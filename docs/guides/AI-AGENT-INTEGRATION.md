@@ -65,7 +65,7 @@ mkdir -p ~/.jht
 echo "JHT_HOST_TYPE=local" > ~/.jht/host.env   # or 'vps'
 ```
 
-If `vps`: stop and switch to the VPS provisioning runbook in `docs/guides/VPS-SETUP.md`. The agent can drive that flow too, but it is a superset (SSH key, Hetzner API token, `install.sh --pairing-token`).
+If `vps`: stop and switch to the VPS provisioning runbook in `docs/guides/VPS-SETUP.md`. The agent can drive that flow too, but it is a superset (SSH key, Hetzner API token, `install.sh --pairing-token`). For fully autonomous provisioning (agent creates the server itself via `hcloud`), see [§Advanced — Autonomous VPS provisioning](#advanced--autonomous-vps-provisioning-with-hcloud) below.
 
 ### 3 — **ASK USER**: cloud sync (opt-in for Local, mandatory for VPS)
 
@@ -131,6 +131,117 @@ jht cloud status          # if sync was enabled, must show `abilitato`
 ```
 
 If `jht doctor` flags an issue, fix it with the suggested remediation before handing back to the user. Never declare setup complete on a failing `doctor`.
+
+---
+
+## Advanced — Autonomous VPS provisioning with `hcloud`
+
+> ⚠️ **Opt-in, AI-agent-only path.** The Desktop wizard (Path 2) intentionally
+> does **not** automate VPS creation — the user clicks through the Hetzner
+> portal manually (locked decision 2026-05-13: smaller attack surface, no
+> spending token in the app). This section is for the **personal AI agent**
+> path only, where the user has already chosen to trust their agent with
+> shell + spending.
+
+When the agent is driving setup (the runbook above) and the user chose
+`vps`, the only remaining manual step from `docs/guides/VPS-SETUP.md §1` is
+"create the server on console.hetzner.com and paste the IP". The Hetzner
+official CLI [`hcloud`](https://github.com/hetznercloud/cli) closes that gap.
+
+### Pre-flight
+
+1. **ASK USER**: confirm they want fully autonomous provisioning and that
+   they understand the agent will create a billable resource on their
+   behalf. **Quote the cost out loud** (default `cx22` ≈ €4.50/mo, `cpx22`
+   ≈ €9.75/mo) and **wait for explicit confirmation**.
+2. **ASK USER** for a Hetzner Cloud API token scoped to a single project
+   (`console.hetzner.com → Security → API Tokens → Read & Write`).
+3. Install `hcloud` on the agent's machine if missing:
+   ```bash
+   # macOS
+   brew install hcloud
+   # Windows
+   scoop install hcloud   # or: choco install hcloud
+   # Linux
+   curl -fsSL https://github.com/hetznercloud/cli/releases/latest/download/hcloud-linux-amd64.tar.gz \
+     | tar -xz -C /tmp && sudo mv /tmp/hcloud /usr/local/bin/
+   ```
+4. Configure context (token stays in `~/.config/hcloud/cli.toml`, mode 0600):
+   ```bash
+   hcloud context create jht   # paste token when prompted
+   ```
+
+### Provision
+
+```bash
+# 1. Upload the JHT SSH pubkey (generated in step 2 of the main runbook,
+#    or via `ssh-keygen -t ed25519 -f ~/.ssh/jht_ed25519 -C "jht"`).
+hcloud ssh-key create --name jht --public-key-from-file ~/.ssh/jht_ed25519.pub
+
+# 2. Create the server. ALWAYS pin --type and --location; never let the
+#    agent default-pick. Recommended baseline:
+hcloud server create \
+  --name jht \
+  --type cpx22 \
+  --image ubuntu-24.04 \
+  --location hel1 \
+  --ssh-key jht
+
+# 3. Capture the IPv4 and wait for SSH to be reachable:
+VPS_IP=$(hcloud server ip jht)
+until ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=3 \
+          -i ~/.ssh/jht_ed25519 root@"$VPS_IP" true 2>/dev/null; do
+  sleep 5
+done
+echo "VPS ready at $VPS_IP"
+```
+
+From here, **resume the existing flow** at `docs/guides/VPS-SETUP.md §3`
+(swap) or §4 (`install.sh`). The agent should pass the `VPS_IP` and the
+pairing token (if the user is on the Desktop path) or follow the bare
+CLI runbook (if pure agent path).
+
+### Cost guardrails the agent MUST enforce
+
+- **Never** create more than one server per user. JHT is single-team
+  (locked: `project_team_location_exclusive.md`). If `hcloud server list`
+  shows an existing `jht` server, reuse it — don't spawn a duplicate.
+- **Never** auto-upgrade `--type` (no `cpx32`/`cpx52` without an
+  explicit user request). If the user reports memory pressure, surface
+  the Hetzner price diff and **ASK USER** before resizing.
+- **Never** leave a server running after the user says "I got hired"
+  or "stop everything". Use the teardown below.
+
+### Teardown — "I got hired"
+
+```bash
+# Snapshot first (preserves /home/jht state at ~€0.10/mo, restorable in 90s).
+hcloud server create-image --type snapshot --description "jht-snapshot-$(date +%F)" jht
+
+# Then delete the server. Hetzner does NOT bill for "powered off" servers
+# being kept around — only `delete` stops billing.
+hcloud server delete jht
+```
+
+Confirm with `hcloud server list` (must be empty) and report the snapshot
+ID back to the user so they can restore via `hcloud server create --image <id>`.
+
+### Other providers
+
+The pattern (single binary, token-scoped CLI, no Desktop equivalent) ports
+to other clouds the agent may encounter on the user's machine:
+
+| Provider          | CLI         | Equivalent of `server create`           |
+|-------------------|-------------|------------------------------------------|
+| DigitalOcean      | `doctl`     | `doctl compute droplet create`           |
+| AWS EC2           | `aws`       | `aws ec2 run-instances`                  |
+| GCP Compute       | `gcloud`    | `gcloud compute instances create`        |
+| OVHcloud          | `ovh-cli`   | (less mature; prefer manual portal step) |
+
+For all of them: same cost-guardrail rules (one server, never auto-upgrade,
+teardown on hire). JHT itself is provider-agnostic from `install.sh`
+onward — the only thing the agent needs to deliver is `root@<IP>` reachable
+over SSH with the JHT pubkey installed.
 
 ---
 
