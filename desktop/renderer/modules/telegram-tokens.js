@@ -37,6 +37,14 @@ export const TELEGRAM_BOT_ROLES = [
   { key: 'mentor',     label: 'Mentor',     hint: 'growth coach + strategic positioning' },
 ]
 
+// BotFather rate-limits consecutive /newbot calls (~2 min cooldown
+// observed empirically — no public spec). When the user finishes
+// verifying bot N, lock bot N+1 for this window so they can't even try
+// to /newbot too fast and get a confusing BotFather refusal mid-flow.
+// First bot (assistente) is never locked.
+const TG_COOLDOWN_MS = 2 * 60 * 1000
+const TG_NEXT_ROLE = { assistente: 'capitano', capitano: 'mentor', mentor: null }
+
 function ensureState() {
   if (state.telegram && typeof state.telegram === 'object') return
   state.telegram = {}
@@ -88,10 +96,35 @@ function setDeepLink(els, botUsername) {
   els.deepLink.hidden = false
 }
 
+function isLocked(roleKey) {
+  const t = state.tgRateLimit?.[roleKey]
+  return typeof t === 'number' && Date.now() < t
+}
+
+function lockCountdownText(roleKey) {
+  const secs = Math.max(0, Math.ceil(((state.tgRateLimit?.[roleKey] || 0) - Date.now()) / 1000))
+  const mm = Math.floor(secs / 60).toString().padStart(2, '0')
+  const ss = (secs % 60).toString().padStart(2, '0')
+  return `BotFather rate limit — available in ${mm}:${ss}`
+}
+
 function renderRow(roleKey) {
   const bot = state.telegram[roleKey]
   const els = getRow(roleKey)
   if (!els.root) return
+
+  // Rate-limit lock takes precedence over the normal state machine —
+  // user can't paste/verify until the cooldown for this slot expires.
+  if (isLocked(roleKey)) {
+    if (els.input) els.input.disabled = true
+    els.verifyBtn.disabled = true
+    els.verifyBtn.textContent = 'Verify'
+    setStatus(els, lockCountdownText(roleKey), 'progress')
+    setDeepLink(els, null)
+    els.root.setAttribute('data-status', 'locked')
+    return
+  }
+  if (els.input) els.input.disabled = false
 
   // Token field reflects state, but never trash a value the user is
   // still typing — only set when the bot status indicates we owe them
@@ -156,10 +189,26 @@ function renderAll() {
   renderActions()
 }
 
+// Optional before-enter hook so wizard-flow.js can populate the new
+// per-row meta slots (suggested name + suggested username + copy/regen)
+// without telegram-tokens.js having to know about that UI. Avoids a
+// circular import.
+let beforeEnterHook = null
+export function setTelegramTokensBeforeEnter(fn) {
+  beforeEnterHook = typeof fn === 'function' ? fn : null
+}
+
 export function enterTelegramTokens() {
   ensureState()
+  if (beforeEnterHook) {
+    try { beforeEnterHook() } catch (e) { log.warn('before-enter.hook.failed', { err: e?.message }) }
+  }
   showStep(STEP_TELEGRAM_TOKENS)
   renderAll()
+  // Resume the rate-limit ticker if there's a still-in-future lock
+  // when re-entering the step (e.g., user backed out and came back).
+  const future = Object.values(state.tgRateLimit || {}).some((t) => typeof t === 'number' && t > Date.now())
+  if (future) startRateLimitTick()
 }
 
 async function startChatPolling(roleKey) {
@@ -244,10 +293,57 @@ async function onVerify(roleKey) {
   bot.botUsername = res.username
   bot.status = 'verified'
   log.info('verified', { roleKey, username: res.username })
+
+  // Arm the rate-limit cooldown on the NEXT bot — verifying this
+  // token is the earliest signal we get that the user has just done
+  // /newbot on BotFather. Assume the next /newbot is imminent and
+  // gate it. Only set once per role (don't reset if user re-verifies).
+  const next = TG_NEXT_ROLE[roleKey]
+  if (next) {
+    if (!state.tgRateLimit) state.tgRateLimit = {}
+    if (!state.tgRateLimit[next]) {
+      state.tgRateLimit[next] = Date.now() + TG_COOLDOWN_MS
+      log.info('rate-limit.armed', { next, untilMs: state.tgRateLimit[next] })
+      startRateLimitTick()
+      renderRow(next)
+    }
+  }
+
   // Immediately enter chat-polling mode — the user already has the
   // deep-link and they're expected to press Start within the 15-min
   // window. Don't make them click anything else.
   startChatPolling(roleKey)
+}
+
+let rateLimitTickHandle = null
+function startRateLimitTick() {
+  if (rateLimitTickHandle) return
+  rateLimitTickHandle = setInterval(() => {
+    // Stop if the step isn't visible (user navigated away).
+    const step = document.getElementById('step-telegram-tokens')
+    if (!step || step.hidden) {
+      stopRateLimitTick()
+      return
+    }
+    // Stop if no lock is still in the future.
+    const future = Object.values(state.tgRateLimit || {}).some((t) => typeof t === 'number' && t > Date.now())
+    if (!future) {
+      stopRateLimitTick()
+      // Final pass to clear the lock display.
+      renderAll()
+      return
+    }
+    // Re-render locked rows only — cheap.
+    for (const role of TELEGRAM_BOT_ROLES) {
+      if (isLocked(role.key)) renderRow(role.key)
+    }
+  }, 1000)
+}
+function stopRateLimitTick() {
+  if (rateLimitTickHandle) {
+    clearInterval(rateLimitTickHandle)
+    rateLimitTickHandle = null
+  }
 }
 
 function onTokenInput(roleKey, value) {

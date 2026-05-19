@@ -12,7 +12,6 @@ import {
   STEP_LOCATION,
   STEP_SUPABASE_LOGIN,
   STEP_TELEGRAM_INTRO,
-  STEP_TELEGRAM_CREATE,
   STEP_TELEGRAM_TOKENS,
   STEP_VPS_PROVISION,
   STEP_SETUP,
@@ -34,6 +33,7 @@ import { clearChildren, refreshDockerStatus, onInstallWindowsStack } from './doc
 import { enterProviderLogin } from './terminal-login.js'
 import {
   enterTelegramTokens,
+  setTelegramTokensBeforeEnter,
   getTelegramBotsForSave,
   isTelegramTokensReady,
 } from './telegram-tokens.js'
@@ -403,71 +403,73 @@ function makeCopyBtn(getText) {
   return btn
 }
 
-function renderTgCreateRows() {
-  if (!dom.tgCreateRows) return
-  dom.tgCreateRows.replaceChildren()
-  for (const role of TG_CREATE_ROLES) {
-    const row = document.createElement('div')
-    row.className = 'tg-create__row'
+// Build the "Insert this name + Insert this username" meta block for a
+// single role and drop it into the per-row #tg-meta-<role> slot of the
+// unified telegram-tokens page. Called once per role from
+// renderAllTgMeta() — re-runs idempotently every time the user changes
+// userTag or hits Regenerate.
+function renderTgMetaForRow(role) {
+  const slot = document.getElementById(`tg-meta-${role}`)
+  if (!slot) return
 
-    // Section header — translated role name only, no emoji.
-    const roleLabel = document.createElement('div')
-    roleLabel.className = 'tg-create__role'
-    roleLabel.textContent = roleHeader(role)
+  // Name field — what the user types into BotFather when asked "How
+  // are we going to call it?". Value: "<emoji> JHT <Role>".
+  const nameField = document.createElement('div')
+  nameField.className = 'tg-create__field'
+  const nameLabel = document.createElement('div')
+  nameLabel.className = 'tg-create__field-label'
+  nameLabel.textContent = t('telegram.create.nameLabel')
+  const nameRow = document.createElement('div')
+  nameRow.className = 'tg-create__row-actions'
+  const nameValue = document.createElement('div')
+  nameValue.className = 'tg-create__username'
+  nameValue.textContent = botDisplayName(role)
+  nameRow.append(nameValue, makeCopyBtn(() => botDisplayName(role)))
+  nameField.append(nameLabel, nameRow)
 
-    // Field 1: display name to type into BotFather when it asks "How
-    // are we going to call it?". Same string as the row header — the
-    // user copies this verbatim.
-    const nameField = document.createElement('div')
-    nameField.className = 'tg-create__field'
-    const nameLabel = document.createElement('div')
-    nameLabel.className = 'tg-create__field-label'
-    nameLabel.textContent = t('telegram.create.nameLabel')
-    const nameRow = document.createElement('div')
-    nameRow.className = 'tg-create__row-actions'
-    const nameValue = document.createElement('div')
-    nameValue.className = 'tg-create__username'
-    nameValue.textContent = botDisplayName(role)
-    nameRow.append(nameValue, makeCopyBtn(() => botDisplayName(role)))
-    nameField.append(nameLabel, nameRow)
-
-    // Field 2: username (regen-able random suffix).
-    const userField = document.createElement('div')
-    userField.className = 'tg-create__field'
-    const userLabel = document.createElement('div')
-    userLabel.className = 'tg-create__field-label'
-    userLabel.textContent = t('telegram.create.usernameLabel')
-    const userRow = document.createElement('div')
-    userRow.className = 'tg-create__row-actions'
-    const usernameEl = document.createElement('div')
-    usernameEl.className = 'tg-create__username'
+  // Username field — regen-able random suffix, must end in `bot`.
+  const userField = document.createElement('div')
+  userField.className = 'tg-create__field'
+  const userLabel = document.createElement('div')
+  userLabel.className = 'tg-create__field-label'
+  userLabel.textContent = t('telegram.create.usernameLabel')
+  const userRow = document.createElement('div')
+  userRow.className = 'tg-create__row-actions'
+  const usernameEl = document.createElement('div')
+  usernameEl.className = 'tg-create__username'
+  usernameEl.textContent = '@' + suggestedUsername(role)
+  const regenBtn = document.createElement('button')
+  regenBtn.className = 'btn btn--ghost btn--small'
+  regenBtn.type = 'button'
+  regenBtn.textContent = t('telegram.create.regen')
+  regenBtn.addEventListener('click', () => {
+    ensureTgCreateState()
+    state.tgCreate.suffixes[role] = generatePrivacySuffix(6)
     usernameEl.textContent = '@' + suggestedUsername(role)
-    const regenBtn = document.createElement('button')
-    regenBtn.className = 'btn btn--ghost btn--small'
-    regenBtn.type = 'button'
-    regenBtn.textContent = t('telegram.create.regen')
-    regenBtn.addEventListener('click', () => {
-      ensureTgCreateState()
-      state.tgCreate.suffixes[role] = generatePrivacySuffix(6)
-      usernameEl.textContent = '@' + suggestedUsername(role)
-    })
-    userRow.append(usernameEl, makeCopyBtn(() => suggestedUsername(role)), regenBtn)
-    userField.append(userLabel, userRow)
+  })
+  userRow.append(usernameEl, makeCopyBtn(() => suggestedUsername(role)), regenBtn)
+  userField.append(userLabel, userRow)
 
-    row.append(roleLabel, nameField, userField)
-    dom.tgCreateRows.append(row)
-  }
+  slot.replaceChildren(nameField, userField)
 }
+
+export function renderAllTgMeta() {
+  ensureTgCreateState()
+  for (const role of TG_CREATE_ROLES) renderTgMetaForRow(role)
+}
+
+// Register a hook so when telegram-tokens.js's enterTelegramTokens()
+// runs, the meta slots get populated first. This bridges the unified
+// step's two halves (suggested name/username + token paste) without
+// circular imports.
+setTelegramTokensBeforeEnter(() => {
+  ensureTgCreateState()
+  if (dom.tgCreateUsertag) dom.tgCreateUsertag.value = state.tgCreate.userTag
+  renderAllTgMeta()
+})
 
 export function enterTelegramIntro() {
   showStep(STEP_TELEGRAM_INTRO)
-}
-
-export function enterTelegramCreate() {
-  ensureTgCreateState()
-  if (dom.tgCreateUsertag) dom.tgCreateUsertag.value = state.tgCreate.userTag
-  renderTgCreateRows()
-  showStep(STEP_TELEGRAM_CREATE)
 }
 
 if (dom.tgIntroLink) {
@@ -481,14 +483,16 @@ if (dom.tgIntroLink) {
   })
 }
 if (dom.btnTgIntroBack) dom.btnTgIntroBack.addEventListener('click', () => enterSupabaseLogin())
-if (dom.btnTgIntroContinue) dom.btnTgIntroContinue.addEventListener('click', () => enterTelegramCreate())
-if (dom.btnTgCreateBack) dom.btnTgCreateBack.addEventListener('click', () => enterTelegramIntro())
-if (dom.btnTgCreateContinue) dom.btnTgCreateContinue.addEventListener('click', () => enterTelegramTokens())
+// Intro Continue jumps straight to the unified tokens step — there
+// used to be a separate "create" step in between, dropped 2026-05-19
+// (telegram-tokens.js calls renderAllTgMeta on its enter to populate
+// the per-row meta slots).
+if (dom.btnTgIntroContinue) dom.btnTgIntroContinue.addEventListener('click', () => enterTelegramTokens())
 if (dom.tgCreateUsertag) {
   dom.tgCreateUsertag.addEventListener('input', () => {
     ensureTgCreateState()
     state.tgCreate.userTag = (dom.tgCreateUsertag.value || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)
-    renderTgCreateRows()
+    renderAllTgMeta()
   })
 }
 if (dom.tgCreateOpenBotfather) {
