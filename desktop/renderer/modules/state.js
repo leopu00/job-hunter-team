@@ -84,6 +84,7 @@ export const dom = {
   btnSupabaseCopyUrl: document.getElementById('btn-supabase-copy-url'),
   btnSupabaseCancel: document.getElementById('btn-supabase-cancel'),
   // Telegram intro / create steps
+  tgIntroLink: document.getElementById('tg-intro-link'),
   btnTgIntroBack: document.getElementById('btn-tg-intro-back'),
   btnTgIntroContinue: document.getElementById('btn-tg-intro-continue'),
   tgCreateUsertag: document.getElementById('tg-create-usertag'),
