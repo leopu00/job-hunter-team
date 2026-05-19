@@ -164,7 +164,7 @@ Per **monitorare il beta tester in tempo reale** durante i primi giorni (vedere 
    ssh -i ... root@<vps-ip>
    docker exec jht jq '.channels.telegram.bots |= map_values(.observer_chat_ids = ["<leone_chat>"])' \
      ~/.jht/jht.config.json > /tmp/c.json && mv /tmp/c.json ~/.jht/jht.config.json
-   docker exec jht jht team restart  # ricarica config
+   docker exec jht jht team stop --all && docker exec jht jht team start  # ricarica config
    ```
 
 **Trade-off accettato** (vedi `docs/sessions/2026-05-18-supabase-disk-io-investigation/README.md` per dettagli architettura simili):
