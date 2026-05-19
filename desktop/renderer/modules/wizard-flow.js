@@ -381,9 +381,21 @@ function ensureTgCreateState() {
   }
 }
 
+// Max len Telegram bot username = 32. Pattern: <role>_<tag>_<6>_bot
+// Fixed bytes (separators + suffix + _bot) = 12. So tag.length ≤ 20 -
+// role.length. Worst case is role "assistente" (10) → tag max 10. Use
+// the WORST-CASE cap globally so all 3 bot usernames carry the same
+// (truncated) tag — user-recognizable cross-bot.
+//
+// Observed 2026-05-19: tag "leonepuglisi" (12) + role "assistente"
+// produced 34-char username, rejected by BotFather with
+// "Sorry, this username is invalid".
+const TG_USERNAME_MAX = 32
+const TG_TAG_MAX = 10
+
 function suggestedUsername(role) {
   ensureTgCreateState()
-  const tag = (state.tgCreate.userTag || 'user').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user'
+  const tag = (state.tgCreate.userTag || 'user').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, TG_TAG_MAX) || 'user'
   return `${role}_${tag}_${state.tgCreate.suffixes[role]}_bot`
 }
 
@@ -494,7 +506,7 @@ if (dom.btnTgIntroContinue) dom.btnTgIntroContinue.addEventListener('click', () 
 if (dom.tgCreateUsertag) {
   dom.tgCreateUsertag.addEventListener('input', () => {
     ensureTgCreateState()
-    state.tgCreate.userTag = (dom.tgCreateUsertag.value || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20)
+    state.tgCreate.userTag = (dom.tgCreateUsertag.value || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, TG_TAG_MAX)
     renderAllTgMeta()
   })
 }
