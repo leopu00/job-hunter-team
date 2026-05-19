@@ -156,6 +156,8 @@ export interface DashboardStats {
 export interface PositionWithScore extends Position {
   score?: number
   scores?: Score
+  critic_score?: number | null
+  critic_verdict?: string | null
 }
 
 export interface ApplicationWithPosition extends Application {

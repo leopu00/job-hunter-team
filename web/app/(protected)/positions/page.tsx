@@ -112,8 +112,28 @@ interface CompanyProps {
     remote?: string;
     tier?: string;
     sync?: string;
+    sort?: string;
+    dir?: string;
   }>;
 }
+
+const SORTABLE_COLUMNS = new Set([
+  "title",
+  "company",
+  "source",
+  "location",
+  "score",
+  "critic",
+  "found_at",
+  "status",
+]);
+
+// Verdetto critico → colore badge.
+const CRITIC_COLORS: Record<string, string> = {
+  PASS: "var(--color-green)",
+  NEEDS_WORK: "var(--color-yellow)",
+  REJECT: "var(--color-red)",
+};
 
 const SYNC_FILTERS = [
   { val: "all", label: "Tutti" },
@@ -132,6 +152,11 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
       ? params.sync
       : "all";
 
+  const sortCol = SORTABLE_COLUMNS.has(params.sort ?? "")
+    ? params.sort!
+    : "found_at";
+  const sortDir: "asc" | "desc" = params.dir === "asc" ? "asc" : "desc";
+
   const tier = TIERS.find((t) => t.val === tierFilter) ?? TIERS[0];
 
   const allPositions = await getPositions({
@@ -141,6 +166,8 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
     maxScore: tier.max,
     noScore: tier.noScore,
     limit: 600,
+    sort: sortCol,
+    dir: sortDir,
   });
 
   // Fetch dei legacy_id già su Supabase per l'utente loggato (set per
@@ -176,20 +203,45 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
 
   // Helper per costruire URL preservando filtri attivi.
   const buildHref = (
-    overrides: Partial<Record<"status" | "remote" | "tier" | "sync", string>>,
+    overrides: Partial<
+      Record<"status" | "remote" | "tier" | "sync" | "sort" | "dir", string>
+    >,
   ) => {
     const merged: Record<string, string> = {};
     if (statusFilter !== "all") merged.status = statusFilter;
     if (remoteFilter !== "all") merged.remote = remoteFilter;
     if (tierFilter !== "all") merged.tier = tierFilter;
     if (syncFilter !== "all") merged.sync = syncFilter;
+    if (sortCol !== "found_at") merged.sort = sortCol;
+    if (sortDir !== "desc") merged.dir = sortDir;
     Object.assign(merged, overrides);
-    // Rimuovi chiavi con valore 'all' (default → URL pulito)
-    for (const k of Object.keys(merged))
+    // Rimuovi chiavi con valore 'all' o default → URL pulito
+    for (const k of Object.keys(merged)) {
       if (merged[k] === "all") delete merged[k];
+      if (k === "sort" && merged[k] === "found_at") delete merged[k];
+      if (k === "dir" && merged[k] === "desc") delete merged[k];
+    }
     const qs = new URLSearchParams(merged).toString();
     return qs ? `/positions?${qs}` : "/positions";
   };
+
+  // Link per ordinare cliccando un header: se la colonna è già attiva
+  // toggla la direzione, altrimenti diventa la nuova attiva con dir
+  // default (desc per metriche numeriche, asc per testo).
+  const sortHref = (col: string) => {
+    const isActive = sortCol === col;
+    const NUMERIC = new Set(["score", "critic", "found_at"]);
+    const defaultDir = NUMERIC.has(col) ? "desc" : "asc";
+    const nextDir = isActive
+      ? sortDir === "asc"
+        ? "desc"
+        : "asc"
+      : defaultDir;
+    return buildHref({ sort: col, dir: nextDir });
+  };
+
+  const sortIndicator = (col: string) =>
+    sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
@@ -319,23 +371,42 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
         >
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
+              <th
+                scope="col"
+                className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
+                style={{ color: "var(--color-dim)" }}
+              >
+                ID
+              </th>
               {[
-                "ID",
-                "Titolo",
-                "Azienda",
-                "Fonte",
-                "Location",
-                "Score",
-                "Rilevata",
-                "Stato",
-              ].map((h) => (
+                { col: "title", label: "Titolo" },
+                { col: "company", label: "Azienda" },
+                { col: "source", label: "Fonte" },
+                { col: "location", label: "Location" },
+                { col: "score", label: "Score" },
+                { col: "critic", label: "Voto finale" },
+                { col: "found_at", label: "Rilevata" },
+                { col: "status", label: "Stato" },
+              ].map(({ col, label }) => (
                 <th
-                  key={h}
+                  key={col}
                   scope="col"
                   className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
-                  style={{ color: "var(--color-dim)" }}
+                  style={{
+                    color:
+                      sortCol === col
+                        ? "var(--color-bright)"
+                        : "var(--color-dim)",
+                  }}
                 >
-                  {h}
+                  <Link
+                    href={sortHref(col)}
+                    className="no-underline hover:text-[var(--color-green)] transition-colors"
+                    style={{ color: "inherit" }}
+                  >
+                    {label}
+                    <span aria-hidden="true">{sortIndicator(col)}</span>
+                  </Link>
                 </th>
               ))}
             </tr>
@@ -344,7 +415,7 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
             {positions.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   Nessuna posizione trovata con questi filtri.
@@ -422,6 +493,42 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
                         />
                       </div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {p.critic_score != null || p.critic_verdict ? (
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-[12px] font-semibold tabular-nums"
+                          style={{
+                            color:
+                              CRITIC_COLORS[p.critic_verdict ?? ""] ??
+                              "var(--color-muted)",
+                          }}
+                        >
+                          {p.critic_score != null
+                            ? p.critic_score.toFixed(1)
+                            : "—"}
+                        </span>
+                        {p.critic_verdict && (
+                          <span
+                            className="text-[9px] font-semibold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded border"
+                            style={{
+                              color:
+                                CRITIC_COLORS[p.critic_verdict] ??
+                                "var(--color-dim)",
+                              borderColor:
+                                CRITIC_COLORS[p.critic_verdict] ??
+                                "var(--color-border)",
+                              background: `${CRITIC_COLORS[p.critic_verdict] ?? "var(--color-border)"}18`,
+                            }}
+                          >
+                            {p.critic_verdict.replace("_", " ")}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[var(--color-dim)] text-[11px]">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
                     {formatFoundAt(p.found_at)}

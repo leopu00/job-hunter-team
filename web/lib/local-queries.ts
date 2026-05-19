@@ -147,9 +147,24 @@ export function getRecentlyTouchedPositionsLocal(ws: string, limit = 15): (Posit
 }
 
 // ── All positions with optional filters ────────────────────────────
+// Whitelist colonne sortabili → espressione SQL. NON inserire mai
+// opts.sort raw nella query: SQLite non supporta prepared statement
+// per ORDER BY, quindi la mappa qui sotto è l'unica difesa anti-injection.
+const POSITION_SORT_COLUMNS: Record<string, string> = {
+  title: 'p.title',
+  company: 'p.company',
+  source: 'p.source',
+  location: 'p.location',
+  score: 's.total_score',
+  critic: 'a.critic_score',
+  found_at: 'p.found_at',
+  status: 'p.status',
+}
+
 export function getPositionsLocal(ws: string, opts?: {
   status?: string; minScore?: number; maxScore?: number; noScore?: boolean
   remoteType?: string; limit?: number; offset?: number
+  sort?: string; dir?: 'asc' | 'desc'
 }): PositionWithScore[] {
   const db = getDb(ws)
   const where: string[] = []
@@ -176,13 +191,23 @@ export function getPositionsLocal(ws: string, opts?: {
   if (opts?.limit) params.push(opts.limit)
   if (opts?.offset) params.push(opts.offset)
 
+  const sortCol = POSITION_SORT_COLUMNS[opts?.sort ?? ''] ?? 'p.found_at'
+  const sortDir = opts?.dir === 'asc' ? 'ASC' : 'DESC'
+  // NULLS LAST simulato: per score/critic le righe senza valore vanno in
+  // fondo sia ASC che DESC, sennò ordinare per score asc mostra solo "—".
+  const nullsLast = sortCol.startsWith('s.') || sortCol.startsWith('a.')
+    ? `${sortCol} IS NULL, `
+    : ''
+
   const sql = `
     SELECT p.*, s.total_score as score,
-      s.stack_match, s.remote_fit, s.salary_fit, s.strategic_fit
+      s.stack_match, s.remote_fit, s.salary_fit, s.strategic_fit,
+      a.critic_score, a.critic_verdict
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
+    LEFT JOIN applications a ON a.position_id = p.id
     ${whereClause}
-    ORDER BY p.found_at DESC
+    ORDER BY ${nullsLast}${sortCol} ${sortDir}
     ${limitClause} ${offsetClause}
   `
   const rows = db.prepare(sql).all(...params) as any[]
@@ -494,6 +519,8 @@ function mapPosition(r: any): PositionWithScore {
     found_by: r.found_by, found_at: r.found_at ?? '', deadline: r.deadline ?? null,
     status: r.status, notes: r.notes ?? null, last_checked: r.last_checked ?? null,
     score: r.score ?? undefined,
+    critic_score: r.critic_score ?? null,
+    critic_verdict: r.critic_verdict ?? null,
     scores: r.stack_match != null ? {
       id: '', position_id: sid(r.id), total_score: r.score ?? 0,
       stack_match: r.stack_match, remote_fit: r.remote_fit, salary_fit: r.salary_fit,
