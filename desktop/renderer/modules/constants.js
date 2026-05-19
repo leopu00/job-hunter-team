@@ -5,7 +5,9 @@ export const STEP_WELCOME = 'welcome'
 export const STEP_LOCATION = 'location'
 export const STEP_SUPABASE_LOGIN = 'supabase-login'
 export const STEP_TELEGRAM_INTRO = 'telegram-intro'
-export const STEP_TELEGRAM_CREATE = 'telegram-create'
+// telegram-create + telegram-tokens were merged into a single step
+// 2026-05-19. The unified page lives at STEP_TELEGRAM_TOKENS — name
+// suggestions + username suggestions + token paste in one column.
 export const STEP_TELEGRAM_TOKENS = 'telegram-tokens'
 export const STEP_VPS_PROVISION = 'vps-provision'
 export const STEP_SETUP = 'setup'
