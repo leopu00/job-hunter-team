@@ -151,6 +151,7 @@ export function getRecentlyTouchedPositionsLocal(ws: string, limit = 15): (Posit
 // opts.sort raw nella query: SQLite non supporta prepared statement
 // per ORDER BY, quindi la mappa qui sotto è l'unica difesa anti-injection.
 const POSITION_SORT_COLUMNS: Record<string, string> = {
+  id: 'p.id',
   title: 'p.title',
   company: 'p.company',
   source: 'p.source',
@@ -435,6 +436,26 @@ export function getCriticoStatsLocal(ws: string) {
     if (row.critic_verdict === 'REJECT') grouped[key].reject++
   }
   return Object.entries(grouped).map(([critico, s]) => ({ critico, ...s })).sort((a, b) => b.total - a.total)
+}
+
+// ── Critic verdict aggregate ────────────────────────────────────────
+// Conta PASS / NEEDS_WORK / REJECT totali (non per critico).
+// Per il widget "Conversion rate" della dashboard.
+export function getCriticVerdictTotalsLocal(ws: string): {
+  pass: number; needs_work: number; reject: number; total: number
+} {
+  const db = getDb(ws)
+  const rows = db.prepare(
+    "SELECT critic_verdict, count(*) as n FROM applications WHERE critic_verdict IS NOT NULL Company BY critic_verdict"
+  ).all() as { critic_verdict: string; n: number }[]
+  const out = { pass: 0, needs_work: 0, reject: 0, total: 0 }
+  for (const r of rows) {
+    out.total += r.n
+    if (r.critic_verdict === 'PASS') out.pass = r.n
+    else if (r.critic_verdict === 'NEEDS_WORK') out.needs_work = r.n
+    else if (r.critic_verdict === 'REJECT') out.reject = r.n
+  }
+  return out
 }
 
 // ── Pending user messages (V5) ──────────────────────────────────────
