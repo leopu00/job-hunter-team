@@ -133,7 +133,7 @@ export const TRANSLATIONS = {
     'vps.step2.openHetzner': 'Open Hetzner console',
     'vps.step2.openKeyFolder': 'Open SSH key folder',
     'vps.step2.shareKeyHint':
-      'To share VPS access with a teammate or use it from another PC, send them the private key file (jht_ed25519, without the .pub extension) from this folder.',
+      'To share VPS access with a teammate or use it from another PC, send them BOTH files from this folder (jht_ed25519 and jht_ed25519.pub). They go in the recipient\u2019s ~/.ssh/ directory.',
     'vps.step3.title': '3. Paste the server IP',
     'vps.step3.ipLabel': 'Server IPv4',
     'vps.step3.ipPlaceholder': 'e.g. 5.6.7.8',
@@ -551,7 +551,7 @@ export const TRANSLATIONS = {
     'vps.step2.openHetzner': 'Apri console Hetzner',
     'vps.step2.openKeyFolder': 'Apri cartella chiave SSH',
     'vps.step2.shareKeyHint':
-      'Per condividere l\u2019accesso alla VPS con un compagno o usarlo da un altro PC, inviagli il file della chiave privata (jht_ed25519, senza estensione .pub) da questa cartella.',
+      'Per condividere l\u2019accesso alla VPS con un compagno o usarlo da un altro PC, mandagli ENTRAMBI i file di questa cartella (jht_ed25519 e jht_ed25519.pub). Vanno messi nella sua ~/.ssh/.',
     'vps.step3.title': '3. Incolla l\u2019IP del server',
     'vps.step3.ipLabel': 'IPv4 del server',
     'vps.step3.ipPlaceholder': 'es. 5.6.7.8',
@@ -969,7 +969,7 @@ export const TRANSLATIONS = {
     'vps.step2.openHetzner': 'Hetzner konzol megnyitása',
     'vps.step2.openKeyFolder': 'SSH kulcs mappa megnyitása',
     'vps.step2.shareKeyHint':
-      'Ha másnak vagy másik PC-nek szeretnél hozzáférést adni a VPS-hez, küldd el neki a privát kulcs fájlt (jht_ed25519, .pub kiterjesztés nélkül) ebből a mappából.',
+      'Ha másnak vagy másik PC-nek szeretnél hozzáférést adni a VPS-hez, küldd el neki MINDKÉT fájlt ebből a mappából (jht_ed25519 és jht_ed25519.pub). A címzett ~/.ssh/ könyvtárába kerülnek.',
     'vps.step3.title': '3. Illeszd be a szerver IP-jét',
     'vps.step3.ipLabel': 'Szerver IPv4',
     'vps.step3.ipPlaceholder': 'pl. 5.6.7.8',
