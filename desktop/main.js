@@ -1085,6 +1085,10 @@ app.whenReady().then(() => {
       onData: (data) => {
         const id = getId()
         const sess = id != null ? terminalSessions.get(id) : null
+        log.debug('terminal.data', {
+          id, attached: sess?.attached, len: data?.length,
+          first32: typeof data === 'string' ? data.slice(0, 32) : null,
+        })
         if (!sess || !sess.attached) {
           if (sess) {
             sess.chunks.push(data)
