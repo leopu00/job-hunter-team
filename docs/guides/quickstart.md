@@ -91,6 +91,8 @@ jht team status      # confirm it's running
 
 The wizard handles provider selection + OAuth login + `jht team start` in one go. To switch provider later: `jht providers use claude` (or `codex` / `kimi`) then `jht providers update <id>` to (re)install the CLI.
 
+> 📖 Full command list — including the host wrapper (`up`/`down`/`upgrade`/`logs`/`shell`/…) vs the Node CLI split, all subcommands and flags: see [`CLI-REFERENCE.md`](CLI-REFERENCE.md).
+
 The container runs `restart: unless-stopped`, so it survives host reboots. To stop everything: `jht down`. To upgrade: `jht upgrade`.
 
 You'll end up with two folders:
