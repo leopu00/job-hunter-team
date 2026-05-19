@@ -217,6 +217,11 @@ contextBridge.exposeInMainWorld('terminalApi', {
   write: (sessionId, data) => ipcRenderer.send('terminal:write', { sessionId, data }),
   resize: (sessionId, cols, rows) => ipcRenderer.send('terminal:resize', { sessionId, cols, rows }),
   kill: (sessionId) => ipcRenderer.invoke('terminal:kill', sessionId),
+  // Signal "I have subscribed to data/exit, flush the buffer".
+  // Race-free: renderer must subscribe via onData/onExit BEFORE
+  // calling attach. Main buffers everything between start() and
+  // attach() so no chunk is lost in transit.
+  attach: (sessionId) => ipcRenderer.invoke('terminal:attach', sessionId),
   onData: (sessionId, cb) => {
     const channel = `terminal:data:${sessionId}`
     const listener = (_event, data) => { try { cb(data) } catch { /* ignore */ } }
