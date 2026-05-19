@@ -79,55 +79,65 @@ jht cloud login
 
 For **VPS**: cloud sync is structurally required. The recommended path is the desktop pairing-token (see `docs/internal/vps.md` § "Identità unificata"). If the agent is driving without the desktop, fall back to `jht cloud login` from inside the VPS shell.
 
-### 4 — **ASK USER**: 3 Telegram bot tokens (mandatory)
+### 4 — Run the interactive wizard
 
-```
-Assistente   — direct chat with the user
-Capitano     — escalations and team-wide updates
-Mentor       — learning loop / weekly review
-```
+This single command drives **provider choice + Telegram setup + provider OAuth login + team start** in sequence. The agent's job here is to hand off the TTY to the user — every sub-step inside the wizard needs human input or a live browser.
 
-Walk the user through https://t.me/BotFather (one `/newbot` per role). When the user pastes the 3 tokens:
-
-```bash
-jht config set channels.telegram.bots.assistente.bot_token <token>
-jht config set channels.telegram.bots.capitano.bot_token   <token>
-jht config set channels.telegram.bots.mentor.bot_token     <token>
-```
-
-(`shared/config/schema.ts` § `TelegramBotsSchema` validates the shape; missing or empty tokens fail fast.)
-
-### 5 — Provider AI login (interactive, terminal-bound)
+**Local path:**
 
 ```bash
 jht setup
-# Opens the wizard. The user picks Claude / Codex / Kimi and completes
-# the provider's interactive OAuth/login. The token is saved on the
-# host you chose in step 2 (Local: this machine; VPS: the VPS shell).
 ```
 
-The agent **must not** try to script this — provider login flows expect a real TTY and will reject piped input.
-
-### 6 — First team start
+**VPS path** (the agent SSHes the user into the VPS shell, then launches the wizard inside the container):
 
 ```bash
-jht team start
+ssh -t -i ~/.ssh/jht_ed25519 root@<VPS_IP>
+# Inside the VPS shell:
+jht setup
+# The wizard reads JHT_HOST_TYPE=vps (set by install.sh in ~/.jht/host.env)
+# and switches to the VPS-aware flow.
+```
+
+> ⚠️ `ssh -t` is **mandatory** on the VPS path. Without `-t`, the provider OAuth sub-step has no TTY and the device-flow CLI rejects piped input.
+
+What the wizard does, in order — useful so the agent can narrate progress and recover from mid-step failures:
+
+1. **Prerequisites check** — Docker, Node, write access to `~/.jht/`. Bail out cleanly if anything is missing.
+2. **VPS-only: cloud login** — `jht cloud login` device-flow (if not already paired in step 3 above).
+3. **Provider choice** — Claude / Codex / Kimi via interactive picker.
+4. **Provider CLI install** — `jht providers update <provider>` (npm install of `@anthropic-ai/claude-code` / `@openai/codex` / `kimi-cli`).
+5. **VPS-only: 3 Telegram bot tokens** (mandatory on VPS). For each role (`assistente`, `capitano`, `mentor`):
+   - Suggests a privacy-protected bot username `<role>_<tag>_<random6>_bot`.
+   - **ASK USER**: token from `@BotFather` `/newbot`.
+   - Validates the token live via `https://api.telegram.org/bot<token>/getMe` (fails fast on typos / revoked tokens).
+   - Shows a `t.me/<username>?start=jht` deep-link; long-polls `getUpdates` (15-min deadline) until the user sends `/start` from their account.
+   - Captures the resulting `chat_id` and writes the full `{bot_token, chat_id}` to `channels.telegram.bots.<role>` in the config.
+
+   On Local, Telegram is skipped here and remains opt-in via `jht config set channels.telegram.bots.<role>.bot_token <token>` afterward (the web dashboard is the primary surface).
+6. **Provider OAuth login** — the wizard spawns the provider's CLI (`claude` / `codex` / `kimi`) with stdio inherited; the device-flow URL appears in the terminal. User opens it in their browser, completes the OAuth, and the wizard polls `~/.claude/.credentials.json` (or equivalent) for up to 30 min.
+7. **Team start** — `jht team start` is invoked automatically once OAuth credentials are detected.
+
+If the user closes the wizard mid-flow, re-running `jht setup` resumes from the next missing step (the wizard inspects existing config snapshots).
+
+> 🛠️ **Fallback for manual edits.** If the user needs to swap a single
+> Telegram token later without re-running the whole wizard, raw config
+> writes still work — but they bypass the live token validation and the
+> chat_id long-poll, so the user must paste the `chat_id` too:
+>
+> ```bash
+> jht config set channels.telegram.bots.capitano.bot_token <new-token>
+> jht config set channels.telegram.bots.capitano.chat_id   <chat-id>
+> ```
+
+### 5 — Verification (the agent should do this before reporting "done")
+
+```bash
 jht status                # confirm `mode: running`
-jht logs --follow         # optional: stream agent activity
-```
-
-Open the dashboard:
-
-```bash
-jht dashboard             # Local: opens http://localhost:3000
-                          # VPS:   prints the SSH tunnel command
-```
-
-### 7 — Verification (the agent should do this before reporting "done")
-
-```bash
 jht doctor                # must exit 0; surfaces auth + Docker + DB checks
 jht cloud status          # if sync was enabled, must show `abilitato`
+jht dashboard             # Local: opens http://localhost:3000
+                          # VPS:   prints the SSH tunnel command
 ```
 
 If `jht doctor` flags an issue, fix it with the suggested remediation before handing back to the user. Never declare setup complete on a failing `doctor`.
