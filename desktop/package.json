@@ -57,6 +57,7 @@
       "auth/**/*.js",
       "sync/**/*.js",
       "vps/**/*.js",
+      "telegram/**/*.js",
       "docker-installer/**/*.js",
       "win-installer/**/*.js",
       "!**/*.test.js",
