@@ -126,7 +126,20 @@ contextBridge.exposeInMainWorld('clipboardApi', {
 contextBridge.exposeInMainWorld('authApi', {
   getStatus: () => ipcRenderer.invoke('auth:get-status'),
   signIn: (provider) => ipcRenderer.invoke('auth:sign-in', provider),
+  cancelSignIn: () => ipcRenderer.invoke('auth:cancel-sign-in'),
   signOut: () => ipcRenderer.invoke('auth:sign-out'),
+  // Subscribe to the OAuth URL emitted right before main opens it
+  // in the default browser. Renderer uses this to expose a "Copy
+  // link" fallback (in case the browser fails to open, or the user
+  // wants to paste the URL into a different browser without the
+  // wrong Google session). Returns an unsubscribe fn.
+  onUrlReady: (callback) => {
+    const handler = (_event, payload) => {
+      try { callback(payload) } catch { /* ignore */ }
+    }
+    ipcRenderer.on('auth:url-ready', handler)
+    return () => ipcRenderer.removeListener('auth:url-ready', handler)
+  },
   // Used by the (upcoming) VPS provisioning wizard to feed
   // `install.sh --pairing-token <token>`. Renderer-side: treat the
   // returned string as an opaque blob; never log it.
