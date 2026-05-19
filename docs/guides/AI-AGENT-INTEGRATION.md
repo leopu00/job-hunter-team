@@ -152,10 +152,20 @@ official CLI [`hcloud`](https://github.com/hetznercloud/cli) closes that gap.
 
 1. **ASK USER**: confirm they want fully autonomous provisioning and that
    they understand the agent will create a billable resource on their
-   behalf. **Quote the cost out loud** (default `cx22` ≈ €4.50/mo, `cpx22`
-   ≈ €9.75/mo) and **wait for explicit confirmation**.
+   behalf. **Quote the cost out loud** (cheapest baseline `cx23` ≈ €4.59/mo
+   Intel 4GB, recommended `cpx22` ≈ €9.20/mo AMD 4GB — JHT's tested tier)
+   and **wait for explicit confirmation**.
+
+   > 💡 Hetzner periodically renames the CX line (the previous `cx22` was
+   > retired in 2026; the current cheapest x86 in EU is `cx23`). The agent
+   > should **always run `hcloud server-type list` first** and pick the
+   > current name programmatically — never hard-code from this doc.
 2. **ASK USER** for a Hetzner Cloud API token scoped to a single project
    (`console.hetzner.com → Security → API Tokens → Read & Write`).
+
+   > 🔐 **Token hygiene**: if the token is ever pasted into chat, logs,
+   > screenshots, or any non-local channel, revoke it immediately on the
+   > Hetzner console and generate a fresh one for the agent to use locally.
 3. Install `hcloud` on the agent's machine if missing:
    ```bash
    # macOS
@@ -174,12 +184,17 @@ official CLI [`hcloud`](https://github.com/hetznercloud/cli) closes that gap.
 ### Provision
 
 ```bash
+# 0. Confirm the server type name is still valid (Hetzner renames CX line
+#    every couple of years — fail fast instead of guessing).
+hcloud server-type list | grep -E '^[0-9]+\s+(cx23|cpx22)\b' \
+  || { echo "Server type renamed — re-pick from 'hcloud server-type list'"; exit 1; }
+
 # 1. Upload the JHT SSH pubkey (generated in step 2 of the main runbook,
 #    or via `ssh-keygen -t ed25519 -f ~/.ssh/jht_ed25519 -C "jht"`).
 hcloud ssh-key create --name jht --public-key-from-file ~/.ssh/jht_ed25519.pub
 
 # 2. Create the server. ALWAYS pin --type and --location; never let the
-#    agent default-pick. Recommended baseline:
+#    agent default-pick. Recommended baseline (cpx22 = JHT prod tier):
 hcloud server create \
   --name jht \
   --type cpx22 \
@@ -195,6 +210,12 @@ until ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=3 \
 done
 echo "VPS ready at $VPS_IP"
 ```
+
+> ⏱️ **Expected wall-clock**: ~17s for the `hcloud server create` API call
+> to return + ~10s before SSH accepts connections. Total from key upload
+> to `root@<IP>` reachable: **~30s** (measured on `cx23` / `nbg1` /
+> ubuntu-24.04, 2026-05-19). If the loop exceeds 90s, investigate — the
+> server may be stuck in `initializing` or the SSH key didn't propagate.
 
 From here, **resume the existing flow** at `docs/guides/VPS-SETUP.md §3`
 (swap) or §4 (`install.sh`). The agent should pass the `VPS_IP` and the
@@ -215,16 +236,28 @@ CLI runbook (if pure agent path).
 ### Teardown — "I got hired"
 
 ```bash
-# Snapshot first (preserves /home/jht state at ~€0.10/mo, restorable in 90s).
+# 1. Snapshot first (preserves /home/jht state at ~€0.10/mo, restorable in ~90s).
 hcloud server create-image --type snapshot --description "jht-snapshot-$(date +%F)" jht
 
-# Then delete the server. Hetzner does NOT bill for "powered off" servers
-# being kept around — only `delete` stops billing.
+# 2. Delete the server. Hetzner does NOT stop billing on "powered off"
+#    servers — only `delete` stops the meter.
 hcloud server delete jht
+
+# 3. Delete the SSH key on Hetzner too. Stale keys accumulate fast across
+#    re-deploys and are themselves a small attack-surface item.
+hcloud ssh-key delete jht
 ```
 
-Confirm with `hcloud server list` (must be empty) and report the snapshot
-ID back to the user so they can restore via `hcloud server create --image <id>`.
+Verify cleanup:
+
+```bash
+hcloud server list    # must NOT list `jht`
+hcloud ssh-key list   # must NOT list the `jht` key
+hcloud image list --type snapshot   # shows the snapshot you just took
+```
+
+Report the snapshot ID back to the user so they can restore later via
+`hcloud server create --image <id> --type cpx22 --location hel1 --ssh-key <fresh-key>`.
 
 ### Other providers
 
