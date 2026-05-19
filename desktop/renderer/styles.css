@@ -1738,15 +1738,48 @@ body { display: flex; flex-direction: column; }
   font-size: 0.9em;
 }
 
-/* ── Telegram intro step (image-only) ──────────────────────────── */
-.tg-intro__hero {
-  display: block;
-  margin: 0 auto;
-  max-width: min(420px, 70vh);
-  max-height: 70vh;
-  width: 100%;
-  height: auto;
-  border-radius: 18px;
+/* ── Telegram intro step ───────────────────────────────────────── */
+.tg-intro__card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  margin: 18px auto;
+  border-radius: 14px;
+  background: rgba(55, 174, 226, 0.08);
+  border: 1px solid rgba(55, 174, 226, 0.3);
+  max-width: 420px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.tg-intro__card:hover {
+  background: rgba(55, 174, 226, 0.14);
+  transform: translateY(-1px);
+}
+.tg-intro__avatar {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #1E96C8;
+}
+.tg-intro__meta { text-align: left; flex: 1; }
+.tg-intro__handle {
+  font-weight: 600;
+  font-size: 1.05em;
+}
+.tg-intro__sub {
+  opacity: 0.7;
+  font-size: 0.88em;
+  margin-top: 2px;
+}
+.tg-intro__cta {
+  margin-top: 6px;
+  font-size: 0.85em;
+  color: #37AEE2;
+  font-weight: 500;
 }
 
 /* ── Telegram create step ──────────────────────────────────────── */
