@@ -1056,6 +1056,97 @@ app.whenReady().then(() => {
 
   const loginContainerNames = new Map()
 
+  // ── Terminal session attach/buffer machinery ─────────────────────
+  // Race condition fix (2026-05-19): the child process (ssh -tt PTY
+  // for VPS, node-pty container for local) starts emitting bytes
+  // synchronously inside adoptChild/spawnSession via stdout/stderr
+  // listeners. But the renderer only subscribes to terminal:data:<id>
+  // AFTER awaiting terminal:start's IPC return — there's a 50-200ms
+  // window where webContents.send() goes to a channel with no
+  // listener and the bytes are dropped on the floor.
+  //
+  // codex emits its full TUI welcome+login prompt in a single burst
+  // at startup, so dropping the first 100ms = empty terminal panel
+  // forever. Hard to debug, easy to break.
+  //
+  // Fix: buffer all data and exit events in main until the renderer
+  // explicitly calls terminal:attach(sessionId). The renderer is
+  // expected to subscribe to data/exit channels BEFORE calling
+  // attach, so flushing during attach is race-free.
+  //
+  // Buffer is capped (drop oldest bytes if > MAX) to defend against a
+  // pathological client that never attaches; in practice attach is
+  // called within ~50ms of start so the buffer stays tiny.
+  const TERMINAL_BUFFER_MAX_BYTES = 2 * 1024 * 1024 // 2 MB
+  const terminalSessions = new Map() // id → { attached, chunks, bytes, exit }
+
+  function makeTerminalDispatchers(getId) {
+    return {
+      onData: (data) => {
+        const id = getId()
+        const sess = id != null ? terminalSessions.get(id) : null
+        if (!sess || !sess.attached) {
+          if (sess) {
+            sess.chunks.push(data)
+            sess.bytes += data.length
+            while (sess.bytes > TERMINAL_BUFFER_MAX_BYTES && sess.chunks.length > 1) {
+              const dropped = sess.chunks.shift()
+              sess.bytes -= dropped.length
+            }
+          }
+          return
+        }
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(`terminal:data:${id}`, data)
+        }
+      },
+      onExit: (exit) => {
+        const id = getId()
+        const sess = id != null ? terminalSessions.get(id) : null
+        if (!sess || !sess.attached) {
+          if (sess) sess.exit = exit
+          return
+        }
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(`terminal:exit:${id}`, exit)
+        }
+        terminalSessions.delete(id)
+      },
+    }
+  }
+
+  function registerTerminalSession(id) {
+    terminalSessions.set(id, { attached: false, chunks: [], bytes: 0, exit: null })
+  }
+
+  ipcMain.handle('terminal:attach', (_event, sessionId) => {
+    const sess = terminalSessions.get(sessionId)
+    if (!sess) return { ok: false, error: 'unknown-session' }
+    if (sess.attached) return { ok: true, alreadyAttached: true }
+    sess.attached = true
+    // Flush buffered chunks (preserves order via webContents.send IPC
+    // channel ordering guarantee).
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      for (const chunk of sess.chunks) {
+        mainWindow.webContents.send(`terminal:data:${sessionId}`, chunk)
+      }
+    }
+    const flushedBytes = sess.bytes
+    const flushedChunks = sess.chunks.length
+    sess.chunks = []
+    sess.bytes = 0
+    // Also flush a pending exit if the process died before attach.
+    if (sess.exit !== null) {
+      const exit = sess.exit
+      sess.exit = null
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(`terminal:exit:${sessionId}`, exit)
+      }
+      terminalSessions.delete(sessionId)
+    }
+    return { ok: true, flushedBytes, flushedChunks }
+  })
+
   ipcMain.handle('terminal:start', (_event, { providerId, host = 'local', vpsIp } = {}) => {
     const meta = providerInstall.PROVIDERS[providerId]
     if (!meta) return { ok: false, error: `unknown provider: ${providerId}` }
@@ -1069,19 +1160,14 @@ app.whenReady().then(() => {
       if (!vpsIp) return { ok: false, error: 'host=vps requires vpsIp' }
       const r = providerInstall.openLoginViaSsh({ vpsIp, providerId })
       if (!r.ok) return r
-      const id = terminal.adoptChild({
+      let id = null
+      const dispatchers = makeTerminalDispatchers(() => id)
+      id = terminal.adoptChild({
         child: r.child,
-        onData: (data) => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(`terminal:data:${id}`, data)
-          }
-        },
-        onExit: (exit) => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(`terminal:exit:${id}`, exit)
-          }
-        },
+        onData: dispatchers.onData,
+        onExit: dispatchers.onExit,
       })
+      registerTerminalSession(id)
       return { ok: true, sessionId: id, host: 'vps' }
     }
 
@@ -1096,7 +1182,9 @@ app.whenReady().then(() => {
     // config on disk. Later launches — including the background
     // assistant boot — will skip straight past it.
     const loginArgs = Array.isArray(meta.loginArgs) ? meta.loginArgs : []
-    const id = terminal.spawnSession({
+    let id = null
+    const baseDispatchers = makeTerminalDispatchers(() => id)
+    id = terminal.spawnSession({
       command: 'docker',
       args: [
         'compose', 'run', '--rm', '--no-deps',
@@ -1109,18 +1197,14 @@ app.whenReady().then(() => {
       ],
       cwd: payloadDir,
       env: containerPrep.dockerEnv(),
-      onData: (data) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(`terminal:data:${id}`, data)
-        }
-      },
+      onData: baseDispatchers.onData,
       onExit: (exit) => {
         loginContainerNames.delete(id)
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(`terminal:exit:${id}`, exit)
-        }
+        // Delegate buffering/dispatch to the shared helper.
+        baseDispatchers.onExit(exit)
       },
     })
+    registerTerminalSession(id)
     loginContainerNames.set(id, containerName)
     return { ok: true, sessionId: id }
   })
@@ -1137,6 +1221,9 @@ app.whenReady().then(() => {
     const containerName = loginContainerNames.get(sessionId)
     terminal.kill(sessionId)
     loginContainerNames.delete(sessionId)
+    // Clear buffer + exit cache for this session; renderer is going
+    // away so flushing would be pointless.
+    terminalSessions.delete(sessionId)
     if (containerName) {
       const { spawn } = require('node:child_process')
       // Best-effort: remove the ephemeral container. --rm would clean
