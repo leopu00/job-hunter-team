@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { User } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -24,12 +25,24 @@ export default async function ProtectedLayout({
   const search = hdrs.get("x-search") ?? "";
   const demoMode = isDashboardDemoMode(search);
 
-  // Onboarding gate: finché il profilo locale non è completo l'utente
-  // può stare solo su /onboarding. Qualsiasi altra route del gruppo
-  // protetto lo rispedisce indietro, così non può saltare il setup
-  // cambiando l'URL a mano. Il check gira solo in local mode, dove
-  // readWorkspaceProfile() ha senso (in cloud il profilo è su Supabase).
+  // Tenta sessione Supabase prima di tutto. Se l'utente è loggato in
+  // cloud, prevale sul flusso locale (anche su localhost): mandarlo in
+  // /onboarding wizard-PC-locale ha senso solo per chi NON ha account.
+  // Vedi docs/internal/2026-05-19-dashboard-routing-cases.md.
+  let cloudUser: User | null = null;
+  if (isSupabaseConfigured && !demoMode) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    cloudUser = user;
+  }
+
+  // Onboarding gate LOCALE: si applica solo se l'utente NON è loggato
+  // in cloud. Su localhost+cloud-user-loggato il profilo è su Supabase
+  // (candidate_profiles via cloud-sync), il wizard PC-locale è inutile.
   if (
+    !cloudUser &&
     localRequest &&
     pathname &&
     !pathname.startsWith("/onboarding") &&
@@ -40,52 +53,26 @@ export default async function ProtectedLayout({
     }
   }
 
-  // Cloud mode (Supabase env configured) AND request from a public
-  // host → require auth. Local desktop users bypass even when the
-  // web app has Supabase credentials baked in, since /dashboard is
-  // opened directly from the JHT Desktop launcher.
-  if (isSupabaseConfigured && !localRequest) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      // Preserva l'URL originale (path + query) come `returnTo` per
-      // far ripartire la pagina target dopo il login OAuth. Senza
-      // questo, deep-link come `/cli-link?code=ABCD-1234` perdono il
-      // codice e l'utente atterra sulla landing senza modale login.
-      const returnTo = pathname ? pathname + search : "";
-      if (returnTo && returnTo !== "/") {
-        redirect(`/?login=true&returnTo=${encodeURIComponent(returnTo)}`);
-      }
-      redirect("/?login=true");
+  // Auth gate REMOTE: senza sessione e non-localhost → /login.
+  if (isSupabaseConfigured && !cloudUser && !localRequest) {
+    const returnTo = pathname ? pathname + search : "";
+    if (returnTo && returnTo !== "/") {
+      redirect(`/?login=true&returnTo=${encodeURIComponent(returnTo)}`);
     }
-
-    return (
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <Navbar user={user} />
-        <div className="flex items-stretch">
-          <div className="flex-1 min-w-0">
-            <MainChrome>{children}</MainChrome>
-          </div>
-          {/* Mount point per side panel (es. assistente profilo). Se vuoto,
-              non occupa spazio (display:contents). Quando il portal monta
-              un pannello qui dentro, diventa flex item della riga sopra
-              e il main-area si stringe automaticamente via flex-1. */}
-          <div id="protected-side-panel" className="contents" />
-        </div>
-      </div>
-    );
+    redirect("/?login=true");
   }
 
-  // Local mode OR localhost request with cloud config: no auth.
   return (
     <div style={{ position: "relative", zIndex: 1 }}>
-      <Navbar user={null} />
+      <Navbar user={cloudUser} />
       <div className="flex items-stretch">
         <div className="flex-1 min-w-0">
           <MainChrome>{children}</MainChrome>
         </div>
+        {/* Mount point per side panel (es. assistente profilo). Se vuoto,
+            non occupa spazio (display:contents). Quando il portal monta
+            un pannello qui dentro, diventa flex item della riga sopra
+            e il main-area si stringe automaticamente via flex-1. */}
         <div id="protected-side-panel" className="contents" />
       </div>
     </div>

@@ -77,11 +77,28 @@ export const dom = {
   btnSupabaseBack: document.getElementById('btn-supabase-back'),
   btnSupabaseContinue: document.getElementById('btn-supabase-continue'),
   btnSupabaseSkip: document.getElementById('btn-supabase-skip'),
+  supabaseSigninProgress: document.getElementById('supabase-signin-progress'),
+  supabaseSigninHint: document.getElementById('supabase-signin-hint'),
+  supabaseSigninUrlRow: document.getElementById('supabase-signin-url-row'),
+  supabaseSigninUrl: document.getElementById('supabase-signin-url'),
+  btnSupabaseCopyUrl: document.getElementById('btn-supabase-copy-url'),
+  btnSupabaseCancel: document.getElementById('btn-supabase-cancel'),
+  // Telegram intro step
+  tgIntroLink: document.getElementById('tg-intro-link'),
+  btnTgIntroBack: document.getElementById('btn-tg-intro-back'),
+  btnTgIntroContinue: document.getElementById('btn-tg-intro-continue'),
+  // Telegram tokens step (unified — used to be split create+tokens).
+  // Meta rows ("Insert this name / username") are injected by
+  // wizard-flow.js into the per-role #tg-meta-<role> slot inside the
+  // existing token rows.
+  tgCreateUsertag: document.getElementById('tg-create-usertag'),
+  tgCreateOpenBotfather: document.getElementById('tg-create-open-botfather'),
   btnVpsGenerateKey: document.getElementById('btn-vps-generate-key'),
   vpsStep2: document.getElementById('vps-step2'),
   vpsStep3: document.getElementById('vps-step3'),
   vpsPubkey: document.getElementById('vps-pubkey'),
   btnVpsCopyPubkey: document.getElementById('btn-vps-copy-pubkey'),
+  btnVpsOpenKeyFolder: document.getElementById('btn-vps-open-key-folder'),
   btnVpsOpenHetzner: document.getElementById('btn-vps-open-hetzner'),
   vpsIp: document.getElementById('vps-ip'),
   btnVpsConnect: document.getElementById('btn-vps-connect'),

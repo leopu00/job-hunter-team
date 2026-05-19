@@ -1,6 +1,6 @@
 {
   "name": "jht-desktop",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "description": "Desktop launcher for Job Hunter Team",
   "author": {
@@ -57,6 +57,7 @@
       "auth/**/*.js",
       "sync/**/*.js",
       "vps/**/*.js",
+      "telegram/**/*.js",
       "docker-installer/**/*.js",
       "win-installer/**/*.js",
       "!**/*.test.js",

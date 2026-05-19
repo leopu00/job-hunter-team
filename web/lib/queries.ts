@@ -265,9 +265,17 @@ export async function getRecentPositions(limit = 15): Promise<PositionWithScore[
 }
 
 // ── All positions with optional filters ────────────────────────────
+// Sort: la dir base è applicata via supabase.order() per `found_at`
+// (default). Per gli altri ordinamenti (score, critic, ecc.) il fetch
+// resta su found_at e poi riordiniamo in memoria — limit 600 in chiamata
+// è gestibile e tiene la logica fuori da PostgREST nested ordering.
+const POSITION_SORT_KEYS = ['id', 'title', 'company', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
+type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
+
 export async function getPositions(opts?: {
   status?: string; minScore?: number; maxScore?: number; noScore?: boolean
   remoteType?: string; limit?: number; offset?: number
+  sort?: string; dir?: 'asc' | 'desc'
 }): Promise<PositionWithScore[]> {
   const w = await ws()
   if (w) { try { return local.getPositionsLocal(w, opts) } catch { return [] } }
@@ -276,7 +284,7 @@ export async function getPositions(opts?: {
   const supabase = await createClient()
   let query = supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit )')
+    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
     .order('found_at', { ascending: false })
 
   if (opts?.status && opts.status !== 'all') query = query.eq('status', opts.status)
@@ -291,7 +299,40 @@ export async function getPositions(opts?: {
 
   const { data, error } = await query
   if (error || !data) return []
-  return data.map((p: any) => ({ ...p, score: p.score ?? p.scores?.total_score ?? undefined, scores: p.scores ?? undefined }))
+  const mapped: PositionWithScore[] = data.map((p: any) => {
+    const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
+    return {
+      ...p,
+      score: p.score ?? p.scores?.total_score ?? undefined,
+      scores: p.scores ?? undefined,
+      critic_score: app?.critic_score ?? null,
+      critic_verdict: app?.critic_verdict ?? null,
+    }
+  })
+
+  // Sort in memoria per le colonne richieste dalla UI.
+  const sortKey: PositionSortKey | null = POSITION_SORT_KEYS.includes(opts?.sort as PositionSortKey)
+    ? (opts!.sort as PositionSortKey)
+    : null
+  if (!sortKey) return mapped
+  const dirMul = opts?.dir === 'asc' ? 1 : -1
+  const getVal = (p: PositionWithScore): string | number | null => {
+    switch (sortKey) {
+      case 'score': return p.score ?? null
+      case 'critic': return p.critic_score ?? null
+      case 'found_at': return p.found_at ?? null
+      default: return (p as any)[sortKey] ?? null
+    }
+  }
+  return [...mapped].sort((a, b) => {
+    const va = getVal(a), vb = getVal(b)
+    // NULLS LAST in entrambe le direzioni
+    if (va == null && vb == null) return 0
+    if (va == null) return 1
+    if (vb == null) return -1
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dirMul
+    return String(va).localeCompare(String(vb)) * dirMul
+  })
 }
 
 // ── Single position with all details ───────────────────────────────
@@ -500,6 +541,36 @@ export async function getCriticoStats() {
   const grouped: Record<string, { total: number; pass: number; needsWork: number; reject: number }> = {}
   for (const row of data) { const key = row.reviewed_by!; if (!grouped[key]) grouped[key] = { total: 0, pass: 0, needsWork: 0, reject: 0 }; grouped[key].total++; if (row.critic_verdict === 'PASS') grouped[key].pass++; if (row.critic_verdict === 'NEEDS_WORK') grouped[key].needsWork++; if (row.critic_verdict === 'REJECT') grouped[key].reject++ }
   return Object.entries(grouped).map(([critico, s]) => ({ critico, ...s })).sort((a, b) => b.total - a.total)
+}
+
+// ── Critic verdict aggregate totals ─────────────────────────────────
+// Per il widget "Conversion rate" della dashboard: somma PASS /
+// NEEDS_WORK / REJECT su TUTTE le applications (non spezzate per critico).
+export type CriticVerdictTotals = {
+  pass: number
+  needs_work: number
+  reject: number
+  total: number
+}
+
+export async function getCriticVerdictTotals(): Promise<CriticVerdictTotals> {
+  const w = await ws()
+  if (w) {
+    try { return local.getCriticVerdictTotalsLocal(w) } catch { return { pass: 0, needs_work: 0, reject: 0, total: 0 } }
+  }
+  if (!isSupabaseConfigured) return { pass: 0, needs_work: 0, reject: 0, total: 0 }
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('applications').select('critic_verdict').not('critic_verdict', 'is', null)
+  if (error || !data) return { pass: 0, needs_work: 0, reject: 0, total: 0 }
+  const out: CriticVerdictTotals = { pass: 0, needs_work: 0, reject: 0, total: 0 }
+  for (const row of data as { critic_verdict: string | null }[]) {
+    out.total++
+    if (row.critic_verdict === 'PASS') out.pass++
+    else if (row.critic_verdict === 'NEEDS_WORK') out.needs_work++
+    else if (row.critic_verdict === 'REJECT') out.reject++
+  }
+  return out
 }
 
 // ── Pending user messages (V5) ──────────────────────────────────────

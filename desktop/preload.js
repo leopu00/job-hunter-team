@@ -126,7 +126,20 @@ contextBridge.exposeInMainWorld('clipboardApi', {
 contextBridge.exposeInMainWorld('authApi', {
   getStatus: () => ipcRenderer.invoke('auth:get-status'),
   signIn: (provider) => ipcRenderer.invoke('auth:sign-in', provider),
+  cancelSignIn: () => ipcRenderer.invoke('auth:cancel-sign-in'),
   signOut: () => ipcRenderer.invoke('auth:sign-out'),
+  // Subscribe to the OAuth URL emitted right before main opens it
+  // in the default browser. Renderer uses this to expose a "Copy
+  // link" fallback (in case the browser fails to open, or the user
+  // wants to paste the URL into a different browser without the
+  // wrong Google session). Returns an unsubscribe fn.
+  onUrlReady: (callback) => {
+    const handler = (_event, payload) => {
+      try { callback(payload) } catch { /* ignore */ }
+    }
+    ipcRenderer.on('auth:url-ready', handler)
+    return () => ipcRenderer.removeListener('auth:url-ready', handler)
+  },
   // Used by the (upcoming) VPS provisioning wizard to feed
   // `install.sh --pairing-token <token>`. Renderer-side: treat the
   // returned string as an opaque blob; never log it.
@@ -146,6 +159,10 @@ contextBridge.exposeInMainWorld('vpsApi', {
   generateKey: (args) => ipcRenderer.invoke('vps:generate-key', args),
   getPublicKey: () => ipcRenderer.invoke('vps:get-public-key'),
   hasKey: () => ipcRenderer.invoke('vps:has-key'),
+  // Reveal the SSH keypair folder so the user can share the private
+  // key file with a beta tester / second machine (the public key
+  // alone is NOT enough — the SSH client needs the private key).
+  openKeyFolder: () => ipcRenderer.invoke('vps:open-key-folder'),
   // SSH into the user's freshly-created VPS and stream install.sh
   // output back via onInstallLog. The token comes from authApi
   // automatically (main side) so no secret leaves the IPC boundary.
@@ -200,6 +217,11 @@ contextBridge.exposeInMainWorld('terminalApi', {
   write: (sessionId, data) => ipcRenderer.send('terminal:write', { sessionId, data }),
   resize: (sessionId, cols, rows) => ipcRenderer.send('terminal:resize', { sessionId, cols, rows }),
   kill: (sessionId) => ipcRenderer.invoke('terminal:kill', sessionId),
+  // Signal "I have subscribed to data/exit, flush the buffer".
+  // Race-free: renderer must subscribe via onData/onExit BEFORE
+  // calling attach. Main buffers everything between start() and
+  // attach() so no chunk is lost in transit.
+  attach: (sessionId) => ipcRenderer.invoke('terminal:attach', sessionId),
   onData: (sessionId, cb) => {
     const channel = `terminal:data:${sessionId}`
     const listener = (_event, data) => { try { cb(data) } catch { /* ignore */ } }

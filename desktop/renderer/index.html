@@ -105,6 +105,22 @@
             Continue with GitHub
           </button>
         </div>
+        <div class="signin-progress" id="supabase-signin-progress" hidden>
+          <p class="step__hint" id="supabase-signin-hint" data-i18n="supabase.signin.waiting">
+            Waiting for sign-in to complete in your browser…
+          </p>
+          <p class="step__hint signin-progress__url-row" id="supabase-signin-url-row" hidden>
+            <span class="signin-progress__url" id="supabase-signin-url" title="" aria-label=""></span>
+          </p>
+          <div class="signin-progress__actions">
+            <button type="button" class="btn btn--ghost btn--small" id="btn-supabase-copy-url" data-i18n="supabase.signin.copyLink" hidden>
+              Copy sign-in link
+            </button>
+            <button type="button" class="btn btn--ghost btn--small" id="btn-supabase-cancel" data-i18n="supabase.signin.cancel">
+              Cancel sign-in
+            </button>
+          </div>
+        </div>
         <p class="step__hint" id="supabase-status" hidden></p>
         <div class="step__actions step__actions--between step__actions--wide">
           <button class="btn btn--ghost" id="btn-supabase-back" data-i18n="supabase.back">
@@ -130,33 +146,78 @@
            /getMe; chat_id captured automatically when the user presses
            Start on the deep-link. Saved on the VPS at
            /root/.jht/jht.config.json after VPS provisioning. -->
+      <!-- Step: Telegram intro — introduces @BotFather before the user
+           is asked to do anything with it. Avoids the "ok wait what is
+           BotFather" cognitive cliff for non-tech users. -->
+      <section class="step step--centered" id="step-telegram-intro" data-step="telegram-intro" hidden>
+        <h1 class="step__title" data-i18n="telegram.intro.title">Meet @BotFather</h1>
+        <p class="step__lead" data-i18n="telegram.intro.lead">
+          BotFather is the official Telegram bot that creates other bots. We'll guide you through creating three small bots that the team will use to talk to you.
+        </p>
+        <a class="tg-intro__card" id="tg-intro-link" href="https://t.me/BotFather" target="_blank" rel="noopener">
+          <img src="./assets/botfather.jpg" alt="@BotFather" class="tg-intro__avatar" />
+          <div class="tg-intro__meta">
+            <div class="tg-intro__handle">@BotFather</div>
+            <div class="tg-intro__sub" data-i18n="telegram.intro.botfatherDesc">Telegram's official bot factory</div>
+            <div class="tg-intro__cta" data-i18n="telegram.intro.openCta">Open in Telegram →</div>
+          </div>
+        </a>
+        <p class="step__hint" data-i18n="telegram.intro.hint">
+          On the next page we'll suggest three bot usernames. Then you'll create them inside @BotFather and paste the tokens back here.
+        </p>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-tg-intro-back" data-i18n="telegram.intro.back">Back</button>
+          <button class="btn btn--primary" id="btn-tg-intro-continue" data-i18n="telegram.intro.continue">Got it, continue</button>
+        </div>
+      </section>
+
+      <!-- Step: Telegram tokens (unified) — for each of the 3 bots
+           we show: a suggested display name + suggested username
+           (user copies these into BotFather), then a token field
+           that the user pastes back from BotFather. The same row
+           drives verification + chat_id polling + final ready state. -->
       <section class="step step--centered" id="step-telegram-tokens" data-step="telegram-tokens" hidden>
         <div class="step__emoji" aria-hidden="true">💬</div>
         <h1 class="step__title" data-i18n="telegram.title">Telegram bots</h1>
-        <p class="step__lead" data-i18n="telegram.lead">
-          Three dedicated Telegram bots — one per user-facing agent. Create them on
-          <a href="#" id="tg-link-botfather">@BotFather</a> and paste each token here.
+        <p class="step__lead" data-i18n="telegram.tokens.lead">
+          Three dedicated Telegram bots — one per user-facing agent. For each bot: copy the suggested name + username into @BotFather, then paste the token it returns here.
         </p>
+        <div class="tg-create__usertag">
+          <label for="tg-create-usertag" class="tg-create__label" data-i18n="telegram.create.usertag.label">Your tag (lowercase, used inside bot usernames)</label>
+          <input
+            type="text"
+            id="tg-create-usertag"
+            class="tg-create__input"
+            placeholder="myname"
+            spellcheck="false"
+            autocomplete="off"
+            autocapitalize="off"
+            maxlength="10"
+          />
+        </div>
 
         <div class="tg-rows">
           <div class="tg-row" id="tg-row-assistente" data-role="assistente" data-status="idle">
             <div class="tg-row__head">
-              <h2 class="tg-row__title">Assistente</h2>
-              <p class="tg-row__hint" data-i18n="telegram.role.assistente">Profile onboarding · document drop-zone</p>
+              <h2 class="tg-row__title" data-i18n="telegram.agent.assistente">Assistant</h2>
             </div>
-            <div class="tg-row__form">
-              <input
-                type="password"
-                class="tg-row__input"
-                id="tg-input-assistente"
-                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                spellcheck="false"
-                autocomplete="off"
-                autocapitalize="off"
-              />
-              <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-assistente" disabled>
-                Verify
-              </button>
+            <div class="tg-row__meta" id="tg-meta-assistente"></div>
+            <div class="tg-row__token">
+              <label for="tg-input-assistente" class="tg-row__token-label" data-i18n="telegram.tokens.pasteLabel">Paste the token here:</label>
+              <div class="tg-row__form">
+                <input
+                  type="text"
+                  class="tg-row__input"
+                  id="tg-input-assistente"
+                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                  spellcheck="false"
+                  autocomplete="off"
+                  autocapitalize="off"
+                />
+                <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-assistente" disabled>
+                  Verify
+                </button>
+              </div>
             </div>
             <p class="tg-row__status" id="tg-status-assistente" hidden></p>
             <a class="tg-row__deeplink" id="tg-deeplink-assistente" href="#" target="_blank" rel="noopener" hidden></a>
@@ -164,22 +225,25 @@
 
           <div class="tg-row" id="tg-row-capitano" data-role="capitano" data-status="idle">
             <div class="tg-row__head">
-              <h2 class="tg-row__title">Capitano</h2>
-              <p class="tg-row__hint" data-i18n="telegram.role.capitano">Team direction · ready-position notifications</p>
+              <h2 class="tg-row__title" data-i18n="telegram.agent.capitano">Captain</h2>
             </div>
-            <div class="tg-row__form">
-              <input
-                type="password"
-                class="tg-row__input"
-                id="tg-input-capitano"
-                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                spellcheck="false"
-                autocomplete="off"
-                autocapitalize="off"
-              />
-              <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-capitano" disabled>
-                Verify
-              </button>
+            <div class="tg-row__meta" id="tg-meta-capitano"></div>
+            <div class="tg-row__token">
+              <label for="tg-input-capitano" class="tg-row__token-label" data-i18n="telegram.tokens.pasteLabel">Paste the token here:</label>
+              <div class="tg-row__form">
+                <input
+                  type="text"
+                  class="tg-row__input"
+                  id="tg-input-capitano"
+                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                  spellcheck="false"
+                  autocomplete="off"
+                  autocapitalize="off"
+                />
+                <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-capitano" disabled>
+                  Verify
+                </button>
+              </div>
             </div>
             <p class="tg-row__status" id="tg-status-capitano" hidden></p>
             <a class="tg-row__deeplink" id="tg-deeplink-capitano" href="#" target="_blank" rel="noopener" hidden></a>
@@ -187,28 +251,34 @@
 
           <div class="tg-row" id="tg-row-mentor" data-role="mentor" data-status="idle">
             <div class="tg-row__head">
-              <h2 class="tg-row__title">Mentor</h2>
-              <p class="tg-row__hint" data-i18n="telegram.role.mentor">Growth coach · strategic positioning</p>
+              <h2 class="tg-row__title" data-i18n="telegram.agent.mentor">Mentor</h2>
             </div>
-            <div class="tg-row__form">
-              <input
-                type="password"
-                class="tg-row__input"
-                id="tg-input-mentor"
-                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                spellcheck="false"
-                autocomplete="off"
-                autocapitalize="off"
-              />
-              <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-mentor" disabled>
-                Verify
-              </button>
+            <div class="tg-row__meta" id="tg-meta-mentor"></div>
+            <div class="tg-row__token">
+              <label for="tg-input-mentor" class="tg-row__token-label" data-i18n="telegram.tokens.pasteLabel">Paste the token here:</label>
+              <div class="tg-row__form">
+                <input
+                  type="text"
+                  class="tg-row__input"
+                  id="tg-input-mentor"
+                  placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                  spellcheck="false"
+                  autocomplete="off"
+                  autocapitalize="off"
+                />
+                <button type="button" class="btn btn--secondary tg-row__verify" id="tg-verify-mentor" disabled>
+                  Verify
+                </button>
+              </div>
             </div>
             <p class="tg-row__status" id="tg-status-mentor" hidden></p>
             <a class="tg-row__deeplink" id="tg-deeplink-mentor" href="#" target="_blank" rel="noopener" hidden></a>
           </div>
         </div>
 
+        <p class="step__hint">
+          <a href="#" id="tg-create-open-botfather" data-i18n="telegram.create.openBotfather">Open @BotFather in Telegram</a>
+        </p>
         <p class="step__hint" id="tg-save-status" hidden></p>
 
         <div class="step__actions step__actions--between step__actions--wide">
@@ -254,7 +324,13 @@
             <button class="btn btn--ghost" id="btn-vps-open-hetzner" data-i18n="vps.step2.openHetzner">
               Open Hetzner console
             </button>
+            <button class="btn btn--ghost" id="btn-vps-open-key-folder" data-i18n="vps.step2.openKeyFolder">
+              Open SSH key folder
+            </button>
           </div>
+          <p class="vps-step__hint" data-i18n="vps.step2.shareKeyHint">
+            To share VPS access with a teammate or use it from another PC, send them <strong>both</strong> files from this folder (<code>jht_ed25519</code> and <code>jht_ed25519.pub</code>). They go in the recipient's <code>~/.ssh/</code> directory.
+          </p>
         </div>
 
         <div class="vps-step" id="vps-step3" hidden>

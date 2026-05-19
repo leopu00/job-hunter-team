@@ -132,14 +132,14 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ⬜ **"Enable cloud sync" toggle** in desktop launcher + CLI wizard
 - ⬜ **Self-hosted Supabase docs** (BYO backend for technical users)
 
-##### 📅 [JHT-MONITORING-WEEKLY] Weekly window calibration
+##### 🟡 [JHT-MONITORING-WEEKLY] Weekly window calibration — data-layer DONE 2026-05-19
 
 - **Problem:** monitoring is currently calibrated on 5h windows, but Anthropic's real reset is weekly. Two days of intensive use can burn through the weekly cap even if every 5h window stays under 95%.
-- **Tasks:**
-  1. Rewrite projection in `compute_metrics.py` with weekly base
-  2. Sentinel UI shows weekly usage + breakdown per 5h window
-  3. Target 95% weekly instead of 95% per window
-  4. Test on a full weekly session with Claude Max + Kimi
+- **Stato implementazione:**
+  1. ✅ `compute_metrics.py` espone `weekly_usage`, `weekly_reset_at`, `weekly_reset_at_unix` (bug #19A: disponibili al Capitano/Sentinella senza calcoli runtime); flag `--weekly` su CLI.
+  2. 🟡 API `/api/sentinella/data` consuma i nuovi campi (`web/app/api/sentinella/data/route.ts`); UI breakdown per 5h ancora da verificare/cablare lato dashboard.
+  3. ⬜ Switch target 95 % settimanale (oggi rimane 95 % per finestra) — decisione + tuning bridge.
+  4. ⬜ Test su sessione settimanale completa Claude Max + Kimi.
 
 ##### ⏰ [JHT-MONITORING-WORKHOURS] User-defined work hours
 
@@ -180,22 +180,18 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - ✅ Persistent service — `shared/skills/token-meter.py` has singleton PID lock + `/proc/cmdline` check; `shared/skills/token-meter-control.sh` start|stop|status|restart; integrated in `.launcher/start-agent.sh` (ROLE=token-meter) + CLI `cli/src/commands/team/start.js` + web `web/app/api/team/start-all/route.ts`
   - ✅ State file `$JHT_HOME/logs/token-meter-state.json` exposes `ratio.ema_kt_per_pct` + `per_agent[<name>].rate_kt_per_min_60s` + `idle_seconds` + `window_source`; consumed by `web/app/api/tokens/status/route.ts`
   - ✅ Shared lib `shared/skills/token_metrics_lib.py` (read_kimi_events, parse_session_to_agent, billing_weighted, aggregate, rolling_rate, rolling_rate_per_agent) — `token-meter.py`, `token-by-agent-plot.py`, `token-by-agent-rate.py` are now thin wrappers
-- **Tier 3 — dedicated session (~1 day):**
-  - `throttle-controller.py`: deterministic (no LLM), reads state every 30 s, computes `error = actual - target_per_agent`, emits `[THROTTLE @<agent> ±Ns]` to the Capitano
-  - Capitano forwards to agents; agents honour the delta in their loop sleep
-  - Initial allocation: Scout 60 % / Critico 15 % / Capitano 15 % / Sentinella 10 %; refit on 24 h of real data
-  - Anti-oscillation: dead-band ±10 %, max ±3 s change per 60 s, integral term for slow drift
+- **Tier 3 — ✅ DONE 2026-05-19** (shipped come `shared/skills/throttle*.py` + `.launcher/pacing-bridge.py`):
+  - ✅ Controller deterministico (no LLM) cablato: `shared/skills/throttle.py` (sleep tracciato + indirezione via config), `throttle-config.py` (lettura/scrittura config centralizzato), `throttle-series.py` (serie storica per chart). Ogni agente invoca `jht-throttle` invece di `sleep N` nudo → logging `start/end` su `~/.jht/logs/throttle-events.jsonl` con `id` univoco per legare start/end, `actual_sleep_sec`, `interrupted` flag.
+  - ✅ Routing centralizzato via `throttle-config.json` (chiave per-agente, fallback `default`, fallback `0=no-op`) → Capitano cambia 1 file e tutti gli agenti applicano al ciclo successivo, senza dover ricevere 5 messaggi tmux.
+  - ✅ Loop di controllo trasferito al pacing-bridge (vedi [JHT-BRIDGE-V8] sotto): tick orario calcola velocità per-agente e emette verdetto SFORO/MARGINE/ALLINEATO al CAPITANO che ridistribuisce i delta via `throttle-config`.
+  - **Nota architettonica:** il design originale prevedeva `throttle-controller.py` come binario singolo + Capitano forwarder; lo shipping si è scomposto in 3 skill modulari (config + sleep + series) + pacing-bridge come sensor/reporter. Funzionalmente equivalente, più componibile.
 - **Expected gain:** projection stdev 20 % → ~5 %, in-target 68 % → ~95 %. Sentinella becomes interrupt-driven (only strategic decisions: freeze, switch provider, scheduled pauses).
 - **Architectural payoff:** the same V6 / V7 architecture scales to weekly windows ([JHT-MONITORING-WEEKLY]) just by changing thresholds.
 
-##### 🚀 [JHT-BRIDGE-V8] Auto-incentive — bridge accelerates underutilized teams (NEW 2026-05-02)
+##### ✅ [JHT-BRIDGE-V8] Auto-incentive — bridge accelerates underutilized teams (DONE 2026-05-19)
 
-- **Background:** during the 2026-04-30/05-01 session, the team did NOT fully self-utilize the rate budget toward the end of the window. The user had to send 3 manual nudges (`controlla lo usage`, `non state sfruttando la FINESTRA AL MASSIMO`, `SPINGI AL MASSIMO SENZA SFORARE`) to push consumption from ~70% to ~84%.
-- **Idea:** dual of the V6 cooldown. Today the bridge slows the team down; tomorrow it should also speed them up if it sees budget unused near reset.
-- **Trigger:** `proj < 80% AND reset_window_remaining < 90min AND velocity < target × 0.7`
-- **Action:** bridge sends `[BRIDGE NUDGE] proj 60%, reset in 1h — push harder` to the Capitano (1 message per cooldown_window, like the down-throttle direction).
-- **Effort:** ~2 h after V7 is in place (reuses state machine + cooldown logic).
-- **Effort guard:** must NOT loop — same cooldown discipline as V6 (15 min between nudges).
+- **Stato implementazione:** `.launcher/pacing-bridge.py` deployed — tick allineato all'orologio ogni 15 min (`:00/:15/:30/:45 UTC`), calcola Δusage del team, velocità %/h, ottimale per atterrare nel target band 90-95% al reset, breakdown per-agente (ratio kT/%, divisione, contributo %/h). Verdetto a tre stati: `SFORO` (riduci) | `MARGINE` (puoi accelerare) | `ALLINEATO`. Output a stdout (`/tmp/pacing-bridge.log`) + tmux send single-line al CAPITANO via `jht-tmux-send`. Singleton via spawner `start-agent.sh`. Override env: `JHT_PACING_TARGET_PCT`, `JHT_PACING_TICK_MIN`, `JHT_PACING_MIN_PCT_H`. Modi: loop infinito o `--once [--send]`.
+- **Background originale:** during the 2026-04-30/05-01 session, the team did NOT fully self-utilize the rate budget toward the end of the window. The user had to send 3 manual nudges to push consumption from ~70% to ~84%. V8 elimina questo bisogno.
 
 ##### 📚 [JHT-LAUNCH-LOW-PROFILE] Public release strategy — low-profile founder model (NEW 2026-05-02)
 
@@ -226,10 +222,11 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
 - **Priority:** 🔴 BLOCKER pre-launch
 
-##### 📊 [JHT-FRONTEND-DASHBOARD-AUDIT] Audit residual mock data in dashboard
+##### ✅ [JHT-FRONTEND-DASHBOARD-AUDIT] Audit residual mock data in dashboard — DONE 2026-05-19
 
-- **Problem:** dashboard queries Supabase ✅ (in production), but some widgets may still use mock data.
-- **Task:** audit `web/app/(protected)/dashboard/` component by component, identify and wire residual mocks.
+- **Stato implementazione:** audit completato. L'unico residuo mock-like è `web/lib/dashboard-demo.ts` (33+ righe), ma è **demo intenzionale** gated da `?demo=1` query param o env `JHT_WEB_DASHBOARD_DEMO=1` — usato per landing/screenshots, mai attivo in produzione (`process.env.NODE_ENV === "production"` early-return prima del flag).
+- **Path produzione:** `web/app/(protected)/dashboard/page.tsx` legge tutto da Supabase via `web/lib/queries.ts` (183 righe post-refactor, vs ~30 in passato).
+- **Acceptance:** nessun mock leak in prod confermato — chiusa.
 
 ##### 🏗️ [JHT-INSTALL-SPLIT] Host/container split — wrapper bash + install.sh ridisegno ✅ partial DONE 2026-05-06
 
@@ -287,15 +284,15 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 #### 🟡 MEDIUM PRIORITY
 
-##### 🐍 [JHT-BACKEND-01] `db_supabase.py` — push agent results to cloud
+##### ✅ [JHT-BACKEND-01] `db_to_supabase.py` — push agent results to cloud — DONE
 
-- **Context:** Scout, Analyst, Scorer, Writer write only to local SQLite. Results aren't visible from the phone.
-- **Task:** create `shared/skills/db_supabase.py` wrapper with the same functions as `db_insert.py` / `db_update.py` / `db_query.py`, multi-tenant via `user_id`.
-- Linked to JHT-ONBOARDING-04.
+- **Stato implementazione:** shipped come `shared/skills/db_to_supabase.py` (naming "db_to_supabase" piu' chiaro del proposto "db_supabase" sulla direzione del flusso). Sync SQLite → Supabase con `legacy_id` mapping (integer → UUID), multi-tenant via `JHT_SUPABASE_USER_ID` (autodetect dal primo utente in `auth.users` se omesso). Ordine: companies → positions → scores → applications → position_highlights. Modi: `sync [--dry-run] [--table <t>]`, `status` (conteggi SQLite vs Supabase).
+- **Linked:** `[JHT-ONBOARDING-04]` (periodic push, vedi sotto).
 
 ##### 📤 [JHT-ONBOARDING-04] Periodic agent results push
 
-- **Dependency:** JHT-BACKEND-01
+- **Dependency:** ✅ [JHT-BACKEND-01] (`db_to_supabase.py` ready).
+- **Resta da fare:** scheduling periodico — oggi `db_to_supabase.py sync` è invocabile manualmente, serve un trigger (cron interno container / `.launcher/auto-report-loop.sh` pattern, o hook post-agent-run nel Capitano).
 - Batch push after each agent run (positions, scores, applications) to Supabase.
 - Write-only: cloud is read-only mirror.
 
@@ -591,7 +588,9 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
   - `[JHT-VPS-FRIENDLY]` (desktop launcher dovrebbe fare il pairing automaticamente come parte del provisioning, non e' un'alternativa al fix #1 ma un layer sopra)
   - Pattern di riferimento: implementazione device flow di `claude --dangerously-skip-permissions` o `gh auth login`
 - **Priorita':** 🔴 alta — primo touchpoint utente non-tech post-launch. Senza fix, "VPS mode" rimane prerogativa dei tech-user (bypass step 5 SSH e' impossibile per non-tech).
-- **Stato implementazione (aggiornato 2026-05-13 sera):** ✅ pairing automatico via desktop app cablato (path B3). L'app desktop deriva il pairing token dalla session Supabase + lo passa a `install.sh --pairing-token`; `jht cloud pair --token <t>` chiama `POST /api/cloud-sync/device-register` che registra il device su Supabase. Zero copia-incolla per Path 2. Resta opzione 1 (`jht cloud login` device flow OAuth) per Path 3 / power-user senza desktop app — non bloccante per la beta.
+- **Stato implementazione (aggiornato 2026-05-19):** ✅ TUTTI e quattro i path coperti.
+  - ✅ Pairing automatico via desktop app (path B3, 2026-05-13): `install.sh --pairing-token` + `jht cloud pair --token <t>` → `POST /api/cloud-sync/device-register`.
+  - ✅ **🥇 Opzione 1 — `jht cloud login` device flow OAuth** cablato: 3 endpoint web (`/api/cloud-sync/device-init`, `device-poll`, `device-confirm`) + flusso CLI completo in `cli/src/commands/cloud.js` (genera `device_code` + `user_code` + `verification_url`, polling con expires_in, fallback messaggi su slow_down/expired/not-found). Pattern di riferimento `gh auth login` rispettato. Power-user senza desktop app ora hanno path 1-comando.
 
 #### 📎 [JHT-VPS-CV-UPLOAD-UX] Upload CV/allegati su VPS via UI (no scp/sftp)
 
@@ -654,22 +653,17 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
   Implementazione:
   - ✅ **RULE-T14** in `agents/_team/team-rules.md` (deployed 2026-05-13) — safeguard runtime: anche con baseline IT, locale=en → output EN
-  - ⬜ **[JHT-I18N-TRANSLATE]** (sotto) — traduzione vera dei baseline IT→EN (elimina costo "traduzione mentale" runtime)
+  - ✅ **[JHT-I18N-TRANSLATE]** (sotto) — traduzione vera dei baseline IT→EN completata
   - ⬜ Overlay multi-lingua per `agents/_team/`, `agents/_manual/`, `agents/_skills/` (questi sono letti via `Read` tool, non copiati dal launcher → serve risoluzione diversa)
-  - ⬜ Community translation HU/ES/DE/FR (post-launch)
+  - 🟡 Community translation HU shipped (vedi sotto); ES/DE/FR/PT post-launch
 
-##### 🌐 [JHT-I18N-TRANSLATE] Traduzione baseline prompt agenti IT → EN
+##### ✅ [JHT-I18N-TRANSLATE] Traduzione baseline prompt agenti IT → EN — DONE 2026-05-19
 
-- **Why HIGH:** RULE-T14 mitiga il drift ma l'agente fa "traduzione mentale" runtime → token overhead. Traduzione vera elimina il costo.
-- **Scope:** 10 file `<role>.md`, ~1650 righe totali (post-refactor).
-- **Procedura:**
-  1. `cp agents/<role>/<role>.md agents/<role>/<role>.it.md` (preserva IT come override)
-  2. Tradurre il baseline `<role>.md` in inglese
-  3. Preservare invariati: protocol token (`STEADY`, `ATTENZIONE`, `RECOVERY TRACKING`, ecc. parsati per pattern dal Capitano), tmux session names (`CAPITANO`, `SCOUT-N`), comandi shell, path
-  4. Smoke test: team start con `locale=en` → verifica baseline EN caricato + risposte EN
-- **Acceptance:** 10 file EN, 10 file `<role>.it.md` con IT preservato, smoke test pass.
-- **Effort stimato:** 4-6 ore. Da fare pre-launch.
-- **Design doc:** [`docs/internal/2026-05-06-agent-prompts-i18n.md`](docs/internal/2026-05-06-agent-prompts-i18n.md) § "Task traduzione esplicito".
+- **Stato implementazione:** baseline EN deployed per tutti i 9 prompt agenti (`analista.md`, `assistente.md`, `capitano.md`, `critico.md`, `dottore.md`, `mentor.md`, `scorer.md`, `scout.md`, `scrittore.md`, `sentinella.md`). Header verificato in EN ("You are a **Scout**", "You are **Capitano**", ecc.) — niente più "Sei lo Scout/Sei il Capitano" baseline.
+- **Overlay IT preservato:** `agents/<role>/<role>.it.md` siblings per fallback locale=it (9 file).
+- **Bonus 🇭🇺:** traduzione Hungarian community-contributed shipped contestualmente — `agents/<role>/<role>.hu.md` per 10 ruoli (incluso `mentor.hu.md`). HU sblocca il primo beta tester non-anglofono/non-italianofono.
+- **Architettura risoluzione (gia' deployed 2026-05-06):** `.launcher/start-agent.sh` legge `~/.jht/i18n-prefs.json`, prova `<role>.<locale>.md`, fallback al baseline `<role>.md` (ora EN). Protocol token (`STEADY`, `ATTENZIONE`, `RECOVERY TRACKING`, ecc.) preservati invariati come da spec.
+- **Design doc storico:** [`docs/internal/2026-05-06-agent-prompts-i18n.md`](docs/internal/2026-05-06-agent-prompts-i18n.md).
 
 #### 🌍 [JHT-I18N-03] Future language expansion
 

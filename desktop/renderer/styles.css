@@ -457,8 +457,12 @@ body { display: flex; flex-direction: column; }
 }
 
 .btn--ghost {
-  background: transparent;
-  color: var(--text-dim);
+  background: var(--panel-subtle);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--panel);
 }
 
 .btn--large {
@@ -1705,6 +1709,167 @@ body { display: flex; flex-direction: column; }
   width: 100%;
   max-width: 360px;
   margin: 18px auto 12px;
+}
+
+.signin-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  max-width: 480px;
+  margin: 6px auto 14px;
+}
+
+.signin-progress__url-row {
+  width: 100%;
+  text-align: center;
+  word-break: break-all;
+  opacity: 0.75;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.signin-progress__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn--small {
+  padding: 6px 12px;
+  font-size: 0.9em;
+}
+
+/* ── Telegram intro step ───────────────────────────────────────── */
+.tg-intro__card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  margin: 18px auto;
+  border-radius: 14px;
+  background: rgba(55, 174, 226, 0.08);
+  border: 1px solid rgba(55, 174, 226, 0.3);
+  max-width: 420px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.tg-intro__card:hover {
+  background: rgba(55, 174, 226, 0.14);
+  transform: translateY(-1px);
+}
+.tg-intro__avatar {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #1E96C8;
+}
+.tg-intro__meta { text-align: left; flex: 1; }
+.tg-intro__handle {
+  font-weight: 600;
+  font-size: 1.05em;
+}
+.tg-intro__sub {
+  opacity: 0.7;
+  font-size: 0.88em;
+  margin-top: 2px;
+}
+.tg-intro__cta {
+  margin-top: 6px;
+  font-size: 0.85em;
+  color: #37AEE2;
+  font-weight: 500;
+}
+
+/* ── Telegram create step ──────────────────────────────────────── */
+.tg-create__usertag {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 440px;
+  margin: 14px auto;
+}
+.tg-create__label {
+  font-size: 0.85em;
+  opacity: 0.75;
+  text-align: left;
+}
+.tg-create__input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95em;
+}
+.tg-create__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 520px;
+  margin: 8px auto 14px;
+}
+.tg-row__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 4px;
+}
+.tg-row__token {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.tg-row__token-label {
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+.tg-create__row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--bg-elev, rgba(255,255,255,0.04));
+  border: 1px solid var(--border);
+}
+.tg-create__role {
+  font-weight: 600;
+  font-size: 1em;
+}
+.tg-create__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tg-create__field-label {
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+.tg-create__row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.tg-create__username {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.18);
+  color: var(--fg);
+  word-break: break-all;
 }
 
 .step__actions-group {
