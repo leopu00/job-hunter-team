@@ -146,11 +146,25 @@
            /getMe; chat_id captured automatically when the user presses
            Start on the deep-link. Saved on the VPS at
            /root/.jht/jht.config.json after VPS provisioning. -->
-      <!-- Step: Telegram intro — pure visual hook. The Godfather-style
-           parody image carries the introduction by itself; the user
-           recognizes the joke and moves on. No copy intentionally. -->
+      <!-- Step: Telegram intro — introduces @BotFather before the user
+           is asked to do anything with it. Avoids the "ok wait what is
+           BotFather" cognitive cliff for non-tech users. -->
       <section class="step step--centered" id="step-telegram-intro" data-step="telegram-intro" hidden>
-        <img src="./assets/botfather.jpg" alt="@BotFather" class="tg-intro__hero" />
+        <h1 class="step__title" data-i18n="telegram.intro.title">Meet @BotFather</h1>
+        <p class="step__lead" data-i18n="telegram.intro.lead">
+          BotFather is the official Telegram bot that creates other bots. We'll guide you through creating three small bots that the team will use to talk to you.
+        </p>
+        <a class="tg-intro__card" id="tg-intro-link" href="https://t.me/BotFather" target="_blank" rel="noopener">
+          <img src="./assets/botfather.jpg" alt="@BotFather" class="tg-intro__avatar" />
+          <div class="tg-intro__meta">
+            <div class="tg-intro__handle">@BotFather</div>
+            <div class="tg-intro__sub" data-i18n="telegram.intro.botfatherDesc">Telegram's official bot factory</div>
+            <div class="tg-intro__cta" data-i18n="telegram.intro.openCta">Open in Telegram →</div>
+          </div>
+        </a>
+        <p class="step__hint" data-i18n="telegram.intro.hint">
+          On the next page we'll suggest three bot usernames. Then you'll create them inside @BotFather and paste the tokens back here.
+        </p>
         <div class="step__actions step__actions--between step__actions--wide">
           <button class="btn btn--ghost" id="btn-tg-intro-back" data-i18n="telegram.intro.back">Back</button>
           <button class="btn btn--primary" id="btn-tg-intro-continue" data-i18n="telegram.intro.continue">Got it, continue</button>
