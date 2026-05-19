@@ -84,12 +84,14 @@ After install:
 
 ```bash
 jht up               # starts the container (pulls image on first run)
-jht setup            # interactive wizard
+jht setup            # interactive wizard — picks provider, installs CLI, OAuth, team start
 jht doctor           # check prerequisites
-jht providers add    # add your subscription (Claude / Codex / Kimi)
-jht team start       # start the team
-jht team status      # check it's running
+jht team status      # confirm it's running
 ```
+
+The wizard handles provider selection + OAuth login + `jht team start` in one go. To switch provider later: `jht providers use claude` (or `codex` / `kimi`) then `jht providers update <id>` to (re)install the CLI.
+
+> 📖 Full command list — including the host wrapper (`up`/`down`/`upgrade`/`logs`/`shell`/…) vs the Node CLI split, all subcommands and flags: see [`CLI-REFERENCE.md`](CLI-REFERENCE.md).
 
 The container runs `restart: unless-stopped`, so it survives host reboots. To stop everything: `jht down`. To upgrade: `jht upgrade`.
 
