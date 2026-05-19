@@ -119,8 +119,7 @@ Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/qu
 |---|---|---|---|
 | 🌐 | **Web Dashboard** | `cd web && npm run dev:host` | Next.js · React · Tailwind · Supabase |
 | 🖥️ | **Desktop Launcher** | open `JHT Desktop` | Electron · electron-builder *(launcher only — interaction happens in browser/Telegram/CLI)* |
-| ⌨️ | **CLI** | `jht team start` | Node.js · Commander *(also designed to be driven by AI agents — see [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md))* |
-| 📺 | **TUI** | `jht tui` | `@mariozechner/pi-tui` · chalk |
+| ⌨️ | **CLI** | `jht team start` | Node.js · Commander *(full reference: [`docs/guides/CLI-REFERENCE.md`](docs/guides/CLI-REFERENCE.md). Also designed to be driven by AI agents — see [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md))* |
 | 💬 | **Telegram** | bidirectional bot bridge | grammy |
 
 ## 🤖 AI agents can drive JHT
