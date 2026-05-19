@@ -723,6 +723,18 @@ async function onVpsConnect() {
 
 if (dom.btnVpsGenerateKey) dom.btnVpsGenerateKey.addEventListener('click', onVpsGenerateKey)
 if (dom.btnVpsCopyPubkey) dom.btnVpsCopyPubkey.addEventListener('click', onVpsCopyPubkey)
+if (dom.btnVpsOpenKeyFolder) {
+  dom.btnVpsOpenKeyFolder.addEventListener('click', async () => {
+    if (!window.vpsApi?.openKeyFolder) return
+    try {
+      const res = await window.vpsApi.openKeyFolder()
+      if (!res?.ok) log.warn('vps.open-key-folder.failed', { err: res?.error })
+      else log.info('vps.open-key-folder.ok', { path: res.path })
+    } catch (err) {
+      log.warn('vps.open-key-folder.crashed', { err: err?.message })
+    }
+  })
+}
 if (dom.btnVpsOpenHetzner) dom.btnVpsOpenHetzner.addEventListener('click', onVpsOpenHetzner)
 if (dom.btnVpsConnect) dom.btnVpsConnect.addEventListener('click', onVpsConnect)
 if (dom.vpsIp) dom.vpsIp.addEventListener('input', updateVpsConnectState)
