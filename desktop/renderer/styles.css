@@ -457,8 +457,12 @@ body { display: flex; flex-direction: column; }
 }
 
 .btn--ghost {
-  background: transparent;
-  color: var(--text-dim);
+  background: var(--panel-subtle);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--panel);
 }
 
 .btn--large {
