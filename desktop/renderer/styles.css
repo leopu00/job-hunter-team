@@ -1814,6 +1814,22 @@ body { display: flex; flex-direction: column; }
   max-width: 520px;
   margin: 8px auto 14px;
 }
+.tg-row__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 4px;
+}
+.tg-row__token {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.tg-row__token-label {
+  font-size: 0.8em;
+  opacity: 0.7;
+}
 .tg-create__row {
   display: flex;
   flex-direction: column;

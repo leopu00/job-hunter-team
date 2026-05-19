@@ -83,15 +83,16 @@ export const dom = {
   supabaseSigninUrl: document.getElementById('supabase-signin-url'),
   btnSupabaseCopyUrl: document.getElementById('btn-supabase-copy-url'),
   btnSupabaseCancel: document.getElementById('btn-supabase-cancel'),
-  // Telegram intro / create steps
+  // Telegram intro step
   tgIntroLink: document.getElementById('tg-intro-link'),
   btnTgIntroBack: document.getElementById('btn-tg-intro-back'),
   btnTgIntroContinue: document.getElementById('btn-tg-intro-continue'),
+  // Telegram tokens step (unified — used to be split create+tokens).
+  // Meta rows ("Insert this name / username") are injected by
+  // wizard-flow.js into the per-role #tg-meta-<role> slot inside the
+  // existing token rows.
   tgCreateUsertag: document.getElementById('tg-create-usertag'),
-  tgCreateRows: document.getElementById('tg-create-rows'),
   tgCreateOpenBotfather: document.getElementById('tg-create-open-botfather'),
-  btnTgCreateBack: document.getElementById('btn-tg-create-back'),
-  btnTgCreateContinue: document.getElementById('btn-tg-create-continue'),
   btnVpsGenerateKey: document.getElementById('btn-vps-generate-key'),
   vpsStep2: document.getElementById('vps-step2'),
   vpsStep3: document.getElementById('vps-step3'),
