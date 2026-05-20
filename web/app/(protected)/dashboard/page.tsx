@@ -460,204 +460,6 @@ export default async function DashboardCompany() {
         })}
       </div>
 
-      {/* ── Conversion rate ─────────────────────────────────────── */}
-      <div className="section-label mb-4">Conversion rate</div>
-      <div
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
-        style={{ animation: "fade-in 0.35s ease both" }}
-      >
-        {/* Filtro Analisti: % escluse al primo check (status='excluded') */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="section-label">Filtro analisti</span>
-            <span className="text-[10px] text-[var(--color-dim)]">
-              {stats.total} trovate · {stats.excluded} escluse
-            </span>
-          </div>
-          <div className="flex items-baseline gap-3 mb-3">
-            <span
-              className="text-3xl font-bold tracking-tight"
-              style={{ color: "var(--color-red)" }}
-            >
-              {analystExcludedPct}%
-            </span>
-            <span className="text-[10px] text-[var(--color-muted)]">
-              esclusioni · {analystKeptPct}% passate all'analisi
-            </span>
-          </div>
-          <div
-            className="h-2 rounded-full overflow-hidden flex"
-            style={{ background: "var(--color-border)" }}
-          >
-            <div
-              style={{
-                width: `${analystKeptPct}%`,
-                background: "var(--color-green)",
-                opacity: 0.85,
-              }}
-            />
-            <div
-              style={{
-                width: `${analystExcludedPct}%`,
-                background: "var(--color-red)",
-                opacity: 0.85,
-              }}
-            />
-          </div>
-          <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
-            <span style={{ color: "var(--color-green)" }}>
-              passate · {stats.total - stats.excluded}
-            </span>
-            <span style={{ color: "var(--color-red)" }}>
-              escluse · {stats.excluded}
-            </span>
-          </div>
-        </div>
-
-        {/* Verdetto Critici: PASS / NEEDS_WORK / REJECT su totali revisionati */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="section-label">Verdetto critici</span>
-            <span className="text-[10px] text-[var(--color-dim)]">
-              {criticTotals.total} revisionate
-            </span>
-          </div>
-          <div className="flex items-baseline gap-3 mb-3">
-            <span
-              className="text-3xl font-bold tracking-tight"
-              style={{ color: "var(--color-green)" }}
-            >
-              {criticPassPct}%
-            </span>
-            <span className="text-[10px] text-[var(--color-muted)]">
-              pass · {criticRejectPct}% reject · {criticNeedsPct}% needs work
-            </span>
-          </div>
-          <div
-            className="h-2 rounded-full overflow-hidden flex"
-            style={{ background: "var(--color-border)" }}
-          >
-            <div
-              style={{
-                width: `${criticPassPct}%`,
-                background: "var(--color-green)",
-                opacity: 0.85,
-              }}
-            />
-            <div
-              style={{
-                width: `${criticNeedsPct}%`,
-                background: "var(--color-yellow)",
-                opacity: 0.85,
-              }}
-            />
-            <div
-              style={{
-                width: `${criticRejectPct}%`,
-                background: "var(--color-red)",
-                opacity: 0.85,
-              }}
-            />
-          </div>
-          <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
-            <span style={{ color: "var(--color-green)" }}>
-              pass · {criticTotals.pass}
-            </span>
-            <span style={{ color: "var(--color-yellow)" }}>
-              needs · {criticTotals.needs_work}
-            </span>
-            <span style={{ color: "var(--color-red)" }}>
-              reject · {criticTotals.reject}
-            </span>
-          </div>
-        </div>
-
-        {/* Funnel end-to-end: throughput vero del team — quante posizioni
-            trovate diventano "ready" (CV pronto a partire) o oltre. */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="section-label">Throughput finale</span>
-            <span className="text-[10px] text-[var(--color-dim)]">
-              {funnelOutput}/{stats.total} pronte
-            </span>
-          </div>
-          <div className="flex items-baseline gap-3 mb-3">
-            <span
-              className="text-3xl font-bold tracking-tight"
-              style={{
-                color:
-                  funnelRatePct >= 25
-                    ? "var(--color-green)"
-                    : funnelRatePct >= 10
-                      ? "var(--color-yellow)"
-                      : "var(--color-orange)",
-              }}
-            >
-              {funnelRatePct}%
-            </span>
-            <span className="text-[10px] text-[var(--color-muted)]">
-              su 10 trovate · {funnelPer10} arrivano pronte
-            </span>
-          </div>
-          {/* Mini-funnel: 3 step "trovate → analizzate → pronte" */}
-          <div className="space-y-2">
-            {[
-              {
-                label: "trovate",
-                n: stats.total,
-                pct: 100,
-                color: "var(--color-blue)",
-              },
-              {
-                label: "analizzate",
-                n: stats.total - stats.excluded,
-                pct:
-                  stats.total > 0
-                    ? Math.round(
-                        ((stats.total - stats.excluded) / stats.total) * 100,
-                      )
-                    : 0,
-                color: "var(--color-purple)",
-              },
-              {
-                label: "pronte",
-                n: funnelOutput,
-                pct: funnelRatePct,
-                color: "var(--color-green)",
-              },
-            ].map((row) => (
-              <div key={row.label} className="flex items-center gap-2">
-                <span
-                  className="text-[9px] font-semibold w-20 tracking-[0.08em] uppercase"
-                  style={{ color: row.color }}
-                >
-                  {row.label}
-                </span>
-                <div
-                  className="flex-1 h-1.5 rounded-full overflow-hidden"
-                  style={{ background: "var(--color-border)" }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${row.pct}%`,
-                      background: row.color,
-                      opacity: 0.8,
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-[10px] font-semibold tabular-nums w-8 text-right"
-                  style={{ color: row.color }}
-                >
-                  {row.n}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       {/* ── Charts ──────────────────────────────────────────────── */}
       <div
         className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
@@ -684,7 +486,7 @@ export default async function DashboardCompany() {
             )}
           </div>
           <div className="space-y-3 mb-3">
-            {scoreDist.buckets.map((b) => (
+            {scoreDist.buckets.filter((b) => b.count > 0).map((b) => (
               <div key={b.label} className="flex items-center gap-3">
                 <span
                   className="text-[9.5px] font-semibold w-12 text-right shrink-0"
@@ -914,6 +716,204 @@ export default async function DashboardCompany() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* ── Conversion rate ─────────────────────────────────────── */}
+      <div className="section-label mb-4">Conversion rate</div>
+      <div
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
+        style={{ animation: "fade-in 0.35s ease both" }}
+      >
+        {/* Filtro Analisti: % escluse al primo check (status='excluded') */}
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="section-label">Filtro analisti</span>
+            <span className="text-[10px] text-[var(--color-dim)]">
+              {stats.total} trovate · {stats.excluded} escluse
+            </span>
+          </div>
+          <div className="flex items-baseline gap-3 mb-3">
+            <span
+              className="text-3xl font-bold tracking-tight"
+              style={{ color: "var(--color-red)" }}
+            >
+              {analystExcludedPct}%
+            </span>
+            <span className="text-[10px] text-[var(--color-muted)]">
+              esclusioni · {analystKeptPct}% passate all'analisi
+            </span>
+          </div>
+          <div
+            className="h-2 rounded-full overflow-hidden flex"
+            style={{ background: "var(--color-border)" }}
+          >
+            <div
+              style={{
+                width: `${analystKeptPct}%`,
+                background: "var(--color-green)",
+                opacity: 0.85,
+              }}
+            />
+            <div
+              style={{
+                width: `${analystExcludedPct}%`,
+                background: "var(--color-red)",
+                opacity: 0.85,
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
+            <span style={{ color: "var(--color-green)" }}>
+              passate · {stats.total - stats.excluded}
+            </span>
+            <span style={{ color: "var(--color-red)" }}>
+              escluse · {stats.excluded}
+            </span>
+          </div>
+        </div>
+
+        {/* Verdetto Critici: PASS / NEEDS_WORK / REJECT su totali revisionati */}
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="section-label">Verdetto critici</span>
+            <span className="text-[10px] text-[var(--color-dim)]">
+              {criticTotals.total} revisionate
+            </span>
+          </div>
+          <div className="flex items-baseline gap-3 mb-3">
+            <span
+              className="text-3xl font-bold tracking-tight"
+              style={{ color: "var(--color-green)" }}
+            >
+              {criticPassPct}%
+            </span>
+            <span className="text-[10px] text-[var(--color-muted)]">
+              pass · {criticRejectPct}% reject · {criticNeedsPct}% needs work
+            </span>
+          </div>
+          <div
+            className="h-2 rounded-full overflow-hidden flex"
+            style={{ background: "var(--color-border)" }}
+          >
+            <div
+              style={{
+                width: `${criticPassPct}%`,
+                background: "var(--color-green)",
+                opacity: 0.85,
+              }}
+            />
+            <div
+              style={{
+                width: `${criticNeedsPct}%`,
+                background: "var(--color-yellow)",
+                opacity: 0.85,
+              }}
+            />
+            <div
+              style={{
+                width: `${criticRejectPct}%`,
+                background: "var(--color-red)",
+                opacity: 0.85,
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
+            <span style={{ color: "var(--color-green)" }}>
+              pass · {criticTotals.pass}
+            </span>
+            <span style={{ color: "var(--color-yellow)" }}>
+              needs · {criticTotals.needs_work}
+            </span>
+            <span style={{ color: "var(--color-red)" }}>
+              reject · {criticTotals.reject}
+            </span>
+          </div>
+        </div>
+
+        {/* Funnel end-to-end: throughput vero del team — quante posizioni
+            trovate diventano "ready" (CV pronto a partire) o oltre. */}
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="section-label">Throughput finale</span>
+            <span className="text-[10px] text-[var(--color-dim)]">
+              {funnelOutput}/{stats.total} pronte
+            </span>
+          </div>
+          <div className="flex items-baseline gap-3 mb-3">
+            <span
+              className="text-3xl font-bold tracking-tight"
+              style={{
+                color:
+                  funnelRatePct >= 25
+                    ? "var(--color-green)"
+                    : funnelRatePct >= 10
+                      ? "var(--color-yellow)"
+                      : "var(--color-orange)",
+              }}
+            >
+              {funnelRatePct}%
+            </span>
+            <span className="text-[10px] text-[var(--color-muted)]">
+              su 10 trovate · {funnelPer10} arrivano pronte
+            </span>
+          </div>
+          {/* Mini-funnel: 3 step "trovate → analizzate → pronte" */}
+          <div className="space-y-2">
+            {[
+              {
+                label: "trovate",
+                n: stats.total,
+                pct: 100,
+                color: "var(--color-blue)",
+              },
+              {
+                label: "analizzate",
+                n: stats.total - stats.excluded,
+                pct:
+                  stats.total > 0
+                    ? Math.round(
+                        ((stats.total - stats.excluded) / stats.total) * 100,
+                      )
+                    : 0,
+                color: "var(--color-purple)",
+              },
+              {
+                label: "pronte",
+                n: funnelOutput,
+                pct: funnelRatePct,
+                color: "var(--color-green)",
+              },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center gap-2">
+                <span
+                  className="text-[9px] font-semibold w-20 tracking-[0.08em] uppercase"
+                  style={{ color: row.color }}
+                >
+                  {row.label}
+                </span>
+                <div
+                  className="flex-1 h-1.5 rounded-full overflow-hidden"
+                  style={{ background: "var(--color-border)" }}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${row.pct}%`,
+                      background: row.color,
+                      opacity: 0.8,
+                    }}
+                  />
+                </div>
+                <span
+                  className="text-[10px] font-semibold tabular-nums w-8 text-right"
+                  style={{ color: row.color }}
+                >
+                  {row.n}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <OnboardingWizard />
