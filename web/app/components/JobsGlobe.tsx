@@ -109,6 +109,9 @@ export default function JobsGlobe() {
   const mapRef = useRef<MaplibreMap | null>(null);
   const layersReadyRef = useRef(false);
   const themeRef = useRef<"dark" | "light">(resolvedTheme);
+  // Ref tracking di jittered, per essere letta dentro onStyleLoad che
+  // ha una closure "vecchia" (registrato 1 sola volta in mount).
+  const jitteredRef = useRef<PositionCoord[]>([]);
 
   // Jitter deterministico sui pin con stesse coordinate (city-center
   // fallback): li sparpaglia su un anello, cosi' restano cliccabili
@@ -270,6 +273,12 @@ export default function JobsGlobe() {
     };
   }, []);
 
+  // Tieni il ref allineato a ogni render: cosi' syncData chiamato
+  // da onStyleLoad (closure vecchia) legge i dati attuali.
+  useEffect(() => {
+    jitteredRef.current = jittered;
+  }, [jittered]);
+
   // Sync GeoJSON source ogni volta che cambiano i dati
   useEffect(() => {
     const map = mapRef.current;
@@ -296,7 +305,8 @@ export default function JobsGlobe() {
         })
       | undefined;
     if (!src) return;
-    const features: GeoJSON.Feature[] = jittered.map((p) => ({
+    // Legge sempre dal ref aggiornato, non dalla closure originale.
+    const features: GeoJSON.Feature[] = jitteredRef.current.map((p) => ({
       type: "Feature",
       geometry: { type: "Point", coordinates: [p.lon, p.lat] },
       properties: {
@@ -346,7 +356,14 @@ export default function JobsGlobe() {
         className="relative w-full overflow-hidden rounded-md"
         // zoom: 1 neutralizza il body { zoom: var(--zoom) } di JHT
         // che mandava MapLibre a leggere dimensioni canvas sbagliate.
-        style={{ height: 500, background: "#000", zoom: 1 }}
+        // background theme-aware: l'area fuori dal globo (la sfera
+        // proiettata occupa solo il centro del canvas) deve seguire
+        // il tema della pagina, non essere hardcoded nero.
+        style={{
+          height: 500,
+          background: "var(--color-deep)",
+          zoom: 1,
+        }}
       >
         <div
           ref={mapContainerRef}
