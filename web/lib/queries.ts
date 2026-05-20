@@ -456,6 +456,34 @@ export async function getSourceDistribution(): Promise<Array<{ source: string; c
   return Object.entries(counts).map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count).slice(0, 8)
 }
 
+// ── Positions con coordinate ufficio (per JobsGlobe) ───────────────
+export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionsWithCoordsLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('id, title, company, status, office_lat, office_lon, is_remote, scores ( total_score )')
+    .not('status', 'eq', 'excluded')
+    .not('office_lat', 'is', null)
+  if (error || !data) return []
+  return data.map((p: any) => {
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    return {
+      id: String(p.id),
+      title: p.title,
+      company: p.company,
+      status: p.status,
+      score: typeof score?.total_score === 'number' ? score.total_score : null,
+      lat: p.office_lat,
+      lon: p.office_lon,
+      is_remote: !!p.is_remote,
+    }
+  })
+}
+
 // ── Position type distribution ──────────────────────────────────────
 export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]> {
   const w = await ws()
