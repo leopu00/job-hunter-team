@@ -129,14 +129,34 @@ def extract_address(jd_text):
     return addr
 
 
-def process_position(c, pid, title, company, location, jd_text):
-    """Restituisce (lat, lon, source) o (None, None, 'remote'|'skip')."""
+def extract_city(loc: str) -> str:
+    """Estrae il primo segmento di location come citta'.
 
-    # 1. Tentativo address da jd_text
+    "Rome, Latium, Italy"     -> "Rome"
+    "Milano, Italy (Remote)"  -> "Milano"
+    "London, UK"              -> "London"
+    """
+    s = re.sub(r"\([^)]*\)", "", loc)
+    s = re.sub(r"^(hybrid|onsite|on-site|in-?office)\s*[-:]\s*", "", s, flags=re.I)
+    s = s.strip()
+    first = s.split(",")[0].strip()
+    return first or s
+
+
+def process_position(c, pid, title, company, location, jd_text):
+    """Restituisce (lat, lon, source) o (None, None, 'remote'|'skip').
+
+    Strategia office-level aggressiva: cerca SEMPRE company quando
+    disponibile, anche se la location e' nota. Cache dedup su
+    (company, city) tuple per evitare API hammering ma lasciando
+    coord distinte per company diverse stessa citta'.
+    """
+
+    # 1. Address dal jd_text (se preciso)
     addr = extract_address(jd_text)
     if addr:
-        # canonical = address + location (per disambiguare città)
-        q = f"{addr}, {location}" if location and not REMOTE_KW.search(location) else addr
+        city = extract_city(location) if location else ""
+        q = f"{addr}, {city}" if city else addr
         canonical = canonicalize(q)
         cached = cache_lookup(c, canonical)
         if cached:
@@ -147,24 +167,28 @@ def process_position(c, pid, title, company, location, jd_text):
         if geo:
             return geo["lat"], geo["lon"], "address"
 
-    # 2. Se location è remote, marca e basta
+    # 2. Remote shortcut
     if location and REMOTE_KW.search(location):
         return None, None, "remote"
 
-    # 3. Tentativo company + location
+    # 3. Company + city — SEMPRE tentato, anche se cache location esiste.
+    #    Le 30+ positions a Roma di company diverse NON devono finire
+    #    sullo stesso centro citta'.
     if company and location:
-        q = f"{company}, {location}"
-        canonical = canonicalize(q)
-        cached = cache_lookup(c, canonical)
-        if cached:
-            return cached[0], cached[1], "company-cached"
-        time.sleep(1.1)
-        geo = geocode(q)
-        cache_write(c, canonical, q, geo, "company")
-        if geo:
-            return geo["lat"], geo["lon"], "company"
+        city = extract_city(location)
+        if city:
+            q = f"{company} {city}"
+            canonical = canonicalize(q)
+            cached = cache_lookup(c, canonical)
+            if cached:
+                return cached[0], cached[1], "company-cached"
+            time.sleep(1.1)
+            geo = geocode(q)
+            cache_write(c, canonical, q, geo, "company")
+            if geo:
+                return geo["lat"], geo["lon"], "company"
 
-    # 4. Fallback location-only
+    # 4. Fallback location-only (per positions senza company o miss)
     if location:
         canonical = canonicalize(location)
         if canonical in SKIP_NON_PLACE or len(canonical) < 3:
