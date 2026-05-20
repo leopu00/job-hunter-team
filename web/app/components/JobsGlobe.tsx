@@ -41,6 +41,55 @@ type PositionCoord = {
   is_remote: boolean;
 };
 
+// Calcola la "faccia migliore" del globo da mostrare: longitude
+// media circolare di tutti i pin (vettorializzata, gestisce wrap-around
+// 180/-180 correttamente). Restituisce centro + bounding box dei pin
+// entro 90° da quel centro (la "metà di globo visibile").
+function bestViewport(pins: PositionCoord[]):
+  | { center: [number, number]; bounds: [[number, number], [number, number]] }
+  | null {
+  if (pins.length === 0) return null;
+  const toRad = Math.PI / 180;
+  let sx = 0,
+    sy = 0;
+  for (const p of pins) {
+    sx += Math.cos(p.lon * toRad);
+    sy += Math.sin(p.lon * toRad);
+  }
+  const centerLon = Math.atan2(sy, sx) / toRad;
+  // Distanza circolare in longitudine [0..180]
+  const lonDist = (a: number, b: number) => {
+    let d = Math.abs(a - b) % 360;
+    if (d > 180) d = 360 - d;
+    return d;
+  };
+  const inFace = pins.filter((p) => lonDist(p.lon, centerLon) <= 100);
+  const subset = inFace.length >= Math.ceil(pins.length * 0.5) ? inFace : pins;
+  let minLat = +Infinity,
+    maxLat = -Infinity,
+    minLon = +Infinity,
+    maxLon = -Infinity;
+  for (const p of subset) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    // Normalizza lon relativa al centerLon per evitare wrap nella bbox.
+    let nlon = p.lon;
+    if (nlon - centerLon > 180) nlon -= 360;
+    if (nlon - centerLon < -180) nlon += 360;
+    if (nlon < minLon) minLon = nlon;
+    if (nlon > maxLon) maxLon = nlon;
+  }
+  // Centroide lat = media; centroide lon = centerLon circolare.
+  const centerLat = (minLat + maxLat) / 2;
+  return {
+    center: [centerLon, centerLat],
+    bounds: [
+      [minLon, minLat],
+      [maxLon, maxLat],
+    ],
+  };
+}
+
 function featureToPosition(f: GeoJSON.Feature): PositionCoord | null {
   if (f.geometry?.type !== "Point") return null;
   const [lon, lat] = (f.geometry as GeoJSON.Point).coordinates as [
@@ -363,6 +412,18 @@ export default function CompanyGlobe() {
 
   const remoteCount = data.filter((d) => d.is_remote).length;
 
+  function flyToAll() {
+    const map = mapRef.current;
+    if (!map || data.length === 0) return;
+    const vp = bestViewport(data);
+    if (!vp) return;
+    map.fitBounds(vp.bounds, {
+      padding: { top: 60, bottom: 60, left: 60, right: 60 },
+      duration: 800,
+      maxZoom: 7,
+    });
+  }
+
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
@@ -413,6 +474,28 @@ export default function CompanyGlobe() {
             height: "100%",
           }}
         />
+
+        {/* Bottone "Vista generale": fitBounds sulla faccia migliore */}
+        {loaded && data.length > 0 && (
+          <button
+            onClick={flyToAll}
+            aria-label="Vista generale"
+            title="Vista generale — mostra tutti i pin"
+            className="absolute top-2 left-2 z-10 text-[10px] font-semibold tracking-widest uppercase"
+            style={{
+              padding: "6px 10px",
+              borderRadius: 6,
+              background: "var(--color-panel)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-bright)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+            }}
+          >
+            ⊕ Vista generale
+          </button>
+        )}
 
         {!loaded && (
           <p className="absolute inset-0 grid place-items-center text-[11px] text-[var(--color-dim)] pointer-events-none">
