@@ -12,6 +12,7 @@ import {
   getCriticVerdictTotals,
 } from "@/lib/queries";
 import PositionTypesPie from "@/app/components/PositionTypesPie";
+import ScoreDistribution from "@/app/components/ScoreDistribution";
 import JobsGlobe from "@/app/components/JobsGlobe";
 import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured } from "@/lib/workspace";
@@ -474,61 +475,12 @@ export default async function DashboardPage() {
         className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
         style={{ animation: "fade-in 0.35s ease both 0.1s" }}
       >
-        {/* Score distribution */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="flex items-center justify-between mb-4">
-            <span className="section-label">{t.score_distribution}</span>
-            {scoreDist.avgScore != null && (
-              <span
-                className="text-[11px] font-semibold"
-                style={{
-                  color:
-                    scoreDist.avgScore >= 75
-                      ? "var(--color-green)"
-                      : scoreDist.avgScore >= 55
-                        ? "var(--color-yellow)"
-                        : "var(--color-red)",
-                }}
-              >
-                avg {scoreDist.avgScore}
-              </span>
-            )}
-          </div>
-          <div className="space-y-3 mb-3">
-            {scoreDist.buckets.filter((b) => b.count > 0).map((b) => (
-              <div key={b.label} className="flex items-center gap-3">
-                <span
-                  className="text-[9.5px] font-semibold w-12 text-right shrink-0"
-                  style={{ color: b.color }}
-                >
-                  {b.label}
-                </span>
-                <div
-                  className="flex-1 h-2 rounded-full overflow-hidden"
-                  style={{ background: "var(--color-border)" }}
-                >
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${scoreDist.withScore > 0 ? (b.count / scoreDist.withScore) * 100 : 0}%`,
-                      background: b.color,
-                      opacity: 0.85,
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-[11px] font-bold w-6 text-right shrink-0"
-                  style={{ color: b.color }}
-                >
-                  {b.count}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-[var(--color-dim)]">
-            {t.score_footer(scoreDist.withScore, scoreDist.total)}
-          </p>
-        </div>
+        {/* Score distribution — histogram fine-grained */}
+        <ScoreDistribution
+          scores={scoreDist.scores ?? []}
+          title={t.score_distribution}
+          emptyLabel={t.no_data}
+        />
 
         {/* Source distribution */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
