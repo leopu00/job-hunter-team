@@ -44,6 +44,40 @@ export default function CompanyGlobe() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
 
+  // Jitter deterministico sulle coordinate quando piu' positions
+  // condividono lo stesso (lat, lon) — tipico col geocoding city-center
+  // (Roma -> 36 positions sullo stesso punto). Distribuisce gli N punti
+  // su un cerchio di raggio ~3km attorno al centro originale, in modo che
+  // ognuno sia cliccabile separatamente anche zoomato in.
+  const jittered = useMemo(() => {
+    const groups = new Map<string, PositionCoord[]>();
+    for (const p of data) {
+      const key = `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
+      const arr = groups.get(key);
+      if (arr) arr.push(p);
+      else groups.set(key, [p]);
+    }
+    const out: PositionCoord[] = [];
+    for (const arr of groups.values()) {
+      if (arr.length === 1) {
+        out.push(arr[0]);
+        continue;
+      }
+      // raggio dipende dal numero di punti: piu' fitti -> raggio maggiore
+      const n = arr.length;
+      const radius = Math.min(0.05 + n * 0.0015, 0.12); // gradi (~5-13 km)
+      arr.forEach((p, i) => {
+        const angle = (i / n) * Math.PI * 2;
+        out.push({
+          ...p,
+          lat: p.lat + radius * Math.cos(angle),
+          lon: p.lon + radius * Math.sin(angle),
+        });
+      });
+    }
+    return out;
+  }, [data]);
+
   // Sfera grafica scura: niente texture, solo solid color.
   const globeMaterial = useMemo(
     () =>
@@ -161,7 +195,7 @@ export default function CompanyGlobe() {
             polygonCapColor={() => "rgba(0, 232, 122, 0.08)"}
             polygonSideColor={() => "rgba(0, 232, 122, 0.0)"}
             polygonStrokeColor={() => "rgba(0, 232, 122, 0.55)"}
-            pointsData={data}
+            pointsData={jittered}
             pointLat="lat"
             pointLng="lon"
             pointColor={(d: object) => {
@@ -170,9 +204,10 @@ export default function CompanyGlobe() {
             }}
             pointAltitude={(d: object) => {
               const p = d as PositionCoord;
-              return p.score && p.score > 70 ? 0.06 : 0.02;
+              return p.score && p.score > 70 ? 0.012 : 0.006;
             }}
-            pointRadius={0.35}
+            pointRadius={0.18}
+            pointResolution={6}
             pointLabel={(d: object) => {
               const p = d as PositionCoord;
               const status =
