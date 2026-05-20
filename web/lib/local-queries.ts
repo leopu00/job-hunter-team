@@ -334,7 +334,7 @@ export function getScoreDistributionLocal(ws: string) {
   const sum = withScore.reduce((a, s) => a + s, 0)
   const avgScore = withScore.length > 0 ? Math.round(sum / withScore.length) : null
 
-  return { buckets, total: allScores.length, withScore: withScore.length, avgScore }
+  return { buckets, total: allScores.length, withScore: withScore.length, avgScore, scores: withScore }
 }
 
 // ── Positions con coordinate ufficio (per JobsGlobe) ───────────────
