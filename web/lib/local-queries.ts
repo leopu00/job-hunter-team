@@ -1,4 +1,5 @@
 import { getDb } from './db'
+import { aggregateTypes, type PositionTypeCount } from './position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -324,6 +325,15 @@ export function getScoreDistributionLocal(ws: string) {
   const avgScore = withScore.length > 0 ? Math.round(sum / withScore.length) : null
 
   return { buckets, total: allScores.length, withScore: withScore.length, avgScore }
+}
+
+// ── Position type distribution ──────────────────────────────────────
+export function getPositionTypeDistributionLocal(ws: string): PositionTypeCount[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT title FROM positions WHERE status != 'excluded'
+  `).all() as { title: string | null }[]
+  return aggregateTypes(rows.map(r => r.title))
 }
 
 // ── Source distribution ─────────────────────────────────────────────
