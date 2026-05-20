@@ -408,6 +408,14 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* ── World globe (hero) ──────────────────────────────────── */}
+      <div
+        className="mb-8"
+        style={{ animation: "fade-in 0.35s ease both 0.05s" }}
+      >
+        <JobsGlobe hero />
+      </div>
+
       {/* ── Pipeline ────────────────────────────────────────────── */}
       <div className="section-label mb-4">{t.pipeline}</div>
       <div
@@ -579,14 +587,6 @@ export default async function DashboardPage() {
             other: t.pt_other,
           }}
         />
-      </div>
-
-      {/* ── World globe ─────────────────────────────────────────── */}
-      <div
-        className="mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.15s" }}
-      >
-        <JobsGlobe />
       </div>
 
       {/* ── Positions table ─────────────────────────────────────── */}
