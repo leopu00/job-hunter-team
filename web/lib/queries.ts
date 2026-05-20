@@ -423,7 +423,7 @@ export async function getScoreDistribution() {
   const w = await ws()
   if (w) { try { return local.getScoreDistributionLocal(w) } catch { /* fall through */ } }
 
-  const empty = { buckets: [] as Array<{ label: string; count: number; color: string }>, total: 0, withScore: 0, avgScore: null as number | null }
+  const empty = { buckets: [] as Array<{ label: string; count: number; color: string }>, total: 0, withScore: 0, avgScore: null as number | null, scores: [] as number[] }
   if (!isSupabaseConfigured) return empty
 
   const supabase = await createClient()
@@ -439,7 +439,7 @@ export async function getScoreDistribution() {
     { label: '\u2264 40',   min: 0,  max: 40,  color: 'var(--color-red)' },
   ].map(b => ({ label: b.label, count: withScore.filter((s: number) => s >= b.min && s <= b.max).length, color: b.color }))
   const sum = withScore.reduce((a: number, s: number) => a + s, 0)
-  return { buckets, total: scores.length, withScore: withScore.length, avgScore: withScore.length > 0 ? Math.round(sum / withScore.length) : null }
+  return { buckets, total: scores.length, withScore: withScore.length, avgScore: withScore.length > 0 ? Math.round(sum / withScore.length) : null, scores: withScore }
 }
 
 // ── Source distribution ─────────────────────────────────────────────
