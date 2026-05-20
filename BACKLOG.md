@@ -1042,6 +1042,37 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 
 ## 📦 PACKAGING & DISTRIBUTION
 
+### 🔴 [PACING-WEEKLY-EXHAUSTION] Team esaurisce weekly cap Codex in ~2 giorni invece di 7
+
+- **Sintomo:** la Sentinella ottimizza il singolo cycle 5h (target 92% per finestra) ma **ignora il weekly cap** di Codex ProLite. Risultato: in 2-3 giorni di operatività intensa il team consuma il 100% del weekly e poi gli agenti smettono di rispondere per 4-5 giorni fino al reset settimanale.
+- **Evidenza misurata 2026-05-20 (VPS1, primo giro reale beta):**
+  - Boot: 2026-05-19 20:14 UTC
+  - Snapshot 22:30 (giorno 1, +2h): primary 47%, weekly **7%**
+  - Snapshot 06:30 (giorno 2, +10h): primary 2% (post-reset), weekly **27%** (+20pp in 8h notturne, rate 2.5%/h)
+  - Snapshot 14:30 (giorno 2, +18h): primary 41%, weekly **45%**
+  - Rate medio weekly: ~2.5%/h. A questo ritmo, 100% consumato in **~40h totali** = ~2 giorni di operatività intensa, non 7.
+- **Storia:** la feature "weekly budget distribution" era stata trackata come **F-3 DEFERRED** nello sprint 2026-05-17/18 ("utente: default attuale 95% G-spot OK, non serve weekly tracking"). Il primo giro beta del 2026-05-20 ha dimostrato che era una decisione sbagliata: senza weekly pacing, il team va out-of-budget molto prima del reset.
+- **Conseguenza diretta:**
+  - Il team non può girare H24 per una settimana intera (il caso d'uso target del setup VPS 24/7)
+  - L'utente deve manualmente fermare/rallentare il team a metà settimana, o accettare 4-5 giorni di "silenzio forzato" prima del reset
+  - Per beta tester con piano ProLite/Plus questo è inaccettabile
+- **Math per sostenibilità H24 sui 7 giorni:**
+  - Reset weekly tra ~6.4 giorni residui = 153.6h
+  - Per consumare 100% in 153.6h serve rate medio **0.65 %/h** sul weekly
+  - Con ratio primary/secondary 6.7×, corrisponde a **~4.4 %/h** sul primary
+  - Una finestra 5h al ritmo sostenibile chiude a 22% (vs target 92% attuale)
+  - Quindi: o **target band 22% per finestra H24** oppure **finestre intensive 92% ma con periodi off**
+- **Fix proposti (in ordine di preferenza):**
+  - 🥇 **Estendere Sentinella con dial weekly**: nuovo campo `weekly_proj` nel `pacing-bridge-state.json` che proietta il consumo a 7 giorni; la Sentinella usa il minimo tra cycle-target e weekly-target per decidere il throttle. Già discusso nelle convo del 2026-05-20 ma non implementato.
+  - 🥈 **Pacing scheduler esterno**: un cron-like che spegne il team per X ore al giorno (es. spegnimento notturno) per spalmare il consumo. Meno fine-grained ma molto semplice.
+  - 🥉 **Mode "marathon"**: configurazione utente (`jht.config.json.pacing.mode = "marathon"`) che imposta target_band_center=22% invece di 92%. Default = "sprint" attuale.
+  - 🥉 **Telemetria pre-allarme**: notifica Telegram all'utente "weekly al 50%, mancano X giorni al reset" così l'utente decide se fermare/rallentare. Banale (1 cron + 1 send).
+- **Effort:** dial weekly nella Sentinella ~3-5h di codice (logica + integrazione + test). Mode marathon ~1h. Telemetria pre-allarme ~30 min.
+- **Priorità:** **P0 per scenario VPS 24/7** che è il target dichiarato del setup beta (vedi sezione "PHASE 3 — Multi-Provider Cloud Provisioning"). Senza fix, lo scenario VPS è praticamente inutilizzabile per più di 2-3 giorni.
+- **Memoria correlata:** [[2026-05-20-team-idle-gaps-investigation]] (anche se il bottleneck immediato lì era diverso), [[project_no_cv_mode_active_vps1]] (NO CV ha ridotto temporaneamente il rate, mascherando il problema; quando si torna in modalità CV il consumo accelera ancora).
+
+---
+
 ### 🟡 [PACK-INSTALLER-SIZE] Eseguibili desktop troppo pesanti (90-200 MB) — feedback beta
 
 - **Sintomo:** i beta tester segnalano che il download dell'installer è percepibilmente lento. Asset attuali della release `v0.1.17` (verificato 2026-05-20):
