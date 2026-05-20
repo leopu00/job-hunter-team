@@ -46,6 +46,18 @@ const T = {
     sources:              'Fonti',
     no_data:              'Nessun dato',
 
+    // Position types pie
+    position_types:       'Tipologie',
+    pt_ai_ml:             'AI / ML',
+    pt_data:              'Data',
+    pt_devops_cloud:      'DevOps / Cloud',
+    pt_full_stack:        'Full Stack',
+    pt_backend:           'Backend',
+    pt_frontend:          'Frontend',
+    pt_python:            'Python',
+    pt_software_engineer: 'Software Eng.',
+    pt_other:             'Altro',
+
     // Table
     recent_positions:     'Posizioni Recenti',
     view_all:             'Vedi tutte →',
@@ -111,6 +123,18 @@ const T = {
     sources:              'Sources',
     no_data:              'No data',
 
+    // Position types pie
+    position_types:       'Types',
+    pt_ai_ml:             'AI / ML',
+    pt_data:              'Data',
+    pt_devops_cloud:      'DevOps / Cloud',
+    pt_full_stack:        'Full Stack',
+    pt_backend:           'Backend',
+    pt_frontend:          'Frontend',
+    pt_python:            'Python',
+    pt_software_engineer: 'Software Eng.',
+    pt_other:             'Other',
+
     recent_positions:     'Recent Positions',
     view_all:             'View all →',
     col_id:               'ID',
@@ -173,6 +197,18 @@ const T = {
     score_footer:         (w: number, t: number) => `${w} / ${t} pontszámmal · ${t - w} nélkül`,
     sources:              'Források',
     no_data:              'Nincs adat',
+
+    // Position types pie
+    position_types:       'Típusok',
+    pt_ai_ml:             'AI / ML',
+    pt_data:              'Adat',
+    pt_devops_cloud:      'DevOps / Cloud',
+    pt_full_stack:        'Full Stack',
+    pt_backend:           'Backend',
+    pt_frontend:          'Frontend',
+    pt_python:            'Python',
+    pt_software_engineer: 'Szoftvermérnök',
+    pt_other:             'Egyéb',
 
     recent_positions:     'Legutóbbi állások',
     view_all:             'Összes megtekintése →',

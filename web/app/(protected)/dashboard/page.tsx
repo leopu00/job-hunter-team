@@ -7,9 +7,11 @@ import {
   getRecentPositions,
   getScoreDistribution,
   getSourceDistribution,
+  getPositionTypeDistribution,
   getPendingMessages,
   getCriticVerdictTotals,
 } from "@/lib/queries";
+import PositionTypesPie from "@/app/components/PositionTypesPie";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { runBash } from "@/lib/shell";
@@ -99,13 +101,14 @@ export default async function DashboardCompany() {
   }
 
   const demoData = demoMode ? getDemoDashboardData() : null;
-  const [stats, positions, scoreDist, sourceDist, pendingMessages, criticTotals] =
+  const [stats, positions, scoreDist, sourceDist, typeDist, pendingMessages, criticTotals] =
     demoData
       ? [
           demoData.stats,
           demoData.positions,
           demoData.scoreDistribution,
           demoData.sourceDistribution,
+          [],
           demoData.pendingMessages,
           { pass: 0, needs_work: 0, reject: 0, total: 0 },
         ]
@@ -114,6 +117,7 @@ export default async function DashboardCompany() {
           getRecentPositions(15),
           getScoreDistribution(),
           getSourceDistribution(),
+          getPositionTypeDistribution(),
           getPendingMessages(20),
           getCriticVerdictTotals(),
         ]);
@@ -656,7 +660,7 @@ export default async function DashboardCompany() {
 
       {/* ── Charts ──────────────────────────────────────────────── */}
       <div
-        className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
         style={{ animation: "fade-in 0.35s ease both 0.1s" }}
       >
         {/* Score distribution */}
@@ -754,6 +758,24 @@ export default async function DashboardCompany() {
             )}
           </div>
         </div>
+
+        {/* Position types pie */}
+        <PositionTypesPie
+          data={typeDist}
+          title={t.position_types}
+          emptyLabel={t.no_data}
+          labels={{
+            ai_ml: t.pt_ai_ml,
+            data: t.pt_data,
+            devops_cloud: t.pt_devops_cloud,
+            full_stack: t.pt_full_stack,
+            backend: t.pt_backend,
+            frontend: t.pt_frontend,
+            python: t.pt_python,
+            software_engineer: t.pt_software_engineer,
+            other: t.pt_other,
+          }}
+        />
       </div>
 
       {/* ── Positions table ─────────────────────────────────────── */}

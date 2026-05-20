@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
+import { aggregateTypes, type PositionTypeCount } from '@/lib/position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -445,6 +446,18 @@ export async function getSourceDistribution(): Promise<Array<{ source: string; c
   const counts: Record<string, number> = {}
   for (const row of data) { const s = row.source ?? 'sconosciuta'; counts[s] = (counts[s] ?? 0) + 1 }
   return Object.entries(counts).map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count).slice(0, 8)
+}
+
+// ── Position type distribution ──────────────────────────────────────
+export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionTypeDistributionLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('positions').select('title').not('status', 'eq', 'excluded')
+  if (error || !data) return []
+  return aggregateTypes(data.map((r: { title: string | null }) => r.title))
 }
 
 // ── Positions count by status ───────────────────────────────────────
