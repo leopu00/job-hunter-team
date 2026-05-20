@@ -9,6 +9,8 @@ import { useTheme } from "@/app/theme-provider";
 const SOURCE_ID = "jht-jobs";
 const LAYER_HALO_ID = "jht-jobs-halo";
 const LAYER_DOT_ID = "jht-jobs-dot";
+const LAYER_CLUSTER_ID = "jht-jobs-cluster";
+const LAYER_CLUSTER_COUNT_ID = "jht-jobs-cluster-count";
 
 // Carto basemap styles (free, no API key, CDN OSS).
 // Vector tiles street-level su zoom alto.
@@ -113,36 +115,11 @@ export default function JobsGlobe() {
   // ha una closure "vecchia" (registrato 1 sola volta in mount).
   const jitteredRef = useRef<PositionCoord[]>([]);
 
-  // Jitter deterministico sui pin con stesse coordinate (city-center
-  // fallback): li sparpaglia su un anello, cosi' restano cliccabili
-  // separatamente. Quando lo Scout fornira' office-level vero, e' no-op.
-  const jittered = useMemo(() => {
-    const groups = new Map<string, PositionCoord[]>();
-    for (const p of data) {
-      const key = `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
-      const arr = groups.get(key);
-      if (arr) arr.push(p);
-      else groups.set(key, [p]);
-    }
-    const out: PositionCoord[] = [];
-    for (const arr of groups.values()) {
-      if (arr.length === 1) {
-        out.push(arr[0]);
-        continue;
-      }
-      const n = arr.length;
-      const radius = Math.min(0.02 + n * 0.0008, 0.06); // gradi
-      arr.forEach((p, i) => {
-        const angle = (i / n) * Math.PI * 2;
-        out.push({
-          ...p,
-          lat: p.lat + radius * Math.cos(angle),
-          lon: p.lon + radius * Math.sin(angle),
-        });
-      });
-    }
-    return out;
-  }, [data]);
+  // Niente jitter visibile: i pin coincident a livello city-center
+  // vengono raggruppati come "cluster" nativo di MapLibre (vedi
+  // cluster: true sulla source). Cosi' a zoom largo vedi UNA bolla
+  // con count "36", zoomando dentro esplode in pin singoli.
+  const jittered = data;
 
   // Fetch data
   useEffect(() => {
@@ -186,12 +163,49 @@ export default function JobsGlobe() {
         map.addSource(SOURCE_ID, {
           type: "geojson",
           data: { type: "FeatureCollection", features: [] },
+          // Cluster i pin coincident (city-center fallback) o vicini.
+          cluster: true,
+          clusterMaxZoom: 14,
+          clusterRadius: 35,
         });
-        // Layer 1: halo glow attorno al pin
+        // Layer cluster bubble: cerchio verde con count dentro
+        map.addLayer({
+          id: LAYER_CLUSTER_ID,
+          type: "circle",
+          source: SOURCE_ID,
+          filter: ["has", "point_count"],
+          paint: {
+            "circle-color": "#00e87a",
+            "circle-opacity": 0.85,
+            "circle-radius": [
+              "step",
+              ["get", "point_count"],
+              14, 5, 18, 15, 24, 30, 30,
+            ],
+            "circle-stroke-color": "#000",
+            "circle-stroke-width": 1.5,
+          },
+        });
+        map.addLayer({
+          id: LAYER_CLUSTER_COUNT_ID,
+          type: "symbol",
+          source: SOURCE_ID,
+          filter: ["has", "point_count"],
+          layout: {
+            "text-field": ["get", "point_count_abbreviated"],
+            "text-font": ["Open Sans Bold"],
+            "text-size": 12,
+          },
+          paint: {
+            "text-color": "#000",
+          },
+        });
+        // Layer pin singolo (filtra solo non-cluster)
         map.addLayer({
           id: LAYER_HALO_ID,
           type: "circle",
           source: SOURCE_ID,
+          filter: ["!", ["has", "point_count"]],
           paint: {
             "circle-radius": [
               "interpolate",
@@ -205,11 +219,11 @@ export default function JobsGlobe() {
             "circle-blur": 0.6,
           },
         });
-        // Layer 2: dot centrale
         map.addLayer({
           id: LAYER_DOT_ID,
           type: "circle",
           source: SOURCE_ID,
+          filter: ["!", ["has", "point_count"]],
           paint: {
             "circle-radius": [
               "interpolate",
@@ -252,6 +266,31 @@ export default function JobsGlobe() {
       map.getCanvas().style.cursor = "pointer";
     });
     map.on("mouseleave", LAYER_DOT_ID, () => {
+      map.getCanvas().style.cursor = "";
+    });
+
+    // Click su cluster -> zoom + recenter sul centroide
+    map.on("click", LAYER_CLUSTER_ID, async (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const clusterId = (f.properties as { cluster_id?: number })?.cluster_id;
+      const src = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource;
+      if (clusterId == null || !src) return;
+      try {
+        const zoom = await src.getClusterExpansionZoom(clusterId);
+        const center = (f.geometry as GeoJSON.Point).coordinates as [
+          number,
+          number,
+        ];
+        map.flyTo({ center, zoom: zoom + 0.5, duration: 700 });
+      } catch (err) {
+        console.warn("[JobsGlobe] cluster expand error:", err);
+      }
+    });
+    map.on("mouseenter", LAYER_CLUSTER_ID, () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+    map.on("mouseleave", LAYER_CLUSTER_ID, () => {
       map.getCanvas().style.cursor = "";
     });
 
