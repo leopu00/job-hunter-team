@@ -90,6 +90,15 @@ function bestViewport(pins: PositionCoord[]):
   };
 }
 
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
 function featureToPosition(f: GeoJSON.Feature): PositionCoord | null {
   if (f.geometry?.type !== "Point") return null;
   const [lon, lat] = (f.geometry as GeoJSON.Point).coordinates as [
@@ -164,11 +173,38 @@ export default function JobsGlobe() {
   // ha una closure "vecchia" (registrato 1 sola volta in mount).
   const jitteredRef = useRef<PositionCoord[]>([]);
 
-  // Niente jitter visibile: i pin coincident a livello city-center
-  // vengono raggruppati come "cluster" nativo di MapLibre (vedi
-  // cluster: true sulla source). Cosi' a zoom largo vedi UNA bolla
-  // con count "36", zoomando dentro esplode in pin singoli.
-  const jittered = data;
+  // Micro-jitter deterministico per pin con stesse coordinate
+  // (city-center fallback): perturba di ~50m random-but-stable, cosi'
+  // a zoom city-level si vedono come pin distinti su strade vicine,
+  // non come cerchio finto. A zoom country i pin micro-jitterati
+  // restano dentro il clusterRadius (~30m) e vengono raggruppati
+  // dal cluster nativo MapLibre. Quando lo Scout/Analista forniranno
+  // office-level vero, il jitter sara' no-op naturale.
+  const jittered = useMemo(() => {
+    const groups = new Map<string, PositionCoord[]>();
+    for (const p of data) {
+      const key = `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
+      const arr = groups.get(key);
+      if (arr) arr.push(p);
+      else groups.set(key, [p]);
+    }
+    const out: PositionCoord[] = [];
+    for (const arr of groups.values()) {
+      if (arr.length === 1) {
+        out.push(arr[0]);
+        continue;
+      }
+      // Hash deterministico dell'id per offset stabile su refresh.
+      arr.forEach((p) => {
+        const h = hashStr(p.id);
+        // ~0.0005 deg = ~50m; range -250m..+250m
+        const dx = ((h & 0xffff) / 0xffff - 0.5) * 0.001;
+        const dy = (((h >>> 16) & 0xffff) / 0xffff - 0.5) * 0.001;
+        out.push({ ...p, lat: p.lat + dy, lon: p.lon + dx });
+      });
+    }
+    return out;
+  }, [data]);
 
   // Fetch data
   useEffect(() => {
@@ -214,8 +250,10 @@ export default function JobsGlobe() {
           data: { type: "FeatureCollection", features: [] },
           // Cluster i pin coincident (city-center fallback) o vicini.
           cluster: true,
-          clusterMaxZoom: 14,
-          clusterRadius: 35,
+          // Sotto questo zoom (country/region) cluster i pin vicini.
+          // Sopra: pin individuali distinti, anche se micro-jitterati.
+          clusterMaxZoom: 8,
+          clusterRadius: 30,
         });
         // Layer cluster bubble: cerchio verde con count dentro
         map.addLayer({
