@@ -12,6 +12,7 @@ import {
   getCriticVerdictTotals,
 } from "@/lib/queries";
 import PositionTypesPie from "@/app/components/PositionTypesPie";
+import JobsGlobe from "@/app/components/JobsGlobe";
 import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
@@ -578,6 +579,14 @@ export default async function DashboardPage() {
             other: t.pt_other,
           }}
         />
+      </div>
+
+      {/* ── World globe ─────────────────────────────────────────── */}
+      <div
+        className="mb-8"
+        style={{ animation: "fade-in 0.35s ease both 0.15s" }}
+      >
+        <JobsGlobe />
       </div>
 
       {/* ── Positions table ─────────────────────────────────────── */}

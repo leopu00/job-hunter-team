@@ -337,6 +337,41 @@ export function getScoreDistributionLocal(ws: string) {
   return { buckets, total: allScores.length, withScore: withScore.length, avgScore }
 }
 
+// ── Positions con coordinate ufficio (per JobsGlobe) ───────────────
+export interface PositionCoord {
+  id: string
+  title: string
+  company: string
+  status: string
+  score: number | null
+  lat: number
+  lon: number
+  is_remote: boolean
+}
+export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.id, p.title, p.company, p.status,
+           s.total_score as score,
+           p.office_lat as lat, p.office_lon as lon,
+           p.is_remote
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    WHERE p.status != 'excluded'
+      AND p.office_lat IS NOT NULL AND p.office_lon IS NOT NULL
+  `).all() as any[]
+  return rows.map(r => ({
+    id: sid(r.id),
+    title: r.title,
+    company: r.company,
+    status: r.status,
+    score: typeof r.score === 'number' ? r.score : null,
+    lat: r.lat,
+    lon: r.lon,
+    is_remote: !!r.is_remote,
+  }))
+}
+
 // ── Position type distribution ──────────────────────────────────────
 export function getPositionTypeDistributionLocal(ws: string): PositionTypeCount[] {
   const db = getDb(ws)
