@@ -182,7 +182,38 @@ round in 60 min), non zero round.
 
 → **Scartata.**
 
-### Ipotesi D (corrente) — "Cooperative idle"
+### Ipotesi E (scoperta a posteriori, 2026-05-20 ~14:30) — "NO CV mode attivo"
+
+**Causa primaria mai identificata nelle prime analisi.** Recuperato dal
+log codex il body intero del messaggio utente delle 07:42 UTC del
+2026-05-20:
+
+> "ok, no cv, continua con ricerca di ruoli. considera le cose che ti
+> ha detto il mentor"
+
+44 secondi dopo il Capitano ha propagato URG a entrambi gli Scrittori:
+> "Ordine utente: NO CV per ora. Non claimare nuove posizioni anche se
+> scored >=50. Resta idle/gate Phase2 finché nuovo ordine esplicito."
+
+**Conseguenza diretta**: dalle 07:42 UTC in poi gli Scrittori sono in
+`gate Phase2` (idle by design). Un intero anello della pipeline non
+lavora. Il throughput del team è **strutturalmente dimezzato**.
+
+Tutti i gap successivi a 07:42 UTC vanno riletti con questa lente. In
+particolare i gap "post emergency" del 06:35 e in poi sono **una
+combinazione di NO CV + context saturation**, non solo cooperative idle.
+La causa NO CV era sempre lì, ma nascosta nei body troncati di
+`messages.jsonl.preview`.
+
+Vedi [[project_no_cv_mode_active_vps1]] per il contesto completo.
+
+→ **Da elaborare**: separare gap "fisiologici" (NO CV by design) da gap
+"patologici" (context bloat) richiede una nuova passata di analisi. Le
+ipotesi A-D precedenti restano scartate/imprecise, ma la decomposizione
+del totale di 8h15m di silenzio in "by design" vs "patologico" non è
+stata fatta.
+
+### Ipotesi D (precedente, parzialmente vera) — "Cooperative idle"
 
 Tutti gli agenti hanno consegnato i loro task disponibili
 (Scrittore-1/2: position #44 chiusa, batch finito; Scout-1: batch
