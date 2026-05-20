@@ -43,16 +43,26 @@ export function getDashboardStatsLocal(ws: string): DashboardStats {
 // ── Recent positions with scores ───────────────────────────────────
 export function getRecentPositionsLocal(ws: string, limit = 15): PositionWithScore[] {
   const db = getDb(ws)
+  // last_action_at = ULTIMA azione qualsiasi su una posizione: insert
+  // dello Scout (found_at), check dell'Analista (last_checked), score
+  // dello Scorer (scored_at). Versione "lite" — non guarda
+  // status_changed_at perche' il trigger SQLite non e' garantito su
+  // workspace seedati da Supabase (tipico dev locale).
   const rows = db.prepare(`
-    SELECT p.*, s.total_score as score
+    SELECT p.*, s.total_score as score,
+           MAX(
+             COALESCE(p.found_at, '1970-01-01'),
+             COALESCE(p.last_checked, '1970-01-01'),
+             COALESCE(s.scored_at, '1970-01-01')
+           ) AS last_action_at
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     WHERE p.status != 'excluded'
-    ORDER BY p.found_at DESC
+    ORDER BY last_action_at DESC
     LIMIT ?
   `).all(limit) as any[]
 
-  return rows.map(r => mapPosition(r))
+  return rows.map(r => ({ ...mapPosition(r), last_action_at: r.last_action_at }))
 }
 
 // Posizioni ordinate per ULTIMA azione qualsiasi: insert dello Scout

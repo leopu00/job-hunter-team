@@ -12,10 +12,10 @@ import {
   getCriticVerdictTotals,
 } from "@/lib/queries";
 import PositionTypesPie from "@/app/components/PositionTypesPie";
+import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { runBash } from "@/lib/shell";
-import type { PositionWithScore } from "@/lib/types";
 import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
 import { createClient } from "@/lib/supabase/server";
@@ -606,6 +606,7 @@ export default async function DashboardCompany() {
                 t.col_remote,
                 t.col_score,
                 t.col_status,
+                t.col_updated,
               ].map((h) => (
                 <th
                   key={h}
@@ -622,14 +623,14 @@ export default async function DashboardCompany() {
             {positions.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   {t.no_positions}
                 </td>
               </tr>
             ) : (
-              positions.map((p: PositionWithScore, i: number) => (
+              positions.map((p, i: number) => (
                 <tr
                   key={p.id}
                   className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
@@ -710,6 +711,9 @@ export default async function DashboardCompany() {
                     >
                       {p.status}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
+                    {formatFoundAt(p.last_action_at ?? p.found_at)}
                   </td>
                 </tr>
               ))
