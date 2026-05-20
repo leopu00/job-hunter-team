@@ -1,14 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import maplibregl, { type Map as MaplibreMap, type Marker } from "maplibre-gl";
+import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Link from "next/link";
+import { useTheme } from "@/app/theme-provider";
 
-// Dark-matter Carto style (free, no API key, CDN OSS).
-// Provides vector tiles street-level su zoom alto.
-const MAP_STYLE_URL =
+const SOURCE_ID = "jht-jobs";
+const LAYER_HALO_ID = "jht-jobs-halo";
+const LAYER_DOT_ID = "jht-jobs-dot";
+
+// Carto basemap styles (free, no API key, CDN OSS).
+// Vector tiles street-level su zoom alto.
+const STYLE_DARK =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+const STYLE_LIGHT =
+  "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "#7a7a96",
@@ -32,14 +39,76 @@ type PositionCoord = {
   is_remote: boolean;
 };
 
+function featureToPosition(f: GeoJSON.Feature): PositionCoord | null {
+  if (f.geometry?.type !== "Point") return null;
+  const [lon, lat] = (f.geometry as GeoJSON.Point).coordinates as [
+    number,
+    number,
+  ];
+  const p = f.properties as Record<string, unknown> | null;
+  if (!p) return null;
+  return {
+    id: String(p.id ?? ""),
+    title: String(p.title ?? ""),
+    company: String(p.company ?? ""),
+    status: String(p.status ?? ""),
+    score: typeof p.score === "number" ? p.score : null,
+    lat,
+    lon,
+    is_remote: Boolean(p.is_remote),
+  };
+}
+
+// Paint override per allineare il basemap al theme JHT.
+// Dark: nero-verde profondo. Light: bianco-grigio caldo.
+function tintMap(map: MaplibreMap, mode: "dark" | "light") {
+  const tweaks: Array<[string, string, string]> =
+    mode === "dark"
+      ? [
+          ["background", "background-color", "#04140c"],
+          ["water", "fill-color", "#031410"],
+          ["landcover_wood", "fill-color", "#0a1f15"],
+          ["landcover_grass", "fill-color", "#0c2418"],
+          ["landuse_overlay_national_park", "fill-color", "#0c2418"],
+          ["landuse_park", "fill-color", "#0c2418"],
+          ["landuse_residential", "fill-color", "#081710"],
+          ["national_park", "fill-color", "#0c2418"],
+          ["building", "fill-color", "#0a1f15"],
+          ["building-3d", "fill-color", "#0a1f15"],
+        ]
+      : [
+          ["background", "background-color", "#f3f3ee"],
+          ["water", "fill-color", "#dadce6"],
+          ["landcover_wood", "fill-color", "#e6efe6"],
+          ["landcover_grass", "fill-color", "#eaf2ea"],
+          ["landuse_park", "fill-color", "#eaf2ea"],
+          ["landuse_residential", "fill-color", "#ecebe6"],
+          ["national_park", "fill-color", "#eaf2ea"],
+          ["building", "fill-color", "#e4e1d8"],
+        ];
+  const style = map.getStyle();
+  const layerIds = new Set((style?.layers ?? []).map((l) => l.id));
+  for (const [layerId, prop, value] of tweaks) {
+    if (layerIds.has(layerId)) {
+      try {
+        map.setPaintProperty(layerId, prop, value);
+      } catch {
+        /* layer non supporta la prop, skip */
+      }
+    }
+  }
+}
+
 export default function CompanyGlobe() {
+  const { resolvedTheme } = useTheme();
   const [data, setData] = useState<PositionCoord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<PositionCoord | null>(null);
   const mapWrapRef = useRef<HTMLDivElement | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
-  const markersRef = useRef<Marker[]>([]);
+  const layersReadyRef = useRef(false);
+  const themeRef = useRef<"dark" | "light">(resolvedTheme);
 
   // Jitter deterministico sui pin con stesse coordinate (city-center
   // fallback): li sparpaglia su un anello, cosi' restano cliccabili
@@ -90,7 +159,7 @@ export default function CompanyGlobe() {
 
     const map = new maplibregl.Map({
       container,
-      style: MAP_STYLE_URL,
+      style: themeRef.current === "light" ? STYLE_LIGHT : STYLE_DARK,
       center: [10, 45], // centrato su Europa
       zoom: 1.8,
       attributionControl: { compact: true },
@@ -98,27 +167,94 @@ export default function CompanyGlobe() {
       bearing: 0,
     });
 
-    map.on("style.load", () => {
+    const onStyleLoad = () => {
       try {
         map.setCompanyion({ type: "globe" });
       } catch (e) {
         console.warn("[CompanyGlobe] globe projection unsupported:", e);
       }
-      // Force resize: a volte il container ha dimensioni 0 al
-      // momento del primo render (animazione fade-in), MapLibre
-      // calcola viewport invalido e la mappa resta nera.
+      // Force resize: container 0x0 al primo render (animazione fade-in).
       map.resize();
-    });
+      // Tinta theme-aware sui layer base.
+      tintMap(map, themeRef.current);
+      // Aggiungo source + layer per i pin. WebGL native = follow-mappa
+      // garantito (i DOM markers su globe projection ballavano).
+      if (!map.getSource(SOURCE_ID)) {
+        map.addSource(SOURCE_ID, {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] },
+        });
+        // Layer 1: halo glow attorno al pin
+        map.addLayer({
+          id: LAYER_HALO_ID,
+          type: "circle",
+          source: SOURCE_ID,
+          paint: {
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0, 4,
+              12, 14,
+            ],
+            "circle-color": ["get", "color"],
+            "circle-opacity": 0.22,
+            "circle-blur": 0.6,
+          },
+        });
+        // Layer 2: dot centrale
+        map.addLayer({
+          id: LAYER_DOT_ID,
+          type: "circle",
+          source: SOURCE_ID,
+          paint: {
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0, 3,
+              12, 7,
+            ],
+            "circle-color": ["get", "color"],
+            "circle-stroke-color": "#000000",
+            "circle-stroke-width": 1.2,
+            "circle-opacity": 0.95,
+          },
+        });
+      }
+      layersReadyRef.current = true;
+      syncData(map);
+    };
+    map.on("style.load", onStyleLoad);
 
     map.on("error", (e) => {
       console.error("[CompanyGlobe] map error:", e);
     });
 
+    // Click handler sul layer
+    map.on("click", LAYER_DOT_ID, (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      const p = featureToPosition(f as unknown as GeoJSON.Feature);
+      if (!p) return;
+      setSelected(p);
+      map.flyTo({
+        center: [p.lon, p.lat],
+        zoom: Math.max(map.getZoom(), 11),
+        duration: 800,
+      });
+    });
+
+    map.on("mouseenter", LAYER_DOT_ID, () => {
+      map.getCanvas().style.cursor = "pointer";
+    });
+    map.on("mouseleave", LAYER_DOT_ID, () => {
+      map.getCanvas().style.cursor = "";
+    });
+
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     mapRef.current = map;
 
-    // Resize observer per tenere la mappa fitta al container anche
-    // su layout shifts (es. apertura sidebar, resize finestra).
     const ro = new ResizeObserver(() => {
       try {
         map.resize();
@@ -128,55 +264,53 @@ export default function CompanyGlobe() {
 
     return () => {
       ro.disconnect();
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
+      layersReadyRef.current = false;
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
-  // Sync markers ogni volta che cambiano i dati jitterati
+  // Sync GeoJSON source ogni volta che cambiano i dati
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-
-    // Pulisci marker precedenti
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
-
-    for (const p of jittered) {
-      const color = STATUS_COLORS[p.status] ?? "#7a7a96";
-      const el = document.createElement("div");
-      el.setAttribute("role", "button");
-      el.setAttribute("aria-label", `${p.title} — ${p.company}`);
-      el.title = `${p.title} — ${p.company}\nscore: ${p.score ?? "—"} · ${p.status}`;
-      Object.assign(el.style, {
-        width: "12px",
-        height: "12px",
-        borderRadius: "50%",
-        background: color,
-        boxShadow: `0 0 0 2px rgba(0,0,0,0.6), 0 0 10px ${color}88`,
-        border: `1px solid ${color}`,
-        cursor: "pointer",
-        transition: "transform 0.15s ease, box-shadow 0.15s ease",
-      } as Partial<CSSStyleDeclaration>);
-      el.addEventListener("mouseenter", () => {
-        el.style.transform = "scale(1.4)";
-      });
-      el.addEventListener("mouseleave", () => {
-        el.style.transform = "scale(1)";
-      });
-      el.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        setSelected(p);
-        map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 11), duration: 800 });
-      });
-      const marker = new maplibregl.Marker({ element: el, anchor: "center" })
-        .setLngLat([p.lon, p.lat])
-        .addTo(map);
-      markersRef.current.push(marker);
-    }
+    syncData(map);
   }, [jittered, loaded]);
+
+  // Reagisci al cambio theme JHT (dark/light/system): switch del basemap.
+  useEffect(() => {
+    themeRef.current = resolvedTheme;
+    const map = mapRef.current;
+    if (!map) return;
+    // style.load handler riapplichera' projection + tint + layer pin
+    // perche' map.on('style.load', ...) e' persistent fra setStyle.
+    layersReadyRef.current = false;
+    map.setStyle(resolvedTheme === "light" ? STYLE_LIGHT : STYLE_DARK);
+  }, [resolvedTheme]);
+
+  function syncData(map: MaplibreMap) {
+    if (!layersReadyRef.current) return;
+    const src = map.getSource(SOURCE_ID) as
+      | (maplibregl.GeoJSONSource & {
+          setData: (data: GeoJSON.FeatureCollection) => void;
+        })
+      | undefined;
+    if (!src) return;
+    const features: GeoJSON.Feature[] = jittered.map((p) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+      properties: {
+        id: p.id,
+        title: p.title,
+        company: p.company,
+        status: p.status,
+        score: p.score,
+        is_remote: p.is_remote,
+        color: STATUS_COLORS[p.status] ?? "#7a7a96",
+      },
+    }));
+    src.setData({ type: "FeatureCollection", features });
+  }
 
   const remoteCount = data.filter((d) => d.is_remote).length;
 
