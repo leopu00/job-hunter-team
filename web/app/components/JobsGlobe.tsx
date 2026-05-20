@@ -86,31 +86,48 @@ export default function CompanyGlobe() {
   // Inizializza la mappa una volta sola
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
+    const container = mapContainerRef.current;
+
     const map = new maplibregl.Map({
-      container: mapContainerRef.current,
+      container,
       style: MAP_STYLE_URL,
       center: [10, 45], // centrato su Europa
       zoom: 1.8,
       attributionControl: { compact: true },
-      // pitch/bearing per dare un filo di prospettiva
       pitch: 0,
       bearing: 0,
     });
 
     map.on("style.load", () => {
-      // Globe projection: sotto zoom 12 e' globo, sopra mercator.
-      // Switch automatico gestito da MapLibre.
       try {
         map.setCompanyion({ type: "globe" });
-      } catch {
-        /* MapLibre versions older than 5.0 - skip */
+      } catch (e) {
+        console.warn("[CompanyGlobe] globe projection unsupported:", e);
       }
+      // Force resize: a volte il container ha dimensioni 0 al
+      // momento del primo render (animazione fade-in), MapLibre
+      // calcola viewport invalido e la mappa resta nera.
+      map.resize();
+    });
+
+    map.on("error", (e) => {
+      console.error("[CompanyGlobe] map error:", e);
     });
 
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     mapRef.current = map;
 
+    // Resize observer per tenere la mappa fitta al container anche
+    // su layout shifts (es. apertura sidebar, resize finestra).
+    const ro = new ResizeObserver(() => {
+      try {
+        map.resize();
+      } catch {}
+    });
+    ro.observe(container);
+
     return () => {
+      ro.disconnect();
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       map.remove();
