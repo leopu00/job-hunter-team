@@ -133,8 +133,8 @@ export default function JobsGlobe() {
             width={size.w}
             height={size.h}
             backgroundColor="rgba(0,0,0,0)"
-            globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
-            bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
+            globeImageUrl="/textures/earth-night.jpg"
+            bumpImageUrl="/textures/earth-topology.png"
             atmosphereColor="#3a8bff"
             atmosphereAltitude={0.18}
             pointsData={data}
