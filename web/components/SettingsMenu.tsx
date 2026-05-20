@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
+import { DarkModeToggle } from '@/app/theme-provider'
 
 const DEV_MODE_KEY = 'jht-dev-mode'
 const DEV_MODE_EVENT = 'jht-dev-mode-change'
@@ -96,6 +97,14 @@ export default function SettingsMenu() {
           <div className="px-3 py-2 text-[9px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-dim)', borderBottom: '1px solid var(--color-border)' }}>
             Impostazioni
           </div>
+
+          <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+            <span className="text-[11px] font-semibold" style={{ color: 'var(--color-bright)' }}>
+              Tema
+            </span>
+            <DarkModeToggle />
+          </div>
+
           <button
             role="menuitemcheckbox"
             aria-checked={devMode}
