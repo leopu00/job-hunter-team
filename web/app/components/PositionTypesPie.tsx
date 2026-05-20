@@ -114,10 +114,7 @@ export default function PositionTypesPie({
                       transition: "opacity 0.15s ease, stroke-width 0.15s ease",
                     }}
                   >
-                    <title>
-                      {(labels[d.type] ?? d.type)} — {d.count} (
-                      {Math.round((d.count / total) * 100)}%)
-                    </title>
+                    <title>{`${labels[d.type] ?? d.type} — ${d.count} (${Math.round((d.count / total) * 100)}%)`}</title>
                   </path>
                 );
               });
