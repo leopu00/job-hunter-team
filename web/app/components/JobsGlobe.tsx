@@ -156,11 +156,11 @@ export default function JobsGlobe() {
             showAtmosphere
             atmosphereColor="#00e87a"
             atmosphereAltitude={0.15}
-            hexPolygonsData={countries}
-            hexPolygonResolution={3}
-            hexPolygonMargin={0.45}
-            hexPolygonUseDots={false}
-            hexPolygonColor={() => "rgba(0, 232, 122, 0.35)"}
+            polygonsData={countries}
+            polygonAltitude={0.005}
+            polygonCapColor={() => "rgba(0, 232, 122, 0.08)"}
+            polygonSideColor={() => "rgba(0, 232, 122, 0.0)"}
+            polygonStrokeColor={() => "rgba(0, 232, 122, 0.55)"}
             pointsData={data}
             pointLat="lat"
             pointLng="lon"
