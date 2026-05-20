@@ -68,6 +68,7 @@ const T = {
     col_remote:           'Company',
     col_score:            'Score',
     col_status:           'Stato',
+    col_updated:          'Aggiornato',
     no_positions:         'Nessuna posizione trovata.',
 
     // Pipeline statuses
@@ -144,6 +145,7 @@ const T = {
     col_remote:           'Company',
     col_score:            'Score',
     col_status:           'Status',
+    col_updated:          'Updated',
     no_positions:         'No positions found.',
 
     status_new:      'New',
@@ -219,6 +221,7 @@ const T = {
     col_remote:           'Távmunka',
     col_score:            'Pontszám',
     col_status:           'Állapot',
+    col_updated:          'Frissítve',
     no_positions:         'Nem találhatók állások.',
 
     status_new:      'Új',
