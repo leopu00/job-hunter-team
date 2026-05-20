@@ -44,6 +44,8 @@ const T = {
     score_distribution:   'Distribuzione Score',
     score_footer:         (w: number, t: number) => `${w} di ${t} con score · ${t - w} senza`,
     sources:              'Fonti',
+    critic_votes:         'Voti Critico',
+    critic_ready:         'pass ≥5.5',
     no_data:              'Nessun dato',
 
     // Position types pie
@@ -122,6 +124,8 @@ const T = {
     score_distribution:   'Score Distribution',
     score_footer:         (w: number, t: number) => `${w} of ${t} with score · ${t - w} without`,
     sources:              'Sources',
+    critic_votes:         'Critic Votes',
+    critic_ready:         'pass ≥5.5',
     no_data:              'No data',
 
     // Position types pie
@@ -198,6 +202,8 @@ const T = {
     score_distribution:   'Pontszám eloszlás',
     score_footer:         (w: number, t: number) => `${w} / ${t} pontszámmal · ${t - w} nélkül`,
     sources:              'Források',
+    critic_votes:         'Kritikus pontok',
+    critic_ready:         'pass ≥5.5',
     no_data:              'Nincs adat',
 
     // Position types pie

@@ -484,6 +484,24 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   })
 }
 
+// ── Critic votes distribution ──────────────────────────────────────
+export async function getCriticScores(): Promise<number[]> {
+  const w = await ws()
+  if (w) { try { return local.getCriticScoresLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('applications')
+    .select('critic_score, positions!inner(status)')
+    .not('critic_score', 'is', null)
+    .not('positions.status', 'eq', 'excluded')
+  if (error || !data) return []
+  return data
+    .map((r: any) => r.critic_score)
+    .filter((s: any): s is number => typeof s === 'number')
+}
+
 // ── Position type distribution ──────────────────────────────────────
 export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]> {
   const w = await ws()
