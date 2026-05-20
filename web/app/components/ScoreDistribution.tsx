@@ -58,6 +58,9 @@ export default function ScoreDistribution({
         min: 0,
         topVal: 0,
         n: 0,
+        domainLo: 0,
+        domainHi: 100,
+        firstBin: 0,
       };
     }
     const bins = new Array(BINS).fill(0);
@@ -65,9 +68,20 @@ export default function ScoreDistribution({
       const i = Math.min(BINS - 1, Math.floor(s / BIN_SIZE));
       bins[i] += 1;
     }
+    // Auto-scale: trova primo/ultimo bin non-vuoto, padda di 1 bin per
+    // respiro visuale. Cosi' se i score stanno [40..95] il chart copre
+    // [35..100] invece di [0..100] con mezzo vuoto a sinistra.
+    let firstBin = 0;
+    while (firstBin < BINS && bins[firstBin] === 0) firstBin++;
+    let lastBin = BINS - 1;
+    while (lastBin > firstBin && bins[lastBin] === 0) lastBin--;
+    firstBin = Math.max(0, firstBin - 1);
+    lastBin = Math.min(BINS - 1, lastBin + 1);
+    const domainLo = firstBin * BIN_SIZE;
+    const domainHi = Math.min(100, (lastBin + 1) * BIN_SIZE);
     const sum = arr.reduce((a, b) => a + b, 0);
     return {
-      bins,
+      bins: bins.slice(firstBin, lastBin + 1),
       max: Math.max(...bins),
       avg: Math.round(sum / n),
       median: percentile(arr, 0.5),
@@ -76,6 +90,9 @@ export default function ScoreDistribution({
       min: arr[0],
       topVal: arr[n - 1],
       n,
+      domainLo,
+      domainHi,
+      firstBin,
     };
   }, [scores]);
 
@@ -90,20 +107,33 @@ export default function ScoreDistribution({
 
   const chartW = W - PAD_LEFT - PAD_RIGHT;
   const chartH = H - PAD_TOP - PAD_BOTTOM;
-  const barW = chartW / BINS;
+  const barW = chartW / stats.bins.length;
+  const domainSpan = stats.domainHi - stats.domainLo || 1;
 
-  // X position from score 0..100
-  const sx = (score: number) => PAD_LEFT + (score / 100) * chartW;
-  // Y position from bin count
+  // X position from score (mappato sul dominio dinamico)
+  const sx = (score: number) =>
+    PAD_LEFT + ((score - stats.domainLo) / domainSpan) * chartW;
   const by = (count: number) =>
     PAD_TOP + chartH - (count / Math.max(1, stats.max)) * chartH;
 
+  // Tick adattivi a step di 10 o 5 in base allo span
+  const tickStep = domainSpan <= 30 ? 5 : 10;
+  const xTicks: number[] = [];
+  const tickStart = Math.ceil(stats.domainLo / tickStep) * tickStep;
+  for (let v = tickStart; v <= stats.domainHi; v += tickStep) xTicks.push(v);
+
   const hoveredBin = hover != null ? hover : null;
   const hoveredCount = hoveredBin != null ? stats.bins[hoveredBin] : 0;
-  const hoveredLo = hoveredBin != null ? Math.round(hoveredBin * BIN_SIZE) : 0;
+  const hoveredLo =
+    hoveredBin != null
+      ? Math.round((stats.firstBin + hoveredBin) * BIN_SIZE)
+      : 0;
   const hoveredHi =
     hoveredBin != null
-      ? Math.min(100, Math.round((hoveredBin + 1) * BIN_SIZE) - 1)
+      ? Math.min(
+          100,
+          Math.round((stats.firstBin + hoveredBin + 1) * BIN_SIZE) - 1,
+        )
       : 0;
   const hoveredPct =
     hoveredCount && stats.n > 0
@@ -149,8 +179,8 @@ export default function ScoreDistribution({
           />
         ))}
 
-        {/* Asse X — tick a 0/25/50/75/100 */}
-        {[0, 25, 50, 75, 100].map((v) => (
+        {/* Asse X — tick dinamici sul dominio */}
+        {xTicks.map((v) => (
           <g key={v}>
             <line
               x1={sx(v)}
@@ -178,7 +208,7 @@ export default function ScoreDistribution({
           const y = by(count);
           const h = PAD_TOP + chartH - y;
           const isHover = hover === i;
-          const score = i * BIN_SIZE + BIN_SIZE / 2;
+          const score = (stats.firstBin + i) * BIN_SIZE + BIN_SIZE / 2;
           return (
             <rect
               key={i}

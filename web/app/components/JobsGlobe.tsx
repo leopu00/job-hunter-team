@@ -125,16 +125,20 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
   const tweaks: Array<[string, string, string]> =
     mode === "dark"
       ? [
-          ["background", "background-color", "#04140c"],
-          ["water", "fill-color", "#031410"],
-          ["landcover_wood", "fill-color", "#0a1f15"],
-          ["landcover_grass", "fill-color", "#0c2418"],
-          ["landuse_overlay_national_park", "fill-color", "#0c2418"],
-          ["landuse_park", "fill-color", "#0c2418"],
-          ["landuse_residential", "fill-color", "#081710"],
-          ["national_park", "fill-color", "#0c2418"],
-          ["building", "fill-color", "#0a1f15"],
-          ["building-3d", "fill-color", "#0a1f15"],
+          // Land base "neutra" (background renderizzato sotto i layer
+          // landuse): verde scuro warm, distinto dal water blu scuro.
+          ["background", "background-color", "#0d2218"],
+          // Water: blu petrol distinto, NON quasi-nero come prima.
+          ["water", "fill-color", "#06222b"],
+          // Landcover/use/park: verde un po' piu' chiaro = "respiro".
+          ["landcover_wood", "fill-color", "#102c1f"],
+          ["landcover_grass", "fill-color", "#143222"],
+          ["landuse_overlay_national_park", "fill-color", "#143222"],
+          ["landuse_park", "fill-color", "#143222"],
+          ["landuse_residential", "fill-color", "#0e2519"],
+          ["national_park", "fill-color", "#143222"],
+          ["building", "fill-color", "#102c1f"],
+          ["building-3d", "fill-color", "#102c1f"],
         ]
       : [
           ["background", "background-color", "#f3f3ee"],
