@@ -159,7 +159,7 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
   }
 }
 
-export default function JobsGlobe() {
+export default function JobsGlobe({ hero = false }: { hero?: boolean } = {}) {
   const { resolvedTheme } = useTheme();
   const [data, setData] = useState<PositionCoord[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -498,7 +498,7 @@ export default function JobsGlobe() {
         // proiettata occupa solo il centro del canvas) deve seguire
         // il tema della pagina, non essere hardcoded nero.
         style={{
-          height: 500,
+          height: hero ? 620 : 500,
           background: "var(--color-deep)",
           zoom: 1,
         }}
