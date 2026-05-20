@@ -249,7 +249,7 @@ export async function getRecentlyTouchedPositions(limit = 15): Promise<RecentlyT
 }
 
 // ── Recent positions with scores ───────────────────────────────────
-export async function getRecentPositions(limit = 15): Promise<PositionWithScore[]> {
+export async function getRecentPositions(limit = 15): Promise<(PositionWithScore & { last_action_at?: string })[]> {
   const w = await ws()
   if (w) { try { return local.getRecentPositionsLocal(w, limit) } catch { return [] } }
   if (!isSupabaseConfigured) return []
@@ -257,12 +257,20 @@ export async function getRecentPositions(limit = 15): Promise<PositionWithScore[
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, url, source, found_at, status, notes, scores ( total_score )')
+    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, url, source, found_at, last_checked, status, notes, scores ( total_score, scored_at )')
     .not('status', 'eq', 'excluded')
     .order('found_at', { ascending: false })
     .limit(limit)
   if (error || !data) return []
-  return data.map((p: any) => ({ ...p, score: p.scores?.total_score ?? undefined }))
+  return data.map((p: any) => {
+    // last_action_at = ULTIMA azione: scout / analista / scorer
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    const candidates = [p.found_at, p.last_checked, score?.scored_at].filter(Boolean) as string[]
+    const last_action_at = candidates.length > 0
+      ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
+      : p.found_at
+    return { ...p, score: score?.total_score ?? undefined, last_action_at }
+  })
 }
 
 // ── All positions with optional filters ────────────────────────────
