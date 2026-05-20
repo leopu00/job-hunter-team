@@ -9,9 +9,9 @@ type Props = {
   emptyLabel: string;
 };
 
-const SIZE = 160;
-const RADIUS = 64;
-const INNER = 38; // donut hole
+const SIZE = 130;
+const RADIUS = 52;
+const INNER = 30; // donut hole
 const CX = SIZE / 2;
 const CY = SIZE / 2;
 
@@ -70,7 +70,7 @@ export default function PositionTypesPie({ data, labels, title, emptyLabel }: Pr
       {total === 0 ? (
         <p className="text-[11px] text-[var(--color-dim)]">{emptyLabel}</p>
       ) : (
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4">
           <svg
             width={SIZE}
             height={SIZE}
@@ -105,7 +105,7 @@ export default function PositionTypesPie({ data, labels, title, emptyLabel }: Pr
               return (
                 <li
                   key={d.type}
-                  className="flex items-center gap-2 text-[10.5px]"
+                  className="flex items-center gap-2 text-[10.5px] leading-tight"
                 >
                   <span
                     className="inline-block w-2 h-2 rounded-sm shrink-0"
@@ -113,15 +113,15 @@ export default function PositionTypesPie({ data, labels, title, emptyLabel }: Pr
                     aria-hidden
                   />
                   <span
-                    className="flex-1 truncate text-[var(--color-muted)]"
+                    className="flex-1 min-w-0 text-[var(--color-muted)]"
                     title={labels[d.type] ?? d.type}
                   >
                     {labels[d.type] ?? d.type}
                   </span>
-                  <span className="tabular-nums text-[var(--color-bright)] font-semibold">
+                  <span className="tabular-nums text-[var(--color-bright)] font-semibold shrink-0">
                     {d.count}
                   </span>
-                  <span className="tabular-nums text-[var(--color-dim)] w-8 text-right">
+                  <span className="tabular-nums text-[var(--color-dim)] w-8 text-right shrink-0">
                     {pct}%
                   </span>
                 </li>
