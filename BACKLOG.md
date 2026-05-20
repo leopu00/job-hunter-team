@@ -1017,4 +1017,58 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   - 🥉 Test cross-OS: il bug potrebbe non manifestarsi su Linux/macOS — verificare via CI prima di toccare config.
 - **Verifica:** `cd web && npm run dev` + `curl localhost:3000/` deve rispondere 200 senza loop di resolve.
 
+---
+
+## 🔭 OBSERVABILITY GAPS
+
+### 🟡 [OBS-TELEGRAM-SEND-LOG] `jht-telegram-send` senza log centrale outgoing
+
+- **File:** `/app/agents/_tools/jht-telegram-send` (bash + curl POST a Bot API)
+- **Sintomo:** quando un agente (Capitano, Assistente, Mentor) invia un messaggio Telegram all'utente, **non c'è log persistente centralizzato**. Le tracce sono solo:
+  - Pane tmux live (volatile, scrolla fuori dopo ~60-1000 righe)
+  - `/jht_home/logs/dottore-captures/*.txt` (snapshot parziali ogni 2h, max 60 righe del pane catturate al momento del round)
+- **Conseguenza:** impossibile rispondere a domande tipo "quanto frequentemente il Capitano scrive all'utente", "ricostruisci la timeline degli invii Telegram di ieri", "qual è il delta medio risposta agente → utente". Misurato 2026-05-20: ~9 messaggi Capitano confermati in 14h (≈ 1 ogni 1.5h), ma il numero reale è probabilmente maggiore — i precedenti sono scrollati fuori da tutte le fonti.
+- **Fix proposto:** aggiungere a `jht-telegram-send` (subito dopo la chiamata curl che riceve `ok:true`) un append idempotente a `$JHT_HOME/logs/telegram-sent.jsonl`:
+  ```bash
+  printf '{"ts":"%s","from":"%s","chat_id":"%s","chars":%d,"parse_mode":"%s","ok":true}\n' \
+    "$(date -u +%FT%TZ)" "$role" "$chat_id" "${#text}" "$parse_mode" \
+    >> "$JHT_HOME/logs/telegram-sent.jsonl"
+  ```
+  Senza body completo (privacy + size), solo metadati (mittente, lunghezza, parse_mode, esito). Da loggare anche i fallimenti (`ok:false`, status code HTTP).
+- **Effort:** ~15 minuti (5 righe shell + test su un invio singolo).
+- **Memoria correlata:** [[2026-05-20-agent-context-saturation]] (sezione "Side effect Telegram per Assistente"), [[2026-05-20-team-idle-gaps-investigation]] (i gap di idle includono buchi anche di comunicazione TG non misurabili oggi).
+
+---
+
+## 📦 PACKAGING & DISTRIBUTION
+
+### 🟡 [PACK-INSTALLER-SIZE] Eseguibili desktop troppo pesanti (90-200 MB) — feedback beta
+
+- **Sintomo:** i beta tester segnalano che il download dell'installer è percepibilmente lento. Asset attuali della release `v0.1.17` (verificato 2026-05-20):
+  | Artifact | Size |
+  |---|---:|
+  | linux.AppImage | 117.1 MB |
+  | linux.deb | 91.1 MB |
+  | mac.dmg | 110.6 MB |
+  | windows-x64.exe | 97.3 MB |
+  | windows-arm64.exe | 98.7 MB |
+  | windows.exe (universal combo) | **195.4 MB** |
+- **Benchmark indicativi:** VS Code Electron ~80-90 MB, Discord ~100 MB, Slack ~150 MB. Il nostro `windows.exe` universal a 195 MB è sopra la fascia "normale" per launcher Electron, e l'AppImage Linux a 117 MB è alto considerato che dovrebbe essere "solo un launcher".
+- **Causa probabile (da verificare):**
+  - Bundle Electron include `node_modules` non potati (probabile dev dependencies finite nel build)
+  - `desktop/app-payload/` (visto in alcuni grep precedenti contenere `web/.next` compilato + `web/node_modules` interi + `shared/`) potrebbe essere imbarcato a runtime invece di lazy-loaded
+  - Asset duplicati: il `windows.exe` universal (195 MB) è quasi la somma di x64 (97) + arm64 (99). Forse il combo embedda entrambe le binarie native — accettabile se intenzionale, ma da documentare/escludere quando il tester sa già la sua arch
+  - Nessuna compressione (xz/lzma per AppImage, NSIS LZMA per .exe) — da verificare nelle electron-builder config
+- **Effetto sull'esperienza beta:**
+  - Download su connessione lenta = minuti di attesa, frizione percepita
+  - Rilease frequenti (oggi v0.1.16 + v0.1.17 nello stesso giorno) = beta scaricano centinaia di MB ogni volta
+- **Fix proposti (in ordine di rapport effort/risultato):**
+  - 🥇 **Verificare quale fetta di byte sono cosa** con `electron-builder --prepackaged` + `du -sh dist/` per categoria (node_modules, app-payload, electron runtime, native modules). Datapoint mancante per qualsiasi decisione informata.
+  - 🥈 **Differential downloads (`blockmap`)**: c'è già il `.blockmap` per Mac/Windows — l'auto-updater Electron dovrebbe scaricare solo i delta. Da verificare che sia effettivamente in uso (forse i beta usano sempre download manuale, by-passando l'updater).
+  - 🥉 **Excludere `app-payload/web/.next`** dal bundle e scaricarlo on-first-run dal sito (~30-50 MB risparmiati stimato).
+  - 🥉 **NSIS LZMA compression** se non già attivo per `windows.exe`.
+  - 🥉 **Splittare universal**: smettere di buildare il `windows.exe` combo (195 MB) — il sito può servire direttamente x64 o arm64 sulla base dell'UA detection del download.
+- **Effort:** investigation breakdown ~1h, low-hanging fix ~2-3h, refactor app-payload separato ~1 giorno.
+- **Feedback originale:** beta tester (giro 2026-05-20).
+
 Operational info (Supabase access, Vercel env vars, OAuth setup, security review status, contact) lives in [`docs/internal/MAINTAINERS.md`](docs/internal/MAINTAINERS.md).
