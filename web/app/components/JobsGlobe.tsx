@@ -210,9 +210,19 @@ export default function JobsGlobe() {
       <div
         ref={mapWrapRef}
         className="relative w-full overflow-hidden rounded-md"
-        style={{ height: 500, background: "#000" }}
+        // zoom: 1 neutralizza il body { zoom: var(--zoom) } di JHT
+        // che mandava MapLibre a leggere dimensioni canvas sbagliate.
+        style={{ height: 500, background: "#000", zoom: 1 }}
       >
-        <div ref={mapContainerRef} className="absolute inset-0" />
+        <div
+          ref={mapContainerRef}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+          }}
+        />
 
         {!loaded && (
           <p className="absolute inset-0 grid place-items-center text-[11px] text-[var(--color-dim)] pointer-events-none">
