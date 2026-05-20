@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { GlobeMethods } from "react-globe.gl";
+import * as THREE from "three";
 import Link from "next/link";
 
 // SSR off: three.js richiede window.
 const Globe = dynamic(() => import("react-globe.gl"), { ssr: false });
+
+type Feature = { type: "Feature"; properties: Record<string, unknown>; geometry: object };
+type FeatureCollection = { type: "FeatureCollection"; features: Feature[] };
 
 const STATUS_COLORS: Record<string, string> = {
   new: "#7a7a96",
@@ -32,6 +36,7 @@ type PositionCoord = {
 
 export default function JobsGlobe() {
   const [data, setData] = useState<PositionCoord[]>([]);
+  const [countries, setCountries] = useState<Feature[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [hovered, setHovered] = useState<PositionCoord | null>(null);
   const [selected, setSelected] = useState<PositionCoord | null>(null);
@@ -39,11 +44,25 @@ export default function JobsGlobe() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
 
+  // Sfera grafica scura: niente texture, solo solid color.
+  const globeMaterial = useMemo(
+    () =>
+      new THREE.MeshPhongMaterial({
+        color: new THREE.Color("#0a0a14"),
+        emissive: new THREE.Color("#020208"),
+        shininess: 0.15,
+      }),
+    [],
+  );
+
   useEffect(() => {
-    fetch("/api/positions/coords")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d: PositionCoord[]) => {
+    Promise.all([
+      fetch("/api/positions/coords").then((r) => (r.ok ? r.json() : [])),
+      fetch("/data/countries.geojson").then((r) => (r.ok ? r.json() : null)),
+    ])
+      .then(([d, geo]: [PositionCoord[], FeatureCollection | null]) => {
         setData(Array.isArray(d) ? d : []);
+        setCountries(geo?.features ?? []);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -133,10 +152,15 @@ export default function JobsGlobe() {
             width={size.w}
             height={size.h}
             backgroundColor="rgba(0,0,0,0)"
-            globeImageUrl="/textures/earth-night.jpg"
-            bumpImageUrl="/textures/earth-topology.png"
-            atmosphereColor="#3a8bff"
-            atmosphereAltitude={0.18}
+            globeMaterial={globeMaterial}
+            showAtmosphere
+            atmosphereColor="#00e87a"
+            atmosphereAltitude={0.15}
+            hexPolygonsData={countries}
+            hexPolygonResolution={3}
+            hexPolygonMargin={0.45}
+            hexPolygonUseDots={false}
+            hexPolygonColor={() => "rgba(0, 232, 122, 0.35)"}
             pointsData={data}
             pointLat="lat"
             pointLng="lon"
