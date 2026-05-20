@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
-import type { GlobeMethods } from "react-globe.gl";
-import * as THREE from "three";
+import maplibregl, { type Map as MaplibreMap, type Marker } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import Link from "next/link";
 
-// SSR off: three.js richiede window.
-const Globe = dynamic(() => import("react-globe.gl"), { ssr: false });
-
-type Feature = { type: "Feature"; properties: Record<string, unknown>; geometry: object };
-type FeatureCollection = { type: "FeatureCollection"; features: Feature[] };
+// Dark-matter Carto style (free, no API key, CDN OSS).
+// Provides vector tiles street-level su zoom alto.
+const MAP_STYLE_URL =
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "#7a7a96",
@@ -36,19 +34,16 @@ type PositionCoord = {
 
 export default function JobsGlobe() {
   const [data, setData] = useState<PositionCoord[]>([]);
-  const [countries, setCountries] = useState<Feature[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [hovered, setHovered] = useState<PositionCoord | null>(null);
   const [selected, setSelected] = useState<PositionCoord | null>(null);
-  const [size, setSize] = useState({ w: 800, h: 460 });
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const globeRef = useRef<GlobeMethods | undefined>(undefined);
+  const mapWrapRef = useRef<HTMLDivElement | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<MaplibreMap | null>(null);
+  const markersRef = useRef<Marker[]>([]);
 
-  // Jitter deterministico sulle coordinate quando piu' positions
-  // condividono lo stesso (lat, lon) — tipico col geocoding city-center
-  // (Roma -> 36 positions sullo stesso punto). Distribuisce gli N punti
-  // su un cerchio di raggio ~3km attorno al centro originale, in modo che
-  // ognuno sia cliccabile separatamente anche zoomato in.
+  // Jitter deterministico sui pin con stesse coordinate (city-center
+  // fallback): li sparpaglia su un anello, cosi' restano cliccabili
+  // separatamente. Quando lo Scout fornira' office-level vero, e' no-op.
   const jittered = useMemo(() => {
     const groups = new Map<string, PositionCoord[]>();
     for (const p of data) {
@@ -63,9 +58,8 @@ export default function JobsGlobe() {
         out.push(arr[0]);
         continue;
       }
-      // raggio dipende dal numero di punti: piu' fitti -> raggio maggiore
       const n = arr.length;
-      const radius = Math.min(0.05 + n * 0.0015, 0.12); // gradi (~5-13 km)
+      const radius = Math.min(0.02 + n * 0.0008, 0.06); // gradi
       arr.forEach((p, i) => {
         const angle = (i / n) * Math.PI * 2;
         out.push({
@@ -78,64 +72,94 @@ export default function JobsGlobe() {
     return out;
   }, [data]);
 
-  // Sfera grafica scura: niente texture, solo solid color.
-  const globeMaterial = useMemo(
-    () =>
-      new THREE.MeshPhongMaterial({
-        color: new THREE.Color("#0a0a14"),
-        emissive: new THREE.Color("#020208"),
-        shininess: 0.15,
-      }),
-    [],
-  );
-
+  // Fetch data
   useEffect(() => {
-    Promise.all([
-      fetch("/api/positions/coords").then((r) => (r.ok ? r.json() : [])),
-      fetch("/data/countries.geojson").then((r) => (r.ok ? r.json() : null)),
-    ])
-      .then(([d, geo]: [PositionCoord[], FeatureCollection | null]) => {
+    fetch("/api/positions/coords")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d: PositionCoord[]) => {
         setData(Array.isArray(d) ? d : []);
-        setCountries(geo?.features ?? []);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
   }, []);
 
+  // Inizializza la mappa una volta sola
   useEffect(() => {
-    if (!wrapRef.current) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        const w = Math.floor(e.contentRect.width);
-        const h = Math.max(360, Math.floor(w * 0.55));
-        setSize({ w, h });
+    if (!mapContainerRef.current || mapRef.current) return;
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: MAP_STYLE_URL,
+      center: [10, 45], // centrato su Europa
+      zoom: 1.8,
+      attributionControl: { compact: true },
+      // pitch/bearing per dare un filo di prospettiva
+      pitch: 0,
+      bearing: 0,
+    });
+
+    map.on("style.load", () => {
+      // Globe projection: sotto zoom 12 e' globo, sopra mercator.
+      // Switch automatico gestito da MapLibre.
+      try {
+        map.setProjection({ type: "globe" });
+      } catch {
+        /* MapLibre versions older than 5.0 - skip */
       }
     });
-    ro.observe(wrapRef.current);
-    return () => ro.disconnect();
+
+    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    mapRef.current = map;
+
+    return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+    };
   }, []);
 
-  // Auto-rotate iniziale + posizione su Europa
+  // Sync markers ogni volta che cambiano i dati jitterati
   useEffect(() => {
-    const g = globeRef.current;
-    if (!g || !loaded) return;
-    // delay perche' la lib monta async
-    const t = setTimeout(() => {
-      try {
-        const controls = g.controls() as {
-          autoRotate: boolean;
-          autoRotateSpeed: number;
-        };
-        if (controls) {
-          controls.autoRotate = true;
-          controls.autoRotateSpeed = 0.4;
-        }
-        // Centra su Europa (lat 50, lon 10)
-        g.pointOfView({ lat: 45, lng: 10, altitude: 2.2 }, 0);
-      } catch {}
-    }, 100);
-    return () => clearTimeout(t);
-  }, [loaded]);
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+
+    // Pulisci marker precedenti
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    for (const p of jittered) {
+      const color = STATUS_COLORS[p.status] ?? "#7a7a96";
+      const el = document.createElement("div");
+      el.setAttribute("role", "button");
+      el.setAttribute("aria-label", `${p.title} — ${p.company}`);
+      el.title = `${p.title} — ${p.company}\nscore: ${p.score ?? "—"} · ${p.status}`;
+      Object.assign(el.style, {
+        width: "12px",
+        height: "12px",
+        borderRadius: "50%",
+        background: color,
+        boxShadow: `0 0 0 2px rgba(0,0,0,0.6), 0 0 10px ${color}88`,
+        border: `1px solid ${color}`,
+        cursor: "pointer",
+        transition: "transform 0.15s ease, box-shadow 0.15s ease",
+      } as Partial<CSSStyleDeclaration>);
+      el.addEventListener("mouseenter", () => {
+        el.style.transform = "scale(1.4)";
+      });
+      el.addEventListener("mouseleave", () => {
+        el.style.transform = "scale(1)";
+      });
+      el.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        setSelected(p);
+        map.flyTo({ center: [p.lon, p.lat], zoom: Math.max(map.getZoom(), 11), duration: 800 });
+      });
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat([p.lon, p.lat])
+        .addTo(map);
+      markersRef.current.push(marker);
+    }
+  }, [jittered, loaded]);
 
   const remoteCount = data.filter((d) => d.is_remote).length;
 
@@ -167,78 +191,21 @@ export default function JobsGlobe() {
       </div>
 
       <div
-        ref={wrapRef}
+        ref={mapWrapRef}
         className="relative w-full overflow-hidden rounded-md"
-        style={{ background: "#000", minHeight: 360 }}
+        style={{ height: 500, background: "#000" }}
       >
-        {!loaded ? (
-          <p className="text-[11px] text-[var(--color-dim)] absolute inset-0 grid place-items-center">
+        <div ref={mapContainerRef} className="absolute inset-0" />
+
+        {!loaded && (
+          <p className="absolute inset-0 grid place-items-center text-[11px] text-[var(--color-dim)] pointer-events-none">
             Caricamento…
           </p>
-        ) : data.length === 0 ? (
-          <p className="text-[11px] text-[var(--color-dim)] absolute inset-0 grid place-items-center">
-            Nessuna posizione geolocalizzata. Esegui{" "}
-            <code>web/scripts/geocode-positions.py</code>.
-          </p>
-        ) : (
-          <Globe
-            ref={globeRef}
-            width={size.w}
-            height={size.h}
-            backgroundColor="rgba(0,0,0,0)"
-            globeMaterial={globeMaterial}
-            showAtmosphere
-            atmosphereColor="#00e87a"
-            atmosphereAltitude={0.15}
-            polygonsData={countries}
-            polygonAltitude={0.005}
-            polygonCapColor={() => "rgba(0, 232, 122, 0.08)"}
-            polygonSideColor={() => "rgba(0, 232, 122, 0.0)"}
-            polygonStrokeColor={() => "rgba(0, 232, 122, 0.55)"}
-            pointsData={jittered}
-            pointLat="lat"
-            pointLng="lon"
-            pointColor={(d: object) => {
-              const p = d as PositionCoord;
-              return STATUS_COLORS[p.status] ?? "#7a7a96";
-            }}
-            pointAltitude={(d: object) => {
-              const p = d as PositionCoord;
-              return p.score && p.score > 70 ? 0.012 : 0.006;
-            }}
-            pointRadius={0.18}
-            pointResolution={6}
-            pointLabel={(d: object) => {
-              const p = d as PositionCoord;
-              const status =
-                `<span style="color:${STATUS_COLORS[p.status] ?? "#7a7a96"};font-size:9px;letter-spacing:0.1em;text-transform:uppercase">${p.status}</span>`;
-              const score = p.score != null ? ` · score ${p.score}` : "";
-              return `<div style="background:#111116;border:1px solid #252530;border-radius:6px;padding:6px 10px;font-family:inherit;color:#e0e0f0;font-size:11px;max-width:260px">
-                <div style="font-weight:700;margin-bottom:2px">${escapeHtml(p.title)}</div>
-                <div style="color:#7a7a96;font-size:10px;margin-bottom:4px">${escapeHtml(p.company)}</div>
-                ${status}${score}
-              </div>`;
-            }}
-            onPointHover={(d) => setHovered((d as PositionCoord | null) ?? null)}
-            onPointClick={(d) => {
-              const p = d as PositionCoord;
-              setSelected(p);
-              // Stop auto-rotate quando interagisco
-              const g = globeRef.current;
-              if (g) {
-                try {
-                  (
-                    g.controls() as { autoRotate: boolean }
-                  ).autoRotate = false;
-                } catch {}
-              }
-            }}
-          />
         )}
 
         {selected && (
           <div
-            className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm bg-[var(--color-panel)] border border-[var(--color-border)] rounded-md p-3 text-[11px]"
+            className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm bg-[var(--color-panel)] border border-[var(--color-border)] rounded-md p-3 text-[11px] z-10"
             style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.6)" }}
           >
             <div className="flex items-start justify-between gap-3 mb-1">
@@ -281,24 +248,7 @@ export default function JobsGlobe() {
             </Link>
           </div>
         )}
-
-        {hovered && !selected && (
-          <div
-            className="absolute top-3 right-3 text-[10px] text-[var(--color-dim)] pointer-events-none"
-            aria-hidden
-          >
-            click per dettaglio
-          </div>
-        )}
       </div>
     </div>
   );
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
