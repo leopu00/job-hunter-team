@@ -81,7 +81,7 @@ function buildCsp(nonce: string, isDevelopment: boolean): string {
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com",
-    "font-src 'self'",
+    "font-src 'self' data: https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com",
     "connect-src 'self' https://*.supabase.co https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com",
     "worker-src 'self' blob:",
     "child-src 'self' blob:",
