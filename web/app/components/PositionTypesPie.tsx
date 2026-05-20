@@ -1,6 +1,10 @@
 "use client";
 
-import type { PositionTypeCount } from "@/lib/position-classifier";
+import { useState } from "react";
+import type {
+  PositionTypeCount,
+  PositionType,
+} from "@/lib/position-classifier";
 
 type Props = {
   data: PositionTypeCount[];
@@ -19,7 +23,6 @@ function arc(startAngle: number, endAngle: number): string {
   // Avoid degenerate arcs when a single slice covers 100%
   const span = endAngle - startAngle;
   if (span >= 2 * Math.PI - 1e-6) {
-    // full ring as two half-arcs
     const xR = CX + RADIUS;
     const xL = CX - RADIUS;
     const yC = CY;
@@ -53,8 +56,17 @@ function arc(startAngle: number, endAngle: number): string {
   ].join(" ");
 }
 
-export default function PositionTypesPie({ data, labels, title, emptyLabel }: Props) {
+export default function PositionTypesPie({
+  data,
+  labels,
+  title,
+  emptyLabel,
+}: Props) {
+  const [hovered, setHovered] = useState<PositionType | null>(null);
   const total = data.reduce((a, d) => a + d.count, 0);
+  const focused = hovered != null ? data.find((d) => d.type === hovered) : null;
+  const focusedPct =
+    focused && total > 0 ? Math.round((focused.count / total) * 100) : null;
 
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
@@ -78,6 +90,7 @@ export default function PositionTypesPie({ data, labels, title, emptyLabel }: Pr
             className="shrink-0"
             aria-label={title}
             role="img"
+            onMouseLeave={() => setHovered(null)}
           >
             {(() => {
               let acc = -Math.PI / 2; // start at top
@@ -85,27 +98,90 @@ export default function PositionTypesPie({ data, labels, title, emptyLabel }: Pr
                 const span = (d.count / total) * 2 * Math.PI;
                 const path = arc(acc, acc + span);
                 acc += span;
+                const isHover = hovered === d.type;
+                const dimmed = hovered != null && !isHover;
                 return (
                   <path
                     key={d.type}
                     d={path}
                     fill={d.color}
-                    opacity={0.88}
+                    opacity={isHover ? 1 : dimmed ? 0.32 : 0.88}
                     stroke="var(--color-card)"
-                    strokeWidth={1}
-                  />
+                    strokeWidth={isHover ? 1.5 : 1}
+                    onMouseEnter={() => setHovered(d.type)}
+                    style={{
+                      cursor: "pointer",
+                      transition: "opacity 0.15s ease, stroke-width 0.15s ease",
+                    }}
+                  >
+                    <title>
+                      {(labels[d.type] ?? d.type)} — {d.count} (
+                      {Math.round((d.count / total) * 100)}%)
+                    </title>
+                  </path>
                 );
               });
             })()}
+
+            {/* Center label: mostra la slice hovered (count + pct).
+                Quando nessuna e' hovered, mostra il totale. */}
+            <text
+              x={CX}
+              y={CY - 4}
+              textAnchor="middle"
+              fontSize={focused ? 11 : 9}
+              fill={focused ? focused.color : "var(--color-dim)"}
+              fontWeight={700}
+              style={{ pointerEvents: "none", fontFamily: "inherit" }}
+            >
+              {focused
+                ? (labels[focused.type] ?? focused.type)
+                : "totale"}
+            </text>
+            <text
+              x={CX}
+              y={CY + 11}
+              textAnchor="middle"
+              fontSize={13}
+              fill="var(--color-bright)"
+              fontWeight={700}
+              style={{ pointerEvents: "none", fontFamily: "inherit" }}
+            >
+              {focused ? `${focused.count}` : `${total}`}
+            </text>
+            {focusedPct != null && (
+              <text
+                x={CX}
+                y={CY + 22}
+                textAnchor="middle"
+                fontSize={9}
+                fill="var(--color-muted)"
+                style={{ pointerEvents: "none", fontFamily: "inherit" }}
+              >
+                {focusedPct}%
+              </text>
+            )}
           </svg>
 
-          <ul className="flex-1 space-y-1.5 min-w-0">
+          <ul
+            className="flex-1 space-y-1.5 min-w-0"
+            onMouseLeave={() => setHovered(null)}
+          >
             {data.map((d) => {
               const pct = Math.round((d.count / total) * 100);
+              const isHover = hovered === d.type;
+              const dimmed = hovered != null && !isHover;
               return (
                 <li
                   key={d.type}
-                  className="flex items-center gap-2 text-[10.5px] leading-tight"
+                  onMouseEnter={() => setHovered(d.type)}
+                  className="flex items-center gap-2 text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
+                  style={{
+                    cursor: "pointer",
+                    background: isHover ? "var(--color-row)" : "transparent",
+                    opacity: dimmed ? 0.45 : 1,
+                    transition: "background 0.15s ease, opacity 0.15s ease",
+                  }}
                 >
                   <span
                     className="inline-block w-2 h-2 rounded-sm shrink-0"
@@ -113,7 +189,12 @@ export default function PositionTypesPie({ data, labels, title, emptyLabel }: Pr
                     aria-hidden
                   />
                   <span
-                    className="flex-1 min-w-0 text-[var(--color-muted)]"
+                    className="flex-1 min-w-0"
+                    style={{
+                      color: isHover
+                        ? "var(--color-bright)"
+                        : "var(--color-muted)",
+                    }}
                     title={labels[d.type] ?? d.type}
                   >
                     {labels[d.type] ?? d.type}
