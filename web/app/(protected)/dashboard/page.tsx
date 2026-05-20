@@ -6,7 +6,7 @@ import {
   getDashboardStats,
   getRecentPositions,
   getScoreDistribution,
-  getSourceDistribution,
+  getCriticScores,
   getPositionTypeDistribution,
   getPendingMessages,
   getCriticVerdictTotals,
@@ -103,13 +103,13 @@ export default async function DashboardCompany() {
   }
 
   const demoData = demoMode ? getDemoDashboardData() : null;
-  const [stats, positions, scoreDist, sourceDist, typeDist, pendingMessages, criticTotals] =
+  const [stats, positions, scoreDist, criticScores, typeDist, pendingMessages, criticTotals] =
     demoData
       ? [
           demoData.stats,
           demoData.positions,
           demoData.scoreDistribution,
-          demoData.sourceDistribution,
+          [] as number[],
           [],
           demoData.pendingMessages,
           { pass: 0, needs_work: 0, reject: 0, total: 0 },
@@ -118,7 +118,7 @@ export default async function DashboardCompany() {
           getDashboardStats(),
           getRecentPositions(15),
           getScoreDistribution(),
-          getSourceDistribution(),
+          getCriticScores(),
           getPositionTypeDistribution(),
           getPendingMessages(20),
           getCriticVerdictTotals(),
@@ -482,45 +482,17 @@ export default async function DashboardCompany() {
           emptyLabel={t.no_data}
         />
 
-        {/* Source distribution */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="section-label mb-4">{t.sources}</div>
-          <div className="space-y-3">
-            {sourceDist.length === 0 ? (
-              <p className="text-[11px] text-[var(--color-dim)]">{t.no_data}</p>
-            ) : (
-              (() => {
-                const max = sourceDist[0]?.count ?? 1;
-                return sourceDist.map((s) => (
-                  <div key={s.source} className="flex items-center gap-3">
-                    <span
-                      className="text-[9.5px] text-[var(--color-muted)] w-28 truncate shrink-0"
-                      title={s.source}
-                    >
-                      {s.source}
-                    </span>
-                    <div
-                      className="flex-1 h-1.5 rounded-full overflow-hidden"
-                      style={{ background: "var(--color-border)" }}
-                    >
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${(s.count / max) * 100}%`,
-                          background: "var(--color-blue)",
-                          opacity: 0.7,
-                        }}
-                      />
-                    </div>
-                    <span className="text-[11px] font-bold text-[var(--color-blue)] w-6 text-right shrink-0">
-                      {s.count}
-                    </span>
-                  </div>
-                ));
-              })()
-            )}
-          </div>
-        </div>
+        {/* Critic votes distribution (0-10) */}
+        <ScoreDistribution
+          scores={criticScores}
+          title={t.critic_votes}
+          emptyLabel={t.no_data}
+          maxScore={10}
+          binStep={0.5}
+          decimals={1}
+          thresholdReady={5.5}
+          thresholdLabel={t.critic_ready}
+        />
 
         {/* Position types pie */}
         <PositionTypesPie
