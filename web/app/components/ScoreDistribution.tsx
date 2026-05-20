@@ -6,11 +6,12 @@ type Props = {
   scores: number[];
   title: string;
   emptyLabel: string;
-  thresholdReady?: number; // default 70: soglia "ready" che marchi con riga
+  thresholdReady?: number; // soglia "ready" con linea verticale
+  thresholdLabel?: string;
+  maxScore?: number; // default 100 (es. 10 per critic_score 0-10)
+  binStep?: number;  // default 5 (es. 0.5 per critic_score)
+  decimals?: number; // decimali nei tick/tooltip (default 0)
 };
-
-const BINS = 20; // bin da 5 score (0-4, 5-9, ..., 95-100)
-const BIN_SIZE = 100 / BINS;
 
 const W = 480;
 const H = 200;
@@ -19,12 +20,25 @@ const PAD_RIGHT = 8;
 const PAD_TOP = 12;
 const PAD_BOTTOM = 22;
 
-function colorForScore(score: number): string {
-  if (score >= 75) return "var(--color-green)";
-  if (score >= 60) return "#7fffb2";
-  if (score >= 45) return "var(--color-yellow)";
-  if (score >= 30) return "var(--color-orange)";
+function colorForFraction(frac: number): string {
+  // frac = score / maxScore in [0..1]
+  if (frac >= 0.75) return "var(--color-green)";
+  if (frac >= 0.6) return "#7fffb2";
+  if (frac >= 0.45) return "var(--color-yellow)";
+  if (frac >= 0.3) return "var(--color-orange)";
   return "var(--color-red)";
+}
+
+function niceTickStep(span: number, target: number): number {
+  const raw = span / target;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / pow;
+  let step: number;
+  if (norm < 1.5) step = 1;
+  else if (norm < 3) step = 2;
+  else if (norm < 7) step = 5;
+  else step = 10;
+  return step * pow;
 }
 
 function percentile(sorted: number[], p: number): number {
@@ -40,9 +54,14 @@ export default function ScoreDistribution({
   scores,
   title,
   emptyLabel,
-  thresholdReady = 70,
+  thresholdReady,
+  thresholdLabel,
+  maxScore = 100,
+  binStep = 5,
+  decimals = 0,
 }: Props) {
   const [hover, setHover] = useState<number | null>(null);
+  const BINS = Math.max(1, Math.round(maxScore / binStep));
 
   const stats = useMemo(() => {
     const arr = [...scores].sort((a, b) => a - b);
@@ -59,13 +78,13 @@ export default function ScoreDistribution({
         topVal: 0,
         n: 0,
         domainLo: 0,
-        domainHi: 100,
+        domainHi: maxScore,
         firstBin: 0,
       };
     }
     const bins = new Array(BINS).fill(0);
     for (const s of arr) {
-      const i = Math.min(BINS - 1, Math.floor(s / BIN_SIZE));
+      const i = Math.min(BINS - 1, Math.floor(s / binStep));
       bins[i] += 1;
     }
     // Auto-scale: trova primo/ultimo bin non-vuoto, padda di 1 bin per
@@ -77,16 +96,20 @@ export default function ScoreDistribution({
     while (lastBin > firstBin && bins[lastBin] === 0) lastBin--;
     firstBin = Math.max(0, firstBin - 1);
     lastBin = Math.min(BINS - 1, lastBin + 1);
-    const domainLo = firstBin * BIN_SIZE;
-    const domainHi = Math.min(100, (lastBin + 1) * BIN_SIZE);
+    const domainLo = firstBin * binStep;
+    const domainHi = Math.min(maxScore, (lastBin + 1) * binStep);
     const sum = arr.reduce((a, b) => a + b, 0);
+    const round = (v: number) =>
+      decimals > 0
+        ? Math.round(v * 10 ** decimals) / 10 ** decimals
+        : Math.round(v);
     return {
       bins: bins.slice(firstBin, lastBin + 1),
       max: Math.max(...bins),
-      avg: Math.round(sum / n),
-      median: percentile(arr, 0.5),
-      p25: percentile(arr, 0.25),
-      p75: percentile(arr, 0.75),
+      avg: round(sum / n),
+      median: round(percentile(arr, 0.5)),
+      p25: round(percentile(arr, 0.25)),
+      p75: round(percentile(arr, 0.75)),
       min: arr[0],
       topVal: arr[n - 1],
       n,
@@ -94,7 +117,7 @@ export default function ScoreDistribution({
       domainHi,
       firstBin,
     };
-  }, [scores]);
+  }, [scores, BINS, binStep, maxScore, decimals]);
 
   if (stats.n === 0) {
     return (
@@ -116,25 +139,31 @@ export default function ScoreDistribution({
   const by = (count: number) =>
     PAD_TOP + chartH - (count / Math.max(1, stats.max)) * chartH;
 
-  // Tick adattivi a step di 10 o 5 in base allo span
-  const tickStep = domainSpan <= 30 ? 5 : 10;
+  // Tick adattivi: max 6 ticks
+  const niceStep = niceTickStep(domainSpan, 6);
   const xTicks: number[] = [];
-  const tickStart = Math.ceil(stats.domainLo / tickStep) * tickStep;
-  for (let v = tickStart; v <= stats.domainHi; v += tickStep) xTicks.push(v);
+  const tickStart = Math.ceil(stats.domainLo / niceStep) * niceStep;
+  for (let v = tickStart; v <= stats.domainHi + 0.0001; v += niceStep)
+    xTicks.push(Number(v.toFixed(decimals + 1)));
 
   const hoveredBin = hover != null ? hover : null;
   const hoveredCount = hoveredBin != null ? stats.bins[hoveredBin] : 0;
+  const formatVal = (v: number) =>
+    decimals > 0 ? v.toFixed(decimals) : Math.round(v).toString();
   const hoveredLo =
     hoveredBin != null
-      ? Math.round((stats.firstBin + hoveredBin) * BIN_SIZE)
-      : 0;
+      ? formatVal((stats.firstBin + hoveredBin) * binStep)
+      : "";
   const hoveredHi =
     hoveredBin != null
-      ? Math.min(
-          100,
-          Math.round((stats.firstBin + hoveredBin + 1) * BIN_SIZE) - 1,
+      ? formatVal(
+          Math.min(
+            maxScore,
+            (stats.firstBin + hoveredBin + 1) * binStep -
+              (decimals > 0 ? 10 ** -decimals : 1),
+          ),
         )
-      : 0;
+      : "";
   const hoveredPct =
     hoveredCount && stats.n > 0
       ? Math.round((hoveredCount / stats.n) * 100)
@@ -145,7 +174,11 @@ export default function ScoreDistribution({
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <span className="section-label">{title}</span>
         <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)] tabular-nums">
-          <Stat label="avg" value={stats.avg} color={colorForScore(stats.avg)} />
+          <Stat
+            label="avg"
+            value={stats.avg}
+            color={colorForFraction(stats.avg / maxScore)}
+          />
           <Stat label="med" value={stats.median} />
           <Stat
             label="p25–p75"
@@ -208,7 +241,7 @@ export default function ScoreDistribution({
           const y = by(count);
           const h = PAD_TOP + chartH - y;
           const isHover = hover === i;
-          const score = (stats.firstBin + i) * BIN_SIZE + BIN_SIZE / 2;
+          const score = (stats.firstBin + i) * binStep + binStep / 2;
           return (
             <rect
               key={i}
@@ -216,7 +249,7 @@ export default function ScoreDistribution({
               y={y}
               width={Math.max(1, barW - 1)}
               height={h}
-              fill={colorForScore(score)}
+              fill={colorForFraction(score / maxScore)}
               opacity={hover == null ? 0.85 : isHover ? 1 : 0.35}
               onMouseEnter={() => setHover(i)}
               style={{ cursor: "pointer", transition: "opacity 0.12s" }}
@@ -269,44 +302,49 @@ export default function ScoreDistribution({
               opacity={0.8}
               style={{ fontFamily: "inherit" }}
             >
-              ready ≥{thresholdReady}
+              {thresholdLabel ?? `ready ≥${thresholdReady}`}
             </text>
           </g>
         )}
 
         {/* Hover tooltip */}
-        {hoveredBin != null && hoveredCount > 0 && (
-          <g style={{ pointerEvents: "none" }}>
-            <rect
-              x={Math.min(W - 110, Math.max(0, sx(hoveredLo) - 50))}
-              y={Math.max(0, by(hoveredCount) - 38)}
-              width={108}
-              height={32}
-              rx={4}
-              fill="var(--color-panel)"
-              stroke="var(--color-border)"
-            />
-            <text
-              x={Math.min(W - 110, Math.max(0, sx(hoveredLo) - 50)) + 8}
-              y={Math.max(0, by(hoveredCount) - 24)}
-              fontSize={10}
-              fill="var(--color-bright)"
-              fontWeight={700}
-              style={{ fontFamily: "inherit" }}
-            >
-              {hoveredLo}–{hoveredHi}
-            </text>
-            <text
-              x={Math.min(W - 110, Math.max(0, sx(hoveredLo) - 50)) + 8}
-              y={Math.max(0, by(hoveredCount) - 11)}
-              fontSize={9}
-              fill="var(--color-muted)"
-              style={{ fontFamily: "inherit" }}
-            >
-              {hoveredCount} pos · {hoveredPct}%
-            </text>
-          </g>
-        )}
+        {hoveredBin != null && hoveredCount > 0 && (() => {
+          const binX = PAD_LEFT + hoveredBin * barW;
+          const tipX = Math.min(W - 110, Math.max(0, binX - 50));
+          const tipY = Math.max(0, by(hoveredCount) - 38);
+          return (
+            <g style={{ pointerEvents: "none" }}>
+              <rect
+                x={tipX}
+                y={tipY}
+                width={108}
+                height={32}
+                rx={4}
+                fill="var(--color-panel)"
+                stroke="var(--color-border)"
+              />
+              <text
+                x={tipX + 8}
+                y={tipY + 14}
+                fontSize={10}
+                fill="var(--color-bright)"
+                fontWeight={700}
+                style={{ fontFamily: "inherit" }}
+              >
+                {hoveredLo}–{hoveredHi}
+              </text>
+              <text
+                x={tipX + 8}
+                y={tipY + 27}
+                fontSize={9}
+                fill="var(--color-muted)"
+                style={{ fontFamily: "inherit" }}
+              >
+                {hoveredCount} · {hoveredPct}%
+              </text>
+            </g>
+          );
+        })()}
       </svg>
     </div>
   );

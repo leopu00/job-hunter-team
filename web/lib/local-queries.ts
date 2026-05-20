@@ -381,6 +381,18 @@ export function getPositionTypeDistributionLocal(ws: string): PositionTypeCount[
   return aggregateTypes(rows.map(r => r.title))
 }
 
+// ── Critic votes distribution (0-10) ───────────────────────────────
+export function getCriticScoresLocal(ws: string): number[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT a.critic_score
+    FROM applications a
+    JOIN positions p ON p.id = a.position_id
+    WHERE p.status != 'excluded' AND a.critic_score IS NOT NULL
+  `).all() as { critic_score: number }[]
+  return rows.map(r => r.critic_score).filter((s): s is number => typeof s === 'number')
+}
+
 // ── Source distribution ─────────────────────────────────────────────
 export function getSourceDistributionLocal(ws: string): Array<{ source: string; count: number }> {
   const db = getDb(ws)
