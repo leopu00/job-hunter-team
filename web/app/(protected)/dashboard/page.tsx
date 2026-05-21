@@ -17,7 +17,6 @@ import JobsGlobe from "@/app/components/JobsGlobe";
 import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
-import { runBash } from "@/lib/shell";
 import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
 import { createClient } from "@/lib/supabase/server";
@@ -165,31 +164,6 @@ export default async function DashboardPage() {
     hasProfile = readWorkspaceProfile() !== null;
   }
 
-  // Check if team is active (tmux JHT sessions)
-  let teamActive = demoMode;
-  if (!demoMode) {
-    try {
-      const { stdout } = await runBash(
-        'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""',
-      );
-      const sessions = stdout.trim().split("\n").filter(Boolean);
-      const JH_PREFIXES = [
-        "CAPITANO",
-        "SCOUT",
-        "ANALISTA",
-        "SCORER",
-        "SCRITTORE",
-        "CRITICO",
-        "SENTINELLA",
-      ];
-      teamActive = sessions.some((s) =>
-        JH_PREFIXES.some(
-          (p) => s.toUpperCase() === p || s.toUpperCase().startsWith(`${p}-`),
-        ),
-      );
-    } catch {}
-  }
-
   const isEmpty = stats.total === 0;
 
   const pipeline = [
@@ -265,37 +239,13 @@ export default async function DashboardPage() {
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-3">
-          <div
-            className="w-2 h-2 rounded-full"
-            style={{
-              background: teamActive
-                ? "var(--color-green)"
-                : "var(--color-dim)",
-              animation: teamActive
-                ? "pulse-dot 2s ease-in-out infinite"
-                : undefined,
-            }}
-          />
-          <span
-            className="text-[10px] font-semibold tracking-[0.18em] uppercase"
-            style={{
-              color: teamActive ? "var(--color-green)" : "var(--color-dim)",
-            }}
-          >
-            {demoMode ? "DEMO DATA" : teamActive ? t.live : t.data_updated}
-          </span>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-          {t.title}
-        </h1>
-        <p className="text-[var(--color-muted)] text-[11px] mt-1">
-          {t.total_positions(stats.total, stats.excluded, activeTotal)}
-        </p>
+      {/* ── World globe (hero) — primo elemento, full-width, attacca al navbar */}
+      <div style={{ animation: "fade-in 0.35s ease both 0.05s" }}>
+        <JobsGlobe hero />
       </div>
 
+      {/* ── Tutto il resto centrato come prima del refactor full-width ── */}
+      <div className="max-w-6xl mx-auto px-5 pt-8 pb-8">
       {/* ── Messaggi del team (fallback web quando Telegram down) ─ */}
       <PendingMessagesCard initialMessages={pendingMessages} />
 
@@ -408,14 +358,6 @@ export default async function DashboardPage() {
           </div>
         </div>
       )}
-
-      {/* ── World globe (hero) ──────────────────────────────────── */}
-      <div
-        className="mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.05s" }}
-      >
-        <JobsGlobe hero />
-      </div>
 
       {/* ── Pipeline ────────────────────────────────────────────── */}
       <div className="section-label mb-4">{t.pipeline}</div>
@@ -851,6 +793,7 @@ export default async function DashboardPage() {
             ))}
           </div>
         </div>
+      </div>
       </div>
 
       <OnboardingWizard />
