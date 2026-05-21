@@ -18,7 +18,6 @@ export default function robots(): MetadataRoute.Robots {
           "/dashboard",
           "/profile",
           "/positions",
-          "/applications",
           "/ready",
           "/risposte",
           "/crescita",
