@@ -15,7 +15,6 @@ type Cmd = { id: string; label: string; detail: string; category: string; href?:
 const STATIC_COMMANDS: Cmd[] = [
   { id: 'dashboard',    label: 'Dashboard',        detail: 'Vista riepilogativa lavoro in corso', category: 'Pagine',  href: '/dashboard' },
   { id: 'positions',    label: 'Offerte',          detail: 'Job trovati dagli agenti',            category: 'Pagine',  href: '/positions' },
-  { id: 'applications', label: 'Candidature',      detail: 'Candidature inviate o in lavorazione', category: 'Pagine',  href: '/applications' },
   { id: 'ready',        label: 'Pronte all\'invio', detail: 'CV+CL generati, pronte da spedire',   category: 'Pagine',  href: '/ready' },
   { id: 'risposte',     label: 'Risposte',         detail: 'Risposte ricevute dalle aziende',     category: 'Pagine',  href: '/risposte' },
   { id: 'crescita',     label: 'Crescita',         detail: 'Analytics personale + trend',         category: 'Pagine',  href: '/crescita' },
