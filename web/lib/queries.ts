@@ -509,9 +509,24 @@ export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('title').not('status', 'eq', 'excluded')
+  // Coerente con getScoreDistribution(): preferisci positions.score quando
+  // presente, altrimenti fallback su scores.total_score via join.
+  // critic_score sta in applications.
+  const { data, error } = await supabase
+    .from('positions')
+    .select('title, score, scores(total_score), applications(critic_score)')
+    .not('status', 'eq', 'excluded')
   if (error || !data) return []
-  return aggregateTypes(data.map((r: { title: string | null }) => r.title))
+  const rows = (data as any[]).map((r) => {
+    const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores
+    const appRel = Array.isArray(r.applications) ? r.applications[0] : r.applications
+    return {
+      title: r.title as string | null,
+      score: (r.score as number | null) ?? (scoresRel?.total_score ?? null),
+      critic: (appRel?.critic_score as number | null) ?? null,
+    }
+  })
+  return aggregateTypes(rows)
 }
 
 // ── Positions count by status ───────────────────────────────────────
