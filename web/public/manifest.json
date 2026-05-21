@@ -39,11 +39,6 @@
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Candidature",
-      "short_name": "Candidature",
-      "url": "/applications"
-    },
-    {
       "name": "Posizioni",
       "short_name": "Posizioni",
       "url": "/positions"
