@@ -7,7 +7,7 @@ const DRIVE_BASE = "https://drive.google.com/file/d";
 export default async function ReadyPage() {
   const [readyApps, readyPositions] = await Promise.all([
     getApplicationsByStatus("ready"),
-    getPositions({ status: "ready", limit: 200 }),
+    getPositions({ statuses: ["ready"], limit: 200 }),
   ]);
 
   const appsWithReadyPositions = readyPositions.filter(
