@@ -38,11 +38,7 @@ export function useDevMode(): boolean {
 
 export default function SettingsMenu() {
   const [open, setOpen] = useState(false)
-  const [devMode, setDevMode] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-
-  // Leggi lo stato iniziale dopo il mount (niente mismatch SSR/CSR).
-  useEffect(() => { setDevMode(readDevMode()) }, [])
 
   useEffect(() => {
     if (!open) return
@@ -57,13 +53,6 @@ export default function SettingsMenu() {
       document.removeEventListener('keydown', onKey)
     }
   }, [open])
-
-  const toggleDev = () => {
-    const next = !devMode
-    setDevMode(next)
-    window.localStorage.setItem(DEV_MODE_KEY, next ? '1' : '0')
-    window.dispatchEvent(new CustomEvent(DEV_MODE_EVENT, { detail: next }))
-  }
 
   return (
     <div ref={ref} className="relative">
@@ -105,35 +94,21 @@ export default function SettingsMenu() {
             <DarkModeToggle />
           </div>
 
-          <button
-            role="menuitemcheckbox"
-            aria-checked={devMode}
-            onClick={toggleDev}
-            className="w-full flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-[var(--color-card)] transition-colors"
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
-          >
-            <span className="text-[11px] font-semibold" style={{ color: 'var(--color-bright)' }}>
-              Modalità dev
-            </span>
-            <Toggle on={devMode} />
-          </button>
+          <SectionHeader>Team</SectionHeader>
+          <MenuLink href="/team-pyramid" onClick={() => setOpen(false)}>Organigramma</MenuLink>
 
-          <SectionHeader>Configurazione</SectionHeader>
-          <MenuLink href="/providers" onClick={() => setOpen(false)}>Provider LLM</MenuLink>
-          <MenuLink href="/credentials" onClick={() => setOpen(false)}>Credenziali</MenuLink>
-          <MenuLink href="/rate-limiter" onClick={() => setOpen(false)}>Rate Limiter</MenuLink>
-          <MenuLink href="/secrets" onClick={() => setOpen(false)}>Secret</MenuLink>
+          {/* Voci placeholder — riabilitare una alla volta dopo validazione.
+              <SectionHeader>Notifiche</SectionHeader>
+              <MenuLink href="/notifications" onClick={() => setOpen(false)}>Preferenze notifiche</MenuLink>
+              <MenuLink href="/channels" onClick={() => setOpen(false)}>Canali</MenuLink>
+              <MenuLink href="/integrations" onClick={() => setOpen(false)}>Integrazioni</MenuLink>
 
-          <SectionHeader>Notifiche</SectionHeader>
-          <MenuLink href="/notifications" onClick={() => setOpen(false)}>Preferenze notifiche</MenuLink>
-          <MenuLink href="/channels" onClick={() => setOpen(false)}>Canali</MenuLink>
-          <MenuLink href="/integrations" onClick={() => setOpen(false)}>Integrazioni</MenuLink>
-
-          <SectionHeader>Sistema</SectionHeader>
-          <MenuLink href="/cron" onClick={() => setOpen(false)}>Cron jobs</MenuLink>
-          <MenuLink href="/setup" onClick={() => setOpen(false)}>Setup wizard</MenuLink>
-          <MenuLink href="/settings/cloud-sync" onClick={() => setOpen(false)}>Cloud sync</MenuLink>
-          <MenuLink href="/cli-link" onClick={() => setOpen(false)}>Collega CLI / VPS</MenuLink>
+              <SectionHeader>Sistema</SectionHeader>
+              <MenuLink href="/cron" onClick={() => setOpen(false)}>Cron jobs</MenuLink>
+              <MenuLink href="/setup" onClick={() => setOpen(false)}>Setup wizard</MenuLink>
+              <MenuLink href="/settings/cloud-sync" onClick={() => setOpen(false)}>Cloud sync</MenuLink>
+              <MenuLink href="/cli-link" onClick={() => setOpen(false)}>Collega CLI / VPS</MenuLink>
+          */}
         </div>
       )}
     </div>
@@ -174,35 +149,3 @@ function GearIcon() {
   )
 }
 
-function Toggle({ on }: { on: boolean }) {
-  return (
-    <span
-      aria-hidden="true"
-      style={{
-        position: 'relative',
-        display: 'inline-block',
-        width: 28,
-        height: 16,
-        borderRadius: 8,
-        background: on ? 'rgba(34,197,94,0.3)' : 'var(--color-border)',
-        border: `1px solid ${on ? 'rgba(34,197,94,0.5)' : 'var(--color-border)'}`,
-        transition: 'background 0.15s, border-color 0.15s',
-        flexShrink: 0,
-      }}
-    >
-      <span
-        style={{
-          position: 'absolute',
-          top: 1,
-          left: on ? 13 : 1,
-          width: 12,
-          height: 12,
-          borderRadius: '50%',
-          background: on ? '#22c55e' : 'var(--color-muted)',
-          boxShadow: on ? '0 0 6px rgba(34,197,94,0.5)' : 'none',
-          transition: 'left 0.15s, background 0.15s',
-        }}
-      />
-    </span>
-  )
-}
