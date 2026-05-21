@@ -120,25 +120,24 @@ function featureToPosition(f: GeoJSON.Feature): PositionCoord | null {
 }
 
 // Paint override per allineare il basemap al theme JHT.
-// Dark: nero-verde profondo. Light: bianco-grigio caldo.
+// Dark = inverso cromatico della light: stessa palette grayscale
+// neutra (warm offwhite → warm darkgray), nessun verde/blu acceso.
+// Relazioni di luminanza preservate (water più chiaro del land,
+// building leggermente più scuro del land, ecc.) per leggibilità.
 function tintMap(map: MaplibreMap, mode: "dark" | "light") {
   const tweaks: Array<[string, string, string]> =
     mode === "dark"
       ? [
-          // Land base "neutra" (background renderizzato sotto i layer
-          // landuse): verde scuro warm, distinto dal water blu scuro.
-          ["background", "background-color", "#0d2218"],
-          // Water: blu petrol distinto, NON quasi-nero come prima.
-          ["water", "fill-color", "#06222b"],
-          // Landcover/use/park: verde un po' piu' chiaro = "respiro".
-          ["landcover_wood", "fill-color", "#102c1f"],
-          ["landcover_grass", "fill-color", "#143222"],
-          ["landuse_overlay_national_park", "fill-color", "#143222"],
-          ["landuse_park", "fill-color", "#143222"],
-          ["landuse_residential", "fill-color", "#0e2519"],
-          ["national_park", "fill-color", "#143222"],
-          ["building", "fill-color", "#102c1f"],
-          ["building-3d", "fill-color", "#102c1f"],
+          ["background", "background-color", "#0d0d11"],
+          ["water", "fill-color", "#23252b"],
+          ["landcover_wood", "fill-color", "#14171a"],
+          ["landcover_grass", "fill-color", "#181b1e"],
+          ["landuse_overlay_national_park", "fill-color", "#181b1e"],
+          ["landuse_park", "fill-color", "#181b1e"],
+          ["landuse_residential", "fill-color", "#16161a"],
+          ["national_park", "fill-color", "#181b1e"],
+          ["building", "fill-color", "#1c1d22"],
+          ["building-3d", "fill-color", "#1c1d22"],
         ]
       : [
           ["background", "background-color", "#f3f3ee"],
@@ -466,44 +465,50 @@ export default function JobsGlobe({ hero = false }: { hero?: boolean } = {}) {
     });
   }
 
+  const wrapClass = hero
+    ? ""
+    : "bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]";
+
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <span className="section-label">Mappa offerte</span>
-        <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
-          {loaded && (
-            <>
-              <span>
-                <span className="text-[var(--color-bright)] font-semibold">
-                  {data.length}
-                </span>{" "}
-                con coordinate
-              </span>
-              {remoteCount > 0 && (
+    <div className={wrapClass}>
+      {!hero && (
+        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+          <span className="section-label">Mappa offerte</span>
+          <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
+            {loaded && (
+              <>
                 <span>
-                  ·{" "}
                   <span className="text-[var(--color-bright)] font-semibold">
-                    {remoteCount}
+                    {data.length}
                   </span>{" "}
-                  remote
+                  con coordinate
                 </span>
-              )}
-            </>
-          )}
+                {remoteCount > 0 && (
+                  <span>
+                    ·{" "}
+                    <span className="text-[var(--color-bright)] font-semibold">
+                      {remoteCount}
+                    </span>{" "}
+                    remote
+                  </span>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div
         ref={mapWrapRef}
-        className="relative w-full overflow-hidden rounded-md"
+        className={`relative w-full overflow-hidden ${hero ? "" : "rounded-md"}`}
         // zoom: 1 neutralizza il body { zoom: var(--zoom) } di JHT
         // che mandava MapLibre a leggere dimensioni canvas sbagliate.
-        // background theme-aware: l'area fuori dal globo (la sfera
-        // proiettata occupa solo il centro del canvas) deve seguire
-        // il tema della pagina, non essere hardcoded nero.
+        // In hero il bg è transparent così il globo si fonde col
+        // body (--color-deep) senza frame; in card mode mantiene
+        // --color-deep esplicito.
         style={{
           height: hero ? 620 : 500,
-          background: "var(--color-deep)",
+          background: hero ? "transparent" : "var(--color-deep)",
           zoom: 1,
         }}
       >
