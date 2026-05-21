@@ -203,7 +203,7 @@ export default function SettingsCompany() {
       className="min-h-screen px-6 py-10"
       style={{ animation: "fade-in 0.35s ease both" }}
     >
-      <div className="max-w-2xl flex flex-col gap-6">
+      <div className="max-w-6xl mx-auto flex flex-col gap-6">
         <div>
           <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-3">
             <Link
