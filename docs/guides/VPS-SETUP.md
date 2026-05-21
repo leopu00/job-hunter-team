@@ -486,6 +486,43 @@ Supabase OAuth callback configurato solo per dominio prod. Workaround:
 usa CLI / Telegram per gestire il team. Fix futuro: aggiungere
 `http://localhost:3000` agli additional redirect URLs nel Supabase project.
 
+### SSH `Permission denied (publickey,password)` con chiave che dovrebbe matchare
+
+Fingerprint locale = fingerprint Hetzner ma OpenSSH rifiuta. Verifica
+se la private key è cifrata con passphrase:
+
+```bash
+ssh-keygen -y -f ~/.ssh/<your-key>
+# Se chiede passphrase → la key è encrypted
+```
+
+In `BatchMode=yes` (script + automazione) OpenSSH non può decifrarla →
+genera signature invalida → server rigetta. Soluzioni:
+
+- Aggiungi la key a `ssh-agent`: `eval $(ssh-agent) && ssh-add ~/.ssh/<key>`
+- Oppure genera una key effimera senza passphrase per l'automazione:
+  ```bash
+  ssh-keygen -t ed25519 -N "" -f ~/.ssh/jht_ephemeral
+  hcloud ssh-key create --name jht-ephemeral --public-key-from-file ~/.ssh/jht_ephemeral.pub
+  ```
+
+### Hetzner crea VPS ma la SSH key non risulta iniettata
+
+Sintomo: `hcloud server create --ssh-key <name>` ritorna OK ma SSH chiede
+password (e nell'output di create vedi `Root password: ...`). Causa
+tipica: il token API ha permessi limitati anche se la UI mostra i badge
+"Read+Write".
+
+```bash
+# Verifica scope del token corrente:
+hcloud ssh-key list   # se vuoto/errato, il token non ha scope SSH
+```
+
+Genera un nuovo token con scope full Read+Write esplicito da
+`console.hetzner.com/projects/<id>/security/tokens`. Cloud-init
+`user_data` come fallback **non è affidabile** per l'injection chiave
+su Hetzner Ubuntu 24.04 — affidati solo a `--ssh-key` / `ssh_keys` array.
+
 ## Costi mensili
 
 | Voce                              | €/mo  |
