@@ -13,6 +13,8 @@ import {
 } from "@/lib/queries";
 import PositionTypesPie from "@/app/components/PositionTypesPie";
 import ScoreDistribution from "@/app/components/ScoreDistribution";
+import PipelineFunnel from "@/app/components/PipelineFunnel";
+import PipelineFlow from "@/app/components/PipelineFlow";
 import JobsGlobe from "@/app/components/JobsGlobe";
 import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured } from "@/lib/workspace";
@@ -238,13 +240,34 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <div style={{ animation: "fade-in 0.35s ease both" }}>
-      {/* ── World globe (hero) — primo elemento, full-width, attacca al navbar */}
-      <div style={{ animation: "fade-in 0.35s ease both 0.05s" }}>
+    <div style={{ animation: "fade-in 0.35s ease both", position: "relative" }}>
+      {/* ── World globe — sticky sotto navbar (h-14=56px), z-0.
+          Resta ancorato mentre il contenuto sottostante (z-1 + bg
+          opaco) scrolla sopra coprendolo: il globo NON viene
+          spinto via, viene coperto. */}
+      <div
+        style={{
+          position: "sticky",
+          top: 56,
+          height: 620,
+          zIndex: 0,
+          animation: "fade-in 0.35s ease both 0.05s",
+        }}
+      >
         <JobsGlobe hero />
       </div>
 
-      {/* ── Tutto il resto centrato come prima del refactor full-width ── */}
+      {/* ── Tutto il resto: bg opaco full-width che copre il globo
+          edge-to-edge durante lo scroll; layer esterno fa da pannello,
+          quello interno centra i contenuti come prima. z-1 sopra al
+          globo (z-0). ── */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          background: "var(--color-deep)",
+        }}
+      >
       <div className="max-w-6xl mx-auto px-5 pt-8 pb-8">
       {/* ── Messaggi del team (fallback web quando Telegram down) ─ */}
       <PendingMessagesCard initialMessages={pendingMessages} />
@@ -359,6 +382,46 @@ export default async function DashboardPage() {
         </div>
       )}
 
+      {/* ── Position types — pie chart in grande sopra la pipeline ── */}
+      <div
+        className="mb-8"
+        style={{ animation: "fade-in 0.35s ease both 0.08s" }}
+      >
+        <PositionTypesPie
+          data={typeDist}
+          title={t.position_types}
+          emptyLabel={t.no_data}
+          size={300}
+          labels={{
+            ai_ml: t.pt_ai_ml,
+            data: t.pt_data,
+            devops_cloud: t.pt_devops_cloud,
+            full_stack: t.pt_full_stack,
+            backend: t.pt_backend,
+            frontend: t.pt_frontend,
+            python: t.pt_python,
+            software_engineer: t.pt_software_engineer,
+            other: t.pt_other,
+          }}
+        />
+      </div>
+
+      {/* ── Pipeline density: dove si addensano le posizioni ────── */}
+      <div
+        className="mb-8"
+        style={{ animation: "fade-in 0.35s ease both 0.1s" }}
+      >
+        <PipelineFunnel steps={pipeline} title={t.pipeline_density} />
+      </div>
+
+      {/* ── Pipeline flow: area chart con linea ondulante ───────── */}
+      <div
+        className="mb-8"
+        style={{ animation: "fade-in 0.35s ease both 0.12s" }}
+      >
+        <PipelineFlow steps={pipeline} title="Pipeline flow" />
+      </div>
+
       {/* ── Pipeline ────────────────────────────────────────────── */}
       <div className="section-label mb-4">{t.pipeline}</div>
       <div
@@ -414,7 +477,7 @@ export default async function DashboardPage() {
 
       {/* ── Charts ──────────────────────────────────────────────── */}
       <div
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
+        className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
         style={{ animation: "fade-in 0.35s ease both 0.1s" }}
       >
         {/* Score distribution — histogram fine-grained */}
@@ -434,24 +497,6 @@ export default async function DashboardPage() {
           decimals={1}
           thresholdReady={5.5}
           thresholdLabel={t.critic_ready}
-        />
-
-        {/* Position types pie */}
-        <PositionTypesPie
-          data={typeDist}
-          title={t.position_types}
-          emptyLabel={t.no_data}
-          labels={{
-            ai_ml: t.pt_ai_ml,
-            data: t.pt_data,
-            devops_cloud: t.pt_devops_cloud,
-            full_stack: t.pt_full_stack,
-            backend: t.pt_backend,
-            frontend: t.pt_frontend,
-            python: t.pt_python,
-            software_engineer: t.pt_software_engineer,
-            other: t.pt_other,
-          }}
         />
       </div>
 
@@ -793,6 +838,7 @@ export default async function DashboardPage() {
             ))}
           </div>
         </div>
+      </div>
       </div>
       </div>
 
