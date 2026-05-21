@@ -7,6 +7,7 @@
     "dev:host": "JHT_SHELL_VIA=docker:jht next dev -p 3001",
     "dev:host:3002": "JHT_SHELL_VIA=docker:jht next dev -p 3002",
     "build": "next build",
+    "analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
@@ -22,11 +23,10 @@
     "next": "16.0.11",
     "next-intl": "^4.9.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-globe.gl": "^2.38.0",
-    "three": "^0.184.0"
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.6",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/js-yaml": "^4.0.9",
