@@ -484,6 +484,51 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   })
 }
 
+// ── Position state-history (timestamp delle transizioni) ──────────
+// Restituisce per ogni posizione i timestamp delle transizioni di
+// stato, sufficienti a ricostruire la composizione della pipeline a
+// un istante T arbitrario (slider temporale nel dashboard).
+export type PositionStateHistory = {
+  id: string
+  status: string
+  critic_verdict: string | null
+  found_at: string | null
+  last_checked: string | null
+  scored_at: string | null
+  written_at: string | null
+  critic_reviewed_at: string | null
+  applied_at: string | null
+  response_at: string | null
+}
+
+export async function getPositionStateHistory(): Promise<PositionStateHistory[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionStateHistoryLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('id, status, found_at, last_checked, scores(scored_at), applications(written_at, critic_reviewed_at, critic_verdict, applied_at, response_at)')
+  if (error || !data) return []
+  return (data as any[]).map((p) => {
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
+    return {
+      id: String(p.id),
+      status: p.status,
+      critic_verdict: app?.critic_verdict ?? null,
+      found_at: p.found_at ?? null,
+      last_checked: p.last_checked ?? null,
+      scored_at: score?.scored_at ?? null,
+      written_at: app?.written_at ?? null,
+      critic_reviewed_at: app?.critic_reviewed_at ?? null,
+      applied_at: app?.applied_at ?? null,
+      response_at: app?.response_at ?? null,
+    }
+  })
+}
+
 // ── Critic votes distribution ──────────────────────────────────────
 export async function getCriticScores(): Promise<number[]> {
   const w = await ws()
@@ -509,9 +554,24 @@ export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('title').not('status', 'eq', 'excluded')
+  // Coerente con getScoreDistribution(): preferisci positions.score quando
+  // presente, altrimenti fallback su scores.total_score via join.
+  // critic_score sta in applications.
+  const { data, error } = await supabase
+    .from('positions')
+    .select('title, score, scores(total_score), applications(critic_score)')
+    .not('status', 'eq', 'excluded')
   if (error || !data) return []
-  return aggregateTypes(data.map((r: { title: string | null }) => r.title))
+  const rows = (data as any[]).map((r) => {
+    const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores
+    const appRel = Array.isArray(r.applications) ? r.applications[0] : r.applications
+    return {
+      title: r.title as string | null,
+      score: (r.score as number | null) ?? (scoresRel?.total_score ?? null),
+      critic: (appRel?.critic_score as number | null) ?? null,
+    }
+  })
+  return aggregateTypes(rows)
 }
 
 // ── Positions count by status ───────────────────────────────────────
