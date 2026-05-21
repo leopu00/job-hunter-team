@@ -1,4 +1,5 @@
 import { getDb } from './db'
+import { aggregateTypes, type PositionTypeCount } from './position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -42,16 +43,26 @@ export function getDashboardStatsLocal(ws: string): DashboardStats {
 // ── Recent positions with scores ───────────────────────────────────
 export function getRecentPositionsLocal(ws: string, limit = 15): PositionWithScore[] {
   const db = getDb(ws)
+  // last_action_at = ULTIMA azione qualsiasi su una posizione: insert
+  // dello Scout (found_at), check dell'Analista (last_checked), score
+  // dello Scorer (scored_at). Versione "lite" — non guarda
+  // status_changed_at perche' il trigger SQLite non e' garantito su
+  // workspace seedati da Supabase (tipico dev locale).
   const rows = db.prepare(`
-    SELECT p.*, s.total_score as score
+    SELECT p.*, s.total_score as score,
+           MAX(
+             COALESCE(p.found_at, '1970-01-01'),
+             COALESCE(p.last_checked, '1970-01-01'),
+             COALESCE(s.scored_at, '1970-01-01')
+           ) AS last_action_at
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     WHERE p.status != 'excluded'
-    ORDER BY p.found_at DESC
+    ORDER BY last_action_at DESC
     LIMIT ?
   `).all(limit) as any[]
 
-  return rows.map(r => mapPosition(r))
+  return rows.map(r => ({ ...mapPosition(r), last_action_at: r.last_action_at }))
 }
 
 // Posizioni ordinate per ULTIMA azione qualsiasi: insert dello Scout
@@ -323,7 +334,63 @@ export function getScoreDistributionLocal(ws: string) {
   const sum = withScore.reduce((a, s) => a + s, 0)
   const avgScore = withScore.length > 0 ? Math.round(sum / withScore.length) : null
 
-  return { buckets, total: allScores.length, withScore: withScore.length, avgScore }
+  return { buckets, total: allScores.length, withScore: withScore.length, avgScore, scores: withScore }
+}
+
+// ── Positions con coordinate ufficio (per JobsGlobe) ───────────────
+export interface PositionCoord {
+  id: string
+  title: string
+  company: string
+  status: string
+  score: number | null
+  lat: number
+  lon: number
+  is_remote: boolean
+}
+export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.id, p.title, p.company, p.status,
+           s.total_score as score,
+           p.office_lat as lat, p.office_lon as lon,
+           p.is_remote
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    WHERE p.status != 'excluded'
+      AND p.office_lat IS NOT NULL AND p.office_lon IS NOT NULL
+  `).all() as any[]
+  return rows.map(r => ({
+    id: sid(r.id),
+    title: r.title,
+    company: r.company,
+    status: r.status,
+    score: typeof r.score === 'number' ? r.score : null,
+    lat: r.lat,
+    lon: r.lon,
+    is_remote: !!r.is_remote,
+  }))
+}
+
+// ── Position type distribution ──────────────────────────────────────
+export function getPositionTypeDistributionLocal(ws: string): PositionTypeCount[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT title FROM positions WHERE status != 'excluded'
+  `).all() as { title: string | null }[]
+  return aggregateTypes(rows.map(r => r.title))
+}
+
+// ── Critic votes distribution (0-10) ───────────────────────────────
+export function getCriticScoresLocal(ws: string): number[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT a.critic_score
+    FROM applications a
+    JOIN positions p ON p.id = a.position_id
+    WHERE p.status != 'excluded' AND a.critic_score IS NOT NULL
+  `).all() as { critic_score: number }[]
+  return rows.map(r => r.critic_score).filter((s): s is number => typeof s === 'number')
 }
 
 // ── Source distribution ─────────────────────────────────────────────
