@@ -8,7 +8,6 @@ import { useDashboardT } from '@/app/components/DashboardI18n'
 const NAV_KEYS: { href: string; key: string; accent?: string }[] = [
   { href: '/dashboard',    key: 'nav_dashboard' },
   { href: '/positions',    key: 'nav_positions' },
-  { href: '/applications', key: 'nav_applications' },
   { href: '/ready',        key: 'nav_ready',    accent: '#7fffb2' },
   { href: '/risposte',     key: 'nav_risposte', accent: '#58a6ff' },
   { href: '/crescita',     key: 'nav_crescita' },
