@@ -85,14 +85,14 @@ export default function CloudSyncStatusBanner() {
   if (status.remote) return null;
 
   const inSync = status.in_sync;
-  const accent = inSync ? "var(--color-green)" : "var(--color-yellow, #d4a85a)";
+  const accent = inSync ? "var(--color-green)" : "var(--sync-warn)";
 
   return (
     <div
       className="mb-5 px-4 py-2.5 border rounded-lg flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]"
       style={{
         borderColor: "var(--color-border)",
-        background: "rgba(0,0,0,0.15)",
+        background: "var(--color-card)",
       }}
     >
       <span
@@ -124,7 +124,7 @@ export default function CloudSyncStatusBanner() {
             <span
               key={t}
               style={{
-                color: eq ? "var(--color-dim)" : "var(--color-yellow, #d4a85a)",
+                color: eq ? "var(--color-dim)" : "var(--sync-warn)",
               }}
             >
               {t}: {local}/{cloud}
