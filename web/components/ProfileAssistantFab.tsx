@@ -49,15 +49,43 @@ export default function ProfileAssistantFab() {
     setAgentStatus(data.active ? 'active' : 'inactive')
   }, [])
 
+  // Poll attivo solo quando il pannello e' aperto E la tab e' visibile.
+  // Pre-fix (2026-05-22): interval continuava anche con tab in background,
+  // contribuendo al consumo Vercel Function Invocations (vedi
+  // docs/internal/2026-05-22-vercel-quota-exhaustion.md).
   useEffect(() => {
     if (!open) return
+    let cancelled = false
+    let statusTimer: ReturnType<typeof setTimeout> | null = null
+    let messagesTimer: ReturnType<typeof setTimeout> | null = null
+
+    const scheduleStatus = (delay: number) => {
+      if (cancelled) return
+      statusTimer = setTimeout(async () => {
+        if (cancelled) return
+        const hidden = typeof document !== 'undefined' && document.visibilityState !== 'visible'
+        if (!hidden) await fetchStatus()
+        scheduleStatus(hidden ? 60_000 : 10_000)
+      }, delay)
+    }
+    const scheduleMessages = (delay: number) => {
+      if (cancelled) return
+      messagesTimer = setTimeout(async () => {
+        if (cancelled) return
+        const hidden = typeof document !== 'undefined' && document.visibilityState !== 'visible'
+        if (!hidden) await fetchMessages()
+        scheduleMessages(hidden ? 30_000 : 5_000)
+      }, delay)
+    }
+
     fetchStatus()
     fetchMessages()
-    const si = setInterval(fetchStatus, 5000)
-    const cm = setInterval(fetchMessages, 3000)
+    scheduleStatus(10_000)
+    scheduleMessages(5_000)
     return () => {
-      clearInterval(si)
-      clearInterval(cm)
+      cancelled = true
+      if (statusTimer) clearTimeout(statusTimer)
+      if (messagesTimer) clearTimeout(messagesTimer)
     }
   }, [open, fetchStatus, fetchMessages])
 
