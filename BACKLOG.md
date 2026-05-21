@@ -868,6 +868,28 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **Fix applicato:** mappa `VERSION_FLAGS = { tmux: '-V' }` con default `--version`, fallback su qualsiasi binario diverso da tmux. Smoke test locale: `tmux 3.6` ora ritornato correttamente.
 - **Scoperto durante:** spike host/container split del 2026-05-06.
 
+### ✅ [BUG-CODEX-PROVIDER-ALIAS] `start-agent.sh` non riconosceva `active_provider: "codex"` (raw dal wizard desktop) — FIXED 2026-05-21 (commit `79f63324`)
+
+- **Sintomo:** sul VPS1 (2026-05-19, primo bring-up beta) tutti gli agenti LLM fallivano al watchdog (`start FAIL rc=1`). Eseguito `start-agent.sh` a mano: `Warning: provider 'codex' non riconosciuto in jht.config.json, fallback a claude. Errore: comando 'claude' non trovato (provider configurato: codex)`. Il container non ha `claude` installato (solo `codex` + `kimi`), exit 1.
+- **Causa:** `start-agent.sh:367` aveva `case "$PROVIDER" in openai)` ma il wizard desktop scrive `active_provider: "codex"` raw → cade nel `*` (fallback claude) → `command -v claude` fallisce. Il CLI Node (`providers.js`) normalizzava `codex → openai` ma non veniva mai invocato dal flow desktop wizard, che bypass.
+- **Fix applicato:** `.launcher/start-agent.sh:367` → `openai|codex)`. Stesso pattern degli altri alias (`anthropic|claude`, `kimi|moonshot`). 1 riga, retro-compatibile.
+- **Validato 2026-05-21:** VPS Hetzner CPX22 vergine, image GHCR `:latest` post-`79f63324`, sed `"openai" → "codex"` raw in `jht.config.json` + `docker restart jht` → 7 agenti partiti senza warning, panes tutti su `gpt-5.5 high · ~/agents/<role>`, **0 occorrenze** di `provider non riconosciuto` / `fallback a claude` in `docker logs`. Doc completa: `docs/internal/2026-05-21-vps-bootstrap-fixes-validated.md`.
+
+### ✅ [BUG-CODEX-TRUST-PROMPT] Codex CLI blocca al "trust prompt" al primo avvio in ogni nuova dir agente — FIXED 2026-05-21 (commit `79f63324`)
+
+- **Sintomo:** su VPS1 dopo workaround Bug#1, `jht team start` reportava `7 avviati / 0 errori` ma solo MENTOR aveva Codex live; gli altri 4 user-facing (ASSISTENTE, CAPITANO, SENTINELLA, DOTTORE) finivano in **bash shell vuota**. Messaggi sistema (`[@utente -> @assistente] [TG] ciao`) interpretati come comandi bash → `[@utente: command not found`.
+- **Causa:** Codex CLI mostra al primo avvio in ogni nuova cwd il prompt blocking "Do you trust the contents of this directory?". `start-agent.sh` lancia codex via `tmux new -s NAME 'codex ...'`: il prompt attendeva input, codex usciva silenziosamente dopo qualche secondo → la sessione tmux tornava a bash (pane orphan). MENTOR si era "salvata" perché qualcuno (test precedente del bring-up) aveva confermato manualmente il trust → la entry restava in `~/.codex/config.toml`. Gli altri agenti spawnati dopo non avevano l'entry.
+- **Fix applicato:** `.launcher/start-agent.sh:480-501` (subito dopo `mkdir -p "$AGENT_DIR/tools" "$AGENT_DIR/tmp"`) — **just-in-time append idempotente** della trust entry per `$AGENT_DIR` corrente in `~/.codex/config.toml`. Guard `[ "$CLI_BIN" = "codex" ]`. Idempotente via `grep -qF` sul `TRUST_KEY`.
+- **Approccio scelto vs pre-pop al boot pid1:** just-in-time per-agente perché conosce esattamente `$AGENT_DIR` e funziona anche per scout/analista/scrittore/critico spawnati on-demand dal Capitano (cwd dinamiche non note al boot iniziale di pid1).
+- **Validato 2026-05-21:** stessa VPS fresh. Pre-fix: `config.toml` inesistente. Post-`jht team start`: 5 entries auto-popolate (assistente, sentinella, mentor, capitano, dottore). Dopo `docker restart jht` con auto-spawn DOTTORE via watchdog: entry idempotente (nessun duplicato). Tutti i panes mostrano `gpt-5.5 ... · ~/agents/<role>`, agenti elaborano welcome flow regolarmente.
+
+### ✅ [BUG-PID1-AUTO-MIGRATE] `jht migrate` necessario al boot ma non auto-eseguito — FIXED 2026-05-21 (commit `79f63324`)
+
+- **Sintomo:** su VPS1 `jht doctor` segnalava `▲ Config v1 — aggiornamento disponibile / ↳ Esegui: jht migrate`. Il container partiva con `jht.config.json` scritto dal wizard desktop in format v1; senza migrazione i campi v2-v4 (`providers` strutturato, `agents.list`, `notifications`, `analytics`) restavano assenti e alcuni step downstream cadevano nei default silenziosi (es. `providers.codex.auth_method`).
+- **Causa:** `pid1` (`cli/src/commands/pid1.js dispatch()`) non lanciava `jht migrate` al boot. L'utente doveva intervenire manualmente via terminale embedded o `docker exec`.
+- **Fix applicato:** nuova funzione `runMigrate()` in `pid1.js` chiamata come **primo step** di `dispatch()` (prima di `maybeRunPairing()`). Best-effort: se la config non esiste ancora (pre-pairing), ritorna silenziosa. Se esiste, `spawn jht migrate` → log `[pid1] running jht migrate (idempotente)` + `[pid1] jht migrate ok`. `jht migrate` è già non-interattivo + idempotente: se la config è al massimo, exit pulito.
+- **Validato 2026-05-21:** stessa VPS fresh. Container boot pre-setup: `runMigrate` skippa (no config). Dopo `jht setup` + `docker restart jht`: log `[migrate] ✓ v3 applicata`, `[migrate] ✓ v4 applicata`, `[pid1] jht migrate ok`. `jht.config.json` ora ha `version: 4` + nuovi campi `agents`, `notifications`, `analytics`.
+
 ### ✅ [BUG-CLAUDE-TRUST-PROMPT] start-agent.sh non accettava il "Bypass Permissions" prompt di Claude Code 2.1+ — FIXED 2026-05-08 (commit `7106ef6e`)
 
 - **Sintomo:** `jht team start` su VPS dev-1 (commit `6958fb42`, immagine GHCR del 2026-05-07): bootstrap mostra "✓ CAPITANO avviato" ma attaching alla sessione tmux interna (`docker exec -it jht tmux attach -t CAPITANO`) rivela che claude e' uscito immediatamente e il pane mostra il prompt bash. Stesso fato confermato anche per SENTINELLA. Solo BRIDGE (Python, no claude CLI) girava correttamente.
