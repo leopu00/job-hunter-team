@@ -83,21 +83,66 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     }
   }, [activeSession])
 
+  // Poll adattivo: pausa quando tab non e' visibile, backoff esponenziale
+  // se l'output non cambia. Pre-fix (2026-05-22): 1500ms fissi senza
+  // visibility check → 2400 req/h × dashboard aperta H24 ≈ 30 GB egress
+  // mensili Vercel (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md).
+  const lastOutputRef = useRef('')
+  const backoffRef = useRef(0)
+
   useEffect(() => {
-    fetchSessions()
-    const id = setInterval(fetchSessions, 5000)
-    return () => clearInterval(id)
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const tick = async () => {
+      if (cancelled) return
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        // tab hidden: poll lentissimo (60s) per ricarica veloce al rientro
+        timer = setTimeout(tick, 60_000)
+        return
+      }
+      await fetchSessions()
+      timer = setTimeout(tick, 5000)
+    }
+    tick()
+    return () => { cancelled = true; if (timer) clearTimeout(timer) }
   }, [fetchSessions])
 
   useEffect(() => {
-    if (activeSession) fetchTerminal()
-    // 1500ms (era 3000): refresh piu' "live" del pane tmux. Lo stick-to-
-    // bottom condizionale (vedi termAtBottomRef sotto) impedisce che il
-    // refresh frequente diventi fastidioso quando l'utente legge in
-    // mezzo — non scrolla finche' non e' in fondo per scelta.
-    const id = setInterval(fetchTerminal, 1500)
-    return () => clearInterval(id)
+    if (!activeSession) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    // Reset backoff su cambio sessione: nuovo agente, ricomincia veloce.
+    backoffRef.current = 0
+    lastOutputRef.current = ''
+
+    const tick = async () => {
+      if (cancelled) return
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        timer = setTimeout(tick, 30_000)
+        return
+      }
+      await fetchTerminal()
+      // Schedule prossimo tick basato su backoff. Il backoff cresce se
+      // l'output non e' cambiato (agente idle). Range: 1500ms a 20s.
+      const delay = Math.min(20_000, 1500 * Math.pow(2, backoffRef.current))
+      timer = setTimeout(tick, delay)
+    }
+    tick()
+    return () => { cancelled = true; if (timer) clearTimeout(timer) }
   }, [activeSession, fetchTerminal])
+
+  // Aggiorna backoff in base a variazione dell'output. setOutput viene
+  // chiamato da fetchTerminal: confrontiamo con lastOutputRef per capire
+  // se vale la pena accelerare o rallentare. Idle prolungato → polling
+  // ogni 20s (max). Cambio rilevato → torna a 1500ms.
+  useEffect(() => {
+    if (output !== lastOutputRef.current) {
+      lastOutputRef.current = output
+      backoffRef.current = 0
+    } else if (backoffRef.current < 4) {
+      backoffRef.current += 1
+    }
+  }, [output])
 
   // Scroll chat
   const prevMsgCountRef = useRef(0)
