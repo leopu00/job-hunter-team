@@ -31,6 +31,9 @@
 
   /* Font */
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+  /* Scoped tokens (override per-theme dove serve, non toccano --color-*). */
+  --sync-warn: #d4a85a;
 }
 
 /* ── Light theme overrides ───────────────────────────────────────── */
@@ -48,6 +51,7 @@ html[data-theme="light"] {
   --color-bright:       #18183a;
   --color-white:        #0a0a20;
   --color-grid:         rgba(0, 0, 0, 0.022);
+  --sync-warn:          #8b6914;
 }
 
 /* ── Base ────────────────────────────────────────────────────────── */
