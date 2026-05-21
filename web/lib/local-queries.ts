@@ -173,28 +173,62 @@ const POSITION_SORT_COLUMNS: Record<string, string> = {
   status: 'p.status',
 }
 
-export function getPositionsLocal(ws: string, opts?: {
-  status?: string; minScore?: number; maxScore?: number; noScore?: boolean
-  remoteType?: string; limit?: number; offset?: number
-  sort?: string; dir?: 'asc' | 'desc'
-}): PositionWithScore[] {
+type LocalPositionFilterOpts = {
+  statuses?: string[]
+  remoteTypes?: string[]
+  sources?: string[]
+  tiers?: string[]
+  verdicts?: string[]
+  limit?: number
+  offset?: number
+  sort?: string
+  dir?: 'asc' | 'desc'
+}
+
+const LOCAL_TIER_RANGES: Record<string, { min?: number; max?: number; noScore?: boolean }> = {
+  seria:       { min: 70 },
+  practice:    { min: 40, max: 69 },
+  riferimento: { min: 1,  max: 39 },
+  noscore:     { noScore: true },
+}
+
+function tierClauses(tiers: string[]): string {
+  const parts: string[] = []
+  for (const t of tiers) {
+    const r = LOCAL_TIER_RANGES[t]; if (!r) continue
+    if (r.noScore) { parts.push('(s.total_score IS NULL OR s.total_score = 0)'); continue }
+    const sub: string[] = []
+    if (r.min != null) sub.push(`s.total_score >= ${r.min}`)
+    if (r.max != null) sub.push(`s.total_score <= ${r.max}`)
+    if (sub.length) parts.push(`(${sub.join(' AND ')})`)
+  }
+  return parts.length ? `(${parts.join(' OR ')})` : ''
+}
+
+export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): PositionWithScore[] {
   const db = getDb(ws)
   const where: string[] = []
   const params: any[] = []
 
-  if (opts?.status && opts.status !== 'all') {
-    where.push('p.status = ?')
-    params.push(opts.status)
+  if (opts?.statuses?.length) {
+    where.push(`p.status IN (${opts.statuses.map(() => '?').join(',')})`)
+    params.push(...opts.statuses)
   }
-  if (opts?.remoteType && opts.remoteType !== 'all') {
-    where.push('p.remote_type = ?')
-    params.push(opts.remoteType)
+  if (opts?.remoteTypes?.length) {
+    where.push(`p.remote_type IN (${opts.remoteTypes.map(() => '?').join(',')})`)
+    params.push(...opts.remoteTypes)
   }
-  if (opts?.noScore) {
-    where.push('(s.total_score IS NULL OR s.total_score = 0)')
-  } else {
-    if (opts?.minScore) { where.push('s.total_score >= ?'); params.push(opts.minScore) }
-    if (opts?.maxScore) { where.push('s.total_score <= ?'); params.push(opts.maxScore) }
+  if (opts?.sources?.length) {
+    where.push(`p.source IN (${opts.sources.map(() => '?').join(',')})`)
+    params.push(...opts.sources)
+  }
+  if (opts?.verdicts?.length) {
+    where.push(`a.critic_verdict IN (${opts.verdicts.map(() => '?').join(',')})`)
+    params.push(...opts.verdicts)
+  }
+  if (opts?.tiers?.length) {
+    const tc = tierClauses(opts.tiers)
+    if (tc) where.push(tc)
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
@@ -205,8 +239,6 @@ export function getPositionsLocal(ws: string, opts?: {
 
   const sortCol = POSITION_SORT_COLUMNS[opts?.sort ?? ''] ?? 'p.found_at'
   const sortDir = opts?.dir === 'asc' ? 'ASC' : 'DESC'
-  // NULLS LAST simulato: per score/critic le righe senza valore vanno in
-  // fondo sia ASC che DESC, sennò ordinare per score asc mostra solo "—".
   const nullsLast = sortCol.startsWith('s.') || sortCol.startsWith('a.')
     ? `${sortCol} IS NULL, `
     : ''
