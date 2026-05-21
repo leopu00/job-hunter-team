@@ -3,10 +3,59 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { JHT_HOME } from "@/lib/jht-paths";
+import { createClient as createServerSupabase } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
 const PREFS_PATH = path.join(JHT_HOME, "preferences.json");
+
+// tour_done vive sul DB (user_onboarding_state.tour_done_at) per
+// l'utente loggato: il file locale e' ephemeral su Vercel Lambda e
+// non sopravvive a cold start, quindi il wizard si riapriva ogni
+// volta. Le altre preferenze (theme, language, notifications,
+// shortcuts) restano sul file: sono dev-local-only.
+
+async function readTourDoneFromDb(): Promise<boolean | null> {
+  try {
+    const supabase = await createServerSupabase();
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from("user_onboarding_state")
+      .select("tour_done_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (error) return null;
+    return Boolean(data?.tour_done_at);
+  } catch {
+    return null;
+  }
+}
+
+async function writeTourDoneToDb(done: boolean): Promise<boolean> {
+  try {
+    const supabase = await createServerSupabase();
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData?.user;
+    if (!user) return false;
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("user_onboarding_state")
+      .upsert(
+        {
+          user_id: user.id,
+          tour_done_at: done ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+    return !error;
+  } catch {
+    return false;
+  }
+}
 
 type ShortcutMap = Record<string, string>;
 
@@ -59,7 +108,12 @@ function save(prefs: UserPreferences): void {
 }
 
 export async function GET() {
-  return NextResponse.json(load());
+  const prefs = load();
+  const dbDone = await readTourDoneFromDb();
+  if (dbDone !== null) {
+    prefs.ui_state = { ...prefs.ui_state, tour_done: dbDone };
+  }
+  return NextResponse.json(prefs);
 }
 
 export async function PATCH(req: NextRequest) {
@@ -87,31 +141,39 @@ export async function PATCH(req: NextRequest) {
       ...(body.shortcuts as ShortcutMap),
     };
   }
+  let tourDoneFromBody: boolean | undefined;
   if (body.ui_state && typeof body.ui_state === "object") {
     const u = body.ui_state as Record<string, unknown>;
-    if (typeof u.tour_done === "boolean")
+    if (typeof u.tour_done === "boolean") {
       prefs.ui_state.tour_done = u.tour_done;
+      tourDoneFromBody = u.tour_done;
+    }
   }
 
+  if (tourDoneFromBody !== undefined) {
+    const ok = await writeTourDoneToDb(tourDoneFromBody);
+    if (ok) {
+      prefs.ui_state.tour_done = tourDoneFromBody;
+    }
+  }
+
+  // Best-effort: il file fallisce silenziosamente in env senza FS
+  // scrivibile (Vercel). tour_done e' gia' persistito sul DB sopra.
   try {
     save(prefs);
-    return NextResponse.json(prefs);
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "errore" },
-      { status: 500 },
-    );
+  } catch {
+    /* read-only FS — ignora */
   }
+  return NextResponse.json(prefs);
 }
 
 export async function DELETE() {
+  // Reset anche del tour DB per simmetria con DEFAULTS (tour_done=false)
+  await writeTourDoneToDb(false);
   try {
     save({ ...DEFAULTS });
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "errore" },
-      { status: 500 },
-    );
+  } catch {
+    /* read-only FS — ignora */
   }
+  return NextResponse.json({ ok: true });
 }

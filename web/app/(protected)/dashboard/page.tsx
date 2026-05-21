@@ -6,14 +6,17 @@ import {
   getDashboardStats,
   getRecentPositions,
   getScoreDistribution,
-  getSourceDistribution,
+  getCriticScores,
+  getPositionTypeDistribution,
   getPendingMessages,
   getCriticVerdictTotals,
 } from "@/lib/queries";
+import PositionTypesPie from "@/app/components/PositionTypesPie";
+import ScoreDistribution from "@/app/components/ScoreDistribution";
+import JobsGlobe from "@/app/components/JobsGlobe";
+import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
-import { runBash } from "@/lib/shell";
-import type { PositionWithScore } from "@/lib/types";
 import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
 import { createClient } from "@/lib/supabase/server";
@@ -99,13 +102,14 @@ export default async function DashboardPage() {
   }
 
   const demoData = demoMode ? getDemoDashboardData() : null;
-  const [stats, positions, scoreDist, sourceDist, pendingMessages, criticTotals] =
+  const [stats, positions, scoreDist, criticScores, typeDist, pendingMessages, criticTotals] =
     demoData
       ? [
           demoData.stats,
           demoData.positions,
           demoData.scoreDistribution,
-          demoData.sourceDistribution,
+          [] as number[],
+          [],
           demoData.pendingMessages,
           { pass: 0, needs_work: 0, reject: 0, total: 0 },
         ]
@@ -113,7 +117,8 @@ export default async function DashboardPage() {
           getDashboardStats(),
           getRecentPositions(15),
           getScoreDistribution(),
-          getSourceDistribution(),
+          getCriticScores(),
+          getPositionTypeDistribution(),
           getPendingMessages(20),
           getCriticVerdictTotals(),
         ]);
@@ -157,31 +162,6 @@ export default async function DashboardPage() {
     hasProfile = false;
   } else {
     hasProfile = readWorkspaceProfile() !== null;
-  }
-
-  // Check if team is active (tmux JHT sessions)
-  let teamActive = demoMode;
-  if (!demoMode) {
-    try {
-      const { stdout } = await runBash(
-        'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""',
-      );
-      const sessions = stdout.trim().split("\n").filter(Boolean);
-      const JH_PREFIXES = [
-        "CAPITANO",
-        "SCOUT",
-        "ANALISTA",
-        "SCORER",
-        "SCRITTORE",
-        "CRITICO",
-        "SENTINELLA",
-      ];
-      teamActive = sessions.some((s) =>
-        JH_PREFIXES.some(
-          (p) => s.toUpperCase() === p || s.toUpperCase().startsWith(`${p}-`),
-        ),
-      );
-    } catch {}
   }
 
   const isEmpty = stats.total === 0;
@@ -259,37 +239,13 @@ export default async function DashboardPage() {
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-3">
-          <div
-            className="w-2 h-2 rounded-full"
-            style={{
-              background: teamActive
-                ? "var(--color-green)"
-                : "var(--color-dim)",
-              animation: teamActive
-                ? "pulse-dot 2s ease-in-out infinite"
-                : undefined,
-            }}
-          />
-          <span
-            className="text-[10px] font-semibold tracking-[0.18em] uppercase"
-            style={{
-              color: teamActive ? "var(--color-green)" : "var(--color-dim)",
-            }}
-          >
-            {demoMode ? "DEMO DATA" : teamActive ? t.live : t.data_updated}
-          </span>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-          {t.title}
-        </h1>
-        <p className="text-[var(--color-muted)] text-[11px] mt-1">
-          {t.total_positions(stats.total, stats.excluded, activeTotal)}
-        </p>
+      {/* ── World globe (hero) — primo elemento, full-width, attacca al navbar */}
+      <div style={{ animation: "fade-in 0.35s ease both 0.05s" }}>
+        <JobsGlobe hero />
       </div>
 
+      {/* ── Tutto il resto centrato come prima del refactor full-width ── */}
+      <div className="max-w-6xl mx-auto px-5 pt-8 pb-8">
       {/* ── Messaggi del team (fallback web quando Telegram down) ─ */}
       <PendingMessagesCard initialMessages={pendingMessages} />
 
@@ -454,6 +410,191 @@ export default async function DashboardPage() {
             </Link>
           );
         })}
+      </div>
+
+      {/* ── Charts ──────────────────────────────────────────────── */}
+      <div
+        className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
+        style={{ animation: "fade-in 0.35s ease both 0.1s" }}
+      >
+        {/* Score distribution — histogram fine-grained */}
+        <ScoreDistribution
+          scores={scoreDist.scores ?? []}
+          title={t.score_distribution}
+          emptyLabel={t.no_data}
+        />
+
+        {/* Critic votes distribution (0-10) */}
+        <ScoreDistribution
+          scores={criticScores}
+          title={t.critic_votes}
+          emptyLabel={t.no_data}
+          maxScore={10}
+          binStep={0.5}
+          decimals={1}
+          thresholdReady={5.5}
+          thresholdLabel={t.critic_ready}
+        />
+
+        {/* Position types pie */}
+        <PositionTypesPie
+          data={typeDist}
+          title={t.position_types}
+          emptyLabel={t.no_data}
+          labels={{
+            ai_ml: t.pt_ai_ml,
+            data: t.pt_data,
+            devops_cloud: t.pt_devops_cloud,
+            full_stack: t.pt_full_stack,
+            backend: t.pt_backend,
+            frontend: t.pt_frontend,
+            python: t.pt_python,
+            software_engineer: t.pt_software_engineer,
+            other: t.pt_other,
+          }}
+        />
+      </div>
+
+      {/* ── Positions table ─────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-4">
+        <span className="section-label">{t.recent_positions}</span>
+        <Link
+          href="/positions"
+          className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+        >
+          {t.view_all}
+        </Link>
+      </div>
+      <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-8">
+        <table
+          className="w-full text-[12px]"
+          style={{ borderCollapse: "collapse" }}
+          aria-label={t.recent_positions}
+        >
+          <thead>
+            <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
+              {[
+                t.col_id,
+                t.col_title,
+                t.col_company,
+                t.col_location,
+                t.col_remote,
+                t.col_score,
+                t.col_status,
+                t.col_updated,
+              ].map((h) => (
+                <th
+                  key={h}
+                  scope="col"
+                  className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
+                  style={{ color: "var(--color-dim)" }}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {positions.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={8}
+                  className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
+                >
+                  {t.no_positions}
+                </td>
+              </tr>
+            ) : (
+              positions.map((p, i: number) => (
+                <tr
+                  key={p.id}
+                  className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
+                  style={{
+                    borderBottomColor:
+                      i === positions.length - 1 ? "transparent" : undefined,
+                    background:
+                      i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
+                  }}
+                >
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                    {p.legacy_id
+                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                      : p.id.slice(0, 8)}
+                  </td>
+                  <td
+                    className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
+                    title={p.title}
+                  >
+                    <Link
+                      href={`/positions/${p.id}`}
+                      className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                    >
+                      {p.title}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
+                    {p.company}
+                  </td>
+                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
+                    {p.location ?? "—"}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span
+                      className="text-[10px]"
+                      style={{
+                        color:
+                          p.remote_type === "full_remote"
+                            ? "var(--color-green)"
+                            : p.remote_type === "hybrid"
+                              ? "var(--color-yellow)"
+                              : "var(--color-red)",
+                      }}
+                    >
+                      {p.remote_type?.replace("_", " ") ?? "—"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2 justify-end">
+                      <span
+                        className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
+                      >
+                        {p.score ?? "—"}
+                      </span>
+                      <div
+                        className="w-10 h-1 rounded-full overflow-hidden"
+                        style={{ background: "var(--color-border)" }}
+                      >
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${p.score ?? 0}%`,
+                            background: scoreBg(p.score),
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
+                      style={{
+                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                        borderColor:
+                          STATUS_COLORS[p.status] ?? "var(--color-border)",
+                        background: `${STATUS_COLORS[p.status]}18`,
+                      }}
+                    >
+                      {p.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
+                    {formatFoundAt(p.last_action_at ?? p.found_at)}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* ── Conversion rate ─────────────────────────────────────── */}
@@ -653,245 +794,6 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* ── Charts ──────────────────────────────────────────────── */}
-      <div
-        className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.1s" }}
-      >
-        {/* Score distribution */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="flex items-center justify-between mb-4">
-            <span className="section-label">{t.score_distribution}</span>
-            {scoreDist.avgScore != null && (
-              <span
-                className="text-[11px] font-semibold"
-                style={{
-                  color:
-                    scoreDist.avgScore >= 75
-                      ? "var(--color-green)"
-                      : scoreDist.avgScore >= 55
-                        ? "var(--color-yellow)"
-                        : "var(--color-red)",
-                }}
-              >
-                avg {scoreDist.avgScore}
-              </span>
-            )}
-          </div>
-          <div className="space-y-3 mb-3">
-            {scoreDist.buckets.map((b) => (
-              <div key={b.label} className="flex items-center gap-3">
-                <span
-                  className="text-[9.5px] font-semibold w-12 text-right shrink-0"
-                  style={{ color: b.color }}
-                >
-                  {b.label}
-                </span>
-                <div
-                  className="flex-1 h-2 rounded-full overflow-hidden"
-                  style={{ background: "var(--color-border)" }}
-                >
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${scoreDist.withScore > 0 ? (b.count / scoreDist.withScore) * 100 : 0}%`,
-                      background: b.color,
-                      opacity: 0.85,
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-[11px] font-bold w-6 text-right shrink-0"
-                  style={{ color: b.color }}
-                >
-                  {b.count}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-[var(--color-dim)]">
-            {t.score_footer(scoreDist.withScore, scoreDist.total)}
-          </p>
-        </div>
-
-        {/* Source distribution */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="section-label mb-4">{t.sources}</div>
-          <div className="space-y-3">
-            {sourceDist.length === 0 ? (
-              <p className="text-[11px] text-[var(--color-dim)]">{t.no_data}</p>
-            ) : (
-              (() => {
-                const max = sourceDist[0]?.count ?? 1;
-                return sourceDist.map((s) => (
-                  <div key={s.source} className="flex items-center gap-3">
-                    <span
-                      className="text-[9.5px] text-[var(--color-muted)] w-28 truncate shrink-0"
-                      title={s.source}
-                    >
-                      {s.source}
-                    </span>
-                    <div
-                      className="flex-1 h-1.5 rounded-full overflow-hidden"
-                      style={{ background: "var(--color-border)" }}
-                    >
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${(s.count / max) * 100}%`,
-                          background: "var(--color-blue)",
-                          opacity: 0.7,
-                        }}
-                      />
-                    </div>
-                    <span className="text-[11px] font-bold text-[var(--color-blue)] w-6 text-right shrink-0">
-                      {s.count}
-                    </span>
-                  </div>
-                ));
-              })()
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Positions table ─────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="section-label">{t.recent_positions}</span>
-        <Link
-          href="/positions"
-          className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
-        >
-          {t.view_all}
-        </Link>
-      </div>
-      <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-8">
-        <table
-          className="w-full text-[12px]"
-          style={{ borderCollapse: "collapse" }}
-          aria-label={t.recent_positions}
-        >
-          <thead>
-            <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-              {[
-                t.col_id,
-                t.col_title,
-                t.col_company,
-                t.col_location,
-                t.col_remote,
-                t.col_score,
-                t.col_status,
-              ].map((h) => (
-                <th
-                  key={h}
-                  scope="col"
-                  className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
-                  style={{ color: "var(--color-dim)" }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {positions.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
-                >
-                  {t.no_positions}
-                </td>
-              </tr>
-            ) : (
-              positions.map((p: PositionWithScore, i: number) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
-                  style={{
-                    borderBottomColor:
-                      i === positions.length - 1 ? "transparent" : undefined,
-                    background:
-                      i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
-                  }}
-                >
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                    {p.legacy_id
-                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                      : p.id.slice(0, 8)}
-                  </td>
-                  <td
-                    className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
-                    title={p.title}
-                  >
-                    <Link
-                      href={`/positions/${p.id}`}
-                      className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
-                    >
-                      {p.title}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
-                    {p.company}
-                  </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
-                    {p.location ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span
-                      className="text-[10px]"
-                      style={{
-                        color:
-                          p.remote_type === "full_remote"
-                            ? "var(--color-green)"
-                            : p.remote_type === "hybrid"
-                              ? "var(--color-yellow)"
-                              : "var(--color-red)",
-                      }}
-                    >
-                      {p.remote_type?.replace("_", " ") ?? "—"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
-                      <span
-                        className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
-                      >
-                        {p.score ?? "—"}
-                      </span>
-                      <div
-                        className="w-10 h-1 rounded-full overflow-hidden"
-                        style={{ background: "var(--color-border)" }}
-                      >
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${p.score ?? 0}%`,
-                            background: scoreBg(p.score),
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
-                      style={{
-                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                        borderColor:
-                          STATUS_COLORS[p.status] ?? "var(--color-border)",
-                        background: `${STATUS_COLORS[p.status]}18`,
-                      }}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
       </div>
 
       <OnboardingWizard />
