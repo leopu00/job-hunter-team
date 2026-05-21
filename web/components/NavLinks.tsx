@@ -10,7 +10,6 @@ export default function NavLinks() {
     <div className="flex items-center gap-1">
       <NavLink href="/dashboard" tour="dashboard">{t('nav_dashboard')}</NavLink>
       <NavLink href="/positions" tour="positions">{t('nav_positions')}</NavLink>
-      <NavLink href="/applications" tour="applications">{t('nav_applications')}</NavLink>
       <NavLink href="/ready" accent="#7fffb2">{t('nav_ready')}</NavLink>
       <NavLink href="/risposte" accent="#58a6ff">{t('nav_risposte')}</NavLink>
       <NavLink href="/crescita">{t('nav_crescita')}</NavLink>
