@@ -28,13 +28,6 @@ const ITEM_DEFS: ItemDef[] = [
     href: "/positions",
   },
   {
-    id: "applications",
-    labelKey: "gs_applications_label",
-    detailKey: "gs_applications_detail",
-    catKey: "cat_pages",
-    href: "/applications",
-  },
-  {
     id: "ready",
     labelKey: "gs_ready_label",
     detailKey: "gs_ready_detail",
