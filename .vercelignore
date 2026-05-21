@@ -1,0 +1,13 @@
+node_modules
+.next
+dev1
+dev2
+dev3
+dev4
+desktop
+agents
+profile
+allegati
+mio-test-team
+.git
+*.log
