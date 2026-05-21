@@ -11,6 +11,11 @@ const PROFILE_DIR = join(JHT_HOME, 'profile');
 const PROFILE_YAML_PATH = join(PROFILE_DIR, 'candidate_profile.yml');
 const PROFILE_SUMMARIES_DIR = join(PROFILE_DIR, 'summaries');
 const SENTINEL_DATA_PATH = join(JHT_HOME, 'logs', 'sentinel-data.jsonl');
+const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
+// Cursor delta-sync: per ogni tabella memorizziamo l'ultimo updated_at
+// pushato. Al tick successivo selezioniamo solo righe con updated_at >
+// cursor. Crollo bandwidth ~95% (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md).
+const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -374,6 +379,77 @@ function readSqliteTable(db, table, columns) {
   }
 }
 
+/**
+ * Legge una tabella SQLite filtrando per updated_at > cursor.
+ * Se cursor e' null/undefined ritorna tutte le righe (first push o cursor
+ * cancellato). Include updated_at nelle colonne selezionate (serve per
+ * calcolare il nuovo cursor lato chiamante).
+ *
+ * Robust: se la tabella non esiste o non ha la colonna updated_at,
+ * ricade su full SELECT (compatibile con schema vecchi / tabelle senza
+ * timestamp di mutazione).
+ */
+function readSqliteTableDelta(db, table, columns, cursor) {
+  const cols = columns.includes('updated_at') ? columns : [...columns, 'updated_at'];
+  try {
+    if (cursor) {
+      return db.prepare(
+        `SELECT ${cols.join(', ')} FROM ${table} WHERE updated_at > ?`
+      ).all(cursor);
+    }
+    return db.prepare(`SELECT ${cols.join(', ')} FROM ${table}`).all();
+  } catch (err) {
+    if (/no such table/i.test(err.message)) return [];
+    if (/no such column/i.test(err.message)) {
+      // schema legacy senza updated_at: fallback a full read
+      return readSqliteTable(db, table, columns);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Carica il cursor di sync. Ritorna oggetto { positions, scores,
+ * applications } dove ogni valore e' l'ISO string dell'ultimo updated_at
+ * pushato per quella tabella. Missing keys = first push (legge tutto).
+ */
+function loadCloudCursor() {
+  if (!existsSync(CLOUD_CURSOR_FILE)) return {};
+  try {
+    return JSON.parse(readFileSync(CLOUD_CURSOR_FILE, 'utf-8'));
+  } catch {
+    // corrotto: meglio ripartire da zero (full push) che fallire
+    return {};
+  }
+}
+
+/**
+ * Salva il cursor di sync. Scritto solo dopo push API HTTP 200. Su
+ * errore di scrittura logghiamo ma non blocchiamo il daemon: al prossimo
+ * tick verra' rifatto il delta (al massimo ri-pusha righe gia' upsertate,
+ * idempotente lato server).
+ */
+async function saveCloudCursor(cursor) {
+  try {
+    await writeFile(CLOUD_CURSOR_FILE, JSON.stringify(cursor, null, 2));
+  } catch (err) {
+    console.error(pc.yellow(`  warn: cursor save failed (${err.message})`));
+  }
+}
+
+/**
+ * Dato un array di righe con campo updated_at, ritorna il MAX(updated_at)
+ * come stringa ISO. Null se l'array e' vuoto o nessuna riga ha il campo.
+ */
+function maxUpdatedAt(rows) {
+  let max = null;
+  for (const r of rows) {
+    const u = r?.updated_at;
+    if (u && (max === null || u > max)) max = u;
+  }
+  return max;
+}
+
 async function handlePush(options) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
@@ -413,34 +489,41 @@ async function handlePush(options) {
   let scores = [];
   let applications = [];
   let pendingMessages = [];
+  // Cursor delta-sync: ad ogni tick leggiamo solo righe con updated_at >
+  // ultimo pushato per quella tabella. Prima volta (cursor vuoto): full
+  // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
+  // delle righe pushate.
+  const cursor = options.full ? {} : loadCloudCursor();
   if (dbExists) {
     try {
       const db = new DatabaseSync(dbPath, { readOnly: true });
-      positions = readSqliteTable(db, 'positions', [
+      positions = readSqliteTableDelta(db, 'positions', [
         'id', 'title', 'company', 'url', 'location', 'remote_type', 'status',
         'notes', 'source', 'jd_text', 'requirements', 'found_by', 'found_at',
         'deadline', 'last_checked',
         'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
         'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
         'salary_estimated_source',
-      ]);
-      scores = readSqliteTable(db, 'scores', [
+      ], cursor.positions);
+      scores = readSqliteTableDelta(db, 'scores', [
         'position_id', 'total_score', 'experience_fit', 'salary_fit',
         'stack_match', 'remote_fit', 'strategic_fit', 'breakdown', 'notes',
         'scored_by', 'scored_at',
-      ]);
-      applications = readSqliteTable(db, 'applications', [
+      ], cursor.scores);
+      applications = readSqliteTableDelta(db, 'applications', [
         'position_id', 'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
         'status', 'critic_score', 'critic_verdict', 'critic_notes',
         'written_at', 'applied_at', 'applied_via', 'response', 'response_at',
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
         'cv_drive_id', 'cl_drive_id',
-      ]);
+      ], cursor.applications);
       // pending_user_messages e' la coda agente -> utente. Pushiamo TUTTE le
       // righe ad ogni tick: l'upsert lato server e' idempotente su
       // (user_id, legacy_id), e gli ack-time / reply-time vanno comunque
       // sincronizzati a ritroso (web -> local) — vedi /api/cloud-sync/pull
       // (futuro). Per ora il push e' write-only locale -> cloud.
+      // NB: questa tabella non ha colonna updated_at, e' append + flag
+      // updates. Lasciamo full-push, il volume e' piccolo.
       pendingMessages = readSqliteTable(db, 'pending_user_messages', [
         'id', 'agent', 'body', 'kind', 'related_position_id',
         'delivered_via', 'delivered_at', 'acknowledged_at',
@@ -464,9 +547,11 @@ async function handlePush(options) {
   const sentinelChunks = sentinelTicks.length > 0
     ? `, ${sentinelTicks.length} sentinel ticks`
     : '';
+  const isFirstPush = !cursor.positions && !cursor.scores && !cursor.applications;
+  const deltaMode = isFirstPush ? 'first-push (full)' : 'delta';
   console.log(
     pc.dim(
-      `Payload: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${sentinelChunks}${profileChunks}`
+      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${sentinelChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
@@ -519,6 +604,23 @@ async function handlePush(options) {
   console.log(pc.dim(`  applications:     ${body.applications?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  sentinel ticks:   ${body.sentinel_ticks?.upserted ?? 0} upserted`));
+
+  // Aggiorna cursor delta-sync solo dopo HTTP 200: il prossimo tick
+  // selezionera' solo righe con updated_at > cursor. Se una qualsiasi
+  // tabella aveva almeno una riga pushata, avanziamo il suo cursor al
+  // MAX(updated_at) di quelle righe. Tabelle vuote nel tick: cursor
+  // invariato (mantenendo eventuale valore precedente).
+  const newCursor = { ...cursor };
+  const posMax = maxUpdatedAt(positions);
+  const scoMax = maxUpdatedAt(scores);
+  const appMax = maxUpdatedAt(applications);
+  if (posMax) newCursor.positions = posMax;
+  if (scoMax) newCursor.scores = scoMax;
+  if (appMax) newCursor.applications = appMax;
+  // Salviamo anche se nulla e' cambiato: la prima volta crea il file e
+  // disabilita la modalita' "first-push" al prossimo tick. La 2a volta
+  // in poi e' no-op a livello di contenuto.
+  await saveCloudCursor(newCursor);
 }
 
 /**
@@ -745,22 +847,40 @@ async function handleDaemon(options) {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
+  // HALT-WEEKLY guard: se il flag esiste, l'utente ha ordinato stop team
+  // (vedi docs/internal/2026-05-21-halt-weekly-incident.md). Saltiamo il
+  // push: dati locali non cambiano, e ogni tick costa ~1 MB upload + 1
+  // function invocation + ~500ms-2s CPU Postgres lato Vercel/Supabase
+  // (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
+  // ogni 10 tick per evitare spam ma confermare che il daemon e' vivo.
+  let haltSkipCount = 0;
   // Push iniziale immediato: se il container era spento per un po' e gli
   // agenti hanno scritto offline, il primo tick deve flushare subito.
   while (running) {
-    try {
-      // Reset di process.exitCode tra un tick e l'altro: handlePush lo
-      // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
-      // il loop al prossimo intervallo.
-      const prev = process.exitCode;
-      process.exitCode = 0;
-      await handlePush({});
-      if (process.exitCode === 1) {
-        // Errore di push: log gia' fatto da handlePush, continuiamo.
+    if (existsSync(WEEKLY_HALT_FLAG)) {
+      if (haltSkipCount % 10 === 0) {
+        console.log(pc.dim(`  HALT-WEEKLY attivo (${WEEKLY_HALT_FLAG}) — push saltato.`));
       }
-      process.exitCode = prev;
-    } catch (err) {
-      console.error(pc.yellow(`  daemon tick error: ${err.message}`));
+      haltSkipCount += 1;
+    } else {
+      if (haltSkipCount > 0) {
+        console.log(pc.green(`  HALT-WEEKLY rimosso, riprendo push normali.`));
+        haltSkipCount = 0;
+      }
+      try {
+        // Reset di process.exitCode tra un tick e l'altro: handlePush lo
+        // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
+        // il loop al prossimo intervallo.
+        const prev = process.exitCode;
+        process.exitCode = 0;
+        await handlePush({});
+        if (process.exitCode === 1) {
+          // Errore di push: log gia' fatto da handlePush, continuiamo.
+        }
+        process.exitCode = prev;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon tick error: ${err.message}`));
+      }
     }
     if (!running) break;
     // Sleep interrompibile: spezziamo in chunk da 1s cosi' SIGTERM ferma
