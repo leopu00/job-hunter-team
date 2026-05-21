@@ -11,6 +11,7 @@ type Props = {
   labels: Record<string, string>; // type key -> localized label
   title: string;
   emptyLabel: string;
+  size?: number; // px reso. viewBox scala tutta la geometria interna.
 };
 
 const SIZE = 130;
@@ -61,6 +62,7 @@ export default function PositionTypesPie({
   labels,
   title,
   emptyLabel,
+  size = SIZE,
 }: Props) {
   const [hovered, setHovered] = useState<PositionType | null>(null);
   const total = data.reduce((a, d) => a + d.count, 0);
@@ -84,8 +86,8 @@ export default function PositionTypesPie({
       ) : (
         <div className="flex items-center gap-4">
           <svg
-            width={SIZE}
-            height={SIZE}
+            width={size}
+            height={size}
             viewBox={`0 0 ${SIZE} ${SIZE}`}
             className="shrink-0"
             aria-label={title}
@@ -161,9 +163,22 @@ export default function PositionTypesPie({
           </svg>
 
           <ul
-            className="flex-1 space-y-1.5 min-w-0"
+            className="space-y-1.5 min-w-0"
             onMouseLeave={() => setHovered(null)}
           >
+            {/* Header: didascalia colonne. Stesso grid template delle
+                righe sotto così tutto si allinea verticalmente. Tipo a
+                sinistra, numeri subito accanto (non spinti a destra). */}
+            <li
+              className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem_2.25rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+              aria-hidden
+            >
+              <span>tipo</span>
+              <span>n</span>
+              <span>%</span>
+              <span title="Score medio (0-100)">score</span>
+              <span title="Voto critico medio (0-10)">critic</span>
+            </li>
             {data.map((d) => {
               const pct = Math.round((d.count / total) * 100);
               const isHover = hovered === d.type;
@@ -172,7 +187,7 @@ export default function PositionTypesPie({
                 <li
                   key={d.type}
                   onMouseEnter={() => setHovered(d.type)}
-                  className="flex items-center gap-2 text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
+                  className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem_2.25rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
                   style={{
                     cursor: "pointer",
                     background: isHover ? "var(--color-row)" : "transparent",
@@ -180,27 +195,61 @@ export default function PositionTypesPie({
                     transition: "background 0.15s ease, opacity 0.15s ease",
                   }}
                 >
-                  <span
-                    className="inline-block w-2 h-2 rounded-sm shrink-0"
-                    style={{ background: d.color }}
-                    aria-hidden
-                  />
-                  <span
-                    className="flex-1 min-w-0"
-                    style={{
-                      color: isHover
-                        ? "var(--color-bright)"
-                        : "var(--color-muted)",
-                    }}
-                    title={labels[d.type] ?? d.type}
-                  >
-                    {labels[d.type] ?? d.type}
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="inline-block w-2 h-2 rounded-sm shrink-0"
+                      style={{ background: d.color }}
+                      aria-hidden
+                    />
+                    <span
+                      className="truncate"
+                      style={{
+                        color: isHover
+                          ? "var(--color-bright)"
+                          : "var(--color-muted)",
+                      }}
+                      title={labels[d.type] ?? d.type}
+                    >
+                      {labels[d.type] ?? d.type}
+                    </span>
                   </span>
-                  <span className="tabular-nums text-[var(--color-bright)] font-semibold shrink-0">
+                  <span className="tabular-nums text-[var(--color-bright)] font-semibold">
                     {d.count}
                   </span>
-                  <span className="tabular-nums text-[var(--color-dim)] w-8 text-right shrink-0">
+                  <span className="tabular-nums text-[var(--color-dim)]">
                     {pct}%
+                  </span>
+                  <span
+                    className="tabular-nums"
+                    title="Score medio (0-100, solo posizioni scorate)"
+                    style={{
+                      color:
+                        d.avgScore == null
+                          ? "var(--color-dim)"
+                          : d.avgScore >= 75
+                            ? "var(--color-green)"
+                            : d.avgScore >= 55
+                              ? "var(--color-yellow)"
+                              : "var(--color-red)",
+                    }}
+                  >
+                    {d.avgScore == null ? "—" : `${Math.round(d.avgScore)}`}
+                  </span>
+                  <span
+                    className="tabular-nums"
+                    title="Voto critico medio (0-10, solo posizioni revisionate)"
+                    style={{
+                      color:
+                        d.avgCritic == null
+                          ? "var(--color-dim)"
+                          : d.avgCritic >= 7
+                            ? "var(--color-green)"
+                            : d.avgCritic >= 5.5
+                              ? "var(--color-yellow)"
+                              : "var(--color-red)",
+                    }}
+                  >
+                    {d.avgCritic == null ? "—" : d.avgCritic.toFixed(1)}
                   </span>
                 </li>
               );
