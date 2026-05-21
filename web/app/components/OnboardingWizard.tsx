@@ -43,14 +43,6 @@ const STEPS: StepDef[] = [
     },
   },
   {
-    selector: '[data-tour="applications"]',
-    title: { it: "Applications", en: "Applications" },
-    body: {
-      it: "Le candidature che hai già inviato, con CV e cover letter generati su misura per ogni offerta.",
-      en: "The applications you've sent, with CVs and cover letters tailored to each listing.",
-    },
-  },
-  {
     selector: '[data-tour="team"]',
     title: { it: "Team", en: "Team" },
     body: {
