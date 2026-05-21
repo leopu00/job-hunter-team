@@ -323,9 +323,47 @@ async function maybeRunPairing() {
   });
 }
 
+/**
+ * Esegue `jht migrate` al boot. Il wizard desktop scrive `jht.config.json`
+ * in formato v1 (no `version` field); senza migrazione i campi v2-v4
+ * (`providers` strutturato, `agents.list`, `notifications`, `analytics`)
+ * restano assenti e i comandi downstream falliscono o cadono nei default
+ * silenziosi. `jht migrate` e' gia' non-interattivo (no prompts) ed
+ * idempotente: se la config e' al massimo, exit 0 con "Nessuna migrazione
+ * necessaria". Best-effort: un fallimento qui non blocca pid1, l'utente
+ * puo' rieseguire `jht migrate` manualmente dal terminal embedded.
+ * Vedi docs/internal/2026-05-20-vps-bootstrap-bugs.md §Bug #3.
+ */
+async function runMigrate() {
+  try {
+    await access(JHT_CONFIG_PATH);
+  } catch {
+    // No config yet (pre-pairing su VPS): niente da migrare.
+    return;
+  }
+  pid1Log('running jht migrate (idempotente)');
+  await new Promise((resolve) => {
+    const child = spawnLabeled('migrate', process.execPath, [JHT_ENTRY, 'migrate']);
+    child.on('exit', (code) => {
+      if (code === 0) pid1Log('jht migrate ok');
+      else pid1Log(`jht migrate exit ${code} — proseguo, retry manuale via 'jht migrate'`);
+      resolve();
+    });
+    child.on('error', (err) => {
+      pid1Log(`jht migrate spawn error: ${err.message}`);
+      resolve();
+    });
+  });
+}
+
 async function dispatch() {
   const hostType = await readHostType();
   const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
+
+  // Migrate jht.config.json al volo (v1 → vN). Il wizard desktop scrive v1
+  // e il container ha bisogno dei campi delle versioni successive per far
+  // funzionare provider OAuth, channels, agents.list. Idempotente.
+  await runMigrate();
 
   // Pair non-interattivo PRIMA di partire dashboard+daemon: cosi' il watcher
   // su cloud.json non scatta a vuoto e il daemon parte subito col token
