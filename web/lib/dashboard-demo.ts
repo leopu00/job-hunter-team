@@ -9,6 +9,12 @@ type ScoreDistribution = {
   total: number;
   withScore: number;
   avgScore: number | null;
+  // Array di score validi (> 0): consumato dalla ScoreDistribution
+  // histogram fine-grained (vedi web/app/components/ScoreDistribution.tsx
+  // e fix 2026-05-21 #70998e84 "score histogram domain dinamico").
+  // Aggiunto qui per allineare il type al ritorno di
+  // queries.ts:getScoreDistribution + local-queries.ts:getScoreDistributionLocal.
+  scores: number[];
 };
 
 type SourceDistribution = Array<{ source: string; count: number }>;
@@ -255,6 +261,20 @@ const stats: DashboardStats = {
   excluded: 5,
 };
 
+// Demo scores: 29 valori plausibili che riproducono i bucket sopra
+// (11 in 76-100, 9 in 61-75, 6 in 41-60, 3 in <=40). Servono al
+// componente ScoreDistribution per il rendering fine-grained.
+const demoScoresArray = [
+  // 76-100 (11)
+  82, 86, 88, 79, 91, 78, 95, 81, 84, 89, 77,
+  // 61-75 (9)
+  62, 68, 71, 65, 74, 63, 70, 67, 72,
+  // 41-60 (6)
+  45, 52, 48, 58, 50, 55,
+  // <= 40 (3)
+  38, 25, 33,
+];
+
 const scoreDistribution: ScoreDistribution = {
   buckets: [
     { label: "76-100", count: 11, color: "var(--color-green)" },
@@ -265,6 +285,7 @@ const scoreDistribution: ScoreDistribution = {
   total: 37,
   withScore: 29,
   avgScore: 72,
+  scores: demoScoresArray,
 };
 
 const sourceDistribution: SourceDistribution = [
