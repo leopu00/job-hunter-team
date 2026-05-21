@@ -1,5 +1,10 @@
 # 2026-05-19/20 — VPS bootstrap bugs (sessione setup VPS1)
 
+> **🟢 STATUS 2026-05-21:** bug #1, #2, #3 **FIXED & VALIDATED** end-to-end su VPS fresh Hetzner
+> CPX22 con provider Codex. Vedi `docs/internal/2026-05-21-vps-bootstrap-fixes-validated.md` per
+> la validation report (commit `79f63324`, image GHCR `:latest` aggiornata).
+> Bug #4/#5/#6 (debug-only/cosmetici) deferred.
+
 ## Context
 
 Sessione di pairing di una nuova VPS Hetzner (`178.105.152.253`, `ubuntu-4gb-fsn1-2`)

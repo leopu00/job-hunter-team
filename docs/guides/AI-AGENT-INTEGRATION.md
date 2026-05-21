@@ -232,6 +232,42 @@ From here, **resume the existing flow** at `docs/guides/VPS-SETUP.md §3`
 pairing token (if the user is on the Desktop path) or follow the bare
 CLI runbook (if pure agent path).
 
+### Validation gotchas (lessons from 2026-05-21 test run)
+
+Before reporting "provisioning done", the agent **must** verify these
+three failure modes that look like success on the surface:
+
+1. **Token scope silently dropping `ssh_keys`.** If `hcloud server create`
+   returns `Root password: <random>` in its output (instead of being
+   silent about credentials), the SSH key was **not** injected — even
+   if the project UI shows the token as "Read+Write". Verify with:
+   ```bash
+   ssh -o BatchMode=yes -o ConnectTimeout=10 -i ~/.ssh/jht_ed25519 \
+       root@"$VPS_IP" true && echo KEY_OK || echo KEY_BROKEN
+   ```
+   If `KEY_BROKEN`: stop. Ask the user to generate a fresh token with
+   explicit full write scope. Cloud-init `--user-data` with
+   `ssh_authorized_keys` is **not** a reliable fallback on Hetzner
+   Ubuntu 24.04 (tested 2026-05-21, multiple failures).
+
+2. **Local private key encrypted with passphrase.** OpenSSH in
+   `BatchMode=yes` does **not** prompt for the passphrase but still
+   sends an (invalid) signature → server rejects with
+   `Permission denied (publickey,password)` even though `Server accepts key`
+   appears in the verbose log. Detect at pre-flight:
+   ```bash
+   ssh-keygen -y -f ~/.ssh/jht_ed25519 >/dev/null 2>&1 \
+     || { echo "Key is encrypted — generate a passphraseless ephemeral key for automation"; exit 1; }
+   ```
+   For autonomous runs, prefer a fresh `ssh-keygen -t ed25519 -N ""` key
+   that the agent owns end-to-end and deletes at teardown.
+
+3. **`hcloud --ssh-key <name>` accepted but not applied.** The CLI may
+   parse the flag without error and still skip the injection in edge
+   cases (observed with scope-limited tokens). Always cross-check via
+   the SSH probe in (1). Never assume `hcloud server create` exit 0
+   implies the server is reachable.
+
 ### Cost guardrails the agent MUST enforce
 
 - **Never** create more than one server per user. JHT is single-team
