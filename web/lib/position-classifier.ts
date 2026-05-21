@@ -100,10 +100,22 @@ export type PositionTypeCount = {
   type: PositionType;
   count: number;
   color: string;
+  // Media degli score (0-100) per le sole posizioni di questo tipo che
+  // hanno uno score numerico. null se nessuna posizione del tipo è
+  // stata scorata.
+  avgScore: number | null;
+  // Media del voto critico (0-10) per le sole posizioni di questo tipo
+  // che hanno un voto critico numerico. null se nessuna è stata
+  // revisionata dal critico.
+  avgCritic: number | null;
 };
 
 export function aggregateTypes(
-  titles: Array<string | null | undefined>,
+  rows: Array<{
+    title: string | null | undefined;
+    score: number | null | undefined;
+    critic: number | null | undefined;
+  }>,
 ): PositionTypeCount[] {
   const counts: Record<PositionType, number> = {
     ai_ml: 0,
@@ -116,12 +128,29 @@ export function aggregateTypes(
     software_engineer: 0,
     other: 0,
   };
-  for (const t of titles) counts[classifyTitle(t)] += 1;
+  const scoreSum: Record<PositionType, number> = { ...counts };
+  const scoreN: Record<PositionType, number> = { ...counts };
+  const criticSum: Record<PositionType, number> = { ...counts };
+  const criticN: Record<PositionType, number> = { ...counts };
+  for (const r of rows) {
+    const t = classifyTitle(r.title);
+    counts[t] += 1;
+    if (typeof r.score === "number" && Number.isFinite(r.score)) {
+      scoreSum[t] += r.score;
+      scoreN[t] += 1;
+    }
+    if (typeof r.critic === "number" && Number.isFinite(r.critic)) {
+      criticSum[t] += r.critic;
+      criticN[t] += 1;
+    }
+  }
   return POSITION_TYPE_ORDER
     .map((type) => ({
       type,
       count: counts[type],
       color: POSITION_TYPE_COLOR[type],
+      avgScore: scoreN[type] > 0 ? scoreSum[type] / scoreN[type] : null,
+      avgCritic: criticN[type] > 0 ? criticSum[type] / criticN[type] : null,
     }))
     .filter((r) => r.count > 0)
     .sort((a, b) => b.count - a.count);
