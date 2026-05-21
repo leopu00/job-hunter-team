@@ -32,6 +32,7 @@ const T = {
 
     // Pipeline
     pipeline:             'Pipeline',
+    pipeline_density:     'Addensamento pipeline',
     p_new:                'Nuove',
     p_checked:            'Analizzate',
     p_scored:             'Valutate',
@@ -113,6 +114,7 @@ const T = {
     sent:                 'Sent',
 
     pipeline:             'Pipeline',
+    pipeline_density:     'Pipeline density',
     p_new:                'New',
     p_checked:            'Analyzed',
     p_scored:             'Scored',
@@ -191,6 +193,7 @@ const T = {
     sent:                 'Elküldve',
 
     pipeline:             'Folyamat',
+    pipeline_density:     'Folyamat sűrűsége',
     p_new:                'Új',
     p_checked:            'Elemzett',
     p_scored:             'Értékelt',
