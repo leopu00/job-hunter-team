@@ -16,7 +16,7 @@
     "@supabase/supabase-js": "^2.99.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
-    "better-sqlite3": "^12.8.0",
+    "better-sqlite3": "^12.10.0",
     "ipaddr.js": "^2.2.0",
     "js-yaml": "^4.1.1",
     "maplibre-gl": "^5.24.0",
