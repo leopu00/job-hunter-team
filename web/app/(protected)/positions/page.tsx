@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { getPositions } from "@/lib/queries";
-import type { PositionWithScore, PositionStatus } from "@/lib/types";
+import { getPositions, getSourceDistribution } from "@/lib/queries";
+import type { PositionWithScore } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
+import FiltersWizard from "./FiltersWizard";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "var(--color-muted)",
@@ -15,18 +16,6 @@ const STATUS_COLORS: Record<string, string> = {
   response: "#58a6ff",
   excluded: "var(--color-red)",
 };
-
-const ALL_STATUSES: PositionStatus[] = [
-  "new",
-  "checked",
-  "scored",
-  "writing",
-  "review",
-  "ready",
-  "applied",
-  "response",
-  "excluded",
-];
 
 function scoreClass(s?: number) {
   if (!s) return "text-[var(--color-dim)]";
@@ -62,62 +51,26 @@ function formatFoundAt(ts: string | null | undefined) {
   });
 }
 
-// ── Tier config (dal legacy) ──────────────────────────────────────
-const TIERS = [
-  {
-    val: "all",
-    label: "Tutti",
-    color: undefined,
-    min: undefined,
-    max: undefined,
-    noScore: false,
-  },
-  {
-    val: "seria",
-    label: "Seria ≥70",
-    color: "var(--color-green)",
-    min: 70,
-    max: undefined,
-    noScore: false,
-  },
-  {
-    val: "practice",
-    label: "Practice 40-69",
-    color: "var(--color-yellow)",
-    min: 40,
-    max: 69,
-    noScore: false,
-  },
-  {
-    val: "riferimento",
-    label: "Riferimento <40",
-    color: "var(--color-orange)",
-    min: 1,
-    max: 39,
-    noScore: false,
-  },
-  {
-    val: "noscore",
-    label: "Non scored",
-    color: "var(--color-dim)",
-    min: undefined,
-    max: undefined,
-    noScore: true,
-  },
-] as const;
-
 interface PageProps {
   searchParams: Promise<{
     status?: string;
     remote?: string;
     tier?: string;
-    sync?: string;
+    source?: string;
+    verdict?: string;
     sort?: string;
     dir?: string;
     expand?: string;
     page?: string;
     pageSize?: string;
   }>;
+}
+
+// Parse CSV multi-valore da URL: "scored,checked" → ["scored","checked"].
+// Empty / undefined → [].
+function csv(v: string | undefined): string[] {
+  if (!v) return [];
+  return v.split(",").map(s => s.trim()).filter(Boolean);
 }
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
@@ -146,22 +99,13 @@ const CRITIC_COLORS: Record<string, string> = {
   REJECT: "var(--color-red)",
 };
 
-const SYNC_FILTERS = [
-  { val: "all", label: "Tutti" },
-  { val: "synced", label: "☁ Sincronizzate" },
-  { val: "unsynced", label: "Da sincronizzare" },
-] as const;
-type SyncFilter = (typeof SYNC_FILTERS)[number]["val"];
-
 export default async function PositionsPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const statusFilter = params.status ?? "all";
-  const remoteFilter = params.remote ?? "all";
-  const tierFilter = params.tier ?? "all";
-  const syncFilter: SyncFilter =
-    params.sync === "synced" || params.sync === "unsynced"
-      ? params.sync
-      : "all";
+  const statuses = csv(params.status);
+  const remotes = csv(params.remote);
+  const tiers = csv(params.tier);
+  const sources = csv(params.source);
+  const verdicts = csv(params.verdict);
 
   const sortCol = SORTABLE_COLUMNS.has(params.sort ?? "")
     ? params.sort!
@@ -186,18 +130,20 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     : DEFAULT_PAGE_SIZE;
   const requestedPage = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
-  const tier = TIERS.find((t) => t.val === tierFilter) ?? TIERS[0];
-
-  const allPositions = await getPositions({
-    status: statusFilter !== "all" ? statusFilter : undefined,
-    remoteType: remoteFilter !== "all" ? remoteFilter : undefined,
-    minScore: tier.min,
-    maxScore: tier.max,
-    noScore: tier.noScore,
-    limit: 600,
-    sort: sortCol,
-    dir: sortDir,
-  });
+  const [allPositions, sourceList] = await Promise.all([
+    getPositions({
+      statuses: statuses.length ? statuses : undefined,
+      remoteTypes: remotes.length ? remotes : undefined,
+      sources: sources.length ? sources : undefined,
+      tiers: tiers.length ? tiers : undefined,
+      verdicts: verdicts.length ? verdicts : undefined,
+      limit: 2000,
+      sort: sortCol,
+      dir: sortDir,
+    }),
+    getSourceDistribution(),
+  ]);
+  const availableSources = sourceList.map((s) => s.source);
 
   // Fetch dei legacy_id già su Supabase per l'utente loggato (set per
   // lookup O(1) dentro il loop righe). Errori → set vuoto, niente icona
@@ -220,15 +166,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     );
   }
 
-  // Applica filtro sync dopo aver caricato syncedIds. Una position senza
-  // legacy_id non può essere sincronizzata → cade in "unsynced".
-  const positions =
-    syncFilter === "all"
-      ? allPositions
-      : allPositions.filter((p) => {
-          const isSynced = p.legacy_id != null && syncedIds.has(p.legacy_id);
-          return syncFilter === "synced" ? isSynced : !isSynced;
-        });
+  const positions = allPositions;
 
   // Pagination computed values
   const totalResults = positions.length;
@@ -241,10 +179,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const buildHref = (
     overrides: Partial<
       Record<
-        | "status"
-        | "remote"
-        | "tier"
-        | "sync"
         | "sort"
         | "dir"
         | "expand"
@@ -255,19 +189,19 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     >,
   ) => {
     const merged: Record<string, string> = {};
-    if (statusFilter !== "all") merged.status = statusFilter;
-    if (remoteFilter !== "all") merged.remote = remoteFilter;
-    if (tierFilter !== "all") merged.tier = tierFilter;
-    if (syncFilter !== "all") merged.sync = syncFilter;
+    if (statuses.length) merged.status = statuses.join(",");
+    if (remotes.length) merged.remote = remotes.join(",");
+    if (tiers.length) merged.tier = tiers.join(",");
+    if (sources.length) merged.source = sources.join(",");
+    if (verdicts.length) merged.verdict = verdicts.join(",");
     if (sortCol !== "found_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
     if (expandedCols.size > 0) merged.expand = Array.from(expandedCols).join(",");
     if (page !== 1) merged.page = String(page);
     if (pageSize !== DEFAULT_PAGE_SIZE) merged.pageSize = String(pageSize);
     Object.assign(merged, overrides);
-    // Rimuovi chiavi con valore 'all' o default → URL pulito
+    // Cleanup default values → URL pulito
     for (const k of Object.keys(merged)) {
-      if (merged[k] === "all") delete merged[k];
       if (k === "sort" && merged[k] === "found_at") delete merged[k];
       if (k === "dir" && merged[k] === "desc") delete merged[k];
       if (k === "expand" && merged[k] === "") delete merged[k];
@@ -304,22 +238,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const sortIndicator = (col: string) =>
     sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
-  // True se l'utente ha toccato qualsiasi filtro/sort/expand rispetto
-  // al default — usato per mostrare il bottone "Reset filtri".
-  const hasActiveFilters =
-    statusFilter !== "all" ||
-    remoteFilter !== "all" ||
-    tierFilter !== "all" ||
-    syncFilter !== "all" ||
-    sortCol !== "found_at" ||
-    sortDir !== "desc" ||
-    expandedCols.size > 0;
-
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
-      {/* Banner stato cloud-sync (compatto, nascosto se non loggato). */}
-      <CloudSyncStatusBanner />
-
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
@@ -342,104 +262,41 @@ export default async function PositionsPage({ searchParams }: PageProps) {
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">
           Posizioni
         </h1>
-        <p className="text-[var(--color-muted)] text-[11px] mt-1 flex flex-wrap items-center gap-x-2">
-          <span>
-            {positions.length} risultati
-            {statusFilter !== "all" && ` · status: ${statusFilter}`}
-            {remoteFilter !== "all" && ` · ${remoteFilter.replace("_", " ")}`}
-            {tierFilter !== "all" && ` · ${tier.label}`}
-            {syncFilter !== "all" &&
-              ` · ${SYNC_FILTERS.find((s) => s.val === syncFilter)?.label}`}
-          </span>
-          {hasActiveFilters && (
-            <Link
-              href="/positions"
-              className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline border border-[var(--color-border)] hover:border-[var(--color-green)] rounded-full px-2 py-0.5"
-            >
-              ✕ Reset filtri
-            </Link>
-          )}
+        <p className="text-[var(--color-muted)] text-[11px] mt-1">
+          {positions.length} risultati
         </p>
       </div>
 
-      {/* ── Tier filter (dal legacy: Seria / Practice / Riferimento) ── */}
-      <div className="mb-5">
-        <span className="text-[9.5px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] mr-3">
-          Tier
-        </span>
-        <span className="inline-flex flex-wrap gap-1.5">
-          {TIERS.map((t) => (
-            <FilterChip
-              key={t.val}
-              href={buildHref({ tier: t.val })}
-              label={t.label}
-              active={tierFilter === t.val}
-              color={t.color}
-            />
-          ))}
-        </span>
-      </div>
+      {/* Banner stato cloud-sync (compatto, nascosto se non loggato). */}
+      <CloudSyncStatusBanner />
 
-      {/* ── Sync filter (mostra solo se utente loggato — sennò info inutile) ── */}
-      {user && (
-        <div className="mb-5">
-          <span className="text-[9.5px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] mr-3">
-            Cloud sync
+      {/* ── Filtri (wizard a sinistra, righe-per-pagina a destra) ── */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <FiltersWizard availableSources={availableSources} />
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
+            Righe per pagina
           </span>
-          <span className="inline-flex flex-wrap gap-1.5">
-            {SYNC_FILTERS.map((s) => (
-              <FilterChip
-                key={s.val}
-                href={buildHref({ sync: s.val })}
-                label={s.label}
-                active={syncFilter === s.val}
-                color={
-                  s.val === "synced"
-                    ? "var(--color-green)"
-                    : s.val === "unsynced"
-                      ? "var(--color-yellow, #d4a85a)"
-                      : undefined
-                }
-              />
-            ))}
-          </span>
-        </div>
-      )}
-
-      {/* ── Filters ─────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3 mb-6">
-        {/* Status filter */}
-        <div className="flex flex-wrap gap-1">
-          <FilterChip
-            href={buildHref({ status: "all" })}
-            label="Tutti"
-            active={statusFilter === "all"}
-          />
-          {ALL_STATUSES.map((s) => (
-            <FilterChip
-              key={s}
-              href={buildHref({ status: s })}
-              label={s}
-              active={statusFilter === s}
-              color={STATUS_COLORS[s]}
-            />
-          ))}
-        </div>
-
-        {/* Remote filter */}
-        <div className="flex gap-1 ml-auto">
-          {[
-            { val: "all", label: "Remote: tutti" },
-            { val: "full_remote", label: "Full remote" },
-            { val: "hybrid", label: "Hybrid" },
-            { val: "onsite", label: "On-site" },
-          ].map(({ val, label }) => (
-            <FilterChip
-              key={val}
-              href={buildHref({ remote: val })}
-              label={label}
-              active={remoteFilter === val}
-            />
+          {PAGE_SIZE_OPTIONS.map((size) => (
+            <Link
+              key={size}
+              href={buildHref({ pageSize: String(size), page: "1" })}
+              className="px-2 py-0.5 text-[10px] font-semibold rounded-full border transition-colors no-underline"
+              style={
+                pageSize === size
+                  ? {
+                      color: "var(--color-bright)",
+                      borderColor: "var(--color-green)",
+                      background: "var(--color-card)",
+                    }
+                  : {
+                      color: "var(--color-dim)",
+                      borderColor: "var(--color-border)",
+                    }
+              }
+            >
+              {size}
+            </Link>
           ))}
         </div>
       </div>
@@ -684,32 +541,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             : `${startIdx + 1}–${Math.min(startIdx + pageSize, totalResults)} di ${totalResults} · pagina ${page} / ${pageCount}`}
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
-              Righe per pagina
-            </span>
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <Link
-                key={size}
-                href={buildHref({ pageSize: String(size), page: "1" })}
-                className="px-2 py-0.5 text-[10px] font-semibold rounded-full border transition-colors no-underline"
-                style={
-                  pageSize === size
-                    ? {
-                        color: "var(--color-bright)",
-                        borderColor: "var(--color-green)",
-                        background: "var(--color-card)",
-                      }
-                    : {
-                        color: "var(--color-dim)",
-                        borderColor: "var(--color-border)",
-                      }
-                }
-              >
-                {size}
-              </Link>
-            ))}
-          </div>
           <div className="flex items-center gap-1">
             {page > 1 ? (
               <Link
@@ -742,37 +573,3 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   );
 }
 
-function FilterChip({
-  href,
-  label,
-  active,
-  color,
-}: {
-  href: string;
-  label: string;
-  active?: boolean;
-  color?: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="px-2.5 py-1 text-[10px] font-semibold rounded-full border transition-colors no-underline whitespace-nowrap"
-      style={
-        active
-          ? {
-              color: color ?? "var(--color-bright)",
-              borderColor: color ?? "var(--color-green)",
-              background: color ? `${color}20` : "var(--color-card)",
-            }
-          : {
-              color: "var(--color-dim)",
-              borderColor: "var(--color-border)",
-              background: "transparent",
-            }
-      }
-    >
-      {label}
-    </Link>
-  );
-}
-// Thu Apr 23 09:14:05 UTC 2026
