@@ -281,11 +281,40 @@ export async function getRecentPositions(limit = 15): Promise<(PositionWithScore
 const POSITION_SORT_KEYS = ['id', 'title', 'company', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
 
-export async function getPositions(opts?: {
-  status?: string; minScore?: number; maxScore?: number; noScore?: boolean
-  remoteType?: string; limit?: number; offset?: number
-  sort?: string; dir?: 'asc' | 'desc'
-}): Promise<PositionWithScore[]> {
+export type PositionFilterOpts = {
+  statuses?: string[]
+  remoteTypes?: string[]
+  sources?: string[]
+  tiers?: string[]       // ['seria','practice','riferimento','noscore']
+  verdicts?: string[]    // applications.critic_verdict (PASS|NEEDS_WORK|REJECT)
+  limit?: number
+  offset?: number
+  sort?: string
+  dir?: 'asc' | 'desc'
+}
+
+// Tier → score-range. 'noscore' = score null/0.
+const TIER_RANGES: Record<string, { min?: number; max?: number; noScore?: boolean }> = {
+  seria:       { min: 70 },
+  practice:    { min: 40, max: 69 },
+  riferimento: { min: 1,  max: 39 },
+  noscore:     { noScore: true },
+}
+
+function applyTierFilter(rows: PositionWithScore[], tiers: string[]): PositionWithScore[] {
+  if (!tiers.length) return rows
+  return rows.filter(p => tiers.some(t => {
+    const r = TIER_RANGES[t]; if (!r) return false
+    const s = p.score
+    if (r.noScore) return s == null || s === 0
+    if (s == null || s === 0) return false
+    if (r.min != null && s < r.min) return false
+    if (r.max != null && s > r.max) return false
+    return true
+  }))
+}
+
+export async function getPositions(opts?: PositionFilterOpts): Promise<PositionWithScore[]> {
   const w = await ws()
   if (w) { try { return local.getPositionsLocal(w, opts) } catch { return [] } }
   if (!isSupabaseConfigured) return []
@@ -296,19 +325,15 @@ export async function getPositions(opts?: {
     .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
     .order('found_at', { ascending: false })
 
-  if (opts?.status && opts.status !== 'all') query = query.eq('status', opts.status)
-  if (opts?.remoteType && opts.remoteType !== 'all') query = query.eq('remote_type', opts.remoteType)
-  if (opts?.noScore) { query = query.or('score.is.null,score.eq.0') }
-  else {
-    if (opts?.minScore) query = query.gte('score', opts.minScore)
-    if (opts?.maxScore) query = query.lte('score', opts.maxScore)
-  }
+  if (opts?.statuses?.length) query = query.in('status', opts.statuses)
+  if (opts?.remoteTypes?.length) query = query.in('remote_type', opts.remoteTypes)
+  if (opts?.sources?.length) query = query.in('source', opts.sources)
   if (opts?.limit) query = query.limit(opts.limit)
   if (opts?.offset) query = query.range(opts.offset, (opts.offset + (opts.limit ?? 50)) - 1)
 
   const { data, error } = await query
   if (error || !data) return []
-  const mapped: PositionWithScore[] = data.map((p: any) => {
+  let mapped: PositionWithScore[] = data.map((p: any) => {
     const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
     return {
       ...p,
@@ -318,6 +343,13 @@ export async function getPositions(opts?: {
       critic_verdict: app?.critic_verdict ?? null,
     }
   })
+
+  // Filtri post-fetch: tier (range union) + verdict (nested join).
+  if (opts?.tiers?.length) mapped = applyTierFilter(mapped, opts.tiers)
+  if (opts?.verdicts?.length) {
+    const set = new Set(opts.verdicts)
+    mapped = mapped.filter(p => p.critic_verdict && set.has(p.critic_verdict))
+  }
 
   // Sort in memoria per le colonne richieste dalla UI.
   const sortKey: PositionSortKey | null = POSITION_SORT_KEYS.includes(opts?.sort as PositionSortKey)
