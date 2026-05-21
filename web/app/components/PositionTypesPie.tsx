@@ -81,10 +81,7 @@ export default function PositionTypesPie({
         )}
       </div>
 
-      {total === 0 ? (
-        <p className="text-[11px] text-[var(--color-dim)]">{emptyLabel}</p>
-      ) : (
-        <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4">
           <svg
             width={size}
             height={size}
@@ -94,6 +91,15 @@ export default function PositionTypesPie({
             role="img"
             onMouseLeave={() => setHovered(null)}
           >
+            <circle
+              cx={CX}
+              cy={CY}
+              r={(RADIUS + INNER) / 2}
+              fill="none"
+              stroke="var(--color-border)"
+              strokeWidth={RADIUS - INNER}
+              opacity={total === 0 ? 0.5 : 0}
+            />
             {(() => {
               let acc = -Math.PI / 2; // start at top
               return data.map((d) => {
@@ -254,9 +260,13 @@ export default function PositionTypesPie({
                 </li>
               );
             })}
+            {data.length === 0 && (
+              <li className="text-[10px] text-[var(--color-dim)] italic py-2">
+                {emptyLabel}
+              </li>
+            )}
           </ul>
         </div>
-      )}
     </div>
   );
 }

@@ -13,7 +13,6 @@ import {
 } from "@/lib/queries";
 import PositionTypesPie from "@/app/components/PositionTypesPie";
 import ScoreDistribution from "@/app/components/ScoreDistribution";
-import PipelineFunnel from "@/app/components/PipelineFunnel";
 import PipelineFlow from "@/app/components/PipelineFlow";
 import JobsGlobe from "@/app/components/JobsGlobe";
 import { formatFoundAt } from "@/lib/format-time";
@@ -404,14 +403,6 @@ export default async function DashboardPage() {
             other: t.pt_other,
           }}
         />
-      </div>
-
-      {/* ── Pipeline density: dove si addensano le posizioni ────── */}
-      <div
-        className="mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.1s" }}
-      >
-        <PipelineFunnel steps={pipeline} title={t.pipeline_density} />
       </div>
 
       {/* ── Pipeline flow: area chart con linea ondulante ───────── */}
