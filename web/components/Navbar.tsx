@@ -27,12 +27,8 @@ export default function Navbar({ user }: NavbarProps) {
         {/* Brand */}
         <Link
           href="/dashboard"
-          className="flex items-center gap-2.5 no-underline group flex-shrink-0"
+          className="flex items-center no-underline group flex-shrink-0"
         >
-          <div
-            className="w-2 h-2 group-hover:opacity-80 transition-opacity"
-            style={{ background: 'var(--color-green)', boxShadow: '0 0 8px var(--color-green)' }}
-          />
           <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)] group-hover:opacity-80 transition-opacity">
             JHT
           </span>

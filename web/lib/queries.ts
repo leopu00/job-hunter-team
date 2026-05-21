@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
+import { aggregateTypes, type PositionTypeCount } from '@/lib/position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -248,7 +249,7 @@ export async function getRecentlyTouchedPositions(limit = 15): Promise<RecentlyT
 }
 
 // ── Recent positions with scores ───────────────────────────────────
-export async function getRecentPositions(limit = 15): Promise<PositionWithScore[]> {
+export async function getRecentPositions(limit = 15): Promise<(PositionWithScore & { last_action_at?: string })[]> {
   const w = await ws()
   if (w) { try { return local.getRecentPositionsLocal(w, limit) } catch { return [] } }
   if (!isSupabaseConfigured) return []
@@ -256,12 +257,20 @@ export async function getRecentPositions(limit = 15): Promise<PositionWithScore[
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, url, source, found_at, status, notes, scores ( total_score )')
+    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, url, source, found_at, last_checked, status, notes, scores ( total_score, scored_at )')
     .not('status', 'eq', 'excluded')
     .order('found_at', { ascending: false })
     .limit(limit)
   if (error || !data) return []
-  return data.map((p: any) => ({ ...p, score: p.scores?.total_score ?? undefined }))
+  return data.map((p: any) => {
+    // last_action_at = ULTIMA azione: scout / analista / scorer
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    const candidates = [p.found_at, p.last_checked, score?.scored_at].filter(Boolean) as string[]
+    const last_action_at = candidates.length > 0
+      ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
+      : p.found_at
+    return { ...p, score: score?.total_score ?? undefined, last_action_at }
+  })
 }
 
 // ── All positions with optional filters ────────────────────────────
@@ -414,7 +423,7 @@ export async function getScoreDistribution() {
   const w = await ws()
   if (w) { try { return local.getScoreDistributionLocal(w) } catch { /* fall through */ } }
 
-  const empty = { buckets: [] as Array<{ label: string; count: number; color: string }>, total: 0, withScore: 0, avgScore: null as number | null }
+  const empty = { buckets: [] as Array<{ label: string; count: number; color: string }>, total: 0, withScore: 0, avgScore: null as number | null, scores: [] as number[] }
   if (!isSupabaseConfigured) return empty
 
   const supabase = await createClient()
@@ -430,7 +439,7 @@ export async function getScoreDistribution() {
     { label: '\u2264 40',   min: 0,  max: 40,  color: 'var(--color-red)' },
   ].map(b => ({ label: b.label, count: withScore.filter((s: number) => s >= b.min && s <= b.max).length, color: b.color }))
   const sum = withScore.reduce((a: number, s: number) => a + s, 0)
-  return { buckets, total: scores.length, withScore: withScore.length, avgScore: withScore.length > 0 ? Math.round(sum / withScore.length) : null }
+  return { buckets, total: scores.length, withScore: withScore.length, avgScore: withScore.length > 0 ? Math.round(sum / withScore.length) : null, scores: withScore }
 }
 
 // ── Source distribution ─────────────────────────────────────────────
@@ -445,6 +454,64 @@ export async function getSourceDistribution(): Promise<Array<{ source: string; c
   const counts: Record<string, number> = {}
   for (const row of data) { const s = row.source ?? 'sconosciuta'; counts[s] = (counts[s] ?? 0) + 1 }
   return Object.entries(counts).map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count).slice(0, 8)
+}
+
+// ── Positions con coordinate ufficio (per JobsGlobe) ───────────────
+export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionsWithCoordsLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('id, title, company, status, office_lat, office_lon, is_remote, scores ( total_score )')
+    .not('status', 'eq', 'excluded')
+    .not('office_lat', 'is', null)
+  if (error || !data) return []
+  return data.map((p: any) => {
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    return {
+      id: String(p.id),
+      title: p.title,
+      company: p.company,
+      status: p.status,
+      score: typeof score?.total_score === 'number' ? score.total_score : null,
+      lat: p.office_lat,
+      lon: p.office_lon,
+      is_remote: !!p.is_remote,
+    }
+  })
+}
+
+// ── Critic votes distribution ──────────────────────────────────────
+export async function getCriticScores(): Promise<number[]> {
+  const w = await ws()
+  if (w) { try { return local.getCriticScoresLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('applications')
+    .select('critic_score, positions!inner(status)')
+    .not('critic_score', 'is', null)
+    .not('positions.status', 'eq', 'excluded')
+  if (error || !data) return []
+  return data
+    .map((r: any) => r.critic_score)
+    .filter((s: any): s is number => typeof s === 'number')
+}
+
+// ── Position type distribution ──────────────────────────────────────
+export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionTypeDistributionLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('positions').select('title').not('status', 'eq', 'excluded')
+  if (error || !data) return []
+  return aggregateTypes(data.map((r: { title: string | null }) => r.title))
 }
 
 // ── Positions count by status ───────────────────────────────────────
