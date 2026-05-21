@@ -302,7 +302,6 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/dashboard') ||
       pathname.startsWith('/profile') ||
       pathname.startsWith('/positions') ||
-      pathname.startsWith('/applications') ||
       pathname.startsWith('/ready') ||
       pathname.startsWith('/risposte') ||
       pathname.startsWith('/crescita') ||
