@@ -158,6 +158,12 @@ export interface PositionWithScore extends Position {
   scores?: Score
   critic_score?: number | null
   critic_verdict?: string | null
+  // Ultima azione tracciata sulla position (es. ACK Capitano, write CV).
+  // Aggiunto nei merge dev1/dev2/dev3 del 2026-05-21 per il widget
+  // "Recent positions shows last-action timestamp" (commit a89d75d5).
+  // Opzionale: presente solo nelle query che fanno join con
+  // applications/state-history (vedi getRecentPositions).
+  last_action_at?: string
 }
 
 export interface ApplicationWithPosition extends Application {
