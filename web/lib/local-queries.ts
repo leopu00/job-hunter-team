@@ -372,6 +372,38 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
   }))
 }
 
+// ── Position state-history (timestamp transizioni) ────────────────
+export function getPositionStateHistoryLocal(ws: string) {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.id AS id,
+           p.status AS status,
+           p.found_at AS found_at,
+           p.last_checked AS last_checked,
+           s.scored_at AS scored_at,
+           a.written_at AS written_at,
+           a.critic_reviewed_at AS critic_reviewed_at,
+           a.critic_verdict AS critic_verdict,
+           a.applied_at AS applied_at,
+           a.response_at AS response_at
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    LEFT JOIN applications a ON a.position_id = p.id
+  `).all() as Array<{
+    id: number | string
+    status: string
+    found_at: string | null
+    last_checked: string | null
+    scored_at: string | null
+    written_at: string | null
+    critic_reviewed_at: string | null
+    critic_verdict: string | null
+    applied_at: string | null
+    response_at: string | null
+  }>
+  return rows.map(r => ({ ...r, id: String(r.id) }))
+}
+
 // ── Position type distribution ──────────────────────────────────────
 export function getPositionTypeDistributionLocal(ws: string): PositionTypeCount[] {
   const db = getDb(ws)
