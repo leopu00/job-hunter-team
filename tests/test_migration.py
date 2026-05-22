@@ -49,10 +49,13 @@ sys.path.insert(0, {repr(SKILLS_DIR)})
 import _db as _db_module
 _db_module.DB_PATH = {repr(db_path)}
 sys.argv = ['script'] + {repr(list(args))}
-with open({repr(script)}) as _f:
+# encoding='utf-8' esplicito: su Windows open() default e' cp1252 e fallisce
+# su file con caratteri non-ASCII (es. accenti italiani nei commenti di
+# db_init.py / db_migrate_v2.py).
+with open({repr(script)}, encoding='utf-8') as _f:
     _code = compile(_f.read(), {repr(script)}, 'exec')
 exec(_code, {{'__file__': {repr(script)}, '__name__': '__main__'}})
-""")
+""", encoding='utf-8')
     return subprocess.run(
         [sys.executable, str(wrapper)],
         capture_output=True, text=True
@@ -94,6 +97,95 @@ class TestSchemaV2:
         conn.close()
         assert "interview_round" in cols, \
             f"Colonna interview_round mancante in applications. Colonne: {cols}"
+
+    def test_positions_has_length_constraints(self, tmp_db, tmp_path):
+        """Fresh DB deve rifiutare INSERT con title/company/location over-length.
+
+        Mirror del CHECK constraint Postgres (mig 015) — origin: incident
+        RobertHalf 2026-05-19 (vedi docs/internal/cloud-sync-architecture.md).
+        """
+        result = run_cli(DB_INIT, [], tmp_db, tmp_path)
+        assert result.returncode == 0, f"db_init fallito:\n{result.stderr}"
+
+        conn = sqlite3.connect(tmp_db)
+        # location > 200 char deve essere rifiutato
+        with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint"):
+            conn.execute(
+                "INSERT INTO positions(title, company, location) VALUES (?, ?, ?)",
+                ('ok', 'ok', 'x' * 201)
+            )
+        # title > 500 deve essere rifiutato
+        with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint"):
+            conn.execute(
+                "INSERT INTO positions(title, company) VALUES (?, ?)",
+                ('x' * 501, 'ok')
+            )
+        # company > 300 deve essere rifiutato
+        with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint"):
+            conn.execute(
+                "INSERT INTO positions(title, company) VALUES (?, ?)",
+                ('ok', 'x' * 301)
+            )
+        # Valori validi devono passare
+        conn.execute(
+            "INSERT INTO positions(title, company, location) VALUES (?, ?, ?)",
+            ('Senior Engineer', 'Acme Corp', 'Milan, IT')
+        )
+        # location NULL deve passare (constraint e' "location IS NULL OR LENGTH <= 200")
+        conn.execute(
+            "INSERT INTO positions(title, company) VALUES (?, ?)",
+            ('Engineer', 'Beta Corp')
+        )
+        conn.close()
+
+    def test_migrate_truncates_legacy_over_length_rows(self, tmp_db, tmp_path):
+        """Legacy DB con rows over-length: migration tronca e attiva constraint."""
+        # Crea DB legacy senza CHECK constraint
+        conn = sqlite3.connect(tmp_db)
+        conn.executescript("""
+            CREATE TABLE companies (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE);
+            CREATE TABLE positions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                company TEXT NOT NULL,
+                location TEXT,
+                status TEXT DEFAULT 'new'
+            );
+        """)
+        # Inserisci 1 row con location lunga (simulando incident RobertHalf)
+        conn.execute(
+            "INSERT INTO positions(title, company, location) VALUES (?, ?, ?)",
+            ('Engineer', 'Acme', 'x' * 400)
+        )
+        conn.execute(
+            "INSERT INTO positions(title, company, location) VALUES (?, ?, ?)",
+            ('Other', 'Beta', 'Milan')
+        )
+        conn.execute("PRAGMA user_version = 4")
+        conn.commit()
+        conn.close()
+
+        # Run db_init (che applica ensure_schema → migrate chain)
+        result = run_cli(DB_INIT, [], tmp_db, tmp_path)
+        assert result.returncode == 0, f"db_init fallito:\n{result.stderr}"
+
+        conn = sqlite3.connect(tmp_db)
+        # Row over-length deve essere troncata, ma row valida deve restare
+        rows = conn.execute(
+            "SELECT title, company, LENGTH(location) FROM positions ORDER BY id"
+        ).fetchall()
+        assert len(rows) == 2, f"Expected 2 rows, got {len(rows)}: {rows}"
+        # Row 1: location troncata a placeholder
+        assert rows[0][2] <= 200, f"Row 1 location length {rows[0][2]} > 200 (non troncata)"
+        # Row 2: location valida invariata
+        assert rows[1][2] == 5, f"Row 2 location length expected 5 (Milan), got {rows[1][2]}"
+        # Constraint deve essere ora attivo
+        with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint"):
+            conn.execute(
+                "INSERT INTO positions(title, company, location) VALUES (?, ?, ?)",
+                ('x', 'x', 'y' * 250)
+            )
+        conn.close()
 
     @pytest.mark.xfail(
         strict=False,
