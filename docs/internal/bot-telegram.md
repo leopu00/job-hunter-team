@@ -35,22 +35,9 @@ Il resto del team (Scout, Analista, Scorer, Scrittore, Critico, Sentinella) **no
 
 ---
 
-## 🤖 Setup bot — 4 opzioni valutate
+## 🤖 Setup bot — decisione lockata 2026-05-13 rev2
 
-### Opzione 1 — Un bot solo, Assistente è router
-
-```
-                ┌─────────────────────────┐
-   👤 utente ───▶│  @jht_<user>_bot        │───▶ ASSISTENTE (router)
-                └─────────────────────────┘            │
-                                                       ├──▶ Capitano (forward)
-                                                       └──▶ Mentor  (forward)
-```
-
-✅ 1 token, 1 wizard step | ✅ già implementato
-🔴 Notifiche in 1 chat → mute selettivo impossibile | 🔴 routing manuale via prefix `/cap` `/mentor` ambiguo | 🔴 contesto mescolato
-
-### Opzione 2 — N bot dedicati per agente
+**Opzione 2 — N bot dedicati per agente:**
 
 ```
    👤 utente ──▶ @jht_<user>_assistente_bot ──▶ ASSISTENTE
@@ -58,54 +45,11 @@ Il resto del team (Scout, Analista, Scorer, Scrittore, Critico, Sentinella) **no
             └─▶ @jht_<user>_mentor_bot ────▶ MENTOR
 ```
 
-✅ Notifiche separate (Telegram nativo) | ✅ contesto pulito | ✅ tag implicito dal canale
-🔴 Wizard chiede 3× `/newbot` a `@BotFather` faticoso | 🟡 3× token nel config | 🟡 3× `/start`
+Wizard chiede 3× `/newbot` a `@BotFather`, 3 token in `channels.telegram.bots.{assistente,capitano,mentor}`, 3 `/start` separati. Ogni agente parla sul proprio bot (no router, no forward).
 
-### Opzione 3 — Gruppo Telegram con topic (Forum mode)
+**Trade-off accettato**: setup ~3 minuti in cambio di notifiche separate Telegram-native, contesto pulito, mute selettivo.
 
-```
-   👤 utente ┌─ #📥 Assistente  ─▶ ASSISTENTE
-       in    ├─ #🎯 Capitano    ─▶ CAPITANO
-   gruppo ──┤ #🧭 Mentor      ─▶ MENTOR
-    JHT     └─ #📣 Team-log    ─▶ broadcast (read-only)
-```
-
-✅ 1 solo bot | ✅ topic = sub-canale Telegram nativo | ✅ notifiche per topic configurabili
-🟡 Bot API: `message_thread_id` + `is_topic_message` | 🟡 setup wizard più articolato (creare gruppo + abilitare topic + invitare bot + dare admin)
-
-### Opzione 4 — Un bot, routing via @-tag
-
-```
-   👤 utente: "@capitano alza score posizioni Roma"
-                  │
-         ┌────────┴────────┐
-   parse @<role>       default
-         ▼                 ▼
-       CAPITANO        ASSISTENTE
-```
-
-✅ 1 bot | 🟡 dipende dall'utente che ricorda i tag | 🔴 mix conversazionale rumoroso
-
-### Matrice decisione
-
-| Opz | Setup utente | UX quotidiana | Effort dev | Scala |
-|-----|--------------|---------------|------------|-------|
-| 1 — un bot router | 🟢 1 step | 🟡 rumoroso | 🟢 zero | 🟢 |
-| 2 — N bot dedicati | 🔴 3 step BotFather | 🟢 pulita | 🟡 wizard + multi-token | 🟢 |
-| 3 — Topic mode | 🟡 1 step + gruppo | 🟢🟢 ottimo | 🟡 bridge topic-aware | 🟢 |
-| 4 — @-tag in chat | 🟢 1 step | 🟡 abitudine | 🟢 piccolo router | 🟢 |
-
-### ✅ Decisione finale 2026-05-13 rev2 — Opzione 2 (tutti e 3 obbligatori)
-
-> **Cambio idea 2026-05-13 sera**: l'idea iniziale dell'ibrido (Assistente obbligatorio + Capitano/Mentor opt-in) è stata superata. Per garantire la stessa UX a tutti gli utenti e separare i contesti fin da subito, **tutti e 3 i bot sono obbligatori** in onboarding.
-
-- **Assistente bot + Capitano bot + Mentor bot** = TUTTI OBBLIGATORI
-  - Wizard chiede 3× `/newbot` a `@BotFather`
-  - 3 token salvati in `channels.telegram.bots.{assistente,capitano,mentor}`
-  - 3 `/start` separati (uno per ogni bot) prima di poter completare il setup
-  - Routing: ogni agente parla all'utente sul suo bot dedicato (no forward, no router)
-
-**Trade-off accettato**: setup più lungo (~3 minuti BotFather) in cambio di notifiche separate Telegram-native, contesto pulito per ogni agente, mute selettivo nativo.
+**Alternative scartate**: (1) un bot router con Assistente che forward → notifiche mescolate, mute selettivo impossibile. (3) Forum mode con topic → setup ancora più articolato (gruppo + admin bot + topic). (4) @-tag in chat unica → dipende dall'utente che ricorda i tag, mix conversazionale.
 
 ---
 
@@ -343,31 +287,21 @@ Ordine post-fix:
 - ❌ **Non scaricare file > 20 MB direttamente**: Telegram Bot API limita a 20 MB con il bot token standard. Per file più grandi servirebbe self-hosted Bot API server (out of scope beta).
 - ❌ **Non rispondere via `jht-send` a un `[TG]`**: l'utente è sul telefono, la dashboard web non è aperta. Skill `chat-web` vs `telegram-send` — leggi il prefix `[CHAT]` vs `[TG]` per decidere.
 
-### Stato implementazione (aggiornato 2026-05-13 sera)
+### Stato — aperti
 
-- ✅ **Photo OCR**: cablato via Claude vision nativo del Read tool dell'Assistente (commit `37b359d4`). L'agente legge `path` di `[TG-DOC] mime=image/*` con `Read` e interpreta foto-di-documento / screenshot / meme in autonomia. Nessun servizio OCR esterno necessario.
-- ✅ **Fallback cloud sync (marker user-reply-check)**: skill + tool + integrazione nei 3 prompt agenti (Capitano/Mentor/Assistente) — commit `53efebc4`. Le risposte utente arrivate via dashboard web vengono lette al top del loop e marcate come viste.
-- ✅ **Working hours enforcement (§ 9)**: config `team.working_hours` + helper `shared/skills/working_hours.py` + gate in `pacing-bridge.py` e `jht-notify-user` — commit `13318e1d`. Default 24/7, configurabile via `jht.config.json`.
-
-Rimasti aperti (fuori scope beta):
-- **Audio transcription voice note**: STT automatico non in scope beta — decisione lockata. L'Assistente acknowledge il `voice-*.ogg` e chiede gentile la versione testo. Riapertura possibile in v1 con Whisper o servizio analogo.
-- **Risposte con allegato**: outbound CV/cover-letter generati. Per ora `jht-telegram-send` manda solo testo. `sendDocument` su Bot API supportato, ma wrapper non lo espone. Estensione futura: `jht-telegram-send-doc <path>`.
-- **Notifiche batch Capitano (kick-off iniziale)**: default N=10 + segnali di vita iniziali — forma esatta del kick-off ancora da rifinire.
-- **Multi-utente**: il design ipotizza 1 VPS = 1 utente (whitelist su `chat_id` singolo nel config). Open platform → richiederà mapping `chat_id → user_id` su DB.
+- **Audio transcription voice note**: STT non in scope beta. L'Assistente ack-a il `voice-*.ogg` e chiede testo. Riapertura v1 con Whisper.
+- **Risposte con allegato (outbound)**: `jht-telegram-send` manda solo testo. `sendDocument` Bot API supportato ma wrapper non lo espone. Estensione: `jht-telegram-send-doc <path>`.
+- **Notifiche batch Capitano (kick-off iniziale)**: default N=10 + segnali di vita iniziali — forma esatta del kick-off da rifinire.
+- **Multi-utente**: design 1 VPS = 1 utente (whitelist `chat_id` singolo). Open platform richiederà mapping `chat_id → user_id` su DB.
 
 ---
 
-## 🗺️ Roadmap implementativa
+## 🗺️ Roadmap — aperti
 
-1. ✅ **Ingest documenti via Telegram (Opz B)** — `tg-bridge.py` 3-bot, `jht-telegram-send` con `--from`, skill, role `tg-bridge` in `start-agent.sh`, bootstrap V7 CLI+web, wizard auto chat_id (merge dev2 `82bf4fc8`)
-2. ✅ **Multi-bot (3 obbligatori)** — config `channels.telegram.bots.{assistente,capitano,mentor}`, routing per agente, wizard 3× BotFather
-3. **Notifiche batch Capitano** → ogni N posizioni `ready`, top-N per score con link + descrizione (default N=10, da rifinire)
-4. ✅ **Fallback cloud sync** — marker `user-reply-check` nei 3 prompt + tool `jht-check-user-replies` + schema V5 `pending_user_messages` + dashboard widget (merge dev3 + commit `53efebc4`)
-5. ✅ **Photo OCR** — cablato via Claude vision nativo nel prompt Assistente (commit `37b359d4`)
-6. ✅ **Working hours enforcement** — config + gate pacing-bridge + gate notify-user (commit `13318e1d`)
-7. **Post-beta feedback** → valutare WhatsApp secondary (trigger: >2/10 beta tester rifiuta TG)
-8. **v1 pubblica** → implementare Opz D (relay cloud S3/R2)
-9. **Desktop launcher VPS** → integrare Opz E (Tailscale) come opzione avanzata
+1. **Notifiche batch Capitano** → ogni N posizioni `ready`, top-N per score con link + descrizione (default N=10, da rifinire)
+2. **Post-beta feedback** → valutare WhatsApp secondary (trigger: >2/10 beta tester rifiuta TG)
+3. **v1 pubblica** → Opz D (relay cloud S3/R2) come canale doc principale
+4. **Desktop launcher VPS** → integrare Opz E (Tailscale) come opzione avanzata
 
 ---
 

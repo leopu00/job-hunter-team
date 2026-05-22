@@ -15,6 +15,8 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 
 ## Test results so far
 
+> ⚠️ Numbers below come from real-world usage by the project author over several weeks, **not from a controlled test matrix**. A formal `provider × tier × persona × job-category` matrix is in the pre-launch backlog.
+
 ### 🟣 Claude Max x20 — production-ready
 
 | Metric | Value |
@@ -49,7 +51,7 @@ A single agent working at modest pace burns through this tier well before the wi
 
 ## Known issues
 
-1. **🪟 5h window vs weekly cap** — current calibration optimizes for the 5h reset, but Anthropic's real cap is weekly. Two days of intensive use can exhaust the weekly allowance even when every 5h window stayed under 95%. **Next milestone**: weekly-window calibration.
+1. **🪟 5h window vs weekly cap** — current calibration optimizes for the 5h reset, but Anthropic's real cap is weekly. Two days of intensive use can exhaust the weekly allowance even when every 5h window stayed under 95%. **Real incident observed** on 2026-05-21 (see `docs/internal/2026-05-21-halt-weekly-incident.md`). **Next milestone**: weekly-window calibration.
 
 2. **🛡️ Sentinel itself consumes tokens** — the Sentinel intervenes too often today, and each intervention costs LLM calls. This is *the* reason the €20 base tier is currently unusable. Reducing Sentinel intervention frequency is the highest-leverage optimization left.
 
@@ -69,3 +71,4 @@ These graphs are interesting on their own and will be added to this page (and li
 - [ADR-0004](adr/0004-subscription-only-no-api-keys.md) — why subscription-only
 - `agents/sentinella/sentinella.md` — the Sentinel's prompt and behavior
 - `shared/skills/` — the monitoring skills (`bridge_health`, `sentinel_health`, `usage_record`, `compute_metrics`, `rate_budget`)
+- `docs/internal/context-watchdog-spec.md` — periodic agent restart pattern (long-lived threads burning context cause silent throughput collapse; restart restores 5× pipeline velocity)
