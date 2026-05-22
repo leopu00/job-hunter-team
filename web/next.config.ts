@@ -1,6 +1,16 @@
 import type { NextConfig } from 'next'
 import createNextIntlPlugin from 'next-intl/plugin';
+import withBundleAnalyzerInit from '@next/bundle-analyzer';
 import path from 'node:path'
+
+// Bundle analyzer: attivo solo con ANALYZE=true per non rallentare le
+// build normali. `npm run analyze` da web/ apre i report HTML in
+// .next/analyze/client.html e server.html (vedi
+// docs/internal/2026-05-22-vercel-quota-exhaustion.md insight #10).
+const withBundleAnalyzer = withBundleAnalyzerInit({
+  enabled: process.env.ANALYZE === 'true',
+  openAnalyzer: false,
+});
 
 // Locale: build parte da web/ (cwd termina con /web). Vercel: build parte dalla repo root.
 const CWD = process.cwd()
@@ -92,4 +102,4 @@ const nextConfig: NextConfig = {
 
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
-export default withNextIntl(nextConfig);
+export default withBundleAnalyzer(withNextIntl(nextConfig));
