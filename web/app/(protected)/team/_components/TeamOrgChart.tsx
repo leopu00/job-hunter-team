@@ -1505,7 +1505,7 @@ export default function TeamOrgChart({
                   markerUnits="userSpaceOnUse"
                   orient="auto-start-reverse"
                 >
-                  <path d="M0 0 L10 5 L0 10 Z" fill="rgba(255,255,255,0.42)" />
+                  <path d="M0 0 L10 5 L0 10 Z" fill="var(--color-muted)" />
                 </marker>
               </defs>
 
@@ -1518,8 +1518,8 @@ export default function TeamOrgChart({
                     fill="none"
                     stroke={
                       bridgeRunning
-                        ? "rgba(255,255,255,0.28)"
-                        : "rgba(255,255,255,0.10)"
+                        ? "var(--color-muted)"
+                        : "var(--color-border)"
                     }
                     strokeWidth="1.75"
                     strokeLinecap="round"
@@ -1537,8 +1537,8 @@ export default function TeamOrgChart({
                     fill="none"
                     stroke={
                       pacingRunning
-                        ? "rgba(255,255,255,0.28)"
-                        : "rgba(255,255,255,0.10)"
+                        ? "var(--color-muted)"
+                        : "var(--color-border)"
                     }
                     strokeWidth="1.75"
                     strokeLinecap="round"
@@ -1554,7 +1554,7 @@ export default function TeamOrgChart({
                     id={arrowOverlay.sentinelToCaptainPath.id}
                     d={arrowOverlay.sentinelToCaptainPath.d}
                     fill="none"
-                    stroke="rgba(255,255,255,0.28)"
+                    stroke="var(--color-muted)"
                     strokeWidth="1.75"
                     strokeLinecap="round"
                     markerEnd="url(#team-orgchart-arrowhead)"
@@ -1575,7 +1575,7 @@ export default function TeamOrgChart({
                     id={p.id}
                     d={p.d}
                     fill="none"
-                    stroke="rgba(255,255,255,0.28)"
+                    stroke="var(--color-muted)"
                     strokeWidth="1.75"
                     strokeLinecap="round"
                     markerStart="url(#team-orgchart-arrowhead)"
@@ -1595,7 +1595,7 @@ export default function TeamOrgChart({
                     id={p.id}
                     d={p.d}
                     fill="none"
-                    stroke="rgba(255,255,255,0.22)"
+                    stroke="var(--color-dim)"
                     strokeWidth="1.35"
                     strokeLinecap="round"
                     markerStart={
@@ -1618,7 +1618,7 @@ export default function TeamOrgChart({
                     id={p.id}
                     d={p.d}
                     fill="none"
-                    stroke="rgba(255,255,255,0.18)"
+                    stroke="var(--color-border-glow)"
                     strokeWidth="1.25"
                     strokeLinecap="round"
                     markerEnd="url(#team-orgchart-arrowhead)"
