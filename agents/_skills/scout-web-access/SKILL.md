@@ -195,4 +195,4 @@ python3 /app/shared/skills/scout_workspace.py release "$MY_ID" "$SOURCE"
 - `shared/skills/scout_workspace.py`
 - `agents/scout/scout.md` § SC-05/SC-06/SC-07
 - `agents/_skills/expiration-tracking/SKILL.md` (F-4 deadline)
-- `docs/internal/2026-05-17-team-strategy-bugs.md` §F-2
+- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §F-2
