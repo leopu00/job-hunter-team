@@ -356,6 +356,37 @@ async function runMigrate() {
   });
 }
 
+async function runUnstuckPositions() {
+  // Reset positions stuck in 'writing'/'checked' da HALT/kill mid-run del
+  // boot precedente. Idempotente: zero stuck = no-op. Skip se jobs.db
+  // ancora non esiste (nessun team mai avviato, niente da pulire).
+  // Origin: docs/internal/2026-05-21-vps1-run-postmortem.md anomalia #4.
+  const JOBS_DB_PATH = `${JHT_HOME}/jobs.db`;
+  try {
+    await access(JOBS_DB_PATH);
+  } catch {
+    return;
+  }
+  pid1Log('running unstuck_positions (reset stuck writing > 2h)');
+  await new Promise((resolve) => {
+    const child = spawnLabeled('unstuck', '/usr/bin/env', [
+      'python3',
+      '/app/shared/skills/unstuck_positions.py',
+      '--apply',
+      '--include-checked',
+    ]);
+    child.on('exit', (code) => {
+      if (code === 0) pid1Log('unstuck_positions ok');
+      else pid1Log(`unstuck_positions exit ${code} — non bloccante, proseguo`);
+      resolve();
+    });
+    child.on('error', (err) => {
+      pid1Log(`unstuck_positions spawn error: ${err.message}`);
+      resolve();
+    });
+  });
+}
+
 async function dispatch() {
   const hostType = await readHostType();
   const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
@@ -364,6 +395,10 @@ async function dispatch() {
   // e il container ha bisogno dei campi delle versioni successive per far
   // funzionare provider OAuth, channels, agents.list. Idempotente.
   await runMigrate();
+
+  // Reset positions stuck in writing/checked dal boot precedente (HALT,
+  // kill mid-run). Idempotente, skip se jobs.db non esiste ancora.
+  await runUnstuckPositions();
 
   // Pair non-interattivo PRIMA di partire dashboard+daemon: cosi' il watcher
   // su cloud.json non scatta a vuoto e il daemon parte subito col token
