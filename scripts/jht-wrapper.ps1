@@ -122,7 +122,12 @@ if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
 
 # ── Dispatcher ────────────────────────────────────────────────────────────
 $Sub = if ($args.Count -ge 1) { $args[0] } else { '' }
-$Rest = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
+# BUG FIX 2026-05-22: `$args[1..1]` collapses to a scalar string (PowerShell
+# unwraps single-element arrays). When that scalar is splatted via @Rest,
+# docker exec iterates char-by-char and the inner CLI sees `cloud l o g i n`
+# instead of `cloud login`. Forziamo array via @() per garantire splat
+# corretto anche con 1 solo arg di coda.
+$Rest = if ($args.Count -gt 1) { @($args[1..($args.Count - 1)]) } else { @() }
 
 switch ($Sub) {
   { $_ -in @('up', 'start-container') } {
