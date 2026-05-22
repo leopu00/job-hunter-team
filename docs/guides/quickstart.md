@@ -67,18 +67,28 @@ The launcher handles everything through a graphical interface — no terminal re
 
 ## 📦 Path 3 — One-liner installer (CLI users)
 
+**macOS / Linux / WSL2:**
+
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
+**Windows (PowerShell, no WSL required):**
+
+```powershell
+iwr -useb https://jobhunterteam.ai/install.ps1 | iex
+```
+
+> ⚠️ Windows path requires **Docker Desktop** already installed and running. The PowerShell installer doesn't install Docker for you (Docker Desktop is an MSI with its own EULA flow — out of scope for an unattended script).
+
 The script:
 
-1. Detects your OS (macOS / Linux apt+dnf+pacman / WSL2)
-2. Installs the **Docker runtime** (Colima on macOS via Homebrew, `docker.io` on Linux/WSL2)
-3. Downloads `docker-compose.yml` to `~/.jht/runtime/`
-4. Downloads the `jht` wrapper bash to `~/.local/bin/jht`
+1. Detects your OS (macOS / Linux apt+dnf+pacman / WSL2 / Windows PowerShell)
+2. Installs the **Docker runtime** (Colima on macOS via Homebrew, `docker.io` on Linux/WSL2). On Windows: verifies Docker Desktop is running.
+3. Downloads `docker-compose.yml` to `~/.jht/runtime/` (Windows: `$env:USERPROFILE\.jht\runtime\`)
+4. Downloads the `jht` wrapper (bash on \*nix, PowerShell `jht-wrapper.ps1` on Windows) to `~/.local/bin/jht` (Windows: `$env:USERPROFILE\.local\bin\jht.ps1` + PATH registration)
 
-The wrapper is a thin host-side dispatcher (~165 lines): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/vps.md`](../internal/vps.md) for the design rationale.
+The wrapper is a thin host-side dispatcher (~230 lines bash / ~230 lines PowerShell): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/vps.md`](../internal/vps.md) for the design rationale.
 
 After install:
 
