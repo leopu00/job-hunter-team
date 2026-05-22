@@ -1,6 +1,6 @@
 // fresh
 import { createClient } from '@/lib/supabase/server'
-import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
+import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/workspace'
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
 import { aggregateTypes, type PositionTypeCount } from '@/lib/position-classifier'
@@ -24,8 +24,10 @@ import type {
 // perché vediamo TUTTE le row locali e usiamo Supabase come overlay (non
 // come fonte). In cloud puro Supabase è l'unica fonte.
 async function ws(): Promise<string | null> {
-  if (await isLocalRequest()) return getWorkspacePath()
-  return null
+  if (!(await isLocalRequest())) return null
+  const p = await getWorkspacePath()
+  if (!p || !workspaceHasDb(p)) return null
+  return p
 }
 
 // ── Dashboard Stats ────────────────────────────────────────────────
