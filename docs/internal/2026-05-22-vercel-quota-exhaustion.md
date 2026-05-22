@@ -142,6 +142,6 @@ Da notare: il sito è andato giù mentre VPS1 era già in HALT-WEEKLY (team oper
 - `BACKLOG.md` — entry da aggiungere `[INFRA-VERCEL-QUOTA]`.
 - `docs/internal/2026-05-21-halt-weekly-incident.md` — HALT-WEEKLY parallelo, sezione cause root.
 - `docs/internal/2026-05-19-sync-incident-roberthalf-redux.md` — incident precedente sync VPS↔Supabase, contesto rilevante.
-- `docs/internal/2026-05-06-launch-infra-costs.md` — proiezione costi pre-lancio (da rivedere alla luce di questi numeri reali).
+- `docs/internal/_archive/2026-05-06-launch-infra-costs.md` — proiezione costi pre-lancio (da rivedere alla luce di questi numeri reali).
 - File codice da modificare: `cli/src/commands/cloud.js`, `web/components/AgentInteraction.tsx`, `web/components/ProfileAssistantFab.tsx`.
 - Commit storia rilevante: `86333443 fix(cloud-sync): throttle last_used_at a 1h per fermare la satura Disk IO`, `7c2b090b fix(cli/cloud): push daemon default 30s -> 60s`, `a61e2f93 fix(cli/cloud): rimuovi default Commander '30' che sovrascriveva il fix 60s` — la storia di tuning del push interval dimostra che il problema "push troppo frequente" era già noto, ma è stato fixato solo lato interval, non lato payload.
