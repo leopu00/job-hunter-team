@@ -13,7 +13,6 @@ import {
 } from "@/lib/queries";
 import PositionTypesPie from "@/app/components/PositionTypesPie";
 import ScoreDistribution from "@/app/components/ScoreDistribution";
-import PipelineFunnel from "@/app/components/PipelineFunnel";
 import PipelineFlow from "@/app/components/PipelineFlow";
 // CompanyGlobe usa maplibre-gl (~1 MB parsed): caricato via wrapper Client
 // che fa dynamic import. Il wrapper e' Client Component perche'
@@ -37,6 +36,7 @@ import CloudDownloadLanding from "@/app/components/CloudDownloadLanding";
 import VpsSetupCompleteLanding from "@/app/components/VpsSetupCompleteLanding";
 import PendingMessagesCard from "@/app/components/PendingMessagesCard";
 import VpsCompanycycleCard from "@/app/components/VpsCompanycycleCard";
+import OnboardingPopup from "@/app/components/OnboardingPopup";
 
 const OnboardingWizard = dynamic(
   () => import("@/app/components/OnboardingWizard"),
@@ -284,108 +284,24 @@ export default async function DashboardCompany() {
           tua MacBook. Vedi docs/internal/vps.md § "Companycycle". */}
       <VpsCompanycycleCard visible={process.env.JHT_HOST_TYPE === "vps"} />
 
-      {/* ── Onboarding (empty state) ──────────────────────────── */}
+      {/* ── Onboarding popup (empty state) ────────────────────── */}
       {isEmpty && (
-        <div className="mb-10" style={{ animation: "fade-in 0.35s ease both" }}>
-          <div className="section-label mb-5">{t.start_here}</div>
-          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] p-6 mb-6">
-            <p className="text-[var(--color-muted)] text-[12px] mb-6 leading-relaxed">
-              {t.setup_intro}
-            </p>
-
-            <div className="flex flex-col gap-4">
-              {/* Step 1 — Configure Profile (required) */}
-              <Link
-                href="/profile"
-                className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
-                  hasProfile
-                    ? "border-[var(--color-green)]/30"
-                    : "border-[var(--color-border)] hover:border-[#00e87a55]"
-                }`}
-              >
-                <div
-                  className={`flex items-center justify-center w-8 h-8 rounded-full border text-[13px] font-bold shrink-0 mt-0.5 ${
-                    hasProfile
-                      ? "border-[var(--color-green)] text-[var(--color-green)] bg-[var(--color-green)]/10"
-                      : "border-[var(--color-green)] text-[var(--color-green)]"
-                  }`}
-                >
-                  {hasProfile ? "✓" : "1"}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div
-                    className={`text-[12px] font-bold mb-1 ${hasProfile ? "text-[var(--color-green)]" : "text-[var(--color-bright)] group-hover:text-[var(--color-green)] transition-colors"}`}
-                  >
-                    {t.step1_title}
-                    {hasProfile && (
-                      <span className="ml-2 text-[9px] font-semibold tracking-[0.12em] uppercase text-[var(--color-green)] bg-[var(--color-green)]/10 px-2 py-0.5 rounded-full border border-[var(--color-green)]/20">
-                        {t.step1_completed}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
-                    {hasProfile ? t.step1_desc_done : t.step1_desc_todo}
-                  </p>
-                </div>
-                {!hasProfile && (
-                  <span className="text-[var(--color-dim)] group-hover:text-[var(--color-green)] text-[14px] transition-colors shrink-0 mt-1">
-                    →
-                  </span>
-                )}
-              </Link>
-
-              {/* Step 2 — Start the Team */}
-              <Link
-                href="/team"
-                className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
-                  hasProfile
-                    ? "border-[var(--color-border)] hover:border-[#ffc10755]"
-                    : "border-[var(--color-border)] opacity-50 pointer-events-none"
-                }`}
-              >
-                <div
-                  className={`flex items-center justify-center w-8 h-8 rounded-full border text-[13px] font-bold shrink-0 mt-0.5 ${
-                    hasProfile
-                      ? "border-[var(--color-yellow)] text-[var(--color-yellow)]"
-                      : "border-[var(--color-dim)] text-[var(--color-dim)]"
-                  }`}
-                >
-                  2
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div
-                    className={`text-[12px] font-bold mb-1 ${hasProfile ? "text-[var(--color-bright)] group-hover:text-[var(--color-yellow)]" : "text-[var(--color-dim)]"} transition-colors`}
-                  >
-                    {t.step2_title}
-                  </div>
-                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
-                    {hasProfile ? t.step2_desc_done : t.step2_desc_todo}
-                  </p>
-                </div>
-                {hasProfile && (
-                  <span className="text-[var(--color-dim)] group-hover:text-[var(--color-yellow)] text-[14px] transition-colors shrink-0 mt-1">
-                    →
-                  </span>
-                )}
-              </Link>
-            </div>
-
-            {/* Assistant — optional helper */}
-            <div className="mt-5 pt-4 border-t border-[var(--color-border)]">
-              <Link
-                href="/team/assistente"
-                className="group flex items-center gap-3 no-underline"
-              >
-                <span className="text-[11px] text-[var(--color-dim)] group-hover:text-[var(--color-muted)] transition-colors">
-                  {t.help_text}
-                </span>
-                <span className="text-[var(--color-dim)] group-hover:text-[var(--color-muted)] text-[12px] transition-colors shrink-0">
-                  {t.open_assistant}
-                </span>
-              </Link>
-            </div>
-          </div>
-        </div>
+        <OnboardingPopup
+          hasProfile={hasProfile}
+          translations={{
+            start_here: t.start_here,
+            setup_intro: t.setup_intro,
+            step1_title: t.step1_title,
+            step1_completed: t.step1_completed,
+            step1_desc_done: t.step1_desc_done,
+            step1_desc_todo: t.step1_desc_todo,
+            step2_title: t.step2_title,
+            step2_desc_done: t.step2_desc_done,
+            step2_desc_todo: t.step2_desc_todo,
+            help_text: t.help_text,
+            open_assistant: t.open_assistant,
+          }}
+        />
       )}
 
       {/* ── Position types — pie chart in grande sopra la pipeline ── */}
@@ -410,14 +326,6 @@ export default async function DashboardCompany() {
             other: t.pt_other,
           }}
         />
-      </div>
-
-      {/* ── Pipeline density: dove si addensano le posizioni ────── */}
-      <div
-        className="mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.1s" }}
-      >
-        <PipelineFunnel steps={pipeline} title={t.pipeline_density} />
       </div>
 
       {/* ── Pipeline flow: area chart con linea ondulante ───────── */}
