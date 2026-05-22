@@ -1067,7 +1067,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   ```
   Senza body completo (privacy + size), solo metadati (mittente, lunghezza, parse_mode, esito). Da loggare anche i fallimenti (`ok:false`, status code HTTP).
 - **Effort:** ~15 minuti (5 righe shell + test su un invio singolo).
-- **Memoria correlata:** [[2026-05-20-agent-context-saturation]] (sezione "Side effect Telegram per Assistente"), [[2026-05-20-team-idle-gaps-investigation]] (i gap di idle includono buchi anche di comunicazione TG non misurabili oggi).
+- **Memoria correlata:** [[context-watchdog-spec]] (sezione "Side effect Telegram per Assistente"), [[2026-05-20-team-idle-gaps-investigation]] (i gap di idle includono buchi anche di comunicazione TG non misurabili oggi).
 
 ---
 
