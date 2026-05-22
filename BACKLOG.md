@@ -99,14 +99,15 @@ Sprint to bring the entire docs corpus + agent prompts to V5 alignment + English
 
 See also the **launcher-distributed skill discovery** punch list in [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md#%EF%B8%8F-skill-discovery--launcher-distributed-isolation-priority) for the follow-up work after the markdown moves landed (Python script colocation, distributor in `start-agent.sh`, drop the global Dockerfile loop, full-team integration test).
 
-### 🧪 Real-world tests (preliminary, undocumented)
+### 🧪 Real-world tests (preliminary, partially documented)
 
-> ⚠️ **Test results so far are anecdotal** — based on the maintainer's own job-hunting sessions on a single profile. No formal test campaign yet. **See [JHT-TEST-CAMPAIGN] in PHASE 1** — running a documented coverage matrix (provider × tier × persona) is a critical pre-launch milestone. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
+> ⚠️ **Status 2026-05-22**: tre run reali esistono ma solo uno è pubblicato come Case Study. Da promuovere a `RESULTS.md` next time — vedi [JHT-TEST-CAMPAIGN] in PHASE 1. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
 
-- ✅ Claude Max x20 — pipeline tested for weeks, ±5% usage projection precision
-- 🟡 Kimi €40 — works, ±10–15% oscillation, calibration in progress (mass-market target)
+- ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1 pubblicato)
+- 🟡 Codex ProLite × non-tech multi-dominio IT+HU — VPS1 35h run 19-21/05: 206 pos → 105 ready, critic 6.30 (dati in `docs/internal/2026-05-21-team-output-analysis.md`, **da promuovere a Case Study #2**)
+- 🟡 Kimi K2 × tech SWE — run ~17/05: 19 ready, critic ~6.0, ±10-15% oscillation (dati in `docs/internal/2026-05-17-team-strategy-bugs.md`, **da promuovere a Case Study #3**)
 - ❌ Claude Pro €20 — not viable (single agent burns the window)
-- 🔬 Codex Plus/Pro €100 — supported by runtime, benchmark in progress
+- ⬜ Kimi €40 mass-market — 2 tester aggiuntivi necessari per validare jackpot
 
 For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
@@ -221,6 +222,14 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Pipeline:** beta tester applies via [`docs/guides/BETA.md`](docs/guides/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/about/RESULTS.md`](docs/about/RESULTS.md) and updating cell status in BETA.
 - **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
 - **Priority:** 🔴 BLOCKER pre-launch
+- **🆕 Update 2026-05-22 — abbiamo 2 celle reali non ancora pubblicate:**
+  - Run **Codex ProLite × non-tech multi-dominio IT+HU** (VPS1, 35h, 19-21/05): 206 pos → 105 ready, critic medio 6.30, dati completi in [`docs/internal/2026-05-21-team-output-analysis.md`](docs/internal/2026-05-21-team-output-analysis.md) e [`2026-05-21-kimi-vs-codex-run-comparison.md`](docs/internal/2026-05-21-kimi-vs-codex-run-comparison.md).
+  - Run **Kimi K2 × tech SWE** (~17/05): 19 ready, critic ~6.0, dati in [`docs/internal/2026-05-17-team-strategy-bugs.md`](docs/internal/2026-05-17-team-strategy-bugs.md).
+- **Next time — azioni concrete (effort ~2h):**
+  1. PR: promuovere VPS1 run a **Case Study #2** in `docs/about/RESULTS.md` (template già pronto).
+  2. PR: promuovere Kimi run a **Case Study #3** in `RESULTS.md`.
+  3. Aggiornare matrice in `docs/guides/BETA.md` → 3/10 done (non più 1/10). Identificare quale cella formale coprire (probabilmente nuove righe "non-tech multi-domain × Codex ProLite" + "tech SWE × Kimi K2 Plan").
+  4. Vero gap residuo dopo i 3 PR: trovare **2 tester Kimi €40** per validare mass-market jackpot (resta priorità).
 
 ##### ✅ [JHT-FRONTEND-DASHBOARD-AUDIT] Audit residual mock data in dashboard — DONE 2026-05-19
 
