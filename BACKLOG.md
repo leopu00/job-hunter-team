@@ -99,14 +99,15 @@ Sprint to bring the entire docs corpus + agent prompts to V5 alignment + English
 
 See also the **launcher-distributed skill discovery** punch list in [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md#%EF%B8%8F-skill-discovery--launcher-distributed-isolation-priority) for the follow-up work after the markdown moves landed (Python script colocation, distributor in `start-agent.sh`, drop the global Dockerfile loop, full-team integration test).
 
-### 🧪 Real-world tests (preliminary, undocumented)
+### 🧪 Real-world tests (preliminary, partially documented)
 
-> ⚠️ **Test results so far are anecdotal** — based on the maintainer's own job-hunting sessions on a single profile. No formal test campaign yet. **See [JHT-TEST-CAMPAIGN] in PHASE 1** — running a documented coverage matrix (provider × tier × persona) is a critical pre-launch milestone. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
+> ⚠️ **Status 2026-05-22**: tre run reali esistono ma solo uno è pubblicato come Case Study. Da promuovere a `RESULTS.md` next time — vedi [JHT-TEST-CAMPAIGN] in PHASE 1. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
 
-- ✅ Claude Max x20 — pipeline tested for weeks, ±5% usage projection precision
-- 🟡 Kimi €40 — works, ±10–15% oscillation, calibration in progress (mass-market target)
+- ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1 pubblicato)
+- 🟡 Codex ProLite × non-tech multi-dominio IT+HU — VPS1 35h run 19-21/05: 206 pos → 105 ready, critic 6.30 (dati in `docs/internal/2026-05-21-vps1-run-postmortem.md`, **da promuovere a Case Study #2**)
+- 🟡 Kimi K2 × tech SWE — run ~17/05: 19 ready, critic ~6.0, ±10-15% oscillation (dati in `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`, **da promuovere a Case Study #3**)
 - ❌ Claude Pro €20 — not viable (single agent burns the window)
-- 🔬 Codex Plus/Pro €100 — supported by runtime, benchmark in progress
+- ⬜ Kimi €40 mass-market — 2 tester aggiuntivi necessari per validare jackpot
 
 For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
@@ -118,7 +119,9 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 #### 🔴 HIGH PRIORITY
 
-##### ☁️ [JHT-CLOUDSYNC-01] Cloud Sync — completion (60% done)
+##### ☁️ [JHT-CLOUDSYNC-01] Cloud Sync — completion
+
+> 📐 Architettura & stato implementazione consolidati in [`docs/internal/cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md) (living doc). Voci sotto = riepilogo BACKLOG; per dettagli decisione macro-events e incident RobertHalf vedi il doc.
 
 - ✅ `cloud_sync_tokens` schema + RLS (migration 006)
 - ✅ API CRUD `/api/cloud-sync/tokens` (GET/POST/DELETE, soft-delete)
@@ -127,10 +130,24 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ✅ CLI `jht cloud enable/status/disable` (token in `~/.jht/cloud.json` chmod 0600)
 - ✅ Endpoint `/api/cloud-sync/push` (idempotent upsert via `(user_id, legacy_id)`, mapping → UUID)
 - ✅ CLI `jht cloud push` (one-shot manual, built-in `node:sqlite`, `--dry-run`)
-- ⬜ **Periodic sync loop** (daemon/cron, diff SQLite → cloud every N min)
+- ✅ **Push delta-only** via `updated_at` cursor + halt-flag guard (commit `690534e0`, 2026-05-22)
+- ✅ **Web fallback** quando manca SQLite locale (commit `cc52acca`, 2026-05-22)
+- ✅ **`positions.location` cap ≤ 200 char** (migration 015, post-incident RobertHalf)
+- ⬜ **P0 — Rimuovere `sentinel_ticks` + `team_commands` dal push** (decisione macro-events 2026-05-20)
+- ⬜ **P0 — SQLite CHECK constraints** (migration `006_positions_check_constraints.sql`)
+- ⬜ **P0 — RLS init plan fix** (24 policy `auth.uid()` per-row)
+- ⬜ **P1 — Daemon alert** ≥3 fail consecutivi + auto-shutdown >5 fail
+- ⬜ **Periodic sync loop** ⏺ già done (push daemon attivo, cadenza tunata 30s→60s + delta-only)
 - ⬜ **Google Drive integration** (`drive.file` scope, CV/cover letter upload)
 - ⬜ **"Enable cloud sync" toggle** in desktop launcher + CLI wizard
 - ⬜ **Self-hosted Supabase docs** (BYO backend for technical users)
+
+##### 🔌 [JHT-LOCAL-NO-API] Local PC mode bypassa Supabase
+
+- **Decisione 2026-05-20** ([`cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md)): in Local PC mode (`cloud.json.enabled=false`) il web bypassa Supabase e legge direttamente `jobs.db` via `web/lib/local-queries.ts`.
+- **Done:** `local-queries.ts` esiste e funziona ([`web/lib/local-queries.ts`](web/lib/local-queries.ts), commit `cc52acca` ha esteso il fallback).
+- **Pending:** `web/lib/queries.ts` deve switchare su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx` per consumi residui.
+- **Priority:** 🟡 P1 (privacy-first feature + sblocca path Local PC mode senza touch Supabase).
 
 ##### 🟡 [JHT-MONITORING-WEEKLY] Weekly window calibration — data-layer DONE 2026-05-19
 
@@ -221,6 +238,14 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Pipeline:** beta tester applies via [`docs/guides/BETA.md`](docs/guides/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/about/RESULTS.md`](docs/about/RESULTS.md) and updating cell status in BETA.
 - **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
 - **Priority:** 🔴 BLOCKER pre-launch
+- **🆕 Update 2026-05-22 — abbiamo 2 celle reali non ancora pubblicate:**
+  - Run **Codex ProLite × non-tech multi-dominio IT+HU** (VPS1, 35h, 19-21/05): 206 pos → 105 ready, critic medio 6.30, dati completi in [`docs/internal/2026-05-21-vps1-run-postmortem.md`](docs/internal/2026-05-21-vps1-run-postmortem.md) (consolida team-idle-gaps + team-output-analysis + kimi-vs-codex).
+  - Run **Kimi K2 × tech SWE** (~17/05): 19 ready, critic ~6.0, dati in [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md).
+- **Next time — azioni concrete (effort ~2h):**
+  1. PR: promuovere VPS1 run a **Case Study #2** in `docs/about/RESULTS.md` (template già pronto).
+  2. PR: promuovere Kimi run a **Case Study #3** in `RESULTS.md`.
+  3. Aggiornare matrice in `docs/guides/BETA.md` → 3/10 done (non più 1/10). Identificare quale cella formale coprire (probabilmente nuove righe "non-tech multi-domain × Codex ProLite" + "tech SWE × Kimi K2 Plan").
+  4. Vero gap residuo dopo i 3 PR: trovare **2 tester Kimi €40** per validare mass-market jackpot (resta priorità).
 
 ##### ✅ [JHT-FRONTEND-DASHBOARD-AUDIT] Audit residual mock data in dashboard — DONE 2026-05-19
 
@@ -804,7 +829,7 @@ All 5 tasks from 04-22 have been implemented:
 ### ✅ Team strategy bugs sprint 2026-05-17/18 (13 bug + 3 feature chiusi)
 
 Dettaglio completo + riepilogo numerico in
-[`docs/internal/2026-05-17-team-strategy-bugs.md`](docs/internal/2026-05-17-team-strategy-bugs.md)
+[`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md)
 e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-18-fix-effectiveness-review/).
 
 **Bug strategici / comportamentali** (tutti FIXED, commit specifico per ognuno):
@@ -1058,7 +1083,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   ```
   Senza body completo (privacy + size), solo metadati (mittente, lunghezza, parse_mode, esito). Da loggare anche i fallimenti (`ok:false`, status code HTTP).
 - **Effort:** ~15 minuti (5 righe shell + test su un invio singolo).
-- **Memoria correlata:** [[2026-05-20-agent-context-saturation]] (sezione "Side effect Telegram per Assistente"), [[2026-05-20-team-idle-gaps-investigation]] (i gap di idle includono buchi anche di comunicazione TG non misurabili oggi).
+- **Memoria correlata:** [[context-watchdog-spec]] (sezione "Side effect Telegram per Assistente"), [[2026-05-21-vps1-run-postmortem]] (i gap di idle includono buchi anche di comunicazione TG non misurabili oggi).
 
 ---
 
@@ -1091,7 +1116,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   - 🥉 **Telemetria pre-allarme**: notifica Telegram all'utente "weekly al 50%, mancano X giorni al reset" così l'utente decide se fermare/rallentare. Banale (1 cron + 1 send).
 - **Effort:** dial weekly nella Sentinella ~3-5h di codice (logica + integrazione + test). Mode marathon ~1h. Telemetria pre-allarme ~30 min.
 - **Priorità:** **P0 per scenario VPS 24/7** che è il target dichiarato del setup beta (vedi sezione "PHASE 3 — Multi-Provider Cloud Provisioning"). Senza fix, lo scenario VPS è praticamente inutilizzabile per più di 2-3 giorni.
-- **Memoria correlata:** [[2026-05-20-team-idle-gaps-investigation]] (anche se il bottleneck immediato lì era diverso), [[project_no_cv_mode_active_vps1]] (NO CV ha ridotto temporaneamente il rate, mascherando il problema; quando si torna in modalità CV il consumo accelera ancora).
+- **Memoria correlata:** [[2026-05-21-vps1-run-postmortem]] (anche se il bottleneck immediato lì era diverso), [[project_no_cv_mode_active_vps1]] (NO CV ha ridotto temporaneamente il rate, mascherando il problema; quando si torna in modalità CV il consumo accelera ancora).
 
 ---
 

@@ -8,26 +8,26 @@
     "dev:host:3002": "JHT_SHELL_VIA=docker:jht next dev -p 3002",
     "dev:cloud:3003": "next dev -p 3003",
     "build": "next build",
+    "analyze": "ANALYZE=true next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.9.0",
+    "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.99.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
-    "better-sqlite3": "^12.8.0",
+    "better-sqlite3": "^12.10.0",
     "ipaddr.js": "^2.2.0",
     "js-yaml": "^4.1.1",
     "maplibre-gl": "^5.24.0",
     "next": "^16.2.6",
     "next-intl": "^4.9.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-globe.gl": "^2.38.0",
-    "three": "^0.184.0"
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.2.6",
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
     "@types/js-yaml": "^4.0.9",
