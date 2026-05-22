@@ -129,19 +129,26 @@ The `critic-loop` skill records each round's score; here you persist the verdict
 
 ```bash
 # Final UPSERT on the application — verdict + score + ready/draft promotion
+# `--reviewed-by` must be set to the LAST Critic's session id you spawned
+# (e.g. CRITICO-S3 if round 3 was the final one). Without it, `reviewed_by`
+# stays NULL — observed 95% null pre-2026-05-22 (vps1-run-postmortem #1).
+LAST_CRITIC="${LAST_CRITIC:-CRITICO-S3}"   # set by critic-loop on round spawn
+
 if [[ <final_verdict> == "PASS" ]]; then
   python3 /app/shared/skills/db_update.py application "$ID" \
     --critic-verdict PASS \
     --critic-score <X.X> \
     --critic-round 3 \
     --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]" \
+    --reviewed-by "$LAST_CRITIC" \
     --status ready
 else
   python3 /app/shared/skills/db_update.py application "$ID" \
     --critic-verdict <NEEDS_WORK|REJECT> \
     --critic-score <X.X> \
     --critic-round 3 \
-    --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]"
+    --critic-notes "Round 1: A.A, Round 2: B.B, Round 3: X.X. Gap: [...]" \
+    --reviewed-by "$LAST_CRITIC"
   # status resta 'draft' — l'application non è pronta per l'utente.
 fi
 
