@@ -79,4 +79,4 @@ Da fixare quando saremo fuori HALT (preferibilmente prima del prossimo team prod
 
 - `BACKLOG.md` — entry `[PACING-WEEKLY-EXHAUSTION]` (P0).
 - `docs/internal/2026-05-20-team-idle-gaps-investigation.md` — analisi gap pre-incident.
-- `docs/internal/2026-05-20-agent-context-saturation.md` — PoC restart agenti (pattern usato per FASE 1 del Dottore).
+- `docs/internal/context-watchdog-spec.md` — PoC restart agenti (pattern usato per FASE 1 del Dottore).
