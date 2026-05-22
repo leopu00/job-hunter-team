@@ -96,6 +96,13 @@ const nextConfig: NextConfig = {
           { key: 'cache-control', value: 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400' },
         ],
       },
+      {
+        source: '/install.ps1',
+        headers: [
+          { key: 'content-type', value: 'text/plain; charset=utf-8' },
+          { key: 'cache-control', value: 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400' },
+        ],
+      },
     ]
   },
 }
