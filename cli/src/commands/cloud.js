@@ -854,6 +854,15 @@ async function handleDaemon(options) {
   // (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
   // ogni 10 tick per evitare spam ma confermare che il daemon e' vivo.
   let haltSkipCount = 0;
+  // Consecutive failure tracking: dopo 3 fail consecutivi alziamo un warning
+  // visibile; dopo MAX_CONSECUTIVE_FAILS auto-shutdown del daemon.
+  // Origin: incident RobertHalf 2026-05-19 — daemon ha retentato in loop
+  // silenzioso per 1h, saturando Supabase pool fino al 504 user-facing.
+  // Meglio fermarsi e chiedere intervento manuale che bruciare quota cloud
+  // a vuoto (vedi docs/internal/cloud-sync-architecture.md P1 #4).
+  const MAX_CONSECUTIVE_FAILS = 5;
+  const WARN_AT = 3;
+  let consecutiveFails = 0;
   // Push iniziale immediato: se il container era spento per un po' e gli
   // agenti hanno scritto offline, il primo tick deve flushare subito.
   while (running) {
@@ -867,6 +876,7 @@ async function handleDaemon(options) {
         console.log(pc.green(`  HALT-WEEKLY rimosso, riprendo push normali.`));
         haltSkipCount = 0;
       }
+      let tickFailed = false;
       try {
         // Reset di process.exitCode tra un tick e l'altro: handlePush lo
         // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
@@ -875,11 +885,42 @@ async function handleDaemon(options) {
         process.exitCode = 0;
         await handlePush({});
         if (process.exitCode === 1) {
-          // Errore di push: log gia' fatto da handlePush, continuiamo.
+          tickFailed = true;
         }
         process.exitCode = prev;
       } catch (err) {
         console.error(pc.yellow(`  daemon tick error: ${err.message}`));
+        tickFailed = true;
+      }
+
+      if (tickFailed) {
+        consecutiveFails += 1;
+        if (consecutiveFails === WARN_AT) {
+          console.error(
+            pc.yellow(
+              `  ⚠ ${WARN_AT} push consecutivi falliti. ` +
+              `Probabile row corrotta o saturazione Supabase. ` +
+              `Verifica logs container e dashboard Supabase. ` +
+              `Auto-shutdown a ${MAX_CONSECUTIVE_FAILS} fail consecutivi.`
+            )
+          );
+        }
+        if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
+          console.error(
+            pc.red(
+              `  ✗ ${MAX_CONSECUTIVE_FAILS} push consecutivi falliti, ` +
+              `auto-shutdown daemon per evitare loop saturante Supabase. ` +
+              `Investiga la causa (vedi docs/internal/cloud-sync-architecture.md ` +
+              `incident RobertHalf 2026-05-19) e rilancia il daemon manualmente.`
+            )
+          );
+          running = false;
+          process.exitCode = 1;
+          break;
+        }
+      } else if (consecutiveFails > 0) {
+        console.log(pc.green(`  push ok dopo ${consecutiveFails} fail, contatore resettato.`));
+        consecutiveFails = 0;
       }
     }
     if (!running) break;
