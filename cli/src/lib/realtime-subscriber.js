@@ -26,11 +26,13 @@
 
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
+const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 const JHT_BIN = '/app/cli/bin/jht.js';
 
 const POLL_INTERVAL_MS_DEFAULT = 5000;
@@ -235,7 +237,28 @@ export async function runRealtimeSubscriber() {
     log('info', 'heartbeat.alive');
   }, 5 * 60 * 1000);
 
+  // HALT-WEEKLY guard: come per `cloud daemon` (vedi handleDaemon in
+  // cli/src/commands/cloud.js), saltiamo il poll quando il flag e' attivo.
+  // Ogni poll = 1 Function Invocation Vercel + Postgres roundtrip; durante
+  // HALT-WEEKLY (team operativi killati) non c'e' nulla da fare.
+  // Vedi docs/internal/2026-05-21-halt-weekly-incident.md +
+  // docs/internal/2026-05-22-vercel-quota-exhaustion.md.
+  let haltLogTick = 0;
   while (!shuttingDown) {
+    if (existsSync(WEEKLY_HALT_FLAG)) {
+      if (haltLogTick % 60 === 0) {
+        // log ogni 60 cicli (~5min @ 5s default) per non spammare
+        log('info', 'poll.skipped', { reason: 'weekly-halt-flag active' });
+      }
+      haltLogTick += 1;
+      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS_DEFAULT));
+      continue;
+    }
+    if (haltLogTick > 0) {
+      log('info', 'poll.resumed', { reason: 'weekly-halt-flag removed' });
+      haltLogTick = 0;
+    }
+
     let backoff = POLL_INTERVAL_MS_DEFAULT;
     try {
       const r = await apiGet(baseUrl, token, '/api/cloud-sync/team-commands?status=pending&limit=20');
