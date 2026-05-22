@@ -86,7 +86,7 @@ Observed in windows W3-W6 (median peak proj 57-61%): Scouts produce ~3 positions
 |---------------------------------------------------------|-----------------------------|----------------------------------------------------------------------------------------------|
 | `0 new, 0 checked, 0 scored` (empty)                    | head: no material           | start **Scouts only**, even 2 in parallel. No Analyst/Scorer/Writer (no input).              |
 | many `new`, few `checked`                               | Analyst undersized          | spawn `analista 2`. Do **not** add Scouts (already material; slow them down if needed).      |
-| many `checked`, few `scored`                            | Scorer slow                 | spawn `scorer 1` if missing; one is usually enough (Scorer is light)                         |
+| many `checked`, few `scored`                            | Scorer slow                 | spawn `scorer 1` if missing; if already up + queue `checked` > 20 for ≥2 ticks → spawn `scorer 2` (1 used to be enough but vps1 run 2026-05-21 ran 180 scoring on solo scorer = bottleneck) |
 | many `scored ≥ 50`                                      | needs writing capacity      | Writer. Caveat: 1 active Writer + Critic can saturate the budget alone. Spawn 1, observe 2-3 ticks, then decide. |
 | Writers saturated, queue `score ≥ 50` not draining      | plan capacity limit         | DO NOT spawn extra Writers — risk of instant `RALLENTA`. Slow Scouts instead to stop feeding the queue. |
 | low `scored` queue BUT many `writing` in progress       | Writers busy & producing    | do nothing. Wait `writing → ready`.                                                          |
@@ -96,7 +96,7 @@ Observed in windows W3-W6 (median peak proj 57-61%): Scouts produce ~3 positions
 ## Scaling gates (pacing rules)
 
 - **1 spawn per Sentinel tick (~5 min).** Spawn → kick-off → wait next `[BRIDGE TICK]` → next decision. Never 5 in a row.
-- **Max per role**: 2 Scout, 2 Analyst, 1 Scorer, 3 Writer, 1 Critic (the Critic is spawned by the Writer, you do not touch it).
+- **Max per role**: 2 Scout, 2 Analyst, **2 Scorer** (raised from 1 after vps1 run 2026-05-21 showed solo scorer = 180 scoring bottleneck — vps1-postmortem anomalia #6), 3 Writer, 1 Critic (the Critic is spawned by the Writer, you do not touch it).
 - **Pre-spawn check**: `tmux has-session -t <SESSION> 2>/dev/null && echo ATTIVO` — never blind-spawn over an existing session.
 - **Boot order**: Scouts + Analyst *first*, Scorer + Writers *after*. Never in parallel.
 
