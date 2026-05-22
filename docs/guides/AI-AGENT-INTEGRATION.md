@@ -26,7 +26,9 @@ If a feature requires opening the web dashboard or the Desktop app to be configu
 
 ## Setup runbook (Path 3 — no Desktop app)
 
-> **Audience**: an AI agent (Claude Code / OpenClaw / Codex / Cursor) running on the user's machine. Treat this as an executable script: each step is a concrete CLI invocation. Stop and ask the user only at the points marked **ASK USER**.
+> **Audience**: an AI agent (Claude Code / OpenClaw / Codex / Cursor) running on the user's machine. Treat this as an executable script: each step is a concrete CLI invocation. **STOP AND ASK the user at every step marked `**ASK USER**`** — these are real decisions only the user can make (cost, privacy, hardware). Don't pre-decide them based on the prompt unless the user has explicitly answered the question upfront.
+>
+> When asking, **present the options with pros/cons inline** as listed below. The user is often non-technical and needs the trade-off to choose.
 >
 > See `docs/internal/onboarding-flow.md` for the design rationale (Path 1 / 2 / 3 split, lock decisions).
 
@@ -65,25 +67,49 @@ iwr -useb https://jobhunterteam.ai/install.ps1 | iex
 >
 > The agent should NOT fall back to `curl install.sh | bash` via WSL: that path hangs silently on `sudo` prompts when stdin is a pipe (known issue). Use the native `install.ps1` path on Windows.
 
-### 2 — **ASK USER**: location
+### 2 — **ASK USER**: where does the team run?
 
-```
-Local PC   → tutto sul Mac/Win/Linux dell'utente, niente costi cloud
-VPS Hetzner → €5–10/mese, sempre on, indipendente dal PC
-```
+Present these 3 options with the trade-offs:
 
-Persist the choice:
+| Mode | Cost | Always on | PC noise / RAM | Setup time |
+|---|---|---|---|---|
+| 🖥️ **Local PC** (this machine) | free | only when PC is on | 8 agents = ~3-4 GB RAM, fans audible | < 5 min |
+| 🏠 **Dedicated PC at home** | hardware already owned | yes (24/7) | none for you | < 5 min (same as Local) |
+| ☁️ **VPS** (Hetzner CPX22 €9.75/mo) | ~€10/mo while job-hunting | yes (24/7) | zero — runs on cloud | 15-30 min (SSH key + provisioning) |
+
+**Rule of thumb to suggest**:
+- "I'll only use it during work breaks / nights" → Local PC.
+- "I want to find a job in the background while doing other things" → VPS (or Dedicated PC if you already have one collecting dust).
+- "I want to try it for 1-2 weeks before deciding" → Local PC (no monthly cost).
+
+Persist the choice once the user picks:
 
 ```bash
 mkdir -p ~/.jht
 echo "JHT_HOST_TYPE=local" > ~/.jht/host.env   # or 'vps'
 ```
 
-If `vps`: stop and switch to the VPS provisioning runbook in `docs/guides/VPS-SETUP.md`. The agent can drive that flow too, but it is a superset (SSH key, Hetzner API token, `install.sh --pairing-token`). For fully autonomous provisioning (agent creates the server itself via `hcloud`), see [§Advanced — Autonomous VPS provisioning](#advanced--autonomous-vps-provisioning-with-hcloud) below.
+If the user picks `vps`: stop this runbook and switch to `docs/guides/VPS-SETUP.md`. It's a superset that handles SSH key + Hetzner provisioning + pairing token. For fully autonomous provisioning (agent creates the server itself via `hcloud`), see [§Advanced — Autonomous VPS provisioning](#advanced--autonomous-vps-provisioning-with-hcloud) below.
 
-### 3 — **ASK USER**: cloud sync (opt-in for Local, mandatory for VPS)
+If `local` and the user is on **macOS**, ask about runtime:
 
-For **Local**: ask whether to enable cloud sync. If yes, run the device-flow pairing — it opens a browser for the user to confirm:
+| Runtime | Pros | Cons |
+|---|---|---|
+| 🐳 **Docker Desktop** | Familiar GUI, auto-update, integrates with Kubernetes | Closed-source, ~$5/mo for business, ~2GB RAM idle |
+| 🦙 **Colima** | Free, open-source, lightweight (~500MB RAM idle), CLI-driven | No GUI, no auto-update |
+
+The installer auto-detects which one is running. The user can switch later by stopping one and starting the other — JHT only cares that `docker info` works.
+
+### 3 — **ASK USER**: cloud sync — yes or no?
+
+| Choice | What it does | Pros | Cons |
+|---|---|---|---|
+| ✅ **Yes** (recommended) | Local SQLite mirrored to Supabase, accessible via `jobhunterteam.ai` web dashboard | See jobs/scores/CVs from any browser, multi-device, share with mentor | Requires GitHub/Google sign-up at jobhunterteam.ai, ~50 MB metadata uploaded per week, CVs stay local |
+| ❌ **No** | Fully local, no cloud touched | Maximum privacy, zero external dependency | Dashboard only at `localhost:3000`, no remote access |
+
+For **Local PC** the choice is real (default: ask). For **VPS** cloud sync is structurally required (the user can't be at the VPS terminal all day, the web dashboard is the primary interface).
+
+If yes, run the device-flow pairing — it opens a browser for the user to confirm:
 
 ```bash
 jht cloud login
@@ -91,7 +117,31 @@ jht cloud login
 # After the user confirms, the CLI saves ~/.jht/cloud.json (mode 0600).
 ```
 
-For **VPS**: cloud sync is structurally required. The recommended path is the desktop pairing-token (see `docs/internal/vps.md` § "Identità unificata"). If the agent is driving without the desktop, fall back to `jht cloud login` from inside the VPS shell.
+For **VPS**: the recommended path is the desktop pairing-token (see `docs/internal/vps.md` § "Identità unificata"). If the agent is driving without the desktop, fall back to `jht cloud login` from inside the VPS shell.
+
+### 3.5 — **ASK USER**: which LLM provider / subscription?
+
+**JHT runs on a dedicated LLM subscription, not pay-per-use API.** The user must have (or buy) one of:
+
+| Provider | Plan | Cost/month | Best for | Status |
+|---|---|---|---|---|
+| 🟠 **Claude** | Max x20 | ~€200 | Production-ready, best precision, lowest token oscillation | ✅ Recommended for serious job hunt |
+| 🔵 **Codex** (OpenAI) | Plus or Pro | ~€100 | Fast iteration, ok precision | 🔬 Supported, benchmarks in progress |
+| 🌙 **Kimi** (Moonshot) | Pro | ~€40 | Mass-market price, "good enough" for most cases | 🎯 Target tier for cost-sensitive users |
+
+> ⚠️ **The subscription must be dedicated to JHT** — not the same account the user uses for personal AI. A shared account drains the same weekly quota twice and the team hits rate limits unexpectedly.
+
+The wizard (step 4 below) installs the matching CLI (`@anthropic-ai/claude-code` / `@openai/codex` / `kimi-cli`) and runs the device-flow OAuth.
+
+### 3.6 — **ASK USER**: language (en / it / hu)
+
+| Lang | Status |
+|---|---|
+| 🇬🇧 **en** | Default, agents communicate in English |
+| 🇮🇹 **it** | Full translation, well-tested (maintainer's locale) |
+| 🇭🇺 **hu** | Partial, beta-quality |
+
+The choice affects all user-facing messages (web dashboard, Telegram bots, agent narration). Job descriptions are kept in their original language regardless.
 
 ### 4 — Run the interactive wizard
 
