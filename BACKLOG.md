@@ -307,6 +307,28 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Linked:** [JHT-VPS-VALIDATE] (output `docs/VPS-SETUP.md`) feeds the "Mode 3 manual" branch; [JHT-VPS-FRIENDLY] feeds the "Mode 3 wizard" branch.
 - **Provider research feeder:** [`docs/internal/vps.md`](docs/internal/vps.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
 
+##### 🪟 [JHT-CLI-WIN-NATIVE] Windows-native CLI (no WSL required) ⬜ NEW 2026-05-22
+
+- **Problem:** scoperto durante E2E test del prompt universale AI-agent (2026-05-22). `scripts/install.sh` + `scripts/jht-wrapper.sh` sono bash-only. Su Windows un agent AI è forzato a girare via WSL, ma `curl install.sh | bash` blocca in modo silenzioso su `sudo` (stdin = pipe, non TTY) anche quando Docker è già presente via Docker Desktop. Risultato: utente Windows tech senza WSL pre-configurata non ha un path CLI funzionante.
+- **Stato attuale paths per Windows:**
+  - ✅ Desktop launcher (`.exe`, Path 2 quickstart) — funziona ma non AI-drivable
+  - ❌ `install.ps1` — non esiste
+  - ❌ `npm install -g jht-cli` — `cli/package.json` ha `"private": true`, mai pubblicato
+  - ⚠️ Path 4 (clone repo + `docker compose`) — funziona ma "contributor mode", non per utenti finali
+  - ⚠️ WSL + install.sh — hang su sudo prompt quando lanciato non-interattivo
+- **Conseguenze:** la "universal AI-agent prompt" promessa in `docs/guides/AI-AGENT-INTEGRATION.md` non funziona end-to-end su Windows. Riduce significativamente l'audience JHT (Windows è ~70% del market consumer).
+- **Approccio scelto:** port host-thin del wrapper bash → PowerShell + script install.ps1. Mantiene invariante architetturale "no Node sul host" (alternativa `npm publish` scartata: rompe l'invariante).
+- **Subtask:**
+  1. **[JHT-CLI-WIN-WRAPPER]** Port `scripts/jht-wrapper.sh` (274 righe) → `scripts/jht-wrapper.ps1`. Stesso dispatcher: lifecycle (`up`/`down`/`restart`/`logs`/`status`) via `docker compose`, tutto il resto via `docker exec jht node /app/cli/bin/jht.js`.
+  2. **[JHT-CLI-WIN-INSTALL]** Port `scripts/install.sh` (904 righe) → `scripts/install.ps1`. Detect Docker Desktop installato, no apt/sudo, scarica `docker-compose.yml` + `jht-wrapper.ps1` in `$env:USERPROFILE\.jht\runtime\`, registra `jht` su PATH via `$env:USERPROFILE\.local\bin\jht.ps1` o equivalente Windows.
+  3. **[JHT-CLI-WIN-DOC]** Aggiornare `docs/guides/quickstart.md` Path 3 + `AI-AGENT-INTEGRATION.md` con istruzioni Windows (`iwr | iex` invece di `curl | bash`).
+  4. **[JHT-CLI-WIN-E2E]** Rifare E2E test con agente AI (Claude Code) su Windows native — il test del 2026-05-22 va replicato per validare il fix.
+- **Discarded alternatives:**
+  - `npm publish` del CLI: più semplice ma richiede Node sul host (~50MB) + rompe host-thin design. Forse Phase 2 se manteniamo entrambi.
+  - "Solo Desktop su Windows": copre non-tech ma blocca tutto il use-case AI-agent universal prompt.
+- **Acceptance:** `iwr -useb https://jobhunterteam.ai/install.ps1 | iex` su Windows 11 vergine completa in <5min senza prompt sudo/UAC bloccanti. Successivo `jht setup` interattivo funziona uguale a Linux/macOS. Universal AI prompt completa il flow end-to-end senza menzione di WSL.
+- **Priority:** 🔴 HIGH — blocca path AI-agent universal su Windows (= grosso pezzo della audience target).
+
 #### 🟡 MEDIUM PRIORITY
 
 ##### ✅ [JHT-BACKEND-01] `db_to_supabase.py` — push agent results to cloud — DONE
