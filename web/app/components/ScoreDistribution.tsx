@@ -119,15 +119,6 @@ export default function ScoreDistribution({
     };
   }, [scores, BINS, binStep, maxScore, decimals]);
 
-  if (stats.n === 0) {
-    return (
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5">
-        <div className="section-label mb-3">{title}</div>
-        <p className="text-[11px] text-[var(--color-dim)]">{emptyLabel}</p>
-      </div>
-    );
-  }
-
   const chartW = W - PAD_LEFT - PAD_RIGHT;
   const chartH = H - PAD_TOP - PAD_BOTTOM;
   const barW = chartW / stats.bins.length;
@@ -258,28 +249,30 @@ export default function ScoreDistribution({
         })}
 
         {/* Linea verticale: media */}
-        <g>
-          <line
-            x1={sx(stats.avg)}
-            x2={sx(stats.avg)}
-            y1={PAD_TOP}
-            y2={PAD_TOP + chartH}
-            stroke="var(--color-bright)"
-            strokeWidth={1.5}
-            strokeDasharray="3 3"
-          />
-          <text
-            x={sx(stats.avg)}
-            y={PAD_TOP - 2}
-            fontSize={9}
-            textAnchor="middle"
-            fill="var(--color-bright)"
-            fontWeight={700}
-            style={{ fontFamily: "inherit" }}
-          >
-            avg {stats.avg}
-          </text>
-        </g>
+        {stats.n > 0 && (
+          <g>
+            <line
+              x1={sx(stats.avg)}
+              x2={sx(stats.avg)}
+              y1={PAD_TOP}
+              y2={PAD_TOP + chartH}
+              stroke="var(--color-bright)"
+              strokeWidth={1.5}
+              strokeDasharray="3 3"
+            />
+            <text
+              x={sx(stats.avg)}
+              y={PAD_TOP - 2}
+              fontSize={9}
+              textAnchor="middle"
+              fill="var(--color-bright)"
+              fontWeight={700}
+              style={{ fontFamily: "inherit" }}
+            >
+              avg {stats.avg}
+            </text>
+          </g>
+        )}
 
         {/* Linea verticale: soglia ready */}
         {thresholdReady != null && (
