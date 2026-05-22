@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-I 3 bug bloccanti dello startup VPS documentati il 2026-05-20 (`docs/internal/2026-05-20-vps-bootstrap-bugs.md`) sono stati **risolti e validati end-to-end** su una VPS Hetzner CPX22 vergine il 2026-05-21.
+I 3 bug bloccanti dello startup VPS documentati il 2026-05-20 (`docs/internal/_archive/2026-05-20-vps-bootstrap-bugs.md`) sono stati **risolti e validati end-to-end** su una VPS Hetzner CPX22 vergine il 2026-05-21.
 
 - Commit fix: `79f63324` su `master`
 - Image GHCR aggiornata: `ghcr.io/leopu00/jht:latest` (build CI `26235170426`)
@@ -173,7 +173,7 @@ Causa: con `BatchMode=yes` OpenSSH non chiede la passphrase, ma genera comunque 
 
 ## Stato deferred (non fixati ora)
 
-Dal doc originale `2026-05-20-vps-bootstrap-bugs.md`:
+Dal doc originale `_archive/2026-05-20-vps-bootstrap-bugs.md`:
 
 - **Bug #4/#5** (`procps`, `pkill`, `sqlite3` mancanti in image) — debug-only, non bloccanti per startup. Trade-off image size ~5 MB vs debugging speed.
 - **Bug #6** (`jobs.db` non creato al boot → log spam daemon) — cosmetico, auto-risolve al primo INSERT da agente. `jht db init` non esiste come comando.
@@ -182,7 +182,7 @@ Da considerare in una pulizia successiva (non urgente).
 
 ## Riferimenti
 
-- Bug originali: `docs/internal/2026-05-20-vps-bootstrap-bugs.md`
+- Bug originali: `docs/internal/_archive/2026-05-20-vps-bootstrap-bugs.md`
 - Commit fix: `79f63324`
 - Test VPS: `49.13.5.51` (server ID 132244720)
 - CI build: `gh run view 26235170426`
