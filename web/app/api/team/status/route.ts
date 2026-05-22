@@ -85,7 +85,18 @@ export async function GET() {
       session: prefix,
       active: lastFor[prefix.toLowerCase()] === "start",
     }));
-    return NextResponse.json({ agents, isLocalhost: false, remote: true });
+    // Cache 10s: lo stato active si infersce dallo storico team_commands
+    // (ultimo Start/Stop). Cambia raramente: 10s di cache browser sono
+    // accettabili per UX e tagliano significativamente Function
+    // Invocations Vercel + roundtrip Postgres.
+    return NextResponse.json(
+      { agents, isLocalhost: false, remote: true },
+      {
+        headers: {
+          "cache-control": "private, max-age=10, stale-while-revalidate=60",
+        },
+      },
+    );
   }
   try {
     const { stdout } = await runBash(
@@ -98,7 +109,13 @@ export async function GET() {
       .filter(Boolean)
       .map((a) => ({ ...a, active: true }));
 
-    return NextResponse.json({ agents, isLocalhost: true });
+    // Locale: cache 3s. tmux list-sessions e' veloce ma il polling
+    // dashboard (5s default post-fix 542a94f2) puo' comunque trarne
+    // beneficio se l'utente naviga tra schede.
+    return NextResponse.json(
+      { agents, isLocalhost: true },
+      { headers: { "cache-control": "private, max-age=3" } },
+    );
   } catch {
     return NextResponse.json({ agents: [], isLocalhost: false });
   }
