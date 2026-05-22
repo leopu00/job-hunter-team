@@ -187,14 +187,21 @@ function Get-RuntimeFiles {
 
   # Shim CMD per chi usa cmd.exe invece di pwsh. Permette `jht <args>` senza
   # estensione .ps1, con bypass della ExecutionPolicy default Restricted.
+  # Fallback su powershell.exe (PS 5.1, ships con Windows) se pwsh (PS 7+)
+  # non e' installato — feedback master#28 cross-review d87890f8.
   if (-not $DryRun) {
     $shimContent = @"
 @echo off
-pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
-if errorlevel 1 exit /b %errorlevel%
+where pwsh.exe >nul 2>&1
+if %errorlevel%==0 (
+  pwsh -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
+) else (
+  powershell -NoLogo -ExecutionPolicy Bypass -File "%~dp0jht.ps1" %*
+)
+exit /b %errorlevel%
 "@
     Set-Content -Path $shimDest -Value $shimContent -Encoding ASCII
-    Write-Ok "shim CMD: $shimDest"
+    Write-Ok "shim CMD: $shimDest (pwsh + powershell.exe fallback)"
   } else {
     Write-Dry "Set-Content $shimDest (CMD shim)"
   }
