@@ -105,7 +105,7 @@ See also the **launcher-distributed skill discovery** punch list in [`docs/about
 
 - ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1 pubblicato)
 - 🟡 Codex ProLite × non-tech multi-dominio IT+HU — VPS1 35h run 19-21/05: 206 pos → 105 ready, critic 6.30 (dati in `docs/internal/2026-05-21-team-output-analysis.md`, **da promuovere a Case Study #2**)
-- 🟡 Kimi K2 × tech SWE — run ~17/05: 19 ready, critic ~6.0, ±10-15% oscillation (dati in `docs/internal/2026-05-17-team-strategy-bugs.md`, **da promuovere a Case Study #3**)
+- 🟡 Kimi K2 × tech SWE — run ~17/05: 19 ready, critic ~6.0, ±10-15% oscillation (dati in `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`, **da promuovere a Case Study #3**)
 - ❌ Claude Pro €20 — not viable (single agent burns the window)
 - ⬜ Kimi €40 mass-market — 2 tester aggiuntivi necessari per validare jackpot
 
@@ -224,7 +224,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Priority:** 🔴 BLOCKER pre-launch
 - **🆕 Update 2026-05-22 — abbiamo 2 celle reali non ancora pubblicate:**
   - Run **Codex ProLite × non-tech multi-dominio IT+HU** (VPS1, 35h, 19-21/05): 206 pos → 105 ready, critic medio 6.30, dati completi in [`docs/internal/2026-05-21-team-output-analysis.md`](docs/internal/2026-05-21-team-output-analysis.md) e [`2026-05-21-kimi-vs-codex-run-comparison.md`](docs/internal/2026-05-21-kimi-vs-codex-run-comparison.md).
-  - Run **Kimi K2 × tech SWE** (~17/05): 19 ready, critic ~6.0, dati in [`docs/internal/2026-05-17-team-strategy-bugs.md`](docs/internal/2026-05-17-team-strategy-bugs.md).
+  - Run **Kimi K2 × tech SWE** (~17/05): 19 ready, critic ~6.0, dati in [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md).
 - **Next time — azioni concrete (effort ~2h):**
   1. PR: promuovere VPS1 run a **Case Study #2** in `docs/about/RESULTS.md` (template già pronto).
   2. PR: promuovere Kimi run a **Case Study #3** in `RESULTS.md`.
@@ -813,7 +813,7 @@ All 5 tasks from 04-22 have been implemented:
 ### ✅ Team strategy bugs sprint 2026-05-17/18 (13 bug + 3 feature chiusi)
 
 Dettaglio completo + riepilogo numerico in
-[`docs/internal/2026-05-17-team-strategy-bugs.md`](docs/internal/2026-05-17-team-strategy-bugs.md)
+[`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md)
 e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-18-fix-effectiveness-review/).
 
 **Bug strategici / comportamentali** (tutti FIXED, commit specifico per ognuno):
