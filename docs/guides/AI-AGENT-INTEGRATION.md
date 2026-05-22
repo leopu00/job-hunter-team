@@ -44,12 +44,26 @@ If Docker is missing: instruct the user to install Docker Desktop (macOS / Windo
 
 ### 1 — Install the CLI
 
+**macOS / Linux / WSL2:**
+
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 # Adds `~/.local/bin/jht` (host wrapper) + pulls the runtime container image.
 ```
 
 After install: `export PATH="$HOME/.local/bin:$PATH"` if not already on PATH.
+
+**Windows (PowerShell, no WSL required):**
+
+```powershell
+iwr -useb https://jobhunterteam.ai/install.ps1 | iex
+# Adds `$env:USERPROFILE\.local\bin\jht.ps1` (host wrapper) + registers PATH
+# (User scope, no admin needed) + pulls the runtime container image.
+```
+
+> 🪟 Windows prerequisites: **Docker Desktop** installed and running. The installer doesn't install Docker (Docker Desktop is an MSI with an EULA — out of scope). If Docker Desktop is missing, the installer fails fast with a download link.
+>
+> The agent should NOT fall back to `curl install.sh | bash` via WSL: that path hangs silently on `sudo` prompts when stdin is a pipe (known issue). Use the native `install.ps1` path on Windows.
 
 ### 2 — **ASK USER**: location
 
