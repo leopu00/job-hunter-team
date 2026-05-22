@@ -41,6 +41,73 @@ def _title_similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
+def _normalize_city(location):
+    """Estrae e normalizza il primo token della location come 'citta'.
+
+    Address vps1-postmortem anomalia #3: 7 (title, company) duplicate
+    perche' Scout dedup falliva quando stessa position arrivava da
+    source multipli con location string diversa:
+      - LinkedIn: 'Milan, Italy'
+      - Ashby:    'Milan, Lombardy, IT'
+      - Direct:   'Milano, IT'
+    Senza normalizzazione, Level 2/3 dedup non matchano e si crea row
+    duplicata. Tokenizziamo sul primo token + normalizzazione minima
+    (lowercase + strip diacritici comuni IT/EN).
+
+    Esempi:
+      'Milan, Italy'         -> 'milan'
+      'Milan, Lombardy, IT'  -> 'milan'
+      'Milano, IT'           -> 'milano'   # IT vs EN nome citta diverso
+      'New York, NY, USA'    -> 'new york'
+      None / ''              -> ''
+    """
+    if not location:
+        return ''
+    # Primo token comma-separated (la citta')
+    first = location.split(',')[0].strip().lower()
+    # Strip diacritics: 'münchen' -> 'munchen', 'köln' -> 'koln', 'genève' -> 'geneve'.
+    # NFD decompone i caratteri (ä = a + combining-diaeresis), poi filtriamo
+    # le marks combining (categoria 'Mn' di unicodedata).
+    import unicodedata
+    nfd = unicodedata.normalize('NFD', first)
+    return ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+
+
+# Synonyms cross-language per le citta' italiane/europee piu' frequenti
+# nei JD. Tutto in lowercase. Se nessuna mappatura → ritorna l'input.
+_CITY_SYNONYMS = {
+    'milano': 'milan',
+    'milan': 'milan',
+    'roma': 'rome',
+    'rome': 'rome',
+    'torino': 'turin',
+    'turin': 'turin',
+    'firenze': 'florence',
+    'florence': 'florence',
+    'venezia': 'venice',
+    'venice': 'venice',
+    'napoli': 'naples',
+    'naples': 'naples',
+    'genova': 'genoa',
+    'genoa': 'genoa',
+    'monaco di baviera': 'munich',
+    'munchen': 'munich',
+    'munich': 'munich',
+    'koln': 'cologne',
+    'cologne': 'cologne',
+    'wien': 'vienna',
+    'vienna': 'vienna',
+    'praha': 'prague',
+    'prague': 'prague',
+}
+
+
+def _normalize_city_canonical(location):
+    """Normalizza city + applica synonym map cross-language."""
+    raw = _normalize_city(location)
+    return _CITY_SYNONYMS.get(raw, raw)
+
+
 def _log_dedup_skip(level, existing_id, skipped_url, company, title):
     """Append-only JSONL audit dei skip dedup (bug #25).
 
@@ -107,31 +174,35 @@ def check_duplicate(conn, url, company, title, location=None):
             _log_dedup_skip(1, existing['id'], url, company, title)
             return existing, "URL esatto"
 
-    # Livello 2 — azienda + titolo + location uguale (o entrambe ''/NULL)
-    loc_norm = (location or '').strip()
+    # Livello 2 — azienda + titolo + city normalizzata (primo token + synonym map)
+    # Address vps1-postmortem anomalia #3: 'Milan, Italy' vs 'Milan, Lombardy, IT'
+    # vs 'Milano, IT' devono matchare. Carichiamo i candidati per azienda+titolo
+    # e applichiamo _normalize_city_canonical in Python (SQL non ha la synonym map).
+    city_new = _normalize_city_canonical(location)
     if company and title:
-        existing = conn.execute(
+        candidates_l2 = conn.execute(
             "SELECT id, title, company, location FROM positions "
-            "WHERE LOWER(company) = LOWER(?) AND LOWER(title) = LOWER(?) "
-            "  AND COALESCE(LOWER(TRIM(location)),'') = LOWER(?)",
-            (company, title, loc_norm)
-        ).fetchone()
-        if existing:
-            _log_dedup_skip(2, existing['id'], url, company, title)
-            return existing, "azienda+titolo+location"
-
-    # Livello 3 — azienda + titolo simile (>0.85) + location uguale
-    if company and title:
-        candidates = conn.execute(
-            "SELECT id, title, company, location FROM positions "
-            "WHERE LOWER(company) = LOWER(?) "
-            "  AND COALESCE(LOWER(TRIM(location)),'') = LOWER(?)",
-            (company, loc_norm)
+            "WHERE LOWER(company) = LOWER(?) AND LOWER(title) = LOWER(?)",
+            (company, title)
         ).fetchall()
-        for cand in candidates:
+        for cand in candidates_l2:
+            if _normalize_city_canonical(cand['location']) == city_new:
+                _log_dedup_skip(2, cand['id'], url, company, title)
+                return cand, "azienda+titolo+city-norm"
+
+    # Livello 3 — azienda + titolo simile (>0.85) + city normalizzata
+    if company and title:
+        candidates_l3 = conn.execute(
+            "SELECT id, title, company, location FROM positions "
+            "WHERE LOWER(company) = LOWER(?)",
+            (company,)
+        ).fetchall()
+        for cand in candidates_l3:
+            if _normalize_city_canonical(cand['location']) != city_new:
+                continue
             if _title_similarity(title, cand['title']) > 0.85:
                 _log_dedup_skip(3, cand['id'], url, company, title)
-                return cand, "azienda+titolo simile+location"
+                return cand, "azienda+titolo simile+city-norm"
 
     return None, None
 
