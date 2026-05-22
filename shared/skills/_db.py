@@ -53,6 +53,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_v2_to_v3(conn)
     _migrate_v3_to_v4(conn)
     _migrate_positions_status_review(conn)
+    _migrate_positions_length_constraints(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,6 +101,13 @@ def ensure_schema(conn: sqlite3.Connection):
         last_actor TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        -- Length guardrails: mirror dei CHECK constraint Postgres (mig 015).
+        -- Origin: incident RobertHalf 2026-05-19 (location 4394 char di HTML
+        -- bloccava sync cloud, vedi docs/internal/cloud-sync-architecture.md).
+        -- SQLite locale deve fallire SUBITO al INSERT, non in differita al push.
+        CHECK (LENGTH(title) <= 500),
+        CHECK (LENGTH(company) <= 300),
+        CHECK (location IS NULL OR LENGTH(location) <= 200),
         FOREIGN KEY (company_id) REFERENCES companies(id)
     );
 
@@ -568,6 +576,145 @@ def _migrate_positions_status_review(conn: sqlite3.Connection) -> None:
             last_actor TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id)
+        )
+    """)
+    conn.execute(
+        f"""
+        INSERT INTO positions_new ({', '.join(desired_columns)})
+        SELECT {', '.join(select_columns)} FROM positions
+        """
+    )
+    conn.execute("DROP TABLE positions")
+    conn.execute("ALTER TABLE positions_new RENAME TO positions")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url)")
+
+
+def _migrate_positions_length_constraints(conn: sqlite3.Connection) -> None:
+    """Replica i CHECK constraint length di Postgres (mig 015) su SQLite.
+
+    Aggiunge `CHECK (LENGTH(title) <= 500)`, `CHECK (LENGTH(company) <= 300)`,
+    `CHECK (location IS NULL OR LENGTH(location) <= 200)` a positions.
+
+    Origin: incident RobertHalf 2026-05-19 — scout RobertHalf ha scritto
+    4394 char di HTML in `positions.location`. SQLite (senza constraint)
+    ha accettato; Postgres (con mig 015) ha rifiutato; daemon push ha
+    bloccato sync per 1h causando 504 GATEWAY_TIMEOUT user-facing.
+
+    Fail-fast: con questo migration, INSERT con field over-length fallisce
+    immediatamente sul container, l'agente vede l'errore nel suo turn e
+    ri-parsa la pagina sorgente invece di far esplodere il sync asincrono.
+
+    Idempotente: guard via introspezione `sqlite_master`. Salta se i
+    constraint sono gia' presenti nello schema.
+
+    Rows pre-esistenti che violano il constraint vengono troncate a
+    placeholder durante il rebuild (impossibile lasciarle: il CREATE TABLE
+    del rebuild ha gia' i CHECK, INSERT ... SELECT fallirebbe altrimenti).
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+
+    schema_row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='positions'"
+    ).fetchone()
+    schema_sql = (schema_row['sql'] or '') if schema_row else ''
+    # Match case-insensitive: confronto contro literal UPPERCASE (in `LENGTH(TITLE)`
+    # invece di `LENGTH(title)`) altrimenti il .upper() del subject non darebbe
+    # mai match per via dei nomi colonna trasformati. Controlliamo tutti e 3
+    # i constraint per evitare migrazioni parziali su schema custom.
+    schema_upper = schema_sql.upper()
+    has_all_constraints = (
+        'LENGTH(TITLE)' in schema_upper and
+        'LENGTH(COMPANY)' in schema_upper and
+        'LENGTH(LOCATION)' in schema_upper
+    )
+    if has_all_constraints:
+        return
+
+    # Trova e tronca rows che violerebbero i nuovi constraint. Non possiamo
+    # lasciarle al rebuild: il nuovo positions_new ha i CHECK e
+    # INSERT...SELECT fallirebbe atomicamente.
+    truncated = 0
+    for col, max_len in (('title', 500), ('company', 300), ('location', 200)):
+        cursor = conn.execute(
+            f"SELECT id, LENGTH({col}) AS len FROM positions WHERE {col} IS NOT NULL AND LENGTH({col}) > ?",
+            (max_len,)
+        )
+        rows = cursor.fetchall()
+        for row in rows:
+            row_id = row['id']
+            original_len = row['len']
+            placeholder = f"[truncated by mig length-constraints: was {original_len} chars]"
+            conn.execute(
+                f"UPDATE positions SET {col}=? WHERE id=?",
+                (placeholder[:max_len], row_id)
+            )
+            truncated += 1
+
+    if truncated:
+        # Non c'e' logger condiviso qui — print su stderr e' la convenzione
+        # delle altre migrate (vedi _migrate_v3_to_v4). Visibile in
+        # `jht migrate` stdout e nel boot pid1.
+        import sys
+        print(
+            f"[migrate] truncated {truncated} positions rows violating length constraints",
+            file=sys.stderr,
+        )
+
+    existing_columns = {
+        row['name'] for row in conn.execute("PRAGMA table_info(positions)").fetchall()
+    }
+    # Lista columns coerente con lo schema canonico in ensure_schema().
+    desired_columns = [
+        'id', 'title', 'company', 'company_id', 'location', 'remote_type',
+        'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
+        'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
+        'salary_estimated_source', 'url', 'source', 'jd_text', 'requirements',
+        'found_by', 'found_at', 'deadline', 'status', 'notes', 'last_checked',
+        'last_actor', 'created_at', 'updated_at',
+    ]
+    select_columns = [
+        column if column in existing_columns else 'NULL' for column in desired_columns
+    ]
+
+    conn.execute("DROP TABLE IF EXISTS positions_new")
+    conn.execute("""
+        CREATE TABLE positions_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            company TEXT NOT NULL,
+            company_id INTEGER,
+            location TEXT,
+            remote_type TEXT,
+            salary_declared_min INTEGER,
+            salary_declared_max INTEGER,
+            salary_declared_currency TEXT DEFAULT 'EUR',
+            salary_estimated_min INTEGER,
+            salary_estimated_max INTEGER,
+            salary_estimated_currency TEXT DEFAULT 'EUR',
+            salary_estimated_source TEXT,
+            url TEXT,
+            source TEXT,
+            jd_text TEXT,
+            requirements TEXT,
+            found_by TEXT,
+            found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            deadline TEXT,
+            status TEXT DEFAULT 'new' CHECK (status IN (
+                'new','checked','scored','writing','review','ready','applied','response','excluded'
+            )),
+            notes TEXT,
+            last_checked TIMESTAMP,
+            last_actor TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CHECK (LENGTH(title) <= 500),
+            CHECK (LENGTH(company) <= 300),
+            CHECK (location IS NULL OR LENGTH(location) <= 200),
             FOREIGN KEY (company_id) REFERENCES companies(id)
         )
     """)
