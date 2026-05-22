@@ -195,42 +195,14 @@ Tutti prezzi includono VAT EU (22% IT, 19% DE), aggiornati 2026-05-06.
 
 ---
 
-## 🧰 Install + wizard UX fixes (2026-05-12)
+## 🧰 Install + wizard UX — punch list aperta
 
-> **Stato fix (aggiornato 2026-05-13)**: tutti i 🔴 P0 del blocco install + wizard + pairing risolti (commit `c360bb27`, `d24d2b8a`, `4a6cb181`, `c2ab7247`). 🟡 P2 verbosity install + warning gruppo docker root anche risolti. Resta aperto solo 🟠 P1 `jht` no-args che chiama ancora `ensure_up` (`scripts/jht-wrapper.sh::''` branch) e qualche P2/P3 minore.
-
-Test "utente totalmente nuovo" su VPS Hetzner fresca (Ubuntu 24.04, root), one-liner `curl -fsSL https://jobhunterteam.ai/install.sh | bash`. L'install gira liscio ma il post-install ha attriti.
-
-### ✅ 🔴 P0 — Wizard non parte da solo dopo install (risolto)
-**Stato originale**: dopo `curl | bash` lo script stampa "Stdin/stdout non è un terminale interattivo: salto il wizard" e lascia tre istruzioni divergenti (`jht`, `jht up`, `jht setup`).
-**Fix applicato (commit `4a6cb181`)**: auto-launch wizard via TTY re-exec + skip root noise + cleaner final msg.
-**File**: `scripts/install.sh::maybe_onboard()`.
+> Origine: test "utente nuovo" su VPS Hetzner fresca (Ubuntu 24.04, 2026-05-12). Tutti i 🔴 P0 install/wizard/pairing risolti (vedi git log `scripts/install.sh`, `scripts/jht-wrapper.sh`, `scripts/host-setup.sh`). Resta aperta la punch list sotto.
 
 ### 🟠 P1 — `jht` senza argomenti ha doppio comportamento
 **Stato**: `jht` nudo fa `jht up` implicito (pull 500 MB) + stampa help. Effetto collaterale invisibile.
 **Fix**: separare `jht` (no args) = solo help, no side-effect; `jht up` = pull + start esplicito; `jht setup` = up + wizard con messaggio "avvio container al primo run".
 **File**: `scripts/jht-wrapper.sh` dispatcher.
-
-### ✅ 🟠 P1 — Help post-install troppo lunga (risolto)
-**Stato originale**: 30+ sotto-comandi (`reset full`, `cron`, `webhooks`, `secrets`, ...). Spaventoso.
-**Fix applicato (merge dev1, commit `3d832a3f`)**: `jht` / `jht --help` mostra il subset "essential commands"; la full help torna dietro `jht help` esplicito.
-```
-Comandi essenziali:
-  jht setup      Configurazione iniziale
-  jht status     Stato del sistema
-  jht agents     Lista agenti e task
-  jht dashboard  Apri la dashboard web
-  jht doctor     Diagnostica setup
-
-Per tutti i comandi: jht help
-```
-**File**: `cli/src/program.js`.
-
-### ✅ 🟡 P2 — Verbosity install (risolto in `4a6cb181`)
-Output `apt-get install` ora redirected, spinner singolo. **File**: `scripts/install.sh::install_docker_linux()`.
-
-### ✅ 🟡 P2 — Warning "gruppo docker" mostrato anche a root (risolto in `4a6cb181`)
-Warning `usermod -aG docker $USER` condizionato a `[ "$(id -u)" -ne 0 ]`. **File**: `scripts/install.sh`.
 
 ### 🟡 P2 — "Allineo owner di /root/.jht a 1001:1001..."
 Messaggio criptico. Fix: silenzioso o contestualizzato "▸ Imposto permessi cartelle host per container non-root (sicurezza)... ✓".
@@ -247,32 +219,9 @@ Manca cancellazione di `/root/.jht/{config,db,allegati,agents}` e `~/Documents/J
 ### 🟢 P3 — Tipografia minore
 `runtime:/root/.jht/runtime` → manca spazio dopo `runtime:` nella banner.
 
-### Wizard step 1 — Host detection
-
-**✅ 🔴 P0 — Lingua deve essere LA PRIMA scelta del wizard (risolto in `c2ab7247`).** Primissimo step `Choose your language / Scegli la lingua` in `scripts/host-setup.sh:58`, default English, persistito in `~/.jht/host.env` come `JHT_LANG=en|it` letto poi dal wizard Node.
-
-**✅ 🔴 P0 — Selettore host ambiguo (risolto in `c2ab7247`).** Rimossa la finto-checkbox `[V] 1)` / `[ ] 2)`, prompt numerico con default visibile + spiegazione di cosa è stato rilevato.
-
-**🟠 P1 — Testo opzioni poco esplicativo.** "Server remoto / VPS" + "Computer locale" non spiega perché la scelta conta. Fix: testo lungo che spiega "il tuo PC accessibile in rete locale" vs "server cloud raggiungibile via IP pubblico, servono passi extra".
+### 🟠 P1 — Wizard step 1, testo opzioni host poco esplicativo
+"Server remoto / VPS" + "Computer locale" non spiega perché la scelta conta. Fix: testo lungo che spiega "il tuo PC accessibile in rete locale" vs "server cloud raggiungibile via IP pubblico, servono passi extra".
 **File**: `scripts/host-setup.sh:81-89`.
-
-### Wizard step 2 — Swap config
-
-**🟠 P1 — Spiegazione swap troppo prolissa.** 4 righe tecniche (OOM, kernel killa processi) che spaventano. Fix:
-```
-RAM: 4 GB  |  Swap: 0 MB
-
-▸ Con solo 4 GB di RAM il team può andare in OOM sotto carico.
-  Configuro 2 GB di swap in /swapfile per sicurezza? [Y/n]: _
-```
-Skip step se RAM ≥ 8GB o swap già configurata. ✅ Applicato in commit `c2ab7247`.
-
-### Wizard step 4 — Pairing CLI ↔ web
-
-**✅ 🔴 P0 — Link diretto `/cli-link?code=...` non porta al login, perde il code (risolto in `d24d2b8a`).**
-Chain di 3 bug: `(protected)/layout` scartava URL+query; proxy non esponeva la search string; `LandingClient` hardcodava `redirectTo`. Fix applicato: aggiunto `x-search` header in proxy, `returnTo` propagato da `(protected)/layout`, accettato in `LandingClient`, usato `next=` nel callback OAuth. **Impatto**: sistemato un bug generale "perdita URL su login" per tutte le pagine protette.
-
-**✅ 🔴 P0 — CSRF guard blocca pairing su `jobhunterteam.ai` prod (risolto in `c360bb27`).** `proxy.ts` ora calcola `hostOrigin` da `x-forwarded-proto` + `x-forwarded-host` dinamicamente e lo passa a `shouldRejectBrowserMutation`. Same-origin → non-CSRF. Funziona su qualsiasi dominio futuro senza env hardcoded.
 
 ---
 
