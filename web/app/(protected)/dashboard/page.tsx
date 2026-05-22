@@ -14,7 +14,13 @@ import {
 import PositionTypesPie from "@/app/components/PositionTypesPie";
 import ScoreDistribution from "@/app/components/ScoreDistribution";
 import PipelineFlow from "@/app/components/PipelineFlow";
-import CompanyGlobe from "@/app/components/CompanyGlobe";
+// CompanyGlobe usa maplibre-gl (~1 MB parsed): caricato via wrapper Client
+// che fa dynamic import. Il wrapper e' Client Component perche'
+// dynamic({ssr:false}) non e' permesso in Server Component da Next 14+.
+// Cosi' il chunk maplibre viene scaricato solo quando il browser monta
+// CompanyGlobeLazy, non al primo paint della dashboard.
+// Vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md insight #10.
+import CompanyGlobeLazy from "@/app/components/CompanyGlobeLazy";
 import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
@@ -254,7 +260,7 @@ export default async function DashboardCompany() {
           animation: "fade-in 0.35s ease both 0.05s",
         }}
       >
-        <CompanyGlobe hero />
+        <CompanyGlobeLazy hero />
       </div>
 
       {/* ── Tutto il resto: bg opaco full-width che copre il globo
