@@ -6,6 +6,7 @@
     "dev": "next dev",
     "dev:host": "JHT_SHELL_VIA=docker:jht next dev -p 3001",
     "dev:host:3002": "JHT_SHELL_VIA=docker:jht next dev -p 3002",
+    "dev:cloud:3003": "next dev -p 3003",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -19,7 +20,7 @@
     "ipaddr.js": "^2.2.0",
     "js-yaml": "^4.1.1",
     "maplibre-gl": "^5.24.0",
-    "next": "16.0.11",
+    "next": "^16.2.6",
     "next-intl": "^4.9.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
