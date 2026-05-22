@@ -32,8 +32,6 @@ import {
   getDemoDashboardData,
   isDashboardDemoMode,
 } from "@/lib/dashboard-demo";
-import CloudDownloadLanding from "@/app/components/CloudDownloadLanding";
-import VpsSetupCompleteLanding from "@/app/components/VpsSetupCompleteLanding";
 import PendingMessagesCard from "@/app/components/PendingMessagesCard";
 import VpsCompanycycleCard from "@/app/components/VpsCompanycycleCard";
 import OnboardingPopup from "@/app/components/OnboardingPopup";
@@ -90,19 +88,7 @@ export default async function DashboardCompany() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) {
-      const { data: onboarding } = await supabase
-        .from("user_onboarding_state")
-        .select("vps_setup_completed_at, profile_configured_at")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (!onboarding?.vps_setup_completed_at) {
-        return <CloudDownloadLanding userEmail={user.email ?? null} />;
-      }
-      if (!onboarding?.profile_configured_at) {
-        return <VpsSetupCompleteLanding userEmail={user.email ?? null} />;
-      }
-    } else if (localRequest) {
+    if (!user && localRequest) {
       if (readWorkspaceProfile() === null) redirect("/onboarding");
     }
   } else if (!demoMode) {
