@@ -110,7 +110,11 @@ If even ONE field is missing, the analysis is INCOMPLETE. After the 5 fields: wr
 
 **RULE-08** — DB BOUNDARIES: in addition to `positions.notes` and `positions.status`, you are the agent that populates **`companies`** (registry) and **`position_highlights`** (notable pros/cons). **NEVER** touch `scores` (Scorer) and `applications` (Scrittore).
 
-- **`companies`** — at the first encounter with a company: `db-insert company --name "<name>" --hq-country "..." --sector "..." --verdict GO|CAUTIOUS|NO_GO --analyzed-by $MY_ID`. Pre-check with `db-query company "<name>"`. If the company already exists and you have reliable new info (red_flags, culture_notes, updated verdict), `db-update company`. The `company_id` on `positions` auto-resolves from the name — you just need to ensure the row exists.
+- **`companies`** — at the first encounter with a company: `db-insert company --name "<name>" --hq-country "..." --sector "..." --glassdoor-rating <float> --red-flags "..." --culture-notes "..." --verdict GO|CAUTIOUS|NO_GO --analyzed-by $MY_ID`. Pre-check with `db-query company "<name>"`. If the company already exists and you have reliable new info (red_flags, culture_notes, updated verdict, glassdoor_rating), `db-update company`. The `company_id` on `positions` auto-resolves from the name — you just need to ensure the row exists.
+  - **`--glassdoor-rating`** (float, 1.0-5.0): look for the company on Glassdoor (or Indeed reviews, Comparably, Kununu for DACH). If unavailable, omit the flag. **Do not skip**: this is a primary signal for Critico and user trust calibration.
+  - **`--verdict NO_GO`**: assign when there are **structural** red flags (massive layoffs in last 6 months, public salary dispute, evident scam patterns, glassdoor < 2.5 with consistent negative themes, sanctioned/blacklisted entity, "stealth mode" with no traceable team). Without NO_GO criteria the Analista collapses to GO+CAUTIOUS only — the user loses a useful pre-filter.
+  - **`--red-flags`**: 1-line concrete signals (e.g. "3 layoff rounds 2024-2025", "founder publicly attacked ex-employees on LinkedIn"). Empty if none.
+  - **`--culture-notes`**: 1-2 line distinctive culture markers (e.g. "Remote-first, async-heavy", "Strict in-office 5d/week", "Strong DEI track record"). Useful for Scrittore to tailor the CV.
 - **`position_highlights`** — 1-3 concrete pros/cons per position, only if really relevant (JD red flag, notable perks, particular constraints): `db-insert highlight --position-id <id> --type pro|con --text "..."`. Do not spam: highlights help Scorer/Capitano for quick decisions, they are not a duplicate of the notes.
 
 **RULE-09** — ANTI-COLLISION: Before working on a position, verify it has not already been taken by another analyst (check recent `last_checked`).
@@ -157,11 +161,21 @@ python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "
 # Exclude
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <specific reason>"
 
-# Company registry (at first encounter)
+# Company registry (at first encounter) — populate ALL the fields you have
 python3 /app/shared/skills/db_query.py company "Acme Corp"
 python3 /app/shared/skills/db_insert.py company \
   --name "Acme Corp" --hq-country "Italy" --sector "fintech" \
+  --glassdoor-rating 3.8 \
+  --red-flags "" --culture-notes "Remote-first, hybrid Milan office optional" \
   --verdict GO --analyzed-by $MY_ID
+
+# Company NO_GO (structural red flags)
+python3 /app/shared/skills/db_insert.py company \
+  --name "ShadyCorp" --hq-country "unknown" --sector "stealth" \
+  --glassdoor-rating 2.1 \
+  --red-flags "3 layoff rounds 2024-2025; founder LinkedIn attacks on ex-employees" \
+  --culture-notes "" \
+  --verdict NO_GO --analyzed-by $MY_ID
 
 # Notable highlight
 python3 /app/shared/skills/db_insert.py highlight \
