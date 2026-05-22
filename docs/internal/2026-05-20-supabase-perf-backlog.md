@@ -2,7 +2,7 @@
 
 ## Context
 
-Durante l'analisi post-incident del 504-storm del 2026-05-19 ([[2026-05-19-sync-incident-roberthalf-redux]]),
+Durante l'analisi post-incident del 504-storm del 2026-05-19 ([[cloud-sync-architecture]]),
 ho fatto girare per la prima volta `mcp__supabase__get_advisors` con il
 progetto `smittwvohsnwwwisqdrh` (`job-hunter-team`, region eu-central-1).
 
@@ -279,7 +279,7 @@ Per ogni migration applicata:
 
 ## Memory rilevante
 
-- [[2026-05-19-sync-incident-roberthalf-redux]] — incident che ha rivelato
+- [[cloud-sync-architecture]] — incident che ha rivelato
   il bisogno di fare audit performance di Supabase
 - [[project_release_workflow]] — le migration vanno applicate insieme al
   bump version (017_rls + 018_fk in v0.1.18 patch)

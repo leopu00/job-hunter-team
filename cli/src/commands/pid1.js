@@ -332,7 +332,7 @@ async function maybeRunPairing() {
  * idempotente: se la config e' al massimo, exit 0 con "Nessuna migrazione
  * necessaria". Best-effort: un fallimento qui non blocca pid1, l'utente
  * puo' rieseguire `jht migrate` manualmente dal terminal embedded.
- * Vedi docs/internal/2026-05-20-vps-bootstrap-bugs.md §Bug #3.
+ * Vedi docs/internal/_archive/2026-05-20-vps-bootstrap-bugs.md §Bug #3.
  */
 async function runMigrate() {
   try {
@@ -509,7 +509,7 @@ async function dispatch() {
   // check). Regressione storica: introdotto 2026-05-08 (commit d4bb2ca2)
   // e poi perso al rebuild perché esisteva solo come `tmux new-session`
   // manuale. Pattern identico ad agent-watchdog ma cadenza interna allo
-  // script (sleep 1800s). Vedi docs/internal/2026-05-17-team-strategy-bugs.md §18.
+  // script (sleep 1800s). Vedi docs/internal/_archive/2026-05-17-team-strategy-bugs.md §18.
   let doctorWatchdogChild = null;
   let doctorWatchdogRespawnTimer = null;
   const startDoctorWatchdog = () => {
