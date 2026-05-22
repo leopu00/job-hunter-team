@@ -489,7 +489,7 @@ mkdir -p "$AGENT_DIR/tools" "$AGENT_DIR/tmp"
 # AGENT_DIR corrente in $JHT_HOME/.codex/config.toml prima di lanciare la
 # CLI. Funziona anche per gli scout/analista/scrittore/critico spawnati
 # on-demand dal Capitano (cwd dinamiche non note al boot di pid1).
-# Vedi docs/internal/2026-05-20-vps-bootstrap-bugs.md §Bug #2.
+# Vedi docs/internal/_archive/2026-05-20-vps-bootstrap-bugs.md §Bug #2.
 if [ "$CLI_BIN" = "codex" ]; then
   CODEX_CONFIG_FILE="${JHT_HOME:-/jht_home}/.codex/config.toml"
   mkdir -p "$(dirname "$CODEX_CONFIG_FILE")"
