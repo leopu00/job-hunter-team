@@ -1,7 +1,6 @@
 import { readFile, writeFile, mkdir, chmod, unlink, stat } from 'node:fs/promises';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
 import pc from 'picocolors';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 
@@ -10,7 +9,6 @@ const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
 const PROFILE_DIR = join(JHT_HOME, 'profile');
 const PROFILE_YAML_PATH = join(PROFILE_DIR, 'candidate_profile.yml');
 const PROFILE_SUMMARIES_DIR = join(PROFILE_DIR, 'summaries');
-const SENTINEL_DATA_PATH = join(JHT_HOME, 'logs', 'sentinel-data.jsonl');
 const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 // Cursor delta-sync: per ogni tabella memorizziamo l'ultimo updated_at
 // pushato. Al tick successivo selezioniamo solo righe con updated_at >
@@ -50,73 +48,6 @@ function readProfilePayload() {
   }
 
   return { yaml: yamlRaw, summaries };
-}
-
-function finiteNumber(value) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function makeSentinelSampleKey(entry) {
-  const stable = [
-    entry.ts ?? '',
-    entry.provider ?? '',
-    entry.source ?? '',
-    entry.session_id ?? '',
-  ].join('|');
-  return createHash('sha1').update(stable).digest('hex');
-}
-
-/**
- * Legge gli ultimi sample prodotti da sentinel-bridge.py. Il cloud daemon
- * pusha ogni 30s mentre il bridge ticka ogni 2-10min: ripushare una finestra
- * corta e idempotente e' piu' robusto di mantenere un cursor locale separato.
- */
-function readSentinelTicksPayload(limit = 500) {
-  if (!existsSync(SENTINEL_DATA_PATH)) return [];
-  let raw;
-  try {
-    raw = readFileSync(SENTINEL_DATA_PATH, 'utf-8');
-  } catch {
-    return [];
-  }
-  const lines = raw.split(/\r?\n/).filter(Boolean).slice(-limit * 2);
-  const out = [];
-  for (const line of lines) {
-    let entry;
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (!entry || typeof entry !== 'object') continue;
-    if (typeof entry.ts !== 'string') continue;
-    if (typeof entry.provider !== 'string') continue;
-    const usage = finiteNumber(entry.usage);
-    if (usage === null) continue;
-    out.push({
-      sample_key: makeSentinelSampleKey(entry),
-      ts: entry.ts,
-      provider: entry.provider,
-      usage,
-      delta: finiteNumber(entry.delta),
-      velocity: finiteNumber(entry.velocity),
-      velocity_smooth: finiteNumber(entry.velocity_smooth),
-      velocity_ideal: finiteNumber(entry.velocity_ideal),
-      projection: finiteNumber(entry.projection),
-      projection_naive: finiteNumber(entry.projection_naive),
-      velocity_decreasing: typeof entry.velocity_decreasing === 'boolean' ? entry.velocity_decreasing : null,
-      status: typeof entry.status === 'string' ? entry.status : 'OK',
-      throttle: Number.isInteger(entry.throttle) ? entry.throttle : null,
-      reset_at: typeof entry.reset_at === 'string' ? entry.reset_at : null,
-      weekly_usage: finiteNumber(entry.weekly_usage),
-      source: typeof entry.source === 'string' ? entry.source : null,
-      session_id: typeof entry.session_id === 'string' ? entry.session_id : null,
-      host: entry.host && typeof entry.host === 'object' && !Array.isArray(entry.host) ? entry.host : null,
-      host_level: typeof entry.host_level === 'string' ? entry.host_level : null,
-      raw: entry,
-    });
-  }
-  return out.slice(-limit);
 }
 
 async function loadCloudConfig() {
@@ -465,11 +396,10 @@ async function handlePush(options) {
   // vuota fino al primo job trovato dallo Scout, deludendo l'utente che
   // si aspetta di vedere il proprio profilo subito dopo l'onboarding.
   const profilePayload = readProfilePayload();
-  const sentinelTicks = readSentinelTicksPayload();
 
   const dbPath = options.db || JHT_DB_PATH;
   const dbExists = await stat(dbPath).then(() => true).catch(() => false);
-  if (!dbExists && !profilePayload && sentinelTicks.length === 0) {
+  if (!dbExists && !profilePayload) {
     console.error(pc.red(`Database non trovato: ${dbPath}`));
     console.error(pc.dim('Avvia il team almeno una volta o passa --db <path>'));
     process.exitCode = 1;
@@ -544,14 +474,11 @@ async function handlePush(options) {
   const pendingChunks = pendingMessages.length > 0
     ? `, ${pendingMessages.length} pending messages`
     : '';
-  const sentinelChunks = sentinelTicks.length > 0
-    ? `, ${sentinelTicks.length} sentinel ticks`
-    : '';
   const isFirstPush = !cursor.positions && !cursor.scores && !cursor.applications;
   const deltaMode = isFirstPush ? 'first-push (full)' : 'delta';
   console.log(
     pc.dim(
-      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${sentinelChunks}${profileChunks}`
+      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
@@ -561,7 +488,7 @@ async function handlePush(options) {
   if (
     positions.length === 0 && scores.length === 0 &&
     applications.length === 0 && pendingMessages.length === 0 &&
-    sentinelTicks.length === 0 && !profilePayload
+    !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
     return;
@@ -579,7 +506,6 @@ async function handlePush(options) {
       body: JSON.stringify({
         positions, scores, applications,
         pending_user_messages: pendingMessages,
-        sentinel_ticks: sentinelTicks,
         ...(profilePayload ? { profile: profilePayload } : {}),
       }),
     });
@@ -603,7 +529,6 @@ async function handlePush(options) {
   console.log(pc.dim(`  scores:           ${body.scores?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  applications:     ${body.applications?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
-  console.log(pc.dim(`  sentinel ticks:   ${body.sentinel_ticks?.upserted ?? 0} upserted`));
 
   // Aggiorna cursor delta-sync solo dopo HTTP 200: il prossimo tick
   // selezionera' solo righe con updated_at > cursor. Se una qualsiasi
