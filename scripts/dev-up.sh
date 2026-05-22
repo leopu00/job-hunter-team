@@ -19,6 +19,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+HOST_PORT="${HOST_PORT:-3001}"
+
 COLOR_RESET=$'\e[0m'
 COLOR_DIM=$'\e[2m'
 COLOR_GREEN=$'\e[32m'
@@ -71,13 +73,13 @@ info "Container in avvio. Next dentro parte su :3000 (baked), Assistente in back
 # Dev host mode usa SQLite locale: se .env.local definisce Supabase il
 # fallback non scatta e vedi 0 risultati. Lo svuotiamo SOLO per questo
 # processo Next (non tocca .env.local sul disco).
-log "Avvio Next sull'host su :3001 (docker-exec mode)"
+log "Avvio Next sull'host su :${HOST_PORT} (docker-exec mode)"
 
 cd "$REPO_ROOT/web"
 
 # Kill eventuale Next host precedente per non intasare la memoria
 # con postcss worker (vedi memory: feedback_web_dev_host_mode).
-HOST_NEXT_PIDS=$(pgrep -f "next dev -p 3001" 2>/dev/null || true)
+HOST_NEXT_PIDS=$(pgrep -f "next dev -p ${HOST_PORT}" 2>/dev/null || true)
 if [ -n "${HOST_NEXT_PIDS}" ]; then
   info "Termino Next host precedenti: ${HOST_NEXT_PIDS}"
   # shellcheck disable=SC2086
@@ -95,13 +97,13 @@ export NEXT_PUBLIC_SUPABASE_URL=""
 export NEXT_PUBLIC_SUPABASE_ANON_KEY=""
 (
   cd "$REPO_ROOT/web"
-  nohup npm run dev -- -p 3001 > "$HOST_LOG" 2>&1 &
+  nohup npm run dev -- -p "${HOST_PORT}" > "$HOST_LOG" 2>&1 &
 )
 sleep 5
 
 # Verifica boot
-if curl -s -o /dev/null -w "%{http_code}" "http://localhost:3001/" --max-time 30 | grep -qE "^(200|307|308)"; then
-  log "Host Next pronto su ${COLOR_BOLD}http://localhost:3001${COLOR_RESET}"
+if curl -s -o /dev/null -w "%{http_code}" "http://localhost:${HOST_PORT}/" --max-time 30 | grep -qE "^(200|307|308)"; then
+  log "Host Next pronto su ${COLOR_BOLD}http://localhost:${HOST_PORT}${COLOR_RESET}"
 else
   warn "Host Next non risponde ancora; log: $HOST_LOG"
 fi
@@ -109,7 +111,7 @@ fi
 # ── 7. Riepilogo ──────────────────────────────────────────────────────────
 printf "\n"
 printf "  %sDev mode attivo%s\n" "$COLOR_GREEN$COLOR_BOLD" "$COLOR_RESET"
-printf "    UI dev (hot-reload):  %shttp://localhost:3001%s\n" "$COLOR_BOLD" "$COLOR_RESET"
+printf "    UI dev (hot-reload):  %shttp://localhost:%s%s\n" "$COLOR_BOLD" "${HOST_PORT}" "$COLOR_RESET"
 printf "    Next container:       %shttp://localhost:3000%s %s(usato solo come fallback)%s\n" "$COLOR_DIM" "$COLOR_RESET" "$COLOR_DIM" "$COLOR_RESET"
 printf "    Log host Next:        %s%s%s\n" "$COLOR_DIM" "$HOST_LOG" "$COLOR_RESET"
 printf "    Log container:        %sdocker logs -f jht%s\n" "$COLOR_DIM" "$COLOR_RESET"
