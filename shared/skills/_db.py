@@ -622,9 +622,17 @@ def _migrate_positions_length_constraints(conn: sqlite3.Connection) -> None:
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='positions'"
     ).fetchone()
     schema_sql = (schema_row['sql'] or '') if schema_row else ''
-    # Match abbastanza permissivo per accettare future ri-formattazioni dello
-    # schema (LENGTH(title) <= 500, length(title)<= 500, ecc.).
-    if 'LENGTH(title)' in schema_sql.upper() and 'LENGTH(location)' in schema_sql.upper():
+    # Match case-insensitive: confronto contro literal UPPERCASE (in `LENGTH(TITLE)`
+    # invece di `LENGTH(title)`) altrimenti il .upper() del subject non darebbe
+    # mai match per via dei nomi colonna trasformati. Controlliamo tutti e 3
+    # i constraint per evitare migrazioni parziali su schema custom.
+    schema_upper = schema_sql.upper()
+    has_all_constraints = (
+        'LENGTH(TITLE)' in schema_upper and
+        'LENGTH(COMPANY)' in schema_upper and
+        'LENGTH(LOCATION)' in schema_upper
+    )
+    if has_all_constraints:
         return
 
     # Trova e tronca rows che violerebbero i nuovi constraint. Non possiamo
