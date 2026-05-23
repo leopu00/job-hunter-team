@@ -812,7 +812,9 @@ export default function TeamOrgChart({
       }
     };
     check();
-    const interval = setInterval(check, 3000);
+    // 15s (era 3s): bridge/pacing status non cambia frequentemente. Riduce
+    // req/min su /api/bridge/status + /api/team/pacing-bridge (40→8 totale).
+    const interval = setInterval(check, 15_000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -904,7 +906,9 @@ export default function TeamOrgChart({
       }
     };
     check();
-    const interval = setInterval(check, 3000);
+    // 15s (era 3s): bridge/pacing status non cambia frequentemente. Riduce
+    // req/min su /api/bridge/status + /api/team/pacing-bridge (40→8 totale).
+    const interval = setInterval(check, 15_000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -1273,12 +1277,11 @@ export default function TeamOrgChart({
       }
     };
     poll();
-    // 1500ms (era 800): l'animazione delle frecce non risente
-    // visivamente del raddoppio (un messaggio passa in ~2s sulla
-    // freccia comunque). Riduce req/min su /api/team/messages da
-    // ~75 a ~40, dando margine al rate limit per gli altri poll
-    // della pagina /team (chart, status, sentinella, ecc.).
-    const interval = setInterval(poll, 1500);
+    // 5000ms (era 1500ms): le animazioni delle frecce restano OK con
+    // questa cadenza (un messaggio passa in ~2s sulla freccia comunque).
+    // Riduce req/min su /api/team/messages da ~40 a 12 — taglio principale
+    // della pagina /team rate-limit-friendly.
+    const interval = setInterval(poll, 5000);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -1329,7 +1332,9 @@ export default function TeamOrgChart({
       }
     };
     poll();
-    const interval = setInterval(poll, 2500);
+    // 10s (era 2.5s): queue state per throttle/pallini queued non richiede
+    // alta frequenza. Riduce req/min su /api/team/queue (24→6).
+    const interval = setInterval(poll, 10_000);
     return () => {
       cancelled = true;
       clearInterval(interval);
