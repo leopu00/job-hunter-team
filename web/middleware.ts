@@ -111,7 +111,12 @@ const CORS_HEADERS = 'Content-Type, Authorization, X-Requested-With'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_LOCAL_MAX = 600   // ~10 req/sec per utente sul proprio Mac
-const RATE_LIMIT_PUBLIC_MAX = 120  // limit anti-abuse per deploy esposti
+const RATE_LIMIT_PUBLIC_MAX = 300  // anti-abuse per deploy esposti; alzato 2026-05-23
+                                   // perché la pagina /team genera ~150+ req/min
+                                   // legacy (pacing/queue/messages/status/agents/...)
+                                   // + nuovi useTeamState polling. Alzato a 300 per
+                                   // tenere margine; ridurre con polling adattivo
+                                   // (Task #3 backlog) quando refactor è completo.
 const RATE_LIMIT_CLEANUP_INTERVAL = 5 * 60_000
 
 type RateLimitEntry = { count: number; windowStart: number }
