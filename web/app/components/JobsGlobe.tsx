@@ -5,6 +5,7 @@ import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
+import { classifyTitle, type PositionType } from "@/lib/position-classifier";
 
 const SOURCE_ID = "jht-jobs";
 const LAYER_HALO_ID = "jht-jobs-halo";
@@ -162,11 +163,26 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
   }
 }
 
-export default function CompanyGlobe({ hero = false }: { hero?: boolean } = {}) {
+export default function CompanyGlobe({
+  hero = false,
+  fullscreen = false,
+  selectedTypes = [],
+  selectedScoreRanges = [],
+}: {
+  hero?: boolean;
+  fullscreen?: boolean;
+  selectedTypes?: PositionType[];
+  selectedScoreRanges?: Array<{ lo: number; hi: number }>;
+} = {}) {
   const { resolvedTheme } = useTheme();
   const [data, setData] = useState<PositionCoord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<PositionCoord | null>(null);
+  // Posizione schermo del pin selezionato (in pixel viewport del map
+  // container). Serve a posizionare il popup-vignetta sopra al pin
+  // con la coda che punta verso il basso. Si aggiorna ad ogni
+  // move/zoom della mappa.
+  const [popupAnchor, setPopupAnchor] = useState<{ x: number; y: number } | null>(null);
   const mapWrapRef = useRef<HTMLDivElement | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
@@ -183,9 +199,28 @@ export default function CompanyGlobe({ hero = false }: { hero?: boolean } = {}) 
   // restano dentro il clusterRadius (~30m) e vengono raggruppati
   // dal cluster nativo MapLibre. Quando lo Scout/Analista forniranno
   // office-level vero, il jitter sara' no-op naturale.
+  // Applica filtri donut (tipi) + histogram (range score) di /map.
+  // Tra le due tipologie: AND. Dentro ciascuna: OR (uno qualunque
+  // dei tipi / range selezionati). Vuoto = no filtro.
+  const displayData = useMemo(() => {
+    let out = data;
+    if (selectedTypes.length > 0) {
+      out = out.filter((p) => selectedTypes.includes(classifyTitle(p.title)));
+    }
+    if (selectedScoreRanges.length > 0) {
+      out = out.filter((p) => {
+        if (typeof p.score !== "number") return false;
+        return selectedScoreRanges.some(
+          (r) => p.score! >= r.lo && p.score! <= r.hi,
+        );
+      });
+    }
+    return out;
+  }, [data, selectedTypes, selectedScoreRanges]);
+
   const jittered = useMemo(() => {
     const groups = new Map<string, PositionCoord[]>();
-    for (const p of data) {
+    for (const p of displayData) {
       const key = `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
       const arr = groups.get(key);
       if (arr) arr.push(p);
@@ -207,7 +242,7 @@ export default function CompanyGlobe({ hero = false }: { hero?: boolean } = {}) 
       });
     }
     return out;
-  }, [data]);
+  }, [displayData]);
 
   // Fetch data
   useEffect(() => {
@@ -455,8 +490,8 @@ export default function CompanyGlobe({ hero = false }: { hero?: boolean } = {}) 
 
   function flyToAll() {
     const map = mapRef.current;
-    if (!map || data.length === 0) return;
-    const vp = bestViewport(data);
+    if (!map || displayData.length === 0) return;
+    const vp = bestViewport(displayData);
     if (!vp) return;
     map.fitBounds(vp.bounds, {
       padding: { top: 60, bottom: 60, left: 60, right: 60 },
@@ -465,13 +500,49 @@ export default function CompanyGlobe({ hero = false }: { hero?: boolean } = {}) 
     });
   }
 
-  const wrapClass = hero
-    ? ""
+  // Traccia la posizione schermo del pin selezionato: aggiorna ad
+  // ogni movimento/zoom mappa per tenere il popup ancorato sopra.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selected) {
+      setPopupAnchor(null);
+      return;
+    }
+    const update = () => {
+      const pt = map.project([selected.lon, selected.lat]);
+      setPopupAnchor({ x: pt.x, y: pt.y });
+    };
+    update();
+    map.on("move", update);
+    map.on("zoom", update);
+    return () => {
+      map.off("move", update);
+      map.off("zoom", update);
+    };
+  }, [selected]);
+
+  // Auto-zoom sui pin filtrati: ogni volta che cambia displayData
+  // (filtri donut/histogram di /map o primo fetch), riadatta la
+  // vista per inquadrare i pin attualmente mostrati.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !layersReadyRef.current || displayData.length === 0) return;
+    const vp = bestViewport(displayData);
+    if (!vp) return;
+    map.fitBounds(vp.bounds, {
+      padding: { top: 60, bottom: 60, left: 60, right: 60 },
+      duration: 800,
+      maxZoom: 7,
+    });
+  }, [displayData]);
+
+  const wrapClass = (hero || fullscreen)
+    ? (fullscreen ? "h-full" : "")
     : "bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]";
 
   return (
     <div className={wrapClass}>
-      {!hero && (
+      {!hero && !fullscreen && (
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <span className="section-label">Mappa offerte</span>
           <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
@@ -500,15 +571,16 @@ export default function CompanyGlobe({ hero = false }: { hero?: boolean } = {}) 
 
       <div
         ref={mapWrapRef}
-        className={`relative w-full overflow-hidden ${hero ? "" : "rounded-md"}`}
+        className={`relative w-full overflow-hidden ${(hero || fullscreen) ? "" : "rounded-md"}`}
         // zoom: 1 neutralizza il body { zoom: var(--zoom) } di JHT
         // che mandava MapLibre a leggere dimensioni canvas sbagliate.
         // In hero il bg è transparent così il globo si fonde col
         // body (--color-deep) senza frame; in card mode mantiene
-        // --color-deep esplicito.
+        // --color-deep esplicito. In fullscreen height=100% riempie
+        // il container fisso (es. /map).
         style={{
-          height: hero ? 620 : 500,
-          background: hero ? "transparent" : "var(--color-deep)",
+          height: fullscreen ? "100%" : hero ? 620 : 500,
+          background: (hero || fullscreen) ? "transparent" : "var(--color-deep)",
           zoom: 1,
         }}
       >
@@ -550,10 +622,22 @@ export default function CompanyGlobe({ hero = false }: { hero?: boolean } = {}) 
           </p>
         )}
 
-        {selected && (
+        {selected && popupAnchor && (
           <div
-            className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm bg-[var(--color-panel)] border border-[var(--color-border)] rounded-md p-3 text-[11px] z-10"
-            style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.6)" }}
+            // Vignetta popup ancorata sopra al pin selezionato. La
+            // freccia in basso punta esattamente al pin. translate
+            // -50% X centra orizzontalmente sul pin; -100% Y la
+            // sposta interamente sopra; il -14px Y aggiunge gap +
+            // spazio per la coda.
+            className="absolute bg-[var(--color-panel)] border border-[var(--color-border)] rounded-md p-3 text-[11px] z-10"
+            style={{
+              left: popupAnchor.x,
+              top: popupAnchor.y - 14,
+              transform: "translate(-50%, -100%)",
+              width: 280,
+              maxWidth: "calc(100vw - 32px)",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+            }}
           >
             <div className="flex items-start justify-between gap-3 mb-1">
               <span
@@ -593,6 +677,37 @@ export default function CompanyGlobe({ hero = false }: { hero?: boolean } = {}) 
             >
               Apri →
             </Link>
+
+            {/* Coda della vignetta: triangolo SVG centrato sotto al
+                box, punta verso il basso (verso il pin). Riga top
+                del triangolo NON disegnata per non far apparire
+                doppia linea col bordo del popup. */}
+            <svg
+              width="16"
+              height="9"
+              viewBox="0 0 16 9"
+              style={{
+                position: "absolute",
+                left: "50%",
+                bottom: -9,
+                transform: "translateX(-50%)",
+                pointerEvents: "none",
+                overflow: "visible",
+              }}
+              aria-hidden
+            >
+              <path
+                d="M 0 0 L 8 9 L 16 0 Z"
+                fill="var(--color-panel)"
+                stroke="none"
+              />
+              <path
+                d="M 0 0 L 8 9 L 16 0"
+                fill="none"
+                stroke="var(--color-border)"
+                strokeWidth="1"
+              />
+            </svg>
           </div>
         )}
       </div>
