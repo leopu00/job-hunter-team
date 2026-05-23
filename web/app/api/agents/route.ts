@@ -109,16 +109,54 @@ export async function GET() {
         remote: true,
       });
     }
-    const [{ data: cmds }, activity] = await Promise.all([
-      supabase
-        .from("team_commands")
-        .select("action, payload, processed_at")
-        .eq("user_id", user.id)
-        .eq("status", "done")
-        .order("processed_at", { ascending: false })
-        .limit(50),
-      inferRemoteActivity(supabase),
-    ]);
+    // Source-of-truth post-refactor 2026-05-23: team_state.is_running scritto
+    // dal reconciler container. Se team_state esiste, deduco da quello.
+    // Fallback su team_commands legacy quando team_state è null (es. utenti
+    // pre-refactor che non hanno ancora rebuilded il container).
+    const tsRes = (await supabase
+      .from("team_state")
+      .select("is_running, agents_enabled, last_action_at")
+      .eq("user_id", user.id)
+      .maybeSingle()) as {
+      data: {
+        is_running: boolean | null;
+        agents_enabled: Record<string, { enabled?: boolean }> | null;
+        last_action_at: string | null;
+      } | null;
+      error: { message: string } | null;
+    };
+
+    const activity = await inferRemoteActivity(supabase);
+
+    if (tsRes.data) {
+      // team_state c'è → autoritativo
+      const teamRunning = !!tsRes.data.is_running;
+      const enabledMap = tsRes.data.agents_enabled || {};
+      const agents = AGENTS.map((a) => {
+        const entry = enabledMap[a.id];
+        // Se agents_enabled è popolato, rispettalo per-agente; altrimenti
+        // segui il global is_running.
+        const enabled = entry?.enabled !== undefined ? entry.enabled : teamRunning;
+        const running = teamRunning && enabled;
+        const activityAt = activity[a.id];
+        return {
+          ...a,
+          status: running ? "running" : "stopped",
+          instances: running ? 1 : 0,
+          last_activity_at: activityAt ? new Date(activityAt).toISOString() : null,
+        };
+      });
+      return NextResponse.json({ agents, remote: true });
+    }
+
+    // Fallback legacy team_commands
+    const { data: cmds } = await supabase
+      .from("team_commands")
+      .select("action, payload, processed_at")
+      .eq("user_id", user.id)
+      .eq("status", "done")
+      .order("processed_at", { ascending: false })
+      .limit(50);
     const lastFor: Record<
       string,
       { action: "start" | "stop"; processedAt: number }
