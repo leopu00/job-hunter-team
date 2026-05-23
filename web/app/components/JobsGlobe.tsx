@@ -12,6 +12,115 @@ const LAYER_HALO_ID = "jht-jobs-halo";
 const LAYER_DOT_ID = "jht-jobs-dot";
 const LAYER_CLUSTER_ID = "jht-jobs-cluster";
 const LAYER_CLUSTER_COUNT_ID = "jht-jobs-cluster-count";
+const BEAM_IMG_ID = "jht-beam";
+const CLUSTER_BEAMS_IMG_ID = "jht-cluster-beams";
+const LAYER_CLUSTER_BEAMS_ID = "jht-jobs-cluster-beams";
+
+// Genera un'icona "raggio di luce" verticale (canvas in-memory)
+// da usare come icon-image nel symbol layer dei pin singoli.
+// Larga in basso, sottile in alto, gradient verde→trasparente,
+// glow radiale alla base. icon-anchor "bottom" del symbol layer
+// la ancora al punto geografico del pin.
+function createBeamImageData(): ImageData | null {
+  const W = 64;
+  const H = 192;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+  if (!ctx) return null;
+
+  // Cono trapezoidale: base larga (W), apice sottile (4px) in alto.
+  const baseW = W * 0.45;
+  const topW = 3;
+  const xBaseLeft = (W - baseW) / 2;
+  const xTopLeft = (W - topW) / 2;
+  const grad = ctx.createLinearGradient(0, H, 0, 0);
+  grad.addColorStop(0, "rgba(0,232,122,1)");
+  grad.addColorStop(0.15, "rgba(0,232,122,0.85)");
+  grad.addColorStop(0.5, "rgba(0,232,122,0.32)");
+  grad.addColorStop(1, "rgba(0,232,122,0)");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(xBaseLeft, H);
+  ctx.lineTo(xBaseLeft + baseW, H);
+  ctx.lineTo(xTopLeft + topW, 0);
+  ctx.lineTo(xTopLeft, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Glow radiale alla base (effetto "punto di origine luminoso").
+  const baseGlow = ctx.createRadialGradient(W / 2, H, 0, W / 2, H, W * 0.55);
+  baseGlow.addColorStop(0, "rgba(180,255,210,0.95)");
+  baseGlow.addColorStop(0.35, "rgba(0,232,122,0.55)");
+  baseGlow.addColorStop(1, "rgba(0,232,122,0)");
+  ctx.fillStyle = baseGlow;
+  ctx.fillRect(0, H - W, W, W);
+
+  return ctx.getImageData(0, 0, W, H);
+}
+
+// Icona "corona di raggi" distribuita su tutto il perimetro del
+// cerchio cluster: N raggi verticali equispaziati a 360°. Punti
+// di partenza sui bordi nord/est/ovest/sud del cerchio invisibile
+// — tutti salgono verticalmente verso l'alto.
+function createClusterBeamsImageData(): ImageData | null {
+  // cy = H/2 al centro del canvas così "icon-anchor: center"
+  // allinea automaticamente la base raggi col pin geo,
+  // indipendentemente da icon-size (no più icon-offset che si
+  // scalerebbe col size e disallineerebbe a zoom diversi).
+  const W = 220;
+  const H = 420;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+  if (!ctx) return null;
+
+  const cx = W / 2;
+  const cy = H / 2;
+  // "Skyline": cerchi concentrici (più densità al centro), ellisse
+  // appiattita per prospettiva. I raggi al centro sono alti, quelli
+  // al perimetro più bassi e larghi (effetto grattacieli + periferia).
+  const yScale = 0.35;
+  const rings: Array<{ r: number; n: number; lenMul: number; bw: number }> = [
+    { r: 0,  n: 1,  lenMul: 1.20, bw: 4.0 },
+    { r: 8,  n: 6,  lenMul: 1.05, bw: 3.5 },
+    { r: 16, n: 11, lenMul: 0.90, bw: 3.0 },
+    { r: 26, n: 16, lenMul: 0.75, bw: 2.5 },
+    { r: 36, n: 22, lenMul: 0.55, bw: 2.0 },
+  ];
+  const baseLen = 200;
+  for (const ring of rings) {
+    for (let i = 0; i < ring.n; i++) {
+      // offset angolare alternato per evitare allineamento radiale
+      // troppo "stellato" tra ring contigui.
+      const theta = ring.n === 1
+        ? 0
+        : ((i + (ring.r % 2 ? 0.5 : 0)) / ring.n) * 2 * Math.PI;
+      const xPos = cx + Math.cos(theta) * ring.r;
+      const yStart = cy + Math.sin(theta) * ring.r * yScale;
+      const len = baseLen * ring.lenMul;
+      const yEnd = Math.max(0, yStart - len);
+      const topW = 0.6;
+
+      const grad = ctx.createLinearGradient(xPos, yStart, xPos, yEnd);
+      grad.addColorStop(0, "rgba(0,232,122,0.95)");
+      grad.addColorStop(0.2, "rgba(0,232,122,0.65)");
+      grad.addColorStop(0.6, "rgba(0,232,122,0.22)");
+      grad.addColorStop(1, "rgba(0,232,122,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(xPos - ring.bw / 2, yStart);
+      ctx.lineTo(xPos + ring.bw / 2, yStart);
+      ctx.lineTo(xPos + topW / 2, yEnd);
+      ctx.lineTo(xPos - topW / 2, yEnd);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  return ctx.getImageData(0, 0, W, H);
+}
 
 // Carto basemap styles (free, no API key, CDN OSS).
 // Vector tiles street-level su zoom alto.
@@ -303,7 +412,9 @@ export default function CompanyGlobe({
           clusterMaxZoom: 8,
           clusterRadius: 30,
         });
-        // Layer cluster bubble: cerchio verde con count dentro
+        // Cerchio cluster: "piattaforma" trasparente sotto i raggi.
+        // Opacity bassa così non maschera la base dei raggi che
+        // partono dal suo perimetro superiore. No bordi.
         map.addLayer({
           id: LAYER_CLUSTER_ID,
           type: "circle",
@@ -311,14 +422,51 @@ export default function CompanyGlobe({
           filter: ["has", "point_count"],
           paint: {
             "circle-color": "#00e87a",
-            "circle-opacity": 0.85,
+            "circle-opacity": 0.35,
             "circle-radius": [
               "step",
               ["get", "point_count"],
               14, 5, 18, 15, 24, 30, 30,
             ],
-            "circle-stroke-color": "#000",
-            "circle-stroke-width": 1.5,
+          },
+        });
+        // Doccia di raggi che escono dal perimetro superiore del
+        // cerchio cluster. Symbol layer separato (sovrapposto sopra
+        // il cerchio, sotto il testo del count).
+        if (!map.hasImage(CLUSTER_BEAMS_IMG_ID)) {
+          const beams = createClusterBeamsImageData();
+          if (beams) {
+            map.addImage(CLUSTER_BEAMS_IMG_ID, beams, { pixelRatio: 2 });
+          }
+        }
+        map.addLayer({
+          id: LAYER_CLUSTER_BEAMS_ID,
+          type: "symbol",
+          source: SOURCE_ID,
+          filter: ["has", "point_count"],
+          layout: {
+            "icon-image": CLUSTER_BEAMS_IMG_ID,
+            "icon-anchor": "center",
+            // cy del cerchio invisibile = H/2 nel canvas → coincide
+            // col centro icona → coincide col pin geo. No offset:
+            // l'allineamento è stabile a qualsiasi icon-size.
+            "icon-rotation-alignment": "viewport",
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            // Scala in base al count (cerchio invisibile dell'icona
+            // è 30px; cluster radius varia 14→30; scalo per coincidere)
+            // e amplifica un po' col zoom.
+            // zoom DEVE essere top-level; step(count) sta nei stop
+            // values per scalare anche col point_count.
+            "icon-size": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0,
+              ["step", ["get", "point_count"], 0.55, 5, 0.7, 15, 0.9, 30, 1.1],
+              16,
+              ["step", ["get", "point_count"], 0.8, 5, 1.0, 15, 1.3, 30, 1.6],
+            ],
           },
         });
         map.addLayer({
@@ -335,7 +483,19 @@ export default function CompanyGlobe({
             "text-color": "#000",
           },
         });
-        // Layer pin singolo (filtra solo non-cluster)
+        // Registra l'icona "raggio luminoso" (canvas) come immagine
+        // sprite, una sola volta (style.load può rifire al setStyle
+        // ma map.hasImage previene duplicati).
+        if (!map.hasImage(BEAM_IMG_ID)) {
+          const beam = createBeamImageData();
+          if (beam) {
+            // pixelRatio 2: l'icon-size 1.0 renderizza l'immagine
+            // a metà dim canvas — netto su display retina.
+            map.addImage(BEAM_IMG_ID, beam, { pixelRatio: 2 });
+          }
+        }
+        // Halo sfumato alla base del raggio per dare profondità
+        // (cerchio verde basso-opacità sotto il symbol).
         map.addLayer({
           id: LAYER_HALO_ID,
           type: "circle",
@@ -346,31 +506,39 @@ export default function CompanyGlobe({
               "interpolate",
               ["linear"],
               ["zoom"],
-              0, 4,
-              12, 14,
+              0, 5,
+              12, 18,
             ],
-            "circle-color": ["get", "color"],
-            "circle-opacity": 0.22,
-            "circle-blur": 0.6,
+            "circle-color": "#00e87a",
+            "circle-opacity": 0.28,
+            "circle-blur": 0.7,
           },
         });
+        // Pin singolo = raggio di luce verticale.
+        // icon-anchor 'bottom' → la base del raggio sta sul punto.
+        // icon-rotation-alignment 'viewport' → resta verticale in
+        // schermo anche col globo tiltato.
+        // icon-allow-overlap → raggi vicini non si nascondono.
         map.addLayer({
           id: LAYER_DOT_ID,
-          type: "circle",
+          type: "symbol",
           source: SOURCE_ID,
           filter: ["!", ["has", "point_count"]],
-          paint: {
-            "circle-radius": [
+          layout: {
+            "icon-image": BEAM_IMG_ID,
+            "icon-anchor": "bottom",
+            "icon-rotation-alignment": "viewport",
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+            "icon-size": [
               "interpolate",
               ["linear"],
               ["zoom"],
-              0, 3,
-              12, 7,
+              0, 0.35,
+              6, 0.55,
+              12, 0.9,
+              16, 1.1,
             ],
-            "circle-color": ["get", "color"],
-            "circle-stroke-color": "#000000",
-            "circle-stroke-width": 1.2,
-            "circle-opacity": 0.95,
           },
         });
       }
@@ -380,7 +548,7 @@ export default function CompanyGlobe({
     map.on("style.load", onStyleLoad);
 
     map.on("error", (e) => {
-      console.error("[CompanyGlobe] map error:", e);
+      console.error("[CompanyGlobe] map error:", (e as any)?.error?.message ?? e);
     });
 
     // Click handler sul layer
