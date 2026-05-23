@@ -108,7 +108,7 @@ function createClusterBeamsImageData(
 
   // Blur leggero: smussa i bordi dei raggi e li fonde l'uno con
   // l'altro → meno "lineette", più "luce ambient".
-  ctx.filter = "blur(2.5px)";
+  ctx.filter = "blur(1.2px)";
 
   // Raggi: palette verde brillante (color-green del design system
   // + sfumature più chiare/sature). Trasparenti, vivi su mappa
@@ -485,10 +485,10 @@ export default function JobsGlobe({
               "interpolate",
               ["linear"],
               ["zoom"],
-              0, 0.7,
-              6, 0.9,
-              12, 1.1,
-              16, 1.3,
+              0, 1.0,
+              6, 1.1,
+              12, 1.25,
+              16, 1.4,
             ],
           },
         });
