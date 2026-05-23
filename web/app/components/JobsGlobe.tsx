@@ -39,10 +39,10 @@ function createBeamImageData(): ImageData | null {
   const xBaseLeft = (W - baseW) / 2;
   const xTopLeft = (W - topW) / 2;
   const grad = ctx.createLinearGradient(0, H, 0, 0);
-  grad.addColorStop(0, "rgba(0,232,122,1)");
-  grad.addColorStop(0.15, "rgba(0,232,122,0.85)");
-  grad.addColorStop(0.5, "rgba(0,232,122,0.32)");
-  grad.addColorStop(1, "rgba(0,232,122,0)");
+  grad.addColorStop(0, "rgba(0,200,90,1)");
+  grad.addColorStop(0.15, "rgba(0,200,90,0.9)");
+  grad.addColorStop(0.5, "rgba(0,180,80,0.4)");
+  grad.addColorStop(1, "rgba(0,170,75,0)");
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.moveTo(xBaseLeft, H);
@@ -54,9 +54,9 @@ function createBeamImageData(): ImageData | null {
 
   // Glow radiale alla base (effetto "punto di origine luminoso").
   const baseGlow = ctx.createRadialGradient(W / 2, H, 0, W / 2, H, W * 0.55);
-  baseGlow.addColorStop(0, "rgba(180,255,210,0.95)");
-  baseGlow.addColorStop(0.35, "rgba(0,232,122,0.55)");
-  baseGlow.addColorStop(1, "rgba(0,232,122,0)");
+  baseGlow.addColorStop(0, "rgba(0,210,95,0.95)");
+  baseGlow.addColorStop(0.35, "rgba(0,180,75,0.55)");
+  baseGlow.addColorStop(1, "rgba(0,170,75,0)");
   ctx.fillStyle = baseGlow;
   ctx.fillRect(0, H - W, W, W);
 
@@ -94,29 +94,27 @@ function createClusterBeamsImageData(
   };
   const { rings, baseLen } = presets[density];
 
-  // Glow morbido di base (alone radial, sotto i raggi): dà
-  // l'impressione di luce diffusa che esce dalla "città".
+  // Glow morbido di base (alone radial, sotto i raggi): tinte
+  // verde scuro per stare leggibile su sfondo cartina chiaro.
   const haloR = density === "xl" ? 70 : density === "l" ? 56 : density === "m" ? 42 : 32;
   const haloGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
-  haloGrad.addColorStop(0, "rgba(180,255,210,0.55)");
-  haloGrad.addColorStop(0.5, "rgba(0,232,122,0.18)");
-  haloGrad.addColorStop(1, "rgba(0,232,122,0)");
+  haloGrad.addColorStop(0, "rgba(0,200,90,0.55)");
+  haloGrad.addColorStop(0.5, "rgba(0,170,80,0.22)");
+  haloGrad.addColorStop(1, "rgba(0,170,80,0)");
   ctx.fillStyle = haloGrad;
   ctx.beginPath();
   ctx.ellipse(cx, cy, haloR, haloR * yScale * 1.3, 0, 0, 2 * Math.PI);
   ctx.fill();
 
-  // Disegno raggi in modalità additive ("lighter"): le
-  // sovrapposizioni schiariscono → effetto luce mixata invece
-  // di tinte uniformi. Mix di tonalità verdi a cycle per dare
-  // profondità (verde acido, mint, lime, bianco-verde).
+  // Raggi: blending standard (source-over) per evitare la
+  // schiaritura del "lighter" su sfondi light. Mix di soli verdi
+  // saturi/scuri (neon ma senza bianco) per restare leggibili.
   const tones = [
-    "rgba(0,232,122,A)",
-    "rgba(110,255,180,A)",
-    "rgba(180,255,210,A)",
-    "rgba(40,210,140,A)",
+    "rgba(0,200,90,A)",    // verde acceso medio
+    "rgba(0,160,70,A)",    // verde scuro
+    "rgba(40,220,110,A)",  // verde brillante
+    "rgba(0,180,80,A)",    // verde saturo
   ];
-  ctx.globalCompositeOperation = "lighter";
   let toneIdx = 0;
   for (const [r, n, lenMul, bw] of rings) {
     for (let i = 0; i < n; i++) {
@@ -133,9 +131,9 @@ function createClusterBeamsImageData(
       const tone = tones[toneIdx % tones.length];
       toneIdx++;
       const grad = ctx.createLinearGradient(xPos, yStart, xPos, yEnd);
-      grad.addColorStop(0, tone.replace("A", "0.85"));
-      grad.addColorStop(0.18, tone.replace("A", "0.6"));
-      grad.addColorStop(0.55, tone.replace("A", "0.22"));
+      grad.addColorStop(0, tone.replace("A", "0.95"));
+      grad.addColorStop(0.2, tone.replace("A", "0.75"));
+      grad.addColorStop(0.6, tone.replace("A", "0.3"));
       grad.addColorStop(1, tone.replace("A", "0"));
       ctx.fillStyle = grad;
       ctx.beginPath();
@@ -147,7 +145,6 @@ function createClusterBeamsImageData(
       ctx.fill();
     }
   }
-  ctx.globalCompositeOperation = "source-over";
   return ctx.getImageData(0, 0, W, H);
 }
 
