@@ -518,6 +518,44 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   })
 }
 
+// ── Positions SENZA coordinate ufficio (per "remote bucket" /map) ─
+// Speculare a getPositionsWithCoords: ritorna le posizioni che il
+// globo non puo' renderizzare (office_lat null). Servono per il
+// widget "+ N senza coord" sulla pagina /map che spiega la
+// discrepanza tra chart e mappa.
+export type PositionNoCoord = {
+  id: string
+  title: string | null
+  company: string | null
+  status: string
+  score: number | null
+  is_remote: boolean
+}
+export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionsWithoutCoordsLocal(w) } catch { /* fall through */ } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('id, title, company, status, office_lat, is_remote, scores ( total_score )')
+    .not('status', 'eq', 'excluded')
+    .is('office_lat', null)
+  if (error || !data) return []
+  return (data as any[]).map((p) => {
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    return {
+      id: String(p.id),
+      title: p.title,
+      company: p.company,
+      status: p.status,
+      score: typeof score?.total_score === 'number' ? score.total_score : null,
+      is_remote: !!p.is_remote,
+    }
+  })
+}
+
 // ── Position state-history (timestamp delle transizioni) ──────────
 // Restituisce per ogni posizione i timestamp delle transizioni di
 // stato, sufficienti a ricostruire la composizione della pipeline a
@@ -584,7 +622,10 @@ export async function getCriticScores(): Promise<number[]> {
 // ── Position type distribution ──────────────────────────────────────
 export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]> {
   const w = await ws()
-  if (w) { try { return local.getPositionTypeDistributionLocal(w) } catch { return [] } }
+  // Coerente con getScoreDistribution: se la versione locale fallisce
+  // (es. better-sqlite3 binding mancante), fall-through a Supabase
+  // invece di restituire silenziosamente [] e perdere la donut.
+  if (w) { try { return local.getPositionTypeDistributionLocal(w) } catch { /* fall through */ } }
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
