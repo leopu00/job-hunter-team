@@ -17,14 +17,22 @@ type Props = {
   // (lo,hi) coincide con uno dei range selezionati. Click toggle.
   selectedRanges?: Array<{ lo: number; hi: number }>;
   onToggleRange?: (r: { lo: number; hi: number }) => void;
+  // Posizioni del dataset corrente senza score numerico: appaiono
+  // come barra speciale in cima ("—"). Selezionabile come una
+  // barra normale (filtra "solo senza score" lato mappa).
+  unscoredCount?: number;
+  unscoredSelected?: boolean;
+  onToggleUnscored?: () => void;
 };
 
 const W = 480;
-// Layout ruotato 180°: barre right-anchored.
-// PAD_LEFT = spazio per count (lato sinistro, dove la barra finisce).
-// PAD_RIGHT = spazio per label range "35–39" (lato destro, dove la barra parte).
-const PAD_LEFT = 44;
-const PAD_RIGHT = 76;
+// Layout: a sinistra range label; barre right-anchored al centro;
+// count a destra DOPO la barra (subito prima del bordo container).
+const COUNT_W = 28;
+const RANGE_W = 64;
+const GAP = 6;
+const PAD_LEFT = RANGE_W + GAP; // 70
+const PAD_RIGHT = COUNT_W + GAP; // 34
 const PAD_TOP = 12;
 const PAD_BOTTOM = 8;
 const ROW_H = 24;
@@ -58,8 +66,11 @@ export default function ScoreDistributionHorizontal({
   accentColor,
   selectedRanges = [],
   onToggleRange,
+  unscoredCount = 0,
+  unscoredSelected = false,
+  onToggleUnscored,
 }: Props) {
-  const hasRangeSelection = selectedRanges.length > 0;
+  const hasRangeSelection = selectedRanges.length > 0 || unscoredSelected;
   const [hover, setHover] = useState<number | null>(null);
 
   const stats = useMemo(() => {
@@ -147,16 +158,19 @@ export default function ScoreDistributionHorizontal({
   const visibleBins = stats.bins
     .map((count, i) => ({ count, i }))
     .filter((b) => b.count > 0);
-  const rows = visibleBins.length;
+  const hasUnscored = unscoredCount > 0;
+  const rows = visibleBins.length + (hasUnscored ? 1 : 0);
   const H = PAD_TOP + PAD_BOTTOM + rows * ROW_H;
   const chartW = W - PAD_LEFT - PAD_RIGHT;
+  // Scala barre: includi unscored nel max per coerenza visiva.
+  const barMax = Math.max(1, stats.max, unscoredCount);
   const formatVal = (v: number) =>
     decimals > 0 ? v.toFixed(decimals) : Math.round(v).toString();
 
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-        {accentLabel ? (
+      {accentLabel && (
+        <div className="flex items-center justify-end mb-3">
           <span
             className="text-[10px] font-semibold tracking-[0.14em] uppercase px-2 py-0.5 rounded-full border"
             style={{
@@ -167,22 +181,10 @@ export default function ScoreDistributionHorizontal({
           >
             {accentLabel}
           </span>
-        ) : (
-          <span />
-        )}
-        <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)] tabular-nums">
-          <Stat
-            label="avg"
-            value={stats.avg}
-            color={colorForFraction(stats.avg / maxScore)}
-          />
-          <Stat label="med" value={stats.median} />
-          <Stat label="p25–p75" value={`${stats.p25}–${stats.p75}`} />
-          <Stat label="n" value={stats.n} />
         </div>
-      </div>
+      )}
 
-      {stats.n === 0 ? (
+      {stats.n === 0 && !hasUnscored ? (
         <div className="text-[11px] text-[var(--color-dim)] py-6 text-center">
           {emptyLabel}
         </div>
@@ -196,6 +198,77 @@ export default function ScoreDistributionHorizontal({
           style={{ overflow: "visible" }}
           onMouseLeave={() => setHover(null)}
         >
+          {/* Riga speciale "senza score" — in fondo (ultima riga).
+              I bin score occupano rowIdx 0..visibleBins.length-1
+              (alto-score in cima). Unscored = rowIdx visibleBins.length. */}
+          {hasUnscored && (() => {
+            const y = PAD_TOP + visibleBins.length * ROW_H;
+            const barH = ROW_H - 4;
+            const w = (unscoredCount / barMax) * chartW;
+            const isHover = hover === -1;
+            const isSelected = unscoredSelected;
+            const active = isHover || (hover == null && isSelected);
+            const dimmed =
+              (hover != null && !isHover) ||
+              (hover == null && hasRangeSelection && !isSelected);
+            return (
+              <g
+                onMouseEnter={() => setHover(-1)}
+                onClick={() => onToggleUnscored?.()}
+                style={{ cursor: onToggleUnscored ? "pointer" : "default" }}
+              >
+                <text
+                  x={PAD_LEFT + chartW + GAP}
+                  y={y + barH / 2 + 3}
+                  fontSize={LABEL_FONT}
+                  textAnchor="start"
+                  fill={
+                    isSelected ? "var(--color-bright)" : "var(--color-muted)"
+                  }
+                  fontWeight={isSelected ? 700 : 400}
+                  style={{ fontFamily: "inherit" }}
+                >
+                  {unscoredCount}
+                </text>
+                <rect
+                  x={PAD_LEFT}
+                  y={y}
+                  width={chartW}
+                  height={barH}
+                  fill="var(--color-border)"
+                  opacity={0.25}
+                />
+                <rect
+                  x={PAD_LEFT + chartW - Math.max(0, w)}
+                  y={y}
+                  width={Math.max(0, w)}
+                  height={barH}
+                  fill="var(--color-muted)"
+                  opacity={active ? 1 : dimmed ? 0.32 : 0.7}
+                  stroke={isSelected ? "var(--color-bright)" : "none"}
+                  strokeWidth={isSelected ? 1.5 : 0}
+                  style={{
+                    transition: "opacity 0.12s, stroke-width 0.12s",
+                  }}
+                />
+                <text
+                  x={RANGE_W - 4}
+                  y={y + barH / 2 + 3}
+                  fontSize={LABEL_FONT}
+                  textAnchor="end"
+                  fill={
+                    isSelected ? "var(--color-bright)" : "var(--color-dim)"
+                  }
+                  fontWeight={isSelected ? 700 : 400}
+                  fontStyle="italic"
+                  style={{ fontFamily: "inherit" }}
+                >
+                  no score
+                </text>
+              </g>
+            );
+          })()}
+
           {visibleBins.map(({ count, i }, visIdx) => {
             const lo = (stats.firstBin + i) * stats.activeStep;
             const hi = Math.min(
@@ -204,10 +277,12 @@ export default function ScoreDistributionHorizontal({
                 (decimals > 0 ? 10 ** -decimals : 1),
             );
             // Ruotato 180°: bin con score più alto in cima.
-            const rowIdx = rows - 1 - visIdx;
+            // Unscored (se presente) occupa l'ultima riga: i bin
+            // restano nelle righe 0..visibleBins.length-1.
+            const rowIdx = visibleBins.length - 1 - visIdx;
             const y = PAD_TOP + rowIdx * ROW_H;
             const barH = ROW_H - 4;
-            const w = (count / Math.max(1, stats.max)) * chartW;
+            const w = (count / barMax) * chartW;
             const score = lo + stats.activeStep / 2;
             const isHover = hover === i;
             const isSelected = selectedRanges.some(
@@ -226,10 +301,10 @@ export default function ScoreDistributionHorizontal({
                 style={{ cursor: onToggleRange ? "pointer" : "default" }}
               >
                 <text
-                  x={PAD_LEFT - 4}
+                  x={PAD_LEFT + chartW + GAP}
                   y={y + barH / 2 + 3}
                   fontSize={LABEL_FONT}
-                  textAnchor="end"
+                  textAnchor="start"
                   fill={
                     isSelected ? "var(--color-bright)" : "var(--color-muted)"
                   }
@@ -261,9 +336,10 @@ export default function ScoreDistributionHorizontal({
                   }}
                 />
                 <text
-                  x={PAD_LEFT + chartW + 6}
+                  x={RANGE_W - 4}
                   y={y + barH / 2 + 3}
                   fontSize={LABEL_FONT}
+                  textAnchor="end"
                   fill={
                     isSelected ? "var(--color-bright)" : "var(--color-dim)"
                   }

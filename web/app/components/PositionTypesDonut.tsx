@@ -97,13 +97,21 @@ export default function PositionTypesDonut({
   }
 
   return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+      }}
+      onMouseLeave={() => setHovered(null)}
+    >
     <svg
       width={size}
       height={size}
       viewBox={`0 0 ${SIZE} ${SIZE}`}
       role="img"
       aria-label="Position types"
-      onMouseLeave={() => setHovered(null)}
+      style={{ flexShrink: 0 }}
     >
       {(() => {
         let acc = -Math.PI / 2;
@@ -180,5 +188,71 @@ export default function PositionTypesDonut({
         </text>
       )}
     </svg>
+
+    {/* Legenda: una riga per categoria con pallino, nome, %.
+        Click toggle stessa selezione delle fette; hover evidenzia
+        la fetta corrispondente. */}
+    <ul
+      className="flex flex-col gap-1 min-w-0"
+      style={{ fontSize: 11, lineHeight: 1.2 }}
+    >
+      {data.map((d) => {
+        const isHover = hovered === d.type;
+        const isSelected = selectedTypes.includes(d.type);
+        const dimmed =
+          (hovered != null && !isHover) ||
+          (hovered == null && hasSelection && !isSelected);
+        const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
+        return (
+          <li
+            key={d.type}
+            onMouseEnter={() => setHovered(d.type)}
+            onClick={() => onToggleType?.(d.type)}
+            className="flex items-center gap-2 px-2 py-0.5 rounded transition-opacity"
+            style={{
+              cursor: onToggleType ? "pointer" : "default",
+              opacity: dimmed ? 0.45 : 1,
+              background: isSelected
+                ? "rgba(255,255,255,0.06)"
+                : "transparent",
+            }}
+          >
+            <span
+              aria-hidden
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: d.color,
+                flexShrink: 0,
+              }}
+            />
+            <span
+              className="truncate"
+              style={{
+                color: isSelected
+                  ? "var(--color-bright)"
+                  : "var(--color-base)",
+                fontWeight: isSelected ? 600 : 400,
+              }}
+              title={labels[d.type] ?? d.type}
+            >
+              {labels[d.type] ?? d.type}
+            </span>
+            <span
+              className="tabular-nums"
+              style={{
+                marginLeft: "auto",
+                color: "var(--color-muted)",
+                fontWeight: 600,
+              }}
+            >
+              {pct}%
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+    </div>
   );
 }
