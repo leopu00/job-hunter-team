@@ -130,6 +130,35 @@ def update_position(args):
             params.append(args.last_checked)
         changed.append(f"last_checked={args.last_checked}")
 
+    # Role family + location strutturata (popolata dall'analista).
+    # Convenzione: stringa vuota "" => SET NULL (per "ripulire" un campo).
+    _loc_fields = (
+        ('role_family',       'role_family'),
+        ('loc_city',          'loc_city'),
+        ('loc_region',        'loc_region'),
+        ('loc_country',       'loc_country'),
+        ('loc_country_code',  'loc_country_code'),
+        ('loc_continent',     'loc_continent'),
+        ('work_mode',         'work_mode'),
+        ('work_country',      'work_country'),
+        ('work_country_code', 'work_country_code'),
+        ('location_notes',    'location_notes'),
+    )
+    for arg_name, col in _loc_fields:
+        v = getattr(args, arg_name, None)
+        if v is not None:
+            if v == "":
+                updates.append(f"{col} = NULL")
+                changed.append(f"{col}=NULL")
+            else:
+                updates.append(f"{col} = ?")
+                params.append(v)
+                changed.append(f"{col}={v[:40]}" if len(v) > 40 else f"{col}={v}")
+    if args.is_multi_location is not None:
+        updates.append("is_multi_location = ?")
+        params.append(1 if args.is_multi_location == 'true' else 0)
+        changed.append(f"is_multi_location={args.is_multi_location}")
+
     if not updates:
         print("Nessun campo da aggiornare.")
         return
@@ -379,6 +408,19 @@ def main():
     p.add_argument('--salary-estimated-source', help='Fonte stima: glassdoor, levels.fyi, manual')
     p.add_argument('--source')
     p.add_argument('--last-checked', help='Data/ora ultima verifica link (YYYY-MM-DD HH:MM o "now")')
+    # Role family (categoria semantica del ruolo)
+    p.add_argument('--role-family', help='Categoria semantica popolata dall\'analista (es. "Technical Writing", "CAD / CNC"). Vedi docs/internal/2026-05-23-location-playbook.md')
+    # Location strutturata (popolata dall'analista). Vedi playbook 2026-05-23.
+    p.add_argument('--loc-city', help='Città di ufficio (es. "Dublin"). NULL se solo paese/continente.')
+    p.add_argument('--loc-region', help='Regione/stato (es. "Friuli-Venezia Giulia"). Opzionale.')
+    p.add_argument('--loc-country', help='Paese di ufficio (es. "Italy"). NULL se solo continente.')
+    p.add_argument('--loc-country-code', help='ISO-3166 alpha-2 (es. "IT").')
+    p.add_argument('--loc-continent', choices=['Europe', 'Asia', 'Americas', 'Africa', 'Oceania'])
+    p.add_argument('--work-mode', choices=['onsite', 'hybrid', 'remote'], help='Modalità di lavoro. Rimpiazza is_remote/remote_type.')
+    p.add_argument('--work-country', help='Paese contrattuale (entity che firma). Determina stipendio/CCNL.')
+    p.add_argument('--work-country-code', help='ISO-2 del paese contrattuale.')
+    p.add_argument('--is-multi-location', choices=['true', 'false'], help='true se JD elenca più città/paesi (pin singolo su centroide).')
+    p.add_argument('--location-notes', help='Note libere analista (es. "EU multi-country: NL+DE+GB")')
 
     # company
     c = sub.add_parser('company')
