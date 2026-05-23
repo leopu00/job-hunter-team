@@ -85,35 +85,39 @@ function createClusterBeamsImageData(
   const cy = H / 2;
   const yScale = 0.35;
 
-  // 4 preset "skyline" — densità, ampiezza, altezza scalano.
+  // 4 preset "skyline": meno raggi, più larghi e blendati.
   const presets = {
-    s:  { rings: [[0,1,1.0,3.5],[10,6,0.85,3.0],[20,10,0.70,2.5]] as const, baseLen: 150 },
-    m:  { rings: [[0,1,1.10,4.0],[10,7,0.95,3.5],[20,12,0.80,3.0],[32,16,0.62,2.5]] as const, baseLen: 180 },
-    l:  { rings: [[0,1,1.20,4.5],[10,8,1.05,4.0],[22,14,0.88,3.5],[34,20,0.70,3.0],[44,24,0.55,2.5]] as const, baseLen: 210 },
-    xl: { rings: [[0,1,1.30,5.0],[10,9,1.15,4.5],[22,16,0.98,4.0],[34,22,0.80,3.5],[46,28,0.62,3.0],[58,32,0.45,2.5]] as const, baseLen: 240 },
+    s:  { rings: [[0,1,1.0,8.0],[14,4,0.80,7.0]] as const, baseLen: 150 },
+    m:  { rings: [[0,1,1.10,9.0],[14,5,0.95,8.0],[26,8,0.75,7.0]] as const, baseLen: 180 },
+    l:  { rings: [[0,1,1.20,10.0],[14,6,1.05,9.0],[26,9,0.85,8.0],[40,12,0.65,7.0]] as const, baseLen: 210 },
+    xl: { rings: [[0,1,1.30,11.0],[14,7,1.15,10.0],[26,10,0.95,9.0],[40,13,0.75,8.0],[54,16,0.55,7.0]] as const, baseLen: 240 },
   };
   const { rings, baseLen } = presets[density];
 
-  // Glow morbido di base (alone radial, sotto i raggi): tinte
-  // verde scuro per stare leggibile su sfondo cartina chiaro.
-  const haloR = density === "xl" ? 70 : density === "l" ? 56 : density === "m" ? 42 : 32;
+  // Glow di base: verde brillante (stesso tono delle barre score
+  // alte = "#00e87a") trasparente, alone più largo.
+  const haloR = density === "xl" ? 80 : density === "l" ? 64 : density === "m" ? 50 : 38;
   const haloGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
-  haloGrad.addColorStop(0, "rgba(0,200,90,0.55)");
-  haloGrad.addColorStop(0.5, "rgba(0,170,80,0.22)");
-  haloGrad.addColorStop(1, "rgba(0,170,80,0)");
+  haloGrad.addColorStop(0, "rgba(0,232,122,0.55)");
+  haloGrad.addColorStop(0.5, "rgba(0,232,122,0.22)");
+  haloGrad.addColorStop(1, "rgba(0,232,122,0)");
   ctx.fillStyle = haloGrad;
   ctx.beginPath();
   ctx.ellipse(cx, cy, haloR, haloR * yScale * 1.3, 0, 0, 2 * Math.PI);
   ctx.fill();
 
-  // Raggi: blending standard (source-over) per evitare la
-  // schiaritura del "lighter" su sfondi light. Mix di soli verdi
-  // saturi/scuri (neon ma senza bianco) per restare leggibili.
+  // Blur leggero: smussa i bordi dei raggi e li fonde l'uno con
+  // l'altro → meno "lineette", più "luce ambient".
+  ctx.filter = "blur(2.5px)";
+
+  // Raggi: palette verde brillante (color-green del design system
+  // + sfumature più chiare/sature). Trasparenti, vivi su mappa
+  // light senza ricadere su "bianco".
   const tones = [
-    "rgba(0,200,90,A)",    // verde acceso medio
-    "rgba(0,160,70,A)",    // verde scuro
-    "rgba(40,220,110,A)",  // verde brillante
-    "rgba(0,180,80,A)",    // verde saturo
+    "rgba(0,232,122,A)",   // verde JHT
+    "rgba(127,255,178,A)", // mint
+    "rgba(40,220,135,A)",  // verde brillante
+    "rgba(0,210,110,A)",   // verde saturo
   ];
   let toneIdx = 0;
   for (const [r, n, lenMul, bw] of rings) {
@@ -145,6 +149,7 @@ function createClusterBeamsImageData(
       ctx.fill();
     }
   }
+  ctx.filter = "none";
   return ctx.getImageData(0, 0, W, H);
 }
 
