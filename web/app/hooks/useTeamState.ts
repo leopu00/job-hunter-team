@@ -82,6 +82,20 @@ export function useTeamState(userId: string | null) {
     let cancelled = false
 
     void (async () => {
+      // Auth del Realtime channel con il JWT user. Senza questo passo il
+      // channel parte con role anon → RLS blocca tutti gli eventi
+      // postgres_changes. Discovered nel test E2E 2026-05-23: il browser
+      // restava in waiting indefinitamente nonostante DB scritto.
+      const session = (await supabase.auth.getSession()) as {
+        data: { session: { access_token: string } | null }
+        error: { message: string } | null
+      }
+      if (cancelled) return
+      const jwt = session.data.session?.access_token
+      if (jwt && supabase.realtime?.setAuth) {
+        supabase.realtime.setAuth(jwt)
+      }
+
       const res = (await supabase
         .from('team_state')
         .select('*')
