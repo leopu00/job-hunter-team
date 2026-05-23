@@ -124,7 +124,21 @@ export function useTeamState(userId: string | null) {
       body: JSON.stringify(partial),
     })
     const body = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`)
+    if (!res.ok) {
+      // Costruisco un messaggio leggibile (Error con .message stringa) anche
+      // quando il server ritorna error come oggetto annidato. Evita il
+      // "[object Object]" nel toast del caller.
+      const msg =
+        typeof body.error === 'string'
+          ? body.error
+          : body.message ?? `HTTP ${res.status}`
+      throw new Error(msg)
+    }
+    // Optimistic update: aggiorno subito lo state locale col valore appena
+    // confermato dal server, senza aspettare il broadcast Realtime. La
+    // subscription sovrascriverà comunque se arriva, ma il bottone reagisce
+    // immediato all'azione utente.
+    setState((body.state as TeamState) ?? null)
     return body.state as TeamState
   }, [])
 
