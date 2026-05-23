@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/workspace'
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
-import { aggregateTypes, type PositionTypeCount } from '@/lib/position-classifier'
+import { aggregateRoleFamilies, type RoleFamilyCount } from '@/lib/position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -582,30 +582,30 @@ export async function getCriticScores(): Promise<number[]> {
 }
 
 // ── Position type distribution ──────────────────────────────────────
-export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]> {
+export async function getPositionTypeDistribution(): Promise<RoleFamilyCount[]> {
   const w = await ws()
   if (w) { try { return local.getPositionTypeDistributionLocal(w) } catch { return [] } }
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  // Coerente con getScoreDistribution(): preferisci positions.score quando
-  // presente, altrimenti fallback su scores.total_score via join.
-  // critic_score sta in applications.
+  // Legge `role_family` dalla colonna popolata dal team analyst.
+  // Score: preferisci positions.score, fallback su scores.total_score via join.
+  // Critic: applications.critic_score.
   const { data, error } = await supabase
     .from('positions')
-    .select('title, score, scores(total_score), applications(critic_score)')
+    .select('role_family, score, scores(total_score), applications(critic_score)')
     .not('status', 'eq', 'excluded')
   if (error || !data) return []
   const rows = (data as any[]).map((r) => {
     const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores
     const appRel = Array.isArray(r.applications) ? r.applications[0] : r.applications
     return {
-      title: r.title as string | null,
+      role_family: r.role_family as string | null,
       score: (r.score as number | null) ?? (scoresRel?.total_score ?? null),
       critic: (appRel?.critic_score as number | null) ?? null,
     }
   })
-  return aggregateTypes(rows)
+  return aggregateRoleFamilies(rows)
 }
 
 // ── Positions count by status ───────────────────────────────────────

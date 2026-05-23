@@ -1,157 +1,94 @@
-// Classificatore deterministico del titolo di una posizione in macro-categorie
-// per il widget "Tipologie" della dashboard. Heuristic basato su regex priority
-// list: la prima categoria che fa match vince. L'ordine e' studiato perche'
-// titoli come "Python Backend Engineer" cadono in Backend (specifico), non in
-// Python (catch-all). "AI / ML" sta in cima perche' un "AI Software Engineer"
-// e' AI prima che generico SWE.
+// Aggregatore della distribuzione "Types" della dashboard.
+//
+// NIENTE classificazione qui dentro. La colonna `positions.role_family` (text)
+// e' la fonte di verita': popolata dal team analyst o da una pipeline LLM,
+// letta dal DB e raggruppata. Questo modulo offre solo:
+//   - il tipo `RoleFamilyCount` consumato dalla UI
+//   - `aggregateRoleFamilies()`: somma counts/score/critic per family
+//   - `colorForFamily()`: colore deterministico HSL dal nome family (palette
+//     non hardcoded — qualunque nuova family inventata dall'analista riceve
+//     subito un colore distinto, senza modifiche al codice)
+//
+// Storia: prima qui c'era una lista di regex priority-list per dedurre la
+// categoria dal title. Era hardcoded e tarata sui profili dev, dava 81%
+// "Other" sui profili non-dev (technical writer/CAD/translator). Migrata
+// a colonna DB + lettura data-driven il 2026-05-23. Roadmap per la pipeline
+// LLM in `docs/internal/2026-05-23-position-classifier-llm-roadmap.md`.
 
-export type PositionType =
-  | "ai_ml"
-  | "data"
-  | "devops_cloud"
-  | "full_stack"
-  | "backend"
-  | "frontend"
-  | "python"
-  | "software_engineer"
-  | "other";
+export const UNCATEGORIZED_LABEL = "Da categorizzare";
 
-type Rule = { type: PositionType; pattern: RegExp };
-
-const RULES: Rule[] = [
-  // AI / ML: keyword forti (ai engineer, ml, llm, gen ai, applied ai)
-  {
-    type: "ai_ml",
-    pattern:
-      /\b(ai|a\.i\.|artificial intelligence|machine learning|ml engineer|llm|gen ?ai|nlp|computer vision|cv engineer|deep learning)\b/i,
-  },
-  // Data: scientist / analyst / engineer / analytics
-  {
-    type: "data",
-    pattern:
-      /\b(data scientist|data analyst|data engineer|data engineering|analytics|business intelligence|bi engineer|big data)\b/i,
-  },
-  // DevOps / Cloud / Platform / SRE / Infra
-  {
-    type: "devops_cloud",
-    pattern:
-      /\b(devops|sre|site reliability|cloud (engineer|developer|architect)|kubernetes|k8s|platform engineer|infrastructure|infra engineer)\b/i,
-  },
-  // Full Stack
-  {
-    type: "full_stack",
-    pattern: /\b(full ?stack|full-stack|fullstack)\b/i,
-  },
-  // Backend (anche back-end / server-side)
-  {
-    type: "backend",
-    pattern:
-      /\b(back ?end|back-end|backend|server ?side|api engineer|microservices)\b/i,
-  },
-  // Frontend / UI
-  {
-    type: "frontend",
-    pattern:
-      /\b(front ?end|front-end|frontend|react|vue|angular|ui engineer|ui developer)\b/i,
-  },
-  // Python catch-all (dopo le specializzazioni)
-  { type: "python", pattern: /\bpython\b/i },
-  // Software Engineer / Developer generico
-  {
-    type: "software_engineer",
-    pattern:
-      /\b(software engineer|software developer|software dev|swe|developer|engineer)\b/i,
-  },
-];
-
-export function classifyTitle(title: string | null | undefined): PositionType {
-  if (!title) return "other";
-  for (const r of RULES) if (r.pattern.test(title)) return r.type;
-  return "other";
-}
-
-// Palette coerente con il design system della dashboard. Niente verde puro
-// (riservato ad "applied"); usiamo accenti gia' presenti come var CSS.
-export const POSITION_TYPE_COLOR: Record<PositionType, string> = {
-  ai_ml: "var(--color-purple)",
-  data: "var(--color-blue)",
-  devops_cloud: "var(--color-orange)",
-  full_stack: "#7fffb2",
-  backend: "var(--color-yellow)",
-  frontend: "#58a6ff",
-  python: "#3776ab",
-  software_engineer: "var(--color-muted)",
-  other: "var(--color-dim)",
-};
-
-export const POSITION_TYPE_ORDER: PositionType[] = [
-  "ai_ml",
-  "data",
-  "devops_cloud",
-  "full_stack",
-  "backend",
-  "frontend",
-  "python",
-  "software_engineer",
-  "other",
-];
-
-export type PositionTypeCount = {
-  type: PositionType;
+export type RoleFamilyCount = {
+  family: string; // valore della colonna positions.role_family (o UNCATEGORIZED_LABEL)
   count: number;
   color: string;
-  // Media degli score (0-100) per le sole posizioni di questo tipo che
-  // hanno uno score numerico. null se nessuna posizione del tipo è
-  // stata scorata.
+  // Media degli score (0-100) per le sole posizioni di questa family che hanno
+  // uno score numerico. null se nessuna è stata scorata.
   avgScore: number | null;
-  // Media del voto critico (0-10) per le sole posizioni di questo tipo
-  // che hanno un voto critico numerico. null se nessuna è stata
-  // revisionata dal critico.
+  // Media del voto critico (0-10), null se nessuna è stata revisionata.
   avgCritic: number | null;
 };
 
-export function aggregateTypes(
+// Hash deterministico: stesso input → stesso colore. Output stabile tra
+// reload, indipendente dall'ordine delle family in input.
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0; // forza a int32
+  }
+  return Math.abs(h);
+}
+
+export function colorForFamily(name: string): string {
+  // "Other" e "Da categorizzare" tinta dimmed: stesso slot visivo del resto
+  // ma de-enfatizzato, segnala che non e' una categoria semantica vera.
+  if (!name || name === "Other" || name === UNCATEGORIZED_LABEL) {
+    return "var(--color-dim)";
+  }
+  // HSL con saturazione/luminosita' calibrate sul tema scuro: tinte
+  // sufficientemente distinte tra family senza spegnersi sullo sfondo
+  // (--color-card e' ~#13161b).
+  const hue = hashString(name) % 360;
+  return `hsl(${hue}, 42%, 60%)`;
+}
+
+export function aggregateRoleFamilies(
   rows: Array<{
-    title: string | null | undefined;
+    role_family: string | null | undefined;
     score: number | null | undefined;
     critic: number | null | undefined;
   }>,
-): PositionTypeCount[] {
-  const counts: Record<PositionType, number> = {
-    ai_ml: 0,
-    data: 0,
-    devops_cloud: 0,
-    full_stack: 0,
-    backend: 0,
-    frontend: 0,
-    python: 0,
-    software_engineer: 0,
-    other: 0,
-  };
-  const scoreSum: Record<PositionType, number> = { ...counts };
-  const scoreN: Record<PositionType, number> = { ...counts };
-  const criticSum: Record<PositionType, number> = { ...counts };
-  const criticN: Record<PositionType, number> = { ...counts };
+): RoleFamilyCount[] {
+  const counts = new Map<string, number>();
+  const scoreSum = new Map<string, number>();
+  const scoreN = new Map<string, number>();
+  const criticSum = new Map<string, number>();
+  const criticN = new Map<string, number>();
+
   for (const r of rows) {
-    const t = classifyTitle(r.title);
-    counts[t] += 1;
+    const family = (r.role_family ?? "").trim() || UNCATEGORIZED_LABEL;
+    counts.set(family, (counts.get(family) ?? 0) + 1);
     if (typeof r.score === "number" && Number.isFinite(r.score)) {
-      scoreSum[t] += r.score;
-      scoreN[t] += 1;
+      scoreSum.set(family, (scoreSum.get(family) ?? 0) + r.score);
+      scoreN.set(family, (scoreN.get(family) ?? 0) + 1);
     }
     if (typeof r.critic === "number" && Number.isFinite(r.critic)) {
-      criticSum[t] += r.critic;
-      criticN[t] += 1;
+      criticSum.set(family, (criticSum.get(family) ?? 0) + r.critic);
+      criticN.set(family, (criticN.get(family) ?? 0) + 1);
     }
   }
-  return POSITION_TYPE_ORDER
-    .map((type) => ({
-      type,
-      count: counts[type],
-      color: POSITION_TYPE_COLOR[type],
-      avgScore: scoreN[type] > 0 ? scoreSum[type] / scoreN[type] : null,
-      avgCritic: criticN[type] > 0 ? criticSum[type] / criticN[type] : null,
-    }))
-    .filter((r) => r.count > 0)
+
+  return Array.from(counts.entries())
+    .map(([family, count]) => {
+      const sN = scoreN.get(family) ?? 0;
+      const cN = criticN.get(family) ?? 0;
+      return {
+        family,
+        count,
+        color: colorForFamily(family),
+        avgScore: sN > 0 ? (scoreSum.get(family) ?? 0) / sN : null,
+        avgCritic: cN > 0 ? (criticSum.get(family) ?? 0) / cN : null,
+      };
+    })
     .sort((a, b) => b.count - a.count);
 }
