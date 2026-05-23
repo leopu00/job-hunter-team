@@ -71,7 +71,12 @@ async function apiCall(method, baseUrl, token, path, body) {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(`${baseUrl}${path}`, opts);
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`${method} ${path} → HTTP ${res.status}: ${json.error || 'unknown'}`);
+  if (!res.ok) {
+    const err = new Error(`${method} ${path} → HTTP ${res.status}: ${json.error || 'unknown'}`);
+    err.status = res.status;
+    err.body = json;
+    throw err;
+  }
   return json;
 }
 
@@ -164,16 +169,7 @@ export async function runTeamStateReconciler() {
 
   log('info', 'startup.begin', { baseUrl, userId: config.user_id });
 
-  try {
-    const claim = await apiCall('POST', baseUrl, token, '/api/team-state/claim', {});
-    log('info', 'claim.done', { device_id: claim.claimed_device_id });
-  } catch (err) {
-    log('error', 'claim.failed', { err: err.message });
-  }
-
   let shuttingDown = false;
-  let consecutiveErrors = 0;
-  let lastHeartbeatAt = 0;
 
   const shutdown = (signal) => {
     log('info', 'shutdown.received', { signal });
@@ -181,6 +177,44 @@ export async function runTeamStateReconciler() {
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Claim con retry su 409 (altro device active con heartbeat recente):
+  // wait & retry ogni 60s. Quando l'altro device sparisce (heartbeat
+  // scaduto > 5min lato server), il claim riesce. Non si fa force=true
+  // automatico (sarebbe rude); l'utente deve decidere via UI/CLI.
+  const CLAIM_RETRY_MS = 60_000;
+  const deviceLabel = process.env.JHT_DEVICE_LABEL || (process.env.IS_CONTAINER === '1' ? 'container' : 'cli');
+  while (!shuttingDown) {
+    try {
+      const claim = await apiCall('POST', baseUrl, token, '/api/team-state/claim', {
+        device_label: deviceLabel,
+      });
+      log('info', 'claim.done', {
+        device_id: claim.claimed_device_id,
+        evicted: claim.evicted_device_id || null,
+      });
+      break;
+    } catch (err) {
+      if (err.status === 409 && err.body?.error === 'device_already_claimed') {
+        log('warn', 'claim.conflict', {
+          owner_device_id: err.body.current_device_id,
+          heartbeat_age_seconds: err.body.heartbeat_age_seconds,
+          retrying_in_seconds: CLAIM_RETRY_MS / 1000,
+        });
+        await new Promise((r) => setTimeout(r, CLAIM_RETRY_MS));
+        continue;
+      }
+      // Altro errore (rete, 5xx): log + breve backoff, riprova
+      log('error', 'claim.failed', { err: err.message });
+      await new Promise((r) => setTimeout(r, 30_000));
+    }
+  }
+  if (shuttingDown) {
+    log('info', 'shutdown.during-claim');
+    process.exit(0);
+  }
+  let consecutiveErrors = 0;
+  let lastHeartbeatAt = 0;
 
   while (!shuttingDown) {
     if (existsSync(WEEKLY_HALT_FLAG)) {

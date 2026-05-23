@@ -258,6 +258,35 @@ export async function POST(req: NextRequest) {
   if (!result.ok) return result.res;
   const { userId, admin } = result.data;
 
+  // Single-team enforcement (regola lockata vps.md:392): se team_state
+  // ha un active_device_id non-null e non corrisponde al token corrente,
+  // rifiuta il push con 409. Lascia passare se active_device_id è null
+  // (nessuno ha mai claimato) per backward-compat con device legacy.
+  const tsCheck = (await admin
+    .from("team_state")
+    .select("active_device_id, last_heartbeat_at")
+    .eq("user_id", userId)
+    .maybeSingle()) as {
+    data: { active_device_id: string | null; last_heartbeat_at: string | null } | null;
+    error: { message: string } | null;
+  };
+  if (
+    tsCheck.data &&
+    tsCheck.data.active_device_id &&
+    tsCheck.data.active_device_id !== result.data.tokenId
+  ) {
+    return NextResponse.json(
+      {
+        error: "not_active_device",
+        message:
+          "Questo device non è più il team attivo (un altro device ha fatto claim). " +
+          "Spegni il team locale o fai POST /api/team-state/claim {\"force\":true} per riprendere il controllo.",
+        active_device_id: tsCheck.data.active_device_id,
+      },
+      { status: 409 },
+    );
+  }
+
   // Push e' write-heavy (positions+scores+applications upsert): cap
   // stretto a 20/min per token. Il limite globale del proxy resta sopra.
   const rl = await checkCloudSyncRateLimit("push", result.data.tokenId, 20);
