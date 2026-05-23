@@ -137,16 +137,16 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ✅ **Refactor `team_commands` → `team_state` desired-state + event lanes** (mig 019–022, 2026-05-23) — accorpa single-team enforcement + status inference + chat/feedback lanes; `team_commands` resta vivo in parallelo durante cutover (Step 5–6 in `cloud-sync-architecture.md`)
 - ✅ **Realtime publication su team_state + lanes** (mig 021) — browser live (~200ms) via Supabase Realtime
 - ✅ **Fix RLS `location_geocode`** (mig 020) — close advisor critical: cache poisoning via anon key
-- ⬜ **P0 — SQLite CHECK constraints** (migration `006_positions_check_constraints.sql`)
-- ⬜ **P0 — RLS init plan fix** (24 policy `auth.uid()` per-row)
+- ✅ **P0 — SQLite CHECK constraints** (commit `3602d42e`, 2026-05-22) — replica CHECK length di Postgres mig 015 su SQLite locale (title/company/location)
+- ✅ **P0 — RLS init plan fix** (commit `2b78fdd9` + migration 018, 2026-05-22) — 24 policy migrate da `auth.uid()` per-row a `(select auth.uid())`, chiude advisor critical
 - ⬜ **P0 — DELETE propagation con tombstone** (push è solo UPSERT — vedi `cloud-sync-architecture.md` #4)
-- ⬜ **P1 — Daemon alert** ≥3 fail consecutivi + auto-shutdown >5 fail
+- ✅ **P1 — Daemon alert + auto-shutdown** (commit `ad2e8076`, 2026-05-22) — counter consecutiveFails: warning a ≥3, auto-shutdown a ≥5, reset su success. Origin incident RobertHalf 2026-05-19
 - ⬜ **P1 — Killswitch 401/403** (oggi daemon continua loop infinito su token revocato)
 - ⬜ **P1 — `jht cloud restore`** comando esplicito disaster recovery
 - ⬜ **P1 — Subscriber on-demand 🅲** (polling spento se team giù, post-team_state)
 - ⬜ **P1 — Polling adattivo** basato su `team_state.last_user_activity_at`
 - ⬜ **P1 — Feedback like/dislike** istruire scout/scorer a reagire
-- ⬜ **Periodic sync loop** ⏺ già done (push daemon attivo, cadenza tunata 30s→60s + delta-only)
+- ✅ **Periodic sync loop** (commit `690534e0`, 2026-05-22) — push daemon attivo, cadenza tunata 30s→60s + delta-only via `updated_at` cursor + halt-flag guard
 - ⬜ **Google Drive integration** (`drive.file` scope, CV/cover letter upload)
 - ⬜ **"Enable cloud sync" toggle** in desktop launcher + CLI wizard
 - ⬜ **Self-hosted Supabase docs** (BYO backend for technical users)
