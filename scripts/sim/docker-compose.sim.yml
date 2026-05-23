@@ -24,6 +24,10 @@ services:
       dockerfile: Dockerfile
     image: jht-sim:local
     container_name: jht-sim-d2
+    # Override ENTRYPOINT del Dockerfile (`tini -- node jht.js`) per evitare
+    # il crash di `node` su `croner` mancante nell'immagine. Tini resta come
+    # PID 1 per signal handling, ma il processo figlio è solo `sleep`.
+    entrypoint: ["/usr/bin/tini", "-g", "--"]
     command: ["sleep", "infinity"]
     environment:
       - HOME=/jht_home_sim
