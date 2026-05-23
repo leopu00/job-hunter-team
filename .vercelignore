@@ -1,13 +1,15 @@
+# Path con leading slash = solo root del repo. Senza slash matchava anche
+# `web/app/api/agents/` rompendo /api/agents/* su prod (fixed 2026-05-23).
 node_modules
 .next
-dev1
-dev2
-dev3
-dev4
-desktop
-agents
-profile
-allegati
-mio-test-team
+/dev1
+/dev2
+/dev3
+/dev4
+/desktop
+/agents
+/profile
+/allegati
+/mio-test-team
 .git
 *.log
