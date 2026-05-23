@@ -101,13 +101,14 @@ See also the **launcher-distributed skill discovery** punch list in [`docs/about
 
 ### 🧪 Real-world tests (preliminary, partially documented)
 
-> ⚠️ **Status 2026-05-22**: tre run reali esistono ma solo uno è pubblicato come Case Study. Da promuovere a `RESULTS.md` next time — vedi [JHT-TEST-CAMPAIGN] in PHASE 1. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
+> ✅ **Status 2026-05-23**: 3 run pubblicati come Case Study in `docs/about/RESULTS.md`. Staging doc: `docs/internal/2026-05-23-case-study-staging.md` (analisi DB raw + log + cost breakdown). Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — ora 3/12 done.
 
-- ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1 pubblicato)
-- 🟡 Codex ProLite × non-tech multi-dominio IT+HU — VPS1 35h run 19-21/05: 206 pos → 105 ready, critic 6.30 (dati in `docs/internal/2026-05-21-vps1-run-postmortem.md`, **da promuovere a Case Study #2**)
-- 🟡 Kimi K2 × tech SWE — run ~17/05: 19 ready, critic ~6.0, ±10-15% oscillation (dati in `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`, **da promuovere a Case Study #3**)
+- ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1)
+- ✅ **Codex ProLite × Beta tester 1** (senior multilingual technical) — 34.84h run: 206 pos → 105 ready (51%), critic 6.35, 88.2% PASS, €100/mo (Case Study #2)
+- ✅ **Kimi K2 Pro × Beta tester 2** (junior software dev) — 75h run: 251 pos → 56 ready (22%), critic 5.05, 51% PASS, €40/mo, 1.61B token totali aggregati da wire.jsonl (Case Study #3)
 - ❌ Claude Pro €20 — not viable (single agent burns the window)
-- ⬜ Kimi €40 mass-market — 2 tester aggiuntivi necessari per validare jackpot
+- ⬜ Kimi €40 mass-market — almeno 2 tester esterni necessari per validare jackpot in profili diversi (Case Study #3 è maintainer-internal)
+- ⬜ Multi-week tests — i 3 case study attuali sono <4 giorni ciascuno (burst usage). Servono test 4-settimane (= 1 abbonamento mensile speso) per dati steady-state
 
 For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
@@ -240,21 +241,68 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Co-maintainer:** identify within 60 days post-launch (can be informal, just someone who triages issues — fratello / amico fidato).
 - **Reasoning:** see `docs/internal/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
 
-##### 🧪 [JHT-TEST-CAMPAIGN] Fill coverage matrix (8/10 cells) ⬜ BLOCKER pre-launch
+##### 🧪 [JHT-TEST-CAMPAIGN] Fill coverage matrix (8/12 cells) 🟡 3/12 done — BLOCKER residuo
 
 - **Problem:** today's test claims are anecdotal (single profile, single provider). Public users will ask "does it work for *my* setup?" — we need data.
-- **Coverage tracker:** [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — 10 cells (provider × persona), 1 done (maintainer), 9 open. Target: 8/10 filled before launch.
+- **Coverage tracker:** [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — 12 cells (provider × persona), **3 done** (#1 maintainer Claude Max anecdotal, #2 Codex/translator, #3 Kimi/Python junior), 9 open. Target: **8/12** filled before launch.
 - **Pipeline:** beta tester applies via [`docs/guides/BETA.md`](docs/guides/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/about/RESULTS.md`](docs/about/RESULTS.md) and updating cell status in BETA.
 - **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
-- **Priority:** 🔴 BLOCKER pre-launch
-- **🆕 Update 2026-05-22 — abbiamo 2 celle reali non ancora pubblicate:**
-  - Run **Codex ProLite × non-tech multi-dominio IT+HU** (VPS1, 35h, 19-21/05): 206 pos → 105 ready, critic medio 6.30, dati completi in [`docs/internal/2026-05-21-vps1-run-postmortem.md`](docs/internal/2026-05-21-vps1-run-postmortem.md) (consolida team-idle-gaps + team-output-analysis + kimi-vs-codex).
-  - Run **Kimi K2 × tech SWE** (~17/05): 19 ready, critic ~6.0, dati in [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md).
-- **Next time — azioni concrete (effort ~2h):**
-  1. PR: promuovere VPS1 run a **Case Study #2** in `docs/about/RESULTS.md` (template già pronto).
-  2. PR: promuovere Kimi run a **Case Study #3** in `RESULTS.md`.
-  3. Aggiornare matrice in `docs/guides/BETA.md` → 3/10 done (non più 1/10). Identificare quale cella formale coprire (probabilmente nuove righe "non-tech multi-domain × Codex ProLite" + "tech SWE × Kimi K2 Plan").
-  4. Vero gap residuo dopo i 3 PR: trovare **2 tester Kimi €40** per validare mass-market jackpot (resta priorità).
+- **Priority:** 🔴 BLOCKER pre-launch (5 cells residue)
+- **✅ Done 2026-05-23**: estrazione DB raw da entrambe le VPS Hetzner (Codex VPS1 + Kimi VPS), analisi pipeline + cost + token, anonimizzazione, scrittura Case Study #2 + #3 in `RESULTS.md`, matrix BETA.md aggiornata 1/10 → 3/12. Staging doc: [`docs/internal/2026-05-23-case-study-staging.md`](docs/internal/2026-05-23-case-study-staging.md).
+- **Residual gap:** trovare **almeno 2 tester Kimi €40 esterni** (cell #4, #6, #7, #8, #10) per validare mass-market jackpot al di fuori del maintainer. Case Study #3 è internal (Beta tester 2 = maintainer profile costruito ad hoc), serve external confirmation.
+- **Side findings da promuovere a fix backlog:**
+  - Companies rubric Analista: 0 NO_GO su 357 companies totali tra 2 run → rubric troppo permissivo, hard requirements (degree, geo) non filtrati upfront
+  - Writer attribution null 93% su Codex run → `written_by` field non popolato consistente
+
+##### ✍️ [JHT-WRITER-ON-DEMAND] Scrittore + Critico spawn SOLO su selezione utente esplicita ⬜ 🔴 URGENTE pre-next-test
+
+- **Background scoperto da case study #2/#3 (2026-05-23)**: gli Scrittori sono i top consumer di token del team (spawn 3-round + Critico che a sua volta consuma per leggere CV+JD+scrivere critica). Il Critico è concettualmente "fuori dal team" (spawnato dallo Scrittore) ma il suo consumo dovrebbe essere attribuito allo Scrittore per i calcoli di throttling del Capitano. Inoltre molti CV scritti finiscono in `ready` senza che l'utente li voglia davvero → token bruciati su posizioni che l'utente non applierà mai. Su VPS Codex: 105 ready ma applied=0; su VPS Kimi: 56 ready ma applied=0.
+- **Problem statement**: oggi la pipeline scrive CV per **tutto** ciò che passa lo Scorer (default ≥60). Risultato: forte spreco di token su CV non desiderati + scarsa potenza di ricerca perché Scrittori "rubano" risorse a Scout/Analista/Scorer.
+- **Soluzione proposta** (rivoluzione architettonica per i prossimi beta test):
+  1. **Default mode = "SEARCH ONLY"**: all'avvio del team, Scrittori in stand-by. Il team gira solo come motore di ricerca + analisi + scoring → accumula posizioni con score nel DB.
+  2. **Trigger esplicito**: utente seleziona posizioni nel pool con score (via Telegram bot O dashboard web) → checkbox/star/select-all → solo per quelle posizioni si spawnano Scrittore + Critico.
+  3. **Capitano dynamic balancing**: una volta arrivata richiesta scrittura, Capitano alloca dinamicamente (es. 3 Scout + 1 Scrittore se la richiesta è piccola, oppure 2 Scout + 2 Scrittori se grossa).
+  4. **Feedback loop migliorato**: gli score (e ora anche le **selezioni esplicite** dell'utente per scrittura) diventano segnale per gli Scout — "questi tipi di posizioni interessano davvero, cerca di più in questo ambito".
+- **Vantaggi**:
+  - Risparmio token MASSIVO (probabilmente 60-80% per i beta tester che selezionano ~20% delle ready)
+  - Motore di ricerca + validazione più potente di default (più budget per Scout/Analista/Scorer)
+  - Pipeline diventa "demand-driven" invece di "speculative-driven"
+  - User-curated apply è già nel design (applied=0 by-design) → write-on-demand è la sua naturale estensione upstream
+- **Componenti da implementare**:
+  - UI dashboard web: lista posizioni scored con checkbox + "Genera CV per le selezionate" CTA
+  - Telegram bot: comando `/cv <position_id>` o `/cv all-score-80plus` per batch
+  - Capitano prompt: nuova RULE "non spawnare Scrittore se nessuna posizione ha flag `write_requested=true` nel DB"
+  - DB: aggiungere `positions.write_requested BOOLEAN DEFAULT 0` + `positions.write_requested_at TIMESTAMP`
+  - Skill nuova `[JHT-SKILL-WRITE-REQUEST]` per Scrittore: pull next position con `write_requested=true AND status='scored'`
+  - Migration Supabase: stesso campo per cloud sync
+- **Priority**: 🔴 URGENTE — da implementare PRIMA dei prossimi test beta. Cambia profondamente i numeri di consumo token e quindi la validità delle metriche.
+- **Linked**: [JHT-TOKEN-MONITOR-WRITER-CRITIC] (sotto), [JHT-COST-VALIDATION-PAYG-VS-SUB] (sotto).
+
+##### 📊 [JHT-TOKEN-MONITOR-WRITER-CRITIC] Aggrega consumo Scrittore+Critico come unità singola per throttling Capitano ⬜ 🟠 HIGH
+
+- **Background scoperto 2026-05-23**: il Critico è spawnato dallo Scrittore (~3-round critic loop). Il suo consumo token NON è attribuito allo Scrittore nel `token-meter` attuale, ma per le decisioni di throttling del Capitano dovrebbe essere considerato "1 unit" insieme allo Scrittore. Inoltre il Critico ha task atomica (read CV + JD + scrivere critica) — non può essere throttlato facilmente, quindi l'unico leva è rallentare lo Scrittore "padre" prima che spawni il Critico.
+- **Task**:
+  1. `token-meter.py` (o `pacing-bridge.py`): aggregare per-agent rate sommando `writer-N` + `critic-spawned-by-writer-N` come una sola serie temporale (chiave = writer-N).
+  2. Capitano vede `writer-N rate = 1.5M kT/min` (e quel numero include il critico associato), e decide il throttle in base al rate aggregato.
+  3. State file token-meter espone `per_writer_aggregated[writer-N] = {own_rate, critic_rate, combined_rate}` per debugging/dashboard.
+  4. Dashboard web `/team`: tab "Per-writer cost" con barra stacked (writer own + critic spawn).
+- **Linked**: [JHT-WRITER-ON-DEMAND] (sopra) sblocca anche questa misurazione perché senza writer-spawn-burst il rate aggregato resta naturalmente sotto soglia.
+- **Side bug da fix**: `token-meter.csv` non è durable cross container restart (verificato su VPS Kimi 2026-05-23, file resettato sul restart, 35 righe vs 10752 di Codex). Da rendere durable con append-mode + rotazione invece di overwrite.
+
+##### 🧪 [JHT-COST-VALIDATION-PAYG-VS-SUB] Validazione cost — €40 di token Kimi pay-per-use vs €40 sub mensile ⬜ 🟡 MEDIUM
+
+- **Background**: Case Study #3 (Kimi €40 sub, 4 giorni run, 1.61B tokens all-in) ha **stimato** che pay-per-use sarebbe stato ~€78. Conferma il "mass-market jackpot" di Kimi ma è una stima da listino, non misurazione diretta.
+- **Esperimento proposto**:
+  1. Comprare credito Kimi K2 in pay-per-use per €40 esatti.
+  2. Far girare team JHT con quello stesso profilo (o Beta tester 2 stesso, o profilo nuovo neutro).
+  3. Misurare cosa produce: positions trovate, ready, critic pass rate, time-to-cap.
+  4. Confrontare con i numeri del Case Study #3 (sub €40 in 4 giorni di burst → 56 ready).
+  5. Output: metrica precisa "cost per ready CV" pay-per-use vs sub.
+- **Bonus experiment — burst vs spread**:
+  - Intuition utente (2026-05-23): uso massivo concentrato (3-4 giorni full) potrebbe avere prezzo/throughput diverso da uso distribuito (es. 1-2h/day per 30 giorni). Differenze attese: cache hit rate, tier pricing dinamico (se esiste), saturazione weekly window.
+  - Misurare: lanciare un terzo run "spread" — 1h/day per 30 giorni con stesso profilo/provider, contare token totali e ready prodotti.
+- **Acceptance**: tabella in `docs/about/RESULTS.md` con colonne "Sub €40", "Pay-per-use €40", "Spread 1h/day per 30d" + metriche → narrative chiaro su quando ciascun pattern conviene.
+- **Costo**: €40 sub Kimi + €40 token pay-per-use + 4 settimane di tempo per il run "spread". ~€80 tot + 1 mese calendar.
 
 ##### ✅ [JHT-FRONTEND-DASHBOARD-AUDIT] Audit residual mock data in dashboard — DONE 2026-05-19
 
