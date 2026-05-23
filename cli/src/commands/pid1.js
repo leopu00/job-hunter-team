@@ -375,6 +375,7 @@ async function dispatch() {
   const dashCmd = [JHT_ENTRY, 'dashboard', '--no-browser'];
   const daemonCmd = [JHT_ENTRY, 'cloud', 'daemon'];
   const realtimeCmd = [JHT_ENTRY, 'cloud', 'realtime-listen'];
+  const teamStateCmd = [JHT_ENTRY, 'cloud', 'team-state-listen'];
 
   // ── Dashboard: lifetime = container, parte sempre.
   pid1Log(isVps ? 'mode: VPS' : 'mode: local');
@@ -537,8 +538,10 @@ async function dispatch() {
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
   let daemonChild = null;
   let realtimeChild = null;
+  let teamStateChild = null;
   let daemonRespawnTimer = null;
   let realtimeRespawnTimer = null;
+  let teamStateRespawnTimer = null;
 
   const startDaemon = () => {
     if (daemonChild && !daemonChild.killed) return;
@@ -585,6 +588,30 @@ async function dispatch() {
     });
   };
 
+  // team_state reconciler: polla /api/team-state e converge desired→observed
+  // via `jht team start|stop|restart`. Parallelo a realtime subscriber durante
+  // il cutover (Step 5 in docs/internal/cloud-sync-architecture.md).
+  const startTeamState = () => {
+    if (teamStateChild && !teamStateChild.killed) return;
+    pid1Log('starting team_state reconciler');
+    teamStateChild = spawnLabeled('team-state', process.execPath, teamStateCmd);
+    teamStateChild.on('exit', (code, signal) => {
+      const exitedChild = teamStateChild;
+      teamStateChild = null;
+      if (shuttingDown) return;
+      pid1Log(`team_state reconciler exited (code=${code} signal=${signal})`);
+      if (teamStateRespawnTimer) clearTimeout(teamStateRespawnTimer);
+      teamStateRespawnTimer = setTimeout(async () => {
+        if (shuttingDown) return;
+        if (await isCloudConfigured()) {
+          pid1Log('team_state reconciler respawn dopo crash');
+          startTeamState();
+        }
+      }, 5000);
+      void exitedChild;
+    });
+  };
+
   const stopDaemon = (reason) => {
     if (daemonRespawnTimer) {
       clearTimeout(daemonRespawnTimer);
@@ -602,12 +629,21 @@ async function dispatch() {
       pid1Log(`stopping realtime subscriber (${reason})`);
       realtimeChild.kill('SIGTERM');
     }
+    if (teamStateRespawnTimer) {
+      clearTimeout(teamStateRespawnTimer);
+      teamStateRespawnTimer = null;
+    }
+    if (teamStateChild && !teamStateChild.killed) {
+      pid1Log(`stopping team_state reconciler (${reason})`);
+      teamStateChild.kill('SIGTERM');
+    }
   };
 
-  // Stato iniziale del cloud: se gia' paired, daemon + realtime partono.
+  // Stato iniziale del cloud: se gia' paired, daemon + realtime + team_state partono.
   if (isVps && await isCloudConfigured()) {
     startDaemon();
     startRealtime();
+    startTeamState();
   } else if (isVps) {
     pid1Log('cloud sync non ancora configurato: aspetto cloud.json (auto-start dopo pairing)');
   }
@@ -629,9 +665,10 @@ async function dispatch() {
         if (nowConfigured === lastConfigured) return;
         lastConfigured = nowConfigured;
         if (nowConfigured) {
-          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber');
+          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber + team_state reconciler');
           startDaemon();
           startRealtime();
+          startTeamState();
         } else {
           stopDaemon('cloud.json rimosso o disabilitato');
         }
@@ -650,6 +687,7 @@ async function dispatch() {
     pid1Log(`shutdown (${sig}): killing children`);
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
+    if (teamStateChild && !teamStateChild.killed) teamStateChild.kill(sig);
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
     if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
