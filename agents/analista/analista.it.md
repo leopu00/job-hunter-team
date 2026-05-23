@@ -221,6 +221,81 @@ fonte se non sei certo (es. "work_country inferred from HQ").
 continente, NON un paese). Usa `loc_continent="Europe"` e lascia
 `loc_country=NULL`.
 
+**REGOLA-09b — Una posizione alla volta (NO batch)**
+
+Processa le posizioni del tuo range **una per volta**: leggi JD → ragiona
+→ db-update → status=checked → passa alla successiva. NON caricare 20-69
+JD in un singolo turno LLM e produrre un mega-blocco di update.
+
+Perché: il batch in un singolo turno (osservato in sim 2026-05-23) genera
+output da 17k+ token che impiega 4-5 minuti, durante i quali altri
+analisti girano a vuoto sul Capitano; in più il reasoning si appiattisce
+sui pattern dei primi record e perde nuance sui casi vaghi (Europe
+Company, multi-location, US-entity-in-EU). Uno-alla-volta è più lento per
+record ma più affidabile, più ispezionabile (il Capitano vede progress
+real-time) e meglio parallelizzabile.
+
+Eccezione: per i casi banali (es. "Dublin, Ireland" hybrid in azienda
+locale) puoi fare batch di 3-5 senza web search. Per qualunque caso che
+richiede web search, fai uno alla volta.
+
+**REGOLA-09c — Peer DB lookup (coordinazione tassonomia)**
+
+PRIMA di scegliere il valore di `role_family` per una nuova posizione,
+**consulta sempre il DB** per vedere quali family hanno già usato gli
+altri analisti nel batch corrente. Allineati al loro vocabolario invece
+di inventarne di nuovi:
+
+```bash
+# Vedi cosa hanno già usato i colleghi
+python3 /app/shared/skills/db_query.py raw \
+  "SELECT role_family, COUNT(*) AS n
+   FROM positions WHERE role_family IS NOT NULL
+   Company BY role_family ORDER BY n DESC"
+```
+
+Regole:
+- Se trovi una family **semanticamente equivalente** (es. collega ha
+  scritto "Technical Writing" e tu stavi per scrivere "Technical
+  Engineering" per un Technical Writer): **allineati** al nome esistente.
+- Se la tua posizione è davvero un caso nuovo, puoi creare una nuova
+  family — ma documenta brevemente nel `location_notes` perché non hai
+  riusato una esistente.
+- Esegui il lookup almeno ogni 5-10 posizioni nel tuo range (la prima
+  volta che inizi, poi periodicamente). I colleghi nel frattempo hanno
+  scritto, devi essere aggiornato.
+
+**Anti-pattern noti dalla sim 1 (2026-05-23)** — NON ripetere:
+- "Translation / Localization" vs "Localization / Language Quality" vs
+  "Language / Localization" → scegli UNO e tienilo
+- "Customer Support" vs "Customer Success / Technical" vs "Technical
+  Support" → scegli UNO
+- "Technical Engineering" per un Technical Writer → SBAGLIATO, usa
+  "Technical Writing"
+
+Quando in dubbio chiedi al Capitano via tmux send-keys (REGOLA inter-
+agente). Lui può consolidare la tassonomia per tutto il team.
+
+**REGOLA-09d — Fallback `work_country` se "unverifiable"**
+
+Se dopo 2 tentativi di web search non riesci a determinare con certezza
+il `work_country` (paese contrattuale), NON lasciarlo NULL. Procedi per
+fallback in quest'ordine:
+
+1. **Paese del posting board** (es. job apparso su `linkedin.com/it/...`
+   → fallback `IT` se la JD non smentisce). Annota in
+   `location_notes`: "work_country inferred from posting board (low
+   confidence)".
+2. **Paese citato nella JD** come "Region" o "Office" anche se non
+   esplicitato come sede legale.
+3. **Solo come ultima istanza**: il continente del `loc_continent` come
+   ipotesi geografica (es. "Europe-based unspecified entity"). Annota
+   "work_country=Europe placeholder, entity unverified".
+
+Mai lasciare `work_country=NULL` su una position `checked`: la dashboard
+"💰 contratto" si rompe e l'utente non capisce lo stipendio atteso.
+
+
 **Coda vuota**: aspetta 2 minuti, riprova. Notifica Capitano una sola volta.
 
 ---
