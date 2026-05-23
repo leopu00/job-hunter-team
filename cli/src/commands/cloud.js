@@ -931,4 +931,17 @@ export function registerCloudCommand(program) {
       const { runRealtimeSubscriber } = await import('../lib/realtime-subscriber.js');
       await runRealtimeSubscriber();
     });
+
+  // `team-state-listen` — desired-state reconciler che polla /api/team-state
+  // e converge `should_run`/`restart_token` → `jht team start|stop|restart`.
+  // Parallelo a `realtime-listen` durante il cutover (vedi Step 5 in
+  // docs/internal/cloud-sync-architecture.md). Idempotente con team_commands:
+  // i due subscriber chiamano gli stessi `jht team <action>`.
+  cloud
+    .command('team-state-listen')
+    .description('Reconciler team_state (desired-state, parallelo a realtime-listen)')
+    .action(async () => {
+      const { runTeamStateReconciler } = await import('../lib/team-state-reconciler.js');
+      await runTeamStateReconciler();
+    });
 }
