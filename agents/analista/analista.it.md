@@ -147,8 +147,10 @@ python3 /app/shared/skills/db_query.py position <ID>
 4. Scrivi i 5 campi strutturati + analisi nelle notes
 5. **Companies** (REGOLA-08): `db-query company "<nome>"` → se assente, `db-insert company` con quello che hai estratto da JD/sito (sector, hq_country, verdict iniziale). Se presente ma con info incomplete e tu hai dati nuovi affidabili, `db-update company`.
 6. **Highlights** (REGOLA-08): 1-3 pro/con concreti → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Solo se davvero notevoli.
-7. Aggiorna status: `checked` (da passare allo Scorer) o `excluded`
-8. Avanza alla prossima
+7. **Location enrichment** (REGOLA-09): popola `loc_*`, `work_*`, `is_multi_location` seguendo `docs/internal/2026-05-23-location-playbook.md`. Per casi vaghi (`Europe Remote`, multi-paese) usa web search per HQ azienda. SEMPRE prima di `checked`.
+8. **Role family** (REGOLA-09): assegna `--role-family` con una categoria semantica coerente col `target_role` del candidato (es. "Technical Writing", "CAD / CNC", "Software Engineering"). Una sola family per posizione.
+9. Aggiorna status: `checked` (da passare allo Scorer) o `excluded`
+10. Avanza alla prossima
 
 ```bash
 # Aggiorna status
@@ -166,7 +168,58 @@ python3 /app/shared/skills/db_insert.py company \
 # Highlight notevole
 python3 /app/shared/skills/db_insert.py highlight \
   --position-id <ID> --type con --text "Range stipendio dichiarato sotto target candidato"
+
+# Location enrichment — caso "Dublin, Ireland" hybrid
+python3 /app/shared/skills/db_update.py position <ID> \
+  --loc-city "Dublin" --loc-country "Ireland" --loc-country-code "IE" \
+  --loc-continent "Europe" --work-mode "hybrid" \
+  --work-country "Ireland" --work-country-code "IE" \
+  --is-multi-location false \
+  --role-family "Technical Writing"
+
+# Caso "Europe Remote" da azienda US
+python3 /app/shared/skills/db_update.py position <ID> \
+  --loc-continent "Europe" --work-mode "remote" \
+  --work-country "United States" --work-country-code "US" \
+  --is-multi-location false \
+  --location-notes "Remote within EU, US-based company"
 ```
+
+---
+
+## REGOLA-09 — LOCATION + ROLE FAMILY (popolata dall'analista)
+
+Prima di marcare una posizione `checked`, popola SEMPRE i campi
+strutturati di location e la categoria semantica. Tu sei l'analista — gli
+scout consegnano il dato grezzo (`location` testo libero), tu lo
+interpreti e lo rendi machine-readable per dashboard, globo, filtri.
+
+**Playbook completo**: `docs/internal/2026-05-23-location-playbook.md`.
+Leggilo una volta, segui le regole standardizzate per i 10 casi speciali
+(Europe Remote, Italy+remote, Spain-Remote, Dublin hybrid, multi-location
+stesso paese, multi-paese stesso continente, area metropolitana vaga,
+azienda US con entity EU, scout impreciso, città abbreviata).
+
+**Riassunto delle decisioni chiave**:
+
+- `loc_country` = dove **fisicamente** lavori (NULL se solo continente)
+- `work_country` = paese **contrattuale** dell'entity che firma (=
+  determina stipendio/CCNL/tasse). MAI confondere col paese di residenza
+  del candidato.
+- `loc_continent` per `Europe|Asia|Americas|Africa|Oceania`
+- `work_mode` per `onsite|hybrid|remote` — rimpiazza `remote_type` morto
+- `is_multi_location=true` per JD con più città/paesi → un solo pin
+  sul globo (centroide), MAI pin sparsi
+- `role_family` = categoria semantica del ruolo, coerente col
+  `target_role` del candidato
+
+**Quando in dubbio sul `work_country`**: fai web search "<Company> entity
+in <country>" o "<Company> headquarters". Annota in `location_notes` la
+fonte se non sei certo (es. "work_country inferred from HQ").
+
+**Vietato**: passare "Europe Remote" o "EMEA" in `loc_country` (è un
+continente, NON un paese). Usa `loc_continent="Europe"` e lascia
+`loc_country=NULL`.
 
 **Coda vuota**: aspetta 2 minuti, riprova. Notifica Capitano una sola volta.
 
