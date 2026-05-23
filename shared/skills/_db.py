@@ -54,6 +54,8 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_v3_to_v4(conn)
     _migrate_positions_status_review(conn)
     _migrate_positions_length_constraints(conn)
+    _migrate_positions_role_family(conn)
+    _migrate_positions_structured_location(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +101,17 @@ def ensure_schema(conn: sqlite3.Connection):
         notes TEXT,
         last_checked TIMESTAMP,
         last_actor TEXT,
+        role_family TEXT,
+        loc_city TEXT,
+        loc_region TEXT,
+        loc_country TEXT,
+        loc_country_code TEXT,
+        loc_continent TEXT,
+        work_mode TEXT,
+        work_country TEXT,
+        work_country_code TEXT,
+        is_multi_location INTEGER DEFAULT 0,
+        location_notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         -- Length guardrails: mirror dei CHECK constraint Postgres (mig 015).
@@ -730,6 +743,61 @@ def _migrate_positions_length_constraints(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url)")
+
+
+def _migrate_positions_role_family(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.role_family` (text, nullable).
+
+    Categoria semantica del ruolo popolata dall'analista (es. 'Technical
+    Writing', 'CAD / CNC'). NULL = non classificata. Allinea SQLite locale
+    a Supabase mig 'add_role_family_to_positions' del 2026-05-23.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if _column_exists(conn, 'positions', 'role_family'):
+        return
+    conn.execute("ALTER TABLE positions ADD COLUMN role_family TEXT")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_role_family "
+        "ON positions(role_family) WHERE role_family IS NOT NULL"
+    )
+
+
+def _migrate_positions_structured_location(conn: sqlite3.Connection) -> None:
+    """Aggiunge le 10 colonne location strutturate popolate dall'analista.
+
+    Vedi `docs/internal/2026-05-23-location-playbook.md`. Allinea SQLite a
+    Supabase mig `add_structured_location_columns` del 2026-05-23.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('loc_city',           'TEXT'),
+        ('loc_region',         'TEXT'),
+        ('loc_country',        'TEXT'),
+        ('loc_country_code',   'TEXT'),
+        ('loc_continent',      'TEXT'),
+        ('work_mode',          'TEXT'),
+        ('work_country',       'TEXT'),
+        ('work_country_code',  'TEXT'),
+        ('is_multi_location',  'INTEGER DEFAULT 0'),
+        ('location_notes',     'TEXT'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_loc_country_code "
+        "ON positions(loc_country_code) WHERE loc_country_code IS NOT NULL"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_work_mode "
+        "ON positions(work_mode) WHERE work_mode IS NOT NULL"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_loc_continent "
+        "ON positions(loc_continent) WHERE loc_continent IS NOT NULL"
+    )
 
 
 def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
