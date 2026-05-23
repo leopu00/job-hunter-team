@@ -81,7 +81,7 @@ Vedi sopra "Cosa va in cloud". Trade-off accettati:
 
 ### ⬜ Pending (in ordine di priorità)
 
-1. **P0 — Refactor `team_commands` → `team_state` desired-state + event lanes**. Cambio di paradigma da command log a desired-state reconciler (Kubernetes-style), motivato dalla visione web-first di Leone (2026-05-23): chat agenti già attiva, like/dislike position, feedback web in roadmap immediata. Accorpa **3 voci del backlog** (ex-#1 rimozione `team_commands`, ex-#4 single-team enforcement, status inference sparsa). Componenti:
+1. **P0 — Refactor `team_commands` → `team_state` desired-state + event lanes**. Cambio di paradigma da command log a desired-state reconciler (Kubernetes-style), motivato dalla visione web-first del maintainer (2026-05-23): chat agenti già attiva, like/dislike position, feedback web in roadmap immediata. Accorpa **3 voci del backlog** (ex-#1 rimozione `team_commands`, ex-#4 single-team enforcement, status inference sparsa). Componenti:
    - **`team_state`** (1 riga per `user_id`): `should_run BOOLEAN`, `agents_enabled JSONB`, `restart_token UUID`, `active_device_id UUID`, `last_heartbeat_at`, `is_running BOOLEAN`, `last_user_activity_at` (per polling adattivo). Web scrive desired, container scrive observed.
    - **`user_to_agent_messages`** (event log): chat utente → agente. `user_id`, `agent`, `message`, `sent_at`, `replied_at`. Bidirezionale con `pending_user_messages` esistente per le risposte.
    - **`position_feedback`** (event log): like/dislike + segnali (vedi #5). Separato da `positions.status` per evitare conflitto con [#14 design constraint web write].
