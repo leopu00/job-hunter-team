@@ -5,7 +5,7 @@ no marketing language, no "revolutionary AI", no sales speak. Lead with what
 it does and the numbers from the legacy run, then the why.
 
 Linked from [`BACKLOG.md`](../../BACKLOG.md) item **[JHT-LAUNCH-09]**. Owner:
-Leone. Reviewer: the team (post in #launch when ready). Not published yet.
+maintainer. Reviewer: the team (post in #launch when ready). Not published yet.
 
 ---
 
