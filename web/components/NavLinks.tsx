@@ -38,12 +38,13 @@ export default function NavLinks() {
   return (
     <div className="flex items-center gap-1">
       <NavLink href="/dashboard" pathname={pathname} tour="dashboard">{t('nav_dashboard')}</NavLink>
+      <NavLink href="/map" pathname={pathname}>Map</NavLink>
       <NavLink href="/positions" pathname={pathname} tour="positions">{t('nav_positions')}</NavLink>
-      <NavLink href="/ready" pathname={pathname} accent="#7fffb2">{t('nav_ready')}</NavLink>
-      <NavLink href="/risposte" pathname={pathname} accent="#58a6ff">{t('nav_risposte')}</NavLink>
+      <NavLink href="/ready" pathname={pathname}>{t('nav_ready')}</NavLink>
+      <NavLink href="/risposte" pathname={pathname}>{t('nav_risposte')}</NavLink>
       <NavLink href="/crescita" pathname={pathname}>{t('nav_crescita')}</NavLink>
       <NavLink href="/reports" pathname={pathname}>{t('nav_reports')}</NavLink>
-      <NavLink href="/team" pathname={pathname} tour="team" accent="#ffc107" badge={pending.team}>Team</NavLink>
+      <NavLink href="/team" pathname={pathname} tour="team" badge={pending.team}>Team</NavLink>
       <NavLink href="/profile" pathname={pathname} badge={pending.profile}>{t('nav_profile')}</NavLink>
     </div>
   )
