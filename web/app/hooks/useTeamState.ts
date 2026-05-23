@@ -111,8 +111,25 @@ export function useTeamState(userId: string | null) {
       )
       .subscribe()
 
+    // Polling fallback (5s): se il Realtime broadcast non arriva (es. RLS,
+    // network filtered, subscription stale), il polling garantisce che il
+    // browser veda comunque i cambi observed scritti dal container.
+    // Light query: una SELECT su PK user_id con filtro RLS. Quando Realtime
+    // funziona, il polling è ridondante ma idempotente.
+    const pollInterval = setInterval(async () => {
+      if (cancelled) return
+      const r = (await supabase
+        .from('team_state')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle()) as PostgrestLike<TeamState>
+      if (cancelled) return
+      if (!r.error) setState(r.data ?? null)
+    }, 5000)
+
     return () => {
       cancelled = true
+      clearInterval(pollInterval)
       supabase.removeChannel(channel)
     }
   }, [userId])
