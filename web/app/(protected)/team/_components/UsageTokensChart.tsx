@@ -1261,7 +1261,8 @@ export default function UsageTokensChart() {
   useEffect(() => {
     loadData();
     loadTokens();
-    const dataId = setInterval(loadData, 10_000);
+    // 30s (era 10s): sentinel data cambia ogni ~30s lato bridge.
+    const dataId = setInterval(loadData, 30_000);
     // Token fetch più lento (30s): payload più pesante, l'aggregazione
     // server-side gira a ogni richiesta. 30s basta per la correlazione visiva.
     const tokenId = setInterval(loadTokens, 30_000);
