@@ -59,6 +59,37 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Single-team enforcement: solo il device active può scrivere observed.
+  // Browser (session) può sempre scrivere desired (un utente loggato è la
+  // fonte di verità del desired, indipendentemente da quale device sta
+  // runnando). Token non-active viene rifiutato per non sporcare lo stato.
+  if (source === 'token') {
+    const tsCheck = (await supabase
+      .from('team_state')
+      .select('active_device_id')
+      .eq('user_id', userId)
+      .maybeSingle()) as {
+      data: { active_device_id: string | null } | null
+      error: { message: string } | null
+    }
+    if (
+      tsCheck.data &&
+      tsCheck.data.active_device_id &&
+      tsCheck.data.active_device_id !== resolved.user.token.tokenId
+    ) {
+      return NextResponse.json(
+        {
+          error: 'not_active_device',
+          message:
+            "Questo device non è più il team attivo. PATCH observed rifiutata: " +
+            "fai POST /api/team-state/claim {\"force\":true} per riprendere il controllo.",
+          active_device_id: tsCheck.data.active_device_id,
+        },
+        { status: 409 }
+      )
+    }
+  }
+
   const { data, error } = await supabase
     .from('team_state')
     .upsert({ user_id: userId, ...update }, { onConflict: 'user_id' })
