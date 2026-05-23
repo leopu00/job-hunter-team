@@ -40,6 +40,7 @@ type PositionCoord = {
   lat: number;
   lon: number;
   is_remote: boolean;
+  location: string | null;
 };
 
 // Calcola la "faccia migliore" del globo da mostrare: longitude
@@ -168,11 +169,15 @@ export default function JobsGlobe({
   fullscreen = false,
   selectedTypes = [],
   selectedScoreRanges = [],
+  selectedUnscored = false,
+  selectedLocations = [],
 }: {
   hero?: boolean;
   fullscreen?: boolean;
   selectedTypes?: PositionType[];
   selectedScoreRanges?: Array<{ lo: number; hi: number }>;
+  selectedUnscored?: boolean;
+  selectedLocations?: string[];
 } = {}) {
   const { resolvedTheme } = useTheme();
   const [data, setData] = useState<PositionCoord[]>([]);
@@ -199,24 +204,29 @@ export default function JobsGlobe({
   // restano dentro il clusterRadius (~30m) e vengono raggruppati
   // dal cluster nativo MapLibre. Quando lo Scout/Analista forniranno
   // office-level vero, il jitter sara' no-op naturale.
-  // Applica filtri donut (tipi) + histogram (range score) di /map.
-  // Tra le due tipologie: AND. Dentro ciascuna: OR (uno qualunque
-  // dei tipi / range selezionati). Vuoto = no filtro.
+  // Applica filtri donut (tipi) + histogram (range score + flag
+  // unscored) di /map. Tra tipi e score: AND. Dentro score:
+  // (range OR unscored). Vuoto = no filtro.
   const displayData = useMemo(() => {
     let out = data;
     if (selectedTypes.length > 0) {
       out = out.filter((p) => selectedTypes.includes(classifyTitle(p.title)));
     }
-    if (selectedScoreRanges.length > 0) {
+    const scoreFilterActive =
+      selectedScoreRanges.length > 0 || selectedUnscored;
+    if (scoreFilterActive) {
       out = out.filter((p) => {
-        if (typeof p.score !== "number") return false;
+        if (typeof p.score !== "number") return selectedUnscored;
         return selectedScoreRanges.some(
           (r) => p.score! >= r.lo && p.score! <= r.hi,
         );
       });
     }
+    if (selectedLocations.length > 0) {
+      out = out.filter((p) => selectedLocations.includes(p.location ?? "—"));
+    }
     return out;
-  }, [data, selectedTypes, selectedScoreRanges]);
+  }, [data, selectedTypes, selectedScoreRanges, selectedUnscored, selectedLocations]);
 
   const jittered = useMemo(() => {
     const groups = new Map<string, PositionCoord[]>();
@@ -419,7 +429,7 @@ export default function JobsGlobe({
       map.getCanvas().style.cursor = "";
     });
 
-    map.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.addControl(new maplibregl.NavigationControl(), "top-left");
     mapRef.current = map;
 
     const ro = new ResizeObserver(() => {
@@ -569,9 +579,17 @@ export default function JobsGlobe({
         </div>
       )}
 
+      {/* Sposta NavigationControl (zoom +/-) sotto al bottone
+          "Vista generale" che sta in top-left. Default 10px → 50px
+          per lasciare spazio al bottone (alto ~32px + gap). */}
+      <style>{`
+        .jht-globe-wrap .maplibregl-ctrl-top-left .maplibregl-ctrl-group {
+          margin-top: 40px;
+        }
+      `}</style>
       <div
         ref={mapWrapRef}
-        className={`relative w-full overflow-hidden ${(hero || fullscreen) ? "" : "rounded-md"}`}
+        className={`jht-globe-wrap relative w-full overflow-hidden ${(hero || fullscreen) ? "" : "rounded-md"}`}
         // zoom: 1 neutralizza il body { zoom: var(--zoom) } di JHT
         // che mandava MapLibre a leggere dimensioni canvas sbagliate.
         // In hero il bg è transparent così il globo si fonde col
