@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type {
-  PositionTypeCount,
-  PositionType,
-} from "@/lib/position-classifier";
+import type { RoleFamilyCount } from "@/lib/position-classifier";
 
 type Props = {
-  data: PositionTypeCount[];
-  labels: Record<string, string>; // type key -> localized label
+  data: RoleFamilyCount[];
+  // Override opzionale family-name -> label localizzata. Se assente,
+  // il nome family viene mostrato cosi' com'e' (e' il valore della colonna
+  // positions.role_family, gia' leggibile dall'utente).
+  labels?: Record<string, string>;
   title: string;
   emptyLabel: string;
   size?: number; // px reso. viewBox scala tutta la geometria interna.
@@ -64,9 +64,10 @@ export default function PositionTypesPie({
   emptyLabel,
   size = SIZE,
 }: Props) {
-  const [hovered, setHovered] = useState<PositionType | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const labelFor = (family: string) => labels?.[family] ?? family;
   const total = data.reduce((a, d) => a + d.count, 0);
-  const focused = hovered != null ? data.find((d) => d.type === hovered) : null;
+  const focused = hovered != null ? data.find((d) => d.family === hovered) : null;
   const focusedPct =
     focused && total > 0 ? Math.round((focused.count / total) * 100) : null;
 
@@ -106,23 +107,23 @@ export default function PositionTypesPie({
                 const span = (d.count / total) * 2 * Math.PI;
                 const path = arc(acc, acc + span);
                 acc += span;
-                const isHover = hovered === d.type;
+                const isHover = hovered === d.family;
                 const dimmed = hovered != null && !isHover;
                 return (
                   <path
-                    key={d.type}
+                    key={d.family}
                     d={path}
                     fill={d.color}
                     opacity={isHover ? 1 : dimmed ? 0.32 : 0.88}
                     stroke="var(--color-card)"
                     strokeWidth={isHover ? 1.5 : 1}
-                    onMouseEnter={() => setHovered(d.type)}
+                    onMouseEnter={() => setHovered(d.family)}
                     style={{
                       cursor: "pointer",
                       transition: "opacity 0.15s ease, stroke-width 0.15s ease",
                     }}
                   >
-                    <title>{`${labels[d.type] ?? d.type} — ${d.count} (${Math.round((d.count / total) * 100)}%)`}</title>
+                    <title>{`${labelFor(d.family)} — ${d.count} (${Math.round((d.count / total) * 100)}%)`}</title>
                   </path>
                 );
               });
@@ -139,9 +140,7 @@ export default function PositionTypesPie({
               fontWeight={700}
               style={{ pointerEvents: "none", fontFamily: "inherit" }}
             >
-              {focused
-                ? (labels[focused.type] ?? focused.type)
-                : "totale"}
+              {focused ? labelFor(focused.family) : "totale"}
             </text>
             <text
               x={CX}
@@ -187,12 +186,12 @@ export default function PositionTypesPie({
             </li>
             {data.map((d) => {
               const pct = Math.round((d.count / total) * 100);
-              const isHover = hovered === d.type;
+              const isHover = hovered === d.family;
               const dimmed = hovered != null && !isHover;
               return (
                 <li
-                  key={d.type}
-                  onMouseEnter={() => setHovered(d.type)}
+                  key={d.family}
+                  onMouseEnter={() => setHovered(d.family)}
                   className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem_2.25rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
                   style={{
                     cursor: "pointer",
@@ -214,9 +213,9 @@ export default function PositionTypesPie({
                           ? "var(--color-bright)"
                           : "var(--color-muted)",
                       }}
-                      title={labels[d.type] ?? d.type}
+                      title={labelFor(d.family)}
                     >
-                      {labels[d.type] ?? d.type}
+                      {labelFor(d.family)}
                     </span>
                   </span>
                   <span className="tabular-nums text-[var(--color-bright)] font-semibold">
