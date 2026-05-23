@@ -28,14 +28,20 @@ export async function GET(req: Request) {
   const sinceMin = clampInt(url.searchParams.get("sinceMin"), 180, 1, 24 * 60);
   const bucketSec = clampInt(url.searchParams.get("bucketSec"), 60, 1, 600);
 
-  // Su cloud (Vercel) non c'è Python. Empty graceful invece di 500.
+  // Su cloud (Vercel) non c'è Python. Empty graceful con shape matching
+  // del client ThrottleChart.
   if (!(await isLocalRequest())) {
+    const nowIso = new Date().toISOString();
     return NextResponse.json({
       ok: true,
-      sinceMin,
-      bucketSec,
-      buckets: [],
+      now: nowIso,
+      since: new Date(Date.now() - sinceMin * 60_000).toISOString(),
+      bucket_sec: bucketSec,
       agents: [],
+      totals_sec: {},
+      events: {},
+      series: [],
+      intervals: [],
       remote: true,
     });
   }
