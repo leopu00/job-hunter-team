@@ -378,7 +378,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   1. ✅ **[JHT-CLI-WIN-WRAPPER]** Port `scripts/jht-wrapper.sh` → `scripts/jht-wrapper.ps1` (commit `33bfae7c`, bugfix splat scalar `81f7efc8`). Dispatcher identico: lifecycle via `docker compose`, tutto il resto via `docker exec jht node /app/cli/bin/jht.js`.
   2. ✅ **[JHT-CLI-WIN-INSTALL]** Port `scripts/install.sh` → `scripts/install.ps1` (commit `d87890f8`, shim CMD fallback su `powershell.exe` se `pwsh` assente `1a705221`, servito da web `a95fb028`). Sync drift guard CI `77e9d6a8` + `scripts/sync-public-installers.sh` (`e930fe63`) per tenere `web/public/install.ps1` allineato.
   3. ✅ **[JHT-CLI-WIN-DOC]** Aggiornato `docs/guides/quickstart.md` Path 3 + `AI-AGENT-INTEGRATION.md` con `iwr | iex` (commit `de51fc0f`).
-  4. ⬜ **[JHT-CLI-WIN-E2E]** **RIMASTO:** Rifare E2E test con agente AI (Claude Code) su Windows 11 nativo per validare che `iwr -useb https://jobhunterteam.ai/install.ps1 | iex` completi il flow universal AI-agent senza menzione di WSL. Owner: Leone (richiede macchina Windows fisica — Parallels Win11 ARM non riproduce per `[project_docker_parallels_wall]`).
+  4. ⬜ **[JHT-CLI-WIN-E2E]** **RIMASTO:** Rifare E2E test con agente AI (Claude Code) su Windows 11 nativo per validare che `iwr -useb https://jobhunterteam.ai/install.ps1 | iex` completi il flow universal AI-agent senza menzione di WSL. Owner: maintainer (richiede macchina Windows fisica — Parallels Win11 ARM non riproduce per `[project_docker_parallels_wall]`).
 - **Discarded alternatives:**
   - `npm publish` del CLI: più semplice ma richiede Node sul host (~50MB) + rompe host-thin design.
   - "Solo Desktop su Windows": copre non-tech ma blocca tutto il use-case AI-agent universal prompt.
@@ -700,7 +700,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 - **Goal:** utente VPS deve poter caricare PDF (CV, certificati, lettere referenze) **senza usare scp/sftp manuale**. Oggi l'unico path funzionante e' `scp -i ~/.ssh/jht_hetzner cv.pdf root@VPS:'/root/Documents/Job Hunter Team/cv/'`, che richiede shell tools, conoscenza del bind path host, e know-how SSH/scp.
 - **Stato attuale (2026-05-08):** `web/app/profile` ha gia' un form di upload (multipart POST → `/api/profile/upload-cv`) che scrive in `/jht_user/cv/`. Funziona in dev e in prod. Su VPS via SSH tunnel `localhost:3000` e' bloccato da `[BUG-VPS-AUTH-TUNNEL]` (Supabase OAuth callback).
 - **Path forward:**
-  1. **Step 1 (sblocca tutto):** fixare `[BUG-VPS-AUTH-TUNNEL]` aggiungendo `http://localhost:3000/**` agli allowed redirect URLs Supabase. ~10min, owner Leone (admin Supabase). Senza questo, il resto della UX VPS rimane parzialmente CLI-only.
+  1. **Step 1 (sblocca tutto):** fixare `[BUG-VPS-AUTH-TUNNEL]` aggiungendo `http://localhost:3000/**` agli allowed redirect URLs Supabase. ~10min, owner maintainer (admin Supabase). Senza questo, il resto della UX VPS rimane parzialmente CLI-only.
   2. **Step 2 (UX):** verificare che il form `/profile` upload PDF su VPS via tunnel scriva correttamente in `/jht_user/cv/` (bind-mounted `~/Documents/Job Hunter Team/cv/` host). Test end-to-end sul VPS test.
   3. **Step 3 (OCR):** integrare skill PDF parsing nell'Assistente per auto-estrarre `candidate_profile.yml` dal PDF appena caricato → utente non deve compilare YAML a mano. Skill esiste in `agents/_skills/` (controllare manifest), serve solo cablarla nel flusso `/profile` upload.
   4. **Step 4 (Telegram, futuro):** Assistente accetta documento `.pdf` come allegato Telegram → stessa pipeline OCR. Roadmap PHASE 2.
@@ -836,7 +836,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 #### 🎬 [JHT-LAUNCH-03] 30s demo video 🟡 BLOCKER
 
 - ✅ Storyboard + recording plan landed at [`docs/launch/demo-storyboard.md`](docs/launch/demo-storyboard.md): 6-beat shot list timed to 30s, asciinema record/convert commands (`.cast` → `.gif` via `agg`, ≤ 2.5 MB target), captions, README embed snippet, Show HN/press-kit reuse plan.
-- ⬜ Remaining (Leone-only — needs the live install + the demo SQLite snapshot):
+- ⬜ Remaining (maintainer-only — needs the live install + the demo SQLite snapshot):
   - Add `--demo-profile` to `jht setup` and `--fixture` to `jht sentinella tail` (or drop beat 4 of the storyboard)
   - Ship `docs/launch/demo-profile.yml` (anonymised) + `assets/demo-fixtures/` snapshot
   - Record, convert, verify size, upload `.cast` to asciinema.org
@@ -876,7 +876,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 #### 📰 [JHT-LAUNCH-09] Show HN post draft 🟡
 
 - Draft landed at [`docs/launch/show-hn-draft.md`](docs/launch/show-hn-draft.md): 4 title variants, body in dev-to-dev tone with the 200/20/5 numbers, 5 pre-written first-comment answers, timing window (Tue/Wed 13-15 UTC) and Plan B fallback subreddits.
-- Still ⬜: screenshots/GIF embedded in the body (waits on LAUNCH-03 demo + LAUNCH-10 press kit), final pass once README is frozen, decide who posts (Leone vs. a friend account with karma already).
+- Still ⬜: screenshots/GIF embedded in the body (waits on LAUNCH-03 demo + LAUNCH-10 press kit), final pass once README is frozen, decide who posts (maintainer vs. a friend account with karma already).
 
 #### 🎙️ [JHT-LAUNCH-10] Press kit ⬜
 
@@ -1061,7 +1061,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   4. Save → propagazione immediata, no deploy needed.
   5. Validare end-to-end: SSH tunnel su VPS test, browser → `http://localhost:3000/?login=true` → Google OAuth → callback su `localhost:3000/auth/callback` → cookie set → redirect a `/positions`. Aggiungere screenshot a `docs/guides/VPS-SETUP.md`.
   6. Aggiornare `docs/guides/VPS-SETUP.md` step 6 con istruzioni tunnel + login flow.
-- **Owner:** chi ha credenziali admin del Supabase project JHT (Leone).
+- **Owner:** chi ha credenziali admin del Supabase project JHT (maintainer).
 - **Priorita':** 🔴 BLOCKER per UX VPS (nessuna alternativa accettabile). Banale da fixare ma richiede credenziali admin Supabase.
 - **Storia:** la limitazione attuale era intenzionale per il pre-launch (solo dominio prod come allowed callback per minimizzare attack surface). Post-launch / per dev/test, localhost deve essere sempre allowed.
 
@@ -1127,7 +1127,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **File:** `web/next.config.ts` (config `outputFileTracingRoot` + Turbopack interaction) + ambient resolution
 - **Errore (riproducibile in dev su Windows):**
   ```
-  Error: Can't resolve 'tailwindcss' in 'C:\Users\leone.puglisi\repos\job-hunter-team\dev-2'
+  Error: Can't resolve 'tailwindcss' in 'C:\Users\<user>\repos\job-hunter-team\dev-2'
     resolve as module
       C:\...\dev-2\node_modules doesn't exist or is not a directory
       C:\...\repos\node_modules doesn't exist or is not a directory

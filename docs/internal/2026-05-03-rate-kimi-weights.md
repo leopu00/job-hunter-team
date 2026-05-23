@@ -116,7 +116,7 @@ Watchdog implementato in:
 
 ## Storico decisione
 
-- 2026-05-03 — Discussione con Leone, analisi empirica condotta sui log
+- 2026-05-03 — Discussione con il maintainer, analisi empirica condotta sui log
   della sessione 13:07 → 18:09 (710 events), pesi scelti `(1, 1, 0, 0)`,
   watchdog implementato.
 - Commit di riferimento:
