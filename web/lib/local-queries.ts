@@ -404,6 +404,28 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
   }))
 }
 
+// ── Positions SENZA coordinate (per /map "remote bucket") ─────────
+export function getPositionsWithoutCoordsLocal(ws: string) {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.id, p.title, p.company, p.status,
+           s.total_score as score,
+           p.is_remote
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    WHERE p.status != 'excluded'
+      AND p.office_lat IS NULL
+  `).all() as any[]
+  return rows.map(r => ({
+    id: sid(r.id),
+    title: r.title as string | null,
+    company: r.company as string | null,
+    status: r.status as string,
+    score: typeof r.score === 'number' ? r.score : null,
+    is_remote: !!r.is_remote,
+  }))
+}
+
 // ── Position state-history (timestamp transizioni) ────────────────
 export function getPositionStateHistoryLocal(ws: string) {
   const db = getDb(ws)
