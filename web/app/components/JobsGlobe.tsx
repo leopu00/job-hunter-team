@@ -13,7 +13,10 @@ const LAYER_DOT_ID = "jht-jobs-dot";
 const LAYER_CLUSTER_ID = "jht-jobs-cluster";
 const LAYER_CLUSTER_COUNT_ID = "jht-jobs-cluster-count";
 const BEAM_IMG_ID = "jht-beam";
-const CLUSTER_BEAMS_IMG_ID = "jht-cluster-beams";
+const CLUSTER_BEAMS_S = "jht-cluster-beams-s";
+const CLUSTER_BEAMS_M = "jht-cluster-beams-m";
+const CLUSTER_BEAMS_L = "jht-cluster-beams-l";
+const CLUSTER_BEAMS_XL = "jht-cluster-beams-xl";
 const LAYER_CLUSTER_BEAMS_ID = "jht-jobs-cluster-beams";
 
 // Genera un'icona "raggio di luce" verticale (canvas in-memory)
@@ -64,13 +67,14 @@ function createBeamImageData(): ImageData | null {
 // cerchio cluster: N raggi verticali equispaziati a 360°. Punti
 // di partenza sui bordi nord/est/ovest/sud del cerchio invisibile
 // — tutti salgono verticalmente verso l'alto.
-function createClusterBeamsImageData(): ImageData | null {
-  // cy = H/2 al centro del canvas così "icon-anchor: center"
-  // allinea automaticamente la base raggi col pin geo,
-  // indipendentemente da icon-size (no più icon-offset che si
-  // scalerebbe col size e disallineerebbe a zoom diversi).
-  const W = 220;
-  const H = 420;
+// Genera l'icona "skyline" parametrizzata sulla densità del
+// cluster. La densità governa raggio max + numero raggi + altezza
+// → cluster grandi sembrano metropoli, cluster piccoli borghi.
+function createClusterBeamsImageData(
+  density: "s" | "m" | "l" | "xl",
+): ImageData | null {
+  const W = 240;
+  const H = 440;
   const c = document.createElement("canvas");
   c.width = W;
   c.height = H;
@@ -79,46 +83,71 @@ function createClusterBeamsImageData(): ImageData | null {
 
   const cx = W / 2;
   const cy = H / 2;
-  // "Skyline": cerchi concentrici (più densità al centro), ellisse
-  // appiattita per prospettiva. I raggi al centro sono alti, quelli
-  // al perimetro più bassi e larghi (effetto grattacieli + periferia).
   const yScale = 0.35;
-  const rings: Array<{ r: number; n: number; lenMul: number; bw: number }> = [
-    { r: 0,  n: 1,  lenMul: 1.20, bw: 4.0 },
-    { r: 8,  n: 6,  lenMul: 1.05, bw: 3.5 },
-    { r: 16, n: 11, lenMul: 0.90, bw: 3.0 },
-    { r: 26, n: 16, lenMul: 0.75, bw: 2.5 },
-    { r: 36, n: 22, lenMul: 0.55, bw: 2.0 },
-  ];
-  const baseLen = 200;
-  for (const ring of rings) {
-    for (let i = 0; i < ring.n; i++) {
-      // offset angolare alternato per evitare allineamento radiale
-      // troppo "stellato" tra ring contigui.
-      const theta = ring.n === 1
-        ? 0
-        : ((i + (ring.r % 2 ? 0.5 : 0)) / ring.n) * 2 * Math.PI;
-      const xPos = cx + Math.cos(theta) * ring.r;
-      const yStart = cy + Math.sin(theta) * ring.r * yScale;
-      const len = baseLen * ring.lenMul;
-      const yEnd = Math.max(0, yStart - len);
-      const topW = 0.6;
 
+  // 4 preset "skyline" — densità, ampiezza, altezza scalano.
+  const presets = {
+    s:  { rings: [[0,1,1.0,3.5],[10,6,0.85,3.0],[20,10,0.70,2.5]] as const, baseLen: 150 },
+    m:  { rings: [[0,1,1.10,4.0],[10,7,0.95,3.5],[20,12,0.80,3.0],[32,16,0.62,2.5]] as const, baseLen: 180 },
+    l:  { rings: [[0,1,1.20,4.5],[10,8,1.05,4.0],[22,14,0.88,3.5],[34,20,0.70,3.0],[44,24,0.55,2.5]] as const, baseLen: 210 },
+    xl: { rings: [[0,1,1.30,5.0],[10,9,1.15,4.5],[22,16,0.98,4.0],[34,22,0.80,3.5],[46,28,0.62,3.0],[58,32,0.45,2.5]] as const, baseLen: 240 },
+  };
+  const { rings, baseLen } = presets[density];
+
+  // Glow morbido di base (alone radial, sotto i raggi): dà
+  // l'impressione di luce diffusa che esce dalla "città".
+  const haloR = density === "xl" ? 70 : density === "l" ? 56 : density === "m" ? 42 : 32;
+  const haloGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, haloR);
+  haloGrad.addColorStop(0, "rgba(180,255,210,0.55)");
+  haloGrad.addColorStop(0.5, "rgba(0,232,122,0.18)");
+  haloGrad.addColorStop(1, "rgba(0,232,122,0)");
+  ctx.fillStyle = haloGrad;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, haloR, haloR * yScale * 1.3, 0, 0, 2 * Math.PI);
+  ctx.fill();
+
+  // Disegno raggi in modalità additive ("lighter"): le
+  // sovrapposizioni schiariscono → effetto luce mixata invece
+  // di tinte uniformi. Mix di tonalità verdi a cycle per dare
+  // profondità (verde acido, mint, lime, bianco-verde).
+  const tones = [
+    "rgba(0,232,122,A)",
+    "rgba(110,255,180,A)",
+    "rgba(180,255,210,A)",
+    "rgba(40,210,140,A)",
+  ];
+  ctx.globalCompositeOperation = "lighter";
+  let toneIdx = 0;
+  for (const [r, n, lenMul, bw] of rings) {
+    for (let i = 0; i < n; i++) {
+      const theta = n === 1
+        ? 0
+        : ((i + (r % 2 ? 0.5 : 0)) / n) * 2 * Math.PI;
+      const xPos = cx + Math.cos(theta) * r;
+      const yStart = cy + Math.sin(theta) * r * yScale;
+      const len = baseLen * lenMul * (0.85 + Math.random() * 0.3); // leggera varianza altezza
+      const yEnd = Math.max(0, yStart - len);
+      const topW = 0.5;
+
+      // Tonalità ciclica per dare mix di colore.
+      const tone = tones[toneIdx % tones.length];
+      toneIdx++;
       const grad = ctx.createLinearGradient(xPos, yStart, xPos, yEnd);
-      grad.addColorStop(0, "rgba(0,232,122,0.95)");
-      grad.addColorStop(0.2, "rgba(0,232,122,0.65)");
-      grad.addColorStop(0.6, "rgba(0,232,122,0.22)");
-      grad.addColorStop(1, "rgba(0,232,122,0)");
+      grad.addColorStop(0, tone.replace("A", "0.85"));
+      grad.addColorStop(0.18, tone.replace("A", "0.6"));
+      grad.addColorStop(0.55, tone.replace("A", "0.22"));
+      grad.addColorStop(1, tone.replace("A", "0"));
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.moveTo(xPos - ring.bw / 2, yStart);
-      ctx.lineTo(xPos + ring.bw / 2, yStart);
+      ctx.moveTo(xPos - bw / 2, yStart);
+      ctx.lineTo(xPos + bw / 2, yStart);
       ctx.lineTo(xPos + topW / 2, yEnd);
       ctx.lineTo(xPos - topW / 2, yEnd);
       ctx.closePath();
       ctx.fill();
     }
   }
+  ctx.globalCompositeOperation = "source-over";
   return ctx.getImageData(0, 0, W, H);
 }
 
@@ -412,31 +441,22 @@ export default function CompanyGlobe({
           clusterMaxZoom: 8,
           clusterRadius: 30,
         });
-        // Cerchio cluster: "piattaforma" trasparente sotto i raggi.
-        // Opacity bassa così non maschera la base dei raggi che
-        // partono dal suo perimetro superiore. No bordi.
-        map.addLayer({
-          id: LAYER_CLUSTER_ID,
-          type: "circle",
-          source: SOURCE_ID,
-          filter: ["has", "point_count"],
-          paint: {
-            "circle-color": "#00e87a",
-            "circle-opacity": 0.35,
-            "circle-radius": [
-              "step",
-              ["get", "point_count"],
-              14, 5, 18, 15, 24, 30, 30,
-            ],
-          },
-        });
+        // Niente "piattaforma" — restano solo raggi + numero.
         // Doccia di raggi che escono dal perimetro superiore del
         // cerchio cluster. Symbol layer separato (sovrapposto sopra
         // il cerchio, sotto il testo del count).
-        if (!map.hasImage(CLUSTER_BEAMS_IMG_ID)) {
-          const beams = createClusterBeamsImageData();
-          if (beams) {
-            map.addImage(CLUSTER_BEAMS_IMG_ID, beams, { pixelRatio: 2 });
+        // 4 varianti skyline (S/M/L/XL) selezionate via step(count):
+        // più posizioni nel cluster → più raggi/più alti/alone più
+        // largo (metropoli vs borgo).
+        for (const [id, density] of [
+          [CLUSTER_BEAMS_S, "s"],
+          [CLUSTER_BEAMS_M, "m"],
+          [CLUSTER_BEAMS_L, "l"],
+          [CLUSTER_BEAMS_XL, "xl"],
+        ] as const) {
+          if (!map.hasImage(id)) {
+            const img = createClusterBeamsImageData(density);
+            if (img) map.addImage(id, img, { pixelRatio: 2 });
           }
         }
         map.addLayer({
@@ -445,27 +465,28 @@ export default function CompanyGlobe({
           source: SOURCE_ID,
           filter: ["has", "point_count"],
           layout: {
-            "icon-image": CLUSTER_BEAMS_IMG_ID,
+            "icon-image": [
+              "step",
+              ["get", "point_count"],
+              CLUSTER_BEAMS_S,
+              6, CLUSTER_BEAMS_M,
+              15, CLUSTER_BEAMS_L,
+              30, CLUSTER_BEAMS_XL,
+            ],
             "icon-anchor": "center",
-            // cy del cerchio invisibile = H/2 nel canvas → coincide
-            // col centro icona → coincide col pin geo. No offset:
-            // l'allineamento è stabile a qualsiasi icon-size.
             "icon-rotation-alignment": "viewport",
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
-            // Scala in base al count (cerchio invisibile dell'icona
-            // è 30px; cluster radius varia 14→30; scalo per coincidere)
-            // e amplifica un po' col zoom.
-            // zoom DEVE essere top-level; step(count) sta nei stop
-            // values per scalare anche col point_count.
+            // La "dimensione" del cluster è gestita dalla variante
+            // d'icona; icon-size scala solo col zoom.
             "icon-size": [
               "interpolate",
               ["linear"],
               ["zoom"],
-              0,
-              ["step", ["get", "point_count"], 0.55, 5, 0.7, 15, 0.9, 30, 1.1],
-              16,
-              ["step", ["get", "point_count"], 0.8, 5, 1.0, 15, 1.3, 30, 1.6],
+              0, 0.7,
+              6, 0.9,
+              12, 1.1,
+              16, 1.3,
             ],
           },
         });
