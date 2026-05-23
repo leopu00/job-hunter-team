@@ -203,7 +203,10 @@ export default function TeamCompany() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
+    // 15s invece di 5s: orgchart status non cambia spesso, riduce req/min
+    // sul rate limit globale. Realtime via useTeamState copre i cambi
+    // is_running ad alta frequenza (es. click Start/Stop).
+    const interval = setInterval(fetchStatus, 15_000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
