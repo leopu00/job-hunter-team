@@ -32,6 +32,7 @@ const T = {
 
     // Pipeline
     pipeline:             'Pipeline',
+    pipeline_density:     'Addensamento pipeline',
     p_new:                'Nuove',
     p_checked:            'Analizzate',
     p_scored:             'Valutate',
@@ -44,7 +45,21 @@ const T = {
     score_distribution:   'Distribuzione Score',
     score_footer:         (w: number, t: number) => `${w} di ${t} con score · ${t - w} senza`,
     sources:              'Fonti',
+    critic_votes:         'Voti Critico',
+    critic_ready:         'pass ≥5.5',
     no_data:              'Nessun dato',
+
+    // Position types pie
+    position_types:       'Tipologie',
+    pt_ai_ml:             'AI / ML',
+    pt_data:              'Data',
+    pt_devops_cloud:      'DevOps / Cloud',
+    pt_full_stack:        'Full Stack',
+    pt_backend:           'Backend',
+    pt_frontend:          'Frontend',
+    pt_python:            'Python',
+    pt_software_engineer: 'Software Eng.',
+    pt_other:             'Altro',
 
     // Table
     recent_positions:     'Posizioni Recenti',
@@ -56,6 +71,7 @@ const T = {
     col_remote:           'Company',
     col_score:            'Score',
     col_status:           'Stato',
+    col_updated:          'Aggiornato',
     no_positions:         'Nessuna posizione trovata.',
 
     // Pipeline statuses
@@ -98,6 +114,7 @@ const T = {
     sent:                 'Sent',
 
     pipeline:             'Pipeline',
+    pipeline_density:     'Pipeline density',
     p_new:                'New',
     p_checked:            'Analyzed',
     p_scored:             'Scored',
@@ -109,7 +126,21 @@ const T = {
     score_distribution:   'Score Distribution',
     score_footer:         (w: number, t: number) => `${w} of ${t} with score · ${t - w} without`,
     sources:              'Sources',
+    critic_votes:         'Critic Votes',
+    critic_ready:         'pass ≥5.5',
     no_data:              'No data',
+
+    // Position types pie
+    position_types:       'Types',
+    pt_ai_ml:             'AI / ML',
+    pt_data:              'Data',
+    pt_devops_cloud:      'DevOps / Cloud',
+    pt_full_stack:        'Full Stack',
+    pt_backend:           'Backend',
+    pt_frontend:          'Frontend',
+    pt_python:            'Python',
+    pt_software_engineer: 'Software Eng.',
+    pt_other:             'Other',
 
     recent_positions:     'Recent Positions',
     view_all:             'View all →',
@@ -120,6 +151,7 @@ const T = {
     col_remote:           'Company',
     col_score:            'Score',
     col_status:           'Status',
+    col_updated:          'Updated',
     no_positions:         'No positions found.',
 
     status_new:      'New',
@@ -161,6 +193,7 @@ const T = {
     sent:                 'Elküldve',
 
     pipeline:             'Folyamat',
+    pipeline_density:     'Folyamat sűrűsége',
     p_new:                'Új',
     p_checked:            'Elemzett',
     p_scored:             'Értékelt',
@@ -172,7 +205,21 @@ const T = {
     score_distribution:   'Pontszám eloszlás',
     score_footer:         (w: number, t: number) => `${w} / ${t} pontszámmal · ${t - w} nélkül`,
     sources:              'Források',
+    critic_votes:         'Kritikus pontok',
+    critic_ready:         'pass ≥5.5',
     no_data:              'Nincs adat',
+
+    // Position types pie
+    position_types:       'Típusok',
+    pt_ai_ml:             'AI / ML',
+    pt_data:              'Adat',
+    pt_devops_cloud:      'DevOps / Cloud',
+    pt_full_stack:        'Full Stack',
+    pt_backend:           'Backend',
+    pt_frontend:          'Frontend',
+    pt_python:            'Python',
+    pt_software_engineer: 'Szoftvermérnök',
+    pt_other:             'Egyéb',
 
     recent_positions:     'Legutóbbi állások',
     view_all:             'Összes megtekintése →',
@@ -183,6 +230,7 @@ const T = {
     col_remote:           'Távmunka',
     col_score:            'Pontszám',
     col_status:           'Állapot',
+    col_updated:          'Frissítve',
     no_positions:         'Nem találhatók állások.',
 
     status_new:      'Új',

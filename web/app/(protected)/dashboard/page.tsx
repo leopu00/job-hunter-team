@@ -6,14 +6,24 @@ import {
   getDashboardStats,
   getRecentPositions,
   getScoreDistribution,
-  getSourceDistribution,
+  getCriticScores,
+  getPositionTypeDistribution,
   getPendingMessages,
   getCriticVerdictTotals,
 } from "@/lib/queries";
+import PositionTypesPie from "@/app/components/PositionTypesPie";
+import ScoreDistribution from "@/app/components/ScoreDistribution";
+import PipelineFlow from "@/app/components/PipelineFlow";
+// CompanyGlobe usa maplibre-gl (~1 MB parsed): caricato via wrapper Client
+// che fa dynamic import. Il wrapper e' Client Component perche'
+// dynamic({ssr:false}) non e' permesso in Server Component da Next 14+.
+// Cosi' il chunk maplibre viene scaricato solo quando il browser monta
+// CompanyGlobeLazy, non al primo paint della dashboard.
+// Vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md insight #10.
+import CompanyGlobeLazy from "@/app/components/CompanyGlobeLazy";
+import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
-import { runBash } from "@/lib/shell";
-import type { PositionWithScore } from "@/lib/types";
 import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
 import { createClient } from "@/lib/supabase/server";
@@ -26,6 +36,7 @@ import CloudDownloadLanding from "@/app/components/CloudDownloadLanding";
 import VpsSetupCompleteLanding from "@/app/components/VpsSetupCompleteLanding";
 import PendingMessagesCard from "@/app/components/PendingMessagesCard";
 import VpsCompanycycleCard from "@/app/components/VpsCompanycycleCard";
+import OnboardingPopup from "@/app/components/OnboardingPopup";
 
 const OnboardingWizard = dynamic(
   () => import("@/app/components/OnboardingWizard"),
@@ -99,13 +110,14 @@ export default async function DashboardCompany() {
   }
 
   const demoData = demoMode ? getDemoDashboardData() : null;
-  const [stats, positions, scoreDist, sourceDist, pendingMessages, criticTotals] =
+  const [stats, positions, scoreDist, criticScores, typeDist, pendingMessages, criticTotals] =
     demoData
       ? [
           demoData.stats,
           demoData.positions,
           demoData.scoreDistribution,
-          demoData.sourceDistribution,
+          [] as number[],
+          [],
           demoData.pendingMessages,
           { pass: 0, needs_work: 0, reject: 0, total: 0 },
         ]
@@ -113,7 +125,8 @@ export default async function DashboardCompany() {
           getDashboardStats(),
           getRecentPositions(15),
           getScoreDistribution(),
-          getSourceDistribution(),
+          getCriticScores(),
+          getPositionTypeDistribution(),
           getPendingMessages(20),
           getCriticVerdictTotals(),
         ]);
@@ -157,31 +170,6 @@ export default async function DashboardCompany() {
     hasProfile = false;
   } else {
     hasProfile = readWorkspaceProfile() !== null;
-  }
-
-  // Check if team is active (tmux JHT sessions)
-  let teamActive = demoMode;
-  if (!demoMode) {
-    try {
-      const { stdout } = await runBash(
-        'tmux list-sessions -F "#{session_name}" 2>/dev/null || echo ""',
-      );
-      const sessions = stdout.trim().split("\n").filter(Boolean);
-      const JH_PREFIXES = [
-        "CAPITANO",
-        "SCOUT",
-        "ANALISTA",
-        "SCORER",
-        "SCRITTORE",
-        "CRITICO",
-        "SENTINELLA",
-      ];
-      teamActive = sessions.some((s) =>
-        JH_PREFIXES.some(
-          (p) => s.toUpperCase() === p || s.toUpperCase().startsWith(`${p}-`),
-        ),
-      );
-    } catch {}
   }
 
   const isEmpty = stats.total === 0;
@@ -258,38 +246,35 @@ export default async function DashboardCompany() {
   ];
 
   return (
-    <div style={{ animation: "fade-in 0.35s ease both" }}>
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-3">
-          <div
-            className="w-2 h-2 rounded-full"
-            style={{
-              background: teamActive
-                ? "var(--color-green)"
-                : "var(--color-dim)",
-              animation: teamActive
-                ? "pulse-dot 2s ease-in-out infinite"
-                : undefined,
-            }}
-          />
-          <span
-            className="text-[10px] font-semibold tracking-[0.18em] uppercase"
-            style={{
-              color: teamActive ? "var(--color-green)" : "var(--color-dim)",
-            }}
-          >
-            {demoMode ? "DEMO DATA" : teamActive ? t.live : t.data_updated}
-          </span>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-          {t.title}
-        </h1>
-        <p className="text-[var(--color-muted)] text-[11px] mt-1">
-          {t.total_positions(stats.total, stats.excluded, activeTotal)}
-        </p>
+    <div style={{ animation: "fade-in 0.35s ease both", position: "relative" }}>
+      {/* ── World globe — sticky sotto navbar (h-14=56px), z-0.
+          Resta ancorato mentre il contenuto sottostante (z-1 + bg
+          opaco) scrolla sopra coprendolo: il globo NON viene
+          spinto via, viene coperto. */}
+      <div
+        style={{
+          position: "sticky",
+          top: 56,
+          height: 620,
+          zIndex: 0,
+          animation: "fade-in 0.35s ease both 0.05s",
+        }}
+      >
+        <CompanyGlobeLazy hero />
       </div>
 
+      {/* ── Tutto il resto: bg opaco full-width che copre il globo
+          edge-to-edge durante lo scroll; layer esterno fa da pannello,
+          quello interno centra i contenuti come prima. z-1 sopra al
+          globo (z-0). ── */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          background: "var(--color-deep)",
+        }}
+      >
+      <div className="max-w-6xl mx-auto px-5 pt-8 pb-8">
       {/* ── Messaggi del team (fallback web quando Telegram down) ─ */}
       <PendingMessagesCard initialMessages={pendingMessages} />
 
@@ -299,109 +284,57 @@ export default async function DashboardCompany() {
           tua MacBook. Vedi docs/internal/vps.md § "Companycycle". */}
       <VpsCompanycycleCard visible={process.env.JHT_HOST_TYPE === "vps"} />
 
-      {/* ── Onboarding (empty state) ──────────────────────────── */}
+      {/* ── Onboarding popup (empty state) ────────────────────── */}
       {isEmpty && (
-        <div className="mb-10" style={{ animation: "fade-in 0.35s ease both" }}>
-          <div className="section-label mb-5">{t.start_here}</div>
-          <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-card)] p-6 mb-6">
-            <p className="text-[var(--color-muted)] text-[12px] mb-6 leading-relaxed">
-              {t.setup_intro}
-            </p>
-
-            <div className="flex flex-col gap-4">
-              {/* Step 1 — Configure Profile (required) */}
-              <Link
-                href="/profile"
-                className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
-                  hasProfile
-                    ? "border-[var(--color-green)]/30"
-                    : "border-[var(--color-border)] hover:border-[#00e87a55]"
-                }`}
-              >
-                <div
-                  className={`flex items-center justify-center w-8 h-8 rounded-full border text-[13px] font-bold shrink-0 mt-0.5 ${
-                    hasProfile
-                      ? "border-[var(--color-green)] text-[var(--color-green)] bg-[var(--color-green)]/10"
-                      : "border-[var(--color-green)] text-[var(--color-green)]"
-                  }`}
-                >
-                  {hasProfile ? "✓" : "1"}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div
-                    className={`text-[12px] font-bold mb-1 ${hasProfile ? "text-[var(--color-green)]" : "text-[var(--color-bright)] group-hover:text-[var(--color-green)] transition-colors"}`}
-                  >
-                    {t.step1_title}
-                    {hasProfile && (
-                      <span className="ml-2 text-[9px] font-semibold tracking-[0.12em] uppercase text-[var(--color-green)] bg-[var(--color-green)]/10 px-2 py-0.5 rounded-full border border-[var(--color-green)]/20">
-                        {t.step1_completed}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
-                    {hasProfile ? t.step1_desc_done : t.step1_desc_todo}
-                  </p>
-                </div>
-                {!hasProfile && (
-                  <span className="text-[var(--color-dim)] group-hover:text-[var(--color-green)] text-[14px] transition-colors shrink-0 mt-1">
-                    →
-                  </span>
-                )}
-              </Link>
-
-              {/* Step 2 — Start the Team */}
-              <Link
-                href="/team"
-                className={`group flex items-start gap-4 p-4 rounded-lg border bg-[var(--color-panel)] no-underline transition-colors ${
-                  hasProfile
-                    ? "border-[var(--color-border)] hover:border-[#ffc10755]"
-                    : "border-[var(--color-border)] opacity-50 pointer-events-none"
-                }`}
-              >
-                <div
-                  className={`flex items-center justify-center w-8 h-8 rounded-full border text-[13px] font-bold shrink-0 mt-0.5 ${
-                    hasProfile
-                      ? "border-[var(--color-yellow)] text-[var(--color-yellow)]"
-                      : "border-[var(--color-dim)] text-[var(--color-dim)]"
-                  }`}
-                >
-                  2
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div
-                    className={`text-[12px] font-bold mb-1 ${hasProfile ? "text-[var(--color-bright)] group-hover:text-[var(--color-yellow)]" : "text-[var(--color-dim)]"} transition-colors`}
-                  >
-                    {t.step2_title}
-                  </div>
-                  <p className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0">
-                    {hasProfile ? t.step2_desc_done : t.step2_desc_todo}
-                  </p>
-                </div>
-                {hasProfile && (
-                  <span className="text-[var(--color-dim)] group-hover:text-[var(--color-yellow)] text-[14px] transition-colors shrink-0 mt-1">
-                    →
-                  </span>
-                )}
-              </Link>
-            </div>
-
-            {/* Assistant — optional helper */}
-            <div className="mt-5 pt-4 border-t border-[var(--color-border)]">
-              <Link
-                href="/team/assistente"
-                className="group flex items-center gap-3 no-underline"
-              >
-                <span className="text-[11px] text-[var(--color-dim)] group-hover:text-[var(--color-muted)] transition-colors">
-                  {t.help_text}
-                </span>
-                <span className="text-[var(--color-dim)] group-hover:text-[var(--color-muted)] text-[12px] transition-colors shrink-0">
-                  {t.open_assistant}
-                </span>
-              </Link>
-            </div>
-          </div>
-        </div>
+        <OnboardingPopup
+          hasProfile={hasProfile}
+          translations={{
+            start_here: t.start_here,
+            setup_intro: t.setup_intro,
+            step1_title: t.step1_title,
+            step1_completed: t.step1_completed,
+            step1_desc_done: t.step1_desc_done,
+            step1_desc_todo: t.step1_desc_todo,
+            step2_title: t.step2_title,
+            step2_desc_done: t.step2_desc_done,
+            step2_desc_todo: t.step2_desc_todo,
+            help_text: t.help_text,
+            open_assistant: t.open_assistant,
+          }}
+        />
       )}
+
+      {/* ── Position types — pie chart in grande sopra la pipeline ── */}
+      <div
+        className="mb-8"
+        style={{ animation: "fade-in 0.35s ease both 0.08s" }}
+      >
+        <PositionTypesPie
+          data={typeDist}
+          title={t.position_types}
+          emptyLabel={t.no_data}
+          size={300}
+          labels={{
+            ai_ml: t.pt_ai_ml,
+            data: t.pt_data,
+            devops_cloud: t.pt_devops_cloud,
+            full_stack: t.pt_full_stack,
+            backend: t.pt_backend,
+            frontend: t.pt_frontend,
+            python: t.pt_python,
+            software_engineer: t.pt_software_engineer,
+            other: t.pt_other,
+          }}
+        />
+      </div>
+
+      {/* ── Pipeline flow: area chart con linea ondulante ───────── */}
+      <div
+        className="mb-8"
+        style={{ animation: "fade-in 0.35s ease both 0.12s" }}
+      >
+        <PipelineFlow steps={pipeline} title="Pipeline flow" />
+      </div>
 
       {/* ── Pipeline ────────────────────────────────────────────── */}
       <div className="section-label mb-4">{t.pipeline}</div>
@@ -454,6 +387,173 @@ export default async function DashboardCompany() {
             </Link>
           );
         })}
+      </div>
+
+      {/* ── Charts ──────────────────────────────────────────────── */}
+      <div
+        className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
+        style={{ animation: "fade-in 0.35s ease both 0.1s" }}
+      >
+        {/* Score distribution — histogram fine-grained */}
+        <ScoreDistribution
+          scores={scoreDist.scores ?? []}
+          title={t.score_distribution}
+          emptyLabel={t.no_data}
+        />
+
+        {/* Critic votes distribution (0-10) */}
+        <ScoreDistribution
+          scores={criticScores}
+          title={t.critic_votes}
+          emptyLabel={t.no_data}
+          maxScore={10}
+          binStep={0.5}
+          decimals={1}
+          thresholdReady={5.5}
+          thresholdLabel={t.critic_ready}
+        />
+      </div>
+
+      {/* ── Positions table ─────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-4">
+        <span className="section-label">{t.recent_positions}</span>
+        <Link
+          href="/positions"
+          className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+        >
+          {t.view_all}
+        </Link>
+      </div>
+      <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-8">
+        <table
+          className="w-full text-[12px]"
+          style={{ borderCollapse: "collapse" }}
+          aria-label={t.recent_positions}
+        >
+          <thead>
+            <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
+              {[
+                t.col_id,
+                t.col_title,
+                t.col_company,
+                t.col_location,
+                t.col_remote,
+                t.col_score,
+                t.col_status,
+                t.col_updated,
+              ].map((h) => (
+                <th
+                  key={h}
+                  scope="col"
+                  className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
+                  style={{ color: "var(--color-dim)" }}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {positions.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={8}
+                  className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
+                >
+                  {t.no_positions}
+                </td>
+              </tr>
+            ) : (
+              positions.map((p, i: number) => (
+                <tr
+                  key={p.id}
+                  className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
+                  style={{
+                    borderBottomColor:
+                      i === positions.length - 1 ? "transparent" : undefined,
+                    background:
+                      i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
+                  }}
+                >
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                    {p.legacy_id
+                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                      : p.id.slice(0, 8)}
+                  </td>
+                  <td
+                    className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
+                    title={p.title}
+                  >
+                    <Link
+                      href={`/positions/${p.id}`}
+                      className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                    >
+                      {p.title}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
+                    {p.company}
+                  </td>
+                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
+                    {p.location ?? "—"}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span
+                      className="text-[10px]"
+                      style={{
+                        color:
+                          p.remote_type === "full_remote"
+                            ? "var(--color-green)"
+                            : p.remote_type === "hybrid"
+                              ? "var(--color-yellow)"
+                              : "var(--color-red)",
+                      }}
+                    >
+                      {p.remote_type?.replace("_", " ") ?? "—"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2 justify-end">
+                      <span
+                        className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
+                      >
+                        {p.score ?? "—"}
+                      </span>
+                      <div
+                        className="w-10 h-1 rounded-full overflow-hidden"
+                        style={{ background: "var(--color-border)" }}
+                      >
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${p.score ?? 0}%`,
+                            background: scoreBg(p.score),
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
+                      style={{
+                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                        borderColor:
+                          STATUS_COLORS[p.status] ?? "var(--color-border)",
+                        background: `${STATUS_COLORS[p.status]}18`,
+                      }}
+                    >
+                      {p.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
+                    {formatFoundAt(p.last_action_at ?? p.found_at)}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* ── Conversion rate ─────────────────────────────────────── */}
@@ -653,245 +753,7 @@ export default async function DashboardCompany() {
           </div>
         </div>
       </div>
-
-      {/* ── Charts ──────────────────────────────────────────────── */}
-      <div
-        className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.1s" }}
-      >
-        {/* Score distribution */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="flex items-center justify-between mb-4">
-            <span className="section-label">{t.score_distribution}</span>
-            {scoreDist.avgScore != null && (
-              <span
-                className="text-[11px] font-semibold"
-                style={{
-                  color:
-                    scoreDist.avgScore >= 75
-                      ? "var(--color-green)"
-                      : scoreDist.avgScore >= 55
-                        ? "var(--color-yellow)"
-                        : "var(--color-red)",
-                }}
-              >
-                avg {scoreDist.avgScore}
-              </span>
-            )}
-          </div>
-          <div className="space-y-3 mb-3">
-            {scoreDist.buckets.map((b) => (
-              <div key={b.label} className="flex items-center gap-3">
-                <span
-                  className="text-[9.5px] font-semibold w-12 text-right shrink-0"
-                  style={{ color: b.color }}
-                >
-                  {b.label}
-                </span>
-                <div
-                  className="flex-1 h-2 rounded-full overflow-hidden"
-                  style={{ background: "var(--color-border)" }}
-                >
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${scoreDist.withScore > 0 ? (b.count / scoreDist.withScore) * 100 : 0}%`,
-                      background: b.color,
-                      opacity: 0.85,
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-[11px] font-bold w-6 text-right shrink-0"
-                  style={{ color: b.color }}
-                >
-                  {b.count}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-[var(--color-dim)]">
-            {t.score_footer(scoreDist.withScore, scoreDist.total)}
-          </p>
-        </div>
-
-        {/* Source distribution */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="section-label mb-4">{t.sources}</div>
-          <div className="space-y-3">
-            {sourceDist.length === 0 ? (
-              <p className="text-[11px] text-[var(--color-dim)]">{t.no_data}</p>
-            ) : (
-              (() => {
-                const max = sourceDist[0]?.count ?? 1;
-                return sourceDist.map((s) => (
-                  <div key={s.source} className="flex items-center gap-3">
-                    <span
-                      className="text-[9.5px] text-[var(--color-muted)] w-28 truncate shrink-0"
-                      title={s.source}
-                    >
-                      {s.source}
-                    </span>
-                    <div
-                      className="flex-1 h-1.5 rounded-full overflow-hidden"
-                      style={{ background: "var(--color-border)" }}
-                    >
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${(s.count / max) * 100}%`,
-                          background: "var(--color-blue)",
-                          opacity: 0.7,
-                        }}
-                      />
-                    </div>
-                    <span className="text-[11px] font-bold text-[var(--color-blue)] w-6 text-right shrink-0">
-                      {s.count}
-                    </span>
-                  </div>
-                ));
-              })()
-            )}
-          </div>
-        </div>
       </div>
-
-      {/* ── Positions table ─────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="section-label">{t.recent_positions}</span>
-        <Link
-          href="/positions"
-          className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
-        >
-          {t.view_all}
-        </Link>
-      </div>
-      <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-8">
-        <table
-          className="w-full text-[12px]"
-          style={{ borderCollapse: "collapse" }}
-          aria-label={t.recent_positions}
-        >
-          <thead>
-            <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-              {[
-                t.col_id,
-                t.col_title,
-                t.col_company,
-                t.col_location,
-                t.col_remote,
-                t.col_score,
-                t.col_status,
-              ].map((h) => (
-                <th
-                  key={h}
-                  scope="col"
-                  className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
-                  style={{ color: "var(--color-dim)" }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {positions.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
-                >
-                  {t.no_positions}
-                </td>
-              </tr>
-            ) : (
-              positions.map((p: PositionWithScore, i: number) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
-                  style={{
-                    borderBottomColor:
-                      i === positions.length - 1 ? "transparent" : undefined,
-                    background:
-                      i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
-                  }}
-                >
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                    {p.legacy_id
-                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                      : p.id.slice(0, 8)}
-                  </td>
-                  <td
-                    className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
-                    title={p.title}
-                  >
-                    <Link
-                      href={`/positions/${p.id}`}
-                      className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
-                    >
-                      {p.title}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
-                    {p.company}
-                  </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
-                    {p.location ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span
-                      className="text-[10px]"
-                      style={{
-                        color:
-                          p.remote_type === "full_remote"
-                            ? "var(--color-green)"
-                            : p.remote_type === "hybrid"
-                              ? "var(--color-yellow)"
-                              : "var(--color-red)",
-                      }}
-                    >
-                      {p.remote_type?.replace("_", " ") ?? "—"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
-                      <span
-                        className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
-                      >
-                        {p.score ?? "—"}
-                      </span>
-                      <div
-                        className="w-10 h-1 rounded-full overflow-hidden"
-                        style={{ background: "var(--color-border)" }}
-                      >
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${p.score ?? 0}%`,
-                            background: scoreBg(p.score),
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
-                      style={{
-                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                        borderColor:
-                          STATUS_COLORS[p.status] ?? "var(--color-border)",
-                        background: `${STATUS_COLORS[p.status]}18`,
-                      }}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
       </div>
 
       <OnboardingWizard />

@@ -323,9 +323,47 @@ async function maybeRunPairing() {
   });
 }
 
+/**
+ * Esegue `jht migrate` al boot. Il wizard desktop scrive `jht.config.json`
+ * in formato v1 (no `version` field); senza migrazione i campi v2-v4
+ * (`providers` strutturato, `agents.list`, `notifications`, `analytics`)
+ * restano assenti e i comandi downstream falliscono o cadono nei default
+ * silenziosi. `jht migrate` e' gia' non-interattivo (no prompts) ed
+ * idempotente: se la config e' al massimo, exit 0 con "Nessuna migrazione
+ * necessaria". Best-effort: un fallimento qui non blocca pid1, l'utente
+ * puo' rieseguire `jht migrate` manualmente dal terminal embedded.
+ * Vedi docs/internal/_archive/2026-05-20-vps-bootstrap-bugs.md §Bug #3.
+ */
+async function runMigrate() {
+  try {
+    await access(JHT_CONFIG_PATH);
+  } catch {
+    // No config yet (pre-pairing su VPS): niente da migrare.
+    return;
+  }
+  pid1Log('running jht migrate (idempotente)');
+  await new Promise((resolve) => {
+    const child = spawnLabeled('migrate', process.execPath, [JHT_ENTRY, 'migrate']);
+    child.on('exit', (code) => {
+      if (code === 0) pid1Log('jht migrate ok');
+      else pid1Log(`jht migrate exit ${code} — proseguo, retry manuale via 'jht migrate'`);
+      resolve();
+    });
+    child.on('error', (err) => {
+      pid1Log(`jht migrate spawn error: ${err.message}`);
+      resolve();
+    });
+  });
+}
+
 async function dispatch() {
   const hostType = await readHostType();
   const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
+
+  // Migrate jht.config.json al volo (v1 → vN). Il wizard desktop scrive v1
+  // e il container ha bisogno dei campi delle versioni successive per far
+  // funzionare provider OAuth, channels, agents.list. Idempotente.
+  await runMigrate();
 
   // Pair non-interattivo PRIMA di partire dashboard+daemon: cosi' il watcher
   // su cloud.json non scatta a vuoto e il daemon parte subito col token
@@ -337,6 +375,7 @@ async function dispatch() {
   const dashCmd = [JHT_ENTRY, 'dashboard', '--no-browser'];
   const daemonCmd = [JHT_ENTRY, 'cloud', 'daemon'];
   const realtimeCmd = [JHT_ENTRY, 'cloud', 'realtime-listen'];
+  const teamStateCmd = [JHT_ENTRY, 'cloud', 'team-state-listen'];
 
   // ── Dashboard: lifetime = container, parte sempre.
   pid1Log(isVps ? 'mode: VPS' : 'mode: local');
@@ -471,7 +510,7 @@ async function dispatch() {
   // check). Regressione storica: introdotto 2026-05-08 (commit d4bb2ca2)
   // e poi perso al rebuild perché esisteva solo come `tmux new-session`
   // manuale. Pattern identico ad agent-watchdog ma cadenza interna allo
-  // script (sleep 1800s). Vedi docs/internal/2026-05-17-team-strategy-bugs.md §18.
+  // script (sleep 1800s). Vedi docs/internal/_archive/2026-05-17-team-strategy-bugs.md §18.
   let doctorWatchdogChild = null;
   let doctorWatchdogRespawnTimer = null;
   const startDoctorWatchdog = () => {
@@ -499,8 +538,10 @@ async function dispatch() {
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
   let daemonChild = null;
   let realtimeChild = null;
+  let teamStateChild = null;
   let daemonRespawnTimer = null;
   let realtimeRespawnTimer = null;
+  let teamStateRespawnTimer = null;
 
   const startDaemon = () => {
     if (daemonChild && !daemonChild.killed) return;
@@ -547,6 +588,30 @@ async function dispatch() {
     });
   };
 
+  // team_state reconciler: polla /api/team-state e converge desired→observed
+  // via `jht team start|stop|restart`. Parallelo a realtime subscriber durante
+  // il cutover (Step 5 in docs/internal/cloud-sync-architecture.md).
+  const startTeamState = () => {
+    if (teamStateChild && !teamStateChild.killed) return;
+    pid1Log('starting team_state reconciler');
+    teamStateChild = spawnLabeled('team-state', process.execPath, teamStateCmd);
+    teamStateChild.on('exit', (code, signal) => {
+      const exitedChild = teamStateChild;
+      teamStateChild = null;
+      if (shuttingDown) return;
+      pid1Log(`team_state reconciler exited (code=${code} signal=${signal})`);
+      if (teamStateRespawnTimer) clearTimeout(teamStateRespawnTimer);
+      teamStateRespawnTimer = setTimeout(async () => {
+        if (shuttingDown) return;
+        if (await isCloudConfigured()) {
+          pid1Log('team_state reconciler respawn dopo crash');
+          startTeamState();
+        }
+      }, 5000);
+      void exitedChild;
+    });
+  };
+
   const stopDaemon = (reason) => {
     if (daemonRespawnTimer) {
       clearTimeout(daemonRespawnTimer);
@@ -564,12 +629,21 @@ async function dispatch() {
       pid1Log(`stopping realtime subscriber (${reason})`);
       realtimeChild.kill('SIGTERM');
     }
+    if (teamStateRespawnTimer) {
+      clearTimeout(teamStateRespawnTimer);
+      teamStateRespawnTimer = null;
+    }
+    if (teamStateChild && !teamStateChild.killed) {
+      pid1Log(`stopping team_state reconciler (${reason})`);
+      teamStateChild.kill('SIGTERM');
+    }
   };
 
-  // Stato iniziale del cloud: se gia' paired, daemon + realtime partono.
+  // Stato iniziale del cloud: se gia' paired, daemon + realtime + team_state partono.
   if (isVps && await isCloudConfigured()) {
     startDaemon();
     startRealtime();
+    startTeamState();
   } else if (isVps) {
     pid1Log('cloud sync non ancora configurato: aspetto cloud.json (auto-start dopo pairing)');
   }
@@ -591,9 +665,10 @@ async function dispatch() {
         if (nowConfigured === lastConfigured) return;
         lastConfigured = nowConfigured;
         if (nowConfigured) {
-          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber');
+          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber + team_state reconciler');
           startDaemon();
           startRealtime();
+          startTeamState();
         } else {
           stopDaemon('cloud.json rimosso o disabilitato');
         }
@@ -612,6 +687,7 @@ async function dispatch() {
     pid1Log(`shutdown (${sig}): killing children`);
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
+    if (teamStateChild && !teamStateChild.killed) teamStateChild.kill(sig);
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
     if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);

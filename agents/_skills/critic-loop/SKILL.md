@@ -97,10 +97,12 @@ These three feed Step 8 (correction).
 
 ```bash
 python3 /app/shared/skills/db_update.py application <POSITION_ID> \
-  --critic-score <X.X> --critic-round <N>
+  --critic-score <X.X> --critic-round <N> --reviewed-by "$CRITICO_SESSION"
 ```
 
 `<POSITION_ID>` is the position ID, NOT the application ID — the `db_update.py application` is an UPSERT that finds the row by position.
+
+`--reviewed-by "$CRITICO_SESSION"` tracks which Critic instance produced each round; without it `applications.reviewed_by` stays NULL (observed 95% null pre-2026-05-22 — vps1-run-postmortem #1). Always pass it.
 
 ### Step 8 — Kill the Critic (mandatory)
 
@@ -131,6 +133,7 @@ if [[ "<final_verdict>" == "PASS" ]]; then
     --critic-score <final> \
     --critic-round 3 \
     --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --reviewed-by "$CRITICO_SESSION" \
     --status ready
 else
   # FAIL → critic data persists, status stays 'draft'
@@ -138,7 +141,8 @@ else
     --critic-verdict FAIL \
     --critic-score <final> \
     --critic-round 3 \
-    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]"
+    --critic-notes "Round 1: X.X, Round 2: Y.Y, Round 3: Z.Z. Gap: [...]. Verdict: [...]" \
+    --reviewed-by "$CRITICO_SESSION"
 fi
 ```
 

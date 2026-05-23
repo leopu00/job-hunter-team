@@ -1,7 +1,6 @@
 import { readFile, writeFile, mkdir, chmod, unlink, stat } from 'node:fs/promises';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
 import pc from 'picocolors';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 
@@ -10,7 +9,11 @@ const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
 const PROFILE_DIR = join(JHT_HOME, 'profile');
 const PROFILE_YAML_PATH = join(PROFILE_DIR, 'candidate_profile.yml');
 const PROFILE_SUMMARIES_DIR = join(PROFILE_DIR, 'summaries');
-const SENTINEL_DATA_PATH = join(JHT_HOME, 'logs', 'sentinel-data.jsonl');
+const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
+// Cursor delta-sync: per ogni tabella memorizziamo l'ultimo updated_at
+// pushato. Al tick successivo selezioniamo solo righe con updated_at >
+// cursor. Crollo bandwidth ~95% (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md).
+const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -45,73 +48,6 @@ function readProfilePayload() {
   }
 
   return { yaml: yamlRaw, summaries };
-}
-
-function finiteNumber(value) {
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function makeSentinelSampleKey(entry) {
-  const stable = [
-    entry.ts ?? '',
-    entry.provider ?? '',
-    entry.source ?? '',
-    entry.session_id ?? '',
-  ].join('|');
-  return createHash('sha1').update(stable).digest('hex');
-}
-
-/**
- * Legge gli ultimi sample prodotti da sentinel-bridge.py. Il cloud daemon
- * pusha ogni 30s mentre il bridge ticka ogni 2-10min: ripushare una finestra
- * corta e idempotente e' piu' robusto di mantenere un cursor locale separato.
- */
-function readSentinelTicksPayload(limit = 500) {
-  if (!existsSync(SENTINEL_DATA_PATH)) return [];
-  let raw;
-  try {
-    raw = readFileSync(SENTINEL_DATA_PATH, 'utf-8');
-  } catch {
-    return [];
-  }
-  const lines = raw.split(/\r?\n/).filter(Boolean).slice(-limit * 2);
-  const out = [];
-  for (const line of lines) {
-    let entry;
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (!entry || typeof entry !== 'object') continue;
-    if (typeof entry.ts !== 'string') continue;
-    if (typeof entry.provider !== 'string') continue;
-    const usage = finiteNumber(entry.usage);
-    if (usage === null) continue;
-    out.push({
-      sample_key: makeSentinelSampleKey(entry),
-      ts: entry.ts,
-      provider: entry.provider,
-      usage,
-      delta: finiteNumber(entry.delta),
-      velocity: finiteNumber(entry.velocity),
-      velocity_smooth: finiteNumber(entry.velocity_smooth),
-      velocity_ideal: finiteNumber(entry.velocity_ideal),
-      projection: finiteNumber(entry.projection),
-      projection_naive: finiteNumber(entry.projection_naive),
-      velocity_decreasing: typeof entry.velocity_decreasing === 'boolean' ? entry.velocity_decreasing : null,
-      status: typeof entry.status === 'string' ? entry.status : 'OK',
-      throttle: Number.isInteger(entry.throttle) ? entry.throttle : null,
-      reset_at: typeof entry.reset_at === 'string' ? entry.reset_at : null,
-      weekly_usage: finiteNumber(entry.weekly_usage),
-      source: typeof entry.source === 'string' ? entry.source : null,
-      session_id: typeof entry.session_id === 'string' ? entry.session_id : null,
-      host: entry.host && typeof entry.host === 'object' && !Array.isArray(entry.host) ? entry.host : null,
-      host_level: typeof entry.host_level === 'string' ? entry.host_level : null,
-      raw: entry,
-    });
-  }
-  return out.slice(-limit);
 }
 
 async function loadCloudConfig() {
@@ -374,6 +310,77 @@ function readSqliteTable(db, table, columns) {
   }
 }
 
+/**
+ * Legge una tabella SQLite filtrando per updated_at > cursor.
+ * Se cursor e' null/undefined ritorna tutte le righe (first push o cursor
+ * cancellato). Include updated_at nelle colonne selezionate (serve per
+ * calcolare il nuovo cursor lato chiamante).
+ *
+ * Robust: se la tabella non esiste o non ha la colonna updated_at,
+ * ricade su full SELECT (compatibile con schema vecchi / tabelle senza
+ * timestamp di mutazione).
+ */
+function readSqliteTableDelta(db, table, columns, cursor) {
+  const cols = columns.includes('updated_at') ? columns : [...columns, 'updated_at'];
+  try {
+    if (cursor) {
+      return db.prepare(
+        `SELECT ${cols.join(', ')} FROM ${table} WHERE updated_at > ?`
+      ).all(cursor);
+    }
+    return db.prepare(`SELECT ${cols.join(', ')} FROM ${table}`).all();
+  } catch (err) {
+    if (/no such table/i.test(err.message)) return [];
+    if (/no such column/i.test(err.message)) {
+      // schema legacy senza updated_at: fallback a full read
+      return readSqliteTable(db, table, columns);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Carica il cursor di sync. Ritorna oggetto { positions, scores,
+ * applications } dove ogni valore e' l'ISO string dell'ultimo updated_at
+ * pushato per quella tabella. Missing keys = first push (legge tutto).
+ */
+function loadCloudCursor() {
+  if (!existsSync(CLOUD_CURSOR_FILE)) return {};
+  try {
+    return JSON.parse(readFileSync(CLOUD_CURSOR_FILE, 'utf-8'));
+  } catch {
+    // corrotto: meglio ripartire da zero (full push) che fallire
+    return {};
+  }
+}
+
+/**
+ * Salva il cursor di sync. Scritto solo dopo push API HTTP 200. Su
+ * errore di scrittura logghiamo ma non blocchiamo il daemon: al prossimo
+ * tick verra' rifatto il delta (al massimo ri-pusha righe gia' upsertate,
+ * idempotente lato server).
+ */
+async function saveCloudCursor(cursor) {
+  try {
+    await writeFile(CLOUD_CURSOR_FILE, JSON.stringify(cursor, null, 2));
+  } catch (err) {
+    console.error(pc.yellow(`  warn: cursor save failed (${err.message})`));
+  }
+}
+
+/**
+ * Dato un array di righe con campo updated_at, ritorna il MAX(updated_at)
+ * come stringa ISO. Null se l'array e' vuoto o nessuna riga ha il campo.
+ */
+function maxUpdatedAt(rows) {
+  let max = null;
+  for (const r of rows) {
+    const u = r?.updated_at;
+    if (u && (max === null || u > max)) max = u;
+  }
+  return max;
+}
+
 async function handlePush(options) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
@@ -389,11 +396,10 @@ async function handlePush(options) {
   // vuota fino al primo job trovato dallo Scout, deludendo l'utente che
   // si aspetta di vedere il proprio profilo subito dopo l'onboarding.
   const profilePayload = readProfilePayload();
-  const sentinelTicks = readSentinelTicksPayload();
 
   const dbPath = options.db || JHT_DB_PATH;
   const dbExists = await stat(dbPath).then(() => true).catch(() => false);
-  if (!dbExists && !profilePayload && sentinelTicks.length === 0) {
+  if (!dbExists && !profilePayload) {
     console.error(pc.red(`Database non trovato: ${dbPath}`));
     console.error(pc.dim('Avvia il team almeno una volta o passa --db <path>'));
     process.exitCode = 1;
@@ -413,34 +419,41 @@ async function handlePush(options) {
   let scores = [];
   let applications = [];
   let pendingMessages = [];
+  // Cursor delta-sync: ad ogni tick leggiamo solo righe con updated_at >
+  // ultimo pushato per quella tabella. Prima volta (cursor vuoto): full
+  // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
+  // delle righe pushate.
+  const cursor = options.full ? {} : loadCloudCursor();
   if (dbExists) {
     try {
       const db = new DatabaseSync(dbPath, { readOnly: true });
-      positions = readSqliteTable(db, 'positions', [
+      positions = readSqliteTableDelta(db, 'positions', [
         'id', 'title', 'company', 'url', 'location', 'remote_type', 'status',
         'notes', 'source', 'jd_text', 'requirements', 'found_by', 'found_at',
         'deadline', 'last_checked',
         'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
         'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
         'salary_estimated_source',
-      ]);
-      scores = readSqliteTable(db, 'scores', [
+      ], cursor.positions);
+      scores = readSqliteTableDelta(db, 'scores', [
         'position_id', 'total_score', 'experience_fit', 'salary_fit',
         'stack_match', 'remote_fit', 'strategic_fit', 'breakdown', 'notes',
         'scored_by', 'scored_at',
-      ]);
-      applications = readSqliteTable(db, 'applications', [
+      ], cursor.scores);
+      applications = readSqliteTableDelta(db, 'applications', [
         'position_id', 'cv_path', 'cv_pdf_path', 'cl_path', 'cl_pdf_path',
         'status', 'critic_score', 'critic_verdict', 'critic_notes',
         'written_at', 'applied_at', 'applied_via', 'response', 'response_at',
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
         'cv_drive_id', 'cl_drive_id',
-      ]);
+      ], cursor.applications);
       // pending_user_messages e' la coda agente -> utente. Pushiamo TUTTE le
       // righe ad ogni tick: l'upsert lato server e' idempotente su
       // (user_id, legacy_id), e gli ack-time / reply-time vanno comunque
       // sincronizzati a ritroso (web -> local) — vedi /api/cloud-sync/pull
       // (futuro). Per ora il push e' write-only locale -> cloud.
+      // NB: questa tabella non ha colonna updated_at, e' append + flag
+      // updates. Lasciamo full-push, il volume e' piccolo.
       pendingMessages = readSqliteTable(db, 'pending_user_messages', [
         'id', 'agent', 'body', 'kind', 'related_position_id',
         'delivered_via', 'delivered_at', 'acknowledged_at',
@@ -461,12 +474,11 @@ async function handlePush(options) {
   const pendingChunks = pendingMessages.length > 0
     ? `, ${pendingMessages.length} pending messages`
     : '';
-  const sentinelChunks = sentinelTicks.length > 0
-    ? `, ${sentinelTicks.length} sentinel ticks`
-    : '';
+  const isFirstPush = !cursor.positions && !cursor.scores && !cursor.applications;
+  const deltaMode = isFirstPush ? 'first-push (full)' : 'delta';
   console.log(
     pc.dim(
-      `Payload: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${sentinelChunks}${profileChunks}`
+      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
@@ -476,7 +488,7 @@ async function handlePush(options) {
   if (
     positions.length === 0 && scores.length === 0 &&
     applications.length === 0 && pendingMessages.length === 0 &&
-    sentinelTicks.length === 0 && !profilePayload
+    !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
     return;
@@ -494,7 +506,6 @@ async function handlePush(options) {
       body: JSON.stringify({
         positions, scores, applications,
         pending_user_messages: pendingMessages,
-        sentinel_ticks: sentinelTicks,
         ...(profilePayload ? { profile: profilePayload } : {}),
       }),
     });
@@ -518,7 +529,23 @@ async function handlePush(options) {
   console.log(pc.dim(`  scores:           ${body.scores?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  applications:     ${body.applications?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
-  console.log(pc.dim(`  sentinel ticks:   ${body.sentinel_ticks?.upserted ?? 0} upserted`));
+
+  // Aggiorna cursor delta-sync solo dopo HTTP 200: il prossimo tick
+  // selezionera' solo righe con updated_at > cursor. Se una qualsiasi
+  // tabella aveva almeno una riga pushata, avanziamo il suo cursor al
+  // MAX(updated_at) di quelle righe. Tabelle vuote nel tick: cursor
+  // invariato (mantenendo eventuale valore precedente).
+  const newCursor = { ...cursor };
+  const posMax = maxUpdatedAt(positions);
+  const scoMax = maxUpdatedAt(scores);
+  const appMax = maxUpdatedAt(applications);
+  if (posMax) newCursor.positions = posMax;
+  if (scoMax) newCursor.scores = scoMax;
+  if (appMax) newCursor.applications = appMax;
+  // Salviamo anche se nulla e' cambiato: la prima volta crea il file e
+  // disabilita la modalita' "first-push" al prossimo tick. La 2a volta
+  // in poi e' no-op a livello di contenuto.
+  await saveCloudCursor(newCursor);
 }
 
 /**
@@ -745,22 +772,81 @@ async function handleDaemon(options) {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
+  // HALT-WEEKLY guard: se il flag esiste, l'utente ha ordinato stop team
+  // (vedi docs/internal/2026-05-21-halt-weekly-incident.md). Saltiamo il
+  // push: dati locali non cambiano, e ogni tick costa ~1 MB upload + 1
+  // function invocation + ~500ms-2s CPU Postgres lato Vercel/Supabase
+  // (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
+  // ogni 10 tick per evitare spam ma confermare che il daemon e' vivo.
+  let haltSkipCount = 0;
+  // Consecutive failure tracking: dopo 3 fail consecutivi alziamo un warning
+  // visibile; dopo MAX_CONSECUTIVE_FAILS auto-shutdown del daemon.
+  // Origin: incident RobertHalf 2026-05-19 — daemon ha retentato in loop
+  // silenzioso per 1h, saturando Supabase pool fino al 504 user-facing.
+  // Meglio fermarsi e chiedere intervento manuale che bruciare quota cloud
+  // a vuoto (vedi docs/internal/cloud-sync-architecture.md P1 #4).
+  const MAX_CONSECUTIVE_FAILS = 5;
+  const WARN_AT = 3;
+  let consecutiveFails = 0;
   // Push iniziale immediato: se il container era spento per un po' e gli
   // agenti hanno scritto offline, il primo tick deve flushare subito.
   while (running) {
-    try {
-      // Reset di process.exitCode tra un tick e l'altro: handlePush lo
-      // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
-      // il loop al prossimo intervallo.
-      const prev = process.exitCode;
-      process.exitCode = 0;
-      await handlePush({});
-      if (process.exitCode === 1) {
-        // Errore di push: log gia' fatto da handlePush, continuiamo.
+    if (existsSync(WEEKLY_HALT_FLAG)) {
+      if (haltSkipCount % 10 === 0) {
+        console.log(pc.dim(`  HALT-WEEKLY attivo (${WEEKLY_HALT_FLAG}) — push saltato.`));
       }
-      process.exitCode = prev;
-    } catch (err) {
-      console.error(pc.yellow(`  daemon tick error: ${err.message}`));
+      haltSkipCount += 1;
+    } else {
+      if (haltSkipCount > 0) {
+        console.log(pc.green(`  HALT-WEEKLY rimosso, riprendo push normali.`));
+        haltSkipCount = 0;
+      }
+      let tickFailed = false;
+      try {
+        // Reset di process.exitCode tra un tick e l'altro: handlePush lo
+        // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
+        // il loop al prossimo intervallo.
+        const prev = process.exitCode;
+        process.exitCode = 0;
+        await handlePush({});
+        if (process.exitCode === 1) {
+          tickFailed = true;
+        }
+        process.exitCode = prev;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon tick error: ${err.message}`));
+        tickFailed = true;
+      }
+
+      if (tickFailed) {
+        consecutiveFails += 1;
+        if (consecutiveFails === WARN_AT) {
+          console.error(
+            pc.yellow(
+              `  ⚠ ${WARN_AT} push consecutivi falliti. ` +
+              `Probabile row corrotta o saturazione Supabase. ` +
+              `Verifica logs container e dashboard Supabase. ` +
+              `Auto-shutdown a ${MAX_CONSECUTIVE_FAILS} fail consecutivi.`
+            )
+          );
+        }
+        if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
+          console.error(
+            pc.red(
+              `  ✗ ${MAX_CONSECUTIVE_FAILS} push consecutivi falliti, ` +
+              `auto-shutdown daemon per evitare loop saturante Supabase. ` +
+              `Investiga la causa (vedi docs/internal/cloud-sync-architecture.md ` +
+              `incident RobertHalf 2026-05-19) e rilancia il daemon manualmente.`
+            )
+          );
+          running = false;
+          process.exitCode = 1;
+          break;
+        }
+      } else if (consecutiveFails > 0) {
+        console.log(pc.green(`  push ok dopo ${consecutiveFails} fail, contatore resettato.`));
+        consecutiveFails = 0;
+      }
     }
     if (!running) break;
     // Sleep interrompibile: spezziamo in chunk da 1s cosi' SIGTERM ferma
@@ -844,5 +930,18 @@ export function registerCloudCommand(program) {
     .action(async () => {
       const { runRealtimeSubscriber } = await import('../lib/realtime-subscriber.js');
       await runRealtimeSubscriber();
+    });
+
+  // `team-state-listen` — desired-state reconciler che polla /api/team-state
+  // e converge `should_run`/`restart_token` → `jht team start|stop|restart`.
+  // Parallelo a `realtime-listen` durante il cutover (vedi Step 5 in
+  // docs/internal/cloud-sync-architecture.md). Idempotente con team_commands:
+  // i due subscriber chiamano gli stessi `jht team <action>`.
+  cloud
+    .command('team-state-listen')
+    .description('Reconciler team_state (desired-state, parallelo a realtime-listen)')
+    .action(async () => {
+      const { runTeamStateReconciler } = await import('../lib/team-state-reconciler.js');
+      await runTeamStateReconciler();
     });
 }

@@ -1,4 +1,5 @@
 import { getDb } from './db'
+import { aggregateTypes, type PositionTypeCount } from './position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -42,16 +43,26 @@ export function getDashboardStatsLocal(ws: string): DashboardStats {
 // ── Recent positions with scores ───────────────────────────────────
 export function getRecentPositionsLocal(ws: string, limit = 15): PositionWithScore[] {
   const db = getDb(ws)
+  // last_action_at = ULTIMA azione qualsiasi su una posizione: insert
+  // dello Scout (found_at), check dell'Analista (last_checked), score
+  // dello Scorer (scored_at). Versione "lite" — non guarda
+  // status_changed_at perche' il trigger SQLite non e' garantito su
+  // workspace seedati da Supabase (tipico dev locale).
   const rows = db.prepare(`
-    SELECT p.*, s.total_score as score
+    SELECT p.*, s.total_score as score,
+           MAX(
+             COALESCE(p.found_at, '1970-01-01'),
+             COALESCE(p.last_checked, '1970-01-01'),
+             COALESCE(s.scored_at, '1970-01-01')
+           ) AS last_action_at
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     WHERE p.status != 'excluded'
-    ORDER BY p.found_at DESC
+    ORDER BY last_action_at DESC
     LIMIT ?
   `).all(limit) as any[]
 
-  return rows.map(r => mapPosition(r))
+  return rows.map(r => ({ ...mapPosition(r), last_action_at: r.last_action_at }))
 }
 
 // Posizioni ordinate per ULTIMA azione qualsiasi: insert dello Scout
@@ -162,28 +173,62 @@ const POSITION_SORT_COLUMNS: Record<string, string> = {
   status: 'p.status',
 }
 
-export function getPositionsLocal(ws: string, opts?: {
-  status?: string; minScore?: number; maxScore?: number; noScore?: boolean
-  remoteType?: string; limit?: number; offset?: number
-  sort?: string; dir?: 'asc' | 'desc'
-}): PositionWithScore[] {
+type LocalPositionFilterOpts = {
+  statuses?: string[]
+  remoteTypes?: string[]
+  sources?: string[]
+  tiers?: string[]
+  verdicts?: string[]
+  limit?: number
+  offset?: number
+  sort?: string
+  dir?: 'asc' | 'desc'
+}
+
+const LOCAL_TIER_RANGES: Record<string, { min?: number; max?: number; noScore?: boolean }> = {
+  seria:       { min: 70 },
+  practice:    { min: 40, max: 69 },
+  riferimento: { min: 1,  max: 39 },
+  noscore:     { noScore: true },
+}
+
+function tierClauses(tiers: string[]): string {
+  const parts: string[] = []
+  for (const t of tiers) {
+    const r = LOCAL_TIER_RANGES[t]; if (!r) continue
+    if (r.noScore) { parts.push('(s.total_score IS NULL OR s.total_score = 0)'); continue }
+    const sub: string[] = []
+    if (r.min != null) sub.push(`s.total_score >= ${r.min}`)
+    if (r.max != null) sub.push(`s.total_score <= ${r.max}`)
+    if (sub.length) parts.push(`(${sub.join(' AND ')})`)
+  }
+  return parts.length ? `(${parts.join(' OR ')})` : ''
+}
+
+export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): PositionWithScore[] {
   const db = getDb(ws)
   const where: string[] = []
   const params: any[] = []
 
-  if (opts?.status && opts.status !== 'all') {
-    where.push('p.status = ?')
-    params.push(opts.status)
+  if (opts?.statuses?.length) {
+    where.push(`p.status IN (${opts.statuses.map(() => '?').join(',')})`)
+    params.push(...opts.statuses)
   }
-  if (opts?.remoteType && opts.remoteType !== 'all') {
-    where.push('p.remote_type = ?')
-    params.push(opts.remoteType)
+  if (opts?.remoteTypes?.length) {
+    where.push(`p.remote_type IN (${opts.remoteTypes.map(() => '?').join(',')})`)
+    params.push(...opts.remoteTypes)
   }
-  if (opts?.noScore) {
-    where.push('(s.total_score IS NULL OR s.total_score = 0)')
-  } else {
-    if (opts?.minScore) { where.push('s.total_score >= ?'); params.push(opts.minScore) }
-    if (opts?.maxScore) { where.push('s.total_score <= ?'); params.push(opts.maxScore) }
+  if (opts?.sources?.length) {
+    where.push(`p.source IN (${opts.sources.map(() => '?').join(',')})`)
+    params.push(...opts.sources)
+  }
+  if (opts?.verdicts?.length) {
+    where.push(`a.critic_verdict IN (${opts.verdicts.map(() => '?').join(',')})`)
+    params.push(...opts.verdicts)
+  }
+  if (opts?.tiers?.length) {
+    const tc = tierClauses(opts.tiers)
+    if (tc) where.push(tc)
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
@@ -194,8 +239,6 @@ export function getPositionsLocal(ws: string, opts?: {
 
   const sortCol = POSITION_SORT_COLUMNS[opts?.sort ?? ''] ?? 'p.found_at'
   const sortDir = opts?.dir === 'asc' ? 'ASC' : 'DESC'
-  // NULLS LAST simulato: per score/critic le righe senza valore vanno in
-  // fondo sia ASC che DESC, sennò ordinare per score asc mostra solo "—".
   const nullsLast = sortCol.startsWith('s.') || sortCol.startsWith('a.')
     ? `${sortCol} IS NULL, `
     : ''
@@ -323,7 +366,104 @@ export function getScoreDistributionLocal(ws: string) {
   const sum = withScore.reduce((a, s) => a + s, 0)
   const avgScore = withScore.length > 0 ? Math.round(sum / withScore.length) : null
 
-  return { buckets, total: allScores.length, withScore: withScore.length, avgScore }
+  return { buckets, total: allScores.length, withScore: withScore.length, avgScore, scores: withScore }
+}
+
+// ── Positions con coordinate ufficio (per CompanyGlobe) ───────────────
+export interface PositionCoord {
+  id: string
+  title: string
+  company: string
+  status: string
+  score: number | null
+  lat: number
+  lon: number
+  is_remote: boolean
+}
+export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.id, p.title, p.company, p.status,
+           s.total_score as score,
+           p.office_lat as lat, p.office_lon as lon,
+           p.is_remote
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    WHERE p.status != 'excluded'
+      AND p.office_lat IS NOT NULL AND p.office_lon IS NOT NULL
+  `).all() as any[]
+  return rows.map(r => ({
+    id: sid(r.id),
+    title: r.title,
+    company: r.company,
+    status: r.status,
+    score: typeof r.score === 'number' ? r.score : null,
+    lat: r.lat,
+    lon: r.lon,
+    is_remote: !!r.is_remote,
+  }))
+}
+
+// ── Position state-history (timestamp transizioni) ────────────────
+export function getPositionStateHistoryLocal(ws: string) {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.id AS id,
+           p.status AS status,
+           p.found_at AS found_at,
+           p.last_checked AS last_checked,
+           s.scored_at AS scored_at,
+           a.written_at AS written_at,
+           a.critic_reviewed_at AS critic_reviewed_at,
+           a.critic_verdict AS critic_verdict,
+           a.applied_at AS applied_at,
+           a.response_at AS response_at
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    LEFT JOIN applications a ON a.position_id = p.id
+  `).all() as Array<{
+    id: number | string
+    status: string
+    found_at: string | null
+    last_checked: string | null
+    scored_at: string | null
+    written_at: string | null
+    critic_reviewed_at: string | null
+    critic_verdict: string | null
+    applied_at: string | null
+    response_at: string | null
+  }>
+  return rows.map(r => ({ ...r, id: String(r.id) }))
+}
+
+// ── Position type distribution ──────────────────────────────────────
+export function getPositionTypeDistributionLocal(ws: string): PositionTypeCount[] {
+  const db = getDb(ws)
+  // score → scores.total_score (0-100), critic → applications.critic_score
+  // (0-10). LEFT JOIN entrambi: aggregateTypes filtra null nel calcolo
+  // delle medie, così includiamo anche posizioni senza voto.
+  const rows = db.prepare(`
+    SELECT p.title AS title,
+           s.total_score AS score,
+           a.critic_score AS critic
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    LEFT JOIN applications a ON a.position_id = p.id
+    WHERE p.status != 'excluded'
+  `).all() as { title: string | null; score: number | null; critic: number | null }[]
+  return aggregateTypes(rows)
+}
+
+// ── Critic votes distribution (0-10) ───────────────────────────────
+export function getCriticScoresLocal(ws: string): number[] {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT a.critic_score
+    FROM applications a
+    JOIN positions p ON p.id = a.position_id
+    WHERE p.status != 'excluded' AND a.critic_score IS NOT NULL
+  `).all() as { critic_score: number }[]
+  return rows.map(r => r.critic_score).filter((s): s is number => typeof s === 'number')
 }
 
 // ── Source distribution ─────────────────────────────────────────────

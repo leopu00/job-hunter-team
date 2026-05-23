@@ -364,7 +364,7 @@ case "$PROVIDER" in
       CLI_ENV_PREFIX="ANTHROPIC_API_KEY='${API_KEY}' "
     fi
     ;;
-  openai)
+  openai|codex)
     CLI_BIN="codex"
     # --yolo è alias di --dangerously-bypass-approvals-and-sandbox:
     # salta sia approval che sandbox FS, così l'agente può scrivere
@@ -476,6 +476,29 @@ mkdir -p "$AGENT_DIR"
 # scratch (downloaded JDs, draft buffers, …) and is wiped by the agent
 # at boot for files older than 7 days.
 mkdir -p "$AGENT_DIR/tools" "$AGENT_DIR/tmp"
+
+# ── Pre-trust della cwd per Codex CLI ────────────────────────────────────────
+# Codex mostra al primo avvio in una nuova working dir un prompt blocking
+# "Do you trust the contents of this directory?" (default = nessuna scelta).
+# Quando lo spawn avviene dentro `tmux new -s NAME 'codex ...'` il prompt
+# resta in attesa, dopo qualche secondo codex esce silenziosamente → il
+# pane tmux torna a bash e i messaggi successivi vengono interpretati come
+# comandi shell ("command not found").
+#
+# Fix: scriviamo idempotentemente l'entry trust_level="trusted" per la
+# AGENT_DIR corrente in $JHT_HOME/.codex/config.toml prima di lanciare la
+# CLI. Funziona anche per gli scout/analista/scrittore/critico spawnati
+# on-demand dal Capitano (cwd dinamiche non note al boot di pid1).
+# Vedi docs/internal/_archive/2026-05-20-vps-bootstrap-bugs.md §Bug #2.
+if [ "$CLI_BIN" = "codex" ]; then
+  CODEX_CONFIG_FILE="${JHT_HOME:-/jht_home}/.codex/config.toml"
+  mkdir -p "$(dirname "$CODEX_CONFIG_FILE")"
+  touch "$CODEX_CONFIG_FILE"
+  TRUST_KEY="[projects.\"$AGENT_DIR\"]"
+  if ! grep -qF "$TRUST_KEY" "$CODEX_CONFIG_FILE"; then
+    printf '\n%s\ntrust_level = "trusted"\n' "$TRUST_KEY" >> "$CODEX_CONFIG_FILE"
+  fi
+fi
 
 # ── File d'identità per l'agente ──────────────────────────────────────────────
 # Convenzione per provider:

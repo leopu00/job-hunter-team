@@ -19,7 +19,7 @@
   --color-base:   #b8b8d0;
   --color-bright: #e0e0f0;
   --color-white:  #f0f0fa;
-  --color-grid:   rgba(44, 44, 68, 0.06);
+  --color-grid:   rgba(255, 255, 255, 0.018);
 
   /* Accents */
   --color-green:  #00e87a;
@@ -31,6 +31,9 @@
 
   /* Font */
   --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+
+  /* Scoped tokens (override per-theme dove serve, non toccano --color-*). */
+  --sync-warn: #d4a85a;
 }
 
 /* ── Light theme overrides ───────────────────────────────────────── */
@@ -47,7 +50,8 @@ html[data-theme="light"] {
   --color-base:         #282848;
   --color-bright:       #18183a;
   --color-white:        #0a0a20;
-  --color-grid:         rgba(92, 92, 128, 0.1);
+  --color-grid:         rgba(0, 0, 0, 0.022);
+  --sync-warn:          #8b6914;
 }
 
 /* ── Base ────────────────────────────────────────────────────────── */
@@ -75,24 +79,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Scanline overlay */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.07) 2px,
-    rgba(0, 0, 0, 0.07) 4px
-  );
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0.35;
-}
-
-/* Ambient grid */
+/* Ambient grid — matrix infinito, sfondo tinta unita + griglia
+   principale appena percepibile. Niente scanline orizzontali. */
 body::after {
   content: '';
   position: fixed;
@@ -100,7 +88,7 @@ body::after {
   background-image:
     linear-gradient(var(--color-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
-  background-size: 40px 40px;
+  background-size: 80px 80px;
   pointer-events: none;
   z-index: 0;
 }

@@ -99,14 +99,15 @@ Sprint to bring the entire docs corpus + agent prompts to V5 alignment + English
 
 See also the **launcher-distributed skill discovery** punch list in [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md#%EF%B8%8F-skill-discovery--launcher-distributed-isolation-priority) for the follow-up work after the markdown moves landed (Python script colocation, distributor in `start-agent.sh`, drop the global Dockerfile loop, full-team integration test).
 
-### 🧪 Real-world tests (preliminary, undocumented)
+### 🧪 Real-world tests (preliminary, partially documented)
 
-> ⚠️ **Test results so far are anecdotal** — based on the maintainer's own job-hunting sessions on a single profile. No formal test campaign yet. **See [JHT-TEST-CAMPAIGN] in PHASE 1** — running a documented coverage matrix (provider × tier × persona) is a critical pre-launch milestone. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
+> ⚠️ **Status 2026-05-22**: tre run reali esistono ma solo uno è pubblicato come Case Study. Da promuovere a `RESULTS.md` next time — vedi [JHT-TEST-CAMPAIGN] in PHASE 1. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
 
-- ✅ Claude Max x20 — pipeline tested for weeks, ±5% usage projection precision
-- 🟡 Kimi €40 — works, ±10–15% oscillation, calibration in progress (mass-market target)
+- ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1 pubblicato)
+- 🟡 Codex ProLite × non-tech multi-dominio IT+HU — VPS1 35h run 19-21/05: 206 pos → 105 ready, critic 6.30 (dati in `docs/internal/2026-05-21-vps1-run-postmortem.md`, **da promuovere a Case Study #2**)
+- 🟡 Kimi K2 × tech SWE — run ~17/05: 19 ready, critic ~6.0, ±10-15% oscillation (dati in `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`, **da promuovere a Case Study #3**)
 - ❌ Claude Pro €20 — not viable (single agent burns the window)
-- 🔬 Codex Plus/Pro €100 — supported by runtime, benchmark in progress
+- ⬜ Kimi €40 mass-market — 2 tester aggiuntivi necessari per validare jackpot
 
 For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
@@ -118,7 +119,9 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 #### 🔴 HIGH PRIORITY
 
-##### ☁️ [JHT-CLOUDSYNC-01] Cloud Sync — completion (60% done)
+##### ☁️ [JHT-CLOUDSYNC-01] Cloud Sync — completion
+
+> 📐 Architettura & stato implementazione consolidati in [`docs/internal/cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md) (living doc). Voci sotto = riepilogo BACKLOG; per dettagli decisione macro-events e incident RobertHalf vedi il doc.
 
 - ✅ `cloud_sync_tokens` schema + RLS (migration 006)
 - ✅ API CRUD `/api/cloud-sync/tokens` (GET/POST/DELETE, soft-delete)
@@ -127,10 +130,33 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ✅ CLI `jht cloud enable/status/disable` (token in `~/.jht/cloud.json` chmod 0600)
 - ✅ Endpoint `/api/cloud-sync/push` (idempotent upsert via `(user_id, legacy_id)`, mapping → UUID)
 - ✅ CLI `jht cloud push` (one-shot manual, built-in `node:sqlite`, `--dry-run`)
-- ⬜ **Periodic sync loop** (daemon/cron, diff SQLite → cloud every N min)
+- ✅ **Push delta-only** via `updated_at` cursor + halt-flag guard (commit `690534e0`, 2026-05-22)
+- ✅ **Web fallback** quando manca SQLite locale (commit `cc52acca`, 2026-05-22)
+- ✅ **`positions.location` cap ≤ 200 char** (migration 015, post-incident RobertHalf)
+- ✅ **Rimozione `sentinel_ticks` dal push daemon** (commit `f68a127d`)
+- ✅ **Refactor `team_commands` → `team_state` desired-state + event lanes** (mig 019–022, 2026-05-23) — accorpa single-team enforcement + status inference + chat/feedback lanes; `team_commands` resta vivo in parallelo durante cutover (Step 5–6 in `cloud-sync-architecture.md`)
+- ✅ **Realtime publication su team_state + lanes** (mig 021) — browser live (~200ms) via Supabase Realtime
+- ✅ **Fix RLS `location_geocode`** (mig 020) — close advisor critical: cache poisoning via anon key
+- ⬜ **P0 — SQLite CHECK constraints** (migration `006_positions_check_constraints.sql`)
+- ⬜ **P0 — RLS init plan fix** (24 policy `auth.uid()` per-row)
+- ⬜ **P0 — DELETE propagation con tombstone** (push è solo UPSERT — vedi `cloud-sync-architecture.md` #4)
+- ⬜ **P1 — Daemon alert** ≥3 fail consecutivi + auto-shutdown >5 fail
+- ⬜ **P1 — Killswitch 401/403** (oggi daemon continua loop infinito su token revocato)
+- ⬜ **P1 — `jht cloud restore`** comando esplicito disaster recovery
+- ⬜ **P1 — Subscriber on-demand 🅲** (polling spento se team giù, post-team_state)
+- ⬜ **P1 — Polling adattivo** basato su `team_state.last_user_activity_at`
+- ⬜ **P1 — Feedback like/dislike** istruire scout/scorer a reagire
+- ⬜ **Periodic sync loop** ⏺ già done (push daemon attivo, cadenza tunata 30s→60s + delta-only)
 - ⬜ **Google Drive integration** (`drive.file` scope, CV/cover letter upload)
 - ⬜ **"Enable cloud sync" toggle** in desktop launcher + CLI wizard
 - ⬜ **Self-hosted Supabase docs** (BYO backend for technical users)
+
+##### 🔌 [JHT-LOCAL-NO-API] Local PC mode bypassa Supabase
+
+- **Decisione 2026-05-20** ([`cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md)): in Local PC mode (`cloud.json.enabled=false`) il web bypassa Supabase e legge direttamente `jobs.db` via `web/lib/local-queries.ts`.
+- **Done:** `local-queries.ts` esiste e funziona ([`web/lib/local-queries.ts`](web/lib/local-queries.ts), commit `cc52acca` ha esteso il fallback).
+- **Pending:** `web/lib/queries.ts` deve switchare su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx` per consumi residui.
+- **Priority:** 🟡 P1 (privacy-first feature + sblocca path Local PC mode senza touch Supabase).
 
 ##### 🟡 [JHT-MONITORING-WEEKLY] Weekly window calibration — data-layer DONE 2026-05-19
 
@@ -221,6 +247,14 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Pipeline:** beta tester applies via [`docs/guides/BETA.md`](docs/guides/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/about/RESULTS.md`](docs/about/RESULTS.md) and updating cell status in BETA.
 - **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
 - **Priority:** 🔴 BLOCKER pre-launch
+- **🆕 Update 2026-05-22 — abbiamo 2 celle reali non ancora pubblicate:**
+  - Run **Codex ProLite × non-tech multi-dominio IT+HU** (VPS1, 35h, 19-21/05): 206 pos → 105 ready, critic medio 6.30, dati completi in [`docs/internal/2026-05-21-vps1-run-postmortem.md`](docs/internal/2026-05-21-vps1-run-postmortem.md) (consolida team-idle-gaps + team-output-analysis + kimi-vs-codex).
+  - Run **Kimi K2 × tech SWE** (~17/05): 19 ready, critic ~6.0, dati in [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md).
+- **Next time — azioni concrete (effort ~2h):**
+  1. PR: promuovere VPS1 run a **Case Study #2** in `docs/about/RESULTS.md` (template già pronto).
+  2. PR: promuovere Kimi run a **Case Study #3** in `RESULTS.md`.
+  3. Aggiornare matrice in `docs/guides/BETA.md` → 3/10 done (non più 1/10). Identificare quale cella formale coprire (probabilmente nuove righe "non-tech multi-domain × Codex ProLite" + "tech SWE × Kimi K2 Plan").
+  4. Vero gap residuo dopo i 3 PR: trovare **2 tester Kimi €40** per validare mass-market jackpot (resta priorità).
 
 ##### ✅ [JHT-FRONTEND-DASHBOARD-AUDIT] Audit residual mock data in dashboard — DONE 2026-05-19
 
@@ -281,6 +315,28 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Why:** without explicit positioning, non-tech users will try VPS, fail, and think JHT is broken. Honest framing > vague promises.
 - **Linked:** [JHT-VPS-VALIDATE] (output `docs/VPS-SETUP.md`) feeds the "Mode 3 manual" branch; [JHT-VPS-FRIENDLY] feeds the "Mode 3 wizard" branch.
 - **Provider research feeder:** [`docs/internal/vps.md`](docs/internal/vps.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
+
+##### 🪟 [JHT-CLI-WIN-NATIVE] Windows-native CLI (no WSL required) ⬜ NEW 2026-05-22
+
+- **Problem:** scoperto durante E2E test del prompt universale AI-agent (2026-05-22). `scripts/install.sh` + `scripts/jht-wrapper.sh` sono bash-only. Su Windows un agent AI è forzato a girare via WSL, ma `curl install.sh | bash` blocca in modo silenzioso su `sudo` (stdin = pipe, non TTY) anche quando Docker è già presente via Docker Desktop. Risultato: utente Windows tech senza WSL pre-configurata non ha un path CLI funzionante.
+- **Stato attuale paths per Windows:**
+  - ✅ Desktop launcher (`.exe`, Path 2 quickstart) — funziona ma non AI-drivable
+  - ❌ `install.ps1` — non esiste
+  - ❌ `npm install -g jht-cli` — `cli/package.json` ha `"private": true`, mai pubblicato
+  - ⚠️ Path 4 (clone repo + `docker compose`) — funziona ma "contributor mode", non per utenti finali
+  - ⚠️ WSL + install.sh — hang su sudo prompt quando lanciato non-interattivo
+- **Conseguenze:** la "universal AI-agent prompt" promessa in `docs/guides/AI-AGENT-INTEGRATION.md` non funziona end-to-end su Windows. Riduce significativamente l'audience JHT (Windows è ~70% del market consumer).
+- **Approccio scelto:** port host-thin del wrapper bash → PowerShell + script install.ps1. Mantiene invariante architetturale "no Node sul host" (alternativa `npm publish` scartata: rompe l'invariante).
+- **Subtask:**
+  1. **[JHT-CLI-WIN-WRAPPER]** Port `scripts/jht-wrapper.sh` (274 righe) → `scripts/jht-wrapper.ps1`. Stesso dispatcher: lifecycle (`up`/`down`/`restart`/`logs`/`status`) via `docker compose`, tutto il resto via `docker exec jht node /app/cli/bin/jht.js`.
+  2. **[JHT-CLI-WIN-INSTALL]** Port `scripts/install.sh` (904 righe) → `scripts/install.ps1`. Detect Docker Desktop installato, no apt/sudo, scarica `docker-compose.yml` + `jht-wrapper.ps1` in `$env:USERPROFILE\.jht\runtime\`, registra `jht` su PATH via `$env:USERPROFILE\.local\bin\jht.ps1` o equivalente Windows.
+  3. **[JHT-CLI-WIN-DOC]** Aggiornare `docs/guides/quickstart.md` Path 3 + `AI-AGENT-INTEGRATION.md` con istruzioni Windows (`iwr | iex` invece di `curl | bash`).
+  4. **[JHT-CLI-WIN-E2E]** Rifare E2E test con agente AI (Claude Code) su Windows native — il test del 2026-05-22 va replicato per validare il fix.
+- **Discarded alternatives:**
+  - `npm publish` del CLI: più semplice ma richiede Node sul host (~50MB) + rompe host-thin design. Forse Phase 2 se manteniamo entrambi.
+  - "Solo Desktop su Windows": copre non-tech ma blocca tutto il use-case AI-agent universal prompt.
+- **Acceptance:** `iwr -useb https://jobhunterteam.ai/install.ps1 | iex` su Windows 11 vergine completa in <5min senza prompt sudo/UAC bloccanti. Successivo `jht setup` interattivo funziona uguale a Linux/macOS. Universal AI prompt completa il flow end-to-end senza menzione di WSL.
+- **Priority:** 🔴 HIGH — blocca path AI-agent universal su Windows (= grosso pezzo della audience target).
 
 #### 🟡 MEDIUM PRIORITY
 
@@ -804,7 +860,7 @@ All 5 tasks from 04-22 have been implemented:
 ### ✅ Team strategy bugs sprint 2026-05-17/18 (13 bug + 3 feature chiusi)
 
 Dettaglio completo + riepilogo numerico in
-[`docs/internal/2026-05-17-team-strategy-bugs.md`](docs/internal/2026-05-17-team-strategy-bugs.md)
+[`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md)
 e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-18-fix-effectiveness-review/).
 
 **Bug strategici / comportamentali** (tutti FIXED, commit specifico per ognuno):
@@ -867,6 +923,28 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **Causa:** `cmdVersion(cmd)` usava `${cmd} --version` per tutti i binari, ma `tmux` vuole `-V` maiuscolo e su `--version` ritorna usage + exit 1 → doctor diceva "tmux: non trovato" su install validi.
 - **Fix applicato:** mappa `VERSION_FLAGS = { tmux: '-V' }` con default `--version`, fallback su qualsiasi binario diverso da tmux. Smoke test locale: `tmux 3.6` ora ritornato correttamente.
 - **Scoperto durante:** spike host/container split del 2026-05-06.
+
+### ✅ [BUG-CODEX-PROVIDER-ALIAS] `start-agent.sh` non riconosceva `active_provider: "codex"` (raw dal wizard desktop) — FIXED 2026-05-21 (commit `79f63324`)
+
+- **Sintomo:** sul VPS1 (2026-05-19, primo bring-up beta) tutti gli agenti LLM fallivano al watchdog (`start FAIL rc=1`). Eseguito `start-agent.sh` a mano: `Warning: provider 'codex' non riconosciuto in jht.config.json, fallback a claude. Errore: comando 'claude' non trovato (provider configurato: codex)`. Il container non ha `claude` installato (solo `codex` + `kimi`), exit 1.
+- **Causa:** `start-agent.sh:367` aveva `case "$PROVIDER" in openai)` ma il wizard desktop scrive `active_provider: "codex"` raw → cade nel `*` (fallback claude) → `command -v claude` fallisce. Il CLI Node (`providers.js`) normalizzava `codex → openai` ma non veniva mai invocato dal flow desktop wizard, che bypass.
+- **Fix applicato:** `.launcher/start-agent.sh:367` → `openai|codex)`. Stesso pattern degli altri alias (`anthropic|claude`, `kimi|moonshot`). 1 riga, retro-compatibile.
+- **Validato 2026-05-21:** VPS Hetzner CPX22 vergine, image GHCR `:latest` post-`79f63324`, sed `"openai" → "codex"` raw in `jht.config.json` + `docker restart jht` → 7 agenti partiti senza warning, panes tutti su `gpt-5.5 high · ~/agents/<role>`, **0 occorrenze** di `provider non riconosciuto` / `fallback a claude` in `docker logs`. Doc completa: `docs/internal/2026-05-21-vps-bootstrap-fixes-validated.md`.
+
+### ✅ [BUG-CODEX-TRUST-PROMPT] Codex CLI blocca al "trust prompt" al primo avvio in ogni nuova dir agente — FIXED 2026-05-21 (commit `79f63324`)
+
+- **Sintomo:** su VPS1 dopo workaround Bug#1, `jht team start` reportava `7 avviati / 0 errori` ma solo MENTOR aveva Codex live; gli altri 4 user-facing (ASSISTENTE, CAPITANO, SENTINELLA, DOTTORE) finivano in **bash shell vuota**. Messaggi sistema (`[@utente -> @assistente] [TG] ciao`) interpretati come comandi bash → `[@utente: command not found`.
+- **Causa:** Codex CLI mostra al primo avvio in ogni nuova cwd il prompt blocking "Do you trust the contents of this directory?". `start-agent.sh` lancia codex via `tmux new -s NAME 'codex ...'`: il prompt attendeva input, codex usciva silenziosamente dopo qualche secondo → la sessione tmux tornava a bash (pane orphan). MENTOR si era "salvata" perché qualcuno (test precedente del bring-up) aveva confermato manualmente il trust → la entry restava in `~/.codex/config.toml`. Gli altri agenti spawnati dopo non avevano l'entry.
+- **Fix applicato:** `.launcher/start-agent.sh:480-501` (subito dopo `mkdir -p "$AGENT_DIR/tools" "$AGENT_DIR/tmp"`) — **just-in-time append idempotente** della trust entry per `$AGENT_DIR` corrente in `~/.codex/config.toml`. Guard `[ "$CLI_BIN" = "codex" ]`. Idempotente via `grep -qF` sul `TRUST_KEY`.
+- **Approccio scelto vs pre-pop al boot pid1:** just-in-time per-agente perché conosce esattamente `$AGENT_DIR` e funziona anche per scout/analista/scrittore/critico spawnati on-demand dal Capitano (cwd dinamiche non note al boot iniziale di pid1).
+- **Validato 2026-05-21:** stessa VPS fresh. Pre-fix: `config.toml` inesistente. Post-`jht team start`: 5 entries auto-popolate (assistente, sentinella, mentor, capitano, dottore). Dopo `docker restart jht` con auto-spawn DOTTORE via watchdog: entry idempotente (nessun duplicato). Tutti i panes mostrano `gpt-5.5 ... · ~/agents/<role>`, agenti elaborano welcome flow regolarmente.
+
+### ✅ [BUG-PID1-AUTO-MIGRATE] `jht migrate` necessario al boot ma non auto-eseguito — FIXED 2026-05-21 (commit `79f63324`)
+
+- **Sintomo:** su VPS1 `jht doctor` segnalava `▲ Config v1 — aggiornamento disponibile / ↳ Esegui: jht migrate`. Il container partiva con `jht.config.json` scritto dal wizard desktop in format v1; senza migrazione i campi v2-v4 (`providers` strutturato, `agents.list`, `notifications`, `analytics`) restavano assenti e alcuni step downstream cadevano nei default silenziosi (es. `providers.codex.auth_method`).
+- **Causa:** `pid1` (`cli/src/commands/pid1.js dispatch()`) non lanciava `jht migrate` al boot. L'utente doveva intervenire manualmente via terminale embedded o `docker exec`.
+- **Fix applicato:** nuova funzione `runMigrate()` in `pid1.js` chiamata come **primo step** di `dispatch()` (prima di `maybeRunPairing()`). Best-effort: se la config non esiste ancora (pre-pairing), ritorna silenziosa. Se esiste, `spawn jht migrate` → log `[pid1] running jht migrate (idempotente)` + `[pid1] jht migrate ok`. `jht migrate` è già non-interattivo + idempotente: se la config è al massimo, exit pulito.
+- **Validato 2026-05-21:** stessa VPS fresh. Container boot pre-setup: `runMigrate` skippa (no config). Dopo `jht setup` + `docker restart jht`: log `[migrate] ✓ v3 applicata`, `[migrate] ✓ v4 applicata`, `[pid1] jht migrate ok`. `jht.config.json` ora ha `version: 4` + nuovi campi `agents`, `notifications`, `analytics`.
 
 ### ✅ [BUG-CLAUDE-TRUST-PROMPT] start-agent.sh non accettava il "Bypass Permissions" prompt di Claude Code 2.1+ — FIXED 2026-05-08 (commit `7106ef6e`)
 
@@ -1016,5 +1094,90 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   - 🥈 Aggiungere `tailwindcss` esplicitamente in `web/next.config.ts` `experimental.externalDir` o forzare PostCSS config a usare `path.resolve(__dirname, 'node_modules/tailwindcss')`.
   - 🥉 Test cross-OS: il bug potrebbe non manifestarsi su Linux/macOS — verificare via CI prima di toccare config.
 - **Verifica:** `cd web && npm run dev` + `curl localhost:3000/` deve rispondere 200 senza loop di resolve.
+
+---
+
+## 🔭 OBSERVABILITY GAPS
+
+### 🟡 [OBS-TELEGRAM-SEND-LOG] `jht-telegram-send` senza log centrale outgoing
+
+- **File:** `/app/agents/_tools/jht-telegram-send` (bash + curl POST a Bot API)
+- **Sintomo:** quando un agente (Capitano, Assistente, Mentor) invia un messaggio Telegram all'utente, **non c'è log persistente centralizzato**. Le tracce sono solo:
+  - Pane tmux live (volatile, scrolla fuori dopo ~60-1000 righe)
+  - `/jht_home/logs/dottore-captures/*.txt` (snapshot parziali ogni 2h, max 60 righe del pane catturate al momento del round)
+- **Conseguenza:** impossibile rispondere a domande tipo "quanto frequentemente il Capitano scrive all'utente", "ricostruisci la timeline degli invii Telegram di ieri", "qual è il delta medio risposta agente → utente". Misurato 2026-05-20: ~9 messaggi Capitano confermati in 14h (≈ 1 ogni 1.5h), ma il numero reale è probabilmente maggiore — i precedenti sono scrollati fuori da tutte le fonti.
+- **Fix proposto:** aggiungere a `jht-telegram-send` (subito dopo la chiamata curl che riceve `ok:true`) un append idempotente a `$JHT_HOME/logs/telegram-sent.jsonl`:
+  ```bash
+  printf '{"ts":"%s","from":"%s","chat_id":"%s","chars":%d,"parse_mode":"%s","ok":true}\n' \
+    "$(date -u +%FT%TZ)" "$role" "$chat_id" "${#text}" "$parse_mode" \
+    >> "$JHT_HOME/logs/telegram-sent.jsonl"
+  ```
+  Senza body completo (privacy + size), solo metadati (mittente, lunghezza, parse_mode, esito). Da loggare anche i fallimenti (`ok:false`, status code HTTP).
+- **Effort:** ~15 minuti (5 righe shell + test su un invio singolo).
+- **Memoria correlata:** [[context-watchdog-spec]] (sezione "Side effect Telegram per Assistente"), [[2026-05-21-vps1-run-postmortem]] (i gap di idle includono buchi anche di comunicazione TG non misurabili oggi).
+
+---
+
+## 📦 PACKAGING & DISTRIBUTION
+
+### 🔴 [PACING-WEEKLY-EXHAUSTION] Team esaurisce weekly cap Codex in ~2 giorni invece di 7
+
+- **Sintomo:** la Sentinella ottimizza il singolo cycle 5h (target 92% per finestra) ma **ignora il weekly cap** di Codex ProLite. Risultato: in 2-3 giorni di operatività intensa il team consuma il 100% del weekly e poi gli agenti smettono di rispondere per 4-5 giorni fino al reset settimanale.
+- **Evidenza misurata 2026-05-20 (VPS1, primo giro reale beta):**
+  - Boot: 2026-05-19 20:14 UTC
+  - Snapshot 22:30 (giorno 1, +2h): primary 47%, weekly **7%**
+  - Snapshot 06:30 (giorno 2, +10h): primary 2% (post-reset), weekly **27%** (+20pp in 8h notturne, rate 2.5%/h)
+  - Snapshot 14:30 (giorno 2, +18h): primary 41%, weekly **45%**
+  - Rate medio weekly: ~2.5%/h. A questo ritmo, 100% consumato in **~40h totali** = ~2 giorni di operatività intensa, non 7.
+- **Storia:** la feature "weekly budget distribution" era stata trackata come **F-3 DEFERRED** nello sprint 2026-05-17/18 ("utente: default attuale 95% G-spot OK, non serve weekly tracking"). Il primo giro beta del 2026-05-20 ha dimostrato che era una decisione sbagliata: senza weekly pacing, il team va out-of-budget molto prima del reset.
+- **Conseguenza diretta:**
+  - Il team non può girare H24 per una settimana intera (il caso d'uso target del setup VPS 24/7)
+  - L'utente deve manualmente fermare/rallentare il team a metà settimana, o accettare 4-5 giorni di "silenzio forzato" prima del reset
+  - Per beta tester con piano ProLite/Plus questo è inaccettabile
+- **Math per sostenibilità H24 sui 7 giorni:**
+  - Reset weekly tra ~6.4 giorni residui = 153.6h
+  - Per consumare 100% in 153.6h serve rate medio **0.65 %/h** sul weekly
+  - Con ratio primary/secondary 6.7×, corrisponde a **~4.4 %/h** sul primary
+  - Una finestra 5h al ritmo sostenibile chiude a 22% (vs target 92% attuale)
+  - Quindi: o **target band 22% per finestra H24** oppure **finestre intensive 92% ma con periodi off**
+- **Fix proposti (in ordine di preferenza):**
+  - 🥇 **Estendere Sentinella con dial weekly**: nuovo campo `weekly_proj` nel `pacing-bridge-state.json` che proietta il consumo a 7 giorni; la Sentinella usa il minimo tra cycle-target e weekly-target per decidere il throttle. Già discusso nelle convo del 2026-05-20 ma non implementato.
+  - 🥈 **Pacing scheduler esterno**: un cron-like che spegne il team per X ore al giorno (es. spegnimento notturno) per spalmare il consumo. Meno fine-grained ma molto semplice.
+  - 🥉 **Mode "marathon"**: configurazione utente (`jht.config.json.pacing.mode = "marathon"`) che imposta target_band_center=22% invece di 92%. Default = "sprint" attuale.
+  - 🥉 **Telemetria pre-allarme**: notifica Telegram all'utente "weekly al 50%, mancano X giorni al reset" così l'utente decide se fermare/rallentare. Banale (1 cron + 1 send).
+- **Effort:** dial weekly nella Sentinella ~3-5h di codice (logica + integrazione + test). Mode marathon ~1h. Telemetria pre-allarme ~30 min.
+- **Priorità:** **P0 per scenario VPS 24/7** che è il target dichiarato del setup beta (vedi sezione "PHASE 3 — Multi-Provider Cloud Provisioning"). Senza fix, lo scenario VPS è praticamente inutilizzabile per più di 2-3 giorni.
+- **Memoria correlata:** [[2026-05-21-vps1-run-postmortem]] (anche se il bottleneck immediato lì era diverso), [[project_no_cv_mode_active_vps1]] (NO CV ha ridotto temporaneamente il rate, mascherando il problema; quando si torna in modalità CV il consumo accelera ancora).
+
+---
+
+### 🟡 [PACK-INSTALLER-SIZE] Eseguibili desktop troppo pesanti (90-200 MB) — feedback beta
+
+- **Sintomo:** i beta tester segnalano che il download dell'installer è percepibilmente lento. Asset attuali della release `v0.1.17` (verificato 2026-05-20):
+  | Artifact | Size |
+  |---|---:|
+  | linux.AppImage | 117.1 MB |
+  | linux.deb | 91.1 MB |
+  | mac.dmg | 110.6 MB |
+  | windows-x64.exe | 97.3 MB |
+  | windows-arm64.exe | 98.7 MB |
+  | windows.exe (universal combo) | **195.4 MB** |
+- **Benchmark indicativi:** VS Code Electron ~80-90 MB, Discord ~100 MB, Slack ~150 MB. Il nostro `windows.exe` universal a 195 MB è sopra la fascia "normale" per launcher Electron, e l'AppImage Linux a 117 MB è alto considerato che dovrebbe essere "solo un launcher".
+- **Causa probabile (da verificare):**
+  - Bundle Electron include `node_modules` non potati (probabile dev dependencies finite nel build)
+  - `desktop/app-payload/` (visto in alcuni grep precedenti contenere `web/.next` compilato + `web/node_modules` interi + `shared/`) potrebbe essere imbarcato a runtime invece di lazy-loaded
+  - Asset duplicati: il `windows.exe` universal (195 MB) è quasi la somma di x64 (97) + arm64 (99). Forse il combo embedda entrambe le binarie native — accettabile se intenzionale, ma da documentare/escludere quando il tester sa già la sua arch
+  - Nessuna compressione (xz/lzma per AppImage, NSIS LZMA per .exe) — da verificare nelle electron-builder config
+- **Effetto sull'esperienza beta:**
+  - Download su connessione lenta = minuti di attesa, frizione percepita
+  - Rilease frequenti (oggi v0.1.16 + v0.1.17 nello stesso giorno) = beta scaricano centinaia di MB ogni volta
+- **Fix proposti (in ordine di rapport effort/risultato):**
+  - 🥇 **Verificare quale fetta di byte sono cosa** con `electron-builder --prepackaged` + `du -sh dist/` per categoria (node_modules, app-payload, electron runtime, native modules). Datapoint mancante per qualsiasi decisione informata.
+  - 🥈 **Differential downloads (`blockmap`)**: c'è già il `.blockmap` per Mac/Windows — l'auto-updater Electron dovrebbe scaricare solo i delta. Da verificare che sia effettivamente in uso (forse i beta usano sempre download manuale, by-passando l'updater).
+  - 🥉 **Excludere `app-payload/web/.next`** dal bundle e scaricarlo on-first-run dal sito (~30-50 MB risparmiati stimato).
+  - 🥉 **NSIS LZMA compression** se non già attivo per `windows.exe`.
+  - 🥉 **Splittare universal**: smettere di buildare il `windows.exe` combo (195 MB) — il sito può servire direttamente x64 o arm64 sulla base dell'UA detection del download.
+- **Effort:** investigation breakdown ~1h, low-hanging fix ~2-3h, refactor app-payload separato ~1 giorno.
+- **Feedback originale:** beta tester (giro 2026-05-20).
 
 Operational info (Supabase access, Vercel env vars, OAuth setup, security review status, contact) lives in [`docs/internal/MAINTAINERS.md`](docs/internal/MAINTAINERS.md).

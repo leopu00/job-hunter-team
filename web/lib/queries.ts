@@ -1,8 +1,9 @@
 // fresh
 import { createClient } from '@/lib/supabase/server'
-import { getWorkspacePath, isSupabaseConfigured } from '@/lib/workspace'
+import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/workspace'
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
+import { aggregateTypes, type PositionTypeCount } from '@/lib/position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -23,8 +24,10 @@ import type {
 // perché vediamo TUTTE le row locali e usiamo Supabase come overlay (non
 // come fonte). In cloud puro Supabase è l'unica fonte.
 async function ws(): Promise<string | null> {
-  if (await isLocalRequest()) return getWorkspacePath()
-  return null
+  if (!(await isLocalRequest())) return null
+  const p = await getWorkspacePath()
+  if (!p || !workspaceHasDb(p)) return null
+  return p
 }
 
 // ── Dashboard Stats ────────────────────────────────────────────────
@@ -248,7 +251,7 @@ export async function getRecentlyTouchedPositions(limit = 15): Promise<RecentlyT
 }
 
 // ── Recent positions with scores ───────────────────────────────────
-export async function getRecentPositions(limit = 15): Promise<PositionWithScore[]> {
+export async function getRecentPositions(limit = 15): Promise<(PositionWithScore & { last_action_at?: string })[]> {
   const w = await ws()
   if (w) { try { return local.getRecentPositionsLocal(w, limit) } catch { return [] } }
   if (!isSupabaseConfigured) return []
@@ -256,12 +259,20 @@ export async function getRecentPositions(limit = 15): Promise<PositionWithScore[
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, url, source, found_at, status, notes, scores ( total_score )')
+    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, url, source, found_at, last_checked, status, notes, scores ( total_score, scored_at )')
     .not('status', 'eq', 'excluded')
     .order('found_at', { ascending: false })
     .limit(limit)
   if (error || !data) return []
-  return data.map((p: any) => ({ ...p, score: p.scores?.total_score ?? undefined }))
+  return data.map((p: any) => {
+    // last_action_at = ULTIMA azione: scout / analista / scorer
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    const candidates = [p.found_at, p.last_checked, score?.scored_at].filter(Boolean) as string[]
+    const last_action_at = candidates.length > 0
+      ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
+      : p.found_at
+    return { ...p, score: score?.total_score ?? undefined, last_action_at }
+  })
 }
 
 // ── All positions with optional filters ────────────────────────────
@@ -272,11 +283,40 @@ export async function getRecentPositions(limit = 15): Promise<PositionWithScore[
 const POSITION_SORT_KEYS = ['id', 'title', 'company', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
 
-export async function getPositions(opts?: {
-  status?: string; minScore?: number; maxScore?: number; noScore?: boolean
-  remoteType?: string; limit?: number; offset?: number
-  sort?: string; dir?: 'asc' | 'desc'
-}): Promise<PositionWithScore[]> {
+export type PositionFilterOpts = {
+  statuses?: string[]
+  remoteTypes?: string[]
+  sources?: string[]
+  tiers?: string[]       // ['seria','practice','riferimento','noscore']
+  verdicts?: string[]    // applications.critic_verdict (PASS|NEEDS_WORK|REJECT)
+  limit?: number
+  offset?: number
+  sort?: string
+  dir?: 'asc' | 'desc'
+}
+
+// Tier → score-range. 'noscore' = score null/0.
+const TIER_RANGES: Record<string, { min?: number; max?: number; noScore?: boolean }> = {
+  seria:       { min: 70 },
+  practice:    { min: 40, max: 69 },
+  riferimento: { min: 1,  max: 39 },
+  noscore:     { noScore: true },
+}
+
+function applyTierFilter(rows: PositionWithScore[], tiers: string[]): PositionWithScore[] {
+  if (!tiers.length) return rows
+  return rows.filter(p => tiers.some(t => {
+    const r = TIER_RANGES[t]; if (!r) return false
+    const s = p.score
+    if (r.noScore) return s == null || s === 0
+    if (s == null || s === 0) return false
+    if (r.min != null && s < r.min) return false
+    if (r.max != null && s > r.max) return false
+    return true
+  }))
+}
+
+export async function getPositions(opts?: PositionFilterOpts): Promise<PositionWithScore[]> {
   const w = await ws()
   if (w) { try { return local.getPositionsLocal(w, opts) } catch { return [] } }
   if (!isSupabaseConfigured) return []
@@ -287,19 +327,15 @@ export async function getPositions(opts?: {
     .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
     .order('found_at', { ascending: false })
 
-  if (opts?.status && opts.status !== 'all') query = query.eq('status', opts.status)
-  if (opts?.remoteType && opts.remoteType !== 'all') query = query.eq('remote_type', opts.remoteType)
-  if (opts?.noScore) { query = query.or('score.is.null,score.eq.0') }
-  else {
-    if (opts?.minScore) query = query.gte('score', opts.minScore)
-    if (opts?.maxScore) query = query.lte('score', opts.maxScore)
-  }
+  if (opts?.statuses?.length) query = query.in('status', opts.statuses)
+  if (opts?.remoteTypes?.length) query = query.in('remote_type', opts.remoteTypes)
+  if (opts?.sources?.length) query = query.in('source', opts.sources)
   if (opts?.limit) query = query.limit(opts.limit)
   if (opts?.offset) query = query.range(opts.offset, (opts.offset + (opts.limit ?? 50)) - 1)
 
   const { data, error } = await query
   if (error || !data) return []
-  const mapped: PositionWithScore[] = data.map((p: any) => {
+  let mapped: PositionWithScore[] = data.map((p: any) => {
     const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
     return {
       ...p,
@@ -309,6 +345,13 @@ export async function getPositions(opts?: {
       critic_verdict: app?.critic_verdict ?? null,
     }
   })
+
+  // Filtri post-fetch: tier (range union) + verdict (nested join).
+  if (opts?.tiers?.length) mapped = applyTierFilter(mapped, opts.tiers)
+  if (opts?.verdicts?.length) {
+    const set = new Set(opts.verdicts)
+    mapped = mapped.filter(p => p.critic_verdict && set.has(p.critic_verdict))
+  }
 
   // Sort in memoria per le colonne richieste dalla UI.
   const sortKey: PositionSortKey | null = POSITION_SORT_KEYS.includes(opts?.sort as PositionSortKey)
@@ -414,7 +457,7 @@ export async function getScoreDistribution() {
   const w = await ws()
   if (w) { try { return local.getScoreDistributionLocal(w) } catch { /* fall through */ } }
 
-  const empty = { buckets: [] as Array<{ label: string; count: number; color: string }>, total: 0, withScore: 0, avgScore: null as number | null }
+  const empty = { buckets: [] as Array<{ label: string; count: number; color: string }>, total: 0, withScore: 0, avgScore: null as number | null, scores: [] as number[] }
   if (!isSupabaseConfigured) return empty
 
   const supabase = await createClient()
@@ -430,7 +473,7 @@ export async function getScoreDistribution() {
     { label: '\u2264 40',   min: 0,  max: 40,  color: 'var(--color-red)' },
   ].map(b => ({ label: b.label, count: withScore.filter((s: number) => s >= b.min && s <= b.max).length, color: b.color }))
   const sum = withScore.reduce((a: number, s: number) => a + s, 0)
-  return { buckets, total: scores.length, withScore: withScore.length, avgScore: withScore.length > 0 ? Math.round(sum / withScore.length) : null }
+  return { buckets, total: scores.length, withScore: withScore.length, avgScore: withScore.length > 0 ? Math.round(sum / withScore.length) : null, scores: withScore }
 }
 
 // ── Source distribution ─────────────────────────────────────────────
@@ -445,6 +488,124 @@ export async function getSourceDistribution(): Promise<Array<{ source: string; c
   const counts: Record<string, number> = {}
   for (const row of data) { const s = row.source ?? 'sconosciuta'; counts[s] = (counts[s] ?? 0) + 1 }
   return Object.entries(counts).map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count).slice(0, 8)
+}
+
+// ── Positions con coordinate ufficio (per CompanyGlobe) ───────────────
+export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionsWithCoordsLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('id, title, company, status, office_lat, office_lon, is_remote, scores ( total_score )')
+    .not('status', 'eq', 'excluded')
+    .not('office_lat', 'is', null)
+  if (error || !data) return []
+  return data.map((p: any) => {
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    return {
+      id: String(p.id),
+      title: p.title,
+      company: p.company,
+      status: p.status,
+      score: typeof score?.total_score === 'number' ? score.total_score : null,
+      lat: p.office_lat,
+      lon: p.office_lon,
+      is_remote: !!p.is_remote,
+    }
+  })
+}
+
+// ── Position state-history (timestamp delle transizioni) ──────────
+// Restituisce per ogni posizione i timestamp delle transizioni di
+// stato, sufficienti a ricostruire la composizione della pipeline a
+// un istante T arbitrario (slider temporale nel dashboard).
+export type PositionStateHistory = {
+  id: string
+  status: string
+  critic_verdict: string | null
+  found_at: string | null
+  last_checked: string | null
+  scored_at: string | null
+  written_at: string | null
+  critic_reviewed_at: string | null
+  applied_at: string | null
+  response_at: string | null
+}
+
+export async function getPositionStateHistory(): Promise<PositionStateHistory[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionStateHistoryLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('id, status, found_at, last_checked, scores(scored_at), applications(written_at, critic_reviewed_at, critic_verdict, applied_at, response_at)')
+  if (error || !data) return []
+  return (data as any[]).map((p) => {
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
+    return {
+      id: String(p.id),
+      status: p.status,
+      critic_verdict: app?.critic_verdict ?? null,
+      found_at: p.found_at ?? null,
+      last_checked: p.last_checked ?? null,
+      scored_at: score?.scored_at ?? null,
+      written_at: app?.written_at ?? null,
+      critic_reviewed_at: app?.critic_reviewed_at ?? null,
+      applied_at: app?.applied_at ?? null,
+      response_at: app?.response_at ?? null,
+    }
+  })
+}
+
+// ── Critic votes distribution ──────────────────────────────────────
+export async function getCriticScores(): Promise<number[]> {
+  const w = await ws()
+  if (w) { try { return local.getCriticScoresLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('applications')
+    .select('critic_score, positions!inner(status)')
+    .not('critic_score', 'is', null)
+    .not('positions.status', 'eq', 'excluded')
+  if (error || !data) return []
+  return data
+    .map((r: any) => r.critic_score)
+    .filter((s: any): s is number => typeof s === 'number')
+}
+
+// ── Position type distribution ──────────────────────────────────────
+export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionTypeDistributionLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  // Coerente con getScoreDistribution(): preferisci positions.score quando
+  // presente, altrimenti fallback su scores.total_score via join.
+  // critic_score sta in applications.
+  const { data, error } = await supabase
+    .from('positions')
+    .select('title, score, scores(total_score), applications(critic_score)')
+    .not('status', 'eq', 'excluded')
+  if (error || !data) return []
+  const rows = (data as any[]).map((r) => {
+    const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores
+    const appRel = Array.isArray(r.applications) ? r.applications[0] : r.applications
+    return {
+      title: r.title as string | null,
+      score: (r.score as number | null) ?? (scoresRel?.total_score ?? null),
+      critic: (appRel?.critic_score as number | null) ?? null,
+    }
+  })
+  return aggregateTypes(rows)
 }
 
 // ── Positions count by status ───────────────────────────────────────
