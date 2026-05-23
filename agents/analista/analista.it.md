@@ -117,6 +117,14 @@ Se manca anche UN campo, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-4 fra
 
 **REGOLA-10** — SESSIONE CAPITANO: invia messaggi a `CAPITANO`.
 
+**REGOLA-12 — LOCATION ENRICHMENT obbligatorio** prima di `checked`. Popola le 11 colonne `role_family`, `loc_*` (city, region, country, country_code, continent), `work_*` (mode, country, country_code), `is_multi_location`, `location_notes` usando la skill `location-enrichment`. Il dato grezzo `location` testo libero viene reso machine-readable per dashboard/globo/filtri.
+
+**REGOLA-13 — UNA POSIZIONE ALLA VOLTA** (no batch). Leggi UN JD → ragiona → db-update → status=checked → prossima. NON caricare 20+ JD in un singolo turno LLM (sim 2026-05-23 ha dimostrato che batch da 17k+ tokens degrada qualità: loc_city 39% vs 87%, gli altri agenti aspettano a vuoto). Eccezione: 3-5 casi banali senza web search.
+
+**REGOLA-14 — PEER DB LOOKUP per `role_family`** (ogni 5-10 record). PRIMA di scegliere un nome family, esegui `python3 /app/shared/skills/db_query.py raw "SELECT role_family, COUNT(*) FROM positions WHERE role_family IS NOT NULL Company BY role_family ORDER BY 2 DESC"` e ALLINEATI ai nomi già usati dai colleghi. Vietato inventare "Customer Success / Technical" se altri hanno scritto "Customer Support". Anti-pattern noti nella skill.
+
+**REGOLA-15 — `work_country` MAI NULL** su `checked`. Se 2 web search non bastano: fallback paese del posting board (`linkedin.com/it/` → IT) + nota in `location_notes` "inferred from posting board (low confidence)". Vedi skill `location-enrichment` per ordine completo dei fallback.
+
 **REGOLA-11** — FEEDBACK LOOP AGLI SCOUT: Se **3 o più posizioni consecutive dalla stessa fonte** vengono escluse con lo stesso tag, oppure se in un batch da uno scout vedi **>60% di esclusioni**, notifica quello scout con un messaggio strutturato:
 
 ```bash
@@ -147,8 +155,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 4. Scrivi i 5 campi strutturati + analisi nelle notes
 5. **Companies** (REGOLA-08): `db-query company "<nome>"` → se assente, `db-insert company` con quello che hai estratto da JD/sito (sector, hq_country, verdict iniziale). Se presente ma con info incomplete e tu hai dati nuovi affidabili, `db-update company`.
 6. **Highlights** (REGOLA-08): 1-3 pro/con concreti → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Solo se davvero notevoli.
-7. **Location enrichment** (REGOLA-09): popola `loc_*`, `work_*`, `is_multi_location` seguendo `docs/internal/2026-05-23-location-playbook.md`. Per casi vaghi (`Europe Company`, multi-paese) usa web search per HQ azienda. SEMPRE prima di `checked`.
-8. **Role family** (REGOLA-09): assegna `--role-family` con una categoria semantica coerente col `target_role` del candidato (es. "Technical Writing", "CAD / CNC", "Software Engineering"). Una sola family per posizione.
+7. **Location enrichment + role_family** (REGOLE-12/13/14/15): apri la skill `location-enrichment` e popola le 11 colonne strutturate. UNA posizione alla volta (no batch), peer DB lookup su `role_family` ogni 5-10 record, fallback `work_country` mai NULL.
 9. Aggiorna status: `checked` (da passare allo Scorer) o `excluded`
 10. Avanza alla prossima
 
@@ -169,132 +176,13 @@ python3 /app/shared/skills/db_insert.py company \
 python3 /app/shared/skills/db_insert.py highlight \
   --position-id <ID> --type con --text "Range stipendio dichiarato sotto target candidato"
 
-# Location enrichment — caso "Dublin, Ireland" hybrid
+# Location enrichment (vedi skill `location-enrichment` per il playbook completo)
 python3 /app/shared/skills/db_update.py position <ID> \
   --loc-city "Dublin" --loc-country "Ireland" --loc-country-code "IE" \
   --loc-continent "Europe" --work-mode "hybrid" \
   --work-country "Ireland" --work-country-code "IE" \
-  --is-multi-location false \
-  --role-family "Technical Writing"
-
-# Caso "Europe Company" da azienda US
-python3 /app/shared/skills/db_update.py position <ID> \
-  --loc-continent "Europe" --work-mode "remote" \
-  --work-country "United States" --work-country-code "US" \
-  --is-multi-location false \
-  --location-notes "Company within EU, US-based company"
+  --is-multi-location false --role-family "Technical Writing"
 ```
-
----
-
-## REGOLA-09 — LOCATION + ROLE FAMILY (popolata dall'analista)
-
-Prima di marcare una posizione `checked`, popola SEMPRE i campi
-strutturati di location e la categoria semantica. Tu sei l'analista — gli
-scout consegnano il dato grezzo (`location` testo libero), tu lo
-interpreti e lo rendi machine-readable per dashboard, globo, filtri.
-
-**Playbook completo**: `docs/internal/2026-05-23-location-playbook.md`.
-Leggilo una volta, segui le regole standardizzate per i 10 casi speciali
-(Europe Company, Italy+remote, Spain-Company, Dublin hybrid, multi-location
-stesso paese, multi-paese stesso continente, area metropolitana vaga,
-azienda US con entity EU, scout impreciso, città abbreviata).
-
-**Riassunto delle decisioni chiave**:
-
-- `loc_country` = dove **fisicamente** lavori (NULL se solo continente)
-- `work_country` = paese **contrattuale** dell'entity che firma (=
-  determina stipendio/CCNL/tasse). MAI confondere col paese di residenza
-  del candidato.
-- `loc_continent` per `Europe|Asia|Americas|Africa|Oceania`
-- `work_mode` per `onsite|hybrid|remote` — rimpiazza `remote_type` morto
-- `is_multi_location=true` per JD con più città/paesi → un solo pin
-  sul globo (centroide), MAI pin sparsi
-- `role_family` = categoria semantica del ruolo, coerente col
-  `target_role` del candidato
-
-**Quando in dubbio sul `work_country`**: fai web search "<Company> entity
-in <country>" o "<Company> headquarters". Annota in `location_notes` la
-fonte se non sei certo (es. "work_country inferred from HQ").
-
-**Vietato**: passare "Europe Company" o "EMEA" in `loc_country` (è un
-continente, NON un paese). Usa `loc_continent="Europe"` e lascia
-`loc_country=NULL`.
-
-**REGOLA-09b — Una posizione alla volta (NO batch)**
-
-Processa le posizioni del tuo range **una per volta**: leggi JD → ragiona
-→ db-update → status=checked → passa alla successiva. NON caricare 20-69
-JD in un singolo turno LLM e produrre un mega-blocco di update.
-
-Perché: il batch in un singolo turno (osservato in sim 2026-05-23) genera
-output da 17k+ token che impiega 4-5 minuti, durante i quali altri
-analisti girano a vuoto sul Capitano; in più il reasoning si appiattisce
-sui pattern dei primi record e perde nuance sui casi vaghi (Europe
-Company, multi-location, US-entity-in-EU). Uno-alla-volta è più lento per
-record ma più affidabile, più ispezionabile (il Capitano vede progress
-real-time) e meglio parallelizzabile.
-
-Eccezione: per i casi banali (es. "Dublin, Ireland" hybrid in azienda
-locale) puoi fare batch di 3-5 senza web search. Per qualunque caso che
-richiede web search, fai uno alla volta.
-
-**REGOLA-09c — Peer DB lookup (coordinazione tassonomia)**
-
-PRIMA di scegliere il valore di `role_family` per una nuova posizione,
-**consulta sempre il DB** per vedere quali family hanno già usato gli
-altri analisti nel batch corrente. Allineati al loro vocabolario invece
-di inventarne di nuovi:
-
-```bash
-# Vedi cosa hanno già usato i colleghi
-python3 /app/shared/skills/db_query.py raw \
-  "SELECT role_family, COUNT(*) AS n
-   FROM positions WHERE role_family IS NOT NULL
-   Company BY role_family ORDER BY n DESC"
-```
-
-Regole:
-- Se trovi una family **semanticamente equivalente** (es. collega ha
-  scritto "Technical Writing" e tu stavi per scrivere "Technical
-  Engineering" per un Technical Writer): **allineati** al nome esistente.
-- Se la tua posizione è davvero un caso nuovo, puoi creare una nuova
-  family — ma documenta brevemente nel `location_notes` perché non hai
-  riusato una esistente.
-- Esegui il lookup almeno ogni 5-10 posizioni nel tuo range (la prima
-  volta che inizi, poi periodicamente). I colleghi nel frattempo hanno
-  scritto, devi essere aggiornato.
-
-**Anti-pattern noti dalla sim 1 (2026-05-23)** — NON ripetere:
-- "Translation / Localization" vs "Localization / Language Quality" vs
-  "Language / Localization" → scegli UNO e tienilo
-- "Customer Support" vs "Customer Success / Technical" vs "Technical
-  Support" → scegli UNO
-- "Technical Engineering" per un Technical Writer → SBAGLIATO, usa
-  "Technical Writing"
-
-Quando in dubbio chiedi al Capitano via tmux send-keys (REGOLA inter-
-agente). Lui può consolidare la tassonomia per tutto il team.
-
-**REGOLA-09d — Fallback `work_country` se "unverifiable"**
-
-Se dopo 2 tentativi di web search non riesci a determinare con certezza
-il `work_country` (paese contrattuale), NON lasciarlo NULL. Procedi per
-fallback in quest'ordine:
-
-1. **Paese del posting board** (es. job apparso su `linkedin.com/it/...`
-   → fallback `IT` se la JD non smentisce). Annota in
-   `location_notes`: "work_country inferred from posting board (low
-   confidence)".
-2. **Paese citato nella JD** come "Region" o "Office" anche se non
-   esplicitato come sede legale.
-3. **Solo come ultima istanza**: il continente del `loc_continent` come
-   ipotesi geografica (es. "Europe-based unspecified entity"). Annota
-   "work_country=Europe placeholder, entity unverified".
-
-Mai lasciare `work_country=NULL` su una position `checked`: la dashboard
-"💰 contratto" si rompe e l'utente non capisce lo stipendio atteso.
-
 
 **Coda vuota**: aspetta 2 minuti, riprova. Notifica Capitano una sola volta.
 
