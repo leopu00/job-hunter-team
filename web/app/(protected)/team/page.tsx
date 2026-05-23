@@ -234,7 +234,9 @@ export default function TeamPage() {
       agentActionCmd.state === "timeout"
     ) {
       toast(
-        agentActionCmd.error ?? "Errore esecuzione comando agente",
+        typeof agentActionCmd.error === 'string' && agentActionCmd.error
+          ? agentActionCmd.error
+          : "Errore esecuzione comando agente",
         "error",
         6000,
       );
