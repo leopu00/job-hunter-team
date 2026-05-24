@@ -62,7 +62,18 @@ INSERT INTO case_study_metrics (case_study_id, metric_key, metric_label, value_n
 -- Timing
 (1, 'velocity_pct_h',           'Bridge velocity',             2.70, '2.70%/h (steady)',                                                   '%/h','⚡','timing',   5, 0),
 (1, 'time_to_ready_avg',        'Avg time-to-ready',           7.4,  '7.4h (min 12 min, max 18.9h)',                                       'h',  '⏱️','timing',   10, 0),
-(1, 'hours_of_user_time',       'Hours of user time',          1,    '<1h setup + 1 manual doctor mass-restart (see notes)',               'h',  '🧠','timing',   20, 0);
+(1, 'hours_of_user_time',       'Hours of user time',          1,    '<1h setup + 1 manual doctor mass-restart (see notes)',               'h',  '🧠','timing',   20, 0),
+-- Pipeline stage breakdown (Codex has full state-transition coverage)
+(1, 'pipeline_new',             'Stage: new',                  206,  '206 positions discovered',                                           'count','📥','pipeline',100,0),
+(1, 'pipeline_checked',         'Stage: checked',              196,  '196 made it past triage',                                            'count','🔍','pipeline',101,0),
+(1, 'pipeline_scored',          'Stage: scored',               168,  '168 reached scoring',                                                'count','📊','pipeline',102,0),
+(1, 'pipeline_writing',         'Stage: writing',              138,  '138 assigned to a Writer',                                           'count','✍️','pipeline',103,0),
+(1, 'pipeline_ready',           'Stage: ready',                105,  '105 CV+critic PASS',                                                 'count','✅','pipeline',104,0),
+(1, 'pipeline_excluded_at_new',     'Excluded at triage',     10,   '10 (rejected without checking)',                                      'count','✂️','pipeline',110,0),
+(1, 'pipeline_excluded_at_checked', 'Excluded after checking',23,   '23 (failed pre-check)',                                                'count','✂️','pipeline',111,0),
+(1, 'pipeline_excluded_at_scored',  'Excluded after scoring', 3,    '3 (score too low for write)',                                          'count','✂️','pipeline',112,0),
+(1, 'pipeline_excluded_at_writing', 'Excluded in writing',    27,   '27 (writer-side rejection)',                                          'count','✂️','pipeline',113,0),
+(1, 'pipeline_excluded_total',  'Excluded total',              63,   '63 (30.6% of pool)',                                                  'count','❌','pipeline',114,0);
 
 INSERT INTO case_study_notes (case_study_id, note_type, body_md, display_order) VALUES
 (1, 'worked',     '**Niche match excellence** — the candidate''s secondary technical/manufacturing skill set surfaced a small group of rare-but-perfect matches that averaged **87.3/100**, the highest score domain of the run.', 10),
@@ -138,7 +149,16 @@ INSERT INTO case_study_metrics (case_study_id, metric_key, metric_label, value_n
 (2, 'sub_vs_payg_ratio',        'Subscription vs pay-per-use', 14,   'Sub 14× cheaper at this usage',                                      'x',  '🏆','economics',50, 1),
 -- Timing
 (2, 'velocity_pct_h',           'Bridge velocity',             5.37, '5.37%/h (2× faster than Codex 2.7%/h)',                              '%/h','⚡','timing',   10, 0),
-(2, 'hours_of_user_time',       'Hours of user time',          1,    '<1h setup + occasional monitoring (autonomous)',                      'h',  '🧠','timing',   20, 0);
+(2, 'hours_of_user_time',       'Hours of user time',          1,    '<1h setup + occasional monitoring (autonomous)',                      'h',  '🧠','timing',   20, 0),
+-- Pipeline stage breakdown (Kimi: state-transitions only cover post-fix#14, so we use final status for the totals)
+(2, 'pipeline_new',             'Stage: new (total found)',    251,  '251 positions discovered',                                           'count','📥','pipeline',100,0),
+(2, 'pipeline_ready',           'Stage: ready',                56,   '56 CV+critic PASS',                                                  'count','✅','pipeline',101,0),
+(2, 'pipeline_excluded_total',  'Excluded total',              164,  '164 (65.3% of pool — high noise from non-LinkedIn sources)',          'count','❌','pipeline',102,0),
+-- Source breakdown (Kimi only — LinkedIn enabled mid-run is a key insight)
+(2, 'source_linkedin_total',    'LinkedIn positions found',    124,  '124 (LinkedIn enabled at 17/05 21:35 UTC)',                          'count','💼','pipeline',120,0),
+(2, 'source_linkedin_ready',    'LinkedIn → ready',            34,   '34 PASS (27.4% conversion on LinkedIn-sourced)',                     'count','💼','pipeline',121,0),
+(2, 'source_other_total',       'Other-source positions',      127,  '127 (websearch + Greenhouse + Lever + CompanyOK)',                    'count','🔗','pipeline',122,0),
+(2, 'source_other_ready',       'Other-source → ready',        22,   '22 PASS (17.3% conversion on non-LinkedIn)',                         'count','🔗','pipeline',123,0);
 
 INSERT INTO case_study_notes (case_study_id, note_type, body_md, display_order) VALUES
 (2, 'worked',     '**Token-based provider sustains long runs** — Kimi has no weekly cap; the team consumed ~1.8 weekly cycles cumulatively (first window ~80% peak, second window 100%).', 10),
