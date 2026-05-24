@@ -54,15 +54,15 @@ function WeeklyCard({
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h5 className="text-sm font-semibold text-slate-900">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h5 className="flex items-baseline gap-2 text-sm font-semibold">
           <span
-            className="mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+            className="inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
             style={{ backgroundColor: accentColor }}
           >
             W{w.window_number}
           </span>
-          {w.label}
+          <span className="text-slate-900">{w.label}</span>
         </h5>
         {w.peak_usage_pct != null && (
           <span className="font-mono text-sm font-bold text-slate-900">
@@ -98,20 +98,22 @@ function WeeklyCard({
 }
 
 function PhaseCard({ p, accentColor }: { p: Window; accentColor: string }) {
+  // Strip the redundant "Phase: " prefix since the badge already says "PHASE N".
+  const cleanLabel = p.label.replace(/^Phase:\s*/i, "")
   return (
-    <div className="rounded border border-dashed border-slate-200 bg-slate-50/60 p-3">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h6 className="text-xs font-semibold text-slate-800">
+    <div className="rounded border border-dashed border-slate-300 bg-white p-3">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h6 className="flex items-baseline gap-2 text-xs font-semibold">
           <span
-            className="mr-2 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white"
-            style={{ backgroundColor: accentColor, opacity: 0.7 }}
+            className="inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white"
+            style={{ backgroundColor: accentColor }}
           >
             phase {p.window_number}
           </span>
-          {p.label}
+          <span className="text-slate-900">{cleanLabel}</span>
         </h6>
         {p.conversion_pct != null && (
-          <span className="font-mono text-xs font-bold text-slate-800">
+          <span className="font-mono text-xs font-bold text-slate-900">
             {p.conversion_pct}% conv.
           </span>
         )}
@@ -119,7 +121,7 @@ function PhaseCard({ p, accentColor }: { p: Window; accentColor: string }) {
       <WindowMetricsRow w={p} compact />
       {p.notes_md && (
         <p
-          className="mt-2 text-xs leading-relaxed text-slate-600"
+          className="mt-2 text-xs leading-relaxed text-slate-700"
           dangerouslySetInnerHTML={{ __html: renderInlineMd(p.notes_md) }}
         />
       )}
