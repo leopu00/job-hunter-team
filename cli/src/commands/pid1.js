@@ -26,6 +26,8 @@
  */
 
 import { readFile, access } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import { dirname } from 'node:path';
@@ -182,6 +184,16 @@ async function hasProviderCredentials() {
  * attive e skippa, idempotente.
  */
 async function startUserFacingAgents() {
+  // Gate centrale .team-halted.flag: se settato (utente ha cliccato Stop
+  // dalla dashboard prima del restart container), NON auto-startare.
+  // Source of truth: team_state.should_run. Il reconciler creerà/rimuoverà
+  // il flag al prossimo polling. Senza questo gate, il container post-restart
+  // partiva sempre con agenti attivi anche se l'utente li aveva spenti.
+  const teamHaltedFlag = join(JHT_HOME, '.team-halted.flag');
+  if (existsSync(teamHaltedFlag)) {
+    pid1Log('auto-start agenti SKIPPED: .team-halted.flag presente (user ha cliccato Stop)');
+    return;
+  }
   // Bug regressione post-recreate (osservato 2026-05-17 20:02): senza
   // sentinella tmux il Capitano non riceve [BRIDGE TICK] e all'utente
   // risponde generico ("team in standby") perché non ha dati freschi.
