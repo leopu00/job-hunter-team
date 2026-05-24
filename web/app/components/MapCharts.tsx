@@ -133,17 +133,6 @@ export default function MapCharts({
     return Math.max(0, totalInScope - histogramScores.length);
   }, [selectedTypes, typeDist, histogramScores]);
 
-  const accentLabel =
-    selectedTypes.length === 0
-      ? undefined
-      : selectedTypes.length === 1
-        ? labels[selectedTypes[0]] ?? String(selectedTypes[0])
-        : `${selectedTypes.length} tipi`;
-  const accentColor =
-    selectedTypes.length === 1
-      ? typeDist.find((t) => t.type === selectedTypes[0])?.color
-      : undefined;
-
   const toggleType = (t: PositionType) =>
     setSelectedTypes((cur) =>
       cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t],
@@ -172,42 +161,117 @@ export default function MapCharts({
         />
       </div>
 
-      {/* Colonna destra: Score Distribution + bucket "senza coord"
-          sotto, ancorati top-right per restare allineati a vista. */}
+      {/* Colonna destra: chart top-right FISSO; i chip filtri
+          fluiscono come testo attorno al chart. shape-outside lascia
+          libera la fascia superiore (~32px) sopra al chart così la
+          PRIMA riga di chip si estende full-width (anche sopra al
+          chart); le righe successive sono limitate dalla shape del
+          chart (vanno a sinistra del chart). */}
       <div
         style={{
           position: "absolute",
           top: 24,
-          // I controlli zoom MapLibre ora stanno in top-left sotto
-          // "Vista generale", quindi il chart torna al bordo destro.
+          left: 24,
           right: 24,
           zIndex: 10,
-          width: 420,
-          maxWidth: "calc(100vw - 48px)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: 12,
           pointerEvents: "none",
         }}
       >
+        {/* Chart float-right con shape-outside: il rect occupa
+            (420 x H+32), ma la "shape" che il testo evita inizia 32px
+            più in basso → fascia top libera. */}
         <div
-          className="map-bare-chart"
-          style={{ width: "100%", pointerEvents: "auto" }}
+          style={{
+            float: "right",
+            width: 420,
+            maxWidth: "calc(100vw - 48px)",
+            marginLeft: 12,
+            shapeOutside: "inset(32px 0 0 0)",
+            WebkitShapeOutside: "inset(32px 0 0 0)" as never,
+            pointerEvents: "auto",
+          } as React.CSSProperties}
         >
-          <ScoreDistributionHorizontal
-            scores={histogramScores}
-            title={scoreTitle}
-            emptyLabel={emptyLabel}
-            accentLabel={accentLabel}
-            accentColor={accentColor}
-            selectedRanges={selectedRanges}
-            onToggleRange={toggleRange}
-            unscoredCount={unscoredCount}
-            unscoredSelected={unscoredSelected}
-            onToggleUnscored={() => setUnscoredSelected((v) => !v)}
-          />
+          <div className="map-bare-chart" style={{ marginTop: 32 }}>
+            <ScoreDistributionHorizontal
+              scores={histogramScores}
+              title={scoreTitle}
+              emptyLabel={emptyLabel}
+              selectedRanges={selectedRanges}
+              onToggleRange={toggleRange}
+              unscoredCount={unscoredCount}
+              unscoredSelected={unscoredSelected}
+              onToggleUnscored={() => setUnscoredSelected((v) => !v)}
+            />
+          </div>
         </div>
+
+        {/* Filtri attivi: chip che fluiscono attorno al chart float
+            right. text-align:right + inline-block → vanno a capo
+            riempendo lo spazio a sinistra del chart riga per riga. */}
+        {(selectedTypes.length > 0 ||
+          selectedRanges.length > 0 ||
+          unscoredSelected ||
+          selectedLocations.length > 0) && (
+          <div
+            style={{
+              width: "100%",
+              textAlign: "right",
+              lineHeight: "24px",
+              pointerEvents: "auto",
+            }}
+          >
+            {selectedTypes.map((t) => {
+              const color = typeDist.find((d) => d.type === t)?.color;
+              return (
+                <FilterChip
+                  key={`t-${t}`}
+                  label={labels[t] ?? String(t)}
+                  color={color}
+                  onRemove={() => toggleType(t)}
+                />
+              );
+            })}
+            {selectedRanges.map((r) => (
+              <FilterChip
+                key={`r-${r.lo}-${r.hi}`}
+                label={`${r.lo}–${r.hi}`}
+                onRemove={() => toggleRange(r)}
+              />
+            ))}
+            {unscoredSelected && (
+              <FilterChip
+                key="unscored"
+                label="no score"
+                onRemove={() => setUnscoredSelected(false)}
+              />
+            )}
+            {selectedLocations.map((loc) => (
+              <FilterChip
+                key={`l-${loc}`}
+                label={loc}
+                onRemove={() => toggleLocation(loc)}
+              />
+            ))}
+            <button
+              onClick={() => {
+                setSelectedTypes([]);
+                setSelectedRanges([]);
+                setUnscoredSelected(false);
+                setSelectedLocations([]);
+              }}
+              className="text-[9px] font-semibold tracking-widest uppercase px-2 py-1 rounded-full hover:bg-[var(--color-card)] transition-colors"
+              style={{
+                color: "var(--color-dim)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+              }}
+              title="Rimuovi tutti i filtri"
+            >
+              clear all
+            </button>
+          </div>
+        )}
 
       </div>
 
@@ -448,5 +512,54 @@ export default function MapCharts({
       </div>
 
     </>
+  );
+}
+
+function FilterChip({
+  label,
+  color,
+  onRemove,
+}: {
+  label: string;
+  color?: string;
+  onRemove: () => void;
+}) {
+  const c = color ?? "var(--color-bright)";
+  return (
+    <span
+      className="text-[9px] font-semibold tracking-wide rounded-full border whitespace-nowrap"
+      style={{
+        display: "inline-block",
+        marginLeft: 4,
+        marginBottom: 4,
+        padding: "1px 4px 1px 8px",
+        color: c,
+        borderColor: c,
+        background: `${c}1a`,
+        verticalAlign: "middle",
+      }}
+    >
+      <span title={label}>{label}</span>
+      <button
+        onClick={onRemove}
+        aria-label={`Rimuovi ${label}`}
+        title={`Rimuovi ${label}`}
+        className="hover:opacity-70 transition-opacity"
+        style={{
+          display: "inline-block",
+          marginLeft: 4,
+          background: "transparent",
+          border: "none",
+          color: c,
+          cursor: "pointer",
+          fontSize: 11,
+          lineHeight: 1,
+          padding: 0,
+          verticalAlign: "middle",
+        }}
+      >
+        ×
+      </button>
+    </span>
   );
 }
