@@ -161,20 +161,13 @@ export default function MapCharts({
         />
       </div>
 
-      {/* Chart top-right: overlay assoluto. Quando ci sono chip
-          attivi, scende di 32px così la riga 1 chip (full-width
-          sopra) non lo copre. */}
+      {/* Chart top-right: posizione FISSA, mai si sposta. Eventuali
+          chip della riga 1 vanno sopra (z-index più alto). */}
       <div
         className="map-bare-chart"
         style={{
           position: "absolute",
-          top:
-            selectedTypes.length > 0 ||
-            selectedRanges.length > 0 ||
-            unscoredSelected ||
-            selectedLocations.length > 0
-              ? 56
-              : 24,
+          top: 24,
           right: 24,
           width: 420,
           maxWidth: "calc(100vw - 48px)",
@@ -548,7 +541,12 @@ function FilterChipsBar({
         }}
       >
         {chips.map((c) => (
-          <FilterChip key={c.key} {...c} />
+          <FilterChip
+            key={c.key}
+            label={c.label}
+            color={c.color}
+            onRemove={c.onRemove}
+          />
         ))}
         <span style={{ display: "inline-block", width: 56 }} />
       </div>
@@ -571,7 +569,12 @@ function FilterChipsBar({
         }}
       >
         {row1.map((c) => (
-          <FilterChip key={c.key} {...c} />
+          <FilterChip
+            key={c.key}
+            label={c.label}
+            color={c.color}
+            onRemove={c.onRemove}
+          />
         ))}
         {extra.length === 0 && <ClearAllButton onClick={clearAll} />}
       </div>
@@ -595,7 +598,12 @@ function FilterChipsBar({
           }}
         >
           {extra.map((c) => (
-            <FilterChip key={c.key} {...c} />
+            <FilterChip
+            key={c.key}
+            label={c.label}
+            color={c.color}
+            onRemove={c.onRemove}
+          />
           ))}
           <ClearAllButton onClick={clearAll} />
         </div>
