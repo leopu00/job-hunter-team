@@ -65,25 +65,40 @@ export default async function CaseStudiesCompany() {
             </summary>
             <ul className="mt-3 ml-4 list-disc space-y-1 text-amber-900/90">
               <li>
-                Each run is a <strong>burst</strong> of &lt;4 calendar days, not a steady-state
-                month. A monthly subscription buys ~4 weeks of pacing — the numbers below reflect
-                what the pipeline produces when pushed hard.
+                <strong>Test duration is short.</strong> Case study #1 (Codex) ran continuously
+                for ~35 hours inside one weekly cycle. Case study #2 (Kimi) spans ~1.8 weekly
+                cycles (first ~80%, second 100%). Neither is the full ~4-week month a
+                subscription buys — multi-week steady-state tests are the next milestone.
               </li>
               <li>
-                <strong>Provider comparisons are confounded by profile differences</strong>: each
-                case study uses a different candidate profile, so we cannot isolate provider
+                <strong>Headline conversion rates can be misleading.</strong> For case study #2
+                (Kimi) we enabled LinkedIn scouting mid-run, which materially changed source
+                quality. The aggregate 22% conversion averages a pre-LinkedIn 17.8% with a
+                post-LinkedIn 26.3% — see the per-phase split inside each case study&apos;s
+                Windows section.
+              </li>
+              <li>
+                <strong>Provider comparisons are confounded by profile differences.</strong>
+                Different candidate profiles + different providers = we cannot isolate provider
                 quality from profile difficulty. A same-candidate × dual-provider experiment is on
                 the roadmap.
               </li>
               <li>
+                <strong>Case study #1 (Codex) is the most reliable data point</strong>: one
+                continuous run, only one manual intervention (a doctor mass-restart for context
+                freshness), telemetry intact from start to finish.
+              </li>
+              <li>
                 Profiles are <strong>anonymized</strong> (&quot;Beta tester N&quot;) with broad
-                role descriptors. No personally identifying details, employers, or city names are
-                published.
+                role descriptors. No identifying details, employers, or city names are published.
               </li>
               <li>
                 <strong>Applied = 0</strong> in every case study is by design: JHT prepares
-                applications but the human user decides when to submit. Interview / offer numbers
-                are reported separately when relevant.
+                applications but the human user decides when to submit.
+              </li>
+              <li>
+                We exclude earlier informal tests (e.g. the original Claude legacy run) from this
+                page because they were not measured with the same instrumentation.
               </li>
             </ul>
           </details>

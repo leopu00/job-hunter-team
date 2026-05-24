@@ -1,5 +1,6 @@
 import type { CaseStudy } from "./types"
 import { metricText, providerColor } from "./types"
+import { WindowsSection } from "./WindowsSection"
 
 type Props = {
   cs: CaseStudy
@@ -99,6 +100,8 @@ export function CaseStudyCard({ cs }: Props) {
           )
         })}
       </div>
+
+      <WindowsSection windows={cs.windows} accentColor={accent} />
     </article>
   )
 }
