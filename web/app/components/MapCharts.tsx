@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   classifyTitle,
   type PositionType,
@@ -161,13 +161,20 @@ export default function MapCharts({
         />
       </div>
 
-      {/* Chart top-right: overlay assoluto, posizione fissa
-          indipendente dai chip. */}
+      {/* Chart top-right: overlay assoluto. Quando ci sono chip
+          attivi, scende di 32px così la riga 1 chip (full-width
+          sopra) non lo copre. */}
       <div
         className="map-bare-chart"
         style={{
           position: "absolute",
-          top: 24,
+          top:
+            selectedTypes.length > 0 ||
+            selectedRanges.length > 0 ||
+            unscoredSelected ||
+            selectedLocations.length > 0
+              ? 56
+              : 24,
           right: 24,
           width: 420,
           maxWidth: "calc(100vw - 48px)",
@@ -187,82 +194,56 @@ export default function MapCharts({
         />
       </div>
 
-      {/* Filtri attivi: overlay assoluto separato che termina dove
-          inizia il chart (right: 24 + 420 + 12). flex-wrap +
-          justify-end → riga ancorata a destra contro il bordo
-          sinistro del chart, cresce verso sinistra; va a capo SOTTO
-          quando lo spazio è pieno (sempre limitato dal chart). */}
-      {(selectedTypes.length > 0 ||
-        selectedRanges.length > 0 ||
-        unscoredSelected ||
-        selectedLocations.length > 0) && (
-        <div
-          style={{
-            position: "absolute",
-            top: 24,
-            left: 24,
-            right: 24 + 420 + 12,
-            zIndex: 10,
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 4,
-            pointerEvents: "auto",
-          }}
-        >
-            {selectedTypes.map((t) => {
-              const color = typeDist.find((d) => d.type === t)?.color;
-              return (
-                <FilterChip
-                  key={`t-${t}`}
-                  label={labels[t] ?? String(t)}
-                  color={color}
-                  onRemove={() => toggleType(t)}
-                />
-              );
-            })}
-            {selectedRanges.map((r) => (
-              <FilterChip
-                key={`r-${r.lo}-${r.hi}`}
-                label={`${r.lo}–${r.hi}`}
-                onRemove={() => toggleRange(r)}
-              />
-            ))}
-            {unscoredSelected && (
-              <FilterChip
-                key="unscored"
-                label="no score"
-                onRemove={() => setUnscoredSelected(false)}
-              />
-            )}
-            {selectedLocations.map((loc) => (
-              <FilterChip
-                key={`l-${loc}`}
-                label={loc}
-                onRemove={() => toggleLocation(loc)}
-              />
-            ))}
-            <button
-              onClick={() => {
-                setSelectedTypes([]);
-                setSelectedRanges([]);
-                setUnscoredSelected(false);
-                setSelectedLocations([]);
-              }}
-              className="text-[9px] font-semibold tracking-widest uppercase px-2 py-1 rounded-full hover:bg-[var(--color-card)] transition-colors"
-              style={{
-                color: "var(--color-dim)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-              }}
-              title="Rimuovi tutti i filtri"
-            >
-              clear all
-            </button>
-        </div>
-      )}
+      {/* Filtri attivi: layout split client-side.
+          - Container "measure": full-width invisibile, misura quanti
+            chip stanno nella riga 1 ancorata a right:24 dello SCHERMO.
+          - Container A (riga 1): visibile, top:24 right:24 left:24,
+            mostra solo i chip che entrano nella riga 1 (= ancorati al
+            bordo destro, possono passare SOPRA al chart).
+          - Container B (riga 2+): visibile, top:60 right:(24+420+12)
+            left:24, mostra i chip extra; limitato a sx del chart. */}
+      <FilterChipsBar
+        chips={(() => {
+          const arr: FilterChipDesc[] = [];
+          for (const t of selectedTypes) {
+            arr.push({
+              key: `t-${t}`,
+              label: labels[t] ?? String(t),
+              color: typeDist.find((d) => d.type === t)?.color,
+              onRemove: () => toggleType(t),
+            });
+          }
+          for (const r of selectedRanges) {
+            arr.push({
+              key: `r-${r.lo}-${r.hi}`,
+              label: `${r.lo}–${r.hi}`,
+              onRemove: () => toggleRange(r),
+            });
+          }
+          if (unscoredSelected) {
+            arr.push({
+              key: "unscored",
+              label: "no score",
+              onRemove: () => setUnscoredSelected(false),
+            });
+          }
+          for (const loc of selectedLocations) {
+            arr.push({
+              key: `l-${loc}`,
+              label: loc,
+              onRemove: () => toggleLocation(loc),
+            });
+          }
+          return arr;
+        })()}
+        clearAll={() => {
+          setSelectedTypes([]);
+          setSelectedRanges([]);
+          setUnscoredSelected(false);
+          setSelectedLocations([]);
+        }}
+        chartReserveRight={24 + 420 + 12}
+      />
 
       {/* Card "Company" — overlay bottom-right. Mostra le posizioni
           che non hanno coordinate (quindi non rappresentabili sulla
@@ -501,6 +482,143 @@ export default function MapCharts({
       </div>
 
     </>
+  );
+}
+
+type FilterChipDesc = {
+  key: string;
+  label: string;
+  color?: string;
+  onRemove: () => void;
+};
+
+function FilterChipsBar({
+  chips,
+  clearAll,
+  chartReserveRight,
+}: {
+  chips: FilterChipDesc[];
+  clearAll: () => void;
+  chartReserveRight: number;
+}) {
+  const measureRef = useRef<HTMLDivElement>(null);
+  const [row1End, setRow1End] = useState(chips.length);
+
+  useLayoutEffect(() => {
+    const el = measureRef.current;
+    if (!el) return;
+    const kids = Array.from(el.children) as HTMLElement[];
+    if (kids.length === 0) {
+      setRow1End(0);
+      return;
+    }
+    const top0 = kids[0].offsetTop;
+    let i = 0;
+    for (; i < kids.length; i++) {
+      if (kids[i].offsetTop !== top0) break;
+    }
+    setRow1End(i);
+  });
+
+  if (chips.length === 0) return null;
+
+  const row1 = chips.slice(0, row1End);
+  const extra = chips.slice(row1End);
+
+  return (
+    <>
+      {/* Container "measure" (invisibile, fuori vista): renderizza
+          TUTTI i chip in larghezza piena per misurare quanti
+          stanno nella prima riga full-width. */}
+      <div
+        ref={measureRef}
+        aria-hidden
+        style={{
+          position: "absolute",
+          top: -9999,
+          left: 0,
+          width: "calc(100vw - 48px)",
+          visibility: "hidden",
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          gap: 4,
+          pointerEvents: "none",
+        }}
+      >
+        {chips.map((c) => (
+          <FilterChip key={c.key} {...c} />
+        ))}
+        <span style={{ display: "inline-block", width: 56 }} />
+      </div>
+
+      {/* Container A: riga 1 full-width, ancorata a right:24 del
+          viewport. Può estendersi sopra al chart (right:24). */}
+      <div
+        style={{
+          position: "absolute",
+          top: 24,
+          left: 24,
+          right: 24,
+          zIndex: 20,
+          display: "flex",
+          flexWrap: "nowrap",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: 4,
+          pointerEvents: "auto",
+        }}
+      >
+        {row1.map((c) => (
+          <FilterChip key={c.key} {...c} />
+        ))}
+        {extra.length === 0 && <ClearAllButton onClick={clearAll} />}
+      </div>
+
+      {/* Container B: righe extra, sotto la riga 1, limitate a
+          sinistra del chart (right: chartReserveRight). */}
+      {extra.length > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: 56,
+            left: 24,
+            right: chartReserveRight,
+            zIndex: 10,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 4,
+            pointerEvents: "auto",
+          }}
+        >
+          {extra.map((c) => (
+            <FilterChip key={c.key} {...c} />
+          ))}
+          <ClearAllButton onClick={clearAll} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function ClearAllButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-[9px] font-semibold tracking-widest uppercase px-2 py-1 rounded-full hover:bg-[var(--color-card)] transition-colors"
+      style={{
+        color: "var(--color-dim)",
+        background: "transparent",
+        border: "none",
+        cursor: "pointer",
+      }}
+      title="Rimuovi tutti i filtri"
+    >
+      clear all
+    </button>
   );
 }
 
