@@ -121,11 +121,12 @@ export default function PositionTypesDonut({
           acc += span;
           const isHover = hovered === d.type;
           const isSelected = selectedTypes.includes(d.type);
-          // Dimming: se ci sono selezioni (e niente hover) le fette
-          // NON selezionate sono attenuate. L'hover override temporaneo.
-          const active = isHover || (hovered == null && isSelected);
+          // Le fette selezionate restano sempre evidenziate (anche
+          // durante hover su altre). L'hover attenua solo le fette
+          // né selezionate né hovered.
+          const active = isHover || isSelected;
           const dimmed =
-            (hovered != null && !isHover) ||
+            (hovered != null && !isHover && !isSelected) ||
             (hovered == null && hasSelection && !isSelected);
           return (
             <path
@@ -200,7 +201,7 @@ export default function PositionTypesDonut({
         const isHover = hovered === d.type;
         const isSelected = selectedTypes.includes(d.type);
         const dimmed =
-          (hovered != null && !isHover) ||
+          (hovered != null && !isHover && !isSelected) ||
           (hovered == null && hasSelection && !isSelected);
         const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
         return (
