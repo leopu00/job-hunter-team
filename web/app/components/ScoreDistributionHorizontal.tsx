@@ -207,9 +207,9 @@ export default function ScoreDistributionHorizontal({
             const w = (unscoredCount / barMax) * chartW;
             const isHover = hover === -1;
             const isSelected = unscoredSelected;
-            const active = isHover || (hover == null && isSelected);
+            const active = isHover || isSelected;
             const dimmed =
-              (hover != null && !isHover) ||
+              (hover != null && !isHover && !isSelected) ||
               (hover == null && hasRangeSelection && !isSelected);
             return (
               <g
@@ -288,9 +288,9 @@ export default function ScoreDistributionHorizontal({
             const isSelected = selectedRanges.some(
               (r) => r.lo === lo && r.hi === hi,
             );
-            const active = isHover || (hover == null && isSelected);
+            const active = isHover || isSelected;
             const dimmed =
-              (hover != null && !isHover) ||
+              (hover != null && !isHover && !isSelected) ||
               (hover == null && hasRangeSelection && !isSelected);
             const pct = stats.n > 0 ? Math.round((count / stats.n) * 100) : 0;
             return (
