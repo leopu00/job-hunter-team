@@ -161,65 +161,56 @@ export default function MapCharts({
         />
       </div>
 
-      {/* Colonna destra: chart top-right FISSO; i chip filtri
-          fluiscono come testo attorno al chart. shape-outside lascia
-          libera la fascia superiore (~32px) sopra al chart così la
-          PRIMA riga di chip si estende full-width (anche sopra al
-          chart); le righe successive sono limitate dalla shape del
-          chart (vanno a sinistra del chart). */}
+      {/* Chart top-right: overlay assoluto, posizione fissa
+          indipendente dai chip. */}
       <div
+        className="map-bare-chart"
         style={{
           position: "absolute",
           top: 24,
-          left: 24,
           right: 24,
+          width: 420,
+          maxWidth: "calc(100vw - 48px)",
           zIndex: 10,
-          pointerEvents: "none",
+          pointerEvents: "auto",
         }}
       >
-        {/* Chart float-right con shape-outside: il rect occupa
-            (420 x H+32), ma la "shape" che il testo evita inizia 32px
-            più in basso → fascia top libera. */}
+        <ScoreDistributionHorizontal
+          scores={histogramScores}
+          title={scoreTitle}
+          emptyLabel={emptyLabel}
+          selectedRanges={selectedRanges}
+          onToggleRange={toggleRange}
+          unscoredCount={unscoredCount}
+          unscoredSelected={unscoredSelected}
+          onToggleUnscored={() => setUnscoredSelected((v) => !v)}
+        />
+      </div>
+
+      {/* Filtri attivi: overlay assoluto separato che termina dove
+          inizia il chart (right: 24 + 420 + 12). flex-wrap +
+          justify-end → riga ancorata a destra contro il bordo
+          sinistro del chart, cresce verso sinistra; va a capo SOTTO
+          quando lo spazio è pieno (sempre limitato dal chart). */}
+      {(selectedTypes.length > 0 ||
+        selectedRanges.length > 0 ||
+        unscoredSelected ||
+        selectedLocations.length > 0) && (
         <div
           style={{
-            float: "right",
-            width: 420,
-            maxWidth: "calc(100vw - 48px)",
-            marginLeft: 12,
-            shapeOutside: "inset(32px 0 0 0)",
-            WebkitShapeOutside: "inset(32px 0 0 0)" as never,
+            position: "absolute",
+            top: 24,
+            left: 24,
+            right: 24 + 420 + 12,
+            zIndex: 10,
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 4,
             pointerEvents: "auto",
-          } as React.CSSProperties}
+          }}
         >
-          <div className="map-bare-chart" style={{ marginTop: 32 }}>
-            <ScoreDistributionHorizontal
-              scores={histogramScores}
-              title={scoreTitle}
-              emptyLabel={emptyLabel}
-              selectedRanges={selectedRanges}
-              onToggleRange={toggleRange}
-              unscoredCount={unscoredCount}
-              unscoredSelected={unscoredSelected}
-              onToggleUnscored={() => setUnscoredSelected((v) => !v)}
-            />
-          </div>
-        </div>
-
-        {/* Filtri attivi: chip che fluiscono attorno al chart float
-            right. text-align:right + inline-block → vanno a capo
-            riempendo lo spazio a sinistra del chart riga per riga. */}
-        {(selectedTypes.length > 0 ||
-          selectedRanges.length > 0 ||
-          unscoredSelected ||
-          selectedLocations.length > 0) && (
-          <div
-            style={{
-              width: "100%",
-              textAlign: "right",
-              lineHeight: "24px",
-              pointerEvents: "auto",
-            }}
-          >
             {selectedTypes.map((t) => {
               const color = typeDist.find((d) => d.type === t)?.color;
               return (
@@ -270,10 +261,8 @@ export default function MapCharts({
             >
               clear all
             </button>
-          </div>
-        )}
-
-      </div>
+        </div>
+      )}
 
       {/* Card "Company" — overlay bottom-right. Mostra le posizioni
           che non hanno coordinate (quindi non rappresentabili sulla
