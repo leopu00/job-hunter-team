@@ -32,6 +32,9 @@ type FunnelStage = {
   label: string
   count: number
   excludedHere?: number
+  // Computed once stages are built: how many positions passed forward from this
+  // stage to the next one. Null on the last (terminal) stage.
+  passedForward?: number | null
 }
 
 function CaseFunnel({ cs }: { cs: CaseStudy }) {
@@ -87,25 +90,36 @@ function buildStages(cs: CaseStudy): FunnelStage[] {
   const exScored = metricNum(cs, "pipeline_excluded_at_scored") ?? undefined
   const exWriting = metricNum(cs, "pipeline_excluded_at_writing") ?? undefined
 
+  let stages: FunnelStage[]
   if (newC != null && checked != null && scored != null && writing != null && ready != null) {
-    return [
+    stages = [
       { key: "new", label: "📥 Found", count: newC, excludedHere: exNew },
       { key: "checked", label: "🔍 Checked", count: checked, excludedHere: exChecked },
       { key: "scored", label: "📊 Scored", count: scored, excludedHere: exScored },
       { key: "writing", label: "✍️ Writing", count: writing, excludedHere: exWriting },
       { key: "ready", label: "✅ Ready", count: ready },
     ]
+  } else {
+    // Fallback to 2-stage with side-excluded total
+    const found = metricNum(cs, "pipeline_new") ?? metricNum(cs, "positions_analyzed") ?? 0
+    const readyFallback =
+      metricNum(cs, "pipeline_ready") ??
+      metricNum(cs, "cvs_ready") ??
+      metricNum(cs, "applications_sent") ??
+      0
+    const excludedTotal = metricNum(cs, "pipeline_excluded_total") ?? undefined
+    stages = [
+      { key: "new", label: "📥 Found", count: found, excludedHere: excludedTotal },
+      { key: "ready", label: "✅ Ready", count: readyFallback },
+    ]
   }
 
-  // Fallback to 2-stage with side-excluded total
-  const found = metricNum(cs, "pipeline_new") ?? metricNum(cs, "positions_analyzed") ?? 0
-  const readyFallback =
-    metricNum(cs, "pipeline_ready") ?? metricNum(cs, "cvs_ready") ?? metricNum(cs, "applications_sent") ?? 0
-  const excludedTotal = metricNum(cs, "pipeline_excluded_total") ?? undefined
-  return [
-    { key: "new", label: "📥 Found", count: found, excludedHere: excludedTotal },
-    { key: "ready", label: "✅ Ready", count: readyFallback },
-  ]
+  // Annotate each stage with passedForward = count of the NEXT stage.
+  // Last (terminal) stage has passedForward = null.
+  for (let i = 0; i < stages.length; i++) {
+    stages[i].passedForward = i < stages.length - 1 ? stages[i + 1].count : null
+  }
+  return stages
 }
 
 function FunnelStages({
@@ -121,10 +135,21 @@ function FunnelStages({
   return (
     <div className="space-y-1.5">
       {stages.map((s, i) => {
-        const widthPct = Math.max(8, (s.count / maxCount) * 100)
+        // Stage bar width is proportional to the absolute count vs the maxCount of the case.
+        // INSIDE the bar we split into 3 segments so the blue ("passed forward") segment
+        // aligns visually with the next stage's bar — making the funnel drop-off obvious.
+        const widthPct = Math.max(4, (s.count / maxCount) * 100)
         const cumulativePct = (s.count / initial) * 100
-        const isLast = i === stages.length - 1
-        const exPct = s.excludedHere ? Math.max(2, (s.excludedHere / maxCount) * 100) : 0
+
+        const passed = s.passedForward // null for terminal stage
+        const excluded = s.excludedHere ?? 0
+        const stayed = passed != null ? Math.max(0, s.count - passed - excluded) : 0
+
+        // Internal proportions (0..100 = % of the bar's own width)
+        const passedShare = passed != null && s.count > 0 ? (passed / s.count) * 100 : 100
+        const excludedShare = s.count > 0 ? (excluded / s.count) * 100 : 0
+        const stayedShare = Math.max(0, 100 - passedShare - excludedShare)
+
         return (
           <div key={s.key} className="space-y-0.5">
             <div className="flex items-baseline gap-2 text-xs text-slate-600">
@@ -133,32 +158,66 @@ function FunnelStages({
                 {s.count.toLocaleString()}
                 <span className="ml-1 text-slate-500">({cumulativePct.toFixed(0)}%)</span>
               </span>
-              {s.excludedHere != null && s.excludedHere > 0 && (
+              {excluded > 0 && (
                 <span className="ml-auto font-mono text-xs text-red-600">
-                  −{s.excludedHere} excluded
+                  −{excluded} excluded{stayed > 0 ? ` · ${stayed} held/back` : ""}
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1">
+            <div
+              className="flex h-5 overflow-hidden rounded"
+              style={{ width: `${widthPct}%` }}
+              role="img"
+              aria-label={`stage ${s.label}: ${s.count} total${passed != null ? `, ${passed} passed forward` : ""}, ${excluded} excluded${stayed > 0 ? `, ${stayed} held back` : ""}`}
+            >
+              {/* blue: passed forward to the next stage (last stage is fully blue) */}
               <div
-                className={`h-5 rounded ${isLast ? "" : "rounded-r"}`}
+                className="h-full"
                 style={{
-                  width: `${widthPct}%`,
+                  width: `${passedShare}%`,
                   backgroundColor: accent,
-                  opacity: 1 - i * 0.12,
+                  opacity: 1 - i * 0.06,
                 }}
+                title={
+                  passed != null
+                    ? `${passed} passed to ${stages[i + 1]?.label ?? "next stage"}`
+                    : `${s.count} reached this terminal stage`
+                }
               />
-              {exPct > 0 && (
+              {/* red: excluded at this stage */}
+              {excludedShare > 0 && (
                 <div
-                  className="h-5 rounded bg-red-300"
-                  style={{ width: `${exPct}%`, opacity: 0.5 }}
-                  title={`${s.excludedHere} excluded at this stage`}
+                  className="h-full bg-red-400"
+                  style={{ width: `${excludedShare}%`, opacity: 0.55 }}
+                  title={`${excluded} excluded at ${s.label}`}
+                />
+              )}
+              {/* slate-300: stayed in this stage at HALT, or returned to a prior stage */}
+              {stayedShare > 0 && (
+                <div
+                  className="h-full bg-slate-300"
+                  style={{ width: `${stayedShare}%`, opacity: 0.6 }}
+                  title={`${stayed} held in stage / returned to earlier stage`}
                 />
               )}
             </div>
           </div>
         )
       })}
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500">
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block h-2.5 w-3 rounded" style={{ backgroundColor: accent }} />
+          passed to next stage
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block h-2.5 w-3 rounded bg-red-400 opacity-55" />
+          excluded here
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="inline-block h-2.5 w-3 rounded bg-slate-300 opacity-60" />
+          held / returned
+        </span>
+      </div>
     </div>
   )
 }
