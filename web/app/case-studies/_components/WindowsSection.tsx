@@ -9,7 +9,7 @@ type Props = {
 // Weekly windows are top-level cards; phase windows (parent_window_id != null) are
 // nested under their parent as indented sub-cards.
 export function WindowsSection({ windows, accentColor }: Props) {
-  if (windows.length === 0) return null
+  if (!windows || windows.length === 0) return null
 
   const weekly = windows.filter((w) => w.kind === "weekly").sort((a, b) => a.display_order - b.display_order)
   const phasesByParent = new Map<number, Window[]>()
