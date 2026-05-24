@@ -86,6 +86,17 @@ Vedi sopra "Cosa va in cloud". Trade-off accettati:
 | **Hardening trigger team_state** (search_path + REVOKE EXECUTE) (mig 023) | `e6420371` | 2026-05-23 |
 | **CLI cloud preflight + 409 killswitch + login UX warn** | `98118878` | 2026-05-23 |
 | **Bottoni Start/Stop UI bulk usano `useTeamState`** | `39f1d778` | 2026-05-23 |
+| **Bottone Start/Stop derivato da team_state** (no più activeCount) | `046a0109` | 2026-05-23 |
+| **Optimistic update bottone + fix toast `[object Object]`** | `027b550b` | 2026-05-23 |
+| **Polling fallback 5s su useTeamState** (Realtime safety net) | `9232c99a` | 2026-05-23 |
+| **Realtime channel auth con JWT user** (`setAuth(jwt)`, fix postgres_changes silenti) | `22e334c8` | 2026-05-23 |
+| **Rate limit 120→300 + polling team_state 5s→15s** | `19b6f816` | 2026-05-23 |
+| **Polling pagina /team -73%** (~157→34 req/min) | `bde2fd94` | 2026-05-23 |
+| **Rate limit per-session** (auth 600/min, anon 120/min) | `f306af19` | 2026-05-23 |
+| **Fix /api/agents 404** (.vercelignore matchava web/app/api/agents/) | `8307bd3b` | 2026-05-23 |
+| **Fix /api/tokens/* 500** (isLocalRequest → empty graceful su Vercel) | `02e3bcbb`+`8b506a75` | 2026-05-23 |
+| **`/api/agents` legge da `team_state.is_running`** (era stuck su team_commands legacy) | `a7bde38e` | 2026-05-23 |
+| **Gate centrale `.team-halted.flag`** (watchdog/spawner/pid1/jht-start rispettano user Stop) | `016b7b3d` | 2026-05-25 |
 
 ### ⬜ Pending (in ordine di priorità)
 
@@ -104,6 +115,13 @@ Vedi sopra "Cosa va in cloud". Trade-off accettati:
 8. **P1 — Feedback loop position (like/dislike): istruire agenti** (infra `position_feedback` ✅ done). Resta: progettare istruzioni per scout (skip simili a dislike) e scorer (boost simili a like). Letture su position_feedback da agenti container.
 9. **P1 — Daemon push alert quando ≥3 fail consecutivi** ✅ implementato in `cli/src/commands/cloud.js handleDaemon` (WARN_AT=3, MAX_CONSECUTIVE_FAILS=5 → auto-shutdown). Vale anche per 409 not_active_device (vedi commit `98118878`).
 10. **P1 — Killswitch su 401/403 ripetuti**. Oggi `cli/src/commands/cloud.js:672-675` logga il 401 da token revocato ma il daemon **continua loop infinito ogni ~30s**. Comportamento atteso: 3 risposte 401/403 consecutive → halt del daemon + notifica `pending_user_messages` ("Token revocato, riapri il pairing"). Distinto dal P1 #9 (5xx/409 generico): qui è auth, non transient. *Nota: 409 not_active_device già coperto, 401/403 no.*
+
+**Edge case noto post-refactor 2026-05-25**: il `reconciler` legge solo `team_state.is_running` dal DB, non sa di tmux session locali. Scenario "DB stale vs container running" può accadere se:
+   (a) utente clicca Stop, DB → `should_run=false` `is_running=false`
+   (b) container muore prima di applicare lo stop (es. SIGKILL brutale)
+   (c) container restart, pid1 vede `.team-halted.flag` assente (non era stato creato) → auto-start agenti
+   (d) reconciler primo poll: vede `should_run=false && is_running=false` → noop, ma agenti girano
+   Risultato: agenti operativi nonostante DB dice stopped. Workaround manuale: SQL `UPDATE team_state SET should_run=true` per nudge reconciler, poi click Stop. Fix proper richiede al reconciler verifica reale tmux al boot (tmux ls + parse). *Discovered nel test E2E 2026-05-25 con Leone*.
 11. **P1 — Disaster recovery: `jht cloud restore` esplicito**. Oggi il bootstrap (`cli/src/commands/cloud.js:141`, `:710`) si attiva **solo** dentro `enable`/`login`. Se il SQLite locale muore (disco pieno, container corrotto, reset onboarding parziale) non c'è un comando "ricostruisci da cloud". Serve comando dedicato + conferma esplicita ("Sovrascriverai N righe locali con M righe cloud, procedo?") per evitare overwrite accidentale.
 12. **P1 — `JHT-LOCAL-NO-API`**: `web/lib/queries.ts` switcha su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx`.
 13. **P1 — Cutover team_commands→team_state**: Step 5 backlog. Switch UI bulk Start/Stop ✅ done. Resta: handleAction per singolo agente ancora su useTeamCommandPoller; switch incrementale + verifica E2E + Step 6 drop tabella.
