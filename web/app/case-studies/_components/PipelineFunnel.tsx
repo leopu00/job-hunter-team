@@ -41,8 +41,17 @@ function CaseFunnel({ cs }: { cs: CaseStudy }) {
   const accent = providerColor(cs.provider_name)
   const stages = buildStages(cs)
   const maxCount = Math.max(...stages.map((s) => s.count), 1)
-  const conversion =
-    stages.length > 0 ? (stages[stages.length - 1].count / stages[0].count) * 100 : 0
+
+  // Conversion rates — two flavours:
+  // - terminal: ready / (ready + excluded) → "of positions that reached a decision"
+  // - loose:    ready / total_found       → naïve, biased by in-flight positions
+  const totalFound = stages[0]?.count ?? 0
+  const ready = stages[stages.length - 1]?.count ?? 0
+  const excludedTotal = metricNum(cs, "pipeline_excluded_total") ?? 0
+  const inFlight = Math.max(0, totalFound - ready - excludedTotal)
+  const terminalConv =
+    ready + excludedTotal > 0 ? (ready / (ready + excludedTotal)) * 100 : 0
+  const looseConv = totalFound > 0 ? (ready / totalFound) * 100 : 0
 
   // Side-panel data for Kimi (phase + source breakdown) when available
   const phases = cs.windows?.filter((w) => w.kind === "phase") ?? []
@@ -50,7 +59,7 @@ function CaseFunnel({ cs }: { cs: CaseStudy }) {
 
   return (
     <div className="border-t border-slate-100 pt-5 first:border-t-0 first:pt-0">
-      <header className="mb-3 flex items-baseline justify-between">
+      <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h4 className="text-sm font-semibold text-slate-900">
           <span
             className="mr-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
@@ -60,12 +69,32 @@ function CaseFunnel({ cs }: { cs: CaseStudy }) {
           </span>
           {cs.provider_name}
         </h4>
-        <span className="font-mono text-sm font-bold text-slate-900">
-          {conversion.toFixed(1)}% overall conversion
-        </span>
+        <div className="flex items-baseline gap-2 text-right">
+          <span className="font-mono text-sm font-bold text-slate-900">
+            {terminalConv.toFixed(1)}% conversion
+          </span>
+          <span className="font-mono text-[10px] text-slate-500">
+            (on {ready + excludedTotal} decided)
+          </span>
+        </div>
       </header>
 
       <FunnelStages stages={stages} maxCount={maxCount} accent={accent} />
+
+      {(inFlight > 0 || excludedTotal > 0) && (
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+          Of {totalFound} positions found: <strong>{ready}</strong> ready ·{" "}
+          <strong>{excludedTotal}</strong> excluded ·{" "}
+          {inFlight > 0 && (
+            <>
+              <strong>{inFlight}</strong> still in pipeline at HALT (
+              {((inFlight / totalFound) * 100).toFixed(0)}% — not yet a terminal decision).{" "}
+            </>
+          )}
+          Naïve conversion (ready / total found) = {looseConv.toFixed(1)}% — biased downward by
+          in-flight positions.
+        </p>
+      )}
 
       {(phases.length > 0 || sources) && (
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -136,19 +165,19 @@ function FunnelStages({
     <div className="space-y-1.5">
       {stages.map((s, i) => {
         // Stage bar width is proportional to the absolute count vs the maxCount of the case.
-        // INSIDE the bar we split into 3 segments so the blue ("passed forward") segment
-        // aligns visually with the next stage's bar — making the funnel drop-off obvious.
+        // INSIDE the bar we split into 2 colored segments + an implicit empty remainder
+        // (positions still in-flight at this stage when the team was halted). The blue
+        // ("passed forward") segment is exactly as wide as the NEXT stage's bar, so the
+        // funnel drop-off is obvious.
         const widthPct = Math.max(4, (s.count / maxCount) * 100)
         const cumulativePct = (s.count / initial) * 100
 
         const passed = s.passedForward // null for terminal stage
         const excluded = s.excludedHere ?? 0
-        const stayed = passed != null ? Math.max(0, s.count - passed - excluded) : 0
 
         // Internal proportions (0..100 = % of the bar's own width)
         const passedShare = passed != null && s.count > 0 ? (passed / s.count) * 100 : 100
         const excludedShare = s.count > 0 ? (excluded / s.count) * 100 : 0
-        const stayedShare = Math.max(0, 100 - passedShare - excludedShare)
 
         return (
           <div key={s.key} className="space-y-0.5">
@@ -160,15 +189,15 @@ function FunnelStages({
               </span>
               {excluded > 0 && (
                 <span className="ml-auto font-mono text-xs text-red-600">
-                  −{excluded} excluded{stayed > 0 ? ` · ${stayed} held/back` : ""}
+                  −{excluded} excluded
                 </span>
               )}
             </div>
             <div
-              className="flex h-5 overflow-hidden rounded"
+              className="flex h-5 overflow-hidden rounded bg-slate-100"
               style={{ width: `${widthPct}%` }}
               role="img"
-              aria-label={`stage ${s.label}: ${s.count} total${passed != null ? `, ${passed} passed forward` : ""}, ${excluded} excluded${stayed > 0 ? `, ${stayed} held back` : ""}`}
+              aria-label={`stage ${s.label}: ${s.count} total${passed != null ? `, ${passed} passed forward` : ""}, ${excluded} excluded`}
             >
               {/* blue: passed forward to the next stage (last stage is fully blue) */}
               <div
@@ -192,14 +221,7 @@ function FunnelStages({
                   title={`${excluded} excluded at ${s.label}`}
                 />
               )}
-              {/* slate-300: stayed in this stage at HALT, or returned to a prior stage */}
-              {stayedShare > 0 && (
-                <div
-                  className="h-full bg-slate-300"
-                  style={{ width: `${stayedShare}%`, opacity: 0.6 }}
-                  title={`${stayed} held in stage / returned to earlier stage`}
-                />
-              )}
+              {/* implicit empty remainder = in-flight at this stage, no explicit segment */}
             </div>
           </div>
         )
@@ -211,11 +233,7 @@ function FunnelStages({
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="inline-block h-2.5 w-3 rounded bg-red-400 opacity-55" />
-          excluded here
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2.5 w-3 rounded bg-slate-300 opacity-60" />
-          held / returned
+          excluded at this stage
         </span>
       </div>
     </div>
