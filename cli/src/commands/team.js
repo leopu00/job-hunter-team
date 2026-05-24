@@ -191,6 +191,7 @@ function registerTeamCommand(program) {
     .command('start [agente]')
     .description('Avvia un agente o il team default (es: jht team start scout:1)')
     .option('-m, --mode <mode>', 'Modalita: default o fast', 'default')
+    .option('-f, --force', 'Bypass .team-halted.flag (start manuale anche se utente ha cliccato Stop)')
     .action(startAction);
 
   team
@@ -205,6 +206,27 @@ function registerTeamCommand(program) {
 // ── Comando: team start ─────────────────────────────────────────────────────
 
 function startAction(agentArg, options) {
+  // Gate centrale .team-halted.flag: rispetta lo stop esplicito dell'utente
+  // (settato dal reconciler quando should_run=false). Senza, capitano,
+  // watchdog, doctor-watchdog e auto-start bypassavano lo Stop dell'UI.
+  // Source of truth: team_state.should_run. --force override per casi
+  // manuali (es. utente in sessione SSH che vuole un test isolato).
+  const teamHaltedFlag = path.join(JHT_HOME, '.team-halted.flag');
+  if (fs.existsSync(teamHaltedFlag) && !options.force) {
+    console.error(
+      c.yellow(
+        '✗ Team halted — `team start` rifiutato (.team-halted.flag presente).'
+      )
+    );
+    console.error(
+      c.dim(
+        '  Per riprendere: clicca Start dalla dashboard cloud (rimuove il flag\n' +
+        '  via reconciler) oppure usa `--force` per override locale di un singolo\n' +
+        '  start (non rimuove il flag).'
+      )
+    );
+    process.exit(2);
+  }
   if (!tmuxAvailable()) {
     console.error(c.red('Errore: tmux non trovato. Installa con: brew install tmux'));
     process.exit(1);
