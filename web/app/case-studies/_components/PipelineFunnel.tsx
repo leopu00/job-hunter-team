@@ -42,16 +42,18 @@ function CaseFunnel({ cs }: { cs: CaseStudy }) {
   const stages = buildStages(cs)
   const maxCount = Math.max(...stages.map((s) => s.count), 1)
 
-  // Conversion rates — two flavours:
-  // - terminal: ready / (ready + excluded) → "of positions that reached a decision"
-  // - loose:    ready / total_found       → naïve, biased by in-flight positions
-  const totalFound = stages[0]?.count ?? 0
+  // stages[0].count = cumulative-terminal Found = ready + total excluded.
+  // The "raw" total found in the run (which is larger, since it includes in-flight)
+  // comes from a separate metric.
+  const decidedTotal = stages[0]?.count ?? 0
   const ready = stages[stages.length - 1]?.count ?? 0
   const excludedTotal = metricNum(cs, "pipeline_excluded_total") ?? 0
-  const inFlight = Math.max(0, totalFound - ready - excludedTotal)
+  const rawFound =
+    metricNum(cs, "pipeline_new") ?? metricNum(cs, "positions_analyzed") ?? decidedTotal
+  const inFlight = Math.max(0, rawFound - decidedTotal)
   const terminalConv =
-    ready + excludedTotal > 0 ? (ready / (ready + excludedTotal)) * 100 : 0
-  const looseConv = totalFound > 0 ? (ready / totalFound) * 100 : 0
+    decidedTotal > 0 ? (ready / decidedTotal) * 100 : 0
+  const looseConv = rawFound > 0 ? (ready / rawFound) * 100 : 0
 
   // Side-panel data for Kimi (phase + source breakdown) when available
   const phases = cs.windows?.filter((w) => w.kind === "phase") ?? []
@@ -74,7 +76,7 @@ function CaseFunnel({ cs }: { cs: CaseStudy }) {
             {terminalConv.toFixed(1)}% conversion
           </span>
           <span className="font-mono text-[10px] text-slate-500">
-            (on {ready + excludedTotal} decided)
+            (on {decidedTotal} decided)
           </span>
         </div>
       </header>
@@ -83,14 +85,17 @@ function CaseFunnel({ cs }: { cs: CaseStudy }) {
 
       {(inFlight > 0 || excludedTotal > 0) && (
         <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
-          Of {totalFound} positions found: <strong>{ready}</strong> ready ·{" "}
-          <strong>{excludedTotal}</strong> excluded ·{" "}
+          Of <strong>{rawFound}</strong> positions found in the run,{" "}
+          <strong>{decidedTotal}</strong> reached a terminal decision (
+          <strong>{ready}</strong> ready · <strong>{excludedTotal}</strong> excluded). The funnel
+          above shows the flow of those {decidedTotal}.
           {inFlight > 0 && (
             <>
-              <strong>{inFlight}</strong> still in pipeline at HALT (
-              {((inFlight / totalFound) * 100).toFixed(0)}% — not yet a terminal decision).{" "}
+              {" "}
+              The remaining <strong>{inFlight}</strong> ({((inFlight / rawFound) * 100).toFixed(0)}
+              %) were still in-flight at HALT and are excluded from the chart for clarity.
             </>
-          )}
+          )}{" "}
           Naïve conversion (ready / total found) = {looseConv.toFixed(1)}% — biased downward by
           in-flight positions.
         </p>
@@ -114,37 +119,59 @@ function buildStages(cs: CaseStudy): FunnelStage[] {
   const writing = metricNum(cs, "pipeline_writing")
   const ready = metricNum(cs, "pipeline_ready")
 
-  const exNew = metricNum(cs, "pipeline_excluded_at_new") ?? undefined
-  const exChecked = metricNum(cs, "pipeline_excluded_at_checked") ?? undefined
-  const exScored = metricNum(cs, "pipeline_excluded_at_scored") ?? undefined
-  const exWriting = metricNum(cs, "pipeline_excluded_at_writing") ?? undefined
-
   let stages: FunnelStage[]
   if (newC != null && checked != null && scored != null && writing != null && ready != null) {
+    // ─── Cumulative-terminal cascade ───
+    // Each stage count = positions that EVENTUALLY reached a terminal decision
+    // (ready or excluded), ignoring still-in-flight positions. This makes the
+    // funnel "complete": for every stage, blue (passed forward) + red (excluded
+    // here) fill the bar entirely, AND blue of stage N == bar of stage N+1.
+    //
+    // Math example for Codex:
+    //   Ready = 105 (terminal)
+    //   Writing cum = ready + excluded_writing = 105 + 27 = 132
+    //   Scored cum  = 132 + excluded_scored = 132 + 3 = 135
+    //   Checked cum = 135 + excluded_checked = 135 + 23 = 158
+    //   Found cum   = 158 + excluded_new = 158 + 10 = 168
+    //   168 = 105 ready + 63 excluded total. ✓
+    const exNew = metricNum(cs, "pipeline_excluded_at_new") ?? 0
+    const exChecked = metricNum(cs, "pipeline_excluded_at_checked") ?? 0
+    const exScored = metricNum(cs, "pipeline_excluded_at_scored") ?? 0
+    const exWriting = metricNum(cs, "pipeline_excluded_at_writing") ?? 0
+
+    const cReady = ready
+    const cWriting = cReady + exWriting
+    const cScored = cWriting + exScored
+    const cChecked = cScored + exChecked
+    const cNew = cChecked + exNew
+
     stages = [
-      { key: "new", label: "📥 Found", count: newC, excludedHere: exNew },
-      { key: "checked", label: "🔍 Checked", count: checked, excludedHere: exChecked },
-      { key: "scored", label: "📊 Scored", count: scored, excludedHere: exScored },
-      { key: "writing", label: "✍️ Writing", count: writing, excludedHere: exWriting },
-      { key: "ready", label: "✅ Ready", count: ready },
+      { key: "new", label: "📥 Found", count: cNew, excludedHere: exNew },
+      { key: "checked", label: "🔍 Checked", count: cChecked, excludedHere: exChecked },
+      { key: "scored", label: "📊 Scored", count: cScored, excludedHere: exScored },
+      { key: "writing", label: "✍️ Writing", count: cWriting, excludedHere: exWriting },
+      { key: "ready", label: "✅ Ready", count: cReady },
     ]
   } else {
-    // Fallback to 2-stage with side-excluded total
-    const found = metricNum(cs, "pipeline_new") ?? metricNum(cs, "positions_analyzed") ?? 0
-    const readyFallback =
+    // ─── 2-stage fallback (Kimi: per-stage exclusion not tracked, only total) ───
+    // Same cascade idea collapsed to 2 stages: Found cum = ready + excluded_total.
+    const readyVal =
       metricNum(cs, "pipeline_ready") ??
       metricNum(cs, "cvs_ready") ??
       metricNum(cs, "applications_sent") ??
       0
-    const excludedTotal = metricNum(cs, "pipeline_excluded_total") ?? undefined
+    const excludedTotal = metricNum(cs, "pipeline_excluded_total") ?? 0
+    const cFound = readyVal + excludedTotal
     stages = [
-      { key: "new", label: "📥 Found", count: found, excludedHere: excludedTotal },
-      { key: "ready", label: "✅ Ready", count: readyFallback },
+      { key: "new", label: "📥 Found", count: cFound, excludedHere: excludedTotal },
+      { key: "ready", label: "✅ Ready", count: readyVal },
     ]
   }
 
   // Annotate each stage with passedForward = count of the NEXT stage.
   // Last (terminal) stage has passedForward = null.
+  // Since this is a cumulative-terminal cascade, by construction:
+  //   passed + excluded == count (no empty/in-flight space inside bars).
   for (let i = 0; i < stages.length; i++) {
     stages[i].passedForward = i < stages.length - 1 ? stages[i + 1].count : null
   }
