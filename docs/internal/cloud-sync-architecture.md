@@ -134,6 +134,21 @@ Vedi sopra "Cosa va in cloud". Trade-off accettati:
 18. **DESIGN CONSTRAINT — Web write su prod (concretizza con visione web-first)**. ✅ Già adottata strategia **C** (tabelle dedicate event log `user_to_agent_messages` + `position_feedback`) nel refactor. Resta da pianificare se domani aggiungeremo write su entità esistenti (es. `positions.status` dal mobile).
 19. **PHASE 3 — VPS live theater channel** (`[JHT-CLOUD-06]`): WebSocket over SSH tunnel. Non passa per Supabase. **Strategico** post visione web-first: abilita chat sub-secondo senza prezzo polling. Browser ha già Realtime (~200ms via Supabase WS); WS over SSH serve solo se vogliamo bypassare Supabase del tutto per VPS↔web.
 
+### 🎨 Web dashboard feature gap (Task #18, #19)
+
+Scoperti durante test E2E refactor 2026-05-25. Dashboard cloud `jobhunterteam.ai/team` mancano 2 feature che funzionano solo su localhost:
+
+20. **P1 — Animazioni pallini inter-agente su cloud (Task #18)**. Su localhost TeamOrgChart anima pallini che passano da un agente all'altro (polling `/api/team/messages` + `/api/team/queue`). Su cloud le animazioni non partono: i dati di comunicazione tmux interna del container non arrivano fino a Supabase. Design:
+   - Nuova tabella `agent_messages` push-friendly (`from_agent`, `to_agent`, `kind`, `at`) OPPURE riuso esteso di `user_to_agent_messages`
+   - Bridge container aggrega sample ogni 30s (cadenza macro-events post-2026-05-20)
+   - Browser: `useAgentMessages` hook Realtime → TeamOrgChart subscriber
+   - **Why**: vision web-first; il browser deve mostrare team "vivo" come localhost
+21. **P1 — Rate Budget chart su cloud (Task #19)**. Il blocco "RATE BUDGET" (UsageChart, UsageTokensChart, AgentTokensChart, ThrottleChart, TokenTypesChart) è vuoto su cloud: `sentinel_ticks` rimosso dal push (`f68a127d` decimazione macro-events 2026-05-20) + endpoint `/api/tokens/*` dipendono da script Python locali. Su Vercel ritornano empty graceful (fix `02e3bcbb`/`8b506a75`) ma niente grafici. Design:
+   - Re-introdurre push sentinel a cadenza bassa (1 sample / 2 min, non 30s pre-decimazione)
+   - Nuova tabella `sentinel_summary` con bucket aggregati (volume gestibile vs incident RobertHalf)
+   - Migrate `/api/tokens/by-agent` `/throttle` `/by-type` da Python → SQL query Supabase
+   - `/api/sentinella/data` cloud branch legge da Supabase invece del file JSONL locale
+
 ## 🔗 Riferimenti
 
 - [project_cloud_sync_direction] (memory) — push-only lockato 2026-05-13
