@@ -71,9 +71,17 @@ export default async function CaseStudiesPage() {
                 subscription buys — multi-week steady-state tests are the next milestone.
               </li>
               <li>
-                <strong>Headline conversion rates can be misleading.</strong> For case study #2
-                (Kimi) we enabled LinkedIn scouting mid-run, which materially changed source
-                quality. The aggregate 22% conversion averages a pre-LinkedIn 17.8% with a
+                <strong>Conversion is computed on positions that reached a terminal decision</strong>{" "}
+                (ready or excluded), not on the total found. A naïve &quot;ready / total found&quot;
+                ratio underestimates the rate because at HALT a fraction of positions is still
+                in-flight (analyzed but not yet scored, scored but not yet written, etc.). The
+                funnel chart shows both the terminal conversion (headline) and the naïve one
+                (subtext) so you can compare.
+              </li>
+              <li>
+                <strong>Headline conversion rates can still be misleading.</strong> For case study
+                #2 (Kimi) we enabled LinkedIn scouting mid-run, which materially changed source
+                quality. The aggregate 22% naïve conversion averages a pre-LinkedIn 17.8% with a
                 post-LinkedIn 26.3% — see the per-phase split inside each case study&apos;s
                 Windows section.
               </li>
