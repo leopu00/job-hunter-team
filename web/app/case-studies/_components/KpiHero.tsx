@@ -9,6 +9,11 @@ type Props = {
 export function KpiHero({ caseStudies }: Props) {
   const totalRuns = caseStudies.length
 
+  const totalWindows = caseStudies.reduce(
+    (sum, cs) => sum + cs.windows.filter((w) => w.kind === "weekly").length,
+    0,
+  )
+
   const totalPositions = caseStudies.reduce(
     (sum, cs) => sum + (metricNum(cs, "positions_analyzed") ?? 0),
     0,
@@ -22,10 +27,14 @@ export function KpiHero({ caseStudies }: Props) {
   const totalProviders = providers.size
 
   const kpis = [
-    { value: totalRuns.toString(), label: "Field tests", sub: "real runs, no synthetic benchmarks" },
-    { value: `~${totalPositions}`, label: "Positions analyzed", sub: "across all runs" },
-    { value: `~${totalReady}`, label: "Ready applications", sub: "CV + critic PASS" },
-    { value: totalProviders.toString(), label: "Providers tested", sub: "Claude, Codex, Kimi tiers" },
+    {
+      value: totalRuns.toString(),
+      label: "Field tests",
+      sub: `across ${totalWindows} weekly cycle${totalWindows === 1 ? "" : "s"}`,
+    },
+    { value: `${totalPositions}`, label: "Positions analyzed", sub: "by the pipeline" },
+    { value: `${totalReady}`, label: "Ready applications", sub: "CV + critic PASS" },
+    { value: totalProviders.toString(), label: "Providers tested", sub: "subscription tiers" },
   ]
 
   return (
@@ -40,8 +49,8 @@ export function KpiHero({ caseStudies }: Props) {
           </h1>
           <p className="mt-3 max-w-2xl text-base text-slate-600">
             What Job Hunter Team has produced on real candidate profiles, with real LLM
-            subscriptions, on real job markets. First-pass data — multi-week tests are the next
-            milestone.
+            subscriptions, on real job markets. We only publish runs we instrumented end-to-end
+            with the same rigor — earlier informal tests are excluded.
           </p>
         </div>
         <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">

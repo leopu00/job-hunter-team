@@ -33,6 +33,25 @@ type NoteRow = {
   display_order: number
 }
 
+type WindowRow = {
+  id: number
+  case_study_id: number
+  window_number: number
+  label: string
+  kind: "weekly" | "phase"
+  parent_window_id: number | null
+  started_at: string | null
+  ended_at: string | null
+  duration_hours: number | null
+  peak_usage_pct: number | null
+  positions_found: number | null
+  ready_cvs: number | null
+  conversion_pct: number | null
+  notes_md: string | null
+  burn_curve_json: string | null
+  display_order: number
+}
+
 type CaseStudyRow = {
   id: number
   slug: string
@@ -126,6 +145,17 @@ export async function GET() {
       )
       .all() as CoverageRow[]
 
+    const windows = db
+      .prepare(
+        `SELECT id, case_study_id, window_number, label, kind, parent_window_id,
+                started_at, ended_at, duration_hours, peak_usage_pct,
+                positions_found, ready_cvs, conversion_pct,
+                notes_md, burn_curve_json, display_order
+         FROM case_study_windows
+         ORDER BY case_study_id ASC, display_order ASC`,
+      )
+      .all() as WindowRow[]
+
     // Pivot children under their parent case-study for easier consumption client-side.
     const metricsByCs = new Map<number, MetricRow[]>()
     for (const m of metrics) {
@@ -141,6 +171,13 @@ export async function GET() {
       notesByCs.set(n.case_study_id, arr)
     }
 
+    const windowsByCs = new Map<number, WindowRow[]>()
+    for (const w of windows) {
+      const arr = windowsByCs.get(w.case_study_id) ?? []
+      arr.push(w)
+      windowsByCs.set(w.case_study_id, arr)
+    }
+
     const out = caseStudies.map((cs) => ({
       ...cs,
       highlighted: Boolean(cs as unknown as { highlighted?: number }),
@@ -149,6 +186,12 @@ export async function GET() {
         highlighted: Boolean(m.highlighted),
       })),
       notes: notesByCs.get(cs.id) ?? [],
+      windows: (windowsByCs.get(cs.id) ?? []).map((w) => ({
+        ...w,
+        burn_curve: w.burn_curve_json
+          ? (JSON.parse(w.burn_curve_json) as Array<{ t: string; w: number }>)
+          : null,
+      })),
     }))
 
     return NextResponse.json({
@@ -159,6 +202,7 @@ export async function GET() {
         total_published: caseStudies.length,
         total_metrics: metrics.length,
         total_notes: notes.length,
+        total_windows: windows.length,
         total_coverage_cells: coverage.length,
         coverage_done: coverage.filter((c) => c.status === "done").length,
       },
