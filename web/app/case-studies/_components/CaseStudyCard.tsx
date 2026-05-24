@@ -101,7 +101,7 @@ export function CaseStudyCard({ cs }: Props) {
         })}
       </div>
 
-      <WindowsSection windows={cs.windows} accentColor={accent} />
+      <WindowsSection windows={cs.windows ?? []} accentColor={accent} />
     </article>
   )
 }

@@ -10,7 +10,7 @@ export function KpiHero({ caseStudies }: Props) {
   const totalRuns = caseStudies.length
 
   const totalWindows = caseStudies.reduce(
-    (sum, cs) => sum + cs.windows.filter((w) => w.kind === "weekly").length,
+    (sum, cs) => sum + (cs.windows ?? []).filter((w) => w.kind === "weekly").length,
     0,
   )
 
