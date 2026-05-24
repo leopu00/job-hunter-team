@@ -25,7 +25,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
@@ -33,6 +33,12 @@ import pc from 'picocolors';
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
+// Gate locale "team-halted": creato dal reconciler quando applica stop,
+// cancellato quando applica start. agent-watchdog, doctor-watchdog,
+// pid1 auto-start e jht team start lo controllano per rispettare la
+// decisione utente. Semantica distinta da .weekly-halt.flag (= limite
+// rate budget weekly). Source of truth: team_state.should_run.
+const TEAM_HALTED_FLAG = join(JHT_HOME, '.team-halted.flag');
 const JHT_BIN = '/app/cli/bin/jht.js';
 
 const POLL_INTERVAL_MS = 5000;
@@ -104,7 +110,25 @@ function execJht(args) {
 }
 
 async function applyAction(baseUrl, token, command, args) {
+  // Gate centrale .team-halted.flag: cancello PRIMA di start (così
+  // watchdog/spawner possono partire) e creo DOPO stop (così watchdog
+  // smette di respawn). Ordine importante: il flag deve essere coerente
+  // con lo stato che stiamo per applicare nel container.
+  if (command === 'started' || command === 'restarted') {
+    try { await unlink(TEAM_HALTED_FLAG); } catch { /* not present */ }
+  }
   const r = await execJht(args);
+  if (command === 'stopped' && r.ok) {
+    try {
+      await writeFile(
+        TEAM_HALTED_FLAG,
+        `halted_by=team-state-reconciler\nat=${new Date().toISOString()}\n`,
+        { mode: 0o644 }
+      );
+    } catch (err) {
+      log('warn', 'team-halted-flag write failed', { err: err.message });
+    }
+  }
   const updates = {
     last_action: command,
     last_action_at: new Date().toISOString(),
