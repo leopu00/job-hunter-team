@@ -135,7 +135,7 @@ INSERT INTO case_study_metrics (case_study_id, metric_key, metric_label, value_n
 -- Pipeline (note: numbers here are for the SECOND weekly window, the only one with full telemetry)
 (2, 'positions_analyzed',       'Job offers analyzed',         251,  '251 (2nd weekly window only — 1st not telemetered)',                'count','🎯','pipeline', 10, 1),
 (2, 'companies_vetted',         'Companies vetted',            178,  '178 (158 GO / 20 CAUTIOUS / 0 NO_GO)',                              'count','✅','pipeline', 20, 0),
-(2, 'cvs_ready',                'Applications written (PASS)', 56,   '56 (22% avg — but see pre/post LinkedIn windows below)',            'count','📄','pipeline', 30, 1),
+(2, 'cvs_ready',                'Applications written (PASS)', 55,   '55 (22% avg — but see pre/post LinkedIn windows below; status at cutoff)','count','📄','pipeline', 30, 1),
 (2, 'applications_submitted',   'Applications submitted',      0,    '0 (by-design — user-curated)',                                       'count','📤','pipeline', 40, 0),
 -- Quality
 (2, 'critic_pass_rate',         'Critic pass rate',            51.4, '51.4% (55 PASS / 51 REJECT)',                                        '%',  '📈','quality',  10, 1),
@@ -150,15 +150,25 @@ INSERT INTO case_study_metrics (case_study_id, metric_key, metric_label, value_n
 -- Timing
 (2, 'velocity_pct_h',           'Bridge velocity',             5.37, '5.37%/h (2× faster than Codex 2.7%/h)',                              '%/h','⚡','timing',   10, 0),
 (2, 'hours_of_user_time',       'Hours of user time',          1,    '<1h setup + occasional monitoring (autonomous)',                      'h',  '🧠','timing',   20, 0),
--- Pipeline stage breakdown (Kimi: state-transitions only cover post-fix#14, so we use final status for the totals)
-(2, 'pipeline_new',             'Stage: new (total found)',    251,  '251 positions discovered',                                           'count','📥','pipeline',100,0),
-(2, 'pipeline_ready',           'Stage: ready',                56,   '56 CV+critic PASS',                                                  'count','✅','pipeline',101,0),
-(2, 'pipeline_excluded_total',  'Excluded total',              164,  '164 (65.3% of pool — high noise from non-LinkedIn sources)',          'count','❌','pipeline',102,0),
+-- Pipeline stage breakdown — Kimi 5-stage cascade (status reconstructed at cutoff 2026-05-20 00:00 UTC).
+-- Caveat: bug #14 (state_transitions logging) was fixed mid-run on 17/05 17:11 UTC.
+-- 83 positions excluded BEFORE the fix have no per-stage transition log and are
+-- conservatively attributed to 'excluded_at_new' (= exclusion during scouting).
+(2, 'pipeline_new',             'Stage: new (cumulative terminal)', 218, '218 reached a terminal decision',                                'count','📥','pipeline',100,0),
+(2, 'pipeline_checked',         'Stage: checked',              117,  '117 made it past triage',                                            'count','🔍','pipeline',101,0),
+(2, 'pipeline_scored',          'Stage: scored',                96,  '96 reached scoring',                                                 'count','📊','pipeline',102,0),
+(2, 'pipeline_writing',         'Stage: writing',               93,  '93 assigned to a Writer',                                            'count','✍️','pipeline',103,0),
+(2, 'pipeline_ready',           'Stage: ready',                 55,  '55 CV + critic PASS',                                                'count','✅','pipeline',104,0),
+(2, 'pipeline_excluded_at_new',     'Excluded at scouting',    101, '101 (18 tracked + 83 pre-bug#14-fix aggregated)',                     'count','✂️','pipeline',110,0),
+(2, 'pipeline_excluded_at_checked', 'Excluded after checking',  21,  '21 (failed Analista pre-check)',                                      'count','✂️','pipeline',111,0),
+(2, 'pipeline_excluded_at_scored',  'Excluded after scoring',    3,  '3 (score too low)',                                                  'count','✂️','pipeline',112,0),
+(2, 'pipeline_excluded_at_writing', 'Excluded in writing',      38,  '38 (Critic rejection)',                                              'count','✂️','pipeline',113,0),
+(2, 'pipeline_excluded_total',  'Excluded total',              163, '163 (65% of decided pool)',                                           'count','❌','pipeline',114,0),
 -- Source breakdown (Kimi only — LinkedIn enabled mid-run is a key insight)
 (2, 'source_linkedin_total',    'LinkedIn positions found',    124,  '124 (LinkedIn enabled at 17/05 21:35 UTC)',                          'count','💼','pipeline',120,0),
 (2, 'source_linkedin_ready',    'LinkedIn → ready',            34,   '34 PASS (27.4% conversion on LinkedIn-sourced)',                     'count','💼','pipeline',121,0),
 (2, 'source_other_total',       'Other-source positions',      127,  '127 (websearch + Greenhouse + Lever + CompanyOK)',                    'count','🔗','pipeline',122,0),
-(2, 'source_other_ready',       'Other-source → ready',        22,   '22 PASS (17.3% conversion on non-LinkedIn)',                         'count','🔗','pipeline',123,0);
+(2, 'source_other_ready',       'Other-source → ready',        21,   '21 PASS (16.5% conversion on non-LinkedIn)',                         'count','🔗','pipeline',123,0);
 
 INSERT INTO case_study_notes (case_study_id, note_type, body_md, display_order) VALUES
 (2, 'worked',     '**Token-based provider sustains long runs** — Kimi has no weekly cap; the team consumed ~1.8 weekly cycles cumulatively (first window ~80% peak, second window 100%).', 10),
@@ -183,13 +193,13 @@ INSERT INTO case_study_windows (id, case_study_id, window_number, label, kind, p
  10),
 (11, 2, 2, 'Second weekly window — full telemetry', 'weekly', NULL,
  '2026-05-16 17:19:00', '2026-05-19 01:26:00', 56.1, 100,
- 251, 56, 22.3,
- 'Hit the weekly cap (100%) on day 4. This window contains the LinkedIn enablement event around 2026-05-17 21:35 UTC, which materially changed the conversion rate. See the two phase rows below.',
+ 251, 55, 21.9,
+ 'Hit the weekly cap (100%) on day 4. This window contains the LinkedIn enablement event around 2026-05-17 21:35 UTC, which materially changed the conversion rate. See the two phase rows below. *Counts reconstructed at cutoff 2026-05-20 00:00 UTC.*',
  NULL,
  20),
 (12, 2, 1, 'Phase: Pre-LinkedIn enable', 'phase', 11,
  '2026-05-16 17:19:00', '2026-05-17 21:35:00', 28.3, NULL,
- 118, 21, 17.8,
+ 118, 20, 16.9,
  'Scouts limited to websearch + curated boards (Greenhouse, Lever, CompanyOK). High noise → low conversion. **~2/10 positions made it through** — matches the maintainer''s real-time impression.',
  NULL,
  21),
