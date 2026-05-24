@@ -48,8 +48,12 @@ function CaseFunnel({ cs }: { cs: CaseStudy }) {
   const decidedTotal = stages[0]?.count ?? 0
   const ready = stages[stages.length - 1]?.count ?? 0
   const excludedTotal = metricNum(cs, "pipeline_excluded_total") ?? 0
+  // For the "raw found in the run" count, prefer the un-cascaded total
+  // (positions_analyzed) when available. pipeline_new may be the cumulative-terminal
+  // count of the cascade (which IS the funnel's top stage) and would understate the
+  // raw total for VPSes where in-flight positions exist.
   const rawFound =
-    metricNum(cs, "pipeline_new") ?? metricNum(cs, "positions_analyzed") ?? decidedTotal
+    metricNum(cs, "positions_analyzed") ?? metricNum(cs, "pipeline_new") ?? decidedTotal
   const inFlight = Math.max(0, rawFound - decidedTotal)
   const terminalConv =
     decidedTotal > 0 ? (ready / decidedTotal) * 100 : 0
