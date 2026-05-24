@@ -19,6 +19,26 @@ export type Note = {
   display_order: number
 }
 
+export type BurnCurvePoint = { t: string; w: number }
+
+export type Window = {
+  id: number
+  window_number: number
+  label: string
+  kind: "weekly" | "phase"
+  parent_window_id: number | null
+  started_at: string | null
+  ended_at: string | null
+  duration_hours: number | null
+  peak_usage_pct: number | null
+  positions_found: number | null
+  ready_cvs: number | null
+  conversion_pct: number | null
+  notes_md: string | null
+  burn_curve: BurnCurvePoint[] | null
+  display_order: number
+}
+
 export type CaseStudy = {
   id: number
   slug: string
@@ -36,6 +56,7 @@ export type CaseStudy = {
   duration_label: string | null
   metrics: Metric[]
   notes: Note[]
+  windows: Window[]
 }
 
 export type CoverageCell = {
@@ -54,6 +75,7 @@ export type Payload = {
     total_published: number
     total_metrics: number
     total_notes: number
+    total_windows: number
     total_coverage_cells: number
     coverage_done: number
   }
