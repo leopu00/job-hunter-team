@@ -83,11 +83,38 @@ CREATE TABLE IF NOT EXISTS coverage_matrix (
 
 CREATE INDEX IF NOT EXISTS idx_cov_status ON coverage_matrix(status, display_order);
 
+-- Per-study windows: a single run can span N weekly budget windows, and a window
+-- itself can be split into "phases" when something material changed mid-run
+-- (e.g. a new source/skill was enabled).
+CREATE TABLE IF NOT EXISTS case_study_windows (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_study_id   INTEGER NOT NULL,
+  window_number   INTEGER NOT NULL,                             -- 1, 2, 3 ...
+  label           TEXT NOT NULL,                                -- "First weekly window" | "Pre-LinkedIn phase"
+  kind            TEXT NOT NULL,                                -- 'weekly' | 'phase'
+  parent_window_id INTEGER,                                      -- non-null when this row is a phase inside a weekly window
+  started_at      TIMESTAMP,
+  ended_at        TIMESTAMP,
+  duration_hours  DECIMAL,
+  peak_usage_pct  DECIMAL,                                      -- peak weekly budget used during this window/phase
+  positions_found INTEGER,
+  ready_cvs       INTEGER,
+  conversion_pct  DECIMAL,                                      -- ready / positions_found * 100
+  notes_md        TEXT,
+  burn_curve_json TEXT,                                         -- optional sparkline data: [{ts, weekly_usage_pct}]
+  display_order   INTEGER DEFAULT 0,
+  FOREIGN KEY (case_study_id) REFERENCES case_studies(id) ON DELETE CASCADE,
+  FOREIGN KEY (parent_window_id) REFERENCES case_study_windows(id) ON DELETE CASCADE,
+  CHECK (kind IN ('weekly','phase'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_csw_case ON case_study_windows(case_study_id, display_order);
+
 -- Schema version stamp (for future migrations)
 CREATE TABLE IF NOT EXISTS schema_meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
 
-INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('version', '1');
+INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('version', '2');
 INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('created_at', CURRENT_TIMESTAMP);

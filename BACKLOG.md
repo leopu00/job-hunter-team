@@ -289,6 +289,19 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Linked**: [JHT-WRITER-ON-DEMAND] (sopra) sblocca anche questa misurazione perché senza writer-spawn-burst il rate aggregato resta naturalmente sotto soglia.
 - **Side bug da fix**: `token-meter.csv` non è durable cross container restart (verificato su VPS Kimi 2026-05-23, file resettato sul restart, 35 righe vs 10752 di Codex). Da rendere durable con append-mode + rotazione invece di overwrite.
 
+##### 🩺 [JHT-DOCTOR-DAILY-RESTART] Dottori riavviano ogni agente almeno 1×/giorno per context freshness ⬜ 🟠 HIGH
+
+- **Background scoperto durante Codex run 2026-05-19/21** (Case Study #1 nella pagina pubblica): a un certo punto gli agenti del team non venivano più riavviati automaticamente dai Dottori, restavano in idle con contesto vecchio di ore. Il maintainer ha dovuto fare 1 intervento manuale: missione esplicita ai Dottori per riavviare tutto il team. Ogni agente al riavvio prende un contesto fresco e ricostruisce lo stato del team in autonomia (basta guardare DB + handoff snapshot + leggersi qualche messaggio recente).
+- **Premise architetturale**: anche senza una "context window" esplicita visibile (es. Codex non la mostra come Claude/Kimi), una sessione fresca di N minuti **è sempre meglio** di una sessione che gira da ore. Drift di prompt, accumulazione di "rumore" nel ragionamento, dimenticanze, decisioni che si rifanno a fatti vecchi non più validi. Esempio empirico: Codex run del 19-21/05 ha mostrato decisioni progressivamente meno lucide nelle ore finali → il restart manuale ha riportato il team a comportamento netto.
+- **Soluzione proposta**:
+  1. **Nuova rule per il Dottore**: ogni 24h (o ad intervallo configurabile, default 24h), eseguire una mass-restart wave del team. Ordine: tier 3 (Scrittori/Critico/Scout) → tier 2 (Analista/Scorer) → tier 1 (Capitano/Sentinella/Mentor). Skip se l'agente è stato riavviato negli ultimi N ore (anti-thrash).
+  2. **Pre-restart snapshot**: ogni agente scrive `~/.jht/<agent>-pre-respawn-snapshot.txt` con stato corrente + "cosa stavo facendo" + "prossimo step" → post-restart il nuovo processo legge e riprende.
+  3. **Capitano notification**: il Dottore informa il Capitano della prossima wave 10min prima (così non spawna nuove task short-lived che vengono interrotte).
+  4. **Config**: `~/.jht/preferences.json` → `doctor.daily_restart_enabled: true`, `doctor.daily_restart_hour: "03:00"` (low-activity window default), `doctor.daily_restart_min_uptime_hours: 6` (skip se appena restartato).
+- **Vantaggi misurabili attesi**: meno token consumati per task ripetitive ben note (perché agente riconosce ridondanza), meno errori di drift, meno necessità di intervento utente manuale.
+- **Acceptance**: dopo 1 settimana di Codex run con questa feature attiva, confrontare metriche (positions/h, critic pass rate, errori loggati, intervento utente count) vs Case Study #1 (1 restart manuale) → deve mostrare miglioramento o almeno non-regressione, senza richiedere intervento utente.
+- **Linked**: chiude il gap segnalato in `docs/about/RESULTS.md` Case Study #1 note "Future runs will have doctors auto-restart every agent at least once per day for context freshness".
+
 ##### 🧪 [JHT-COST-VALIDATION-PAYG-VS-SUB] Validazione cost — €40 di token Kimi pay-per-use vs €40 sub mensile ⬜ 🟡 MEDIUM
 
 - **Background**: Case Study #3 (Kimi €40 sub, 4 giorni run, 1.61B tokens all-in) ha **stimato** che pay-per-use sarebbe stato ~€78. Conferma il "mass-market jackpot" di Kimi ma è una stima da listino, non misurazione diretta.
