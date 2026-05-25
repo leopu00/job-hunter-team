@@ -26,7 +26,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 - 🐳 Container runtime = Docker + Docker Compose
 - ⌨️ CLI **driveable by AI agents** (Claude Code, 🦞 OpenClaw, Codex, Cursor) — USP
 - 💬 **Telegram** — 3-bot setup shipped 2026-05-13 (Assistente + Capitano + Mentor, all mandatory in onboarding); roadmap: per-agent 1:1 chat + "team forum" channel where the user can join the whole team's conversation
-- 🧙‍♂️ **Mentor** career-coach agent (planned) — see [`docs/about/VISION.md`](docs/about/VISION.md)
+- 🧙‍♂️ **Mentor** career-coach agent (shipped 2026-05-13, runtime `.launcher/start-agent.sh`) — see [`docs/about/VISION.md`](docs/about/VISION.md)
 
 ---
 
@@ -61,7 +61,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 
 ### 🤖 Team & monitoring (post 04-11)
 
-- ✅ **8-agent team** (Captain + Sentinel + Scout + Analyst + Scorer + Writer + Critic + Assistant) **+ 🧙‍♂️ Mentor (planned)**
+- ✅ **9-agent team** (Captain + Sentinel + Scout + Analyst + Scorer + Writer + Critic + Assistant + 🧙‍♂️ Mentor) — Mentor shipped 2026-05-13 con 9 skills (chat-web, telegram-send, notify-user, user-reply-check, tmux-send, db-query, mentor-patterns, mentor-output, spawn-doctor)
 - ✅ **📡 Bridge** as separate role (`sentinel-bridge.py` clock-only daemon)
 - ✅ **Monitoring V5** (Bridge → Sentinel event-driven → Captain autonomous, multi-source)
 - ✅ Sentinel refactor (491→130 lines + 6 on-demand skills: `check_usage_http/tui`, `decision_throttle`, `emergency_handling`, `memory_state`, `order_formats`)
@@ -158,6 +158,28 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Done:** `local-queries.ts` esiste e funziona ([`web/lib/local-queries.ts`](web/lib/local-queries.ts), commit `cc52acca` ha esteso il fallback).
 - **Pending:** `web/lib/queries.ts` deve switchare su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx` per consumi residui.
 - **Priority:** 🟡 P1 (privacy-first feature + sblocca path Local PC mode senza touch Supabase).
+
+##### 🚦 [INFRA-VERCEL-QUOTA] Vercel quota exhaustion — sostenibilità post-incident 2026-05-22 🟢 quasi tutto done
+
+- **Incident:** `jobhunterteam.ai` offline (HTTP 402) per quota Hobby exhausted: Fast Origin Transfer 305%, Fluid CPU 149%, Function Invocations 120% (vedi [`docs/internal/2026-05-22-vercel-quota-exhaustion.md`](docs/internal/2026-05-22-vercel-quota-exhaustion.md)).
+- **Stato implementazione:**
+  - ✅ **Push delta-only** (commit `690534e0`, 2026-05-22) — riduce upload ~95% via cursor `updated_at`
+  - ✅ **Dashboard polling adattivo** ([`web/components/AgentInteraction.tsx:87`](web/components/AgentInteraction.tsx)): 1500ms fissi → backoff esponenziale 1.5s→20s + pausa quando `visibilityState !== 'visible'`. Stessa logica in `ProfileAssistantFab.tsx`.
+  - ✅ **Pause cloud-sync durante HALT-WEEKLY** ([`cli/src/commands/cloud.js:877`](cli/src/commands/cloud.js)): guard `WEEKLY_HALT_FLAG` salta `handlePush` quando file presente, log ogni 10 skip.
+  - ⬜ **Vercel spending limit alert** — config dashboard 50/80/95% sulle 3 metriche critiche (10 min, una tantum).
+  - ⬜ **CV PDF su Cloudflare R2/Backblaze B2** — solo se PDF download torna a essere quota di rilievo (1 giorno dev).
+- **Rilevanza beta forum:** la doc dice esplicitamente "non siamo pronti per beta forum pubblica finché push daemon e dashboard polling non sono fixati" — i due fix critici sono ora ✅, manca solo l'alert preventivo.
+- **Priority:** 🟢 LOW (lavoro critico già completato, residuo è alert + opzionale R2 migration).
+
+##### 🗄️ [INFRA-SUPABASE-PERF] Supabase advisor findings — 40+ items (P0 done)
+
+- **Source:** [`docs/internal/2026-05-20-supabase-perf-backlog.md`](docs/internal/2026-05-20-supabase-perf-backlog.md) — 40+ findings da `get_advisors`.
+- **Stato implementazione:**
+  - ✅ **P0 — `auth_rls_initplan` × 24 occorrenze** (migration `018_rls_init_plan_fix.sql` + commit `2b78fdd9`, 2026-05-22) — 24 policy migrate da `auth.uid()` per-row a `(select auth.uid())`. Chiude advisor critical, impatto plausibile sull'incident del 2026-05-19.
+  - ⬜ **P1 — `unindexed_foreign_keys` × 9 occorrenze** (INFO). Migration `018_fk_indexes.sql` proposta nel doc ma mai applicata (slot 018 preso da init plan fix). Da emettere come `024_fk_indexes.sql` idempotente con `IF NOT EXISTS`.
+  - ⬜ **P2 — `unused_index` × 7 occorrenze** (INFO). Da droppare con migration dedicata; richiede verifica `pg_stat_user_indexes` lato Supabase prima del drop.
+  - ⬜ **P2 — `auth_db_connections_absolute` × 1** (INFO). Monitor connection pool, no action immediato.
+- **Priority:** 🟡 P1 per le FK indexes (impatto query planner), 🟢 LOW per unused index drop (no impact correttezza, solo storage/maintenance).
 
 ##### 🟡 [JHT-MONITORING-WEEKLY] Weekly window calibration — data-layer DONE 2026-05-19
 

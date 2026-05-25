@@ -413,11 +413,11 @@ The 3-cwd test on `~/Desktop/skill-isolation-test/` (with `CLAUDE.md` + `AGENTS.
 
 Each session is sent the same prompt (*"list all skills you currently have available"*), and panes are captured with `tmux capture-pane -t <session> -p`. The expected outcome with the launcher-distribution model: every agent reports `_global/* + <its role>/*` and nothing else.
 
-### 🧙‍♂️ Mentor — career-coach agent (planned)
+### 🧙‍♂️ Mentor — career-coach agent (shipped 2026-05-13)
 
-The most important agent we haven't built yet. Stands outside the operational pipeline, looks at career trajectory + market signals + user goals, gives strategic advice.
+Strategic agent outside the operational pipeline — looks at career trajectory + market signals + user goals, gives strategic advice. Spawned by `.launcher/start-agent.sh` as user-facing always-on (priority `MENTOR|high|`) alongside Assistente and Capitano. Routed via tg-bridge per role.
 
-→ Spec in [`agents/mentor/mentor.md`](../../agents/mentor/mentor.md). See [`docs/VISION.md`](VISION.md) for the rationale.
+→ Spec in [`agents/mentor/mentor.md`](../../agents/mentor/mentor.md). See [`docs/VISION.md`](VISION.md) for the rationale. Residual: additional Mentor-specific skills tracked under `[JHT-MENTOR-SKILLS]` in BACKLOG.
 
 ### 🗄️ Database schema optimization (priority)
 
