@@ -5,7 +5,7 @@ for the launch). The recording itself isn't checked in here — this file is
 the shot list, the asciinema script that drives it, and the embed plan for
 the README and the Show HN post.
 
-Recording owner: Leone (only person with the live `jht` install + the demo
+Recording owner: maintainer (only person with the live `jht` install + the demo
 SQLite snapshot). Reviewer: anyone on the team who's seen the dashboard run.
 
 ## Why 30 seconds, not 90
