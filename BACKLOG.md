@@ -254,6 +254,23 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - Companies rubric Analista: 0 NO_GO su 357 companies totali tra 2 run → rubric troppo permissivo, hard requirements (degree, geo) non filtrati upfront
   - Writer attribution null 93% su Codex run → `written_by` field non popolato consistente
 
+##### 📊 [JHT-CASE-STUDIES-WEB] Pagina pubblica /case-studies — sessione 23-25/05 done, residui pre-launch ⬜ 🟠 HIGH
+
+- **Stato 2026-05-25:** infrastructure completa, pagina navigabile su `localhost:3001/case-studies`. Schema DB (`web/data/case-studies/schema.sql` v2), seed populato (`seed.sql`), API route (`/api/case-studies` via `node:sqlite`), 9 componenti UI in `web/app/case-studies/_components/`. Toolkit estrazione VPS in `tools/case-study-extract/` con snapshot pulito di entrambe le VPS (89.7 MB zip in `~/jht-case-study-data/`). Funnel 5-stage cascade per Codex + Kimi, 2 mini-funnel Pre/Post LinkedIn per Kimi, source breakdown, coverage matrix, CTA. Profili anonimizzati come "Beta tester 1/2".
+- **Documentazione completa di handoff:** [`docs/internal/2026-05-25-case-studies-page-handoff.md`](docs/internal/2026-05-25-case-studies-page-handoff.md) (stato, decisioni viz, todo prioritizzato, file map, workflow iterazione, lesson learned).
+- **🔴 Bloccanti per publish-ready:**
+  1. **Migrazione Supabase** del schema + dati (schema gia' SQL-compatible, serve solo convertire AUTOINCREMENT→SERIAL e fix RLS). Migrazione API route da `node:sqlite` a Supabase client.
+  2. **Link `/case-studies` nel nav** principale del sito (header + footer).
+  3. **SEO meta + Open Graph image** dedicate (`metadata` export gia' minimal).
+  4. **Mobile responsive check** (PipelineFunnel full-width stretto su 375px viewport).
+- **🟠 Cleanup dati:**
+  - Hero KPI ricalcolare al cutoff (165 → 160 ready dopo cvs_ready Kimi 56→55).
+  - RESULTS.md vs DB seed drift: Kimi numbers da allineare (cvs_ready, excluded, conversion).
+  - Codex sessions (432 rollout-*.jsonl) extracted ma non aggregate per token attribution.
+- **🟡 Feature opzionali:** secondo grafico "team efficiency" (held-back/in-flight per stage), burn sparkline anche per Kimi, domain breakdown Codex, per-day timeline, critic score distribution histogram.
+- **🟢 Operativo:** shutdown VPS Hetzner (€19.50/mo combinati per 2 CPX22 ferme). Investigare auto-restart container Kimi (osservato 2× durante sessione).
+- **🐛 Bug minori funnel:** labels phase troncati su viewport stretti, legend duplicata Codex+Kimi, Pre-LinkedIn funnel "distorto" da 84 untracked.
+
 ##### ✍️ [JHT-WRITER-ON-DEMAND] Scrittore + Critico spawn SOLO su selezione utente esplicita ⬜ 🔴 URGENTE pre-next-test
 
 - **Background scoperto da case study #2/#3 (2026-05-23)**: gli Scrittori sono i top consumer di token del team (spawn 3-round + Critico che a sua volta consuma per leggere CV+JD+scrivere critica). Il Critico è concettualmente "fuori dal team" (spawnato dallo Scrittore) ma il suo consumo dovrebbe essere attribuito allo Scrittore per i calcoli di throttling del Capitano. Inoltre molti CV scritti finiscono in `ready` senza che l'utente li voglia davvero → token bruciati su posizioni che l'utente non applierà mai. Su VPS Codex: 105 ready ma applied=0; su VPS Kimi: 56 ready ma applied=0.
