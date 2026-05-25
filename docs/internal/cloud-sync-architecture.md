@@ -149,6 +149,26 @@ Scoperti durante test E2E refactor 2026-05-25. Dashboard cloud `jobhunterteam.ai
    - Migrate `/api/tokens/by-agent` `/throttle` `/by-type` da Python → SQL query Supabase
    - `/api/sentinella/data` cloud branch legge da Supabase invece del file JSONL locale
 
+### 💰 Risparmio token + 🎯 Feedback loop ricco (Task #20, #21)
+
+Discovered 2026-05-25. Pattern: dare all'utente più controllo + segnali per orientare team senza accendere agenti. Stesso DNA del CV writer toggle.
+
+22. **P1 — Geocoding location opt-in/out per posizione (Task #20)**. Sim dev2 (sim-1/2/3) mostra che geocoding precise sull'ufficio popola bene `/map` ma costa molto agli analisti. Servono 3 modes:
+   - **ALL**: ogni position riceve geocoding (default off, costoso)
+   - **NONE**: zero geocoding (default safe)
+   - **SELECTIVE**: utente fa spunta per-position
+   - Backend: `positions.geocode_requested BOOLEAN`, analista legge prima di partire
+   - Pattern: stesso del "scrittore on/off per CV" (esistente)
+   - Compatibile con feedback loop (#21): "scaduta/non interessante" → no geocode
+23. **P1 — Feedback loop utente esteso (Task #21, estende #4)**. Vector vario per orientare scout/scorer:
+   - **Sentimento qualitativo** (1 click): like, dislike, interesting, expired, out_of_budget, wrong_location
+   - **Commento libero** (testo)
+   - **Punteggio** 1-10 opzionale
+   - **Direzionale**: more_like_this / less_like_this → scout cerca simili/evita
+   - Schema: estende `position_feedback` (mig 019) con `comment`, `score`, `direction`
+   - Capitano/Scout/Scorer leggono via Realtime + integrano nelle decisioni
+   - **Why**: web-first vision → l'utente dà valore senza consumare token AI
+
 ## 🔗 Riferimenti
 
 - [project_cloud_sync_direction] (memory) — push-only lockato 2026-05-13
