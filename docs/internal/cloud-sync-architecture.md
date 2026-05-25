@@ -100,7 +100,7 @@ Vedi sopra "Cosa va in cloud". Trade-off accettati:
 
 ### ⬜ Pending (in ordine di priorità)
 
-1. ~~**P0 — Refactor `team_commands` → `team_state` desired-state**~~ ✅ **DONE 2026-05-23** (mig 019/020/021/022/023, commit `627e7ab5...e6420371`). Single-team enforcement runtime completo (claim 409 + push 409 + PATCH 409 + reconciler retry + CLI preflight). `team_commands` ancora vivo in parallelo per cutover graduale → vedi Step 5/6.
+1. ~~**P0 — Refactor `team_commands` → `team_state` desired-state**~~ ✅ **DONE 2026-05-23** (mig 019/020/021/022/023, commit `627e7ab5...e6420371`). Single-team enforcement runtime completo (claim 409 + push 409 + PATCH 409 + reconciler retry + CLI preflight). `team_commands` ancora vivo in parallelo per cutover graduale → vedi Step 5/6. Originally motivato dalla visione web-first del maintainer.
 2. **P0 — SQLite locale: replicare CHECK constraint di Postgres** (`location ≤ 200`, `title ≤ 500`, `company ≤ 300`). Migration `cli/migrations/006_positions_check_constraints.sql`. Lo scout vedrà errore subito, non a valle. *Origin: incident root cause.*
 3. **P0 — RLS init plan fix** (24 policy con `auth.uid()` per row). Migration dedicata (non 017 che è geocoding). Ortogonale alla decimazione: senza, anche cloud "leggero" paga `O(N×K)` sotto carico.
 4. **P0 — DELETE propagation con tombstone**. Il push è solo UPSERT: una riga cancellata in SQLite locale (`web/app/api/cloud-sync/push/route.ts:338`, `cli/src/commands/cloud.js:490-510`) **non viene mai comunicata a Supabase** e resta ghost in cloud per sempre. Componenti:
