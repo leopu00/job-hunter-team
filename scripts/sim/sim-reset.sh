@@ -57,9 +57,10 @@ UPDATE positions SET
   loc_country=NULL, loc_country_code=NULL, loc_continent=NULL,
   work_mode=NULL, work_country=NULL, work_country_code=NULL,
   is_multi_location=0, location_notes=NULL,
+  office_lat=NULL, office_lon=NULL, office_address=NULL,
+  office_geocoded=0, office_verified=0,
   last_actor=NULL, last_checked=NULL, notes=NULL,
   status='new'
--- office_* sono solo su Supabase prod, non in questo SQLite
 ''')
 for t in ['position_state_transitions','position_highlights','scores',
           'applications','companies','pending_user_messages']:

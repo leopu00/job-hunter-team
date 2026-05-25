@@ -56,6 +56,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_length_constraints(conn)
     _migrate_positions_role_family(conn)
     _migrate_positions_structured_location(conn)
+    _migrate_positions_office_geocoding(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +113,11 @@ def ensure_schema(conn: sqlite3.Connection):
         work_country_code TEXT,
         is_multi_location INTEGER DEFAULT 0,
         location_notes TEXT,
+        office_lat REAL,
+        office_lon REAL,
+        office_address TEXT,
+        office_geocoded INTEGER DEFAULT 0,
+        office_verified INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         -- Length guardrails: mirror dei CHECK constraint Postgres (mig 015).
@@ -797,6 +803,30 @@ def _migrate_positions_structured_location(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_loc_continent "
         "ON positions(loc_continent) WHERE loc_continent IS NOT NULL"
+    )
+
+
+def _migrate_positions_office_geocoding(conn: sqlite3.Connection) -> None:
+    """Aggiunge le 5 colonne office_* per office geocoding precise.
+
+    Vedi skill `agents/_skills/office-geocoding/SKILL.md`. Mirror delle
+    colonne Supabase prod (già esistenti lì pre-2026-05).
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('office_lat',       'REAL'),
+        ('office_lon',       'REAL'),
+        ('office_address',   'TEXT'),
+        ('office_geocoded',  'INTEGER DEFAULT 0'),
+        ('office_verified',  'INTEGER DEFAULT 0'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_office_geocoded "
+        "ON positions(office_geocoded) WHERE office_geocoded = 1"
     )
 
 
