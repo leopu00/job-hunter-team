@@ -71,14 +71,24 @@ def import_seed():
                    salary_estimated_source,
                    url, source, jd_text, requirements,
                    found_by, found_at, deadline,
-                   status, notes)
+                   status, notes,
+                   role_family,
+                   loc_city, loc_region, loc_country, loc_country_code, loc_continent,
+                   work_mode, work_country, work_country_code,
+                   is_multi_location, location_notes,
+                   office_lat, office_lon, office_address, office_geocoded, office_verified)
                 VALUES (?, ?, ?, ?,
                         ?, ?, ?,
                         ?, ?, ?,
                         ?,
                         ?, ?, ?, ?,
                         ?, ?, ?,
-                        ?, ?)
+                        ?, ?,
+                        ?,
+                        ?, ?, ?, ?, ?,
+                        ?, ?, ?,
+                        ?, ?,
+                        ?, ?, ?, ?, ?)
             """, (
                 r.get('title'), r.get('company'), r.get('location'), r.get('remote_type'),
                 r.get('salary_declared_min'), r.get('salary_declared_max'), r.get('salary_declared_currency'),
@@ -87,6 +97,12 @@ def import_seed():
                 url, r.get('source'), r.get('jd_text'), r.get('requirements'),
                 r.get('found_by'), r.get('found_at'), r.get('deadline'),
                 r.get('status', 'new'), r.get('notes'),
+                r.get('role_family'),
+                r.get('loc_city'), r.get('loc_region'), r.get('loc_country'), r.get('loc_country_code'), r.get('loc_continent'),
+                r.get('work_mode'), r.get('work_country'), r.get('work_country_code'),
+                1 if r.get('is_multi_location') else 0, r.get('location_notes'),
+                r.get('office_lat'), r.get('office_lon'), r.get('office_address'),
+                1 if r.get('office_geocoded') else 0, 1 if r.get('office_verified') else 0,
             ))
             inserted += 1
         except sqlite3.IntegrityError as e:
