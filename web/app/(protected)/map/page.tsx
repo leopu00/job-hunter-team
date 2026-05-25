@@ -15,8 +15,9 @@ import {
   getDemoDashboardData,
   isDashboardDemoMode,
 } from "@/lib/dashboard-demo";
-import CloudDownloadLanding from "@/app/components/CloudDownloadLanding";
-import VpsSetupCompleteLanding from "@/app/components/VpsSetupCompleteLanding";
+// 2026-05-25 merge dev1+dev2: CloudDownloadLanding e VpsSetupCompleteLanding
+// rimossi da dev2 (unificato in OnboardingPopup globale). Lasciato qui un
+// redirect minimal a /onboarding quando profile non configurato.
 
 export default async function MapPage() {
   const locale = getServerLocale();
@@ -37,11 +38,8 @@ export default async function MapPage() {
         .select("vps_setup_completed_at, profile_configured_at")
         .eq("user_id", user.id)
         .maybeSingle();
-      if (!onboarding?.vps_setup_completed_at) {
-        return <CloudDownloadLanding userEmail={user.email ?? null} />;
-      }
-      if (!onboarding?.profile_configured_at) {
-        return <VpsSetupCompleteLanding userEmail={user.email ?? null} />;
+      if (!onboarding?.vps_setup_completed_at || !onboarding?.profile_configured_at) {
+        redirect("/dashboard");
       }
     } else if (localRequest) {
       if (readWorkspaceProfile() === null) redirect("/onboarding");
@@ -59,17 +57,18 @@ export default async function MapPage() {
       const v = avg + (Math.random() - 0.5) * 2 * spread;
       return Math.max(0, Math.min(100, Math.round(v)));
     });
+  // Demo data: usa `family` post-dev2 refactor (data-driven, niente più enum).
   const demoTypeDist = demoMode
     ? [
-        { type: "ai_ml" as const, count: 8, color: "var(--color-purple)", avgScore: 82, avgCritic: null, scores: synthScores(82, 8) },
-        { type: "data" as const, count: 15, color: "var(--color-blue)", avgScore: 63, avgCritic: null, scores: synthScores(63, 15) },
-        { type: "devops_cloud" as const, count: 8, color: "var(--color-orange)", avgScore: 56, avgCritic: null, scores: synthScores(56, 8) },
-        { type: "full_stack" as const, count: 6, color: "#7fffb2", avgScore: 70, avgCritic: null, scores: synthScores(70, 6) },
-        { type: "backend" as const, count: 7, color: "var(--color-yellow)", avgScore: 64, avgCritic: null, scores: synthScores(64, 7) },
-        { type: "frontend" as const, count: 5, color: "#58a6ff", avgScore: 62, avgCritic: null, scores: synthScores(62, 5) },
-        { type: "python" as const, count: 15, color: "#3776ab", avgScore: 68, avgCritic: null, scores: synthScores(68, 15) },
-        { type: "software_engineer" as const, count: 21, color: "var(--color-muted)", avgScore: 62, avgCritic: null, scores: synthScores(62, 21) },
-        { type: "other" as const, count: 2, color: "var(--color-dim)", avgScore: 55, avgCritic: null, scores: synthScores(55, 2) },
+        { family: "AI / ML", count: 8, color: "var(--color-purple)", avgScore: 82, avgCritic: null, scores: synthScores(82, 8) },
+        { family: "Data", count: 15, color: "var(--color-blue)", avgScore: 63, avgCritic: null, scores: synthScores(63, 15) },
+        { family: "DevOps / Cloud", count: 8, color: "var(--color-orange)", avgScore: 56, avgCritic: null, scores: synthScores(56, 8) },
+        { family: "Full-stack", count: 6, color: "#7fffb2", avgScore: 70, avgCritic: null, scores: synthScores(70, 6) },
+        { family: "Backend", count: 7, color: "var(--color-yellow)", avgScore: 64, avgCritic: null, scores: synthScores(64, 7) },
+        { family: "Frontend", count: 5, color: "#58a6ff", avgScore: 62, avgCritic: null, scores: synthScores(62, 5) },
+        { family: "Python", count: 15, color: "#3776ab", avgScore: 68, avgCritic: null, scores: synthScores(68, 15) },
+        { family: "Software Engineer", count: 21, color: "var(--color-muted)", avgScore: 62, avgCritic: null, scores: synthScores(62, 21) },
+        { family: "Other", count: 2, color: "var(--color-dim)", avgScore: 55, avgCritic: null, scores: synthScores(55, 2) },
       ]
     : null;
   const [scoreDist, typeDist] = demoData
@@ -111,17 +110,10 @@ export default async function MapPage() {
         fallbackScores={scoreDist.scores ?? []}
         scoreTitle={t.score_distribution}
         emptyLabel={t.no_data}
-        labels={{
-          ai_ml: t.pt_ai_ml,
-          data: t.pt_data,
-          devops_cloud: t.pt_devops_cloud,
-          full_stack: t.pt_full_stack,
-          backend: t.pt_backend,
-          frontend: t.pt_frontend,
-          python: t.pt_python,
-          software_engineer: t.pt_software_engineer,
-          other: t.pt_other,
-        }}
+        // Post-dev2: labels mapping enum→i18n rimosso; family stessa è
+        // human-readable (popolata dal team analyst con stringhe libere).
+        // Empty object = MapCharts userà la family literal come label.
+        labels={{}}
       />
     </div>
   );

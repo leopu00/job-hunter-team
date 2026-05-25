@@ -2,9 +2,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  classifyTitle,
-  type PositionType,
-  type PositionTypeCount,
+  UNCATEGORIZED_LABEL,
+  type RoleFamilyCount,
 } from "@/lib/position-classifier";
 import PositionTypesDonut from "@/app/components/PositionTypesDonut";
 import ScoreDistributionHorizontal from "@/app/components/ScoreDistributionHorizontal";
@@ -15,6 +14,7 @@ type NoCoordItem = {
   title: string | null;
   company: string | null;
   status: string;
+  role_family: string | null;
   score: number | null;
   is_remote: boolean;
   location: string | null;
@@ -26,7 +26,7 @@ type LocationCount = {
 };
 
 type Props = {
-  typeDist: PositionTypeCount[];
+  typeDist: RoleFamilyCount[];
   fallbackScores: number[]; // score totali quando nessun tipo selezionato
   labels: Record<string, string>;
   emptyLabel: string;
@@ -42,7 +42,9 @@ export default function MapCharts({
 }: Props) {
   // Multi-selezione. Vuoto = nessun filtro (mostra tutto).
   // Tra tipologie diverse: AND. Dentro la stessa tipologia: OR.
-  const [selectedTypes, setSelectedTypes] = useState<PositionType[]>([]);
+  // Post-dev2 refactor 2026-05-23: classificazione è data-driven da
+  // positions.role_family (popolata dal team analyst). Niente più enum.
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedRanges, setSelectedRanges] = useState<
     Array<{ lo: number; hi: number }>
   >([]);
@@ -93,7 +95,7 @@ export default function MapCharts({
     return noCoords.filter((p) => {
       if (
         selectedTypes.length > 0 &&
-        !selectedTypes.includes(classifyTitle(p.title))
+        !selectedTypes.includes(p.role_family ?? UNCATEGORIZED_LABEL)
       )
         return false;
       if (!passScoreFilter(p.score)) return false;
@@ -114,7 +116,7 @@ export default function MapCharts({
     if (selectedTypes.length === 0) return fallbackScores;
     const out: number[] = [];
     for (const t of selectedTypes) {
-      const entry = typeDist.find((d) => d.type === t);
+      const entry = typeDist.find((d) => d.family === t);
       if (entry?.scores) out.push(...entry.scores);
     }
     return out;
@@ -128,12 +130,12 @@ export default function MapCharts({
       selectedTypes.length === 0
         ? typeDist.reduce((a, d) => a + d.count, 0)
         : typeDist
-            .filter((d) => selectedTypes.includes(d.type))
+            .filter((d) => selectedTypes.includes(d.family))
             .reduce((a, d) => a + d.count, 0);
     return Math.max(0, totalInScope - histogramScores.length);
   }, [selectedTypes, typeDist, histogramScores]);
 
-  const toggleType = (t: PositionType) =>
+  const toggleType = (t: string) =>
     setSelectedTypes((cur) =>
       cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t],
     );
@@ -194,7 +196,7 @@ export default function MapCharts({
             arr.push({
               key: `t-${t}`,
               label: labels[t] ?? String(t),
-              color: typeDist.find((d) => d.type === t)?.color,
+              color: typeDist.find((d) => d.family === t)?.color,
               onRemove: () => toggleType(t),
             });
           }

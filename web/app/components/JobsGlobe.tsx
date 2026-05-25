@@ -5,7 +5,7 @@ import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
-import { classifyTitle, type PositionType } from "@/lib/position-classifier";
+import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
 
 const SOURCE_ID = "jht-jobs";
 const LAYER_HALO_ID = "jht-jobs-halo";
@@ -176,6 +176,9 @@ type PositionCoord = {
   title: string;
   company: string;
   status: string;
+  // Post-dev2 refactor: classificazione viene da positions.role_family
+  // (popolata dal team analyst), non più da classifyTitle del title.
+  role_family: string | null;
   score: number | null;
   lat: number;
   lon: number;
@@ -254,10 +257,12 @@ function featureToPosition(f: GeoJSON.Feature): PositionCoord | null {
     title: String(p.title ?? ""),
     company: String(p.company ?? ""),
     status: String(p.status ?? ""),
+    role_family: typeof p.role_family === "string" ? p.role_family : null,
     score: typeof p.score === "number" ? p.score : null,
     lat,
     lon,
     is_remote: Boolean(p.is_remote),
+    location: typeof p.location === "string" ? p.location : null,
   };
 }
 
@@ -314,7 +319,7 @@ export default function JobsGlobe({
 }: {
   hero?: boolean;
   fullscreen?: boolean;
-  selectedTypes?: PositionType[];
+  selectedTypes?: string[];
   selectedScoreRanges?: Array<{ lo: number; hi: number }>;
   selectedUnscored?: boolean;
   selectedLocations?: string[];
@@ -350,7 +355,7 @@ export default function JobsGlobe({
   const displayData = useMemo(() => {
     let out = data;
     if (selectedTypes.length > 0) {
-      out = out.filter((p) => selectedTypes.includes(classifyTitle(p.title)));
+      out = out.filter((p) => selectedTypes.includes(p.role_family ?? UNCATEGORIZED_LABEL));
     }
     const scoreFilterActive =
       selectedScoreRanges.length > 0 || selectedUnscored;
