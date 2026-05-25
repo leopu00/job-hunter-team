@@ -118,7 +118,7 @@ Vista live delle connessioni:
 
 ---
 
-## 🎯 Decisione strategica (2026-05-18, Leone)
+## 🎯 Decisione strategica (2026-05-18, maintainer)
 
 Il problema NON è "fare meno sync" — il prodotto JHT ha come **vincolo funzionale**
 che la dashboard web mostri:
@@ -457,7 +457,7 @@ Monitoring post-deploy:
 
 ---
 
-## ✅ Decisioni lockate (2026-05-18, Leone)
+## ✅ Decisioni lockate (2026-05-18, maintainer)
 
 1. ✅ **Sync frequente = requisito prodotto**, non bug. Dashboard live = UX critica.
 2. ✅ **Limitare ora dove zero impatto UX** (Fix #1 + #3 + #4 + #5), rimandare il refactor architetturale.

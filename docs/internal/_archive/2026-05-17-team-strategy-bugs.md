@@ -427,7 +427,7 @@ verso Capitano per micro-azioni operative (es: "promuovi 5 posizioni
 ## ✨ 11. Insight positivo — Mentor è il miglior agente conversazionale
 
 **Osservazione neutra dalla sessione**: zero spam, 6 risposte ognuna densa
-di valore numerico, sempre nome utente "Leone", silenzio M-01 dopo emoji
+di valore numerico, sempre nome utente "<utente>", silenzio M-01 dopo emoji
 di ack, accetta reframe utente (msg #6 "dimmi cosa migliorare non cosa non
 va bene") senza moralismi mantenendo il proprio stile *"misurato, numeri
 prima delle opinioni"*.
@@ -2273,9 +2273,9 @@ application puntano allo stesso path.
 Verificato:
 ```
 app#17 (pos#28 Company 033 Observability) →
-  /jht_user/cv/CV_LeoneEmanuelPuglisi_Company 033.pdf
+  /jht_user/cv/CV_MarioRossi_Company 033.pdf
 app#30 (pos#62 Company 033 Junior Ubuntu) →
-  /jht_user/cv/CV_LeoneEmanuelPuglisi_Company 033.pdf  ← STESSO PATH!
+  /jht_user/cv/CV_MarioRossi_Company 033.pdf  ← STESSO PATH!
 ```
 
 Quando l'utente apre il PDF "per app#17" legge il contenuto scritto
@@ -2398,8 +2398,8 @@ Cambiare pattern da `CV_<name>_<company>.pdf` a:
 CV_<name>_<position_id>_<company-slug>_<title-slug>.pdf
 
 Esempio:
-CV_LeoneEmanuelPuglisi_28_canonical_observability.pdf
-CV_LeoneEmanuelPuglisi_62_canonical_junior-ubuntu.pdf
+CV_MarioRossi_28_canonical_observability.pdf
+CV_MarioRossi_62_canonical_junior-ubuntu.pdf
 ```
 
 `position_id` garantisce unicità assoluta. Slug aiuta utente a
@@ -2493,9 +2493,9 @@ Quindi:
 ### B. 3 CV generati per posizioni EXCLUDED/REJECT (spreco)
 
 ```
-CV_LeoneEmanuelPuglisi_Company 033_ContainerImages.pdf  →  pos #34 EXCLUDED
-CV_LeoneEmanuelPuglisi_Company 033_K8s.pdf              →  pos #35 EXCLUDED
-CV_LeoneEmanuelPuglisi_Deloitte.pdf                   →  REJECT Critic
+CV_MarioRossi_Company 033_ContainerImages.pdf  →  pos #34 EXCLUDED
+CV_MarioRossi_Company 033_K8s.pdf              →  pos #35 EXCLUDED
+CV_MarioRossi_Deloitte.pdf                   →  REJECT Critic
 ```
 
 Lo Scrittore ha generato CV per posizioni che **non avrebbero dovuto
@@ -2556,11 +2556,11 @@ Mai generare CV per posizioni già scartate.
 ```sql
 -- Ricollegare Sisal e Leadtech (sono PASS validi)
 UPDATE applications SET
-  cv_pdf_path='/jht_user/cv/CV_LeoneEmanuelPuglisi_Sisal.pdf',
+  cv_pdf_path='/jht_user/cv/CV_MarioRossi_Sisal.pdf',
   cv_generated_at='2026-05-17 04:43:00'
 WHERE id=20;
 UPDATE applications SET
-  cv_pdf_path='/jht_user/cv/CV_LeoneEmanuelPuglisi_Leadtech.pdf',
+  cv_pdf_path='/jht_user/cv/CV_MarioRossi_Leadtech.pdf',
   cv_generated_at='2026-05-17 04:30:00'
 WHERE id=19;
 ```

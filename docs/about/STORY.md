@@ -28,7 +28,7 @@ Two reasons, in this order:
 
 ## What changed when I rebuilt it
 
-Going from "works for Leone" to "works for anyone" is a different project entirely. The current public JHT has:
+Going from "works for one person" to "works for anyone" is a different project entirely. The current public JHT has:
 
 - 🤖 **7 specialized agents** (Captain, Sentinel, Scout, Analyst, Scorer, Writer, Critic) — each with its own prompt, skills, and on-demand tools
 - 🛡️ **A Bridge + Sentinel monitoring layer** that calibrates token usage to within 5–15% of the subscription window, so the team doesn't burn through your quota
