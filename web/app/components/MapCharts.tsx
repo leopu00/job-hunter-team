@@ -523,7 +523,10 @@ function FilterChipsBar({
           position: "absolute",
           top: -9999,
           left: 0,
-          width: "calc(100vw - 48px)",
+          // larghezza measurement piu' stretta del container reale
+          // (-16px buffer) cosi' la conta non eccede mai e i chip
+          // restano dentro lo schermo senza essere tagliati a sx.
+          width: "calc(100vw - 64px)",
           visibility: "hidden",
           display: "flex",
           flexWrap: "wrap",
@@ -544,13 +547,18 @@ function FilterChipsBar({
       </div>
 
       {/* Riga 1: full screen width, ancorata a right:24. Va SOPRA
-          al chart (z-index alto) — chart resta fermo a top:24. */}
+          al chart (z-index alto) — chart resta fermo a top:24.
+          overflow:hidden + height:30: se la measurement contasse
+          un chip in più (precisione pixel sub-pixel), l'eccedenza
+          a sx resta tagliata invece di sforare fuori schermo. */}
       <div
         style={{
           position: "absolute",
           top: 24,
           left: 24,
           right: 24,
+          height: 30,
+          overflow: "hidden",
           zIndex: 20,
           display: "flex",
           flexWrap: "nowrap",
