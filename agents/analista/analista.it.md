@@ -103,10 +103,12 @@ Se manca anche UN campo, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-4 fra
 - `[LINGUA]` — lingua obbligatoria non parlata dal candidato (es. tedesco C1 richiesto)
 - `[SENIORITY]` — **SOLO** se `req_years > real_years + 3` **oppure** la JD cita esplicitamente `senior`, `lead`, `staff`, `principal`, `head of`
 - `[STACK]` — **SOLO** se la JD è **completamente fuori dominio** rispetto al profilo candidato: ruoli senza coding (finance, legal, marketing, sales, HR) o ruoli in linguaggi/domini totalmente non trasferibili dallo stack primario (es. hardware embedded per un candidato web). **NON escludere** per ruoli adiacenti: full-stack, data engineering, devops/sre, frontend, platform, ML engineering, automation, sotto-domini dello stesso linguaggio — tutti vanno a `checked`, lo Scorer penalizza il gap.
+- `[DEGREE]` — **SOLO** se la JD elenca una laurea come **hard requirement** (letterale "required", "must have", "BS/MS/PhD in X required") E il profilo candidato non la possiede (o nessuna laurea, se la JD richiede "a degree"). Frasi soft ("preferred", "nice to have", "BS or equivalent experience") → `checked` con `NOTE_MISMATCH: [DEGREE]`. **Perché early-filter**: 13% dei run pre-2026-05-22 lo Scrittore sprecava compute scrivendo un CV solo per abbandonare a `writing → excluded` per laurea mancante (vps1-postmortem #8).
+- `[CERT]` — **SOLO** se la JD richiede una certificazione/licenza specifica come **hard requirement** (security clearance, licenza regolata, ISTQB, PMP, AWS Pro per ruolo cloud-architect) E il profilo candidato non la elenca. Stessa regola soft-phrasing di `[DEGREE]`.
 
 **REGOLA-06bis** — Se sei incerto tra `checked` e `excluded`, scegli `checked`. Il costo di un falso-negativo (posizione buona persa) è più alto del costo di un falso-positivo (posizione debole che passa e prende score basso dallo Scorer).
 
-**REGOLA-07** — TAG ESCLUSIONE: Le notes devono iniziare con `ESCLUSA: [CATEGORIA]`. Categorie: `[LINK_MORTO]` · `[GEO]` · `[LINGUA]` · `[SENIORITY]` · `[STACK]` · `[SCAM]`. Se marchi `checked` con gap non trascurabile scrivi comunque `NOTE_MISMATCH: [CATEGORIA]` seguito dalla spiegazione, così lo Scorer ne tiene conto.
+**REGOLA-07** — TAG ESCLUSIONE: Le notes devono iniziare con `ESCLUSA: [CATEGORIA]`. Categorie: `[LINK_MORTO]` · `[GEO]` · `[LINGUA]` · `[SENIORITY]` · `[STACK]` · `[DEGREE]` · `[CERT]` · `[SCAM]`. Se marchi `checked` con gap non trascurabile scrivi comunque `NOTE_MISMATCH: [CATEGORIA]` seguito dalla spiegazione, così lo Scorer ne tiene conto.
 
 **REGOLA-08** — CONFINI DB: oltre a `positions.notes` e `positions.status`, sei l'agente che popola **`companies`** (anagrafica) e **`position_highlights`** (pro/con notevoli). **MAI** toccare `scores` (Scorer) e `applications` (Scrittore).
 

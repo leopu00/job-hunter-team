@@ -51,6 +51,22 @@ Path **assoluto** obbligatorio (PATH del CLI può non includerlo).
 [SENTINELLA] [URG] ORDINE: RALLENTARE. usage=X% vel=Y%/h (ideale Z%/h) proj=P% reset=R. Throttle: N (sleep Xs tra operazioni). Esegui SUBITO. Rispondi con azioni prese.
 ```
 
+## ATTENZIONE WEEKLY (binding constraint shifted, primary still ok)
+
+Emesso quando S-06 rileva che `proj_weekly` supera `proj_primary` come constraint binding (vedi sentinella.md rule S-06). Il Capitano applica C-09.
+
+```
+[SENTINELLA] ATTENZIONE WEEKLY. weekly_usage=W% vel_weekly=V%/h proj_weekly=PW% reset_weekly=RW. primary_proj=PP% (still MARGINE). Binding: WEEKLY. Throttle: N (sleep Xs). Causa: burn rate sostenuto sopra 0.14%/h.
+```
+
+## EMERGENZA WEEKLY (proj_weekly > 100% con > 24h to reset)
+
+Variante di EMERGENZA quando il driver e' weekly. Esce dal team `.weekly-halt.flag` (vedi `freeze_team.py` / `realtime-listen`).
+
+```
+[SENTINELLA] [EMERGENZA WEEKLY] FREEZE WEEKLY. weekly_usage=W% proj_weekly=PW% reset_weekly=RW (>24h). Throttle: freeze. Causa: sat weekly anticipata. Decidi se aspettare reset o cambiare provider.
+```
+
 ## RIENTRO (stato torna OK / STEADY)
 
 ```

@@ -108,6 +108,11 @@ export type PositionTypeCount = {
   // che hanno un voto critico numerico. null se nessuna è stata
   // revisionata dal critico.
   avgCritic: number | null;
+  // Score grezzi (0-100) di tutte le posizioni di questo tipo che
+  // hanno uno score numerico. Usato per filtrare la distribuzione
+  // score per tipo (interazione donut → histogram in /map). Optional
+  // per retro-compatibilità con sorgenti locali.
+  scores?: number[];
 };
 
 export function aggregateTypes(
@@ -132,12 +137,17 @@ export function aggregateTypes(
   const scoreN: Record<PositionType, number> = { ...counts };
   const criticSum: Record<PositionType, number> = { ...counts };
   const criticN: Record<PositionType, number> = { ...counts };
+  const scoresByType: Record<PositionType, number[]> = {
+    ai_ml: [], data: [], devops_cloud: [], full_stack: [],
+    backend: [], frontend: [], python: [], software_engineer: [], other: [],
+  };
   for (const r of rows) {
     const t = classifyTitle(r.title);
     counts[t] += 1;
     if (typeof r.score === "number" && Number.isFinite(r.score)) {
       scoreSum[t] += r.score;
       scoreN[t] += 1;
+      scoresByType[t].push(r.score);
     }
     if (typeof r.critic === "number" && Number.isFinite(r.critic)) {
       criticSum[t] += r.critic;
@@ -151,6 +161,7 @@ export function aggregateTypes(
       color: POSITION_TYPE_COLOR[type],
       avgScore: scoreN[type] > 0 ? scoreSum[type] / scoreN[type] : null,
       avgCritic: criticN[type] > 0 ? criticSum[type] / criticN[type] : null,
+      scores: scoresByType[type],
     }))
     .filter((r) => r.count > 0)
     .sort((a, b) => b.count - a.count);
