@@ -1,4 +1,4 @@
-import type { CaseStudy, Window } from "./types"
+import type { CaseStudy } from "./types"
 import { metricNum, providerColor } from "./types"
 
 type Props = {
@@ -59,8 +59,6 @@ function CaseFunnel({ cs }: { cs: CaseStudy }) {
     decidedTotal > 0 ? (ready / decidedTotal) * 100 : 0
   const looseConv = rawFound > 0 ? (ready / rawFound) * 100 : 0
 
-  // Side-panel data for Kimi (phase + source breakdown) when available
-  const phases = cs.windows?.filter((w) => w.kind === "phase") ?? []
   const sources = buildSourceBreakdown(cs)
 
   return (
@@ -105,10 +103,13 @@ function CaseFunnel({ cs }: { cs: CaseStudy }) {
         </p>
       )}
 
-      {(phases.length > 0 || sources) && (
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {phases.length > 0 && <PhaseBreakdown phases={phases} accent={accent} />}
-          {sources && <SourceBreakdown sources={sources} accent={accent} />}
+      {/* Pre/Post LinkedIn phase 5-stage funnels (Kimi only) */}
+      <PhaseFunnels cs={cs} accent={accent} />
+
+      {/* By-source breakdown (Kimi only) */}
+      {sources && (
+        <div className="mt-4">
+          <SourceBreakdown sources={sources} accent={accent} />
         </div>
       )}
     </div>
@@ -271,43 +272,143 @@ function FunnelStages({
   )
 }
 
-function PhaseBreakdown({ phases, accent }: { phases: Window[]; accent: string }) {
-  const maxFound = Math.max(...phases.map((p) => p.positions_found ?? 0), 1)
+// PhaseFunnels: per Kimi we have a Pre/Post-LinkedIn split with full 5-stage
+// cascade metrics for each phase (when metric keys phase_pre_pipeline_*  and
+// phase_post_pipeline_* exist). Each phase gets its own mini-funnel with the
+// same cumulative-terminal cascade convention used for the main funnel.
+function PhaseFunnels({ cs, accent }: { cs: CaseStudy; accent: string }) {
+  const pre = buildPhaseStages(cs, "phase_pre_")
+  const post = buildPhaseStages(cs, "phase_post_")
+  if (!pre || !post) return null
+
+  // Shared max so the two funnels are visually comparable side-by-side.
+  const sharedMax = Math.max(pre[0]?.count ?? 0, post[0]?.count ?? 0, 1)
+
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <h5 className="mb-2 text-xs font-bold text-slate-800">📅 By phase (within window)</h5>
-      <div className="space-y-2">
-        {phases.map((p) => {
-          const found = p.positions_found ?? 0
-          const ready = p.ready_cvs ?? 0
-          const widthPct = (found / maxFound) * 100
-          const readyWidth = found > 0 ? (ready / found) * widthPct : 0
+      <h5 className="mb-3 text-xs font-bold text-slate-800">
+        📅 5-stage funnel by phase (within the second weekly window)
+      </h5>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <MiniPhaseFunnel
+          label="Pre-LinkedIn enable"
+          stages={pre}
+          maxCount={sharedMax}
+          accent={accent}
+          totalFound={118}
+          caveat="84 of the excluded were pre-bug-#14-fix (no per-stage attribution) → aggregated to scout-level"
+        />
+        <MiniPhaseFunnel
+          label="Post-LinkedIn enable"
+          stages={post}
+          maxCount={sharedMax}
+          accent={accent}
+          totalFound={133}
+        />
+      </div>
+    </div>
+  )
+}
+
+function buildPhaseStages(cs: CaseStudy, prefix: string): FunnelStage[] | null {
+  const newC = metricNum(cs, `${prefix}pipeline_new`)
+  const checked = metricNum(cs, `${prefix}pipeline_checked`)
+  const scored = metricNum(cs, `${prefix}pipeline_scored`)
+  const writing = metricNum(cs, `${prefix}pipeline_writing`)
+  const ready = metricNum(cs, `${prefix}pipeline_ready`)
+  if ([newC, checked, scored, writing, ready].some((v) => v == null)) return null
+
+  const exNew = metricNum(cs, `${prefix}ex_new`) ?? 0
+  const exChecked = metricNum(cs, `${prefix}ex_checked`) ?? 0
+  const exScored = metricNum(cs, `${prefix}ex_scored`) ?? 0
+  const exWriting = metricNum(cs, `${prefix}ex_writing`) ?? 0
+
+  const stages: FunnelStage[] = [
+    { key: "new", label: "📥 Found", count: newC!, excludedHere: exNew },
+    { key: "checked", label: "🔍 Checked", count: checked!, excludedHere: exChecked },
+    { key: "scored", label: "📊 Scored", count: scored!, excludedHere: exScored },
+    { key: "writing", label: "✍️ Writing", count: writing!, excludedHere: exWriting },
+    { key: "ready", label: "✅ Ready", count: ready! },
+  ]
+  for (let i = 0; i < stages.length; i++) {
+    stages[i].passedForward = i < stages.length - 1 ? stages[i + 1].count : null
+  }
+  return stages
+}
+
+function MiniPhaseFunnel({
+  label,
+  stages,
+  maxCount,
+  accent,
+  totalFound,
+  caveat,
+}: {
+  label: string
+  stages: FunnelStage[]
+  maxCount: number
+  accent: string
+  totalFound: number
+  caveat?: string
+}) {
+  const cReady = stages[stages.length - 1].count
+  const cNew = stages[0].count
+  const conv = cNew > 0 ? (cReady / cNew) * 100 : 0
+  return (
+    <div className="rounded border border-slate-200 bg-white p-3">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="text-xs font-semibold text-slate-900">{label}</span>
+        <span className="font-mono text-xs font-bold text-slate-900">
+          {conv.toFixed(1)}%
+        </span>
+      </div>
+      <div className="space-y-1">
+        {stages.map((s, i) => {
+          const widthPct = Math.max(2, (s.count / maxCount) * 100)
+          const passed = s.passedForward
+          const excluded = s.excludedHere ?? 0
+          const passedShare = passed != null && s.count > 0 ? (passed / s.count) * 100 : 100
+          const excludedShare = s.count > 0 ? (excluded / s.count) * 100 : 0
           return (
-            <div key={p.id}>
-              <div className="flex items-baseline justify-between text-[11px] text-slate-600">
-                <span>{p.label.replace("Phase: ", "")}</span>
-                <span className="font-mono font-bold text-slate-900">
-                  {p.conversion_pct}% ({ready}/{found})
-                </span>
-              </div>
-              <div className="mt-0.5 h-3 overflow-hidden rounded bg-slate-200">
+            <div key={s.key} className="flex items-center gap-2 text-[10px]">
+              <span className="w-16 shrink-0 text-slate-600">{s.label}</span>
+              <span className="w-8 shrink-0 text-right font-mono text-slate-700">{s.count}</span>
+              <div className="relative flex h-3 flex-1 overflow-hidden rounded bg-slate-100">
                 <div
-                  className="h-full"
-                  style={{ width: `${widthPct}%`, backgroundColor: accent, opacity: 0.3 }}
+                  className="flex h-3 overflow-hidden rounded"
+                  style={{ width: `${widthPct}%` }}
                 >
                   <div
                     className="h-full"
                     style={{
-                      width: `${(readyWidth / widthPct) * 100}%`,
+                      width: `${passedShare}%`,
                       backgroundColor: accent,
+                      opacity: 1 - i * 0.06,
                     }}
                   />
+                  {excludedShare > 0 && (
+                    <div
+                      className="h-full bg-red-400"
+                      style={{ width: `${excludedShare}%`, opacity: 0.55 }}
+                    />
+                  )}
                 </div>
               </div>
+              {excluded > 0 && (
+                <span className="w-12 shrink-0 text-right font-mono text-[10px] text-red-600">
+                  −{excluded}
+                </span>
+              )}
             </div>
           )
         })}
       </div>
+      <p className="mt-2 text-[10px] text-slate-500">
+        {totalFound} positions found · {cReady} ready · {cNew - cReady} excluded · {totalFound - cNew} in-flight
+      </p>
+      {caveat && (
+        <p className="mt-1 text-[10px] italic text-slate-500">⚠️ {caveat}</p>
+      )}
     </div>
   )
 }
