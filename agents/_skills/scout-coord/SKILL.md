@@ -57,6 +57,22 @@ Peer answers with `[ACK]` (accept) or `[COUNTER]` (counter-proposal). Keep it sh
 
 Whichever split you pick, the rule is: **no two scouts on the same (circle, tier_set) combination at the same time.**
 
+**Volume vs curated split — empirico dal run VPS1 2026-05-21 (vps1-run-postmortem #14):**
+
+> Scout-1 trovava 130 position con score avg 63.1 (40% high-score)
+> Scout-2 trovava 76 position con score avg 68.4 (54% high-score)
+>
+> → Scout-2 era 1.4× più qualitativo di Scout-1 sullo stesso candidato.
+
+Pattern raccomandato quando si ha la libertà di scegliere il tier per i 2 scout:
+
+| Scout    | Tier assegnato                                          | Razionale                                      |
+|----------|---------------------------------------------------------|------------------------------------------------|
+| SCOUT-1  | LinkedIn (alto volume, noisy)                           | Cattura il flusso, accetta lo score medio basso|
+| SCOUT-2  | Ashby / Greenhouse / Lever / company-careers (curated)  | Pochi ma giusti, score medio più alto          |
+
+Il `next-for-analista` riceve poi un mix bilanciato di volume + qualità, e il filtro hard-requirements dell'Analista (RULE-06) si concentra sul Scout-1 stream (dove c'è più rumore). Non e' una regola rigida — adattare al `work_mode` come da tabella sopra.
+
 ## Step 4 — Solidify the assignment
 
 Once you and your peers agree, persist the partition:

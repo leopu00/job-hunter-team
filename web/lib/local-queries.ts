@@ -379,11 +379,12 @@ export interface PositionCoord {
   lat: number
   lon: number
   is_remote: boolean
+  location: string | null
 }
 export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
   const db = getDb(ws)
   const rows = db.prepare(`
-    SELECT p.id, p.title, p.company, p.status,
+    SELECT p.id, p.title, p.company, p.status, p.location,
            s.total_score as score,
            p.office_lat as lat, p.office_lon as lon,
            p.is_remote
@@ -401,6 +402,43 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
     lat: r.lat,
     lon: r.lon,
     is_remote: !!r.is_remote,
+    location: r.location ?? null,
+  }))
+}
+
+// ── Conteggio posizioni per location (per /map sidebar paesi) ─────
+export function getPositionLocationsLocal(ws: string) {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT COALESCE(location, '—') AS location, COUNT(*) AS count
+    FROM positions
+    WHERE status != 'excluded'
+    GROUP BY location
+    ORDER BY count DESC
+  `).all() as { location: string; count: number }[]
+  return rows
+}
+
+// ── Positions SENZA coordinate (per /map "remote bucket") ─────────
+export function getPositionsWithoutCoordsLocal(ws: string) {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.id, p.title, p.company, p.status, p.location,
+           s.total_score as score,
+           p.is_remote
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    WHERE p.status != 'excluded'
+      AND p.office_lat IS NULL
+  `).all() as any[]
+  return rows.map(r => ({
+    id: sid(r.id),
+    title: r.title as string | null,
+    company: r.company as string | null,
+    status: r.status as string,
+    score: typeof r.score === 'number' ? r.score : null,
+    is_remote: !!r.is_remote,
+    location: (r.location as string | null) ?? null,
   }))
 }
 
