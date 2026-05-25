@@ -1,5 +1,5 @@
 import { getDb } from './db'
-import { aggregateTypes, type PositionTypeCount } from './position-classifier'
+import { aggregateRoleFamilies, type RoleFamilyCount } from './position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -424,6 +424,7 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
   const db = getDb(ws)
   const rows = db.prepare(`
     SELECT p.id, p.title, p.company, p.status, p.location,
+           p.role_family,
            s.total_score as score,
            p.is_remote
     FROM positions p
@@ -436,6 +437,7 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
     title: r.title as string | null,
     company: r.company as string | null,
     status: r.status as string,
+    role_family: r.role_family as string | null,
     score: typeof r.score === 'number' ? r.score : null,
     is_remote: !!r.is_remote,
     location: (r.location as string | null) ?? null,
@@ -475,21 +477,22 @@ export function getPositionStateHistoryLocal(ws: string) {
 }
 
 // ── Position type distribution ──────────────────────────────────────
-export function getPositionTypeDistributionLocal(ws: string): PositionTypeCount[] {
+// Legge la colonna positions.role_family (popolata dal team analyst).
+// score → scores.total_score, critic → applications.critic_score (0-10).
+// LEFT JOIN entrambi: aggregateRoleFamilies filtra null nel calcolo delle
+// medie, includiamo anche posizioni senza voto.
+export function getPositionTypeDistributionLocal(ws: string): RoleFamilyCount[] {
   const db = getDb(ws)
-  // score → scores.total_score (0-100), critic → applications.critic_score
-  // (0-10). LEFT JOIN entrambi: aggregateTypes filtra null nel calcolo
-  // delle medie, così includiamo anche posizioni senza voto.
   const rows = db.prepare(`
-    SELECT p.title AS title,
+    SELECT p.role_family AS role_family,
            s.total_score AS score,
            a.critic_score AS critic
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     LEFT JOIN applications a ON a.position_id = p.id
     WHERE p.status != 'excluded'
-  `).all() as { title: string | null; score: number | null; critic: number | null }[]
-  return aggregateTypes(rows)
+  `).all() as { role_family: string | null; score: number | null; critic: number | null }[]
+  return aggregateRoleFamilies(rows)
 }
 
 // ── Critic votes distribution (0-10) ───────────────────────────────

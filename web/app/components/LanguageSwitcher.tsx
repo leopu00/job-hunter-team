@@ -48,7 +48,7 @@ export default function LanguageSwitcher({
 }: {
   direction?: "up" | "down";
 }) {
-  const [current, setCurrent] = useState<Locale>("it");
+  const [current, setCurrent] = useState<Locale | null>(null);
   const [locales, setLocales] = useState<LocaleInfo[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -66,7 +66,7 @@ export default function LanguageSwitcher({
     const res = await fetch("/api/i18n?t=" + Date.now()).catch(() => null);
     if (!res?.ok) return;
     const data = await res.json();
-    setCurrent(data.current ?? "it");
+    setCurrent((data.current as Locale) ?? "it");
     setLocales(data.locales ?? []);
   }, []);
 
@@ -76,7 +76,7 @@ export default function LanguageSwitcher({
 
   const switchLocale = async (code: Locale) => {
     setOpen(false);
-    if (code === current) return;
+    if (!current || code === current) return;
     const res = await fetch("/api/i18n", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -88,6 +88,7 @@ export default function LanguageSwitcher({
     }
   };
 
+  if (!current) return null;
   const CurrentFlag = FLAGS[current] || FlagEN;
 
   return (
@@ -95,7 +96,7 @@ export default function LanguageSwitcher({
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 py-0 px-0 transition-all cursor-pointer"
-        aria-label={`Language: ${localeLabels[current]?.label || current}`}
+        aria-label={`Language: ${localeLabels[current!]?.label || current}`}
         aria-expanded={open}
       >
         <CurrentFlag />
