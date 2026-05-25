@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/workspace'
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
-import { aggregateTypes, type PositionTypeCount } from '@/lib/position-classifier'
+import { aggregateRoleFamilies, type RoleFamilyCount } from '@/lib/position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -499,7 +499,7 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, office_lat, office_lon, is_remote, scores ( total_score )')
+    .select('id, title, company, status, location, office_lat, office_lon, is_remote, scores ( total_score )')
     .not('status', 'eq', 'excluded')
     .not('office_lat', 'is', null)
   if (error || !data) return []
@@ -514,6 +514,74 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
       lat: p.office_lat,
       lon: p.office_lon,
       is_remote: !!p.is_remote,
+      location: p.location ?? null,
+    }
+  })
+}
+
+// ── Conteggio posizioni per location (per /map sidebar paesi) ─────
+// "Location" è un campo libero, non normalizzato (es. "Milan, IT",
+// "Company", "London"). Non standardizziamo qui: l'utente vede i
+// dati grezzi come sono nel DB.
+export async function getPositionLocations(): Promise<Array<{ location: string; count: number }>> {
+  const w = await ws()
+  if (w) { try { return local.getPositionLocationsLocal(w) } catch { /* fall through */ } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('location')
+    .not('status', 'eq', 'excluded')
+  if (error || !data) return []
+  const counts: Record<string, number> = {}
+  for (const row of data) {
+    const loc = (row as any).location ?? '—'
+    counts[loc] = (counts[loc] ?? 0) + 1
+  }
+  return Object.entries(counts)
+    .map(([location, count]) => ({ location, count }))
+    .sort((a, b) => b.count - a.count)
+}
+
+// ── Positions SENZA coordinate ufficio (per "remote bucket" /map) ─
+// Speculare a getPositionsWithCoords: ritorna le posizioni che il
+// globo non puo' renderizzare (office_lat null). Servono per il
+// widget "+ N senza coord" sulla pagina /map che spiega la
+// discrepanza tra chart e mappa.
+export type PositionNoCoord = {
+  id: string
+  title: string | null
+  company: string | null
+  status: string
+  role_family: string | null
+  score: number | null
+  is_remote: boolean
+  location: string | null
+}
+export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionsWithoutCoordsLocal(w) } catch { /* fall through */ } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('id, title, company, status, role_family, office_lat, is_remote, location, scores ( total_score )')
+    .not('status', 'eq', 'excluded')
+    .is('office_lat', null)
+  if (error || !data) return []
+  return (data as any[]).map((p) => {
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    return {
+      id: String(p.id),
+      title: p.title,
+      company: p.company,
+      status: p.status,
+      role_family: p.role_family ?? null,
+      score: typeof score?.total_score === 'number' ? score.total_score : null,
+      is_remote: !!p.is_remote,
+      location: p.location ?? null,
     }
   })
 }
@@ -582,30 +650,33 @@ export async function getCriticScores(): Promise<number[]> {
 }
 
 // ── Position type distribution ──────────────────────────────────────
-export async function getPositionTypeDistribution(): Promise<PositionTypeCount[]> {
+export async function getPositionTypeDistribution(): Promise<RoleFamilyCount[]> {
   const w = await ws()
-  if (w) { try { return local.getPositionTypeDistributionLocal(w) } catch { return [] } }
+  // Coerente con getScoreDistribution: se la versione locale fallisce
+  // (es. better-sqlite3 binding mancante), fall-through a Supabase
+  // invece di restituire silenziosamente [] e perdere la donut.
+  if (w) { try { return local.getPositionTypeDistributionLocal(w) } catch { /* fall through */ } }
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  // Coerente con getScoreDistribution(): preferisci positions.score quando
-  // presente, altrimenti fallback su scores.total_score via join.
-  // critic_score sta in applications.
+  // Legge `role_family` dalla colonna popolata dal team analyst.
+  // Score: preferisci positions.score, fallback su scores.total_score via join.
+  // Critic: applications.critic_score.
   const { data, error } = await supabase
     .from('positions')
-    .select('title, score, scores(total_score), applications(critic_score)')
+    .select('role_family, score, scores(total_score), applications(critic_score)')
     .not('status', 'eq', 'excluded')
   if (error || !data) return []
   const rows = (data as any[]).map((r) => {
     const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores
     const appRel = Array.isArray(r.applications) ? r.applications[0] : r.applications
     return {
-      title: r.title as string | null,
+      role_family: r.role_family as string | null,
       score: (r.score as number | null) ?? (scoresRel?.total_score ?? null),
       critic: (appRel?.critic_score as number | null) ?? null,
     }
   })
-  return aggregateTypes(rows)
+  return aggregateRoleFamilies(rows)
 }
 
 // ── Positions count by status ───────────────────────────────────────

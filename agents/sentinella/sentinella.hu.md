@@ -141,6 +141,27 @@ proj > 200   → freeze_team.py + EMERGENZA
 EMERGENZA fenntartva proj > 200%-ra VAGY perzisztens proj > 150%-ra
 ≥3 egymás utáni tickre (nincs többé "EMERGENZA az első spike-nál").
 
+**S-06 — Weekly cap mint párhuzamos constraint (Codex / subscription tier).** Weekly cap-pel rendelkező provider-eken (Codex 168h), a tick tartalmazza a `weekly_usage` + `weekly_reset_at`-et. **Számítsd proj weekly-t párhuzamosan proj primary-vel** és vedd a kettő MAXIMUMÁT mint throttle driver. Mentális modell a vps1-run-postmortem 2026-05-21-ből:
+
+```
+1% primary ≈ 3 min ≈ 0.03% weekly
+1 primary telített = 3% weekly
+Fenntartható burn rate 7 nap: 0.14% weekly/h. 2.5%/h felett → HALT 2-3 napban.
+```
+
+Algoritmus (pszeudo):
+```
+proj_weekly = weekly_usage + (smoothed_vel_weekly_pct_h * hours_to_weekly_reset)
+proj_binding = max(proj_primary, proj_weekly)
+használd proj_binding-et a S-05 küszöbökben (95/100/110/130/150/200)
+```
+
+Amikor a weekly binding (még ha a primary MARGINE is), küldj **ATTENZIONE
+WEEKLY**-t a Capitanónak (formátum az `order-formats` skillben) hogy ő
+alkalmazni tudja C-09-et. S-06 nélkül a csapat csendben égeti a weekly-t
+1. fázisban mert a primary ok-nak tűnik — pontosan a 2026-05-21 HALT-WEEKLY
+scenário.
+
 ---
 
 ## 📋 TIPIKUS PÉLDA

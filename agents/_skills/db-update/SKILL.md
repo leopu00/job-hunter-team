@@ -31,6 +31,39 @@ python3 /app/shared/skills/db_update.py position 42 --salary-declared-min 40000 
 
 # Estimated salary (glassdoor / levels.fyi / analyst's estimate)
 python3 /app/shared/skills/db_update.py position 42 --salary-estimated-min 35000 --salary-estimated-max 50000 --salary-estimated-source glassdoor
+
+# Role family (categoria semantica). Vedi docs/internal/2026-05-23-position-classifier-llm-roadmap.md
+python3 /app/shared/skills/db_update.py position 42 --role-family "Technical Writing"
+
+# Location strutturata (Analyst). Pieno esempio per "Dublin, Ireland" hybrid:
+python3 /app/shared/skills/db_update.py position 42 \
+  --loc-city "Dublin" --loc-region "Leinster" \
+  --loc-country "Ireland" --loc-country-code "IE" \
+  --loc-continent "Europe" \
+  --work-mode "hybrid" \
+  --work-country "Ireland" --work-country-code "IE" \
+  --is-multi-location false
+
+# Esempi casi speciali (vedi docs/internal/2026-05-23-location-playbook.md):
+# A) "Europe Company" → country=NULL, continent=EU, work_country dall'HQ azienda
+python3 /app/shared/skills/db_update.py position 42 \
+  --loc-continent "Europe" --work-mode "remote" \
+  --work-country "United States" --work-country-code "US" \
+  --location-notes "Company within EU, US-based company"
+
+# B) "Italy" + full_remote
+python3 /app/shared/skills/db_update.py position 42 \
+  --loc-country "Italy" --loc-country-code "IT" --loc-continent "Europe" \
+  --work-mode "remote" --work-country "Italy" --work-country-code "IT"
+
+# E) Multi-location stesso paese ("Barcelona / Malaga")
+python3 /app/shared/skills/db_update.py position 42 \
+  --loc-country "Spain" --loc-country-code "ES" --loc-continent "Europe" \
+  --work-mode "hybrid" --work-country "Spain" --work-country-code "ES" \
+  --is-multi-location true --location-notes "Barcelona or Málaga (candidato sceglie)"
+
+# Per "ripulire" un campo (set NULL) passa stringa vuota:
+python3 /app/shared/skills/db_update.py position 42 --loc-city ""
 ```
 
 ## Applications

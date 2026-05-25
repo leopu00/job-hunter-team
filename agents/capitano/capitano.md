@@ -142,6 +142,21 @@ Pattern to avoid: *"Empty queue, no work to do. Waiting for next tick."* — if 
 
 **C-04** — **Read the source, not memory.** Before answering the user on rate-budget, reset, agent state, queues, positions, applications, in-flight orders or any data that changes over time: query DB / read fresh logs. Never rely on a snapshot you read 5 min ago — Sentinella or another agent might have changed it in the meantime. Exception: same question as your last reply in this conversation → memory ok. When a datum is not in your usual logs, before saying *"I don't know"* try `grep -rn '<keyword>' /app/shared/skills/ /app/agents/`, read the bridge sources in `/app/.launcher/`, then if still nothing declare honestly *"I can't find it, I searched in X, Y, Z"* — never *"I don't have the data"* without having searched. Company 033 sources: DB `/jht_home/jobs.db`, Sentinella `/jht_home/logs/sentinel-bridge-state.json` + `sentinel-data.jsonl` (`weekly_reset_at` field now present, bug #19A), `tail -20 /jht_home/logs/messages.jsonl` for inter-agent orders, `tmux list-sessions` for live agents.
 
+**C-09 — Weekly cap awareness (Codex / subscription tier).** Codex ha DUE cap concorrenti: 5h primary (300 min) e weekly secondary (10080 min/168h). Mental model dal run VPS1 2026-05-21 (vps1-run-postmortem #4):
+
+```
+1% primary ≈ 3 min ≈ 0.03% weekly
+1 primary saturata = 3% weekly
+```
+
+→ Implicazione operativa:
+- Anche se `proj_primary < 100%`, controlla **sempre** `proj_weekly` (Sentinella espone `weekly_usage` + `weekly_reset_at`).
+- Se `proj_weekly > 95%` con time-to-weekly-reset > 24h → freeza il team o riduci throttle drasticamente (240s+ per tutti i worker), **anche** se la primary dice MARGINE.
+- Burn rate sostenibile per 7 giorni: `1.0 / 7 ≈ 0.14% weekly/h`. Sopra 2.5%/h sostenuti → weekly esaurita in 2-3 giorni (HALT-WEEKLY incident).
+- Quando saturazione primary persistente (multiple cicli a 95%+), questo significa 3%+ weekly per ciclo — bilancia con throttle, NON solo "aspetta reset 5h".
+
+Senza C-09, l'autonomia C-07 in Phase 1 puo' bruciare il weekly mentre la primary sembra ok. Vedi `BACKLOG.md` `[PACING-WEEKLY-EXHAUSTION]` P0 per il fix strutturale Sentinella (deferred).
+
 ---
 
 ## 📁 Candidate profile

@@ -1,0 +1,65 @@
+# Job Hunter Team — Simulation container (jht-sim-d2)
+#
+# Container ISOLATO per simulazione capitano + analisti, senza toccare
+# l'ambiente di dev (dev1 usa `jht`, dev2 usa il next dev host su 3005).
+#
+# Storia: creato 2026-05-23 per testare il playbook location dell'analista
+# (docs/internal/2026-05-23-location-playbook.md) su 206 posizioni vergini.
+#
+# Differenze vs docker-compose.yml di produzione:
+# - container_name: jht-sim-d2 (non collide con `jht`)
+# - HOME/JHT_HOME: /jht_home_sim → bind su ~/.jht-sim-d2/ (volume separato)
+# - JHT_USER_DIR: /jht_user_sim → bind su ~/.jht-sim-d2/user/
+# - NIENTE porte esposte (gli agenti parlano via tmux interno, l'utente
+#   non si connette al next dev di questo container)
+# - command: sleep infinity (nessun pid1/dashboard; spawn manuale agents)
+# - bind-mount sorgenti web/agents/shared/.launcher per usare le ultime
+#   modifiche senza ricostruire (db_update.py con flag location, prompt
+#   analista aggiornato, ecc.)
+
+services:
+  jht-sim-d2:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: jht-sim:local
+    container_name: jht-sim-d2
+    # Override ENTRYPOINT del Dockerfile (`tini -- node jht.js`) per evitare
+    # il crash di `node` su `croner` mancante nell'immagine. Tini resta come
+    # PID 1 per signal handling, ma il processo figlio è solo `sleep`.
+    entrypoint: ["/usr/bin/tini", "-g", "--"]
+    command: ["sleep", "infinity"]
+    environment:
+      - HOME=/jht_home_sim
+      - JHT_HOME=/jht_home_sim
+      - JHT_USER_DIR=/jht_user_sim
+      - JHT_HOST_TYPE=local
+      - JHT_LANG=it
+      - JHT_USER_TZ=Europe/Rome
+      - IS_CONTAINER=1
+      # Flag che identifica questo come container di simulazione (utile
+      # negli script per evitare di pushare verso Supabase prod).
+      - JHT_SIM_MODE=1
+      - JHT_SIM_LABEL=sim-d2
+      # API keys: ereditate dall'env Mac se presenti, altrimenti vuote
+      # (la simulazione non gira se non ci sono — gli agenti hanno bisogno
+      # di un provider per generare risposte).
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
+    volumes:
+      # Volume host separato — niente collisione con ~/.jht (dev1/desktop)
+      # né con ~/.jht-sim-w3m (collega Claude su Work3Master).
+      - ${HOME}/.jht-sim-d2:/jht_home_sim
+      - ${HOME}/.jht-sim-d2/user:/jht_user_sim
+      # Bind-mount sorgenti per hot-reload degli script/prompt aggiornati.
+      - ../../web:/app/web
+      - /app/web/node_modules
+      - /app/web/.next
+      - ../../agents:/app/agents
+      - ../../shared:/app/shared
+      - ../../.launcher:/app/.launcher
+    stdin_open: true
+    tty: true
+    # Niente restart: vogliamo controllo manuale (stop/start espliciti).
+    restart: "no"

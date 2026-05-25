@@ -86,10 +86,21 @@ Vedi sopra "Cosa va in cloud". Trade-off accettati:
 | **Hardening trigger team_state** (search_path + REVOKE EXECUTE) (mig 023) | `e6420371` | 2026-05-23 |
 | **CLI cloud preflight + 409 killswitch + login UX warn** | `98118878` | 2026-05-23 |
 | **Bottoni Start/Stop UI bulk usano `useTeamState`** | `39f1d778` | 2026-05-23 |
+| **Bottone Start/Stop derivato da team_state** (no più activeCount) | `046a0109` | 2026-05-23 |
+| **Optimistic update bottone + fix toast `[object Object]`** | `027b550b` | 2026-05-23 |
+| **Polling fallback 5s su useTeamState** (Realtime safety net) | `9232c99a` | 2026-05-23 |
+| **Realtime channel auth con JWT user** (`setAuth(jwt)`, fix postgres_changes silenti) | `22e334c8` | 2026-05-23 |
+| **Rate limit 120→300 + polling team_state 5s→15s** | `19b6f816` | 2026-05-23 |
+| **Polling pagina /team -73%** (~157→34 req/min) | `bde2fd94` | 2026-05-23 |
+| **Rate limit per-session** (auth 600/min, anon 120/min) | `f306af19` | 2026-05-23 |
+| **Fix /api/agents 404** (.vercelignore matchava web/app/api/agents/) | `8307bd3b` | 2026-05-23 |
+| **Fix /api/tokens/* 500** (isLocalRequest → empty graceful su Vercel) | `02e3bcbb`+`8b506a75` | 2026-05-23 |
+| **`/api/agents` legge da `team_state.is_running`** (era stuck su team_commands legacy) | `a7bde38e` | 2026-05-23 |
+| **Gate centrale `.team-halted.flag`** (watchdog/spawner/pid1/jht-start rispettano user Stop) | `016b7b3d` | 2026-05-25 |
 
 ### ⬜ Pending (in ordine di priorità)
 
-1. ~~**P0 — Refactor `team_commands` → `team_state` desired-state**~~ ✅ **DONE 2026-05-23** (mig 019/020/021/022/023, commit `627e7ab5...e6420371`). Single-team enforcement runtime completo (claim 409 + push 409 + PATCH 409 + reconciler retry + CLI preflight). `team_commands` ancora vivo in parallelo per cutover graduale → vedi Step 5/6.
+1. ~~**P0 — Refactor `team_commands` → `team_state` desired-state**~~ ✅ **DONE 2026-05-23** (mig 019/020/021/022/023, commit `627e7ab5...e6420371`). Single-team enforcement runtime completo (claim 409 + push 409 + PATCH 409 + reconciler retry + CLI preflight). `team_commands` ancora vivo in parallelo per cutover graduale → vedi Step 5/6. Originally motivato dalla visione web-first del maintainer.
 2. **P0 — SQLite locale: replicare CHECK constraint di Postgres** (`location ≤ 200`, `title ≤ 500`, `company ≤ 300`). Migration `cli/migrations/006_positions_check_constraints.sql`. Lo scout vedrà errore subito, non a valle. *Origin: incident root cause.*
 3. **P0 — RLS init plan fix** (24 policy con `auth.uid()` per row). Migration dedicata (non 017 che è geocoding). Ortogonale alla decimazione: senza, anche cloud "leggero" paga `O(N×K)` sotto carico.
 4. **P0 — DELETE propagation con tombstone**. Il push è solo UPSERT: una riga cancellata in SQLite locale (`web/app/api/cloud-sync/push/route.ts:338`, `cli/src/commands/cloud.js:490-510`) **non viene mai comunicata a Supabase** e resta ghost in cloud per sempre. Componenti:
@@ -104,6 +115,13 @@ Vedi sopra "Cosa va in cloud". Trade-off accettati:
 8. **P1 — Feedback loop position (like/dislike): istruire agenti** (infra `position_feedback` ✅ done). Resta: progettare istruzioni per scout (skip simili a dislike) e scorer (boost simili a like). Letture su position_feedback da agenti container.
 9. **P1 — Daemon push alert quando ≥3 fail consecutivi** ✅ implementato in `cli/src/commands/cloud.js handleDaemon` (WARN_AT=3, MAX_CONSECUTIVE_FAILS=5 → auto-shutdown). Vale anche per 409 not_active_device (vedi commit `98118878`).
 10. **P1 — Killswitch su 401/403 ripetuti**. Oggi `cli/src/commands/cloud.js:672-675` logga il 401 da token revocato ma il daemon **continua loop infinito ogni ~30s**. Comportamento atteso: 3 risposte 401/403 consecutive → halt del daemon + notifica `pending_user_messages` ("Token revocato, riapri il pairing"). Distinto dal P1 #9 (5xx/409 generico): qui è auth, non transient. *Nota: 409 not_active_device già coperto, 401/403 no.*
+
+**Edge case noto post-refactor 2026-05-25**: il `reconciler` legge solo `team_state.is_running` dal DB, non sa di tmux session locali. Scenario "DB stale vs container running" può accadere se:
+   (a) utente clicca Stop, DB → `should_run=false` `is_running=false`
+   (b) container muore prima di applicare lo stop (es. SIGKILL brutale)
+   (c) container restart, pid1 vede `.team-halted.flag` assente (non era stato creato) → auto-start agenti
+   (d) reconciler primo poll: vede `should_run=false && is_running=false` → noop, ma agenti girano
+   Risultato: agenti operativi nonostante DB dice stopped. Workaround manuale: SQL `UPDATE team_state SET should_run=true` per nudge reconciler, poi click Stop. Fix proper richiede al reconciler verifica reale tmux al boot (tmux ls + parse). *Discovered nel test E2E 2026-05-25 con Leone*.
 11. **P1 — Disaster recovery: `jht cloud restore` esplicito**. Oggi il bootstrap (`cli/src/commands/cloud.js:141`, `:710`) si attiva **solo** dentro `enable`/`login`. Se il SQLite locale muore (disco pieno, container corrotto, reset onboarding parziale) non c'è un comando "ricostruisci da cloud". Serve comando dedicato + conferma esplicita ("Sovrascriverai N righe locali con M righe cloud, procedo?") per evitare overwrite accidentale.
 12. **P1 — `JHT-LOCAL-NO-API`**: `web/lib/queries.ts` switcha su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx`.
 13. **P1 — Cutover team_commands→team_state**: Step 5 backlog. Switch UI bulk Start/Stop ✅ done. Resta: handleAction per singolo agente ancora su useTeamCommandPoller; switch incrementale + verifica E2E + Step 6 drop tabella.
@@ -115,6 +133,41 @@ Vedi sopra "Cosa va in cloud". Trade-off accettati:
 17. **P2 — Canary endpoint** per distinguere "Supabase saturo" da "Vercel slow".
 18. **DESIGN CONSTRAINT — Web write su prod (concretizza con visione web-first)**. ✅ Già adottata strategia **C** (tabelle dedicate event log `user_to_agent_messages` + `position_feedback`) nel refactor. Resta da pianificare se domani aggiungeremo write su entità esistenti (es. `positions.status` dal mobile).
 19. **PHASE 3 — VPS live theater channel** (`[JHT-CLOUD-06]`): WebSocket over SSH tunnel. Non passa per Supabase. **Strategico** post visione web-first: abilita chat sub-secondo senza prezzo polling. Browser ha già Realtime (~200ms via Supabase WS); WS over SSH serve solo se vogliamo bypassare Supabase del tutto per VPS↔web.
+
+### 🎨 Web dashboard feature gap (Task #18, #19)
+
+Scoperti durante test E2E refactor 2026-05-25. Dashboard cloud `jobhunterteam.ai/team` mancano 2 feature che funzionano solo su localhost:
+
+20. **P1 — Animazioni pallini inter-agente su cloud (Task #18)**. Su localhost TeamOrgChart anima pallini che passano da un agente all'altro (polling `/api/team/messages` + `/api/team/queue`). Su cloud le animazioni non partono: i dati di comunicazione tmux interna del container non arrivano fino a Supabase. Design:
+   - Nuova tabella `agent_messages` push-friendly (`from_agent`, `to_agent`, `kind`, `at`) OPPURE riuso esteso di `user_to_agent_messages`
+   - Bridge container aggrega sample ogni 30s (cadenza macro-events post-2026-05-20)
+   - Browser: `useAgentMessages` hook Realtime → TeamOrgChart subscriber
+   - **Why**: vision web-first; il browser deve mostrare team "vivo" come localhost
+21. **P1 — Rate Budget chart su cloud (Task #19)**. Il blocco "RATE BUDGET" (UsageChart, UsageTokensChart, AgentTokensChart, ThrottleChart, TokenTypesChart) è vuoto su cloud: `sentinel_ticks` rimosso dal push (`f68a127d` decimazione macro-events 2026-05-20) + endpoint `/api/tokens/*` dipendono da script Python locali. Su Vercel ritornano empty graceful (fix `02e3bcbb`/`8b506a75`) ma niente grafici. Design:
+   - Re-introdurre push sentinel a cadenza bassa (1 sample / 2 min, non 30s pre-decimazione)
+   - Nuova tabella `sentinel_summary` con bucket aggregati (volume gestibile vs incident RobertHalf)
+   - Migrate `/api/tokens/by-agent` `/throttle` `/by-type` da Python → SQL query Supabase
+   - `/api/sentinella/data` cloud branch legge da Supabase invece del file JSONL locale
+
+### 💰 Risparmio token + 🎯 Feedback loop ricco (Task #20, #21)
+
+Discovered 2026-05-25. Pattern: dare all'utente più controllo + segnali per orientare team senza accendere agenti. Stesso DNA del CV writer toggle.
+
+22. **P1 — Geocoding location opt-in/out per posizione (Task #20)**. Sim dev2 (sim-1/2/3) mostra che geocoding precise sull'ufficio popola bene `/map` ma costa molto agli analisti. Servono 3 modes:
+   - **ALL**: ogni position riceve geocoding (default off, costoso)
+   - **NONE**: zero geocoding (default safe)
+   - **SELECTIVE**: utente fa spunta per-position
+   - Backend: `positions.geocode_requested BOOLEAN`, analista legge prima di partire
+   - Pattern: stesso del "scrittore on/off per CV" (esistente)
+   - Compatibile con feedback loop (#21): "scaduta/non interessante" → no geocode
+23. **P1 — Feedback loop utente esteso (Task #21, estende #4)**. Vector vario per orientare scout/scorer:
+   - **Sentimento qualitativo** (1 click): like, dislike, interesting, expired, out_of_budget, wrong_location
+   - **Commento libero** (testo)
+   - **Punteggio** 1-10 opzionale
+   - **Direzionale**: more_like_this / less_like_this → scout cerca simili/evita
+   - Schema: estende `position_feedback` (mig 019) con `comment`, `score`, `direction`
+   - Capitano/Scout/Scorer leggono via Realtime + integrano nelle decisioni
+   - **Why**: web-first vision → l'utente dà valore senza consumare token AI
 
 ## 🔗 Riferimenti
 

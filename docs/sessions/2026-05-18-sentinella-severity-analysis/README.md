@@ -1,7 +1,7 @@
 # 🚨 Sentinella — analisi "troppo severa?" (post Bug #24)
 
 **Data**: 2026-05-18 16:50 CEST
-**Trigger**: Leone chiede "mi sembra che Sentinella è ancora troppo severa — forse mi sbaglio?"
+**Trigger**: maintainer chiede "mi sembra che Sentinella è ancora troppo severa — forse mi sbaglio?"
 **Verdetto**: confermato, è troppo severa nel caso osservato. Fix Quick win proposto, attesa OK per apply.
 **Riferimenti precedenti**: Bug #24 (Sentinella 3 fasi) closed nello sprint del 17 maggio.
 
@@ -180,7 +180,7 @@ Se proj > 150% ma usage < 70%:
   → con velocity 60%/h sono 30 min di buffer. Sufficiente per
   intervento manuale o second-tick re-evaluation.
 
-### 🟡 Medio — Scala throttle GRANULARE 6 livelli (proposta Leone, 2026-05-18)
+### 🟡 Medio — Scala throttle GRANULARE 6 livelli (proposta maintainer, 2026-05-18)
 
 **File**: `agents/sentinella/sentinella.md` + `agents/_skills/rate-budget/SKILL.md`
 **Effort**: 2-3h di prompt engineering + test runtime
@@ -188,7 +188,7 @@ Se proj > 150% ma usage < 70%:
 
 #### Origine
 
-Conversazione 2026-05-18 17:00 CEST: Leone osserva che oggi il bridge
+Conversazione 2026-05-18 17:00 CEST: maintainer osserva che oggi il bridge
 calcola throttle PROPORZIONALI (`240s`, `360s`, `600s`) ma la Sentinella
 LLM tende a binarizzare in "leggero ↔ freeze totale (-1)". Manca il
 **middle ground**: throttle severo (es. 30 min, 1 ora) ma NON freeze.
@@ -303,7 +303,7 @@ giudice.
 
 ---
 
-## 🎯 Raccomandazione finale (2026-05-18, Leone)
+## 🎯 Raccomandazione finale (2026-05-18, maintainer)
 
 Strategia a 2 fasi:
 
@@ -318,7 +318,7 @@ Strategia a 2 fasi:
 
 ### Fase 2 — POCO DOPO (entro 1-2 giorni)
 
-**Scala granulare 6 livelli** (proposta Leone): introduzione progressiva
+**Scala granulare 6 livelli** (proposta maintainer): introduzione progressiva
 con 4 livelli inizialmente (L1/L2/L4/L6), poi se necessario L3 e L5.
 
 - Risolve a monte il problema del binarismo Sentinella
@@ -333,7 +333,7 @@ sotto). Sentinella diventa esecutore, non giudice.
 
 ---
 
-## 📋 Checklist apply (quando Leone darà OK)
+## 📋 Checklist apply (quando maintainer darà OK)
 
 ```
 □ Modifica agents/sentinella/sentinella.md (master EN):
