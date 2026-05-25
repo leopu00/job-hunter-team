@@ -130,6 +130,61 @@ def update_position(args):
             params.append(args.last_checked)
         changed.append(f"last_checked={args.last_checked}")
 
+    # Role family + location strutturata (popolata dall'analista).
+    # Convenzione: stringa vuota "" => SET NULL (per "ripulire" un campo).
+    _loc_fields = (
+        ('role_family',       'role_family'),
+        ('loc_city',          'loc_city'),
+        ('loc_region',        'loc_region'),
+        ('loc_country',       'loc_country'),
+        ('loc_country_code',  'loc_country_code'),
+        ('loc_continent',     'loc_continent'),
+        ('work_mode',         'work_mode'),
+        ('work_country',      'work_country'),
+        ('work_country_code', 'work_country_code'),
+        ('location_notes',    'location_notes'),
+    )
+    for arg_name, col in _loc_fields:
+        v = getattr(args, arg_name, None)
+        if v is not None:
+            if v == "":
+                updates.append(f"{col} = NULL")
+                changed.append(f"{col}=NULL")
+            else:
+                updates.append(f"{col} = ?")
+                params.append(v)
+                changed.append(f"{col}={v[:40]}" if len(v) > 40 else f"{col}={v}")
+    if args.is_multi_location is not None:
+        updates.append("is_multi_location = ?")
+        params.append(1 if args.is_multi_location == 'true' else 0)
+        changed.append(f"is_multi_location={args.is_multi_location}")
+
+    # Office geocoding (skill office-geocoding)
+    if args.office_lat is not None:
+        updates.append("office_lat = ?")
+        params.append(args.office_lat)
+        changed.append(f"office_lat={args.office_lat}")
+    if args.office_lon is not None:
+        updates.append("office_lon = ?")
+        params.append(args.office_lon)
+        changed.append(f"office_lon={args.office_lon}")
+    if args.office_address is not None:
+        if args.office_address == "":
+            updates.append("office_address = NULL")
+            changed.append("office_address=NULL")
+        else:
+            updates.append("office_address = ?")
+            params.append(args.office_address)
+            changed.append(f"office_address={args.office_address[:40]}")
+    if args.office_geocoded is not None:
+        updates.append("office_geocoded = ?")
+        params.append(1 if args.office_geocoded == 'true' else 0)
+        changed.append(f"office_geocoded={args.office_geocoded}")
+    if args.office_verified is not None:
+        updates.append("office_verified = ?")
+        params.append(1 if args.office_verified == 'true' else 0)
+        changed.append(f"office_verified={args.office_verified}")
+
     if not updates:
         print("Nessun campo da aggiornare.")
         return
@@ -379,6 +434,25 @@ def main():
     p.add_argument('--salary-estimated-source', help='Fonte stima: glassdoor, levels.fyi, manual')
     p.add_argument('--source')
     p.add_argument('--last-checked', help='Data/ora ultima verifica link (YYYY-MM-DD HH:MM o "now")')
+    # Role family (categoria semantica del ruolo)
+    p.add_argument('--role-family', help='Categoria semantica popolata dall\'analista (es. "Technical Writing", "CAD / CNC"). Vedi docs/internal/2026-05-23-location-playbook.md')
+    # Location strutturata (popolata dall'analista). Vedi playbook 2026-05-23.
+    p.add_argument('--loc-city', help='Città di ufficio (es. "Dublin"). NULL se solo paese/continente.')
+    p.add_argument('--loc-region', help='Regione/stato (es. "Friuli-Venezia Giulia"). Opzionale.')
+    p.add_argument('--loc-country', help='Paese di ufficio (es. "Italy"). NULL se solo continente.')
+    p.add_argument('--loc-country-code', help='ISO-3166 alpha-2 (es. "IT").')
+    p.add_argument('--loc-continent', choices=['Europe', 'Asia', 'Americas', 'Africa', 'Oceania'])
+    p.add_argument('--work-mode', choices=['onsite', 'hybrid', 'remote'], help='Modalità di lavoro. Rimpiazza is_remote/remote_type.')
+    p.add_argument('--work-country', help='Paese contrattuale (entity che firma). Determina stipendio/CCNL.')
+    p.add_argument('--work-country-code', help='ISO-2 del paese contrattuale.')
+    p.add_argument('--is-multi-location', choices=['true', 'false'], help='true se JD elenca più città/paesi (pin singolo su centroide).')
+    p.add_argument('--location-notes', help='Note libere analista (es. "EU multi-country: NL+DE+GB")')
+    # Office geocoding precise (skill office-geocoding)
+    p.add_argument('--office-lat', type=float, help='Latitudine WGS84 ufficio (es. 41.8933203)')
+    p.add_argument('--office-lon', type=float, help='Longitudine WGS84 ufficio (es. 12.4829321)')
+    p.add_argument('--office-address', help='Indirizzo completo ufficio (display_name del geocoder)')
+    p.add_argument('--office-geocoded', choices=['true', 'false'], help='true se è stato fatto geocoding (anche se fallito)')
+    p.add_argument('--office-verified', choices=['true', 'false'], help='true se SEI SICURO sia l\'ufficio giusto; false se city-level/multi-ambiguo')
 
     # company
     c = sub.add_parser('company')

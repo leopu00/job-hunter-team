@@ -32,8 +32,6 @@ import {
   getDemoDashboardData,
   isDashboardDemoMode,
 } from "@/lib/dashboard-demo";
-import CloudDownloadLanding from "@/app/components/CloudDownloadLanding";
-import VpsSetupCompleteLanding from "@/app/components/VpsSetupCompleteLanding";
 import PendingMessagesCard from "@/app/components/PendingMessagesCard";
 import VpsCompanycycleCard from "@/app/components/VpsCompanycycleCard";
 import OnboardingPopup from "@/app/components/OnboardingPopup";
@@ -90,19 +88,7 @@ export default async function DashboardCompany() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (user) {
-      const { data: onboarding } = await supabase
-        .from("user_onboarding_state")
-        .select("vps_setup_completed_at, profile_configured_at")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (!onboarding?.vps_setup_completed_at) {
-        return <CloudDownloadLanding userEmail={user.email ?? null} />;
-      }
-      if (!onboarding?.profile_configured_at) {
-        return <VpsSetupCompleteLanding userEmail={user.email ?? null} />;
-      }
-    } else if (localRequest) {
+    if (!user && localRequest) {
       if (readWorkspaceProfile() === null) redirect("/onboarding");
     }
   } else if (!demoMode) {
@@ -309,22 +295,14 @@ export default async function DashboardCompany() {
         className="mb-8"
         style={{ animation: "fade-in 0.35s ease both 0.08s" }}
       >
+        {/* labels: nessun mapping hardcoded. La label e' il valore della
+            colonna positions.role_family, gia' una stringa leggibile
+            assegnata dal team analyst. */}
         <PositionTypesPie
           data={typeDist}
           title={t.position_types}
           emptyLabel={t.no_data}
           size={300}
-          labels={{
-            ai_ml: t.pt_ai_ml,
-            data: t.pt_data,
-            devops_cloud: t.pt_devops_cloud,
-            full_stack: t.pt_full_stack,
-            backend: t.pt_backend,
-            frontend: t.pt_frontend,
-            python: t.pt_python,
-            software_engineer: t.pt_software_engineer,
-            other: t.pt_other,
-          }}
         />
       </div>
 

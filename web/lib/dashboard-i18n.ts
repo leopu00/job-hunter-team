@@ -51,15 +51,8 @@ const T = {
 
     // Position types pie
     position_types:       'Tipologie',
-    pt_ai_ml:             'AI / ML',
-    pt_data:              'Data',
-    pt_devops_cloud:      'DevOps / Cloud',
-    pt_full_stack:        'Full Stack',
-    pt_backend:           'Backend',
-    pt_frontend:          'Frontend',
-    pt_python:            'Python',
-    pt_software_engineer: 'Software Eng.',
-    pt_other:             'Altro',
+    // Le etichette delle famiglie sono ora il valore di positions.role_family
+    // (popolato dal team analyst), non più hardcoded qui.
 
     // Table
     recent_positions:     'Posizioni Recenti',
@@ -132,15 +125,8 @@ const T = {
 
     // Position types pie
     position_types:       'Types',
-    pt_ai_ml:             'AI / ML',
-    pt_data:              'Data',
-    pt_devops_cloud:      'DevOps / Cloud',
-    pt_full_stack:        'Full Stack',
-    pt_backend:           'Backend',
-    pt_frontend:          'Frontend',
-    pt_python:            'Python',
-    pt_software_engineer: 'Software Eng.',
-    pt_other:             'Other',
+    // Family labels now come from positions.role_family in the DB
+    // (populated by the team analyst), not hardcoded here.
 
     recent_positions:     'Recent Positions',
     view_all:             'View all →',
@@ -211,15 +197,8 @@ const T = {
 
     // Position types pie
     position_types:       'Típusok',
-    pt_ai_ml:             'AI / ML',
-    pt_data:              'Adat',
-    pt_devops_cloud:      'DevOps / Cloud',
-    pt_full_stack:        'Full Stack',
-    pt_backend:           'Backend',
-    pt_frontend:          'Frontend',
-    pt_python:            'Python',
-    pt_software_engineer: 'Szoftvermérnök',
-    pt_other:             'Egyéb',
+    // A családneveket most a positions.role_family DB oszlop adja
+    // (a team analyst populálja), nincs hardkódolva itt.
 
     recent_positions:     'Legutóbbi állások',
     view_all:             'Összes megtekintése →',
