@@ -101,13 +101,14 @@ See also the **launcher-distributed skill discovery** punch list in [`docs/about
 
 ### 🧪 Real-world tests (preliminary, partially documented)
 
-> ⚠️ **Status 2026-05-22**: tre run reali esistono ma solo uno è pubblicato come Case Study. Da promuovere a `RESULTS.md` next time — vedi [JHT-TEST-CAMPAIGN] in PHASE 1. Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need).
+> ✅ **Status 2026-05-23**: 3 run pubblicati come Case Study in `docs/about/RESULTS.md`. Staging doc: `docs/internal/2026-05-23-case-study-staging.md` (analisi DB raw + log + cost breakdown). Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — ora 3/12 done.
 
-- ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1 pubblicato)
-- 🟡 Codex ProLite × non-tech multi-dominio IT+HU — VPS1 35h run 19-21/05: 206 pos → 105 ready, critic 6.30 (dati in `docs/internal/2026-05-21-vps1-run-postmortem.md`, **da promuovere a Case Study #2**)
-- 🟡 Kimi K2 × tech SWE — run ~17/05: 19 ready, critic ~6.0, ±10-15% oscillation (dati in `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`, **da promuovere a Case Study #3**)
+- ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1)
+- ✅ **Codex ProLite × Beta tester 1** (senior multilingual technical) — 34.84h run: 206 pos → 105 ready (51%), critic 6.35, 88.2% PASS, €100/mo (Case Study #2)
+- ✅ **Kimi K2 Pro × Beta tester 2** (junior software dev) — 75h run: 251 pos → 56 ready (22%), critic 5.05, 51% PASS, €40/mo, 1.61B token totali aggregati da wire.jsonl (Case Study #3)
 - ❌ Claude Pro €20 — not viable (single agent burns the window)
-- ⬜ Kimi €40 mass-market — 2 tester aggiuntivi necessari per validare jackpot
+- ⬜ Kimi €40 mass-market — almeno 2 tester esterni necessari per validare jackpot in profili diversi (Case Study #3 è maintainer-internal)
+- ⬜ Multi-week tests — i 3 case study attuali sono <4 giorni ciascuno (burst usage). Servono test 4-settimane (= 1 abbonamento mensile speso) per dati steady-state
 
 For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
@@ -137,16 +138,16 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ✅ **Refactor `team_commands` → `team_state` desired-state + event lanes** (mig 019–022, 2026-05-23) — accorpa single-team enforcement + status inference + chat/feedback lanes; `team_commands` resta vivo in parallelo durante cutover (Step 5–6 in `cloud-sync-architecture.md`)
 - ✅ **Realtime publication su team_state + lanes** (mig 021) — browser live (~200ms) via Supabase Realtime
 - ✅ **Fix RLS `location_geocode`** (mig 020) — close advisor critical: cache poisoning via anon key
-- ⬜ **P0 — SQLite CHECK constraints** (migration `006_positions_check_constraints.sql`)
-- ⬜ **P0 — RLS init plan fix** (24 policy `auth.uid()` per-row)
+- ✅ **P0 — SQLite CHECK constraints** (commit `3602d42e`, 2026-05-22) — replica CHECK length di Postgres mig 015 su SQLite locale (title/company/location)
+- ✅ **P0 — RLS init plan fix** (commit `2b78fdd9` + migration 018, 2026-05-22) — 24 policy migrate da `auth.uid()` per-row a `(select auth.uid())`, chiude advisor critical
 - ⬜ **P0 — DELETE propagation con tombstone** (push è solo UPSERT — vedi `cloud-sync-architecture.md` #4)
-- ⬜ **P1 — Daemon alert** ≥3 fail consecutivi + auto-shutdown >5 fail
+- ✅ **P1 — Daemon alert + auto-shutdown** (commit `ad2e8076`, 2026-05-22) — counter consecutiveFails: warning a ≥3, auto-shutdown a ≥5, reset su success. Origin incident RobertHalf 2026-05-19
 - ⬜ **P1 — Killswitch 401/403** (oggi daemon continua loop infinito su token revocato)
 - ⬜ **P1 — `jht cloud restore`** comando esplicito disaster recovery
 - ⬜ **P1 — Subscriber on-demand 🅲** (polling spento se team giù, post-team_state)
 - ⬜ **P1 — Polling adattivo** basato su `team_state.last_user_activity_at`
 - ⬜ **P1 — Feedback like/dislike** istruire scout/scorer a reagire
-- ⬜ **Periodic sync loop** ⏺ già done (push daemon attivo, cadenza tunata 30s→60s + delta-only)
+- ✅ **Periodic sync loop** (commit `690534e0`, 2026-05-22) — push daemon attivo, cadenza tunata 30s→60s + delta-only via `updated_at` cursor + halt-flag guard
 - ⬜ **Google Drive integration** (`drive.file` scope, CV/cover letter upload)
 - ⬜ **"Enable cloud sync" toggle** in desktop launcher + CLI wizard
 - ⬜ **Self-hosted Supabase docs** (BYO backend for technical users)
@@ -240,21 +241,98 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Co-maintainer:** identify within 60 days post-launch (can be informal, just someone who triages issues — fratello / amico fidato).
 - **Reasoning:** see `docs/internal/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
 
-##### 🧪 [JHT-TEST-CAMPAIGN] Fill coverage matrix (8/10 cells) ⬜ BLOCKER pre-launch
+##### 🧪 [JHT-TEST-CAMPAIGN] Fill coverage matrix (8/12 cells) 🟡 3/12 done — BLOCKER residuo
 
 - **Problem:** today's test claims are anecdotal (single profile, single provider). Public users will ask "does it work for *my* setup?" — we need data.
-- **Coverage tracker:** [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — 10 cells (provider × persona), 1 done (maintainer), 9 open. Target: 8/10 filled before launch.
+- **Coverage tracker:** [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — 12 cells (provider × persona), **3 done** (#1 maintainer Claude Max anecdotal, #2 Codex/translator, #3 Kimi/Python junior), 9 open. Target: **8/12** filled before launch.
 - **Pipeline:** beta tester applies via [`docs/guides/BETA.md`](docs/guides/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/about/RESULTS.md`](docs/about/RESULTS.md) and updating cell status in BETA.
 - **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
-- **Priority:** 🔴 BLOCKER pre-launch
-- **🆕 Update 2026-05-22 — abbiamo 2 celle reali non ancora pubblicate:**
-  - Run **Codex ProLite × non-tech multi-dominio IT+HU** (VPS1, 35h, 19-21/05): 206 pos → 105 ready, critic medio 6.30, dati completi in [`docs/internal/2026-05-21-vps1-run-postmortem.md`](docs/internal/2026-05-21-vps1-run-postmortem.md) (consolida team-idle-gaps + team-output-analysis + kimi-vs-codex).
-  - Run **Kimi K2 × tech SWE** (~17/05): 19 ready, critic ~6.0, dati in [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md).
-- **Next time — azioni concrete (effort ~2h):**
-  1. PR: promuovere VPS1 run a **Case Study #2** in `docs/about/RESULTS.md` (template già pronto).
-  2. PR: promuovere Kimi run a **Case Study #3** in `RESULTS.md`.
-  3. Aggiornare matrice in `docs/guides/BETA.md` → 3/10 done (non più 1/10). Identificare quale cella formale coprire (probabilmente nuove righe "non-tech multi-domain × Codex ProLite" + "tech SWE × Kimi K2 Plan").
-  4. Vero gap residuo dopo i 3 PR: trovare **2 tester Kimi €40** per validare mass-market jackpot (resta priorità).
+- **Priority:** 🔴 BLOCKER pre-launch (5 cells residue)
+- **✅ Done 2026-05-23**: estrazione DB raw da entrambe le VPS Hetzner (Codex VPS1 + Kimi VPS), analisi pipeline + cost + token, anonimizzazione, scrittura Case Study #2 + #3 in `RESULTS.md`, matrix BETA.md aggiornata 1/10 → 3/12. Staging doc: [`docs/internal/2026-05-23-case-study-staging.md`](docs/internal/2026-05-23-case-study-staging.md).
+- **Residual gap:** trovare **almeno 2 tester Kimi €40 esterni** (cell #4, #6, #7, #8, #10) per validare mass-market jackpot al di fuori del maintainer. Case Study #3 è internal (Beta tester 2 = maintainer profile costruito ad hoc), serve external confirmation.
+- **Side findings da promuovere a fix backlog:**
+  - Companies rubric Analista: 0 NO_GO su 357 companies totali tra 2 run → rubric troppo permissivo, hard requirements (degree, geo) non filtrati upfront
+  - Writer attribution null 93% su Codex run → `written_by` field non popolato consistente
+
+##### 📊 [JHT-CASE-STUDIES-WEB] Pagina pubblica /case-studies — sessione 23-25/05 done, residui pre-launch ⬜ 🟠 HIGH
+
+- **Stato 2026-05-25:** infrastructure completa, pagina navigabile su `localhost:3001/case-studies`. Schema DB (`web/data/case-studies/schema.sql` v2), seed populato (`seed.sql`), API route (`/api/case-studies` via `node:sqlite`), 9 componenti UI in `web/app/case-studies/_components/`. Toolkit estrazione VPS in `tools/case-study-extract/` con snapshot pulito di entrambe le VPS (89.7 MB zip in `~/jht-case-study-data/`). Funnel 5-stage cascade per Codex + Kimi, 2 mini-funnel Pre/Post LinkedIn per Kimi, source breakdown, coverage matrix, CTA. Profili anonimizzati come "Beta tester 1/2".
+- **Documentazione completa di handoff:** [`docs/internal/2026-05-25-case-studies-page-handoff.md`](docs/internal/2026-05-25-case-studies-page-handoff.md) (stato, decisioni viz, todo prioritizzato, file map, workflow iterazione, lesson learned).
+- **🔴 Bloccanti per publish-ready:**
+  1. **Migrazione Supabase** del schema + dati (schema gia' SQL-compatible, serve solo convertire AUTOINCREMENT→SERIAL e fix RLS). Migrazione API route da `node:sqlite` a Supabase client.
+  2. **Link `/case-studies` nel nav** principale del sito (header + footer).
+  3. **SEO meta + Open Graph image** dedicate (`metadata` export gia' minimal).
+  4. **Mobile responsive check** (PipelineFunnel full-width stretto su 375px viewport).
+- **🟠 Cleanup dati:**
+  - Hero KPI ricalcolare al cutoff (165 → 160 ready dopo cvs_ready Kimi 56→55).
+  - RESULTS.md vs DB seed drift: Kimi numbers da allineare (cvs_ready, excluded, conversion).
+  - Codex sessions (432 rollout-*.jsonl) extracted ma non aggregate per token attribution.
+- **🟡 Feature opzionali:** secondo grafico "team efficiency" (held-back/in-flight per stage), burn sparkline anche per Kimi, domain breakdown Codex, per-day timeline, critic score distribution histogram.
+- **🟢 Operativo:** shutdown VPS Hetzner (€19.50/mo combinati per 2 CPX22 ferme). Investigare auto-restart container Kimi (osservato 2× durante sessione).
+- **🐛 Bug minori funnel:** labels phase troncati su viewport stretti, legend duplicata Codex+Kimi, Pre-LinkedIn funnel "distorto" da 84 untracked.
+
+##### ✍️ [JHT-WRITER-ON-DEMAND] Scrittore + Critico spawn SOLO su selezione utente esplicita ⬜ 🔴 URGENTE pre-next-test
+
+- **Background scoperto da case study #2/#3 (2026-05-23)**: gli Scrittori sono i top consumer di token del team (spawn 3-round + Critico che a sua volta consuma per leggere CV+JD+scrivere critica). Il Critico è concettualmente "fuori dal team" (spawnato dallo Scrittore) ma il suo consumo dovrebbe essere attribuito allo Scrittore per i calcoli di throttling del Capitano. Inoltre molti CV scritti finiscono in `ready` senza che l'utente li voglia davvero → token bruciati su posizioni che l'utente non applierà mai. Su VPS Codex: 105 ready ma applied=0; su VPS Kimi: 56 ready ma applied=0.
+- **Problem statement**: oggi la pipeline scrive CV per **tutto** ciò che passa lo Scorer (default ≥60). Risultato: forte spreco di token su CV non desiderati + scarsa potenza di ricerca perché Scrittori "rubano" risorse a Scout/Analista/Scorer.
+- **Soluzione proposta** (rivoluzione architettonica per i prossimi beta test):
+  1. **Default mode = "SEARCH ONLY"**: all'avvio del team, Scrittori in stand-by. Il team gira solo come motore di ricerca + analisi + scoring → accumula posizioni con score nel DB.
+  2. **Trigger esplicito**: utente seleziona posizioni nel pool con score (via Telegram bot O dashboard web) → checkbox/star/select-all → solo per quelle posizioni si spawnano Scrittore + Critico.
+  3. **Capitano dynamic balancing**: una volta arrivata richiesta scrittura, Capitano alloca dinamicamente (es. 3 Scout + 1 Scrittore se la richiesta è piccola, oppure 2 Scout + 2 Scrittori se grossa).
+  4. **Feedback loop migliorato**: gli score (e ora anche le **selezioni esplicite** dell'utente per scrittura) diventano segnale per gli Scout — "questi tipi di posizioni interessano davvero, cerca di più in questo ambito".
+- **Vantaggi**:
+  - Risparmio token MASSIVO (probabilmente 60-80% per i beta tester che selezionano ~20% delle ready)
+  - Motore di ricerca + validazione più potente di default (più budget per Scout/Analista/Scorer)
+  - Pipeline diventa "demand-driven" invece di "speculative-driven"
+  - User-curated apply è già nel design (applied=0 by-design) → write-on-demand è la sua naturale estensione upstream
+- **Componenti da implementare**:
+  - UI dashboard web: lista posizioni scored con checkbox + "Genera CV per le selezionate" CTA
+  - Telegram bot: comando `/cv <position_id>` o `/cv all-score-80plus` per batch
+  - Capitano prompt: nuova RULE "non spawnare Scrittore se nessuna posizione ha flag `write_requested=true` nel DB"
+  - DB: aggiungere `positions.write_requested BOOLEAN DEFAULT 0` + `positions.write_requested_at TIMESTAMP`
+  - Skill nuova `[JHT-SKILL-WRITE-REQUEST]` per Scrittore: pull next position con `write_requested=true AND status='scored'`
+  - Migration Supabase: stesso campo per cloud sync
+- **Priority**: 🔴 URGENTE — da implementare PRIMA dei prossimi test beta. Cambia profondamente i numeri di consumo token e quindi la validità delle metriche.
+- **Linked**: [JHT-TOKEN-MONITOR-WRITER-CRITIC] (sotto), [JHT-COST-VALIDATION-PAYG-VS-SUB] (sotto).
+
+##### 📊 [JHT-TOKEN-MONITOR-WRITER-CRITIC] Aggrega consumo Scrittore+Critico come unità singola per throttling Capitano ⬜ 🟠 HIGH
+
+- **Background scoperto 2026-05-23**: il Critico è spawnato dallo Scrittore (~3-round critic loop). Il suo consumo token NON è attribuito allo Scrittore nel `token-meter` attuale, ma per le decisioni di throttling del Capitano dovrebbe essere considerato "1 unit" insieme allo Scrittore. Inoltre il Critico ha task atomica (read CV + JD + scrivere critica) — non può essere throttlato facilmente, quindi l'unico leva è rallentare lo Scrittore "padre" prima che spawni il Critico.
+- **Task**:
+  1. `token-meter.py` (o `pacing-bridge.py`): aggregare per-agent rate sommando `writer-N` + `critic-spawned-by-writer-N` come una sola serie temporale (chiave = writer-N).
+  2. Capitano vede `writer-N rate = 1.5M kT/min` (e quel numero include il critico associato), e decide il throttle in base al rate aggregato.
+  3. State file token-meter espone `per_writer_aggregated[writer-N] = {own_rate, critic_rate, combined_rate}` per debugging/dashboard.
+  4. Dashboard web `/team`: tab "Per-writer cost" con barra stacked (writer own + critic spawn).
+- **Linked**: [JHT-WRITER-ON-DEMAND] (sopra) sblocca anche questa misurazione perché senza writer-spawn-burst il rate aggregato resta naturalmente sotto soglia.
+- **Side bug da fix**: `token-meter.csv` non è durable cross container restart (verificato su VPS Kimi 2026-05-23, file resettato sul restart, 35 righe vs 10752 di Codex). Da rendere durable con append-mode + rotazione invece di overwrite.
+
+##### 🩺 [JHT-DOCTOR-DAILY-RESTART] Dottori riavviano ogni agente almeno 1×/giorno per context freshness ⬜ 🟠 HIGH
+
+- **Background scoperto durante Codex run 2026-05-19/21** (Case Study #1 nella pagina pubblica): a un certo punto gli agenti del team non venivano più riavviati automaticamente dai Dottori, restavano in idle con contesto vecchio di ore. Il maintainer ha dovuto fare 1 intervento manuale: missione esplicita ai Dottori per riavviare tutto il team. Ogni agente al riavvio prende un contesto fresco e ricostruisce lo stato del team in autonomia (basta guardare DB + handoff snapshot + leggersi qualche messaggio recente).
+- **Premise architetturale**: anche senza una "context window" esplicita visibile (es. Codex non la mostra come Claude/Kimi), una sessione fresca di N minuti **è sempre meglio** di una sessione che gira da ore. Drift di prompt, accumulazione di "rumore" nel ragionamento, dimenticanze, decisioni che si rifanno a fatti vecchi non più validi. Esempio empirico: Codex run del 19-21/05 ha mostrato decisioni progressivamente meno lucide nelle ore finali → il restart manuale ha riportato il team a comportamento netto.
+- **Soluzione proposta**:
+  1. **Nuova rule per il Dottore**: ogni 24h (o ad intervallo configurabile, default 24h), eseguire una mass-restart wave del team. Ordine: tier 3 (Scrittori/Critico/Scout) → tier 2 (Analista/Scorer) → tier 1 (Capitano/Sentinella/Mentor). Skip se l'agente è stato riavviato negli ultimi N ore (anti-thrash).
+  2. **Pre-restart snapshot**: ogni agente scrive `~/.jht/<agent>-pre-respawn-snapshot.txt` con stato corrente + "cosa stavo facendo" + "prossimo step" → post-restart il nuovo processo legge e riprende.
+  3. **Capitano notification**: il Dottore informa il Capitano della prossima wave 10min prima (così non spawna nuove task short-lived che vengono interrotte).
+  4. **Config**: `~/.jht/preferences.json` → `doctor.daily_restart_enabled: true`, `doctor.daily_restart_hour: "03:00"` (low-activity window default), `doctor.daily_restart_min_uptime_hours: 6` (skip se appena restartato).
+- **Vantaggi misurabili attesi**: meno token consumati per task ripetitive ben note (perché agente riconosce ridondanza), meno errori di drift, meno necessità di intervento utente manuale.
+- **Acceptance**: dopo 1 settimana di Codex run con questa feature attiva, confrontare metriche (positions/h, critic pass rate, errori loggati, intervento utente count) vs Case Study #1 (1 restart manuale) → deve mostrare miglioramento o almeno non-regressione, senza richiedere intervento utente.
+- **Linked**: chiude il gap segnalato in `docs/about/RESULTS.md` Case Study #1 note "Future runs will have doctors auto-restart every agent at least once per day for context freshness".
+
+##### 🧪 [JHT-COST-VALIDATION-PAYG-VS-SUB] Validazione cost — €40 di token Kimi pay-per-use vs €40 sub mensile ⬜ 🟡 MEDIUM
+
+- **Background**: Case Study #3 (Kimi €40 sub, 4 giorni run, 1.61B tokens all-in) ha **stimato** che pay-per-use sarebbe stato ~€78. Conferma il "mass-market jackpot" di Kimi ma è una stima da listino, non misurazione diretta.
+- **Esperimento proposto**:
+  1. Comprare credito Kimi K2 in pay-per-use per €40 esatti.
+  2. Far girare team JHT con quello stesso profilo (o Beta tester 2 stesso, o profilo nuovo neutro).
+  3. Misurare cosa produce: positions trovate, ready, critic pass rate, time-to-cap.
+  4. Confrontare con i numeri del Case Study #3 (sub €40 in 4 giorni di burst → 56 ready).
+  5. Output: metrica precisa "cost per ready CV" pay-per-use vs sub.
+- **Bonus experiment — burst vs spread**:
+  - Intuition utente (2026-05-23): uso massivo concentrato (3-4 giorni full) potrebbe avere prezzo/throughput diverso da uso distribuito (es. 1-2h/day per 30 giorni). Differenze attese: cache hit rate, tier pricing dinamico (se esiste), saturazione weekly window.
+  - Misurare: lanciare un terzo run "spread" — 1h/day per 30 giorni con stesso profilo/provider, contare token totali e ready prodotti.
+- **Acceptance**: tabella in `docs/about/RESULTS.md` con colonne "Sub €40", "Pay-per-use €40", "Spread 1h/day per 30d" + metriche → narrative chiaro su quando ciascun pattern conviene.
+- **Costo**: €40 sub Kimi + €40 token pay-per-use + 4 settimane di tempo per il run "spread". ~€80 tot + 1 mese calendar.
 
 ##### ✅ [JHT-FRONTEND-DASHBOARD-AUDIT] Audit residual mock data in dashboard — DONE 2026-05-19
 
@@ -316,27 +394,26 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Linked:** [JHT-VPS-VALIDATE] (output `docs/VPS-SETUP.md`) feeds the "Mode 3 manual" branch; [JHT-VPS-FRIENDLY] feeds the "Mode 3 wizard" branch.
 - **Provider research feeder:** [`docs/internal/vps.md`](docs/internal/vps.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
 
-##### 🪟 [JHT-CLI-WIN-NATIVE] Windows-native CLI (no WSL required) ⬜ NEW 2026-05-22
+##### 🪟 [JHT-CLI-WIN-NATIVE] Windows-native CLI (no WSL required) 🟡 3/4 DONE 2026-05-22 — E2E validation rimasta
 
-- **Problem:** scoperto durante E2E test del prompt universale AI-agent (2026-05-22). `scripts/install.sh` + `scripts/jht-wrapper.sh` sono bash-only. Su Windows un agent AI è forzato a girare via WSL, ma `curl install.sh | bash` blocca in modo silenzioso su `sudo` (stdin = pipe, non TTY) anche quando Docker è già presente via Docker Desktop. Risultato: utente Windows tech senza WSL pre-configurata non ha un path CLI funzionante.
-- **Stato attuale paths per Windows:**
+- **Problem (origine):** scoperto durante E2E test del prompt universale AI-agent (2026-05-22). `scripts/install.sh` + `scripts/jht-wrapper.sh` sono bash-only. Su Windows un agent AI era forzato a girare via WSL, ma `curl install.sh | bash` bloccava in modo silenzioso su `sudo` (stdin = pipe, non TTY) anche con Docker Desktop presente. Risultato: utente Windows tech senza WSL pre-configurata non aveva un path CLI funzionante. **Non una regressione**: il path "Windows nativo CLI" non era mai esistito — sempre dipeso da WSL o Desktop launcher.
+- **Stato paths per Windows (post-fix 22/05):**
   - ✅ Desktop launcher (`.exe`, Path 2 quickstart) — funziona ma non AI-drivable
-  - ❌ `install.ps1` — non esiste
-  - ❌ `npm install -g jht-cli` — `cli/package.json` ha `"private": true`, mai pubblicato
-  - ⚠️ Path 4 (clone repo + `docker compose`) — funziona ma "contributor mode", non per utenti finali
-  - ⚠️ WSL + install.sh — hang su sudo prompt quando lanciato non-interattivo
-- **Conseguenze:** la "universal AI-agent prompt" promessa in `docs/guides/AI-AGENT-INTEGRATION.md` non funziona end-to-end su Windows. Riduce significativamente l'audience JHT (Windows è ~70% del market consumer).
+  - ✅ `install.ps1` — **shipped 22/05** + shim CMD fallback + servito da `jobhunterteam.ai`
+  - ❌ `npm install -g jht-cli` — `cli/package.json` ha `"private": true`, mai pubblicato (discarded)
+  - ⚠️ Path 4 (clone repo + `docker compose`) — funziona ma "contributor mode"
+  - ⚠️ WSL + install.sh — hang su sudo prompt quando lanciato non-interattivo (bypassato dal path nativo)
 - **Approccio scelto:** port host-thin del wrapper bash → PowerShell + script install.ps1. Mantiene invariante architetturale "no Node sul host" (alternativa `npm publish` scartata: rompe l'invariante).
 - **Subtask:**
-  1. **[JHT-CLI-WIN-WRAPPER]** Port `scripts/jht-wrapper.sh` (274 righe) → `scripts/jht-wrapper.ps1`. Stesso dispatcher: lifecycle (`up`/`down`/`restart`/`logs`/`status`) via `docker compose`, tutto il resto via `docker exec jht node /app/cli/bin/jht.js`.
-  2. **[JHT-CLI-WIN-INSTALL]** Port `scripts/install.sh` (904 righe) → `scripts/install.ps1`. Detect Docker Desktop installato, no apt/sudo, scarica `docker-compose.yml` + `jht-wrapper.ps1` in `$env:USERPROFILE\.jht\runtime\`, registra `jht` su PATH via `$env:USERPROFILE\.local\bin\jht.ps1` o equivalente Windows.
-  3. **[JHT-CLI-WIN-DOC]** Aggiornare `docs/guides/quickstart.md` Path 3 + `AI-AGENT-INTEGRATION.md` con istruzioni Windows (`iwr | iex` invece di `curl | bash`).
-  4. **[JHT-CLI-WIN-E2E]** Rifare E2E test con agente AI (Claude Code) su Windows native — il test del 2026-05-22 va replicato per validare il fix.
+  1. ✅ **[JHT-CLI-WIN-WRAPPER]** Port `scripts/jht-wrapper.sh` → `scripts/jht-wrapper.ps1` (commit `33bfae7c`, bugfix splat scalar `81f7efc8`). Dispatcher identico: lifecycle via `docker compose`, tutto il resto via `docker exec jht node /app/cli/bin/jht.js`.
+  2. ✅ **[JHT-CLI-WIN-INSTALL]** Port `scripts/install.sh` → `scripts/install.ps1` (commit `d87890f8`, shim CMD fallback su `powershell.exe` se `pwsh` assente `1a705221`, servito da web `a95fb028`). Sync drift guard CI `77e9d6a8` + `scripts/sync-public-installers.sh` (`e930fe63`) per tenere `web/public/install.ps1` allineato.
+  3. ✅ **[JHT-CLI-WIN-DOC]** Aggiornato `docs/guides/quickstart.md` Path 3 + `AI-AGENT-INTEGRATION.md` con `iwr | iex` (commit `de51fc0f`).
+  4. ⬜ **[JHT-CLI-WIN-E2E]** **RIMASTO:** Rifare E2E test con agente AI (Claude Code) su Windows 11 nativo per validare che `iwr -useb https://jobhunterteam.ai/install.ps1 | iex` completi il flow universal AI-agent senza menzione di WSL. Owner: maintainer (richiede macchina Windows fisica — Parallels Win11 ARM non riproduce per `[project_docker_parallels_wall]`).
 - **Discarded alternatives:**
-  - `npm publish` del CLI: più semplice ma richiede Node sul host (~50MB) + rompe host-thin design. Forse Phase 2 se manteniamo entrambi.
+  - `npm publish` del CLI: più semplice ma richiede Node sul host (~50MB) + rompe host-thin design.
   - "Solo Desktop su Windows": copre non-tech ma blocca tutto il use-case AI-agent universal prompt.
 - **Acceptance:** `iwr -useb https://jobhunterteam.ai/install.ps1 | iex` su Windows 11 vergine completa in <5min senza prompt sudo/UAC bloccanti. Successivo `jht setup` interattivo funziona uguale a Linux/macOS. Universal AI prompt completa il flow end-to-end senza menzione di WSL.
-- **Priority:** 🔴 HIGH — blocca path AI-agent universal su Windows (= grosso pezzo della audience target).
+- **Priority:** 🟡 MEDIUM (residual) — implementazione completa, manca solo validazione E2E sul ferro.
 
 #### 🟡 MEDIUM PRIORITY
 
@@ -653,7 +730,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 - **Goal:** utente VPS deve poter caricare PDF (CV, certificati, lettere referenze) **senza usare scp/sftp manuale**. Oggi l'unico path funzionante e' `scp -i ~/.ssh/jht_hetzner cv.pdf root@VPS:'/root/Documents/Job Hunter Team/cv/'`, che richiede shell tools, conoscenza del bind path host, e know-how SSH/scp.
 - **Stato attuale (2026-05-08):** `web/app/profile` ha gia' un form di upload (multipart POST → `/api/profile/upload-cv`) che scrive in `/jht_user/cv/`. Funziona in dev e in prod. Su VPS via SSH tunnel `localhost:3000` e' bloccato da `[BUG-VPS-AUTH-TUNNEL]` (Supabase OAuth callback).
 - **Path forward:**
-  1. **Step 1 (sblocca tutto):** fixare `[BUG-VPS-AUTH-TUNNEL]` aggiungendo `http://localhost:3000/**` agli allowed redirect URLs Supabase. ~10min, owner Leone (admin Supabase). Senza questo, il resto della UX VPS rimane parzialmente CLI-only.
+  1. **Step 1 (sblocca tutto):** fixare `[BUG-VPS-AUTH-TUNNEL]` aggiungendo `http://localhost:3000/**` agli allowed redirect URLs Supabase. ~10min, owner maintainer (admin Supabase). Senza questo, il resto della UX VPS rimane parzialmente CLI-only.
   2. **Step 2 (UX):** verificare che il form `/profile` upload PDF su VPS via tunnel scriva correttamente in `/jht_user/cv/` (bind-mounted `~/Documents/Job Hunter Team/cv/` host). Test end-to-end sul VPS test.
   3. **Step 3 (OCR):** integrare skill PDF parsing nell'Assistente per auto-estrarre `candidate_profile.yml` dal PDF appena caricato → utente non deve compilare YAML a mano. Skill esiste in `agents/_skills/` (controllare manifest), serve solo cablarla nel flusso `/profile` upload.
   4. **Step 4 (Telegram, futuro):** Assistente accetta documento `.pdf` come allegato Telegram → stessa pipeline OCR. Roadmap PHASE 2.
@@ -789,7 +866,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 #### 🎬 [JHT-LAUNCH-03] 30s demo video 🟡 BLOCKER
 
 - ✅ Storyboard + recording plan landed at [`docs/launch/demo-storyboard.md`](docs/launch/demo-storyboard.md): 6-beat shot list timed to 30s, asciinema record/convert commands (`.cast` → `.gif` via `agg`, ≤ 2.5 MB target), captions, README embed snippet, Show HN/press-kit reuse plan.
-- ⬜ Remaining (Leone-only — needs the live install + the demo SQLite snapshot):
+- ⬜ Remaining (maintainer-only — needs the live install + the demo SQLite snapshot):
   - Add `--demo-profile` to `jht setup` and `--fixture` to `jht sentinella tail` (or drop beat 4 of the storyboard)
   - Ship `docs/launch/demo-profile.yml` (anonymised) + `assets/demo-fixtures/` snapshot
   - Record, convert, verify size, upload `.cast` to asciinema.org
@@ -829,7 +906,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 #### 📰 [JHT-LAUNCH-09] Show HN post draft 🟡
 
 - Draft landed at [`docs/launch/show-hn-draft.md`](docs/launch/show-hn-draft.md): 4 title variants, body in dev-to-dev tone with the 200/20/5 numbers, 5 pre-written first-comment answers, timing window (Tue/Wed 13-15 UTC) and Plan B fallback subreddits.
-- Still ⬜: screenshots/GIF embedded in the body (waits on LAUNCH-03 demo + LAUNCH-10 press kit), final pass once README is frozen, decide who posts (Leone vs. a friend account with karma already).
+- Still ⬜: screenshots/GIF embedded in the body (waits on LAUNCH-03 demo + LAUNCH-10 press kit), final pass once README is frozen, decide who posts (maintainer vs. a friend account with karma already).
 
 #### 🎙️ [JHT-LAUNCH-10] Press kit ⬜
 
@@ -1014,7 +1091,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   4. Save → propagazione immediata, no deploy needed.
   5. Validare end-to-end: SSH tunnel su VPS test, browser → `http://localhost:3000/?login=true` → Google OAuth → callback su `localhost:3000/auth/callback` → cookie set → redirect a `/positions`. Aggiungere screenshot a `docs/guides/VPS-SETUP.md`.
   6. Aggiornare `docs/guides/VPS-SETUP.md` step 6 con istruzioni tunnel + login flow.
-- **Owner:** chi ha credenziali admin del Supabase project JHT (Leone).
+- **Owner:** chi ha credenziali admin del Supabase project JHT (maintainer).
 - **Priorita':** 🔴 BLOCKER per UX VPS (nessuna alternativa accettabile). Banale da fixare ma richiede credenziali admin Supabase.
 - **Storia:** la limitazione attuale era intenzionale per il pre-launch (solo dominio prod come allowed callback per minimizzare attack surface). Post-launch / per dev/test, localhost deve essere sempre allowed.
 
@@ -1080,7 +1157,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **File:** `web/next.config.ts` (config `outputFileTracingRoot` + Turbopack interaction) + ambient resolution
 - **Errore (riproducibile in dev su Windows):**
   ```
-  Error: Can't resolve 'tailwindcss' in 'C:\Users\leone.puglisi\repos\job-hunter-team\dev-2'
+  Error: Can't resolve 'tailwindcss' in 'C:\Users\<user>\repos\job-hunter-team\dev-2'
     resolve as module
       C:\...\dev-2\node_modules doesn't exist or is not a directory
       C:\...\repos\node_modules doesn't exist or is not a directory
