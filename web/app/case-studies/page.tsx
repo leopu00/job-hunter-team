@@ -121,9 +121,13 @@ export default async function CaseStudiesCompany() {
             Side-by-side views of the four dimensions where the providers diverge most: cost,
             conversion, token economics, and burn rate.
           </p>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <CostPerCvBar caseStudies={caseStudies} />
+          {/* Pipeline funnel is the marquee chart — full width on its own row */}
+          <div className="mb-6">
             <PipelineFunnel caseStudies={caseStudies} />
+          </div>
+          {/* The other three cross-run dimensions in a 3-column row */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <CostPerCvBar caseStudies={caseStudies} />
             <TokenStackBar caseStudies={caseStudies} />
             <VelocityBar caseStudies={caseStudies} />
           </div>
