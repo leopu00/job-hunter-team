@@ -159,6 +159,32 @@ def update_position(args):
         params.append(1 if args.is_multi_location == 'true' else 0)
         changed.append(f"is_multi_location={args.is_multi_location}")
 
+    # Office geocoding (skill office-geocoding)
+    if args.office_lat is not None:
+        updates.append("office_lat = ?")
+        params.append(args.office_lat)
+        changed.append(f"office_lat={args.office_lat}")
+    if args.office_lon is not None:
+        updates.append("office_lon = ?")
+        params.append(args.office_lon)
+        changed.append(f"office_lon={args.office_lon}")
+    if args.office_address is not None:
+        if args.office_address == "":
+            updates.append("office_address = NULL")
+            changed.append("office_address=NULL")
+        else:
+            updates.append("office_address = ?")
+            params.append(args.office_address)
+            changed.append(f"office_address={args.office_address[:40]}")
+    if args.office_geocoded is not None:
+        updates.append("office_geocoded = ?")
+        params.append(1 if args.office_geocoded == 'true' else 0)
+        changed.append(f"office_geocoded={args.office_geocoded}")
+    if args.office_verified is not None:
+        updates.append("office_verified = ?")
+        params.append(1 if args.office_verified == 'true' else 0)
+        changed.append(f"office_verified={args.office_verified}")
+
     if not updates:
         print("Nessun campo da aggiornare.")
         return
@@ -421,6 +447,12 @@ def main():
     p.add_argument('--work-country-code', help='ISO-2 del paese contrattuale.')
     p.add_argument('--is-multi-location', choices=['true', 'false'], help='true se JD elenca più città/paesi (pin singolo su centroide).')
     p.add_argument('--location-notes', help='Note libere analista (es. "EU multi-country: NL+DE+GB")')
+    # Office geocoding precise (skill office-geocoding)
+    p.add_argument('--office-lat', type=float, help='Latitudine WGS84 ufficio (es. 41.8933203)')
+    p.add_argument('--office-lon', type=float, help='Longitudine WGS84 ufficio (es. 12.4829321)')
+    p.add_argument('--office-address', help='Indirizzo completo ufficio (display_name del geocoder)')
+    p.add_argument('--office-geocoded', choices=['true', 'false'], help='true se è stato fatto geocoding (anche se fallito)')
+    p.add_argument('--office-verified', choices=['true', 'false'], help='true se SEI SICURO sia l\'ufficio giusto; false se city-level/multi-ambiguo')
 
     # company
     c = sub.add_parser('company')
