@@ -1,19 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import type {
-  PositionTypeCount,
-  PositionType,
-} from "@/lib/position-classifier";
+import type { RoleFamilyCount } from "@/lib/position-classifier";
 
 type Props = {
-  data: PositionTypeCount[];
+  data: RoleFamilyCount[];
   labels: Record<string, string>;
   emptyLabel: string;
   size?: number;
-  // Multi-selezione: tipi attualmente attivi. Vuoto = nessun filtro.
-  selectedTypes?: PositionType[];
-  onToggleType?: (t: PositionType) => void;
+  // Multi-selezione: family attualmente attive. Vuoto = nessun filtro.
+  // Post-dev2 refactor: family viene da positions.role_family (data-driven).
+  selectedTypes?: string[];
+  onToggleType?: (t: string) => void;
 };
 
 const SIZE = 130;
@@ -66,7 +64,7 @@ export default function PositionTypesDonut({
   selectedTypes = [],
   onToggleType,
 }: Props) {
-  const [hovered, setHovered] = useState<PositionType | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   const total = data.reduce((a, d) => a + d.count, 0);
   const hasSelection = selectedTypes.length > 0;
   // Centro: hover prevale; altrimenti se UNA sola fetta selezionata
@@ -74,14 +72,14 @@ export default function PositionTypesDonut({
   const focusedType =
     hovered ?? (selectedTypes.length === 1 ? selectedTypes[0] : null);
   const focused =
-    focusedType != null ? data.find((d) => d.type === focusedType) : null;
+    focusedType != null ? data.find((d) => d.family === focusedType) : null;
   const focusedPct =
     focused && total > 0 ? Math.round((focused.count / total) * 100) : null;
   // Quando ci sono selezioni multiple, totale = somma counts selezionati
   const aggregatedCount =
     selectedTypes.length > 1
       ? data
-          .filter((d) => selectedTypes.includes(d.type))
+          .filter((d) => selectedTypes.includes(d.family))
           .reduce((a, d) => a + d.count, 0)
       : null;
 
@@ -119,8 +117,8 @@ export default function PositionTypesDonut({
           const span = (d.count / total) * 2 * Math.PI;
           const path = arc(acc, acc + span);
           acc += span;
-          const isHover = hovered === d.type;
-          const isSelected = selectedTypes.includes(d.type);
+          const isHover = hovered === d.family;
+          const isSelected = selectedTypes.includes(d.family);
           // Le fette selezionate restano sempre evidenziate (anche
           // durante hover su altre). L'hover attenua solo le fette
           // né selezionate né hovered.
@@ -130,20 +128,20 @@ export default function PositionTypesDonut({
             (hovered == null && hasSelection && !isSelected);
           return (
             <path
-              key={d.type}
+              key={d.family}
               d={path}
               fill={d.color}
               opacity={active ? 1 : dimmed ? 0.32 : 0.88}
               stroke="var(--color-deep)"
               strokeWidth={active ? 2 : 1}
-              onMouseEnter={() => setHovered(d.type)}
-              onClick={() => onToggleType?.(d.type)}
+              onMouseEnter={() => setHovered(d.family)}
+              onClick={() => onToggleType?.(d.family)}
               style={{
                 cursor: "pointer",
                 transition: "opacity 0.15s ease, stroke-width 0.15s ease",
               }}
             >
-              <title>{`${labels[d.type] ?? d.type} — ${d.count} (${Math.round((d.count / total) * 100)}%)`}</title>
+              <title>{`${labels[d.family] ?? d.family} — ${d.count} (${Math.round((d.count / total) * 100)}%)`}</title>
             </path>
           );
         });
@@ -160,7 +158,7 @@ export default function PositionTypesDonut({
         style={{ pointerEvents: "none", fontFamily: "inherit" }}
       >
         {focused
-          ? labels[focused.type] ?? focused.type
+          ? labels[focused.family] ?? focused.family
           : aggregatedCount != null
             ? `${selectedTypes.length} tipi`
             : "totale"}
@@ -198,17 +196,17 @@ export default function PositionTypesDonut({
       style={{ fontSize: 11, lineHeight: 1.2 }}
     >
       {data.map((d) => {
-        const isHover = hovered === d.type;
-        const isSelected = selectedTypes.includes(d.type);
+        const isHover = hovered === d.family;
+        const isSelected = selectedTypes.includes(d.family);
         const dimmed =
           (hovered != null && !isHover && !isSelected) ||
           (hovered == null && hasSelection && !isSelected);
         const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
         return (
           <li
-            key={d.type}
-            onMouseEnter={() => setHovered(d.type)}
-            onClick={() => onToggleType?.(d.type)}
+            key={d.family}
+            onMouseEnter={() => setHovered(d.family)}
+            onClick={() => onToggleType?.(d.family)}
             className="flex items-center gap-2 px-2 py-0.5 rounded transition-opacity"
             style={{
               cursor: onToggleType ? "pointer" : "default",
@@ -236,9 +234,9 @@ export default function PositionTypesDonut({
                   : "var(--color-base)",
                 fontWeight: isSelected ? 600 : 400,
               }}
-              title={labels[d.type] ?? d.type}
+              title={labels[d.family] ?? d.family}
             >
-              {labels[d.type] ?? d.type}
+              {labels[d.family] ?? d.family}
             </span>
             <span
               className="tabular-nums"
