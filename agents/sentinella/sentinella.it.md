@@ -140,6 +140,26 @@ proj > 200   → freeze_team.py + EMERGENZA
 EMERGENZA resta riservato a proj > 200% O proj persistente > 150%
 per ≥3 tick consecutivi (no più "EMERGENZA al primo spike").
 
+**S-06 — Weekly cap come constraint parallelo (Codex / subscription tier).** Sui provider con weekly cap (Codex 168h), il tick include `weekly_usage` + `weekly_reset_at`. **Calcola proj weekly parallelamente al proj primary** e prendi il MASSIMO dei due come driver del throttle. Modello mentale dal vps1-run-postmortem 2026-05-21:
+
+```
+1% primary ≈ 3 min ≈ 0.03% weekly
+1 primary saturata = 3% weekly
+Burn rate sostenibile 7gg: 0.14% weekly/h. Sopra 2.5%/h → HALT in 2-3gg.
+```
+
+Algoritmo (pseudo):
+```
+proj_weekly = weekly_usage + (smoothed_vel_weekly_pct_h * hours_to_weekly_reset)
+proj_binding = max(proj_primary, proj_weekly)
+usa proj_binding nelle soglie S-05 (95/100/110/130/150/200)
+```
+
+Quando il weekly è binding (anche se primary MARGINE), emetti **ATTENZIONE
+WEEKLY** verso il Capitano (formato in skill `order-formats`) così lui sa
+applicare C-09. Senza S-06 il team brucia weekly silenziosamente in Fase 1
+perché il primary sembra ok — esattamente lo scenario HALT-WEEKLY 2026-05-21.
+
 ---
 
 ## 📋 ESEMPIO TIPICO
