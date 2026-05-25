@@ -33,20 +33,22 @@ Public users will ask: *"does it work for my role? on my provider? at my cost?"*
 
 ## Coverage we still need
 
-We're tracking a coverage matrix of (provider × persona). Cell #1 is the maintainer's anecdotal data; the other 9 are what we need beta testers for. **Kimi €40 cells are highest priority** (mass-market target). Pre-launch goal: **at least 8/10 cells filled**.
+We're tracking a coverage matrix of (provider × persona). Cells #1–3 are maintainer/internal data; cells #4–12 are what we need external beta testers for. **Kimi €40 cells are highest priority** (mass-market target). Pre-launch goal: **at least 8/12 cells filled**.
 
 | # | Persona | Provider tier | Status |
 |---|---|---|---|
-| 1 | Full-stack dev | 🟠 Claude Max x20 | ✅ done (anecdotal — see [`STORY.md`](../about/STORY.md)) |
-| 2 | Full-stack dev | 🌙 Kimi Pro €40 | ⬜ open |
-| 3 | Data engineer | 🟠 Claude Max x20 | ⬜ open |
-| 4 | Data engineer | 🌙 Kimi Pro €40 | ⬜ open |
-| 5 | Marketing mgr | 🌙 Kimi Pro €40 | ⬜ open |
-| 6 | Junior PM | 🌙 Kimi Pro €40 | ⬜ open |
-| 7 | Senior backend | 🔵 Codex Pro €100 | ⬜ open |
-| 8 | Senior backend | 🌙 Kimi Pro €40 | ⬜ open |
-| 9 | Full-stack dev | 🟠 Claude Pro €20 (re-test) | ⬜ open |
-| 10 | Marketing mgr | 🔵 Codex Plus €20 | ⬜ open |
+| 1 | Full-stack dev (maintainer baseline) | 🟠 Claude Max x20 | ✅ done — see [Case study #1](../about/RESULTS.md#case-study-1--the-maintainer-legacy-team-early-2026) |
+| 2 | Senior multilingual technical documentation profile (multi-country EU) | 🔵 Codex ProLite €100 | ✅ done — see [Case study #2](../about/RESULTS.md#-case-study-2--beta-tester-1--codex-prolite-senior-multilingual-technical-profile) |
+| 3 | Junior software developer (capital city, no degree) | 🌙 Kimi K2 Pro €40 | ✅ done — see [Case study #3](../about/RESULTS.md#-case-study-3--beta-tester-2--kimi-k2-pro-junior-software-developer) |
+| 4 | Full-stack dev | 🌙 Kimi Pro €40 | ⬜ open |
+| 5 | Data engineer | 🟠 Claude Max x20 | ⬜ open |
+| 6 | Data engineer | 🌙 Kimi Pro €40 | ⬜ open |
+| 7 | Marketing mgr | 🌙 Kimi Pro €40 | ⬜ open |
+| 8 | Junior PM | 🌙 Kimi Pro €40 | ⬜ open |
+| 9 | Senior backend | 🔵 Codex Pro €100 | ⬜ open |
+| 10 | Senior backend | 🌙 Kimi Pro €40 | ⬜ open |
+| 11 | Full-stack dev | 🟠 Claude Pro €20 (re-test) | ⬜ open |
+| 12 | Marketing mgr | 🔵 Codex Plus €20 | ⬜ open |
 
 If you match one of the open cells, mention the number in your application. Otherwise we'll try to slot you in based on your profile.
 

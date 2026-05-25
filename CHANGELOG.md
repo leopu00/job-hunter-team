@@ -272,7 +272,7 @@ Release focused on friction points that emerged from manual E2E tests on Windows
 
 - New `cloud_sync_tokens` table (migration 006) with per-user RLS, SHA-256 token hash, soft-delete via `revoked_at`.
 - API CRUD `/api/cloud-sync/tokens` (GET list, POST create, DELETE revoke) — the plaintext token is returned only once at creation time.
-- `/settings/cloud-sync` page to generate, copy, and revoke tokens; each token has a human-readable name to identify the device (e.g. "MacBook Leone", "Linux cron").
+- `/settings/cloud-sync` page to generate, copy, and revoke tokens; each token has a human-readable name to identify the device (e.g. "MacBook home", "Linux cron").
 - `/api/cloud-sync/ping` endpoint for Bearer token verification (uses service-role admin client to bypass RLS), updates `last_used_at` on every check.
 - CLI commands `jht cloud enable/status/disable` — `enable` validates the token against `/api/cloud-sync/ping` and persists it in `~/.jht/cloud.json` (chmod 0600); `--url` supports self-hosted and local development.
 - New helper `web/lib/supabase/admin.ts` for service-role client used only server-side.
