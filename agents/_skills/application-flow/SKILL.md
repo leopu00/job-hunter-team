@@ -113,11 +113,11 @@ Final deliverables MUST live under `$JHT_USER_DIR`, NEVER under `$JHT_AGENT_DIR`
 
 Example for 2 Company 033 openings (bug #25 case):
 ```
-CV_LeoneEmanuelPuglisi_28_canonical_observability.pdf
-CV_LeoneEmanuelPuglisi_62_canonical_junior-ubuntu.pdf
+CV_MarioRossi_28_canonical_observability.pdf
+CV_MarioRossi_62_canonical_junior-ubuntu.pdf
 ```
 
-Before bug #25 fix both saved as `CV_LeoneEmanuelPuglisi_Company 033.pdf` → second overwrote first → DB had 2 application rows pointing to the same file → silent data corruption visible only when the user opened the PDF and read content from the *other* application.
+Before bug #25 fix both saved as `CV_MarioRossi_Company 033.pdf` → second overwrote first → DB had 2 application rows pointing to the same file → silent data corruption visible only when the user opened the PDF and read content from the *other* application.
 
 When recording the path in the DB (`--cv-path`, `--cv-pdf-path`), record the `$JHT_USER_DIR/...` path. Never a path under `$JHT_AGENT_DIR` (that's scratch — see workspace below).
 

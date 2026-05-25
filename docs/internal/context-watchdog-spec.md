@@ -615,7 +615,7 @@ di coreografia restart distribuiti, totalmente trascurabili.
   probabilmente correlati alla saturazione del Capitano. Il PoC del
   2026-05-20 conferma: dopo restart Capitano, latenza decisionale
   scende drasticamente.
-- [[feedback_dev_time_over_repair_time]] — Leone vuole feature, non
+- [[feedback_dev_time_over_repair_time]] — il maintainer vuole feature, non
   riparare tooling. Il reboot via Dottore è tooling, ma supporta
   l'operatività di tutte le feature
 - [[project_jht_goal_and_state]] — JHT è personal tool + open platform.
