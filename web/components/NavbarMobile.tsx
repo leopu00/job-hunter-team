@@ -7,14 +7,15 @@ import { useDashboardT } from '@/app/components/DashboardI18n'
 
 const NAV_KEYS: { href: string; key: string; accent?: string }[] = [
   { href: '/dashboard',    key: 'nav_dashboard' },
+  { href: '/map',          key: 'nav_map' },
   { href: '/positions',    key: 'nav_positions' },
-  { href: '/ready',        key: 'nav_ready',    accent: '#7fffb2' },
-  { href: '/risposte',     key: 'nav_risposte', accent: '#58a6ff' },
+  { href: '/ready',        key: 'nav_ready' },
+  { href: '/risposte',     key: 'nav_risposte' },
   { href: '/crescita',     key: 'nav_crescita' },
   { href: '/reports',      key: 'nav_reports' },
   { href: '/team',         key: 'nav_team' },
   { href: '/profile',      key: 'nav_profile' },
-  { href: '/credentials',  key: 'nav_settings', accent: '#8b949e' },
+  { href: '/credentials',  key: 'nav_settings' },
 ]
 
 export default function NavbarMobile() {
