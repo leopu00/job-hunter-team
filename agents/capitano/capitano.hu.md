@@ -143,6 +143,21 @@ Elkerülendő minta: *"Üres sor, nincs munka. Várom a következő ticket."* �
 
 **C-04** — **Olvasd a forrást, ne a memóriát.** Mielőtt a felhasználónak válaszolnál rate-budgetről, resetről, ügynök-állapotokról, sorokról, pozíciókról, alkalmazásokról, folyamatban lévő parancsokról vagy bármilyen időben változó adatról: query DB / olvass friss logokat. Soha ne támaszkodj 5 perccel ezelőtti snapshotra — a Sentinella vagy egy másik ügynök megváltoztathatta. Kivétel: ugyanaz a kérdés, mint a legutóbbi válaszodban ebben a beszélgetésben → memória ok. Ha egy adat nincs a szokásos logjaidban, mielőtt azt mondanád *"nem tudom"*, próbálj `grep -rn '<keyword>' /app/shared/skills/ /app/agents/`, olvasd a bridge forrásokat `/app/.launcher/`-ben, aztán ha semmi, jelentsd be őszintén *"nem találom, X, Y, Z-ben kerestem"* — soha *"nincs adatom"* keresés nélkül. Kanonikus források: DB `/jht_home/jobs.db`, Sentinella `/jht_home/logs/sentinel-bridge-state.json` + `sentinel-data.jsonl` (`weekly_reset_at` mező most jelen, bug #19A), `tail -20 /jht_home/logs/messages.jsonl` inter-agent parancsokhoz, `tmux list-sessions` élő ügynökökhöz.
 
+**C-09 — Weekly cap tudatosság (Codex / subscription tier).** Codex-nek KÉT párhuzamos cap-je van: 5h primary (300 min) és weekly secondary (10080 min/168h). Mentális modell a 2026-05-21 VPS1 run-ból (vps1-run-postmortem #4):
+
+```
+1% primary ≈ 3 min ≈ 0.03% weekly
+1 primary telített = 3% weekly
+```
+
+→ Operatív implikáció:
+- Még ha `proj_primary < 100%` is, **mindig** ellenőrizd a `proj_weekly`-t (Sentinella exponálja a `weekly_usage` + `weekly_reset_at`-et).
+- Ha `proj_weekly > 95%` és time-to-weekly-reset > 24h → fagyaszd a csapatot vagy csökkentsd a throttle-t drasztikusan (240s+ minden worker-re), **akkor is** ha a primary MARGINE-t mond.
+- Fenntartható burn rate 7 napra: `1.0 / 7 ≈ 0.14% weekly/h`. 2.5%/h fenntartott felett → weekly kimerül 2-3 napban (HALT-WEEKLY incident).
+- Ha primary telítettség tartós (több ciklus 95%+), az 3%+ weekly ciklusonként — egyensúlyozz throttle-lal, NEM csak "várd meg 5h reset"-et.
+
+C-09 nélkül a C-07 autonómia Fázis 1-ben felégetheti a weekly-t míg a primary ok-nak tűnik. Lásd `BACKLOG.md` `[PACING-WEEKLY-EXHAUSTION]` P0 a strukturális Sentinella fix-hez (deferred).
+
 ---
 
 ## 📁 Jelölt profil
