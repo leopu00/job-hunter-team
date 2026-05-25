@@ -179,13 +179,15 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 ##### 🌙 [JHT-KIMI-OPTIMIZE] Kimi €40 mass-market calibration
 
-- **Problem:** Kimi projection oscillation is ±10–15% (vs Claude ±5%). Current target is 85% (15% safety buffer = wasted capacity).
-- **Tasks:**
-  1. Analyze Kimi response-size distribution
-  2. Adapt projection model for higher variance
-  3. Final target: 90%+ with <10% oscillation (= Claude equivalent)
-  4. Stress test: 1 month of real job-hunting
-- **Benefit:** if it holds → JHT becomes accessible to anyone for €40/month (vs €200 Claude Max). "Mass-market jackpot" — see `docs/about/PROVIDERS.md` and `docs/about/MONITORING.md`.
+- **Problem originale:** Kimi projection oscillation ±10–15% (vs Claude ±5%). Target conservativo 85% (15% safety buffer = wasted capacity).
+- **Stato 2026-05-25 (refresh post case study #3 + work-hours design):**
+  1. ✅ **Token-meter calibration done** (2026-05-01): empirico `1% rate budget Kimi K2 = 30 kT weighted`, stabile. Per-agent attribution funziona via `state.json.custom_title` regex.
+  2. ✅ **Case study #3 reale** (2026-05-23): run 75h, 56 CV ready, €0.71/CV, burn 5.37%/h, 1.61B token aggregati. Dati pubblicati in `docs/about/RESULTS.md` e `web/data/case-studies/seed.sql`. **Internal-only** (maintainer-built profile).
+  3. ⬜ **Variance analysis dentro finestra 5h** — vero blocker per ridurre buffer 85% → 90%. Kimi NON ha weekly cap quindi work-hours design ([`docs/internal/2026-05-25-work-hours-design.md`](docs/internal/2026-05-25-work-hours-design.md)) NON risolve l'oscillazione (risolve solo il problema weekly exhaustion che vale per Claude/Codex).
+  4. ⬜ **Pacing-bridge per-provider tuning** — oggi `.launcher/pacing-bridge.py` usa `TARGET_BAND_CENTER=92` per tutti i provider. Serve override per Kimi (es. 88% finché variance non scende).
+  5. ⬜ **External beta testers** — almeno 2 tester Kimi €40 esterni per validare mass-market jackpot (cells residue #4, #6, #7, #8, #10 in [`docs/guides/BETA.md`](docs/guides/BETA.md)).
+  6. ⬜ **Stress test 1 mese** real job-hunting.
+- **Benefit:** se regge → JHT accessibile a €40/mo (vs €200 Claude Max). "Mass-market jackpot" — vedi `docs/about/PROVIDERS.md` e `docs/about/MONITORING.md`.
 
 ##### 💂 [JHT-SENTINELLA-OPTIMIZE] Reduce Sentinel token consumption — partially addressed by V6 (2026-05-01)
 
