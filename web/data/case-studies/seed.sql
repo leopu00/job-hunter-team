@@ -164,6 +164,27 @@ INSERT INTO case_study_metrics (case_study_id, metric_key, metric_label, value_n
 (2, 'pipeline_excluded_at_scored',  'Excluded after scoring',    3,  '3 (score too low)',                                                  'count','✂️','pipeline',112,0),
 (2, 'pipeline_excluded_at_writing', 'Excluded in writing',      38,  '38 (Critic rejection)',                                              'count','✂️','pipeline',113,0),
 (2, 'pipeline_excluded_total',  'Excluded total',              163, '163 (65% of decided pool)',                                           'count','❌','pipeline',114,0),
+-- ─── Pre-LinkedIn phase cascade (118 positions, status @ cutoff) ───
+-- Bug #14 untracked: 84 untracked → aggregated to ex_new (none tracked at scout level)
+(2, 'phase_pre_pipeline_new',       'Pre-LinkedIn · Found',     113,  '113 reached terminal',                        'count','📥','pipeline',130,0),
+(2, 'phase_pre_pipeline_checked',   'Pre-LinkedIn · Checked',    29,  '29 made it past triage',                      'count','🔍','pipeline',131,0),
+(2, 'phase_pre_pipeline_scored',    'Pre-LinkedIn · Scored',     29,  '29 reached scoring',                           'count','📊','pipeline',132,0),
+(2, 'phase_pre_pipeline_writing',   'Pre-LinkedIn · Writing',    29,  '29 assigned to Writer',                        'count','✍️','pipeline',133,0),
+(2, 'phase_pre_pipeline_ready',     'Pre-LinkedIn · Ready',      20,  '20 PASS (17.7% conversion)',                   'count','✅','pipeline',134,0),
+(2, 'phase_pre_ex_new',             'Pre-LinkedIn · ex_new',     84,  '84 (mostly untracked pre-bug#14)',            'count','✂️','pipeline',135,0),
+(2, 'phase_pre_ex_checked',         'Pre-LinkedIn · ex_checked',  0,  '0 (no tracked checked exclusion)',            'count','✂️','pipeline',136,0),
+(2, 'phase_pre_ex_scored',          'Pre-LinkedIn · ex_scored',   0,  '0',                                            'count','✂️','pipeline',137,0),
+(2, 'phase_pre_ex_writing',         'Pre-LinkedIn · ex_writing',  9,  '9 (Critic rejection on Writer output)',        'count','✂️','pipeline',138,0),
+-- ─── Post-LinkedIn phase cascade (133 positions, status @ cutoff) ───
+(2, 'phase_post_pipeline_new',      'Post-LinkedIn · Found',    105,  '105 reached terminal',                         'count','📥','pipeline',140,0),
+(2, 'phase_post_pipeline_checked',  'Post-LinkedIn · Checked',   88,  '88 made it past triage',                       'count','🔍','pipeline',141,0),
+(2, 'phase_post_pipeline_scored',   'Post-LinkedIn · Scored',    67,  '67 reached scoring',                           'count','📊','pipeline',142,0),
+(2, 'phase_post_pipeline_writing',  'Post-LinkedIn · Writing',   64,  '64 assigned to Writer',                        'count','✍️','pipeline',143,0),
+(2, 'phase_post_pipeline_ready',    'Post-LinkedIn · Ready',     35,  '35 PASS (33.3% conversion — almost 2× Pre)',   'count','✅','pipeline',144,0),
+(2, 'phase_post_ex_new',            'Post-LinkedIn · ex_new',    17,  '17 (scout-level rejection)',                   'count','✂️','pipeline',145,0),
+(2, 'phase_post_ex_checked',        'Post-LinkedIn · ex_checked',21,  '21 (Analista pre-check failure)',              'count','✂️','pipeline',146,0),
+(2, 'phase_post_ex_scored',         'Post-LinkedIn · ex_scored',  3,  '3 (low score)',                                'count','✂️','pipeline',147,0),
+(2, 'phase_post_ex_writing',        'Post-LinkedIn · ex_writing',29,  '29 (Critic rejection)',                        'count','✂️','pipeline',148,0),
 -- Source breakdown (Kimi only — LinkedIn enabled mid-run is a key insight)
 (2, 'source_linkedin_total',    'LinkedIn positions found',    124,  '124 (LinkedIn enabled at 17/05 21:35 UTC)',                          'count','💼','pipeline',120,0),
 (2, 'source_linkedin_ready',    'LinkedIn → ready',            34,   '34 PASS (27.4% conversion on LinkedIn-sourced)',                     'count','💼','pipeline',121,0),
