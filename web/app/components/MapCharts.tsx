@@ -18,11 +18,36 @@ type NoCoordItem = {
   score: number | null;
   is_remote: boolean;
   location: string | null;
+  loc_country: string | null;
+  loc_city: string | null;
 };
 
-type LocationCount = {
-  location: string;
+// Subset campi PositionCoord che servono per re-derivare donut/histogram
+// dal filtro location. Fetched in parallelo a /api/positions/no-coords.
+type CoordItem = {
+  id: string;
+  role_family: string | null;
+  score: number | null;
+  loc_country: string | null;
+  loc_city: string | null;
+};
+
+// Company gerarchico restituito da /api/positions/locations
+type LocationPositionLite = {
+  id: string;
+  title: string | null;
+  company: string | null;
+  score: number | null;
+};
+type LocationCity = {
+  city: string | null;
   count: number;
+  positions: LocationPositionLite[];
+};
+type LocationCountry = {
+  country: string;
+  count: number;
+  cities: LocationCity[];
 };
 
 type Props = {
@@ -49,9 +74,19 @@ export default function MapCharts({
     Array<{ lo: number; hi: number }>
   >([]);
   const [unscoredSelected, setUnscoredSelected] = useState(false);
-  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  // Filtro location: array di nomi country (es. "Italy") e di city
+  // formato "Country|City" (es. "Italy|Milan"). Country e city
+  // OR-uniti (selezioni multiple).
+  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [noCoords, setNoCoords] = useState<NoCoordItem[]>([]);
-  const [locations, setLocations] = useState<LocationCount[]>([]);
+  // Posizioni con coordinate ufficio — fetched per ricomputare
+  // donut/histogram in base al filtro location.
+  const [coordItems, setCoordItems] = useState<CoordItem[]>([]);
+  const [locations, setLocations] = useState<LocationCountry[]>([]);
+  // Country e city aperti nel drilldown della sidebar Location.
+  const [openCountry, setOpenCountry] = useState<string | null>(null);
+  const [openCity, setOpenCity] = useState<string | null>(null);
 
   // Fetch lista posizioni senza coords una volta al mount.
   useEffect(() => {
@@ -62,17 +97,25 @@ export default function MapCharts({
         if (!cancel) setNoCoords(Array.isArray(d) ? d : []);
       })
       .catch(() => undefined);
+    // Fetch in parallelo positions con coords (subset di campi
+    // necessari a ricomputare donut+histogram sotto filtro location).
+    fetch("/api/positions/coords")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d: CoordItem[]) => {
+        if (!cancel) setCoordItems(Array.isArray(d) ? d : []);
+      })
+      .catch(() => undefined);
     return () => {
       cancel = true;
     };
   }, []);
 
-  // Fetch conteggio per location.
+  // Fetch tree gerarchico location (country → cities → positions).
   useEffect(() => {
     let cancel = false;
     fetch("/api/positions/locations")
       .then((r) => (r.ok ? r.json() : []))
-      .then((d: LocationCount[]) => {
+      .then((d: LocationCountry[]) => {
         if (!cancel) setLocations(Array.isArray(d) ? d : []);
       })
       .catch(() => undefined);
@@ -99,41 +142,153 @@ export default function MapCharts({
       )
         return false;
       if (!passScoreFilter(p.score)) return false;
-      if (
-        selectedLocations.length > 0 &&
-        !selectedLocations.includes(p.location ?? "—")
-      )
-        return false;
+      if (selectedCountries.length > 0 || selectedCities.length > 0) {
+        const country = (p.loc_country ?? "").trim() || "(unknown)";
+        const city = (p.loc_city ?? "").trim() || null;
+        const cityKey = `${country}|${city ?? "(country-only)"}`;
+        const matchCity = selectedCities.includes(cityKey);
+        const matchCountry = selectedCountries.includes(country);
+        if (!matchCity && !matchCountry) return false;
+      }
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noCoords, selectedTypes, selectedRanges, unscoredSelected, selectedLocations]);
+  }, [
+    noCoords,
+    selectedTypes,
+    selectedRanges,
+    unscoredSelected,
+    selectedCountries,
+    selectedCities,
+  ]);
 
-  // Score grezzi mostrati nel histogram:
-  //   - se nessun tipo selezionato → fallbackScores (tutti)
-  //   - altrimenti → concat degli scores dei tipi selezionati.
-  const histogramScores = useMemo(() => {
-    if (selectedTypes.length === 0) return fallbackScores;
-    const out: number[] = [];
-    for (const t of selectedTypes) {
-      const entry = typeDist.find((d) => d.family === t);
-      if (entry?.scores) out.push(...entry.scores);
+  // Tutte le posizioni (coords + no-coords) usate per re-derivare le
+  // metriche quando un filtro location è attivo. Pre-fetch: vuoto fino
+  // al primo fetch; in quel caso fallback ai typeDist server-side.
+  const allItemsLite = useMemo(() => {
+    return [
+      ...coordItems.map((p) => ({
+        id: p.id,
+        role_family: p.role_family,
+        score: p.score,
+        loc_country: p.loc_country,
+        loc_city: p.loc_city,
+      })),
+      ...noCoords.map((p) => ({
+        id: p.id,
+        role_family: p.role_family,
+        score: p.score,
+        loc_country: p.loc_country,
+        loc_city: p.loc_city,
+      })),
+    ];
+  }, [coordItems, noCoords]);
+
+  const locationFilterActive =
+    selectedCountries.length > 0 || selectedCities.length > 0;
+
+  // Subset filtrato per location (donut+histogram scope).
+  const locScopeItems = useMemo(() => {
+    if (!locationFilterActive) return allItemsLite;
+    return allItemsLite.filter((p) => {
+      const country = (p.loc_country ?? "").trim() || "(unknown)";
+      const city = (p.loc_city ?? "").trim() || null;
+      if (selectedCities.length > 0) {
+        const key = `${country}|${city ?? "(country-only)"}`;
+        if (selectedCities.includes(key)) return true;
+      }
+      if (selectedCountries.length > 0 && selectedCountries.includes(country)) {
+        return true;
+      }
+      return false;
+    });
+  }, [allItemsLite, locationFilterActive, selectedCountries, selectedCities]);
+
+  // typeDist effective derivato dal subset filtered (preserva color
+  // dai typeDist prop, che è il source-of-truth per palette/labels).
+  const effectiveTypeDist = useMemo<RoleFamilyCount[]>(() => {
+    // Pre-fetch: fallback ai typeDist server-side (no filter applicato).
+    if (allItemsLite.length === 0) return typeDist;
+    const byFamily = new Map<string, { count: number; scores: number[] }>();
+    for (const p of locScopeItems) {
+      const f = p.role_family ?? UNCATEGORIZED_LABEL;
+      const e = byFamily.get(f) ?? { count: 0, scores: [] };
+      e.count++;
+      if (typeof p.score === "number") e.scores.push(p.score);
+      byFamily.set(f, e);
     }
-    return out;
-  }, [selectedTypes, typeDist, fallbackScores]);
+    return Array.from(byFamily.entries())
+      .map(([family, d]) => {
+        const proto = typeDist.find((x) => x.family === family);
+        return {
+          family,
+          count: d.count,
+          color: proto?.color,
+          avgScore: proto?.avgScore ?? null,
+          avgCritic: proto?.avgCritic ?? null,
+          scores: d.scores,
+        } as RoleFamilyCount;
+      })
+      .sort((a, b) => b.count - a.count);
+  }, [allItemsLite, locScopeItems, typeDist]);
 
-  // Posizioni nel dataset corrente SENZA score numerico:
-  // totale (filtrato per tipi se selezionati) - quante hanno score.
-  // Coerente col donut: count include unscored, histogram.scores no.
+  // Score grezzi mostrati nel histogram (subset filtered location +
+  // tipi selezionati).
+  const histogramScores = useMemo(() => {
+    let pool = locScopeItems;
+    if (selectedTypes.length > 0) {
+      pool = pool.filter((p) =>
+        selectedTypes.includes(p.role_family ?? UNCATEGORIZED_LABEL),
+      );
+    }
+    const scores = pool
+      .map((p) => p.score)
+      .filter((s): s is number => typeof s === "number");
+    // Pre-fetch fallback: usa fallbackScores server-side.
+    if (allItemsLite.length === 0) {
+      if (selectedTypes.length === 0) return fallbackScores;
+      const out: number[] = [];
+      for (const t of selectedTypes) {
+        const entry = typeDist.find((d) => d.family === t);
+        if (entry?.scores) out.push(...entry.scores);
+      }
+      return out;
+    }
+    return scores;
+  }, [
+    allItemsLite,
+    locScopeItems,
+    selectedTypes,
+    typeDist,
+    fallbackScores,
+  ]);
+
+  // Unscored count nel scope.
   const unscoredCount = useMemo(() => {
-    const totalInScope =
-      selectedTypes.length === 0
-        ? typeDist.reduce((a, d) => a + d.count, 0)
-        : typeDist
-            .filter((d) => selectedTypes.includes(d.family))
-            .reduce((a, d) => a + d.count, 0);
-    return Math.max(0, totalInScope - histogramScores.length);
-  }, [selectedTypes, typeDist, histogramScores]);
+    if (allItemsLite.length === 0) {
+      // Fallback server-side: count su typeDist con filtro tipo.
+      const totalInScope =
+        selectedTypes.length === 0
+          ? typeDist.reduce((a, d) => a + d.count, 0)
+          : typeDist
+              .filter((d) => selectedTypes.includes(d.family))
+              .reduce((a, d) => a + d.count, 0);
+      return Math.max(0, totalInScope - histogramScores.length);
+    }
+    let pool = locScopeItems;
+    if (selectedTypes.length > 0) {
+      pool = pool.filter((p) =>
+        selectedTypes.includes(p.role_family ?? UNCATEGORIZED_LABEL),
+      );
+    }
+    return pool.filter((p) => typeof p.score !== "number").length;
+  }, [
+    allItemsLite,
+    locScopeItems,
+    selectedTypes,
+    typeDist,
+    histogramScores,
+  ]);
 
   const toggleType = (t: string) =>
     setSelectedTypes((cur) =>
@@ -145,9 +300,13 @@ export default function MapCharts({
         ? cur.filter((x) => !(x.lo === r.lo && x.hi === r.hi))
         : [...cur, r],
     );
-  const toggleLocation = (loc: string) =>
-    setSelectedLocations((cur) =>
-      cur.includes(loc) ? cur.filter((x) => x !== loc) : [...cur, loc],
+  const toggleCountry = (c: string) =>
+    setSelectedCountries((cur) =>
+      cur.includes(c) ? cur.filter((x) => x !== c) : [...cur, c],
+    );
+  const toggleCity = (key: string) =>
+    setSelectedCities((cur) =>
+      cur.includes(key) ? cur.filter((x) => x !== key) : [...cur, key],
     );
 
   return (
@@ -159,7 +318,8 @@ export default function MapCharts({
           selectedTypes={selectedTypes}
           selectedScoreRanges={selectedRanges}
           selectedUnscored={unscoredSelected}
-          selectedLocations={selectedLocations}
+          selectedCountries={selectedCountries}
+          selectedCities={selectedCities}
         />
       </div>
 
@@ -214,11 +374,20 @@ export default function MapCharts({
               onRemove: () => setUnscoredSelected(false),
             });
           }
-          for (const loc of selectedLocations) {
+          for (const c of selectedCountries) {
             arr.push({
-              key: `l-${loc}`,
-              label: loc,
-              onRemove: () => toggleLocation(loc),
+              key: `co-${c}`,
+              label: c,
+              onRemove: () => toggleCountry(c),
+            });
+          }
+          for (const ck of selectedCities) {
+            // Mostra "City" (Country implicito) nel chip per brevità.
+            const [country, city] = ck.split("|");
+            arr.push({
+              key: `ci-${ck}`,
+              label: city === "(country-only)" ? country : (city ?? country),
+              onRemove: () => toggleCity(ck),
             });
           }
           return arr;
@@ -227,7 +396,8 @@ export default function MapCharts({
           setSelectedTypes([]);
           setSelectedRanges([]);
           setUnscoredSelected(false);
-          setSelectedLocations([]);
+          setSelectedCountries([]);
+          setSelectedCities([]);
         }}
         chartReserveRight={24 + 420 + 12}
       />
@@ -357,89 +527,29 @@ export default function MapCharts({
         );
       })()}
 
-      {/* Lista paesi/location — overlay sopra il donut, bottom-left.
-          Dati grezzi non normalizzati (location come è nel DB). */}
+      {/* Company gerarchico Location: country → city → posizioni.
+          Click su country/city = filtra la mappa E apre/chiude il
+          drilldown (azione singola, intuitiva). Click position →
+          apre /positions/<id> in nuova tab, NIENTE filter. */}
       {locations.length > 0 && (
-        <div
-          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
-          style={{
-            position: "absolute",
-            // Donut: bottom 24, height ~280 (size 280) + padding.
-            // Lascio 16px gap.
-            bottom: 24 + 280 + 16,
-            left: 24,
-            zIndex: 10,
-            width: 240,
-            maxHeight: 240,
-            display: "flex",
-            flexDirection: "column",
-            pointerEvents: "auto",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+        <LocationCompany
+          tree={locations}
+          openCountry={openCountry}
+          openCity={openCity}
+          selectedCountries={selectedCountries}
+          selectedCities={selectedCities}
+          onCountryClick={(c) => {
+            const isOpen = openCountry === c;
+            setOpenCountry(isOpen ? null : c);
+            setOpenCity(null);
+            toggleCountry(c);
           }}
-        >
-          <div
-            className="px-4 py-2 border-b text-[10px] font-semibold tracking-[0.14em] uppercase flex items-baseline justify-between"
-            style={{
-              borderColor: "var(--color-border)",
-              color: "var(--color-dim)",
-            }}
-          >
-            <span>Location</span>
-            <span
-              className="tabular-nums"
-              style={{ color: "var(--color-muted)" }}
-            >
-              {locations.length}
-            </span>
-          </div>
-          <ul
-            className="divide-y overflow-y-auto"
-            style={{ borderColor: "var(--color-border)" }}
-          >
-            {locations.map((loc) => {
-              const isSelected = selectedLocations.includes(loc.location);
-              const hasSel = selectedLocations.length > 0;
-              return (
-                <li
-                  key={loc.location}
-                  onClick={() => toggleLocation(loc.location)}
-                  className="px-4 py-1.5 text-[11px] flex items-baseline justify-between gap-2 transition-colors"
-                  style={{
-                    borderColor: "var(--color-border)",
-                    cursor: "pointer",
-                    background: isSelected
-                      ? "rgba(255,255,255,0.06)"
-                      : "transparent",
-                    opacity: hasSel && !isSelected ? 0.45 : 1,
-                  }}
-                >
-                  <span
-                    className="truncate"
-                    style={{
-                      color: isSelected
-                        ? "var(--color-bright)"
-                        : "var(--color-base)",
-                      fontWeight: isSelected ? 600 : 400,
-                    }}
-                    title={loc.location}
-                  >
-                    {loc.location}
-                  </span>
-                  <span
-                    className="tabular-nums font-semibold flex-shrink-0"
-                    style={{
-                      color: isSelected
-                        ? "var(--color-bright)"
-                        : "var(--color-muted)",
-                    }}
-                  >
-                    {loc.count}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+          onCityClick={(key) => {
+            const isOpen = openCity === key;
+            setOpenCity(isOpen ? null : key);
+            toggleCity(key);
+          }}
+        />
       )}
 
       {/* Position Types donut — overlay bottom-left */}
@@ -453,7 +563,7 @@ export default function MapCharts({
         }}
       >
         <PositionTypesDonut
-          data={typeDist}
+          data={effectiveTypeDist}
           emptyLabel={emptyLabel}
           size={280}
           labels={labels}
@@ -677,5 +787,240 @@ function FilterChip({
         ×
       </button>
     </span>
+  );
+}
+
+// ── Sidebar Location: tree gerarchico country → cities → positions ──
+// Una sola country aperta alla volta, una sola city aperta dentro di
+// essa. Click su una position apre /positions/<id> in nuova tab.
+function LocationCompany({
+  tree,
+  openCountry,
+  openCity,
+  selectedCountries,
+  selectedCities,
+  onCountryClick,
+  onCityClick,
+}: {
+  tree: LocationCountry[];
+  openCountry: string | null;
+  openCity: string | null;
+  selectedCountries: string[];
+  selectedCities: string[];
+  onCountryClick: (c: string) => void;
+  onCityClick: (key: string) => void;
+}) {
+  // Conteggio totale (somma count countries) per il badge header.
+  const total = tree.reduce((s, c) => s + c.count, 0);
+  return (
+    <div
+      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+      style={{
+        position: "absolute",
+        // Top: 60 → la riga "LOCATION header" coincide visualmente
+        // con la prima barra del chart Score Distribution dx (che ha
+        // un padding-top interno SVG che pushava la prima barra in giù).
+        top: 60,
+        left: 24,
+        bottom: 24 + 280 + 16,
+        zIndex: 10,
+        // Width: donut (280) + gap (16) + zona label (~160) ≈ 460
+        // → la card Location si allinea sotto al donut+labels.
+        width: 460,
+        display: "flex",
+        flexDirection: "column",
+        pointerEvents: "auto",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+      }}
+    >
+      <div
+        className="px-4 py-2 border-b text-[10px] font-semibold tracking-[0.14em] uppercase flex items-baseline justify-between"
+        style={{
+          borderColor: "var(--color-border)",
+          color: "var(--color-dim)",
+        }}
+      >
+        <span>Location</span>
+        <span
+          className="tabular-nums"
+          style={{ color: "var(--color-muted)" }}
+        >
+          {tree.length} · {total}
+        </span>
+      </div>
+      <ul
+        className="divide-y overflow-y-auto"
+        style={{ borderColor: "var(--color-border)" }}
+      >
+        {tree.map((country) => {
+          const isOpen = openCountry === country.country;
+          const isSelected = selectedCountries.includes(country.country);
+          return (
+            <li
+              key={country.country}
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              <div
+                onClick={() => onCountryClick(country.country)}
+                className="px-4 py-1.5 text-[11px] flex items-baseline justify-between gap-2 cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                style={{
+                  background: isSelected
+                    ? "rgba(0,232,122,0.08)"
+                    : isOpen
+                    ? "rgba(255,255,255,0.04)"
+                    : "transparent",
+                }}
+              >
+                <span
+                  className="truncate flex items-baseline gap-1.5"
+                  style={{
+                    color: isSelected || isOpen
+                      ? "var(--color-bright)"
+                      : "var(--color-base)",
+                    fontWeight: isSelected || isOpen ? 600 : 400,
+                  }}
+                  title={country.country}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      display: "inline-block",
+                      width: 8,
+                      color: "var(--color-dim)",
+                      fontSize: 9,
+                    }}
+                  >
+                    {isOpen ? "▼" : "▶"}
+                  </span>
+                  {country.country}
+                </span>
+                <span
+                  className="tabular-nums font-semibold flex-shrink-0"
+                  style={{
+                    color: isSelected || isOpen
+                      ? "var(--color-bright)"
+                      : "var(--color-muted)",
+                  }}
+                >
+                  {country.count}
+                </span>
+              </div>
+              {isOpen && (
+                <ul>
+                  {country.cities.map((city) => {
+                    const cityKey = `${country.country}|${city.city ?? "(country-only)"}`;
+                    const isCityOpen = openCity === cityKey;
+                    const isCitySelected = selectedCities.includes(cityKey);
+                    const cityLabel = city.city ?? "(senza città)";
+                    return (
+                      <li
+                        key={cityKey}
+                        style={{ borderColor: "var(--color-border)" }}
+                      >
+                        <div
+                          onClick={() => onCityClick(cityKey)}
+                          className="px-4 py-1 pl-7 text-[10.5px] flex items-baseline justify-between gap-2 cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                          style={{
+                            background: isCitySelected
+                              ? "rgba(0,232,122,0.08)"
+                              : isCityOpen
+                              ? "rgba(255,255,255,0.04)"
+                              : "transparent",
+                          }}
+                        >
+                          <span
+                            className="truncate flex items-baseline gap-1.5"
+                            style={{
+                              color: isCitySelected || isCityOpen
+                                ? "var(--color-bright)"
+                                : "var(--color-muted)",
+                              fontWeight: isCitySelected || isCityOpen ? 600 : 400,
+                              fontStyle: city.city ? "normal" : "italic",
+                            }}
+                            title={cityLabel}
+                          >
+                            <span
+                              aria-hidden
+                              style={{
+                                display: "inline-block",
+                                width: 8,
+                                color: "var(--color-dim)",
+                                fontSize: 9,
+                              }}
+                            >
+                              {isCityOpen ? "▼" : "▶"}
+                            </span>
+                            {cityLabel}
+                          </span>
+                          <span
+                            className="tabular-nums flex-shrink-0"
+                            style={{
+                              color: isCitySelected || isCityOpen
+                                ? "var(--color-bright)"
+                                : "var(--color-dim)",
+                            }}
+                          >
+                            {city.count}
+                          </span>
+                        </div>
+                        {isCityOpen && (
+                          <ul
+                            className="border-t"
+                            style={{ borderColor: "var(--color-border)" }}
+                          >
+                            {city.positions.map((p) => (
+                              <li
+                                key={p.id}
+                                style={{ borderColor: "var(--color-border)" }}
+                              >
+                                <a
+                                  href={`/positions/${p.id}`}
+                                  target="_blank"
+                                  rel="noopener"
+                                  className="block px-4 py-1 pl-10 text-[10px] hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                                  style={{ textDecoration: "none" }}
+                                >
+                                  <div
+                                    className="flex items-baseline justify-between gap-2"
+                                  >
+                                    <span
+                                      className="truncate"
+                                      style={{ color: "var(--color-base)" }}
+                                      title={p.title ?? ""}
+                                    >
+                                      {p.title ?? "(senza titolo)"}
+                                    </span>
+                                    {typeof p.score === "number" && (
+                                      <span
+                                        className="tabular-nums font-semibold flex-shrink-0"
+                                        style={{
+                                          color: "var(--color-muted)",
+                                        }}
+                                      >
+                                        {p.score}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div
+                                    className="text-[9px] truncate"
+                                    style={{ color: "var(--color-dim)" }}
+                                  >
+                                    {p.company ?? "—"}
+                                  </div>
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }

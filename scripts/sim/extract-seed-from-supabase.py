@@ -101,10 +101,16 @@ def main():
     )
     args = parser.parse_args()
 
-    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    url = (
+        os.environ.get("SUPABASE_URL")
+        or os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "")
+    ).rstrip("/")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url or not key:
-        print("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars.", file=sys.stderr)
+        print(
+            "Set SUPABASE_URL (o NEXT_PUBLIC_SUPABASE_URL) e SUPABASE_SERVICE_ROLE_KEY.",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     headers = {

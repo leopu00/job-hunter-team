@@ -20,7 +20,7 @@ const LAYER_DOT_ID = "jht-jobs-dot";
 // A zoom >= 14 niente cluster (raggio sotto coords city-center).
 function clusterRadiusDeg(zoom: number): number {
   const z = Math.round(zoom);
-  if (z >= 14) return 0;
+  if (z >= 12) return 0; // zoom street-level: no cluster, esplode singletons
   return 5.0 / Math.pow(2, Math.max(0, z - 4));
 }
 
@@ -106,26 +106,40 @@ function scoreToRgb(score: number | null): [number, number, number] {
 // L'immagine è ancorata bottom-center sulla coordinata del gruppo.
 // Disposizione "montagna": score più alto al centro, decrescente
 // verso i bordi → forma estetica e leggibilità dello score top.
+// Cap raggi disegnati per icona cluster. Oltre, ne disegniamo i top
+// N_CAP e il count vero resta nella text-label sotto al fascio.
+// Disegnarne 150 col blur era costoso e poco leggibile.
+const MAX_BEAMS_PER_ICON = 24;
+
+// Hash content-based per l'icon-image. Dipende SOLO dai top-cap
+// scores sorted desc → icone ri-usate fra cluster con stessa "testa
+// di distribuzione" anche se la coda differisce.
+function iconIdForScores(scores: (number | null)[]): string {
+  const drawn = [...scores]
+    .sort((a, b) => (b ?? 0) - (a ?? 0))
+    .slice(0, MAX_BEAMS_PER_ICON)
+    .map((s) => (s == null ? "x" : String(s)))
+    .join("|");
+  return `jht-bm-${Math.min(scores.length, MAX_BEAMS_PER_ICON)}-${hashStr(drawn).toString(36)}`;
+}
+
 function createGroupBeamsImageData(
   scores: (number | null)[],
 ): { data: ImageData; w: number; h: number } | null {
-  const N = Math.max(1, scores.length);
-  // Step radiale (px tra anelli concentrici). Scala con N per non
-  // sparpagliare troppo i cluster piccoli e non sovrapporre quelli
-  // grandissimi.
-  const ringStep =
-    N <= 4 ? 14 : N <= 12 ? 11 : N <= 30 ? 9 : N <= 80 ? 7 : 6;
-  // Schiacciamento ellisse della base (vista terreno leggermente
-  // dall'alto). 0.42 = stesso ratio dell'halo → coerenza ottica.
+  const total = Math.max(1, scores.length);
+  // Sort desc e cap ai top N_CAP — visualizziamo la testa della
+  // distribuzione, non l'intero spettro.
+  const sortedDesc = [...scores].sort((a, b) => (b ?? 0) - (a ?? 0));
+  const drawScores = sortedDesc.slice(0, MAX_BEAMS_PER_ICON);
+  const N = drawScores.length;
+  // Step radiale costante per cap fisso → layout stabile.
+  const ringStep = N <= 4 ? 14 : N <= 12 ? 11 : 9;
   const yScale = 0.42;
   const beamW = Math.max(3, Math.min(8, ringStep - 3));
   const minH = 90;
   const maxH = 400;
   const haloPad = 36;
 
-  // Layout: score sorted desc → indice 0 al centro, gli altri sugli
-  // anelli concentrici. Painter sort per render order (back-to-front).
-  const sortedDesc = [...scores].sort((a, b) => (b ?? 0) - (a ?? 0));
   const layout = arrangeCircle(N, ringStep, yScale);
   // Bounding box del layout (per dimensionare canvas)
   let minX = 0, maxX = 0, minY = 0, maxY = 0;
@@ -139,7 +153,15 @@ function createGroupBeamsImageData(
   const halfDepthFront = Math.max(20, maxY + 10);    // verso davanti
   const halfDepthBack = Math.max(20, -minY + 10);    // verso dietro
   const W = Math.ceil(2 * halfW + 20);
-  const H = Math.ceil(maxH + halfDepthBack + halfDepthFront + haloPad + 12);
+  // Spazio sopra baseY (per il raggio centrale + i raggi posteriori).
+  const spaceAbove = maxH + halfDepthBack;
+  // Spazio sotto baseY (basi raggi anteriori + halo).
+  const spaceBelow = halfDepthFront + haloPad;
+  // Canvas simmetrico in altezza: H/2 = baseY → con icon-anchor
+  // "center" il punto geo coincide col centro del cerchio dell'aiuola
+  // (niente più "fluttuamento" dei raggi sopra la coordinata).
+  const halfH = Math.max(spaceAbove, spaceBelow);
+  const H = 2 * halfH;
 
   const c = document.createElement("canvas");
   c.width = W;
@@ -148,37 +170,36 @@ function createGroupBeamsImageData(
   if (!ctx) return null;
 
   const cx = W / 2;
-  // baseY = riga "terreno" del CENTRO del cerchio (il raggio centrale
-  // sta qui). I raggi davanti hanno base più in basso (yOff > 0),
-  // quelli dietro più in alto (yOff < 0).
-  const baseY = H - haloPad - halfDepthFront;
+  // baseY al centro del canvas. Con icon-anchor "center" la coord
+  // geografica cade qui = al centro dell'aiuola di raggi.
+  const baseY = halfH;
 
   // Top-score → tinta halo/core. È il primo elemento di sortedDesc.
   const topScore = sortedDesc[0];
   const [hr, hg, hb] = scoreToRgb(topScore);
   const haloBase = `rgba(${hr},${hg},${hb},`;
 
-  // Halo: ellisse al centro che copre l'intera "aiuola" dei raggi.
-  const haloR = Math.max(40, halfW * 0.85);
+  // Halo: ellisse tenue al centro (più piccolo + meno opaco rispetto
+  // alle prime versioni). Suggerisce il "terreno" senza dominare.
+  const haloR = Math.max(28, halfW * 0.55);
   const haloGrad = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, haloR);
-  haloGrad.addColorStop(0, `${haloBase}0.55)`);
-  haloGrad.addColorStop(0.5, `${haloBase}0.2)`);
+  haloGrad.addColorStop(0, `${haloBase}0.30)`);
+  haloGrad.addColorStop(0.5, `${haloBase}0.1)`);
   haloGrad.addColorStop(1, `${haloBase}0)`);
   ctx.fillStyle = haloGrad;
   ctx.beginPath();
   ctx.ellipse(cx, baseY, haloR, haloR * yScale, 0, 0, 2 * Math.PI);
   ctx.fill();
 
-  ctx.filter = N > 1 ? "blur(0.6px)" : "none";
-
-  // Painter order: back (yOff piccolo) prima, front dopo. Mantiene
-  // l'associazione score-posizione via indice originale.
+  // Niente blur filter: era il più costoso del rendering canvas e
+  // non aggiunge molto valore visivo con raggi sottili. Painter sort
+  // per non bucare i raggi davanti.
   const renderOrder = layout
     .map((p, idx) => ({ ...p, idx }))
     .sort((a, b) => a.yOff - b.yOff);
 
   for (const { xOff, yOff, idx } of renderOrder) {
-    const score = sortedDesc[idx];
+    const score = drawScores[idx];
     const norm = scoreNormHeight(score);
     const height = minH + norm * (maxH - minH);
     const x = cx + xOff;
@@ -203,17 +224,17 @@ function createGroupBeamsImageData(
     ctx.fill();
   }
 
-  ctx.filter = "none";
-
-  // Core luminoso al centro (su top-score color).
-  const coreLight = `rgba(${Math.min(255, hr + 80)},${Math.min(255, hg + 80)},${Math.min(255, hb + 80)},0.95)`;
-  const coreGrad = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, 22);
+  // Core luminoso al centro (più piccolo e meno saturo): un puntino
+  // di luce sulla coordinata, non più un "faro" grande.
+  const coreLight = `rgba(${Math.min(255, hr + 50)},${Math.min(255, hg + 50)},${Math.min(255, hb + 50)},0.55)`;
+  const coreR = 11;
+  const coreGrad = ctx.createRadialGradient(cx, baseY, 0, cx, baseY, coreR);
   coreGrad.addColorStop(0, coreLight);
-  coreGrad.addColorStop(0.5, `${haloBase}0.55)`);
+  coreGrad.addColorStop(0.5, `${haloBase}0.28)`);
   coreGrad.addColorStop(1, `${haloBase}0)`);
   ctx.fillStyle = coreGrad;
   ctx.beginPath();
-  ctx.arc(cx, baseY, 22, 0, 2 * Math.PI);
+  ctx.arc(cx, baseY, coreR, 0, 2 * Math.PI);
   ctx.fill();
 
   return { data: ctx.getImageData(0, 0, W, H), w: W, h: H };
@@ -250,6 +271,11 @@ type PositionCoord = {
   lon: number;
   is_remote: boolean;
   location: string | null;
+  // Country/city normalizzati (location-enrichment skill, regole R12-R15).
+  // Usati come filtro mappa quando l'utente clicca un nodo del tree
+  // Location nella sidebar.
+  loc_country: string | null;
+  loc_city: string | null;
   // Indirizzo street-level geocodato (es. "Via Roma 42, Milano"). Null
   // se l'analista non ha trovato un indirizzo preciso (ufficio mai
   // pubblicato, JD vaga, remote). Vedi migration 017.
@@ -328,18 +354,68 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
+// Esplode i group coord-coincident in singletons con micro-offset
+// radiale, perché a zoom street-level ogni position deve essere
+// cliccabile (con N positions sulla stessa coord il click cade su
+// uno solo). Offset deterministico via hash dell'id → stabile su
+// refresh. Raggio in metri scalato col zoom: ~40m a z=14, ~10m a z=16.
+function explodeGroups(
+  groups: CompanydFeature[],
+  zoom: number,
+): CompanydFeature[] {
+  const meters = 50 / Math.pow(2, Math.max(0, zoom - 14));
+  const out: CompanydFeature[] = [];
+  for (const g of groups) {
+    if (g.count <= 1) {
+      out.push(g);
+      continue;
+    }
+    const radiusDeg = meters / 111000; // ≈ deg latitudine per metro
+    const lonScale = 1 / Math.cos((g.lat * Math.PI) / 180); // anti-distorsione
+    g.positions.forEach((p, i) => {
+      // Angle deterministico: posizione equispaziata sul cerchio +
+      // jitter piccolo da hashStr(p.id) per evitare allineamenti.
+      const angle =
+        (i / g.count) * 2 * Math.PI +
+        (hashStr(p.id) & 0xff) * (Math.PI / 256);
+      const lat = g.lat + radiusDeg * Math.sin(angle);
+      const lon = g.lon + radiusDeg * Math.cos(angle) * lonScale;
+      const singleScores: (number | null)[] = [p.score];
+      out.push({
+        groupKey: `single|${p.id}`,
+        iconId: iconIdForScores(singleScores),
+        lat,
+        lon,
+        count: 1,
+        scores: singleScores,
+        positions: [p],
+        topScore: p.score,
+      });
+    });
+  }
+  return out;
+}
+
 // Re-clusterizza i gruppi (city-coincident) tramite bucket geografici
 // in gradi (lat/lon), dimensione derivata dallo zoom. Bucket geografici
 // sono PAN-INVARIANTI: spostarsi sulla mappa non cambia in che bucket
 // cade un punto → i cluster non "tremano" durante lo scroll.
 // Re-trigger solo su cambio zoom, non su move.
+//
+// A zoom street-level (>=14) "esplode" i group coord-coincident in
+// singletons con micro-offset radiale: così ogni position diventa
+// cliccabile separatamente (altrimenti N positions sulla stessa
+// coord = 1 solo target di click).
 function reclusterByZoom(
   groups: CompanydFeature[],
   zoom: number,
 ): CompanydFeature[] {
   if (groups.length === 0) return [];
   const radiusDeg = clusterRadiusDeg(zoom);
-  if (radiusDeg <= 0) return groups; // zoom street-level: no cluster
+  if (radiusDeg <= 0) {
+    // Street zoom: esplode i groups in singleton click-target.
+    return explodeGroups(groups, zoom);
+  }
   const buckets = new Map<string, CompanydFeature[]>();
   for (const g of groups) {
     const bx = Math.floor(g.lon / radiusDeg);
@@ -366,9 +442,7 @@ function reclusterByZoom(
       if (acc == null) return s;
       return Math.max(acc, s);
     }, null);
-    const iconId = `jht-cl-${scores.length}-${hashStr(
-      scores.map((s) => (s == null ? "x" : String(s))).join("|"),
-    ).toString(36)}`;
+    const iconId = iconIdForScores(scores);
     out.push({
       groupKey: `cluster|${bkey}`,
       iconId,
@@ -432,14 +506,19 @@ export default function CompanyGlobe({
   selectedTypes = [],
   selectedScoreRanges = [],
   selectedUnscored = false,
-  selectedLocations = [],
+  selectedCountries = [],
+  selectedCities = [],
 }: {
   hero?: boolean;
   fullscreen?: boolean;
   selectedTypes?: string[];
   selectedScoreRanges?: Array<{ lo: number; hi: number }>;
   selectedUnscored?: boolean;
-  selectedLocations?: string[];
+  // Filtro country (es. ["Italy", "Hungary"]).
+  selectedCountries?: string[];
+  // Filtro city formato "<Country>|<City>" per evitare collisioni
+  // omonime (es. "Italy|Milan" vs "Spain|Milan(?)" — improbabile ma safe).
+  selectedCities?: string[];
 } = {}) {
   const { resolvedTheme } = useTheme();
   const [data, setData] = useState<PositionCoord[]>([]);
@@ -494,11 +573,26 @@ export default function CompanyGlobe({
         );
       });
     }
-    if (selectedLocations.length > 0) {
-      out = out.filter((p) => selectedLocations.includes(p.location ?? "—"));
+    // Filtro location gerarchico: country e/o city.
+    // Country e cities sono OR fra loro (selezioni multiple).
+    // Tra country e city: se una city è selezionata, basta che la pos
+    // matchi la city (la country è implicita).
+    if (selectedCities.length > 0 || selectedCountries.length > 0) {
+      out = out.filter((p) => {
+        const country = (p.loc_country ?? "").trim() || "(unknown)";
+        const city = (p.loc_city ?? "").trim() || null;
+        if (selectedCities.length > 0) {
+          const key = `${country}|${city ?? "(country-only)"}`;
+          if (selectedCities.includes(key)) return true;
+        }
+        if (selectedCountries.length > 0 && selectedCountries.includes(country)) {
+          return true;
+        }
+        return false;
+      });
     }
     return out;
-  }, [data, selectedTypes, selectedScoreRanges, selectedUnscored, selectedLocations]);
+  }, [data, selectedTypes, selectedScoreRanges, selectedUnscored, selectedCountries, selectedCities]);
 
   // Raggruppa i pin per coordinata identica (city-center fallback).
   // Ogni gruppo diventa UN feature al centroide, con icona custom che
@@ -521,9 +615,7 @@ export default function CompanyGlobe({
         return sa - sb;
       });
       const scores = sorted.map((p) => p.score);
-      const iconId = `jht-group-${scores.length}-${hashStr(
-        scores.map((s) => (s == null ? "x" : String(s))).join("|"),
-      ).toString(36)}`;
+      const iconId = iconIdForScores(scores);
       const lat = arr.reduce((a, p) => a + p.lat, 0) / arr.length;
       const lon = arr.reduce((a, p) => a + p.lon, 0) / arr.length;
       const topScore = scores.reduce<number | null>((acc, s) => {
@@ -602,9 +694,9 @@ export default function CompanyGlobe({
           paint: {
             "circle-radius": [
               "interpolate", ["linear"], ["zoom"],
-              0, ["interpolate", ["linear"], ["get", "count"], 1, 3, 20, 8, 100, 14],
-              8, ["interpolate", ["linear"], ["get", "count"], 1, 10, 20, 24, 100, 40],
-              14, ["interpolate", ["linear"], ["get", "count"], 1, 22, 20, 48, 100, 80],
+              0, ["interpolate", ["linear"], ["get", "count"], 1, 2, 20, 5, 100, 9],
+              8, ["interpolate", ["linear"], ["get", "count"], 1, 6, 20, 14, 100, 24],
+              14, ["interpolate", ["linear"], ["get", "count"], 1, 14, 20, 30, 100, 50],
             ],
             "circle-color": [
               "interpolate", ["linear"],
@@ -616,8 +708,8 @@ export default function CompanyGlobe({
               70, "#7fffb2",
               100, "#00e87a",
             ],
-            "circle-opacity": 0.22,
-            "circle-blur": 0.85,
+            "circle-opacity": 0.12,
+            "circle-blur": 0.9,
           },
         });
         // Symbol layer unico: ogni feature è un cluster client-side
@@ -629,7 +721,7 @@ export default function CompanyGlobe({
           source: SOURCE_ID,
           layout: {
             "icon-image": ["get", "iconId"],
-            "icon-anchor": "bottom",
+            "icon-anchor": "center",
             "icon-rotation-alignment": "viewport",
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
@@ -705,6 +797,8 @@ export default function CompanyGlobe({
       map.getCanvas().style.cursor = "";
     });
 
+    // NavigationControl in top-left (poi spostato CSS-side al
+    // top-center per liberare la colonna sinistra alla card Location).
     map.addControl(new maplibregl.NavigationControl(), "top-left");
     mapRef.current = map;
 
@@ -940,12 +1034,17 @@ export default function CompanyGlobe({
         </div>
       )}
 
-      {/* Sposta NavigationControl (zoom +/-) sotto al bottone
-          "Vista generale" che sta in top-left. Default 10px → 50px
-          per lasciare spazio al bottone (alto ~32px + gap). */}
+      {/* Sposta i controlli zoom +/- dal top-left al top-CENTER
+          (liberiamo la colonna sinistra alla card Location). Il
+          bottone "Vista generale" si affianca a sinistra dei controlli
+          zoom — l'insieme è centrato orizzontalmente. */}
       <style>{`
+        .jht-globe-wrap .maplibregl-ctrl-top-left {
+          left: 50%;
+          transform: translateX(-50%);
+        }
         .jht-globe-wrap .maplibregl-ctrl-top-left .maplibregl-ctrl-group {
-          margin-top: 40px;
+          margin-top: 0;
         }
       `}</style>
       <div
@@ -973,14 +1072,19 @@ export default function CompanyGlobe({
           }}
         />
 
-        {/* Bottone "Vista generale": fitBounds sulla faccia migliore */}
+        {/* Bottone "Vista generale": fitBounds sulla faccia migliore.
+            Posizionato top-center, affiancato ai controlli zoom +/-. */}
         {loaded && data.length > 0 && (
           <button
             onClick={flyToAll}
             aria-label="Vista generale"
             title="Vista generale — mostra tutti i pin"
-            className="absolute top-2 left-2 z-10 text-[10px] font-semibold tracking-widest uppercase"
+            className="absolute top-2 z-10 text-[10px] font-semibold tracking-widest uppercase"
             style={{
+              // Bordo destro del bottone a (50% - 30px) → resta ~8px
+              // di gap a sinistra del ctrl-group +/- centrato sul 50%.
+              left: "calc(50% - 30px)",
+              transform: "translateX(-100%)",
               padding: "6px 10px",
               borderRadius: 6,
               background: "var(--color-panel)",
