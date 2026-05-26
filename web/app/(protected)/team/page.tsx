@@ -7,6 +7,7 @@ import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
 import { useTeamState } from "@/app/hooks/useTeamState";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import TeamOrgChart from "./_components/TeamOrgChart";
+import WorkHoursPicker from "./_components/WorkHoursPicker";
 import UsageChart from "./_components/UsageChart";
 import UsageTokensChart from "./_components/UsageTokensChart";
 import TokenBreakdown from "./_components/TokenBreakdown";
@@ -451,6 +452,13 @@ export default function TeamCompany() {
             onAction={handleAction}
             actionLoading={actionLoading}
           />
+        </div>
+      </section>
+
+      {/* Working hours — distribuzione weekly budget sulle ore ON */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <WorkHoursPicker />
         </div>
       </section>
 
