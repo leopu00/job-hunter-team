@@ -191,6 +191,17 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   2. ⬜ Test su sessione settimanale completa Claude Max — il seed `15%` è stima, serve case study reale per riportare confidence high.
   3. ⬜ Backfill EMA convergence verification — dopo 1 settimana di run reale verificare che `observed_ratio_pct` converga al seed `±5%`.
 
+##### 🔐 [JHT-ACCESS-CREDENTIALS-GAPS] Access & credentials — gap doc vs codice (NEW 2026-05-26)
+
+- **Context:** sessione di consolidamento doc 2026-05-26 (`docs/internal/access-and-credentials.md`) ha riallineato la storia "dove vivono le credenziali" e rivelato 6 punti dove la doc promette qualcosa che il codice non implementa ancora.
+- **Tickets sotto (priorità bassa, non blockers):**
+  1. `[JHT-SSH-PASSPHRASE-KEYRING]` — wizard salva la passphrase della SSH key in OS keyring quando l'utente la setta. Oggi rimane da inserire ad ogni `ssh-add` → blocca automation/LLM-agent path. Fix: `cli/wizard/setup-steps.js` durante key gen, + lib `desktop/vps/ssh-keychain.js` (nuovo).
+  2. `[JHT-HETZNER-TOKEN-SECRETS]` — `web/lib/hetzner.ts:49` legge solo `process.env.HCLOUD_TOKEN`. Dovrebbe avere fallback a `jht secrets get HCLOUD_TOKEN` (decifrato con `JHT_CREDENTIALS_KEY` dal keyring). Riallinea doc `vps.md` § "Cosa va nel cloud, cosa resta locale" col comportamento reale.
+  3. `[JHT-LLM-AGENT-CONTRACT]` — discovery contract per LLM agent locali (Claude Code, Codex, Kimi): endpoint `/api/agent/discovery` (or static JSON file in `~/.jht/agent-contract.json`) che dichiara quali credenziali sono presenti, in quale storage, e che capability sbloccano. Vedi access-and-credentials.md §3.1-3.2.
+  4. `[JHT-CRED-SCOPED-GRANT]` — `jht credentials grant <scope> --expiry 1h` per token derivati a tempo per LLM agent remoti. Out of scope v1, ma traccia.
+  5. `[JHT-BACKUP-ROUNDTRIP]` — verifica end-to-end scenari recovery S1-S5 di access-and-credentials.md §4. Oggi `jht backup export/import` esiste ma roundtrip su nuovo PC non testato.
+- **Priority:** 🟢 LOW per tutti — il funzionale beta 0 regge col path A (utente paste IP, no API token automation). Da attaccare quando il path B2 LLM-agent diventa primary (Beta 1+).
+
 ##### ✅ [JHT-MONITORING-WORKHOURS] User-defined work hours — DONE 2026-05-26
 
 - **Problem:** team runs 24/7 once started — wasting tokens during unproductive hours and burning the weekly budget.
