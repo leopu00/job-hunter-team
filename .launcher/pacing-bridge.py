@@ -833,12 +833,60 @@ def _serialize_report(d: dict) -> dict | None:
     }
 
 
-def write_state(d: dict | None, next_tick_at: datetime, last_message: str | None):
-    """Scrive lo stato pubblico letto dall'API web. Atomico (tmp + rename)."""
+def write_state(
+    d: dict | None,
+    next_tick_at: datetime,
+    last_message: str | None,
+    wht=None,
+    pcap=None,
+):
+    """Scrive lo stato pubblico letto dall'API web. Atomico (tmp + rename).
+
+    I campi work-hours-aware vengono SEMPRE popolati quando wht/pcap sono
+    disponibili — non dipendono dal sample sentinel, sono pure funzioni di
+    `now + schedule`. Così la UI vede phase/target/transition anche durante
+    tick saltati (insufficient_samples, effective_window_too_short).
+    """
+    now = datetime.now(timezone.utc)
+    work_phase = d.get("work_phase") if d else None
+    target_pct = d.get("target_pct") if d else None
+    target_source = d.get("target_source") if d else None
+    next_trans = d.get("next_phase_transition_at") if d else None
+    win_ratio = d.get("window_cap_pct_of_weekly") if d else None
+
+    # Fallback: ricomputa standalone se mancano (es. tick saltato).
+    if work_phase is None and wht is not None and pcap is not None:
+        try:
+            # Finestra placeholder allineata all'ora corrente. Buono per
+            # i campi schedule-driven (phase, transition, ratio); il target
+            # numerico dipende dalla finestra "vera" che qui non abbiamo
+            # ancora — accettiamo il placeholder.
+            ws = now.replace(minute=0, second=0, microsecond=0)
+            we = ws + timedelta(hours=5)
+            ratio = pcap.get_window_cap_pct_of_weekly()
+            t = wht.compute_target(
+                now_utc=now,
+                window_start_utc=ws,
+                window_end_utc=we,
+                window_cap_pct_of_weekly=ratio,
+                default_target_band_pct=TARGET_BAND_CENTER,
+            )
+            work_phase = t["work_phase"]
+            target_pct = t["current_window_target_pct"]
+            target_source = (
+                "band_center" if ratio is None and t["weekly_active_hours"] >= 168.0
+                else ("schedule+ratio" if ratio is not None else "schedule+band")
+            )
+            next_trans = t["next_phase_transition_at"]
+            win_ratio = t["window_cap_pct_of_weekly"]
+        except Exception as e:
+            print(f"[pacing-bridge] WARN write_state target fallback: {e}",
+                  file=sys.stderr)
+
     state = {
         "version": 1,
         "pid": os.getpid(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": now.isoformat(),
         "next_tick_at": next_tick_at.isoformat(),
         "tick_interval_min": TICK_MIN,
         "target_band_center": TARGET_BAND_CENTER,
@@ -848,19 +896,13 @@ def write_state(d: dict | None, next_tick_at: datetime, last_message: str | None
         ),
         "last_report": _serialize_report(d) if d else None,
         "last_message": last_message,
-        # Top-level mirror dei campi work-hours-aware: la UI può leggere
-        # questi senza ispezionare last_report. Letti dal tick più recente
-        # anche se compute_tick ha dato `ok=False` (lo state file resta
-        # informativo durante gli skip).
-        "work_phase": d.get("work_phase") if d else None,
-        "current_window_target_pct": d.get("target_pct") if d else None,
-        "target_source": d.get("target_source") if d else None,
-        "next_phase_transition_at": (
-            d.get("next_phase_transition_at") if d else None
-        ),
-        "window_cap_pct_of_weekly": (
-            d.get("window_cap_pct_of_weekly") if d else None
-        ),
+        # Top-level mirror dei campi work-hours-aware (sempre popolati se
+        # wht/pcap disponibili, anche durante tick saltati).
+        "work_phase": work_phase,
+        "current_window_target_pct": target_pct,
+        "target_source": target_source,
+        "next_phase_transition_at": next_trans,
+        "window_cap_pct_of_weekly": win_ratio,
     }
     try:
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -889,7 +931,7 @@ def loop():
     )
     # Stato iniziale al boot: la UI vede subito il countdown, anche prima
     # del primo tick reale.
-    write_state(None, next_quarter(), None)
+    write_state(None, next_quarter(), None, wht=wht, pcap=pcap)
 
     while True:
         nxt = next_quarter()
@@ -906,7 +948,7 @@ def loop():
             print(f"[pacing-bridge] off-hours skip tick {now.isoformat()} ({status})",
                   flush=True)
             write_state(None, next_quarter(now + timedelta(seconds=1)),
-                        f"off-hours ({status})")
+                        f"off-hours ({status})", wht=wht, pcap=pcap)
             continue
         try:
             d = compute_tick(ast, tba, rb, now, wht=wht, pcap=pcap)
@@ -923,14 +965,15 @@ def loop():
             append_to_mailbox(msg, delivered_via_tmux=delivered, kind=kind)
             # Aggiorna lo stato DOPO il send: la UI vede il tick appena
             # consegnato e il prossimo countdown già aggiornato.
-            write_state(d, next_quarter(now + timedelta(seconds=1)), msg)
+            write_state(d, next_quarter(now + timedelta(seconds=1)), msg,
+                        wht=wht, pcap=pcap)
         except Exception as e:
             # Non vogliamo che un errore di un tick affossi il loop.
             print(f"[pacing-bridge] errore tick {now.isoformat()}: {e}",
                   file=sys.stderr, flush=True)
             try:
                 write_state(None, next_quarter(now + timedelta(seconds=1)),
-                            f"errore: {e}")
+                            f"errore: {e}", wht=wht, pcap=pcap)
             except Exception:
                 pass
 
