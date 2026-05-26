@@ -14,10 +14,17 @@ La storia "dove sta il token? dove sta la chiave? l'LLM agent come accede?" era 
                           Local PC        Dedicated PC          VPS Hetzner
 ─────────────────────────────────────────────────────────────────────────────
 SSH key di accesso        ❌ no           ✅ desktop → home     ✅ desktop → VPS
-Hetzner API token         ❌ no           ❌ no                  🟡 opt-in (B2)
+                                          (key pre-condivisa)   (o generata al volo
+                                                                 da LLM agent in B2)
+Hetzner API token         ❌ no           ❌ no                  🟡 path A opt-in
+                                                                  🟢 path B2 raccomandato
 Tunnel app↔team           ❌ stessa host  🟡 LAN o Tailscale     ✅ ssh -L via app
-Storage credenziali       n/a             OS keyring             OS keyring
-Cosa può un LLM agent     tutto (è in-host) leggere SSH key      leggere SSH key + opt API token
+Storage credenziali       n/a             filesystem 0600        filesystem 0600
+                                                                  + env $HCLOUD_TOKEN
+Cosa può un LLM agent     tutto (è in-host) leggere SSH key      **autonomous full**
+                                          + accedere a home PC   (solo token basta:
+                                                                  genera key, crea
+                                                                  VPS, SSH in, install)
 ```
 
 **Chiave di lettura della tabella:**
@@ -92,11 +99,31 @@ SSH key discovery:
 
 | Has | Can do | Cannot do |
 |---|---|---|
-| Solo SSH key (no passphrase) | `ssh root@<IP>`, exec, capture pane, restart container | scoprire IP se non lo sa, lifecycle (create/destroy server) |
-| Solo HCLOUD_TOKEN | listServers, createSnapshot, deleteServer, iniettare SSH key, **rescue mode** | shell interattiva diretta (richiede SSH) |
-| **Entrambi** | full autonomous setup: list servers → resolve IP → SSH → orchestrate | — |
+| Solo SSH key (no passphrase) | `ssh root@<IP>` se conosce l'IP, exec, capture pane, restart container | scoprire IP a priori, lifecycle (create/destroy server) |
+| **Solo `HCLOUD_TOKEN`** | **full autonomous bootstrap** (vedi 3.3 sotto), lifecycle (list/create/destroy/snapshot), iniettare SSH key in fase di create | — |
+| Entrambi | full + riusa la SSH key JHT esistente invece di generarne una temporanea | — |
 
-**Nota importante** (rispondere alla domanda "ma il token mi dà accesso alla macchina?"): no, **non direttamente**. Ma con il token puoi **(a)** iniettare una nuova SSH key in `authorized_keys` via API (`POST /servers/{id}/actions/add_ssh_key` indiretto via rebuild — workaround: passi attraverso rescue mode), **(b)** abilitare la rescue mode + reset root password, **(c)** usare la web console del portale Hetzner. Quindi l'API token = "accesso indiretto recuperabile", la SSH key = "accesso immediato".
+### 3.3 Autonomous bootstrap dell'LLM con solo `HCLOUD_TOKEN`
+
+Verificato empiricamente: dare a un LLM agent (Claude Code, Codex, Kimi) **solo** la variabile `HCLOUD_TOKEN` è sufficiente per il setup VPS end-to-end. Il flow è:
+
+```
+1. echo $env:HCLOUD_TOKEN                                    # discovery
+2. ssh-keygen -t ed25519 -N "" -f ~/.ssh/jht_bootstrap       # keypair locale
+3. POST  /v1/ssh_keys      { name, public_key }              # upload pubkey
+4. POST  /v1/servers       { server_type, image,             # create con key
+                             ssh_keys: ["jht_bootstrap"] }   # injection at boot
+5. GET   /v1/servers/{id}  poll until status=running         # ~30-60s
+6. ssh -i ~/.ssh/jht_bootstrap root@<public_ipv4>            # entra ✅
+7. curl https://raw.githubusercontent.com/.../install.sh | bash
+8. jht setup --pairing-token <derived>                       # post-install
+```
+
+**Punto chiave**: al passo 4 la pubkey viene iniettata da Hetzner in `/root/.ssh/authorized_keys` **prima del primo boot**. Non serve "rescue mode" né `POST /servers/{id}/actions/add_ssh_key` su server esistenti — è la happy path normale dell'API per macchine nuove. La SSH key locale può essere effimera (passphraseless, generata al volo) — il path B2 non richiede la presenza preventiva di una chiave nel keychain.
+
+**Rispondere alla domanda "ma il token mi dà accesso alla macchina?"**: **sì, indirettamente ma in pratica subito** — l'API token consente di creare un server includendo nella create request una SSH key (anche appena generata dall'agent localmente), e ti permette inoltre lifecycle, snapshot, destroy, rescue mode, web console. Non c'è shell interattiva *senza* SSH, ma SSH + key fresh è uno step automatizzabile da chiunque abbia il token.
+
+**Decisione operativa per beta 0** (riallinea `vps.md` L376-386): il path A (utente paste IP a mano) resta **default per il wizard desktop** — non vogliamo che la desktop app crei VPS automaticamente con la carta dell'utente. Il path B2 (token-only autonomous) è il flow **raccomandato per LLM agent** che l'utente avvia esplicitamente con `jht setup --autonomous` (o equivalente) o quando un AI coding assistant locale (Claude Code/Codex/Kimi) viene incaricato di "tirare su la VPS". Doc esplicita 6.4 del punch list.
 
 ### 3.3 Sicurezza — chi autorizza l'LLM ad usare le credenziali?
 
