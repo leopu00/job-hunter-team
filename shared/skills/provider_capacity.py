@@ -38,14 +38,33 @@ from typing import Optional
 
 
 # Lookup seed — vedi design doc "Lookup table seed (day 0)".
-# `weeklyUnlimited=True` indica provider senza weekly cap (Kimi): nessuna
+# `weekly_unlimited=True` indica provider senza weekly cap (Kimi): nessuna
 # distribuzione weekly necessaria, fallback al target band classico.
+#
+# Campi:
+#   window_cap_pct_of_weekly  — % del weekly cap che vale una finestra 5h piena
+#   natural_burn_pct_per_h    — burn rate naturale del team (% weekly / h) a
+#                               full speed senza throttle, dal case study di
+#                               riferimento del provider. Usato per calcolare
+#                               il `sweet_spot_min_hours` (= ore minime/sett
+#                               per saturare il sub al 100% del weekly cap).
+#   confidence                — "high" se basato su run reale, "low" se stima.
 _PROVIDER_SEEDS: dict[str, dict] = {
-    "openai":      {"window_cap_pct_of_weekly": 14.7, "confidence": "high"},
-    "codex":       {"window_cap_pct_of_weekly": 14.7, "confidence": "high"},
-    "codex-plus":  {"window_cap_pct_of_weekly": 14.7, "confidence": "low"},
-    "claude":      {"window_cap_pct_of_weekly": 15.0, "confidence": "low"},
-    "claude-max5": {"window_cap_pct_of_weekly": 15.0, "confidence": "low"},
+    "openai":      {"window_cap_pct_of_weekly": 14.7,
+                    "natural_burn_pct_per_h":   2.70,
+                    "confidence": "high"},
+    "codex":       {"window_cap_pct_of_weekly": 14.7,
+                    "natural_burn_pct_per_h":   2.70,
+                    "confidence": "high"},
+    "codex-plus":  {"window_cap_pct_of_weekly": 14.7,
+                    "natural_burn_pct_per_h":   2.70,
+                    "confidence": "low"},
+    "claude":      {"window_cap_pct_of_weekly": 15.0,
+                    "natural_burn_pct_per_h":   2.50,
+                    "confidence": "low"},
+    "claude-max5": {"window_cap_pct_of_weekly": 15.0,
+                    "natural_burn_pct_per_h":   2.50,
+                    "confidence": "low"},
     "kimi":        {"weekly_unlimited": True},
 }
 
@@ -133,6 +152,58 @@ def get_window_cap_pct_of_weekly(
     return round(blended, 3)
 
 
+def get_natural_burn_pct_per_h(provider: str | None = None) -> Optional[float]:
+    """Burn rate naturale del provider in % weekly / h (full speed, no throttle).
+
+    Usato per il vincolo "saturazione" del sweet-spot: con burn naturale B,
+    saturi il weekly al 100% in 100/B ore di lavoro/settimana. Sotto
+    quel valore spreci budget.
+
+    Kimi (weekly-unlimited) → None.
+    """
+    prov = (provider or read_active_provider()).lower()
+    info = _PROVIDER_SEEDS.get(prov) or {}
+    if info.get("weekly_unlimited"):
+        return None
+    v = info.get("natural_burn_pct_per_h")
+    return float(v) if v is not None else None
+
+
+def get_sweet_spot_hours(provider: str | None = None) -> dict:
+    """Range ore/sett "buone" per il provider.
+
+    Ritorna dict con:
+      min_hours        — sotto = sprechi budget (non saturi il weekly)
+      max_hours        — sopra = diluisci troppo le finestre (overhead alto)
+      weekly_unlimited — Kimi: nessun vincolo budget
+    """
+    prov = (provider or read_active_provider()).lower()
+    info = _PROVIDER_SEEDS.get(prov) or {}
+    if info.get("weekly_unlimited"):
+        return {
+            "weekly_unlimited": True,
+            "min_hours": None,
+            "max_hours": None,
+            "provider": prov,
+        }
+    burn = info.get("natural_burn_pct_per_h")
+    ratio = get_window_cap_pct_of_weekly(prov)
+    min_h = round(100.0 / burn, 1) if isinstance(burn, (int, float)) and burn > 0 else None
+    # Sweet spot superiore: tetto al ~25% di utilizzo del cap finestra 5h
+    # (sotto a quello il target/finestra diventa < 25% e l'overhead di
+    # spawn/coordinazione domina sul lavoro utile).
+    # Formula: 2000 / windowCapPct_percent (vedi design doc).
+    max_h = round(2000.0 / ratio, 1) if isinstance(ratio, (int, float)) and ratio > 0 else None
+    return {
+        "weekly_unlimited": False,
+        "min_hours": min_h,
+        "max_hours": max_h,
+        "natural_burn_pct_per_h": burn,
+        "window_cap_pct_of_weekly": ratio,
+        "provider": prov,
+    }
+
+
 def describe(provider: str | None = None) -> dict:
     """Diagnostica completa per UI / log."""
     prov = (provider or read_active_provider()).lower()
@@ -140,14 +211,18 @@ def describe(provider: str | None = None) -> dict:
     observed = _read_observed_ratio() or {}
     if (observed.get("provider") or "").lower() != prov:
         observed = {}
+    sweet = get_sweet_spot_hours(prov)
     return {
         "provider": prov,
         "seed_pct": seed_info.get("window_cap_pct_of_weekly"),
+        "seed_burn_pct_per_h": seed_info.get("natural_burn_pct_per_h"),
         "seed_confidence": seed_info.get("confidence"),
         "weekly_unlimited": bool(seed_info.get("weekly_unlimited")),
         "observed_ema_pct": observed.get("ema_ratio_pct"),
         "days_observed": observed.get("days_observed"),
         "effective_pct": get_window_cap_pct_of_weekly(prov),
+        "sweet_spot_min_hours": sweet["min_hours"],
+        "sweet_spot_max_hours": sweet["max_hours"],
     }
 
 

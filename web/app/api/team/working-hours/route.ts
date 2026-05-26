@@ -65,6 +65,7 @@ we = ws + timedelta(hours=5)
 ratio = pcap.get_window_cap_pct_of_weekly()
 r = wht.compute_target(now, ws, we, ratio)
 r['provider_active'] = pcap.read_active_provider()
+r['provider'] = pcap.describe()
 print(json.dumps(r, default=str))`,
       ],
       { stdio: ["ignore", "pipe", "pipe"] },
