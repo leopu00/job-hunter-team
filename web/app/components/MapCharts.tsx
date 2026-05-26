@@ -23,9 +23,12 @@ type NoCoordItem = {
 };
 
 // Subset campi PositionCoord che servono per re-derivare donut/histogram
-// dal filtro location. Fetched in parallelo a /api/positions/no-coords.
+// + tree Location dal filtro location. Fetched in parallelo a
+// /api/positions/no-coords.
 type CoordItem = {
   id: string;
+  title: string | null;
+  company: string | null;
   role_family: string | null;
   score: number | null;
   loc_country: string | null;
@@ -162,13 +165,15 @@ export default function MapCharts({
     selectedCities,
   ]);
 
-  // Tutte le posizioni (coords + no-coords) usate per re-derivare le
-  // metriche quando un filtro location è attivo. Pre-fetch: vuoto fino
-  // al primo fetch; in quel caso fallback ai typeDist server-side.
+  // Tutte le posizioni (coords + no-coords) usate per re-derivare
+  // donut/histogram/tree Location quando un filtro è attivo. Include
+  // title+company per popolare le posizioni del drilldown Location.
   const allItemsLite = useMemo(() => {
     return [
       ...coordItems.map((p) => ({
         id: p.id,
+        title: p.title,
+        company: p.company,
         role_family: p.role_family,
         score: p.score,
         loc_country: p.loc_country,
@@ -176,6 +181,8 @@ export default function MapCharts({
       })),
       ...noCoords.map((p) => ({
         id: p.id,
+        title: p.title,
+        company: p.company,
         role_family: p.role_family,
         score: p.score,
         loc_country: p.loc_country,
@@ -289,6 +296,65 @@ export default function MapCharts({
     typeDist,
     histogramScores,
   ]);
+
+  // Tree Location ricalcolato dal subset filtrato per tipi+score.
+  // NOTA: NON applico il filtro location qui — i nodi visibili devono
+  // restare nella sidebar anche quando l'utente clicca un filtro
+  // country/city (altrimenti si auto-eliminano e non c'è modo di
+  // togliere il filtro dall'albero). Fallback al fetch server-side
+  // (`locations` state) finché allItemsLite è vuoto al primo render.
+  const effectiveLocationTree = useMemo<LocationCountry[]>(() => {
+    if (allItemsLite.length === 0) return locations;
+    // Filtra per tipi e score.
+    const filtered = allItemsLite.filter((p) => {
+      if (
+        selectedTypes.length > 0 &&
+        !selectedTypes.includes(p.role_family ?? UNCATEGORIZED_LABEL)
+      )
+        return false;
+      if (!passScoreFilter(p.score)) return false;
+      return true;
+    });
+    // Aggrego come fa il server (vedi queries.ts buildLocationTree).
+    const byCountry = new Map<string, Map<string | null, LocationPositionLite[]>>();
+    for (const p of filtered) {
+      const country = (p.loc_country ?? "").trim() || "(unknown)";
+      const city = (p.loc_city ?? "").trim() || null;
+      const cMap = byCountry.get(country) ?? new Map<string | null, LocationPositionLite[]>();
+      const arr = cMap.get(city) ?? [];
+      arr.push({
+        id: p.id,
+        title: p.title,
+        company: p.company,
+        score: p.score,
+      });
+      cMap.set(city, arr);
+      byCountry.set(country, cMap);
+    }
+    const out: LocationCountry[] = [];
+    for (const [country, cMap] of byCountry) {
+      const cities: LocationCity[] = [];
+      let total = 0;
+      for (const [city, positions] of cMap) {
+        positions.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+        cities.push({ city, count: positions.length, positions });
+        total += positions.length;
+      }
+      cities.sort((a, b) => {
+        if (a.city == null) return 1;
+        if (b.city == null) return -1;
+        return b.count - a.count;
+      });
+      out.push({ country, count: total, cities });
+    }
+    out.sort((a, b) => {
+      if (a.country === "(unknown)") return 1;
+      if (b.country === "(unknown)") return -1;
+      return b.count - a.count;
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allItemsLite, locations, selectedTypes, selectedRanges, unscoredSelected]);
 
   const toggleType = (t: string) =>
     setSelectedTypes((cur) =>
@@ -528,12 +594,13 @@ export default function MapCharts({
       })()}
 
       {/* Tree gerarchico Location: country → city → posizioni.
-          Click su country/city = filtra la mappa E apre/chiude il
-          drilldown (azione singola, intuitiva). Click position →
-          apre /positions/<id> in nuova tab, NIENTE filter. */}
-      {locations.length > 0 && (
+          Ricalcolato client-side da allItemsLite con i filtri tipi+score
+          applicati → count e nodi visibili riflettono le selezioni
+          donut/histogram. Click su country/city = filtra la mappa E
+          apre/chiude il drilldown. Click position → apre /positions/<id>. */}
+      {effectiveLocationTree.length > 0 && (
         <LocationTree
-          tree={locations}
+          tree={effectiveLocationTree}
           openCountry={openCountry}
           openCity={openCity}
           selectedCountries={selectedCountries}
@@ -549,6 +616,13 @@ export default function MapCharts({
             setOpenCity(isOpen ? null : key);
             toggleCity(key);
           }}
+          onCountryCaret={(c) => {
+            setOpenCountry((cur) => (cur === c ? null : c));
+            setOpenCity(null);
+          }}
+          onCityCaret={(key) =>
+            setOpenCity((cur) => (cur === key ? null : key))
+          }
         />
       )}
 
@@ -801,6 +875,8 @@ function LocationTree({
   selectedCities,
   onCountryClick,
   onCityClick,
+  onCountryCaret,
+  onCityCaret,
 }: {
   tree: LocationCountry[];
   openCountry: string | null;
@@ -809,6 +885,9 @@ function LocationTree({
   selectedCities: string[];
   onCountryClick: (c: string) => void;
   onCityClick: (key: string) => void;
+  // Click solo sulla freccia ▶/▼: apri/chiudi senza toccare il filtro.
+  onCountryCaret: (c: string) => void;
+  onCityCaret: (key: string) => void;
 }) {
   // Conteggio totale (somma count countries) per il badge header.
   const total = tree.reduce((s, c) => s + c.count, 0);
@@ -881,17 +960,26 @@ function LocationTree({
                   }}
                   title={country.country}
                 >
-                  <span
-                    aria-hidden
+                  <button
+                    aria-label={isOpen ? "Chiudi" : "Apri"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCountryCaret(country.country);
+                    }}
                     style={{
                       display: "inline-block",
-                      width: 8,
+                      width: 14,
                       color: "var(--color-dim)",
                       fontSize: 9,
+                      background: "transparent",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      lineHeight: 1,
                     }}
                   >
                     {isOpen ? "▼" : "▶"}
-                  </span>
+                  </button>
                   {country.country}
                 </span>
                 <span
@@ -939,17 +1027,26 @@ function LocationTree({
                             }}
                             title={cityLabel}
                           >
-                            <span
-                              aria-hidden
+                            <button
+                              aria-label={isCityOpen ? "Chiudi" : "Apri"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onCityCaret(cityKey);
+                              }}
                               style={{
                                 display: "inline-block",
-                                width: 8,
+                                width: 14,
                                 color: "var(--color-dim)",
                                 fontSize: 9,
+                                background: "transparent",
+                                border: "none",
+                                padding: 0,
+                                cursor: "pointer",
+                                lineHeight: 1,
                               }}
                             >
                               {isCityOpen ? "▼" : "▶"}
-                            </span>
+                            </button>
                             {cityLabel}
                           </span>
                           <span
