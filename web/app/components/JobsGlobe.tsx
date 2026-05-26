@@ -742,19 +742,26 @@ export default function JobsGlobe({
             "text-font": ["Open Sans Bold"],
             "text-size": [
               "interpolate", ["linear"], ["zoom"],
-              0, 10,
-              6, 11,
-              12, 13,
+              0, 11,
+              6, 12,
+              12, 14,
             ],
-            "text-offset": [0, 0.7],
+            // 0.3em sotto il pin: subito attaccato al cluster.
+            // Halo forte (sotto) gestisce overlap coi nomi città.
+            "text-offset": [0, 0.3],
             "text-anchor": "top",
             "text-allow-overlap": true,
             "text-ignore-placement": true,
+            // Disegna SEMPRE sopra altri layer di testo della basemap.
+            "symbol-sort-key": 999,
           },
           paint: {
-            "text-color": "#a8f5cc",
-            "text-halo-color": "rgba(0,0,0,0.7)",
-            "text-halo-width": 1.5,
+            "text-color": "#ffffff",
+            // Halo nero più spesso e opaco per coprire i nomi città
+            // della basemap dietro al numero (es. "11" su "Milan").
+            "text-halo-color": "rgba(0,0,0,0.95)",
+            "text-halo-width": 2.5,
+            "text-halo-blur": 0.5,
           },
         });
       }
