@@ -499,7 +499,7 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, location, office_lat, office_lon, is_remote, scores ( total_score )')
+    .select('id, title, company, status, location, office_address, office_lat, office_lon, is_remote, scores ( total_score )')
     .not('status', 'eq', 'excluded')
     .not('office_lat', 'is', null)
   if (error || !data) return []
@@ -515,6 +515,7 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
       lon: p.office_lon,
       is_remote: !!p.is_remote,
       location: p.location ?? null,
+      office_address: p.office_address ?? null,
     }
   })
 }
