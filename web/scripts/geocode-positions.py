@@ -81,21 +81,36 @@ def geocode(query: str):
         return None
     first = data[0]
     addr = first.get("address", {})
+    # Address string: preferiamo "Road N, Suburb, City" — più utile del
+    # display_name verboso. Fallback al display_name se mancano parti.
+    street_bits = [s for s in [addr.get("road"), addr.get("house_number")] if s]
+    street = " ".join(street_bits).strip()
+    suburb = addr.get("suburb")
+    city = addr.get("city") or addr.get("town") or addr.get("village")
+    address_compact = ", ".join([s for s in [street, suburb, city] if s])
     return {
         "lat": float(first["lat"]),
         "lon": float(first["lon"]),
-        "city": addr.get("city") or addr.get("town") or addr.get("village") or None,
+        "city": city,
         "country": addr.get("country") or None,
+        "address": address_compact or first.get("display_name") or None,
     }
 
 
 def cache_lookup(c: sqlite3.Cursor, canonical: str):
+    # raw_text è usato come carrier dell'address compatto cached: nel
+    # write salviamo "address|raw" e nel read separiamo. Compat back:
+    # se non c'è '|', raw_text = solo raw.
     row = c.execute(
-        "SELECT lat, lon, source FROM location_geocode WHERE canonical = ?",
+        "SELECT lat, lon, source, raw_text FROM location_geocode WHERE canonical = ?",
         (canonical,),
     ).fetchone()
     if row and row[0] is not None:
-        return row[0], row[1], row[2]
+        lat, lon, source, raw_text = row
+        addr = None
+        if raw_text and "|" in raw_text:
+            addr = raw_text.split("|", 1)[0] or None
+        return lat, lon, source, addr
     return None
 
 
@@ -108,13 +123,17 @@ def cache_write(c: sqlite3.Cursor, canonical: str, raw: str, geo, source: str):
             (canonical, raw, f"{source}-miss"),
         )
         return None
+    # raw_text = "<address>|<raw>" così cache_lookup può recuperare
+    # l'indirizzo. Schema invariato (no migration).
+    address = geo.get("address") or ""
+    raw_combined = f"{address}|{raw}"
     c.execute(
         """INSERT OR REPLACE INTO location_geocode
            (canonical, raw_text, lat, lon, city, country, source)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (canonical, raw, geo["lat"], geo["lon"], geo["city"], geo["country"], source),
+        (canonical, raw_combined, geo["lat"], geo["lon"], geo["city"], geo["country"], source),
     )
-    return geo["lat"], geo["lon"]
+    return geo["lat"], geo["lon"], address or None
 
 
 def extract_address(jd_text):
@@ -144,7 +163,7 @@ def extract_city(loc: str) -> str:
 
 
 def process_position(c, pid, title, company, location, jd_text):
-    """Restituisce (lat, lon, source) o (None, None, 'remote'|'skip').
+    """Restituisce (lat, lon, address, source) o (None, None, None, 'remote'|'skip').
 
     Strategia office-level aggressiva: cerca SEMPRE company quando
     disponibile, anche se la location e' nota. Cache dedup su
@@ -160,16 +179,16 @@ def process_position(c, pid, title, company, location, jd_text):
         canonical = canonicalize(q)
         cached = cache_lookup(c, canonical)
         if cached:
-            return cached[0], cached[1], "address-cached"
+            return cached[0], cached[1], cached[3], "address-cached"
         time.sleep(1.1)
         geo = geocode(q)
         cache_write(c, canonical, q, geo, "address")
         if geo:
-            return geo["lat"], geo["lon"], "address"
+            return geo["lat"], geo["lon"], geo.get("address"), "address"
 
     # 2. Remote shortcut
     if location and REMOTE_KW.search(location):
-        return None, None, "remote"
+        return None, None, None, "remote"
 
     # 3. Company + city — SEMPRE tentato, anche se cache location esiste.
     #    Le 30+ positions a Roma di company diverse NON devono finire
@@ -181,28 +200,28 @@ def process_position(c, pid, title, company, location, jd_text):
             canonical = canonicalize(q)
             cached = cache_lookup(c, canonical)
             if cached:
-                return cached[0], cached[1], "company-cached"
+                return cached[0], cached[1], cached[3], "company-cached"
             time.sleep(1.1)
             geo = geocode(q)
             cache_write(c, canonical, q, geo, "company")
             if geo:
-                return geo["lat"], geo["lon"], "company"
+                return geo["lat"], geo["lon"], geo.get("address"), "company"
 
     # 4. Fallback location-only (per positions senza company o miss)
     if location:
         canonical = canonicalize(location)
         if canonical in SKIP_NON_PLACE or len(canonical) < 3:
-            return None, None, "skip"
+            return None, None, None, "skip"
         cached = cache_lookup(c, canonical)
         if cached:
-            return cached[0], cached[1], "location-cached"
+            return cached[0], cached[1], cached[3], "location-cached"
         time.sleep(1.1)
         geo = geocode(canonical)
         cache_write(c, canonical, location, geo, "location")
         if geo:
-            return geo["lat"], geo["lon"], "location"
+            return geo["lat"], geo["lon"], geo.get("address"), "location"
 
-    return None, None, "skip"
+    return None, None, None, "skip"
 
 
 def main():
@@ -215,9 +234,9 @@ def main():
 
     if args.reset:
         c.execute(
-            "UPDATE positions SET office_lat = NULL, office_lon = NULL, office_geocoded = 0, is_remote = 0"
+            "UPDATE positions SET office_lat = NULL, office_lon = NULL, office_address = NULL, office_geocoded = 0, is_remote = 0"
         )
-        print("=== reset office_lat/lon/geocoded/is_remote ===")
+        print("=== reset office_lat/lon/address/geocoded/is_remote ===")
 
     rows = c.execute(
         """SELECT id, title, company, location, jd_text
@@ -230,7 +249,7 @@ def main():
     stats = {"address": 0, "company": 0, "location": 0, "remote": 0, "skip": 0, "cache": 0}
 
     for pid, title, company, location, jd_text in rows:
-        lat, lon, source = process_position(c, pid, title, company, location, jd_text)
+        lat, lon, address, source = process_position(c, pid, title, company, location, jd_text)
         short_t = (title or "")[:40]
         if source == "remote":
             c.execute("UPDATE positions SET is_remote = 1 WHERE id = ?", (pid,))
@@ -241,8 +260,8 @@ def main():
             print(f"  [#{pid:3d}] skip     | {short_t} (loc={location!r})")
         elif lat is not None:
             c.execute(
-                "UPDATE positions SET office_lat = ?, office_lon = ?, office_geocoded = 1 WHERE id = ?",
-                (lat, lon, pid),
+                "UPDATE positions SET office_lat = ?, office_lon = ?, office_address = ?, office_geocoded = 1 WHERE id = ?",
+                (lat, lon, address, pid),
             )
             if "cached" in source:
                 stats["cache"] += 1
