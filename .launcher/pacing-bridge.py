@@ -118,6 +118,73 @@ def _load_working_hours():
         return None
 
 
+def _load_target_helpers():
+    """Modulo target dinamico (work_hours_target + provider_capacity).
+
+    Sostituisce il TARGET_BAND_CENTER fisso 92% con un target che dipende
+    da (a) ore ON dell'utente nella finestra 5h corrente, (b) ratio del
+    provider (cap 5h / cap weekly). Vedi docs/internal/2026-05-25-work-hours-design.md.
+
+    Failsafe: qualsiasi import error → ritorna (None, None) e il bridge
+    continua col target band classico.
+    """
+    try:
+        wht = _path_import(_shared_skills_dir() / "work_hours_target.py", "_wht")
+        pcap = _path_import(_shared_skills_dir() / "provider_capacity.py", "_pcap")
+        return wht, pcap
+    except Exception as e:
+        print(f"[pacing-bridge] WARN target helpers non caricabili: {e} — uso target_band fisso",
+              file=sys.stderr, flush=True)
+        return None, None
+
+
+def _compute_dynamic_target(
+    wht, pcap, now: datetime, h_to_reset: float | None
+) -> dict:
+    """Calcola il target % di finestra 5h da puntare per il tick corrente.
+
+    Se l'algoritmo non è applicabile (helpers mancanti, h_to_reset None,
+    o config 24/7 senza schedule) ritorna `current_window_target_pct =
+    TARGET_BAND_CENTER` per backwards-compat completo.
+
+    Return dict pronto da merge nello state file:
+      work_phase, current_window_target_pct, target_pct_of_weekly,
+      active_hours_in_window, weekly_active_hours,
+      window_cap_pct_of_weekly, next_phase_transition_at
+    """
+    fallback = {
+        "work_phase": "ON",
+        "current_window_target_pct": TARGET_BAND_CENTER,
+        "target_pct_of_weekly": None,
+        "active_hours_in_window": None,
+        "weekly_active_hours": None,
+        "window_cap_pct_of_weekly": None,
+        "next_phase_transition_at": None,
+        "target_source": "band_center",
+    }
+    if wht is None or pcap is None or h_to_reset is None or h_to_reset <= 0:
+        return fallback
+    try:
+        window_end = now + timedelta(hours=h_to_reset)
+        window_start = window_end - timedelta(hours=5)
+        ratio = pcap.get_window_cap_pct_of_weekly()
+        out = wht.compute_target(
+            now_utc=now,
+            window_start_utc=window_start,
+            window_end_utc=window_end,
+            window_cap_pct_of_weekly=ratio,
+            default_target_band_pct=TARGET_BAND_CENTER,
+        )
+        out["target_source"] = (
+            "schedule+ratio" if ratio is not None else "schedule+band"
+        )
+        return out
+    except Exception as e:
+        print(f"[pacing-bridge] WARN compute_target failed: {e} — fallback band center",
+              file=sys.stderr, flush=True)
+        return fallback
+
+
 def next_quarter(now: datetime | None = None) -> datetime:
     """Prossimo multiplo di TICK_MIN dopo `now` (UTC), allineato al minuto 0."""
     now = now or datetime.now(timezone.utc)
@@ -242,7 +309,8 @@ def hours_to_reset(reset_hhmm: str | None, now: datetime) -> float | None:
     return (target - now).total_seconds() / 3600.0
 
 
-def compute_tick(ast, tba, rb, now: datetime) -> dict:
+def compute_tick(ast, tba, rb, now: datetime,
+                 wht=None, pcap=None) -> dict:
     """Calcola tutto il payload del tick. Ritorna dict con `ok` true/false.
 
     La finestra nominale è TICK_MIN minuti, ma se al suo interno cambia
@@ -351,18 +419,26 @@ def compute_tick(ast, tba, rb, now: datetime) -> dict:
     reset_at = sample.get("reset_at")
     h_to_reset = hours_to_reset(reset_at, now)
 
-    # 4) vel_target: (target_band - usage_now) / hours_to_reset.
+    # 4) Target dinamico per la finestra 5h corrente.
+    #    Sostituisce il TARGET_BAND_CENTER fisso 92% con un target che
+    #    dipende dalle ore ON dell'utente nella finestra e dal ratio
+    #    cap-5h/cap-weekly del provider. Fallback automatico al 92% se
+    #    schedule assente o ratio sconosciuto (Kimi unlimited).
+    target_info = _compute_dynamic_target(wht, pcap, now, h_to_reset)
+    target_pct = target_info["current_window_target_pct"]
+
+    # 5) vel_target: (target_pct - usage_now) / hours_to_reset.
     #    Se reset_at o usage mancano, vel_target = None (verdetto N/D).
     if (
         h_to_reset is not None
         and h_to_reset > 0
         and isinstance(usage_now, (int, float))
     ):
-        vel_target = max(0.0, (TARGET_BAND_CENTER - usage_now) / h_to_reset)
+        vel_target = max(0.0, (target_pct - usage_now) / h_to_reset)
     else:
         vel_target = None
 
-    # 5) Per ogni agente: kT, kT/h, %/h, share, cadenza checkpoint/min.
+    # 6) Per ogni agente: kT, kT/h, %/h, share, cadenza checkpoint/min.
     #    Filtra rumore < MIN_PCT_H.
     checkpoint_counts = _read_throttle_events(effective_since_ts, now_ts)
     eff_min = effective_window_h * 60.0
@@ -389,7 +465,7 @@ def compute_tick(ast, tba, rb, now: datetime) -> dict:
             }
         )
 
-    # 6) Verdetto.
+    # 7) Verdetto.
     if vel_target is None:
         verdict = {"kind": "ND", "delta": None, "frac_pct": None}
     else:
@@ -423,6 +499,17 @@ def compute_tick(ast, tba, rb, now: datetime) -> dict:
         "vel_team": vel_team,
         "vel_target": vel_target,
         "target_band_center": TARGET_BAND_CENTER,
+        # Target dinamico work-hours-aware (replacement di target_band_center).
+        # Quando schedule e ratio sono disponibili → questo è il numero
+        # effettivamente usato; altrimenti coincide con TARGET_BAND_CENTER.
+        "target_pct": target_pct,
+        "target_source": target_info.get("target_source"),
+        "work_phase": target_info.get("work_phase"),
+        "target_pct_of_weekly": target_info.get("target_pct_of_weekly"),
+        "active_hours_in_window": target_info.get("active_hours_in_window"),
+        "weekly_active_hours": target_info.get("weekly_active_hours"),
+        "window_cap_pct_of_weekly": target_info.get("window_cap_pct_of_weekly"),
+        "next_phase_transition_at": target_info.get("next_phase_transition_at"),
         "usage_now": usage_now,
         "proj": proj,
         "reset_at": reset_at,
@@ -483,9 +570,19 @@ def format_message(d: dict) -> str:
     ]
 
     if d["vel_target"] is not None:
+        # Quando il target è work-hours-aware mostriamo il valore effettivo
+        # invece del band center fisso: il Capitano sa che il bridge sta
+        # puntando es. al 75% anziché al 92% perché l'utente lavora 9-18.
+        target_pct = d.get("target_pct", d["target_band_center"])
+        src = d.get("target_source") or "band_center"
+        src_tag = (
+            ""
+            if src == "band_center"
+            else f" [{src} phase={d.get('work_phase', '?')}]"
+        )
         parts.append(
             f"vel_target={d['vel_target']:.2f}%/h "
-            f"(per chiudere a {d['target_band_center']:.0f}% al reset)"
+            f"(per chiudere a {target_pct:.0f}% al reset){src_tag}"
         )
     else:
         parts.append("vel_target=N/D")
@@ -717,6 +814,19 @@ def _serialize_report(d: dict) -> dict | None:
         "vel_team": round(d["vel_team"], 2),
         "vel_target": round(d["vel_target"], 2) if d["vel_target"] else None,
         "target_band_center": d["target_band_center"],
+        # Work-hours-aware fields (None = fallback al band center classico).
+        "target_pct": d.get("target_pct"),
+        "target_source": d.get("target_source"),
+        "work_phase": d.get("work_phase"),
+        "target_pct_of_weekly": (
+            round(d["target_pct_of_weekly"], 2)
+            if isinstance(d.get("target_pct_of_weekly"), (int, float))
+            else None
+        ),
+        "active_hours_in_window": d.get("active_hours_in_window"),
+        "weekly_active_hours": d.get("weekly_active_hours"),
+        "window_cap_pct_of_weekly": d.get("window_cap_pct_of_weekly"),
+        "next_phase_transition_at": d.get("next_phase_transition_at"),
         "agents": agents,
         "skipped": skipped,
         "verdict": verdict,
@@ -738,6 +848,19 @@ def write_state(d: dict | None, next_tick_at: datetime, last_message: str | None
         ),
         "last_report": _serialize_report(d) if d else None,
         "last_message": last_message,
+        # Top-level mirror dei campi work-hours-aware: la UI può leggere
+        # questi senza ispezionare last_report. Letti dal tick più recente
+        # anche se compute_tick ha dato `ok=False` (lo state file resta
+        # informativo durante gli skip).
+        "work_phase": d.get("work_phase") if d else None,
+        "current_window_target_pct": d.get("target_pct") if d else None,
+        "target_source": d.get("target_source") if d else None,
+        "next_phase_transition_at": (
+            d.get("next_phase_transition_at") if d else None
+        ),
+        "window_cap_pct_of_weekly": (
+            d.get("window_cap_pct_of_weekly") if d else None
+        ),
     }
     try:
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -756,6 +879,7 @@ def write_state(d: dict | None, next_tick_at: datetime, last_message: str | None
 def loop():
     ast, tba, rb = _load_helpers()
     wh = _load_working_hours()
+    wht, pcap = _load_target_helpers()
     write_pid()
     print(
         f"[pacing-bridge] up — target={TARGET_SESSION} tick={TICK_MIN}m "
@@ -785,7 +909,7 @@ def loop():
                         f"off-hours ({status})")
             continue
         try:
-            d = compute_tick(ast, tba, rb, now)
+            d = compute_tick(ast, tba, rb, now, wht=wht, pcap=pcap)
             msg = format_message(d)
             print(msg, flush=True)
             delivered = send_to_capitano(msg)
@@ -813,7 +937,10 @@ def loop():
 
 def once(do_send: bool):
     ast, tba, rb = _load_helpers()
-    d = compute_tick(ast, tba, rb, datetime.now(timezone.utc))
+    wht, pcap = _load_target_helpers()
+    d = compute_tick(
+        ast, tba, rb, datetime.now(timezone.utc), wht=wht, pcap=pcap
+    )
     msg = format_message(d)
     print(msg)
     delivered = False
