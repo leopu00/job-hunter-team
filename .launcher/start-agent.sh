@@ -153,6 +153,28 @@ if [ "$ROLE" = "bridge" ]; then
     echo "⚠ $PACING_SCRIPT non trovato — pacing NON partito (sentinel ok)"
   fi
 
+  # Window ratio meter — calibrazione auto del rapporto cap-5h/cap-weekly.
+  # Daemon leggero (un pass ogni 5 min su sentinel-data.jsonl), scrive
+  # ~/.jht/logs/window-ratio-state.json che provider_capacity.py blenda
+  # col seed table. Inattivo per Kimi (no weekly cap): il daemon parte
+  # comunque ma update_ratio scarta tutti i sample senza weekly_usage.
+  WRM_SCRIPT="/app/shared/skills/window_ratio_meter.py"
+  if [ -f "$WRM_SCRIPT" ]; then
+    for _pid in $(grep -l window_ratio_meter.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -TERM "$_pid" 2>/dev/null || true
+    done
+    sleep 0.5
+    for _pid in $(grep -l window_ratio_meter.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -KILL "$_pid" 2>/dev/null || true
+    done
+    setsid sh -c "
+      python3 -u $WRM_SCRIPT --watch >> /tmp/window-ratio-meter.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ window-ratio-meter partito (log /tmp/window-ratio-meter.log)"
+  else
+    echo "⚠ $WRM_SCRIPT non trovato — calibrazione auto N/D (seed only)"
+  fi
+
   exit 0
 fi
 
