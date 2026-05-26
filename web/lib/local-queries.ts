@@ -380,11 +380,12 @@ export interface PositionCoord {
   lon: number
   is_remote: boolean
   location: string | null
+  office_address: string | null
 }
 export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
   const db = getDb(ws)
   const rows = db.prepare(`
-    SELECT p.id, p.title, p.company, p.status, p.location,
+    SELECT p.id, p.title, p.company, p.status, p.location, p.office_address,
            s.total_score as score,
            p.office_lat as lat, p.office_lon as lon,
            p.is_remote
@@ -403,6 +404,7 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
     lon: r.lon,
     is_remote: !!r.is_remote,
     location: r.location ?? null,
+    office_address: r.office_address ?? null,
   }))
 }
 
