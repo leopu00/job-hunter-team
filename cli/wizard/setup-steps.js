@@ -14,6 +14,7 @@ import {
 import { describeSecret } from './secret-ref.js';
 import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
+import { t } from './i18n.js';
 
 // ─── Privacy suffix per bot username Telegram ──────────────────────────
 // I bot Telegram hanno username GLOBALI UNICI raggiungibili da chiunque
@@ -296,9 +297,67 @@ async function promptSingleTelegramBot(prompter, role, existing, suggestedUserna
  * Assembla e salva la config finale conforme a shared/config/ schema.
  * apiKey puo' essere un SecretInput (oggetto) o una stringa plaintext legacy.
  */
+/**
+ * Step working-hours: chiede all'utente come distribuire il budget weekly
+ * sulle ore di lavoro. 5 preset + skip ("configura dopo"). Lo step è
+ * non-bloccante: skip lascia il team in 24/7 (default storico).
+ *
+ * Ritorna `WorkingHoursConfig | null`: null = 24/7 (campo non presente nel
+ * config), oggetto = team.working_hours da salvare.
+ *
+ * Smart skip: se baseConfig.team.working_hours esiste già (es. l'utente
+ * sta rifacendo il setup) → mostra come default il preset attuale ma
+ * permette di cambiarlo. Per "keep as-is" basta scegliere lo stesso.
+ */
+export async function promptWorkingHours(prompter, currentWorkingHours) {
+  const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  const PRESETS = {
+    office:  { days: ['mon','tue','wed','thu','fri'], start: '09:00', end: '18:00' },
+    weekend: { days: ['sat','sun'],                   start: '09:00', end: '18:00' },
+    daytime: { days: ALL_DAYS,                        start: '09:00', end: '18:00' },
+    night:   { days: ALL_DAYS,                        start: '22:00', end: '07:00' },
+  };
+  function detectCurrentPreset() {
+    if (!currentWorkingHours?.windows?.length) return 'always';
+    if (currentWorkingHours.windows.length !== 1) return 'custom_later';
+    const w = currentWorkingHours.windows[0];
+    for (const [key, p] of Object.entries(PRESETS)) {
+      if (p.start === w.start && p.end === w.end &&
+          p.days.length === w.days.length &&
+          p.days.every(d => w.days.includes(d))) return key;
+    }
+    return 'custom_later';
+  }
+  function detectLocalTz() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
+    catch { return 'UTC'; }
+  }
+
+  const choice = await prompter.select({
+    message: t('wizard.workhours.prompt'),
+    initialValue: detectCurrentPreset(),
+    options: [
+      { value: 'office',         label: t('wizard.workhours.office'),        hint: t('wizard.workhours.hint') },
+      { value: 'weekend',        label: t('wizard.workhours.weekend') },
+      { value: 'daytime',        label: t('wizard.workhours.daytime') },
+      { value: 'night',          label: t('wizard.workhours.night') },
+      { value: 'always',         label: t('wizard.workhours.always') },
+      { value: 'custom_later',   label: t('wizard.workhours.custom_later') },
+    ],
+  });
+
+  if (choice === 'always') return null;
+  if (choice === 'custom_later') return currentWorkingHours ?? null;  // no-op
+  const preset = PRESETS[choice];
+  return {
+    timezone: currentWorkingHours?.timezone || detectLocalTz(),
+    windows: [{ days: preset.days, start: preset.start, end: preset.end }],
+  };
+}
+
 export async function assembleAndSaveConfig(prompter, params) {
   const { providerChoice, authMethod, apiKey, subscriptionConfig, model,
-          telegramChannel, baseProviders } = params;
+          telegramChannel, baseProviders, workingHours } = params;
 
   const progress = prompter.progress('Salvataggio configurazione...');
 
@@ -327,6 +386,13 @@ export async function assembleAndSaveConfig(prompter, params) {
 
   // telegramChannel = { bots: { assistente, capitano, mentor } } (schema 2026-05-13)
   if (telegramChannel) config.channels.telegram = telegramChannel;
+
+  // Working hours: presenti solo se l'utente ha scelto un preset (no 24/7).
+  // Quando assenti il team gira 24/7 (default storico).
+  if (workingHours) {
+    config.team = config.team || {};
+    config.team.working_hours = workingHours;
+  }
 
   writeConfigFile(config);
   progress.stop('Configurazione salvata!');
