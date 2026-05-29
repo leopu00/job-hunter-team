@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation'
 const FULLSCREEN_FLOWS = ['/onboarding', '/positions']
 // Hero flows: full-width senza padding (il globo del dashboard tocca
 // il navbar; il page gestisce il centering dei contenuti sottostanti).
-const HERO_FLOWS = ['/dashboard']
+const HERO_FLOWS = ['/dashboard', '/map']
 
 export default function MainChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? ''

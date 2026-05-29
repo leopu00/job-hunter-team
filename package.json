@@ -21,7 +21,7 @@
     "desktop:dist:linux": "npm --prefix desktop run dist:linux"
   },
   "keywords": [],
-  "author": "Leone Emanuele Puglisi",
+  "author": "Leone P.",
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {

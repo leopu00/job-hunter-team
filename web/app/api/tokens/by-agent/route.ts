@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
+import { isLocalRequest } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,23 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const sinceMin = clampInt(url.searchParams.get("sinceMin"), 180, 1, 24 * 60);
   const bucketSec = clampInt(url.searchParams.get("bucketSec"), 60, 1, 600);
+
+  // Su cloud (Vercel) non c'è Python. Empty graceful con shape matching
+  // del client AgentTokensChart (data.series.map, data.agents.length).
+  if (!(await isLocalRequest())) {
+    const nowIso = new Date().toISOString();
+    return NextResponse.json({
+      ok: true,
+      now: nowIso,
+      since: new Date(Date.now() - sinceMin * 60_000).toISOString(),
+      bucket_sec: bucketSec,
+      agents: [],
+      totals_kt: {},
+      events: {},
+      series: [],
+      remote: true,
+    });
+  }
 
   try {
     const { stdout } = await runBash(
