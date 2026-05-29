@@ -375,16 +375,21 @@ export interface PositionCoord {
   title: string
   company: string
   status: string
+  role_family: string | null
   score: number | null
   lat: number
   lon: number
   is_remote: boolean
   location: string | null
+  loc_country: string | null
+  loc_city: string | null
+  office_address: string | null
 }
 export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
   const db = getDb(ws)
   const rows = db.prepare(`
-    SELECT p.id, p.title, p.company, p.status, p.location,
+    SELECT p.id, p.title, p.company, p.status, p.role_family, p.location,
+           p.loc_country, p.loc_city, p.office_address,
            s.total_score as score,
            p.office_lat as lat, p.office_lon as lon,
            p.is_remote
@@ -398,25 +403,90 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
     title: r.title,
     company: r.company,
     status: r.status,
+    role_family: r.role_family ?? null,
     score: typeof r.score === 'number' ? r.score : null,
     lat: r.lat,
     lon: r.lon,
     is_remote: !!r.is_remote,
     location: r.location ?? null,
+    loc_country: r.loc_country ?? null,
+    loc_city: r.loc_city ?? null,
+    office_address: r.office_address ?? null,
   }))
 }
 
-// ── Conteggio posizioni per location (per /map sidebar paesi) ─────
-export function getPositionLocationsLocal(ws: string) {
+// ── Company gerarchico location (country → cities → positions) ──────
+// Allineato a queries.ts (Supabase). Usa loc_country/loc_city strutturati.
+export type LocationPositionLite = {
+  id: string
+  title: string | null
+  company: string | null
+  score: number | null
+}
+export type LocationCity = {
+  city: string | null
+  count: number
+  positions: LocationPositionLite[]
+}
+export type LocationCountry = {
+  country: string
+  count: number
+  cities: LocationCity[]
+}
+
+export function getPositionLocationsLocal(ws: string): LocationCountry[] {
   const db = getDb(ws)
   const rows = db.prepare(`
-    SELECT COALESCE(location, '—') AS location, COUNT(*) AS count
-    FROM positions
-    WHERE status != 'excluded'
-    Company BY location
-    ORDER BY count DESC
-  `).all() as { location: string; count: number }[]
-  return rows
+    SELECT p.id, p.title, p.company, p.loc_country, p.loc_city,
+           s.total_score AS score
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    WHERE p.status != 'excluded'
+  `).all() as Array<{
+    id: any
+    title: string | null
+    company: string | null
+    loc_country: string | null
+    loc_city: string | null
+    score: number | null
+  }>
+  const byCountry = new Map<string, Map<string | null, LocationPositionLite[]>>()
+  for (const r of rows) {
+    const country = r.loc_country?.trim() || '(unknown)'
+    const city = r.loc_city?.trim() || null
+    const cMap = byCountry.get(country) ?? new Map<string | null, LocationPositionLite[]>()
+    const arr = cMap.get(city) ?? []
+    arr.push({
+      id: sid(r.id),
+      title: r.title,
+      company: r.company,
+      score: typeof r.score === 'number' ? r.score : null,
+    })
+    cMap.set(city, arr)
+    byCountry.set(country, cMap)
+  }
+  const out: LocationCountry[] = []
+  for (const [country, cMap] of byCountry) {
+    const cities: LocationCity[] = []
+    let total = 0
+    for (const [city, positions] of cMap) {
+      positions.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+      cities.push({ city, count: positions.length, positions })
+      total += positions.length
+    }
+    cities.sort((a, b) => {
+      if (a.city == null) return 1
+      if (b.city == null) return -1
+      return b.count - a.count
+    })
+    out.push({ country, count: total, cities })
+  }
+  out.sort((a, b) => {
+    if (a.country === '(unknown)') return 1
+    if (b.country === '(unknown)') return -1
+    return b.count - a.count
+  })
+  return out
 }
 
 // ── Positions SENZA coordinate (per /map "remote bucket") ─────────
@@ -424,6 +494,7 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
   const db = getDb(ws)
   const rows = db.prepare(`
     SELECT p.id, p.title, p.company, p.status, p.location,
+           p.loc_country, p.loc_city,
            p.role_family,
            s.total_score as score,
            p.is_remote
@@ -441,6 +512,8 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
     score: typeof r.score === 'number' ? r.score : null,
     is_remote: !!r.is_remote,
     location: (r.location as string | null) ?? null,
+    loc_country: (r.loc_country as string | null) ?? null,
+    loc_city: (r.loc_city as string | null) ?? null,
   }))
 }
 
