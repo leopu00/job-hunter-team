@@ -500,6 +500,9 @@ async function handlePush(options) {
         'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
         'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
         'salary_estimated_source',
+        // Writer-on-demand (V6, 2026-05-29): l'utente seleziona da
+        // dashboard/Telegram, il flag viaggia a cloud per UI cross-device.
+        'write_requested', 'write_requested_at',
       ], cursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
         'position_id', 'total_score', 'experience_fit', 'salary_fit',
