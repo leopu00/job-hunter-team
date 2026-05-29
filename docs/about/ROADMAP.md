@@ -1,6 +1,6 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-05-14
+> Last updated: 2026-05-29
 >
 > 📋 **For tactical, task-by-task detail → see [`BACKLOG.md`](../BACKLOG.md)**.
 > This file is the strategic, visual summary — where we're going, not the day-to-day.
@@ -51,9 +51,9 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
   Phase 1            Phase 2            Phase 3            Phase 4            Phase 5            Phase 6
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  🔨 ~85%             🔨 ~70%             🔨 ~70%            🔨 ~30%            🔨 ~70%            🔨 ~65%
+  🔨 ~88%             🔨 ~80%             🔨 ~50%            🔨 ~70%            🔨 ~70%            🔨 ~68%
   Web Platform       Desktop Launcher    Cloud Multi-      Full              Public            🚢 Pre-Launch
-  consolidation      + first-run UX      Provider          i18n              Website            (NEW)
+  consolidation      + first-run UX      Provider          i18n              Website            OSS
 ```
 
 ---
@@ -63,26 +63,32 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 > _"The web app works end-to-end with real data."_
 
 ```
-🟢 Status: IN PROGRESS — ~85%
+🟢 Status: IN PROGRESS — ~88%
 ━━━━━━━━━━━━━━━━━━━░░ 
 
-✅ Next.js 16 app with 112 pages (App Router)
+✅ Next.js 16 app, ~76 page.tsx routes (App Router)
 ✅ Google + GitHub OAuth
-✅ DB schema (migrations 001–007, 7 tables, RLS)
+✅ DB schema (migrations 001–011, RLS, onboarding-state)
 ✅ Vercel CI/CD pipeline + jobhunterteam.ai live
-✅ Dashboard wired to real Supabase data
-✅ Positions, applications, settings pages live
-✅ Cloud sync (tokens + ping + push endpoints, jht cloud CLI)
-✅ Web E2E tests (75+ Playwright specs)
+✅ Dashboard wired to real Supabase data (mock-data audit: solo `web/lib/dashboard-demo.ts` gated da env+query)
+✅ Positions, applications, settings, map drilldown pages live
+✅ Cloud sync — 9 route.ts in web/app/api/cloud-sync/ (tokens, ping, push, device-init/poll/confirm/register, team-commands), jht cloud CLI completo (enable/login/pair/status/push/disable/daemon)
+✅ Web E2E tests — 76 Playwright specs in e2e/tests/
 ✅ Onboarding split-screen (profile mirror + assistant chat)
 ✅ CLI ↔ container coordination (jht team / container / sentinella)
-⬜ db_supabase.py wrapper — push agent results to cloud
-⬜ Weekly window monitoring calibration (today: 5h windows)
-✅ User-defined work hours ("team as employee" model) — config + gate in pacing-bridge & notify-user (commit `13318e1d`)
+✅ db_to_supabase.py wrapper — push agent results to cloud (shared/skills/db_to_supabase.py)
+✅ Weekly window monitoring calibration — data layer DONE (compute_metrics.py espone weekly_usage, weekly_reset_at)
+✅ User-defined work hours ("team as employee" model) — config + gate in pacing-bridge & notify-user (commit `13318e1d` + work-hours-aware target `f7b52e52`)
+✅ Sentinel token optimization — 491→162 righe (-67%, target era 130) + 6 SKILL.md on-demand
+✅ Bridge V7 — token-based monitoring (shared/skills/token-meter.py + throttle*.py)
+✅ Bridge V8 — auto-incentive (.launcher/pacing-bridge.py, tick 15min)
 ✅ Kimi €40 calibration (sprint 17-18 maggio: Sentinella 3 fasi + scala continua, EMERGENZA -96%) — commit `d6c1c646`
-✅ Sentinel token consumption optimization — bug #24 chiuso (vedi BACKLOG team strategy sprint)
-⬜ Documented test campaign matrix (provider × tier × persona)
+✅ Weekly cap awareness post-fix 2026-05-22 (C-09 `9e7ece9f` Capitano + S-06 `86da0f03` Sentinella)
+✅ Windows-native CLI — install.ps1 (389 righe) + jht-wrapper.ps1 (233 righe) shipped 2026-05-22
 ✅ Team strategy bugs sprint 2026-05-17/18 — 13 bug + 3 feature chiusi, vedi [BACKLOG](../../BACKLOG.md#-team-strategy-bugs-sprint-2026-05-1718-13-bug--3-feature-chiusi) e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](../sessions/2026-05-18-fix-effectiveness-review/)
+⬜ Documented test campaign matrix (provider × tier × persona) — BLOCKER pre-launch, 1/10 cella pubblicata
+⬜ VPS comparison decision tree doc (PC locale vs PC dedicato vs VPS)
+🟡 Local-PC-no-API mode — local-queries.ts esiste, switch logico pending in queries.ts
 ```
 
 For full task list → [BACKLOG · Phase 1](../BACKLOG.md#1️⃣-phase-1--web-platform-consolidation-current-sprint)
@@ -94,8 +100,8 @@ For full task list → [BACKLOG · Phase 1](../BACKLOG.md#1️⃣-phase-1--web-p
 > _"Download, install, everything starts in the background, then you work from the browser."_
 
 ```
-🟡 Status: IN PROGRESS — ~70%
-━━━━━━━━━━━━━━░░░░░░ 
+🟡 Status: IN PROGRESS — ~80%
+━━━━━━━━━━━━━━━━░░░░ 
 
 ✅ Electron scaffolding + electron-builder
 ✅ First-run setup wizard (i18n en/it/hu, language picker, step-based UI)
@@ -105,8 +111,19 @@ For full task list → [BACKLOG · Phase 1](../BACKLOG.md#1️⃣-phase-1--web-p
 ✅ Smart boot (skip wizard if already configured)
 ✅ Cross-platform installers: .dmg / .exe / .AppImage / .deb
 ✅ Lazy install of Docker container (handles Node/Python deps inside)
+✅ OAuth login flow — desktop/auth/ (browser-picker, callback-server PKCE, OS keychain, Guest+Signed-in coexistence) DONE 2026-05-13
+✅ Encrypted cloud sync core — desktop/sync/crypto.js (AES-256-GCM + PBKDF2-SHA512 KDF v1)
+✅ Cloud sync profile (candidate_profile.yml in payload push cifrato)
+✅ VPS friendly wizard — location picker, SSH keypair gen, runInstall remoto, pairing token derivato dalla session, 3 lifecycle button (⏸️/📸/💀) DONE 2026-05-13
+✅ Auto-pairing VPS↔account web — 4/4 path (CLI `jht cloud login` device flow OAuth + onboarding empty-state + auto-push + desktop install.sh --pairing-token) DONE 2026-05-19
+⬜ `jht cloud restore` — bootstrap pull-automatico su container vuoto (CLI command da implementare)
+⬜ Cloud sync theme/settings — oggi in localStorage, da migrare a `user_settings` DB table
+⬜ Recovery passphrase BIP39 6-word (Argon2id KDF v2)
+⬜ Friendly error handling (ECONNREFUSED/401/Tailscale → cards azionabili)
+⬜ Embedded help/FAQ (context-sensitive "?" + offline FAQ)
 ⬜ Tray icon + native desktop notifications
 ⬜ Auto-update via electron-updater
+⬜ Dedicated computer mode (SSH-based JHT su PC della rete locale, mDNS/Bonjour)
 ⏸️ Code signing (deferred post-beta — open source + community review = trust signal)
 ```
 
@@ -119,8 +136,8 @@ For full task list → [BACKLOG · Phase 2](../BACKLOG.md#2️⃣-phase-2--🖥�
 > _"Click a button, the team runs on a self-hosted VPS."_
 
 ```
-🟡 Status: IN PROGRESS — ~70%
-██████████████░░░░░░ 
+🟡 Status: IN PROGRESS — ~50%
+██████████░░░░░░░░░░ 
 
 ✅ Desktop → VPS bring-up via SSH (T1: SshExec helper + IPC routing, commit a118cecb)
 ✅ Remote provider install via SSH (T2: install.sh + chown npm dirs, commit 87601d2a)
@@ -128,13 +145,16 @@ For full task list → [BACKLOG · Phase 2](../BACKLOG.md#2️⃣-phase-2--🖥�
 ✅ Telegram 3-bot tokens step via remote save (T4, commit fd1f7e6d)
 ✅ Dashboard 3-way routing + VpsSetupCompleteLanding (commit eccd1158)
 ✅ Cloud sync user onboarding state (migration 011, vps_setup + profile_configured)
-⬜ Abstraction layer shared/cloud/ (CloudProvider interface — multi-provider refactor)
-⬜ 🇪🇺 Hetzner Cloud adapter ⭐ first (cheapest ~€4.5/mo, EU GDPR)
-⬜ Cloud UI inside the desktop wizard (provider choice, cost estimate)
-⬜ Secure tunnel app ↔ cloud (today: raw SSH; planned: Tailscale or WireGuard)
-⬜ 🌩️ AWS EC2 adapter
-⬜ ☁️ Google Cloud GCE adapter
-⬜ Billing alerts (cost threshold notifications)
+✅ Auto-pairing VPS ↔ account web — 4 path coperti (CLI `jht cloud login` device flow + desktop --pairing-token + onboarding empty-state + auto-push)
+✅ CV upload via web UI (web/app/api/profile/upload/route.ts, PDF+doc+docx+md, 10MB, salva in /jht_user/cv/)
+✅ Hetzner lifecycle minimal — web/lib/hetzner.ts (listServers, snapshot, terminate); decisione lockata 2026-05-13: niente create-server automation in beta, utente paste IP manuale
+⬜ Abstraction layer shared/cloud/ (CloudProvider interface — NON ESISTE, Hetzner sta in web/lib/ silos)
+⬜ 🇪🇺 Hetzner Cloud full adapter (provisioning create-server, cloud-init)
+⬜ Cloud UI inside the desktop wizard (provider choice, cost estimate, billing alerts)
+⬜ Secure tunnel app ↔ cloud (today: raw SSH; planned: Tailscale o WireGuard — non cablato)
+⬜ 🌩️ AWS EC2 adapter (ZERO codice)
+⬜ ☁️ Google Cloud GCE adapter (ZERO codice)
+⬜ PDF OCR skill in agents/_skills/ per auto-extract candidate_profile.yml dal CV uploadato
 ```
 
 > 🌉 **Bridge to today**: power users can already bring up JHT on a self-hosted VPS through the desktop wizard (manual IP + SSH key, T1-T4 path). PHASE 3 generalises that one-VPS flow into a multi-provider, billing-aware one-click experience.
@@ -148,54 +168,29 @@ For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁�
 > _"The platform speaks the user's language."_
 
 ```
-🟡 Status: IN PROGRESS — ~30%
-━━━━━━░░░░░░░░░░░░░░ 
+🟡 Status: IN PROGRESS — ~70%
+██████████████░░░░░░ 
 
-✅ i18n module with it/en/hu support and fallback
-✅ English as primary language (default)
+✅ i18n module with en/it/hu support and fallback
+✅ English as primary language (default) — DEFAULT_LOCALE='en' allineato 2026-05-06
 ✅ Desktop wizard language picker (en/it/hu)
-✅ Hungarian (`hu.json`) — partial, community contribution
-⬜ Per-language JSON files refactor (today translations.ts inline)
-⬜ Language switcher in web dashboard (desktop already has one)
-✅ Fix DEFAULT_LOCALE mismatch — shared/i18n + web fallbacks allineati a 'en' (2026-05-06)
+✅ Language switcher in web dashboard — `web/app/components/LanguageSwitcher.tsx` (EN/IT/HU con flag SVG)
+✅ Hungarian (`hu.json`) — community contribution
+✅ **Localized agent prompts** (DONE 2026-05-19): baseline EN per tutti 9 ruoli (`analista`, `assistente`, `capitano`, `critico`, `dottore`, `mentor`, `scorer`, `scout`, `scrittore`, `sentinella`) + overlay IT 8/10 (mancano `critico.it.md`, `mentor.it.md`) + overlay HU 10/10. Hook risoluzione lingua deployed in `.launcher/start-agent.sh` (legge `~/.jht/i18n-prefs.json`, prova `<role>.<locale>.md`, fallback baseline EN). Safeguard runtime RULE-T14 in `agents/_team/team-rules.md`.
+⚠️ Mismatch infra residuo: `web/app/api/i18n/route.ts:31` default `'it'` ≠ `shared/i18n/types.ts` `DEFAULT_LOCALE='en'`; `LOCALES` in types.ts non include `'hu'` pur essendo supportato in route.ts.
+⚠️ `web/messages/it.json` mancante (presenti solo `en.json` + `hu.json`).
+⬜ Per-language JSON files refactor (oggi `translations.ts` inline)
+⬜ Overlay multi-lingua per `agents/_team/`, `agents/_manual/`, `agents/_skills/` (questi sono letti via `Read` tool, non copiati dal launcher → serve risoluzione diversa)
+⬜ Overlay IT mancanti: `critico.it.md` + `mentor.it.md`
 ⬜ Spanish, German, French, Portuguese translations
-⬜ Translator-facing documentation
-⬜ **Localize agent prompts & runtime docs**: all files agents read at
-   runtime — agent identity prompts (`agents/<role>/<role>.md`), the
-   operational manual (`agents/_manual/`), the team architecture
-   (`agents/_team/architettura.md`), and the skill markdown bodies
-   (`agents/_skills/<name>/SKILL.md` + `agents/<role>/_skills/`) —
-   must exist in every supported language. When the user picks a
-   language at onboarding, the launcher should pin the team to the
-   matching prompt set so the Captain, Sentinel, Writer, etc. all
-   speak that language end-to-end (orders, feedback, chat replies).
-   **Why it matters:** Anthropic docs document a "language drift"
-   pattern — when system prompts contain heavy non-English content,
-   Claude infers conversation language from the system prompt mass
-   and can drift away from the user's query language. JHT prompts
-   today total thousands of lines (capitano.md alone is 647) → real
-   risk for an English-speaking beta tester writing
-   `find me python jobs` and getting Italian back. See
-   `docs/internal/2026-05-06-agent-prompts-i18n.md` for the design.
-   **Convention chosen:** `<role>.<locale>.md` siblings with fallback
-   to `<role>.md` (baseline). Startup hook in `start-agent.sh` reads
-   `~/.jht/i18n-prefs.json` and picks the right file.
-   **Status — honest:**
-   - ✅ Architecture: resolution hook deployed 2026-05-06.
-   - ❌ Translated content: zero files exist. No active translation
-     work on any branch — the parallel branch in progress optimizes
-     the Italian files, does not translate them.
-   - ⚠️ Drift mismatch active: `DEFAULT_LOCALE='en'` set 2026-05-06
-     for the desktop onboarding wizard, but baseline `<role>.md` is
-     still Italian → a default-EN user gets Italian prompts and may
-     experience drift on EN queries.
-   - 🤔 Open decisions (see design doc): keep status quo / rollback
-     DEFAULT_LOCALE to 'it' / quick patch RULE-T14 in `team-rules.md`.
-     None implemented yet — the team-rules edit is blocked by the
-     parallel branch coordination.
-   - ⬜ Future explicit task (unassigned today): translate `<role>.md`
-     content to English. Overlay for `_team/`, `_manual/`, `_skills/`
-     (read directly via `Read` tool, not copied by the launcher).
+⬜ Translator-facing documentation (how to add a new language)
+
+> **Background — "language drift":** Anthropic docs documentano che con
+> system prompt molto pesanti in lingua ≠ user, Claude può inferire la
+> lingua della conversazione dal system prompt e non dalla query utente.
+> Su JHT i 9 prompt agenti sommano migliaia di righe → safeguard via
+> RULE-T14 (runtime) + baseline EN (post-2026-05-19) + overlay locali.
+> Design doc: [`docs/internal/2026-05-06-agent-prompts-i18n.md`](../internal/2026-05-06-agent-prompts-i18n.md).
 ```
 
 For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-internationalization)
@@ -230,25 +225,25 @@ For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-
 
 ---
 
-### 🚢 Phase 6 — Pre-Launch Public OSS (NEW)
+### 🚢 Phase 6 — Pre-Launch Public OSS
 
 > _"Get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists."_
 
 ```
-🟡 Status: IN PROGRESS — ~65%
+🟡 Status: IN PROGRESS — ~68%
 █████████████░░░░░░░ 
 
 ✅ 🔐 SECURITY.md — root file with responsible disclosure (audit in docs/security/)
-✅ 🤝 CODE_OF_CONDUCT.md — Contributor Covenant
-⬜ 🎬 30s demo video (BLOCKER) — README above the fold
-✅ 🛡️ Security review — 31/34 fix, score 30→74%, see docs/security/ (3 gap residui: SSRF, resolve-system-bin, CSP prod)
+✅ 🤝 CODE_OF_CONDUCT.md — Contributor Covenant 2.1
+✅ 🛡️ Security review — 31/34 fix, score 30→74% (docs/security/, 7 file ~2336 righe); 3 gap residui: SSRF, resolve-system-bin, CSP prod
+✅ 🧪 docs/guides/BETA.md created (con "Coverage we still need" matrix)
+🟡 🐛 GitHub issue triage — templates (bug_report.md, feature_request.md) + .github/labels.yml (25 label) + docs/internal/triage.md SLA 48h/24h DONE; manca `gh label sync` live + project board
+🟡 📰 Show HN draft — docs/launch/show-hn-draft.md (171 righe, 4 title variants, Plan B subreddits); manca screenshots/GIF embedded (dipende da demo)
+🟡 🎬 30s demo storyboard — docs/launch/demo-storyboard.md (202 righe, 6-beat shot list, asciinema commands); mancano demo-profile.yml + assets/demo-fixtures/ + .cast/.gif
 ⬜ 🧊 Stabilize monitoring architecture (1-2 weeks freeze pre-launch)
-✅ 🧪 docs/BETA.md created
 ⬜ 🧪 Beta tester recruitment (publish on r/cscareerquestions, friends list)
 ⬜ ⭐ Awesome lists submissions (awesome-ai-agents, awesome-claude, awesome-selfhosted)
-⬜ 🐛 GitHub issue triage workflow
-⬜ 📰 Show HN post draft
-⬜ 🎙️ Press kit (logos, screenshots, descriptions)
+⬜ 🎙️ Press kit (logos svg+png, 5+ screenshots, 3 description variants 30/100/300w) — assets/press-kit/ mancante
 ```
 
 For full task list → [BACKLOG · Phase 6](../BACKLOG.md#6️⃣-phase-6--🚢-pre-launch-public-oss-new)
