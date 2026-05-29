@@ -29,7 +29,7 @@ Filenames diversi (es. `about-mario.md`, `goals_v2.md`) sono **silenziosamente i
 - **Markdown semplice**: paragrafi separati da riga vuota, `**grassetto**` per sottolineare, liste solo se aiutano la leggibilità.
 - **Nessuna tabella, nessun header `#`** — questi MD vivono in card UI già titolate.
 - **Lunghezza**: rispetta il cap. Niente muri di testo.
-- **Prima persona dell'utente**: `"sono uno sviluppatore…"`, `"preferisco lavorare da remoto…"`. Mai terza persona (`"Leone è…"`).
+- **Prima persona dell'utente**: `"sono uno sviluppatore…"`, `"preferisco lavorare da remoto…"`. Mai terza persona (`"Mario è…"`).
 - **Tono**: naturale, come se l'utente parlasse di sé a un amico esperto del settore.
 - **Mai path / nomi file / jargon** nel testo — l'utente legge "il riassunto", non "about.md".
 
@@ -82,7 +82,7 @@ autonomamente le loro brigate.
 
 ## Anti-patterns
 
-- ❌ Scrivere terza persona ("Leone è uno sviluppatore…") — il frontend rende il testo come voce diretta del candidato, terza persona suona alienante.
+- ❌ Scrivere terza persona ("Mario è uno sviluppatore…") — il frontend rende il testo come voce diretta del candidato, terza persona suona alienante.
 - ❌ Append a `Edit` invece di `Write` — finisce con due intro contraddittorie nello stesso file.
 - ❌ Tabelle / header `#` / liste numerate verbose — la card UI ha già il proprio chrome.
 - ❌ Saltare `about.md` / `strengths.md` dopo upload CV "perché tanto è scritto nel YAML" — il YAML non ha tono, gli scrittori producono CV sterili.

@@ -166,6 +166,12 @@ def query_companies(args):
         query += " AND verdict = ?"
         params.append(args.verdict)
 
+    if getattr(args, 'missing_glassdoor', False):
+        query += " AND glassdoor_rating IS NULL"
+
+    if getattr(args, 'missing_verdict', False):
+        query += " AND verdict IS NULL"
+
     query += " ORDER BY name"
     rows = conn.execute(query, params).fetchall()
 
@@ -456,6 +462,15 @@ def main():
     # companies
     c = sub.add_parser('companies')
     c.add_argument('--verdict', choices=['GO', 'CAUTIOUS', 'NO_GO'])
+    c.add_argument(
+        '--missing-glassdoor', action='store_true',
+        help='Filtra companies senza glassdoor_rating (per QA Analista, '
+             'address vps1-postmortem #2: 0/179 popolato).'
+    )
+    c.add_argument(
+        '--missing-verdict', action='store_true',
+        help='Filtra companies senza verdict (gap analysis Analista).'
+    )
 
     # company detail
     cd = sub.add_parser('company')

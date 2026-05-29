@@ -268,6 +268,8 @@ L'utente medio non vede mai il termine "SSH".
 
 ---
 
+> 🔗 **Per la vista consolidata "accesso macchina + dove vivono le credenziali" (3 modi × storage × LLM agent path)** → [`docs/internal/access-and-credentials.md`](access-and-credentials.md). Questo file resta la fonte di verità architetturale; quello consolida la sezione credenziali con confronto doc vs codice e punch list.
+
 ## 🔐 Login launcher + recovery cross-device
 
 VPS mode richiede **signed-in mode** (Local PC mode resta in guest mode disponibile sempre):
@@ -417,14 +419,14 @@ Il token Supabase OAuth dell'app desktop = identità unica per **app + dashboard
 
 ### 5. Rollout strategy → **B3 desktop diretto anche per beta 0**
 
-Path B1 (Leone-assisted SSH) **scartato**.
+Path B1 (maintainer-assisted SSH) **scartato**.
 
 | Fase | Path | Note |
 |------|------|------|
 | Beta 0 (ora) | **B3 — Desktop app full** | Anche i primi beta tester usano la desktop app |
 | Beta 1+ | **B2 — CLI assistita** | Path per AI agent (Claude Code, OpenClaw, ecc.) — utente lascia che il suo agente guidi il setup via `jht` CLI |
 
-Path B1 (Leone fa SSH per l'utente) lascia spazio: l'app deve essere già abbastanza buona da bastare ai primi beta tester senza hand-holding 1-a-1.
+Path B1 (maintainer fa SSH per l'utente) lascia spazio: l'app deve essere già abbastanza buona da bastare ai primi beta tester senza hand-holding 1-a-1.
 
 ---
 

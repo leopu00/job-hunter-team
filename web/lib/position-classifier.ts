@@ -26,6 +26,11 @@ export type RoleFamilyCount = {
   avgScore: number | null;
   // Media del voto critico (0-10), null se nessuna è stata revisionata.
   avgCritic: number | null;
+  // Score grezzi (0-100) di tutte le posizioni di questo tipo che
+  // hanno uno score numerico. Usato per filtrare la distribuzione
+  // score per tipo (interazione donut → histogram in /map). Optional
+  // per retro-compatibilità con sorgenti locali.
+  scores?: number[];
 };
 
 // Hash deterministico: stesso input → stesso colore. Output stabile tra
@@ -59,11 +64,17 @@ export function aggregateRoleFamilies(
     critic: number | null | undefined;
   }>,
 ): RoleFamilyCount[] {
+  // Mappe data-driven (dev2 refactor 2026-05-23): qualunque valore di
+  // role_family scritto dal Analista LLM finisce qui senza modifiche
+  // di codice. Il vecchio enum PositionType (master) è stato eliminato
+  // perché dava 81% "Other" sui profili non-dev. dev1 components
+  // (MapCharts, PositionTypesDonut) adattati a RoleFamilyCount.
   const counts = new Map<string, number>();
   const scoreSum = new Map<string, number>();
   const scoreN = new Map<string, number>();
   const criticSum = new Map<string, number>();
   const criticN = new Map<string, number>();
+  const scoresByFamily = new Map<string, number[]>();
 
   for (const r of rows) {
     const family = (r.role_family ?? "").trim() || UNCATEGORIZED_LABEL;
@@ -71,6 +82,9 @@ export function aggregateRoleFamilies(
     if (typeof r.score === "number" && Number.isFinite(r.score)) {
       scoreSum.set(family, (scoreSum.get(family) ?? 0) + r.score);
       scoreN.set(family, (scoreN.get(family) ?? 0) + 1);
+      const arr = scoresByFamily.get(family) ?? [];
+      arr.push(r.score);
+      scoresByFamily.set(family, arr);
     }
     if (typeof r.critic === "number" && Number.isFinite(r.critic)) {
       criticSum.set(family, (criticSum.get(family) ?? 0) + r.critic);
@@ -88,6 +102,7 @@ export function aggregateRoleFamilies(
         color: colorForFamily(family),
         avgScore: sN > 0 ? (scoreSum.get(family) ?? 0) / sN : null,
         avgCritic: cN > 0 ? (criticSum.get(family) ?? 0) / cN : null,
+        scores: scoresByFamily.get(family) ?? [],
       };
     })
     .sort((a, b) => b.count - a.count);

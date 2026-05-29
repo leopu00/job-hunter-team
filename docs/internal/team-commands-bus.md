@@ -1,5 +1,19 @@
 # Team Commands Bus — web → VPS command channel
 
+> ⚠️ **SUPERSEDED (2026-05-23)** — Il modello command-based descritto qui è
+> stato sostituito dal refactor **`team_state` desired-state + event lanes**
+> (migration 019–022). Il bus `team_commands` resta vivo in parallelo durante
+> il cutover graduale (Step 5–6 in [`cloud-sync-architecture.md`](cloud-sync-architecture.md)).
+> Nuovo design: 1 riga `team_state` per utente con desired (web → container)
+> + observed (container → web), event log dedicati per chat (`user_to_agent_messages`)
+> e feedback (`position_feedback`). Container: `cloud team-state-listen` reconciler.
+> Browser: `useTeamState` hook con Supabase Realtime (~200ms latency).
+>
+> 📌 Questo doc resta come riferimento storico del modello legacy finché
+> `team_commands` non viene rimosso (Step 6).
+
+---
+
 **Lockato 2026-05-14**. Bus per il bottone **Start** su `jobhunterteam.ai/team`
 quando il team gira su una VPS remota (no localhost). L'utente clicca, il
 container sulla VPS riceve il comando entro ~5s ed esegue `jht team <action>`.

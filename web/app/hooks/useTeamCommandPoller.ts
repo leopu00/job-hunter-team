@@ -92,7 +92,15 @@ export function useTeamCommandPoller(): Result {
       postBody = await res.json().catch(() => ({}));
       if (!res.ok || postBody.ok === false) {
         setState("error");
-        setError(postBody.error || `HTTP ${res.status}`);
+        // Normalizza error a stringa: alcuni server ritornano un oggetto in
+        // `error` (es. nested {message,details}) → setError(obj) faceva
+        // poi toast(obj) = "[object Object]" nel toast caller. Fix 2026-05-23.
+        const errMsg =
+          typeof postBody.error === 'string'
+            ? postBody.error
+            : (postBody.error as { message?: string } | undefined)?.message
+              ?? `HTTP ${res.status}`;
+        setError(errMsg);
         return;
       }
     } catch (err) {

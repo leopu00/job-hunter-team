@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "../../components/Toast";
 import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
+import { useTeamState } from "@/app/hooks/useTeamState";
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import TeamOrgChart from "./_components/TeamOrgChart";
+import WorkHoursPicker from "./_components/WorkHoursPicker";
 import UsageChart from "./_components/UsageChart";
 import UsageTokensChart from "./_components/UsageTokensChart";
 import TokenBreakdown from "./_components/TokenBreakdown";
@@ -201,7 +204,10 @@ export default function TeamCompany() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
+    // 15s invece di 5s: orgchart status non cambia spesso, riduce req/min
+    // sul rate limit globale. Realtime via useTeamState copre i cambi
+    // is_running ad alta frequenza (es. click Start/Stop).
+    const interval = setInterval(fetchStatus, 15_000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
@@ -232,7 +238,9 @@ export default function TeamCompany() {
       agentActionCmd.state === "timeout"
     ) {
       toast(
-        agentActionCmd.error ?? "Errore esecuzione comando agente",
+        typeof agentActionCmd.error === 'string' && agentActionCmd.error
+          ? agentActionCmd.error
+          : "Errore esecuzione comando agente",
         "error",
         6000,
       );
@@ -248,17 +256,37 @@ export default function TeamCompany() {
       ? actionTarget
       : null;
 
-  /* ── Azioni bulk ─────────────────────────────────────────────── */
+  /* ── Azioni bulk via team_state desired-state ────────────────── */
 
-  // start-all e stop-all dispatchano via `enqueueIfCompany` lato server:
-  // su cloud writeranno una riga in team_commands (consumata dal subscriber
-  // VPS), su local eseguono shell direttamente. L'hook gestisce POST →
-  // polling /api/team/command/[id] → done|error, così il bottone resta
-  // disabled finché il subscriber non risponde davvero.
-  const teamStartCmd = useTeamCommandPoller();
-  const teamStopCmd = useTeamCommandPoller();
+  // 2026-05-23 cutover: i bottoni Start/Stop scrivono `should_run` su
+  // team_state. Il reconciler `cloud team-state-listen` nel container
+  // converge eseguendo `jht team start|stop`. UI feedback in 3 fasi:
+  // 1) posting       → PATCH /api/team-state in volo
+  // 2) waiting       → should_run cambiato ma container non ha ancora
+  //                    aggiornato is_running (5-10s nel caso peggiore)
+  // 3) settled       → is_running riflette should_run → bottone idle
+  // Realtime hook useTeamState mantiene state aggiornato senza polling.
+  const [userId, setUserId] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const res = (await createBrowserSupabase().auth.getUser()) as {
+        data: { user: { id: string } | null } | null;
+        error: { message: string } | null;
+      };
+      if (cancelled) return;
+      setUserId(res.data?.user?.id ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const startAll = () => {
+  const teamState = useTeamState(userId);
+  const [bulkPosting, setBulkPosting] = useState<"start" | "stop" | null>(null);
+
+  const startAll = async () => {
+    setBulkPosting("start");
     setStatuses((prev) => {
       const next = { ...prev };
       TEAM_AGENTS.forEach((a) => {
@@ -266,43 +294,40 @@ export default function TeamCompany() {
       });
       return next;
     });
-    teamStartCmd.run("/api/team/start-all");
+    try {
+      await teamState.start();
+      toast("Comando Start inoltrato — attendo conferma container…", "success", 3000);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Team start error", "error", 6000);
+    } finally {
+      setBulkPosting(null);
+    }
   };
-  const stopAll = () => teamStopCmd.run("/api/team/stop-all");
 
-  // Aggiorno status quando il bus arriva a terminal + mostra toast errori.
-  useEffect(() => {
-    if (teamStartCmd.state === "done" || teamStartCmd.state === "local") {
-      fetchStatus();
-    } else if (
-      teamStartCmd.state === "error" ||
-      teamStartCmd.state === "timeout"
-    ) {
-      toast(teamStartCmd.error ?? "Team start error", "error", 6000);
+  const stopAll = async () => {
+    setBulkPosting("stop");
+    try {
+      await teamState.stop();
+      toast("Comando Stop inoltrato — attendo conferma container…", "success", 3000);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Team stop error", "error", 6000);
+    } finally {
+      setBulkPosting(null);
     }
-  }, [teamStartCmd.state, teamStartCmd.error, fetchStatus, toast]);
-  useEffect(() => {
-    if (teamStopCmd.state === "done" || teamStopCmd.state === "local") {
-      fetchStatus();
-    } else if (
-      teamStopCmd.state === "error" ||
-      teamStopCmd.state === "timeout"
-    ) {
-      toast(teamStopCmd.error ?? "Team stop error", "error", 6000);
-    }
-  }, [teamStopCmd.state, teamStopCmd.error, fetchStatus, toast]);
+  };
 
-  // bulkLoading retrocompat: i bottoni esistenti leggono questa var.
-  const bulkLoading: "start" | "stop" | null =
-    teamStartCmd.state === "posting" ||
-    teamStartCmd.state === "pending" ||
-    teamStartCmd.state === "running"
-      ? "start"
-      : teamStopCmd.state === "posting" ||
-          teamStopCmd.state === "pending" ||
-          teamStopCmd.state === "running"
-        ? "stop"
-        : null;
+  // bulkLoading retrocompat: i bottoni leggono questa var per disabilitarsi.
+  // Combina HTTP in-flight (bulkPosting) + waiting reconciler convergence
+  // (desired ≠ observed) per UX coerente "Start grigio finché il team
+  // è effettivamente partito".
+  const bulkLoading: "start" | "stop" | null = (() => {
+    if (bulkPosting) return bulkPosting;
+    if (!teamState.state) return null;
+    const { should_run, is_running } = teamState.state;
+    if (should_run && !is_running) return "start";
+    if (!should_run && is_running) return "stop";
+    return null;
+  })();
 
   /* ── Render ──────────────────────────────────────────────────── */
 
@@ -341,66 +366,70 @@ export default function TeamCompany() {
             >
               v2 →
             </Link>
-            <button
-              onClick={startAll}
-              disabled={
-                activeCount === TEAM_AGENTS.length || bulkLoading !== null
-              }
-              className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
-              style={{
-                background:
-                  activeCount === TEAM_AGENTS.length || bulkLoading !== null
-                    ? "var(--color-border)"
-                    : "rgba(34,197,94,0.1)",
-                color:
-                  activeCount === TEAM_AGENTS.length || bulkLoading !== null
-                    ? "var(--color-dim)"
-                    : "#22c55e",
-                border: `1px solid ${activeCount === TEAM_AGENTS.length || bulkLoading !== null ? "var(--color-border)" : "rgba(34,197,94,0.25)"}`,
-                cursor:
-                  activeCount === TEAM_AGENTS.length || bulkLoading !== null
-                    ? "not-allowed"
-                    : "pointer",
-                fontFamily: "inherit",
-                minWidth: 110,
-              }}
-            >
-              {bulkLoading === "start" ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <Spinner size={11} color="var(--color-dim)" /> Starting...
-                </span>
-              ) : activeCount === TEAM_AGENTS.length ? (
-                "\u2713 Active"
-              ) : (
-                "\u25B6 Start"
-              )}
-            </button>
-            {activeCount > 0 && (
-              <button
-                onClick={stopAll}
-                disabled={bulkLoading !== null}
-                className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
-                style={{
-                  background:
-                    bulkLoading !== null
-                      ? "var(--color-border)"
-                      : "rgba(244,67,54,0.08)",
-                  color: bulkLoading !== null ? "var(--color-dim)" : "#f44336",
-                  border: `1px solid ${bulkLoading !== null ? "var(--color-border)" : "rgba(244,67,54,0.2)"}`,
-                  cursor: bulkLoading !== null ? "not-allowed" : "pointer",
-                  fontFamily: "inherit",
-                  minWidth: 110,
-                }}
-              >
-                {bulkLoading === "stop" ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Spinner size={11} color="var(--color-dim)" /> Stopping...
-                  </span>
-                ) : (
-                  <>{"\u25A0"} Stop</>
-                )}
-              </button>
-            )}
+            {/* Team running state derivato da team_state (Realtime), con
+                fallback ad activeCount per Local PC mode senza cloud sync */}
+            {(() => {
+              const teamRunning =
+                teamState.state?.should_run === true ||
+                teamState.state?.is_running === true ||
+                activeCount > 0;
+              return (
+                <>
+                  {!teamRunning && (
+                    <button
+                      onClick={startAll}
+                      disabled={bulkLoading !== null}
+                      className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
+                      style={{
+                        background:
+                          bulkLoading !== null
+                            ? "var(--color-border)"
+                            : "rgba(34,197,94,0.1)",
+                        color: bulkLoading !== null ? "var(--color-dim)" : "#22c55e",
+                        border: `1px solid ${bulkLoading !== null ? "var(--color-border)" : "rgba(34,197,94,0.25)"}`,
+                        cursor: bulkLoading !== null ? "not-allowed" : "pointer",
+                        fontFamily: "inherit",
+                        minWidth: 110,
+                      }}
+                    >
+                      {bulkLoading === "start" ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Spinner size={11} color="var(--color-dim)" /> Starting...
+                        </span>
+                      ) : (
+                        "\u25B6 Start"
+                      )}
+                    </button>
+                  )}
+                  {teamRunning && (
+                    <button
+                      onClick={stopAll}
+                      disabled={bulkLoading !== null}
+                      className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
+                      style={{
+                        background:
+                          bulkLoading !== null
+                            ? "var(--color-border)"
+                            : "rgba(244,67,54,0.08)",
+                        color: bulkLoading !== null ? "var(--color-dim)" : "#f44336",
+                        border: `1px solid ${bulkLoading !== null ? "var(--color-border)" : "rgba(244,67,54,0.2)"}`,
+                        cursor: bulkLoading !== null ? "not-allowed" : "pointer",
+                        fontFamily: "inherit",
+                        minWidth: 110,
+                      }}
+                    >
+                      {bulkLoading === "stop" ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Spinner size={11} color="var(--color-dim)" /> Stopping...
+                        </span>
+                      ) : (
+                        <>{"\u25A0"} Stop</>
+                      )}
+                    </button>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -423,6 +452,13 @@ export default function TeamCompany() {
             onAction={handleAction}
             actionLoading={actionLoading}
           />
+        </div>
+      </section>
+
+      {/* Working hours — distribuzione weekly budget sulle ore ON */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <WorkHoursPicker />
         </div>
       </section>
 

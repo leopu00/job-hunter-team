@@ -792,7 +792,9 @@ export default function UsageChart() {
     loadData();
     // Data fetch ogni 10s — cadenza indipendente dal bridge (1-3m adaptive):
     // appena il bridge scrive un nuovo sample, lo vediamo entro 10s.
-    const dataId = setInterval(loadData, 10_000);
+    // 30s (era 10s): sentinel data cambia ogni ~30s lato bridge. Più
+    // frequente sprecava req/min sul rate limit globale.
+    const dataId = setInterval(loadData, 30_000);
     // Wall-clock tick ogni 10s per far scorrere l'asse x. Cosi' anche se
     // non arrivano nuovi dati, il tempo avanza, l'ultimo sample scorre a
     // sinistra e vediamo il chart "vivo" invece che congelato sul punto.
