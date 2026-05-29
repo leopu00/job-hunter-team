@@ -295,9 +295,18 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **🟢 Operativo:** shutdown VPS Hetzner (€19.50/mo combinati per 2 CPX22 ferme). Investigare auto-restart container Kimi (osservato 2× durante sessione).
 - **🐛 Bug minori funnel:** labels phase troncati su viewport stretti, legend duplicata Codex+Kimi, Pre-LinkedIn funnel "distorto" da 84 untracked.
 
-##### ✍️ [JHT-WRITER-ON-DEMAND] Scrittore + Critico spawn SOLO su selezione utente esplicita ⬜ 🔴 URGENTE pre-next-test
+##### ✍️ [JHT-WRITER-ON-DEMAND] Scrittore + Critico spawn SOLO su selezione utente esplicita ✅ DONE 2026-05-29
 
-- **Background scoperto da case study #2/#3 (2026-05-23)**: gli Scrittori sono i top consumer di token del team (spawn 3-round + Critico che a sua volta consuma per leggere CV+JD+scrivere critica). Il Critico è concettualmente "fuori dal team" (spawnato dallo Scrittore) ma il suo consumo dovrebbe essere attribuito allo Scrittore per i calcoli di throttling del Capitano. Inoltre molti CV scritti finiscono in `ready` senza che l'utente li voglia davvero → token bruciati su posizioni che l'utente non applierà mai. Su VPS Codex: 105 ready ma applied=0; su VPS Kimi: 56 ready ma applied=0.
+- **Stato implementazione (branch `dev3`, 6 commit sequenziali 2026-05-29):**
+  - ✅ DB foundation (`1744938e`): SQLite V6 con `positions.write_requested` + `write_requested_at`, migrazione idempotente `_migrate_positions_write_requested`, partial index `WHERE write_requested = 1`, mig Supabase 024. `next-for-scrittore` filtra `write_requested=1` con ordering FIFO su `write_requested_at`.
+  - ✅ API web (`0ac03951`): `POST/DELETE /api/positions/[legacyId]/write-request` (session-only, double-write SQLite + Supabase best-effort). Push delta cablato: `write_requested[_at]` nel whitelist `cli/src/commands/cloud.js` e nel receive endpoint `web/app/api/cloud-sync/push/route.ts`.
+  - ✅ UI web (`d7fdf924`): button "🖊 Scrivi CV" nella detail page `/positions/[id]` con toggle pulito (POST/DELETE), optimistic update + rollback, disabled quando `status != 'scored'` o application esiste.
+  - ✅ Scrittore prompt (`ac90fc94`, EN+IT baseline): on-demand mode, drain-and-exit (no idle loop), target = solo user-flagged. HU community update pending.
+  - ✅ Capitano prompt + RULE C-10 (`a9596002`, EN+IT): lazy-spawn protocol, NIENTE Scrittori al boot, check `next-for-scrittore` ogni BRIDGE TICK, spawn solo se coda non vuota AND nessun SCRITTORE-* attivo. Rimosso trigger `PROMOTABLE_40_49` da C-05 (anti-pattern V6 esplicito).
+  - ✅ Telegram `/cv <id>` (`5cef55fc`): handler in `telegram-bridge/src/bridge.ts` + nuova skill `shared/skills/write_request.py` (wrapper Python atomico validate+UPDATE, output JSON, riusabile da bridge/Capitano/CLI). Same guard della API web. Notify ad-hoc al Capitano via tmux per evitare attesa BRIDGE TICK.
+- **Decisione architetturale lockata** (vedi memoria `project_writer_on_demand_arch`): lazy-spawn dal Capitano (no boot), MVP single-button + `/cv` Telegram (NO batch multi-select per ora — rinviato se feedback lo richiede).
+- **Componenti rimasti opzionali (post-launch)**: batch multi-select UI lista, comando `/cv all-score-80plus` per gruppo, scaling automatico 2-3 Scrittori in parallelo (C-10 lo descrive ma da validare in produzione).
+- **Background originale**: gli Scrittori sono i top consumer di token del team (spawn 3-round + Critico che a sua volta consuma per leggere CV+JD+scrivere critica). Il Critico è concettualmente "fuori dal team" (spawnato dallo Scrittore) ma il suo consumo dovrebbe essere attribuito allo Scrittore per i calcoli di throttling del Capitano. Inoltre molti CV scritti finiscono in `ready` senza che l'utente li voglia davvero → token bruciati su posizioni che l'utente non applierà mai. Su VPS Codex: 105 ready ma applied=0; su VPS Kimi: 56 ready ma applied=0.
 - **Problem statement**: oggi la pipeline scrive CV per **tutto** ciò che passa lo Scorer (default ≥60). Risultato: forte spreco di token su CV non desiderati + scarsa potenza di ricerca perché Scrittori "rubano" risorse a Scout/Analista/Scorer.
 - **Soluzione proposta** (rivoluzione architettonica per i prossimi beta test):
   1. **Default mode = "SEARCH ONLY"**: all'avvio del team, Scrittori in stand-by. Il team gira solo come motore di ricerca + analisi + scoring → accumula posizioni con score nel DB.
@@ -316,7 +325,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - DB: aggiungere `positions.write_requested BOOLEAN DEFAULT 0` + `positions.write_requested_at TIMESTAMP`
   - Skill nuova `[JHT-SKILL-WRITE-REQUEST]` per Scrittore: pull next position con `write_requested=true AND status='scored'`
   - Migration Supabase: stesso campo per cloud sync
-- **Priority**: 🔴 URGENTE — da implementare PRIMA dei prossimi test beta. Cambia profondamente i numeri di consumo token e quindi la validità delle metriche.
+- **Priority**: ✅ DONE 2026-05-29 — shipped end-to-end (DB + API + UI + Telegram + Scrittore + Capitano). Validare in real beta test per misurare impatto reale sul token spend.
 - **Linked**: [JHT-TOKEN-MONITOR-WRITER-CRITIC] (sotto), [JHT-COST-VALIDATION-PAYG-VS-SUB] (sotto).
 
 ##### 📊 [JHT-TOKEN-MONITOR-WRITER-CRITIC] Aggrega consumo Scrittore+Critico come unità singola per throttling Capitano ⬜ 🟠 HIGH
