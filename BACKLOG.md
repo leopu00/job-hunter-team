@@ -30,9 +30,9 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 
 ---
 
-## 📊 CURRENT STATE (2026-05-14)
+## 📊 CURRENT STATE (2026-05-29)
 
-**Estimated maturity: ~82%** *(subjective estimate based on completed roadmap items — not a measured metric)* (was ~78% on 04-27; bumped by VPS T1-T4 shipping, Telegram 3-bot live, security review + SECURITY.md + COC complete, migration 011 onboarding-state)
+**Estimated maturity: ~85%** *(subjective estimate based on completed roadmap items — not a measured metric)* (was ~82% on 05-14; bumped by: OAuth login DONE + cloud sync core + VPS friendly + auto-pairing 4/4 path + i18n EN baseline + Windows install.ps1 + work-hours enforcement + weekly cap awareness C-09/S-06)
 
 ### 🏗️ Infrastructure completed
 
@@ -111,6 +111,21 @@ See also the **launcher-distributed skill discovery** punch list in [`docs/about
 
 For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
+### 🆕 Feature shipped 2026-05-14 → 2026-05-29 (oltre roadmap)
+
+Dal `CURRENT STATE` precedente sono shipped 269 commit in 15 giorni (~18/giorno). Highlights non già coperti dalle voci roadmap:
+
+- 🗺️ **Web Map** — location tree drilldown full-width, caret separato dal click, cluster client-side, geocoding office skill (REGOLA-16 analista)
+- ⏰ **Working hours UI completa** — config CLI + step wizard + sweet-spot meter + 7×24 heatmap (chiude `[JHT-MONITORING-WORKHOURS]`)
+- 📊 **Case Studies dashboard** — pipeline funnel 5-stage data-driven (`role_family`), case-study-extract tool, Kimi funnel
+- 🛑 **`.team-halted.flag` gate centrale** — Task #14 done 2026-05-25; watchdog/spawner/pid1/jht-start rispettano user Stop
+- 🪟 **Windows native installer** — `scripts/install.ps1` (389 righe) + `scripts/jht-wrapper.ps1` (233 righe), shipped `d87890f8` 2026-05-22
+- 🔧 **VPS bootstrap fixes** — `79f63324` 2026-05-21: codex provider alias + trust prompt + auto-migrate
+- 📈 **Weekly cap awareness** — `9e7ece9f` (C-09 Capitano) + `86da0f03` (S-06 Sentinella) 2026-05-22, chiude `[PACING-WEEKLY-EXHAUSTION]`
+- 🌐 **i18n agent prompts EN baseline** — `[JHT-I18N-TRANSLATE]` done 2026-05-19 (9 ruoli)
+
+Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Turbopack del 2026-05-06; deploy master→production il 2026-05-23 e 2026-05-25).
+
 ---
 
 ## 🚀 ROADMAP — From Open Source to Desktop Product
@@ -158,13 +173,14 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   3. ⬜ Switch target 95 % settimanale (oggi rimane 95 % per finestra) — decisione + tuning bridge.
   4. ⬜ Test su sessione settimanale completa Claude Max + Kimi.
 
-##### ⏰ [JHT-MONITORING-WORKHOURS] User-defined work hours
+##### ✅ [JHT-MONITORING-WORKHOURS] User-defined work hours — DONE 2026-05-22
 
-- **Problem:** team runs 24/7 once started — wasting tokens during unproductive hours and burning the weekly budget.
-- **Tasks:**
-  1. UI in `/team` to define hour slots (e.g., 09:00–13:00 + 14:00–18:00 weekday)
-  2. Captain respects the slots: idle outside, active inside
-  3. Sentinel aligns usage projection to actual slots (no 24/7 projection)
+- **Stato implementazione:** working hours enforcement live (commit `13318e1d` — gate tick Capitano + notify-user). Calibration follow-up: `99bab572` (design UI + autocalibrazione finestre 5h), `1b506bd3` (work-hours target distribution + provider ratio), `f7b52e52` (bridge+agents usano dynamic work-hours-aware target end-to-end), `d8ae0da2` (pacing-bridge popola work-hours fields anche durante tick saltati).
+- **Problem (storico):** team runs 24/7 once started — wasting tokens during unproductive hours and burning the weekly budget.
+- **Closed tasks:**
+  1. ✅ UI in `/team` to define hour slots (e.g., 09:00–13:00 + 14:00–18:00 weekday)
+  2. ✅ Captain respects the slots: idle outside, active inside
+  3. ✅ Sentinel aligns usage projection to actual slots (no 24/7 projection)
   4. "Team as employee" model — works on user-defined office hours
 
 ##### 🌙 [JHT-KIMI-OPTIMIZE] Kimi €40 mass-market calibration
@@ -307,7 +323,10 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Linked:** [JHT-VPS-VALIDATE] (output `docs/VPS-SETUP.md`) feeds the "Mode 3 manual" branch; [JHT-VPS-FRIENDLY] feeds the "Mode 3 wizard" branch.
 - **Provider research feeder:** [`docs/internal/vps.md`](docs/internal/vps.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
 
-##### 🪟 [JHT-CLI-WIN-NATIVE] Windows-native CLI (no WSL required) ⬜ NEW 2026-05-22
+##### ✅ [JHT-CLI-WIN-NATIVE] Windows-native CLI (no WSL required) — CORE DONE 2026-05-22
+
+- **Stato implementazione (2026-05-22):** `scripts/install.ps1` (389 righe) + `scripts/jht-wrapper.ps1` (233 righe) shipped (commit `d87890f8`). Path host-thin PowerShell mantiene invariante "no Node sul host". Wrapper dispatcher con lifecycle (up/down/restart/logs/status) via `docker compose`, resto via `docker exec jht node /app/cli/bin/jht.js`.
+- **Residuo aperto:** subtask BUG-INSTALL-BRANCH-MASTER-DEFAULT estende anche a install.ps1 (deve rispettare branch fetch-source). Resta da fixare lato bash install.sh.
 
 - **Problem:** scoperto durante E2E test del prompt universale AI-agent (2026-05-22). `scripts/install.sh` + `scripts/jht-wrapper.sh` sono bash-only. Su Windows un agent AI è forzato a girare via WSL, ma `curl install.sh | bash` blocca in modo silenzioso su `sudo` (stdin = pipe, non TTY) anche quando Docker è già presente via Docker Desktop. Risultato: utente Windows tech senza WSL pre-configurata non ha un path CLI funzionante.
 - **Stato attuale paths per Windows:**
@@ -565,7 +584,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
 ---
 
-### 3️⃣ PHASE 3 — ☁️ Multi-Provider Cloud Provisioning (future, post-1.0)
+### 3️⃣ PHASE 3 — ☁️ Multi-Provider Cloud Provisioning
 
 > 🌉 **Bridge to today**: il desktop launcher può già fare bring-up di una VPS via SSH (path T1-T4 shipped 2026-05-13: `SshExec` + IPC routing, install remoto, login PTY, telegram tokens). Phase 3 generalizza quel flusso single-VPS in un'esperienza one-click multi-provider con cost estimation e billing alerts.
 
@@ -679,10 +698,10 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
 #### 🌍 [JHT-I18N-02] Infrastructure for additional languages — partial
 
-- ✅ Per-language JSON files in `web/messages/` (today: `en.json`, `hu.json` — Hungarian already partially translated)
+- 🟡 Per-language JSON files in `web/messages/` (oggi: `en.json` + `hu.json`; ⚠️ `it.json` MANCA pur essendo dichiarata locale supportata)
 - ⬜ Refactor `shared/i18n/translations.ts` to load per-language files (today inline)
-- ✅ **Fix mismatch DEFAULT_LOCALE** (2026-05-06): `shared/i18n/types.ts` allineato a `'en'`, e con esso il fallback in `web/app/api/i18n/route.ts` (`loadPrefs()`) e i context default in `web/app/components/DashboardI18n.tsx`. Il fallback per chiavi mancanti in `t()` (riga 557, `TRANSLATIONS['it']`) resta `'it'` perché è secondary fallback per traduzioni assenti, non default-locale utente.
-- ⬜ Language switcher in web dashboard (desktop launcher already has one)
+- 🟡 **Fix mismatch DEFAULT_LOCALE** (2026-05-06): `shared/i18n/types.ts` allineato a `'en'`, e con esso il fallback in `web/app/api/i18n/route.ts` (`loadPrefs()`) e i context default in `web/app/components/DashboardI18n.tsx`. ⚠️ Audit 2026-05-29 rileva drift residuo: `web/app/api/i18n/route.ts:31` ha ancora default fallback `'it'` su un path non-`loadPrefs`; `LOCALES` in `types.ts` non include `'hu'` pur essendo supportato da `route.ts`. Da riconciliare in una pass dedicata. Il fallback per chiavi mancanti in `t()` (riga 557, `TRANSLATIONS['it']`) resta `'it'` perché è secondary fallback per traduzioni assenti, non default-locale utente.
+- ✅ Language switcher in web dashboard — `web/app/components/LanguageSwitcher.tsx` (EN/IT/HU con flag SVG)
 - 🟡 **[JHT-I18N-AGENT-PROMPTS] Localizzazione prompt d'identità agenti** *(architettura scaffolded 2026-05-06, contenuti DA FARE)*.
 
   **Problema:** Anthropic doc avverte che system prompt pesanti in lingua ≠ user causano "language drift" (Claude risponde nella lingua del prompt invece che dell'utente). Su JHT i 9 prompt agenti sommano ~2500+ righe in italiano (capitano.md 647) → un nuovo utente con `DEFAULT_LOCALE='en'` che scrive `find me python jobs` rischia risposta italiana.
@@ -707,6 +726,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 ##### ✅ [JHT-I18N-TRANSLATE] Traduzione baseline prompt agenti IT → EN — DONE 2026-05-19
 
 - **Stato implementazione:** baseline EN deployed per tutti i 9 prompt agenti (`analista.md`, `assistente.md`, `capitano.md`, `critico.md`, `dottore.md`, `mentor.md`, `scorer.md`, `scout.md`, `scrittore.md`, `sentinella.md`). Header verificato in EN ("You are a **Scout**", "You are **Capitano**", ecc.) — niente più "Sei lo Scout/Sei il Capitano" baseline.
+- **⚠️ Overlay IT incompleti (audit 2026-05-29):** 8/10 presenti — **mancano `agents/critico/critico.it.md` e `agents/mentor/mentor.it.md`**. Da chiudere prima di considerare l'item completamente done per utenti italianofoni.
 - **Overlay IT preservato:** `agents/<role>/<role>.it.md` siblings per fallback locale=it (9 file).
 - **Bonus 🇭🇺:** traduzione Hungarian community-contributed shipped contestualmente — `agents/<role>/<role>.hu.md` per 10 ruoli (incluso `mentor.hu.md`). HU sblocca il primo beta tester non-anglofono/non-italianofono.
 - **Architettura risoluzione (gia' deployed 2026-05-06):** `.launcher/start-agent.sh` legge `~/.jht/i18n-prefs.json`, prova `<role>.<locale>.md`, fallback al baseline `<role>.md` (ora EN). Protocol token (`STEADY`, `ATTENZIONE`, `RECOVERY TRACKING`, ecc.) preservati invariati come da spec.
@@ -751,7 +771,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
 ---
 
-### 6️⃣ PHASE 6 — 🚢 Pre-Launch Public OSS (NEW)
+### 6️⃣ PHASE 6 — 🚢 Pre-Launch Public OSS
 
 Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
@@ -760,7 +780,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 **🚦 Suggested execution order** (BLOCKERs first, then rest in parallel):
 
 1. ✅ SECURITY.md + CODE_OF_CONDUCT.md (done — root, EN, Contributor Covenant 2.1)
-2. ✅ Security review (done — 33/35 task chiusi, see `docs/security/`)
+2. ✅ Security review (done — 31/34 task chiusi, see `docs/security/`)
 3. Test campaign matrix (parallel with reviews — slowest cell determines launch date)
 4. Demo video (after monitoring is frozen)
 5. Beta tester recruitment + Show HN draft + Press kit + Awesome lists submissions
@@ -788,7 +808,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
 #### 🛡️ [JHT-LAUNCH-04] Security review (gitleaks + audit) ✅
 
-- **Done 2026-04-27** — hardening sprint dev-1..dev-4 in parallelo, 33/35 task chiusi in `master` (sha `7a2cb6ae`), security score 30% → 74%.
+- **Done 2026-04-27** — hardening sprint dev-1..dev-4 in parallelo, 31/34 task chiusi in `master` (sha `7a2cb6ae`), security score 30% → 74%. Conteggio attendibile: `docs/security/README.md`.
 - **Output:** `docs/security/` (7 file, ~2336 righe) — pre-launch review, OpenClaw comparison, threat model, checklist, post-fix snapshot.
 - **Phase 1 bloccanti pre-launch:** 9/9 ✅ (C1-C5, H1, H2, H8, H9). **Phase 2 post-launch:** 12/12 ✅. **Phase 3 hardening:** 10/13 🟡.
 - **Gap residui (continuous hardening, non blocker):** suite `tests/security/` regression + comando `jht doctor security`. Tutti i blocker per il public release sono chiusi: SSRF dispatcher (4 commit, integrato a webhooks + gateway), L1 CSP nonce-based (cda78a17), `resolve-system-bin` deferito con razionale.
@@ -1032,7 +1052,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **Verifica:** type-check pulito sui file toccati. Da fare in prod: DevTools console = 0 violation CSP, JSON-LD presente nel DOM, Google Rich Results Test verde.
 - **Storia:** introdotto dal commit CSP `cda78a17`; cleanup successivo aveva tolto `getNonce()` come quick fix per sbloccare il dev mode. Risolto definitivamente con questo split.
 
-### ✅ [BUG-TURBOPACK-SHARED-RESOLVE] `next build` fallisce — Turbopack non risolve `.js` ESM imports da `shared/` — FIXED 2026-05-06 (commit `8c85bf27`)
+### ✅ [BUG-TURBOPACK-SHARED-RESOLVE] `next build` fallisce — Turbopack non risolve `.js` ESM imports da `shared/` — FIXED 2026-05-06 (commit `cedb3efd`)
 
 - **Fix applicato — Strategia 4 (copia `shared/net/*` in `web/lib/net/`):** dopo aver fallito 1-3 (transpilePackages, no-extension, experimental.externalDir), si è copiato i 4 file production-grade di `shared/net/` dentro `web/lib/net/`. `web/` era l'unico consumer cross-package; nessuna regressione su altri package. `shared/net/*` invariato come ref OpenClaw + per futuri consumer node ESM (`cli/`, `tui/`). `web/lib/ssrf.ts` ora punta a `./net/ssrf` (relative dentro `web/`). Verifica: `vercel deploy` → ✅ Compiled in 29.8s, 112/112 static pages.
 - **Storico:** PRIORITÀ MASSIMA — bloccava QUALSIASI deploy production via Vercel. Master era 783 commit avanti rispetto a `production` ma il build falliva sulla CI Vercel ufficiale (Linux infra). Production ferma alla v0.1.12 per 19 giorni.
@@ -1111,9 +1131,10 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 
 ## 📦 PACKAGING & DISTRIBUTION
 
-### 🔴 [PACING-WEEKLY-EXHAUSTION] Team esaurisce weekly cap Codex in ~2 giorni invece di 7
+### ✅ [PACING-WEEKLY-EXHAUSTION] Team esaurisce weekly cap Codex in ~2 giorni invece di 7 — FIXED 2026-05-22
 
-- **Sintomo:** la Sentinella ottimizza il singolo cycle 5h (target 92% per finestra) ma **ignora il weekly cap** di Codex ProLite. Risultato: in 2-3 giorni di operatività intensa il team consuma il 100% del weekly e poi gli agenti smettono di rispondere per 4-5 giorni fino al reset settimanale.
+- **Stato fix:** weekly cap awareness shipped 2026-05-22: `9e7ece9f` (C-09 — Capitano weekly cap awareness), `86da0f03` (S-06 — Sentinella weekly cap parallel constraint). Il throttle ora considera il minimo tra cycle-target e weekly-target.
+- **Sintomo (storico):** la Sentinella ottimizzava il singolo cycle 5h (target 92% per finestra) ma **ignorava il weekly cap** di Codex ProLite. Risultato: in 2-3 giorni di operatività intensa il team consumava il 100% del weekly e poi gli agenti smettevano di rispondere per 4-5 giorni fino al reset settimanale.
 - **Evidenza misurata 2026-05-20 (VPS1, primo giro reale beta):**
   - Boot: 2026-05-19 20:14 UTC
   - Snapshot 22:30 (giorno 1, +2h): primary 47%, weekly **7%**
