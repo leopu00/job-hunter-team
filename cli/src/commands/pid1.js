@@ -26,6 +26,8 @@
  */
 
 import { readFile, access } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import { dirname } from 'node:path';
@@ -182,6 +184,16 @@ async function hasProviderCredentials() {
  * attive e skippa, idempotente.
  */
 async function startUserFacingAgents() {
+  // Gate centrale .team-halted.flag: se settato (utente ha cliccato Stop
+  // dalla dashboard prima del restart container), NON auto-startare.
+  // Source of truth: team_state.should_run. Il reconciler creerà/rimuoverà
+  // il flag al prossimo polling. Senza questo gate, il container post-restart
+  // partiva sempre con agenti attivi anche se l'utente li aveva spenti.
+  const teamHaltedFlag = join(JHT_HOME, '.team-halted.flag');
+  if (existsSync(teamHaltedFlag)) {
+    pid1Log('auto-start agenti SKIPPED: .team-halted.flag presente (user ha cliccato Stop)');
+    return;
+  }
   // Bug regressione post-recreate (osservato 2026-05-17 20:02): senza
   // sentinella tmux il Capitano non riceve [BRIDGE TICK] e all'utente
   // risponde generico ("team in standby") perché non ha dati freschi.
@@ -356,6 +368,37 @@ async function runMigrate() {
   });
 }
 
+async function runUnstuckPositions() {
+  // Reset positions stuck in 'writing'/'checked' da HALT/kill mid-run del
+  // boot precedente. Idempotente: zero stuck = no-op. Skip se jobs.db
+  // ancora non esiste (nessun team mai avviato, niente da pulire).
+  // Origin: docs/internal/2026-05-21-vps1-run-postmortem.md anomalia #4.
+  const JOBS_DB_PATH = `${JHT_HOME}/jobs.db`;
+  try {
+    await access(JOBS_DB_PATH);
+  } catch {
+    return;
+  }
+  pid1Log('running unstuck_positions (reset stuck writing > 2h)');
+  await new Promise((resolve) => {
+    const child = spawnLabeled('unstuck', '/usr/bin/env', [
+      'python3',
+      '/app/shared/skills/unstuck_positions.py',
+      '--apply',
+      '--include-checked',
+    ]);
+    child.on('exit', (code) => {
+      if (code === 0) pid1Log('unstuck_positions ok');
+      else pid1Log(`unstuck_positions exit ${code} — non bloccante, proseguo`);
+      resolve();
+    });
+    child.on('error', (err) => {
+      pid1Log(`unstuck_positions spawn error: ${err.message}`);
+      resolve();
+    });
+  });
+}
+
 async function dispatch() {
   const hostType = await readHostType();
   const isVps = hostType === 'vps' || hostType === 'server' || hostType === 'remote';
@@ -364,6 +407,10 @@ async function dispatch() {
   // e il container ha bisogno dei campi delle versioni successive per far
   // funzionare provider OAuth, channels, agents.list. Idempotente.
   await runMigrate();
+
+  // Reset positions stuck in writing/checked dal boot precedente (HALT,
+  // kill mid-run). Idempotente, skip se jobs.db non esiste ancora.
+  await runUnstuckPositions();
 
   // Pair non-interattivo PRIMA di partire dashboard+daemon: cosi' il watcher
   // su cloud.json non scatta a vuoto e il daemon parte subito col token
@@ -375,6 +422,7 @@ async function dispatch() {
   const dashCmd = [JHT_ENTRY, 'dashboard', '--no-browser'];
   const daemonCmd = [JHT_ENTRY, 'cloud', 'daemon'];
   const realtimeCmd = [JHT_ENTRY, 'cloud', 'realtime-listen'];
+  const teamStateCmd = [JHT_ENTRY, 'cloud', 'team-state-listen'];
 
   // ── Dashboard: lifetime = container, parte sempre.
   pid1Log(isVps ? 'mode: VPS' : 'mode: local');
@@ -537,8 +585,10 @@ async function dispatch() {
   // cloud paired. Stessa logica di lifecycle (start/stop/respawn).
   let daemonChild = null;
   let realtimeChild = null;
+  let teamStateChild = null;
   let daemonRespawnTimer = null;
   let realtimeRespawnTimer = null;
+  let teamStateRespawnTimer = null;
 
   const startDaemon = () => {
     if (daemonChild && !daemonChild.killed) return;
@@ -585,6 +635,30 @@ async function dispatch() {
     });
   };
 
+  // team_state reconciler: polla /api/team-state e converge desired→observed
+  // via `jht team start|stop|restart`. Parallelo a realtime subscriber durante
+  // il cutover (Step 5 in docs/internal/cloud-sync-architecture.md).
+  const startTeamState = () => {
+    if (teamStateChild && !teamStateChild.killed) return;
+    pid1Log('starting team_state reconciler');
+    teamStateChild = spawnLabeled('team-state', process.execPath, teamStateCmd);
+    teamStateChild.on('exit', (code, signal) => {
+      const exitedChild = teamStateChild;
+      teamStateChild = null;
+      if (shuttingDown) return;
+      pid1Log(`team_state reconciler exited (code=${code} signal=${signal})`);
+      if (teamStateRespawnTimer) clearTimeout(teamStateRespawnTimer);
+      teamStateRespawnTimer = setTimeout(async () => {
+        if (shuttingDown) return;
+        if (await isCloudConfigured()) {
+          pid1Log('team_state reconciler respawn dopo crash');
+          startTeamState();
+        }
+      }, 5000);
+      void exitedChild;
+    });
+  };
+
   const stopDaemon = (reason) => {
     if (daemonRespawnTimer) {
       clearTimeout(daemonRespawnTimer);
@@ -602,12 +676,21 @@ async function dispatch() {
       pid1Log(`stopping realtime subscriber (${reason})`);
       realtimeChild.kill('SIGTERM');
     }
+    if (teamStateRespawnTimer) {
+      clearTimeout(teamStateRespawnTimer);
+      teamStateRespawnTimer = null;
+    }
+    if (teamStateChild && !teamStateChild.killed) {
+      pid1Log(`stopping team_state reconciler (${reason})`);
+      teamStateChild.kill('SIGTERM');
+    }
   };
 
-  // Stato iniziale del cloud: se gia' paired, daemon + realtime partono.
+  // Stato iniziale del cloud: se gia' paired, daemon + realtime + team_state partono.
   if (isVps && await isCloudConfigured()) {
     startDaemon();
     startRealtime();
+    startTeamState();
   } else if (isVps) {
     pid1Log('cloud sync non ancora configurato: aspetto cloud.json (auto-start dopo pairing)');
   }
@@ -629,9 +712,10 @@ async function dispatch() {
         if (nowConfigured === lastConfigured) return;
         lastConfigured = nowConfigured;
         if (nowConfigured) {
-          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber');
+          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber + team_state reconciler');
           startDaemon();
           startRealtime();
+          startTeamState();
         } else {
           stopDaemon('cloud.json rimosso o disabilitato');
         }
@@ -650,6 +734,7 @@ async function dispatch() {
     pid1Log(`shutdown (${sig}): killing children`);
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
+    if (teamStateChild && !teamStateChild.killed) teamStateChild.kill(sig);
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
     if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
