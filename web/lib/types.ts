@@ -35,6 +35,10 @@ export interface Position {
   status: PositionStatus
   notes: string | null
   last_checked: string | null
+  // V6 (2026-05-29) — Writer-on-demand: utente seleziona da dashboard
+  // o /cv Telegram. Il Capitano spawna Scrittori solo quando = true.
+  write_requested?: boolean
+  write_requested_at?: string | null
 }
 
 // ── Score ──────────────────────────────────────────────────────────
