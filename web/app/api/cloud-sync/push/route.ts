@@ -29,6 +29,11 @@ interface PositionIn {
   salary_estimated_max?: number | null;
   salary_estimated_currency?: string | null;
   salary_estimated_source?: string | null;
+  // Writer-on-demand (V6): user-driven flag per spawn Scrittori on-demand.
+  // Mig Supabase 024. Il valore arriva da SQLite (0|1 integer) e va mappato
+  // a BOOLEAN sul payload upsert.
+  write_requested?: number | boolean | null;
+  write_requested_at?: string | null;
 }
 
 interface ScoreIn {
@@ -361,6 +366,16 @@ export async function POST(req: NextRequest) {
         salary_estimated_max: p.salary_estimated_max ?? null,
         salary_estimated_currency: p.salary_estimated_currency ?? null,
         salary_estimated_source: p.salary_estimated_source ?? null,
+        // SQLite invia integer (0|1); Supabase ha BOOLEAN — coerce esplicito.
+        // Default FALSE quando il campo manca (compat con DB pre-V6 / push
+        // legacy).
+        write_requested:
+          p.write_requested == null
+            ? false
+            : typeof p.write_requested === "boolean"
+              ? p.write_requested
+              : p.write_requested === 1,
+        write_requested_at: p.write_requested_at ?? null,
       }));
 
     const { data: upserted, error } = await admin
