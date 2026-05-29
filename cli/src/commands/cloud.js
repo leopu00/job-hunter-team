@@ -150,6 +150,47 @@ async function handleEnable(options) {
   }
 }
 
+/**
+ * Post-pairing check: chiama GET /api/team-state con il token appena ottenuto
+ * e verifica se esiste già un device active per quell'utente.
+ *
+ * Ritorna:
+ *   { conflict: false }                              — libero, OK
+ *   { conflict: true, active_device_id, age_seconds } — qualcun altro tiene il claim
+ *
+ * Errori HTTP/rete sono silenziosi (warn ma non blocca): meglio finire il
+ * pairing senza preflight che rompere la UX se Vercel ha hiccup.
+ *
+ * Nota: usiamo il token stesso come Bearer (PATCH-friendly authn). Per ora il
+ * server include il proprio token_id come default device_id implicito; quindi
+ * confrontiamo active_device_id vs il prefix del token salvato. È informativo:
+ * il vero enforcement avviene al claim del reconciler.
+ */
+async function checkActiveDeviceConflict(baseUrl, token) {
+  try {
+    const res = await fetch(`${baseUrl}/api/team-state`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return { conflict: false };
+    const body = await res.json().catch(() => ({}));
+    const state = body.state;
+    if (!state || !state.active_device_id) return { conflict: false };
+    // Heartbeat fresco? Allineato con HEARTBEAT_STALE_MS del server (5min).
+    const hbAt = state.last_heartbeat_at ? Date.parse(state.last_heartbeat_at) : 0;
+    const age = Date.now() - hbAt;
+    if (age >= 5 * 60 * 1000) return { conflict: false }; // stale → libero
+    return {
+      conflict: true,
+      active_device_id: state.active_device_id,
+      claimed_at: state.active_device_claimed_at,
+      age_seconds: Math.floor(age / 1000),
+    };
+  } catch {
+    return { conflict: false };
+  }
+}
+
 async function handleLogin(options) {
   const baseUrl = (options.url || DEFAULT_BASE_URL).replace(/\/+$/, '');
   const initUrl = `${baseUrl}/api/cloud-sync/device-init`;
@@ -263,6 +304,31 @@ async function handleLogin(options) {
   console.log(pc.dim(`  Token name: ${approved.token_name ?? 'unnamed'}`));
   console.log(pc.dim(`  User ID:    ${approved.user_id}`));
   console.log(pc.dim(`  File:       ${CLOUD_FILE} (0600)`));
+
+  // Single-team preflight: se un altro device ha già il claim (heartbeat
+  // < 5min), warn l'utente. Non blocca il login: l'utente potrebbe volere
+  // forzare l'eviction. Vedi vps.md:392 "un solo team JHT per utente".
+  const conflict = await checkActiveDeviceConflict(baseUrl, approved.token);
+  if (conflict.conflict) {
+    console.log('');
+    console.log(
+      pc.yellow(
+        `⚠ Un altro device tiene il claim del team (heartbeat ${conflict.age_seconds}s fa).`
+      )
+    );
+    console.log(
+      pc.dim(
+        `  active_device_id: ${conflict.active_device_id?.slice(0, 12)}…` +
+        ` — claimed_at: ${conflict.claimed_at ?? 'unknown'}`
+      )
+    );
+    console.log(
+      pc.dim(
+        `  Se avvii il team qui, il vecchio device verrà evicted (con notifica). ` +
+        `Per testare in parallelo senza conflitti, spegni l'altro container prima.`
+      )
+    );
+  }
 
   if (options.noPush) {
     console.log('');
@@ -517,9 +583,28 @@ async function handlePush(options) {
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    console.error(
-      pc.red(`Push fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`)
-    );
+    // 409 not_active_device → un altro device ha fatto claim del team.
+    // Questo push viene rifiutato deliberatamente (single-team enforcement,
+    // vedi mig 019/023 + docs/internal/vps.md:392). Il daemon entra in
+    // consecutive-fails countdown (vedi handleDaemon: 3 warn / 5 shutdown),
+    // così non resta in loop infinito a sbattere la testa.
+    if (res.status === 409 && body.error === 'not_active_device') {
+      console.error(
+        pc.red(
+          `Push rifiutato (HTTP 409 not_active_device): un altro device ha il claim ` +
+          `(active_device_id=${body.active_device_id ?? 'unknown'}).`
+        )
+      );
+      console.error(
+        pc.dim(
+          `  Per riprendere: jht cloud claim --force (TODO) oppure spegni questo container.`
+        )
+      );
+    } else {
+      console.error(
+        pc.red(`Push fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`)
+      );
+    }
     process.exitCode = 1;
     return;
   }
@@ -710,6 +795,23 @@ async function handlePair(options) {
   console.log(pc.dim(`  User ID:    ${body.user_id}`));
   console.log(pc.dim(`  File:       ${CLOUD_FILE} (0600)`));
   console.log(pc.dim(`  Pairing-token cancellato dopo l'uso.`));
+
+  // Single-team preflight: warn se un altro device ha già il claim active.
+  const conflict = await checkActiveDeviceConflict(baseUrl, body.token);
+  if (conflict.conflict) {
+    console.log('');
+    console.log(
+      pc.yellow(
+        `⚠ Un altro device tiene il claim del team (heartbeat ${conflict.age_seconds}s fa).`
+      )
+    );
+    console.log(
+      pc.dim(
+        `  active_device_id: ${conflict.active_device_id?.slice(0, 12)}… ` +
+        `— il reconciler attenderà la scadenza (5min) o un'eviction esplicita.`
+      )
+    );
+  }
 }
 
 async function handleDisable() {
@@ -930,5 +1032,54 @@ export function registerCloudCommand(program) {
     .action(async () => {
       const { runRealtimeSubscriber } = await import('../lib/realtime-subscriber.js');
       await runRealtimeSubscriber();
+    });
+
+  // `team-state-listen` — desired-state reconciler che polla /api/team-state
+  // e converge `should_run`/`restart_token` → `jht team start|stop|restart`.
+  // Parallelo a `realtime-listen` durante il cutover (vedi Step 5 in
+  // docs/internal/cloud-sync-architecture.md). Idempotente con team_commands:
+  // i due subscriber chiamano gli stessi `jht team <action>`.
+  cloud
+    .command('team-state-listen')
+    .description('Reconciler team_state (desired-state, parallelo a realtime-listen)')
+    .action(async () => {
+      const { runTeamStateReconciler } = await import('../lib/team-state-reconciler.js');
+      await runTeamStateReconciler();
+    });
+
+  // `cloud preflight` — single-team enforcement check post-pairing.
+  // Esce con codice 0 se il claim è libero/recuperabile, 2 se un altro device
+  // ha il claim attivo (heartbeat <5min). Stampa info su stdout per script
+  // (install.sh) che vogliono decidere se proseguire.
+  cloud
+    .command('preflight')
+    .description('Controlla se esiste già un team active per questo utente (exit 0=libero, 2=occupato)')
+    .action(async () => {
+      const config = await loadCloudConfig();
+      if (!config?.enabled) {
+        console.error(pc.red('Cloud sync non abilitato: preflight richiede pairing prima.'));
+        process.exitCode = 1;
+        return;
+      }
+      const baseUrl = (config.base_url || '').replace(/\/+$/, '');
+      const conflict = await checkActiveDeviceConflict(baseUrl, config.token);
+      if (!conflict.conflict) {
+        console.log(pc.green('✓ Nessun team attivo concorrente. Procedi liberamente.'));
+        return;
+      }
+      console.log(
+        pc.yellow(
+          `⚠ Team già attivo su altro device (heartbeat ${conflict.age_seconds}s fa).`
+        )
+      );
+      console.log(
+        pc.dim(
+          `  active_device_id: ${conflict.active_device_id?.slice(0, 12)}…\n` +
+          `  claimed_at:       ${conflict.claimed_at ?? 'unknown'}\n` +
+          `  Per evictare: avvia il container — il reconciler ritenterà ogni 60s\n` +
+          `  e prenderà il claim quando il vecchio device sparisce (5min).`
+        )
+      );
+      process.exitCode = 2;
     });
 }

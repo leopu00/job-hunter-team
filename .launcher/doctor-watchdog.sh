@@ -32,10 +32,29 @@ log() {
   echo "[$ts] $*" | tee -a "$LOGS_DIR/doctor-watchdog.log"
 }
 
+TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
+WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+halt_log_tick=0
+
 log "watchdog starting · interval=${INTERVAL_SEC}s · spawner=$SPAWNER"
 
 # Spawna IMMEDIATAMENTE al primo giro (non aspettare 30min al boot).
 while true; do
+  # Team-halted gate: se utente ha cliccato Stop o weekly-halt è attivo,
+  # NON spawnare il dottore. Source: team_state.should_run.
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ]; then
+    if [ $((halt_log_tick % 4)) -eq 0 ]; then
+      log "halt flag presente — spawn dottore disabilitato"
+    fi
+    halt_log_tick=$((halt_log_tick + 1))
+    sleep "$INTERVAL_SEC"
+    continue
+  fi
+  if [ "$halt_log_tick" -gt 0 ]; then
+    log "halt flag rimosso — riprendo spawn dottore"
+    halt_log_tick=0
+  fi
+
   if [ ! -x "$SPAWNER" ] && [ ! -f "$SPAWNER" ]; then
     log "ERROR: spawner non trovato a $SPAWNER — sleep $INTERVAL_SEC e ritento"
   else

@@ -111,22 +111,46 @@ const CORS_HEADERS = 'Content-Type, Authorization, X-Requested-With'
 
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_LOCAL_MAX = 600   // ~10 req/sec per utente sul proprio Mac
-const RATE_LIMIT_PUBLIC_MAX = 120  // limit anti-abuse per deploy esposti
+const RATE_LIMIT_PUBLIC_MAX = 120  // anti-abuse per anonymous (anti-DDoS basic)
+const RATE_LIMIT_AUTH_MAX = 600    // 2026-05-23: authenticated users hanno quota
+                                   // separata e generosa (10 req/sec). Motivazione:
+                                   // /team con multi-tab apertura sommava sul rate
+                                   // limit per IP, bloccando le PATCH del refactor
+                                   // team_state. Ora il bucket è per session id
+                                   // (cookie supabase) → tab dello stesso utente
+                                   // condividono ma anon abusers restano cappati.
 const RATE_LIMIT_CLEANUP_INTERVAL = 5 * 60_000
 
 type RateLimitEntry = { count: number; windowStart: number }
 const rateLimitStore = new Map<string, RateLimitEntry>()
 let lastCleanup = Date.now()
 
-function getRateLimitKey(req: NextRequest): string {
+function getRateLimitKey(req: NextRequest): { key: string; authed: boolean } {
+  // Prefer session-based key: leggiamo il cookie session Supabase (sb-*-auth-token).
+  // Se presente, scopriamo l'utente e usiamo `user:<jti-prefix>` come chiave.
+  // Fallback a IP per anon. Cosi tab multiple dello stesso utente condividono
+  // la quota (alta), mentre IP separati restano isolati.
+  for (const c of req.cookies.getAll()) {
+    if (c.name.startsWith('sb-') && c.name.endsWith('-auth-token') && c.value) {
+      // Hash leggero del cookie value per chiave stabile + privacy
+      let h = 0
+      for (let i = 0; i < c.value.length && i < 256; i++) h = ((h << 5) - h + c.value.charCodeAt(i)) | 0
+      return { key: `rl:user:${h.toString(36)}`, authed: true }
+    }
+  }
   const forwarded = req.headers.get('x-forwarded-for')
   const ip = forwarded?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
-  return `rl:${ip}`
+  return { key: `rl:ip:${ip}`, authed: false }
 }
 
-function checkRateLimit(key: string, isLocal: boolean): { allowed: boolean; remaining: number; resetAt: number; max: number } {
+function checkRateLimit(keyInfo: { key: string; authed: boolean }, isLocal: boolean): { allowed: boolean; remaining: number; resetAt: number; max: number } {
   const now = Date.now()
-  const max = isLocal ? RATE_LIMIT_LOCAL_MAX : RATE_LIMIT_PUBLIC_MAX
+  const key = keyInfo.key
+  const max = isLocal
+    ? RATE_LIMIT_LOCAL_MAX
+    : keyInfo.authed
+      ? RATE_LIMIT_AUTH_MAX
+      : RATE_LIMIT_PUBLIC_MAX
 
   if (now - lastCleanup > RATE_LIMIT_CLEANUP_INTERVAL) {
     lastCleanup = now
