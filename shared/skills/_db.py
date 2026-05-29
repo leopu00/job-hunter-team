@@ -37,7 +37,7 @@ def get_db() -> sqlite3.Connection:
 
 
 def ensure_schema(conn: sqlite3.Connection):
-    """Crea le tabelle se non esistono (schema V5).
+    """Crea le tabelle se non esistono (schema V6).
 
     Le migrazioni retroattive vengono eseguite PRIMA del CREATE TABLE
     IF NOT EXISTS, così i CREATE TRIGGER IF NOT EXISTS più sotto
@@ -49,6 +49,10 @@ def ensure_schema(conn: sqlite3.Connection):
     - v3→v4: `created_at`/`updated_at` uniformi su tutte le 5 tabelle.
     - v4→v5: tabella `pending_user_messages` (fallback notifiche via cloud
       sync quando Telegram non e' configurato/down — decisione 2026-05-13).
+    - v5→v6: `positions.write_requested` + `write_requested_at` per
+      Writer-on-demand. L'utente seleziona dal dashboard/Telegram cosa
+      portare a CV; il Capitano spawna Scrittori solo quando il flag e'
+      acceso. Vedi BACKLOG [JHT-WRITER-ON-DEMAND] (2026-05-29).
     """
     _migrate_v2_to_v3(conn)
     _migrate_v3_to_v4(conn)
@@ -57,6 +61,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_role_family(conn)
     _migrate_positions_structured_location(conn)
     _migrate_positions_office_geocoding(conn)
+    _migrate_positions_write_requested(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,6 +123,8 @@ def ensure_schema(conn: sqlite3.Connection):
         office_address TEXT,
         office_geocoded INTEGER DEFAULT 0,
         office_verified INTEGER DEFAULT 0,
+        write_requested INTEGER DEFAULT 0,
+        write_requested_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         -- Length guardrails: mirror dei CHECK constraint Postgres (mig 015).
@@ -210,6 +217,7 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
     CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
     CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
+    CREATE INDEX IF NOT EXISTS idx_positions_write_requested ON positions(write_requested) WHERE write_requested = 1;
     CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
     CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
@@ -424,7 +432,7 @@ def ensure_schema(conn: sqlite3.Connection):
       WHERE id = NEW.id;
     END;
     """)
-    conn.execute("PRAGMA user_version = 5")
+    conn.execute("PRAGMA user_version = 6")
     conn.commit()
 
 
@@ -827,6 +835,32 @@ def _migrate_positions_office_geocoding(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_office_geocoded "
         "ON positions(office_geocoded) WHERE office_geocoded = 1"
+    )
+
+
+def _migrate_positions_write_requested(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.write_requested` + `write_requested_at` (V6).
+
+    Flag user-driven per Writer-on-demand: l'utente seleziona dal dashboard
+    web (button "Scrivi CV") o via Telegram (`/cv <id>`) le posizioni per
+    cui vuole un CV. Il Capitano monitora il flag e spawna Scrittori
+    on-demand — niente piu' auto-write su tutto cio' che passa lo Scorer.
+
+    Vedi BACKLOG [JHT-WRITER-ON-DEMAND] (2026-05-29) e Supabase mig 024.
+
+    Idempotente: guard via PRAGMA table_info, ALTER ADD COLUMN solo se
+    mancante (limite SQLite: no DEFAULT non-costante in ADD COLUMN, ma
+    `DEFAULT 0` e' costante quindi OK).
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'write_requested'):
+        conn.execute("ALTER TABLE positions ADD COLUMN write_requested INTEGER DEFAULT 0")
+    if not _column_exists(conn, 'positions', 'write_requested_at'):
+        conn.execute("ALTER TABLE positions ADD COLUMN write_requested_at TIMESTAMP")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_write_requested "
+        "ON positions(write_requested) WHERE write_requested = 1"
     )
 
 
