@@ -77,8 +77,8 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 ✅ Onboarding split-screen (profile mirror + assistant chat)
 ✅ CLI ↔ container coordination (jht team / container / sentinella)
 ✅ db_to_supabase.py wrapper — push agent results to cloud (shared/skills/db_to_supabase.py)
-✅ Weekly window monitoring calibration — data layer DONE (compute_metrics.py espone weekly_usage, weekly_reset_at)
-✅ User-defined work hours ("team as employee" model) — config + gate in pacing-bridge & notify-user (commit `13318e1d` + work-hours-aware target `f7b52e52`)
+✅ Weekly window monitoring calibration — work-hours target dinamico, distribuzione weekly sulle ore ON, seed+EMA per provider (commits `1b506bd3`, `f7b52e52`, `fae5aefa`, `237c8447`); data layer espone `weekly_usage`, `weekly_reset_at` in compute_metrics.py
+✅ User-defined work hours ("team as employee" model) — config + gate in pacing-bridge & notify-user (commit `13318e1d`), UI completa (CLI + web /team + wizard) 2026-05-26
 ✅ Sentinel token optimization — 491→162 righe (-67%, target era 130) + 6 SKILL.md on-demand
 ✅ Bridge V7 — token-based monitoring (shared/skills/token-meter.py + throttle*.py)
 ✅ Bridge V8 — auto-incentive (.launcher/pacing-bridge.py, tick 15min)
@@ -408,11 +408,11 @@ The 3-cwd test on `~/Desktop/skill-isolation-test/` (with `CLAUDE.md` + `AGENTS.
 
 Each session is sent the same prompt (*"list all skills you currently have available"*), and panes are captured with `tmux capture-pane -t <session> -p`. The expected outcome with the launcher-distribution model: every agent reports `_global/* + <its role>/*` and nothing else.
 
-### 🧙‍♂️ Mentor — career-coach agent (planned)
+### 🧙‍♂️ Mentor — career-coach agent (shipped 2026-05-13)
 
-The most important agent we haven't built yet. Stands outside the operational pipeline, looks at career trajectory + market signals + user goals, gives strategic advice.
+Strategic agent outside the operational pipeline — looks at career trajectory + market signals + user goals, gives strategic advice. Spawned by `.launcher/start-agent.sh` as user-facing always-on (priority `MENTOR|high|`) alongside Assistente and Capitano. Routed via tg-bridge per role.
 
-→ Spec in [`agents/mentor/mentor.md`](../../agents/mentor/mentor.md). See [`docs/VISION.md`](VISION.md) for the rationale.
+→ Spec in [`agents/mentor/mentor.md`](../../agents/mentor/mentor.md). See [`docs/VISION.md`](VISION.md) for the rationale. Residual: additional Mentor-specific skills tracked under `[JHT-MENTOR-SKILLS]` in BACKLOG.
 
 ### 🗄️ Database schema optimization (priority)
 
