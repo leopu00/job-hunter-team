@@ -134,7 +134,8 @@ Supabase-backed sync of `positions`, `scores`, `applications`. See also
 | `jht cloud push [flags]`      | Node  | One-shot sync of local SQLite → cloud.                                |
 | `jht cloud daemon [flags]`    | Node  | Long-running push loop (used by container's PID 1).                   |
 | `jht cloud disable`           | Node  | Remove the token from this machine. Doesn't affect cloud side — revoke separately on the web. |
-| `jht cloud realtime-listen`   | Node  | WebSocket subscriber for team commands sent from the web dashboard.   |
+| `jht cloud realtime-listen`   | Node  | Polling subscriber for `team_commands` (legacy, in cutover to team_state). |
+| `jht cloud team-state-listen` | Node  | Desired-state reconciler: polls `team_state`, applies `should_run`/`restart_token` via `jht team start\|stop\|restart`. Co-spawned by pid1 alongside `realtime-listen` during cutover. |
 
 **Key flags:**
 - `--url <url>` (most subcommands) — override the cloud base URL (self-hosted).

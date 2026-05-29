@@ -107,7 +107,32 @@ log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]}"
 # saturare CPU.
 trap 'log "watchdog shutdown (SIGTERM)"; exit 0' TERM INT
 
+TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
+WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
+halt_log_tick=0
+
 while true; do
+  # Team-halted gate (set by team-state-reconciler quando user clicca Stop
+  # dalla dashboard). Source of truth: team_state.should_run. Quando
+  # presente, NIENTE respawn — l'utente ha esplicitamente fermato.
+  # Stesso comportamento per .weekly-halt.flag (limite rate budget).
+  if [ -e "$TEAM_HALTED_FLAG" ] || [ -e "$WEEKLY_HALT_FLAG" ]; then
+    if [ $((halt_log_tick % 20)) -eq 0 ]; then
+      if [ -e "$TEAM_HALTED_FLAG" ]; then
+        log "halt: .team-halted.flag presente — respawn agenti disabilitato"
+      else
+        log "halt: .weekly-halt.flag presente — respawn agenti disabilitato"
+      fi
+    fi
+    halt_log_tick=$((halt_log_tick + 1))
+    sleep "$INTERVAL_SEC"
+    continue
+  fi
+  if [ "$halt_log_tick" -gt 0 ]; then
+    log "halt: flag rimosso — riprendo respawn watchdog"
+    halt_log_tick=0
+  fi
+
   if config_ready; then
     for role in "${AGENTS[@]}"; do
       ensure_agent "$role"
