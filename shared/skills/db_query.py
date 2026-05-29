@@ -332,15 +332,22 @@ def next_for_role(role):
         label = "Posizioni checked senza score"
 
     elif role == 'scrittore':
+        # Writer-on-demand (V6, 2026-05-29): filtro `write_requested = 1`.
+        # Il CV viene scritto solo per le posizioni che l'utente ha
+        # esplicitamente selezionato dal dashboard web o via Telegram
+        # (`/cv <id>`). Vedi BACKLOG [JHT-WRITER-ON-DEMAND].
         rows = conn.execute("""
             SELECT p.id, p.title, p.company, s.total_score
             FROM positions p
             JOIN scores s ON s.position_id = p.id
             LEFT JOIN applications a ON a.position_id = p.id
-            WHERE s.total_score >= 50 AND a.id IS NULL AND p.status = 'scored'
-            ORDER BY s.total_score DESC
+            WHERE p.write_requested = 1
+              AND s.total_score >= 50
+              AND a.id IS NULL
+              AND p.status = 'scored'
+            ORDER BY p.write_requested_at ASC, s.total_score DESC
         """).fetchall()
-        label = "Posizioni scored >= 50 senza application"
+        label = "Posizioni con CV richiesto dall'utente (scored >= 50, no application)"
 
     elif role == 'critico':
         rows = conn.execute("""
