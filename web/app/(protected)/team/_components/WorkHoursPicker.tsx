@@ -397,7 +397,7 @@ export default function WorkHoursPicker() {
 
           <div className="overflow-x-auto">
             <p className="text-xs opacity-60 mb-2">
-              Clicca le celle per attivare/disattivare. Click sul giorno o sull'ora per toggle riga/colonna.
+              Clicca le celle per attivare/disattivare. Click sul giorno o sull&apos;ora per toggle riga/colonna.
             </p>
             <table className="border-separate" style={{ borderSpacing: "1px" }}>
               <thead>
