@@ -108,13 +108,13 @@ Lingue esistenti (en/it/hu): l'app desktop le supporta già (`web/messages/{en,i
 | Componente | Stato attuale | Target |
 |---|---|---|
 | 🖥 Desktop renderer | ✅ en/it/hu 343 chiavi | OK |
-| 📦 Welcome Telegram (3 bot) | ❌ hardcoded IT | i18n via `JHT_LANG` |
+| 📦 Welcome Telegram (3 bot) | ✅ i18n via `shared/i18n.sh` + `JHT_LANG` (welcome-send.sh:24-29, 57-82) | OK |
 | 🤖 Prompt agenti (10 ruoli) | 🟡 mostly IT, mentor/critico EN | baseline EN + `.it.md` + `.hu.md` |
-| ⚙️ Wizard CLI `jht setup` | ❌ hardcoded IT | i18n via `JHT_LANG` |
+| ⚙️ Wizard CLI `jht setup` | ✅ i18n via `cli/wizard/i18n.js` + `JHT_LANG` (setup.js:26, setup-steps.js:17) | OK |
 | 📜 `host-setup.sh` picker | 🟡 en/it solo | aggiungere hu |
 | 🩺 Agent prompts loader | ✅ già scaffolded (start-agent.sh:497-516) | OK, manca solo i contenuti |
-| 🔧 Bot commands `/start /help` | ❌ hardcoded IT | i18n |
-| 📊 Auto-report PNG + caption | ❌ hardcoded IT | i18n |
+| 🔧 Bot commands `/start /help` | ✅ i18n via `shared/i18n.py` (tg-bridge.py:31-55, BOT_COMMANDS lookup) — done 2026-05-31 | OK |
+| 📊 Auto-report PNG + caption | ✅ i18n via `shared/i18n.py` (auto_report.py:52-61 + `_i18n_t/_i18n_tf`) | OK |
 
 **Effort stimato**: 1-2 giorni (vedi sezione "Sprint stabilizzazione i18n" sotto)
 
