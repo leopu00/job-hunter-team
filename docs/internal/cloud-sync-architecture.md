@@ -65,7 +65,7 @@ Due path implementativi equivalenti propagano i delta:
 | **Comandi legacy bus** | `team_commands` (mig 012) | `cli/src/lib/realtime-subscriber.js:264` long-poll 5s su `/api/cloud-sync/team-commands?status=pending` | residuo cutover — handleAction single-agent ancora qui |
 | **Writer-on-demand** | `positions.write_requested` (mig 024) | Capitano via `shared/skills/db_query.py:344` query `next-for-scrittore` → SQLite **locale** | bottone "Scrivi CV" dashboard + Telegram `/cv` |
 | **Chat utente→agente** | `user_to_agent_messages` (mig 019) | `cli/src/lib/user-messages-poller.js` long-poll 5s su `/api/messages?status=pending`, claim atomico PATCH delivered, forward `jht-tmux-send` | POST `/api/messages` |
-| **Like/dislike position** | `position_feedback` (mig 019) | 🟠 **scritto dal web, NESSUN reader Scout/Scorer** | POST `/api/positions/{id}/feedback` |
+| **Like/dislike position** | `position_feedback` (mig 019) | `shared/skills/feedback_query.py check <legacy_id>` (Scorer step 5 multiplier; Scout signal opzionale) | POST `/api/positions/{id}/feedback` |
 | **Agent→user fallback** | `pending_user_messages` (mig 010) | bidirezionale: scritto dal container, letto da browser via Realtime | notifiche utente |
 
 **Nota architetturale sulla nomenclatura**: `realtime-subscriber.js` è **fuorviante** — il file dichiara esplicitamente (riga 10-18) di NON usare WebSocket Realtime. Fa long-poll HTTP perché `cloud.json` non conserva il refresh-token Supabase. Il nome è ereditato dall'intent originale, da rinominare in `team-commands-poller.js` quando si chiude il cutover #13.
@@ -142,7 +142,7 @@ Il refactor `team_state` (mig 019-023, commit `627e7ab5…e6420371`) ha introdot
 
 Il writer-on-demand (mig 024, 2026-05-29) ha esteso lo stesso pattern alle **decisioni per-posizione**: `positions.write_requested` è desired-state, il Capitano è il reconciler che lo osserva e agisce.
 
-La event lane `user_to_agent_messages` è ora osservata: `cli/src/lib/user-messages-poller.js` (commit `4774c190`, 2026-05-31) fa long-poll, claim atomico, forward tmux. Resta scoperta `position_feedback` — schema + RLS + Realtime publication esistono, ma nessuno Scout/Scorer la legge ancora → gap P1 #3 sotto.
+Entrambe le event lane sono ora osservate (commit `4774c190` + `093027c1`, 2026-05-31): `user_to_agent_messages` via poller container-side, `position_feedback` via skill on-demand interrogata dallo Scorer ad ogni scoring (e dallo Scout come signal opzionale). Loop user→agenti bidirezionale chiuso per le 4 lane principali (start/stop, write-request, chat, feedback).
 
 ## 🛠️ Stato implementazione
 
@@ -196,11 +196,7 @@ La event lane `user_to_agent_messages` è ora osservata: `cli/src/lib/user-messa
 
 2. ✅ **P1 — Reader container per `user_to_agent_messages`** *(DONE 2026-05-31, commit `4774c190`)*. `cli/src/lib/user-messages-poller.js` long-poll 5s su `/api/messages?status=pending&limit=50`, sort FIFO, claim atomico via PATCH `status=delivered`, forward tmux via `jht-tmux-send`. Mapping agent→session: ruolo base lowercase + uppercase (`scout-1` → `SCOUT`), whitelist 9 agenti utente-facing. tmux fail → PATCH `expired`. Rispetta `.team-halted.flag` + `.weekly-halt.flag`. Killswitch 401/403 dopo 3 fail consecutivi. Wire in `pid1.js`: spawn al boot + watcher cloud.json + respawn 5s + kill su shutdown. **Limiti noti**: (a) niente "Capitano in CC" routing — il forward è 1:1 al target; se serve CC va aggiunto un campo `payload.cc` nel POST + ciclo extra nel poller; (b) `replied_at` non viene mai settato (richiede che l'agente PATCH-i la propria risposta, fuori scope MVP).
 
-3. **P1 — Reader agenti per `position_feedback`**. Schema, RLS ✅ done; il browser POSTa like/dislike/expired/wrong_location; nessun agente reagisce. Componenti:
-   - Skill `shared/skills/feedback_query.py` che ritorna i feedback recenti aggregati per company/role/location
-   - Scout: leggere prima di ogni search batch → skip simili a dislike, deprioritize simili a expired/out_of_budget
-   - Scorer: boost score per simili a like, malus per simili a dislike
-   - Capitano: integrare nel prompt orientativo periodico
+3. ✅ **P1 — Reader agenti per `position_feedback`** *(DONE 2026-05-31, commit `093027c1`)*. Skill `shared/skills/feedback_query.py check <legacy_id>` + `agents/_skills/feedback-query/SKILL.md`. **Scorer**: Step 5 obbligatorio post-score-base con multiplier (like ×1.10, star ×1.15, dislike ×0.85, hide → excluded), cap 100. **Scout**: skill esposta come signal opzionale (skip per-posizione gia' coperto da SC-05 dedup). Fallback neutro su cloud-disabled. **Out of scope MVP** (tracciato come follow-up): aggregato `recent` company-level per Scout (richiede endpoint dedicato + push delta) e Capitano routing su feedback ricorrenti.
 
 4. **P1 — Subscriber on-demand**. Spawn/kill dei 2 long-poller (team-state + team-commands) agganciato a `team_state.is_running`. Team giù → polling giù → 0 carico Vercel/Supabase. Team su → polling vivo per UX chat. *Già implementato per `cloud daemon push` (halt-flag), manca per i subscriber pull.*
 
