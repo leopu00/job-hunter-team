@@ -33,6 +33,9 @@ const POSITIONS_COLUMNS = [
   // push CLI in cli/src/commands/cloud.js per parita' tra i due path.
   "write_requested",
   "write_requested_at",
+  // Geocoding-on-demand (V8): user-driven office-geocoding flag, mig 027.
+  "geocode_requested",
+  "geocode_requested_at",
 ];
 
 const SCORES_COLUMNS = [
@@ -118,6 +121,9 @@ interface PositionRow {
   // V6 (2026-05-29): SQLite stores INTEGER 0|1, Supabase expects BOOLEAN.
   write_requested: number | null;
   write_requested_at: string | null;
+  // V8 (2026-05-31): stesso mapping integer→boolean.
+  geocode_requested: number | null;
+  geocode_requested_at: string | null;
 }
 
 interface ScoreRow {
@@ -285,9 +291,11 @@ export async function POST() {
         salary_estimated_currency: p.salary_estimated_currency,
         salary_estimated_source: p.salary_estimated_source,
         // Coerce SQLite INTEGER (0|1) -> Supabase BOOLEAN. Null su DB
-        // pre-V6 -> false (default semantico: nessuna richiesta).
+        // pre-V6/pre-V8 -> false (default semantico: nessuna richiesta).
         write_requested: p.write_requested === 1,
         write_requested_at: p.write_requested_at,
+        geocode_requested: p.geocode_requested === 1,
+        geocode_requested_at: p.geocode_requested_at,
       }));
 
     const { data: upserted, error } = await supabase

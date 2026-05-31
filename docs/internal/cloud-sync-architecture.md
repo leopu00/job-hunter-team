@@ -204,9 +204,9 @@ Entrambe le event lane sono ora osservate (commit `4774c190` + `093027c1`, 2026-
 
 #### P1 — Hardening + UX
 
-6. **P1 — Disaster recovery: `jht cloud restore` esplicito**. Oggi il bootstrap (`cli/src/commands/cloud.js:141, :710`) si attiva **solo** dentro `enable`/`login`. Se il SQLite locale muore (disco pieno, container corrotto, reset onboarding parziale) non c'è un comando "ricostruisci da cloud". Serve comando dedicato + conferma esplicita ("Sovrascriverai N righe locali con M righe cloud, procedo?") per evitare overwrite accidentale. *Si compone con il pull desired-state già done ma è scopo distinto: full DB rebuild vs delta intent reconciliation.*
+6. ✅ **P1 — Disaster recovery: `jht cloud restore` esplicito** *(DONE 2026-05-31, commit `10c57c8f`)*. Comando CLI + endpoint `/api/cloud-sync/full-dump` per ricostruire SQLite locale dallo snapshot cloud. Scope MVP: positions/scores/applications (companies + position_highlights ricostruiti dall'Analista). Conferma `@clack/prompts` interattiva; `--confirm-restore` per CI. Reset cursor push a "now" per evitare ri-push.
 
-7. **P1 — `JHT-LOCAL-NO-API`**: `web/lib/queries.ts` switcha su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx`.
+7. ✅ **P1 — `JHT-LOCAL-NO-API`** *(DONE 2026-05-31, commit `193d06fd`)*. Helper `isLocalOnlyMode()` in `web/lib/workspace.ts` legge `~/.jht/cloud.json` + `workspaceHasDb()`. Skip Supabase in `layout.tsx`/`dashboard/page.tsx`/`map/page.tsx`/`positions/page.tsx` quando localOnly=true. `queries.ts` gia' a posto via pattern `ws()`.
 
 8. **P1 — Cutover `team_commands`→`team_state` finale**. UI bulk Start/Stop ✅ done. Rename file `realtime-subscriber.js → team-commands-poller.js` ✅ done 2026-05-31. Resta:
    - `handleAction` per singolo agente ancora su `useTeamCommandPoller` → migrare a `team_state.agents_enabled` (richiede estensione reconciler per single-agent + observed mirror `agents_running`, scope architetturale)
