@@ -59,6 +59,11 @@ def ensure_schema(conn: sqlite3.Connection):
       payload del push delta e il receive Supabase fa UPDATE soft
       SET deleted_at = ?. Vedi mig 025 + BACKLOG [JHT-CLOUDSYNC-01]
       DELETE tombstone (2026-05-31).
+    - v7→v8: `positions.geocode_requested` + `geocode_requested_at`
+      per Geocoding-on-demand. L'utente seleziona dal dashboard/Telegram
+      su quali posizioni vuole le coordinate ufficio precise; l'Analista
+      esegue la skill `office-geocoding` solo quando il flag è acceso.
+      Replica del pattern Writer-on-demand. Vedi BACKLOG (2026-05-31).
     """
     _migrate_v2_to_v3(conn)
     _migrate_v3_to_v4(conn)
@@ -69,6 +74,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_office_geocoding(conn)
     _migrate_positions_write_requested(conn)
     _migrate_v6_to_v7_tombstones(conn)
+    _migrate_positions_geocode_requested(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,6 +138,8 @@ def ensure_schema(conn: sqlite3.Connection):
         office_verified INTEGER DEFAULT 0,
         write_requested INTEGER DEFAULT 0,
         write_requested_at TIMESTAMP,
+        geocode_requested INTEGER DEFAULT 0,
+        geocode_requested_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         -- Length guardrails: mirror dei CHECK constraint Postgres (mig 015).
@@ -225,6 +233,7 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
     CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
     CREATE INDEX IF NOT EXISTS idx_positions_write_requested ON positions(write_requested) WHERE write_requested = 1;
+    CREATE INDEX IF NOT EXISTS idx_positions_geocode_requested ON positions(geocode_requested) WHERE geocode_requested = 1;
     CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
     CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
@@ -904,6 +913,34 @@ def _migrate_positions_write_requested(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_write_requested "
         "ON positions(write_requested) WHERE write_requested = 1"
+    )
+
+
+def _migrate_positions_geocode_requested(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.geocode_requested` + `geocode_requested_at` (V8).
+
+    Flag user-driven per Geocoding-on-demand: l'utente seleziona dal
+    dashboard web (button "Geocodifica") o via Telegram le posizioni
+    per cui vuole coordinate ufficio precise (`office-geocoding` skill).
+    L'Analista esegue la skill solo quando il flag e' acceso — niente
+    piu' sforzo aggressivo 3-tentativi su tutto il pool.
+
+    Replica esatta del pattern Writer-on-demand (vedi
+    `_migrate_positions_write_requested` + Supabase mig 024). Vedi
+    BACKLOG [Cloud Sync — Geocoding opt-in/out] (2026-05-31).
+
+    Idempotente: guard via PRAGMA table_info, ALTER ADD COLUMN solo se
+    mancante.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'geocode_requested'):
+        conn.execute("ALTER TABLE positions ADD COLUMN geocode_requested INTEGER DEFAULT 0")
+    if not _column_exists(conn, 'positions', 'geocode_requested_at'):
+        conn.execute("ALTER TABLE positions ADD COLUMN geocode_requested_at TIMESTAMP")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_geocode_requested "
+        "ON positions(geocode_requested) WHERE geocode_requested = 1"
     )
 
 
