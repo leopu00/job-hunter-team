@@ -1128,38 +1128,31 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **Validato 2026-05-08:** VPS Hetzner CPX22, immagine `ghcr.io/leopu00/jht:dev-1` con `start-agent.sh` patched via `docker cp`. CAPITANO + SENTINELLA mostrano `⏵⏵ bypass permissions on (shift+tab to cycle)`, kick-off arrivato, CAPITANO ha auto-spawnato SCOUT-1 (validation ricorsiva: il fix copre anche gli agenti spawn-ati dal Capitano).
 - **Storia:** scoperto durante retest VPS del 2026-05-07 dopo fix bootstrap V5 (`6958fb42`). Fix scelto: opzione 3 (detect-respond robusto) invece di opzione 1 (settings.json) o 2 (Down+Enter cieco).
 
-### 🟡 [BUG-INSTALL-PATH-NOT-EXPORTED] `install.sh` non esporta `/root/.local/bin` al PATH di sistema
+### ✅ [BUG-INSTALL-PATH-NOT-EXPORTED] `install.sh` non esporta `/root/.local/bin` al PATH — FIXED 2026-05-09
 
-- **Sintomo:** dopo `curl install.sh | bash` su VPS Ubuntu 24.04 fresca, lanciare `jht <subcmd>` ritorna `Command 'jht' not found, did you mean: ...`. Il wrapper esiste in `/root/.local/bin/jht` ma quel path non e' nel PATH della shell perche' la dir non esisteva al login (Bash su Ubuntu auto-popola `~/.local/bin` solo se la dir gia' esiste — vedi `/etc/skel/.profile` con `if [ -d "$HOME/.local/bin" ]`).
-- **Scoperto:** retest VPS Hetzner del 2026-05-08 (commit `7106ef6e`).
-- **Stato attuale:** install.sh stampa un warning + istruzione manuale (`export PATH="$PATH:/root/.local/bin"`) ma NON automatizza. Tutti i comandi successivi nel wizard (es. `jht up`, `jht setup`) falliscono a meno che l'utente non rilegga la guida e copi-incolli il comando export.
-- **Fix proposto:** install.sh deve scrivere automaticamente il PATH a una location persistente:
-  - **root user**: `/etc/profile.d/jht.sh` (system-wide, picked up da ogni nuovo shell login)
-  - **non-root user**: append `~/.bashrc` + `~/.zshrc` se esistono e non gia' presente
-  - Stampare comunque il workaround per la sessione corrente (`export PATH=...`) perche' subshell di curl|bash non puo' modificare il parent shell.
-- **Priorita':** media — bloccante per UX VPS, workaround disponibile ma cattivo first-impression.
-- **File:** `scripts/install.sh:309-356` (funzione `download_runtime_files()`).
+- **Sintomo originale:** dopo `curl install.sh | bash` su VPS Ubuntu 24.04 fresca, lanciare `jht <subcmd>` ritorna `Command 'jht' not found`. Il wrapper esiste in `/root/.local/bin/jht` ma quel path non e' nel PATH della shell perche' la dir non esisteva al login (Bash su Ubuntu auto-popola `~/.local/bin` solo se gia' esistente — vedi `/etc/skel/.profile`).
+- **Fix applicato** (commit `7c14d12f` + `1abc9dec`, [`scripts/install.sh:401-447`](scripts/install.sh#L401)):
+  - **root user**: scrive `/etc/profile.d/jht.sh` (system-wide, sourced da ogni login interactive shell).
+  - **non-root user**: append idempotente a `~/.bashrc`, `~/.zshrc`, `~/.profile` con grep guard.
+  - **Sessione corrente**: `export PATH="$BIN_DIR:$PATH"` per i comandi successivi (wizard) → nessun crash mid-install.
+  - **Fallback**: warning + istruzione manuale se nessun rc disponibile.
+- **Memoria correlata:** vedi anche scelta `BIN_DIR` in `scripts/install.sh:62-67` — root su Linux/WSL preferisce `/usr/local/bin` (sempre nel PATH default).
 
-### 🟡 [BUG-INSTALL-BRANCH-MASTER-DEFAULT] `install.sh` scarica runtime files da `master` anche se fetch-ato da branch dev-N
+### 🟡 [BUG-INSTALL-BRANCH-MASTER-DEFAULT] `install.sh` scarica runtime files da `master` anche se fetch-ato da branch dev-N — MOSTLY FIXED 2026-05-09
 
-- **Sintomo:** `curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash` esegue install.sh dalla branch `dev-1` ma poi scarica `docker-compose.yml` e `jht-wrapper.sh` da `master` (default `BRANCH="${JHT_BRANCH:-master}"`). Risultato su VPS dev-1: container partiva con compose master vecchio (no `${JHT_IMAGE:-}` override del commit `4b10a9db`), pullando `:latest` invece di `:dev-1`. Lo split master/dev-1 cli falliva poi su `--subscription-email` (presente solo nel CLI di `:dev-1`, image fix `86c08174`).
-- **Scoperto:** retest VPS Hetzner del 2026-05-08 (commit `7106ef6e`).
-- **Workaround attuale:** prefissare `JHT_BRANCH=dev-1`:
+- **Sintomo originale:** `curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash` esegue install.sh dalla branch `dev-1` ma poi scarica `docker-compose.yml` e `jht-wrapper.sh` da `master`. Container partiva con compose vecchio, pullando `:latest` invece di `:dev-1`.
+- **Fix applicato** (commit `f79dcfcb`, [`scripts/install.sh:86-94`](scripts/install.sh#L86) + L120):
+  - ✅ Flag `--branch <name>` esplicito (anche `--branch=name`). Sintassi a coppia `$1 $2` con guard.
+  - ✅ `RAW_BASE` ricalcolato **post** arg-parse, così `--branch dev-1` impatta i download successivi.
+  - ✅ Env var `JHT_BRANCH=dev-1` resta alias retro-compat.
+  - ✅ Header docstring documenta entrambe le forme con esempi.
+- **Sintassi consigliata per testing branch dev-N:**
   ```bash
-  JHT_BRANCH=dev-1 curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash -s -- --branch dev-1
   ```
-  Oppure post-install, ri-scaricare manualmente:
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/docker-compose.yml -o /root/.jht/runtime/docker-compose.yml
-  curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/jht-wrapper.sh -o /root/.local/bin/jht
-  ```
-- **Fix proposti:**
-  1. install.sh accetta argomento posizionale `--branch dev-1` per esplicito.
-  2. install.sh prova a inferire la branch dal proprio URL via `$0` e `BASH_SOURCE` (rotto sotto `curl | bash` perche' lo script viene letto da stdin, ma marker file con SHA potrebbe funzionare).
-  3. Build step CI che inietta `BRANCH=<branch_name>` nel publish di install.sh per ogni branch (substituzione marker `__BRANCH__`).
-  4. Documentazione esplicita in `VPS-SETUP.md` + `quickstart.md` su `JHT_BRANCH` env var per devs.
-- **Priorita':** media (devs only — utenti finali curl-ano da `jobhunterteam.ai/install.sh` che servono master). Bloccante per workflow di test branch su VPS.
-- **File:** `scripts/install.sh:51` (`BRANCH="${JHT_BRANCH:-master}"`).
+- **Residui (low priority, edge case):**
+  - ⬜ Inferenza automatica branch dal proprio URL — irrisolvibile in modo robusto sotto `curl | bash` perche' `BASH_SOURCE=""` (stdin). Workaround possibile: CI step che sostituisce un marker `__BRANCH__` in install.sh al publish per ogni branch (richiede modifica `.github/workflows/`). **Decisione 2026-05-31**: non vale la candela — devs sanno usare `--branch`, utenti finali curl-ano da `jobhunterteam.ai/install.sh` (sempre master).
+- **File:** `scripts/install.sh:54` (`BRANCH="${JHT_BRANCH:-master}"`), parser L81-115, RAW_BASE L120.
 
 ### 🔴 [BUG-VPS-AUTH-TUNNEL] Web UI auth Supabase non funziona via SSH tunnel `localhost:3000`
 
