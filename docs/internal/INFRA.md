@@ -41,9 +41,11 @@ This is **opt-in for Local PC**, **mandatory for VPS** (the VPS uses cloud stora
 
 > 📡 **No LLM calls happen on the managed storage side.** The agents always run inside the local container. Supabase and Drive are storage only.
 
-> 🔄 **Bootstrap automatico (decisione 2026-05-13)**: il sync è **push-only** local → cloud. Quando l'utente fa login con lo stesso account su un **container nuovo/vuoto** (es. nuova VPS appena installata, o nuovo PC dopo perdita del vecchio), l'app rileva che il DB locale è vuoto e fa un **pull automatico** dal cloud — DB locale allineato, da lì in poi push normale. Niente comandi manuali, niente backup/restore Docker volume.
+> 🔄 **Sync model (aggiornato 2026-05-31)**: ibrido **push macro-events + pull desired-state**. Il container è source-of-truth dei *risultati* (positions/scores/applications) che vengono pushati a Supabase ogni ~60s come delta. In direzione opposta, le **intenzioni utente** che entrano dal web (start/stop team, "scrivi CV", chat, like/dislike) sono modellate come desired-state Kubernetes-style e tornano al container via 2 long-poller HTTP (`team-state-reconciler` + `realtime-subscriber` legacy) + endpoint dedicato `/api/cloud-sync/pull-desired-state` per i flag per-row (es. `write_requested`).
 >
-> **Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard. Memoria agenti runtime (tmux, skill state) e CV binari → restano locali. Vedi `project_cloud_sync_direction` per la spec.
+> **Bootstrap automatico**: quando l'utente fa login con lo stesso account su un **container nuovo/vuoto** (es. nuova VPS appena installata, o nuovo PC dopo perdita del vecchio), l'app rileva che il DB locale è vuoto e fa un **pull automatico** dal cloud — DB locale allineato, da lì in poi sync normale. Niente comandi manuali, niente backup/restore Docker volume.
+>
+> **Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard, flag user-driven (`write_requested`, futuro `geocode_requested`), tombstones di righe cancellate. Memoria agenti runtime (tmux, skill state) e CV binari → restano locali. Living doc completa: [`docs/internal/cloud-sync-architecture.md`](cloud-sync-architecture.md).
 
 ### 👤 Clients — how the user talks to the team
 

@@ -1,8 +1,9 @@
-# Database Schema — jobs.db (V5)
+# Database Schema — jobs.db (V6)
 
-**Aggiornato**: 2026-05-13
-**Schema version**: `PRAGMA user_version = 5`
-**Cambio rispetto a V4**: aggiunta tabella `pending_user_messages` per il pattern fallback notifiche via cloud sync (decisione 2026-05-13 — Telegram down/non configurato ⇒ scrivi su DB ⇒ cloud sync ⇒ dashboard web). La migrazione e' non-distruttiva: `CREATE TABLE IF NOT EXISTS` + trigger touch_updated_at standard. DB pre-V5 si auto-aggiornano alla prima `ensure_schema()`.
+**Aggiornato**: 2026-05-29
+**Schema version**: `PRAGMA user_version = 6`
+**Cambio rispetto a V5**: aggiunte colonne `positions.write_requested` (INTEGER DEFAULT 0) e `positions.write_requested_at` (TIMESTAMP) per Writer-on-demand. L'utente seleziona dal dashboard web (button "Scrivi CV") o via Telegram (`/cv <id>`) le posizioni per cui vuole un CV; il Capitano spawna Scrittori on-demand solo quando il flag e' acceso. Migrazione idempotente via `_migrate_positions_write_requested()` (ALTER TABLE ADD COLUMN). Vedi BACKLOG [JHT-WRITER-ON-DEMAND] (2026-05-29) e mig Supabase 024.
+**Cambio V4→V5**: aggiunta tabella `pending_user_messages` per il pattern fallback notifiche via cloud sync (decisione 2026-05-13 — Telegram down/non configurato ⇒ scrivi su DB ⇒ cloud sync ⇒ dashboard web). La migrazione e' non-distruttiva: `CREATE TABLE IF NOT EXISTS` + trigger touch_updated_at standard. DB pre-V5 si auto-aggiornano alla prima `ensure_schema()`.
 **Cambio V3→V4**: aggiunte colonne `created_at` e `updated_at` uniformi su tutte le 5 tabelle dati, con `DEFAULT CURRENT_TIMESTAMP` (DB freschi) e trigger `touch_updated_at` (AFTER UPDATE) che mantiene `updated_at` aggiornato automaticamente ad ogni UPDATE. I campi domain (`scored_at`, `applied_at`, `written_at`, `analyzed_at`, `found_at`, `last_checked`) restano per event semantics. Migrazione retroattiva automatica via `_migrate_v3_to_v4()` in `shared/skills/_db.py`: ALTER TABLE ADD COLUMN (senza DEFAULT — limite SQLite) + UPDATE delle righe esistenti con i domain `*_at` come fallback (es. `created_at = COALESCE(found_at, CURRENT_TIMESTAMP)`).
 **Cambio V2→V3**: aggiunto `CHECK` constraint su `positions.status`. Migrazione via `_migrate_v2_to_v3()`.
 **Path**: `$JHT_HOME/jobs.db` (canonical) — fallback `shared/data/jobs.db` per uso fuori container
@@ -58,6 +59,8 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | status | TEXT | new | new → checked → scored → writing → ready → applied → response · `excluded` da qualsiasi step. **V3: vincolato da `CHECK` constraint** — i valori non in questa lista vengono rigettati con `IntegrityError`. |
 | notes | TEXT | | Note libere |
 | last_checked | TIMESTAMP | | Ultima verifica link/JD |
+| write_requested | INTEGER | 0 | **V6** — `1` = utente ha richiesto CV per questa posizione (via web button o `/cv` Telegram). Il Capitano polla questa colonna per spawnare Scrittori on-demand. |
+| write_requested_at | TIMESTAMP | NULL | **V6** — quando l'utente ha richiesto il CV. Usato dal Capitano per FIFO ordering quando spawna Scrittori. |
 | created_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — inserimento riga |
 | updated_at | TIMESTAMP | CURRENT_TIMESTAMP | **V4** — auto-touched ad ogni UPDATE via trigger |
 
@@ -148,6 +151,7 @@ Questo file e' il RIFERIMENTO UFFICIALE per lo schema del database. Tutti gli ag
 | idx_positions_company | positions | company |
 | idx_positions_company_id | positions | company_id |
 | idx_positions_url | positions | url |
+| idx_positions_write_requested | positions | write_requested (partial WHERE = 1) |
 | idx_scores_total | scores | total_score |
 | idx_applications_status | applications | status |
 | idx_pending_user_messages_agent | pending_user_messages | agent |
