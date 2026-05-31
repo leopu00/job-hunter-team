@@ -281,15 +281,15 @@ Roadmap successivo — vero "team forum":
 ⬜ Per-agent mute / subscription preferences
 ```
 
-### 🔄 Cloud sync direction (decisione 2026-05-13)
+### 🔄 Cloud sync direction (aggiornato 2026-05-31)
 
-**Direzione**: push-only `local → cloud`, sempre. Il container è la fonte di verità, Supabase è il mirror.
+**Modello**: ibrido **push macro-events + bidirezionalità a "desired-state"** (Kubernetes-style). Il container è source-of-truth dei *risultati* (positions/scores/applications); Supabase è il mirror. Le **intenzioni utente** dal web (start/stop team, scrivi CV, chat, like/dislike) viaggiano cloud → container tramite long-poller HTTP + endpoint `/api/cloud-sync/pull-desired-state`. La formula "push-only" della decisione 2026-05-13 è stata superata dal refactor `team_state` (2026-05-23, mig 019-023) e dal writer-on-demand (2026-05-29, mig 024) + pull-desired-state (2026-05-31).
 
 **Bootstrap automatico**: quando l'utente fa login con lo stesso account su un container nuovo/vuoto (es. nuova VPS, nuovo PC), l'app rileva il DB locale vuoto e fa un pull automatico — DB allineato, sync normale da lì in poi. Niente comandi manuali.
 
-**Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard. Memoria agenti runtime e CV binari restano locali.
+**Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard, flag user-driven (`write_requested`), tombstones (mig 025). Memoria agenti runtime e CV binari restano locali.
 
-→ Task di implementazione: `[JHT-CLOUD-RESTORE]`, `[JHT-CLOUD-SYNC-PROFILE]`, `[JHT-CLOUD-SYNC-THEME]` in `BACKLOG.md`.
+→ Task di implementazione: `[JHT-CLOUDSYNC-01]`, `[JHT-CLOUD-RESTORE]`, `[JHT-CLOUD-SYNC-PROFILE]`, `[JHT-CLOUD-SYNC-THEME]` in `BACKLOG.md`. Living doc: [`docs/internal/cloud-sync-architecture.md`](../internal/cloud-sync-architecture.md).
 
 ### 🛠️ Skill discovery — launcher-distributed isolation (priority)
 

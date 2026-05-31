@@ -817,6 +817,8 @@ function mapPositionFull(r: any): Position {
     url: r.url, source: r.source, jd_text: r.jd_text ?? null, requirements: r.requirements ?? null,
     found_by: r.found_by, found_at: r.found_at ?? '', deadline: r.deadline ?? null,
     status: r.status, notes: r.notes ?? null, last_checked: r.last_checked ?? null,
+    write_requested: r.write_requested === 1 || r.write_requested === true,
+    write_requested_at: r.write_requested_at ?? null,
   }
 }
 
