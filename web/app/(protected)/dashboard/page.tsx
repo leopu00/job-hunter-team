@@ -22,7 +22,7 @@ import PipelineFlow from "@/app/components/PipelineFlow";
 // Vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md insight #10.
 import CompanyGlobeLazy from "@/app/components/CompanyGlobeLazy";
 import { formatFoundAt } from "@/lib/format-time";
-import { isSupabaseConfigured } from "@/lib/workspace";
+import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
@@ -83,7 +83,9 @@ export default async function DashboardCompany() {
   const localRequest = isLocalRequestFromHeaders(hdrs);
   const demoMode = isDashboardDemoMode(hdrs.get("x-search"));
 
-  if (isSupabaseConfigured && !demoMode) {
+  // JHT-LOCAL-NO-API: salta auth check Supabase in local-only mode.
+  // Cade direttamente nel branch "no-Supabase" che legge solo dal workspace.
+  if (isSupabaseConfigured && !demoMode && !isLocalOnlyMode()) {
     const supabase = await createClient();
     const {
       data: { user },
@@ -155,9 +157,10 @@ export default async function DashboardCompany() {
   let hasProfile = false;
   if (demoMode) {
     hasProfile = true;
-  } else if (isSupabaseConfigured) {
+  } else if (isSupabaseConfigured && !isLocalOnlyMode()) {
     hasProfile = false;
   } else {
+    // No-Supabase deploy OR local-only mode: leggi dal workspace YAML.
     hasProfile = readWorkspaceProfile() !== null;
   }
 

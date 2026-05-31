@@ -5,7 +5,7 @@ import {
   getPositionTypeDistribution,
 } from "@/lib/queries";
 import MapCharts from "@/app/components/MapCharts";
-import { isSupabaseConfigured } from "@/lib/workspace";
+import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
@@ -27,7 +27,7 @@ export default async function MapCompany() {
   const localRequest = isLocalRequestFromHeaders(hdrs);
   const demoMode = isDashboardDemoMode(hdrs.get("x-search"));
 
-  if (isSupabaseConfigured && !demoMode) {
+  if (isSupabaseConfigured && !demoMode && !isLocalOnlyMode()) {
     const supabase = await createClient();
     const {
       data: { user },
