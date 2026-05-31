@@ -65,6 +65,10 @@ export function getDefaultCommands(): CommandSpec[] {
     // Writer-on-demand (V6): l'utente seleziona da Telegram una posizione
     // per la quale vuole il CV. Triggera lo spawn lazy del Capitano (C-10).
     { name: "cv", description: "Richiedi CV: /cv <position_id>", handler: async () => {} },
+    // Geocoding-on-demand (V8): l'utente richiede coordinate ufficio
+    // precise per una posizione. L'Analista (REGOLA-16 OPT-IN) processa
+    // la coda parallela `next-for-geocoding`.
+    { name: "geo", description: "Richiedi geocoding: /geo <position_id>", handler: async () => {} },
     { name: "help", description: "Mostra comandi disponibili", handler: async () => {} },
   ];
 }
