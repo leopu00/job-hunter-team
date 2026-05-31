@@ -12,6 +12,7 @@ import { registerHealthCommand } from './commands/health.js';
 import { registerBackupCommand } from './commands/backup.js';
 import { registerMigrateCommand } from './commands/migrate.js';
 import { registerCacheCommand } from './commands/cache.js';
+import { registerToolsCommand } from './commands/tools.js';
 import { registerLogsCommand } from './commands/logs.js';
 import { registerProvidersCommand } from './commands/providers.js';
 import { registerStatsCommand } from './commands/stats.js';
@@ -82,6 +83,7 @@ export function buildProgram() {
   registerBackupCommand(program);
   registerMigrateCommand(program);
   registerCacheCommand(program);
+  registerToolsCommand(program);
   registerLogsCommand(program);
   registerProvidersCommand(program);
   registerStatsCommand(program);
