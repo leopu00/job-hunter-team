@@ -121,9 +121,28 @@ python3 /app/shared/skills/db_query.py position <ID>
 1. Pre-check (REGOLA-01) → se fallisce: `excluded`
 2. Verifica link (REGOLA-02)
 3. Claim (REGOLA-03)
-4. Calcola score con la formula
-5. Salva score nel DB
-6. Aggiorna status + eventuale notifica Scrittori
+4. Calcola **score base** con la formula
+5. **Applica moltiplicatore feedback utente** (skill `feedback-query`) — vedi sotto
+6. Salva score nel DB
+7. Aggiorna status + eventuale notifica Scrittori
+
+### Step 5 — Moltiplicatore feedback utente (obbligatorio, skill `feedback-query`)
+
+Dopo il calcolo dello score base, interroga il cloud per like/dislike/hide/star che l'utente ha cliccato su questa posizione. La skill non fallisce mai: se il cloud è disabilitato o irraggiungibile ritorna `latest_action=null` con `note`, e il moltiplicatore diventa no-op.
+
+```bash
+python3 /app/shared/skills/feedback_query.py check <legacy_id>
+# {"ok": true, "legacy_id": "42", "latest_action": "dislike",
+#  "count": 2, "actions": [...]}
+```
+
+| `latest_action` | Effetto sullo score **base**              | Side effect                                  |
+|-----------------|--------------------------------------------|----------------------------------------------|
+| `like`          | `final = round(base * 1.10)`, cap 100      | aggiungi `feedback:like+10%` a `score.notes` |
+| `star`          | `final = round(base * 1.15)`, cap 100      | aggiungi `feedback:star+15%` a `score.notes` |
+| `dislike`       | `final = round(base * 0.85)`               | aggiungi `feedback:dislike-15%` a `score.notes` |
+| `hide`          | **NON salvare lo score**                   | `db_update.py position <ID> --status excluded --notes "ESCLUSA: feedback:hide (richiesta utente)"` e skip notifica Scrittori |
+| `null`          | nessun cambio                              | nessuno                                       |
 
 ```bash
 # Salva score (i flag CLI usano i nomi delle colonne DB, non i nomi della tabella)
