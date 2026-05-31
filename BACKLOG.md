@@ -378,7 +378,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Priority**: ✅ DONE 2026-05-29 — shipped end-to-end (DB + API + UI + Telegram + Scrittore + Capitano). Validare in real beta test per misurare impatto reale sul token spend.
 - **Linked**: [JHT-TOKEN-MONITOR-WRITER-CRITIC] (sotto), [JHT-COST-VALIDATION-PAYG-VS-SUB] (sotto).
 
-##### 📊 [JHT-TOKEN-MONITOR-WRITER-CRITIC] Aggrega consumo Scrittore+Critico come unità singola per throttling Capitano ⬜ 🟠 HIGH
+##### 📊 [JHT-TOKEN-MONITOR-WRITER-CRITIC] Aggrega consumo Scrittore+Critico come unità singola per throttling Capitano 🟡 MVP DONE 2026-05-31 🟠 HIGH
 
 - **Background scoperto 2026-05-23**: il Critico è spawnato dallo Scrittore (~3-round critic loop). Il suo consumo token NON è attribuito allo Scrittore nel `token-meter` attuale, ma per le decisioni di throttling del Capitano dovrebbe essere considerato "1 unit" insieme allo Scrittore. Inoltre il Critico ha task atomica (read CV + JD + scrivere critica) — non può essere throttlato facilmente, quindi l'unico leva è rallentare lo Scrittore "padre" prima che spawni il Critico.
 - **Task**:
@@ -388,6 +388,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   4. Dashboard web `/team`: tab "Per-writer cost" con barra stacked (writer own + critic spawn).
 - **Linked**: [JHT-WRITER-ON-DEMAND] (sopra) sblocca anche questa misurazione perché senza writer-spawn-burst il rate aggregato resta naturalmente sotto soglia.
 - **Side bug da fix**: `token-meter.csv` non è durable cross container restart (verificato su VPS Kimi 2026-05-23, file resettato sul restart, 35 righe vs 10752 di Codex). Da rendere durable con append-mode + rotazione invece di overwrite.
+- **MVP shipped 2026-05-31**: nuova funzione `aggregate_writer_critic_rates()` in `shared/skills/token_metrics_lib.py` mappa `scrittore-N` ↔ `critico-sN` (pattern 1:1 stabilito da `critic-loop` skill) e ritorna `{own_rate, critic_rate, combined_rate, own_weighted, critic_weighted, combined_weighted, critic_session, writer_session_alive}`. `token-meter.py` espone il dict aggregato come `per_writer_aggregated` nel state JSON (per_agent invariato per compat). Nuova RULE Capitano **C-11** (IT + EN) istruisce a leggere `per_writer_aggregated.scrittore-N.combined_rate_kt_per_min` invece di `per_agent.scrittore-N.rate_kt_per_min_60s` per decisioni throttle. Gestiti edge case: writer senza critic (review non in flight → combined=own), critic orphan post-restart (writer_session_alive=false → combined=critic rate). **Scope ridotto**: (a) dashboard `/team` tab "Per-writer cost" con barra stacked NON implementato (UI separato, follow-up); (b) side bug durability `token-meter.csv` NON toccato (issue separato, append-mode già usato — il reset cross-restart richiede investigazione VPS Kimi specifica).
 
 ##### 🩺 [JHT-DOCTOR-DAILY-RESTART] Dottori riavviano ogni agente almeno 1×/giorno per context freshness 🟡 MVP DONE 2026-05-31 🟠 HIGH
 
