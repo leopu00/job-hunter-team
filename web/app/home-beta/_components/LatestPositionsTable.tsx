@@ -29,7 +29,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 // Math della pipeline (deve restare allineato a BetaTeamFlow):
 const DURATION = 360;
-const TABLE_PIN_COUNT = 10;
+const TABLE_PIN_COUNT = 15;
 const STICKY_TOP_OFFSET_PX = 80;
 
 // stepStarts dei 5 step "→ DB" (Scout, Analyst, Scorer, Writer in round 1,
@@ -59,11 +59,17 @@ const ANALYST_GROUPS: number[][] = [
 const SCORER_GROUPS: number[][] = [[0, 4], [6, 7], [9, 10, 13]];
 const WRITER_GROUPS: number[][] = [[4, 7], [9, 13]];
 const ROUND2_WRITER_GROUPS: number[][] = [
-  [18, 10, 11, 20, 12, 21],
+  [18, 10, 20, 12, 21],
   [13, 22, 14, 0, 1, 4],
-  [2, 3, 19, 5, 6, 23],
-  [15, 17, 16, 7, 8, 9],
+  [3, 19, 6, 23],
+  [15, 17, 16, 7, 9],
 ];
+
+// Pin esclusi a fine pipeline: Vienna(2), Istanbul(5), Seoul(8),
+// Las Vegas(11). Restano col colore precedente sul globo, in tabella
+// status "excluded" dopo la fine del round 2.
+const EXCLUDED_PINS_FINAL = new Set([2, 5, 8, 11]);
+const PIPELINE_END_T = 8640;
 
 // Mapping step → status applicato al pin quando la pallina arriva.
 function applyStep(
@@ -90,6 +96,10 @@ function computeStatusForPin(pinIdx: number, T: number): string {
   status = applyStep(status, "writing", pinIdx, SCORER_GROUPS, STEP_STARTS.scorerDB, T);
   status = applyStep(status, "ready", pinIdx, WRITER_GROUPS, STEP_STARTS.writerDB, T);
   status = applyStep(status, "ready", pinIdx, ROUND2_WRITER_GROUPS, STEP_STARTS.round2WriterDB, T);
+  // Override finale: a fine pipeline, alcuni pin sono ESCLUSI.
+  if (EXCLUDED_PINS_FINAL.has(pinIdx) && T >= PIPELINE_END_T) {
+    status = "excluded";
+  }
   return status;
 }
 
@@ -102,12 +112,28 @@ const STATUS_ACTOR: Record<string, string> = {
   ready: "scrittore",
 };
 
-// Voto sintetico generato deterministicamente dall'id (così resta
-// stabile tra render). Mostrato solo quando status >= "scored".
-function votoFor(pinIdx: number): number {
-  // Hash semplice → range 6.0–8.8
+// Match Score sintetico generato deterministicamente dall'id (così
+// resta stabile tra render). Range 62–96 (%), mostrato solo dallo
+// status "scored" in poi.
+function matchScoreFor(pinIdx: number): number {
   const seed = (pinIdx * 2654435761) >>> 0;
-  return Math.round((6 + (seed % 28) / 10) * 10) / 10;
+  return 62 + (seed % 35);
+}
+
+// Salary mappata sul range globale del dataset (~25k–95k). Usata per
+// la barra verticale accanto alla cifra: barra alta = top del range.
+const SALARY_MIN_GLOBAL = 25000;
+const SALARY_MAX_GLOBAL = 95000;
+function salaryPercentFor(p: LuxuryPosition): number {
+  const lo = p.salary_declared_min ?? 0;
+  const hi = p.salary_declared_max ?? 0;
+  if (!lo && !hi) return 0;
+  const avg = (lo + hi) / 2;
+  const pct =
+    ((avg - SALARY_MIN_GLOBAL) /
+      (SALARY_MAX_GLOBAL - SALARY_MIN_GLOBAL)) *
+    100;
+  return Math.max(0, Math.min(100, pct));
 }
 
 type FlashState = { color: string; key: number };
@@ -207,25 +233,25 @@ export default function LatestPositionsTable() {
               tableLayout: "fixed",
             }}
           >
-            {/* col widths, ordine: Status | Title | Company | Location | Voto | Salary | Updated */}
+            {/* col widths, ordine: Updated | Match Score | Title | Company | Location | Salary | CV */}
             <colgroup>
               <col style={{ width: "9%" }} />
-              <col style={{ width: "26%" }} />
-              <col style={{ width: "20%" }} />
-              <col style={{ width: "17%" }} />
-              <col style={{ width: "6%" }} />
-              <col style={{ width: "13%" }} />
-              <col style={{ width: "9%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "24%" }} />
+              <col style={{ width: "19%" }} />
+              <col style={{ width: "15%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "8%" }} />
             </colgroup>
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Status</th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">Updated</th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Match Score</th>
                 <th className="px-3 py-2 font-normal whitespace-nowrap">Title</th>
                 <th className="px-3 py-2 font-normal whitespace-nowrap">Company</th>
                 <th className="px-3 py-2 font-normal whitespace-nowrap">Location</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Voto</th>
                 <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Salary</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Updated</th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap text-center">CV</th>
               </tr>
             </thead>
             <tbody>
@@ -239,17 +265,23 @@ export default function LatestPositionsTable() {
                   </td>
                 </tr>
               ) : (
-                recent.map((p, i) => {
+                recent
+                  .map((p, i) => ({ p, i }))
+                  // Mostriamo solo le righe già "trovate" dallo Scout
+                  // (status ≠ "new") → le posizioni compaiono a
+                  // cascata mentre la pipeline avanza.
+                  .filter(({ i }) => statuses[i] !== "new")
+                  .map(({ p, i }) => {
                   const flash = flashes[i];
                   const status = statuses[i] ?? "new";
                   const statusColor = STATUS_COLORS[status] ?? "#94a3b8";
-                  // Voto sintetico stabile solo quando lo status indica
-                  // che lo Scorer (o successivi) ha lavorato il pin.
-                  const showVoto =
+                  // Match score visibile solo dopo lo step Scorer
+                  // (o successivi).
+                  const showScore =
                     status === "scored" ||
                     status === "writing" ||
                     status === "ready";
-                  const voto = showVoto ? votoFor(i) : null;
+                  const matchScore = showScore ? matchScoreFor(i) : null;
                   const updatedAt = p.last_action_at ?? p.found_at;
                   const salary = (() => {
                     const lo = p.salary_declared_min;
@@ -275,19 +307,60 @@ export default function LatestPositionsTable() {
                           ? `${flash.color}33`
                           : "transparent",
                         transition: "background 1.4s ease-out",
+                        // Fade-in alla comparsa (la riga viene montata
+                        // solo dopo che lo Scout l'ha trovata).
+                        animation: "fade-in 0.45s ease both",
                       }}
                     >
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <span
-                          className="inline-block px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide"
-                          style={{
-                            background: `${statusColor}22`,
-                            color: statusColor,
-                            border: `1px solid ${statusColor}55`,
-                          }}
-                        >
-                          {status}
-                        </span>
+                      <td className="px-3 py-2 whitespace-nowrap text-[var(--color-dim)] font-mono tabular-nums">
+                        {formatRelative(updatedAt)}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-bright)] font-mono tabular-nums">
+                        {/* Match Score: cifra + mini donut chart. */}
+                        <div className="flex items-center justify-end gap-2">
+                          <span>
+                            {typeof matchScore === "number"
+                              ? `${matchScore}%`
+                              : "—"}
+                          </span>
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 36 36"
+                            className="flex-shrink-0 -rotate-90"
+                            aria-hidden="true"
+                          >
+                            <circle
+                              cx="18"
+                              cy="18"
+                              r="14"
+                              fill="none"
+                              stroke="var(--color-border)"
+                              strokeWidth="5"
+                            />
+                            {typeof matchScore === "number" && (
+                              <circle
+                                cx="18"
+                                cy="18"
+                                r="14"
+                                fill="none"
+                                stroke={
+                                  matchScore >= 80
+                                    ? "#34d399"
+                                    : matchScore >= 65
+                                      ? "#facc15"
+                                      : "#f59e0b"
+                                }
+                                strokeWidth="5"
+                                strokeLinecap="round"
+                                strokeDasharray={`${(matchScore / 100) * 2 * Math.PI * 14} ${2 * Math.PI * 14}`}
+                                style={{
+                                  transition: "stroke-dasharray 0.6s ease",
+                                }}
+                              />
+                            )}
+                          </svg>
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-[var(--color-bright)]">
                         <div className="truncate" title={p.title}>
@@ -307,14 +380,71 @@ export default function LatestPositionsTable() {
                           {p.location ?? "—"}
                         </div>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-bright)] font-mono tabular-nums">
-                        {typeof voto === "number" ? voto.toFixed(1) : "—"}
-                      </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-muted)] font-mono tabular-nums">
-                        {salary}
+                        {/* Salary: visibile solo dopo lo step Scorer
+                            (status "scored" o successivi). Stesso
+                            criterio del match score, perché in pipeline
+                            il "voto" e la "valutazione economica" sono
+                            entrambi prodotti dallo Scorer. */}
+                        {(() => {
+                          const salaryPct = salaryPercentFor(p);
+                          const salaryColor =
+                            salaryPct >= 55
+                              ? "#34d399"
+                              : salaryPct >= 30
+                                ? "#facc15"
+                                : "#f59e0b";
+                          return (
+                            <div className="flex items-center justify-end gap-2">
+                              <span>{showScore ? salary : "—"}</span>
+                              <div
+                                className="w-[3px] h-[18px] rounded-sm overflow-hidden relative flex-shrink-0"
+                                style={{ background: "var(--color-border)" }}
+                              >
+                                {showScore && (
+                                  <div
+                                    className="absolute bottom-0 left-0 right-0"
+                                    style={{
+                                      height: `${salaryPct}%`,
+                                      background: salaryColor,
+                                      transition: "height 0.6s ease",
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-dim)] font-mono tabular-nums">
-                        {formatRelative(updatedAt)}
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {/* CV: scritto solo se lo Writer ha completato
+                            la riga (status "ready"). SVG visibile,
+                            centrato nella cella. */}
+                        <div className="flex items-center justify-center">
+                          {status === "ready" ? (
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="#34d399"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              aria-label="CV scritto"
+                            >
+                              <path d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : (
+                            <span
+                              className="text-[12px] leading-none"
+                              style={{ color: "var(--color-dim)" }}
+                              aria-hidden="true"
+                            >
+                              —
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
