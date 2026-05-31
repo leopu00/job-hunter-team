@@ -20,39 +20,95 @@ const STATUS_COLORS: Record<string, string> = {
   response: "#facc15",
 };
 
-// Pipeline di avanzamento status. Ogni "tick" scroll-driven prende una
-// riga e la fa avanzare al prossimo stato → simula il team che lavora,
-// come la tabella di /team/v2 quando i polling /api/db/recent-writes
-// rilevano nuovi timestamp.
-const STATUS_PIPELINE = [
-  "new",
-  "checked",
-  "scored",
-  "writing",
-  "review",
-  "ready",
-  "applied",
-  "response",
-] as const;
+// La tabella sotto al globo replica l'evoluzione di stato della
+// pipeline: ogni riga parte come "new", poi attraversa "checked"
+// (Scout) → "scored" (Analyst) → "writing" (Scorer) → "ready"
+// (Writer) → ancora "ready" nel round 2 finale. La progressione è
+// derivata dal medesimo T del pin-section "team-flow", così tabella
+// e globo cambiano in sincrono.
 
-// Actor associato al transition: per dare credibilità al flash
-// mostriamo l'agente che "ha lavorato" la riga.
+// Math della pipeline (deve restare allineato a BetaTeamFlow):
+const DURATION = 360;
+const TABLE_PIN_COUNT = 10;
+const STICKY_TOP_OFFSET_PX = 80;
+
+// stepStarts dei 5 step "→ DB" (Scout, Analyst, Scorer, Writer in round 1,
+// poi Writer in round 2). Valori derivati da SEQUENCE in BetaTeamFlow.
+const STEP_STARTS = {
+  scoutDB: 360,
+  analystDB: 2520,
+  scorerDB: 4320,
+  writerDB: 5760,
+  round2WriterDB: 7200,
+} as const;
+
+// pinGroups di ogni step (allineati a DB_STEPS in BetaTeamFlow).
+const SCOUT_CompanyS: number[][] = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7],
+  [8, 9],
+  [10, 11, 12, 13],
+];
+const ANALYST_CompanyS: number[][] = [
+  [0, 1],
+  [3, 4],
+  [6, 7],
+  [9, 10, 12, 13],
+];
+const SCORER_CompanyS: number[][] = [[0, 4], [6, 7], [9, 10, 13]];
+const WRITER_CompanyS: number[][] = [[4, 7], [9, 13]];
+const ROUND2_WRITER_CompanyS: number[][] = [
+  [18, 10, 11, 20, 12, 21],
+  [13, 22, 14, 0, 1, 4],
+  [2, 3, 19, 5, 6, 23],
+  [15, 17, 16, 7, 8, 9],
+];
+
+// Mapping step → status applicato al pin quando la pallina arriva.
+function applyStep(
+  current: string,
+  newStatus: string,
+  pinIdx: number,
+  groups: number[][],
+  stepStart: number,
+  T: number,
+): string {
+  for (let k = 0; k < groups.length; k++) {
+    const arrivalT = stepStart + (k + 1) * DURATION;
+    if (T >= arrivalT && groups[k].includes(pinIdx)) {
+      current = newStatus;
+    }
+  }
+  return current;
+}
+
+function computeStatusForPin(pinIdx: number, T: number): string {
+  let status = "new";
+  status = applyStep(status, "checked", pinIdx, SCOUT_CompanyS, STEP_STARTS.scoutDB, T);
+  status = applyStep(status, "scored", pinIdx, ANALYST_CompanyS, STEP_STARTS.analystDB, T);
+  status = applyStep(status, "writing", pinIdx, SCORER_CompanyS, STEP_STARTS.scorerDB, T);
+  status = applyStep(status, "ready", pinIdx, WRITER_CompanyS, STEP_STARTS.writerDB, T);
+  status = applyStep(status, "ready", pinIdx, ROUND2_WRITER_CompanyS, STEP_STARTS.round2WriterDB, T);
+  return status;
+}
+
+// Actor visualizzato in funzione dello status (chi ci ha lavorato ora).
 const STATUS_ACTOR: Record<string, string> = {
+  new: "scout",
   checked: "analista",
   scored: "scorer",
   writing: "scrittore",
-  review: "critico",
   ready: "scrittore",
-  applied: "scout",
-  response: "scout",
 };
 
-type RowOverride = {
-  status?: string;
-  actor?: string;
-  voto?: number | null;
-  score?: number | null;
-};
+// Voto sintetico generato deterministicamente dall'id (così resta
+// stabile tra render). Mostrato solo quando status >= "scored".
+function votoFor(pinIdx: number): number {
+  // Hash semplice → range 6.0–8.8
+  const seed = (pinIdx * 2654435761) >>> 0;
+  return Math.round((6 + (seed % 28) / 10) * 10) / 10;
+}
 
 type FlashState = { color: string; key: number };
 
@@ -72,90 +128,69 @@ function formatRelative(iso: string): string {
 }
 
 export default function LatestPositionsTable() {
-  // Landing page: dataset fittizio coerente con il profilo "luxury
-  // hospitality front-of-house". Niente fetch al backend (l'utente non
-  // è loggato e non ha un team che produce dati reali) — i dati statici
-  // si animano lo stesso via lo scroll-driven tick più in basso.
-  const [recent] = useState<RecentPosition[]>(LUXURY_POSITIONS);
-  const [overrides, setOverrides] = useState<Record<string, RowOverride>>({});
-  const [flashes, setFlashes] = useState<Record<string, FlashState>>({});
+  // Mostriamo solo le prime 10 offerte. Inizialmente sono tutte "new",
+  // poi evolvono in funzione del T del pin-section team-flow (stesso
+  // scroll che pilota il globo) → tabella e globo cambiano in sincrono.
+  const recent = LUXURY_POSITIONS.slice(0, TABLE_PIN_COUNT);
   const sectionRef = useRef<HTMLElement | null>(null);
+  const [statuses, setStatuses] = useState<string[]>(() =>
+    Array(TABLE_PIN_COUNT).fill("new"),
+  );
+  const [flashes, setFlashes] = useState<Record<number, FlashState>>({});
   const flashKeyRef = useRef(0);
+  const lastStatusesRef = useRef<string[]>(Array(TABLE_PIN_COUNT).fill("new"));
 
-  // Scroll-driven simulation: ad ogni soglia di scroll-down attraverso
-  // la sezione, una riga avanza di status nel pipeline e flasha. Replica
-  // l'esperienza di /team/v2 quando i polling rilevano scritture reali,
-  // ma local-only (utenti non loggati non hanno il backend del team).
   useEffect(() => {
-    if (recent.length === 0) return;
-    let lastY = typeof window !== "undefined" ? window.scrollY : 0;
-    let accumScroll = 0;
-    const PIXELS_PER_TICK = 140;
+    const sec = document.querySelector(
+      "[data-pin-section='table-evolution']",
+    ) as HTMLElement | null;
 
-    const tick = () => {
-      // Considera tutte le righe non ancora "response" (ultimo stato).
-      const candidates = recent.filter((p) => {
-        const cur = overrides[p.id]?.status ?? p.status;
-        const idx = STATUS_PIPELINE.indexOf(
-          cur as (typeof STATUS_PIPELINE)[number],
-        );
-        return idx >= 0 && idx < STATUS_PIPELINE.length - 1;
-      });
-      if (candidates.length === 0) return;
-      const row = candidates[Math.floor(Math.random() * candidates.length)];
-      const cur = overrides[row.id]?.status ?? row.status;
-      const idx = STATUS_PIPELINE.indexOf(
-        cur as (typeof STATUS_PIPELINE)[number],
-      );
-      const next = STATUS_PIPELINE[idx + 1];
-      const nextActor = STATUS_ACTOR[next] ?? row.last_action_actor ?? "scout";
-      const color = STATUS_COLORS[next] ?? "#94a3b8";
-      flashKeyRef.current += 1;
-      const myKey = flashKeyRef.current;
+    // Scale del tempo: 1 px di scroll sul pin section avanza T della
+    // tabella di T_SPEED_FACTOR. Con 2× l'animazione completa (T = 8640)
+    // si esaurisce in ~4320 px di scroll della tabella.
+    const T_SPEED_FACTOR = 2;
 
-      setOverrides((prev) => {
-        const cur = prev[row.id] ?? {};
-        const patch: RowOverride = { ...cur, status: next, actor: nextActor };
-        // Quando arriva a "scored" assegnamo un voto sintetico
-        // (random 6.0–8.8) se non già presente — coerente con la
-        // colonna Voto che resterebbe vuota altrimenti.
-        if (next === "scored" && row.voto == null && cur.voto == null) {
-          patch.voto = Math.round((6 + Math.random() * 2.8) * 10) / 10;
+    const recompute = () => {
+      const rectTop = sec ? sec.getBoundingClientRect().top : 0;
+      const rawT = Math.max(0, STICKY_TOP_OFFSET_PX - rectTop);
+      const T = rawT * T_SPEED_FACTOR;
+
+      const newStatuses: string[] = [];
+      for (let i = 0; i < TABLE_PIN_COUNT; i++) {
+        newStatuses.push(computeStatusForPin(i, T));
+      }
+
+      // Detect cambi di status → trigger flash sul colore del nuovo
+      // status. Il flash dura 1.4s e si auto-cancella.
+      const prev = lastStatusesRef.current;
+      let changed = false;
+      for (let i = 0; i < TABLE_PIN_COUNT; i++) {
+        if (prev[i] !== newStatuses[i]) {
+          changed = true;
+          const color = STATUS_COLORS[newStatuses[i]] ?? "#94a3b8";
+          flashKeyRef.current += 1;
+          const myKey = flashKeyRef.current;
+          setFlashes((p) => ({ ...p, [i]: { color, key: myKey } }));
+          window.setTimeout(() => {
+            setFlashes((p) => {
+              if (p[i]?.key !== myKey) return p;
+              const rest = { ...p };
+              delete rest[i];
+              return rest;
+            });
+          }, 1400);
         }
-        return { ...prev, [row.id]: patch };
-      });
-      setFlashes((prev) => ({ ...prev, [row.id]: { color, key: myKey } }));
-      window.setTimeout(() => {
-        setFlashes((prev) => {
-          if (prev[row.id]?.key !== myKey) return prev;
-          const rest = { ...prev };
-          delete rest[row.id];
-          return rest;
-        });
-      }, 1400);
+      }
+      if (changed) {
+        lastStatusesRef.current = newStatuses;
+        setStatuses(newStatuses);
+      }
     };
 
-    const onScroll = () => {
-      const dy = window.scrollY - lastY;
-      lastY = window.scrollY;
-      if (dy <= 0) return; // solo scroll-down
-      const sec = sectionRef.current;
-      if (sec) {
-        const rect = sec.getBoundingClientRect();
-        const winH = window.innerHeight;
-        // Attiva ticks solo quando la sezione tabella è almeno parzialmente
-        // nel viewport (top sotto il fondo e bottom sopra il top).
-        if (rect.top > winH || rect.bottom < 0) return;
-      }
-      accumScroll += dy;
-      while (accumScroll >= PIXELS_PER_TICK) {
-        accumScroll -= PIXELS_PER_TICK;
-        tick();
-      }
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [recent, overrides]);
+    recompute();
+    window.addEventListener("scroll", recompute, { passive: true });
+    return () => window.removeEventListener("scroll", recompute);
+  }, []);
 
   return (
     <section ref={sectionRef} className="pt-2 pb-12 w-full">
@@ -204,12 +239,17 @@ export default function LatestPositionsTable() {
                   </td>
                 </tr>
               ) : (
-                recent.map((p) => {
-                  const ov = overrides[p.id];
-                  const flash = flashes[p.id];
-                  const status = ov?.status ?? p.status;
+                recent.map((p, i) => {
+                  const flash = flashes[i];
+                  const status = statuses[i] ?? "new";
                   const statusColor = STATUS_COLORS[status] ?? "#94a3b8";
-                  const voto = ov?.voto ?? p.voto;
+                  // Voto sintetico stabile solo quando lo status indica
+                  // che lo Scorer (o successivi) ha lavorato il pin.
+                  const showVoto =
+                    status === "scored" ||
+                    status === "writing" ||
+                    status === "ready";
+                  const voto = showVoto ? votoFor(i) : null;
                   const updatedAt = p.last_action_at ?? p.found_at;
                   const salary = (() => {
                     const lo = p.salary_declared_min;
