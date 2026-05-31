@@ -12,6 +12,9 @@ db-query
 # Routine round
 liveness-check
 
+# Pre-emptive context freshness (once/24h, narrow time window)
+daily-restart-wave
+
 # Maintenance (end-of-round only, conditional)
 cache-prune
 py-tools-audit
