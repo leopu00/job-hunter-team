@@ -7,9 +7,9 @@ import { LUXURY_POSITIONS } from "../_data/luxuryPositions";
 const NODES = {
   captain: { emoji: "👨‍✈️", name: "Captain", color: "#ff9100" },
   scout: { emoji: "🕵️", name: "Scout", color: "#2196f3" },
-  analyst: { emoji: "👨‍🔬", name: "Analyst", color: "#00e676" },
+  analyst: { emoji: "👨‍🔬", name: "Analyst", color: "#ffd600" },
   scorer: { emoji: "👨‍💻", name: "Scorer", color: "#b388ff" },
-  writer: { emoji: "👨‍🏫", name: "Writer", color: "#ffd600" },
+  writer: { emoji: "👨‍🏫", name: "Writer", color: "#00e676" },
   critic: { emoji: "👨‍⚖️", name: "Critic", color: "#f44336" },
   db: { emoji: "🗄️", name: "DB", color: "#7f9cf5" },
 } as const;
@@ -197,24 +197,33 @@ export default function BetaTeamFlow() {
   useEffect(() => {
     if (overlay.width === 0) return;
 
+    // Ogni pallina di uno step "→ DB" attiva un GRUPPO di pin (1-4).
+    // Count decrescente per step: l'analista non valuta TUTTO ciò che
+    // lo scout ha trovato, lo scorer dà voto solo ad alcuni di quelli
+    // valutati, il writer scrive CV/cover solo per i top → ad ogni
+    // step alcuni pin "restano" nel colore precedente.
+    //   Scout 5 palline → 14 pin
+    //   Analyst 4 → 10 (4 restano blu)
+    //   Scorer 3 → 7 (3 restano verdi)
+    //   Writer 2 → 4 (3 restano viola)
     const SEQUENCE: Array<{
       pathId: string;
       nodeKey: NodeId;
       count?: number;
     }> = [
-      // Round 1: pipeline completa sui primi 14 pin (nord).
+      // Round 1
       { pathId: "captain-to-scout", nodeKey: "captain" },
-      { pathId: "db-from-scout", nodeKey: "scout", count: 14 },
+      { pathId: "db-from-scout", nodeKey: "scout", count: 5 },
       { pathId: "captain-to-analyst", nodeKey: "captain" },
-      { pathId: "db-from-analyst", nodeKey: "analyst", count: 14 },
+      { pathId: "db-from-analyst", nodeKey: "analyst", count: 4 },
       { pathId: "captain-to-scorer", nodeKey: "captain" },
-      { pathId: "db-from-scorer", nodeKey: "scorer", count: 14 },
+      { pathId: "db-from-scorer", nodeKey: "scorer", count: 3 },
       { pathId: "captain-to-writer", nodeKey: "captain" },
-      { pathId: "db-from-writer", nodeKey: "writer", count: 14 },
+      { pathId: "db-from-writer", nodeKey: "writer", count: 2 },
       { pathId: "chain-writer-to-critic", nodeKey: "writer" },
-      // Round 2: lo Scout trova 10 nuove offerte globali (pin 14-23).
+      // Round 2
       { pathId: "captain-to-scout", nodeKey: "captain" },
-      { pathId: "db-from-scout", nodeKey: "scout", count: 10 },
+      { pathId: "db-from-scout", nodeKey: "scout", count: 4 },
     ];
     const DURATION = 360; // px di scroll per il viaggio di 1 pallina
 
@@ -236,44 +245,71 @@ export default function BetaTeamFlow() {
     // viewport top.
     const STICKY_TOP_OFFSET_PX = 80;
 
-    // Step "→ DB" della pipeline. Ogni step ha la lista di PIN che le
-    // sue palline attivano (in ordine). Quando la pallina k arriva, il
-    // pin pinIdxs[k] viene tinto con il colore nodeKey.
-    const range = (start: number, end: number) =>
-      Array.from({ length: end - start }, (_, i) => start + i);
+    // Step "→ DB". Ogni pallina k attiva pinGroups[k] (tutti i pin del
+    // gruppo prendono il colore nodeKey). Selezione decrescente lungo
+    // la pipeline: alcune offerte "saltano" lo step successivo, così
+    // a fine round 1 il globo è un mix di blu/verde/viola/giallo
+    // (non tutto giallo).
+    //
+    // Stato finale round 1:
+    //   - Yellow (Writer):   Rome, Beijing, Tokyo, NY              (4)
+    //   - Purple (Scorer):   London, Moscow, SF                    (3)
+    //   - Green (Analyst):   Paris, Stockholm, Chicago             (3)
+    //   - Blue   (Scout):    Vienna, Istanbul, Seoul, Las Vegas    (4)
     const DB_STEPS: Array<{
       stepIdx: number;
       nodeKey: NodeId;
-      pinIdxs: number[];
+      pinGroups: number[][];
     }> = [
-      // Round 1 → pin 0-13
-      { stepIdx: 1, nodeKey: "scout", pinIdxs: range(0, 14) },
-      { stepIdx: 3, nodeKey: "analyst", pinIdxs: range(0, 14) },
-      { stepIdx: 5, nodeKey: "scorer", pinIdxs: range(0, 14) },
-      { stepIdx: 7, nodeKey: "writer", pinIdxs: range(0, 14) },
-      // Round 2 → pin 14-23 in ordine di longitudine MONOTONICA verso
-      // est (partendo da pin 13 = NY, lon -74). Così la lerp tra pin
-      // successivi gira sempre nella stessa direzione e cumulativamente
-      // copre ~360° (giro completo del globo).
-      // 22=BuenosAires(-58) → 14=SãoPaulo(-47) → 19=CapeTown(18) →
-      // 23=Dubai(55) → 15=Mumbai(73) → 17=Bangkok(100) →
-      // 16=Singapore(104) → 18=Sydney(151) → 20=MexCity(-99) →
-      // 21=Lima(-77). Somma diff lon: ~357° verso est.
+      // Scout: tutti 14 pin diventano blu.
+      {
+        stepIdx: 1,
+        nodeKey: "scout",
+        pinGroups: [[0, 1, 2], [3, 4, 5], [6, 7], [8, 9], [10, 11, 12, 13]],
+      },
+      // Analyst (10/14 → verdi): saltano Vienna(2), Istanbul(5),
+      // Seoul(8), Las Vegas(11) — restano blu.
+      {
+        stepIdx: 3,
+        nodeKey: "analyst",
+        pinGroups: [[0, 1], [3, 4], [6, 7], [9, 10, 12, 13]],
+      },
+      // Scorer (7/10 → viola): saltano Paris(1), Stockholm(3),
+      // Chicago(12) — restano verdi.
+      {
+        stepIdx: 5,
+        nodeKey: "scorer",
+        pinGroups: [[0, 4], [6, 7], [9, 10, 13]],
+      },
+      // Writer (4/7 → gialli): saltano London(0), Moscow(6), SF(10)
+      // — restano viola.
+      {
+        stepIdx: 7,
+        nodeKey: "writer",
+        pinGroups: [[4, 7], [9, 13]],
+      },
+      // Round 2: Scout trova 10 nuove offerte globali.
       {
         stepIdx: 10,
         nodeKey: "scout",
-        pinIdxs: [22, 14, 19, 23, 15, 17, 16, 18, 20, 21],
+        pinGroups: [[22, 14, 19], [23, 15, 17], [16, 18], [20, 21]],
       },
     ];
 
     const computePinColors = (T: number): (string | null)[] => {
       const colors: (string | null)[] = Array(PIN_COUNT).fill(null);
-      // Iterazione cronologica: l'ULTIMO step DB che ha raggiunto un
-      // pin determina il suo colore.
-      for (const { stepIdx, nodeKey, pinIdxs } of DB_STEPS) {
-        for (let k = 0; k < pinIdxs.length; k++) {
+      // Quando la pallina k arriva (T ≥ stepStart + (k+1)*DURATION),
+      // tutti i pin del gruppo pinGroups[k] prendono il colore nodeKey.
+      // L'iterazione preserva l'ordine di DB_STEPS, quindi l'ultimo
+      // step che tocca un pin vince (giallo writer > viola scorer > ecc).
+      for (const { stepIdx, nodeKey, pinGroups } of DB_STEPS) {
+        for (let k = 0; k < pinGroups.length; k++) {
           const arrivalT = stepStarts[stepIdx] + (k + 1) * DURATION;
-          if (T >= arrivalT) colors[pinIdxs[k]] = NODES[nodeKey].color;
+          if (T >= arrivalT) {
+            for (const pinIdx of pinGroups[k]) {
+              colors[pinIdx] = NODES[nodeKey].color;
+            }
+          }
         }
       }
       return colors;
@@ -284,9 +320,11 @@ export default function BetaTeamFlow() {
     // linearmente in longitudine fino a centrare il pin successivo.
     type GlobeEvent = { arrivalT: number; lon: number };
     const globeEvents: GlobeEvent[] = [];
-    for (const { stepIdx, pinIdxs } of DB_STEPS) {
-      for (let k = 0; k < pinIdxs.length; k++) {
-        const pos = LUXURY_POSITIONS[pinIdxs[k]];
+    for (const { stepIdx, pinGroups } of DB_STEPS) {
+      for (let k = 0; k < pinGroups.length; k++) {
+        // Centro il globo sul PRIMO pin del gruppo (gli altri pin
+        // sono geograficamente vicini, quindi tutti visibili).
+        const pos = LUXURY_POSITIONS[pinGroups[k][0]];
         if (!pos) continue;
         globeEvents.push({
           arrivalT: stepStarts[stepIdx] + (k + 1) * DURATION,
@@ -296,23 +334,40 @@ export default function BetaTeamFlow() {
     }
     globeEvents.sort((a, b) => a.arrivalT - b.arrivalT);
 
-    // Lerp tra due longitudini scegliendo il "cammino più corto" sulla
-    // sfera (es. da 170° a -170° passa per +180° → solo 20°, non 340°).
+    // Lerp tra due longitudini SEMPRE verso est (positive). Mai cambio
+    // direzione: scrollando giù il globo ruota solo nella stessa
+    // direzione, anche quando il target sarebbe "geograficamente più
+    // vicino" andando ovest (in quel caso facciamo il giro lungo est).
     const lerpLon = (a: number, b: number, t: number) => {
       let diff = b - a;
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
+      // Forza diff > 0 (rotazione est).
+      while (diff < 0) diff += 360;
       let out = a + diff * t;
-      if (out > 180) out -= 360;
-      if (out < -180) out += 360;
+      while (out > 180) out -= 360;
+      while (out < -180) out += 360;
       return out;
     };
+
+    // Dopo l'ultimo evento (fine pipeline) il globo continua a ruotare
+    // est al ritmo POST_PIPELINE_DEG_PER_PX. Calibrato a 0.14 perché:
+    // i lerp dei 4 eventi di round 2 sommano ~290°, e con un buffer
+    // di ~500 px dopo la pipeline (ma sticky ancora agganciato fase 2)
+    // arriviamo a ~70° → totale ~360°, esattamente un giro durante
+    // la fase centrata. Dopo lo sblocco, la rotazione continua mentre
+    // la tabella sale.
+    const POST_PIPELINE_DEG_PER_PX = 0.14;
 
     const computeGlobeLon = (T: number): number => {
       if (globeEvents.length === 0) return LUXURY_POSITIONS[0]?.lon ?? 10;
       if (T <= globeEvents[0].arrivalT) return globeEvents[0].lon;
       const last = globeEvents[globeEvents.length - 1];
-      if (T >= last.arrivalT) return last.lon;
+      if (T >= last.arrivalT) {
+        const extra = (T - last.arrivalT) * POST_PIPELINE_DEG_PER_PX;
+        let out = last.lon + extra;
+        while (out > 180) out -= 360;
+        while (out < -180) out += 360;
+        return out;
+      }
       for (let i = 0; i < globeEvents.length - 1; i++) {
         const a = globeEvents[i];
         const b = globeEvents[i + 1];
