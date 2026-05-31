@@ -20,16 +20,17 @@ beforeEach(() => resetI18n());
 // --- isValidLocale ---
 
 describe("isValidLocale", () => {
-  it("accetta 'it', 'en', 'es' e 'de'", () => {
+  it("accetta 'it', 'en', 'es', 'de' e 'fr'", () => {
     assert.ok(isValidLocale("it"));
     assert.ok(isValidLocale("en"));
     assert.ok(isValidLocale("es"));
     assert.ok(isValidLocale("de"));
+    assert.ok(isValidLocale("fr"));
   });
 
   it("rifiuta locale non supportati", () => {
-    assert.equal(isValidLocale("fr"), false);
     assert.equal(isValidLocale("pt"), false);
+    assert.equal(isValidLocale("zh"), false);
     assert.equal(isValidLocale(""), false);
   });
 });
@@ -37,8 +38,8 @@ describe("isValidLocale", () => {
 // --- LOCALES / DEFAULT_LOCALE ---
 
 describe("constants", () => {
-  it("LOCALES contiene it, en, es e de", () => {
-    assert.deepEqual([...LOCALES], ["it", "en", "es", "de"]);
+  it("LOCALES contiene it, en, es, de e fr", () => {
+    assert.deepEqual([...LOCALES], ["it", "en", "es", "de", "fr"]);
   });
 
   it("DEFAULT_LOCALE e' en", () => {
@@ -208,7 +209,7 @@ describe("resetI18n", () => {
 // --- translations dizionari ---
 
 describe("translations builtin", () => {
-  it("it, en, es e de hanno le stesse chiavi nav", () => {
+  it("it, en, es, de e fr hanno le stesse chiavi nav", () => {
     const itKeys = Object.keys(translations.it)
       .filter((k) => k.startsWith("nav."))
       .sort();
@@ -221,8 +222,12 @@ describe("translations builtin", () => {
     const deKeys = Object.keys(translations.de)
       .filter((k) => k.startsWith("nav."))
       .sort();
+    const frKeys = Object.keys(translations.fr)
+      .filter((k) => k.startsWith("nav."))
+      .sort();
     assert.deepEqual(itKeys, enKeys);
     assert.deepEqual(itKeys, esKeys);
     assert.deepEqual(itKeys, deKeys);
+    assert.deepEqual(itKeys, frKeys);
   });
 });
