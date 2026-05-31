@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir, chmod, unlink, stat } from 'node:fs/promise
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
+import * as clack from '@clack/prompts';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -153,6 +154,269 @@ async function handleEnable(options) {
     console.log(pc.yellow('  Enable e\' OK ma push iniziale e\' fallito. Riprova: jht cloud push'));
     process.exitCode = prevExitCode;
   }
+}
+
+/**
+ * Disaster recovery: scarica lo snapshot completo (positions / scores /
+ * applications) dal cloud via GET /api/cloud-sync/full-dump e lo applica
+ * a SQLite locale con INSERT OR REPLACE. Distinto dal pull-desired-state
+ * (merge dei flag user-driven) e dal push (delta locale → cloud).
+ *
+ * Vincoli MVP:
+ *   - SQLite locale DEVE esistere (lo schema viene da `ensure_schema` su
+ *     boot del team). Se mancante, esci con istruzioni "jht team start"
+ *     una volta per creare schema, poi `jht cloud restore`.
+ *   - Solo 3 tabelle ricostruite. companies e position_highlights vengono
+ *     ricreate dal normale loop Analista dopo il restore (follow-up:
+ *     mapping UUID→legacy_id per highlights, name-match per companies).
+ *   - INSERT OR REPLACE su id SQLite = legacy_id cloud. Righe locali con
+ *     id mai pushato (legacy_id=NULL cloud-side) restano intatte.
+ *   - Cursor di push resettato a "now" per evitare ri-push delle righe
+ *     appena scaricate al prossimo daemon tick.
+ *
+ * Opzioni:
+ *   --confirm-restore   skip prompt interattivo (per CI / script)
+ *   --db <path>         path SQLite alternativo (default JHT_DB_PATH)
+ */
+async function handleRestore(options) {
+  const config = await loadCloudConfig();
+  if (!config?.enabled) {
+    console.error(pc.red('Cloud non configurato. Esegui `jht cloud login` o `jht cloud enable`.'));
+    process.exitCode = 1;
+    return;
+  }
+  const baseUrl = (config.base_url || '').replace(/\/+$/, '');
+  const token = config.token;
+  if (!baseUrl || !token) {
+    console.error(pc.red('cloud.json malformato (manca base_url o token).'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const dbPath = options.db || JHT_DB_PATH;
+  if (!existsSync(dbPath)) {
+    console.error(pc.red(`SQLite locale assente: ${dbPath}`));
+    console.error(pc.dim('Lancia `jht team start` una volta per creare lo schema, poi riprova `jht cloud restore`.'));
+    process.exitCode = 1;
+    return;
+  }
+
+  // GET dump
+  const dumpUrl = `${baseUrl}/api/cloud-sync/full-dump`;
+  console.log(pc.dim(`Scarico snapshot da ${dumpUrl}...`));
+  let body;
+  try {
+    const res = await fetch(dumpUrl, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(pc.red(`Dump fallito (HTTP ${res.status}): ${body.error || 'errore sconosciuto'}`));
+      process.exitCode = 1;
+      return;
+    }
+  } catch (err) {
+    console.error(pc.red(`Errore di rete: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const dump = body.dump || {};
+  const cloudPositions = Array.isArray(dump.positions) ? dump.positions : [];
+  const cloudScores = Array.isArray(dump.scores) ? dump.scores : [];
+  const cloudApps = Array.isArray(dump.applications) ? dump.applications : [];
+
+  // Conta righe locali per il diff diagnostico.
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch (err) {
+    console.error(pc.red(`node:sqlite non disponibile (${err.message}). Richiesto Node >= 22.`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const localCounts = { positions: 0, scores: 0, applications: 0 };
+  try {
+    const dbRead = new DatabaseSync(dbPath, { readOnly: true });
+    localCounts.positions = dbRead.prepare('SELECT COUNT(*) AS n FROM positions').get().n;
+    localCounts.scores = dbRead.prepare('SELECT COUNT(*) AS n FROM scores').get().n;
+    localCounts.applications = dbRead.prepare('SELECT COUNT(*) AS n FROM applications').get().n;
+    dbRead.close();
+  } catch (err) {
+    console.error(pc.red(`Lettura SQLite fallita: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log('');
+  console.log(pc.bold('Restore disaster recovery'));
+  console.log(pc.dim(`  Local:  ${localCounts.positions} positions, ${localCounts.scores} scores, ${localCounts.applications} applications`));
+  console.log(pc.dim(`  Cloud:  ${cloudPositions.length} positions, ${cloudScores.length} scores, ${cloudApps.length} applications`));
+  console.log('');
+  console.log(pc.dim('  Modo: INSERT OR REPLACE su id SQLite = legacy_id cloud.'));
+  console.log(pc.dim('  Righe locali NON pushate (legacy_id NULL cloud-side) restano intatte.'));
+  console.log(pc.dim('  companies e position_highlights NON ricostruite (out of scope MVP).'));
+
+  let confirmed = false;
+  if (options.confirmRestore) {
+    confirmed = true;
+  } else {
+    const ans = await clack.confirm({
+      message: `Procedo con upsert di ${cloudPositions.length + cloudScores.length + cloudApps.length} righe in ${dbPath}?`,
+      initialValue: false,
+    });
+    if (clack.isCancel(ans) || !ans) {
+      console.log(pc.dim('Annullato.'));
+      return;
+    }
+    confirmed = true;
+  }
+
+  // Mappa cloud_position_id (UUID) -> legacy_id (int). Usata per scores
+  // e applications, che hanno position_id UUID cloud-side.
+  const uuidToLegacy = new Map();
+  for (const p of cloudPositions) {
+    if (p.id && p.legacy_id != null) uuidToLegacy.set(p.id, Number(p.legacy_id));
+  }
+
+  let inserted = { positions: 0, scores: 0, applications: 0 };
+  let skipped = { positions: 0, scores: 0, applications: 0 };
+
+  try {
+    const db = new DatabaseSync(dbPath);
+    db.exec('PRAGMA foreign_keys = OFF');  // Disabilito FK durante restore.
+
+    // Positions: INSERT OR REPLACE su id = legacy_id. company_id resettato
+    // a NULL (mapping cloud→sqlite non disponibile in MVP — l'Analista lo
+    // ricostruisce al prossimo loop quando incontra la company).
+    const posStmt = db.prepare(`
+      INSERT OR REPLACE INTO positions (
+        id, title, company, company_id, location, remote_type,
+        salary_declared_min, salary_declared_max, salary_declared_currency,
+        salary_estimated_min, salary_estimated_max, salary_estimated_currency,
+        salary_estimated_source,
+        url, source, jd_text, requirements, found_by, found_at, deadline,
+        status, notes, last_checked, last_actor, role_family,
+        loc_city, loc_region, loc_country, loc_country_code,
+        work_country, work_country_code,
+        is_multi_location, location_notes,
+        office_lat, office_lon, office_address, office_geocoded, office_verified,
+        write_requested, write_requested_at,
+        geocode_requested, geocode_requested_at,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    db.exec('BEGIN');
+    try {
+      for (const p of cloudPositions) {
+        const legacyId = Number(p.legacy_id);
+        if (!Number.isInteger(legacyId) || legacyId <= 0) {
+          skipped.positions++;
+          continue;
+        }
+        posStmt.run(
+          legacyId,
+          p.title ?? '', p.company ?? '',
+          p.location ?? null, p.remote_type ?? null,
+          p.salary_declared_min ?? null, p.salary_declared_max ?? null, p.salary_declared_currency ?? null,
+          p.salary_estimated_min ?? null, p.salary_estimated_max ?? null, p.salary_estimated_currency ?? null,
+          p.salary_estimated_source ?? null,
+          p.url ?? null, p.source ?? null, p.jd_text ?? null, p.requirements ?? null,
+          p.found_by ?? null, p.found_at ?? null, p.deadline ?? null,
+          p.status ?? 'new', p.notes ?? null, p.last_checked ?? null, p.last_actor ?? null, p.role_family ?? null,
+          p.loc_city ?? null, p.loc_region ?? null, p.loc_country ?? null, p.loc_country_code ?? null,
+          p.work_country ?? null, p.work_country_code ?? null,
+          p.is_multi_location ? 1 : 0, p.location_notes ?? null,
+          p.office_lat ?? null, p.office_lon ?? null, p.office_address ?? null,
+          p.office_geocoded ? 1 : 0, p.office_verified ? 1 : 0,
+          p.write_requested ? 1 : 0, p.write_requested_at ?? null,
+          p.geocode_requested ? 1 : 0, p.geocode_requested_at ?? null,
+          p.created_at ?? null, p.updated_at ?? null,
+        );
+        inserted.positions++;
+      }
+
+      const scoreStmt = db.prepare(`
+        INSERT OR REPLACE INTO scores (
+          position_id, total_score, experience_fit, salary_fit,
+          stack_match, remote_fit, strategic_fit, breakdown, notes,
+          scored_by, scored_at, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const s of cloudScores) {
+        const legacy = uuidToLegacy.get(s.position_id);
+        if (!legacy) { skipped.scores++; continue; }
+        scoreStmt.run(
+          legacy,
+          s.total_score ?? 0,
+          s.experience_fit ?? null, s.salary_fit ?? null,
+          s.stack_match ?? null, s.remote_fit ?? null, s.strategic_fit ?? null,
+          s.breakdown ?? null, s.notes ?? null,
+          s.scored_by ?? null, s.scored_at ?? null,
+          s.created_at ?? null, s.updated_at ?? null,
+        );
+        inserted.scores++;
+      }
+
+      const appStmt = db.prepare(`
+        INSERT OR REPLACE INTO applications (
+          position_id, cv_path, cv_pdf_path, cl_path, cl_pdf_path,
+          status, critic_score, critic_verdict, critic_notes,
+          written_at, applied_at, applied_via, response, response_at,
+          written_by, reviewed_by, critic_reviewed_at, applied,
+          cv_drive_id, cl_drive_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const a of cloudApps) {
+        const legacy = uuidToLegacy.get(a.position_id);
+        if (!legacy) { skipped.applications++; continue; }
+        appStmt.run(
+          legacy,
+          a.cv_path ?? null, a.cv_pdf_path ?? null, a.cl_path ?? null, a.cl_pdf_path ?? null,
+          a.status ?? null, a.critic_score ?? null, a.critic_verdict ?? null, a.critic_notes ?? null,
+          a.written_at ?? null, a.applied_at ?? null, a.applied_via ?? null,
+          a.response ?? null, a.response_at ?? null,
+          a.written_by ?? null, a.reviewed_by ?? null, a.critic_reviewed_at ?? null,
+          a.applied ? 1 : 0,
+          a.cv_drive_id ?? null, a.cl_drive_id ?? null,
+          a.created_at ?? null, a.updated_at ?? null,
+        );
+        inserted.applications++;
+      }
+
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    } finally {
+      db.close();
+    }
+  } catch (err) {
+    console.error(pc.red(`Restore fallito: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  // Cursor reset: "ora" così il prossimo push parte dopo le righe appena
+  // scaricate (idempotente comunque lato server, ma evitiamo carico inutile).
+  const nowIso = new Date().toISOString();
+  await saveCloudCursor({
+    positions: nowIso,
+    scores: nowIso,
+    applications: nowIso,
+  });
+
+  console.log('');
+  console.log(pc.green('✓ Restore completato'));
+  console.log(pc.dim(`  Positions:    ${inserted.positions} upsert (${skipped.positions} skip per legacy_id mancante)`));
+  console.log(pc.dim(`  Scores:       ${inserted.scores} upsert (${skipped.scores} skip per position_id orfano)`));
+  console.log(pc.dim(`  Applications: ${inserted.applications} upsert (${skipped.applications} skip per position_id orfano)`));
+  console.log(pc.dim(`  Cursor sync reset a ${nowIso}`));
+  console.log('');
+  void confirmed;
 }
 
 /**
@@ -1365,6 +1629,17 @@ export function registerCloudCommand(program) {
     .command('disable')
     .description('Rimuove il token dalla macchina locale (non revoca lato server)')
     .action(handleDisable);
+
+  // `restore` — disaster recovery: ricostruisce SQLite locale (positions /
+  // scores / applications) dallo snapshot cloud. Distinto da pull-desired-
+  // state (merge dei flag) e da push (delta locale -> cloud). Conferma
+  // esplicita interattiva, --confirm-restore per skip in CI.
+  cloud
+    .command('restore')
+    .description('Ricostruisce SQLite locale dallo snapshot cloud (positions/scores/applications)')
+    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
+    .option('--confirm-restore', 'Skip conferma interattiva (richiesto per CI / script)')
+    .action(handleRestore);
 
   // `daemon` e' pensato come PID 1 del container su VPS: ciclo push
   // periodico finche' non riceve SIGTERM da docker stop. Cosi' i dati
