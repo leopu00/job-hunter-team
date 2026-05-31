@@ -46,16 +46,37 @@ type WriteRequestResult = {
 };
 
 /**
- * Chiama `python3 shared/skills/write_request.py <id> --mode on` ed esce
- * SEMPRE con un JSON (anche su exit code != 0, perche' lo script lo
- * emette su validation failure prima di sys.exit(1)).
+ * Output del wrapper Python `geocode_request.py` (Geocoding-on-demand, V8).
  */
-function runWriteRequest(positionId: number, mode: "on" | "off"): WriteRequestResult {
+type GeocodeRequestResult = {
+  ok: boolean;
+  error?: string;
+  status_code?: string;
+  id?: number;
+  title?: string;
+  company?: string;
+  status?: string | null;
+  loc_city?: string | null;
+  loc_country_code?: string | null;
+  office_geocoded?: boolean;
+  previous?: number;
+  current?: number;
+};
+
+/**
+ * Helper generico per chiamare uno skill Python che emette JSON sul
+ * suo ultimo stdout line, anche su exit 1 (validation failure).
+ */
+function runJsonSkill<T>(
+  scriptName: string,
+  args: string[],
+  fallbackError: string,
+): T {
   const skillsDir = process.env.JHT_SKILLS_DIR ?? "/app/shared/skills";
   let stdout = "";
   try {
     stdout = execSync(
-      `python3 "${skillsDir}/write_request.py" ${positionId} --mode ${mode}`,
+      `python3 "${skillsDir}/${scriptName}" ${args.join(" ")}`,
       { encoding: "utf-8" }
     );
   } catch (err) {
@@ -66,10 +87,35 @@ function runWriteRequest(positionId: number, mode: "on" | "off"): WriteRequestRe
   }
   try {
     const lastLine = stdout.trim().split("\n").pop() ?? "{}";
-    return JSON.parse(lastLine) as WriteRequestResult;
+    return JSON.parse(lastLine) as T;
   } catch {
-    return { ok: false, error: "write_request.py: output non parseabile" };
+    return { ok: false, error: fallbackError } as T;
   }
+}
+
+/**
+ * Chiama `python3 shared/skills/write_request.py <id> --mode on` ed esce
+ * SEMPRE con un JSON (anche su exit code != 0, perche' lo script lo
+ * emette su validation failure prima di sys.exit(1)).
+ */
+function runWriteRequest(positionId: number, mode: "on" | "off"): WriteRequestResult {
+  return runJsonSkill<WriteRequestResult>(
+    "write_request.py",
+    [String(positionId), "--mode", mode],
+    "write_request.py: output non parseabile",
+  );
+}
+
+/**
+ * Chiama `python3 shared/skills/geocode_request.py <id> --mode on` ed
+ * emette JSON (stesso pattern di write_request).
+ */
+function runGeocodeRequest(positionId: number, mode: "on" | "off"): GeocodeRequestResult {
+  return runJsonSkill<GeocodeRequestResult>(
+    "geocode_request.py",
+    [String(positionId), "--mode", mode],
+    "geocode_request.py: output non parseabile",
+  );
 }
 
 /**
@@ -170,6 +216,57 @@ async function handleCommand(
           `#${result.id} <b>${result.title}</b>\n` +
           `<i>${result.company}</i> · score ${result.score ?? "?"}\n` +
           `Lo Scrittore inizia non appena il Capitano vede il flag (max ~5 min).`
+      );
+      break;
+    }
+
+    case "geo": {
+      // Geocoding-on-demand (V8): user-driven trigger via Telegram.
+      // Setta `positions.geocode_requested = 1` su SQLite locale; l'Analista
+      // (REGOLA-16 OPT-IN) processa la coda parallela `next-for-geocoding`
+      // alla prossima iterazione. Nessun guard di status (vedi
+      // shared/skills/geocode_request.py).
+      const positionId = Number.parseInt(args, 10);
+      if (!Number.isInteger(positionId) || positionId <= 0) {
+        await ctx.replyTo(
+          "Uso: <code>/geo &lt;position_id&gt;</code>\n" +
+            "Es: <code>/geo 42</code>"
+        );
+        return;
+      }
+
+      const result = runGeocodeRequest(positionId, "on");
+
+      if (!result.ok) {
+        const subject = result.title && result.company
+          ? `\n#${result.id} <b>${result.title}</b> · <i>${result.company}</i>`
+          : "";
+        await ctx.replyTo(`<b>❌</b> ${result.error ?? "Errore"}${subject}`);
+        return;
+      }
+
+      // Notify Capitano ad-hoc (idempotente: il flag e' su DB, l'Analista
+      // lo vedrebbe comunque al prossimo giro).
+      sendToCoordinator(
+        coordSession,
+        `[@utente -> @capitano] [TG] /geo ${positionId} -> geocode_requested=1 (${result.company} · ${result.title})`
+      );
+
+      const wasAlreadyOn = result.previous === 1;
+      const wasGeocoded = result.office_geocoded === true;
+      const header = wasAlreadyOn
+        ? "<b>↻ Geocoding gia' richiesto</b>"
+        : wasGeocoded
+          ? "<b>✓ Geocoding richiesto (ricalcolo)</b>"
+          : "<b>✓ Geocoding richiesto</b>";
+      const locLine = result.loc_city
+        ? `<i>${result.loc_city}${result.loc_country_code ? `, ${result.loc_country_code}` : ""}</i>`
+        : "<i>(senza loc_city, l'Analista skipperà se non trova materiale)</i>";
+      await ctx.replyTo(
+        `${header}\n` +
+          `#${result.id} <b>${result.title}</b>\n` +
+          `${result.company} · ${locLine}\n` +
+          `L'Analista processa la coda al prossimo giro (max ~5 min).`
       );
       break;
     }
