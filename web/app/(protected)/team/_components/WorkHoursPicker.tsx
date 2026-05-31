@@ -51,8 +51,13 @@ type PresetKey = "office" | "weekend" | "daytime" | "night" | "24-7" | "custom";
 
 const ALL_DAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DAY_LABELS: Record<Weekday, string> = {
-  mon: "Lun", tue: "Mar", wed: "Mer", thu: "Gio",
-  fri: "Ven", sat: "Sab", sun: "Dom",
+  mon: "Lun",
+  tue: "Mar",
+  wed: "Mer",
+  thu: "Gio",
+  fri: "Ven",
+  sat: "Sab",
+  sun: "Dom",
 };
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
@@ -60,30 +65,65 @@ const PRESETS: Record<
   Exclude<PresetKey, "custom">,
   { label: string; icon: string; cfg: WorkingHoursConfig | null }
 > = {
-  office:   { label: "Office (Lun-Ven 9-18)",  icon: "💼",
-              cfg: { timezone: "", windows: [{ days: ["mon","tue","wed","thu","fri"], start: "09:00", end: "18:00" }] } },
-  weekend:  { label: "Weekend (Sab-Dom 9-18)", icon: "🌴",
-              cfg: { timezone: "", windows: [{ days: ["sat","sun"], start: "09:00", end: "18:00" }] } },
-  daytime:  { label: "Tutti i giorni 9-18",    icon: "☀️",
-              cfg: { timezone: "", windows: [{ days: ALL_DAYS, start: "09:00", end: "18:00" }] } },
-  night:    { label: "Notturno (22-07)",       icon: "🌙",
-              cfg: { timezone: "", windows: [{ days: ALL_DAYS, start: "22:00", end: "07:00" }] } },
-  "24-7":   { label: "24/7 (sempre attivo)",   icon: "🌐", cfg: null },
+  office: {
+    label: "Office (Lun-Ven 9-18)",
+    icon: "💼",
+    cfg: {
+      timezone: "",
+      windows: [
+        {
+          days: ["mon", "tue", "wed", "thu", "fri"],
+          start: "09:00",
+          end: "18:00",
+        },
+      ],
+    },
+  },
+  weekend: {
+    label: "Weekend (Sab-Dom 9-18)",
+    icon: "🌴",
+    cfg: {
+      timezone: "",
+      windows: [{ days: ["sat", "sun"], start: "09:00", end: "18:00" }],
+    },
+  },
+  daytime: {
+    label: "Tutti i giorni 9-18",
+    icon: "☀️",
+    cfg: {
+      timezone: "",
+      windows: [{ days: ALL_DAYS, start: "09:00", end: "18:00" }],
+    },
+  },
+  night: {
+    label: "Notturno (22-07)",
+    icon: "🌙",
+    cfg: {
+      timezone: "",
+      windows: [{ days: ALL_DAYS, start: "22:00", end: "07:00" }],
+    },
+  },
+  "24-7": { label: "24/7 (sempre attivo)", icon: "🌐", cfg: null },
 };
 
 function detectLocalTz(): string {
-  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; }
-  catch { return "UTC"; }
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
 }
 
 /* ─── Heatmap helpers ───────────────────────────────────────────────── */
 
-type CellGrid = boolean[][];  // [day_idx 0..6][hour 0..23]
+type CellGrid = boolean[][]; // [day_idx 0..6][hour 0..23]
 
 function gridFromConfig(cfg: WorkingHoursConfig | null): CellGrid {
-  const grid: CellGrid = Array.from({ length: 7 }, () => new Array(24).fill(false));
+  const grid: CellGrid = Array.from({ length: 7 }, () =>
+    new Array(24).fill(false),
+  );
   if (!cfg || !cfg.windows?.length) {
-    return grid.map(row => row.map(() => true));  // 24/7 = tutto ON
+    return grid.map((row) => row.map(() => true)); // 24/7 = tutto ON
   }
   for (const w of cfg.windows) {
     const [sh, sm] = w.start.split(":").map(Number);
@@ -97,8 +137,8 @@ function gridFromConfig(cfg: WorkingHoursConfig | null): CellGrid {
       for (let h = 0; h < 24; h++) {
         const hMin = h * 60;
         const inside = wraps
-          ? (hMin >= startMin || hMin < endMin)
-          : (hMin >= startMin && hMin < endMin);
+          ? hMin >= startMin || hMin < endMin
+          : hMin >= startMin && hMin < endMin;
         if (inside) grid[di][h] = true;
       }
     }
@@ -112,20 +152,28 @@ function gridFromConfig(cfg: WorkingHoursConfig | null): CellGrid {
  *  i loro days. Risultato: schema compatto e valido. */
 function configFromGrid(grid: CellGrid, timezone: string): WorkingHoursConfig {
   // 1) Per ogni giorno → lista di (start_hour, end_hour) chiuso aperto
-  const perDay: Array<Array<{ start: number; end: number }>> = grid.map((row) => {
-    const runs: Array<{ start: number; end: number }> = [];
-    let i = 0;
-    while (i < 24) {
-      if (!row[i]) { i++; continue; }
-      const s = i;
-      while (i < 24 && row[i]) i++;
-      runs.push({ start: s, end: i });
-    }
-    return runs;
-  });
+  const perDay: Array<Array<{ start: number; end: number }>> = grid.map(
+    (row) => {
+      const runs: Array<{ start: number; end: number }> = [];
+      let i = 0;
+      while (i < 24) {
+        if (!row[i]) {
+          i++;
+          continue;
+        }
+        const s = i;
+        while (i < 24 && row[i]) i++;
+        runs.push({ start: s, end: i });
+      }
+      return runs;
+    },
+  );
 
   // 2) Raggruppa run-by-run per chiave (start,end) → days
-  const byKey = new Map<string, { start: number; end: number; days: Weekday[] }>();
+  const byKey = new Map<
+    string,
+    { start: number; end: number; days: Weekday[] }
+  >();
   perDay.forEach((runs, di) => {
     for (const r of runs) {
       const key = `${r.start}-${r.end}`;
@@ -145,13 +193,13 @@ function configFromGrid(grid: CellGrid, timezone: string): WorkingHoursConfig {
 }
 
 function isAllOn(grid: CellGrid): boolean {
-  return grid.every(row => row.every(cell => cell));
+  return grid.every((row) => row.every((cell) => cell));
 }
 
 /* ─── Bar chart per-giorno ──────────────────────────────────────────── */
 
 function hoursPerDay(grid: CellGrid): number[] {
-  return grid.map(row => row.filter(Boolean).length);
+  return grid.map((row) => row.filter(Boolean).length);
 }
 
 /* ─── Preset detection ──────────────────────────────────────────────── */
@@ -164,10 +212,12 @@ function detectPreset(cfg: WorkingHoursConfig | null): PresetKey {
     if (!p.cfg) continue;
     const pw = p.cfg.windows[0];
     if (
-      pw.start === w.start && pw.end === w.end &&
+      pw.start === w.start &&
+      pw.end === w.end &&
       pw.days.length === w.days.length &&
       pw.days.every((d) => w.days.includes(d))
-    ) return key as PresetKey;
+    )
+      return key as PresetKey;
   }
   return "custom";
 }
@@ -177,9 +227,13 @@ function fmtTransition(iso: string | null | undefined): string {
   try {
     const d = new Date(iso);
     return d.toLocaleString(undefined, {
-      weekday: "short", hour: "2-digit", minute: "2-digit",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
     });
-  } catch { return iso; }
+  } catch {
+    return iso;
+  }
 }
 
 function computeWeeklyHours(cfg: WorkingHoursConfig | null): number {
@@ -217,48 +271,56 @@ export default function WorkHoursPicker() {
     }
   }, [toast]);
 
-  useEffect(() => { loadState(); }, [loadState]);
+  useEffect(() => {
+    loadState();
+  }, [loadState]);
 
-  const save = useCallback(async (next: WorkingHoursConfig | null) => {
-    setSaving(true);
-    try {
-      const r = await fetch("/api/team/working-hours", {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ working_hours: next }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
-      setCfg(data.working_hours ?? null);
-      setPreview(data.preview ?? null);
+  const save = useCallback(
+    async (next: WorkingHoursConfig | null) => {
+      setSaving(true);
+      try {
+        const r = await fetch("/api/team/working-hours", {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ working_hours: next }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+        setCfg(data.working_hours ?? null);
+        setPreview(data.preview ?? null);
+        setEditGrid(null);
+        toast(
+          next === null
+            ? "Team 24/7 (working hours rimosse)"
+            : "Working hours salvate",
+          "success",
+        );
+      } catch (e: any) {
+        toast(`Errore: ${e.message}`, "error");
+      } finally {
+        setSaving(false);
+      }
+    },
+    [toast],
+  );
+
+  const applyPreset = useCallback(
+    (key: PresetKey) => {
+      if (key === "custom") {
+        // Entra in custom: clona il config corrente nella editGrid.
+        setEditGrid(gridFromConfig(cfg));
+        return;
+      }
       setEditGrid(null);
-      toast(
-        next === null
-          ? "Team 24/7 (working hours rimosse)"
-          : "Working hours salvate",
-        "success",
-      );
-    } catch (e: any) {
-      toast(`Errore: ${e.message}`, "error");
-    } finally {
-      setSaving(false);
-    }
-  }, [toast]);
-
-  const applyPreset = useCallback((key: PresetKey) => {
-    if (key === "custom") {
-      // Entra in custom: clona il config corrente nella editGrid.
-      setEditGrid(gridFromConfig(cfg));
-      return;
-    }
-    setEditGrid(null);
-    const p = PRESETS[key];
-    if (!p.cfg) {
-      save(null);
-      return;
-    }
-    save({ ...p.cfg, timezone: cfg?.timezone || detectLocalTz() });
-  }, [cfg, save]);
+      const p = PRESETS[key];
+      if (!p.cfg) {
+        save(null);
+        return;
+      }
+      save({ ...p.cfg, timezone: cfg?.timezone || detectLocalTz() });
+    },
+    [cfg, save],
+  );
 
   const toggleCell = (di: number, hr: number) => {
     if (!editGrid) return;
@@ -279,8 +341,10 @@ export default function WorkHoursPicker() {
 
   const toggleHourCol = (hr: number) => {
     if (!editGrid) return;
-    const allOn = editGrid.every(row => row[hr]);
-    const next = editGrid.map(row => row.map((c, h) => (h === hr ? !allOn : c)));
+    const allOn = editGrid.every((row) => row[hr]);
+    const next = editGrid.map((row) =>
+      row.map((c, h) => (h === hr ? !allOn : c)),
+    );
     setEditGrid(next);
   };
 
@@ -325,7 +389,8 @@ export default function WorkHoursPicker() {
         <div>
           <h2 className="text-lg font-medium">📅 Working hours</h2>
           <p className="text-xs opacity-60 mt-1">
-            Le ore in cui il team lavora. Il budget weekly viene distribuito solo su queste ore.
+            Le ore in cui il team lavora. Il budget weekly viene distribuito
+            solo su queste ore.
           </p>
         </div>
         <div className="text-right">
@@ -371,12 +436,17 @@ export default function WorkHoursPicker() {
       {isCustom && (
         <div className="space-y-4 mt-4 pt-4 border-t border-[var(--color-border)]">
           <div>
-            <label className="block text-xs opacity-60 mb-1">Timezone IANA</label>
+            <label className="block text-xs opacity-60 mb-1">
+              Timezone IANA
+            </label>
             <input
               type="text"
               value={cfg?.timezone ?? detectLocalTz()}
               onChange={(e) =>
-                setCfg({ ...(cfg ?? { windows: [] }), timezone: e.target.value })
+                setCfg({
+                  ...(cfg ?? { windows: [] }),
+                  timezone: e.target.value,
+                })
               }
               placeholder={detectLocalTz()}
               className="px-2 py-1 rounded bg-transparent border border-[var(--color-border)] text-sm w-64"
@@ -397,7 +467,8 @@ export default function WorkHoursPicker() {
 
           <div className="overflow-x-auto">
             <p className="text-xs opacity-60 mb-2">
-              Clicca le celle per attivare/disattivare. Click sul giorno o sull&apos;ora per toggle riga/colonna.
+              Clicca le celle per attivare/disattivare. Click sul giorno o
+              sull&apos;ora per toggle riga/colonna.
             </p>
             <table className="border-separate" style={{ borderSpacing: "1px" }}>
               <thead>
@@ -433,7 +504,7 @@ export default function WorkHoursPicker() {
                             ? "bg-orange-500 hover:bg-orange-400"
                             : "bg-white/5 hover:bg-white/10")
                         }
-                        title={`${DAY_LABELS[d]} ${String(h).padStart(2,"0")}:00`}
+                        title={`${DAY_LABELS[d]} ${String(h).padStart(2, "0")}:00`}
                       />
                     ))}
                   </tr>
@@ -448,7 +519,9 @@ export default function WorkHoursPicker() {
               if (isAllOn(editGrid)) {
                 save(null); // tutto ON = 24/7 = nessun config
               } else {
-                save(configFromGrid(editGrid, cfg?.timezone || detectLocalTz()));
+                save(
+                  configFromGrid(editGrid, cfg?.timezone || detectLocalTz()),
+                );
               }
             }}
             disabled={saving || weeklyHours === 0}
@@ -457,7 +530,10 @@ export default function WorkHoursPicker() {
             {saving ? "Salvataggio…" : "💾 Salva custom"}
           </button>
           <button
-            onClick={() => { setEditGrid(null); loadState(); }}
+            onClick={() => {
+              setEditGrid(null);
+              loadState();
+            }}
             disabled={saving}
             className="ml-2 px-4 py-1.5 rounded-md border border-[var(--color-border)] hover:border-white/30 text-sm"
           >
@@ -497,10 +573,13 @@ export default function WorkHoursPicker() {
         <div className="mt-6 pt-4 border-t border-[var(--color-border)]">
           <div className="flex items-baseline justify-between mb-2">
             <div className="text-xs opacity-60">
-              Sweet spot — provider <span className="font-mono opacity-100">{provInfo.provider}</span>
+              Sweet spot — provider{" "}
+              <span className="font-mono opacity-100">{provInfo.provider}</span>
             </div>
             {unlimited ? (
-              <div className="text-xs text-green-400">🟢 Weekly unlimited (nessun vincolo)</div>
+              <div className="text-xs text-green-400">
+                🟢 Weekly unlimited (nessun vincolo)
+              </div>
             ) : (
               <div className="text-xs opacity-70 font-mono">
                 {minH}h ↔ {maxH}h
@@ -519,7 +598,10 @@ export default function WorkHoursPicker() {
                   : "bg-yellow-500/10 text-yellow-300 border border-yellow-500/30")
               }
             >
-              {sweetSpotWarn.kind === "low" ? "⚠️ Sotto sweet spot" : "⚠️ Sopra sweet spot"}: {sweetSpotWarn.msg}
+              {sweetSpotWarn.kind === "low"
+                ? "⚠️ Sotto sweet spot"
+                : "⚠️ Sopra sweet spot"}
+              : {sweetSpotWarn.msg}
             </div>
           )}
         </div>
@@ -530,10 +612,14 @@ export default function WorkHoursPicker() {
         <div className="mt-6 pt-4 border-t border-[var(--color-border)] grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <div className="text-xs opacity-60">Fase corrente</div>
-            <div className={
-              "font-mono mt-1 " +
-              (preview.work_phase === "ON" ? "text-green-400" : "text-orange-400")
-            }>
+            <div
+              className={
+                "font-mono mt-1 " +
+                (preview.work_phase === "ON"
+                  ? "text-green-400"
+                  : "text-orange-400")
+              }
+            >
               {preview.work_phase === "ON" ? "🟢 ON" : "🟠 OFF"}
             </div>
           </div>
@@ -547,7 +633,9 @@ export default function WorkHoursPicker() {
           </div>
           <div>
             <div className="text-xs opacity-60">Prossima transizione</div>
-            <div className="font-mono mt-1">{fmtTransition(preview.next_phase_transition_at)}</div>
+            <div className="font-mono mt-1">
+              {fmtTransition(preview.next_phase_transition_at)}
+            </div>
           </div>
           <div>
             <div className="text-xs opacity-60">Ratio cap-5h / weekly</div>
@@ -572,8 +660,14 @@ export default function WorkHoursPicker() {
 /* ─── Sweet-spot bar (sub-component) ────────────────────────────────── */
 
 function SweetSpotBar({
-  weeklyHours, minH, maxH,
-}: { weeklyHours: number; minH: number; maxH: number }) {
+  weeklyHours,
+  minH,
+  maxH,
+}: {
+  weeklyHours: number;
+  minH: number;
+  maxH: number;
+}) {
   const scaleMax = Math.max(maxH * 1.1, 168);
   const minPct = (minH / scaleMax) * 100;
   const maxPct = (maxH / scaleMax) * 100;
@@ -593,8 +687,24 @@ function SweetSpotBar({
       />
       <div className="absolute inset-0 flex items-center justify-between px-2 text-[10px] opacity-60 font-mono pointer-events-none">
         <span>0h</span>
-        <span style={{ position: "absolute", left: `${minPct}%`, transform: "translateX(-50%)" }}>min {minH}h</span>
-        <span style={{ position: "absolute", left: `${maxPct}%`, transform: "translateX(-50%)" }}>max {maxH}h</span>
+        <span
+          style={{
+            position: "absolute",
+            left: `${minPct}%`,
+            transform: "translateX(-50%)",
+          }}
+        >
+          min {minH}h
+        </span>
+        <span
+          style={{
+            position: "absolute",
+            left: `${maxPct}%`,
+            transform: "translateX(-50%)",
+          }}
+        >
+          max {maxH}h
+        </span>
         <span>{Math.round(scaleMax)}h</span>
       </div>
     </div>
