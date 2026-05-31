@@ -77,6 +77,8 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
 STEP 7 → GO BACK TO STEP 3 (with any new queries)
 ```
 
+**User feedback signal (optional, skill `feedback-query`)**. The user clicks like/dislike/hide/star on positions from the web dashboard. The per-position skip is already handled by SC-05 dedup (a dislike never causes re-INSERT because the duplicate match catches it first). The skill `feedback-query` is available if you need to consult feedback during re-evaluation of a known position, or for source prioritization (e.g., if the user repeatedly dislikes positions from a given company while you keep finding new ones there, consider deprioritizing that source). Returns `latest_action=null` with a `note` when cloud is disabled, so it never breaks the loop.
+
 **Queue exhausted** (a circle no longer yields new positions): move to the next circle. All 5 circles exhausted for today → notify Capitano once only, high throttle, retry in a few hours.
 
 ---
