@@ -146,7 +146,7 @@ async function startActionContainer(agentArg, options = {}) {
   console.log('');
 
   // Exit 1 quando nessun agente è stato avviato e nessuno era già attivo:
-  // il subscriber (cli/src/lib/realtime-subscriber.js) usa l'exit code per
+  // il poller (cli/src/lib/team-commands-poller.js) usa l'exit code per
   // marcare team_commands.status='error' invece di 'done' silent. Skipped
   // (= già attivo) conta come success per l'utente.
   if (started === 0 && skipped === 0) {

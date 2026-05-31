@@ -26,7 +26,7 @@
         ▲                                                            ▲
         │  ⬇ 2 long-pollers HTTP (no WS)                            │  POST/PATCH
         │     (a) team-state-reconciler.js   → /api/team-state      │  da browser
-        │     (b) realtime-subscriber.js     → /api/cloud-sync/    │
+        │     (b) team-commands-poller.js    → /api/cloud-sync/    │
         │                                       team-commands       │
         │                                                            │
         │      desired-state lanes                                   │
@@ -51,7 +51,7 @@
 | `candidate_profiles`, `user_onboarding_state`, `encrypted_user_blobs` | Event-driven | invariati |
 | `pending_user_messages` (mig 010) | Full-push (volume piccolo) | canale fallback notifiche agent→user |
 | `sentinel_ticks` (mig 013) | ⛔ **rimosso dal push** (`f68a127d`) | ~720 row/h/utente, solo container ne ha bisogno |
-| `team_commands` (mig 012) | ⛔ scrittura container disattivata | resta vivo per il subscriber legacy, vedi sotto |
+| `team_commands` (mig 012) | ⛔ scrittura container disattivata | resta vivo per il poller legacy, vedi sotto |
 
 Due path implementativi equivalenti propagano i delta:
 - **CLI daemon** `cli/src/commands/cloud.js` → POST `/api/cloud-sync/push`
@@ -62,13 +62,13 @@ Due path implementativi equivalenti propagano i delta:
 | Lane | Tabella cloud | Reader container | Trigger UI |
 |---|---|---|---|
 | **Start/stop/restart team** | `team_state` (mig 019) | `cli/src/lib/team-state-reconciler.js:251` long-poll 5s su `/api/team-state` | bottoni Start/Stop dashboard |
-| **Comandi legacy bus** | `team_commands` (mig 012) | `cli/src/lib/realtime-subscriber.js:264` long-poll 5s su `/api/cloud-sync/team-commands?status=pending` | residuo cutover — handleAction single-agent ancora qui |
+| **Comandi legacy bus** | `team_commands` (mig 012) | `cli/src/lib/team-commands-poller.js:264` long-poll 5s su `/api/cloud-sync/team-commands?status=pending` | residuo cutover — handleAction single-agent ancora qui |
 | **Writer-on-demand** | `positions.write_requested` (mig 024) | Capitano via `shared/skills/db_query.py:344` query `next-for-scrittore` → SQLite **locale** | bottone "Scrivi CV" dashboard + Telegram `/cv` |
 | **Chat utente→agente** | `user_to_agent_messages` (mig 019) | `cli/src/lib/user-messages-poller.js` long-poll 5s su `/api/messages?status=pending`, claim atomico PATCH delivered, forward `jht-tmux-send` | POST `/api/messages` |
 | **Like/dislike position** | `position_feedback` (mig 019) | `shared/skills/feedback_query.py check <legacy_id>` (Scorer step 5 multiplier; Scout signal opzionale) | POST `/api/positions/{id}/feedback` |
 | **Agent→user fallback** | `pending_user_messages` (mig 010) | bidirezionale: scritto dal container, letto da browser via Realtime | notifiche utente |
 
-**Nota architetturale sulla nomenclatura**: `realtime-subscriber.js` è **fuorviante** — il file dichiara esplicitamente (riga 10-18) di NON usare WebSocket Realtime. Fa long-poll HTTP perché `cloud.json` non conserva il refresh-token Supabase. Il nome è ereditato dall'intent originale, da rinominare in `team-commands-poller.js` quando si chiude il cutover #13.
+**Nota storica sulla nomenclatura**: il file era `realtime-subscriber.js` ed era **fuorviante** — non usa WebSocket Realtime, fa long-poll HTTP (perché `cloud.json` non conserva il refresh-token Supabase). Rinominato `team-commands-poller.js` il 2026-05-31. Il **comando CLI** resta `jht cloud realtime-listen` per compat con i pid1 deployati; sarà ribattezzato `team-commands-listen` quando si chiude il cutover #13 e il file viene droppato.
 
 **Ordine di grandezza atteso post-decimazione**: write rate –90% circa.
 
@@ -198,7 +198,7 @@ Entrambe le event lane sono ora osservate (commit `4774c190` + `093027c1`, 2026-
 
 3. ✅ **P1 — Reader agenti per `position_feedback`** *(DONE 2026-05-31, commit `093027c1`)*. Skill `shared/skills/feedback_query.py check <legacy_id>` + `agents/_skills/feedback-query/SKILL.md`. **Scorer**: Step 5 obbligatorio post-score-base con multiplier (like ×1.10, star ×1.15, dislike ×0.85, hide → excluded), cap 100. **Scout**: skill esposta come signal opzionale (skip per-posizione gia' coperto da SC-05 dedup). Fallback neutro su cloud-disabled. **Out of scope MVP** (tracciato come follow-up): aggregato `recent` company-level per Scout (richiede endpoint dedicato + push delta) e Capitano routing su feedback ricorrenti.
 
-4. 🟢 **P1 — Subscriber on-demand** *(scope-reduced 2026-05-31)*. Kill/spawn duro di `team-state-reconciler` e `realtime-subscriber` agganciato a `is_running` NON è fattibile: sono i poller che ricevono il `should_run=true` dal browser. Per `user-messages-poller` il problema è coperto dal polling adattivo (#5). Follow-up: tier `deep-idle` (60s+) per `team-state-reconciler` quando team is_running=false stabilmente.
+4. 🟢 **P1 — Subscriber on-demand** *(scope-reduced 2026-05-31)*. Kill/spawn duro di `team-state-reconciler` e `team-commands-poller` agganciato a `is_running` NON è fattibile: sono i poller che ricevono il `should_run=true` dal browser. Per `user-messages-poller` il problema è coperto dal polling adattivo (#5). Follow-up: tier `deep-idle` (60s+) per `team-state-reconciler` quando team is_running=false stabilmente.
 
 5. ✅ **P1 — Polling adattivo** *(DONE 2026-05-31, commit `acc293de`, scope-reduced)*. `user-messages-poller` 3 tier: `active` 5s, `idle` 30s, `deep-idle` 120s. Proxy onesto su "ultima consegna riuscita" invece di `team_state.last_user_activity_at` (che richiederebbe heartbeat browser-side). Riduce carico Vercel ~90% in caso idle h24. Follow-up: estendere lo stesso pattern a `team-state-reconciler` (tier 5s/15s/30s) e implementare il heartbeat browser-side come second-stage.
 
@@ -208,10 +208,10 @@ Entrambe le event lane sono ora osservate (commit `4774c190` + `093027c1`, 2026-
 
 7. **P1 — `JHT-LOCAL-NO-API`**: `web/lib/queries.ts` switcha su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx`.
 
-8. **P1 — Cutover `team_commands`→`team_state` finale + rename `realtime-subscriber.js`**. UI bulk Start/Stop ✅ done. Resta:
-   - `handleAction` per singolo agente ancora su `useTeamCommandPoller` → migrare a `team_state.agents_enabled`
-   - Verifica E2E + drop `team_commands` (Step 6) + rimozione `realtime-subscriber.js` (o suo restyle come reader generico di `user_to_agent_messages`)
-   - Il nome `realtime-subscriber.js` è ingannevole (vedi nota architetturale sopra), rinominare in `team-commands-poller.js` finché vive
+8. **P1 — Cutover `team_commands`→`team_state` finale**. UI bulk Start/Stop ✅ done. Rename file `realtime-subscriber.js → team-commands-poller.js` ✅ done 2026-05-31. Resta:
+   - `handleAction` per singolo agente ancora su `useTeamCommandPoller` → migrare a `team_state.agents_enabled` (richiede estensione reconciler per single-agent + observed mirror `agents_running`, scope architetturale)
+   - Verifica E2E + drop tabella `team_commands` + rimozione file `team-commands-poller.js`
+   - Rename comando CLI `jht cloud realtime-listen` → `team-commands-listen` al drop finale (oggi è ancora `realtime-listen` per compat pid1)
 
 #### P1 — Follow-up tombstone (post commit `6499b3db`)
 

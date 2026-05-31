@@ -72,8 +72,9 @@ dalla VPS** verso il web con il `jht_sync_…` token già in `cloud.json`.
 │   pid1.js  →  spawnLabeled('realtime', node jht.js cloud realtime-    │
 │                              listen)   ← parte se cloud.json esiste   │
 │                                                                       │
-│   cloud realtime-listen  →  runRealtimeSubscriber() in cli/src/lib/   │
-│      realtime-subscriber.js                                           │
+│   cloud realtime-listen  →  runTeamCommandsPoller() in cli/src/lib/   │
+│      team-commands-poller.js  (ex realtime-subscriber.js, rename      │
+│      2026-05-31 — il nome "realtime" è ingannevole: HTTP long-poll)   │
 │        loop:                                                          │
 │          GET /api/cloud-sync/team-commands?status=pending             │
 │          for each cmd:                                                │
@@ -88,10 +89,10 @@ Latenza misurata smoke-test 2026-05-14:
 
 ```
 14T15:58:24  Web INSERT  → status=pending
-14T15:58:28  Subscriber  → poll.found-pending (latency 4s)
-14T15:58:29  Subscriber  → exec.start jht team start
-14T15:59:14  Subscriber  → exec.exit code=0  (45s exec)
-14T15:59:15  DB row     → status=done, processed_at, error=null
+14T15:58:28  Poller      → poll.found-pending (latency 4s)
+14T15:58:29  Poller      → exec.start jht team start
+14T15:59:14  Poller      → exec.exit code=0  (45s exec)
+14T15:59:15  DB row      → status=done, processed_at, error=null
 ```
 
 ---
@@ -105,9 +106,9 @@ Latenza misurata smoke-test 2026-05-14:
 | Web — pull (VPS) | `web/app/api/cloud-sync/team-commands/route.ts` | `GET ?status=pending&limit=20` con `verifyBearerToken(jht_sync_)`. Admin client bypassa RLS e filtra per `user_id` del token. |
 | Web — patch (VPS) | `web/app/api/cloud-sync/team-commands/[id]/route.ts` | `PATCH` per claim atomico (`status='pending'` precondition) e mark done/error. |
 | Web — UI | `web/app/(protected)/team/page.tsx` | `dispatchTeamCommand('start')` → fetch /api/team/command, fallback a `/api/team/start-all` per local-mode. |
-| CLI subscriber | `cli/src/lib/realtime-subscriber.js` | Long-running polling loop. Heartbeat 5min, SIGTERM clean shutdown, backoff esponenziale. |
-| CLI subcommand | `cli/src/commands/cloud.js` | Registra `jht cloud realtime-listen` + (legacy) salva `supabase_url/refresh_token` in `cloud.json` durante `pair` per uso futuro. |
-| PID1 | `cli/src/commands/pid1.js` | Co-spawn subscriber accanto a `cloud daemon` quando `JHT_HOST_TYPE=vps` + `cloud.json` esistente. Auto-restart in 5s su crash. Watch su `cloud.json` per hot-start dopo pairing. |
+| CLI poller | `cli/src/lib/team-commands-poller.js` | Long-running polling loop. Heartbeat 5min, SIGTERM clean shutdown, backoff esponenziale. (Ex `realtime-subscriber.js`, rinominato 2026-05-31.) |
+| CLI subcommand | `cli/src/commands/cloud.js` | Registra `jht cloud realtime-listen` + (legacy) salva `supabase_url/refresh_token` in `cloud.json` durante `pair` per uso futuro. Il nome `realtime-listen` resta per compat pid1 deployati. |
+| PID1 | `cli/src/commands/pid1.js` | Co-spawn poller accanto a `cloud daemon` quando `JHT_HOST_TYPE=vps` + `cloud.json` esistente. Auto-restart in 5s su crash. Watch su `cloud.json` per hot-start dopo pairing. |
 
 ---
 
