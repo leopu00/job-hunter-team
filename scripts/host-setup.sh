@@ -85,24 +85,27 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
   case "$JHT_LANG_DEFAULT" in
     it) DEFAULT_LABEL="[2]" ;;
     hu) DEFAULT_LABEL="[3]" ;;
+    es) DEFAULT_LABEL="[4]" ;;
     *)  DEFAULT_LABEL="[1]" ;;
   esac
   printf "\n${CYAN}━━━ Setup host (preflight) ━━━${RESET}\n\n"
-  printf "Choose your language / Scegli la lingua / Válassz nyelvet:\n\n"
+  printf "Choose your language / Scegli la lingua / Válassz nyelvet / Elige tu idioma:\n\n"
   printf "  1) ${BOLD}English${RESET}\n"
   printf "  2) ${BOLD}Italiano${RESET}\n"
-  printf "  3) ${BOLD}Magyar${RESET}\n\n"
-  printf "Choice / Scelta / Választás %s: " "$DEFAULT_LABEL"
+  printf "  3) ${BOLD}Magyar${RESET}\n"
+  printf "  4) ${BOLD}Español${RESET}\n\n"
+  printf "Choice / Scelta / Választás / Elección %s: " "$DEFAULT_LABEL"
   read -r LANG_CHOICE
   case "$LANG_CHOICE" in
     1) JHT_LANG=en ;;
     2) JHT_LANG=it ;;
     3) JHT_LANG=hu ;;
+    4) JHT_LANG=es ;;
     "") : ;;  # accept default already in JHT_LANG
-    *) warn "Invalid / non valido / érvénytelen — using default ($JHT_LANG)" ;;
+    *) warn "Invalid / non valido / érvénytelen / no válido — using default ($JHT_LANG)" ;;
   esac
 fi
-ok "Language / Lingua / Nyelv: $JHT_LANG"
+ok "Language / Lingua / Nyelv / Idioma: $JHT_LANG"
 
 # Persist subito cosi' se host-setup viene interrotto/relaunchato la
 # scelta resta valida. Il blocco "host type + swap" piu' giu' aggiunge
