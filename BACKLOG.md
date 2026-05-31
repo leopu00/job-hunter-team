@@ -174,7 +174,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ⬜ **P1 — Cutover `team_commands` → `team_state` finale + rename `realtime-subscriber.js`** — `handleAction` singolo agente ancora su `useTeamCommandPoller`; UI bulk ✅. Rinominare `cli/src/lib/realtime-subscriber.js` → `team-commands-poller.js` (nome ingannevole: fa long-poll HTTP, non WebSocket, vedi nota architetturale nel doc)
 - ✅ **P1 — Geocoding opt-in/out per-position** *(DONE 2026-05-31, 4 commit `6e2b75bf`+`48f803f3`+`9a846035`+`32b917ca`)*. Replica esatta del pattern Writer-on-demand: SQLite V8 + Supabase mig 027 (`positions.geocode_requested` + `geocode_requested_at` + partial index), push delta + pull-desired-state cablati, endpoint POST/DELETE `/api/positions/[legacyId]/geocode-request` con dual-path local/cloud, button "Geocodifica/Ricalcola" nella detail page, Analista REGOLA-16 diventa OPT-IN (skippa silenziosamente quando flag=0) + nuova coda parallela `next-for-geocoding` per posizioni gia' processate. **Scope**: solo analista.it.md (EN baseline non aveva REGOLA-16). **Follow-up**: Telegram skill `/geo <id>` (stesso pattern di `/cv`), allineamento EN/IT.
 - ⬜ **P1 — Feedback loop esteso** — `position_feedback` + `comment`, `score`, `direction` (more_like_this/less_like_this)
-- ⬜ **P1 — `JHT-LOCAL-NO-API`** — `web/lib/queries.ts` switcha su `local-queries.ts` quando `cloud.json.enabled=false`
+- ✅ **P1 — `JHT-LOCAL-NO-API`** *(DONE 2026-05-31, commit `193d06fd`)*. Privacy-first switch: `web/lib/workspace.ts` espone `isCloudEnabled()` (legge `~/.jht/cloud.json`) e `isLocalOnlyMode()` (workspaceHasDb && !isCloudEnabled). `queries.ts` era già a posto (pattern `if (ws()) return local.X()`). Patch a `layout.tsx`, `dashboard/page.tsx`, `map/page.tsx`, `positions/page.tsx`: skip `supabase.auth.getUser()` e fetch Supabase quando localOnly=true. Su Vercel/remote sempre false (no SQLite locale), comportamento immutato. Localhost+cloud paired idem (dual-write). Localhost+cloud disabled → 100% local, zero chiamate Supabase.
 
 **🟡 Pending P2**
 - ⬜ Account Supabase mismatch warning UI (memoria `project_supabase_dual_accounts`)
@@ -186,12 +186,15 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ⬜ **"Enable cloud sync" toggle** in desktop launcher + CLI wizard
 - ⬜ **Self-hosted Supabase docs** (BYO backend for technical users)
 
-##### 🔌 [JHT-LOCAL-NO-API] Local PC mode bypassa Supabase
+##### ✅ [JHT-LOCAL-NO-API] Local PC mode bypassa Supabase — DONE 2026-05-31
 
 - **Decisione 2026-05-20** ([`cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md)): in Local PC mode (`cloud.json.enabled=false`) il web bypassa Supabase e legge direttamente `jobs.db` via `web/lib/local-queries.ts`.
-- **Done:** `local-queries.ts` esiste e funziona ([`web/lib/local-queries.ts`](web/lib/local-queries.ts), commit `cc52acca` ha esteso il fallback).
-- **Pending:** `web/lib/queries.ts` deve switchare su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx` per consumi residui.
-- **Priority:** 🟡 P1 (privacy-first feature + sblocca path Local PC mode senza touch Supabase).
+- **Done 2026-05-31 (commit `193d06fd`):**
+  - `web/lib/workspace.ts` espone `isCloudEnabled()` (legge `~/.jht/cloud.json`) e `isLocalOnlyMode()` (workspaceHasDb && !isCloudEnabled).
+  - `queries.ts` era già a posto via pattern `if (await ws()) return local.X()`.
+  - Patch a `(protected)/layout.tsx`, `dashboard/page.tsx`, `map/page.tsx`, `positions/page.tsx`: skip `supabase.auth.getUser()` + fetch Supabase quando `localOnly=true`.
+- **Casi:** Vercel/remote → localOnly=false sempre (no SQLite locale, comportamento immutato). Localhost+cloud paired → localOnly=false (dual-write attuale). Localhost+cloud disabled → 100% local, zero chiamate Supabase.
+- **Follow-up:** allineare anche `profile/page.tsx` (gia' aveva check `!isLocalRequest()` ma puo' essere unificato con `isLocalOnlyMode()` per coerenza), e `(protected)/settings/cloud-sync/CloudSyncClient.tsx` (client component, gestione manuale del pairing — ok cosi'). Non-blocker.
 
 ##### 🚦 [INFRA-VERCEL-QUOTA] Vercel quota exhaustion — sostenibilità post-incident 2026-05-22 🟢 quasi tutto done
 
