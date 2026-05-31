@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 // Dispatch comando team via team_commands bus. Inserisce una riga
-// in DB; il subscriber sulla VPS (cli/src/lib/realtime-subscriber.js)
+// in DB; il poller sulla VPS (cli/src/lib/team-commands-poller.js)
 // polla l'endpoint /api/cloud-sync/team-commands e esegue il comando
 // dentro il container. Il client può SELECT sulla stessa riga (RLS=own)
 // per il feedback di processing (pending → running → done|error).
