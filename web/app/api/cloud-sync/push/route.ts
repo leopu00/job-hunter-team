@@ -116,12 +116,23 @@ interface SentinelTickIn {
   raw?: Record<string, unknown> | null;
 }
 
+// Tombstones (SQLite V7): righe (table_name, legacy_id, deleted_at)
+// emesse dai trigger BEFORE DELETE su positions/scores/applications.
+// Il receive le interpreta come soft-delete cloud: UPDATE deleted_at.
+// Vedi mig 025 + shared/skills/_db.py _migrate_v6_to_v7_tombstones.
+interface TombstoneIn {
+  table_name: "positions" | "scores" | "applications";
+  legacy_id: number;
+  deleted_at: string; // ISO timestamp client-side (preserva il "quando")
+}
+
 interface PushBody {
   positions?: PositionIn[];
   scores?: ScoreIn[];
   applications?: ApplicationIn[];
   pending_user_messages?: PendingMessageIn[];
   sentinel_ticks?: SentinelTickIn[];
+  tombstones?: TombstoneIn[];
   profile?: ProfileIn;
 }
 
@@ -330,12 +341,16 @@ export async function POST(req: NextRequest) {
   const sentinelTicks = Array.isArray(body.sentinel_ticks)
     ? body.sentinel_ticks.slice(-1000)
     : [];
+  const tombstones = Array.isArray(body.tombstones)
+    ? body.tombstones.slice(0, 1000)
+    : [];
 
   let positionsUpserted = 0;
   let scoresUpserted = 0;
   let applicationsUpserted = 0;
   let pendingMessagesUpserted = 0;
   let sentinelTicksUpserted = 0;
+  let tombstonesApplied = 0;
   const legacyToUuid = new Map<number, string>();
 
   // 1. Upsert positions via (user_id, legacy_id)
@@ -601,6 +616,77 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 3d. Tombstones (soft-delete su positions/scores/applications).
+  // Volume tipico: 0-10 righe per push (gli agenti hanno regola NO DELETE,
+  // i DELETE veri arrivano da migrazioni one-shot tipo db_migrate_v2).
+  // Quando viene cancellata una position, scout/critico potrebbero anche
+  // generare tombstones per scores/applications nello stesso tick.
+  //
+  // Logica:
+  //   - positions: UPDATE WHERE user_id, legacy_id (1:1 con cloud).
+  //   - scores/applications: lato cloud usano position_id UUID; risolviamo
+  //     prima legacy_id → UUID via lookup positions, poi UPDATE.
+  //
+  // Idempotente: il filter `deleted_at IS NULL` evita di sovrascrivere
+  // tombstone già applicati (un re-push dopo cursor reset non rompe nulla).
+  if (tombstones.length > 0) {
+    const byTable = { positions: [] as TombstoneIn[], scores: [] as TombstoneIn[], applications: [] as TombstoneIn[] };
+    for (const t of tombstones) {
+      if (!t || typeof t.legacy_id !== "number" || !t.deleted_at) continue;
+      if (t.table_name === "positions" || t.table_name === "scores" || t.table_name === "applications") {
+        byTable[t.table_name].push(t);
+      }
+    }
+
+    // Risolvi legacy_id → UUID per scores/applications. Riusa il mapping
+    // già popolato dai positions upsert quando possibile; integra con
+    // lookup esplicito per i legacy_id che non sono passati dal push.
+    const needsLookup = new Set<number>();
+    for (const t of [...byTable.scores, ...byTable.applications]) {
+      if (!legacyToUuid.has(t.legacy_id)) needsLookup.add(t.legacy_id);
+    }
+    if (needsLookup.size > 0) {
+      const { data: rows } = await admin
+        .from("positions")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(needsLookup));
+      for (const r of rows ?? []) {
+        if (r.legacy_id != null) legacyToUuid.set(r.legacy_id, r.id as string);
+      }
+    }
+
+    for (const t of byTable.positions) {
+      const { error } = await admin
+        .from("positions")
+        .update({ deleted_at: t.deleted_at })
+        .eq("user_id", userId)
+        .eq("legacy_id", t.legacy_id)
+        .is("deleted_at", null);
+      if (!error) tombstonesApplied++;
+    }
+    for (const t of byTable.scores) {
+      const uuid = legacyToUuid.get(t.legacy_id);
+      if (!uuid) continue;
+      const { error } = await admin
+        .from("scores")
+        .update({ deleted_at: t.deleted_at })
+        .eq("position_id", uuid)
+        .is("deleted_at", null);
+      if (!error) tombstonesApplied++;
+    }
+    for (const t of byTable.applications) {
+      const uuid = legacyToUuid.get(t.legacy_id);
+      if (!uuid) continue;
+      const { error } = await admin
+        .from("applications")
+        .update({ deleted_at: t.deleted_at })
+        .eq("position_id", uuid)
+        .is("deleted_at", null);
+      if (!error) tombstonesApplied++;
+    }
+  }
+
   // 4. Profile upsert (opzionale, indipendente da positions/scores/apps)
   let profileUpserted = false;
   let profileError: string | null = null;
@@ -664,6 +750,7 @@ export async function POST(req: NextRequest) {
     applications: { upserted: applicationsUpserted },
     pending_user_messages: { upserted: pendingMessagesUpserted },
     sentinel_ticks: { upserted: sentinelTicksUpserted },
+    tombstones: { applied: tombstonesApplied },
     profile: { upserted: profileUpserted, error: profileError },
   });
 }
