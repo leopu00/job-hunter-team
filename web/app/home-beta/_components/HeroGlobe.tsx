@@ -16,9 +16,9 @@ const SRC_ID = "hero-pins";
 const HALO_ID = "hero-pins-halo";
 const DOT_ID = "hero-pins-dot";
 
-// Coordinate dei pin = location delle offerte mostrate nella tabella
-// sotto al globo. Single source of truth in `_data/luxuryPositions.ts`,
-// così tabella e globo non vanno mai fuori sync.
+// Coordinate dei pin = prime N location delle offerte (single source of
+// truth in `_data/luxuryPositions.ts`). I primi 5 slot vengono pilotati
+// dalla pipeline del team flow tramite la prop `pinColors`.
 const CITIES: Array<[number, number]> = LUXURY_POSITIONS.map(
   (p) => [p.lon, p.lat] as [number, number],
 );
@@ -57,19 +57,37 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
   }
 }
 
-function buildPinFeatures(count: number): GeoJSON.FeatureCollection {
-  const slice = CITIES.slice(0, count);
-  return {
-    type: "FeatureCollection",
-    features: slice.map(([lon, lat], i) => ({
+// Costruisce le feature dei pin attivi: solo gli slot con colore != null.
+// Il colore di ogni pin è una property per layer "data-driven".
+function buildPinFeatures(
+  pinColors: ReadonlyArray<string | null>,
+): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [];
+  for (let i = 0; i < pinColors.length; i++) {
+    const color = pinColors[i];
+    if (!color) continue;
+    const [lon, lat] = CITIES[i];
+    features.push({
       type: "Feature",
       geometry: { type: "Point", coordinates: [lon, lat] },
-      properties: { id: i },
-    })),
-  };
+      properties: { id: i, color },
+    });
+  }
+  return { type: "FeatureCollection", features };
 }
 
-export default function HeroGlobe() {
+type HeroGlobeProps = {
+  // Array di colori, uno per ogni pin. Pin i = null → nessun pin;
+  // pin i = "#xxx" → pin colorato a quel valore.
+  pinColors?: ReadonlyArray<string | null>;
+  // Longitudine del centro del globo. Pilotata dalla pipeline per
+  // ruotare il globo verso il pin che sta per essere toccato. La
+  // latitudine resta a quella iniziale (20°), così la proiezione
+  // globe non si distorce a lat estreme.
+  centerLon?: number;
+};
+
+export default function HeroGlobe({ pinColors, centerLon }: HeroGlobeProps) {
   const { resolvedTheme } = useTheme();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -78,15 +96,12 @@ export default function HeroGlobe() {
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const layersReadyRef = useRef(false);
-  // Tutti i pin sono visibili da subito (uno per offerta della
-  // tabella). Niente più "pin progressive" che dipendevano dal vecchio
-  // pin-section condiviso col team flow.
-  const pinCount = LUXURY_POSITIONS.length;
-  const pinCountRef = useRef(LUXURY_POSITIONS.length);
+  const activePinColors = pinColors ?? [];
+  const pinColorsRef = useRef<ReadonlyArray<string | null>>(activePinColors);
 
   useEffect(() => {
-    pinCountRef.current = pinCount;
-  }, [pinCount]);
+    pinColorsRef.current = activePinColors;
+  }, [activePinColors]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -133,7 +148,7 @@ export default function HeroGlobe() {
       if (!map.getSource(SRC_ID)) {
         map.addSource(SRC_ID, {
           type: "geojson",
-          data: buildPinFeatures(pinCountRef.current),
+          data: buildPinFeatures(pinColorsRef.current),
         });
         map.addLayer({
           id: HALO_ID,
@@ -141,7 +156,8 @@ export default function HeroGlobe() {
           source: SRC_ID,
           paint: {
             "circle-radius": 14,
-            "circle-color": "#00e87a",
+            // colore "data-driven" dalla property `color` della feature.
+            "circle-color": ["get", "color"],
             "circle-opacity": 0.25,
             "circle-blur": 0.7,
           },
@@ -152,7 +168,7 @@ export default function HeroGlobe() {
           source: SRC_ID,
           paint: {
             "circle-radius": 3.5,
-            "circle-color": "#00e87a",
+            "circle-color": ["get", "color"],
             "circle-opacity": 0.95,
             "circle-stroke-color": "#0d0d11",
             "circle-stroke-width": 0.5,
@@ -160,7 +176,7 @@ export default function HeroGlobe() {
         });
       } else {
         const src = map.getSource(SRC_ID) as maplibregl.GeoJSONSource;
-        src.setData(buildPinFeatures(pinCountRef.current));
+        src.setData(buildPinFeatures(pinColorsRef.current));
       }
       layersReadyRef.current = true;
     };
@@ -196,34 +212,26 @@ export default function HeroGlobe() {
     map.setStyle(resolvedTheme === "light" ? STYLE_LIGHT : STYLE_DARK);
   }, [resolvedTheme]);
 
-  // Rotazione guidata dallo scroll: ogni pixel scrollato ruota il globo.
+  // Longitudine del centro pilotata dalla pipeline. jumpTo istantaneo,
+  // lo "scrubbing" è dato dal fatto che centerLon è funzione lineare
+  // di T sopra la pipeline.
   useEffect(() => {
-    const DEG_PER_PX = 0.12;
-    let lastY = typeof window !== "undefined" ? window.scrollY : 0;
-    const onScroll = () => {
-      const map = mapRef.current;
-      if (!map) return;
-      const dy = window.scrollY - lastY;
-      lastY = window.scrollY;
-      if (dy === 0) return;
-      const c = map.getCenter();
-      let nextLon = c.lng + dy * DEG_PER_PX;
-      if (nextLon > 180) nextLon -= 360;
-      if (nextLon < -180) nextLon += 360;
-      map.jumpTo({ center: [nextLon, c.lat] });
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+    if (centerLon == null) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const c = map.getCenter();
+    if (Math.abs(c.lng - centerLon) < 0.01) return;
+    map.jumpTo({ center: [centerLon, c.lat] });
+  }, [centerLon]);
 
-  // Aggiorna i pin sulla mappa quando pinCount cambia.
+  // Aggiorna i pin sulla mappa quando pinColors cambia.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !layersReadyRef.current) return;
     const src = map.getSource(SRC_ID) as maplibregl.GeoJSONSource | undefined;
     if (!src) return;
-    src.setData(buildPinFeatures(pinCount));
-  }, [pinCount]);
+    src.setData(buildPinFeatures(activePinColors));
+  }, [activePinColors]);
 
   return (
     <section aria-hidden="true" className="flex justify-center">
