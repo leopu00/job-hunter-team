@@ -34,6 +34,10 @@ interface PositionIn {
   // a BOOLEAN sul payload upsert.
   write_requested?: number | boolean | null;
   write_requested_at?: string | null;
+  // Geocoding-on-demand (V8): user-driven flag per office-geocoding
+  // precision. Mig Supabase 027. Stesso pattern di write_requested.
+  geocode_requested?: number | boolean | null;
+  geocode_requested_at?: string | null;
 }
 
 interface ScoreIn {
@@ -385,8 +389,8 @@ export async function POST(req: NextRequest) {
         salary_estimated_currency: p.salary_estimated_currency ?? null,
         salary_estimated_source: p.salary_estimated_source ?? null,
         // SQLite invia integer (0|1); Supabase ha BOOLEAN — coerce esplicito.
-        // Default FALSE quando il campo manca (compat con DB pre-V6 / push
-        // legacy).
+        // Default FALSE quando il campo manca (compat con DB pre-V6 / pre-V8
+        // / push legacy).
         write_requested:
           p.write_requested == null
             ? false
@@ -394,6 +398,13 @@ export async function POST(req: NextRequest) {
               ? p.write_requested
               : p.write_requested === 1,
         write_requested_at: p.write_requested_at ?? null,
+        geocode_requested:
+          p.geocode_requested == null
+            ? false
+            : typeof p.geocode_requested === "boolean"
+              ? p.geocode_requested
+              : p.geocode_requested === 1,
+        geocode_requested_at: p.geocode_requested_at ?? null,
       }));
 
     const { data: upserted, error } = await admin
