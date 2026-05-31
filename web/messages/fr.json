@@ -2,7 +2,13 @@
   "metadata": {
     "title": "Job Hunter Team",
     "description": "Une équipe d'agents IA qui trouvent un emploi pour toi. Open source, local, privé.",
-    "keywords": ["recherche d'emploi", "agents IA", "chercher du travail", "candidatures automatiques", "open source"]
+    "keywords": [
+      "recherche d'emploi",
+      "agents IA",
+      "chercher du travail",
+      "candidatures automatiques",
+      "open source"
+    ]
   },
   "common": {
     "loading": "Chargement...",
@@ -58,7 +64,7 @@
     "goodbye": "Au revoir",
     "success": "Succès",
     "warning": "Avertissement",
-    "info": "Info",
+    "info": "Infos",
     "confirm": "Confirmer",
     "dismiss": "Ignorer",
     "done": "Terminé",
@@ -354,7 +360,7 @@
     "integration": "Intégration",
     "interface": "Interface",
     "api": "API",
-    "endpoint": "Endpoint",
+    "endpoint": "Point de terminaison",
     "route": "Route",
     "path": "Chemin",
     "url": "URL",
@@ -816,7 +822,7 @@
     "fireable": "Tirable",
     "shootable": "Tirable",
     "launchable": "Lançable",
-    "projectable": "Companyable",
+    "projectable": "Projetable",
     "throwable": "Lançable",
     "tossable": "Lançable",
     "hurlable": "Lançable",
@@ -1286,7 +1292,7 @@
       "links": {
         "dashboard": "Tableau de bord",
         "deploy": "Déploiement",
-        "gateway": "Gateway",
+        "gateway": "Passerelle",
         "status": "État",
         "download": "Télécharger",
         "offers": "Offres",
@@ -1379,7 +1385,7 @@
       "badge": "flux de travail",
       "title": "Comment ça marche",
       "configure": {
-        "title": "Configure",
+        "title": "Configurer",
         "description": "Définis ton profil, tes compétences et tes préférences une seule fois."
       },
       "agentsWork": {
