@@ -556,7 +556,7 @@ export default async function DashboardPage() {
               {analystExcludedPct}%
             </span>
             <span className="text-[10px] text-[var(--color-muted)]">
-              esclusioni · {analystKeptPct}% passate all'analisi
+              esclusioni · {analystKeptPct}% passate all&apos;analisi
             </span>
           </div>
           <div
