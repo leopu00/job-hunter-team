@@ -37,7 +37,7 @@ def get_db() -> sqlite3.Connection:
 
 
 def ensure_schema(conn: sqlite3.Connection):
-    """Crea le tabelle se non esistono (schema V6).
+    """Crea le tabelle se non esistono (schema V7).
 
     Le migrazioni retroattive vengono eseguite PRIMA del CREATE TABLE
     IF NOT EXISTS, così i CREATE TRIGGER IF NOT EXISTS più sotto
@@ -53,6 +53,12 @@ def ensure_schema(conn: sqlite3.Connection):
       Writer-on-demand. L'utente seleziona dal dashboard/Telegram cosa
       portare a CV; il Capitano spawna Scrittori solo quando il flag e'
       acceso. Vedi BACKLOG [JHT-WRITER-ON-DEMAND] (2026-05-29).
+    - v6→v7: tabella `_tombstones` + trigger BEFORE DELETE su
+      positions/scores/applications. Chiude il gap "DELETE locale non si
+      propaga a cloud" (push è UPSERT-only). Tombstones viaggiano nel
+      payload del push delta e il receive Supabase fa UPDATE soft
+      SET deleted_at = ?. Vedi mig 025 + BACKLOG [JHT-CLOUDSYNC-01]
+      DELETE tombstone (2026-05-31).
     """
     _migrate_v2_to_v3(conn)
     _migrate_v3_to_v4(conn)
@@ -62,6 +68,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_structured_location(conn)
     _migrate_positions_office_geocoding(conn)
     _migrate_positions_write_requested(conn)
+    _migrate_v6_to_v7_tombstones(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -431,8 +438,44 @@ def ensure_schema(conn: sqlite3.Connection):
           updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
       WHERE id = NEW.id;
     END;
+
+    -- Tombstones V7 (vedi _migrate_v6_to_v7_tombstones + mig Supabase 025).
+    -- `legacy_id` identifica la riga lato cloud:
+    --   - positions: positions.id locale (1:1 con cloud legacy_id)
+    --   - scores/applications: position_id locale (1:1 con cloud,
+    --     mappato a position_id UUID via lookup legacy_id)
+    -- INSERT OR REPLACE per essere idempotenti: se la stessa riga viene
+    -- "ricreata" e ri-cancellata, il tombstone più recente vince.
+    CREATE TABLE IF NOT EXISTS _tombstones (
+        table_name TEXT NOT NULL CHECK (table_name IN ('positions', 'scores', 'applications')),
+        legacy_id INTEGER NOT NULL,
+        deleted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (table_name, legacy_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_tombstones_deleted_at ON _tombstones(deleted_at);
+
+    CREATE TRIGGER IF NOT EXISTS positions_tombstone
+    BEFORE DELETE ON positions FOR EACH ROW
+    BEGIN
+      INSERT OR REPLACE INTO _tombstones (table_name, legacy_id, deleted_at)
+      VALUES ('positions', OLD.id, CURRENT_TIMESTAMP);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS scores_tombstone
+    BEFORE DELETE ON scores FOR EACH ROW
+    BEGIN
+      INSERT OR REPLACE INTO _tombstones (table_name, legacy_id, deleted_at)
+      VALUES ('scores', OLD.position_id, CURRENT_TIMESTAMP);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS applications_tombstone
+    BEFORE DELETE ON applications FOR EACH ROW
+    BEGIN
+      INSERT OR REPLACE INTO _tombstones (table_name, legacy_id, deleted_at)
+      VALUES ('applications', OLD.position_id, CURRENT_TIMESTAMP);
+    END;
     """)
-    conn.execute("PRAGMA user_version = 6")
+    conn.execute("PRAGMA user_version = 7")
     conn.commit()
 
 
@@ -862,6 +905,47 @@ def _migrate_positions_write_requested(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_positions_write_requested "
         "ON positions(write_requested) WHERE write_requested = 1"
     )
+
+
+def _migrate_v6_to_v7_tombstones(conn: sqlite3.Connection) -> None:
+    """Aggiunge tabella `_tombstones` + 3 trigger BEFORE DELETE (V7).
+
+    Chiude il gap "DELETE locale non si propaga a cloud": il push delta
+    in cli/src/commands/cloud.js è UPSERT-only, quindi righe cancellate
+    in SQLite (es. cleanup duplicati di db_migrate_v2.py o future
+    operazioni del Capitano) restavano ghost in Supabase per sempre.
+
+    Schema:
+      _tombstones(table_name, legacy_id, deleted_at) — PK composta.
+      legacy_id identifica la riga lato cloud:
+        - positions: OLD.id locale (1:1 con cloud legacy_id)
+        - scores/applications: OLD.position_id (1:1 con cloud, via
+          mapping legacy_id → position_id UUID).
+
+    Trigger BEFORE DELETE FOR EACH ROW (positions/scores/applications)
+    fanno INSERT OR REPLACE in _tombstones, poi il DELETE prosegue
+    normalmente (hard-delete locale invariato — gli agenti continuano a
+    leggere SQLite senza filtri deleted_at). Tombstones viaggiano nel
+    push e il receive Supabase applica UPDATE SET deleted_at = ?.
+
+    Vedi BACKLOG [JHT-CLOUDSYNC-01] DELETE tombstone (2026-05-31) +
+    docs/internal/cloud-sync-architecture.md + Supabase mig 025.
+
+    Idempotente: tabella e trigger sono CREATE ... IF NOT EXISTS sia
+    qui sia nel blocco principale di ensure_schema. La funzione di
+    migrazione è ridondante per DB freschi (lo schema viene già creato
+    nel CREATE TABLE principale), ma utile per DB pre-V7 dove il blocco
+    principale è già stato eseguito una volta: SQLite no-op-pa il
+    CREATE TABLE IF NOT EXISTS per tabelle esistenti ma chiama
+    comunque i CREATE TRIGGER IF NOT EXISTS, quindi a regime non
+    occorre logica esplicita qui. Lasciata vuota come placeholder per
+    migrazioni V8+ future.
+    """
+    # No-op: lo schema V7 è interamente additivo (nuova tabella + 3
+    # trigger), tutti CREATE ... IF NOT EXISTS già presenti nel blocco
+    # executescript di ensure_schema. Nessun ALTER COLUMN né data
+    # migration necessaria.
+    return
 
 
 def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
