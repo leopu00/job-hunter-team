@@ -30,7 +30,34 @@ export default function LandingClient({
           <main style={{ position: "relative", zIndex: 1 }}>
             <LandingNav />
             <LandingHero />
-            <LatestPositionsTable />
+
+            {/* Pin section della tabella: scrollando, la tabella resta
+                centrata in viewport mentre gli status delle 10 righe
+                evolvono in sincrono con la pipeline (stesso ordine
+                degli step DB del team flow), scale 2× così l'animazione
+                tabella è più snella del giro globo.
+                Math: pipeline_T = 8640, T_table = scroll × 2, animation
+                tabella richiede ~4320 px di scroll. */}
+            <div
+              className="relative hidden md:block"
+              data-pin-section="table-evolution"
+              style={{ height: "5500px" }}
+            >
+              <div
+                className="sticky flex items-center justify-center"
+                style={{ top: "5rem", height: "calc(100vh - 5rem)" }}
+              >
+                <div className="w-full">
+                  <LatestPositionsTable />
+                </div>
+              </div>
+            </div>
+
+            {/* Mobile: tabella senza pin (scroll naturale). */}
+            <div className="md:hidden">
+              <LatestPositionsTable />
+            </div>
+
             <section className="flex flex-col items-center justify-center py-24 px-6">
               <span
                 className="text-7xl md:text-9xl leading-none"
