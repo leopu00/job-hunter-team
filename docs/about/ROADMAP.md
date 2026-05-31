@@ -1,6 +1,6 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-05-14
+> Last updated: 2026-05-31
 >
 > 📋 **For tactical, task-by-task detail → see [`BACKLOG.md`](../BACKLOG.md)**.
 > This file is the strategic, visual summary — where we're going, not the day-to-day.
