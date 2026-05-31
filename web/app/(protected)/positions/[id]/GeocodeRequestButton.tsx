@@ -27,9 +27,10 @@ export function GeocodeRequestButton({
     const next = !requested;
     setRequested(next);
     try {
-      const res = await fetch(`/api/positions/${legacyId}/geocode-request`, {
-        method: next ? "POST" : "DELETE",
-      });
+      const res = await fetch(
+        `/api/positions/${legacyId}/geocode-request`,
+        { method: next ? "POST" : "DELETE" },
+      );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setRequested(!next);
@@ -66,7 +67,10 @@ export function GeocodeRequestButton({
         {requested ? "✓" : "📍"} {label}
       </button>
       {error && (
-        <span className="text-[10px]" style={{ color: "var(--color-red)" }}>
+        <span
+          className="text-[10px]"
+          style={{ color: "var(--color-red)" }}
+        >
           {error}
         </span>
       )}
