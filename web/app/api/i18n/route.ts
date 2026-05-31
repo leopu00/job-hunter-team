@@ -18,12 +18,13 @@ const SUPPORTED_LOCALES = [
   { code: "hu", label: "Magyar", flag: "HU" },
   { code: "es", label: "Español", flag: "ES" },
   { code: "de", label: "Deutsch", flag: "DE" },
+  { code: "fr", label: "Français", flag: "FR" },
 ] as const;
 
-type Locale = "it" | "en" | "hu" | "es" | "de";
+type Locale = "it" | "en" | "hu" | "es" | "de" | "fr";
 
 function isLocale(v: unknown): v is Locale {
-  return v === "it" || v === "en" || v === "hu" || v === "es" || v === "de";
+  return v === "it" || v === "en" || v === "hu" || v === "es" || v === "de" || v === "fr";
 }
 
 function loadPrefs(): { locale: Locale } {
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
 
     if (!isLocale(locale)) {
       return NextResponse.json(
-        { error: `Locale non supportato: ${locale}. Validi: it, en, hu, es, de` },
+        { error: `Locale non supportato: ${locale}. Validi: it, en, hu, es, de, fr` },
         { status: 400 },
       );
     }
