@@ -100,6 +100,21 @@ async function startActionContainer(agentArg, options = {}) {
   let errored = 0;
 
   if (useBootstrap) {
+    // Pull desired-state cloud → SQLite locale PRIMA dello spawn agenti:
+    // recupera write_requested cliccato via web mentre container era
+    // offline. Senza questo step, il Capitano non vede mai i flag toggle-on
+    // arrivati durante il downtime (P0 [JHT-CLOUDSYNC-01]).
+    // Best-effort: timeout 15s, errori non bloccano. Skip silenzioso se
+    // cloud non abilitato (Local PC mode senza sync).
+    const pullRes = execInContainer(
+      'node /app/cli/bin/jht.js cloud pull-desired-state --silent',
+      { timeoutMs: 15_000 },
+    );
+    if (pullRes.code !== 0 && pullRes.stderr && !/non abilitato/i.test(pullRes.stderr)) {
+      const lastLine = pullRes.stderr.trim().split('\n').slice(-1)[0];
+      console.log(c.dim(`  ℹ pull desired-state non applicato: ${lastLine}`));
+    }
+
     for (const item of bootstrap) {
       if (item.preDelayMs && item.preDelayMs > 0) {
         console.log(c.dim(`  ⏳ Attendo ${Math.round(item.preDelayMs / 1000)}s prima di ${item.session}...`));
