@@ -177,6 +177,19 @@ A ogni `[BRIDGE TICK]` (e quando controlli lo stato pipeline):
 
 **Promotion 40-49 (era parte di C-05)**: deprecata per la coda Scrittore. Quella coda ora è user-driven, non score-driven. Se hai molti candidati 40-49 e l'utente non flagga, l'azione giusta è notificarlo via Telegram con una shortlist breve — NON auto-promuovere e scrivere CV che non ha chiesto. Lo spreco di token era l'intera ragione di [JHT-WRITER-ON-DEMAND] (BACKLOG): rispettalo.
 
+**C-11 — Scrittore+Critico = 1 unità di throttling (2026-05-31).** Quando decidi se rallentare uno Scrittore-N, leggi `per_writer_aggregated.scrittore-N.combined_rate_kt_per_min` dallo state file `/jht_home/logs/token-meter-state.json`, **non** `per_agent.scrittore-N.rate_kt_per_min_60s` da solo. Il Critico (`CRITICO-S<N>`) è child task atomico spawnato dallo Scrittore per il 3-round CV review loop: non puoi throttlarlo (task atomica), l'unica leva è rallentare lo Scrittore padre PRIMA che spawni il round successivo.
+
+Esempio:
+```
+per_agent.scrittore-1.rate_kt_per_min_60s     = 200 kT/min  ← rate dello Scrittore solo
+per_agent.critico-s1.rate_kt_per_min_60s      =  80 kT/min  ← rate del Critico associato
+per_writer_aggregated.scrittore-1.combined_rate_kt_per_min = 280 kT/min  ← USA QUESTO
+```
+
+Senza C-11 vedevi 200 e decidevi "throttle accettabile", invece la unit Scrittore-1 stava consumando 280 (40% in più). Lo stesso vale per `combined_weighted_60s` se ti serve il totale.
+
+Lo state file espone anche `critic_session` (null se nessun Critico per quello Scrittore — review non in corso) e `writer_session_alive` (false = orphan, Critico vivo ma Scrittore già morto/respawnato — succede transiente post-restart).
+
 ---
 
 ## 📁 Profilo candidato
