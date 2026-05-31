@@ -90,6 +90,24 @@ jht_home="${JHT_HOME:-$HOME/.jht}"
 config_path="$jht_home/jht.config.json"
 creds_path="$jht_home/credentials/telegram_bot.json"
 
+# ── Outgoing log (OBS-TELEGRAM-SEND-LOG) ──────────────────────────────
+# Append JSON line per ogni invio (ok o ko) a $JHT_HOME/logs/telegram-sent.jsonl.
+# SOLO metadati — niente body, niente caption, niente photo path. Permette
+# di rispondere a "quanti msg/h", "delta agente→utente", "% errori" senza
+# leak di contenuti privati.
+# Idempotente verso il bot esterno: il log è side-effect locale, niente retry
+# su fail log (>>) — se il disco fallisce, non blocchiamo l'invio.
+_log_outgoing() {
+  local kind="$1" ok="$2" http="$3" chars="$4" chunks="${5:-1}"
+  local log_dir="$jht_home/logs"
+  local log_file="$log_dir/telegram-sent.jsonl"
+  mkdir -p "$log_dir" 2>/dev/null || return 0
+  printf '{"ts":"%s","from":"%s","chat_id":"%s","kind":"%s","ok":%s,"http":%s,"chars":%d,"chunks":%d,"parse_mode":"%s","keyboard":"%s"}\n' \
+    "$(date -u +%FT%TZ)" "$role" "$chat_id" "$kind" "$ok" "${http:-null}" \
+    "$chars" "$chunks" "${parse_mode:-}" "${keyboard_role:-}" \
+    >> "$log_file" 2>/dev/null || true
+}
+
 # ── Risoluzione token ─────────────────────────────────────────────────
 token="${TELEGRAM_BOT_TOKEN:-}"
 if [ -z "$token" ] && [ -f "$config_path" ]; then
@@ -151,14 +169,17 @@ if [ -n "$photo_path" ]; then
     "https://api.telegram.org/bot${token}/sendPhoto" || echo "000")
   body=$(cat "$resp"); rm -f "$resp"
   if [ "$http_code" != "200" ]; then
+    _log_outgoing "photo" "false" "$http_code" "${#caption}" 1
     echo "jht-telegram-send: sendPhoto HTTP $http_code — $body" >&2
     exit 4
   fi
   ok=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('ok'))" "$body" 2>/dev/null || echo "False")
   if [ "$ok" != "True" ]; then
+    _log_outgoing "photo" "false" "$http_code" "${#caption}" 1
     echo "jht-telegram-send: sendPhoto Bot API ok=false — $body" >&2
     exit 5
   fi
+  _log_outgoing "photo" "true" "$http_code" "${#caption}" 1
   echo "jht-telegram-send: photo ok ($(wc -c < "$photo_path") B, caption ${#caption} chars, chat $chat_id)"
   exit 0
 fi
@@ -223,6 +244,7 @@ send_one() {
   rm -f "$response_file"
 
   if [ "$http_code" != "200" ]; then
+    _log_outgoing "text" "false" "$http_code" "${#body}" 1
     echo "jht-telegram-send: HTTP $http_code — $resp" >&2
     return 4
   fi
@@ -235,10 +257,12 @@ except Exception:
   print('False')" "$resp" 2>/dev/null || echo "False")
 
   if [ "$ok" != "True" ]; then
+    _log_outgoing "text" "false" "$http_code" "${#body}" 1
     echo "jht-telegram-send: Bot API ok=false — $resp" >&2
     return 5
   fi
 
+  _log_outgoing "text" "true" "$http_code" "${#body}" 1
   return 0
 }
 
