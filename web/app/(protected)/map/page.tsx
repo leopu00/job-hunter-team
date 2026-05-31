@@ -38,7 +38,10 @@ export default async function MapPage() {
         .select("vps_setup_completed_at, profile_configured_at")
         .eq("user_id", user.id)
         .maybeSingle();
-      if (!onboarding?.vps_setup_completed_at || !onboarding?.profile_configured_at) {
+      if (
+        !onboarding?.vps_setup_completed_at ||
+        !onboarding?.profile_configured_at
+      ) {
         redirect("/dashboard");
       }
     } else if (localRequest) {
@@ -60,15 +63,78 @@ export default async function MapPage() {
   // Demo data: usa `family` post-dev2 refactor (data-driven, niente più enum).
   const demoTypeDist = demoMode
     ? [
-        { family: "AI / ML", count: 8, color: "var(--color-purple)", avgScore: 82, avgCritic: null, scores: synthScores(82, 8) },
-        { family: "Data", count: 15, color: "var(--color-blue)", avgScore: 63, avgCritic: null, scores: synthScores(63, 15) },
-        { family: "DevOps / Cloud", count: 8, color: "var(--color-orange)", avgScore: 56, avgCritic: null, scores: synthScores(56, 8) },
-        { family: "Full-stack", count: 6, color: "#7fffb2", avgScore: 70, avgCritic: null, scores: synthScores(70, 6) },
-        { family: "Backend", count: 7, color: "var(--color-yellow)", avgScore: 64, avgCritic: null, scores: synthScores(64, 7) },
-        { family: "Frontend", count: 5, color: "#58a6ff", avgScore: 62, avgCritic: null, scores: synthScores(62, 5) },
-        { family: "Python", count: 15, color: "#3776ab", avgScore: 68, avgCritic: null, scores: synthScores(68, 15) },
-        { family: "Software Engineer", count: 21, color: "var(--color-muted)", avgScore: 62, avgCritic: null, scores: synthScores(62, 21) },
-        { family: "Other", count: 2, color: "var(--color-dim)", avgScore: 55, avgCritic: null, scores: synthScores(55, 2) },
+        {
+          family: "AI / ML",
+          count: 8,
+          color: "var(--color-purple)",
+          avgScore: 82,
+          avgCritic: null,
+          scores: synthScores(82, 8),
+        },
+        {
+          family: "Data",
+          count: 15,
+          color: "var(--color-blue)",
+          avgScore: 63,
+          avgCritic: null,
+          scores: synthScores(63, 15),
+        },
+        {
+          family: "DevOps / Cloud",
+          count: 8,
+          color: "var(--color-orange)",
+          avgScore: 56,
+          avgCritic: null,
+          scores: synthScores(56, 8),
+        },
+        {
+          family: "Full-stack",
+          count: 6,
+          color: "#7fffb2",
+          avgScore: 70,
+          avgCritic: null,
+          scores: synthScores(70, 6),
+        },
+        {
+          family: "Backend",
+          count: 7,
+          color: "var(--color-yellow)",
+          avgScore: 64,
+          avgCritic: null,
+          scores: synthScores(64, 7),
+        },
+        {
+          family: "Frontend",
+          count: 5,
+          color: "#58a6ff",
+          avgScore: 62,
+          avgCritic: null,
+          scores: synthScores(62, 5),
+        },
+        {
+          family: "Python",
+          count: 15,
+          color: "#3776ab",
+          avgScore: 68,
+          avgCritic: null,
+          scores: synthScores(68, 15),
+        },
+        {
+          family: "Software Engineer",
+          count: 21,
+          color: "var(--color-muted)",
+          avgScore: 62,
+          avgCritic: null,
+          scores: synthScores(62, 21),
+        },
+        {
+          family: "Other",
+          count: 2,
+          color: "var(--color-dim)",
+          avgScore: 55,
+          avgCritic: null,
+          scores: synthScores(55, 2),
+        },
       ]
     : null;
   const [scoreDist, typeDist] = demoData

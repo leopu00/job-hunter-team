@@ -262,13 +262,7 @@ export default function MapCharts({
       return out;
     }
     return scores;
-  }, [
-    allItemsLite,
-    locScopeItems,
-    selectedTypes,
-    typeDist,
-    fallbackScores,
-  ]);
+  }, [allItemsLite, locScopeItems, selectedTypes, typeDist, fallbackScores]);
 
   // Unscored count nel scope.
   const unscoredCount = useMemo(() => {
@@ -289,13 +283,7 @@ export default function MapCharts({
       );
     }
     return pool.filter((p) => typeof p.score !== "number").length;
-  }, [
-    allItemsLite,
-    locScopeItems,
-    selectedTypes,
-    typeDist,
-    histogramScores,
-  ]);
+  }, [allItemsLite, locScopeItems, selectedTypes, typeDist, histogramScores]);
 
   // Tree Location ricalcolato dal subset filtrato per tipi+score.
   // NOTA: NON applico il filtro location qui — i nodi visibili devono
@@ -316,11 +304,16 @@ export default function MapCharts({
       return true;
     });
     // Aggrego come fa il server (vedi queries.ts buildLocationTree).
-    const byCountry = new Map<string, Map<string | null, LocationPositionLite[]>>();
+    const byCountry = new Map<
+      string,
+      Map<string | null, LocationPositionLite[]>
+    >();
     for (const p of filtered) {
       const country = (p.loc_country ?? "").trim() || "(unknown)";
       const city = (p.loc_city ?? "").trim() || null;
-      const cMap = byCountry.get(country) ?? new Map<string | null, LocationPositionLite[]>();
+      const cMap =
+        byCountry.get(country) ??
+        new Map<string | null, LocationPositionLite[]>();
       const arr = cMap.get(city) ?? [];
       arr.push({
         id: p.id,
@@ -354,7 +347,13 @@ export default function MapCharts({
     });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allItemsLite, locations, selectedTypes, selectedRanges, unscoredSelected]);
+  }, [
+    allItemsLite,
+    locations,
+    selectedTypes,
+    selectedRanges,
+    unscoredSelected,
+  ]);
 
   const toggleType = (t: string) =>
     setSelectedTypes((cur) =>
@@ -472,126 +471,137 @@ export default function MapCharts({
           che non hanno coordinate (quindi non rappresentabili sulla
           mappa): tipicamente remote-only. Filtrata coerentemente
           con donut/histogram. */}
-      {noCoordsFiltered.length > 0 && (() => {
-        const scored = noCoordsFiltered.filter(
-          (p): p is NoCoordItem & { score: number } =>
-            typeof p.score === "number",
-        );
-        const avg =
-          scored.length > 0
-            ? Math.round(
-                scored.reduce((a, s) => a + s.score, 0) / scored.length,
-              )
-            : null;
-        return (
-          <div
-            className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
-            style={{
-              position: "absolute",
-              bottom: 24,
-              right: 24,
-              zIndex: 10,
-              width: 340,
-              // Compatto: 280px max così non copre il chart Score
-              // Distribution che sta in alto a dx; la lista scorre
-              // internamente se ci sono molte righe.
-              maxHeight: 280,
-              display: "flex",
-              flexDirection: "column",
-              pointerEvents: "auto",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-            }}
-          >
+      {noCoordsFiltered.length > 0 &&
+        (() => {
+          const scored = noCoordsFiltered.filter(
+            (p): p is NoCoordItem & { score: number } =>
+              typeof p.score === "number",
+          );
+          const avg =
+            scored.length > 0
+              ? Math.round(
+                  scored.reduce((a, s) => a + s.score, 0) / scored.length,
+                )
+              : null;
+          return (
             <div
-              className="px-4 py-3 border-b flex items-baseline justify-between gap-3"
-              style={{ borderColor: "var(--color-border)" }}
+              className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+              style={{
+                position: "absolute",
+                bottom: 24,
+                right: 24,
+                zIndex: 10,
+                width: 340,
+                // Compatto: 280px max così non copre il chart Score
+                // Distribution che sta in alto a dx; la lista scorre
+                // internamente se ci sono molte righe.
+                maxHeight: 280,
+                display: "flex",
+                flexDirection: "column",
+                pointerEvents: "auto",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              }}
             >
-              <div>
-                <div
-                  className="text-[10px] font-semibold tracking-[0.14em] uppercase"
-                  style={{ color: "var(--color-dim)" }}
-                >
-                  Remote
-                </div>
-                <div
-                  className="text-[9px] mt-0.5"
-                  style={{ color: "var(--color-dim)" }}
-                >
-                  non sulla mappa
-                </div>
-              </div>
-              <div className="flex items-baseline gap-3 tabular-nums">
-                <span
-                  className="text-[18px] font-bold"
-                  style={{ color: "var(--color-bright)" }}
-                >
-                  {noCoordsFiltered.length}
-                </span>
-                {avg != null && (
-                  <span className="text-[10px]" style={{ color: "var(--color-muted)" }}>
-                    <span style={{ color: "var(--color-dim)" }}>avg</span>{" "}
-                    <span style={{ color: "var(--color-bright)", fontWeight: 600 }}>{avg}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-            <ul
-              className="divide-y overflow-y-auto"
-              style={{ borderColor: "var(--color-border)" }}
-            >
-              {noCoordsFiltered.map((p) => (
-                <li
-                  key={p.id}
-                  className="px-4 py-2 text-[11px]"
-                  style={{ borderColor: "var(--color-border)" }}
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span
-                      className="font-medium truncate"
-                      style={{ color: "var(--color-bright)" }}
-                      title={p.title ?? ""}
-                    >
-                      {p.title ?? "(senza titolo)"}
-                    </span>
-                    {typeof p.score === "number" ? (
-                      <span
-                        className="tabular-nums font-semibold flex-shrink-0"
-                        style={{ color: "var(--color-muted)" }}
-                      >
-                        {p.score}
-                      </span>
-                    ) : (
-                      <span
-                        className="text-[9px] italic flex-shrink-0"
-                        style={{ color: "var(--color-dim)" }}
-                      >
-                        no score
-                      </span>
-                    )}
+              <div
+                className="px-4 py-3 border-b flex items-baseline justify-between gap-3"
+                style={{ borderColor: "var(--color-border)" }}
+              >
+                <div>
+                  <div
+                    className="text-[10px] font-semibold tracking-[0.14em] uppercase"
+                    style={{ color: "var(--color-dim)" }}
+                  >
+                    Remote
                   </div>
                   <div
-                    className="text-[10px] truncate flex items-center gap-2"
-                    style={{ color: "var(--color-muted)" }}
+                    className="text-[9px] mt-0.5"
+                    style={{ color: "var(--color-dim)" }}
                   >
-                    <span className="truncate">{p.company ?? "—"}</span>
-                    {p.is_remote && (
+                    non sulla mappa
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-3 tabular-nums">
+                  <span
+                    className="text-[18px] font-bold"
+                    style={{ color: "var(--color-bright)" }}
+                  >
+                    {noCoordsFiltered.length}
+                  </span>
+                  {avg != null && (
+                    <span
+                      className="text-[10px]"
+                      style={{ color: "var(--color-muted)" }}
+                    >
+                      <span style={{ color: "var(--color-dim)" }}>avg</span>{" "}
                       <span
-                        className="text-[8px] font-semibold tracking-widest uppercase px-1 rounded flex-shrink-0"
                         style={{
-                          color: "var(--color-green)",
-                          background: "rgba(127,255,178,0.08)",
+                          color: "var(--color-bright)",
+                          fontWeight: 600,
                         }}
                       >
-                        remote
+                        {avg}
                       </span>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })()}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <ul
+                className="divide-y overflow-y-auto"
+                style={{ borderColor: "var(--color-border)" }}
+              >
+                {noCoordsFiltered.map((p) => (
+                  <li
+                    key={p.id}
+                    className="px-4 py-2 text-[11px]"
+                    style={{ borderColor: "var(--color-border)" }}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span
+                        className="font-medium truncate"
+                        style={{ color: "var(--color-bright)" }}
+                        title={p.title ?? ""}
+                      >
+                        {p.title ?? "(senza titolo)"}
+                      </span>
+                      {typeof p.score === "number" ? (
+                        <span
+                          className="tabular-nums font-semibold flex-shrink-0"
+                          style={{ color: "var(--color-muted)" }}
+                        >
+                          {p.score}
+                        </span>
+                      ) : (
+                        <span
+                          className="text-[9px] italic flex-shrink-0"
+                          style={{ color: "var(--color-dim)" }}
+                        >
+                          no score
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className="text-[10px] truncate flex items-center gap-2"
+                      style={{ color: "var(--color-muted)" }}
+                    >
+                      <span className="truncate">{p.company ?? "—"}</span>
+                      {p.is_remote && (
+                        <span
+                          className="text-[8px] font-semibold tracking-widest uppercase px-1 rounded flex-shrink-0"
+                          style={{
+                            color: "var(--color-green)",
+                            background: "rgba(127,255,178,0.08)",
+                          }}
+                        >
+                          remote
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
 
       {/* Tree gerarchico Location: country → city → posizioni.
           Ricalcolato client-side da allItemsLite con i filtri tipi+score
@@ -651,7 +661,6 @@ export default function MapCharts({
           }}
         />
       </div>
-
     </>
   );
 }
@@ -920,10 +929,7 @@ function LocationTree({
         }}
       >
         <span>Location</span>
-        <span
-          className="tabular-nums"
-          style={{ color: "var(--color-muted)" }}
-        >
+        <span className="tabular-nums" style={{ color: "var(--color-muted)" }}>
           {tree.length} · {total}
         </span>
       </div>
@@ -946,16 +952,17 @@ function LocationTree({
                   background: isSelected
                     ? "rgba(0,232,122,0.08)"
                     : isOpen
-                    ? "rgba(255,255,255,0.04)"
-                    : "transparent",
+                      ? "rgba(255,255,255,0.04)"
+                      : "transparent",
                 }}
               >
                 <span
                   className="truncate flex items-baseline gap-1.5"
                   style={{
-                    color: isSelected || isOpen
-                      ? "var(--color-bright)"
-                      : "var(--color-base)",
+                    color:
+                      isSelected || isOpen
+                        ? "var(--color-bright)"
+                        : "var(--color-base)",
                     fontWeight: isSelected || isOpen ? 600 : 400,
                   }}
                   title={country.country}
@@ -985,9 +992,10 @@ function LocationTree({
                 <span
                   className="tabular-nums font-semibold flex-shrink-0"
                   style={{
-                    color: isSelected || isOpen
-                      ? "var(--color-bright)"
-                      : "var(--color-muted)",
+                    color:
+                      isSelected || isOpen
+                        ? "var(--color-bright)"
+                        : "var(--color-muted)",
                   }}
                 >
                   {country.count}
@@ -1012,17 +1020,19 @@ function LocationTree({
                             background: isCitySelected
                               ? "rgba(0,232,122,0.08)"
                               : isCityOpen
-                              ? "rgba(255,255,255,0.04)"
-                              : "transparent",
+                                ? "rgba(255,255,255,0.04)"
+                                : "transparent",
                           }}
                         >
                           <span
                             className="truncate flex items-baseline gap-1.5"
                             style={{
-                              color: isCitySelected || isCityOpen
-                                ? "var(--color-bright)"
-                                : "var(--color-muted)",
-                              fontWeight: isCitySelected || isCityOpen ? 600 : 400,
+                              color:
+                                isCitySelected || isCityOpen
+                                  ? "var(--color-bright)"
+                                  : "var(--color-muted)",
+                              fontWeight:
+                                isCitySelected || isCityOpen ? 600 : 400,
                               fontStyle: city.city ? "normal" : "italic",
                             }}
                             title={cityLabel}
@@ -1052,9 +1062,10 @@ function LocationTree({
                           <span
                             className="tabular-nums flex-shrink-0"
                             style={{
-                              color: isCitySelected || isCityOpen
-                                ? "var(--color-bright)"
-                                : "var(--color-dim)",
+                              color:
+                                isCitySelected || isCityOpen
+                                  ? "var(--color-bright)"
+                                  : "var(--color-dim)",
                             }}
                           >
                             {city.count}
@@ -1077,9 +1088,7 @@ function LocationTree({
                                   className="block px-4 py-1 pl-10 text-[10px] hover:bg-[rgba(255,255,255,0.04)] transition-colors"
                                   style={{ textDecoration: "none" }}
                                 >
-                                  <div
-                                    className="flex items-baseline justify-between gap-2"
-                                  >
+                                  <div className="flex items-baseline justify-between gap-2">
                                     <span
                                       className="truncate"
                                       style={{ color: "var(--color-base)" }}

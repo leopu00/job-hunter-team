@@ -198,6 +198,11 @@ applica fallback R3 (paese del posting board) + annota.
 - ❌ `work_country = NULL` su una position `checked` (rompe UI stipendio)
 - ❌ Inventare role_family se i colleghi hanno già usato simili → vedi R2
 - ❌ Caricare il batch intero del proprio range → vedi R1
+- ❌ **`loc_city = "Remote" / "Anywhere" / "Distributed"`** — NON sono città.
+  Se la position è full-remote senza city specifica, `loc_city = NULL`.
+  Bug osservato in sim 4: A2 ha scritto `loc_city='Remote'` per 8 record
+  (Canonical, Miratech, Link Group, ecc.). Correggi sempre con
+  `db_update --loc-city ""` (stringa vuota = NULL).
 
 ## Comandi tipo
 

@@ -268,6 +268,8 @@ L'utente medio non vede mai il termine "SSH".
 
 ---
 
+> 🔗 **Per la vista consolidata "accesso macchina + dove vivono le credenziali" (3 modi × storage × LLM agent path)** → [`docs/internal/access-and-credentials.md`](access-and-credentials.md). Questo file resta la fonte di verità architetturale; quello consolida la sezione credenziali con confronto doc vs codice e punch list.
+
 ## 🔐 Login launcher + recovery cross-device
 
 VPS mode richiede **signed-in mode** (Local PC mode resta in guest mode disponibile sempre):

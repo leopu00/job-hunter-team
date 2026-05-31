@@ -2,6 +2,7 @@ import pkg from '../package.json' with { type: 'json' };
 import { Command } from 'commander';
 import { registerSetupCommand } from './commands/setup.js';
 import { registerConfigCommand } from './commands/config.js';
+import { registerWorkingHoursCommand } from './commands/working-hours.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerTeamCommand } from './commands/team/index.js';
 import { registerCronCommand } from './commands/cron.js';
@@ -71,6 +72,7 @@ export function buildProgram() {
 
   registerSetupCommand(program);
   registerConfigCommand(program);
+  registerWorkingHoursCommand(program);
   registerStatusCommand(program);
   registerTeamCommand(program);
   registerCronCommand(program);

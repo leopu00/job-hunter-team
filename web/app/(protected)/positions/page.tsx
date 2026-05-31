@@ -70,7 +70,10 @@ interface PageProps {
 // Empty / undefined → [].
 function csv(v: string | undefined): string[] {
   if (!v) return [];
-  return v.split(",").map(s => s.trim()).filter(Boolean);
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
@@ -178,14 +181,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // Helper per costruire URL preservando filtri attivi.
   const buildHref = (
     overrides: Partial<
-      Record<
-        | "sort"
-        | "dir"
-        | "expand"
-        | "page"
-        | "pageSize",
-        string
-      >
+      Record<"sort" | "dir" | "expand" | "page" | "pageSize", string>
     >,
   ) => {
     const merged: Record<string, string> = {};
@@ -196,7 +192,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     if (verdicts.length) merged.verdict = verdicts.join(",");
     if (sortCol !== "found_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
-    if (expandedCols.size > 0) merged.expand = Array.from(expandedCols).join(",");
+    if (expandedCols.size > 0)
+      merged.expand = Array.from(expandedCols).join(",");
     if (page !== 1) merged.page = String(page);
     if (pageSize !== DEFAULT_PAGE_SIZE) merged.pageSize = String(pageSize);
     Object.assign(merged, overrides);
@@ -205,8 +202,10 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       if (k === "sort" && merged[k] === "found_at") delete merged[k];
       if (k === "dir" && merged[k] === "desc") delete merged[k];
       if (k === "expand" && merged[k] === "") delete merged[k];
-      if (k === "page" && (merged[k] === "1" || merged[k] === "")) delete merged[k];
-      if (k === "pageSize" && merged[k] === String(DEFAULT_PAGE_SIZE)) delete merged[k];
+      if (k === "page" && (merged[k] === "1" || merged[k] === ""))
+        delete merged[k];
+      if (k === "pageSize" && merged[k] === String(DEFAULT_PAGE_SIZE))
+        delete merged[k];
     }
     const qs = new URLSearchParams(merged).toString();
     return qs ? `/positions?${qs}` : "/positions";
@@ -523,7 +522,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         )}
                       </div>
                     ) : (
-                      <span className="text-[var(--color-dim)] text-[11px]">—</span>
+                      <span className="text-[var(--color-dim)] text-[11px]">
+                        —
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -572,4 +573,3 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     </div>
   );
 }
-
