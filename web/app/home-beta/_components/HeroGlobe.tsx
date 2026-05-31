@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useTheme } from "@/app/theme-provider";
+import { LUXURY_POSITIONS } from "../_data/luxuryPositions";
 
 const STYLE_DARK =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
@@ -15,65 +16,12 @@ const SRC_ID = "hero-pins";
 const HALO_ID = "hero-pins-halo";
 const DOT_ID = "hero-pins-dot";
 
-// Coordinate città-hub (lon, lat). Distribuite globalmente per dare
-// senso di copertura mentre il globo ruota. Mix Europa / NA / Asia /
-// Sud / Africa / Oceania.
-const CITIES: Array<[number, number]> = [
-  // Europa
-  [-0.13, 51.51],  // London
-  [13.4, 52.52],   // Berlin
-  [2.35, 48.86],   // Paris
-  [-3.7, 40.42],   // Madrid
-  [12.49, 41.9],   // Rome
-  [9.19, 45.46],   // Milan
-  [4.9, 52.37],    // Amsterdam
-  [18.07, 59.33],  // Stockholm
-  [-9.14, 38.72],  // Lisbon
-  [21.01, 52.23],  // Warsaw
-  [16.37, 48.21],  // Vienna
-  [14.42, 50.08],  // Prague
-  [-6.26, 53.35],  // Dublin
-  [23.73, 37.98],  // Athens
-  [12.57, 55.68],  // Copenhagen
-  [24.94, 60.17],  // Helsinki
-  [19.04, 47.5],   // Prague
-  [26.1, 44.43],   // Bucharest
-  // Nord America
-  [-74.0, 40.71],  // NYC
-  [-122.42, 37.77], // SF
-  [-118.24, 34.05], // LA
-  [-122.33, 47.6], // Seattle
-  [-79.38, 43.65], // Toronto
-  [-71.06, 42.36], // Boston
-  [-87.63, 41.88], // Chicago
-  [-97.74, 30.27], // Austin
-  [-80.19, 25.76], // Miami
-  [-123.12, 49.28], // Vancouver
-  [-75.16, 39.95], // Philadelphia
-  [-122.68, 45.52], // Portland
-  // Asia
-  [139.69, 35.69], // Tokyo
-  [126.98, 37.57], // Seoul
-  [103.82, 1.35],  // Singapore
-  [77.59, 12.97],  // Bangalore
-  [72.83, 19.08],  // Mumbai
-  [116.41, 39.9],  // Beijing
-  [121.47, 31.23], // Shanghai
-  [114.17, 22.32], // Hong Kong
-  [34.78, 32.07],  // Tel Aviv
-  [55.27, 25.2],   // Dubai
-  [101.69, 3.14],  // Kuala Lumpur
-  [106.66, 10.76], // Ho Chi Minh
-  // Oceania / Sud / Africa
-  [151.21, -33.87], // Sydney
-  [144.96, -37.81], // Melbourne
-  [-46.63, -23.55], // São Paulo
-  [-58.38, -34.6],  // Buenos Aires
-  [18.42, -33.92],  // Cape Town
-  [28.03, -26.2],   // Johannesburg
-  [3.39, 6.52],     // Lagos
-  [31.24, 30.04],   // Cairo
-];
+// Coordinate dei pin = location delle offerte mostrate nella tabella
+// sotto al globo. Single source of truth in `_data/luxuryPositions.ts`,
+// così tabella e globo non vanno mai fuori sync.
+const CITIES: Array<[number, number]> = LUXURY_POSITIONS.map(
+  (p) => [p.lon, p.lat] as [number, number],
+);
 
 function tintMap(map: MaplibreMap, mode: "dark" | "light") {
   const tweaks: Array<[string, string, string]> =
@@ -130,8 +78,11 @@ export default function HeroGlobe() {
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const layersReadyRef = useRef(false);
-  const [pinCount, setPinCount] = useState(0);
-  const pinCountRef = useRef(0);
+  // Tutti i pin sono visibili da subito (uno per offerta della
+  // tabella). Niente più "pin progressive" che dipendevano dal vecchio
+  // pin-section condiviso col team flow.
+  const pinCount = LUXURY_POSITIONS.length;
+  const pinCountRef = useRef(LUXURY_POSITIONS.length);
 
   useEffect(() => {
     pinCountRef.current = pinCount;
@@ -152,10 +103,11 @@ export default function HeroGlobe() {
       bearing: 0,
     });
 
-    // Anchor invisibile alla posizione esatta del top sfera, computata via
-    // map.project() del nord-polo. Aggiornato a ogni render. BetaTeamFlow
-    // legge la posizione di questo anchor (data-sphere-top) per agganciare
-    // la convergenza dei path.
+    // Anchor invisibile alla posizione esatta del top sfera, computata
+    // via map.project() del polo nord. Aggiornato a ogni render.
+    // BetaTeamFlow legge il rect di questo anchor (data-sphere-top) per
+    // far convergere i path SVG esattamente sul perimetro top visibile
+    // della sfera, robusto a resize / re-render.
     const updateSphereAnchor = () => {
       const wrap = wrapRef.current;
       if (!wrap) return;
@@ -264,34 +216,6 @@ export default function HeroGlobe() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Pin progress: legge il [data-pin-section] piu' vicino (hero pinned
-  // section condivisa col team flow). I pin appaiono progressivamente
-  // mentre l'utente scrolla attraverso il pin.
-  useEffect(() => {
-    const wrap = wrapRef.current;
-    if (!wrap) return;
-    const sec = wrap.closest("[data-pin-section]") as HTMLElement | null;
-    if (!sec) return;
-    const onScroll = () => {
-      const rect = sec.getBoundingClientRect();
-      const total = rect.height - window.innerHeight;
-      if (total <= 0) return;
-      const raw = -rect.top / total;
-      const progress = Math.max(0, Math.min(1, raw));
-      const count = Math.round(progress * CITIES.length);
-      if (count !== pinCountRef.current) {
-        setPinCount(count);
-      }
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-    };
-  }, []);
-
   // Aggiorna i pin sulla mappa quando pinCount cambia.
   useEffect(() => {
     const map = mapRef.current;
@@ -302,11 +226,7 @@ export default function HeroGlobe() {
   }, [pinCount]);
 
   return (
-    <section
-      aria-hidden="true"
-      data-pin-section="globe"
-      className="flex justify-center"
-    >
+    <section aria-hidden="true" className="flex justify-center">
       <div
         ref={wrapRef}
         data-hero-globe="true"
@@ -314,15 +234,32 @@ export default function HeroGlobe() {
         style={{
           background: "transparent",
           width: "min(90vh, 90vw)",
-          // Canvas non quadrato: rapporto 1/0.7 → sfera MapLibre fitta
-          // l'altezza, niente spazio vuoto sopra/sotto. Canvas top = sfera
-          // visibile top → convergence dei path collima perfettamente.
-          aspectRatio: "1 / 0.7",
+          // Canvas quadrato: la sfera MapLibre (zoom 2.2, projection globe)
+          // ci sta intera dentro un 1:1, niente clipping del polo nord/sud.
+          aspectRatio: "1 / 1",
         }}
       >
         <div
           ref={containerRef}
           style={{ width: "100%", height: "100%", background: "transparent" }}
+        />
+        {/* Anchor invisibile sul perimetro top visibile della sfera.
+            updateSphereAnchor() proietta [lng, 89.5] (~ polo nord
+            visibile) e setta `top` in px relativi al wrap. BetaTeamFlow
+            legge il rect di questo elemento per fare convergere i path
+            esattamente sul perimetro della sfera. */}
+        <div
+          data-sphere-top
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: 0,
+            width: 1,
+            height: 1,
+            transform: "translate(-50%, -50%)",
+            pointerEvents: "none",
+          }}
         />
       </div>
     </section>
