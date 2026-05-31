@@ -96,10 +96,10 @@ export function useTeamCommandPoller(): Result {
         // `error` (es. nested {message,details}) → setError(obj) faceva
         // poi toast(obj) = "[object Object]" nel toast caller. Fix 2026-05-23.
         const errMsg =
-          typeof postBody.error === 'string'
+          typeof postBody.error === "string"
             ? postBody.error
-            : (postBody.error as { message?: string } | undefined)?.message
-              ?? `HTTP ${res.status}`;
+            : ((postBody.error as { message?: string } | undefined)?.message ??
+              `HTTP ${res.status}`);
         setError(errMsg);
         return;
       }
@@ -121,8 +121,7 @@ export function useTeamCommandPoller(): Result {
     setCommandId(id);
     setState("pending");
     setMessage(
-      postBody.message ||
-        "Comando inoltrato alla VPS, attendo conferma…",
+      postBody.message || "Comando inoltrato alla VPS, attendo conferma…",
     );
 
     const start = Date.now();
