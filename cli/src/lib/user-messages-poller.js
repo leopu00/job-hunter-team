@@ -6,7 +6,10 @@
  * forward al tmux pane corrispondente via `jht-tmux-send`.
  *
  * Pattern parallelo a team-state-reconciler.js:
- *  - GET periodico (default 5s, backoff esponenziale on error fino a 60s)
+ *  - GET periodico con tier adattivo (5s active / 30s idle / 120s deep-idle)
+ *    basato sull'ultima consegna riuscita. Reset a active appena arriva
+ *    un nuovo messaggio. Riduzione carico Vercel ~90% in caso idle h24
+ *  - Backoff esponenziale on error fino a 60s
  *  - Rispetta .team-halted.flag (user Stop) e .weekly-halt.flag (rate budget)
  *  - Killswitch 401/403: shutdown dopo 3 auth fail consecutivi
  *
@@ -40,7 +43,17 @@ const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 const TEAM_HALTED_FLAG = join(JHT_HOME, '.team-halted.flag');
 
-const POLL_INTERVAL_MS = 5000;
+// Tre tier di polling adattivo basati sull'ultima consegna riuscita.
+// L'idea: se l'utente sta chattando con un agente, vogliamo latency bassa
+// (5s); se non scrive da minuti, possiamo rilassare; se non scrive da
+// mezz'ora possiamo quasi spegnerci. Lo stato attivo si infera dalle
+// consegne effettive — proxy onesto di "utente attivo" senza dover toccare
+// il browser. Reset a active al primo messaggio in coda.
+const POLL_INTERVAL_ACTIVE_MS = 5000;
+const POLL_INTERVAL_IDLE_MS = 30000;
+const POLL_INTERVAL_DEEP_IDLE_MS = 120000;
+const IDLE_THRESHOLD_MS = 5 * 60 * 1000;        // 5 min
+const DEEP_IDLE_THRESHOLD_MS = 30 * 60 * 1000;  // 30 min
 const POLL_INTERVAL_MAX_MS = 60000;
 const FETCH_LIMIT = 50;
 
@@ -204,17 +217,35 @@ export async function runUserMessagesPoller() {
 
   let consecutiveErrors = 0;
   let consecutiveAuthFails = 0;
+  let lastDeliveryAt = Date.now();
+  let currentTier = 'active';
+
+  // Tier basato su quanto tempo è passato dall'ultima consegna riuscita.
+  // Active = 5s, idle = 30s, deep-idle = 120s.
+  function tierInterval() {
+    const elapsed = Date.now() - lastDeliveryAt;
+    if (elapsed < IDLE_THRESHOLD_MS) {
+      currentTier = 'active';
+      return POLL_INTERVAL_ACTIVE_MS;
+    }
+    if (elapsed < DEEP_IDLE_THRESHOLD_MS) {
+      currentTier = 'idle';
+      return POLL_INTERVAL_IDLE_MS;
+    }
+    currentTier = 'deep-idle';
+    return POLL_INTERVAL_DEEP_IDLE_MS;
+  }
 
   while (!shuttingDown) {
     // Halt gates: rispetta user Stop e weekly rate budget. Il poller NON
     // si auto-shutdown: resta vivo e ricomincia a polling appena i flag
     // spariscono (es. user click Start, weekly reset).
     if (existsSync(TEAM_HALTED_FLAG) || existsSync(WEEKLY_HALT_FLAG)) {
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_IDLE_MS));
       continue;
     }
 
-    let backoff = POLL_INTERVAL_MS;
+    let backoff = tierInterval();
     try {
       const r = await apiCall(
         'GET',
@@ -227,6 +258,15 @@ export async function runUserMessagesPoller() {
       const messages = Array.isArray(r.messages) ? r.messages : [];
       // GET ordina sent_at DESC; per FIFO inverto.
       messages.sort((a, b) => String(a.sent_at).localeCompare(String(b.sent_at)));
+      if (messages.length > 0) {
+        // Attività utente confermata: torna a tier active.
+        const prevTier = currentTier;
+        lastDeliveryAt = Date.now();
+        backoff = tierInterval();
+        if (prevTier !== 'active') {
+          log('info', 'tier.bump-active', { from: prevTier, pending: messages.length });
+        }
+      }
       for (const msg of messages) {
         if (shuttingDown) break;
         try {
@@ -251,13 +291,16 @@ export async function runUserMessagesPoller() {
         }
       } else {
         consecutiveErrors += 1;
+        // Backoff esponenziale sul tier base corrente.
+        const base = tierInterval();
         backoff = Math.min(
           POLL_INTERVAL_MAX_MS,
-          POLL_INTERVAL_MS * 2 ** Math.min(consecutiveErrors, 4),
+          base * 2 ** Math.min(consecutiveErrors, 4),
         );
         log('error', 'poll.failed', {
           err: err.message,
           consecutiveErrors,
+          tier: currentTier,
           nextBackoffMs: backoff,
         });
       }
