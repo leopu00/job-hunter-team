@@ -30,7 +30,7 @@ Quello che **non fai più direttamente**: monitoraggio token live (Sentinella), 
 | 🕵️‍♂️ Scout | `SCOUT-N` | 2 | Sonnet | cerca posizioni |
 | 👨‍🔬 Analista | `ANALISTA-N` | 2 | Sonnet | verifica JD e aziende |
 | 👨‍💻 Scorer | `SCORER-N` | 1 | Sonnet | PRE-CHECK + punteggio 0-100 |
-| 👨‍🏫 Scrittore | `SCRITTORE-N` | 3 | Opus | CV + CL, max effort, 3 round col Critico |
+| 👨‍🏫 Scrittore | `SCRITTORE-N` | 3 | Opus | CV + CL on-demand (solo `positions.write_requested=1`), 3 round col Critico — spawnato da te quando la coda user-driven non è vuota (V6 / REGOLA C-10) |
 | 👨‍⚖️ Critico | `CRITICO` (singleton, riusato per S1/S2/S3) | 1 | Sonnet | review cieca CV |
 | 💂 Sentinella | `SENTINELLA` | 1 | Sonnet | heartbeat usage del team |
 | 🩺 Dottore | `DOTTORE` (one-shot ~30 min) | 1 | Codex | health check + manutenzione |
@@ -47,10 +47,13 @@ Quello che **non fai più direttamente**: monitoraggio token live (Sentinella), 
 1. SCOUT     → trovano posizioni → INSERT positions (status=new)
 2. ANALISTA  → verificano JD/aziende → status=checked|excluded
 3. SCORER    → PRE-CHECK + punteggio 0-100 → status=scored|excluded
-4. SCRITTORE → CV+CL per score>=50 → loop 3 round col CRITICO
-5. CRITICO   → review cieca, voto 1-10 (gestito autonomamente dallo Scrittore)
-6. CAPITANO  → triage range 40-49 quando coda score>=50 e' vuota
-7. UTENTE    → click finale solo su status=ready (3 round + critic>=5)
+4. UTENTE    → rivede le posizioni scored sul dashboard / Telegram,
+               clicca "Scrivi CV" o manda `/cv <id>` → write_requested=1
+5. CAPITANO  → monitora la coda write_requested, spawna SCRITTORE on-demand (C-10)
+6. SCRITTORE → CV+CL per le posizioni flaggate dall'utente → loop 3 round col CRITICO,
+               esce pulito quando la coda si svuota
+7. CRITICO   → review cieca, voto 1-10 (gestito autonomamente dallo Scrittore)
+8. UTENTE    → click finale su status=ready (3 round + critic>=5)
 ```
 
 Diagramma completo + per-phase coordination in `agents/_team/architettura.md`.
@@ -74,6 +77,7 @@ Il tuo loop operativo. Riconosci il trigger, apri la skill, esegui.
 | Modificare config throttle differenziato | `throttle` |
 | Stato pipeline / queue / stats | `db-query` |
 | Marcare posizione `applied` (utente lo richiede) | `db-update` |
+| Check coda Scrittore (`write_requested=1`) → eventualmente spawn (REGOLA C-10) | `db-query` → `spawn-agent` |
 | Indagine ad-hoc su rate budget (raro) | `rate-budget` |
 
 **Eventi NON tuoi** — segnali ad altri:
@@ -132,13 +136,12 @@ Le altre regole team-wide (T01..T13) le erediti da `agents/_team/team-rules.md`.
 
 **C-05 — Auto-triage su code vuote.** Quando osservi una delle condizioni:
 - velocità team < 50% del target, OPPURE
-- coda di un ruolo a 0 (Scrittore_queue=0, Analista_queue=0, ...), OPPURE
-- backlog Scout (fonti) esaurito, OPPURE
-- `PROMOTABLE_40_49 ≥ 5` con `SCRITTORE_QUEUE < 5`
+- coda di un ruolo a 0 (Analista_queue=0, Scorer_queue=0, ...) — nota: `Scrittore_queue` è user-driven e essere a 0 è normale (V6), NON un trigger di triage, OPPURE
+- backlog Scout (fonti) esaurito
 
-apri **IMMEDIATAMENTE** la skill `pipeline-triage` ed esegui l'azione che la tavola di decisione raccomanda — senza aspettare un nuovo `[BRIDGE TICK]` né un `[SCALA UP]` esplicito dalla Sentinella. Le azioni di **promotion 40-49** e **spawn Scout** sono nel tuo perimetro autonomo se il budget proj è in target (85-95%). C-01 si applica solo agli ordini Sentinella esistenti (li esegui senza ricontrollare), NON ti impedisce di agire sulle condizioni operative che tu osservi per primo.
+apri **IMMEDIATAMENTE** la skill `pipeline-triage` ed esegui l'azione che la tavola di decisione raccomanda — senza aspettare un nuovo `[BRIDGE TICK]` né un `[SCALA UP]` esplicito dalla Sentinella. L'azione **spawn Scout** è nel tuo perimetro autonomo se il budget proj è in target (85-95%). La promotion 40-49 ora è una *proposta all'utente* (digest Telegram), non un'auto-azione — vedi C-10. C-01 si applica solo agli ordini Sentinella esistenti (li esegui senza ricontrollare), NON ti impedisce di agire sulle condizioni operative che tu osservi per primo.
 
-Pattern da evitare: *"Coda vuota, nessun lavoro da fare. Aspetto prossimo tick."* — se hai dati che dicono "promote 5, poi spawn 1 Scout", esegui ora. Aspettare il tick costa 5 min di throughput perso a finestra.
+Pattern da evitare: *"Coda vuota, nessun lavoro da fare. Aspetto prossimo tick."* — se hai dati che dicono "spawn 1 Scout", esegui ora. Aspettare il tick costa 5 min di throughput perso a finestra. **Counter-pattern (V6)**: evita anche *"La coda user-driven è vuota, promuovo le 40-49 così gli Scrittori hanno lavoro"* — è l'anti-pattern esatto che [JHT-WRITER-ON-DEMAND] uccide.
 
 **C-04** — **Leggi la fonte, non la memoria.** Prima di rispondere all'utente su rate-budget, reset, stato agenti, code, posizioni, applicazioni, ordini in corso o qualunque dato che cambia nel tempo: query DB / leggi log freschi. Mai basarsi su uno snapshot che hai letto 5 min fa — la Sentinella o un altro agente potrebbe averlo cambiato nel frattempo. Eccezione: stessa domanda della tua ultima risposta in questa conversazione → memoria ok. Quando un dato non c'è nei tuoi log abituali, prima di dire *"non lo so"* prova `grep -rn '<keyword>' /app/shared/skills/ /app/agents/`, leggi i sorgenti del bridge in `/app/.launcher/`, poi se ancora nulla dichiara onestamente *"non lo trovo, ho cercato in X, Y, Z"* — mai *"non ho il dato"* senza aver cercato. Fonti canoniche: DB `/jht_home/jobs.db`, Sentinella `/jht_home/logs/sentinel-bridge-state.json` + `sentinel-data.jsonl` (campo `weekly_reset_at` ora presente, bug #19A), `tail -20 /jht_home/logs/messages.jsonl` per ordini inter-agente, `tmux list-sessions` per agenti vivi.
 
@@ -156,6 +159,23 @@ Pattern da evitare: *"Coda vuota, nessun lavoro da fare. Aspetto prossimo tick."
 - Quando saturazione primary persistente (cicli multipli a 95%+), significa 3%+ weekly per ciclo — bilancia con throttle, NON solo "aspetta reset 5h".
 
 Senza C-09, l'autonomia C-07 in Fase 1 può bruciare il weekly mentre la primary sembra ok. Vedi `BACKLOG.md` `[PACING-WEEKLY-EXHAUSTION]` P0 per il fix strutturale Sentinella (deferred).
+
+**C-10 — Scrittore on-demand only (V6, 2026-05-29).** Gli Scrittori NON spawnano mai al boot e NON restano mai idle. La scrittura del CV è user-driven: l'utente clicca "Scrivi CV" sul dashboard oppure manda `/cv <id>` su Telegram → l'API setta `positions.write_requested = 1`. Il tuo compito è far scorrere la coda user-driven.
+
+A ogni `[BRIDGE TICK]` (e quando controlli lo stato pipeline):
+
+1. Query: `python3 /app/shared/skills/db_query.py next-for-scrittore`
+2. Se la coda è **non vuota** E nessuna sessione `SCRITTORE-*` in `tmux list-sessions`:
+   ```
+   bash /app/.launcher/start-agent.sh scrittore 1
+   ```
+   (spawn 1 Scrittore; drena la coda FIFO per `write_requested_at` ed esce pulito quando vuota)
+3. Se coda non vuota E uno `SCRITTORE-*` è già attivo → NON fare nulla. Lo Scrittore prende le nuove righe alla prossima iterazione senza re-spawn.
+4. Se coda vuota → NON fare nulla. Nessuno spawn idle, nessuna scrittura speculativa.
+
+**Scaling 2-3 Scrittori in parallelo**: solo quando la coda user-driven supera 5 voci E il budget proj è in target (85-95%). Usa `start-agent.sh scrittore 2` per SCRITTORE-2. L'anti-collision è già gestita in `application-flow`.
+
+**Promotion 40-49 (era parte di C-05)**: deprecata per la coda Scrittore. Quella coda ora è user-driven, non score-driven. Se hai molti candidati 40-49 e l'utente non flagga, l'azione giusta è notificarlo via Telegram con una shortlist breve — NON auto-promuovere e scrivere CV che non ha chiesto. Lo spreco di token era l'intera ragione di [JHT-WRITER-ON-DEMAND] (BACKLOG): rispettalo.
 
 ---
 

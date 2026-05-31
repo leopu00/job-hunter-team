@@ -124,6 +124,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 > 📐 Architettura & stato implementazione consolidati in [`docs/internal/cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md) (living doc). Voci sotto = riepilogo BACKLOG; per dettagli decisione macro-events e incident RobertHalf vedi il doc.
 
+**Fondazione (✅)**
 - ✅ `cloud_sync_tokens` schema + RLS (migration 006)
 - ✅ API CRUD `/api/cloud-sync/tokens` (GET/POST/DELETE, soft-delete)
 - ✅ UI `/settings/cloud-sync` (plaintext token shown only once)
@@ -135,19 +136,52 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ✅ **Web fallback** quando manca SQLite locale (commit `cc52acca`, 2026-05-22)
 - ✅ **`positions.location` cap ≤ 200 char** (migration 015, post-incident RobertHalf)
 - ✅ **Rimozione `sentinel_ticks` dal push daemon** (commit `f68a127d`)
-- ✅ **Refactor `team_commands` → `team_state` desired-state + event lanes** (mig 019–022, 2026-05-23) — accorpa single-team enforcement + status inference + chat/feedback lanes; `team_commands` resta vivo in parallelo durante cutover (Step 5–6 in `cloud-sync-architecture.md`)
+- ✅ **Periodic sync loop** (commit `690534e0`, 2026-05-22) — push daemon attivo, cadenza 30s→60s + delta-only + halt-flag guard
+- ✅ **SQLite CHECK constraints** (commit `3602d42e`, 2026-05-22) — replica CHECK length Postgres mig 015 su SQLite (title/company/location)
+- ✅ **RLS init plan fix** (commit `2b78fdd9` + mig 018, 2026-05-22) — 24 policy `auth.uid()` per-row → `(select auth.uid())`, chiude advisor critical
+
+**Refactor desired-state 2026-05-23 (✅)** — passaggio da push-only a bidirezionalità Kubernetes-style
+- ✅ **`team_commands` → `team_state` desired-state + 3 event lanes** (mig 019–022) — single-team enforcement + status inference + `user_to_agent_messages` + `position_feedback`; `team_commands` resta vivo in parallelo durante cutover
 - ✅ **Realtime publication su team_state + lanes** (mig 021) — browser live (~200ms) via Supabase Realtime
-- ✅ **Fix RLS `location_geocode`** (mig 020) — close advisor critical: cache poisoning via anon key
-- ✅ **P0 — SQLite CHECK constraints** (commit `3602d42e`, 2026-05-22) — replica CHECK length di Postgres mig 015 su SQLite locale (title/company/location)
-- ✅ **P0 — RLS init plan fix** (commit `2b78fdd9` + migration 018, 2026-05-22) — 24 policy migrate da `auth.uid()` per-row a `(select auth.uid())`, chiude advisor critical
-- ⬜ **P0 — DELETE propagation con tombstone** (push è solo UPSERT — vedi `cloud-sync-architecture.md` #4)
-- ✅ **P1 — Daemon alert + auto-shutdown** (commit `ad2e8076`, 2026-05-22) — counter consecutiveFails: warning a ≥3, auto-shutdown a ≥5, reset su success. Origin incident RobertHalf 2026-05-19
-- ⬜ **P1 — Killswitch 401/403** (oggi daemon continua loop infinito su token revocato)
-- ⬜ **P1 — `jht cloud restore`** comando esplicito disaster recovery
-- ⬜ **P1 — Subscriber on-demand 🅲** (polling spento se team giù, post-team_state)
-- ⬜ **P1 — Polling adattivo** basato su `team_state.last_user_activity_at`
-- ⬜ **P1 — Feedback like/dislike** istruire scout/scorer a reagire
-- ✅ **Periodic sync loop** (commit `690534e0`, 2026-05-22) — push daemon attivo, cadenza tunata 30s→60s + delta-only via `updated_at` cursor + halt-flag guard
+- ✅ **Fix RLS `location_geocode`** (mig 020) — chiude advisor critical: cache poisoning via anon key
+- ✅ **Hardening trigger team_state** (mig 023) — search_path + REVOKE EXECUTE
+- ✅ **Reconciler container** (`cli/src/lib/team-state-reconciler.js`) — long-poll 5s su `/api/team-state`, applica start/stop/restart atomici, rispetta `.team-halted.flag`
+- ✅ **Single-team enforcement runtime** — claim 409 + push 409 + PATCH 409 (commit `3427a304`)
+
+**Writer-on-demand cloud-side 2026-05-29 (✅)** — replica pattern desired-state su flag per-row
+- ✅ **`positions.write_requested` + `write_requested_at`** (mig 024) — schema, push delta CLI, push web `/api/local/sync`, receive `/api/cloud-sync/push`
+- ✅ **Endpoint web** `/api/positions/[legacyId]/write-request` — UPDATE SQLite locale + best-effort PATCH Supabase
+- ✅ **Capitano lazy-spawn Scrittore on-demand** (RULE C-10 V6, commit `a9596002`)
+- ✅ **Telegram `/cv` handler + `write_request.py` skill** (commit `5cef55fc`)
+
+**🔴 Pending P0 — correttezza flusso** (vedi [`cloud-sync-architecture.md` § Pending](docs/internal/cloud-sync-architecture.md#-pending-in-ordine-di-priorità))
+- ✅ **P0 — Pull cloud→SQLite per desired-state al boot container** *(DONE 2026-05-31, commit `af3302bd` + `1a918531`)*. GET `/api/cloud-sync/pull-desired-state?since=<ISO>` (web) + `jht cloud pull-desired-state` (CLI) + wire al boot di `startActionContainer`. Scope MVP: `positions.write_requested` + `write_requested_at`. Cursor separato `.cloud-pull-cursor.json`. Smoke e2e green. **Limite noto chiuso poco dopo**: la route web richiedeva SQLite locale e ritornava 500 in cloud-mode → vedi commit `0ada62ea` sotto.
+- ✅ **P0 — Route write-request supporta cloud-mode senza SQLite locale** *(DONE 2026-05-31, commit `0ada62ea`)*. Discriminazione `hasLocal`: SQLite presente → path locale (immutato); SQLite assente → SELECT+UPDATE solo Supabase con embedded validate. Loop chiuso: utente clicca su Vercel con container offline → flag su cloud → pull al boot applica → Capitano spawn Scrittore.
+- ✅ **P0 — DELETE propagation con tombstone** *(DONE 2026-05-31, commit `6499b3db`)*. Supabase mig 025 (deleted_at TIMESTAMPTZ + index partial) su positions/scores/applications; SQLite V7 (tabella `_tombstones` + 3 trigger BEFORE DELETE in `shared/skills/_db.py::_migrate_v6_to_v7_tombstones`); CLI push include tombstones nel payload con cursor proprio; web receive UPDATE soft con idempotency `WHERE deleted_at IS NULL` + lookup legacy_id→UUID per scores/apps. Scope ridotto a 3 tabelle (companies/highlights non sono pushate oggi). **Follow-up**: (a) 30 query in `web/lib/queries.ts` da aggiornare con `.is('deleted_at', null)` filter — PR dedicato; (b) cron Supabase hard-delete `deleted_at < now()-30d`.
+- ✅ **P0 — Killswitch 401/403** *(DONE 2026-05-31, commit `07d0109a`)*. handlePush ritorna `{ok, authFailed}`; daemon ha counter dedicato `MAX_CONSECUTIVE_AUTH_FAILS=3` (vs 5 generico, perché token revocato non recupera mai). Halt + INSERT `pending_user_messages` con istruzioni "riapri pairing + jht cloud login". Reset solo su push success 200 (un 500 transient non resetta).
+- ⬜ **P0 — Riparare CI/Tests/Lint pre-esistenti** falliscono da 2026-05-22 — test smoke con soglie sbagliate, ENOENT su file inesistenti, ESLint 100+ warning `any`. Falsano signal qualità
+- ✅ **P1 — Pull periodico nel daemon** *(DONE 2026-05-31, commit `968ef913`)*. `handleDaemon` invoca `handlePullDesiredState` ad ogni tick dopo il push (cadenza condivisa intervalSec). Pull isolato dal counter consecutiveFails. Log "✓ N applicate" bypassa silent quando N>0. Chiude il caso multi-device "live" (mobile click + team su VPS).
+
+**🟠 Pending P1 — chiusura loop feedback agenti** (bidirezionalità incompleta: schema + RLS + Realtime ✅ done, container NON legge)
+- ✅ **P1 — Reader container per `user_to_agent_messages`** *(DONE 2026-05-31, commit `4774c190`)*. `cli/src/lib/user-messages-poller.js` fa long-poll `/api/messages?status=pending&limit=50`, sort FIFO, claim atomico via PATCH `status=delivered`, forward al tmux pane dell'agente target via `jht-tmux-send`. Mapping agent→session: ruolo base lowercase + uppercase (`scout-1` → `SCOUT`), whitelist allineata a `realtime-subscriber.js`. tmux fail → PATCH `expired` (non si re-processa). Rispetta `.team-halted.flag` + `.weekly-halt.flag`. Killswitch 401/403 dopo 3 fail consecutivi (allineato `handlePush`). Wire in `pid1.js`: spawn al boot + watcher cloud.json + respawn 5s + kill su shutdown.
+- ✅ **P1 — Reader agenti per `position_feedback`** *(DONE 2026-05-31, commit `093027c1`)*. Skill `shared/skills/feedback_query.py` (mode `check <legacy_id>`) + `agents/_skills/feedback-query/SKILL.md`. Aggiunta a `scorer/skills.list` e `scout/skills.list`. **Scorer**: nuovo Step 5 obbligatorio post-score-base con multiplier (`like ×1.10`, `star ×1.15`, `dislike ×0.85`, `hide → status=excluded`), cap 100. **Scout**: skill esposta come signal opzionale (skip per-posizione gia' coperto da SC-05 dedup), pattern uso = prioritizzazione fonti su rivalutazione. Fallback neutro (`latest_action=null` + `note`) quando cloud disabled/irraggiungibile: agenti non hard-failano mai. Aggiornati EN + IT baseline (HU community update pending). **Follow-up**: aggregato `recent` per pattern company-level richiede endpoint dedicato + push delta — tracciato in P1 "Feedback loop esteso" sotto.
+- 🟢 **P1 — Subscriber on-demand** *(scope-reduced 2026-05-31, parzialmente coperto da polling adattivo `acc293de`)*. Kill/spawn duro dei poller `team-state-reconciler` e `realtime-subscriber` agganciato a `is_running` NON è fattibile architettonicamente: sono loro che applicano il `should_run=true` dal browser, killarli rompe il restart loop. Per `user-messages-poller` invece il polling adattivo (3 tier 5s/30s/120s) riduce il carico del 90% quando idle senza richiedere riarchitettura. **Follow-up**: investigare se per `team-state-reconciler` ha senso un tier `deep-idle` (60s+) quando team is_running=false stabilmente.
+- ✅ **P1 — Polling adattivo** *(DONE 2026-05-31, commit `acc293de`, scope-reduced)*. `user-messages-poller` 3 tier basati sull'ultima consegna riuscita: `active` 5s (<5min), `idle` 30s (5-30min), `deep-idle` 120s (>30min). Reset a active appena arriva un messaggio. Backoff esponenziale on error si compone col tier corrente. **Scope ridotto**: il task indicava interval basato su `team_state.last_user_activity_at` che richiederebbe heartbeat browser-side via PATCH — fuori scope MVP. La proxy "ultima consegna" ottiene lo stesso outcome (idle → poll giù) senza touch web.
+
+**🟠 Pending P1 — hardening + UX**
+- ✅ **P1 — Daemon alert + auto-shutdown** (commit `ad2e8076`, 2026-05-22) — WARN_AT=3, MAX=5 → auto-shutdown. Vale anche per 409 not_active_device
+- ⬜ **P1 — `jht cloud restore`** comando esplicito disaster recovery (componibile con P0 #1 ma scopo distinto: full DB rebuild vs delta intent reconciliation)
+- ⬜ **P1 — Cutover `team_commands` → `team_state` finale + rename `realtime-subscriber.js`** — `handleAction` singolo agente ancora su `useTeamCommandPoller`; UI bulk ✅. Rinominare `cli/src/lib/realtime-subscriber.js` → `team-commands-poller.js` (nome ingannevole: fa long-poll HTTP, non WebSocket, vedi nota architetturale nel doc)
+- ⬜ **P1 — Geocoding opt-in/out per-position** — replica esatta del pattern writer-on-demand (`positions.geocode_requested BOOLEAN`), analista legge prima di partire
+- ⬜ **P1 — Feedback loop esteso** — `position_feedback` + `comment`, `score`, `direction` (more_like_this/less_like_this)
+- ⬜ **P1 — `JHT-LOCAL-NO-API`** — `web/lib/queries.ts` switcha su `local-queries.ts` quando `cloud.json.enabled=false`
+
+**🟡 Pending P2**
+- ⬜ Account Supabase mismatch warning UI (memoria `project_supabase_dual_accounts`)
+- ⬜ Schema drift alert su fallback full-read
+- ⬜ Canary endpoint per distinguere "Supabase saturo" da "Vercel slow"
+
+**Future / nice-to-have**
 - ⬜ **Google Drive integration** (`drive.file` scope, CV/cover letter upload)
 - ⬜ **"Enable cloud sync" toggle** in desktop launcher + CLI wizard
 - ⬜ **Self-hosted Supabase docs** (BYO backend for technical users)
@@ -308,9 +342,18 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **🟢 Operativo:** shutdown VPS Hetzner (€19.50/mo combinati per 2 CPX22 ferme). Investigare auto-restart container Kimi (osservato 2× durante sessione).
 - **🐛 Bug minori funnel:** labels phase troncati su viewport stretti, legend duplicata Codex+Kimi, Pre-LinkedIn funnel "distorto" da 84 untracked.
 
-##### ✍️ [JHT-WRITER-ON-DEMAND] Scrittore + Critico spawn SOLO su selezione utente esplicita ⬜ 🔴 URGENTE pre-next-test
+##### ✍️ [JHT-WRITER-ON-DEMAND] Scrittore + Critico spawn SOLO su selezione utente esplicita ✅ DONE 2026-05-29
 
-- **Background scoperto da case study #2/#3 (2026-05-23)**: gli Scrittori sono i top consumer di token del team (spawn 3-round + Critico che a sua volta consuma per leggere CV+JD+scrivere critica). Il Critico è concettualmente "fuori dal team" (spawnato dallo Scrittore) ma il suo consumo dovrebbe essere attribuito allo Scrittore per i calcoli di throttling del Capitano. Inoltre molti CV scritti finiscono in `ready` senza che l'utente li voglia davvero → token bruciati su posizioni che l'utente non applierà mai. Su VPS Codex: 105 ready ma applied=0; su VPS Kimi: 56 ready ma applied=0.
+- **Stato implementazione (branch `dev3`, 6 commit sequenziali 2026-05-29):**
+  - ✅ DB foundation (`1744938e`): SQLite V6 con `positions.write_requested` + `write_requested_at`, migrazione idempotente `_migrate_positions_write_requested`, partial index `WHERE write_requested = 1`, mig Supabase 024. `next-for-scrittore` filtra `write_requested=1` con ordering FIFO su `write_requested_at`.
+  - ✅ API web (`0ac03951`): `POST/DELETE /api/positions/[legacyId]/write-request` (session-only, double-write SQLite + Supabase best-effort). Push delta cablato: `write_requested[_at]` nel whitelist `cli/src/commands/cloud.js` e nel receive endpoint `web/app/api/cloud-sync/push/route.ts`.
+  - ✅ UI web (`d7fdf924`): button "🖊 Scrivi CV" nella detail page `/positions/[id]` con toggle pulito (POST/DELETE), optimistic update + rollback, disabled quando `status != 'scored'` o application esiste.
+  - ✅ Scrittore prompt (`ac90fc94`, EN+IT baseline): on-demand mode, drain-and-exit (no idle loop), target = solo user-flagged. HU community update pending.
+  - ✅ Capitano prompt + RULE C-10 (`a9596002`, EN+IT): lazy-spawn protocol, NIENTE Scrittori al boot, check `next-for-scrittore` ogni BRIDGE TICK, spawn solo se coda non vuota AND nessun SCRITTORE-* attivo. Rimosso trigger `PROMOTABLE_40_49` da C-05 (anti-pattern V6 esplicito).
+  - ✅ Telegram `/cv <id>` (`5cef55fc`): handler in `telegram-bridge/src/bridge.ts` + nuova skill `shared/skills/write_request.py` (wrapper Python atomico validate+UPDATE, output JSON, riusabile da bridge/Capitano/CLI). Same guard della API web. Notify ad-hoc al Capitano via tmux per evitare attesa BRIDGE TICK.
+- **Decisione architetturale lockata** (vedi memoria `project_writer_on_demand_arch`): lazy-spawn dal Capitano (no boot), MVP single-button + `/cv` Telegram (NO batch multi-select per ora — rinviato se feedback lo richiede).
+- **Componenti rimasti opzionali (post-launch)**: batch multi-select UI lista, comando `/cv all-score-80plus` per gruppo, scaling automatico 2-3 Scrittori in parallelo (C-10 lo descrive ma da validare in produzione).
+- **Background originale**: gli Scrittori sono i top consumer di token del team (spawn 3-round + Critico che a sua volta consuma per leggere CV+JD+scrivere critica). Il Critico è concettualmente "fuori dal team" (spawnato dallo Scrittore) ma il suo consumo dovrebbe essere attribuito allo Scrittore per i calcoli di throttling del Capitano. Inoltre molti CV scritti finiscono in `ready` senza che l'utente li voglia davvero → token bruciati su posizioni che l'utente non applierà mai. Su VPS Codex: 105 ready ma applied=0; su VPS Kimi: 56 ready ma applied=0.
 - **Problem statement**: oggi la pipeline scrive CV per **tutto** ciò che passa lo Scorer (default ≥60). Risultato: forte spreco di token su CV non desiderati + scarsa potenza di ricerca perché Scrittori "rubano" risorse a Scout/Analista/Scorer.
 - **Soluzione proposta** (rivoluzione architettonica per i prossimi beta test):
   1. **Default mode = "SEARCH ONLY"**: all'avvio del team, Scrittori in stand-by. Il team gira solo come motore di ricerca + analisi + scoring → accumula posizioni con score nel DB.
@@ -329,7 +372,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - DB: aggiungere `positions.write_requested BOOLEAN DEFAULT 0` + `positions.write_requested_at TIMESTAMP`
   - Skill nuova `[JHT-SKILL-WRITE-REQUEST]` per Scrittore: pull next position con `write_requested=true AND status='scored'`
   - Migration Supabase: stesso campo per cloud sync
-- **Priority**: 🔴 URGENTE — da implementare PRIMA dei prossimi test beta. Cambia profondamente i numeri di consumo token e quindi la validità delle metriche.
+- **Priority**: ✅ DONE 2026-05-29 — shipped end-to-end (DB + API + UI + Telegram + Scrittore + Capitano). Validare in real beta test per misurare impatto reale sul token spend.
 - **Linked**: [JHT-TOKEN-MONITOR-WRITER-CRITIC] (sotto), [JHT-COST-VALIDATION-PAYG-VS-SUB] (sotto).
 
 ##### 📊 [JHT-TOKEN-MONITOR-WRITER-CRITIC] Aggrega consumo Scrittore+Critico come unità singola per throttling Capitano ⬜ 🟠 HIGH
@@ -597,7 +640,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 ##### ☁️ [JHT-DESKTOP-SYNC] Encrypted cloud sync of config + VPS metadata — **CORE DONE 2026-05-13**
 
-- **Stato implementazione (merge `8040a576` dev1 + `14d84633` cloud-sync direction lockata + dev2 commit `61a544aa/a4112d10/bae27059`):** sync push-only `local → cloud` cablato; endpoint `web/app/api/cloud-sync/{push,device-register,ping,tokens}/route.ts` live; CLI `cli/src/commands/cloud.js` con `enable/pair/status/push/disable`; bootstrap automatico al primo login (decisione lockata, `[JHT-CLOUD-RESTORE]`). **Ancora aperto**: passphrase recovery end-to-end (`[JHT-DESKTOP-RECOVERY]` sotto) e profile/theme sync (`[JHT-CLOUD-SYNC-PROFILE/THEME]`).
+- **Stato implementazione (merge `8040a576` dev1 + `14d84633` cloud-sync direction lockata + dev2 commit `61a544aa/a4112d10/bae27059`):** sync push-only `local → cloud` cablato (modello successivamente esteso a bidirezionalità desired-state — vedi [`cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md)); endpoint `web/app/api/cloud-sync/{push,device-register,ping,tokens}/route.ts` live; CLI `cli/src/commands/cloud.js` con `enable/pair/status/push/disable`; bootstrap automatico al primo login (decisione lockata, `[JHT-CLOUD-RESTORE]`). **Ancora aperto**: passphrase recovery end-to-end (`[JHT-DESKTOP-RECOVERY]` sotto) e profile/theme sync (`[JHT-CLOUD-SYNC-PROFILE/THEME]`).
 - **Why:** without cloud sync of essential metadata, cross-device recovery is impossible. But syncing master credentials (Hetzner token) is too risky — single point of failure if our cloud is breached.
 - **Sync to cloud (Supabase, encrypted user-side with passphrase):**
   - Profile + preferences

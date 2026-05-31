@@ -62,6 +62,9 @@ export function getDefaultCommands(): CommandSpec[] {
     { name: "run", description: "Esegui task", handler: async () => {} },
     { name: "stop", description: "Ferma task in corso", handler: async () => {} },
     { name: "team", description: "Lista worker attivi", handler: async () => {} },
+    // Writer-on-demand (V6): l'utente seleziona da Telegram una posizione
+    // per la quale vuole il CV. Triggera lo spawn lazy del Capitano (C-10).
+    { name: "cv", description: "Richiedi CV: /cv <position_id>", handler: async () => {} },
     { name: "help", description: "Mostra comandi disponibili", handler: async () => {} },
   ];
 }
