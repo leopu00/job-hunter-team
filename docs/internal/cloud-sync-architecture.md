@@ -180,6 +180,7 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
 | **Pull desired-state endpoint** `/api/cloud-sync/pull-desired-state` (Bearer auth, rate 30/min, lookback 7gg) | `af3302bd` | 2026-05-31 |
 | **CLI `jht cloud pull-desired-state` + wire al boot di `startActionContainer`** (cursor `.cloud-pull-cursor.json`, best-effort 15s timeout) | `1a918531` | 2026-05-31 |
 | **Route write-request supporta cloud-mode senza SQLite locale** (path A local-primary / path B cloud-only con embedded validate) | `0ada62ea` | 2026-05-31 |
+| **Pull desired-state ad ogni tick del daemon** (multi-device live, isolato dal counter consecutiveFails del push) | `968ef913` | 2026-05-31 |
 
 ### ⬜ Pending (in ordine di priorità)
 
@@ -205,7 +206,7 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
 
 #### Loop feedback agenti (chiude la bidirezionalità incompleta)
 
-5. **P1 — Pull periodico nel daemon** *(follow-up del pull-at-boot)*. `jht cloud pull-desired-state` oggi gira solo al boot. In-team il toggle si propaga via push delta-only (~30s, push container→cloud → poi un secondo browser vede aggiornata). Caso scoperto: utente clicca toggle su mobile mentre team gira su VPS → flag in cloud → container non lo vede finché non riavvia. Aggiungere tick (60s consigliato) nel `cloud daemon` loop. Costo: +1 GET/min/utente, lean payload (~4 campi × <10 righe tipico).
+5. ✅ **P1 — Pull periodico nel daemon** (DONE 2026-05-31, commit `968ef913`). `handleDaemon` chiama `handlePullDesiredState({ silent: true })` ad ogni tick dopo il push (cadenza condivisa intervalSec, default 60s). Pull isolato dal counter consecutiveFails del push. Costo misurato +1 GET/tick, payload <100 righe tipico. Chiude il caso multi-device "live": utente clicca toggle su mobile mentre team gira su VPS → flag in cloud → container lo vede entro 60s, senza attendere il riavvio.
 
 6. **P1 — Reader container per `user_to_agent_messages`**. Schema, RLS, Realtime publication ✅ done; il browser scrive POST `/api/messages` e si aspetta che l'agente risponda; il container NON ascolta. Componenti:
    - Nuovo subscriber `cli/src/lib/user-messages-poller.js` (o estensione del `team-state-reconciler.js`) che long-poll `/api/messages?status=pending&limit=20`
