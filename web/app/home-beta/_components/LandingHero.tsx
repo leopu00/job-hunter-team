@@ -34,8 +34,29 @@ export default function LandingHero() {
         className="relative z-10 w-full max-w-6xl mt-6 px-2"
         style={{ animation: "fade-in 0.8s ease 0.2s both" }}
       >
-        <div className="hidden md:block">
-          <BetaTeamFlow />
+        {/* Desktop: il team flow è "pinned" allo scroll. Il wrapper
+            esterno fornisce 1.5 viewport (150vh) di "binario"; lo
+            sticky child resta agganciato al top del viewport per tutta
+            quella distanza, mentre lo scroll del browser continua a
+            generare gli eventi che BetaTeamFlow consuma per far
+            avanzare le pallaine. Niente flex center: il team flow
+            mantiene la sua altezza naturale dal top dello sticky. */}
+        {/* Pin del team flow.
+            - sticky top: 5rem (80px) → scende sotto LandingNav (sticky
+              top:0 z-50, ~80px alta), Captain emoji visibile.
+            - sticky senza height esplicita → contiene naturalmente
+              tutto BetaTeamFlow (team + globo): niente overflow che si
+              sovrappone alla tabella sotto.
+            - pin_height in px = top_offset (80) + pipeline (9×220=1980)
+              + sticky_natural_height (~1300) + buffer ≈ 3500. */}
+        <div
+          className="hidden md:block relative"
+          data-pin-section="team-flow"
+          style={{ height: "3500px" }}
+        >
+          <div className="sticky" style={{ top: "5rem" }}>
+            <BetaTeamFlow />
+          </div>
         </div>
 
         <div className="md:hidden flex items-start justify-start gap-x-6 overflow-x-auto pb-3">

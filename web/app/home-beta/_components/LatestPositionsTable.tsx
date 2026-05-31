@@ -1,29 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  LUXURY_POSITIONS,
+  type LuxuryPosition,
+} from "../_data/luxuryPositions";
 
-type RecentPosition = {
-  id: string;
-  legacy_id?: number | null;
-  title: string;
-  company: string;
-  location?: string | null;
-  status: string;
-  source?: string | null;
-  score?: number | null;
-  found_at: string;
-  found_by?: string | null;
-  last_checked?: string | null;
-  scored_at?: string | null;
-  last_action_at?: string;
-  last_action_by?: string;
-  last_action_actor?: string;
-  voto?: number | null;
-  url?: string | null;
-  remote_type?: string | null;
-  salary_declared_min?: number | null;
-  salary_declared_max?: number | null;
-};
+type RecentPosition = LuxuryPosition;
 
 const STATUS_COLORS: Record<string, string> = {
   new: "#94a3b8",
@@ -36,6 +19,42 @@ const STATUS_COLORS: Record<string, string> = {
   applied: "#22c55e",
   response: "#facc15",
 };
+
+// Pipeline di avanzamento status. Ogni "tick" scroll-driven prende una
+// riga e la fa avanzare al prossimo stato → simula il team che lavora,
+// come la tabella di /team/v2 quando i polling /api/db/recent-writes
+// rilevano nuovi timestamp.
+const STATUS_PIPELINE = [
+  "new",
+  "checked",
+  "scored",
+  "writing",
+  "review",
+  "ready",
+  "applied",
+  "response",
+] as const;
+
+// Actor associato al transition: per dare credibilità al flash
+// mostriamo l'agente che "ha lavorato" la riga.
+const STATUS_ACTOR: Record<string, string> = {
+  checked: "analista",
+  scored: "scorer",
+  writing: "scrittore",
+  review: "critico",
+  ready: "scrittore",
+  applied: "scout",
+  response: "scout",
+};
+
+type RowOverride = {
+  status?: string;
+  actor?: string;
+  voto?: number | null;
+  score?: number | null;
+};
+
+type FlashState = { color: string; key: number };
 
 function formatRelative(iso: string): string {
   const t = Date.parse(iso);
@@ -52,109 +71,145 @@ function formatRelative(iso: string): string {
   return `${mo}mo ago`;
 }
 
-function formatFoundAt(iso: string): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "—";
-  const d = new Date(t);
-  const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  const head = sameDay
-    ? time
-    : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return `${head} (${formatRelative(iso)})`;
-}
-
 export default function LatestPositionsTable() {
-  const [recent, setRecent] = useState<RecentPosition[]>([]);
-  const [recentLoaded, setRecentLoaded] = useState(false);
+  // Landing page: dataset fittizio coerente con il profilo "luxury
+  // hospitality front-of-house". Niente fetch al backend (l'utente non
+  // è loggato e non ha un team che produce dati reali) — i dati statici
+  // si animano lo stesso via lo scroll-driven tick più in basso.
+  const [recent] = useState<RecentPosition[]>(LUXURY_POSITIONS);
+  const [overrides, setOverrides] = useState<Record<string, RowOverride>>({});
+  const [flashes, setFlashes] = useState<Record<string, FlashState>>({});
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const flashKeyRef = useRef(0);
 
-  const fetchRecent = useCallback(async () => {
-    try {
-      const res = await fetch("/api/positions/recent?limit=15");
-      if (!res.ok) {
-        setRecentLoaded(true);
-        return;
-      }
-      const data = await res.json();
-      if (Array.isArray(data?.positions)) {
-        setRecent(data.positions as RecentPosition[]);
-      }
-      setRecentLoaded(true);
-    } catch {
-      setRecentLoaded(true);
-    }
-  }, []);
-
+  // Scroll-driven simulation: ad ogni soglia di scroll-down attraverso
+  // la sezione, una riga avanza di status nel pipeline e flasha. Replica
+  // l'esperienza di /team/v2 quando i polling rilevano scritture reali,
+  // ma local-only (utenti non loggati non hanno il backend del team).
   useEffect(() => {
-    fetchRecent();
-    const t = setInterval(fetchRecent, 10_000);
-    return () => clearInterval(t);
-  }, [fetchRecent]);
+    if (recent.length === 0) return;
+    let lastY = typeof window !== "undefined" ? window.scrollY : 0;
+    let accumScroll = 0;
+    const PIXELS_PER_TICK = 140;
+
+    const tick = () => {
+      // Considera tutte le righe non ancora "response" (ultimo stato).
+      const candidates = recent.filter((p) => {
+        const cur = overrides[p.id]?.status ?? p.status;
+        const idx = STATUS_PIPELINE.indexOf(
+          cur as (typeof STATUS_PIPELINE)[number],
+        );
+        return idx >= 0 && idx < STATUS_PIPELINE.length - 1;
+      });
+      if (candidates.length === 0) return;
+      const row = candidates[Math.floor(Math.random() * candidates.length)];
+      const cur = overrides[row.id]?.status ?? row.status;
+      const idx = STATUS_PIPELINE.indexOf(
+        cur as (typeof STATUS_PIPELINE)[number],
+      );
+      const next = STATUS_PIPELINE[idx + 1];
+      const nextActor = STATUS_ACTOR[next] ?? row.last_action_actor ?? "scout";
+      const color = STATUS_COLORS[next] ?? "#94a3b8";
+      flashKeyRef.current += 1;
+      const myKey = flashKeyRef.current;
+
+      setOverrides((prev) => {
+        const cur = prev[row.id] ?? {};
+        const patch: RowOverride = { ...cur, status: next, actor: nextActor };
+        // Quando arriva a "scored" assegnamo un voto sintetico
+        // (random 6.0–8.8) se non già presente — coerente con la
+        // colonna Voto che resterebbe vuota altrimenti.
+        if (next === "scored" && row.voto == null && cur.voto == null) {
+          patch.voto = Math.round((6 + Math.random() * 2.8) * 10) / 10;
+        }
+        return { ...prev, [row.id]: patch };
+      });
+      setFlashes((prev) => ({ ...prev, [row.id]: { color, key: myKey } }));
+      window.setTimeout(() => {
+        setFlashes((prev) => {
+          if (prev[row.id]?.key !== myKey) return prev;
+          const rest = { ...prev };
+          delete rest[row.id];
+          return rest;
+        });
+      }, 1400);
+    };
+
+    const onScroll = () => {
+      const dy = window.scrollY - lastY;
+      lastY = window.scrollY;
+      if (dy <= 0) return; // solo scroll-down
+      const sec = sectionRef.current;
+      if (sec) {
+        const rect = sec.getBoundingClientRect();
+        const winH = window.innerHeight;
+        // Attiva ticks solo quando la sezione tabella è almeno parzialmente
+        // nel viewport (top sotto il fondo e bottom sopra il top).
+        if (rect.top > winH || rect.bottom < 0) return;
+      }
+      accumScroll += dy;
+      while (accumScroll >= PIXELS_PER_TICK) {
+        accumScroll -= PIXELS_PER_TICK;
+        tick();
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [recent, overrides]);
 
   return (
-    <section className="pt-12 pb-12 w-full">
+    <section ref={sectionRef} className="pt-2 pb-12 w-full">
       <div className="mx-auto w-full max-w-[1280px] px-4">
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-[12px] uppercase tracking-[0.18em] text-[var(--color-muted)]">
-            Latest positions
-          </h2>
-          <span className="text-[10px] text-[var(--color-dim)]">
-            {recent.length > 0
-              ? `${recent.length} most recent`
-              : recentLoaded
-                ? "no data"
-                : "loading…"}
-          </span>
-        </div>
-
         <div
-          className="rounded-md border border-[var(--color-border)] overflow-x-auto"
+          className="rounded-md border border-[var(--color-border)] overflow-hidden"
           style={{ background: "rgba(255,255,255,0.02)" }}
         >
           <table
             className="text-[11px]"
             style={{
               borderCollapse: "collapse",
-              minWidth: 1400,
               width: "100%",
+              tableLayout: "fixed",
             }}
           >
+            {/* col widths, ordine: Status | Title | Company | Location | Voto | Salary | Updated */}
+            <colgroup>
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "26%" }} />
+              <col style={{ width: "20%" }} />
+              <col style={{ width: "17%" }} />
+              <col style={{ width: "6%" }} />
+              <col style={{ width: "13%" }} />
+              <col style={{ width: "9%" }} />
+            </colgroup>
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Updated</th>
                 <th className="px-3 py-2 font-normal whitespace-nowrap">Status</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Source</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Actor</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Company</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Score</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Voto</th>
                 <th className="px-3 py-2 font-normal whitespace-nowrap">Title</th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">Company</th>
                 <th className="px-3 py-2 font-normal whitespace-nowrap">Location</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Salary</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Remote</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Found at</th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Voto</th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Salary</th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Updated</th>
               </tr>
             </thead>
             <tbody>
               {recent.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={7}
                     className="px-3 py-6 text-center text-[var(--color-dim)]"
                   >
-                    {recentLoaded ? "Nessuna posizione ancora." : "Loading…"}
+                    Nessuna posizione ancora.
                   </td>
                 </tr>
               ) : (
                 recent.map((p) => {
-                  const statusColor = STATUS_COLORS[p.status] ?? "#94a3b8";
-                  const actor =
-                    p.last_action_actor ?? p.last_action_by ?? "scout";
+                  const ov = overrides[p.id];
+                  const flash = flashes[p.id];
+                  const status = ov?.status ?? p.status;
+                  const statusColor = STATUS_COLORS[status] ?? "#94a3b8";
+                  const voto = ov?.voto ?? p.voto;
                   const updatedAt = p.last_action_at ?? p.found_at;
                   const salary = (() => {
                     const lo = p.salary_declared_min;
@@ -164,7 +219,10 @@ export default function LatestPositionsTable() {
                       typeof hi === "number" &&
                       (lo || hi)
                     ) {
-                      return `${lo.toLocaleString()}–${hi.toLocaleString()}`;
+                      // Formato compatto k€ (es. 58k–72k) — più leggibile
+                      // a colpo d'occhio del 58,000–72,000.
+                      const k = (n: number) => `${Math.round(n / 1000)}k`;
+                      return `${k(lo)}–${k(hi)}`;
                     }
                     return "—";
                   })();
@@ -172,10 +230,13 @@ export default function LatestPositionsTable() {
                     <tr
                       key={p.id}
                       className="border-t border-[var(--color-border)] hover:bg-[rgba(255,255,255,0.03)]"
+                      style={{
+                        background: flash
+                          ? `${flash.color}33`
+                          : "transparent",
+                        transition: "background 1.4s ease-out",
+                      }}
                     >
-                      <td className="px-3 py-2 whitespace-nowrap text-[var(--color-dim)] font-mono tabular-nums">
-                        {formatFoundAt(updatedAt)}
-                      </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <span
                           className="inline-block px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wide"
@@ -185,47 +246,35 @@ export default function LatestPositionsTable() {
                             border: `1px solid ${statusColor}55`,
                           }}
                         >
-                          {p.status}
+                          {status}
                         </span>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-[var(--color-muted)]">
-                        {p.source ?? "—"}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-[var(--color-muted)] font-mono">
-                        {actor}
-                      </td>
-                      <td className="px-3 py-2 text-[var(--color-muted)]">
-                        <div className="truncate max-w-[180px]" title={p.company}>
-                          {p.company}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-bright)] font-mono tabular-nums">
-                        {typeof p.score === "number" ? p.score : "—"}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-bright)] font-mono tabular-nums">
-                        {typeof p.voto === "number" ? p.voto.toFixed(1) : "—"}
-                      </td>
                       <td className="px-3 py-2 text-[var(--color-bright)]">
-                        <div className="truncate max-w-[380px]" title={p.title}>
+                        <div className="truncate" title={p.title}>
                           {p.title}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-[var(--color-muted)]">
+                        <div className="truncate" title={p.company}>
+                          {p.company}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-[var(--color-muted)]">
                         <div
-                          className="truncate max-w-[200px]"
+                          className="truncate"
                           title={p.location ?? ""}
                         >
                           {p.location ?? "—"}
                         </div>
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-[var(--color-muted)] font-mono tabular-nums">
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-bright)] font-mono tabular-nums">
+                        {typeof voto === "number" ? voto.toFixed(1) : "—"}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-muted)] font-mono tabular-nums">
                         {salary}
                       </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-[var(--color-dim)]">
-                        {p.remote_type ?? "—"}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap text-[var(--color-dim)] font-mono tabular-nums">
-                        {p.found_at ? formatFoundAt(p.found_at) : "—"}
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-[var(--color-dim)] font-mono tabular-nums">
+                        {formatRelative(updatedAt)}
                       </td>
                     </tr>
                   );
