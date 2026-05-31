@@ -30,6 +30,49 @@ function sendToCoordinator(session: string, message: string): boolean {
 }
 
 /**
+ * Output del wrapper Python `write_request.py` (single source of truth
+ * per il validate+UPDATE della richiesta CV user-driven, V6).
+ */
+type WriteRequestResult = {
+  ok: boolean;
+  error?: string;
+  status_code?: string;
+  id?: number;
+  title?: string;
+  company?: string;
+  score?: number | null;
+  previous?: number;
+  current?: number;
+};
+
+/**
+ * Chiama `python3 shared/skills/write_request.py <id> --mode on` ed esce
+ * SEMPRE con un JSON (anche su exit code != 0, perche' lo script lo
+ * emette su validation failure prima di sys.exit(1)).
+ */
+function runWriteRequest(positionId: number, mode: "on" | "off"): WriteRequestResult {
+  const skillsDir = process.env.JHT_SKILLS_DIR ?? "/app/shared/skills";
+  let stdout = "";
+  try {
+    stdout = execSync(
+      `python3 "${skillsDir}/write_request.py" ${positionId} --mode ${mode}`,
+      { encoding: "utf-8" }
+    );
+  } catch (err) {
+    // exit 1 da Python su validation failure — lo stdout JSON e' comunque
+    // disponibile su err.stdout. Solo se Python crash davvero (Python non
+    // installato, skill mancante) cadiamo nel catch interno.
+    stdout = (err as { stdout?: Buffer | string }).stdout?.toString() ?? "";
+  }
+  try {
+    const lastLine = stdout.trim().split("\n").pop() ?? "{}";
+    return JSON.parse(lastLine) as WriteRequestResult;
+  } catch {
+    return { ok: false, error: "write_request.py: output non parseabile" };
+  }
+}
+
+/**
  * Legge lo stato del team dal forum JHT.
  */
 function readTeamStatus(): string[] {
@@ -83,6 +126,51 @@ async function handleCommand(
         "[@telegram -> @ace] [URG] STOP richiesto da Telegram"
       );
       await ctx.replyTo(sent ? "STOP inviato al team" : "Errore: coordinator non raggiungibile");
+      break;
+    }
+
+    case "cv": {
+      // Writer-on-demand (V6): user-driven trigger via Telegram.
+      // Setta `positions.write_requested = 1` su SQLite locale; il
+      // Capitano spawna SCRITTORE on-demand alla prossima iterazione
+      // (vedi RULE C-10 in capitano.md).
+      const positionId = Number.parseInt(args, 10);
+      if (!Number.isInteger(positionId) || positionId <= 0) {
+        await ctx.replyTo(
+          "Uso: <code>/cv &lt;position_id&gt;</code>\n" +
+            "Es: <code>/cv 42</code>"
+        );
+        return;
+      }
+
+      const result = runWriteRequest(positionId, "on");
+
+      if (!result.ok) {
+        const subject = result.title && result.company
+          ? `\n#${result.id} <b>${result.title}</b> · <i>${result.company}</i>`
+          : "";
+        await ctx.replyTo(`<b>❌</b> ${result.error ?? "Errore"}${subject}`);
+        return;
+      }
+
+      // Notify Capitano ad-hoc (non aspettiamo il prossimo BRIDGE TICK).
+      // Idempotente: anche se non riceve il messaggio, la C-10 lo trova
+      // alla query db_query.py next-for-scrittore comunque.
+      sendToCoordinator(
+        coordSession,
+        `[@utente -> @capitano] [TG] /cv ${positionId} -> write_requested=1 (${result.company} · ${result.title})`
+      );
+
+      const wasAlreadyOn = result.previous === 1;
+      const header = wasAlreadyOn
+        ? "<b>↻ Richiesta CV gia' attiva</b>"
+        : "<b>✓ CV richiesto</b>";
+      await ctx.replyTo(
+        `${header}\n` +
+          `#${result.id} <b>${result.title}</b>\n` +
+          `<i>${result.company}</i> · score ${result.score ?? "?"}\n` +
+          `Lo Scrittore inizia non appena il Capitano vede il flag (max ~5 min).`
+      );
       break;
     }
 
