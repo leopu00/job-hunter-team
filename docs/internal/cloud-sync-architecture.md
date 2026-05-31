@@ -181,6 +181,7 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
 | **CLI `jht cloud pull-desired-state` + wire al boot di `startActionContainer`** (cursor `.cloud-pull-cursor.json`, best-effort 15s timeout) | `1a918531` | 2026-05-31 |
 | **Route write-request supporta cloud-mode senza SQLite locale** (path A local-primary / path B cloud-only con embedded validate) | `0ada62ea` | 2026-05-31 |
 | **Pull desired-state ad ogni tick del daemon** (multi-device live, isolato dal counter consecutiveFails del push) | `968ef913` | 2026-05-31 |
+| **Killswitch dedicato 401/403** (threshold 3, halt + notifica `pending_user_messages` agent='cloud-sync') | `07d0109a` | 2026-05-31 |
 
 ### ⬜ Pending (in ordine di priorità)
 
@@ -200,7 +201,7 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
    - Push include le righe con `deleted_at IS NOT NULL` modificate dopo il cursore; lato Supabase un job ripulisce le righe `deleted_at < now() - 30d`
    - Dashboard prod filtra `WHERE deleted_at IS NULL` di default
 
-3. **P0 — Killswitch su 401/403 ripetuti**. Oggi `cli/src/commands/cloud.js:672-675` logga il 401 da token revocato ma il daemon **continua loop infinito ogni ~30s**. Comportamento atteso: 3 risposte 401/403 consecutive → halt del daemon + notifica `pending_user_messages` ("Token revocato, riapri il pairing"). Distinto dal P1 #9 (5xx/409 generico): qui è auth, non transient. *Nota: 409 not_active_device già coperto, 401/403 no.*
+3. ✅ **P0 — Killswitch su 401/403 ripetuti** (DONE 2026-05-31, commit `07d0109a`). `handlePush` ritorna `{ok, authFailed}` (oggetto, callers void esistenti compatibili via optional chaining). Counter dedicato `MAX_CONSECUTIVE_AUTH_FAILS=3` nel daemon (più aggressivo del generico 5 perché token revocato non recupera mai). Killswitch: halt daemon + `INSERT pending_user_messages (agent='cloud-sync', kind='alert', body=...)` con istruzioni esplicite per riaprire il pairing. Reset counter SOLO su push success 200 (un 5xx transient non resetta — un 401 intermittente in mezzo a 500 deve comunque scattare). Smoke test: mock 401 stabile → killswitch al 3° push + riga in pending_user_messages; mock 401,401,200,... → log "push ok dopo 2 auth-fail, contatore auth resettato".
 
 4. **P0 — Riparare CI/Tests/Lint pre-esistenti** (falliscono da 2026-05-22): test smoke-finale con soglie sbagliate (41 vs ≥100 pagine), test ENOENT su file inesistenti (`web/(protected)/app/components/sidebar.tsx`), ESLint 100+ warning `any`. Non bloccanti per refactor ma falsano il signal di qualità.
 
