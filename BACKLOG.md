@@ -215,23 +215,36 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - ⬜ **P2 — `auth_db_connections_absolute` × 1** (INFO). Monitor connection pool, no action immediato.
 - **Priority:** 🟡 P1 per le FK indexes (impatto query planner), 🟢 LOW per unused index drop (no impact correttezza, solo storage/maintenance).
 
-##### 🟡 [JHT-MONITORING-WEEKLY] Weekly window calibration — data-layer DONE 2026-05-19
+##### ✅ [JHT-MONITORING-WEEKLY] Weekly window calibration — DONE 2026-05-26
 
-- **Problem:** monitoring is currently calibrated on 5h windows, but Anthropic's real reset is weekly. Two days of intensive use can burn through the weekly cap even if every 5h window stays under 95%.
-- **Stato implementazione:**
-  1. ✅ `compute_metrics.py` espone `weekly_usage`, `weekly_reset_at`, `weekly_reset_at_unix` (bug #19A: disponibili al Capitano/Sentinella senza calcoli runtime); flag `--weekly` su CLI.
-  2. 🟡 API `/api/sentinella/data` consuma i nuovi campi (`web/app/api/sentinella/data/route.ts`); UI breakdown per 5h ancora da verificare/cablare lato dashboard.
-  3. ⬜ Switch target 95 % settimanale (oggi rimane 95 % per finestra) — decisione + tuning bridge.
-  4. ⬜ Test su sessione settimanale completa Claude Max + Kimi.
+- **Problem:** monitoring was calibrated on 5h windows, but the real Anthropic / Codex reset is weekly. Two days of intensive use could burn through the weekly cap even if every 5h window stayed under 95%.
+- **Soluzione shipped:** target dinamico work-hours-aware sostituisce il `TARGET_BAND_CENTER=92` fisso. Il pacing-bridge calcola per ogni finestra 5h corrente il target = `(active_hours_in_window / weekly_active_hours) × 100% / window_cap_pct_of_weekly`. Provider seed table + EMA auto-calibration via `window_ratio_meter.py` daemon (half-life 7gg, blend `min(1, days/4)`). Sentinel-bridge g-spot ora dinamico (`target±12`), Capitano regola 11 per work_phase=OFF (no spawn, finisci in-flight). Fallback completo al 92% fisso quando schedule assente.
+- **Commits:** `1b506bd3` (skills), `f7b52e52` (bridge+agents), `fae5aefa` (CLI+API+UI minimale), `237c8447` (heatmap+sweet-spot+wizard).
+- **Residual:**
+  1. ⬜ Cloud-sync di `team.working_hours` su Supabase per bootstrap multi-device (oggi local-only — accettabile perché in VPS/Dedicated PC il file vive sul backend, una sola sorgente di verità per device).
+  2. ⬜ Test su sessione settimanale completa Claude Max — il seed `15%` è stima, serve case study reale per riportare confidence high.
+  3. ⬜ Backfill EMA convergence verification — dopo 1 settimana di run reale verificare che `observed_ratio_pct` converga al seed `±5%`.
 
-##### ⏰ [JHT-MONITORING-WORKHOURS] User-defined work hours
+##### 🔐 [JHT-ACCESS-CREDENTIALS-GAPS] Access & credentials — gap doc vs codice (NEW 2026-05-26)
+
+- **Context:** sessione di consolidamento doc 2026-05-26 (`docs/internal/access-and-credentials.md`) ha riallineato la storia "dove vivono le credenziali" e rivelato 6 punti dove la doc promette qualcosa che il codice non implementa ancora.
+- **Tickets sotto (priorità bassa, non blockers):**
+  1. `[JHT-SSH-PASSPHRASE-KEYRING]` — wizard salva la passphrase della SSH key in OS keyring quando l'utente la setta. Oggi rimane da inserire ad ogni `ssh-add` → blocca automation/LLM-agent path. Fix: `cli/wizard/setup-steps.js` durante key gen, + lib `desktop/vps/ssh-keychain.js` (nuovo).
+  2. `[JHT-HETZNER-TOKEN-SECRETS]` — `web/lib/hetzner.ts:49` legge solo `process.env.HCLOUD_TOKEN`. Dovrebbe avere fallback a `jht secrets get HCLOUD_TOKEN` (decifrato con `JHT_CREDENTIALS_KEY` dal keyring). Riallinea doc `vps.md` § "Cosa va nel cloud, cosa resta locale" col comportamento reale.
+  3. `[JHT-LLM-AGENT-CONTRACT]` — discovery contract per LLM agent locali (Claude Code, Codex, Kimi): endpoint `/api/agent/discovery` (or static JSON file in `~/.jht/agent-contract.json`) che dichiara quali credenziali sono presenti, in quale storage, e che capability sbloccano. Vedi access-and-credentials.md §3.1-3.2.
+  4. `[JHT-CRED-SCOPED-GRANT]` — `jht credentials grant <scope> --expiry 1h` per token derivati a tempo per LLM agent remoti. Out of scope v1, ma traccia.
+  5. `[JHT-BACKUP-ROUNDTRIP]` — verifica end-to-end scenari recovery S1-S5 di access-and-credentials.md §4. Oggi `jht backup export/import` esiste ma roundtrip su nuovo PC non testato.
+- **Priority:** 🟢 LOW per tutti — il funzionale beta 0 regge col path A (utente paste IP, no API token automation). Da attaccare quando il path B2 LLM-agent diventa primary (Beta 1+).
+
+##### ✅ [JHT-MONITORING-WORKHOURS] User-defined work hours — DONE 2026-05-26
 
 - **Problem:** team runs 24/7 once started — wasting tokens during unproductive hours and burning the weekly budget.
-- **Tasks:**
-  1. UI in `/team` to define hour slots (e.g., 09:00–13:00 + 14:00–18:00 weekday)
-  2. Captain respects the slots: idle outside, active inside
-  3. Sentinel aligns usage projection to actual slots (no 24/7 projection)
-  4. "Team as employee" model — works on user-defined office hours
+- **Shipped:**
+  1. ✅ Algoritmo + storage local-first (`shared/skills/work_hours_target.py`)
+  2. ✅ Capitano rispetta lo schedule (regola 11): no spawn / no promozioni / no nuovo writing in OFF; in-flight finisce; Mentor/Assistente sempre on
+  3. ✅ Sentinella + Bridge allineano projection al target dinamico (`current_window_target_pct`)
+  4. ✅ "Team as employee" model — 5 preset built-in + custom heatmap 7×24
+  5. ✅ 3 vie configurazione: CLI (`jht working-hours`), wizard desktop (5 preset + skip), web UI `/team` (heatmap + bar chart + sweet-spot meter)
 
 ##### 🌙 [JHT-KIMI-OPTIMIZE] Kimi €40 mass-market calibration
 

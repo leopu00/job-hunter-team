@@ -41,16 +41,14 @@ async function writeTourDoneToDb(done: boolean): Promise<boolean> {
     const user = userData?.user;
     if (!user) return false;
     const admin = createAdminClient();
-    const { error } = await admin
-      .from("user_onboarding_state")
-      .upsert(
-        {
-          user_id: user.id,
-          tour_done_at: done ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" },
-      );
+    const { error } = await admin.from("user_onboarding_state").upsert(
+      {
+        user_id: user.id,
+        tour_done_at: done ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
     return !error;
   } catch {
     return false;

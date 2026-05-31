@@ -46,7 +46,9 @@ export async function GET() {
   // si nasconde su cloud (vedi CloudSyncStatusBanner.tsx).
   if (!(await isLocalRequest())) {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     return NextResponse.json({
       local: false,
       logged_in: !!user,
