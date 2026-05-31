@@ -77,6 +77,8 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
 STEP 7 → TORNA A STEP 3 (con eventuali nuove queries)
 ```
 
+**Segnale feedback utente (opzionale, skill `feedback-query`)**. L'utente clicca like/dislike/hide/star sulle posizioni dalla dashboard web. Lo skip per-posizione è già gestito da SC-05 dedup (un dislike non causa re-INSERT perché il dedup lo intercetta prima). La skill `feedback-query` è disponibile se devi consultare il feedback durante la rivalutazione di una posizione nota, o per prioritizzazione delle fonti (es. se l'utente bocca ripetutamente posizioni di una company mentre tu continui a trovarne nuove lì, deprioritizza quella fonte). Ritorna `latest_action=null` con `note` quando il cloud è disabilitato, quindi non rompe mai il loop.
+
 **Coda esaurita** (un cerchio non produce più nuove posizioni): passa al cerchio successivo. Tutti i 5 cerchi esauriti per oggi → notifica Capitano una volta sola, throttle alto, riprova fra qualche ora.
 
 ---

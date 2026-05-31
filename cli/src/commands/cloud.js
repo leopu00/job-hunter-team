@@ -14,6 +14,11 @@ const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 // pushato. Al tick successivo selezioniamo solo righe con updated_at >
 // cursor. Crollo bandwidth ~95% (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md).
 const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
+// Cursor pull desired-state: ultimo updated_at letto da Supabase per
+// recuperare flag user-driven (write_requested) scritti via web mentre
+// il container era offline. Separato dal push cursor: due direzioni di
+// flusso indipendenti (vedi docs/internal/cloud-sync-architecture.md).
+const CLOUD_PULL_CURSOR_FILE = join(JHT_HOME, '.cloud-pull-cursor.json');
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -435,6 +440,28 @@ async function saveCloudCursor(cursor) {
 }
 
 /**
+ * Carica il cursor di pull desired-state. Ritorna { since: ISO|null }.
+ * Missing/corrupt = null → endpoint server applica default lookback 7gg.
+ */
+function loadPullCursor() {
+  if (!existsSync(CLOUD_PULL_CURSOR_FILE)) return { since: null };
+  try {
+    const parsed = JSON.parse(readFileSync(CLOUD_PULL_CURSOR_FILE, 'utf-8'));
+    return { since: typeof parsed?.since === 'string' ? parsed.since : null };
+  } catch {
+    return { since: null };
+  }
+}
+
+async function savePullCursor(cursor) {
+  try {
+    await writeFile(CLOUD_PULL_CURSOR_FILE, JSON.stringify(cursor, null, 2));
+  } catch (err) {
+    console.error(pc.yellow(`  warn: pull cursor save failed (${err.message})`));
+  }
+}
+
+/**
  * Dato un array di righe con campo updated_at, ritorna il MAX(updated_at)
  * come stringa ISO. Null se l'array e' vuoto o nessuna riga ha il campo.
  */
@@ -485,6 +512,7 @@ async function handlePush(options) {
   let scores = [];
   let applications = [];
   let pendingMessages = [];
+  let tombstones = [];
   // Cursor delta-sync: ad ogni tick leggiamo solo righe con updated_at >
   // ultimo pushato per quella tabella. Prima volta (cursor vuoto): full
   // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
@@ -500,6 +528,9 @@ async function handlePush(options) {
         'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
         'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
         'salary_estimated_source',
+        // Writer-on-demand (V6, 2026-05-29): l'utente seleziona da
+        // dashboard/Telegram, il flag viaggia a cloud per UI cross-device.
+        'write_requested', 'write_requested_at',
       ], cursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
         'position_id', 'total_score', 'experience_fit', 'salary_fit',
@@ -526,6 +557,27 @@ async function handlePush(options) {
         'user_reply', 'user_reply_at', 'agent_seen_reply_at',
         'created_at',
       ]);
+      // Tombstones delta (SQLite V7): righe (table_name, legacy_id,
+      // deleted_at) accumulate dai trigger BEFORE DELETE. Filtro per
+      // deleted_at > cursor → solo le nuove cancellazioni nel tick.
+      // Lato server, il receive le interpreta come UPDATE soft
+      // SET deleted_at = ?. Vedi mig 025 + _migrate_v6_to_v7_tombstones.
+      try {
+        if (cursor.tombstones) {
+          tombstones = db.prepare(
+            `SELECT table_name, legacy_id, deleted_at
+             FROM _tombstones WHERE deleted_at > ?`
+          ).all(cursor.tombstones);
+        } else {
+          tombstones = db.prepare(
+            `SELECT table_name, legacy_id, deleted_at FROM _tombstones`
+          ).all();
+        }
+      } catch (err) {
+        // DB pre-V7: tabella inesistente → no-op silenzioso, niente
+        // tombstones nel payload (compat con vecchi DB).
+        if (!/no such table/i.test(err.message)) throw err;
+      }
       db.close();
     } catch (err) {
       console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
@@ -540,11 +592,14 @@ async function handlePush(options) {
   const pendingChunks = pendingMessages.length > 0
     ? `, ${pendingMessages.length} pending messages`
     : '';
+  const tombstoneChunks = tombstones.length > 0
+    ? `, ${tombstones.length} tombstones`
+    : '';
   const isFirstPush = !cursor.positions && !cursor.scores && !cursor.applications;
   const deltaMode = isFirstPush ? 'first-push (full)' : 'delta';
   console.log(
     pc.dim(
-      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${profileChunks}`
+      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${tombstoneChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
@@ -554,7 +609,7 @@ async function handlePush(options) {
   if (
     positions.length === 0 && scores.length === 0 &&
     applications.length === 0 && pendingMessages.length === 0 &&
-    !profilePayload
+    tombstones.length === 0 && !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
     return;
@@ -572,13 +627,14 @@ async function handlePush(options) {
       body: JSON.stringify({
         positions, scores, applications,
         pending_user_messages: pendingMessages,
+        tombstones,
         ...(profilePayload ? { profile: profilePayload } : {}),
       }),
     });
   } catch (err) {
     console.error(pc.red(`Errore di rete: ${err.message}`));
     process.exitCode = 1;
-    return;
+    return { ok: false, authFailed: false };
   }
 
   const body = await res.json().catch(() => ({}));
@@ -606,7 +662,11 @@ async function handlePush(options) {
       );
     }
     process.exitCode = 1;
-    return;
+    // 401/403 = token revocato o malformato. Il daemon usa questo flag per
+    // contare gli auth-fail consecutivi (threshold 3 → killswitch + notifica
+    // pending_user_messages, vedi handleDaemon). Distinto dal counter
+    // generico consecutiveFails (5xx/network transient).
+    return { ok: false, authFailed: res.status === 401 || res.status === 403 };
   }
 
   console.log(pc.green('✓ Push completato'));
@@ -614,6 +674,9 @@ async function handlePush(options) {
   console.log(pc.dim(`  scores:           ${body.scores?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  applications:     ${body.applications?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
+  if (tombstones.length > 0 || body.tombstones?.applied) {
+    console.log(pc.dim(`  tombstones:       ${body.tombstones?.applied ?? 0} applied`));
+  }
 
   // Aggiorna cursor delta-sync solo dopo HTTP 200: il prossimo tick
   // selezionera' solo righe con updated_at > cursor. Se una qualsiasi
@@ -627,6 +690,15 @@ async function handlePush(options) {
   if (posMax) newCursor.positions = posMax;
   if (scoMax) newCursor.scores = scoMax;
   if (appMax) newCursor.applications = appMax;
+  // Cursor tombstones: MAX(deleted_at) tra le tombstones inviate.
+  // Stesso pattern, ma il campo si chiama deleted_at non updated_at.
+  let tombMax = null;
+  for (const t of tombstones) {
+    if (t?.deleted_at && (tombMax === null || t.deleted_at > tombMax)) {
+      tombMax = t.deleted_at;
+    }
+  }
+  if (tombMax) newCursor.tombstones = tombMax;
   // Salviamo anche se nulla e' cambiato: la prima volta crea il file e
   // disabilita la modalita' "first-push" al prossimo tick. La 2a volta
   // in poi e' no-op a livello di contenuto.
@@ -835,6 +907,200 @@ async function handleDisable() {
 }
 
 /**
+ * Pull desired-state da cloud → SQLite locale. Chiude il gap silent-loss
+ * del writer-on-demand: utente clicca "Scrivi CV" via web mentre container
+ * è offline → write_requested=TRUE su Supabase → senza pull al riavvio
+ * il Capitano non vede mai il flag (push è write-only locale → cloud).
+ *
+ * Scope MVP: solo `positions.write_requested` + `write_requested_at`.
+ * Endpoint server: GET /api/cloud-sync/pull-desired-state?since=<ISO>.
+ *
+ * Best-effort: non blocca il boot del team su errore di rete o cloud
+ * indisponibile. Logga warning e prosegue. Il Capitano vedrà il flag
+ * al pull successivo (next boot o tick daemon).
+ *
+ * options:
+ *   --dry-run        non applica le UPDATE, solo report
+ *   --full           ignora cursor (lookback 7gg server-side)
+ *   --limit <n>      override limit server (default 500)
+ *   --silent         logga solo errori (uso al boot, evita rumore)
+ */
+async function handlePullDesiredState(options = {}) {
+  const silent = options.silent === true;
+  const log = (msg) => { if (!silent) console.log(msg); };
+
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) {
+    if (!silent) {
+      console.error(pc.red('Cloud sync non abilitato.'));
+      console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const dbPath = options.db || JHT_DB_PATH;
+  const dbExists = await stat(dbPath).then(() => true).catch(() => false);
+  if (!dbExists) {
+    log(pc.dim(`  pull skip: SQLite locale non trovato (${dbPath}). Boot team prima.`));
+    return;
+  }
+
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const cursor = options.full ? { since: null } : loadPullCursor();
+  const params = new URLSearchParams();
+  if (cursor.since) params.set('since', cursor.since);
+  if (options.limit) params.set('limit', String(options.limit));
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const pullUrl = `${baseUrl}/api/cloud-sync/pull-desired-state?${params.toString()}`;
+
+  let res;
+  try {
+    res = await fetch(pullUrl, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
+  } catch (err) {
+    console.error(pc.yellow(`  pull warn: errore di rete (${err.message})`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error(
+      pc.yellow(
+        `  pull warn: HTTP ${res.status} ${body.error || 'errore sconosciuto'}`
+      )
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const positions = Array.isArray(body.positions) ? body.positions : [];
+  log(
+    pc.dim(
+      `Pull desired-state [since=${cursor.since || 'lookback-7d'}]: ${positions.length} righe`
+    )
+  );
+
+  if (options.dryRun) {
+    if (positions.length > 0) {
+      for (const p of positions.slice(0, 10)) {
+        log(
+          pc.dim(
+            `  #${p.legacy_id} write_requested=${p.write_requested} at=${p.write_requested_at}`
+          )
+        );
+      }
+      if (positions.length > 10) {
+        log(pc.dim(`  ... +${positions.length - 10} altre righe`));
+      }
+    }
+    log(pc.yellow('--dry-run: nessuna UPDATE applicata.'));
+    return;
+  }
+
+  if (positions.length === 0) {
+    // Aggiorniamo comunque il cursor al server-side value (no-op se cancellato
+    // o uguale, ma riallinea dopo un eventuale --full).
+    if (body.cursor && body.cursor !== cursor.since) {
+      await savePullCursor({ since: body.cursor });
+    }
+    return;
+  }
+
+  // Apriamo la connessione in RW. Usiamo UPDATE puro (non INSERT): se
+  // la position non esiste localmente è una row scoperta su altro device,
+  // arriverà al container quando ne pusherà i dati completi (titolo,
+  // company, ecc); per ora skip silenzioso. Crearla qui con soli flag
+  // produrrebbe una riga zoppa con NULL su title/company → CHECK fail.
+  let updated = 0;
+  let missing = 0;
+  try {
+    const db = new DatabaseSync(dbPath);
+    db.exec('PRAGMA foreign_keys = ON');
+    const stmt = db.prepare(`
+      UPDATE positions
+         SET write_requested = ?,
+             write_requested_at = ?
+       WHERE id = ?
+    `);
+    const checkStmt = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+    for (const p of positions) {
+      const legacyId = Number(p.legacy_id);
+      if (!Number.isInteger(legacyId) || legacyId <= 0) continue;
+      const exists = checkStmt.get(legacyId);
+      if (!exists) { missing++; continue; }
+      const flag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
+      const at = p.write_requested_at || null;
+      stmt.run(flag, at, legacyId);
+      updated++;
+    }
+    db.close();
+  } catch (err) {
+    console.error(pc.red(`Errore UPDATE SQLite: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  // Successo sostanziale loggato anche in `silent`: nel daemon vogliamo
+  // sapere quando l'utente clicca via web e il pull ha applicato qualcosa
+  // (segnale altrimenti invisibile, dato che il push container→cloud
+  // riflette il proprio SQLite e farebbe da eco). Quando updated == 0
+  // (tipico, no nuovi click) restiamo zitti se silent.
+  const successMsg = pc.green(`✓ Pull desired-state applicato: ${updated} positions aggiornate`)
+    + (missing > 0 ? pc.dim(` (${missing} legacy_id non presenti localmente, skip)`) : '');
+  if (updated > 0 || !silent) {
+    console.log(successMsg);
+  }
+
+  if (body.cursor) {
+    await savePullCursor({ since: body.cursor });
+  }
+  if (body.has_more) {
+    log(pc.dim('  has_more=true: rilancia per recuperare le righe rimanenti'));
+  }
+}
+
+/**
+ * Inserisce un messaggio in pending_user_messages locale. Best-effort:
+ * usato dal killswitch del daemon per notificare l'utente quando il token
+ * è revocato. Il push delta-only normalmente propaga questa tabella in
+ * cloud, ma se siamo qui è proprio perché il push fallisce → il bridge
+ * Telegram locale è la via di consegna primaria (vedi telegram-bridge).
+ *
+ * Schema riferimento: shared/skills/_db.py + supabase mig 010.
+ */
+async function writePendingUserMessage({ agent, body, kind = 'alert', dbPath = JHT_DB_PATH }) {
+  try {
+    const exists = await stat(dbPath).then(() => true).catch(() => false);
+    if (!exists) return false;
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(dbPath);
+    try {
+      db.prepare(
+        `INSERT INTO pending_user_messages (agent, body, kind, created_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP)`
+      ).run(agent, body, kind);
+      return true;
+    } finally {
+      db.close();
+    }
+  } catch (err) {
+    console.error(pc.yellow(`  warn: writePendingUserMessage failed (${err.message})`));
+    return false;
+  }
+}
+
+/**
  * Daemon di sync: loop infinito che chiama handlePush() ogni N secondi
  * (default 30). Pensato come PID 1 del container su VPS, dove la dashboard
  * Next.js locale e' inutile (bindata a 127.0.0.1) e l'utente vuole vedere
@@ -863,7 +1129,7 @@ async function handleDaemon(options) {
     return;
   }
 
-  console.log(pc.dim(`Cloud sync daemon: push ogni ${intervalSec}s verso ${config.base_url}`));
+  console.log(pc.dim(`Cloud sync daemon: push + pull-desired-state ogni ${intervalSec}s verso ${config.base_url}`));
 
   let running = true;
   const shutdown = (sig) => {
@@ -890,6 +1156,13 @@ async function handleDaemon(options) {
   const MAX_CONSECUTIVE_FAILS = 5;
   const WARN_AT = 3;
   let consecutiveFails = 0;
+  // Killswitch dedicato auth-fail (401/403): più aggressivo del counter
+  // generico perché un token revocato non recupera mai da solo, non ha
+  // senso ritentare 5 volte. Threshold 3 = tolleranza minima per false
+  // positive (clock skew, rate-limit edge, JWT refresh race), poi halt
+  // con notifica esplicita all'utente via pending_user_messages.
+  const MAX_CONSECUTIVE_AUTH_FAILS = 3;
+  let consecutiveAuthFails = 0;
   // Push iniziale immediato: se il container era spento per un po' e gli
   // agenti hanno scritto offline, il primo tick deve flushare subito.
   while (running) {
@@ -904,20 +1177,73 @@ async function handleDaemon(options) {
         haltSkipCount = 0;
       }
       let tickFailed = false;
+      let authFailedThisTick = false;
       try {
         // Reset di process.exitCode tra un tick e l'altro: handlePush lo
         // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
         // il loop al prossimo intervallo.
         const prev = process.exitCode;
         process.exitCode = 0;
-        await handlePush({});
+        const pushResult = await handlePush({});
         if (process.exitCode === 1) {
           tickFailed = true;
         }
+        // handlePush ritorna {ok, authFailed} solo nel path !res.ok+401/403
+        // o network catch. Tutti gli altri early-return ritornano undefined
+        // (config/db missing) → authFailed undefined → falsy. OK.
+        authFailedThisTick = pushResult?.authFailed === true;
         process.exitCode = prev;
       } catch (err) {
         console.error(pc.yellow(`  daemon tick error: ${err.message}`));
         tickFailed = true;
+      }
+
+      // Pull desired-state DOPO il push (cadenza condivisa intervalSec).
+      // Copre il caso multi-device "live": utente clicca su mobile mentre
+      // team gira su VPS → flag arriva in cloud → il container lo vede al
+      // prossimo tick, non solo al riavvio (P1 [JHT-CLOUDSYNC-01]).
+      // Best-effort: errori loggati ma NON contano nel counter del push
+      // (consecutiveFails è dedicato al write-side, dove la quota Vercel/
+      // Supabase è realmente a rischio). exitCode preservato.
+      try {
+        const prevPull = process.exitCode;
+        process.exitCode = 0;
+        await handlePullDesiredState({ silent: true });
+        process.exitCode = prevPull;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon pull-desired-state error: ${err.message}`));
+      }
+
+      if (authFailedThisTick) {
+        consecutiveAuthFails += 1;
+      } else if (!tickFailed) {
+        // Solo un push riuscito (200 OK) resetta il counter auth. Un fail
+        // NON-auth (es. 500 transient) lascia il counter dov'è — un 401
+        // intermittente in mezzo a 500 deve comunque scattare il killswitch.
+        if (consecutiveAuthFails > 0) {
+          console.log(pc.green(`  push ok dopo ${consecutiveAuthFails} auth-fail, contatore auth resettato.`));
+        }
+        consecutiveAuthFails = 0;
+      }
+
+      if (consecutiveAuthFails >= MAX_CONSECUTIVE_AUTH_FAILS) {
+        const msg =
+          `⛔ Cloud sync interrotto: token revocato o non valido ` +
+          `(${MAX_CONSECUTIVE_AUTH_FAILS} risposte 401/403 consecutive). ` +
+          `Riapri il pairing su ${config.base_url}/settings/cloud-sync ` +
+          `e rilancia: jht cloud login.`;
+        console.error(pc.red(`  ✗ ${msg}`));
+        // Notifica utente via pending_user_messages locale: il bridge
+        // Telegram la consegnerà al prossimo poll. Non possiamo affidarci
+        // al push cloud (è proprio quello che ha fallito).
+        await writePendingUserMessage({
+          agent: 'cloud-sync',
+          body: msg,
+          kind: 'alert',
+        });
+        running = false;
+        process.exitCode = 1;
+        break;
       }
 
       if (tickFailed) {
@@ -959,6 +1285,12 @@ async function handleDaemon(options) {
   }
   console.log(pc.dim('Daemon terminato.'));
 }
+
+// Esportata per uso programmatico (es. wire al boot di `jht team start`
+// per recuperare write_requested cliccato via web mentre container era
+// offline). Best-effort: il caller invoca con { silent: true } e ignora
+// process.exitCode così il boot prosegue anche se cloud è giù.
+export { handlePullDesiredState };
 
 export function registerCloudCommand(program) {
   const cloud = program
@@ -1006,6 +1338,15 @@ export function registerCloudCommand(program) {
     .action(handlePush);
 
   cloud
+    .command('pull-desired-state')
+    .description('Recupera flag user-driven (write_requested) da cloud -> SQLite locale')
+    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
+    .option('--full', 'Ignora cursor (lookback 7gg server-side)')
+    .option('--limit <n>', 'Max righe per chiamata (default 500, max 2000)')
+    .option('--dry-run', 'Mostra cosa verrebbe applicato senza UPDATE')
+    .action(handlePullDesiredState);
+
+  cloud
     .command('disable')
     .description('Rimuove il token dalla macchina locale (non revoca lato server)')
     .action(handleDisable);
@@ -1045,6 +1386,18 @@ export function registerCloudCommand(program) {
     .action(async () => {
       const { runTeamStateReconciler } = await import('../lib/team-state-reconciler.js');
       await runTeamStateReconciler();
+    });
+
+  // `messages-listen` — poller `user_to_agent_messages`. Browser POSTa
+  // a /api/messages, questo handler legge i pending, fa claim atomico
+  // (PATCH delivered) e forwarda al tmux pane dell'agente target via
+  // `jht-tmux-send`. Co-spawnato da pid1 accanto a daemon/realtime/team-state.
+  cloud
+    .command('messages-listen')
+    .description('Poller user_to_agent_messages (forward web → tmux pane)')
+    .action(async () => {
+      const { runUserMessagesPoller } = await import('../lib/user-messages-poller.js');
+      await runUserMessagesPoller();
     });
 
   // `cloud preflight` — single-team enforcement check post-pairing.
