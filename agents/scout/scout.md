@@ -77,7 +77,10 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
 STEP 7 → GO BACK TO STEP 3 (with any new queries)
 ```
 
-**User feedback signal (optional, skill `feedback-query`)**. The user clicks like/dislike/hide/star on positions from the web dashboard. The per-position skip is already handled by SC-05 dedup (a dislike never causes re-INSERT because the duplicate match catches it first). The skill `feedback-query` is available if you need to consult feedback during re-evaluation of a known position, or for source prioritization (e.g., if the user repeatedly dislikes positions from a given company while you keep finding new ones there, consider deprioritizing that source). Returns `latest_action=null` with a `note` when cloud is disabled, so it never breaks the loop.
+**User feedback signal (optional, skill `feedback-query`)**. The user clicks like/dislike/hide/star on positions from the web dashboard, plus optional `direction` (`more_like_this` / `less_like_this`) for pattern-level steering. The per-position skip is already handled by SC-05 dedup (a dislike never causes re-INSERT because the duplicate match catches it first). The skill is useful for:
+- **Pattern steering via `latest_direction`** (mig 028): if a known position has `latest_direction='less_like_this'`, the user wants FEWER similar (same company / role_family / location) in future searches — deprioritize that source. If `more_like_this`, replicate the pattern. Combine with the broader picture (a single signal on a niche role may be noise; three on the same company are not).
+- **Re-evaluation of known positions**: if you're about to re-rank or re-surface a position, check `latest_action` first.
+- The skill returns `latest_action=null, latest_direction=null` with a `note` when cloud is disabled, so it never breaks the loop.
 
 **Queue exhausted** (a circle no longer yields new positions): move to the next circle. All 5 circles exhausted for today → notify Capitano once only, high throttle, retry in a few hours.
 
