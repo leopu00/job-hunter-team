@@ -633,10 +633,18 @@ export async function POST(req: NextRequest) {
   // Idempotente: il filter `deleted_at IS NULL` evita di sovrascrivere
   // tombstone già applicati (un re-push dopo cursor reset non rompe nulla).
   if (tombstones.length > 0) {
-    const byTable = { positions: [] as TombstoneIn[], scores: [] as TombstoneIn[], applications: [] as TombstoneIn[] };
+    const byTable = {
+      positions: [] as TombstoneIn[],
+      scores: [] as TombstoneIn[],
+      applications: [] as TombstoneIn[],
+    };
     for (const t of tombstones) {
       if (!t || typeof t.legacy_id !== "number" || !t.deleted_at) continue;
-      if (t.table_name === "positions" || t.table_name === "scores" || t.table_name === "applications") {
+      if (
+        t.table_name === "positions" ||
+        t.table_name === "scores" ||
+        t.table_name === "applications"
+      ) {
         byTable[t.table_name].push(t);
       }
     }
