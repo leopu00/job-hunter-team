@@ -1,0 +1,301 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useLandingI18n, type Lang } from "./LandingI18n";
+
+function FlagIT() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="7" height="14" fill="#009246" />
+      <rect x="7" width="6" height="14" fill="#fff" />
+      <rect x="13" width="7" height="14" fill="#CE2B37" />
+    </svg>
+  );
+}
+
+function FlagEN() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="20" height="14" fill="#012169" />
+      <path d="M0,0 L20,14 M20,0 L0,14" stroke="#fff" strokeWidth="2.5" />
+      <path d="M0,0 L20,14 M20,0 L0,14" stroke="#C8102E" strokeWidth="1.5" />
+      <path d="M10,0 V14 M0,7 H20" stroke="#fff" strokeWidth="4" />
+      <path d="M10,0 V14 M0,7 H20" stroke="#C8102E" strokeWidth="2.5" />
+    </svg>
+  );
+}
+
+function FlagHU() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="20" height="4.67" fill="#CD2A3E" />
+      <rect y="4.67" width="20" height="4.66" fill="#fff" />
+      <rect y="9.33" width="20" height="4.67" fill="#436F4D" />
+    </svg>
+  );
+}
+
+const LANGUAGES: {
+  code: Lang;
+  label: string;
+  Flag: () => React.JSX.Element;
+}[] = [
+  { code: "it", label: "Italiano", Flag: FlagIT },
+  { code: "en", label: "English", Flag: FlagEN },
+  { code: "hu", label: "Magyar", Flag: FlagHU },
+];
+
+function LangDropdown() {
+  const { lang, setLang } = useLandingI18n();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const current = LANGUAGES.find((l) => l.code === lang)!;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 px-0 py-0 transition-all"
+        style={{
+          cursor: "pointer",
+        }}
+        aria-label={`Language: ${current.label}`}
+      >
+        <current.Flag />
+        <svg
+          aria-hidden="true"
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          style={{
+            opacity: 0.5,
+            transition: "transform 0.15s",
+            transform: open ? "rotate(180deg)" : "",
+          }}
+        >
+          <path
+            d="M2 4L5 7L8 4"
+            stroke="var(--color-muted)"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          className="absolute right-0 top-full mt-1.5 overflow-hidden"
+          style={{
+            background: "var(--color-panel)",
+            border: "1px solid var(--color-border)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            animation: "fade-in 0.15s ease both",
+            minWidth: 140,
+          }}
+        >
+          {LANGUAGES.map(({ code, label, Flag }) => (
+            <button
+              key={code}
+              onClick={() => {
+                setLang(code);
+                setOpen(false);
+              }}
+              className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors"
+              style={{
+                cursor: "pointer",
+                background: code === lang ? "var(--color-card)" : "transparent",
+                color:
+                  code === lang ? "var(--color-white)" : "var(--color-muted)",
+                fontSize: 11,
+                fontWeight: code === lang ? 600 : 400,
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              <Flag />
+              <span>{label}</span>
+              {code === lang && (
+                <svg
+                  aria-hidden="true"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  className="ml-auto"
+                >
+                  <path
+                    d="M2 5L4 7L8 3"
+                    stroke="var(--color-green)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function LandingNav() {
+  const { t } = useLandingI18n();
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const homeAnchor = (id: string) => (pathname === "/" ? `#${id}` : `/#${id}`);
+
+  const navLinkStyle = (href: string) => ({
+    color: pathname === href ? "var(--color-green)" : "var(--color-muted)",
+  });
+  const currentCompany = (href: string) =>
+    pathname === href ? ("page" as const) : undefined;
+
+  return (
+    <nav
+      aria-label="Main navigation"
+      className="sticky top-0 left-0 right-0 z-50"
+      style={{
+        background: "var(--color-void)",
+        borderBottom: "1px solid var(--color-border)",
+      }}
+    >
+      <div className="flex items-center justify-between px-5 sm:px-6 py-4">
+        <Link href="/" className="flex items-center gap-2.5 no-underline">
+          <div
+            className="w-2 h-2"
+            style={{
+              background: "var(--color-green)",
+              boxShadow: "0 0 8px var(--color-green)",
+            }}
+          />
+          <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)]">
+            JHT
+          </span>
+        </Link>
+
+        {/* Nav links nascosti temporaneamente - pagine incomplete
+        <div className="hidden md:flex items-center gap-6">
+          <a href={homeAnchor('features')} className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_features')}
+          </a>
+          <a href={homeAnchor('how')} className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_how')}
+          </a>
+          <a
+            href="https://github.com/leopu00/job-hunter-team"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+          >
+            {t('nav_github')}
+          </a>
+          <Link href="/download" aria-current={currentCompany('/download')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/download')}>
+            {t('nav_download')}
+          </Link>
+          <Link href="/faq" aria-current={currentCompany('/faq')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}>
+            {t('nav_faq')}
+          </Link>
+          <Link href="/pricing" aria-current={currentCompany('/pricing')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/pricing')}>
+            {t('nav_pricing')}
+          </Link>
+          <Link href="/demo" aria-current={currentCompany('/demo')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/demo')}>
+            {t('nav_demo')}
+          </Link>
+          <Link href="/about" aria-current={currentCompany('/about')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/about')}>
+            {t('nav_about')}
+          </Link>
+        </div>
+        */}
+
+        <div className="flex items-center gap-2 sm:gap-3">
+          <LangDropdown />
+
+          <Link
+            href="/?login=true"
+            className="hidden sm:inline-flex px-0 py-0 text-[11px] font-semibold tracking-wider no-underline transition-colors hover:text-[var(--color-bright)]"
+            style={{
+              color: "var(--color-green)",
+            }}
+          >
+            {t("nav_login")}
+          </Link>
+
+          {/* Mobile hamburger nascosto temporaneamente
+          <button
+            onClick={() => setMobileOpen(v => !v)}
+            className="md:hidden flex flex-col gap-1 p-1.5"
+            style={{ background: 'none', border: '1px solid var(--color-border)', cursor: 'pointer' }}
+            aria-label="Menu"
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-nav-menu"
+          >
+            <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
+            <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: mobileOpen ? 0 : 1 }} />
+            <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
+          </button>
+          */}
+        </div>
+      </div>
+
+      {/* Mobile dropdown nascosto temporaneamente
+      {mobileOpen && (
+        <div
+          id="mobile-nav-menu"
+          role="menu"
+          className="md:hidden px-5 pb-4 flex flex-col gap-3"
+          style={{ background: 'var(--color-void)', animation: 'fade-in 0.15s ease both' }}
+        >
+          <a href={homeAnchor('features')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_features')}
+          </a>
+          <a href={homeAnchor('how')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_how')}
+          </a>
+          <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer"
+            className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
+            {t('nav_github')}
+          </a>
+          <Link href="/download" aria-current={currentCompany('/download')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/download')}>
+            {t('nav_download')}
+          </Link>
+          <Link href="/faq" aria-current={currentCompany('/faq')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}>
+            {t('nav_faq')}
+          </Link>
+          <Link href="/pricing" aria-current={currentCompany('/pricing')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/pricing')}>
+            {t('nav_pricing')}
+          </Link>
+          <Link href="/demo" aria-current={currentCompany('/demo')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/demo')}>
+            {t('nav_demo')}
+          </Link>
+          <Link href="/about" aria-current={currentCompany('/about')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/about')}>
+            {t('nav_about')}
+          </Link>
+          <Link
+            href="/?login=true"
+            onClick={() => setMobileOpen(false)}
+            className="text-center py-2.5 text-[12px] font-semibold tracking-wider no-underline transition-colors hover:text-[var(--color-bright)]"
+            style={{ color: 'var(--color-green)' }}
+          >
+            {t('nav_login')}
+          </Link>
+        </div>
+      )}
+      */}
+    </nav>
+  );
+}
