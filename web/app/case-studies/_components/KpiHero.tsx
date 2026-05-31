@@ -1,30 +1,33 @@
-import type { CaseStudy } from "./types"
-import { metricNum } from "./types"
+import type { CaseStudy } from "./types";
+import { metricNum } from "./types";
 
 type Props = {
-  caseStudies: CaseStudy[]
-}
+  caseStudies: CaseStudy[];
+};
 
 // Aggregate KPIs across all published case studies.
 export function KpiHero({ caseStudies }: Props) {
-  const totalRuns = caseStudies.length
+  const totalRuns = caseStudies.length;
 
   const totalWindows = caseStudies.reduce(
-    (sum, cs) => sum + (cs.windows ?? []).filter((w) => w.kind === "weekly").length,
+    (sum, cs) =>
+      sum + (cs.windows ?? []).filter((w) => w.kind === "weekly").length,
     0,
-  )
+  );
 
   const totalPositions = caseStudies.reduce(
     (sum, cs) => sum + (metricNum(cs, "positions_analyzed") ?? 0),
     0,
-  )
+  );
   const totalReady = caseStudies.reduce(
-    (sum, cs) => sum + (metricNum(cs, "cvs_ready") ?? metricNum(cs, "applications_sent") ?? 0),
+    (sum, cs) =>
+      sum +
+      (metricNum(cs, "cvs_ready") ?? metricNum(cs, "applications_sent") ?? 0),
     0,
-  )
+  );
 
-  const providers = new Set(caseStudies.map((cs) => cs.provider_name))
-  const totalProviders = providers.size
+  const providers = new Set(caseStudies.map((cs) => cs.provider_name));
+  const totalProviders = providers.size;
 
   const kpis = [
     {
@@ -32,10 +35,22 @@ export function KpiHero({ caseStudies }: Props) {
       label: "Field tests",
       sub: `across ${totalWindows} weekly cycle${totalWindows === 1 ? "" : "s"}`,
     },
-    { value: `${totalPositions}`, label: "Positions analyzed", sub: "by the pipeline" },
-    { value: `${totalReady}`, label: "Ready applications", sub: "CV + critic PASS" },
-    { value: totalProviders.toString(), label: "Providers tested", sub: "subscription tiers" },
-  ]
+    {
+      value: `${totalPositions}`,
+      label: "Positions analyzed",
+      sub: "by the pipeline",
+    },
+    {
+      value: `${totalReady}`,
+      label: "Ready applications",
+      sub: "CV + critic PASS",
+    },
+    {
+      value: totalProviders.toString(),
+      label: "Providers tested",
+      sub: "subscription tiers",
+    },
+  ];
 
   return (
     <section className="border-b border-slate-200 bg-gradient-to-br from-slate-50 to-white py-12">
@@ -48,9 +63,10 @@ export function KpiHero({ caseStudies }: Props) {
             Case studies
           </h1>
           <p className="mt-3 max-w-2xl text-base text-slate-600">
-            What Job Hunter Team has produced on real candidate profiles, with real LLM
-            subscriptions, on real job markets. We only publish runs we instrumented end-to-end
-            with the same rigor — earlier informal tests are excluded.
+            What Job Hunter Team has produced on real candidate profiles, with
+            real LLM subscriptions, on real job markets. We only publish runs we
+            instrumented end-to-end with the same rigor — earlier informal tests
+            are excluded.
           </p>
         </div>
         <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
@@ -59,12 +75,14 @@ export function KpiHero({ caseStudies }: Props) {
               <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
                 {k.label}
               </dt>
-              <dd className="mt-1 text-3xl font-bold text-slate-900 sm:text-4xl">{k.value}</dd>
+              <dd className="mt-1 text-3xl font-bold text-slate-900 sm:text-4xl">
+                {k.value}
+              </dd>
               <dd className="mt-1 text-xs text-slate-500">{k.sub}</dd>
             </div>
           ))}
         </dl>
       </div>
     </section>
-  )
+  );
 }
