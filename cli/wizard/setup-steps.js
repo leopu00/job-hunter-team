@@ -349,6 +349,7 @@ export async function promptWorkingHours(prompter, currentWorkingHours) {
   if (choice === 'always') return null;
   if (choice === 'custom_later') return currentWorkingHours ?? null;  // no-op
   const preset = PRESETS[choice];
+  if (!preset) return currentWorkingHours ?? null;
   return {
     timezone: currentWorkingHours?.timezone || detectLocalTz(),
     windows: [{ days: preset.days, start: preset.start, end: preset.end }],
