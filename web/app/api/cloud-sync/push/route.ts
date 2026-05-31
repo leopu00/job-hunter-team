@@ -267,7 +267,10 @@ export async function POST(req: NextRequest) {
     .select("active_device_id, last_heartbeat_at")
     .eq("user_id", userId)
     .maybeSingle()) as {
-    data: { active_device_id: string | null; last_heartbeat_at: string | null } | null;
+    data: {
+      active_device_id: string | null;
+      last_heartbeat_at: string | null;
+    } | null;
     error: { message: string } | null;
   };
   if (
@@ -280,7 +283,7 @@ export async function POST(req: NextRequest) {
         error: "not_active_device",
         message:
           "Questo device non è più il team attivo (un altro device ha fatto claim). " +
-          "Spegni il team locale o fai POST /api/team-state/claim {\"force\":true} per riprendere il controllo.",
+          'Spegni il team locale o fai POST /api/team-state/claim {"force":true} per riprendere il controllo.',
         active_device_id: tsCheck.data.active_device_id,
       },
       { status: 409 },

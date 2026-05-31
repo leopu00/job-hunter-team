@@ -102,7 +102,9 @@ export async function GET() {
   // dall'attivita' recente sincronizzata nel DB Supabase.
   if (!(await isLocalRequest())) {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({
         agents: AGENTS.map((a) => ({ ...a, status: "stopped", instances: 0 })),
@@ -136,14 +138,17 @@ export async function GET() {
         const entry = enabledMap[a.id];
         // Se agents_enabled è popolato, rispettalo per-agente; altrimenti
         // segui il global is_running.
-        const enabled = entry?.enabled !== undefined ? entry.enabled : teamRunning;
+        const enabled =
+          entry?.enabled !== undefined ? entry.enabled : teamRunning;
         const running = teamRunning && enabled;
         const activityAt = activity[a.id];
         return {
           ...a,
           status: running ? "running" : "stopped",
           instances: running ? 1 : 0,
-          last_activity_at: activityAt ? new Date(activityAt).toISOString() : null,
+          last_activity_at: activityAt
+            ? new Date(activityAt).toISOString()
+            : null,
         };
       });
       return NextResponse.json({ agents, remote: true });
@@ -262,10 +267,7 @@ export async function POST(req: NextRequest) {
   // Cloud dispatch: la dashboard prod chiama questo endpoint da Vercel
   // (no tmux). Inoltriamo al bus team_commands con target=agent.id; il
   // subscriber sulla VPS esegue `jht team start/stop <agent>`. Local: shell.
-  const remote = await enqueueIfRemote(
-    action as "start" | "stop",
-    agent.id,
-  );
+  const remote = await enqueueIfRemote(action as "start" | "stop", agent.id);
   if (remote) return remote;
 
   const active = await activeSessions();

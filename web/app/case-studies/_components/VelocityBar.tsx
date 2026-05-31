@@ -1,9 +1,9 @@
-import type { CaseStudy } from "./types"
-import { metricNum, providerColor } from "./types"
+import type { CaseStudy } from "./types";
+import { metricNum, providerColor } from "./types";
 
 type Props = {
-  caseStudies: CaseStudy[]
-}
+  caseStudies: CaseStudy[];
+};
 
 // Bridge velocity (%/h of budget consumed) per case study.
 // Time-series visualization would require per-tick data not currently in the seed —
@@ -12,8 +12,8 @@ type Props = {
 export function VelocityBar({ caseStudies }: Props) {
   const rows = caseStudies
     .map((cs) => {
-      const v = metricNum(cs, "velocity_pct_h")
-      if (v == null) return null
+      const v = metricNum(cs, "velocity_pct_h");
+      if (v == null) return null;
       return {
         case_number: cs.case_number,
         provider: cs.provider_name,
@@ -21,31 +21,37 @@ export function VelocityBar({ caseStudies }: Props) {
         velocity: v,
         // Days-to-100% extrapolation: 100 / (v * 24)
         daysToCap: 100 / (v * 24),
-      }
+      };
     })
-    .filter((r): r is NonNullable<typeof r> => r != null)
+    .filter((r): r is NonNullable<typeof r> => r != null);
 
-  const maxV = Math.max(...rows.map((r) => r.velocity), 1)
+  const maxV = Math.max(...rows.map((r) => r.velocity), 1);
 
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-6">
-        <h3 className="mb-1 text-sm font-bold text-slate-900">⚡ Bridge burn velocity</h3>
-        <p className="text-xs text-slate-500">No velocity data published yet for these runs.</p>
+        <h3 className="mb-1 text-sm font-bold text-slate-900">
+          ⚡ Bridge burn velocity
+        </h3>
+        <p className="text-xs text-slate-500">
+          No velocity data published yet for these runs.
+        </p>
       </div>
-    )
+    );
   }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-6">
-      <h3 className="mb-1 text-sm font-bold text-slate-900">⚡ Bridge burn velocity</h3>
+      <h3 className="mb-1 text-sm font-bold text-slate-900">
+        ⚡ Bridge burn velocity
+      </h3>
       <p className="mb-4 text-xs text-slate-500">
-        Average % of budget consumed per hour. Higher = faster burn. The right column shows the
-        extrapolated days to hit 100% at this rate.
+        Average % of budget consumed per hour. Higher = faster burn. The right
+        column shows the extrapolated days to hit 100% at this rate.
       </p>
       <ul className="space-y-3">
         {rows.map((r) => {
-          const widthPct = (r.velocity / maxV) * 100
+          const widthPct = (r.velocity / maxV) * 100;
           return (
             <li key={r.case_number}>
               <div className="mb-1 flex items-baseline justify-between text-xs">
@@ -60,7 +66,9 @@ export function VelocityBar({ caseStudies }: Props) {
                 </span>
                 <span className="font-mono text-sm font-bold text-slate-900">
                   {r.velocity.toFixed(2)}%/h
-                  <span className="ml-2 text-slate-500">→ ~{r.daysToCap.toFixed(1)}d to cap</span>
+                  <span className="ml-2 text-slate-500">
+                    → ~{r.daysToCap.toFixed(1)}d to cap
+                  </span>
                 </span>
               </div>
               <div className="h-5 overflow-hidden rounded bg-slate-100">
@@ -70,13 +78,14 @@ export function VelocityBar({ caseStudies }: Props) {
                 />
               </div>
             </li>
-          )
+          );
         })}
       </ul>
       <p className="mt-4 text-xs text-slate-500">
-        🧪 Note: token-based providers (Kimi) have no weekly cap to hit, so &quot;days to cap&quot;
-        is informational only. Weekly-cap providers (Codex Pro) treat 100% as a hard limit.
+        🧪 Note: token-based providers (Kimi) have no weekly cap to hit, so
+        &quot;days to cap&quot; is informational only. Weekly-cap providers
+        (Codex Pro) treat 100% as a hard limit.
       </p>
     </div>
-  )
+  );
 }
