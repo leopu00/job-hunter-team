@@ -68,8 +68,8 @@ function arrangeCircle(
 function scoreNormHeight(score: number | null): number {
   if (score == null) return 0.45;
   const s = Math.max(0, Math.min(100, score));
-  if (s <= 40) return s / 200;          // 0..0.20
-  return 0.20 + ((s - 40) / 60) * 0.80; // 0.20..1.00
+  if (s <= 40) return s / 200; // 0..0.20
+  return 0.2 + ((s - 40) / 60) * 0.8; // 0.20..1.00
 }
 
 // Mappa score (0-100) → colore RGB. Stops allineati al design system
@@ -78,11 +78,11 @@ function scoreToRgb(score: number | null): [number, number, number] {
   if (score == null) return [140, 200, 170]; // verde-grigio neutro
   const s = Math.max(0, Math.min(100, score));
   const stops: Array<[number, [number, number, number]]> = [
-    [0,   [255, 69, 96]],   // --color-red
-    [40,  [255, 140, 66]],  // --color-orange
-    [55,  [245, 197, 24]],  // --color-yellow
-    [70,  [127, 255, 178]], // mint
-    [100, [0, 232, 122]],   // --color-green
+    [0, [255, 69, 96]], // --color-red
+    [40, [255, 140, 66]], // --color-orange
+    [55, [245, 197, 24]], // --color-yellow
+    [70, [127, 255, 178]], // mint
+    [100, [0, 232, 122]], // --color-green
   ];
   for (let i = 0; i < stops.length - 1; i++) {
     const [s0, c0] = stops[i];
@@ -142,7 +142,10 @@ function createGroupBeamsImageData(
 
   const layout = arrangeCircle(N, ringStep, yScale);
   // Bounding box del layout (per dimensionare canvas)
-  let minX = 0, maxX = 0, minY = 0, maxY = 0;
+  let minX = 0,
+    maxX = 0,
+    minY = 0,
+    maxY = 0;
   for (const p of layout) {
     if (p.xOff < minX) minX = p.xOff;
     if (p.xOff > maxX) maxX = p.xOff;
@@ -150,8 +153,8 @@ function createGroupBeamsImageData(
     if (p.yOff > maxY) maxY = p.yOff;
   }
   const halfW = Math.max(48, Math.max(-minX, maxX) + beamW);
-  const halfDepthFront = Math.max(20, maxY + 10);    // verso davanti
-  const halfDepthBack = Math.max(20, -minY + 10);    // verso dietro
+  const halfDepthFront = Math.max(20, maxY + 10); // verso davanti
+  const halfDepthBack = Math.max(20, -minY + 10); // verso dietro
   const W = Math.ceil(2 * halfW + 20);
   // Spazio sopra baseY (per il raggio centrale + i raggi posteriori).
   const spaceAbove = maxH + halfDepthBack;
@@ -300,9 +303,10 @@ type GroupedFeature = {
 // media circolare di tutti i pin (vettorializzata, gestisce wrap-around
 // 180/-180 correttamente). Restituisce centro + bounding box dei pin
 // entro 90° da quel centro (la "metà di globo visibile").
-function bestViewport(pins: PositionCoord[]):
-  | { center: [number, number]; bounds: [[number, number], [number, number]] }
-  | null {
+function bestViewport(pins: PositionCoord[]): {
+  center: [number, number];
+  bounds: [[number, number], [number, number]];
+} | null {
   if (pins.length === 0) return null;
   const toRad = Math.PI / 180;
   let sx = 0,
@@ -376,8 +380,7 @@ function explodeGroups(
       // Angle deterministico: posizione equispaziata sul cerchio +
       // jitter piccolo da hashStr(p.id) per evitare allineamenti.
       const angle =
-        (i / g.count) * 2 * Math.PI +
-        (hashStr(p.id) & 0xff) * (Math.PI / 256);
+        (i / g.count) * 2 * Math.PI + (hashStr(p.id) & 0xff) * (Math.PI / 256);
       const lat = g.lat + radiusDeg * Math.sin(angle);
       const lon = g.lon + radiusDeg * Math.cos(angle) * lonScale;
       const singleScores: (number | null)[] = [p.score];
@@ -528,7 +531,10 @@ export default function JobsGlobe({
   // container). Serve a posizionare il popup-vignetta sopra al pin
   // con la coda che punta verso il basso. Si aggiorna ad ogni
   // move/zoom della mappa.
-  const [popupAnchor, setPopupAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [popupAnchor, setPopupAnchor] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   // Indirizzo reverse-geocodato lazy quando il popup mostra una pos
   // con office_address null. Cache client-side keyed sulla pos id per
   // evitare refetch su re-render.
@@ -561,7 +567,9 @@ export default function JobsGlobe({
   const displayData = useMemo(() => {
     let out = data;
     if (selectedTypes.length > 0) {
-      out = out.filter((p) => selectedTypes.includes(p.role_family ?? UNCATEGORIZED_LABEL));
+      out = out.filter((p) =>
+        selectedTypes.includes(p.role_family ?? UNCATEGORIZED_LABEL),
+      );
     }
     const scoreFilterActive =
       selectedScoreRanges.length > 0 || selectedUnscored;
@@ -585,14 +593,24 @@ export default function JobsGlobe({
           const key = `${country}|${city ?? "(country-only)"}`;
           if (selectedCities.includes(key)) return true;
         }
-        if (selectedCountries.length > 0 && selectedCountries.includes(country)) {
+        if (
+          selectedCountries.length > 0 &&
+          selectedCountries.includes(country)
+        ) {
           return true;
         }
         return false;
       });
     }
     return out;
-  }, [data, selectedTypes, selectedScoreRanges, selectedUnscored, selectedCountries, selectedCities]);
+  }, [
+    data,
+    selectedTypes,
+    selectedScoreRanges,
+    selectedUnscored,
+    selectedCountries,
+    selectedCities,
+  ]);
 
   // Raggruppa i pin per coordinata identica (city-center fallback).
   // Ogni gruppo diventa UN feature al centroide, con icona custom che
@@ -693,20 +711,62 @@ export default function JobsGlobe({
           source: SOURCE_ID,
           paint: {
             "circle-radius": [
-              "interpolate", ["linear"], ["zoom"],
-              0, ["interpolate", ["linear"], ["get", "count"], 1, 2, 20, 5, 100, 9],
-              8, ["interpolate", ["linear"], ["get", "count"], 1, 6, 20, 14, 100, 24],
-              14, ["interpolate", ["linear"], ["get", "count"], 1, 14, 20, 30, 100, 50],
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0,
+              [
+                "interpolate",
+                ["linear"],
+                ["get", "count"],
+                1,
+                2,
+                20,
+                5,
+                100,
+                9,
+              ],
+              8,
+              [
+                "interpolate",
+                ["linear"],
+                ["get", "count"],
+                1,
+                6,
+                20,
+                14,
+                100,
+                24,
+              ],
+              14,
+              [
+                "interpolate",
+                ["linear"],
+                ["get", "count"],
+                1,
+                14,
+                20,
+                30,
+                100,
+                50,
+              ],
             ],
             "circle-color": [
-              "interpolate", ["linear"],
+              "interpolate",
+              ["linear"],
               ["coalesce", ["get", "topScore"], -1],
-              -1, "#8cc8a0",
-              0, "#ff4560",
-              40, "#ff8c42",
-              55, "#f5c518",
-              70, "#7fffb2",
-              100, "#00e87a",
+              -1,
+              "#8cc8a0",
+              0,
+              "#ff4560",
+              40,
+              "#ff8c42",
+              55,
+              "#f5c518",
+              70,
+              "#7fffb2",
+              100,
+              "#00e87a",
             ],
             "circle-opacity": 0.12,
             "circle-blur": 0.9,
@@ -726,11 +786,17 @@ export default function JobsGlobe({
             "icon-allow-overlap": true,
             "icon-ignore-placement": true,
             "icon-size": [
-              "interpolate", ["linear"], ["zoom"],
-              0, 0.45,
-              6, 0.65,
-              12, 0.95,
-              16, 1.15,
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0,
+              0.45,
+              6,
+              0.65,
+              12,
+              0.95,
+              16,
+              1.15,
             ],
             // Numero del cluster mostrato sotto al fascio (solo se >1).
             "text-field": [
@@ -741,10 +807,15 @@ export default function JobsGlobe({
             ],
             "text-font": ["Open Sans Bold"],
             "text-size": [
-              "interpolate", ["linear"], ["zoom"],
-              0, 11,
-              6, 12,
-              12, 14,
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              0,
+              11,
+              6,
+              12,
+              12,
+              14,
             ],
             // 0.3em sotto il pin: subito attaccato al cluster.
             // Halo forte (sotto) gestisce overlap coi nomi città.
@@ -786,9 +857,10 @@ export default function JobsGlobe({
       if (!g) return;
       // Apri popup sulla posizione con score più alto del gruppo
       // (l'ultima dopo sort asc, o la prima senza score).
-      const top = g.positions
-        .filter((p) => p.score != null)
-        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0] ?? g.positions[0];
+      const top =
+        g.positions
+          .filter((p) => p.score != null)
+          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0] ?? g.positions[0];
       setSelected(top);
       map.flyTo({
         center: [g.lon, g.lat],
@@ -907,7 +979,11 @@ export default function JobsGlobe({
     // contenuti dei gruppi). Lascia maplibre liberare la GPU texture.
     for (const id of Array.from(registeredIconsRef.current)) {
       if (!neededIcons.has(id) && map.hasImage(id)) {
-        try { map.removeImage(id); } catch { /* race ok */ }
+        try {
+          map.removeImage(id);
+        } catch {
+          /* race ok */
+        }
         registeredIconsRef.current.delete(id);
       }
     }
@@ -1008,9 +1084,12 @@ export default function JobsGlobe({
     });
   }, [displayData]);
 
-  const wrapClass = (hero || fullscreen)
-    ? (fullscreen ? "h-full" : "")
-    : "bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]";
+  const wrapClass =
+    hero || fullscreen
+      ? fullscreen
+        ? "h-full"
+        : ""
+      : "bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]";
 
   return (
     <div className={wrapClass}>
@@ -1056,7 +1135,7 @@ export default function JobsGlobe({
       `}</style>
       <div
         ref={mapWrapRef}
-        className={`jht-globe-wrap relative w-full overflow-hidden ${(hero || fullscreen) ? "" : "rounded-md"}`}
+        className={`jht-globe-wrap relative w-full overflow-hidden ${hero || fullscreen ? "" : "rounded-md"}`}
         // zoom: 1 neutralizza il body { zoom: var(--zoom) } di JHT
         // che mandava MapLibre a leggere dimensioni canvas sbagliate.
         // In hero il bg è transparent così il globo si fonde col
@@ -1065,7 +1144,7 @@ export default function JobsGlobe({
         // il container fisso (es. /map).
         style={{
           height: fullscreen ? "100%" : hero ? 620 : 500,
-          background: (hero || fullscreen) ? "transparent" : "var(--color-deep)",
+          background: hero || fullscreen ? "transparent" : "var(--color-deep)",
           zoom: 1,
         }}
       >
@@ -1168,7 +1247,8 @@ export default function JobsGlobe({
               const showStreet = street && street.length > 0;
               const showFallback =
                 fallback && fallback.length > 0 && fallback !== street;
-              const looking = !selected.office_address && lazyAddr === undefined;
+              const looking =
+                !selected.office_address && lazyAddr === undefined;
               return (
                 <>
                   {(showStreet || fallback) && (

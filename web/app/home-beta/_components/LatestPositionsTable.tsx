@@ -126,18 +126,42 @@ export default function LatestPositionsTable() {
           >
             <thead>
               <tr className="text-left text-[10px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Updated</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Status</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Source</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Actor</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Company</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Score</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">Voto</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Title</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Location</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Salary</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Remote</th>
-                <th className="px-3 py-2 font-normal whitespace-nowrap">Found at</th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Updated
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Status
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Source
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Actor
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Company
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">
+                  Score
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap text-right">
+                  Voto
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Title
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Location
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Salary
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Remote
+                </th>
+                <th className="px-3 py-2 font-normal whitespace-nowrap">
+                  Found at
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -195,7 +219,10 @@ export default function LatestPositionsTable() {
                         {actor}
                       </td>
                       <td className="px-3 py-2 text-[var(--color-muted)]">
-                        <div className="truncate max-w-[180px]" title={p.company}>
+                        <div
+                          className="truncate max-w-[180px]"
+                          title={p.company}
+                        >
                           {p.company}
                         </div>
                       </td>
