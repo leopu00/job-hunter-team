@@ -512,6 +512,7 @@ async function handlePush(options) {
   let scores = [];
   let applications = [];
   let pendingMessages = [];
+  let tombstones = [];
   // Cursor delta-sync: ad ogni tick leggiamo solo righe con updated_at >
   // ultimo pushato per quella tabella. Prima volta (cursor vuoto): full
   // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
@@ -556,6 +557,27 @@ async function handlePush(options) {
         'user_reply', 'user_reply_at', 'agent_seen_reply_at',
         'created_at',
       ]);
+      // Tombstones delta (SQLite V7): righe (table_name, legacy_id,
+      // deleted_at) accumulate dai trigger BEFORE DELETE. Filtro per
+      // deleted_at > cursor → solo le nuove cancellazioni nel tick.
+      // Lato server, il receive le interpreta come UPDATE soft
+      // SET deleted_at = ?. Vedi mig 025 + _migrate_v6_to_v7_tombstones.
+      try {
+        if (cursor.tombstones) {
+          tombstones = db.prepare(
+            `SELECT table_name, legacy_id, deleted_at
+             FROM _tombstones WHERE deleted_at > ?`
+          ).all(cursor.tombstones);
+        } else {
+          tombstones = db.prepare(
+            `SELECT table_name, legacy_id, deleted_at FROM _tombstones`
+          ).all();
+        }
+      } catch (err) {
+        // DB pre-V7: tabella inesistente → no-op silenzioso, niente
+        // tombstones nel payload (compat con vecchi DB).
+        if (!/no such table/i.test(err.message)) throw err;
+      }
       db.close();
     } catch (err) {
       console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
@@ -570,11 +592,14 @@ async function handlePush(options) {
   const pendingChunks = pendingMessages.length > 0
     ? `, ${pendingMessages.length} pending messages`
     : '';
+  const tombstoneChunks = tombstones.length > 0
+    ? `, ${tombstones.length} tombstones`
+    : '';
   const isFirstPush = !cursor.positions && !cursor.scores && !cursor.applications;
   const deltaMode = isFirstPush ? 'first-push (full)' : 'delta';
   console.log(
     pc.dim(
-      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${profileChunks}`
+      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${tombstoneChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
@@ -584,7 +609,7 @@ async function handlePush(options) {
   if (
     positions.length === 0 && scores.length === 0 &&
     applications.length === 0 && pendingMessages.length === 0 &&
-    !profilePayload
+    tombstones.length === 0 && !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
     return;
@@ -602,6 +627,7 @@ async function handlePush(options) {
       body: JSON.stringify({
         positions, scores, applications,
         pending_user_messages: pendingMessages,
+        tombstones,
         ...(profilePayload ? { profile: profilePayload } : {}),
       }),
     });
@@ -648,6 +674,9 @@ async function handlePush(options) {
   console.log(pc.dim(`  scores:           ${body.scores?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  applications:     ${body.applications?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
+  if (tombstones.length > 0 || body.tombstones?.applied) {
+    console.log(pc.dim(`  tombstones:       ${body.tombstones?.applied ?? 0} applied`));
+  }
 
   // Aggiorna cursor delta-sync solo dopo HTTP 200: il prossimo tick
   // selezionera' solo righe con updated_at > cursor. Se una qualsiasi
@@ -661,6 +690,15 @@ async function handlePush(options) {
   if (posMax) newCursor.positions = posMax;
   if (scoMax) newCursor.scores = scoMax;
   if (appMax) newCursor.applications = appMax;
+  // Cursor tombstones: MAX(deleted_at) tra le tombstones inviate.
+  // Stesso pattern, ma il campo si chiama deleted_at non updated_at.
+  let tombMax = null;
+  for (const t of tombstones) {
+    if (t?.deleted_at && (tombMax === null || t.deleted_at > tombMax)) {
+      tombMax = t.deleted_at;
+    }
+  }
+  if (tombMax) newCursor.tombstones = tombMax;
   // Salviamo anche se nulla e' cambiato: la prima volta crea il file e
   // disabilita la modalita' "first-push" al prossimo tick. La 2a volta
   // in poi e' no-op a livello di contenuto.
