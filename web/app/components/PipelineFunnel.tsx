@@ -39,7 +39,9 @@ export default function PipelineFunnel({ steps, title }: Props) {
 
       <div
         className="flex items-end gap-3"
-        style={{ height: BAR_AREA_H + 50 /* +50 per count sopra + label sotto */ }}
+        style={{
+          height: BAR_AREA_H + 50 /* +50 per count sopra + label sotto */,
+        }}
       >
         {stages.map((s) => {
           const heightPct = (s.count / maxCount) * 100;

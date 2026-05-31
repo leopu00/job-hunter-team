@@ -227,10 +227,7 @@ export default function TeamCompany() {
   };
 
   useEffect(() => {
-    if (
-      agentActionCmd.state === "done" ||
-      agentActionCmd.state === "local"
-    ) {
+    if (agentActionCmd.state === "done" || agentActionCmd.state === "local") {
       fetchStatus();
       setActionTarget(null);
     } else if (
@@ -238,7 +235,7 @@ export default function TeamCompany() {
       agentActionCmd.state === "timeout"
     ) {
       toast(
-        typeof agentActionCmd.error === 'string' && agentActionCmd.error
+        typeof agentActionCmd.error === "string" && agentActionCmd.error
           ? agentActionCmd.error
           : "Errore esecuzione comando agente",
         "error",
@@ -296,9 +293,17 @@ export default function TeamCompany() {
     });
     try {
       await teamState.start();
-      toast("Comando Start inoltrato — attendo conferma container…", "success", 3000);
+      toast(
+        "Comando Start inoltrato — attendo conferma container…",
+        "success",
+        3000,
+      );
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Team start error", "error", 6000);
+      toast(
+        err instanceof Error ? err.message : "Team start error",
+        "error",
+        6000,
+      );
     } finally {
       setBulkPosting(null);
     }
@@ -308,9 +313,17 @@ export default function TeamCompany() {
     setBulkPosting("stop");
     try {
       await teamState.stop();
-      toast("Comando Stop inoltrato — attendo conferma container…", "success", 3000);
+      toast(
+        "Comando Stop inoltrato — attendo conferma container…",
+        "success",
+        3000,
+      );
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Team stop error", "error", 6000);
+      toast(
+        err instanceof Error ? err.message : "Team stop error",
+        "error",
+        6000,
+      );
     } finally {
       setBulkPosting(null);
     }
@@ -385,16 +398,19 @@ export default function TeamCompany() {
                           bulkLoading !== null
                             ? "var(--color-border)"
                             : "rgba(34,197,94,0.1)",
-                        color: bulkLoading !== null ? "var(--color-dim)" : "#22c55e",
+                        color:
+                          bulkLoading !== null ? "var(--color-dim)" : "#22c55e",
                         border: `1px solid ${bulkLoading !== null ? "var(--color-border)" : "rgba(34,197,94,0.25)"}`,
-                        cursor: bulkLoading !== null ? "not-allowed" : "pointer",
+                        cursor:
+                          bulkLoading !== null ? "not-allowed" : "pointer",
                         fontFamily: "inherit",
                         minWidth: 110,
                       }}
                     >
                       {bulkLoading === "start" ? (
                         <span className="inline-flex items-center gap-1.5">
-                          <Spinner size={11} color="var(--color-dim)" /> Starting...
+                          <Spinner size={11} color="var(--color-dim)" />{" "}
+                          Starting...
                         </span>
                       ) : (
                         "\u25B6 Start"
@@ -411,16 +427,19 @@ export default function TeamCompany() {
                           bulkLoading !== null
                             ? "var(--color-border)"
                             : "rgba(244,67,54,0.08)",
-                        color: bulkLoading !== null ? "var(--color-dim)" : "#f44336",
+                        color:
+                          bulkLoading !== null ? "var(--color-dim)" : "#f44336",
                         border: `1px solid ${bulkLoading !== null ? "var(--color-border)" : "rgba(244,67,54,0.2)"}`,
-                        cursor: bulkLoading !== null ? "not-allowed" : "pointer",
+                        cursor:
+                          bulkLoading !== null ? "not-allowed" : "pointer",
                         fontFamily: "inherit",
                         minWidth: 110,
                       }}
                     >
                       {bulkLoading === "stop" ? (
                         <span className="inline-flex items-center gap-1.5">
-                          <Spinner size={11} color="var(--color-dim)" /> Stopping...
+                          <Spinner size={11} color="var(--color-dim)" />{" "}
+                          Stopping...
                         </span>
                       ) : (
                         <>{"\u25A0"} Stop</>

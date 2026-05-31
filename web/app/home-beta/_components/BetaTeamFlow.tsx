@@ -64,7 +64,13 @@ export default function BetaTeamFlow() {
   });
 
   const [messages, setMessages] = useState<
-    Array<{ key: number; pathId: string; color: string; durationMs: number; reverse?: boolean }>
+    Array<{
+      key: number;
+      pathId: string;
+      color: string;
+      durationMs: number;
+      reverse?: boolean;
+    }>
   >([]);
   const animKey = useRef(0);
   const [inView, setInView] = useState(false);
@@ -109,7 +115,10 @@ export default function BetaTeamFlow() {
           const sX = pacingRect.left - fr.left - 6;
           const eX = captainRect.right - fr.left + 6;
           const y = pacingRect.top + pacingRect.height / 2 - fr.top;
-          pacingPath = { id: "pacing-to-captain", d: `M ${sX} ${y} L ${eX} ${y}` };
+          pacingPath = {
+            id: "pacing-to-captain",
+            d: `M ${sX} ${y} L ${eX} ${y}`,
+          };
         }
 
         // Captain → pipeline (skip Critic come in team/v2: il Capitano non
@@ -117,7 +126,8 @@ export default function BetaTeamFlow() {
         const captainPaths: ArrowPath[] = [];
         const pipelineRects = pipelineRefs.current.map((n) => rectOf(n));
         if (captainNameRect) {
-          const startX = captainNameRect.left + captainNameRect.width / 2 - fr.left;
+          const startX =
+            captainNameRect.left + captainNameRect.width / 2 - fr.left;
           const startY = captainNameRect.bottom - fr.top + 6;
           pipelineRects.forEach((rect, idx) => {
             if (!rect || idx === 4) return;
@@ -253,7 +263,8 @@ export default function BetaTeamFlow() {
     const timers: number[] = [];
     let cancelled = false;
 
-    const rand = (min: number, max: number) => min + Math.random() * (max - min);
+    const rand = (min: number, max: number) =>
+      min + Math.random() * (max - min);
     const schedule = (delayMs: number, fn: () => void) => {
       const t = window.setTimeout(() => {
         if (!cancelled) fn();
@@ -267,7 +278,9 @@ export default function BetaTeamFlow() {
       if (active >= MAX_CONCURRENT) return;
       const el =
         typeof document !== "undefined"
-          ? (document.getElementById(pathId) as unknown as SVGPathElement | null)
+          ? (document.getElementById(
+              pathId,
+            ) as unknown as SVGPathElement | null)
           : null;
       const len = el?.getTotalLength?.() ?? 220;
       const durationMs = Math.max(
@@ -276,7 +289,10 @@ export default function BetaTeamFlow() {
       );
       const key = ++animKey.current;
       active++;
-      setMessages((prev) => [...prev, { key, pathId, color, durationMs, reverse }]);
+      setMessages((prev) => [
+        ...prev,
+        { key, pathId, color, durationMs, reverse },
+      ]);
       schedule(durationMs + 400, () => {
         active = Math.max(0, active - 1);
         setMessages((prev) => prev.filter((m) => m.key !== key));
@@ -456,10 +472,7 @@ export default function BetaTeamFlow() {
   };
 
   return (
-    <div
-      ref={flowRef}
-      className="relative mx-auto w-full max-w-[1080px]"
-    >
+    <div ref={flowRef} className="relative mx-auto w-full max-w-[1080px]">
       {overlay.width > 0 && overlay.height > 0 && (
         <svg
           aria-hidden="true"
@@ -604,18 +617,12 @@ export default function BetaTeamFlow() {
 
       {/* Top row: Bridge | Sentinel | Captain | Pacing */}
       <div className="grid grid-cols-5 justify-items-center items-end">
-        <div className="col-start-1">
-          {renderNode("bridge", bridgeRef)}
-        </div>
-        <div className="col-start-2">
-          {renderNode("sentinel", sentinelRef)}
-        </div>
+        <div className="col-start-1">{renderNode("bridge", bridgeRef)}</div>
+        <div className="col-start-2">{renderNode("sentinel", sentinelRef)}</div>
         <div className="col-start-3 -translate-y-3 md:-translate-y-4">
           {renderNode("captain", captainEmojiRef, "", captainNameRef)}
         </div>
-        <div className="col-start-4">
-          {renderNode("pacing", pacingRef)}
-        </div>
+        <div className="col-start-4">{renderNode("pacing", pacingRef)}</div>
       </div>
 
       {/* Pipeline row */}

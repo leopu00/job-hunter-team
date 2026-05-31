@@ -20,26 +20,26 @@ const DOT_ID = "hero-pins-dot";
 // Sud / Africa / Oceania.
 const CITIES: Array<[number, number]> = [
   // Europa
-  [-0.13, 51.51],  // London
-  [13.4, 52.52],   // Berlin
-  [2.35, 48.86],   // Paris
-  [-3.7, 40.42],   // Madrid
-  [12.49, 41.9],   // Rome
-  [9.19, 45.46],   // Milan
-  [4.9, 52.37],    // Amsterdam
-  [18.07, 59.33],  // Stockholm
-  [-9.14, 38.72],  // Lisbon
-  [21.01, 52.23],  // Warsaw
-  [16.37, 48.21],  // Vienna
-  [14.42, 50.08],  // Prague
-  [-6.26, 53.35],  // Dublin
-  [23.73, 37.98],  // Athens
-  [12.57, 55.68],  // Copenhagen
-  [24.94, 60.17],  // Helsinki
-  [19.04, 47.5],   // Prague
-  [26.1, 44.43],   // Bucharest
+  [-0.13, 51.51], // London
+  [13.4, 52.52], // Berlin
+  [2.35, 48.86], // Paris
+  [-3.7, 40.42], // Madrid
+  [12.49, 41.9], // Rome
+  [9.19, 45.46], // Milan
+  [4.9, 52.37], // Amsterdam
+  [18.07, 59.33], // Stockholm
+  [-9.14, 38.72], // Lisbon
+  [21.01, 52.23], // Warsaw
+  [16.37, 48.21], // Vienna
+  [14.42, 50.08], // Prague
+  [-6.26, 53.35], // Dublin
+  [23.73, 37.98], // Athens
+  [12.57, 55.68], // Copenhagen
+  [24.94, 60.17], // Helsinki
+  [19.04, 47.5], // Prague
+  [26.1, 44.43], // Bucharest
   // Nord America
-  [-74.0, 40.71],  // NYC
+  [-74.0, 40.71], // NYC
   [-122.42, 37.77], // SF
   [-118.24, 34.05], // LA
   [-122.33, 47.6], // Seattle
@@ -54,25 +54,25 @@ const CITIES: Array<[number, number]> = [
   // Asia
   [139.69, 35.69], // Tokyo
   [126.98, 37.57], // Seoul
-  [103.82, 1.35],  // Singapore
-  [77.59, 12.97],  // Bangalore
-  [72.83, 19.08],  // Mumbai
-  [116.41, 39.9],  // Beijing
+  [103.82, 1.35], // Singapore
+  [77.59, 12.97], // Bangalore
+  [72.83, 19.08], // Mumbai
+  [116.41, 39.9], // Beijing
   [121.47, 31.23], // Shanghai
   [114.17, 22.32], // Hong Kong
-  [34.78, 32.07],  // Tel Aviv
-  [55.27, 25.2],   // Dubai
-  [101.69, 3.14],  // Kuala Lumpur
+  [34.78, 32.07], // Tel Aviv
+  [55.27, 25.2], // Dubai
+  [101.69, 3.14], // Kuala Lumpur
   [106.66, 10.76], // Ho Chi Minh
   // Oceania / Sud / Africa
   [151.21, -33.87], // Sydney
   [144.96, -37.81], // Melbourne
   [-46.63, -23.55], // São Paulo
-  [-58.38, -34.6],  // Buenos Aires
-  [18.42, -33.92],  // Cape Town
-  [28.03, -26.2],   // Johannesburg
-  [3.39, 6.52],     // Lagos
-  [31.24, 30.04],   // Cairo
+  [-58.38, -34.6], // Buenos Aires
+  [18.42, -33.92], // Cape Town
+  [28.03, -26.2], // Johannesburg
+  [3.39, 6.52], // Lagos
+  [31.24, 30.04], // Cairo
 ];
 
 function tintMap(map: MaplibreMap, mode: "dark" | "light") {

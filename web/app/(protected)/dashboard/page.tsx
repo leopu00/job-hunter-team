@@ -96,26 +96,33 @@ export default async function DashboardCompany() {
   }
 
   const demoData = demoMode ? getDemoDashboardData() : null;
-  const [stats, positions, scoreDist, criticScores, typeDist, pendingMessages, criticTotals] =
-    demoData
-      ? [
-          demoData.stats,
-          demoData.positions,
-          demoData.scoreDistribution,
-          [] as number[],
-          [],
-          demoData.pendingMessages,
-          { pass: 0, needs_work: 0, reject: 0, total: 0 },
-        ]
-      : await Promise.all([
-          getDashboardStats(),
-          getRecentPositions(15),
-          getScoreDistribution(),
-          getCriticScores(),
-          getPositionTypeDistribution(),
-          getPendingMessages(20),
-          getCriticVerdictTotals(),
-        ]);
+  const [
+    stats,
+    positions,
+    scoreDist,
+    criticScores,
+    typeDist,
+    pendingMessages,
+    criticTotals,
+  ] = demoData
+    ? [
+        demoData.stats,
+        demoData.positions,
+        demoData.scoreDistribution,
+        [] as number[],
+        [],
+        demoData.pendingMessages,
+        { pass: 0, needs_work: 0, reject: 0, total: 0 },
+      ]
+    : await Promise.all([
+        getDashboardStats(),
+        getRecentPositions(15),
+        getScoreDistribution(),
+        getCriticScores(),
+        getPositionTypeDistribution(),
+        getPendingMessages(20),
+        getCriticVerdictTotals(),
+      ]);
 
   const activeTotal = stats.total - stats.excluded;
 
@@ -131,17 +138,13 @@ export default async function DashboardCompany() {
     criticTotals.total > 0
       ? Math.round((criticTotals.pass / criticTotals.total) * 100)
       : 0;
-  const criticNeedsPct = Math.max(
-    0,
-    100 - criticPassPct - criticRejectPct,
-  );
+  const criticNeedsPct = Math.max(0, 100 - criticPassPct - criticRejectPct);
 
   // Funnel end-to-end: quante posizioni "uscite vive" dal pipeline
   // (ready/applied/response = hanno passato Analista + Scorer + Critico)
   // su quelle trovate. È il dato più sintetico — il throughput vero.
   const funnelOutput = stats.ready + stats.applied + stats.response;
-  const funnelRate =
-    stats.total > 0 ? (funnelOutput / stats.total) * 100 : 0;
+  const funnelRate = stats.total > 0 ? (funnelOutput / stats.total) * 100 : 0;
   const funnelRatePct = Math.round(funnelRate);
   // "Su 10 trovate → N arrivano pronte". 1 decimale per non perdere
   // info quando il rate è basso (es. 1.5 su 10 — arrotondato a 2 sarebbe
@@ -260,478 +263,485 @@ export default async function DashboardCompany() {
           background: "var(--color-deep)",
         }}
       >
-      <div className="max-w-6xl mx-auto px-5 pt-8 pb-8">
-      {/* ── Messaggi del team (fallback web quando Telegram down) ─ */}
-      <PendingMessagesCard initialMessages={pendingMessages} />
+        <div className="max-w-6xl mx-auto px-5 pt-8 pb-8">
+          {/* ── Messaggi del team (fallback web quando Telegram down) ─ */}
+          <PendingMessagesCard initialMessages={pendingMessages} />
 
-      {/* ── VPS lifecycle: 3 bottoni (pausa/snapshot/termina) ────
+          {/* ── VPS lifecycle: 3 bottoni (pausa/snapshot/termina) ────
           Solo in VPS mode (JHT_HOST_TYPE=vps): in Local PC mode i
           bottoni non hanno senso — niente "snapshot Hetzner" della
           tua MacBook. Vedi docs/internal/vps.md § "Companycycle". */}
-      <VpsCompanycycleCard visible={process.env.JHT_HOST_TYPE === "vps"} />
+          <VpsCompanycycleCard visible={process.env.JHT_HOST_TYPE === "vps"} />
 
-      {/* ── Onboarding popup (empty state) ────────────────────── */}
-      {isEmpty && (
-        <OnboardingPopup
-          hasProfile={hasProfile}
-          translations={{
-            start_here: t.start_here,
-            setup_intro: t.setup_intro,
-            step1_title: t.step1_title,
-            step1_completed: t.step1_completed,
-            step1_desc_done: t.step1_desc_done,
-            step1_desc_todo: t.step1_desc_todo,
-            step2_title: t.step2_title,
-            step2_desc_done: t.step2_desc_done,
-            step2_desc_todo: t.step2_desc_todo,
-            help_text: t.help_text,
-            open_assistant: t.open_assistant,
-          }}
-        />
-      )}
+          {/* ── Onboarding popup (empty state) ────────────────────── */}
+          {isEmpty && (
+            <OnboardingPopup
+              hasProfile={hasProfile}
+              translations={{
+                start_here: t.start_here,
+                setup_intro: t.setup_intro,
+                step1_title: t.step1_title,
+                step1_completed: t.step1_completed,
+                step1_desc_done: t.step1_desc_done,
+                step1_desc_todo: t.step1_desc_todo,
+                step2_title: t.step2_title,
+                step2_desc_done: t.step2_desc_done,
+                step2_desc_todo: t.step2_desc_todo,
+                help_text: t.help_text,
+                open_assistant: t.open_assistant,
+              }}
+            />
+          )}
 
-      {/* ── Position types — pie chart in grande sopra la pipeline ── */}
-      <div
-        className="mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.08s" }}
-      >
-        {/* labels: nessun mapping hardcoded. La label e' il valore della
+          {/* ── Position types — pie chart in grande sopra la pipeline ── */}
+          <div
+            className="mb-8"
+            style={{ animation: "fade-in 0.35s ease both 0.08s" }}
+          >
+            {/* labels: nessun mapping hardcoded. La label e' il valore della
             colonna positions.role_family, gia' una stringa leggibile
             assegnata dal team analyst. */}
-        <PositionTypesPie
-          data={typeDist}
-          title={t.position_types}
-          emptyLabel={t.no_data}
-          size={300}
-        />
-      </div>
+            <PositionTypesPie
+              data={typeDist}
+              title={t.position_types}
+              emptyLabel={t.no_data}
+              size={300}
+            />
+          </div>
 
-      {/* ── Pipeline flow: area chart con linea ondulante ───────── */}
-      <div
-        className="mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.12s" }}
-      >
-        <PipelineFlow steps={pipeline} title="Pipeline flow" />
-      </div>
+          {/* ── Pipeline flow: area chart con linea ondulante ───────── */}
+          <div
+            className="mb-8"
+            style={{ animation: "fade-in 0.35s ease both 0.12s" }}
+          >
+            <PipelineFlow steps={pipeline} title="Pipeline flow" />
+          </div>
 
-      {/* ── Pipeline ────────────────────────────────────────────── */}
-      <div className="section-label mb-4">{t.pipeline}</div>
-      <div
-        className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 mb-8"
-        style={{ animation: "fade-in 0.35s ease both" }}
-      >
-        {pipeline.map((step, i) => {
-          const percent =
-            step.basis > 0 ? Math.round((step.count / step.basis) * 100) : 0;
+          {/* ── Pipeline ────────────────────────────────────────────── */}
+          <div className="section-label mb-4">{t.pipeline}</div>
+          <div
+            className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 mb-8"
+            style={{ animation: "fade-in 0.35s ease both" }}
+          >
+            {pipeline.map((step, i) => {
+              const percent =
+                step.basis > 0
+                  ? Math.round((step.count / step.basis) * 100)
+                  : 0;
 
-          return (
+              return (
+                <Link
+                  key={step.key}
+                  href={step.href}
+                  className="min-h-[112px] flex flex-col justify-between bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] hover:bg-[var(--color-row)] transition-colors text-left no-underline"
+                  style={{ animation: `fade-in 0.4s ease ${i * 0.04}s both` }}
+                >
+                  <div>
+                    <div
+                      className="text-[9px] font-semibold tracking-[0.14em] uppercase mb-3 truncate"
+                      style={{ color: "var(--color-dim)" }}
+                      title={step.label}
+                    >
+                      {step.label}
+                    </div>
+                    <div
+                      className="text-3xl font-bold leading-none tracking-tight"
+                      style={{ color: step.color }}
+                    >
+                      {step.count}
+                    </div>
+                  </div>
+                  <div
+                    className="h-0.5 rounded-full mt-3 mb-1 overflow-hidden"
+                    style={{ background: "var(--color-border)" }}
+                  >
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(percent, 100)}%`,
+                        background: step.color,
+                        opacity: 0.8,
+                      }}
+                    />
+                  </div>
+                  <div className="text-[9px] text-[var(--color-dim)]">
+                    {step.note ?? `${percent}%`}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+
+          {/* ── Charts ──────────────────────────────────────────────── */}
+          <div
+            className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
+            style={{ animation: "fade-in 0.35s ease both 0.1s" }}
+          >
+            {/* Score distribution — histogram fine-grained */}
+            <ScoreDistribution
+              scores={scoreDist.scores ?? []}
+              title={t.score_distribution}
+              emptyLabel={t.no_data}
+            />
+
+            {/* Critic votes distribution (0-10) */}
+            <ScoreDistribution
+              scores={criticScores}
+              title={t.critic_votes}
+              emptyLabel={t.no_data}
+              maxScore={10}
+              binStep={0.5}
+              decimals={1}
+              thresholdReady={5.5}
+              thresholdLabel={t.critic_ready}
+            />
+          </div>
+
+          {/* ── Positions table ─────────────────────────────────────── */}
+          <div className="flex items-center justify-between mb-4">
+            <span className="section-label">{t.recent_positions}</span>
             <Link
-              key={step.key}
-              href={step.href}
-              className="min-h-[112px] flex flex-col justify-between bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] hover:bg-[var(--color-row)] transition-colors text-left no-underline"
-              style={{ animation: `fade-in 0.4s ease ${i * 0.04}s both` }}
+              href="/positions"
+              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
             >
-              <div>
-                <div
-                  className="text-[9px] font-semibold tracking-[0.14em] uppercase mb-3 truncate"
-                  style={{ color: "var(--color-dim)" }}
-                  title={step.label}
+              {t.view_all}
+            </Link>
+          </div>
+          <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-8">
+            <table
+              className="w-full text-[12px]"
+              style={{ borderCollapse: "collapse" }}
+              aria-label={t.recent_positions}
+            >
+              <thead>
+                <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
+                  {[
+                    t.col_id,
+                    t.col_title,
+                    t.col_company,
+                    t.col_location,
+                    t.col_remote,
+                    t.col_score,
+                    t.col_status,
+                    t.col_updated,
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      scope="col"
+                      className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
+                      style={{ color: "var(--color-dim)" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {positions.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
+                    >
+                      {t.no_positions}
+                    </td>
+                  </tr>
+                ) : (
+                  positions.map((p, i: number) => (
+                    <tr
+                      key={p.id}
+                      className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
+                      style={{
+                        borderBottomColor:
+                          i === positions.length - 1
+                            ? "transparent"
+                            : undefined,
+                        background:
+                          i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
+                      }}
+                    >
+                      <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                        {p.legacy_id
+                          ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                          : p.id.slice(0, 8)}
+                      </td>
+                      <td
+                        className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
+                        title={p.title}
+                      >
+                        <Link
+                          href={`/positions/${p.id}`}
+                          className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                        >
+                          {p.title}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
+                        {p.company}
+                      </td>
+                      <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
+                        {p.location ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span
+                          className="text-[10px]"
+                          style={{
+                            color:
+                              p.remote_type === "full_remote"
+                                ? "var(--color-green)"
+                                : p.remote_type === "hybrid"
+                                  ? "var(--color-yellow)"
+                                  : "var(--color-red)",
+                          }}
+                        >
+                          {p.remote_type?.replace("_", " ") ?? "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 justify-end">
+                          <span
+                            className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
+                          >
+                            {p.score ?? "—"}
+                          </span>
+                          <div
+                            className="w-10 h-1 rounded-full overflow-hidden"
+                            style={{ background: "var(--color-border)" }}
+                          >
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${p.score ?? 0}%`,
+                                background: scoreBg(p.score),
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
+                          style={{
+                            color:
+                              STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                            borderColor:
+                              STATUS_COLORS[p.status] ?? "var(--color-border)",
+                            background: `${STATUS_COLORS[p.status]}18`,
+                          }}
+                        >
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
+                        {formatFoundAt(p.last_action_at ?? p.found_at)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ── Conversion rate ─────────────────────────────────────── */}
+          <div className="section-label mb-4">Conversion rate</div>
+          <div
+            className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
+            style={{ animation: "fade-in 0.35s ease both" }}
+          >
+            {/* Filtro Analisti: % escluse al primo check (status='excluded') */}
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="section-label">Filtro analisti</span>
+                <span className="text-[10px] text-[var(--color-dim)]">
+                  {stats.total} trovate · {stats.excluded} escluse
+                </span>
+              </div>
+              <div className="flex items-baseline gap-3 mb-3">
+                <span
+                  className="text-3xl font-bold tracking-tight"
+                  style={{ color: "var(--color-red)" }}
                 >
-                  {step.label}
-                </div>
-                <div
-                  className="text-3xl font-bold leading-none tracking-tight"
-                  style={{ color: step.color }}
-                >
-                  {step.count}
-                </div>
+                  {analystExcludedPct}%
+                </span>
+                <span className="text-[10px] text-[var(--color-muted)]">
+                  esclusioni · {analystKeptPct}% passate all&apos;analisi
+                </span>
               </div>
               <div
-                className="h-0.5 rounded-full mt-3 mb-1 overflow-hidden"
+                className="h-2 rounded-full overflow-hidden flex"
                 style={{ background: "var(--color-border)" }}
               >
                 <div
-                  className="h-full rounded-full"
                   style={{
-                    width: `${Math.min(percent, 100)}%`,
-                    background: step.color,
-                    opacity: 0.8,
+                    width: `${analystKeptPct}%`,
+                    background: "var(--color-green)",
+                    opacity: 0.85,
+                  }}
+                />
+                <div
+                  style={{
+                    width: `${analystExcludedPct}%`,
+                    background: "var(--color-red)",
+                    opacity: 0.85,
                   }}
                 />
               </div>
-              <div className="text-[9px] text-[var(--color-dim)]">
-                {step.note ?? `${percent}%`}
+              <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
+                <span style={{ color: "var(--color-green)" }}>
+                  passate · {stats.total - stats.excluded}
+                </span>
+                <span style={{ color: "var(--color-red)" }}>
+                  escluse · {stats.excluded}
+                </span>
               </div>
-            </Link>
-          );
-        })}
-      </div>
+            </div>
 
-      {/* ── Charts ──────────────────────────────────────────────── */}
-      <div
-        className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
-        style={{ animation: "fade-in 0.35s ease both 0.1s" }}
-      >
-        {/* Score distribution — histogram fine-grained */}
-        <ScoreDistribution
-          scores={scoreDist.scores ?? []}
-          title={t.score_distribution}
-          emptyLabel={t.no_data}
-        />
-
-        {/* Critic votes distribution (0-10) */}
-        <ScoreDistribution
-          scores={criticScores}
-          title={t.critic_votes}
-          emptyLabel={t.no_data}
-          maxScore={10}
-          binStep={0.5}
-          decimals={1}
-          thresholdReady={5.5}
-          thresholdLabel={t.critic_ready}
-        />
-      </div>
-
-      {/* ── Positions table ─────────────────────────────────────── */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="section-label">{t.recent_positions}</span>
-        <Link
-          href="/positions"
-          className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
-        >
-          {t.view_all}
-        </Link>
-      </div>
-      <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-8">
-        <table
-          className="w-full text-[12px]"
-          style={{ borderCollapse: "collapse" }}
-          aria-label={t.recent_positions}
-        >
-          <thead>
-            <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-              {[
-                t.col_id,
-                t.col_title,
-                t.col_company,
-                t.col_location,
-                t.col_remote,
-                t.col_score,
-                t.col_status,
-                t.col_updated,
-              ].map((h) => (
-                <th
-                  key={h}
-                  scope="col"
-                  className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
-                  style={{ color: "var(--color-dim)" }}
+            {/* Verdetto Critici: PASS / NEEDS_WORK / REJECT su totali revisionati */}
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="section-label">Verdetto critici</span>
+                <span className="text-[10px] text-[var(--color-dim)]">
+                  {criticTotals.total} revisionate
+                </span>
+              </div>
+              <div className="flex items-baseline gap-3 mb-3">
+                <span
+                  className="text-3xl font-bold tracking-tight"
+                  style={{ color: "var(--color-green)" }}
                 >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {positions.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={8}
-                  className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
-                >
-                  {t.no_positions}
-                </td>
-              </tr>
-            ) : (
-              positions.map((p, i: number) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
+                  {criticPassPct}%
+                </span>
+                <span className="text-[10px] text-[var(--color-muted)]">
+                  pass · {criticRejectPct}% reject · {criticNeedsPct}% needs
+                  work
+                </span>
+              </div>
+              <div
+                className="h-2 rounded-full overflow-hidden flex"
+                style={{ background: "var(--color-border)" }}
+              >
+                <div
                   style={{
-                    borderBottomColor:
-                      i === positions.length - 1 ? "transparent" : undefined,
-                    background:
-                      i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
+                    width: `${criticPassPct}%`,
+                    background: "var(--color-green)",
+                    opacity: 0.85,
+                  }}
+                />
+                <div
+                  style={{
+                    width: `${criticNeedsPct}%`,
+                    background: "var(--color-yellow)",
+                    opacity: 0.85,
+                  }}
+                />
+                <div
+                  style={{
+                    width: `${criticRejectPct}%`,
+                    background: "var(--color-red)",
+                    opacity: 0.85,
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
+                <span style={{ color: "var(--color-green)" }}>
+                  pass · {criticTotals.pass}
+                </span>
+                <span style={{ color: "var(--color-yellow)" }}>
+                  needs · {criticTotals.needs_work}
+                </span>
+                <span style={{ color: "var(--color-red)" }}>
+                  reject · {criticTotals.reject}
+                </span>
+              </div>
+            </div>
+
+            {/* Funnel end-to-end: throughput vero del team — quante posizioni
+            trovate diventano "ready" (CV pronto a partire) o oltre. */}
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+              <div className="flex items-center justify-between mb-3">
+                <span className="section-label">Throughput finale</span>
+                <span className="text-[10px] text-[var(--color-dim)]">
+                  {funnelOutput}/{stats.total} pronte
+                </span>
+              </div>
+              <div className="flex items-baseline gap-3 mb-3">
+                <span
+                  className="text-3xl font-bold tracking-tight"
+                  style={{
+                    color:
+                      funnelRatePct >= 25
+                        ? "var(--color-green)"
+                        : funnelRatePct >= 10
+                          ? "var(--color-yellow)"
+                          : "var(--color-orange)",
                   }}
                 >
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                    {p.legacy_id
-                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                      : p.id.slice(0, 8)}
-                  </td>
-                  <td
-                    className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
-                    title={p.title}
-                  >
-                    <Link
-                      href={`/positions/${p.id}`}
-                      className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
-                    >
-                      {p.title}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
-                    {p.company}
-                  </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
-                    {p.location ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span
-                      className="text-[10px]"
-                      style={{
-                        color:
-                          p.remote_type === "full_remote"
-                            ? "var(--color-green)"
-                            : p.remote_type === "hybrid"
-                              ? "var(--color-yellow)"
-                              : "var(--color-red)",
-                      }}
-                    >
-                      {p.remote_type?.replace("_", " ") ?? "—"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
-                      <span
-                        className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
-                      >
-                        {p.score ?? "—"}
-                      </span>
-                      <div
-                        className="w-10 h-1 rounded-full overflow-hidden"
-                        style={{ background: "var(--color-border)" }}
-                      >
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${p.score ?? 0}%`,
-                            background: scoreBg(p.score),
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
-                      style={{
-                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                        borderColor:
-                          STATUS_COLORS[p.status] ?? "var(--color-border)",
-                        background: `${STATUS_COLORS[p.status]}18`,
-                      }}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
-                    {formatFoundAt(p.last_action_at ?? p.found_at)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ── Conversion rate ─────────────────────────────────────── */}
-      <div className="section-label mb-4">Conversion rate</div>
-      <div
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
-        style={{ animation: "fade-in 0.35s ease both" }}
-      >
-        {/* Filtro Analisti: % escluse al primo check (status='excluded') */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="section-label">Filtro analisti</span>
-            <span className="text-[10px] text-[var(--color-dim)]">
-              {stats.total} trovate · {stats.excluded} escluse
-            </span>
-          </div>
-          <div className="flex items-baseline gap-3 mb-3">
-            <span
-              className="text-3xl font-bold tracking-tight"
-              style={{ color: "var(--color-red)" }}
-            >
-              {analystExcludedPct}%
-            </span>
-            <span className="text-[10px] text-[var(--color-muted)]">
-              esclusioni · {analystKeptPct}% passate all&apos;analisi
-            </span>
-          </div>
-          <div
-            className="h-2 rounded-full overflow-hidden flex"
-            style={{ background: "var(--color-border)" }}
-          >
-            <div
-              style={{
-                width: `${analystKeptPct}%`,
-                background: "var(--color-green)",
-                opacity: 0.85,
-              }}
-            />
-            <div
-              style={{
-                width: `${analystExcludedPct}%`,
-                background: "var(--color-red)",
-                opacity: 0.85,
-              }}
-            />
-          </div>
-          <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
-            <span style={{ color: "var(--color-green)" }}>
-              passate · {stats.total - stats.excluded}
-            </span>
-            <span style={{ color: "var(--color-red)" }}>
-              escluse · {stats.excluded}
-            </span>
-          </div>
-        </div>
-
-        {/* Verdetto Critici: PASS / NEEDS_WORK / REJECT su totali revisionati */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="section-label">Verdetto critici</span>
-            <span className="text-[10px] text-[var(--color-dim)]">
-              {criticTotals.total} revisionate
-            </span>
-          </div>
-          <div className="flex items-baseline gap-3 mb-3">
-            <span
-              className="text-3xl font-bold tracking-tight"
-              style={{ color: "var(--color-green)" }}
-            >
-              {criticPassPct}%
-            </span>
-            <span className="text-[10px] text-[var(--color-muted)]">
-              pass · {criticRejectPct}% reject · {criticNeedsPct}% needs work
-            </span>
-          </div>
-          <div
-            className="h-2 rounded-full overflow-hidden flex"
-            style={{ background: "var(--color-border)" }}
-          >
-            <div
-              style={{
-                width: `${criticPassPct}%`,
-                background: "var(--color-green)",
-                opacity: 0.85,
-              }}
-            />
-            <div
-              style={{
-                width: `${criticNeedsPct}%`,
-                background: "var(--color-yellow)",
-                opacity: 0.85,
-              }}
-            />
-            <div
-              style={{
-                width: `${criticRejectPct}%`,
-                background: "var(--color-red)",
-                opacity: 0.85,
-              }}
-            />
-          </div>
-          <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
-            <span style={{ color: "var(--color-green)" }}>
-              pass · {criticTotals.pass}
-            </span>
-            <span style={{ color: "var(--color-yellow)" }}>
-              needs · {criticTotals.needs_work}
-            </span>
-            <span style={{ color: "var(--color-red)" }}>
-              reject · {criticTotals.reject}
-            </span>
-          </div>
-        </div>
-
-        {/* Funnel end-to-end: throughput vero del team — quante posizioni
-            trovate diventano "ready" (CV pronto a partire) o oltre. */}
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="section-label">Throughput finale</span>
-            <span className="text-[10px] text-[var(--color-dim)]">
-              {funnelOutput}/{stats.total} pronte
-            </span>
-          </div>
-          <div className="flex items-baseline gap-3 mb-3">
-            <span
-              className="text-3xl font-bold tracking-tight"
-              style={{
-                color:
-                  funnelRatePct >= 25
-                    ? "var(--color-green)"
-                    : funnelRatePct >= 10
-                      ? "var(--color-yellow)"
-                      : "var(--color-orange)",
-              }}
-            >
-              {funnelRatePct}%
-            </span>
-            <span className="text-[10px] text-[var(--color-muted)]">
-              su 10 trovate · {funnelPer10} arrivano pronte
-            </span>
-          </div>
-          {/* Mini-funnel: 3 step "trovate → analizzate → pronte" */}
-          <div className="space-y-2">
-            {[
-              {
-                label: "trovate",
-                n: stats.total,
-                pct: 100,
-                color: "var(--color-blue)",
-              },
-              {
-                label: "analizzate",
-                n: stats.total - stats.excluded,
-                pct:
-                  stats.total > 0
-                    ? Math.round(
-                        ((stats.total - stats.excluded) / stats.total) * 100,
-                      )
-                    : 0,
-                color: "var(--color-purple)",
-              },
-              {
-                label: "pronte",
-                n: funnelOutput,
-                pct: funnelRatePct,
-                color: "var(--color-green)",
-              },
-            ].map((row) => (
-              <div key={row.label} className="flex items-center gap-2">
-                <span
-                  className="text-[9px] font-semibold w-20 tracking-[0.08em] uppercase"
-                  style={{ color: row.color }}
-                >
-                  {row.label}
+                  {funnelRatePct}%
                 </span>
-                <div
-                  className="flex-1 h-1.5 rounded-full overflow-hidden"
-                  style={{ background: "var(--color-border)" }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${row.pct}%`,
-                      background: row.color,
-                      opacity: 0.8,
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-[10px] font-semibold tabular-nums w-8 text-right"
-                  style={{ color: row.color }}
-                >
-                  {row.n}
+                <span className="text-[10px] text-[var(--color-muted)]">
+                  su 10 trovate · {funnelPer10} arrivano pronte
                 </span>
               </div>
-            ))}
+              {/* Mini-funnel: 3 step "trovate → analizzate → pronte" */}
+              <div className="space-y-2">
+                {[
+                  {
+                    label: "trovate",
+                    n: stats.total,
+                    pct: 100,
+                    color: "var(--color-blue)",
+                  },
+                  {
+                    label: "analizzate",
+                    n: stats.total - stats.excluded,
+                    pct:
+                      stats.total > 0
+                        ? Math.round(
+                            ((stats.total - stats.excluded) / stats.total) *
+                              100,
+                          )
+                        : 0,
+                    color: "var(--color-purple)",
+                  },
+                  {
+                    label: "pronte",
+                    n: funnelOutput,
+                    pct: funnelRatePct,
+                    color: "var(--color-green)",
+                  },
+                ].map((row) => (
+                  <div key={row.label} className="flex items-center gap-2">
+                    <span
+                      className="text-[9px] font-semibold w-20 tracking-[0.08em] uppercase"
+                      style={{ color: row.color }}
+                    >
+                      {row.label}
+                    </span>
+                    <div
+                      className="flex-1 h-1.5 rounded-full overflow-hidden"
+                      style={{ background: "var(--color-border)" }}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${row.pct}%`,
+                          background: row.color,
+                          opacity: 0.8,
+                        }}
+                      />
+                    </div>
+                    <span
+                      className="text-[10px] font-semibold tabular-nums w-8 text-right"
+                      style={{ color: row.color }}
+                    >
+                      {row.n}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-      </div>
       </div>
 
       <OnboardingWizard />
