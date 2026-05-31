@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import HeroGlobe from "./HeroGlobe";
+import { LUXURY_POSITIONS } from "../_data/luxuryPositions";
 
 const NODES = {
   captain: { emoji: "👨‍✈️", name: "Captain", color: "#ff9100" },
@@ -53,6 +54,22 @@ export default function BetaTeamFlow() {
     totalLength: number;
   };
   const [messages, setMessages] = useState<Message[]>([]);
+  // Colore di ciascuno dei 24 pin sul globo. null = pin invisibile.
+  // Round 1 (pin 0-13): pipeline completa Scout → Analyst → Scorer →
+  //   Writer. Ogni step DB tinge i 14 pin nord sequenzialmente.
+  // Round 2 (pin 14-23): Scout trova 10 nuove offerte globali (incluso
+  //   emisfero sud), il globo continua a girare per centrarle.
+  const PIN_COUNT = 24;
+  const [pinColors, setPinColors] = useState<(string | null)[]>(() =>
+    Array(PIN_COUNT).fill(null),
+  );
+  // Longitudine corrente del centro del globo. Interpolata in funzione
+  // di T tra le longitudini dei pin che vengono toccati in sequenza.
+  // La latitudine resta fissa nel HeroGlobe (~20°) per non distorcere
+  // la proiezione globe a lat estreme (London 51° → vista polo nord).
+  const [globeLon, setGlobeLon] = useState<number>(
+    LUXURY_POSITIONS[0]?.lon ?? 10,
+  );
 
   useEffect(() => {
     let frame = 0;
@@ -172,61 +189,194 @@ export default function BetaTeamFlow() {
     };
   }, []);
 
-  // Sequenza fissa: una pallina alla volta, scrubbing su scrollY.
-  // Step i attivo per T ∈ (i*DURATION, (i+1)*DURATION). A progress
-  // esattamente 0 o 1 non renderizziamo nulla (evita pallino fermo).
+  // Sequenza fissa, scrubbing su scrollY. Ogni step ha:
+  //   - pathId / nodeKey
+  //   - count: quante palline emettere (default 1). Le palline sono
+  //     SEQUENZIALI: pallina k parte solo quando pallina k-1 è arrivata
+  //     a destinazione (no raffica). Durata totale step = count*DURATION.
   useEffect(() => {
     if (overlay.width === 0) return;
 
-    const SEQUENCE: Array<{ pathId: string; nodeKey: NodeId }> = [
+    const SEQUENCE: Array<{
+      pathId: string;
+      nodeKey: NodeId;
+      count?: number;
+    }> = [
+      // Round 1: pipeline completa sui primi 14 pin (nord).
       { pathId: "captain-to-scout", nodeKey: "captain" },
-      { pathId: "db-from-scout", nodeKey: "scout" },
+      { pathId: "db-from-scout", nodeKey: "scout", count: 14 },
       { pathId: "captain-to-analyst", nodeKey: "captain" },
-      { pathId: "db-from-analyst", nodeKey: "analyst" },
+      { pathId: "db-from-analyst", nodeKey: "analyst", count: 14 },
       { pathId: "captain-to-scorer", nodeKey: "captain" },
-      { pathId: "db-from-scorer", nodeKey: "scorer" },
+      { pathId: "db-from-scorer", nodeKey: "scorer", count: 14 },
       { pathId: "captain-to-writer", nodeKey: "captain" },
-      { pathId: "db-from-writer", nodeKey: "writer" },
+      { pathId: "db-from-writer", nodeKey: "writer", count: 14 },
       { pathId: "chain-writer-to-critic", nodeKey: "writer" },
+      // Round 2: lo Scout trova 10 nuove offerte globali (pin 14-23).
+      { pathId: "captain-to-scout", nodeKey: "captain" },
+      { pathId: "db-from-scout", nodeKey: "scout", count: 10 },
     ];
-    const DURATION = 220;
+    const DURATION = 360; // px di scroll per il viaggio di 1 pallina
+
+    // Pre-calcolo i T di start di ogni step. Durata step = count * DURATION.
+    const stepStarts: number[] = [];
+    let acc = 0;
+    for (const step of SEQUENCE) {
+      stepStarts.push(acc);
+      const count = step.count ?? 1;
+      acc += count * DURATION;
+    }
 
     const sec = flowRef.current?.closest(
       "[data-pin-section]",
     ) as HTMLElement | null;
 
     // Lo sticky in LandingHero è `top: 5rem` per stare sotto la nav,
-    // quindi T deve partire da 0 quando il pin section top raggiunge
-    // 80px (5rem) sotto il viewport top, non 0.
+    // quindi T parte da 0 quando il pin top raggiunge 80px sotto il
+    // viewport top.
     const STICKY_TOP_OFFSET_PX = 80;
+
+    // Step "→ DB" della pipeline. Ogni step ha la lista di PIN che le
+    // sue palline attivano (in ordine). Quando la pallina k arriva, il
+    // pin pinIdxs[k] viene tinto con il colore nodeKey.
+    const range = (start: number, end: number) =>
+      Array.from({ length: end - start }, (_, i) => start + i);
+    const DB_STEPS: Array<{
+      stepIdx: number;
+      nodeKey: NodeId;
+      pinIdxs: number[];
+    }> = [
+      // Round 1 → pin 0-13
+      { stepIdx: 1, nodeKey: "scout", pinIdxs: range(0, 14) },
+      { stepIdx: 3, nodeKey: "analyst", pinIdxs: range(0, 14) },
+      { stepIdx: 5, nodeKey: "scorer", pinIdxs: range(0, 14) },
+      { stepIdx: 7, nodeKey: "writer", pinIdxs: range(0, 14) },
+      // Round 2 → pin 14-23 in ordine di longitudine MONOTONICA verso
+      // est (partendo da pin 13 = NY, lon -74). Così la lerp tra pin
+      // successivi gira sempre nella stessa direzione e cumulativamente
+      // copre ~360° (giro completo del globo).
+      // 22=BuenosAires(-58) → 14=SãoPaulo(-47) → 19=CapeTown(18) →
+      // 23=Dubai(55) → 15=Mumbai(73) → 17=Bangkok(100) →
+      // 16=Singapore(104) → 18=Sydney(151) → 20=MexCity(-99) →
+      // 21=Lima(-77). Somma diff lon: ~357° verso est.
+      {
+        stepIdx: 10,
+        nodeKey: "scout",
+        pinIdxs: [22, 14, 19, 23, 15, 17, 16, 18, 20, 21],
+      },
+    ];
+
+    const computePinColors = (T: number): (string | null)[] => {
+      const colors: (string | null)[] = Array(PIN_COUNT).fill(null);
+      // Iterazione cronologica: l'ULTIMO step DB che ha raggiunto un
+      // pin determina il suo colore.
+      for (const { stepIdx, nodeKey, pinIdxs } of DB_STEPS) {
+        for (let k = 0; k < pinIdxs.length; k++) {
+          const arrivalT = stepStarts[stepIdx] + (k + 1) * DURATION;
+          if (T >= arrivalT) colors[pinIdxs[k]] = NODES[nodeKey].color;
+        }
+      }
+      return colors;
+    };
+
+    // Sequenza cronologica di tutti gli "arrivi pallina al pin", ordinata
+    // per T crescente. Tra un arrivo e il successivo, il globo ruota
+    // linearmente in longitudine fino a centrare il pin successivo.
+    type GlobeEvent = { arrivalT: number; lon: number };
+    const globeEvents: GlobeEvent[] = [];
+    for (const { stepIdx, pinIdxs } of DB_STEPS) {
+      for (let k = 0; k < pinIdxs.length; k++) {
+        const pos = LUXURY_POSITIONS[pinIdxs[k]];
+        if (!pos) continue;
+        globeEvents.push({
+          arrivalT: stepStarts[stepIdx] + (k + 1) * DURATION,
+          lon: pos.lon,
+        });
+      }
+    }
+    globeEvents.sort((a, b) => a.arrivalT - b.arrivalT);
+
+    // Lerp tra due longitudini scegliendo il "cammino più corto" sulla
+    // sfera (es. da 170° a -170° passa per +180° → solo 20°, non 340°).
+    const lerpLon = (a: number, b: number, t: number) => {
+      let diff = b - a;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+      let out = a + diff * t;
+      if (out > 180) out -= 360;
+      if (out < -180) out += 360;
+      return out;
+    };
+
+    const computeGlobeLon = (T: number): number => {
+      if (globeEvents.length === 0) return LUXURY_POSITIONS[0]?.lon ?? 10;
+      if (T <= globeEvents[0].arrivalT) return globeEvents[0].lon;
+      const last = globeEvents[globeEvents.length - 1];
+      if (T >= last.arrivalT) return last.lon;
+      for (let i = 0; i < globeEvents.length - 1; i++) {
+        const a = globeEvents[i];
+        const b = globeEvents[i + 1];
+        if (T >= a.arrivalT && T < b.arrivalT) {
+          const segT = (T - a.arrivalT) / (b.arrivalT - a.arrivalT);
+          return lerpLon(a.lon, b.lon, segT);
+        }
+      }
+      return last.lon;
+    };
+
+    let lastPinColorsKey = "";
+    // Niente NaN init: Math.abs(x - NaN) = NaN e NaN > 0.05 è false,
+    // quindi setGlobeLon non veniva MAI chiamato.
+    let lastGlobeLon: number | null = null;
 
     const recompute = () => {
       const rectTop = sec ? sec.getBoundingClientRect().top : 0;
-      // T = quanti px il pin ha scrollato OLTRE il punto di aggancio
-      // dello sticky. = max(0, sticky_top_offset - rect.top).
       const T = Math.max(0, STICKY_TOP_OFFSET_PX - rectTop);
 
-      const i = Math.floor(T / DURATION);
-      if (i < 0 || i >= SEQUENCE.length) {
+      // 1a) Aggiorno i pin del globo (solo se cambia qualcosa, per
+      // evitare re-render inutili di HeroGlobe).
+      const newPinColors = computePinColors(T);
+      const key = newPinColors.join("|");
+      if (key !== lastPinColorsKey) {
+        lastPinColorsKey = key;
+        setPinColors(newPinColors);
+      }
+      // 1b) Aggiorno la longitudine del centro globo. Throttling: cambio
+      // lo state solo se la differenza supera 0.05°.
+      const newLon = computeGlobeLon(T);
+      if (lastGlobeLon === null || Math.abs(newLon - lastGlobeLon) > 0.05) {
+        lastGlobeLon = newLon;
+        setGlobeLon(newLon);
+      }
+
+      // 2) Aggiorno la pallina in volo (al massimo 1 alla volta).
+      let stepIdx = -1;
+      for (let i = 0; i < SEQUENCE.length; i++) {
+        const count = SEQUENCE[i].count ?? 1;
+        if (T >= stepStarts[i] && T < stepStarts[i] + count * DURATION) {
+          stepIdx = i;
+          break;
+        }
+      }
+      if (stepIdx < 0) {
         setMessages([]);
         return;
       }
-      const progress = (T - i * DURATION) / DURATION;
-      // Bug fix: skip i frame "fermi" all'origine (progress=0) e
-      // all'arrivo (progress=1). Sennò a scrollY=0 una pallina resta
-      // visibile e ferma sotto l'agente di partenza.
+      const step = SEQUENCE[stepIdx];
+      const tRel = T - stepStarts[stepIdx];
+      const k = Math.floor(tRel / DURATION);
+      const progress = (tRel - k * DURATION) / DURATION;
       if (progress <= 0 || progress >= 1) {
         setMessages([]);
         return;
       }
-      const step = SEQUENCE[i];
       const el = document.getElementById(
         step.pathId,
       ) as unknown as SVGPathElement | null;
       const totalLength = el?.getTotalLength?.() ?? 220;
       setMessages([
         {
-          key: i,
+          key: stepIdx * 100 + k,
           pathId: step.pathId,
           color: NODES[step.nodeKey].color,
           progress,
@@ -401,7 +551,7 @@ export default function BetaTeamFlow() {
           il globo; quando lo scroll esce dal pin, il globo scivola in
           alto e diventa il focus. */}
       <div ref={globeSlotRef} className="mt-32">
-        <HeroGlobe />
+        <HeroGlobe pinColors={pinColors} centerLon={globeLon} />
       </div>
     </div>
   );
