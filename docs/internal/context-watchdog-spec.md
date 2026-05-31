@@ -1,10 +1,21 @@
 # 2026-05-20 — Agent context saturation + reboot periodico via Dottore
 
-> **Status: PROOF-OF-CONCEPT CONFERMATO (2026-05-20 13:18-14:00 UTC).**
-> Misurazione confermata, ipotesi del rimedio (reboot via Dottore) testata
-> con successo su 1 Capitano + batch di 6 operatori. Da codificare in
-> prossima release v0.1.18 come ciclo automatico nel watchdog del Dottore.
-> Vedi sezione "PoC results" in fondo per i numeri e la procedura testata.
+> **Status: MVP SHIPPED 2026-05-31 (`daily-restart-wave`) — PoC validato 2026-05-20.**
+>
+> | Componente | Status | Riferimento |
+> |---|---|---|
+> | PoC manuale (1 Capitano + 6 operatori) | ✅ DONE 2026-05-20 13:18-14:00 UTC | § PoC results in fondo |
+> | **MVP `daily-restart-wave` skill** (trigger time-based 03:00 UTC ±30min) | ✅ DONE 2026-05-31 | commit `e9f96ceb` · [`agents/_skills/daily-restart-wave/SKILL.md`](../../agents/_skills/daily-restart-wave/SKILL.md) |
+> | V2 trigger threshold-based (capitano>50M, scrittore>75M, ecc.) | ⬜ open | § Specifica per implementazione automatica più sotto |
+> | Telemetria `reboots.jsonl` | ⬜ open | § Telemetria |
+> | Integrazione Dottore prompt step 0 pre-round | 🟡 partial (daily-restart-wave triggered da skill discovery, non da prompt explicit) | — |
+>
+> **Razionale split MVP→V2**: il time-based daily restart copre l'80% del
+> beneficio osservato (5.5× boost) senza la complessità di lettura
+> `state_5.sqlite` per ogni provider (path/schema diverso per Codex vs
+> Kimi vs Claude). V2 threshold-based ha senso quando il PoC su carichi
+> >24h reali rivelerà se 1×/giorno è troppo poco. Skipping V2 finché non
+> arriva un secondo case study (>=case study #3 Kimi run continuativo).
 
 ## Misurazione effettuata (snapshot 2026-05-20 ~10:20 UTC, ~14h dal boot)
 
