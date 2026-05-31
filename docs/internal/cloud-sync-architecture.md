@@ -182,6 +182,7 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
 | **Route write-request supporta cloud-mode senza SQLite locale** (path A local-primary / path B cloud-only con embedded validate) | `0ada62ea` | 2026-05-31 |
 | **Pull desired-state ad ogni tick del daemon** (multi-device live, isolato dal counter consecutiveFails del push) | `968ef913` | 2026-05-31 |
 | **Killswitch dedicato 401/403** (threshold 3, halt + notifica `pending_user_messages` agent='cloud-sync') | `07d0109a` | 2026-05-31 |
+| **Tombstone propagation end-to-end** (Supabase mig 025 + SQLite V7 + CLI push + web receive) | `6499b3db` | 2026-05-31 |
 
 ### ⬜ Pending (in ordine di priorità)
 
@@ -195,11 +196,16 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
    - Smoke e2e con mock server: toggle-on/off/skip-unknown applicati correttamente; cursor passato come `?since` al secondo pull.
    - **Residuo**: il pull gira **solo al boot**. Per multi-device "live" (utente clicca su mobile mentre team gira su VPS) servirebbe tick periodico nel `cloud daemon` — vedi Pending P1 sotto.
 
-2. **P0 — DELETE propagation con tombstone**. Il push è solo UPSERT: una riga cancellata in SQLite locale (`web/app/api/cloud-sync/push/route.ts`, `cli/src/commands/cloud.js:490-510`) **non viene mai comunicata a Supabase** e resta ghost in cloud per sempre. Componenti:
-   - Colonna `deleted_at TIMESTAMPTZ` su tutte le tabelle sincronizzate (positions, applications, contacts, scores, position_highlights), default NULL
-   - In SQLite locale: trigger che setta `deleted_at = now()` invece di hard delete (oppure tabella `_tombstones(table, legacy_id, deleted_at)` se non si vuole toccare lo schema esistente)
-   - Push include le righe con `deleted_at IS NOT NULL` modificate dopo il cursore; lato Supabase un job ripulisce le righe `deleted_at < now() - 30d`
-   - Dashboard prod filtra `WHERE deleted_at IS NULL` di default
+2. ✅ **P0 — DELETE propagation con tombstone** (DONE 2026-05-31, commit `6499b3db`). Architettura:
+   - **Supabase** (mig 025): `deleted_at TIMESTAMPTZ` su positions/applications/scores + index partial `WHERE deleted_at IS NULL` per dashboard hot-path. Scope ridotto: companies e position_highlights NON sono pushate oggi → nessun ghost-row issue.
+   - **SQLite V7** (`shared/skills/_db.py`): tabella `_tombstones (table_name, legacy_id, deleted_at)` con PK composta + 3 trigger BEFORE DELETE che fanno INSERT OR REPLACE prima del hard-delete locale. Gli agenti continuano a leggere SQLite senza filtri — zero impatto sul flusso esistente.
+   - **CLI push** (`cli/src/commands/cloud.js`): legge `_tombstones` come delta con cursor proprio in `.cloud-sync-cursor.json`, include nel POST payload, aggiorna cursor su MAX(deleted_at) post HTTP 200. Fallback no-op se DB pre-V7.
+   - **Web receive** (`web/app/api/cloud-sync/push/route.ts`): per `positions` UPDATE WHERE `(user_id, legacy_id) AND deleted_at IS NULL` (idempotente); per scores/applications lookup legacy_id → position_id UUID (riusa `legacyToUuid` dal positions upsert) e UPDATE analogo. Counter `tombstonesApplied` nel response.
+   - Smoke e2e: DELETE su 1 position+score+application → `_tombstones` popolato dai 3 trigger → payload contiene `tombstones[3]` → server applied=3.
+   - **Follow-up tracciato** (non in scope MVP):
+     - 30 query in `web/lib/queries.ts` da aggiornare con `.is('deleted_at', null)` filter — rischio regressioni non testabili da dev3, PR dedicato (anche perché finché tombstones non girano in prod, nessuna riga ha `deleted_at != NULL`).
+     - Cron Supabase hard-delete righe con `deleted_at < now() - 30d`.
+     - Refactor `db_migrate_v2.py` per pattern explicit (oggi i DELETE funzionano: il trigger scatta automaticamente quando il DB è V7, quindi a regime è no-op).
 
 3. ✅ **P0 — Killswitch su 401/403 ripetuti** (DONE 2026-05-31, commit `07d0109a`). `handlePush` ritorna `{ok, authFailed}` (oggetto, callers void esistenti compatibili via optional chaining). Counter dedicato `MAX_CONSECUTIVE_AUTH_FAILS=3` nel daemon (più aggressivo del generico 5 perché token revocato non recupera mai). Killswitch: halt daemon + `INSERT pending_user_messages (agent='cloud-sync', kind='alert', body=...)` con istruzioni esplicite per riaprire il pairing. Reset counter SOLO su push success 200 (un 5xx transient non resetta — un 401 intermittente in mezzo a 500 deve comunque scattare). Smoke test: mock 401 stabile → killswitch al 3° push + riga in pending_user_messages; mock 401,401,200,... → log "push ok dopo 2 auth-fail, contatore auth resettato".
 
