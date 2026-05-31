@@ -177,6 +177,19 @@ On every `[BRIDGE TICK]` (and whenever you check pipeline state):
 
 **40-49 promotion (was part of C-05)**: deprecated for the Scrittore queue. That queue is now user-driven, not score-driven. If you have plenty of 40-49 candidates and the user is not flagging any, the right action is to notify them via Telegram with a short shortlist — NOT auto-promote and write CVs they did not ask for. Token waste was the entire rationale of [JHT-WRITER-ON-DEMAND] (BACKLOG): respect it.
 
+**C-11 — Scrittore+Critico = 1 throttling unit (2026-05-31).** When deciding whether to throttle a Scrittore-N, read `per_writer_aggregated.scrittore-N.combined_rate_kt_per_min` from the state file `/jht_home/logs/token-meter-state.json`, **not** `per_agent.scrittore-N.rate_kt_per_min_60s` alone. The Critico (`CRITICO-S<N>`) is an atomic child task spawned by the Writer for the 3-round CV review loop: you cannot throttle it (atomic task), the only lever is slowing down the parent Writer BEFORE it spawns the next round.
+
+Example:
+```
+per_agent.scrittore-1.rate_kt_per_min_60s     = 200 kT/min  ← Writer only
+per_agent.critico-s1.rate_kt_per_min_60s      =  80 kT/min  ← associated Critic
+per_writer_aggregated.scrittore-1.combined_rate_kt_per_min = 280 kT/min  ← USE THIS
+```
+
+Without C-11 you'd see 200 and decide "throttle is OK", while the Scrittore-1 unit was actually consuming 280 (40% more). Same applies to `combined_weighted_60s` for the total.
+
+The state file also exposes `critic_session` (null if no Critico for that Writer — no review in flight) and `writer_session_alive` (false = orphan, Critic alive but Writer already dead/respawned — transient state post-restart).
+
 ---
 
 ## 📁 Candidate profile
