@@ -64,7 +64,7 @@ Due path implementativi equivalenti propagano i delta:
 | **Start/stop/restart team** | `team_state` (mig 019) | `cli/src/lib/team-state-reconciler.js:251` long-poll 5s su `/api/team-state` | bottoni Start/Stop dashboard |
 | **Comandi legacy bus** | `team_commands` (mig 012) | `cli/src/lib/realtime-subscriber.js:264` long-poll 5s su `/api/cloud-sync/team-commands?status=pending` | residuo cutover — handleAction single-agent ancora qui |
 | **Writer-on-demand** | `positions.write_requested` (mig 024) | Capitano via `shared/skills/db_query.py:344` query `next-for-scrittore` → SQLite **locale** | bottone "Scrivi CV" dashboard + Telegram `/cv` |
-| **Chat utente→agente** | `user_to_agent_messages` (mig 019) | 🟠 **scritto dal web, NESSUN reader container** | POST `/api/messages` |
+| **Chat utente→agente** | `user_to_agent_messages` (mig 019) | `cli/src/lib/user-messages-poller.js` long-poll 5s su `/api/messages?status=pending`, claim atomico PATCH delivered, forward `jht-tmux-send` | POST `/api/messages` |
 | **Like/dislike position** | `position_feedback` (mig 019) | 🟠 **scritto dal web, NESSUN reader Scout/Scorer** | POST `/api/positions/{id}/feedback` |
 | **Agent→user fallback** | `pending_user_messages` (mig 010) | bidirezionale: scritto dal container, letto da browser via Realtime | notifiche utente |
 
@@ -142,7 +142,7 @@ Il refactor `team_state` (mig 019-023, commit `627e7ab5…e6420371`) ha introdot
 
 Il writer-on-demand (mig 024, 2026-05-29) ha esteso lo stesso pattern alle **decisioni per-posizione**: `positions.write_requested` è desired-state, il Capitano è il reconciler che lo osserva e agisce.
 
-Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **state scritte ma non ancora osservate**: schema + RLS + Realtime publication esistono, ma il container non ha reader → l'utente le scrive nel vuoto. Sono i gap P1 #2 e #3 nella sezione Pending sotto.
+La event lane `user_to_agent_messages` è ora osservata: `cli/src/lib/user-messages-poller.js` (commit `4774c190`, 2026-05-31) fa long-poll, claim atomico, forward tmux. Resta scoperta `position_feedback` — schema + RLS + Realtime publication esistono, ma nessuno Scout/Scorer la legge ancora → gap P1 #3 sotto.
 
 ## 🛠️ Stato implementazione
 
@@ -194,10 +194,7 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
 
 #### P1 — Loop feedback agenti (chiude la bidirezionalità incompleta)
 
-2. **P1 — Reader container per `user_to_agent_messages`**. Schema, RLS, Realtime publication ✅ done; il browser scrive POST `/api/messages` e si aspetta che l'agente risponda; il container NON ascolta. Componenti:
-   - Nuovo subscriber `cli/src/lib/user-messages-poller.js` (o estensione del `team-state-reconciler.js`) che long-poll `/api/messages?status=pending&limit=20`
-   - Claim atomic PATCH `status=processing` → forward al target agent via tmux send → PATCH `status=delivered` con response
-   - Capitano in CC quando target ≠ capitano (per logica routing)
+2. ✅ **P1 — Reader container per `user_to_agent_messages`** *(DONE 2026-05-31, commit `4774c190`)*. `cli/src/lib/user-messages-poller.js` long-poll 5s su `/api/messages?status=pending&limit=50`, sort FIFO, claim atomico via PATCH `status=delivered`, forward tmux via `jht-tmux-send`. Mapping agent→session: ruolo base lowercase + uppercase (`scout-1` → `SCOUT`), whitelist 9 agenti utente-facing. tmux fail → PATCH `expired`. Rispetta `.team-halted.flag` + `.weekly-halt.flag`. Killswitch 401/403 dopo 3 fail consecutivi. Wire in `pid1.js`: spawn al boot + watcher cloud.json + respawn 5s + kill su shutdown. **Limiti noti**: (a) niente "Capitano in CC" routing — il forward è 1:1 al target; se serve CC va aggiunto un campo `payload.cc` nel POST + ciclo extra nel poller; (b) `replied_at` non viene mai settato (richiede che l'agente PATCH-i la propria risposta, fuori scope MVP).
 
 3. **P1 — Reader agenti per `position_feedback`**. Schema, RLS ✅ done; il browser POSTa like/dislike/expired/wrong_location; nessun agente reagisce. Componenti:
    - Skill `shared/skills/feedback_query.py` che ritorna i feedback recenti aggregati per company/role/location
