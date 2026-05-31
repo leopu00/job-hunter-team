@@ -52,6 +52,7 @@ export default function BetaTeamFlow() {
     color: string;
     progress: number; // ∈ (0, 1) — one-way mittente → destinatario
     totalLength: number;
+    reverse?: boolean; // se true, viaggia dal punto-end al punto-start
   };
   const [messages, setMessages] = useState<Message[]>([]);
   // Colore di ciascuno dei 24 pin sul globo. null = pin invisibile.
@@ -197,43 +198,69 @@ export default function BetaTeamFlow() {
   useEffect(() => {
     if (overlay.width === 0) return;
 
-    // Ogni pallina di uno step "→ DB" attiva un GRUPPO di pin (1-4).
-    // Count decrescente per step: l'analista non valuta TUTTO ciò che
-    // lo scout ha trovato, lo scorer dà voto solo ad alcuni di quelli
-    // valutati, il writer scrive CV/cover solo per i top → ad ogni
-    // step alcuni pin "restano" nel colore precedente.
-    //   Scout 5 palline → 14 pin
-    //   Analyst 4 → 10 (4 restano blu)
-    //   Scorer 3 → 7 (3 restano verdi)
-    //   Writer 2 → 4 (3 restano viola)
-    const SEQUENCE: Array<{
-      pathId: string;
-      nodeKey: NodeId;
-      count?: number;
-    }> = [
+    // Ogni step ha 1+ `paths` (pallini contemporanei) e opzionale count.
+    //   paths.length === 1 + count > 1 → step multi-pallina sequenziale
+    //   paths.length > 1                → step con N palline parallele
+    //   default                          → 1 pallina sola
+    // Quando un agente FINISCE la sua iterazione (scrive nel DB), parte
+    // contemporaneamente: 1 pallina reverse verso il Captain (report) +
+    // 1 pallina forward verso il prossimo agente (handoff).
+    type StepPath = { pathId: string; nodeKey: NodeId; reverse?: boolean };
+    type Step = { paths: StepPath[]; count?: number };
+    const SEQUENCE: Step[] = [
       // Round 1
-      { pathId: "captain-to-scout", nodeKey: "captain" },
-      { pathId: "db-from-scout", nodeKey: "scout", count: 5 },
-      { pathId: "captain-to-analyst", nodeKey: "captain" },
-      { pathId: "db-from-analyst", nodeKey: "analyst", count: 4 },
-      { pathId: "captain-to-scorer", nodeKey: "captain" },
-      { pathId: "db-from-scorer", nodeKey: "scorer", count: 3 },
-      { pathId: "captain-to-writer", nodeKey: "captain" },
-      { pathId: "db-from-writer", nodeKey: "writer", count: 2 },
-      { pathId: "chain-writer-to-critic", nodeKey: "writer" },
+      { paths: [{ pathId: "captain-to-scout", nodeKey: "captain" }] },
+      { paths: [{ pathId: "db-from-scout", nodeKey: "scout" }], count: 5 },
+      // Scout finisce → report al Captain + handoff all'Analyst
+      {
+        paths: [
+          { pathId: "captain-to-scout", nodeKey: "scout", reverse: true },
+          { pathId: "chain-scout-to-analyst", nodeKey: "scout" },
+        ],
+      },
+      { paths: [{ pathId: "db-from-analyst", nodeKey: "analyst" }], count: 4 },
+      // Analyst finisce → report + handoff allo Scorer
+      {
+        paths: [
+          { pathId: "captain-to-analyst", nodeKey: "analyst", reverse: true },
+          { pathId: "chain-analyst-to-scorer", nodeKey: "analyst" },
+        ],
+      },
+      { paths: [{ pathId: "db-from-scorer", nodeKey: "scorer" }], count: 3 },
+      // Scorer finisce → report + handoff al Writer
+      {
+        paths: [
+          { pathId: "captain-to-scorer", nodeKey: "scorer", reverse: true },
+          { pathId: "chain-scorer-to-writer", nodeKey: "scorer" },
+        ],
+      },
+      { paths: [{ pathId: "db-from-writer", nodeKey: "writer" }], count: 2 },
+      // Writer finisce → report + handoff al Critic
+      {
+        paths: [
+          { pathId: "captain-to-writer", nodeKey: "writer", reverse: true },
+          { pathId: "chain-writer-to-critic", nodeKey: "writer" },
+        ],
+      },
       // Round 2
-      { pathId: "captain-to-scout", nodeKey: "captain" },
-      { pathId: "db-from-scout", nodeKey: "scout", count: 4 },
+      { paths: [{ pathId: "captain-to-scout", nodeKey: "captain" }] },
+      { paths: [{ pathId: "db-from-scout", nodeKey: "scout" }], count: 4 },
     ];
     const DURATION = 360; // px di scroll per il viaggio di 1 pallina
 
-    // Pre-calcolo i T di start di ogni step. Durata step = count * DURATION.
+    // Pre-calcolo i T di start di ogni step. Durata:
+    //   - paths.length > 1   → 1 round con N palline parallele = DURATION
+    //   - count > 1          → count round sequenziali = count * DURATION
+    //   - default            → DURATION
+    const stepDurationOf = (step: Step) => {
+      if (step.paths.length > 1) return DURATION;
+      return (step.count ?? 1) * DURATION;
+    };
     const stepStarts: number[] = [];
     let acc = 0;
     for (const step of SEQUENCE) {
       stepStarts.push(acc);
-      const count = step.count ?? 1;
-      acc += count * DURATION;
+      acc += stepDurationOf(step);
     }
 
     const sec = flowRef.current?.closest(
@@ -288,11 +315,23 @@ export default function BetaTeamFlow() {
         nodeKey: "writer",
         pinGroups: [[4, 7], [9, 13]],
       },
-      // Round 2: Scout trova 10 nuove offerte globali.
+      // Round 2: il Writer fa una passata finale e tinge di VERDE
+      // tutti i pin (sia i 14 esistenti che i 10 nuovi globali).
+      // I 24 pin sono raggruppati per longitudine monotonica est così
+      // il globo ruota di ~360° in totale durante la fase centrata.
       {
         stepIdx: 10,
-        nodeKey: "scout",
-        pinGroups: [[22, 14, 19], [23, 15, 17], [16, 18], [20, 21]],
+        nodeKey: "writer",
+        pinGroups: [
+          // g0: Pacifico + Americas west — Sydney, SF, LV, MexCity, Chicago, Lima
+          [18, 10, 11, 20, 12, 21],
+          // g1: Atlantico est + Europa west — NY, BA, SãoPaulo, London, Paris, Rome
+          [13, 22, 14, 0, 1, 4],
+          // g2: Europa centro/est + Africa + MO — Vienna, Stockholm, CapeTown, Istanbul, Moscow, Dubai
+          [2, 3, 19, 5, 6, 23],
+          // g3: Asia — Mumbai, Bangkok, Singapore, Beijing, Seoul, Tokyo
+          [15, 17, 16, 7, 8, 9],
+        ],
       },
     ];
 
@@ -404,11 +443,11 @@ export default function BetaTeamFlow() {
         setGlobeLon(newLon);
       }
 
-      // 2) Aggiorno la pallina in volo (al massimo 1 alla volta).
+      // 2) Aggiorno le palline in volo.
       let stepIdx = -1;
       for (let i = 0; i < SEQUENCE.length; i++) {
-        const count = SEQUENCE[i].count ?? 1;
-        if (T >= stepStarts[i] && T < stepStarts[i] + count * DURATION) {
+        const dur = stepDurationOf(SEQUENCE[i]);
+        if (T >= stepStarts[i] && T < stepStarts[i] + dur) {
           stepIdx = i;
           break;
         }
@@ -419,6 +458,37 @@ export default function BetaTeamFlow() {
       }
       const step = SEQUENCE[stepIdx];
       const tRel = T - stepStarts[stepIdx];
+
+      if (step.paths.length > 1) {
+        // Step parallel: TUTTI i path emettono 1 pallina contemporanea
+        // dello stesso progress (0 → 1 in DURATION).
+        const progress = tRel / DURATION;
+        if (progress <= 0 || progress >= 1) {
+          setMessages([]);
+          return;
+        }
+        const active: Message[] = [];
+        for (let p = 0; p < step.paths.length; p++) {
+          const path = step.paths[p];
+          const el = document.getElementById(
+            path.pathId,
+          ) as unknown as SVGPathElement | null;
+          const totalLength = el?.getTotalLength?.() ?? 220;
+          active.push({
+            key: stepIdx * 100 + p,
+            pathId: path.pathId,
+            color: NODES[path.nodeKey].color,
+            progress,
+            totalLength,
+            reverse: path.reverse,
+          });
+        }
+        setMessages(active);
+        return;
+      }
+
+      // Step single (1 path), eventualmente multi-pallina sequenziale.
+      const path = step.paths[0];
       const k = Math.floor(tRel / DURATION);
       const progress = (tRel - k * DURATION) / DURATION;
       if (progress <= 0 || progress >= 1) {
@@ -426,16 +496,17 @@ export default function BetaTeamFlow() {
         return;
       }
       const el = document.getElementById(
-        step.pathId,
+        path.pathId,
       ) as unknown as SVGPathElement | null;
       const totalLength = el?.getTotalLength?.() ?? 220;
       setMessages([
         {
           key: stepIdx * 100 + k,
-          pathId: step.pathId,
-          color: NODES[step.nodeKey].color,
+          pathId: path.pathId,
+          color: NODES[path.nodeKey].color,
           progress,
           totalLength,
+          reverse: path.reverse,
         },
       ]);
     };
@@ -546,9 +617,13 @@ export default function BetaTeamFlow() {
             />
           ))}
 
-          {messages.map(({ key, pathId, color, progress, totalLength }) => {
-            // One-way: pallina dal mittente (0) al destinatario (length).
-            const len = progress * totalLength;
+          {messages.map(({ key, pathId, color, progress, totalLength, reverse }) => {
+            // One-way. Normalmente: dal mittente (0) al destinatario (length).
+            // Se reverse, si viaggia in direzione opposta sullo stesso path
+            // (es. da Scout a Captain sul path captain-to-scout).
+            const len = reverse
+              ? (1 - progress) * totalLength
+              : progress * totalLength;
             const el =
               typeof document !== "undefined"
                 ? (document.getElementById(
