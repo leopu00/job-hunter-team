@@ -313,3 +313,77 @@ def rolling_rate_per_agent(
         a["rate_tokens_per_min"] = (a["weighted_60s"] / win_s) * 60.0
 
     return dict(by_agent)
+
+
+# ── Writer + Critic aggregation ─────────────────────────────────────────
+
+# Pattern: il Critico è spawnato dallo Scrittore N e ha session `CRITICO-S<N>`
+# (vedi agents/_skills/critic-loop/SKILL.md). Lowercase keys: scrittore-N
+# parent di critico-sN. La singola sessione `CRITICO` (senza suffisso, raro
+# fallback senza scaling) viene attribuita per convenzione allo scrittore-1
+# se presente, altrimenti rimane standalone.
+_WRITER_KEY_RE = re.compile(r"^scrittore-(\d+)$")
+_CRITIC_KEY_RE = re.compile(r"^critico-s(\d+)$")
+
+
+def aggregate_writer_critic_rates(
+    per_agent: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Aggrega rate Scrittore + Critico spawnato in 1 unità per le decisioni
+    di throttling del Capitano.
+
+    Background: il Critico (`CRITICO-S<N>`) è child task atomico dello
+    Scrittore N (CV review loop a 3 round). Non è throttlabile a livello
+    Critico (task atomica: read CV+JD, write critique). L'unica leva è
+    rallentare lo Scrittore "padre" PRIMA dello spawn round successivo.
+    Quindi per il Capitano il rate vero della unit "scrittore" è
+    `own + critic_associato`. Vedi BACKLOG [JHT-TOKEN-MONITOR-WRITER-CRITIC].
+
+    Input: `per_agent` dict come prodotto da `rolling_rate_per_agent()`,
+    con chiavi lowercase tipo `scrittore-1`, `critico-s1`, `scout-1`, etc.
+    Le chiavi non-scrittore/non-critico vengono ignorate qui (esposte
+    invariate in `per_agent`).
+
+    Output: `{scrittore-N: {own_rate_kt_per_min, critic_rate_kt_per_min,
+                            combined_rate_kt_per_min, own_weighted,
+                            critic_weighted, combined_weighted,
+                            critic_session}}`.
+    Se Scrittore N esiste ma Critico associato no (nessuna review in corso),
+    critic_rate=0, combined_rate=own_rate. Critic orphan (senza writer
+    parent vivo nel dict, raro post-respawn) viene comunque attributo allo
+    `scrittore-N` con own_rate=0 — il Capitano vede il consumo e capisce
+    che c'è una review in coda.
+    """
+    out: dict[str, dict[str, Any]] = {}
+
+    writers: dict[str, dict[str, Any]] = {}
+    critics: dict[str, dict[str, Any]] = {}
+    for key, info in per_agent.items():
+        wm = _WRITER_KEY_RE.match(key)
+        if wm:
+            writers[wm.group(1)] = info
+            continue
+        cm = _CRITIC_KEY_RE.match(key)
+        if cm:
+            critics[cm.group(1)] = info
+
+    all_n = set(writers.keys()) | set(critics.keys())
+    for n in sorted(all_n, key=int):
+        w = writers.get(n, {})
+        c = critics.get(n, {})
+        own_rate = float(w.get("rate_kt_per_min_60s", 0.0) or 0.0)
+        critic_rate = float(c.get("rate_kt_per_min_60s", 0.0) or 0.0)
+        own_weighted = float(w.get("weighted_60s", 0.0) or 0.0)
+        critic_weighted = float(c.get("weighted_60s", 0.0) or 0.0)
+        out[f"scrittore-{n}"] = {
+            "own_rate_kt_per_min": own_rate,
+            "critic_rate_kt_per_min": critic_rate,
+            "combined_rate_kt_per_min": own_rate + critic_rate,
+            "own_weighted_60s": own_weighted,
+            "critic_weighted_60s": critic_weighted,
+            "combined_weighted_60s": own_weighted + critic_weighted,
+            "critic_session": f"critico-s{n}" if c else None,
+            "writer_session_alive": bool(w),
+        }
+
+    return out

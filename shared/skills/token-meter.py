@@ -545,6 +545,10 @@ def main():
             },
             "per_agent": per_agent_out,
             "per_agent_rolling_window_s": PER_AGENT_ROLL_WIN_S,
+            # Aggregato Scrittore+Critico per le decisioni di throttling
+            # del Capitano (RULE C-11). Vedi BACKLOG
+            # [JHT-TOKEN-MONITOR-WRITER-CRITIC].
+            "per_writer_aggregated": tlib.aggregate_writer_critic_rates(per_agent_out),
         }
         write_state_atomic(STATE_OUT, state_payload)
 
