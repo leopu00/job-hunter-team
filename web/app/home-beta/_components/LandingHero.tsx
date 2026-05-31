@@ -14,7 +14,7 @@ export default function LandingHero() {
   const [isPhase2, setIsPhase2] = useState(false);
 
   useEffect(() => {
-    const ROUND1_END_T = 21960; // px di scroll dopo cui finisce round 1
+    const ROUND1_END_T = 6840; // px di scroll dopo cui finisce round 1
     const STICKY_TOP_OFFSET_PX = 80;
     let last = false;
     const onScroll = () => {
@@ -82,23 +82,22 @@ export default function LandingHero() {
             - sticky senza height esplicita → contiene naturalmente
               tutto BetaTeamFlow (team + globo): niente overflow che si
               sovrappone alla tabella sotto.
-            - DURATION = 360 px per pallina. pipeline_T:
-              ROUND 1 (pin 0-13, full pipeline):
-                5 single × 360                = 1800
-              + 4 step DB × 14 palline × 360  = 20160
-                = 21960
-              ROUND 2 (pin 14-23, Scout-only):
-                1 single Captain-Scout × 360  = 360
-              + 1 step Scout-DB × 10 × 360    = 3600
-                = 3960
-              TOTAL = 25920.
-            - pin_height ≈ top_offset (80) + pipeline_T (25920)
-              + sticky_natural_height (~1300) + buffer ≈ 28000. */}
+            - DURATION = 360 px per pallina. Count decrescente lungo la
+              pipeline (Scout 5 → Analyst 4 → Scorer 3 → Writer 2)
+              così alcune offerte "saltano" lo step successivo.
+              ROUND 1: 5 single + (5+4+3+2) palline = 19 unità × 360 = 6840
+              ROUND 2: 1 single + 4 palline       = 5 unità × 360  = 1800
+              TOTAL pipeline_T = 8640.
+            - pin_height esteso di ~500 px oltre fine pipeline così
+              durante fase 2 centrata si arriva a un giro totale di
+              360° (~290° dai lerp + ~70° di POST_PIPELINE). Lo sticky
+              rilascia subito dopo, la tabella sale dal basso mentre
+              il globo continua a girare. */}
         <div
           ref={pinSecRef}
           className="hidden md:block relative"
           data-pin-section="team-flow"
-          style={{ height: "28000px" }}
+          style={{ height: "10000px" }}
         >
           <div
             className="sticky"
