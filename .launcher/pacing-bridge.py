@@ -139,7 +139,9 @@ def _load_target_helpers():
 
 
 def _compute_dynamic_target(
-    wht, pcap, now: datetime, h_to_reset: float | None
+    wht, pcap, now: datetime, h_to_reset: float | None,
+    weekly_used_pct: float | None = None,
+    weekly_reset_at_unix: float | None = None,
 ) -> dict:
     """Calcola il target % di finestra 5h da puntare per il tick corrente.
 
@@ -147,10 +149,24 @@ def _compute_dynamic_target(
     o config 24/7 senza schedule) ritorna `current_window_target_pct =
     TARGET_BAND_CENTER` per backwards-compat completo.
 
+    Parametri weekly-aware (fix [PACING-WEEKLY-EXHAUSTION]):
+      weekly_used_pct        — % weekly cap già consumata (campo
+                               `weekly_usage` del sample sentinel-bridge).
+                               None → assume 0% (comportamento legacy che
+                               causava il bug 24/7).
+      weekly_reset_at_unix   — quando si resetta il weekly cap (campo
+                               `weekly_reset_at_unix` del sample). None →
+                               assume 7 giorni davanti (legacy).
+
+    Quando ENTRAMBI presenti, `compute_target` distribuisce solo il budget
+    weekly residuo sulle ore ON rimanenti fino al reset, prevenendo il
+    burnout precoce visto sul VPS1 (60% weekly in 2 giorni invece di 7).
+
     Return dict pronto da merge nello state file:
       work_phase, current_window_target_pct, target_pct_of_weekly,
-      active_hours_in_window, weekly_active_hours,
-      window_cap_pct_of_weekly, next_phase_transition_at
+      active_hours_in_window, weekly_active_hours, weekly_remaining_pct,
+      weekly_window_source, window_cap_pct_of_weekly,
+      next_phase_transition_at
     """
     fallback = {
         "work_phase": "ON",
@@ -158,6 +174,8 @@ def _compute_dynamic_target(
         "target_pct_of_weekly": None,
         "active_hours_in_window": None,
         "weekly_active_hours": None,
+        "weekly_remaining_pct": None,
+        "weekly_window_source": None,
         "window_cap_pct_of_weekly": None,
         "next_phase_transition_at": None,
         "target_source": "band_center",
@@ -168,16 +186,27 @@ def _compute_dynamic_target(
         window_end = now + timedelta(hours=h_to_reset)
         window_start = window_end - timedelta(hours=5)
         ratio = pcap.get_window_cap_pct_of_weekly()
+        weekly_reset_at_utc = None
+        if isinstance(weekly_reset_at_unix, (int, float)):
+            try:
+                weekly_reset_at_utc = datetime.fromtimestamp(
+                    float(weekly_reset_at_unix), timezone.utc
+                )
+            except (OverflowError, OSError, ValueError):
+                weekly_reset_at_utc = None
         out = wht.compute_target(
             now_utc=now,
             window_start_utc=window_start,
             window_end_utc=window_end,
             window_cap_pct_of_weekly=ratio,
             default_target_band_pct=TARGET_BAND_CENTER,
+            weekly_used_pct=weekly_used_pct,
+            weekly_reset_at_utc=weekly_reset_at_utc,
         )
-        out["target_source"] = (
-            "schedule+ratio" if ratio is not None else "schedule+band"
-        )
+        base = "schedule+ratio" if ratio is not None else "schedule+band"
+        if out.get("weekly_window_source") == "residual_to_reset":
+            base += "+weekly"
+        out["target_source"] = base
         return out
     except Exception as e:
         print(f"[pacing-bridge] WARN compute_target failed: {e} — fallback band center",
@@ -424,7 +453,19 @@ def compute_tick(ast, tba, rb, now: datetime,
     #    dipende dalle ore ON dell'utente nella finestra e dal ratio
     #    cap-5h/cap-weekly del provider. Fallback automatico al 92% se
     #    schedule assente o ratio sconosciuto (Kimi unlimited).
-    target_info = _compute_dynamic_target(wht, pcap, now, h_to_reset)
+    #
+    #    Weekly-aware: leggi anche `weekly_usage` + `weekly_reset_at_unix`
+    #    dal sample sentinel e passali al compute → la distribuzione usa
+    #    il budget residuo invece di 100% pieno (fix
+    #    [PACING-WEEKLY-EXHAUSTION]: senza questo, su VPS 24/7 il team
+    #    bruciava 60% weekly in 2 giorni invece di spalmare su 7).
+    weekly_used = sample.get("weekly_usage")
+    weekly_reset_unix = sample.get("weekly_reset_at_unix")
+    target_info = _compute_dynamic_target(
+        wht, pcap, now, h_to_reset,
+        weekly_used_pct=weekly_used if isinstance(weekly_used, (int, float)) else None,
+        weekly_reset_at_unix=weekly_reset_unix if isinstance(weekly_reset_unix, (int, float)) else None,
+    )
     target_pct = target_info["current_window_target_pct"]
 
     # 5) vel_target: (target_pct - usage_now) / hours_to_reset.
@@ -508,6 +549,8 @@ def compute_tick(ast, tba, rb, now: datetime,
         "target_pct_of_weekly": target_info.get("target_pct_of_weekly"),
         "active_hours_in_window": target_info.get("active_hours_in_window"),
         "weekly_active_hours": target_info.get("weekly_active_hours"),
+        "weekly_remaining_pct": target_info.get("weekly_remaining_pct"),
+        "weekly_window_source": target_info.get("weekly_window_source"),
         "window_cap_pct_of_weekly": target_info.get("window_cap_pct_of_weekly"),
         "next_phase_transition_at": target_info.get("next_phase_transition_at"),
         "usage_now": usage_now,
@@ -825,6 +868,8 @@ def _serialize_report(d: dict) -> dict | None:
         ),
         "active_hours_in_window": d.get("active_hours_in_window"),
         "weekly_active_hours": d.get("weekly_active_hours"),
+        "weekly_remaining_pct": d.get("weekly_remaining_pct"),
+        "weekly_window_source": d.get("weekly_window_source"),
         "window_cap_pct_of_weekly": d.get("window_cap_pct_of_weekly"),
         "next_phase_transition_at": d.get("next_phase_transition_at"),
         "agents": agents,
