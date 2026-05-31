@@ -32,10 +32,9 @@ export function WriteRequestButton({
     // riportiamo lo stato indietro.
     setRequested(next);
     try {
-      const res = await fetch(
-        `/api/positions/${legacyId}/write-request`,
-        { method: next ? "POST" : "DELETE" },
-      );
+      const res = await fetch(`/api/positions/${legacyId}/write-request`, {
+        method: next ? "POST" : "DELETE",
+      });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setRequested(!next);
@@ -90,10 +89,7 @@ export function WriteRequestButton({
         {requested ? "✓" : "🖊"} {label}
       </button>
       {error && (
-        <span
-          className="text-[10px]"
-          style={{ color: "var(--color-red)" }}
-        >
+        <span className="text-[10px]" style={{ color: "var(--color-red)" }}>
           {error}
         </span>
       )}
