@@ -113,6 +113,8 @@ CREATE TABLE IF NOT EXISTS positions (
   role_family TEXT,
   write_requested INTEGER DEFAULT 0,
   write_requested_at TIMESTAMP,
+  geocode_requested INTEGER DEFAULT 0,
+  geocode_requested_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (company_id) REFERENCES companies(id)
@@ -123,6 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
 CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
 CREATE INDEX IF NOT EXISTS idx_positions_role_family ON positions(role_family) WHERE role_family IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_positions_write_requested ON positions(write_requested) WHERE write_requested = 1;
+CREATE INDEX IF NOT EXISTS idx_positions_geocode_requested ON positions(geocode_requested) WHERE geocode_requested = 1;
 
 CREATE TABLE IF NOT EXISTS position_highlights (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
