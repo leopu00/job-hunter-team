@@ -2,7 +2,13 @@
   "metadata": {
     "title": "Job Hunter Team",
     "description": "Un equipo de agentes de IA que buscan empleo por ti. Código abierto, local, privado.",
-    "keywords": ["búsqueda de empleo", "agentes de IA", "buscar trabajo", "candidaturas automáticas", "código abierto"]
+    "keywords": [
+      "búsqueda de empleo",
+      "agentes de IA",
+      "buscar trabajo",
+      "candidaturas automáticas",
+      "código abierto"
+    ]
   },
   "common": {
     "loading": "Cargando...",
@@ -120,7 +126,7 @@
     "custom": "Personalizado",
     "manual": "Manual",
     "automatic": "Automático",
-    "auto": "Auto",
+    "auto": "Automático",
     "manualMode": "Modo manual",
     "autoMode": "Modo automático",
     "on": "Activado",
@@ -722,14 +728,14 @@
     "castable": "Moldeable",
     "moldable": "Moldeable",
     "shapeable": "Modelable",
-    "formable": "Formable",
+    "formable": "Moldeable",
     "creatable": "Creable",
     "makeable": "Hacedero",
     "buildable": "Construible",
     "constructable": "Construible",
     "assembleable": "Ensamblable",
     "producible": "Producible",
-    "manufacturable": "Manufacturable",
+    "manufacturable": "Fabricable",
     "fabricatable": "Fabricable",
     "processable": "Procesable",
     "treatable": "Tratable",
@@ -979,7 +985,7 @@
     "gettable": "Obtenible",
     "obtainable": "Obtenible",
     "acquirable": "Adquirible",
-    "procurable": "Procurable",
+    "procurable": "Obtenible",
     "gainable": "Ganable",
     "earnable": "Ganable",
     "winnable": "Ganable",
@@ -1286,7 +1292,7 @@
       "links": {
         "dashboard": "Panel",
         "deploy": "Despliegue",
-        "gateway": "Gateway",
+        "gateway": "Puerta de enlace",
         "status": "Estado",
         "download": "Descargar",
         "offers": "Ofertas",
