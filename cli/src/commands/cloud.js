@@ -608,7 +608,7 @@ async function handlePush(options) {
   } catch (err) {
     console.error(pc.red(`Errore di rete: ${err.message}`));
     process.exitCode = 1;
-    return;
+    return { ok: false, authFailed: false };
   }
 
   const body = await res.json().catch(() => ({}));
@@ -636,7 +636,11 @@ async function handlePush(options) {
       );
     }
     process.exitCode = 1;
-    return;
+    // 401/403 = token revocato o malformato. Il daemon usa questo flag per
+    // contare gli auth-fail consecutivi (threshold 3 → killswitch + notifica
+    // pending_user_messages, vedi handleDaemon). Distinto dal counter
+    // generico consecutiveFails (5xx/network transient).
+    return { ok: false, authFailed: res.status === 401 || res.status === 403 };
   }
 
   console.log(pc.green('✓ Push completato'));
@@ -1029,6 +1033,36 @@ async function handlePullDesiredState(options = {}) {
 }
 
 /**
+ * Inserisce un messaggio in pending_user_messages locale. Best-effort:
+ * usato dal killswitch del daemon per notificare l'utente quando il token
+ * è revocato. Il push delta-only normalmente propaga questa tabella in
+ * cloud, ma se siamo qui è proprio perché il push fallisce → il bridge
+ * Telegram locale è la via di consegna primaria (vedi telegram-bridge).
+ *
+ * Schema riferimento: shared/skills/_db.py + supabase mig 010.
+ */
+async function writePendingUserMessage({ agent, body, kind = 'alert', dbPath = JHT_DB_PATH }) {
+  try {
+    const exists = await stat(dbPath).then(() => true).catch(() => false);
+    if (!exists) return false;
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(dbPath);
+    try {
+      db.prepare(
+        `INSERT INTO pending_user_messages (agent, body, kind, created_at)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP)`
+      ).run(agent, body, kind);
+      return true;
+    } finally {
+      db.close();
+    }
+  } catch (err) {
+    console.error(pc.yellow(`  warn: writePendingUserMessage failed (${err.message})`));
+    return false;
+  }
+}
+
+/**
  * Daemon di sync: loop infinito che chiama handlePush() ogni N secondi
  * (default 30). Pensato come PID 1 del container su VPS, dove la dashboard
  * Next.js locale e' inutile (bindata a 127.0.0.1) e l'utente vuole vedere
@@ -1084,6 +1118,13 @@ async function handleDaemon(options) {
   const MAX_CONSECUTIVE_FAILS = 5;
   const WARN_AT = 3;
   let consecutiveFails = 0;
+  // Killswitch dedicato auth-fail (401/403): più aggressivo del counter
+  // generico perché un token revocato non recupera mai da solo, non ha
+  // senso ritentare 5 volte. Threshold 3 = tolleranza minima per false
+  // positive (clock skew, rate-limit edge, JWT refresh race), poi halt
+  // con notifica esplicita all'utente via pending_user_messages.
+  const MAX_CONSECUTIVE_AUTH_FAILS = 3;
+  let consecutiveAuthFails = 0;
   // Push iniziale immediato: se il container era spento per un po' e gli
   // agenti hanno scritto offline, il primo tick deve flushare subito.
   while (running) {
@@ -1098,16 +1139,21 @@ async function handleDaemon(options) {
         haltSkipCount = 0;
       }
       let tickFailed = false;
+      let authFailedThisTick = false;
       try {
         // Reset di process.exitCode tra un tick e l'altro: handlePush lo
         // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
         // il loop al prossimo intervallo.
         const prev = process.exitCode;
         process.exitCode = 0;
-        await handlePush({});
+        const pushResult = await handlePush({});
         if (process.exitCode === 1) {
           tickFailed = true;
         }
+        // handlePush ritorna {ok, authFailed} solo nel path !res.ok+401/403
+        // o network catch. Tutti gli altri early-return ritornano undefined
+        // (config/db missing) → authFailed undefined → falsy. OK.
+        authFailedThisTick = pushResult?.authFailed === true;
         process.exitCode = prev;
       } catch (err) {
         console.error(pc.yellow(`  daemon tick error: ${err.message}`));
@@ -1128,6 +1174,38 @@ async function handleDaemon(options) {
         process.exitCode = prevPull;
       } catch (err) {
         console.error(pc.yellow(`  daemon pull-desired-state error: ${err.message}`));
+      }
+
+      if (authFailedThisTick) {
+        consecutiveAuthFails += 1;
+      } else if (!tickFailed) {
+        // Solo un push riuscito (200 OK) resetta il counter auth. Un fail
+        // NON-auth (es. 500 transient) lascia il counter dov'è — un 401
+        // intermittente in mezzo a 500 deve comunque scattare il killswitch.
+        if (consecutiveAuthFails > 0) {
+          console.log(pc.green(`  push ok dopo ${consecutiveAuthFails} auth-fail, contatore auth resettato.`));
+        }
+        consecutiveAuthFails = 0;
+      }
+
+      if (consecutiveAuthFails >= MAX_CONSECUTIVE_AUTH_FAILS) {
+        const msg =
+          `⛔ Cloud sync interrotto: token revocato o non valido ` +
+          `(${MAX_CONSECUTIVE_AUTH_FAILS} risposte 401/403 consecutive). ` +
+          `Riapri il pairing su ${config.base_url}/settings/cloud-sync ` +
+          `e rilancia: jht cloud login.`;
+        console.error(pc.red(`  ✗ ${msg}`));
+        // Notifica utente via pending_user_messages locale: il bridge
+        // Telegram la consegnerà al prossimo poll. Non possiamo affidarci
+        // al push cloud (è proprio quello che ha fallito).
+        await writePendingUserMessage({
+          agent: 'cloud-sync',
+          body: msg,
+          kind: 'alert',
+        });
+        running = false;
+        process.exitCode = 1;
+        break;
       }
 
       if (tickFailed) {
