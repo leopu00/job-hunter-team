@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getPositions, getSourceDistribution } from "@/lib/queries";
 import type { PositionWithScore } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
+import { isLocalOnlyMode } from "@/lib/workspace";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
 import FiltersWizard from "./FiltersWizard";
 
@@ -151,22 +152,26 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // Fetch dei legacy_id già su Supabase per l'utente loggato (set per
   // lookup O(1) dentro il loop righe). Errori → set vuoto, niente icona
   // ma la lista funziona comunque.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // JHT-LOCAL-NO-API: in local-only mode skippiamo (nessuna nozione di
+  // "synced" quando il cloud è disabilitato).
   let syncedIds = new Set<number>();
-  if (user) {
-    const { data } = await supabase
-      .from("positions")
-      .select("legacy_id")
-      .eq("user_id", user.id)
-      .not("legacy_id", "is", null);
-    syncedIds = new Set(
-      (data ?? [])
-        .map((r: { legacy_id: number | null }) => r.legacy_id)
-        .filter((x: number | null): x is number => typeof x === "number"),
-    );
+  if (!isLocalOnlyMode()) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data } = await supabase
+        .from("positions")
+        .select("legacy_id")
+        .eq("user_id", user.id)
+        .not("legacy_id", "is", null);
+      syncedIds = new Set(
+        (data ?? [])
+          .map((r: { legacy_id: number | null }) => r.legacy_id)
+          .filter((x: number | null): x is number => typeof x === "number"),
+      );
+    }
   }
 
   const positions = allPositions;

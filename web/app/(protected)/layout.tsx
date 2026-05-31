@@ -3,7 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/workspace";
+import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
 import { readWorkspaceProfile, isProfileComplete } from "@/lib/profile-reader";
 import { isLocalRequestFromHeaders } from "@/lib/auth";
 import { isDashboardDemoMode } from "@/lib/dashboard-demo";
@@ -25,12 +25,19 @@ export default async function ProtectedLayout({
   const search = hdrs.get("x-search") ?? "";
   const demoMode = isDashboardDemoMode(search);
 
+  // JHT-LOCAL-NO-API: in modalità local-only (SQLite presente + cloud
+  // esplicitamente disabilitato via cloud.json.enabled=false) il web non
+  // deve mai parlare con Supabase. Skippiamo l'auth check: tutto il routing
+  // passa dal flusso "onboarding locale" sotto. Su Vercel-side è sempre
+  // false (no SQLite locale).
+  const localOnly = isLocalOnlyMode();
+
   // Tenta sessione Supabase prima di tutto. Se l'utente è loggato in
   // cloud, prevale sul flusso locale (anche su localhost): mandarlo in
   // /onboarding wizard-PC-locale ha senso solo per chi NON ha account.
   // Vedi docs/internal/2026-05-19-dashboard-routing-cases.md.
   let cloudUser: User | null = null;
-  if (isSupabaseConfigured && !demoMode) {
+  if (isSupabaseConfigured && !demoMode && !localOnly) {
     const supabase = await createClient();
     const {
       data: { user },
@@ -54,7 +61,9 @@ export default async function ProtectedLayout({
   }
 
   // Auth gate REMOTE: senza sessione e non-localhost → /login.
-  if (isSupabaseConfigured && !cloudUser && !localRequest) {
+  // Skippato in local-only mode (impossibile su Vercel comunque, ma
+  // esplicito per chiarezza).
+  if (isSupabaseConfigured && !cloudUser && !localRequest && !localOnly) {
     const returnTo = pathname ? pathname + search : "";
     if (returnTo && returnTo !== "/") {
       redirect(`/?login=true&returnTo=${encodeURIComponent(returnTo)}`);
