@@ -215,7 +215,7 @@ Entrambe le event lane sono ora osservate (commit `4774c190` + `093027c1`, 2026-
 
 #### P1 — Follow-up tombstone (post commit `6499b3db`)
 
-9. **P1 — Filtro `deleted_at IS NULL` sulle query dashboard**. ~30 SELECT su positions/scores/applications in `web/lib/queries.ts` (e ~10 in `web/lib/local-queries.ts`, ma localmente è hard-delete → low priority). Rischio basso oggi: finché il flusso tombstone non gira massicciamente in prod, nessuna riga ha `deleted_at != NULL`. PR dedicato con test di non-regressione.
+9. ✅ **P1 — Filtro `deleted_at IS NULL` sulle query dashboard** *(DONE 2026-05-31, commit `99adc0d2`)*. 34 SELECT su positions/scores/applications in `web/lib/queries.ts` ora filtrano `deleted_at IS NULL`. Caso speciale `getCriticScores` con nested `positions!inner` ha anche `.is('positions.deleted_at', null)`. Nested left join in select (`scores(...)`, `applications(...)`) volutamente non filtrati — la position parent è già filtrata e il caller mappa solo campi visibili. `local-queries.ts` skippato (SQLite hard-delete, no `deleted_at`). Cron hard-delete `deleted_at < now()-30d` resta come task separato.
 
 10. **P1 — Cron Supabase hard-delete soft-deleted >30d**. Cleanup periodico righe `WHERE deleted_at < now() - interval '30 days'` su positions/scores/applications. pg_cron extension già disponibile.
 
