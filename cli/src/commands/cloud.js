@@ -14,6 +14,11 @@ const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 // pushato. Al tick successivo selezioniamo solo righe con updated_at >
 // cursor. Crollo bandwidth ~95% (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md).
 const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
+// Cursor pull desired-state: ultimo updated_at letto da Supabase per
+// recuperare flag user-driven (write_requested) scritti via web mentre
+// il container era offline. Separato dal push cursor: due direzioni di
+// flusso indipendenti (vedi docs/internal/cloud-sync-architecture.md).
+const CLOUD_PULL_CURSOR_FILE = join(JHT_HOME, '.cloud-pull-cursor.json');
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -435,6 +440,28 @@ async function saveCloudCursor(cursor) {
 }
 
 /**
+ * Carica il cursor di pull desired-state. Ritorna { since: ISO|null }.
+ * Missing/corrupt = null → endpoint server applica default lookback 7gg.
+ */
+function loadPullCursor() {
+  if (!existsSync(CLOUD_PULL_CURSOR_FILE)) return { since: null };
+  try {
+    const parsed = JSON.parse(readFileSync(CLOUD_PULL_CURSOR_FILE, 'utf-8'));
+    return { since: typeof parsed?.since === 'string' ? parsed.since : null };
+  } catch {
+    return { since: null };
+  }
+}
+
+async function savePullCursor(cursor) {
+  try {
+    await writeFile(CLOUD_PULL_CURSOR_FILE, JSON.stringify(cursor, null, 2));
+  } catch (err) {
+    console.error(pc.yellow(`  warn: pull cursor save failed (${err.message})`));
+  }
+}
+
+/**
  * Dato un array di righe con campo updated_at, ritorna il MAX(updated_at)
  * come stringa ISO. Null se l'array e' vuoto o nessuna riga ha il campo.
  */
@@ -838,6 +865,162 @@ async function handleDisable() {
 }
 
 /**
+ * Pull desired-state da cloud → SQLite locale. Chiude il gap silent-loss
+ * del writer-on-demand: utente clicca "Scrivi CV" via web mentre container
+ * è offline → write_requested=TRUE su Supabase → senza pull al riavvio
+ * il Capitano non vede mai il flag (push è write-only locale → cloud).
+ *
+ * Scope MVP: solo `positions.write_requested` + `write_requested_at`.
+ * Endpoint server: GET /api/cloud-sync/pull-desired-state?since=<ISO>.
+ *
+ * Best-effort: non blocca il boot del team su errore di rete o cloud
+ * indisponibile. Logga warning e prosegue. Il Capitano vedrà il flag
+ * al pull successivo (next boot o tick daemon).
+ *
+ * options:
+ *   --dry-run        non applica le UPDATE, solo report
+ *   --full           ignora cursor (lookback 7gg server-side)
+ *   --limit <n>      override limit server (default 500)
+ *   --silent         logga solo errori (uso al boot, evita rumore)
+ */
+async function handlePullDesiredState(options = {}) {
+  const silent = options.silent === true;
+  const log = (msg) => { if (!silent) console.log(msg); };
+
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) {
+    if (!silent) {
+      console.error(pc.red('Cloud sync non abilitato.'));
+      console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const dbPath = options.db || JHT_DB_PATH;
+  const dbExists = await stat(dbPath).then(() => true).catch(() => false);
+  if (!dbExists) {
+    log(pc.dim(`  pull skip: SQLite locale non trovato (${dbPath}). Boot team prima.`));
+    return;
+  }
+
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const cursor = options.full ? { since: null } : loadPullCursor();
+  const params = new URLSearchParams();
+  if (cursor.since) params.set('since', cursor.since);
+  if (options.limit) params.set('limit', String(options.limit));
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const pullUrl = `${baseUrl}/api/cloud-sync/pull-desired-state?${params.toString()}`;
+
+  let res;
+  try {
+    res = await fetch(pullUrl, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
+  } catch (err) {
+    console.error(pc.yellow(`  pull warn: errore di rete (${err.message})`));
+    process.exitCode = 1;
+    return;
+  }
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error(
+      pc.yellow(
+        `  pull warn: HTTP ${res.status} ${body.error || 'errore sconosciuto'}`
+      )
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const positions = Array.isArray(body.positions) ? body.positions : [];
+  log(
+    pc.dim(
+      `Pull desired-state [since=${cursor.since || 'lookback-7d'}]: ${positions.length} righe`
+    )
+  );
+
+  if (options.dryRun) {
+    if (positions.length > 0) {
+      for (const p of positions.slice(0, 10)) {
+        log(
+          pc.dim(
+            `  #${p.legacy_id} write_requested=${p.write_requested} at=${p.write_requested_at}`
+          )
+        );
+      }
+      if (positions.length > 10) {
+        log(pc.dim(`  ... +${positions.length - 10} altre righe`));
+      }
+    }
+    log(pc.yellow('--dry-run: nessuna UPDATE applicata.'));
+    return;
+  }
+
+  if (positions.length === 0) {
+    // Aggiorniamo comunque il cursor al server-side value (no-op se cancellato
+    // o uguale, ma riallinea dopo un eventuale --full).
+    if (body.cursor && body.cursor !== cursor.since) {
+      await savePullCursor({ since: body.cursor });
+    }
+    return;
+  }
+
+  // Apriamo la connessione in RW. Usiamo UPDATE puro (non INSERT): se
+  // la position non esiste localmente è una row scoperta su altro device,
+  // arriverà al container quando ne pusherà i dati completi (titolo,
+  // company, ecc); per ora skip silenzioso. Crearla qui con soli flag
+  // produrrebbe una riga zoppa con NULL su title/company → CHECK fail.
+  let updated = 0;
+  let missing = 0;
+  try {
+    const db = new DatabaseSync(dbPath);
+    db.exec('PRAGMA foreign_keys = ON');
+    const stmt = db.prepare(`
+      UPDATE positions
+         SET write_requested = ?,
+             write_requested_at = ?
+       WHERE id = ?
+    `);
+    const checkStmt = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+    for (const p of positions) {
+      const legacyId = Number(p.legacy_id);
+      if (!Number.isInteger(legacyId) || legacyId <= 0) continue;
+      const exists = checkStmt.get(legacyId);
+      if (!exists) { missing++; continue; }
+      const flag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
+      const at = p.write_requested_at || null;
+      stmt.run(flag, at, legacyId);
+      updated++;
+    }
+    db.close();
+  } catch (err) {
+    console.error(pc.red(`Errore UPDATE SQLite: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  log(pc.green(`✓ Pull desired-state applicato: ${updated} positions aggiornate`)
+    + (missing > 0 ? pc.dim(` (${missing} legacy_id non presenti localmente, skip)`) : ''));
+
+  if (body.cursor) {
+    await savePullCursor({ since: body.cursor });
+  }
+  if (body.has_more) {
+    log(pc.dim('  has_more=true: rilancia per recuperare le righe rimanenti'));
+  }
+}
+
+/**
  * Daemon di sync: loop infinito che chiama handlePush() ogni N secondi
  * (default 30). Pensato come PID 1 del container su VPS, dove la dashboard
  * Next.js locale e' inutile (bindata a 127.0.0.1) e l'utente vuole vedere
@@ -963,6 +1146,12 @@ async function handleDaemon(options) {
   console.log(pc.dim('Daemon terminato.'));
 }
 
+// Esportata per uso programmatico (es. wire al boot di `jht team start`
+// per recuperare write_requested cliccato via web mentre container era
+// offline). Best-effort: il caller invoca con { silent: true } e ignora
+// process.exitCode così il boot prosegue anche se cloud è giù.
+export { handlePullDesiredState };
+
 export function registerCloudCommand(program) {
   const cloud = program
     .command('cloud')
@@ -1007,6 +1196,15 @@ export function registerCloudCommand(program) {
     .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
     .option('--dry-run', 'Mostra cosa verrebbe pushato senza chiamare il cloud')
     .action(handlePush);
+
+  cloud
+    .command('pull-desired-state')
+    .description('Recupera flag user-driven (write_requested) da cloud -> SQLite locale')
+    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
+    .option('--full', 'Ignora cursor (lookback 7gg server-side)')
+    .option('--limit <n>', 'Max righe per chiamata (default 500, max 2000)')
+    .option('--dry-run', 'Mostra cosa verrebbe applicato senza UPDATE')
+    .action(handlePullDesiredState);
 
   cloud
     .command('disable')
