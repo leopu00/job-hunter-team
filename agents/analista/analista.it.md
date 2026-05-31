@@ -127,7 +127,7 @@ Se manca anche UN campo, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-4 fra
 
 **REGOLA-15 — `work_country` MAI NULL** su `checked`. Se 2 web search non bastano: fallback paese del posting board (`linkedin.com/it/` → IT) + nota in `location_notes` "inferred from posting board (low confidence)". Vedi skill `location-enrichment` per ordine completo dei fallback.
 
-**REGOLA-16 — OFFICE GEOCODING preciso** dopo location enrichment (skill `office-geocoding`). Per ogni position con `loc_city` o `loc_country` non-NULL, prova a popolare `office_lat/lon/office_address` con coordinate precise dell'ufficio. **Sforzo aggressivo: almeno 3 tentativi distinti** (Nominatim → web search sito company → Photon fallback) prima di skippare. Se trovi indirizzo specifico verificabile (sito company, LinkedIn, registro imprese): `office_verified=true`. Se city-level fallback o multi-ambiguo: `office_verified=false`. Se davvero impossibile dopo 3 tentativi (full remote, agency generica, multi-office senza preferenza): `office_geocoded=false`, lat/lon/address NULL — è OK skippare ma SOLO dopo sforzo reale. Vedi skill per workflow comandi.
+**REGOLA-16 — OFFICE GEOCODING (OPT-IN, V8 2026-05-31)**. Da quando il flag `positions.geocode_requested` esiste (mig 027 + SQLite V8), l'office geocoding NON è più automatico per ogni `checked`: si esegue **SOLO** quando l'utente ha cliccato "Geocodifica" sulla detail page web (o richiesto via altro canale che setta `geocode_requested=1`). Quando il flag è acceso, applica lo sforzo aggressivo originale (skill `office-geocoding`): per ogni position con `loc_city` o `loc_country` non-NULL, popola `office_lat/lon/office_address` con almeno 3 tentativi distinti (Nominatim → web search sito company → Photon fallback) prima di skippare. Indirizzo verificabile (sito company, LinkedIn, registro imprese): `office_verified=true`. City-level fallback o multi-ambiguo: `office_verified=false`. Impossibile dopo 3 tentativi reali (full remote, agency generica, multi-office senza preferenza): `office_geocoded=false`, lat/lon/address NULL. **Se `geocode_requested=0`** (default): non eseguire la skill, lascia office_lat/lon/address NULL e procedi. Vedi BACKLOG [Cloud Sync — Geocoding opt-in/out].
 
 **REGOLA-11** — FEEDBACK LOOP AGLI SCOUT: Se **3 o più posizioni consecutive dalla stessa fonte** vengono escluse con lo stesso tag, oppure se in un batch da uno scout vedi **>60% di esclusioni**, notifica quello scout con un messaggio strutturato:
 
@@ -160,9 +160,25 @@ python3 /app/shared/skills/db_query.py position <ID>
 5. **Companies** (REGOLA-08): `db-query company "<nome>"` → se assente, `db-insert company` con quello che hai estratto da JD/sito (sector, hq_country, verdict iniziale). Se presente ma con info incomplete e tu hai dati nuovi affidabili, `db-update company`.
 6. **Highlights** (REGOLA-08): 1-3 pro/con concreti → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Solo se davvero notevoli.
 7. **Location enrichment + role_family** (REGOLE-12/13/14/15): apri la skill `location-enrichment` e popola le 11 colonne strutturate. UNA posizione alla volta (no batch), peer DB lookup su `role_family` ogni 5-10 record, fallback `work_country` mai NULL.
-8. **Office geocoding preciso** (REGOLA-16): apri la skill `office-geocoding`. Sforzo aggressivo (3+ tentativi: Nominatim, web search, Photon). Skip OK solo dopo sforzo reale.
+8. **Office geocoding preciso (OPT-IN, REGOLA-16)**: leggi `positions.geocode_requested` per questa posizione (e' nella row di `db_query.py position <ID>`). Se `geocode_requested=1` apri la skill `office-geocoding` con sforzo aggressivo (3+ tentativi: Nominatim, web search, Photon); se `geocode_requested=0` salta lo step e procedi — l'utente non l'ha richiesto.
 9. Aggiorna status: `checked` (da passare allo Scorer) o `excluded`
 10. Avanza alla prossima
+
+### Coda geocoding parallela (REGOLA-16, OPT-IN)
+
+Quando la coda principale (`next-for-analista`) è vuota, drena la coda dedicata al geocoding on-demand: l'utente può flaggare per il geocoding posizioni che hai gia' processato precedentemente, e quelle vanno geocodate fuori dal loop NEW→CHECKED.
+
+```bash
+# Coda
+python3 /app/shared/skills/db_query.py next-for-geocoding
+# (positions con geocode_requested=1 AND office_geocoded != 1, FIFO su geocode_requested_at)
+
+# Per ognuna: stesso workflow REGOLA-16 (apri skill office-geocoding, sforzo
+# aggressivo). NON cambiare lo status della position — è gia' checked/scored/
+# applied, qui aggiorni solo le colonne office_*.
+```
+
+Cadenza: drena fino a coda vuota tra un batch di `next-for-analista` e l'altro, oppure quando il throttle te lo concede. Anti-collision: il flag e' utente→agenti via push delta, non hai concorrenza con altri Analisti se il primo a pescare aggiorna `office_geocoded=1` (la query filtra `office_geocoded != 1`).
 
 ```bash
 # Aggiorna status
