@@ -1388,6 +1388,18 @@ export function registerCloudCommand(program) {
       await runTeamStateReconciler();
     });
 
+  // `messages-listen` — poller `user_to_agent_messages`. Browser POSTa
+  // a /api/messages, questo handler legge i pending, fa claim atomico
+  // (PATCH delivered) e forwarda al tmux pane dell'agente target via
+  // `jht-tmux-send`. Co-spawnato da pid1 accanto a daemon/realtime/team-state.
+  cloud
+    .command('messages-listen')
+    .description('Poller user_to_agent_messages (forward web → tmux pane)')
+    .action(async () => {
+      const { runUserMessagesPoller } = await import('../lib/user-messages-poller.js');
+      await runUserMessagesPoller();
+    });
+
   // `cloud preflight` — single-team enforcement check post-pairing.
   // Esce con codice 0 se il claim è libero/recuperabile, 2 se un altro device
   // ha il claim attivo (heartbeat <5min). Stampa info su stdout per script
