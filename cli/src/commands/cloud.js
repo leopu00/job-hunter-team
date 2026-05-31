@@ -531,6 +531,10 @@ async function handlePush(options) {
         // Writer-on-demand (V6, 2026-05-29): l'utente seleziona da
         // dashboard/Telegram, il flag viaggia a cloud per UI cross-device.
         'write_requested', 'write_requested_at',
+        // Geocoding-on-demand (V8, 2026-05-31): stesso pattern,
+        // l'utente seleziona via UI quali posizioni geocodare con
+        // precisione ufficio; il flag viaggia a cloud per UI cross-device.
+        'geocode_requested', 'geocode_requested_at',
       ], cursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
         'position_id', 'total_score', 'experience_fit', 'salary_fit',
@@ -996,7 +1000,8 @@ async function handlePullDesiredState(options = {}) {
       for (const p of positions.slice(0, 10)) {
         log(
           pc.dim(
-            `  #${p.legacy_id} write_requested=${p.write_requested} at=${p.write_requested_at}`
+            `  #${p.legacy_id} write=${p.write_requested}@${p.write_requested_at || '-'} ` +
+              `geo=${p.geocode_requested}@${p.geocode_requested_at || '-'}`
           )
         );
       }
@@ -1027,10 +1032,18 @@ async function handlePullDesiredState(options = {}) {
   try {
     const db = new DatabaseSync(dbPath);
     db.exec('PRAGMA foreign_keys = ON');
+    // UPDATE multi-flag: scriviamo entrambi i flag desired-state
+    // (write_requested + geocode_requested) in un solo statement per row.
+    // Idempotente: se il cloud non li ha (NULL), li riportiamo invariati
+    // localmente. Se il client SQLite è su schema < V8 (geocode_requested
+    // mancante), il prepare fallisce — il caller deve aver chiamato
+    // ensure_schema prima (lo fa il boot wiring).
     const stmt = db.prepare(`
       UPDATE positions
          SET write_requested = ?,
-             write_requested_at = ?
+             write_requested_at = ?,
+             geocode_requested = ?,
+             geocode_requested_at = ?
        WHERE id = ?
     `);
     const checkStmt = db.prepare('SELECT 1 FROM positions WHERE id = ?');
@@ -1039,9 +1052,11 @@ async function handlePullDesiredState(options = {}) {
       if (!Number.isInteger(legacyId) || legacyId <= 0) continue;
       const exists = checkStmt.get(legacyId);
       if (!exists) { missing++; continue; }
-      const flag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
-      const at = p.write_requested_at || null;
-      stmt.run(flag, at, legacyId);
+      const writeFlag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
+      const writeAt = p.write_requested_at || null;
+      const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
+      const geoAt = p.geocode_requested_at || null;
+      stmt.run(writeFlag, writeAt, geoFlag, geoAt, legacyId);
       updated++;
     }
     db.close();
