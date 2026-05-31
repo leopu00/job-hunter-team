@@ -43,13 +43,12 @@ export default function LandingClient({
               data-pin-section="table-evolution"
               style={{ height: "5500px" }}
             >
-              <div
-                className="sticky flex items-center justify-center"
-                style={{ top: "5rem", height: "calc(100vh - 5rem)" }}
-              >
-                <div className="w-full">
-                  <LatestPositionsTable />
-                </div>
+              {/* Sticky naturale ancorato in alto (sotto la nav): la
+                  tabella si attacca subito al top del viewport, niente
+                  flex center → meno spazio vuoto tra il globo (sopra)
+                  e la tabella (qui). */}
+              <div className="sticky" style={{ top: "5rem" }}>
+                <LatestPositionsTable />
               </div>
             </div>
 
