@@ -6,6 +6,9 @@ export const dynamic = "force-dynamic";
 const VALID_ACTIONS = ["like", "dislike", "hide", "star"] as const;
 type Action = (typeof VALID_ACTIONS)[number];
 
+const VALID_DIRECTIONS = ["more_like_this", "less_like_this"] as const;
+type Direction = (typeof VALID_DIRECTIONS)[number];
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ legacyId: string }> },
@@ -24,7 +27,13 @@ export async function POST(
   if (!legacyId)
     return NextResponse.json({ error: "legacyId mancante" }, { status: 400 });
 
-  let body: { action?: unknown; reason?: unknown };
+  let body: {
+    action?: unknown;
+    reason?: unknown;
+    comment?: unknown;
+    score?: unknown;
+    direction?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -46,9 +55,45 @@ export async function POST(
       ? body.reason
       : null;
 
+  // mig 028: campi opzionali estesi.
+  const comment =
+    typeof body.comment === "string" && body.comment.length <= 2000
+      ? body.comment
+      : null;
+  let score: number | null = null;
+  if (typeof body.score === "number" && Number.isInteger(body.score)) {
+    if (body.score < 1 || body.score > 5) {
+      return NextResponse.json(
+        { error: "score deve essere intero 1-5" },
+        { status: 400 },
+      );
+    }
+    score = body.score;
+  }
+  let direction: Direction | null = null;
+  if (typeof body.direction === "string") {
+    if (!(VALID_DIRECTIONS as readonly string[]).includes(body.direction)) {
+      return NextResponse.json(
+        {
+          error: `direction invalida (${VALID_DIRECTIONS.join(", ")})`,
+        },
+        { status: 400 },
+      );
+    }
+    direction = body.direction as Direction;
+  }
+
   const { data, error } = await supabase
     .from("position_feedback")
-    .insert({ user_id: userId, position_legacy_id: legacyId, action, reason })
+    .insert({
+      user_id: userId,
+      position_legacy_id: legacyId,
+      action,
+      reason,
+      comment,
+      score,
+      direction,
+    })
     .select()
     .single();
 
