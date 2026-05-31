@@ -14,6 +14,7 @@ import { TokenStackBar } from "./_components/TokenStackBar"
 import { VelocityBar } from "./_components/VelocityBar"
 import { CoverageMatrix } from "./_components/CoverageMatrix"
 import { ContributeCta } from "./_components/ContributeCta"
+import { AgentActivityHero } from "./_components/AgentActivityHero"
 
 export const dynamic = "force-dynamic"
 
@@ -52,8 +53,14 @@ export default async function CaseStudiesPage() {
 
   const { caseStudies, coverage } = data
 
+  const codex = caseStudies.find((c) => c.slug.startsWith("beta-tester-1-codex"))
+  const codexWeekly = codex?.windows?.find((w) => w.kind === "weekly")
+
   return (
     <main className="min-h-screen bg-white text-slate-900">
+      {codex && codexWeekly && (
+        <AgentActivityHero caseStudy={codex} weekly={codexWeekly} />
+      )}
       <KpiHero caseStudies={caseStudies} />
 
       {/* Methodology disclaimer — visible, collapsible */}
