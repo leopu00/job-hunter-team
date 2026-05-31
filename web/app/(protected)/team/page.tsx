@@ -13,6 +13,7 @@ import UsageTokensChart from "./_components/UsageTokensChart";
 import TokenBreakdown from "./_components/TokenBreakdown";
 import TokenTypesChart from "./_components/TokenTypesChart";
 import AgentTokensChart from "./_components/AgentTokensChart";
+import WriterCriticBreakdown from "./_components/WriterCriticBreakdown";
 import ThrottleChart from "./_components/ThrottleChart";
 import AgentActivityChart from "./_components/AgentActivityChart";
 import DoctorPanel from "./_components/DoctorPanel";
@@ -492,6 +493,13 @@ export default function TeamCompany() {
       <section className="py-10 border-t border-[var(--color-border)]">
         <div className="mx-auto w-full max-w-[900px]">
           <AgentTokensChart />
+        </div>
+      </section>
+
+      {/* Per-Scrittore cost (own + critic spawnato, RULE C-11) */}
+      <section className="py-10 border-t border-[var(--color-border)]">
+        <div className="mx-auto w-full max-w-[900px]">
+          <WriterCriticBreakdown />
         </div>
       </section>
 
