@@ -213,10 +213,10 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Source:** [`docs/internal/2026-05-20-supabase-perf-backlog.md`](docs/internal/2026-05-20-supabase-perf-backlog.md) — 40+ findings da `get_advisors`.
 - **Stato implementazione:**
   - ✅ **P0 — `auth_rls_initplan` × 24 occorrenze** (migration `018_rls_init_plan_fix.sql` + commit `2b78fdd9`, 2026-05-22) — 24 policy migrate da `auth.uid()` per-row a `(select auth.uid())`. Chiude advisor critical, impatto plausibile sull'incident del 2026-05-19.
-  - ⬜ **P1 — `unindexed_foreign_keys` × 9 occorrenze** (INFO). Migration `018_fk_indexes.sql` proposta nel doc ma mai applicata (slot 018 preso da init plan fix). Da emettere come `024_fk_indexes.sql` idempotente con `IF NOT EXISTS`.
-  - ⬜ **P2 — `unused_index` × 7 occorrenze** (INFO). Da droppare con migration dedicata; richiede verifica `pg_stat_user_indexes` lato Supabase prima del drop.
+  - ✅ **P1 — `unindexed_foreign_keys` × 9 occorrenze** — DONE 2026-05-31 (migration `024_fk_indexes.sql`, commit `f2908338`). 9 FK indexes emessi con `IF NOT EXISTS`.
+  - ✅ **P2 — `unused_index` × 9 occorrenze** — DONE 2026-05-31 (migration `026_drop_unused_indexes.sql`, commit `59638b08`). 9 unused indexes droppati.
   - ⬜ **P2 — `auth_db_connections_absolute` × 1** (INFO). Monitor connection pool, no action immediato.
-- **Priority:** 🟡 P1 per le FK indexes (impatto query planner), 🟢 LOW per unused index drop (no impact correttezza, solo storage/maintenance).
+- **Priority:** 🟢 LOW residual (solo monitoring connection pool).
 
 ##### ✅ [JHT-MONITORING-WEEKLY] Weekly window calibration — DONE 2026-05-26
 
