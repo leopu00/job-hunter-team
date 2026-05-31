@@ -63,7 +63,56 @@ MAILBOX_FILE = LOGS_DIR / "bridge-mailbox.jsonl"
 # isolato l'ultima session_id) il calcolo è troppo rumoroso. Salta tick.
 MIN_EFFECTIVE_MIN = 5.0
 
-TARGET_BAND_CENTER = float(os.environ.get("JHT_PACING_TARGET_PCT", "92"))
+# Target band center per-provider. Override globale via JHT_PACING_TARGET_PCT
+# resta supportato per backward-compat (es. tuning manuale durante debug).
+# Senza override: lookup dal provider attivo, fallback 92 se sconosciuto.
+#
+# Kimi 88% — variance osservata ±10-15% per finestra (vs Claude ±5%, Codex
+# ±4%) → buffer più alto evita sforare il cap durante gli swing. Vedi
+# [JHT-KIMI-OPTIMIZE] e docs/about/RESULTS.md case study #3.
+# Codex/Claude 92% — default storico, calibrato dal case study Codex Pro
+# (run 34.84h, proj mean 91%, observed in produzione 91-92%).
+_PROVIDER_TARGET_BAND = {
+    "openai":      92.0,
+    "codex":       92.0,
+    "codex-plus":  92.0,
+    "claude":      92.0,
+    "claude-max5": 92.0,
+    "kimi":        88.0,
+}
+
+
+def _read_active_provider_for_target() -> str:
+    """Provider attivo da $JHT_HOME/jht.config.json. 'openai' default su fail.
+
+    Volutamente standalone (no import di provider_capacity) per evitare il
+    cycle di dipendenze: il TARGET_BAND_CENTER viene risolto all'import-time
+    del modulo, prima che _load_target_helpers() carichi pcap.
+    """
+    try:
+        jht_home = Path(os.environ.get("JHT_HOME") or str(Path.home() / ".jht"))
+        cfg_path = jht_home / "jht.config.json"
+        with cfg_path.open(encoding="utf-8") as f:
+            return (json.load(f).get("active_provider") or "openai").lower()
+    except (OSError, json.JSONDecodeError):
+        return "openai"
+
+
+def _resolve_target_band_center() -> float:
+    """Risolve il target band center applicando override env > provider map."""
+    env_override = os.environ.get("JHT_PACING_TARGET_PCT")
+    if env_override:
+        try:
+            return float(env_override)
+        except ValueError:
+            print(f"[pacing-bridge] WARN JHT_PACING_TARGET_PCT='{env_override}' "
+                  f"non parsabile come float, uso provider map",
+                  file=sys.stderr, flush=True)
+    prov = _read_active_provider_for_target()
+    return _PROVIDER_TARGET_BAND.get(prov, 92.0)
+
+
+TARGET_BAND_CENTER = _resolve_target_band_center()
 TARGET_SESSION = os.environ.get("JHT_PACING_TARGET_SESSION", "CAPITANO")
 TICK_MIN = int(os.environ.get("JHT_PACING_TICK_MIN", "15"))
 MIN_PCT_H = float(os.environ.get("JHT_PACING_MIN_PCT_H", "0.20"))
