@@ -198,9 +198,9 @@ Entrambe le event lane sono ora osservate (commit `4774c190` + `093027c1`, 2026-
 
 3. ✅ **P1 — Reader agenti per `position_feedback`** *(DONE 2026-05-31, commit `093027c1`)*. Skill `shared/skills/feedback_query.py check <legacy_id>` + `agents/_skills/feedback-query/SKILL.md`. **Scorer**: Step 5 obbligatorio post-score-base con multiplier (like ×1.10, star ×1.15, dislike ×0.85, hide → excluded), cap 100. **Scout**: skill esposta come signal opzionale (skip per-posizione gia' coperto da SC-05 dedup). Fallback neutro su cloud-disabled. **Out of scope MVP** (tracciato come follow-up): aggregato `recent` company-level per Scout (richiede endpoint dedicato + push delta) e Capitano routing su feedback ricorrenti.
 
-4. **P1 — Subscriber on-demand**. Spawn/kill dei 2 long-poller (team-state + team-commands) agganciato a `team_state.is_running`. Team giù → polling giù → 0 carico Vercel/Supabase. Team su → polling vivo per UX chat. *Già implementato per `cloud daemon push` (halt-flag), manca per i subscriber pull.*
+4. 🟢 **P1 — Subscriber on-demand** *(scope-reduced 2026-05-31)*. Kill/spawn duro di `team-state-reconciler` e `realtime-subscriber` agganciato a `is_running` NON è fattibile: sono i poller che ricevono il `should_run=true` dal browser. Per `user-messages-poller` il problema è coperto dal polling adattivo (#5). Follow-up: tier `deep-idle` (60s+) per `team-state-reconciler` quando team is_running=false stabilmente.
 
-5. **P1 — Polling adattivo basato su user activity**. Container regola interval in base a `team_state.last_user_activity_at`: chat attiva (<2min) → 3s, dashboard idle (2-15min) → 30s, abbandonata → off. Auto-sostenibilità del costo polling.
+5. ✅ **P1 — Polling adattivo** *(DONE 2026-05-31, commit `acc293de`, scope-reduced)*. `user-messages-poller` 3 tier: `active` 5s, `idle` 30s, `deep-idle` 120s. Proxy onesto su "ultima consegna riuscita" invece di `team_state.last_user_activity_at` (che richiederebbe heartbeat browser-side). Riduce carico Vercel ~90% in caso idle h24. Follow-up: estendere lo stesso pattern a `team-state-reconciler` (tier 5s/15s/30s) e implementare il heartbeat browser-side come second-stage.
 
 #### P1 — Hardening + UX
 
