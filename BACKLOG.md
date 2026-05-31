@@ -1283,7 +1283,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 
 ## 📦 PACKAGING & DISTRIBUTION
 
-### 🔴 [PACING-WEEKLY-EXHAUSTION] Team esaurisce weekly cap Codex in ~2 giorni invece di 7
+### 🟡 [PACING-WEEKLY-EXHAUSTION] Team esaurisce weekly cap Codex in ~2 giorni invece di 7 — MVP DONE 2026-05-31
 
 - **Sintomo:** la Sentinella ottimizza il singolo cycle 5h (target 92% per finestra) ma **ignora il weekly cap** di Codex ProLite. Risultato: in 2-3 giorni di operatività intensa il team consuma il 100% del weekly e poi gli agenti smettono di rispondere per 4-5 giorni fino al reset settimanale.
 - **Evidenza misurata 2026-05-20 (VPS1, primo giro reale beta):**
@@ -1304,7 +1304,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   - Una finestra 5h al ritmo sostenibile chiude a 22% (vs target 92% attuale)
   - Quindi: o **target band 22% per finestra H24** oppure **finestre intensive 92% ma con periodi off**
 - **Fix proposti (in ordine di preferenza):**
-  - 🥇 **Estendere Sentinella con dial weekly**: nuovo campo `weekly_proj` nel `pacing-bridge-state.json` che proietta il consumo a 7 giorni; la Sentinella usa il minimo tra cycle-target e weekly-target per decidere il throttle. Già discusso nelle convo del 2026-05-20 ma non implementato.
+  - ✅ **Estendere Sentinella con dial weekly** — DONE 2026-05-31. `work_hours_target.compute_target` ora accetta `weekly_used_pct` + `weekly_reset_at_utc`; il pacing-bridge li legge dal sample sentinel (`weekly_usage`, `weekly_reset_at_unix`) e distribuisce solo il budget weekly **residuo** sulle ore ON rimanenti fino al reset (invece di assumere sempre 100% su 7 giorni puliti). Su 24/7 con weekly al 60% e 72h al reset il target finestra scende da 20.25% (legacy) a 18.9% (weekly-aware); il throttle si stringe man mano che `weekly_usage` cresce, auto-correggendo. Nuovi campi in `pacing-bridge-state.json`: `weekly_remaining_pct`, `weekly_window_source`, source tag `schedule+ratio+weekly`. Self-test esteso con 4 nuovi scenari (38/38 verdi).
   - 🥈 **Pacing scheduler esterno**: un cron-like che spegne il team per X ore al giorno (es. spegnimento notturno) per spalmare il consumo. Meno fine-grained ma molto semplice.
   - 🥉 **Mode "marathon"**: configurazione utente (`jht.config.json.pacing.mode = "marathon"`) che imposta target_band_center=22% invece di 92%. Default = "sprint" attuale.
   - 🥉 **Telemetria pre-allarme**: notifica Telegram all'utente "weekly al 50%, mancano X giorni al reset" così l'utente decide se fermare/rallentare. Banale (1 cron + 1 send).

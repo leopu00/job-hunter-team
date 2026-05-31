@@ -164,6 +164,8 @@ def compute_target(
     config: dict | None = None,
     default_target_band_pct: float = _DEFAULT_TARGET_BAND_PCT,
     weekly_pct_total: float = 100.0,
+    weekly_used_pct: float | None = None,
+    weekly_reset_at_utc: datetime | None = None,
 ) -> dict:
     """Calcola il target di consumo per la finestra 5h corrente.
 
@@ -183,6 +185,21 @@ def compute_target(
       weekly_pct_total           — totale weekly budget % da distribuire
                                    (default 100). Utile per A/B (es. 90 per
                                    tenere 10% di buffer di sicurezza).
+      weekly_used_pct            — % del weekly cap già consumata (osservata
+                                   dal sentinel-bridge `weekly_usage`). Se
+                                   fornita, la distribuzione usa il residuo
+                                   `max(0, weekly_pct_total - weekly_used_pct)`
+                                   invece del totale, prevenendo l'esaurimento
+                                   precoce del weekly cap in scenari 24/7
+                                   (bug [PACING-WEEKLY-EXHAUSTION]). None →
+                                   comportamento legacy (assume 0% speso).
+      weekly_reset_at_utc        — quando si resetta il weekly cap (da
+                                   sentinel-bridge `weekly_reset_at_unix`).
+                                   Se fornita, `h_weekly` (ore ON nel periodo
+                                   di distribuzione) viene calcolata sul
+                                   residuo `[now → reset]` invece di 7 giorni
+                                   pieni in avanti. None → comportamento
+                                   legacy (assume 7 giorni davanti).
 
     Output:
       work_phase                 — "ON" se now è in finestra, "OFF" altrimenti
@@ -192,7 +209,12 @@ def compute_target(
       target_pct_of_weekly       — % del weekly cap attesa nella finestra
                                    (utile per UI / debug)
       active_hours_in_window     — ore ON che ricadono nei 5h correnti
-      weekly_active_hours        — ore ON totali nella settimana corrente
+      weekly_active_hours        — ore ON nel periodo di distribuzione
+                                   (residuo a reset se forniti i parametri
+                                   weekly-aware, altrimenti 168h forward)
+      weekly_remaining_pct       — % weekly disponibile per la distribuzione
+                                   (= weekly_pct_total - weekly_used_pct, o
+                                   weekly_pct_total se used non fornito)
       window_cap_pct_of_weekly   — eco del ratio usato (None = fallback)
       next_phase_transition_at   — ISO string del prossimo ON→OFF / OFF→ON
       reason                     — diagnostica testuale per i log
@@ -204,19 +226,34 @@ def compute_target(
     h_in_window = active_hours_in_range(
         window_start_utc, window_end_utc, cfg
     )
-    h_weekly = active_hours_in_range(
-        window_start_utc, window_start_utc + timedelta(days=7), cfg
-    )
+
+    # Periodo di distribuzione weekly: residuo [now → reset] se conosciuto,
+    # altrimenti 7 giorni in avanti dal bordo finestra (comportamento legacy).
+    if weekly_reset_at_utc is not None and weekly_reset_at_utc > now_utc:
+        h_weekly = active_hours_in_range(now_utc, weekly_reset_at_utc, cfg)
+        weekly_window_source = "residual_to_reset"
+    else:
+        h_weekly = active_hours_in_range(
+            window_start_utc, window_start_utc + timedelta(days=7), cfg
+        )
+        weekly_window_source = "rolling_7d"
+
+    # Budget weekly residuo: totale meno quello già speso (clamp ≥ 0).
+    if isinstance(weekly_used_pct, (int, float)):
+        weekly_remaining_pct = max(0.0, weekly_pct_total - float(weekly_used_pct))
+    else:
+        weekly_remaining_pct = weekly_pct_total
 
     _, next_at = next_phase_transition(now_utc, cfg)
 
-    if h_weekly <= 0 or h_in_window <= 0:
-        # Niente ore attive nella settimana o nella finestra corrente →
-        # OFF totale. Sentinella tradurrà target=0 in pausa/idle.
+    if h_weekly <= 0 or h_in_window <= 0 or weekly_remaining_pct <= 0:
+        # Niente ore attive nella settimana, fuori finestra, o weekly cap
+        # già esaurito → OFF totale. Sentinella tradurrà target=0 in
+        # pausa/idle.
         target_of_weekly = 0.0
         target_of_window_cap = 0.0
     else:
-        target_of_weekly = weekly_pct_total * (h_in_window / h_weekly)
+        target_of_weekly = weekly_remaining_pct * (h_in_window / h_weekly)
         if window_cap_pct_of_weekly is None or window_cap_pct_of_weekly <= 0:
             # Weekly-unlimited (Kimi) o ratio sconosciuto: fallback al band
             # center classico durante le ore ON. Il throttle Sentinella si
@@ -229,6 +266,13 @@ def compute_target(
                 target_of_weekly / window_cap_pct_of_weekly * 100.0
             )
 
+        # Sommiamo all'usage_now per riferirci al target assoluto a fine
+        # finestra (Sentinella confronta con `usage` corrente). Il ratio
+        # weekly è incrementale (% residua nella finestra) — vedi callsite
+        # pacing-bridge dove vel_target = (target_pct - usage_now)/h_to_reset.
+        # Non addizioniamo usage primary qui per non rompere semantica
+        # legacy del bridge (target_pct è già "%5h cap da raggiungere").
+
     # Safety clamp: la Sentinella non può atterrare oltre il 100% del cap 5h
     # (sarebbe overflow) né sotto 0. Se l'algoritmo produce >100, vuol dire
     # che il weekly budget richiesto eccede il cap della finestra → tetto.
@@ -239,7 +283,16 @@ def compute_target(
         if window_cap_pct_of_weekly in (None, 0)
         else "ratio"
     )
-    reason = f"phase={phase} mode={ratio_tag} h_in_window={h_in_window:.2f}"
+    weekly_tag = (
+        "weekly-aware"
+        if weekly_used_pct is not None or weekly_reset_at_utc is not None
+        else "weekly-legacy"
+    )
+    reason = (
+        f"phase={phase} mode={ratio_tag} {weekly_tag} "
+        f"h_in_window={h_in_window:.2f} h_weekly={h_weekly:.2f} "
+        f"weekly_rem={weekly_remaining_pct:.1f}"
+    )
 
     return {
         "work_phase": phase,
@@ -247,6 +300,8 @@ def compute_target(
         "target_pct_of_weekly": round(target_of_weekly, 3),
         "active_hours_in_window": round(h_in_window, 3),
         "weekly_active_hours": round(h_weekly, 3),
+        "weekly_remaining_pct": round(weekly_remaining_pct, 3),
+        "weekly_window_source": weekly_window_source,
         "window_cap_pct_of_weekly": window_cap_pct_of_weekly,
         "next_phase_transition_at": (
             next_at.isoformat() if next_at else None
@@ -409,7 +464,92 @@ def _self_test() -> int:
         at == datetime(2026, 6, 1, 9, 0, tzinfo=timezone.utc),
     )
 
-    print("─ test 8: timezone Europe/Rome — office 9-18 locali")
+    print("─ test 8a: 24/7 weekly speso 60% con 72h al reset → throttle aggressivo")
+    # Scenario PACING-WEEKLY-EXHAUSTION: VPS 24/7, team ha già bruciato
+    # 60% weekly e mancano 72h al reset. Senza weekly-aware il target
+    # continua a essere 100/168×5/14.7×100 ≈ 20.3% per finestra.
+    # Con weekly-aware: rimangono 40% su 72h ON → per finestra 5h:
+    #   target_weekly = 40 × 5/72 = 2.78%
+    #   target_cap    = 2.78 / 14.7 × 100 ≈ 18.89%
+    # Più basso del baseline → throttle più aggressivo per non sforare.
+    reset_at = mon10 + timedelta(hours=72)
+    r_base = compute_target(mon10, win_start, win_end, 14.7, ALWAYS)
+    r_aware = compute_target(
+        mon10, win_start, win_end, 14.7, ALWAYS,
+        weekly_used_pct=60.0, weekly_reset_at_utc=reset_at,
+    )
+    failures += ok(
+        "baseline 24/7 target_cap ≈ 20.3",
+        abs(r_base["current_window_target_pct"] - 20.3) < 0.2,
+    )
+    failures += ok(
+        "weekly-aware target_cap ≈ 18.9 (< baseline)",
+        abs(r_aware["current_window_target_pct"] - 18.9) < 0.3,
+    )
+    failures += ok(
+        "weekly_remaining_pct = 40",
+        abs(r_aware["weekly_remaining_pct"] - 40.0) < 0.01,
+    )
+    failures += ok(
+        "h_weekly = 72 (residuo, non 168)",
+        abs(r_aware["weekly_active_hours"] - 72.0) < 0.01,
+    )
+    failures += ok(
+        "source = residual_to_reset",
+        r_aware["weekly_window_source"] == "residual_to_reset",
+    )
+
+    print("─ test 8b: weekly cap esaurito (≥ 100%) → target 0")
+    r_exhausted = compute_target(
+        mon10, win_start, win_end, 14.7, ALWAYS,
+        weekly_used_pct=100.0, weekly_reset_at_utc=reset_at,
+    )
+    failures += ok(
+        "weekly esaurito → target_cap 0",
+        r_exhausted["current_window_target_pct"] == 0.0,
+    )
+    failures += ok(
+        "weekly esaurito → remaining 0",
+        r_exhausted["weekly_remaining_pct"] == 0.0,
+    )
+
+    print("─ test 8c: weekly-aware office hours (45h sett, 30h restano, 50% speso)")
+    # Office hours: 30h ON nelle prossime 72h (3 giorni Mer-Ven 9-18 = 27h
+    # + parziali). 50% weekly residuo. Calcolo: target_weekly = 50 × 5/h_remaining_on.
+    # Verifichiamo che il source sia residual e che il valore sia coerente.
+    r_office_aware = compute_target(
+        mon10, win_start, win_end, 14.7, OFFICE,
+        weekly_used_pct=50.0, weekly_reset_at_utc=reset_at,
+    )
+    failures += ok(
+        "office weekly-aware phase ON",
+        r_office_aware["work_phase"] == "ON",
+    )
+    failures += ok(
+        "office weekly-aware remaining 50",
+        abs(r_office_aware["weekly_remaining_pct"] - 50.0) < 0.01,
+    )
+    failures += ok(
+        "office weekly-aware source residual",
+        r_office_aware["weekly_window_source"] == "residual_to_reset",
+    )
+
+    print("─ test 8d: weekly-aware backward-compat (no params → legacy path)")
+    r_legacy = compute_target(mon10, win_start, win_end, 14.7, ALWAYS)
+    failures += ok(
+        "legacy source = rolling_7d",
+        r_legacy["weekly_window_source"] == "rolling_7d",
+    )
+    failures += ok(
+        "legacy h_weekly = 168",
+        abs(r_legacy["weekly_active_hours"] - 168.0) < 0.01,
+    )
+    failures += ok(
+        "legacy remaining = 100",
+        r_legacy["weekly_remaining_pct"] == 100.0,
+    )
+
+    print("─ test 9: timezone Europe/Rome — office 9-18 locali")
     rome_cfg = {
         "team": {
             "working_hours": {
