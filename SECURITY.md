@@ -76,5 +76,5 @@ Full audit trail and remaining gaps: [`docs/security/`](docs/security/).
 ## Versioning
 
 **Policy version:** 1.0
-**Last updated:** 2026-04-30
+**Last updated:** 2026-05-31
 **Next review:** at the first public release.
