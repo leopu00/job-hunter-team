@@ -103,7 +103,7 @@ UPDATE SQLite locale diretto → Capitano pickup → Scrittore
 (push daemon propaga in cloud DOPO, come feedback UX cross-device)
 ```
 
-**Gap critico noto**: se l'utente clicca "Scrivi CV" via web quando il container è **fermo**, il PATCH best-effort scrive `write_requested=true` su Supabase, ma **non esiste un pull cloud→SQLite** al riavvio. Il flag resta ghost in cloud finché non viene rifatto manualmente o finché il container non sync-down. Stessa classe del gap per `team_state.should_run` post-restart (vedi edge case sotto).
+**Gap critico (chiuso 2026-05-31)**: prima, se l'utente cliccava "Scrivi CV" via web quando il container era fermo, il PATCH best-effort scriveva `write_requested=true` su Supabase, ma **non esisteva pull cloud→SQLite** al riavvio → flag ghost in cloud. Adesso chiuso da `GET /api/cloud-sync/pull-desired-state` + `jht cloud pull-desired-state` (wire al boot di `startActionContainer` + tick periodico nel `cloud daemon`). Vedi Stato implementazione → Done.
 
 ## 📜 Incident history — RobertHalf redux (2026-05-19)
 
@@ -142,7 +142,7 @@ Il refactor `team_state` (mig 019-023, commit `627e7ab5…e6420371`) ha introdot
 
 Il writer-on-demand (mig 024, 2026-05-29) ha esteso lo stesso pattern alle **decisioni per-posizione**: `positions.write_requested` è desired-state, il Capitano è il reconciler che lo osserva e agisce.
 
-Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **state scritte ma non ancora osservate**: schema + RLS + Realtime publication esistono, ma il container non ha reader → l'utente le scrive nel vuoto. Sono i gap P1 #6 e #7 sotto.
+Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **state scritte ma non ancora osservate**: schema + RLS + Realtime publication esistono, ma il container non ha reader → l'utente le scrive nel vuoto. Sono i gap P1 #2 e #3 nella sezione Pending sotto.
 
 ## 🛠️ Stato implementazione
 
@@ -186,77 +186,62 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
 
 ### ⬜ Pending (in ordine di priorità)
 
-#### Correttezza dati / flusso
+> Le voci ✅ DONE non sono ripetute qui — sono nella tabella **Done** sopra. Lista sotto = solo aperto.
 
-1. ✅ **P0 — Pull cloud→SQLite per desired-state al boot container** (DONE 2026-05-31, commit `af3302bd` + `1a918531` + `0ada62ea`). Loop chiuso end-to-end:
-   - GET `/api/cloud-sync/pull-desired-state?since=<ISO>&limit=<n>` su Supabase: ritorna `positions.{legacy_id, write_requested, write_requested_at, updated_at}` modificati dopo `since`. Auth Bearer `jht_sync_`, rate 30/min, lookback default 7gg, paginazione `cursor` + `has_more`. Filtro ampio: cattura sia toggle-on sia toggle-off (multi-device).
-   - `jht cloud pull-desired-state` (CLI): UPDATE puro SQLite (skip silente legacy_id non noti), cursor separato `.cloud-pull-cursor.json`, modi `--full --dry-run --silent --limit`.
-   - Wire in `cli/src/commands/team/start.js:startActionContainer` prima del bootstrap agenti (best-effort, timeout 15s, errori non bloccano).
-   - Route web `/api/positions/[id]/write-request` (commit `0ada62ea`): rilassato il check SQLite-mandatory; ora due path (Local: SQLite primary + best-effort cloud / Cloud: solo Supabase con embedded validate scores+applications). Senza questo step, il pull-at-boot serviva solo al recupero multi-device — ora copre anche "click via Vercel mentre container è fermo".
-   - Smoke e2e con mock server: toggle-on/off/skip-unknown applicati correttamente; cursor passato come `?since` al secondo pull.
-   - **Residuo**: il pull gira **solo al boot**. Per multi-device "live" (utente clicca su mobile mentre team gira su VPS) servirebbe tick periodico nel `cloud daemon` — vedi Pending P1 sotto.
+#### P0 — correttezza
 
-2. ✅ **P0 — DELETE propagation con tombstone** (DONE 2026-05-31, commit `6499b3db`). Architettura:
-   - **Supabase** (mig 025): `deleted_at TIMESTAMPTZ` su positions/applications/scores + index partial `WHERE deleted_at IS NULL` per dashboard hot-path. Scope ridotto: companies e position_highlights NON sono pushate oggi → nessun ghost-row issue.
-   - **SQLite V7** (`shared/skills/_db.py`): tabella `_tombstones (table_name, legacy_id, deleted_at)` con PK composta + 3 trigger BEFORE DELETE che fanno INSERT OR REPLACE prima del hard-delete locale. Gli agenti continuano a leggere SQLite senza filtri — zero impatto sul flusso esistente.
-   - **CLI push** (`cli/src/commands/cloud.js`): legge `_tombstones` come delta con cursor proprio in `.cloud-sync-cursor.json`, include nel POST payload, aggiorna cursor su MAX(deleted_at) post HTTP 200. Fallback no-op se DB pre-V7.
-   - **Web receive** (`web/app/api/cloud-sync/push/route.ts`): per `positions` UPDATE WHERE `(user_id, legacy_id) AND deleted_at IS NULL` (idempotente); per scores/applications lookup legacy_id → position_id UUID (riusa `legacyToUuid` dal positions upsert) e UPDATE analogo. Counter `tombstonesApplied` nel response.
-   - Smoke e2e: DELETE su 1 position+score+application → `_tombstones` popolato dai 3 trigger → payload contiene `tombstones[3]` → server applied=3.
-   - **Follow-up tracciato** (non in scope MVP):
-     - 30 query in `web/lib/queries.ts` da aggiornare con `.is('deleted_at', null)` filter — rischio regressioni non testabili da dev3, PR dedicato (anche perché finché tombstones non girano in prod, nessuna riga ha `deleted_at != NULL`).
-     - Cron Supabase hard-delete righe con `deleted_at < now() - 30d`.
-     - Refactor `db_migrate_v2.py` per pattern explicit (oggi i DELETE funzionano: il trigger scatta automaticamente quando il DB è V7, quindi a regime è no-op).
+1. **P0 — Riparare CI/Tests/Lint pre-esistenti** (falliscono da 2026-05-22): test smoke-finale con soglie sbagliate (41 vs ≥100 pagine), test ENOENT su file inesistenti (`web/(protected)/app/components/sidebar.tsx`), ESLint 100+ warning `any`. Non bloccanti per refactor ma falsano il signal di qualità.
 
-3. ✅ **P0 — Killswitch su 401/403 ripetuti** (DONE 2026-05-31, commit `07d0109a`). `handlePush` ritorna `{ok, authFailed}` (oggetto, callers void esistenti compatibili via optional chaining). Counter dedicato `MAX_CONSECUTIVE_AUTH_FAILS=3` nel daemon (più aggressivo del generico 5 perché token revocato non recupera mai). Killswitch: halt daemon + `INSERT pending_user_messages (agent='cloud-sync', kind='alert', body=...)` con istruzioni esplicite per riaprire il pairing. Reset counter SOLO su push success 200 (un 5xx transient non resetta — un 401 intermittente in mezzo a 500 deve comunque scattare). Smoke test: mock 401 stabile → killswitch al 3° push + riga in pending_user_messages; mock 401,401,200,... → log "push ok dopo 2 auth-fail, contatore auth resettato".
+#### P1 — Loop feedback agenti (chiude la bidirezionalità incompleta)
 
-4. **P0 — Riparare CI/Tests/Lint pre-esistenti** (falliscono da 2026-05-22): test smoke-finale con soglie sbagliate (41 vs ≥100 pagine), test ENOENT su file inesistenti (`web/(protected)/app/components/sidebar.tsx`), ESLint 100+ warning `any`. Non bloccanti per refactor ma falsano il signal di qualità.
-
-#### Loop feedback agenti (chiude la bidirezionalità incompleta)
-
-5. ✅ **P1 — Pull periodico nel daemon** (DONE 2026-05-31, commit `968ef913`). `handleDaemon` chiama `handlePullDesiredState({ silent: true })` ad ogni tick dopo il push (cadenza condivisa intervalSec, default 60s). Pull isolato dal counter consecutiveFails del push. Costo misurato +1 GET/tick, payload <100 righe tipico. Chiude il caso multi-device "live": utente clicca toggle su mobile mentre team gira su VPS → flag in cloud → container lo vede entro 60s, senza attendere il riavvio.
-
-6. **P1 — Reader container per `user_to_agent_messages`**. Schema, RLS, Realtime publication ✅ done; il browser scrive POST `/api/messages` e si aspetta che l'agente risponda; il container NON ascolta. Componenti:
+2. **P1 — Reader container per `user_to_agent_messages`**. Schema, RLS, Realtime publication ✅ done; il browser scrive POST `/api/messages` e si aspetta che l'agente risponda; il container NON ascolta. Componenti:
    - Nuovo subscriber `cli/src/lib/user-messages-poller.js` (o estensione del `team-state-reconciler.js`) che long-poll `/api/messages?status=pending&limit=20`
    - Claim atomic PATCH `status=processing` → forward al target agent via tmux send → PATCH `status=delivered` con response
    - Capitano in CC quando target ≠ capitano (per logica routing)
 
-6. **P1 — Reader agenti per `position_feedback`**. Schema, RLS ✅ done; il browser POSTa like/dislike/expired/wrong_location; nessun agente reagisce. Componenti:
+3. **P1 — Reader agenti per `position_feedback`**. Schema, RLS ✅ done; il browser POSTa like/dislike/expired/wrong_location; nessun agente reagisce. Componenti:
    - Skill `shared/skills/feedback_query.py` che ritorna i feedback recenti aggregati per company/role/location
    - Scout: leggere prima di ogni search batch → skip simili a dislike, deprioritize simili a expired/out_of_budget
    - Scorer: boost score per simili a like, malus per simili a dislike
    - Capitano: integrare nel prompt orientativo periodico
 
-7. **P1 — Subscriber on-demand**. Spawn/kill dei 2 long-poller (team-state + team-commands) agganciato a `team_state.is_running`. Team giù → polling giù → 0 carico Vercel/Supabase. Team su → polling vivo per UX chat. *Già implementato per `cloud daemon push` (halt-flag), manca per i subscriber pull.*
+4. **P1 — Subscriber on-demand**. Spawn/kill dei 2 long-poller (team-state + team-commands) agganciato a `team_state.is_running`. Team giù → polling giù → 0 carico Vercel/Supabase. Team su → polling vivo per UX chat. *Già implementato per `cloud daemon push` (halt-flag), manca per i subscriber pull.*
 
-8. **P1 — Polling adattivo basato su user activity**. Container regola interval in base a `team_state.last_user_activity_at`: chat attiva (<2min) → 3s, dashboard idle (2-15min) → 30s, abbandonata → off. Auto-sostenibilità del costo polling.
+5. **P1 — Polling adattivo basato su user activity**. Container regola interval in base a `team_state.last_user_activity_at`: chat attiva (<2min) → 3s, dashboard idle (2-15min) → 30s, abbandonata → off. Auto-sostenibilità del costo polling.
 
-#### Hardening + UX
+#### P1 — Hardening + UX
 
-9. **P1 — Daemon push alert quando ≥3 fail consecutivi** ✅ implementato in `cli/src/commands/cloud.js handleDaemon` (WARN_AT=3, MAX_CONSECUTIVE_FAILS=5 → auto-shutdown). Vale anche per 409 not_active_device (vedi commit `98118878`).
+6. **P1 — Disaster recovery: `jht cloud restore` esplicito**. Oggi il bootstrap (`cli/src/commands/cloud.js:141, :710`) si attiva **solo** dentro `enable`/`login`. Se il SQLite locale muore (disco pieno, container corrotto, reset onboarding parziale) non c'è un comando "ricostruisci da cloud". Serve comando dedicato + conferma esplicita ("Sovrascriverai N righe locali con M righe cloud, procedo?") per evitare overwrite accidentale. *Si compone con il pull desired-state già done ma è scopo distinto: full DB rebuild vs delta intent reconciliation.*
 
-10. **P1 — Disaster recovery: `jht cloud restore` esplicito**. Oggi il bootstrap (`cli/src/commands/cloud.js:141, :710`) si attiva **solo** dentro `enable`/`login`. Se il SQLite locale muore (disco pieno, container corrotto, reset onboarding parziale) non c'è un comando "ricostruisci da cloud". Serve comando dedicato + conferma esplicita ("Sovrascriverai N righe locali con M righe cloud, procedo?") per evitare overwrite accidentale. *Si compone con P0 #1 (pull desired-state) ma è scopo distinto: full DB rebuild vs delta intent reconciliation.*
+7. **P1 — `JHT-LOCAL-NO-API`**: `web/lib/queries.ts` switcha su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx`.
 
-11. **P1 — `JHT-LOCAL-NO-API`**: `web/lib/queries.ts` switcha su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx`.
-
-12. **P1 — Cutover `team_commands`→`team_state` finale + rename `realtime-subscriber.js`**. UI bulk Start/Stop ✅ done. Resta:
+8. **P1 — Cutover `team_commands`→`team_state` finale + rename `realtime-subscriber.js`**. UI bulk Start/Stop ✅ done. Resta:
    - `handleAction` per singolo agente ancora su `useTeamCommandPoller` → migrare a `team_state.agents_enabled`
    - Verifica E2E + drop `team_commands` (Step 6) + rimozione `realtime-subscriber.js` (o suo restyle come reader generico di `user_to_agent_messages`)
    - Il nome `realtime-subscriber.js` è ingannevole (vedi nota architetturale sopra), rinominare in `team-commands-poller.js` finché vive
 
-13. **P2 — Scout RobertHalf parser fix**: con CHECK SQLite in place (P0 #2 — già ✅ in commit `3602d42e`), il bug emerge alla prima esecuzione (field swap title↔location).
+#### P1 — Follow-up tombstone (post commit `6499b3db`)
 
-14. **P2 — Account Supabase mismatch warning UI**. Memoria `project_supabase_dual_accounts`: due account Google distinti = due pool isolati. Single-team enforcement opera per-account, non avvisa se l'utente è loggato col Google sbagliato rispetto al pairing-token del team. Aggiungere check: al boot del team, confronta `auth.user.email` del token con l'email salvata in `cloud.json` → se diverso, blocco push + notifica.
+9. **P1 — Filtro `deleted_at IS NULL` sulle query dashboard**. ~30 SELECT su positions/scores/applications in `web/lib/queries.ts` (e ~10 in `web/lib/local-queries.ts`, ma localmente è hard-delete → low priority). Rischio basso oggi: finché il flusso tombstone non gira massicciamente in prod, nessuna riga ha `deleted_at != NULL`. PR dedicato con test di non-regressione.
 
-15. **P2 — Schema drift alert su fallback full-read**. `cli/src/commands/cloud.js:380-400` cade silenziosamente da delta-only a full-read quando manca `updated_at`. Resiliente ma maschera drift.
+10. **P1 — Cron Supabase hard-delete soft-deleted >30d**. Cleanup periodico righe `WHERE deleted_at < now() - interval '30 days'` su positions/scores/applications. pg_cron extension già disponibile.
 
-16. **P2 — Canary endpoint** per distinguere "Supabase saturo" da "Vercel slow".
+#### P2
+
+11. **P2 — Scout RobertHalf parser fix**: con SQLite CHECK constraints in place (commit `3602d42e`), il bug emerge alla prima esecuzione (field swap title↔location).
+
+12. **P2 — Account Supabase mismatch warning UI**. Memoria `project_supabase_dual_accounts`: due account Google distinti = due pool isolati. Single-team enforcement opera per-account, non avvisa se l'utente è loggato col Google sbagliato rispetto al pairing-token del team. Aggiungere check: al boot del team, confronta `auth.user.email` del token con l'email salvata in `cloud.json` → se diverso, blocco push + notifica.
+
+13. **P2 — Schema drift alert su fallback full-read**. `cli/src/commands/cloud.js:380-400` cade silenziosamente da delta-only a full-read quando manca `updated_at`. Resiliente ma maschera drift.
+
+14. **P2 — Canary endpoint** per distinguere "Supabase saturo" da "Vercel slow".
 
 **Edge case noto post-refactor 2026-05-25**: il `reconciler` legge solo `team_state.is_running` dal DB, non sa di tmux session locali. Scenario "DB stale vs container running" può accadere se:
    (a) utente clicca Stop, DB → `should_run=false` `is_running=false`
    (b) container muore prima di applicare lo stop (es. SIGKILL brutale)
    (c) container restart, pid1 vede `.team-halted.flag` assente (non era stato creato) → auto-start agenti
    (d) reconciler primo poll: vede `should_run=false && is_running=false` → noop, ma agenti girano
-   Risultato: agenti operativi nonostante DB dice stopped. Workaround manuale: SQL `UPDATE team_state SET should_run=true` per nudge reconciler, poi click Stop. Fix proper richiede al reconciler verifica reale tmux al boot (tmux ls + parse). *Discovered nel test E2E 2026-05-25 con Leone*. **Stessa famiglia del P0 #1: serve riconciliazione boot-time tra stato locale osservato e desired-state cloud.**
+   Risultato: agenti operativi nonostante DB dice stopped. Workaround manuale: SQL `UPDATE team_state SET should_run=true` per nudge reconciler, poi click Stop. Fix proper richiede al reconciler verifica reale tmux al boot (tmux ls + parse). *Discovered nel test E2E 2026-05-25 con Leone*. **Stessa famiglia del pull-at-boot già done (commit `1a918531`): serve estendere la riconciliazione boot-time anche al gap "tmux reale vs DB observed", non solo "desired vs observed" cloud.**
 
 ### 🎨 Web dashboard feature gap (Task #18, #19)
 
