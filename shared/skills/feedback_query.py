@@ -13,15 +13,32 @@ so the caller can continue without feedback — agents must never
 hard-fail on missing cloud signal.
 
 Output (single JSON line on stdout, exit 0 on ok=true, exit 1 on
-ok=false / unexpected error):
+ok=false / unexpected error). Schema esteso (mig 028, 2026-05-31):
 
-  {"ok": true, "legacy_id": "42", "latest_action": "dislike",
-   "count": 2, "actions": [{"action": "dislike", "created_at": "...",
-   "reason": "..."}, {"action": "like", "created_at": "..."}]}
+  {"ok": true, "legacy_id": "42",
+   "latest_action": "dislike",
+   "latest_direction": "less_like_this",
+   "count": 2,
+   "actions": [
+     {"action": "dislike", "created_at": "...", "reason": null,
+      "comment": "troppo senior", "score": 2,
+      "direction": "less_like_this"},
+     {"action": "like", "created_at": "...", "reason": null,
+      "comment": null, "score": null, "direction": null}
+   ]}
   {"ok": true, "legacy_id": "99", "latest_action": null,
-   "count": 0, "actions": []}
+   "latest_direction": null, "count": 0, "actions": []}
   {"ok": true, "legacy_id": "...", "latest_action": null,
-   "note": "no-signal (cloud-disabled)"}
+   "latest_direction": null, "note": "no-signal (cloud-disabled)"}
+
+Campi opzionali (NULL su righe pre-mig-028 o quando l'utente non li
+valorizza): `comment` (free text <=2000 char), `score` (intero 1-5),
+`direction` ('more_like_this' | 'less_like_this').
+
+`latest_direction` è il valore più recente di `direction` non-NULL nella
+storia della posizione, anche se non è l'ultima azione. Lo Scout lo
+consulta per decidere se replicare o evitare il pattern (stessa company,
+stesso role_family) in future ricerche.
 """
 
 import argparse
@@ -92,24 +109,37 @@ def check_position(legacy_id: str) -> dict:
             "ok": True,
             "legacy_id": str(legacy_id),
             "latest_action": None,
+            "latest_direction": None,
             "count": 0,
             "actions": [],
             "note": f"no-signal ({payload})",
         }
     feedback = payload.get("feedback") or []
     # La route GET ordina created_at DESC: feedback[0] è l'ultimo.
+    # mig 028: comment / score / direction sono opzionali, possono essere
+    # NULL su righe pre-estensione o quando l'utente non li valorizza.
     actions = [
         {
             "action": f["action"],
             "created_at": f.get("created_at"),
             "reason": f.get("reason"),
+            "comment": f.get("comment"),
+            "score": f.get("score"),
+            "direction": f.get("direction"),
         }
         for f in feedback
     ]
+    # latest_direction = il valore più recente di `direction` non-null
+    # (anche se non è l'ultima azione). Utile allo Scout per pattern-matching.
+    latest_direction = next(
+        (a["direction"] for a in actions if a["direction"]),
+        None,
+    )
     return {
         "ok": True,
         "legacy_id": str(legacy_id),
         "latest_action": actions[0]["action"] if actions else None,
+        "latest_direction": latest_direction,
         "count": len(actions),
         "actions": actions,
     }
