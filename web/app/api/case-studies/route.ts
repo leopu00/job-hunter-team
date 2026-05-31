@@ -7,9 +7,6 @@
 // Response shape is stable: { caseStudies: [...], coverage: [...] }.
 
 import { NextResponse } from "next/server";
-// @ts-expect-error node:sqlite richiede Node 22.5+ — runtime ok su Vercel/dev,
-// types @types/node attuali non lo dichiarano. Stesso pattern (dynamic) usato
-// in cli/src/commands/cloud.js. Quando aggiorniamo @types/node si rimuove.
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "node:fs";
