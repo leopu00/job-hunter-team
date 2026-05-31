@@ -9,6 +9,7 @@
 
 - **Modello scelto**: cloud Supabase = mirror **macro-event** del SQLite locale, non telemetria live. Container è source-of-truth dei *risultati* (positions/scores/applications).
 - **Bidirezionalità a "desired-state" (Kubernetes-style)**: per le **intenzioni utente** che entrano dal web (start/stop team, scrivi CV, like/dislike, chat) il flusso è **cloud → container**. La vecchia formula "push-only" del 2026-05-13 è **superata** dal refactor 2026-05-23 (mig 019-023) e dal writer-on-demand 2026-05-29 (mig 024).
+- **Recovery offline (2026-05-31)**: il loop writer-on-demand funziona anche quando l'utente clicca via web col container fermo. Endpoint `/api/cloud-sync/pull-desired-state` + `jht cloud pull-desired-state` wired al boot del team scaricano i flag desired-state da Supabase a SQLite locale; la route `/api/positions/[id]/write-request` ha path cloud-only quando SQLite non c'è.
 - **Granularità**: dal 2026-05-20 decimazione su `sentinel_ticks` (rimosso dal push); `team_commands` mantenuto in parallelo durante cutover verso `team_state`.
 - **Subscriber container**: oggi sono **2 long-poller HTTP** (no WebSocket Realtime), perché `cloud.json` ha solo `jht_sync_` token, non il refresh-token Supabase necessario per autenticare il WS user. Browser invece usa Realtime full.
 - **Local PC mode**: web bypassa Supabase, legge `jobs.db` direttamente via `web/lib/local-queries.ts`.
@@ -176,15 +177,21 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
 | **Writer-on-demand cloud-side** (mig 024 + `/api/positions/{id}/write-request` + push daemon) | `ac90fc94…a7558a75` | 2026-05-29 |
 | **Capitano lazy-spawn Scrittore on-demand** (RULE C-10 V6) | `a9596002` | 2026-05-29 |
 | **Telegram `/cv` handler + `write_request.py` skill** | `5cef55fc` | 2026-05-29 |
+| **Pull desired-state endpoint** `/api/cloud-sync/pull-desired-state` (Bearer auth, rate 30/min, lookback 7gg) | `af3302bd` | 2026-05-31 |
+| **CLI `jht cloud pull-desired-state` + wire al boot di `startActionContainer`** (cursor `.cloud-pull-cursor.json`, best-effort 15s timeout) | `1a918531` | 2026-05-31 |
+| **Route write-request supporta cloud-mode senza SQLite locale** (path A local-primary / path B cloud-only con embedded validate) | `0ada62ea` | 2026-05-31 |
 
 ### ⬜ Pending (in ordine di priorità)
 
 #### Correttezza dati / flusso
 
-1. **P0 — Pull cloud→SQLite per desired-state quando container restart**. Oggi se l'utente:
-   - clicca "Scrivi CV" su una position quando il container è fermo → `write_requested=true` su Supabase, niente su SQLite locale → al restart il container non lo vede mai
-   - clicca Start su `team_state.should_run` poi il container muore brutalmente prima del primo push, e al riavvio il reconciler vede solo lo stato cloud ma non sa che la sua copia SQLite è dietro
-   Serve uno step di **pull-at-boot** che, prima di accettare comandi locali, riconcili da Supabase i campi `write_requested`, `write_requested_at`, eventuali `feedback` e cliccate utente in finestra. Componenti: GET `/api/cloud-sync/pull-desired-state?since=<last_pull_at>` lato web; client lato container in `cli/src/commands/cloud.js` invocato al boot di `jht team start` e a ogni reconnect post-network-drop. *Promosso da P1 a P0 perché chiude il gap di silent-loss del bottone "Scrivi CV"*.
+1. ✅ **P0 — Pull cloud→SQLite per desired-state al boot container** (DONE 2026-05-31, commit `af3302bd` + `1a918531` + `0ada62ea`). Loop chiuso end-to-end:
+   - GET `/api/cloud-sync/pull-desired-state?since=<ISO>&limit=<n>` su Supabase: ritorna `positions.{legacy_id, write_requested, write_requested_at, updated_at}` modificati dopo `since`. Auth Bearer `jht_sync_`, rate 30/min, lookback default 7gg, paginazione `cursor` + `has_more`. Filtro ampio: cattura sia toggle-on sia toggle-off (multi-device).
+   - `jht cloud pull-desired-state` (CLI): UPDATE puro SQLite (skip silente legacy_id non noti), cursor separato `.cloud-pull-cursor.json`, modi `--full --dry-run --silent --limit`.
+   - Wire in `cli/src/commands/team/start.js:startActionContainer` prima del bootstrap agenti (best-effort, timeout 15s, errori non bloccano).
+   - Route web `/api/positions/[id]/write-request` (commit `0ada62ea`): rilassato il check SQLite-mandatory; ora due path (Local: SQLite primary + best-effort cloud / Cloud: solo Supabase con embedded validate scores+applications). Senza questo step, il pull-at-boot serviva solo al recupero multi-device — ora copre anche "click via Vercel mentre container è fermo".
+   - Smoke e2e con mock server: toggle-on/off/skip-unknown applicati correttamente; cursor passato come `?since` al secondo pull.
+   - **Residuo**: il pull gira **solo al boot**. Per multi-device "live" (utente clicca su mobile mentre team gira su VPS) servirebbe tick periodico nel `cloud daemon` — vedi Pending P1 sotto.
 
 2. **P0 — DELETE propagation con tombstone**. Il push è solo UPSERT: una riga cancellata in SQLite locale (`web/app/api/cloud-sync/push/route.ts`, `cli/src/commands/cloud.js:490-510`) **non viene mai comunicata a Supabase** e resta ghost in cloud per sempre. Componenti:
    - Colonna `deleted_at TIMESTAMPTZ` su tutte le tabelle sincronizzate (positions, applications, contacts, scores, position_highlights), default NULL
@@ -198,7 +205,9 @@ Le altre due event lanes (`user_to_agent_messages`, `position_feedback`) sono **
 
 #### Loop feedback agenti (chiude la bidirezionalità incompleta)
 
-5. **P1 — Reader container per `user_to_agent_messages`**. Schema, RLS, Realtime publication ✅ done; il browser scrive POST `/api/messages` e si aspetta che l'agente risponda; il container NON ascolta. Componenti:
+5. **P1 — Pull periodico nel daemon** *(follow-up del pull-at-boot)*. `jht cloud pull-desired-state` oggi gira solo al boot. In-team il toggle si propaga via push delta-only (~30s, push container→cloud → poi un secondo browser vede aggiornata). Caso scoperto: utente clicca toggle su mobile mentre team gira su VPS → flag in cloud → container non lo vede finché non riavvia. Aggiungere tick (60s consigliato) nel `cloud daemon` loop. Costo: +1 GET/min/utente, lean payload (~4 campi × <10 righe tipico).
+
+6. **P1 — Reader container per `user_to_agent_messages`**. Schema, RLS, Realtime publication ✅ done; il browser scrive POST `/api/messages` e si aspetta che l'agente risponda; il container NON ascolta. Componenti:
    - Nuovo subscriber `cli/src/lib/user-messages-poller.js` (o estensione del `team-state-reconciler.js`) che long-poll `/api/messages?status=pending&limit=20`
    - Claim atomic PATCH `status=processing` → forward al target agent via tmux send → PATCH `status=delivered` con response
    - Capitano in CC quando target ≠ capitano (per logica routing)
