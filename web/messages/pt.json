@@ -2,7 +2,13 @@
   "metadata": {
     "title": "Job Hunter Team",
     "description": "Uma equipe de agentes IA que encontram um emprego para você. Open source, local, privado.",
-    "keywords": ["busca de emprego", "agentes IA", "procurar trabalho", "candidaturas automáticas", "open source"]
+    "keywords": [
+      "busca de emprego",
+      "agentes IA",
+      "procurar trabalho",
+      "candidaturas automáticas",
+      "open source"
+    ]
   },
   "common": {
     "loading": "Carregando...",
@@ -49,7 +55,7 @@
     "details": "Detalhes",
     "settings": "Configurações",
     "profile": "Perfil",
-    "dashboard": "Dashboard",
+    "dashboard": "Painel",
     "logout": "Sair",
     "login": "Entrar",
     "signup": "Cadastrar-se",
@@ -58,7 +64,7 @@
     "goodbye": "Até logo",
     "success": "Sucesso",
     "warning": "Aviso",
-    "info": "Info",
+    "info": "Informações",
     "confirm": "Confirmar",
     "dismiss": "Descartar",
     "done": "Concluído",
@@ -120,7 +126,7 @@
     "custom": "Personalizado",
     "manual": "Manual",
     "automatic": "Automático",
-    "auto": "Auto",
+    "auto": "Automático",
     "manualMode": "Modo manual",
     "autoMode": "Modo automático",
     "on": "Ativado",
@@ -1281,10 +1287,10 @@
         "agents": "AGENTES",
         "data": "DADOS",
         "tools": "FERRAMENTAS",
-        "config": "CONFIG"
+        "config": "CONFIGURAÇÃO"
       },
       "links": {
-        "dashboard": "Dashboard",
+        "dashboard": "Painel",
         "deploy": "Deploy",
         "gateway": "Gateway",
         "status": "Status",
@@ -1379,7 +1385,7 @@
       "badge": "fluxo de trabalho",
       "title": "Como funciona",
       "configure": {
-        "title": "Configure",
+        "title": "Configurar",
         "description": "Defina seu perfil, suas habilidades e suas preferências uma única vez."
       },
       "agentsWork": {
