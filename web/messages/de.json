@@ -2,7 +2,13 @@
   "metadata": {
     "title": "Job Hunter Team",
     "description": "Ein Team von KI-Agenten, das Jobs für dich findet. Open Source, lokal, privat.",
-    "keywords": ["Jobsuche", "KI-Agenten", "Stellensuche", "automatische Bewerbungen", "Open Source"]
+    "keywords": [
+      "Jobsuche",
+      "KI-Agenten",
+      "Stellensuche",
+      "automatische Bewerbungen",
+      "Open Source"
+    ]
   },
   "common": {
     "loading": "Lädt...",
@@ -120,7 +126,7 @@
     "custom": "Benutzerdefiniert",
     "manual": "Manuell",
     "automatic": "Automatisch",
-    "auto": "Auto",
+    "auto": "Automatisch",
     "manualMode": "Manueller Modus",
     "autoMode": "Automatikmodus",
     "on": "An",
@@ -200,7 +206,7 @@
     "tier": "Kategorie",
     "type": "Typ",
     "category": "Kategorie",
-    "tag": "Tag",
+    "tag": "Etikett",
     "label": "Bezeichnung",
     "name": "Name",
     "title": "Titel",
@@ -222,8 +228,8 @@
     "action": "Aktion",
     "operation": "Vorgang",
     "task": "Aufgabe",
-    "job": "Job",
-    "workflow": "Workflow",
+    "job": "Stelle",
+    "workflow": "Arbeitsablauf",
     "pipeline": "Pipeline",
     "stage": "Phase",
     "step": "Schritt",
@@ -266,7 +272,7 @@
     "risk": "Risiko",
     "issue": "Problem",
     "problem": "Problem",
-    "bug": "Bug",
+    "bug": "Fehler",
     "failure": "Fehler",
     "crash": "Absturz",
     "exception": "Ausnahme",
@@ -286,7 +292,7 @@
     "fix": "Korrektur",
     "solution": "Lösung",
     "resolution": "Lösung",
-    "workaround": "Workaround",
+    "workaround": "Behelfslösung",
     "alternative": "Alternative",
     "option": "Option",
     "choice": "Auswahl",
@@ -350,11 +356,11 @@
     "package": "Paket",
     "plugin": "Plugin",
     "extension": "Erweiterung",
-    "add-on": "Add-on",
+    "add-on": "Erweiterung",
     "integration": "Integration",
     "interface": "Schnittstelle",
     "api": "API",
-    "endpoint": "Endpoint",
+    "endpoint": "Endpunkt",
     "route": "Route",
     "path": "Pfad",
     "url": "URL",
@@ -1146,7 +1152,7 @@
     "dedicated": "Engagiert",
     "committed": "Engagiert",
     "faithful": "Treu",
-    "loyal": "Loyal",
+    "loyal": "Treu",
     "true": "Wahr",
     "trusty": "Vertrauenswürdig",
     "trustworthy": "Vertrauenswürdig",
@@ -1199,7 +1205,7 @@
     "intellectual": "Intellektuell",
     "intelligent": "Intelligent",
     "smart": "Klug",
-    "clever": "Clever",
+    "clever": "Klug",
     "bright": "Hell",
     "brilliant": "Brillant",
     "genius": "Genie",
@@ -1219,7 +1225,7 @@
     "expert": "Experte",
     "master": "Meister",
     "virtuoso": "Virtuose",
-    "maestro": "Maestro",
+    "maestro": "Meister",
     "ace": "Ass",
     "crackerjack": "Crack",
     "wizard": "Zauberer",
@@ -1285,7 +1291,7 @@
       },
       "links": {
         "dashboard": "Dashboard",
-        "deploy": "Deploy",
+        "deploy": "Bereitstellung",
         "gateway": "Gateway",
         "status": "Status",
         "download": "Download",
@@ -1300,7 +1306,7 @@
         "assistant": "Assistent",
         "tasks": "Aufgaben",
         "queue": "Warteschlange",
-        "workers": "Workers",
+        "workers": "Worker",
         "events": "Ereignisse",
         "history": "Verlauf",
         "analytics": "Analytik",
@@ -1510,11 +1516,11 @@
           "description": "Erstellt maßgeschneiderte Lebensläufe und Anschreiben für jede Stelle."
         },
         "critic": {
-          "name": "Critic",
+          "name": "Kritiker",
           "description": "Überprüft die Materialien und markiert, was korrigiert werden muss."
         },
         "sentinel": {
-          "name": "Sentinel",
+          "name": "Wächter",
           "description": "Überwacht Budget, Limits und Systemzustand."
         },
         "assistant": {
@@ -1575,13 +1581,13 @@
       "description": "Berechnet Matching-Scores"
     },
     "critic": {
-      "title": "Critic",
+      "title": "Kritiker",
       "description": "Überprüft und gibt Feedback",
       "reviewQueue": "Review-Warteschlange",
       "loading": "Lädt..."
     },
     "sentinel": {
-      "title": "Sentinel",
+      "title": "Wächter",
       "description": "Überwacht und schützt die Job-Hunter-Pipeline",
       "status": {
         "starting": "Wird gestartet...",
