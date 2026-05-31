@@ -39,6 +39,12 @@ export interface Position {
   // o /cv Telegram. Il Capitano spawna Scrittori solo quando = true.
   write_requested?: boolean
   write_requested_at?: string | null
+  // V8 (2026-05-31) — Geocoding-on-demand: utente seleziona da dashboard
+  // per coordinate ufficio precise. L'Analista esegue office-geocoding
+  // solo quando = true. office_geocoded indica lo stato di completamento.
+  geocode_requested?: boolean
+  geocode_requested_at?: string | null
+  office_geocoded?: boolean
 }
 
 // ── Score ──────────────────────────────────────────────────────────

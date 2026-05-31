@@ -6,14 +6,17 @@ allowed-tools: Bash(python3 *)
 
 # feedback-query — User feedback per position
 
-The user can click like/dislike/hide/star on any position from the web dashboard. Those clicks are stored in Supabase `position_feedback` (mig 019) and surfaced to agents via this skill. Schema:
+The user can click like/dislike/hide/star on any position from the web dashboard. Those clicks are stored in Supabase `position_feedback` (mig 019 base + mig 028 extended) and surfaced to agents via this skill. Schema:
 
-| Column              | Type   | Meaning |
-|---------------------|--------|---------|
-| `position_legacy_id`| TEXT   | The `legacy_id` (string) of the position in `positions` |
-| `action`            | TEXT   | One of `like`, `dislike`, `hide`, `star` |
-| `reason`            | TEXT   | Optional free text from the user |
-| `created_at`        | TS     | Submission time |
+| Column              | Type    | Meaning |
+|---------------------|---------|---------|
+| `position_legacy_id`| TEXT    | The `legacy_id` (string) of the position in `positions` |
+| `action`            | TEXT    | One of `like`, `dislike`, `hide`, `star` |
+| `reason`            | TEXT    | Optional short reason (≤500 char) |
+| `comment`           | TEXT    | Optional verbose comment (≤2000 char, mig 028) |
+| `score`             | INTEGER | Optional 1-5 granular score (mig 028) |
+| `direction`         | TEXT    | Optional `more_like_this` / `less_like_this` — pattern signal for the Scout, NOT per-position skip (mig 028) |
+| `created_at`        | TS      | Submission time |
 
 The skill calls `GET /api/positions/{legacy_id}/feedback` on the cloud (using the bearer token in `$JHT_HOME/cloud.json`). On cloud-disabled or network failure, the skill **does not error** — it returns `ok=true, latest_action=null` with a `note` field. Agents must keep going.
 
@@ -30,25 +33,31 @@ Output (JSON on stdout):
   "ok": true,
   "legacy_id": "42",
   "latest_action": "dislike",
+  "latest_direction": "less_like_this",
   "count": 2,
   "actions": [
-    {"action": "dislike", "created_at": "2026-05-30T14:21:00Z", "reason": "too senior"},
-    {"action": "like",    "created_at": "2026-05-28T09:00:00Z", "reason": null}
+    {"action": "dislike", "created_at": "2026-05-30T14:21:00Z",
+     "reason": "too senior", "comment": "5+ anni in Java richiesti, non mi interessa stack legacy",
+     "score": 2, "direction": "less_like_this"},
+    {"action": "like", "created_at": "2026-05-28T09:00:00Z",
+     "reason": null, "comment": null, "score": null, "direction": null}
   ]
 }
 ```
 
-`latest_action` is the most recent click. `actions[]` is ordered DESC by `created_at`. Empty when no feedback exists:
+`latest_action` is the most recent click. `latest_direction` is the most recent NON-NULL value of `direction` in history (anywhere in the actions[], not necessarily the latest action). `actions[]` is ordered DESC by `created_at`. Empty when no feedback exists:
 
 ```json
-{"ok": true, "legacy_id": "99", "latest_action": null, "count": 0, "actions": []}
+{"ok": true, "legacy_id": "99", "latest_action": null,
+ "latest_direction": null, "count": 0, "actions": []}
 ```
 
 When cloud is disabled or the endpoint is unreachable, the skill returns:
 
 ```json
-{"ok": true, "legacy_id": "...", "latest_action": null, "count": 0,
- "actions": [], "note": "no-signal (cloud-disabled)"}
+{"ok": true, "legacy_id": "...", "latest_action": null,
+ "latest_direction": null, "count": 0, "actions": [],
+ "note": "no-signal (cloud-disabled)"}
 ```
 
 ## How agents use it
@@ -66,6 +75,7 @@ When cloud is disabled or the endpoint is unreachable, the skill returns:
 **Scout** (optional contextual signal):
 - Not for per-position skip — that's already handled by dedup (SC-05).
 - Use it sparingly when re-evaluating a known position (e.g., promotion logic): if the user explicitly disliked it, do not re-surface even if dedup would normally rescore it.
+- **Pattern signal via `direction`** (mig 028): when `latest_direction='less_like_this'` on a position, the user is asking for fewer positions LIKE that one (same company / role_family / location). Deprioritize that source/pattern in subsequent searches. When `latest_direction='more_like_this'`, prioritize replicating the pattern. This is a contextual hint, not a hard rule — combine it with the broader picture (e.g., a single `less_like_this` on a tiny niche may be noise; three on the same company are not).
 
 ## Notes
 
