@@ -124,6 +124,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 > 📐 Architettura & stato implementazione consolidati in [`docs/internal/cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md) (living doc). Voci sotto = riepilogo BACKLOG; per dettagli decisione macro-events e incident RobertHalf vedi il doc.
 
+**Fondazione (✅)**
 - ✅ `cloud_sync_tokens` schema + RLS (migration 006)
 - ✅ API CRUD `/api/cloud-sync/tokens` (GET/POST/DELETE, soft-delete)
 - ✅ UI `/settings/cloud-sync` (plaintext token shown only once)
@@ -135,19 +136,50 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ✅ **Web fallback** quando manca SQLite locale (commit `cc52acca`, 2026-05-22)
 - ✅ **`positions.location` cap ≤ 200 char** (migration 015, post-incident RobertHalf)
 - ✅ **Rimozione `sentinel_ticks` dal push daemon** (commit `f68a127d`)
-- ✅ **Refactor `team_commands` → `team_state` desired-state + event lanes** (mig 019–022, 2026-05-23) — accorpa single-team enforcement + status inference + chat/feedback lanes; `team_commands` resta vivo in parallelo durante cutover (Step 5–6 in `cloud-sync-architecture.md`)
+- ✅ **Periodic sync loop** (commit `690534e0`, 2026-05-22) — push daemon attivo, cadenza 30s→60s + delta-only + halt-flag guard
+- ✅ **SQLite CHECK constraints** (commit `3602d42e`, 2026-05-22) — replica CHECK length Postgres mig 015 su SQLite (title/company/location)
+- ✅ **RLS init plan fix** (commit `2b78fdd9` + mig 018, 2026-05-22) — 24 policy `auth.uid()` per-row → `(select auth.uid())`, chiude advisor critical
+
+**Refactor desired-state 2026-05-23 (✅)** — passaggio da push-only a bidirezionalità Kubernetes-style
+- ✅ **`team_commands` → `team_state` desired-state + 3 event lanes** (mig 019–022) — single-team enforcement + status inference + `user_to_agent_messages` + `position_feedback`; `team_commands` resta vivo in parallelo durante cutover
 - ✅ **Realtime publication su team_state + lanes** (mig 021) — browser live (~200ms) via Supabase Realtime
-- ✅ **Fix RLS `location_geocode`** (mig 020) — close advisor critical: cache poisoning via anon key
-- ✅ **P0 — SQLite CHECK constraints** (commit `3602d42e`, 2026-05-22) — replica CHECK length di Postgres mig 015 su SQLite locale (title/company/location)
-- ✅ **P0 — RLS init plan fix** (commit `2b78fdd9` + migration 018, 2026-05-22) — 24 policy migrate da `auth.uid()` per-row a `(select auth.uid())`, chiude advisor critical
-- ⬜ **P0 — DELETE propagation con tombstone** (push è solo UPSERT — vedi `cloud-sync-architecture.md` #4)
-- ✅ **P1 — Daemon alert + auto-shutdown** (commit `ad2e8076`, 2026-05-22) — counter consecutiveFails: warning a ≥3, auto-shutdown a ≥5, reset su success. Origin incident RobertHalf 2026-05-19
-- ⬜ **P1 — Killswitch 401/403** (oggi daemon continua loop infinito su token revocato)
-- ⬜ **P1 — `jht cloud restore`** comando esplicito disaster recovery
-- ⬜ **P1 — Subscriber on-demand 🅲** (polling spento se team giù, post-team_state)
-- ⬜ **P1 — Polling adattivo** basato su `team_state.last_user_activity_at`
-- ⬜ **P1 — Feedback like/dislike** istruire scout/scorer a reagire
-- ✅ **Periodic sync loop** (commit `690534e0`, 2026-05-22) — push daemon attivo, cadenza tunata 30s→60s + delta-only via `updated_at` cursor + halt-flag guard
+- ✅ **Fix RLS `location_geocode`** (mig 020) — chiude advisor critical: cache poisoning via anon key
+- ✅ **Hardening trigger team_state** (mig 023) — search_path + REVOKE EXECUTE
+- ✅ **Reconciler container** (`cli/src/lib/team-state-reconciler.js`) — long-poll 5s su `/api/team-state`, applica start/stop/restart atomici, rispetta `.team-halted.flag`
+- ✅ **Single-team enforcement runtime** — claim 409 + push 409 + PATCH 409 (commit `3427a304`)
+
+**Writer-on-demand cloud-side 2026-05-29 (✅)** — replica pattern desired-state su flag per-row
+- ✅ **`positions.write_requested` + `write_requested_at`** (mig 024) — schema, push delta CLI, push web `/api/local/sync`, receive `/api/cloud-sync/push`
+- ✅ **Endpoint web** `/api/positions/[legacyId]/write-request` — UPDATE SQLite locale + best-effort PATCH Supabase
+- ✅ **Capitano lazy-spawn Scrittore on-demand** (RULE C-10 V6, commit `a9596002`)
+- ✅ **Telegram `/cv` handler + `write_request.py` skill** (commit `5cef55fc`)
+
+**🔴 Pending P0 — correttezza flusso** (vedi [`cloud-sync-architecture.md` § Pending](docs/internal/cloud-sync-architecture.md#-pending-in-ordine-di-priorità))
+- ⬜ **P0 — Pull cloud→SQLite per desired-state al boot/restart container** *(NUOVO, promosso da edge-case)*. Gap critico: utente clicca "Scrivi CV" via web mentre container è fermo → `write_requested=true` su Supabase + best-effort PATCH, ma NESSUN pull cloud→SQLite al riavvio → flag ghost in cloud, mai applicato. Stessa famiglia dell'edge case "reconciler vs DB stale" (P1 #10). Componenti: GET `/api/cloud-sync/pull-desired-state?since=<last_pull_at>` + client `cli/src/commands/cloud.js` al boot di `jht team start` e post-network-drop reconnect.
+- ⬜ **P0 — DELETE propagation con tombstone** — push è solo UPSERT, righe cancellate restano ghost in cloud per sempre. Colonna `deleted_at TIMESTAMPTZ` + trigger SQLite + cleanup job Supabase (vedi doc #2)
+- ⬜ **P0 — Killswitch 401/403** *(promosso da P1)* — daemon continua loop infinito su token revocato. 3 risposte 401/403 consecutive → halt + notifica `pending_user_messages` (`cli/src/commands/cloud.js:672-675`)
+- ⬜ **P0 — Riparare CI/Tests/Lint pre-esistenti** falliscono da 2026-05-22 — test smoke con soglie sbagliate, ENOENT su file inesistenti, ESLint 100+ warning `any`. Falsano signal qualità
+
+**🟠 Pending P1 — chiusura loop feedback agenti** (bidirezionalità incompleta: schema + RLS + Realtime ✅ done, container NON legge)
+- ⬜ **P1 — Reader container per `user_to_agent_messages`** *(NUOVO)*. Browser POSTa `/api/messages`, agenti non ascoltano. Nuovo subscriber `cli/src/lib/user-messages-poller.js` con claim atomic + forward tmux send al target agent
+- ⬜ **P1 — Reader agenti per `position_feedback`** *(NUOVO, era "feedback like/dislike" generico)*. Schema ✅, nessun reader. Skill `shared/skills/feedback_query.py` + Scout skip dislike + Scorer boost/malus
+- ⬜ **P1 — Subscriber on-demand** — spawn/kill dei 2 long-poller agganciato a `team_state.is_running`. Team giù → polling giù
+- ⬜ **P1 — Polling adattivo** — interval in base a `team_state.last_user_activity_at` (3s ↔ 30s ↔ off)
+
+**🟠 Pending P1 — hardening + UX**
+- ✅ **P1 — Daemon alert + auto-shutdown** (commit `ad2e8076`, 2026-05-22) — WARN_AT=3, MAX=5 → auto-shutdown. Vale anche per 409 not_active_device
+- ⬜ **P1 — `jht cloud restore`** comando esplicito disaster recovery (componibile con P0 #1 ma scopo distinto: full DB rebuild vs delta intent reconciliation)
+- ⬜ **P1 — Cutover `team_commands` → `team_state` finale + rename `realtime-subscriber.js`** — `handleAction` singolo agente ancora su `useTeamCommandPoller`; UI bulk ✅. Rinominare `cli/src/lib/realtime-subscriber.js` → `team-commands-poller.js` (nome ingannevole: fa long-poll HTTP, non WebSocket, vedi nota architetturale nel doc)
+- ⬜ **P1 — Geocoding opt-in/out per-position** — replica esatta del pattern writer-on-demand (`positions.geocode_requested BOOLEAN`), analista legge prima di partire
+- ⬜ **P1 — Feedback loop esteso** — `position_feedback` + `comment`, `score`, `direction` (more_like_this/less_like_this)
+- ⬜ **P1 — `JHT-LOCAL-NO-API`** — `web/lib/queries.ts` switcha su `local-queries.ts` quando `cloud.json.enabled=false`
+
+**🟡 Pending P2**
+- ⬜ Account Supabase mismatch warning UI (memoria `project_supabase_dual_accounts`)
+- ⬜ Schema drift alert su fallback full-read
+- ⬜ Canary endpoint per distinguere "Supabase saturo" da "Vercel slow"
+
+**Future / nice-to-have**
 - ⬜ **Google Drive integration** (`drive.file` scope, CV/cover letter upload)
 - ⬜ **"Enable cloud sync" toggle** in desktop launcher + CLI wizard
 - ⬜ **Self-hosted Supabase docs** (BYO backend for technical users)
