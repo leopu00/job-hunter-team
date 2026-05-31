@@ -13,9 +13,10 @@ export const dynamic = 'force-dynamic'
 // solo su Supabase via `/api/positions/[legacyId]/write-request`), poi
 // il container riavvia e qui legge i flag `write_requested` aggiornati.
 //
-// Scope MVP: solo `positions.write_requested` + `write_requested_at`.
-// Pattern desired-state per-row, estendibile a `geocode_requested`
-// (JHT-CLOUDSYNC-01 P1) e altri flag user-driven.
+// Scope: `positions.write_requested[_at]` (V6, mig 024) +
+// `positions.geocode_requested[_at]` (V8, mig 027). Pattern desired-state
+// per-row, estendibile a futuri flag user-driven mantenendo la stessa
+// shape della response (campi opzionali, client UPDATE solo le presenti).
 //
 // Volume atteso: invocato al boot del team (jht team start) + opzionale
 // tick nel daemon. Pull "tutto modificato in finestra" cap default 7gg
@@ -58,17 +59,17 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 500), 2000)
 
   // Filtro intenzionalmente AMPIO: tutte le righe modificate dopo `since`,
-  // anche con write_requested=FALSE. Cattura sia toggle-on (utente clicca
-  // "Scrivi CV" via web) sia toggle-off (utente annulla via web mentre
-  // container era offline). Senza il toggle-off, il container manterrebbe
-  // write_requested=TRUE per sempre dopo un annulla via altro device.
+  // anche con write_requested=FALSE / geocode_requested=FALSE. Cattura sia
+  // toggle-on (utente clicca via web) sia toggle-off (utente annulla via
+  // web mentre container era offline). Senza il toggle-off, il container
+  // manterrebbe il flag=TRUE per sempre dopo un annulla via altro device.
   //
-  // Proiezione lean: solo i 4 campi necessari al merge desired-state.
+  // Proiezione lean: solo i campi necessari al merge desired-state.
   // Volume tipico: <100 righe/boot anche su pool da 1000 positions
   // (le righe modificate sono già delta del push container→cloud).
   const { data, error } = await admin
     .from('positions')
-    .select('legacy_id, write_requested, write_requested_at, updated_at')
+    .select('legacy_id, write_requested, write_requested_at, geocode_requested, geocode_requested_at, updated_at')
     .eq('user_id', userId)
     .gt('updated_at', since.toISOString())
     .order('updated_at', { ascending: true })
