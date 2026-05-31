@@ -1255,22 +1255,21 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 
 ## 🔭 OBSERVABILITY GAPS
 
-### 🟡 [OBS-TELEGRAM-SEND-LOG] `jht-telegram-send` senza log centrale outgoing
+### ✅ [OBS-TELEGRAM-SEND-LOG] `jht-telegram-send` senza log centrale outgoing — DONE 2026-05-31
 
-- **File:** `/app/agents/_tools/jht-telegram-send` (bash + curl POST a Bot API)
-- **Sintomo:** quando un agente (Capitano, Assistente, Mentor) invia un messaggio Telegram all'utente, **non c'è log persistente centralizzato**. Le tracce sono solo:
-  - Pane tmux live (volatile, scrolla fuori dopo ~60-1000 righe)
-  - `/jht_home/logs/dottore-captures/*.txt` (snapshot parziali ogni 2h, max 60 righe del pane catturate al momento del round)
-- **Conseguenza:** impossibile rispondere a domande tipo "quanto frequentemente il Capitano scrive all'utente", "ricostruisci la timeline degli invii Telegram di ieri", "qual è il delta medio risposta agente → utente". Misurato 2026-05-20: ~9 messaggi Capitano confermati in 14h (≈ 1 ogni 1.5h), ma il numero reale è probabilmente maggiore — i precedenti sono scrollati fuori da tutte le fonti.
-- **Fix proposto:** aggiungere a `jht-telegram-send` (subito dopo la chiamata curl che riceve `ok:true`) un append idempotente a `$JHT_HOME/logs/telegram-sent.jsonl`:
-  ```bash
-  printf '{"ts":"%s","from":"%s","chat_id":"%s","chars":%d,"parse_mode":"%s","ok":true}\n' \
-    "$(date -u +%FT%TZ)" "$role" "$chat_id" "${#text}" "$parse_mode" \
-    >> "$JHT_HOME/logs/telegram-sent.jsonl"
+- **File:** [`agents/_tools/jht-telegram-send`](agents/_tools/jht-telegram-send)
+- **Fix applicato:** funzione `_log_outgoing` invocata in tutti i path (send_one OK/fail, sendPhoto OK/fail) scrive 1 JSON line per chunk a `$JHT_HOME/logs/telegram-sent.jsonl`. Append `>> 2>/dev/null || true` — niente fail dell'invio se il disco è KO. mkdir idempotente.
+- **Schema log line:**
+  ```json
+  {"ts":"2026-05-31T16:16:35Z","from":"capitano","chat_id":"123456",
+   "kind":"text","ok":false,"http":404,"chars":10,"chunks":1,
+   "parse_mode":"","keyboard":""}
   ```
-  Senza body completo (privacy + size), solo metadati (mittente, lunghezza, parse_mode, esito). Da loggare anche i fallimenti (`ok:false`, status code HTTP).
-- **Effort:** ~15 minuti (5 righe shell + test su un invio singolo).
-- **Memoria correlata:** [[context-watchdog-spec]] (sezione "Side effect Telegram per Assistente"), [[2026-05-21-vps1-run-postmortem]] (i gap di idle includono buchi anche di comunicazione TG non misurabili oggi).
+- **Privacy:** SOLO metadati (mittente, chat, kind text/photo, ok, http code, lunghezza chunk, parse_mode, keyboard role). Niente body/caption/photo path — il log è side-effect locale tracciabile, non un mirror del messaggio.
+- **Granularità:** 1 entry per chunk (sendMessage call). Un msg lungo split in 3 chunks → 3 entry — il consumer aggrega per `from+ts` se vuole misurare msg-utente.
+- **Test:** smoke test con token bogus → HTTP 404 → JSONL scritto con `ok:false`, chars corretto, mittente corretto. Validato 2026-05-31.
+- **Use cases sbloccati:** `jq -s 'group_by(.from)|.[]|{from:.[0].from,count:length}' telegram-sent.jsonl` per ratio per agente; `jq 'select(.ok==false)'` per error breakdown; timeline ricostruibile.
+- **Memoria correlata:** [[context-watchdog-spec]] sezione "Side effect Telegram per Assistente".
 
 ---
 
