@@ -1363,23 +1363,24 @@ export function registerCloudCommand(program) {
     .option('--interval <sec>', 'Secondi tra un push e il successivo (env JHT_CLOUD_PUSH_INTERVAL_SEC)')
     .action(handleDaemon);
 
-  // `realtime-listen` — long-running WebSocket subscriber su Supabase
-  // Realtime per ricevere comandi web in tempo reale (es. Start button
-  // sulla dashboard cloud → INSERT team_commands → questo handler).
-  // Co-spawnato da pid1 accanto a `cloud daemon`.
+  // `realtime-listen` — HTTP long-poll subscriber su tabella legacy
+  // `team_commands` (vedi mig 012). Co-spawnato da pid1 accanto a
+  // `cloud daemon`. Il comando CLI resta `realtime-listen` per
+  // compatibilità con pid1 deployati; il file interno è stato
+  // rinominato 2026-05-31 → `team-commands-poller.js`.
   cloud
     .command('realtime-listen')
-    .description('Subscriber Realtime per comandi team (start/stop) dal web')
+    .description('Poller HTTP per comandi team legacy (team_commands)')
     .action(async () => {
-      const { runRealtimeSubscriber } = await import('../lib/realtime-subscriber.js');
-      await runRealtimeSubscriber();
+      const { runTeamCommandsPoller } = await import('../lib/team-commands-poller.js');
+      await runTeamCommandsPoller();
     });
 
   // `team-state-listen` — desired-state reconciler che polla /api/team-state
   // e converge `should_run`/`restart_token` → `jht team start|stop|restart`.
-  // Parallelo a `realtime-listen` durante il cutover (vedi Step 5 in
-  // docs/internal/cloud-sync-architecture.md). Idempotente con team_commands:
-  // i due subscriber chiamano gli stessi `jht team <action>`.
+  // Parallelo a `realtime-listen` (team-commands-poller) durante il cutover
+  // (vedi Step 5 in docs/internal/cloud-sync-architecture.md). Idempotente
+  // con team_commands: i due poller chiamano gli stessi `jht team <action>`.
   cloud
     .command('team-state-listen')
     .description('Reconciler team_state (desired-state, parallelo a realtime-listen)')
