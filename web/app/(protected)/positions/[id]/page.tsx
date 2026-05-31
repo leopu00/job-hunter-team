@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getPositionById } from "@/lib/queries";
 import type { PositionHighlight } from "@/lib/types";
 import { WriteRequestButton } from "./WriteRequestButton";
+import { GeocodeRequestButton } from "./GeocodeRequestButton";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "var(--color-muted)",
@@ -181,6 +182,17 @@ export default async function PositionDetailCompany({ params }: CompanyProps) {
               >
                 Annuncio originale ↗
               </a>
+            )}
+            {position.legacy_id != null && (
+              // Geocoding-on-demand (V8): l'utente richiede coordinate
+              // ufficio precise. Sempre attivo: l'Analista skippa
+              // autonomamente quando non ha materiale geografico utile
+              // (vedi BACKLOG [Cloud Sync — Geocoding opt-in/out]).
+              <GeocodeRequestButton
+                legacyId={position.legacy_id}
+                initialRequested={position.geocode_requested === true}
+                alreadyGeocoded={position.office_geocoded === true}
+              />
             )}
             {position.legacy_id != null && (() => {
               // Writer-on-demand (V6): il button e' visibile solo se la
