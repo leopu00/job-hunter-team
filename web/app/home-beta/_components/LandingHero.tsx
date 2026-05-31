@@ -39,28 +39,19 @@ export default function LandingHero() {
         </div>
 
         <div className="md:hidden flex items-start justify-start gap-x-6 overflow-x-auto pb-3">
-          {[
-            "📡",
-            "💂",
-            "👨‍✈️",
-            "⏱️",
-            "🕵️",
-            "👨‍🔬",
-            "👨‍💻",
-            "👨‍🏫",
-            "👨‍⚖️",
-          ].map((e, i) => (
-            <span
-              key={i}
-              className="text-3xl leading-none shrink-0"
-              aria-hidden="true"
-            >
-              {e}
-            </span>
-          ))}
+          {["📡", "💂", "👨‍✈️", "⏱️", "🕵️", "👨‍🔬", "👨‍💻", "👨‍🏫", "👨‍⚖️"].map(
+            (e, i) => (
+              <span
+                key={i}
+                className="text-3xl leading-none shrink-0"
+                aria-hidden="true"
+              >
+                {e}
+              </span>
+            ),
+          )}
         </div>
       </div>
-
     </section>
   );
 }

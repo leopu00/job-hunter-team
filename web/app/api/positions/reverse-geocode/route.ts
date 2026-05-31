@@ -62,8 +62,12 @@ export async function GET(req: Request) {
     // display_name (più verboso, include country).
     const a = data.address ?? {};
     const street = [a.road, a.house_number].filter(Boolean).join(" ").trim();
-    const cityLine = [a.suburb, a.city || a.town || a.village].filter(Boolean).join(", ");
-    const composed = [street, cityLine].filter((s) => s && s.length > 0).join(", ");
+    const cityLine = [a.suburb, a.city || a.town || a.village]
+      .filter(Boolean)
+      .join(", ");
+    const composed = [street, cityLine]
+      .filter((s) => s && s.length > 0)
+      .join(", ");
     const address = composed || data.display_name || null;
 
     cache.set(k, { address, at: Date.now() });
