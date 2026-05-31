@@ -265,7 +265,8 @@ export default function PipelineFlow({ steps, title }: Props) {
       const phase = (now - start) * omega;
       const target = pointsRef.current;
       // Match length se cambia (improbabile a runtime, ma safe)
-      while (easedY.length < target.length) easedY.push(target[easedY.length].y);
+      while (easedY.length < target.length)
+        easedY.push(target[easedY.length].y);
       easedY.length = target.length;
       for (let i = 0; i < target.length; i++) {
         easedY[i] += (target[i].y - easedY[i]) * SMOOTH;
@@ -340,12 +341,24 @@ export default function PipelineFlow({ steps, title }: Props) {
       >
         <defs>
           <linearGradient id="pipeline-flow-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-green)" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="var(--color-green)" stopOpacity="0.04" />
+            <stop
+              offset="0%"
+              stopColor="var(--color-green)"
+              stopOpacity="0.5"
+            />
+            <stop
+              offset="100%"
+              stopColor="var(--color-green)"
+              stopOpacity="0.04"
+            />
           </linearGradient>
         </defs>
 
-        <path ref={areaPathRef} d={initial.area} fill="url(#pipeline-flow-grad)" />
+        <path
+          ref={areaPathRef}
+          d={initial.area}
+          fill="url(#pipeline-flow-grad)"
+        />
         <path
           ref={linePathRef}
           d={initial.line}
