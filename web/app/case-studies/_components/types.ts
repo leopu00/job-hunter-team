@@ -21,6 +21,30 @@ export type Note = {
 
 export type BurnCurvePoint = { t: string; w: number }
 
+export type FiveHourWindow = {
+  window_number: number
+  started_at: string
+  ended_at: string
+  duration_hours: number
+  usage_start_pct: number
+  usage_end_pct: number
+  usage_delta_pct: number
+  peak_usage_pct: number
+}
+
+export type BurnSample = {
+  ts: string
+  weekly_usage_pct: number
+  window_usage_pct: number | null
+}
+
+export type AgentActivity = {
+  agent: string
+  ts_start: string
+  ts_end: string
+  reason: string | null
+}
+
 export type Window = {
   id: number
   window_number: number
@@ -36,6 +60,9 @@ export type Window = {
   conversion_pct: number | null
   notes_md: string | null
   burn_curve: BurnCurvePoint[] | null
+  five_hour_windows: FiveHourWindow[] | null
+  burn_samples: BurnSample[]
+  agent_activity: AgentActivity[]
   display_order: number
 }
 
