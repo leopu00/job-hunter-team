@@ -182,28 +182,29 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 Annuncio originale ↗
               </a>
             )}
-            {position.legacy_id != null && (() => {
-              // Writer-on-demand (V6): il button e' visibile solo se la
-              // posizione e' nello stato giusto. Il Capitano spawna lo
-              // Scrittore quando il flag e' acceso (vedi BACKLOG
-              // [JHT-WRITER-ON-DEMAND]).
-              const wrongStatus = position.status !== "scored";
-              const alreadyWriting = application != null;
-              const isDisabled = wrongStatus || alreadyWriting;
-              const reason = alreadyWriting
-                ? "CV gia' in lavorazione o consegnato"
-                : wrongStatus
-                  ? `Posizione in stato '${position.status}': la richiesta CV e' ammessa solo da 'scored'`
-                  : undefined;
-              return (
-                <WriteRequestButton
-                  legacyId={position.legacy_id}
-                  initialRequested={position.write_requested === true}
-                  disabled={isDisabled}
-                  disabledReason={reason}
-                />
-              );
-            })()}
+            {position.legacy_id != null &&
+              (() => {
+                // Writer-on-demand (V6): il button e' visibile solo se la
+                // posizione e' nello stato giusto. Il Capitano spawna lo
+                // Scrittore quando il flag e' acceso (vedi BACKLOG
+                // [JHT-WRITER-ON-DEMAND]).
+                const wrongStatus = position.status !== "scored";
+                const alreadyWriting = application != null;
+                const isDisabled = wrongStatus || alreadyWriting;
+                const reason = alreadyWriting
+                  ? "CV gia' in lavorazione o consegnato"
+                  : wrongStatus
+                    ? `Posizione in stato '${position.status}': la richiesta CV e' ammessa solo da 'scored'`
+                    : undefined;
+                return (
+                  <WriteRequestButton
+                    legacyId={position.legacy_id}
+                    initialRequested={position.write_requested === true}
+                    disabled={isDisabled}
+                    disabledReason={reason}
+                  />
+                );
+              })()}
           </div>
         </div>
       </div>
