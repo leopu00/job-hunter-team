@@ -9,6 +9,46 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 > 289 commits and 10 days of intensive work since v0.1.12 — desktop launcher rewritten with one-click install on macOS (Colima via Homebrew/osascript) and Windows (WSL2 + Docker Desktop + Git in a single UAC flow), monitoring stack pivoted multiple times (Sentinel eliminated then reintroduced as event-driven watchdog, Bridge promoted to separate clock-only daemon), web team page redesigned with live inter-agent message animations and embedded terminal per agent, web platform restructured around the subscription model, complete pre-launch documentation suite (10 new docs), Kimi (Moonshot) provider support added, **pre-launch security hardening sprint** (31/34 fix, score 30% → 74%, audit suite in `docs/security/`).
 
+### 🌥️ Cloud sync v2: desired-state Kubernetes-style + on-demand UX — 2026-05-22 / 2026-05-31
+
+Dettaglio architettura in [`docs/internal/cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md) (living doc).
+
+**Macro-shift architetturale**: il modello "push-only macro-events" del 2026-05-13 è stato superato. Cloud sync v2 è ora **ibrido push + pull desired-state**: il container resta source-of-truth dei *risultati* (positions/scores/applications, push delta-only ~30s), mentre le **intenzioni utente** che entrano dal web (start/stop team, "scrivi CV", "geocodifica", like/dislike, chat) tornano al container via 2 long-poller HTTP (`team-state-reconciler` + `team-commands-poller`) + endpoint dedicato `pull-desired-state` per i flag per-row. Pattern desired-state Kubernetes-style: il browser scrive `should_run=true`, il reconciler converge.
+
+**On-demand UX — l'utente decide cosa fare lavorare al team**:
+- ✅ **Writer-on-demand V6** (mig 024): Scrittore NON spawnato al boot, lazy-spawn dal Capitano quando `positions.write_requested=1`. Bottone "Scrivi CV" sul dashboard + Telegram `/cv <id>` setta il flag. Latenza ~15s/ondata, zero token bruciati in idle loop. RULE C-10.
+- ✅ **Geocoding opt-in/out V8** (mig 027): replica esatta del pattern, `positions.geocode_requested` flag, button "Geocodifica" detail page. Analista REGOLA-16 diventa OPT-IN (skippa silenziosamente quando flag=0). Nuova coda parallela `next-for-geocoding` per posizioni già processate.
+- ✅ **Feedback loop esteso** (mig 028): `position_feedback` + `comment` (≤2000 char) + `score` (1-5) + `direction` (more_like_this/less_like_this). Skill `feedback_query.py` espone `latest_direction` (più recente non-NULL). Scout prompt EN+IT con sezione "pattern steering": `less_like_this` → deprioritize fonte/company, `more_like_this` → replica pattern. Scorer Step 5 obbligatorio multiplier (like ×1.10, star ×1.15, dislike ×0.85, hide → excluded), cap 100.
+- ✅ **Chat utente→agente bidirezionale**: `user_to_agent_messages` poller container-side fa long-poll `/api/messages?status=pending`, claim atomico PATCH `delivered`, forward al tmux pane dell'agente target via `jht-tmux-send`. Polling adattivo 3 tier (active 5s / idle 30s / deep-idle 120s) basato su ultima consegna riuscita — riduce carico Vercel ~90% in idle h24.
+
+**Backend bidirezionale completo**:
+- ✅ **`team_state` desired-state + 3 event lanes** (mig 019-022): single-team enforcement (claim 409 + push 409 + PATCH 409), status inference, `user_to_agent_messages`, `position_feedback`. Realtime publication su tutte le lane (~200ms browser).
+- ✅ **Pull cloud→SQLite al boot** + **periodic pull nel daemon**: GET `/api/cloud-sync/pull-desired-state?since=<ISO>` wired al boot di `startActionContainer` + ad ogni tick del push daemon. Cursor separato `.cloud-pull-cursor.json`. Chiude multi-device "live" (mobile click + team su VPS).
+- ✅ **Route write-request supporta cloud-mode senza SQLite locale**: discriminazione `hasLocal` (SQLite presente → path locale, altrimenti SELECT+UPDATE solo Supabase con embedded validate). Loop chiuso: utente clicca su Vercel con container offline → flag su cloud → pull al boot applica → Capitano spawn Scrittore.
+- ✅ **DELETE propagation con tombstone end-to-end** (mig 028): `deleted_at TIMESTAMPTZ` su positions/scores/applications + SQLite V7 `_tombstones` table + 3 trigger BEFORE DELETE. CLI push include tombstones nel payload con cursor proprio. Web receive UPDATE soft con idempotency `WHERE deleted_at IS NULL`. **34 query** `web/lib/queries.ts` filtrate con `.is('deleted_at', null)` (caso speciale `getCriticScores` con nested `positions!inner` ha anche `.is('positions.deleted_at', null)`).
+- ✅ **Killswitch dedicato 401/403**: counter separato `MAX_CONSECUTIVE_AUTH_FAILS=3` (vs 5 generico, perché token revocato non recupera mai). Halt + INSERT `pending_user_messages` con istruzioni "riapri pairing + jht cloud login". Reset solo su push success 200.
+
+**Disaster recovery + privacy-first**:
+- ✅ **`jht cloud restore`** (CLI + endpoint `/api/cloud-sync/full-dump`): full DB rebuild da cloud per container vuoto o SQLite corrotto. 3 tabelle (positions/scores/applications, `deleted_at IS NULL`, cap 10k righe/tabella, rate limit 5/min). Conferma esplicita interattiva via `@clack/prompts`, flag `--confirm-restore` per skip in CI. Mappa cloud_uuid→legacy_id per scores/apps. INSERT OR REPLACE idempotente. Reset cursor push a "now".
+- ✅ **JHT-LOCAL-NO-API**: privacy-first switch. `web/lib/workspace.ts` espone `isCloudEnabled()` + `isLocalOnlyMode()`. Quando l'utente disabilita cloud sync e gira tutto localmente → **zero chiamate Supabase** (skip `supabase.auth.getUser()` e fetch in `layout.tsx`, `dashboard/page.tsx`, `map/page.tsx`, `positions/page.tsx`). Su Vercel/remote sempre false, comportamento immutato.
+
+**Refactor naming + hygiene**:
+- ✅ **`realtime-subscriber.js` → `team-commands-poller.js`**: il file faceva HTTP long-poll, non WebSocket Realtime (il nome era ereditato dall'intent originale). Il comando CLI `jht cloud realtime-listen` resta per compat con i pid1 deployati; sarà ribattezzato `team-commands-listen` quando il cutover handleAction singolo agente finisce.
+- ✅ **DB hygiene + RLS init-plan fix** (mig 024-026): 9 FK indexes mancanti aggiunti, 22 policy `auth.uid()` per-row riavvolte a `(select auth.uid())` (Postgres materializza init-plan una sola volta, da O(N×K) a O(N+K)), 9 unused indexes droppati.
+
+**Throttling + freshness team — context drift mitigation**:
+- ✅ **TOKEN-MONITOR-WRITER-CRITIC**: il Critico (`CRITICO-S<N>`) è child task atomico dello Scrittore N, ma il suo consumo token NON era attribuito al parent. Il Capitano vedeva `scrittore-1=200kT/min` e decideva "throttle OK", mentre la unit reale Scrittore-1 stava consumando 280kT/min (40% in più). Nuova funzione `aggregate_writer_critic_rates()` mappa 1:1 e produce `per_writer_aggregated` nel state JSON. RULE Capitano **C-11** (IT+EN) istruisce a leggere `combined_rate_kt_per_min` per le decisioni di throttle.
+- ✅ **DOCTOR-DAILY-RESTART MVP**: nuova skill `daily-restart-wave` (gating triplo: finestra 03:00 UTC ± 30 min + 23h anti-thrash via state file + rispetto `.team-halted.flag`/`.weekly-halt.flag`). Restart pre-emptivo di TUTTI gli agenti (vivi inclusi) per context freshness. Ordine tier 3 → tier 1 (workers first, Capitano LAST). Heads-up Capitano 10 min prima. Chiude il gap Case Study #1 (Codex run 2026-05-19/21) dove l'utente aveva dovuto fare 1 restart manuale per arrestare drift di lucidità dopo ~12-24h.
+
+**CI/DX**:
+- ✅ Migration dev3 rinumerate 024/025 → 027/028 per evitare collisione con master.
+- ✅ Prettier autoformat post-merge dev3 (5 file Writer-on-demand + 3 file Geocoding).
+- ✅ ESLint 8 errori bloccanti risolti.
+- ✅ Node 20 → 24 sui workflow CI/CD.
+- ✅ `npm ci` di `shared/` aggiunto ai job lint-typecheck/test/build.
+- ✅ Vitest exclude `_disabled` + 42 test legacy disabilitati con scopo (CI signal pulito).
+- ✅ Governance: PR template per tier+area, CONTRIBUTING evidence-by-area, beta_feedback issue template.
+
 ### 🐛 Team strategy bugs sprint — 2026-05-17 / 2026-05-18 (19 commit, 48h)
 
 Dettaglio in
