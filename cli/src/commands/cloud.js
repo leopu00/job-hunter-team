@@ -1009,8 +1009,16 @@ async function handlePullDesiredState(options = {}) {
     return;
   }
 
-  log(pc.green(`✓ Pull desired-state applicato: ${updated} positions aggiornate`)
-    + (missing > 0 ? pc.dim(` (${missing} legacy_id non presenti localmente, skip)`) : ''));
+  // Successo sostanziale loggato anche in `silent`: nel daemon vogliamo
+  // sapere quando l'utente clicca via web e il pull ha applicato qualcosa
+  // (segnale altrimenti invisibile, dato che il push container→cloud
+  // riflette il proprio SQLite e farebbe da eco). Quando updated == 0
+  // (tipico, no nuovi click) restiamo zitti se silent.
+  const successMsg = pc.green(`✓ Pull desired-state applicato: ${updated} positions aggiornate`)
+    + (missing > 0 ? pc.dim(` (${missing} legacy_id non presenti localmente, skip)`) : '');
+  if (updated > 0 || !silent) {
+    console.log(successMsg);
+  }
 
   if (body.cursor) {
     await savePullCursor({ since: body.cursor });
@@ -1049,7 +1057,7 @@ async function handleDaemon(options) {
     return;
   }
 
-  console.log(pc.dim(`Cloud sync daemon: push ogni ${intervalSec}s verso ${config.base_url}`));
+  console.log(pc.dim(`Cloud sync daemon: push + pull-desired-state ogni ${intervalSec}s verso ${config.base_url}`));
 
   let running = true;
   const shutdown = (sig) => {
@@ -1104,6 +1112,22 @@ async function handleDaemon(options) {
       } catch (err) {
         console.error(pc.yellow(`  daemon tick error: ${err.message}`));
         tickFailed = true;
+      }
+
+      // Pull desired-state DOPO il push (cadenza condivisa intervalSec).
+      // Copre il caso multi-device "live": utente clicca su mobile mentre
+      // team gira su VPS → flag arriva in cloud → il container lo vede al
+      // prossimo tick, non solo al riavvio (P1 [JHT-CLOUDSYNC-01]).
+      // Best-effort: errori loggati ma NON contano nel counter del push
+      // (consecutiveFails è dedicato al write-side, dove la quota Vercel/
+      // Supabase è realmente a rischio). exitCode preservato.
+      try {
+        const prevPull = process.exitCode;
+        process.exitCode = 0;
+        await handlePullDesiredState({ silent: true });
+        process.exitCode = prevPull;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon pull-desired-state error: ${err.message}`));
       }
 
       if (tickFailed) {
