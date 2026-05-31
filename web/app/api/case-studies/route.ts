@@ -13,6 +13,7 @@ import { NextResponse } from "next/server"
 import { DatabaseSync } from "node:sqlite"
 import path from "node:path"
 import fs from "node:fs"
+import { deriveFiveHourWindows, type BurnPoint } from "@/lib/five-hour-windows"
 
 export const dynamic = "force-dynamic" // never cache during dev iterations
 
@@ -53,6 +54,22 @@ type WindowRow = {
   notes_md: string | null
   burn_curve_json: string | null
   display_order: number
+}
+
+type BurnSampleRow = {
+  case_study_window_id: number
+  ts: string
+  weekly_usage_pct: number
+  window_usage_pct: number | null
+  source: string | null
+}
+
+type AgentActivityRow = {
+  case_study_window_id: number
+  agent: string
+  ts_start: string
+  ts_end: string
+  reason: string | null
 }
 
 type CaseStudyRow = {
@@ -159,6 +176,22 @@ export async function GET() {
       )
       .all() as WindowRow[]
 
+    const burnSamples = db
+      .prepare(
+        `SELECT case_study_window_id, ts, weekly_usage_pct, window_usage_pct, source
+         FROM case_study_burn_samples
+         ORDER BY case_study_window_id ASC, ts ASC`,
+      )
+      .all() as BurnSampleRow[]
+
+    const agentActivity = db
+      .prepare(
+        `SELECT case_study_window_id, agent, ts_start, ts_end, reason
+         FROM case_study_agent_activity
+         ORDER BY case_study_window_id ASC, agent ASC, ts_start ASC`,
+      )
+      .all() as AgentActivityRow[]
+
     // Pivot children under their parent case-study for easier consumption client-side.
     const metricsByCs = new Map<number, MetricRow[]>()
     for (const m of metrics) {
@@ -181,6 +214,20 @@ export async function GET() {
       windowsByCs.set(w.case_study_id, arr)
     }
 
+    const burnByWin = new Map<number, BurnSampleRow[]>()
+    for (const s of burnSamples) {
+      const arr = burnByWin.get(s.case_study_window_id) ?? []
+      arr.push(s)
+      burnByWin.set(s.case_study_window_id, arr)
+    }
+
+    const activityByWin = new Map<number, AgentActivityRow[]>()
+    for (const a of agentActivity) {
+      const arr = activityByWin.get(a.case_study_window_id) ?? []
+      arr.push(a)
+      activityByWin.set(a.case_study_window_id, arr)
+    }
+
     const out = caseStudies.map((cs) => ({
       ...cs,
       highlighted: Boolean(cs as unknown as { highlighted?: number }),
@@ -189,12 +236,22 @@ export async function GET() {
         highlighted: Boolean(m.highlighted),
       })),
       notes: notesByCs.get(cs.id) ?? [],
-      windows: (windowsByCs.get(cs.id) ?? []).map((w) => ({
-        ...w,
-        burn_curve: w.burn_curve_json
-          ? (JSON.parse(w.burn_curve_json) as Array<{ t: string; w: number }>)
-          : null,
-      })),
+      windows: (windowsByCs.get(cs.id) ?? []).map((w) => {
+        const burn = w.burn_curve_json
+          ? (JSON.parse(w.burn_curve_json) as BurnPoint[])
+          : null
+        const fiveHour =
+          w.kind === "weekly" && burn && w.started_at && w.ended_at
+            ? deriveFiveHourWindows(w.started_at, w.ended_at, burn)
+            : null
+        return {
+          ...w,
+          burn_curve: burn,
+          five_hour_windows: fiveHour,
+          burn_samples: burnByWin.get(w.id) ?? [],
+          agent_activity: activityByWin.get(w.id) ?? [],
+        }
+      }),
     }))
 
     return NextResponse.json({
@@ -206,6 +263,8 @@ export async function GET() {
         total_metrics: metrics.length,
         total_notes: notes.length,
         total_windows: windows.length,
+        total_burn_samples: burnSamples.length,
+        total_agent_activity: agentActivity.length,
         total_coverage_cells: coverage.length,
         coverage_done: coverage.filter((c) => c.status === "done").length,
       },
