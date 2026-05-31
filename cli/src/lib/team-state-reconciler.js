@@ -14,8 +14,8 @@
  * Claim active_device: al boot POSTa /api/team-state/claim per registrarsi
  * come device attivo del user (single-team enforcement gratis).
  *
- * Parallelo a realtime-subscriber.js (team_commands) finché Step 5 del
- * cutover non completa. I due subscriber sono ortogonali: leggono tabelle
+ * Parallelo a team-commands-poller.js (team_commands) finché Step 5 del
+ * cutover non completa. I due poller sono ortogonali: leggono tabelle
  * diverse e chiamano `jht team <action>` che è idempotente.
  *
  * Caveat noto: il reconciler si fida dell'observed scritto in DB; se il
