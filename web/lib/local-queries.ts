@@ -819,6 +819,9 @@ function mapPositionFull(r: any): Position {
     status: r.status, notes: r.notes ?? null, last_checked: r.last_checked ?? null,
     write_requested: r.write_requested === 1 || r.write_requested === true,
     write_requested_at: r.write_requested_at ?? null,
+    geocode_requested: r.geocode_requested === 1 || r.geocode_requested === true,
+    geocode_requested_at: r.geocode_requested_at ?? null,
+    office_geocoded: r.office_geocoded === 1 || r.office_geocoded === true,
   }
 }
 
