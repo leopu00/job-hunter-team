@@ -2,7 +2,7 @@
  * i18n — Tipi per internazionalizzazione
  */
 
-export const LOCALES = ["it", "en", "es", "de", "fr"] as const;
+export const LOCALES = ["it", "en", "es", "de", "fr", "pt"] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "en";
 
@@ -35,7 +35,7 @@ export interface I18nConfig {
 export const DEFAULT_I18N_CONFIG: I18nConfig = {
   locale: DEFAULT_LOCALE,
   fallbackLocale: "en",
-  dictionaries: { it: {}, en: {}, es: {}, de: {}, fr: {} },
+  dictionaries: { it: {}, en: {}, es: {}, de: {}, fr: {}, pt: {} },
 };
 
 /** Verifica se una stringa e' un locale valido */
