@@ -102,6 +102,23 @@ type MeterState = {
     }
   >;
   per_agent_rolling_window_s?: number;
+  // Aggregato Scrittore+Critico per le decisioni di throttling del
+  // Capitano (RULE C-11). Key = scrittore-N, include il rate del
+  // critico-sN associato. Vedi shared/skills/token_metrics_lib.py
+  // aggregate_writer_critic_rates().
+  per_writer_aggregated?: Record<
+    string,
+    {
+      own_rate_kt_per_min?: number;
+      critic_rate_kt_per_min?: number;
+      combined_rate_kt_per_min?: number;
+      own_weighted_60s?: number;
+      critic_weighted_60s?: number;
+      combined_weighted_60s?: number;
+      critic_session?: string | null;
+      writer_session_alive?: boolean;
+    }
+  >;
 };
 
 async function readMeterState(): Promise<MeterState | null> {
@@ -149,6 +166,7 @@ export async function GET() {
     ratio: state.ratio ?? null,
     perAgent: state.per_agent ?? {},
     perAgentRollingWindowS: state.per_agent_rolling_window_s ?? null,
+    perWriterAggregated: state.per_writer_aggregated ?? {},
     source: "state-file",
   });
 }
