@@ -230,9 +230,9 @@ export default function PipelineFlow({ steps, title }: Props) {
       const p1 = pts[i];
       const p2 = pts[i + 1];
       const p3 = pts[i + 2] ?? p2;
-      let cp1x = p1.x + (p2.x - p0.x) * t;
+      const cp1x = p1.x + (p2.x - p0.x) * t;
       let cp1y = p1.y + (p2.y - p0.y) * t;
-      let cp2x = p2.x - (p3.x - p1.x) * t;
+      const cp2x = p2.x - (p3.x - p1.x) * t;
       let cp2y = p2.y - (p3.y - p1.y) * t;
       // Phase shift 0.55 per segmento + delta 0.28 fra i due CP →
       // onda viaggiante uniforme, senza zigzag fra i punti dati.
