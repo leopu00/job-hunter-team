@@ -157,7 +157,6 @@ export default function LandingNav() {
   const { t } = useLandingI18n();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const homeAnchor = (id: string) => (pathname === "/" ? `#${id}` : `/#${id}`);
 
   const navLinkStyle = (href: string) => ({
     color: pathname === href ? "var(--color-green)" : "var(--color-muted)",
@@ -177,51 +176,45 @@ export default function LandingNav() {
     >
       <div className="flex items-center justify-between px-5 sm:px-6 py-4">
         <Link href="/" className="flex items-center gap-2.5 no-underline">
-          <div
-            className="w-2 h-2"
-            style={{
-              background: "var(--color-green)",
-              boxShadow: "0 0 8px var(--color-green)",
-            }}
-          />
           <span className="text-[13px] font-bold tracking-widest text-[var(--color-white)]">
             JHT
           </span>
         </Link>
 
-        {/* Nav links nascosti temporaneamente - pagine incomplete
         <div className="hidden md:flex items-center gap-6">
-          <a href={homeAnchor('features')} className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            {t('nav_features')}
-          </a>
-          <a href={homeAnchor('how')} className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            {t('nav_how')}
-          </a>
+          <Link
+            href="/case-studies"
+            aria-current={currentPage("/case-studies")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/case-studies")}
+          >
+            {t("nav_case_studies")}
+          </Link>
+          <Link
+            href="/download"
+            aria-current={currentPage("/download")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/download")}
+          >
+            {t("nav_download")}
+          </Link>
+          <Link
+            href="/project"
+            aria-current={currentPage("/project")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/project")}
+          >
+            {t("nav_project")}
+          </Link>
           <a
             href="https://github.com/leopu00/job-hunter-team"
             target="_blank"
             rel="noreferrer"
             className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
           >
-            {t('nav_github')}
+            {t("nav_github")}
           </a>
-          <Link href="/download" aria-current={currentPage('/download')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/download')}>
-            {t('nav_download')}
-          </Link>
-          <Link href="/faq" aria-current={currentPage('/faq')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}>
-            {t('nav_faq')}
-          </Link>
-          <Link href="/pricing" aria-current={currentPage('/pricing')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/pricing')}>
-            {t('nav_pricing')}
-          </Link>
-          <Link href="/demo" aria-current={currentPage('/demo')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/demo')}>
-            {t('nav_demo')}
-          </Link>
-          <Link href="/about" aria-current={currentPage('/about')} className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/about')}>
-            {t('nav_about')}
-          </Link>
         </div>
-        */}
 
         <div className="flex items-center gap-2 sm:gap-3">
           <LangDropdown />
@@ -236,67 +229,106 @@ export default function LandingNav() {
             {t("nav_login")}
           </Link>
 
-          {/* Mobile hamburger nascosto temporaneamente
           <button
-            onClick={() => setMobileOpen(v => !v)}
+            onClick={() => setMobileOpen((v) => !v)}
             className="md:hidden flex flex-col gap-1 p-1.5"
-            style={{ background: 'none', border: '1px solid var(--color-border)', cursor: 'pointer' }}
+            style={{
+              background: "none",
+              border: "1px solid var(--color-border)",
+              cursor: "pointer",
+            }}
             aria-label="Menu"
             aria-expanded={mobileOpen}
             aria-controls="mobile-nav-menu"
           >
-            <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
-            <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: mobileOpen ? 0 : 1 }} />
-            <span className="block w-4 h-0.5" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: mobileOpen ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
+            <span
+              className="block w-4 h-0.5"
+              style={{
+                background: "var(--color-muted)",
+                transition: "all 0.2s",
+                transform: mobileOpen
+                  ? "rotate(45deg) translate(2px, 2px)"
+                  : "",
+              }}
+            />
+            <span
+              className="block w-4 h-0.5"
+              style={{
+                background: "var(--color-muted)",
+                transition: "all 0.2s",
+                opacity: mobileOpen ? 0 : 1,
+              }}
+            />
+            <span
+              className="block w-4 h-0.5"
+              style={{
+                background: "var(--color-muted)",
+                transition: "all 0.2s",
+                transform: mobileOpen
+                  ? "rotate(-45deg) translate(2px, -2px)"
+                  : "",
+              }}
+            />
           </button>
-          */}
         </div>
       </div>
 
-      {/* Mobile dropdown nascosto temporaneamente
       {mobileOpen && (
         <div
           id="mobile-nav-menu"
           role="menu"
           className="md:hidden px-5 pb-4 flex flex-col gap-3"
-          style={{ background: 'var(--color-void)', animation: 'fade-in 0.15s ease both' }}
+          style={{
+            background: "var(--color-void)",
+            animation: "fade-in 0.15s ease both",
+          }}
         >
-          <a href={homeAnchor('features')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            {t('nav_features')}
+          <Link
+            href="/case-studies"
+            aria-current={currentPage("/case-studies")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/case-studies")}
+          >
+            {t("nav_case_studies")}
+          </Link>
+          <Link
+            href="/download"
+            aria-current={currentPage("/download")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/download")}
+          >
+            {t("nav_download")}
+          </Link>
+          <Link
+            href="/project"
+            aria-current={currentPage("/project")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/project")}
+          >
+            {t("nav_project")}
+          </Link>
+          <a
+            href="https://github.com/leopu00/job-hunter-team"
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+          >
+            {t("nav_github")}
           </a>
-          <a href={homeAnchor('how')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            {t('nav_how')}
-          </a>
-          <a href="https://github.com/leopu00/job-hunter-team" target="_blank" rel="noreferrer"
-            className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline">
-            {t('nav_github')}
-          </a>
-          <Link href="/download" aria-current={currentPage('/download')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/download')}>
-            {t('nav_download')}
-          </Link>
-          <Link href="/faq" aria-current={currentPage('/faq')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/faq')}>
-            {t('nav_faq')}
-          </Link>
-          <Link href="/pricing" aria-current={currentPage('/pricing')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/pricing')}>
-            {t('nav_pricing')}
-          </Link>
-          <Link href="/demo" aria-current={currentPage('/demo')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/demo')}>
-            {t('nav_demo')}
-          </Link>
-          <Link href="/about" aria-current={currentPage('/about')} onClick={() => setMobileOpen(false)} className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline" style={navLinkStyle('/about')}>
-            {t('nav_about')}
-          </Link>
           <Link
             href="/?login=true"
             onClick={() => setMobileOpen(false)}
             className="text-center py-2.5 text-[12px] font-semibold tracking-wider no-underline transition-colors hover:text-[var(--color-bright)]"
-            style={{ color: 'var(--color-green)' }}
+            style={{ color: "var(--color-green)" }}
           >
-            {t('nav_login')}
+            {t("nav_login")}
           </Link>
         </div>
       )}
-      */}
     </nav>
   );
 }
