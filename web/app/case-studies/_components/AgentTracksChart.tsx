@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import type { FiveHourWindow, AgentActivity } from "./types"
+import { useChartTheme, chartPalette } from "./chart-theme"
 
 type Props = {
   fiveHourWindow: FiveHourWindow
@@ -343,6 +344,8 @@ function FormattedReason({
   reason: string | null
   currentAgent?: string
 }) {
+  const { mode } = useChartTheme()
+  const P = chartPalette(mode)
   const p = parseReason(reason)
   // Reception events have a `from` but no `to`. Derive `to` from the track
   // owner so the rendering is identical to sent messages.
@@ -352,29 +355,32 @@ function FormattedReason({
       <div className="space-y-1">
         <div className="flex flex-wrap items-baseline gap-1.5">
           <span>{emojiFor(p.from)}</span>
-          <span className="font-mono font-semibold text-slate-100">{p.from}</span>
-          <span className="text-slate-500">→</span>
+          <span className="font-mono font-semibold" style={{ color: P.popupText }}>{p.from}</span>
+          <span style={{ color: P.popupSubText }}>→</span>
           <span>{emojiFor(effectiveTo)}</span>
-          <span className="font-mono font-semibold text-slate-100">{effectiveTo}</span>
-          {p.type && <span className="text-[11px] text-slate-400">· {p.type.toLowerCase()}</span>}
+          <span className="font-mono font-semibold" style={{ color: P.popupText }}>{effectiveTo}</span>
+          {p.type && <span className="text-[11px]" style={{ color: P.popupSubText }}>· {p.type.toLowerCase()}</span>}
         </div>
-        {p.body && <p className="leading-relaxed text-slate-300">{p.body}</p>}
+        {p.body && <p className="leading-relaxed" style={{ color: P.popupBodyText }}>{p.body}</p>}
       </div>
     )
   }
   return (
     <div className="flex items-baseline gap-1.5">
       <span>{p.icon}</span>
-      <span className="text-slate-200">{p.body}</span>
+      <span style={{ color: P.popupBodyText }}>{p.body}</span>
     </div>
   )
 }
 
 export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
-  const [zoom, setZoom] = useState(4)
+  const [zoom, setZoom] = useState(1)
   const [selected, setSelected] = useState<Selected | null>(null)
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+
+  const { mode } = useChartTheme()
+  const P = chartPalette(mode)
 
   const start = new Date(fhw.started_at).getTime()
   const end = new Date(fhw.ended_at).getTime()
@@ -483,22 +489,28 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
   }, [agents, activity, CLUSTER_GAP_MS, FUSED_MIN_PX, pxPerMs])
 
   return (
-    <figure className="relative rounded-md border border-slate-700 bg-slate-900 text-slate-100">
-      <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-slate-800 px-4 py-3">
+    <figure
+      className="relative rounded-md border"
+      style={{ borderColor: P.figBorder, backgroundColor: P.figBg, color: P.figText }}
+    >
+      <header
+        className="flex flex-wrap items-baseline justify-between gap-3 border-b px-4 py-3"
+        style={{ borderColor: P.headerBorder }}
+      >
         <div>
-          <h6 className="text-sm font-semibold text-slate-100">
-            Finestra {fhw.window_number} · {fmtClock(start)} → {fmtClock(end)} (ora Roma) · {fmtDay(start)}
+          <h6 className="text-sm font-semibold" style={{ color: P.figText }}>
+            Finestra {fhw.window_number} · {fmtClock(start)} → {fmtClock(end)} · {fmtDay(start)}
           </h6>
-          <p className="mt-0.5 text-[10px] text-slate-500">
-            barra colorata = cluster di eventi simili · ogni linea verticale interna = un singolo evento · clic sulla linea per i dettagli
-          </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-wide text-slate-400">zoom</span>
+          <span className="text-[10px] uppercase tracking-wide" style={{ color: P.ctrlText }}>zoom</span>
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(1, z - 1))}
-            className="rounded bg-slate-800 px-2 py-0.5 text-xs hover:bg-slate-700"
+            className="rounded px-2 py-0.5 text-xs transition-colors"
+            style={{ backgroundColor: P.ctrlBg, color: P.figText }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = P.ctrlBgHover)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = P.ctrlBg)}
           >
             −
           </button>
@@ -514,61 +526,45 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(20, z + 1))}
-            className="rounded bg-slate-800 px-2 py-0.5 text-xs hover:bg-slate-700"
+            className="rounded px-2 py-0.5 text-xs transition-colors"
+            style={{ backgroundColor: P.ctrlBg, color: P.figText }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = P.ctrlBgHover)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = P.ctrlBg)}
           >
             +
           </button>
-          <span className="w-9 text-right font-mono text-xs text-slate-400">{zoom}x</span>
+          <span className="w-9 text-right font-mono text-xs" style={{ color: P.ctrlText }}>{zoom}x</span>
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-800 bg-slate-950/50 px-4 py-2 text-[11px] text-slate-300">
-        <span className="text-[10px] uppercase tracking-wide text-slate-500">legenda:</span>
-        {LEGEND_ACTIONS.map((a) => (
-          <span key={a.icon} className="inline-flex items-center gap-1">
-            <span>{a.icon}</span>
-            <span className="text-slate-400">{a.label}</span>
-          </span>
-        ))}
-      </div>
-
       <div className="grid" style={{ gridTemplateColumns: "220px 1fr" }}>
-        <div className="border-r border-slate-800 bg-slate-900">
+        <div
+          className="border-r"
+          style={{ borderColor: P.colBorder, backgroundColor: P.colBg }}
+        >
           <div
-            className="flex items-center justify-between gap-2 border-b border-slate-800/60 px-3 text-[10px] uppercase tracking-wide text-slate-500"
-            style={{ height: padT }}
+            className="flex items-center gap-2 border-b px-3 text-[10px] uppercase tracking-wide"
+            style={{ height: padT, borderColor: P.rowBorder, color: P.colHeaderText }}
           >
             <span>agente</span>
-            <span>
-              <span className="text-slate-300">inviati</span>
-              <span className="text-slate-600"> / ricevuti</span>
-            </span>
           </div>
-          {agents.map((ag) => {
-            const t = tracksByAgent.get(ag)
-            const clusters = t?.clusters ?? []
-            let outN = 0
-            let inN = 0
-            for (const c of clusters) {
-              if (c.allReceived) inN += c.count
-              else outN += c.count
-            }
+          {agents.map((ag, idx) => {
+            const isLast = idx === agents.length - 1
             return (
               <div
                 key={ag}
-                className="flex items-center justify-start gap-2 whitespace-nowrap border-b border-slate-800/40 px-3 last:border-0"
-                style={{ height: trackH + trackGap }}
+                className="flex items-center justify-start gap-2 whitespace-nowrap px-3"
+                style={{
+                  height: trackH + trackGap,
+                  borderBottom: isLast ? undefined : `1px solid ${P.rowBorder}`,
+                }}
               >
                 <span
                   className="inline-block h-2.5 w-2.5 rounded-full"
                   style={{ backgroundColor: AGENT_PALETTE[ag] ?? "#64748b" }}
                 />
                 <span className="text-[13px]">{emojiFor(ag)}</span>
-                <span className="font-mono text-[13px] text-slate-100">{ag}</span>
-                <span className="text-[11px] text-slate-500">
-                  · <span className="text-slate-300">{outN}</span>
-                  <span className="text-slate-600">/{inN}</span>
-                </span>
+                <span className="font-mono text-[13px]" style={{ color: P.agentName }}>{ag}</span>
               </div>
             )
           })}
@@ -589,7 +585,7 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                   x2={xOf(tk)}
                   y1={padT}
                   y2={padT + tracksH}
-                  stroke="#1e293b"
+                  stroke={P.gridLine}
                   strokeWidth="0.5"
                 />
                 <text
@@ -597,7 +593,7 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                   y={padT - 8}
                   fontSize="10"
                   textAnchor="middle"
-                  fill="#94a3b8"
+                  fill={P.topAxisText}
                 >
                   {labelFmt.format(new Date(tk))}
                 </text>
@@ -615,7 +611,7 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                     y={y}
                     width={innerW}
                     height={trackH}
-                    fill={i % 2 === 0 ? "#0f172a" : "#0b1220"}
+                    fill={i % 2 === 0 ? P.bandA : P.bandB}
                   />
                   {/* Sleep / throttle bands — drawn first so they sit behind events */}
                   {t.sleeps.map((sl, j) => {
@@ -644,8 +640,8 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                           y={y + trackH - 8}
                           width={w}
                           height={6}
-                          fill="#475569"
-                          fillOpacity="0.35"
+                          fill={P.sleepFill}
+                          fillOpacity={P.sleepOpacity}
                           rx="1"
                         />
                       </g>
@@ -655,13 +651,6 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                     const x1 = xOf(cl.start)
                     const natW = xOf(cl.end) - x1
                     const visualW = Math.max(10, natW)
-                    const labelText =
-                      cl.count > 1
-                        ? cl.mixed
-                          ? `× ${cl.count} eventi`
-                          : `${cl.icon} ×${cl.count} ${cl.actionLabel}`
-                        : `${cl.icon} ${cl.actionLabel}`
-                    const labelFits = visualW >= 70
                     const linesVisible = visualW / Math.max(1, cl.count) >= LINE_MIN_PX
                     // When events are too packed to render as separate lines,
                     // collapse them into a single solid block. The block width is
@@ -695,33 +684,17 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                       <g key={k}>
                         {/* Fused block (only when individual lines cannot fit) */}
                         {!linesVisible && (
-                          <>
-                            <rect
-                              x={x1}
-                              y={y + 4}
-                              width={fusedW}
-                              height={trackH - 8}
-                              fill={color}
-                              fillOpacity={0.92}
-                              rx="3"
-                              style={{ cursor: "pointer" }}
-                              onClick={onClickCluster}
-                            />
-                            {labelFits && (
-                              <text
-                                x={x1 + 6}
-                                y={y + trackH / 2 + 4}
-                                fontSize="11"
-                                fontWeight="700"
-                                fill="#0f172a"
-                                pointerEvents="none"
-                              >
-                                {labelText.length * 6 < fusedW - 12
-                                  ? labelText
-                                  : labelText.slice(0, Math.max(0, Math.floor((fusedW - 12) / 6))) + "…"}
-                              </text>
-                            )}
-                          </>
+                          <rect
+                            x={x1}
+                            y={y + 4}
+                            width={fusedW}
+                            height={trackH - 8}
+                            fill={color}
+                            fillOpacity={0.92}
+                            rx="3"
+                            style={{ cursor: "pointer" }}
+                            onClick={onClickCluster}
+                          />
                         )}
                         {/* Click-target lines: only render when there is enough
                             pixel room per event. Otherwise the cluster shadow
@@ -790,7 +763,7 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                                   cx={lx}
                                   cy={y + trackH / 2}
                                   r={6}
-                                  fill="#fff"
+                                  fill={P.selectedHalo}
                                   stroke={color}
                                   strokeWidth="2"
                                 />
@@ -811,7 +784,7 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
               x2={innerW}
               y1={padT + tracksH}
               y2={padT + tracksH}
-              stroke="#334155"
+              stroke={P.baseline}
               strokeWidth="0.5"
             />
             {/* Minor ticks: small notches without label */}
@@ -822,7 +795,7 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                 x2={xOf(tk)}
                 y1={padT + tracksH}
                 y2={padT + tracksH + 3}
-                stroke="#475569"
+                stroke={P.minorTick}
                 strokeWidth="0.5"
               />
             ))}
@@ -834,7 +807,7 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                   x2={xOf(tk)}
                   y1={padT + tracksH}
                   y2={padT + tracksH + 6}
-                  stroke="#94a3b8"
+                  stroke={P.majorTick}
                   strokeWidth="0.6"
                 />
                 <text
@@ -842,7 +815,7 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                   y={padT + tracksH + 16}
                   fontSize="10"
                   textAnchor="middle"
-                  fill="#cbd5e1"
+                  fill={P.bottomAxisText}
                 >
                   {labelFmt.format(new Date(tk))}
                 </text>
@@ -860,70 +833,86 @@ export function AgentTracksChart({ fiveHourWindow: fhw, activity }: Props) {
                 onClick={() => setSelected(null)}
                 aria-hidden
               />
-              <div className="relative max-h-[90vh] w-full max-w-xl overflow-hidden rounded-lg border border-slate-600 bg-slate-950 text-sm text-slate-100 shadow-2xl">
+              <div
+                className="relative max-h-[90vh] w-full max-w-xl overflow-hidden rounded-lg border text-sm shadow-2xl"
+                style={{ borderColor: P.popupBorder, backgroundColor: P.popupBg, color: P.popupText }}
+              >
                 {selected.kind === "single" ? (
                   <div className="p-4">
-                    <div className="mb-2 flex items-baseline gap-2 border-b border-slate-800 pb-2">
+                    <div className="mb-2 flex items-baseline gap-2 border-b pb-2" style={{ borderColor: P.popupHeaderBorder }}>
                       <span className="text-lg">{emojiFor(selected.agent)}</span>
                       <span className="font-mono font-semibold">{selected.agent}</span>
-                      <span className="text-[12px] text-slate-400">
+                      <span className="text-[12px]" style={{ color: P.popupSubText }}>
                         {fmtClockSec(selected.ts)} · {fmtDay(selected.ts)}
                       </span>
                     </div>
                     <div className="mb-2 flex items-center gap-2">
                       <span className="text-base">{selected.icon}</span>
-                      <span className="font-semibold text-slate-100">{selected.actionLabel}</span>
+                      <span className="font-semibold" style={{ color: P.popupText }}>{selected.actionLabel}</span>
                     </div>
                     {selected.reason && (
-                      <div className="rounded bg-slate-900 px-3 py-2 text-[12px] leading-relaxed text-slate-300">
+                      <div
+                        className="rounded px-3 py-2 text-[12px] leading-relaxed"
+                        style={{ backgroundColor: P.popupBodyBg, color: P.popupBodyText }}
+                      >
                         <FormattedReason reason={selected.reason} currentAgent={selected.agent} />
                       </div>
                     )}
                     <button
                       type="button"
                       onClick={() => setSelected(null)}
-                      className="mt-3 w-full rounded bg-slate-800 px-3 py-1.5 text-xs font-medium hover:bg-slate-700"
+                      className="mt-3 w-full rounded px-3 py-1.5 text-xs font-medium transition-colors"
+                      style={{ backgroundColor: P.popupCloseBg, color: P.popupText }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = P.popupCloseBgHover)}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = P.popupCloseBg)}
                     >
                       chiudi (Esc)
                     </button>
                   </div>
                 ) : (
                   <div className="flex max-h-[90vh] flex-col">
-                    <div className="border-b border-slate-800 px-4 py-3">
+                    <div className="border-b px-4 py-3" style={{ borderColor: P.popupHeaderBorder }}>
                       <div className="flex items-baseline gap-2">
                         <span className="text-lg">{emojiFor(selected.agent)}</span>
                         <span className="font-mono font-semibold">{selected.agent}</span>
-                        <span className="text-[12px] text-slate-400">
+                        <span className="text-[12px]" style={{ color: P.popupSubText }}>
                           {fmtClockSec(selected.start)} → {fmtClockSec(selected.end)}
                         </span>
                       </div>
-                      <div className="mt-1 flex items-center gap-2 text-slate-300">
+                      <div className="mt-1 flex items-center gap-2" style={{ color: P.popupBodyText }}>
                         <span className="text-base">{selected.icon}</span>
                         <span className="font-semibold">{selected.actionLabel}</span>
-                        <span className="text-[11px] text-slate-500">
+                        <span className="text-[11px]" style={{ color: P.popupSubText }}>
                           · {selected.events.length} eventi nel cluster
                         </span>
                       </div>
                     </div>
                     <ul className="flex-1 space-y-2 overflow-y-auto px-4 py-3 text-[11.5px]">
-                      {selected.events.map((ev, i) => (
-                        <li
-                          key={i}
-                          className="flex gap-3 border-b border-slate-800/60 pb-2 last:border-0"
-                        >
-                          <span className="w-16 shrink-0 font-mono text-slate-500">
-                            {fmtClockSec(ev.ts)}
-                          </span>
-                          <div className="flex-1">
-                            <FormattedReason reason={ev.reason} currentAgent={selected.agent} />
-                          </div>
-                        </li>
-                      ))}
+                      {selected.events.map((ev, i) => {
+                        const isLast = i === selected.events.length - 1
+                        return (
+                          <li
+                            key={i}
+                            className="flex gap-3 pb-2"
+                            style={{ borderBottom: isLast ? undefined : `1px solid ${P.popupHeaderBorder}` }}
+                          >
+                            <span className="w-16 shrink-0 font-mono" style={{ color: P.popupSubText }}>
+                              {fmtClockSec(ev.ts)}
+                            </span>
+                            <div className="flex-1">
+                              <FormattedReason reason={ev.reason} currentAgent={selected.agent} />
+                            </div>
+                          </li>
+                        )
+                      })}
                     </ul>
                     <button
                       type="button"
                       onClick={() => setSelected(null)}
-                      className="border-t border-slate-800 bg-slate-900 px-4 py-2 text-xs font-medium hover:bg-slate-800"
+                      className="border-t px-4 py-2 text-xs font-medium transition-colors"
+                      style={{ borderColor: P.popupHeaderBorder, backgroundColor: P.popupCloseTop, color: P.popupText }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = P.popupCloseBgHover)}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = P.popupCloseTop)}
                     >
                       chiudi (Esc)
                     </button>
