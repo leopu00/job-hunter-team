@@ -39,7 +39,7 @@ type FunnelStage = {
   passedForward?: number | null;
 };
 
-function CaseFunnel({ cs }: { cs: CaseStudy }) {
+export function CaseFunnel({ cs }: { cs: CaseStudy }) {
   const accent = providerColor(cs.provider_name);
   const stages = buildStages(cs);
   const maxCount = Math.max(...stages.map((s) => s.count), 1);

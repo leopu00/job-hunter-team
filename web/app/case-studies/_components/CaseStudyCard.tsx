@@ -6,6 +6,9 @@ type Props = {
   cs: CaseStudy;
 };
 
+// Infra detail that isn't part of the product story — hidden from the metadata strip.
+const HIDDEN_META = new Set(["host"]);
+
 const NOTE_LABEL: Record<
   CaseStudy["notes"][number]["note_type"],
   { title: string; tone: string }
@@ -35,7 +38,7 @@ export function CaseStudyCard({ cs }: Props) {
     .filter((m) => m.highlighted)
     .sort((a, b) => a.display_order - b.display_order);
   const metaMetrics = cs.metrics
-    .filter((m) => m.category === "metadata")
+    .filter((m) => m.category === "metadata" && !HIDDEN_META.has(m.metric_key))
     .sort((a, b) => a.display_order - b.display_order);
 
   return (
@@ -60,33 +63,61 @@ export function CaseStudyCard({ cs }: Props) {
         {cs.profile_summary}
       </p>
 
-      {/* metadata strip */}
-      <dl className="mb-6 grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-3">
-        {metaMetrics.map((m) => (
-          <div key={m.metric_key}>
-            <dt className="text-slate-500">
-              {m.emoji} {m.metric_label}
-            </dt>
-            <dd className="font-medium text-slate-800">
-              {metricText(cs, m.metric_key)}
-            </dd>
-          </div>
-        ))}
-      </dl>
-
-      {/* hero KPI strip */}
-      {heroMetrics.length > 0 && (
-        <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg bg-slate-50 p-4 sm:grid-cols-4">
-          {heroMetrics.map((m) => (
-            <div key={m.metric_key}>
-              <div className="text-xs text-slate-500">
+      {/* metadata strip — boxed "setup" panel */}
+      <section className="mb-6 rounded-xl border border-slate-100 bg-slate-50/70 p-5">
+        <h3 className="mb-3 text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase">
+          Setup
+        </h3>
+        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-3">
+          {metaMetrics.map((m) => (
+            <div key={m.metric_key} className="min-w-0">
+              <dt className="text-slate-500">
                 {m.emoji} {m.metric_label}
-              </div>
-              <div className="mt-1 text-lg font-bold text-slate-900">
-                {m.value_text ?? m.value_num}
-              </div>
+              </dt>
+              <dd className="mt-0.5 text-sm font-medium text-slate-800">
+                {metricText(cs, m.metric_key)}
+              </dd>
             </div>
           ))}
+        </dl>
+      </section>
+
+      {/* hero KPI strip — one accented card per metric */}
+      {heroMetrics.length > 0 && (
+        <div className="mb-6">
+          <h3 className="mb-3 text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase">
+            Risultati chiave
+          </h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {heroMetrics.map((m) => {
+              const { main, sub } = splitMetricValue(
+                String(m.value_text ?? m.value_num ?? "—"),
+              );
+              return (
+                <div
+                  key={m.metric_key}
+                  className="group relative min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-x-0 top-0 h-1 opacity-80"
+                    style={{ backgroundColor: accent }}
+                  />
+                  <div className="truncate pt-1 text-xs text-slate-500">
+                    {m.emoji} {m.metric_label}
+                  </div>
+                  <div className="mt-2 text-2xl font-bold leading-none tracking-tight text-slate-900">
+                    {main}
+                  </div>
+                  {sub && (
+                    <div className="mt-1.5 text-[11px] leading-snug font-normal text-slate-400">
+                      {sub}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -124,6 +155,15 @@ export function CaseStudyCard({ cs }: Props) {
       <WindowsSection windows={cs.windows ?? []} accentColor={accent} />
     </article>
   );
+}
+
+// Split a KPI value like "396.9M weighted (Codex telemetry)" into a short headline
+// number ("396.9M weighted") and a small parenthetical caption ("Codex telemetry"),
+// so the hero strip shows a clean big number with the context demoted underneath.
+function splitMetricValue(v: string): { main: string; sub?: string } {
+  const m = v.match(/^(.*?)\s*\((.*)\)\s*$/);
+  if (m && m[1].trim()) return { main: m[1].trim(), sub: m[2].trim() };
+  return { main: v.trim() };
 }
 
 // Minimal markdown: **bold**, *italic*, `code`. Source content is trusted (we author it).
