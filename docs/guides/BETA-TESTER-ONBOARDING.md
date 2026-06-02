@@ -112,7 +112,7 @@ Lingue esistenti (en/it/hu): l'app desktop le supporta già (`web/messages/{en,i
 | 🤖 Prompt agenti (10 ruoli) | 🟡 mostly IT, mentor/critico EN | baseline EN + `.it.md` + `.hu.md` |
 | ⚙️ Wizard CLI `jht setup` | ✅ i18n via `cli/wizard/i18n.js` + `JHT_LANG` (setup.js:26, setup-steps.js:17) | OK |
 | 📜 `host-setup.sh` picker | 🟡 en/it solo | aggiungere hu |
-| 🩺 Agent prompts loader | ✅ già scaffolded (start-agent.sh:497-516) | OK, manca solo i contenuti |
+| 👨‍⚕️ Agent prompts loader | ✅ già scaffolded (start-agent.sh:497-516) | OK, manca solo i contenuti |
 | 🔧 Bot commands `/start /help` | ✅ i18n via `shared/i18n.py` (tg-bridge.py:31-55, BOT_COMMANDS lookup) — done 2026-05-31 | OK |
 | 📊 Auto-report PNG + caption | ✅ i18n via `shared/i18n.py` (auto_report.py:52-61 + `_i18n_t/_i18n_tf`) | OK |
 

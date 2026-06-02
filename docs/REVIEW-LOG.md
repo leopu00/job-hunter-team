@@ -59,7 +59,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/assistente/assistente.md](../agents/assistente/assistente.md) | 🤝 Assistente — config profilo utente, supporto setup | — | 2026-05-10 | ✅ |
 | [agents/maestro/maestro.md](../agents/maestro/maestro.md) | 🧙‍♂️ Maestro — career-coach pattern-detector (planned, voce Gandalf) | — | 2026-05-02 | ✅ |
 | [agents/capitano/missions/thermostat-test.md](../agents/capitano/missions/thermostat-test.md) | 🌡️ Missione opt-in test termostato senza Sentinella | — | 2026-05-05 | ✅ |
-| [agents/dottore/dottore.md](../agents/dottore/dottore.md) | 🩺 Dottore — health-check + manutenzione one-shot (~30 min, watchdog) | — | 2026-05-10 | ✅ |
+| [agents/dottore/dottore.md](../agents/dottore/dottore.md) | 👨‍⚕️ Dottore — health-check + manutenzione one-shot (~30 min, watchdog) | — | 2026-05-10 | ✅ |
 
 
 ## 📐 Team architecture & manuals
