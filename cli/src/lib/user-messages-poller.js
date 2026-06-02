@@ -22,7 +22,7 @@
  * Mapping agent → tmux session:
  *  Browser POSTa `agent` lowercase (1-64 char). Il poller estrae il ruolo base
  *  (rimuove suffisso `-N` di scaling, es. `scout-1` → `scout`) e fa uppercase.
- *  Whitelist allineata a VALID_TARGETS di team-commands-poller.js. Target speciali
+ *  Whitelist allineata a VALID_TARGETS di realtime-subscriber.js. Target speciali
  *  (`all`, `bridge`) sono skippati: non hanno una sessione tmux di chat con cui
  *  parlare con l'utente.
  *
@@ -62,7 +62,7 @@ const FETCH_LIMIT = 50;
 // senza intervento utente. Allineato a handlePush in cloud.js.
 const MAX_CONSECUTIVE_AUTH_FAILS = 3;
 
-// Whitelist allineata a team-commands-poller.js (VALID_TARGETS).
+// Whitelist allineata a realtime-subscriber.js (VALID_TARGETS).
 // 'all' e 'bridge' sono inclusi nella lista web (resta valida la POST)
 // ma il poller li skippa: non c'è un tmux pane utente-facing.
 const TMUX_TARGETS = new Set([
