@@ -241,7 +241,7 @@ For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-
 ✅ 🔐 SECURITY.md — root file with responsible disclosure (audit in docs/security/)
 ✅ 🤝 CODE_OF_CONDUCT.md — Contributor Covenant
 ⬜ 🎬 30s demo video (BLOCKER) — README above the fold
-✅ 🛡️ Security review — 31/34 fix, score 30→74%, see docs/security/ (3 gap residui: SSRF, resolve-system-bin, CSP prod)
+✅ 🛡️ Security review — 31/34 fix, score 30→74%, see docs/security/ (tutti i blocker pre-launch chiusi: SSRF dispatcher integrato a webhooks+gateway, CSP nonce-based in prod via `web/middleware.ts`, resolve-system-bin deferito con razionale Homebrew/Docker macOS; verificato 2026-06-02)
 ⬜ 🧊 Stabilize monitoring architecture (1-2 weeks freeze pre-launch)
 ✅ 🧪 docs/BETA.md created
 ⬜ 🧪 Beta tester recruitment (publish on r/cscareerquestions, friends list)
@@ -482,7 +482,7 @@ For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Ki
 - 🎯 [`docs/VISION.md`](VISION.md) — design philosophy
 - 📐 [`docs/internal/INFRA.md`](../internal/INFRA.md) — deployment diagram
 - 💳 [`docs/PROVIDERS.md`](PROVIDERS.md) — supported subscriptions
-- 🧪 [`docs/guides/BETA.md`](../guides/BETA.md) — beta program + pre-launch coverage matrix
+- 🧪 [`docs/guides/BETA.md`](../guides/BETA.md) — beta program + post-launch open invitation (any role/industry)
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](../guides/AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
 - 🔒 [`docs/MAINTAINERS.md`](../internal/MAINTAINERS.md) — internal operations reference
 - 📐 [`docs/adr/`](./adr/) — architectural decision records
