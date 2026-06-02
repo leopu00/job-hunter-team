@@ -1,23 +1,24 @@
-"use client"
+"use client";
 
-import type { CaseStudy, Window } from "./types"
-import { providerColor } from "./types"
-import { FiveHourBreakdown } from "./FiveHourBreakdown"
-import { FullRunUsageChart } from "./FullRunUsageChart"
-import { useChartTheme } from "./chart-theme"
+import type { CaseStudy, Window } from "./types";
+import { providerColor } from "./types";
+import { FiveHourBreakdown } from "./FiveHourBreakdown";
+import { FullRunUsageChart } from "./FullRunUsageChart";
+import { useChartTheme } from "./chart-theme";
 
 type Props = {
-  caseStudy: CaseStudy
-  weekly: Window
-}
+  caseStudy: CaseStudy;
+  weekly: Window;
+};
 
 // Dedicated tab section showing the 7 per-5h-window usage charts (cumulative
 // burn curve, trend line, cap, agent activity tracks) for the Codex run.
 export function FiveHourWindowsTab({ caseStudy, weekly }: Props) {
-  const { mode } = useChartTheme()
-  const isDark = mode === "dark"
-  if (!weekly.five_hour_windows || weekly.five_hour_windows.length === 0) return null
-  const accent = providerColor(caseStudy.provider_name)
+  const { mode } = useChartTheme();
+  const isDark = mode === "dark";
+  if (!weekly.five_hour_windows || weekly.five_hour_windows.length === 0)
+    return null;
+  const accent = providerColor(caseStudy.provider_name);
   return (
     <section
       className={`py-10 ${isDark ? "bg-slate-950" : "bg-slate-50"}`}
@@ -54,5 +55,5 @@ export function FiveHourWindowsTab({ caseStudy, weekly }: Props) {
         />
       </div>
     </section>
-  )
+  );
 }

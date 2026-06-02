@@ -12,11 +12,11 @@ type Props = {
 //   * Source split (LinkedIn vs other) from the source_* metrics
 export function PipelineFunnel({ caseStudies }: Props) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6">
-      <h3 className="mb-1 text-sm font-bold text-slate-900">
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6">
+      <h3 className="mb-1 text-sm font-bold text-[var(--color-white)]">
         🌊 Pipeline conversion
       </h3>
-      <p className="mb-5 text-xs text-slate-500">
+      <p className="mb-5 text-xs text-[var(--color-muted)]">
         From positions analyzed by the pipeline to ready applications. Width =
         absolute volume. Drop-off shows where positions were excluded.
       </p>
@@ -65,9 +65,9 @@ export function CaseFunnel({ cs }: { cs: CaseStudy }) {
   const sources = buildSourceBreakdown(cs);
 
   return (
-    <div className="border-t border-slate-100 pt-5 first:border-t-0 first:pt-0">
+    <div className="border-t border-[var(--color-border)] pt-5 first:border-t-0 first:pt-0">
       <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="text-sm font-semibold text-slate-900">
+        <h4 className="text-sm font-semibold text-[var(--color-white)]">
           <span
             className="mr-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
             style={{ backgroundColor: accent }}
@@ -77,10 +77,10 @@ export function CaseFunnel({ cs }: { cs: CaseStudy }) {
           {cs.provider_name}
         </h4>
         <div className="flex items-baseline gap-2 text-right">
-          <span className="font-mono text-sm font-bold text-slate-900">
+          <span className="font-mono text-sm font-bold text-[var(--color-white)]">
             {terminalConv.toFixed(1)}% conversion
           </span>
-          <span className="font-mono text-[10px] text-slate-500">
+          <span className="font-mono text-[10px] text-[var(--color-muted)]">
             (on {decidedTotal} decided)
           </span>
         </div>
@@ -89,7 +89,7 @@ export function CaseFunnel({ cs }: { cs: CaseStudy }) {
       <FunnelStages stages={stages} maxCount={maxCount} accent={accent} />
 
       {(inFlight > 0 || excludedTotal > 0) && (
-        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+        <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-muted)]">
           Of <strong>{rawFound}</strong> positions found in the run,{" "}
           <strong>{decidedTotal}</strong> reached a terminal decision (
           <strong>{ready}</strong> ready · <strong>{excludedTotal}</strong>{" "}
@@ -246,13 +246,13 @@ function FunnelStages({
 
         return (
           <div key={s.key} className="space-y-0.5">
-            <div className="flex items-baseline gap-2 text-xs text-slate-600">
-              <span className="w-24 shrink-0 font-medium text-slate-700">
+            <div className="flex items-baseline gap-2 text-xs text-[var(--color-muted)]">
+              <span className="w-24 shrink-0 font-medium text-[var(--color-bright)]">
                 {s.label}
               </span>
-              <span className="font-mono text-slate-900">
+              <span className="font-mono text-[var(--color-white)]">
                 {s.count.toLocaleString()}
-                <span className="ml-1 text-slate-500">
+                <span className="ml-1 text-[var(--color-muted)]">
                   ({cumulativePct.toFixed(0)}%)
                 </span>
               </span>
@@ -263,7 +263,7 @@ function FunnelStages({
               )}
             </div>
             <div
-              className="flex h-5 overflow-hidden rounded bg-slate-100"
+              className="flex h-5 overflow-hidden rounded bg-[var(--color-card)]"
               style={{ width: `${widthPct}%` }}
               role="img"
               aria-label={`stage ${s.label}: ${s.count} total${passed != null ? `, ${passed} passed forward` : ""}, ${excluded} excluded`}
@@ -295,7 +295,7 @@ function FunnelStages({
           </div>
         );
       })}
-      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500">
+      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[var(--color-muted)]">
         <span className="inline-flex items-center gap-1">
           <span
             className="inline-block h-2.5 w-3 rounded"
@@ -325,8 +325,8 @@ function PhaseFunnels({ cs, accent }: { cs: CaseStudy; accent: string }) {
   const sharedMax = Math.max(pre[0]?.count ?? 0, post[0]?.count ?? 0, 1);
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <h5 className="mb-3 text-xs font-bold text-slate-800">
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-deep)] p-3">
+      <h5 className="mb-3 text-xs font-bold text-[var(--color-bright)]">
         📅 5-stage funnel by phase (within the second weekly window)
       </h5>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -412,10 +412,12 @@ function MiniPhaseFunnel({
   const cNew = stages[0].count;
   const conv = cNew > 0 ? (cReady / cNew) * 100 : 0;
   return (
-    <div className="rounded border border-slate-200 bg-white p-3">
+    <div className="rounded border border-[var(--color-border)] bg-[var(--color-panel)] p-3">
       <div className="mb-2 flex items-baseline justify-between">
-        <span className="text-xs font-semibold text-slate-900">{label}</span>
-        <span className="font-mono text-xs font-bold text-slate-900">
+        <span className="text-xs font-semibold text-[var(--color-white)]">
+          {label}
+        </span>
+        <span className="font-mono text-xs font-bold text-[var(--color-white)]">
           {conv.toFixed(1)}%
         </span>
       </div>
@@ -429,11 +431,13 @@ function MiniPhaseFunnel({
           const excludedShare = s.count > 0 ? (excluded / s.count) * 100 : 0;
           return (
             <div key={s.key} className="flex items-center gap-2 text-[10px]">
-              <span className="w-16 shrink-0 text-slate-600">{s.label}</span>
-              <span className="w-8 shrink-0 text-right font-mono text-slate-700">
+              <span className="w-16 shrink-0 text-[var(--color-muted)]">
+                {s.label}
+              </span>
+              <span className="w-8 shrink-0 text-right font-mono text-[var(--color-bright)]">
                 {s.count}
               </span>
-              <div className="relative flex h-3 flex-1 overflow-hidden rounded bg-slate-100">
+              <div className="relative flex h-3 flex-1 overflow-hidden rounded bg-[var(--color-card)]">
                 <div
                   className="flex h-3 overflow-hidden rounded"
                   style={{ width: `${widthPct}%` }}
@@ -463,12 +467,14 @@ function MiniPhaseFunnel({
           );
         })}
       </div>
-      <p className="mt-2 text-[10px] text-slate-500">
+      <p className="mt-2 text-[10px] text-[var(--color-muted)]">
         {totalFound} positions found · {cReady} ready · {cNew - cReady} excluded
         · {totalFound - cNew} in-flight
       </p>
       {caveat && (
-        <p className="mt-1 text-[10px] italic text-slate-500">⚠️ {caveat}</p>
+        <p className="mt-1 text-[10px] italic text-[var(--color-muted)]">
+          ⚠️ {caveat}
+        </p>
       )}
     </div>
   );
@@ -522,23 +528,25 @@ function SourceBreakdown({
 }) {
   const maxTotal = Math.max(...sources.map((s) => s.total), 1);
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <h5 className="mb-2 text-xs font-bold text-slate-800">📡 By source</h5>
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-deep)] p-3">
+      <h5 className="mb-2 text-xs font-bold text-[var(--color-bright)]">
+        📡 By source
+      </h5>
       <div className="space-y-2">
         {sources.map((s) => {
           const widthPct = (s.total / maxTotal) * 100;
           const readyWidth = s.total > 0 ? (s.ready / s.total) * widthPct : 0;
           return (
             <div key={s.label}>
-              <div className="flex items-baseline justify-between text-[11px] text-slate-600">
+              <div className="flex items-baseline justify-between text-[11px] text-[var(--color-muted)]">
                 <span>
                   {s.emoji} {s.label}
                 </span>
-                <span className="font-mono font-bold text-slate-900">
+                <span className="font-mono font-bold text-[var(--color-white)]">
                   {s.conversion.toFixed(1)}% ({s.ready}/{s.total})
                 </span>
               </div>
-              <div className="mt-0.5 h-3 overflow-hidden rounded bg-slate-200">
+              <div className="mt-0.5 h-3 overflow-hidden rounded bg-[var(--color-card)]">
                 <div
                   className="h-full"
                   style={{
