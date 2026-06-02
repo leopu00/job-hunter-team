@@ -72,6 +72,18 @@ type AgentActivityRow = {
   reason: string | null;
 };
 
+type AgentTokensRow = {
+  case_study_window_id: number;
+  window_number: number;
+  agent: string;
+  input_tokens: number;
+  cached_input_tokens: number;
+  output_tokens: number;
+  reasoning_output_tokens: number;
+  events: number;
+  sessions: number;
+};
+
 type CaseStudyRow = {
   id: number;
   slug: string;
@@ -192,6 +204,16 @@ export async function GET() {
       )
       .all() as AgentActivityRow[];
 
+    const agentTokens = db
+      .prepare(
+        `SELECT case_study_window_id, window_number, agent,
+                input_tokens, cached_input_tokens, output_tokens,
+                reasoning_output_tokens, events, sessions
+         FROM case_study_agent_tokens
+         ORDER BY case_study_window_id ASC, window_number ASC, input_tokens DESC`,
+      )
+      .all() as AgentTokensRow[];
+
     // Pivot children under their parent case-study for easier consumption client-side.
     const metricsByCs = new Map<number, MetricRow[]>();
     for (const m of metrics) {
@@ -228,6 +250,13 @@ export async function GET() {
       activityByWin.set(a.case_study_window_id, arr);
     }
 
+    const tokensByWin = new Map<number, AgentTokensRow[]>();
+    for (const t of agentTokens) {
+      const arr = tokensByWin.get(t.case_study_window_id) ?? [];
+      arr.push(t);
+      tokensByWin.set(t.case_study_window_id, arr);
+    }
+
     const out = caseStudies.map((cs) => ({
       ...cs,
       highlighted: Boolean(cs as unknown as { highlighted?: number }),
@@ -250,6 +279,7 @@ export async function GET() {
           five_hour_windows: fiveHour,
           burn_samples: burnByWin.get(w.id) ?? [],
           agent_activity: activityByWin.get(w.id) ?? [],
+          agent_tokens: tokensByWin.get(w.id) ?? [],
         };
       }),
     }));
@@ -265,6 +295,7 @@ export async function GET() {
         total_windows: windows.length,
         total_burn_samples: burnSamples.length,
         total_agent_activity: agentActivity.length,
+        total_agent_tokens: agentTokens.length,
         total_coverage_cells: coverage.length,
         coverage_done: coverage.filter((c) => c.status === "done").length,
       },
