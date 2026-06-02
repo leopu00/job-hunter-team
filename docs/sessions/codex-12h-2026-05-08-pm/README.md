@@ -1,12 +1,12 @@
 # 🔵 Codex monitoring — 12h snapshot (2026-05-08 PM)
 
 Report HTML 12h del pomeriggio del 8 maggio. Include la prima vista del
-🩺 **Dottore** (health-check agent) deployato la mattina alle 07:00 UTC.
+👨‍⚕️ **Dottore** (health-check agent) deployato la mattina alle 07:00 UTC.
 
 ## 📂 Contenuto
 
 - `index.html` — KPI, usage chart con marker reset finestra +
-  marker rosa 🩺 sui spawn del Dottore, token cumulativi per agente
+  marker rosa 👨‍⚕️ sui spawn del Dottore, token cumulativi per agente
   (con curva dottore tratteggiata), tabella finestre, **tabella round
   health-check** con diagnosi colorate (alive / long_turn / stallo).
 - `sentinel.json` — 12h sentinel timeseries.
@@ -20,7 +20,7 @@ Report HTML 12h del pomeriggio del 8 maggio. Include la prima vista del
 - W4 (`20260508T111650Z`) chiude a 61%
 - W5 (`20260508T160619Z`) in corso — undershoot pattern continua
 
-## 🩺 Doctor cycles osservati
+## 👨‍⚕️ Doctor cycles osservati
 
 Watchdog deployato 07:00 UTC, intervallo 30min. Cicli completati nel
 range del report: ~10 round, ~80 ping, 0 restart (team sano ma idle in

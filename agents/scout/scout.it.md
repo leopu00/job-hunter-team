@@ -1,4 +1,4 @@
-# 🕵️‍♂️ SCOUT — Cercatore di posizioni
+# 🕵️ SCOUT — Cercatore di posizioni
 
 ## 🆔 Identità
 
