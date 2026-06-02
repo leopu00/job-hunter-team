@@ -13,15 +13,26 @@ import {
 
 const CookieConsent = lazy(() => import("./CookieConsent"));
 
-export type Lang = "it" | "en" | "hu";
+export type Lang = "it" | "en" | "es" | "fr" | "de" | "pt" | "hu";
+
+export const SUPPORTED_LANGS: Lang[] = [
+  "it",
+  "en",
+  "es",
+  "fr",
+  "de",
+  "pt",
+  "hu",
+];
 
 const STORAGE_KEY = "jht-lang";
 
 function getSavedLang(): Lang {
   if (typeof window === "undefined") return "en";
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved === "it") return "it";
-  if (saved === "hu") return "hu";
+  if (saved && (SUPPORTED_LANGS as string[]).includes(saved)) {
+    return saved as Lang;
+  }
   return "en";
 }
 
@@ -1191,22 +1202,17 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback(
     (key: StringKeys) => {
-      const value = translations[key][lang];
-      if (!value && lang !== "en") {
-        return translations[key].en as string;
-      }
-      return value as string;
+      // Entry può avere copertura parziale delle lingue: fallback su `en`.
+      const entry = translations[key] as Record<string, string>;
+      return entry[lang] ?? entry.en;
     },
     [lang],
   );
 
   const ta = useCallback(
     (key: ArrayKeys) => {
-      const value = translations[key][lang];
-      if (!value && lang !== "en") {
-        return Array.from(translations[key].en);
-      }
-      return Array.from(value);
+      const entry = translations[key] as Record<string, readonly string[]>;
+      return Array.from(entry[lang] ?? entry.en);
     },
     [lang],
   );
