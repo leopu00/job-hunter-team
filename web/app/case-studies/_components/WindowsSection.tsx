@@ -1,5 +1,4 @@
 import type { Window, BurnCurvePoint } from "./types"
-import { FiveHourBreakdown } from "./FiveHourBreakdown"
 
 type Props = {
   windows: Window[]
@@ -78,15 +77,6 @@ function WeeklyCard({
         <div className="mt-3">
           <BurnSparkline points={w.burn_curve} accentColor={accentColor} />
         </div>
-      )}
-
-      {w.five_hour_windows && w.five_hour_windows.length > 0 && (
-        <FiveHourBreakdown
-          windows={w.five_hour_windows}
-          accentColor={accentColor}
-          burnSamples={w.burn_samples}
-          agentActivity={w.agent_activity}
-        />
       )}
 
       {w.notes_md && (
