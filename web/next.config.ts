@@ -70,7 +70,7 @@ const nextConfig: NextConfig = {
   // ai widget custom dell'app (es. ProfileAssistantFab).
   devIndicators: { position: 'bottom-right' },
   poweredByHeader: false,
-  serverExternalPackages: ['better-sqlite3'],
+  serverExternalPackages: ['better-sqlite3', 'node:sqlite'],
   images: {
     remotePatterns: [
       {
