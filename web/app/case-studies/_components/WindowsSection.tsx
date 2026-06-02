@@ -23,15 +23,15 @@ export function WindowsSection({ windows, accentColor }: Props) {
   }
 
   return (
-    <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5">
-      <h4 className="mb-3 text-sm font-bold text-slate-800">
+    <section className="mt-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-deep)] p-5">
+      <h4 className="mb-3 text-sm font-bold text-[var(--color-bright)]">
         🪟 Windows ({weekly.length} weekly
         {windows.length > weekly.length
           ? ` · ${windows.length - weekly.length} phases`
           : ""}
         )
       </h4>
-      <p className="mb-4 text-xs text-slate-600">
+      <p className="mb-4 text-xs text-[var(--color-muted)]">
         Each weekly subscription cycle is its own window. When something
         material changed mid-cycle (e.g. enabling a new scout source), the cycle
         is split into <strong>phases</strong>.
@@ -60,7 +60,7 @@ function WeeklyCard({
   accentColor: string;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4 shadow-sm">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h5 className="flex items-baseline gap-2 text-sm font-semibold">
           <span
@@ -69,10 +69,10 @@ function WeeklyCard({
           >
             W{w.window_number}
           </span>
-          <span className="text-slate-900">{w.label}</span>
+          <span className="text-[var(--color-white)]">{w.label}</span>
         </h5>
         {w.peak_usage_pct != null && (
-          <span className="font-mono text-sm font-bold text-slate-900">
+          <span className="font-mono text-sm font-bold text-[var(--color-white)]">
             peak {w.peak_usage_pct}%
           </span>
         )}
@@ -88,13 +88,13 @@ function WeeklyCard({
 
       {w.notes_md && (
         <p
-          className="mt-3 text-xs leading-relaxed text-slate-600"
+          className="mt-3 text-xs leading-relaxed text-[var(--color-muted)]"
           dangerouslySetInnerHTML={{ __html: renderInlineMd(w.notes_md) }}
         />
       )}
 
       {phases.length > 0 && (
-        <div className="mt-4 space-y-2 border-l-2 border-slate-200 pl-3">
+        <div className="mt-4 space-y-2 border-l-2 border-[var(--color-border)] pl-3">
           {phases.map((p) => (
             <PhaseCard key={p.id} p={p} accentColor={accentColor} />
           ))}
@@ -108,7 +108,7 @@ function PhaseCard({ p, accentColor }: { p: Window; accentColor: string }) {
   // Strip the redundant "Phase: " prefix since the badge already says "PHASE N".
   const cleanLabel = p.label.replace(/^Phase:\s*/i, "");
   return (
-    <div className="rounded border border-dashed border-slate-300 bg-white p-3">
+    <div className="rounded border border-dashed border-[var(--color-border)] bg-[var(--color-panel)] p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h6 className="flex items-baseline gap-2 text-xs font-semibold">
           <span
@@ -117,10 +117,10 @@ function PhaseCard({ p, accentColor }: { p: Window; accentColor: string }) {
           >
             phase {p.window_number}
           </span>
-          <span className="text-slate-900">{cleanLabel}</span>
+          <span className="text-[var(--color-white)]">{cleanLabel}</span>
         </h6>
         {p.conversion_pct != null && (
-          <span className="font-mono text-xs font-bold text-slate-900">
+          <span className="font-mono text-xs font-bold text-[var(--color-white)]">
             {p.conversion_pct}% conv.
           </span>
         )}
@@ -128,7 +128,7 @@ function PhaseCard({ p, accentColor }: { p: Window; accentColor: string }) {
       <WindowMetricsRow w={p} compact />
       {p.notes_md && (
         <p
-          className="mt-2 text-xs leading-relaxed text-slate-700"
+          className="mt-2 text-xs leading-relaxed text-[var(--color-bright)]"
           dangerouslySetInnerHTML={{ __html: renderInlineMd(p.notes_md) }}
         />
       )}
@@ -167,10 +167,12 @@ function WindowMetricsRow({
     >
       {items.map((i) => (
         <div key={i.label}>
-          <dt className="text-[10px] uppercase tracking-wide text-slate-500">
+          <dt className="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">
             {i.label}
           </dt>
-          <dd className="font-mono font-semibold text-slate-800">{i.value}</dd>
+          <dd className="font-mono font-semibold text-[var(--color-bright)]">
+            {i.value}
+          </dd>
         </div>
       ))}
     </dl>
@@ -203,7 +205,7 @@ function BurnSparkline({
 
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-[10px] text-slate-500">
+      <div className="mb-1 flex items-center justify-between text-[10px] text-[var(--color-muted)]">
         <span>Weekly budget burn (sampled)</span>
         <span className="font-mono">
           {lastPoint.t} → {lastPoint.w}%
@@ -212,7 +214,7 @@ function BurnSparkline({
       <svg
         viewBox={`0 0 ${w} ${h}`}
         preserveAspectRatio="none"
-        className="h-12 w-full rounded bg-white"
+        className="h-12 w-full rounded bg-[var(--color-panel)]"
         role="img"
         aria-label="Burn rate sparkline"
       >
@@ -259,6 +261,6 @@ function renderInlineMd(md: string): string {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(
       /`([^`]+)`/g,
-      '<code class="rounded bg-slate-100 px-1 py-0.5 text-[10px]">$1</code>',
+      '<code class="rounded bg-[var(--color-card)] px-1 py-0.5 text-[10px]">$1</code>',
     );
 }

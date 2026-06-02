@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import {
   createContext,
@@ -6,54 +6,46 @@ import {
   useEffect,
   useState,
   type ReactNode,
-} from "react"
+} from "react";
+import { useTheme } from "@/app/theme-provider";
 
-export type ChartMode = "dark" | "light"
+export type ChartMode = "dark" | "light";
 
 type Ctx = {
-  mode: ChartMode
-  setMode: (m: ChartMode) => void
-}
+  mode: ChartMode;
+  setMode: (m: ChartMode) => void;
+};
 
-const STORAGE_KEY = "jht-charts-theme"
-const ChartThemeContext = createContext<Ctx>({ mode: "light", setMode: () => {} })
+const ChartThemeContext = createContext<Ctx>({
+  mode: "light",
+  setMode: () => {},
+});
 
-export function ChartThemeProvider({
-  children,
-  defaultMode = "light",
-}: {
-  children: ReactNode
-  defaultMode?: ChartMode
-}) {
-  const [mode, setMode] = useState<ChartMode>(defaultMode)
-
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY)
-      if (saved === "dark" || saved === "light") setMode(saved)
-    } catch {}
-  }, [])
+// I grafici seguono il theme di sistema (light/dark) risolto da ThemeProvider.
+// `setMode` resta disponibile come override temporaneo (es. ChartThemeToggle),
+// ma ogni cambio di theme di sistema ri-sincronizza il mode.
+export function ChartThemeProvider({ children }: { children: ReactNode }) {
+  const { resolvedTheme } = useTheme();
+  const [mode, setMode] = useState<ChartMode>(resolvedTheme);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, mode)
-    } catch {}
-  }, [mode])
+    setMode(resolvedTheme);
+  }, [resolvedTheme]);
 
   return (
     <ChartThemeContext.Provider value={{ mode, setMode }}>
       {children}
     </ChartThemeContext.Provider>
-  )
+  );
 }
 
 export function useChartTheme(): Ctx {
-  return useContext(ChartThemeContext)
+  return useContext(ChartThemeContext);
 }
 
 export function ChartThemeToggle({ className = "" }: { className?: string }) {
-  const { mode, setMode } = useChartTheme()
-  const isDark = mode === "dark"
+  const { mode, setMode } = useChartTheme();
+  const isDark = mode === "dark";
   return (
     <button
       type="button"
@@ -68,76 +60,76 @@ export function ChartThemeToggle({ className = "" }: { className?: string }) {
       <span aria-hidden="true">{isDark ? "🌙" : "☀️"}</span>
       <span className="font-mono uppercase tracking-wider">{mode}</span>
     </button>
-  )
+  );
 }
 
 export type ChartPalette = {
   // figure container
-  figBorder: string
-  figBg: string
-  figText: string
+  figBorder: string;
+  figBg: string;
+  figText: string;
   // sub-headers & legend strip
-  headerBorder: string
-  legendBg: string
-  legendText: string
-  legendLabel: string
+  headerBorder: string;
+  legendBg: string;
+  legendText: string;
+  legendLabel: string;
   // controls (zoom buttons)
-  ctrlBg: string
-  ctrlBgHover: string
-  ctrlText: string
+  ctrlBg: string;
+  ctrlBgHover: string;
+  ctrlText: string;
   // agent column / row
-  colBg: string
-  colBorder: string
-  rowBorder: string
-  colHeaderText: string
-  agentName: string
-  countSent: string
-  countRecv: string
-  countSep: string
+  colBg: string;
+  colBorder: string;
+  rowBorder: string;
+  colHeaderText: string;
+  agentName: string;
+  countSent: string;
+  countRecv: string;
+  countSep: string;
   // chart inner bands
-  bandA: string
-  bandB: string
-  gridLine: string
-  baseline: string
-  minorTick: string
-  majorTick: string
-  topAxisText: string
-  bottomAxisText: string
+  bandA: string;
+  bandB: string;
+  gridLine: string;
+  baseline: string;
+  minorTick: string;
+  majorTick: string;
+  topAxisText: string;
+  bottomAxisText: string;
   // sleep band
-  sleepFill: string
-  sleepOpacity: number
+  sleepFill: string;
+  sleepOpacity: number;
   // fused cluster label
-  fusedLabelText: string
+  fusedLabelText: string;
   // selected event halo
-  selectedHalo: string
+  selectedHalo: string;
   // popup
-  popupBorder: string
-  popupBg: string
-  popupText: string
-  popupSubText: string
-  popupHeaderBorder: string
-  popupBodyBg: string
-  popupBodyText: string
-  popupCloseBg: string
-  popupCloseBgHover: string
-  popupCloseTop: string
+  popupBorder: string;
+  popupBg: string;
+  popupText: string;
+  popupSubText: string;
+  popupHeaderBorder: string;
+  popupBodyBg: string;
+  popupBodyText: string;
+  popupCloseBg: string;
+  popupCloseBgHover: string;
+  popupCloseTop: string;
   // FullRunUsageChart specific
-  fullChartFigBg: string
-  fullChartInnerBg: string
-  fullChartCaption: string
-  hoverGuide: string
-  hoverDot: string
-  hoverTooltipBg: string
-  hoverTooltipBorder: string
-  hoverTooltipText: string
-  hoverTooltipMuted: string
-  hoverTooltipBadgeBg: string
+  fullChartFigBg: string;
+  fullChartInnerBg: string;
+  fullChartCaption: string;
+  hoverGuide: string;
+  hoverDot: string;
+  hoverTooltipBg: string;
+  hoverTooltipBorder: string;
+  hoverTooltipText: string;
+  hoverTooltipMuted: string;
+  hoverTooltipBadgeBg: string;
   // semantic chart series (cap line, weekly line, reset markers)
-  capStroke: string
-  capText: string
-  weeklyStroke: string
-  resetMarker: string
-}
+  capStroke: string;
+  capText: string;
+  weeklyStroke: string;
+  resetMarker: string;
+};
 
 const dark: ChartPalette = {
   figBorder: "#334155",
@@ -194,7 +186,7 @@ const dark: ChartPalette = {
   capText: "#fca5a5",
   weeklyStroke: "#60a5fa",
   resetMarker: "#facc15",
-}
+};
 
 const light: ChartPalette = {
   figBorder: "#cbd5e1",
@@ -251,8 +243,8 @@ const light: ChartPalette = {
   capText: "#b91c1c",
   weeklyStroke: "#2563eb",
   resetMarker: "#ca8a04",
-}
+};
 
 export function chartPalette(mode: ChartMode): ChartPalette {
-  return mode === "dark" ? dark : light
+  return mode === "dark" ? dark : light;
 }

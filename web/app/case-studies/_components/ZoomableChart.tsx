@@ -1,21 +1,21 @@
-"use client"
+"use client";
 
-import { useRef } from "react"
+import { useRef } from "react";
 
 type Props = {
-  label: string
-  children: React.ReactNode
-}
+  label: string;
+  children: React.ReactNode;
+};
 
 // Wraps a chart in a clickable card that expands to a near-fullscreen <dialog>
 // on click. Uses native <dialog> (no portal/state library). The chart is
 // rendered twice — once inline, once inside the dialog — to keep both views
 // independent (the dialog instance scales to viewport).
 export function ZoomableChart({ label, children }: Props) {
-  const ref = useRef<HTMLDialogElement>(null)
+  const ref = useRef<HTMLDialogElement>(null);
 
-  const open = () => ref.current?.showModal()
-  const close = () => ref.current?.close()
+  const open = () => ref.current?.showModal();
+  const close = () => ref.current?.close();
 
   return (
     <>
@@ -36,7 +36,7 @@ export function ZoomableChart({ label, children }: Props) {
         className="rounded-lg border border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-black/80 backdrop:backdrop-blur-sm"
         style={{ width: "min(92vw, 1280px)", maxHeight: "92vh" }}
         onClick={(e) => {
-          if (e.target === ref.current) close()
+          if (e.target === ref.current) close();
         }}
       >
         <div className="relative max-h-[92vh] overflow-y-auto overflow-x-hidden">
@@ -54,5 +54,5 @@ export function ZoomableChart({ label, children }: Props) {
         </div>
       </dialog>
     </>
-  )
+  );
 }
