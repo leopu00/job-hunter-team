@@ -59,7 +59,11 @@ html[data-theme="light"] {
 
 html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 
-::selection { background: rgba(0, 232, 122, 0.25); color: var(--color-white); }
+/* Niente color override: il testo selezionato mantiene il suo colore naturale,
+   così resta leggibile sia su sfondi scuri (shell JHT) sia su superfici chiare
+   come le card Tailwind (bg-white) di /case-studies. Solo lo sfondo è mint. */
+::selection { background: rgba(0, 232, 122, 0.25); }
+::-moz-selection { background: rgba(0, 232, 122, 0.25); }
 
 /* Zoom globale UI: simula il Cmd++ del browser in un unico posto.
    In Chromium `100vh` resta calcolato sul viewport NON zoomato, quindi
