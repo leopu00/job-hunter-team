@@ -23,7 +23,7 @@ export function CaseStudiesTabs({ tabs, defaultTab }: Props) {
 
   return (
     <ChartThemeProvider defaultMode="light">
-      <nav className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <nav className="sticky top-14 z-30 border-b border-slate-200 bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-1 px-6">
           {tabs.map((t) => {
             const isActive = t.id === active
