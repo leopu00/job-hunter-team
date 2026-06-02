@@ -169,7 +169,8 @@ export const translations: TranslationDictionary = {
     "notifications.priority.high": "alta",
     "notifications.priority.urgent": "urgente",
 
-    "rateLimit.tooMany": "Demasiadas solicitudes. Inténtalo de nuevo más tarde.",
+    "rateLimit.tooMany":
+      "Demasiadas solicitudes. Inténtalo de nuevo más tarde.",
   },
 
   de: {
