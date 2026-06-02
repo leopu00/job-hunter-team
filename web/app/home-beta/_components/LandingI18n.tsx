@@ -1035,6 +1035,85 @@ const translations = {
     en: "Scout launched!",
     hu: "Felfedező elindítva!",
   },
+
+  // ─── Home-beta: tabella top matches ───────────────────────────────
+  table_title: {
+    it: "Top {n} match",
+    en: "Top {n} matches",
+    hu: "Top {n} egyezés",
+  },
+  table_updated: { it: "Aggiornato", en: "Updated", hu: "Frissítve" },
+  table_match_score: { it: "Match Score", en: "Match Score", hu: "Egyezés" },
+  table_title_col: { it: "Titolo", en: "Title", hu: "Pozíció" },
+  table_company: { it: "Azienda", en: "Company", hu: "Cég" },
+  table_location: { it: "Località", en: "Location", hu: "Helyszín" },
+  table_salary: { it: "Stipendio", en: "Salary", hu: "Fizetés" },
+  table_cv: { it: "CV", en: "CV", hu: "Önéletrajz" },
+  table_empty: {
+    it: "Nessuna posizione ancora.",
+    en: "No positions yet.",
+    hu: "Még nincsenek pozíciók.",
+  },
+
+  // ─── Home-beta: nodi del team flow ────────────────────────────────
+  agent_captain: { it: "Capitano", en: "Captain", hu: "Kapitány" },
+  agent_scout: { it: "Scout", en: "Scout", hu: "Scout" },
+  agent_analyst: { it: "Analista", en: "Analyst", hu: "Analista" },
+  agent_scorer: { it: "Scorer", en: "Scorer", hu: "Scorer" },
+  agent_writer: { it: "Scrittore", en: "Writer", hu: "Író" },
+  agent_critic: { it: "Critico", en: "Critic", hu: "Kritikus" },
+
+  // ─── Home-beta: speech bubbles del team flow ──────────────────────
+  chat_captain_go: {
+    it: "OK team, partiamo!",
+    en: "OK team, let's go!",
+    hu: "OK csapat, gyerünk!",
+  },
+  chat_captain_profile: {
+    it: "Target: Sommelier in hotel 5★",
+    en: "Target: Sommelier at 5★ hotels",
+    hu: "Cél: Sommelier 5★ hotelekben",
+  },
+  chat_scout_europe: {
+    it: "Trovati 3 in Europa!",
+    en: "Found 3 in Europe!",
+    hu: "Találtam 3-at Európában!",
+  },
+  chat_scout_asia: {
+    it: "Asia in arrivo…",
+    en: "Asia incoming…",
+    hu: "Ázsia jön…",
+  },
+  chat_scout_usa: {
+    it: "Grande mercato USA!",
+    en: "Big USA market!",
+    hu: "Nagy USA piac!",
+  },
+  chat_analyst_check: {
+    it: "Verifico il match…",
+    en: "Checking fit…",
+    hu: "Illeszkedést ellenőrzöm…",
+  },
+  chat_captain_good: {
+    it: "Tutto bene",
+    en: "Looking good",
+    hu: "Jól néz ki",
+  },
+  chat_scorer_top: {
+    it: "Top match trovati",
+    en: "Top matches found",
+    hu: "Top egyezések megvannak",
+  },
+  chat_writer_cvs: {
+    it: "Scrivo i CV…",
+    en: "Writing CVs…",
+    hu: "Önéletrajzokat írok…",
+  },
+  chat_critic_reviewing: {
+    it: "Revisione…",
+    en: "Reviewing…",
+    hu: "Felülvizsgálom…",
+  },
 } as const;
 
 type StringKeys = {
