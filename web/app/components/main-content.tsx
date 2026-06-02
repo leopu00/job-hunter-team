@@ -30,8 +30,11 @@ export default function MainContent({
         position: "relative",
         zIndex: 1,
         opacity: fade ? 0 : 1,
-        transform: fade ? "translateY(4px)" : "translateY(0)",
-        transition: "opacity 0.2s ease, transform 0.2s ease",
+        // NB: niente `transform` qui. Un transform (anche translateY(0))
+        // crea un containing block che ancora gli elementi `position: fixed`
+        // discendenti (la LandingNav) a questo <main> invece che al viewport,
+        // facendo scrollare via l'header. Dissolvenza con sola opacity.
+        transition: "opacity 0.2s ease",
       }}
     >
       {children}
