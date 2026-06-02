@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useState,
@@ -18,6 +19,8 @@ type Ctx = {
 const STORAGE_KEY = "jht-charts-theme"
 const ChartThemeContext = createContext<Ctx>({ mode: "light", setMode: () => {} })
 
+const SYSTEM_QUERY = "(prefers-color-scheme: dark)"
+
 export function ChartThemeProvider({
   children,
   defaultMode = "light",
@@ -25,20 +28,44 @@ export function ChartThemeProvider({
   children: ReactNode
   defaultMode?: ChartMode
 }) {
-  const [mode, setMode] = useState<ChartMode>(defaultMode)
+  // SSR-safe: si parte dal default, poi al mount si risolve dal localStorage
+  // (preferenza esplicita dell'utente) o, in sua assenza, dal tema di sistema.
+  const [mode, setModeState] = useState<ChartMode>(defaultMode)
 
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY)
-      if (saved === "dark" || saved === "light") setMode(saved)
+      if (saved === "dark" || saved === "light") {
+        setModeState(saved)
+        return
+      }
     } catch {}
+    // Nessuna preferenza salvata → segui il sistema.
+    if (window.matchMedia?.(SYSTEM_QUERY).matches) setModeState("dark")
   }, [])
 
+  // Se l'utente non ha un override salvato, reagisci ai cambi di tema di sistema.
   useEffect(() => {
+    const mq = window.matchMedia?.(SYSTEM_QUERY)
+    if (!mq) return
+    const onChange = (e: MediaQueryListEvent) => {
+      try {
+        if (window.localStorage.getItem(STORAGE_KEY)) return
+      } catch {}
+      setModeState(e.matches ? "dark" : "light")
+    }
+    mq.addEventListener?.("change", onChange)
+    return () => mq.removeEventListener?.("change", onChange)
+  }, [])
+
+  // La scrittura su localStorage avviene SOLO su scelta esplicita (toggle),
+  // così l'auto-rilevamento dal sistema resta attivo finché l'utente non decide.
+  const setMode = useCallback((m: ChartMode) => {
+    setModeState(m)
     try {
-      window.localStorage.setItem(STORAGE_KEY, mode)
+      window.localStorage.setItem(STORAGE_KEY, m)
     } catch {}
-  }, [mode])
+  }, [])
 
   return (
     <ChartThemeContext.Provider value={{ mode, setMode }}>
