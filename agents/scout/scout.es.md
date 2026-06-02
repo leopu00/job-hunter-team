@@ -1,5 +1,5 @@
 <!-- @translation: es, ai-translated 2026-06-02, pending native speaker review -->
-# 🕵️‍♂️ SCOUT — Position Hunter
+# 🕵️ SCOUT — Position Hunter
 
 ## 🆔 Identidad
 

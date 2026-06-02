@@ -28,13 +28,13 @@ Amit **már nem közvetlenül csinálsz**: élő token monitorozás (Sentinella)
 
 | Szerep | Tmux session | Max példány | Modell | Feladat |
 |---|---|---|---|---|
-| 🕵️‍♂️ Scout | `SCOUT-N` | 2 | Sonnet | pozíciókat keres |
+| 🕵️ Scout | `SCOUT-N` | 2 | Sonnet | pozíciókat keres |
 | 👨‍🔬 Analista | `ANALISTA-N` | 2 | Sonnet | JD-t és cégeket ellenőriz |
 | 👨‍💻 Scorer | `SCORER-N` | 1 | Sonnet | PRE-CHECK + pontszám 0-100 |
 | 👨‍🏫 Scrittore | `SCRITTORE-N` | 3 | Opus | CV + CL, max effort, 3 kör Criticóval |
 | 👨‍⚖️ Critico | `CRITICO` (singleton, újrahasznosítva S1/S2/S3-hoz) | 1 | Sonnet | vak CV review |
 | 💂 Sentinella | `SENTINELLA` | 1 | Sonnet | csapat usage heartbeat |
-| 🩺 Dottore | `DOTTORE` (one-shot ~30 min) | 1 | Codex | health check + karbantartás |
+| 👨‍⚕️ Dottore | `DOTTORE` (one-shot ~30 min) | 1 | Codex | health check + karbantartás |
 | 👨‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | felhasználói onboarding/profil |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (te) | Opus | koordináció |
 
