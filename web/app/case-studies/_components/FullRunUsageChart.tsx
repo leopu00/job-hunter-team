@@ -22,7 +22,18 @@ export function FullRunUsageChart({ weekly, accentColor, capPct = 92 }: Props) {
   const fiveHour = weekly.five_hour_windows ?? []
 
   const svgRef = useRef<SVGSVGElement>(null)
-  const [hover, setHover] = useState<{ ts: number; x: number; y: number } | null>(null)
+  const figureRef = useRef<HTMLElement>(null)
+  // x,y in svg coords (per guide line interna), figX/figY in coord del <figure>
+  // (per il tooltip, che vive fuori dal container scrollabile e non viene clippato).
+  const [hover, setHover] = useState<{
+    ts: number
+    x: number
+    y: number
+    figX: number
+    figY: number
+  } | null>(null)
+  // zoom 1 = tutto il run nel viewport; aumenta per ingrandire e scrollare
+  const [zoom, setZoom] = useState(1)
 
   // Pre-sorted timestamps for fast nearest-neighbour lookup
   const samplesByTs = useMemo(() => {
@@ -38,9 +49,10 @@ export function FullRunUsageChart({ weekly, accentColor, capPct = 92 }: Props) {
   if (!start || !end || burnSamples.length === 0) return null
 
   const totalH = (end - start) / 3_600_000
-  // ~140px per hour → 35h ≈ 4900px wide
-  const pxPerHour = 140
-  const innerW = Math.max(1200, Math.round(totalH * pxPerHour))
+  // zoom 1 = tutto il run in ~1080px (entra in viewport max-w-6xl)
+  // zoom 8 = ~140px/hour (vista granulare al minuto)
+  const pxPerHour = 30 + (zoom - 1) * 16
+  const innerW = Math.max(600, Math.round(totalH * pxPerHour))
   const padL = 50
   const padR = 30
   const padT = 30
@@ -126,15 +138,23 @@ export function FullRunUsageChart({ weekly, accentColor, capPct = 92 }: Props) {
 
   function handleMove(e: React.MouseEvent<SVGSVGElement>) {
     const svg = svgRef.current
-    if (!svg) return
+    const fig = figureRef.current
+    if (!svg || !fig) return
     const rect = svg.getBoundingClientRect()
+    const figRect = fig.getBoundingClientRect()
     const px = ((e.clientX - rect.left) / rect.width) * w
     if (px < padL || px > padL + innerW) {
       setHover(null)
       return
     }
     const ts = start + ((px - padL) / innerW) * (end - start)
-    setHover({ ts, x: e.clientX - rect.left, y: e.clientY - rect.top })
+    setHover({
+      ts,
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      figX: e.clientX - figRect.left,
+      figY: e.clientY - figRect.top,
+    })
   }
 
   const hoverData = useMemo(() => {
@@ -158,16 +178,51 @@ export function FullRunUsageChart({ weekly, accentColor, capPct = 92 }: Props) {
 
   return (
     <figure
-      className="rounded-md border p-2"
+      ref={figureRef}
+      className="relative rounded-md border p-2"
       style={{ borderColor: P.figBorder, backgroundColor: P.fullChartFigBg, color: P.figText }}
     >
-      <header className="mb-2 flex flex-wrap items-baseline justify-between gap-2 px-2 pt-1">
+      <header className="mb-2 flex flex-wrap items-center justify-between gap-2 px-2 pt-1">
         <h6 className="text-sm font-semibold" style={{ color: P.figText }}>
           Usage % — tutto il run ({totalH.toFixed(1)}h · {fiveHour.length} finestre 5h)
         </h6>
-        <span className="text-[10px]" style={{ color: P.fullChartCaption }}>
-          trascina orizzontalmente per esplorare · linea verde = 5h-cap interno · linea blu = burn weekly cumulativo
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-wide" style={{ color: P.ctrlText }}>
+            zoom
+          </span>
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.max(1, z - 1))}
+            className="rounded px-2 py-0.5 text-xs transition-colors"
+            style={{ backgroundColor: P.ctrlBg, color: P.figText }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = P.ctrlBgHover)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = P.ctrlBg)}
+          >
+            −
+          </button>
+          <input
+            type="range"
+            min={1}
+            max={8}
+            step={1}
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+            className="h-1 w-28 cursor-pointer"
+          />
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.min(8, z + 1))}
+            className="rounded px-2 py-0.5 text-xs transition-colors"
+            style={{ backgroundColor: P.ctrlBg, color: P.figText }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = P.ctrlBgHover)}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = P.ctrlBg)}
+          >
+            +
+          </button>
+          <span className="w-9 text-right font-mono text-xs" style={{ color: P.ctrlText }}>
+            {zoom}x
+          </span>
+        </div>
       </header>
       <div className="relative overflow-x-auto overflow-y-hidden rounded">
         <svg
@@ -326,14 +381,20 @@ export function FullRunUsageChart({ weekly, accentColor, capPct = 92 }: Props) {
             </g>
           )}
         </svg>
+      </div>
 
-        {hover && hoverData && (
+      {/* Tooltip vive nel <figure> (fuori dal container scroll) per non essere
+          clippato vicino al bordo destro. Coord relative al figure (figX/figY). */}
+      {hover && hoverData && (() => {
+        const figW = figureRef.current?.getBoundingClientRect().width ?? 0
+        const flip = hover.figX > figW - 260
+        return (
           <div
-            className="pointer-events-none absolute z-30 min-w-[200px] rounded-md border px-3 py-2 text-[11px] shadow-xl"
+            className="pointer-events-none absolute z-30 w-[240px] rounded-md border px-3 py-2 text-[11px] shadow-xl"
             style={{
-              left: `${hover.x + 14}px`,
-              top: `${hover.y + 14}px`,
-              transform: hover.x > w - 250 ? "translateX(-105%)" : undefined,
+              left: `${hover.figX + (flip ? -14 : 14)}px`,
+              top: `${hover.figY + 14}px`,
+              transform: flip ? "translateX(-100%)" : undefined,
               backgroundColor: P.hoverTooltipBg,
               borderColor: P.hoverTooltipBorder,
               color: P.hoverTooltipText,
@@ -362,8 +423,8 @@ export function FullRunUsageChart({ weekly, accentColor, capPct = 92 }: Props) {
               <dd className="text-right" style={{ color: P.capStroke }}>{capPct}%</dd>
             </dl>
           </div>
-        )}
-      </div>
+        )
+      })()}
     </figure>
   )
 }
