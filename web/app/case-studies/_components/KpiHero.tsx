@@ -53,16 +53,16 @@ export function KpiHero({ caseStudies }: Props) {
   ];
 
   return (
-    <section className="border-b border-slate-200 bg-gradient-to-br from-slate-50 to-white py-12">
+    <section className="border-b border-[var(--color-border)] bg-gradient-to-br from-slate-50 to-white py-12">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mb-8">
           <div className="mb-2 inline-block rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
             Field data · not synthetic benchmarks
           </div>
-          <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+          <h1 className="text-4xl font-bold tracking-tight text-[var(--color-white)] sm:text-5xl">
             Case studies
           </h1>
-          <p className="mt-3 max-w-2xl text-base text-slate-600">
+          <p className="mt-3 max-w-2xl text-base text-[var(--color-muted)]">
             What Job Hunter Team has produced on real candidate profiles, with
             real LLM subscriptions, on real job markets. We only publish runs we
             instrumented end-to-end with the same rigor — earlier informal tests
@@ -72,13 +72,15 @@ export function KpiHero({ caseStudies }: Props) {
         <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
           {kpis.map((k) => (
             <div key={k.label}>
-              <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              <dt className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted)]">
                 {k.label}
               </dt>
-              <dd className="mt-1 text-3xl font-bold text-slate-900 sm:text-4xl">
+              <dd className="mt-1 text-3xl font-bold text-[var(--color-white)] sm:text-4xl">
                 {k.value}
               </dd>
-              <dd className="mt-1 text-xs text-slate-500">{k.sub}</dd>
+              <dd className="mt-1 text-xs text-[var(--color-muted)]">
+                {k.sub}
+              </dd>
             </div>
           ))}
         </dl>
