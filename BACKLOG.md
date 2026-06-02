@@ -101,14 +101,15 @@ See also the **launcher-distributed skill discovery** punch list in [`docs/about
 
 ### 🧪 Real-world tests (preliminary, partially documented)
 
-> ✅ **Status 2026-05-23**: 3 run pubblicati come Case Study in `docs/about/RESULTS.md`. Staging doc: `docs/internal/2026-05-23-case-study-staging.md` (analisi DB raw + log + cost breakdown). Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — ora 3/12 done.
+> ✅ **Status 2026-06-02**: 3 run pubblicati come Case Study in `docs/about/RESULTS.md`. 2 ulteriori run **da finalizzare pre-release** (dati raccolti, elaborazione/monitoring incompleti). Staging doc: `docs/internal/2026-05-23-case-study-staging.md`. Strategia test consolidata 2026-06-02 — vedi memorie [[project-pre-release-test-strategy]] e [[project-team-value-chain-shift]].
 
 - ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1)
 - ✅ **Codex ProLite × Beta tester 1** (senior multilingual technical) — 34.84h run: 206 pos → 105 ready (51%), critic 6.35, 88.2% PASS, €100/mo (Case Study #2)
 - ✅ **Kimi K2 Pro × Beta tester 2** (junior software dev) — 75h run: 251 pos → 56 ready (22%), critic 5.05, 51% PASS, €40/mo, 1.61B token totali aggregati da wire.jsonl (Case Study #3)
-- ❌ Claude Pro €20 — not viable (single agent burns the window)
-- ⬜ Kimi €40 mass-market — almeno 2 tester esterni necessari per validare jackpot in profili diversi (Case Study #3 è maintainer-internal)
-- ⬜ Multi-week tests — i 3 case study attuali sono <4 giorni ciascuno (burst usage). Servono test 4-settimane (= 1 abbonamento mensile speso) per dati steady-state
+- 🟡 **Kimi K2 Pro × maintainer weekly-distributed** — dati raccolti, **elaborazione pending** (non ancora caricati su `/case-studies`)
+- 🟡 **Claude Max x20 × maintainer re-test** — run precedente con monitoring incompleto, **da rifare con instrumentation corretta**
+- ❌ Claude Pro €20 — not viable on first attempt (single agent burns the window); re-test possibile post-launch
+- 🟢 **Espansione matrix → POST-launch**: la varietà profili (settori non-IT inclusi) arriva da uso reale di beta tester aperti, non da run sintetici pre-launch. JHT è profile-agnostic; il provider tier è l'unica variabile materiale.
 
 For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
@@ -159,7 +160,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ✅ **P0 — Route write-request supporta cloud-mode senza SQLite locale** *(DONE 2026-05-31, commit `0ada62ea`)*. Discriminazione `hasLocal`: SQLite presente → path locale (immutato); SQLite assente → SELECT+UPDATE solo Supabase con embedded validate. Loop chiuso: utente clicca su Vercel con container offline → flag su cloud → pull al boot applica → Capitano spawn Scrittore.
 - ✅ **P0 — DELETE propagation con tombstone** *(DONE 2026-05-31, commit `6499b3db`)*. Supabase mig 025 (deleted_at TIMESTAMPTZ + index partial) su positions/scores/applications; SQLite V7 (tabella `_tombstones` + 3 trigger BEFORE DELETE in `shared/skills/_db.py::_migrate_v6_to_v7_tombstones`); CLI push include tombstones nel payload con cursor proprio; web receive UPDATE soft con idempotency `WHERE deleted_at IS NULL` + lookup legacy_id→UUID per scores/apps. Scope ridotto a 3 tabelle (companies/highlights non sono pushate oggi). **Follow-up**: (a) 30 query in `web/lib/queries.ts` da aggiornare con `.is('deleted_at', null)` filter — PR dedicato; (b) cron Supabase hard-delete `deleted_at < now()-30d`.
 - ✅ **P0 — Killswitch 401/403** *(DONE 2026-05-31, commit `07d0109a`)*. handlePush ritorna `{ok, authFailed}`; daemon ha counter dedicato `MAX_CONSECUTIVE_AUTH_FAILS=3` (vs 5 generico, perché token revocato non recupera mai). Halt + INSERT `pending_user_messages` con istruzioni "riapri pairing + jht cloud login". Reset solo su push success 200 (un 500 transient non resetta).
-- ⬜ **P0 — Riparare CI/Tests/Lint pre-esistenti** falliscono da 2026-05-22 — test smoke con soglie sbagliate, ENOENT su file inesistenti, ESLint 100+ warning `any`. Falsano signal qualità
+- 🪛 **CI/Tests/Lint minor debt** — declassato 2026-06-02. Stato live: CI/Tests/Security/Docker ✅, Lint Prettier era l'unico rosso → FIXED 2026-06-02 (8 file riformattati). 40 test in `tests/js/tasks/_disabled/` sono debt non-blocker — vedi `docs/internal/MINOR-TRACKER.md` per dettagli (`MINOR-DISABLED-TESTS`, `MINOR-PRECOMMIT-DRIFT`).
 - ✅ **P1 — Pull periodico nel daemon** *(DONE 2026-05-31, commit `968ef913`)*. `handleDaemon` invoca `handlePullDesiredState` ad ogni tick dopo il push (cadenza condivisa intervalSec). Pull isolato dal counter consecutiveFails. Log "✓ N applicate" bypassa silent quando N>0. Chiude il caso multi-device "live" (mobile click + team su VPS).
 
 **🟠 Pending P1 — chiusura loop feedback agenti** (bidirezionalità incompleta: schema + RLS + Realtime ✅ done, container NON legge)
@@ -257,8 +258,8 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   2. ✅ **Case study #3 reale** (2026-05-23): run 75h, 56 CV ready, €0.71/CV, burn 5.37%/h, 1.61B token aggregati. Dati pubblicati in `docs/about/RESULTS.md` e `web/data/case-studies/seed.sql`. **Internal-only** (maintainer-built profile).
   3. ⬜ **Variance analysis dentro finestra 5h** — vero blocker per ridurre buffer 85% → 90%. Kimi NON ha weekly cap quindi work-hours design ([`docs/internal/2026-05-25-work-hours-design.md`](docs/internal/2026-05-25-work-hours-design.md)) NON risolve l'oscillazione (risolve solo il problema weekly exhaustion che vale per Claude/Codex).
   4. ✅ **Pacing-bridge per-provider tuning** — DONE 2026-05-31. `.launcher/pacing-bridge.py` ora ha `_PROVIDER_TARGET_BAND` map: Kimi 88%, Codex/Claude/openai 92%. Risoluzione: env `JHT_PACING_TARGET_PCT` > provider lookup > 92 default. Provider attivo letto da `$JHT_HOME/jht.config.json`. Smoke test 5/5 (kimi=88, codex=92, env override=75, provider sconosciuto=92, no config=92).
-  5. ⬜ **External beta testers** — almeno 2 tester Kimi €40 esterni per validare mass-market jackpot (cells residue #4, #6, #7, #8, #10 in [`docs/guides/BETA.md`](docs/guides/BETA.md)).
-  6. ⬜ **Stress test 1 mese** real job-hunting.
+  5. ⬜ **External beta testers post-launch** — open invitation tramite [`docs/guides/BETA.md`](docs/guides/BETA.md) per validare il "mass-market jackpot" Kimi €40 su profili esterni vari (non più matrix-driven, vedi [[project-pre-release-test-strategy]]). Almeno 1-2 run esterni per consolidare il signal.
+  6. ⬜ **Stress test 1 mese** real job-hunting (steady-state, non burst — Case Study #3 era 4 giorni intensivi).
 - **Benefit:** se regge → JHT accessibile a €40/mo (vs €200 Claude Max). "Mass-market jackpot" — vedi `docs/about/PROVIDERS.md` e `docs/about/MONITORING.md`.
 
 ##### 💂 [JHT-SENTINELLA-OPTIMIZE] Reduce Sentinel token consumption — partially addressed by V6 (2026-05-01)
@@ -315,17 +316,19 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Co-maintainer:** identify within 60 days post-launch (can be informal, just someone who triages issues — fratello / amico fidato).
 - **Reasoning:** see `docs/internal/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
 
-##### 🧪 [JHT-TEST-CAMPAIGN] Fill coverage matrix (8/12 cells) 🟡 3/12 done — BLOCKER residuo
+##### 🧪 [JHT-TEST-CAMPAIGN] Documentare run esistenti (NO matrix coverage pre-launch) 🟢 declassato 2026-06-02
 
-- **Problem:** today's test claims are anecdotal (single profile, single provider). Public users will ask "does it work for *my* setup?" — we need data.
-- **Coverage tracker:** [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — 12 cells (provider × persona), **3 done** (#1 maintainer Claude Max anecdotal, #2 Codex/translator, #3 Kimi/Python junior), 9 open. Target: **8/12** filled before launch.
-- **Pipeline:** beta tester applies via [`docs/guides/BETA.md`](docs/guides/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/about/RESULTS.md`](docs/about/RESULTS.md) and updating cell status in BETA.
-- **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
-- **Priority:** 🔴 BLOCKER pre-launch (5 cells residue)
-- **✅ Done 2026-05-23**: estrazione DB raw da entrambe le VPS Hetzner (Codex VPS1 + Kimi VPS), analisi pipeline + cost + token, anonimizzazione, scrittura Case Study #2 + #3 in `RESULTS.md`, matrix BETA.md aggiornata 1/10 → 3/12. Staging doc: [`docs/internal/2026-05-23-case-study-staging.md`](docs/internal/2026-05-23-case-study-staging.md).
-- **Residual gap:** trovare **almeno 2 tester Kimi €40 esterni** (cell #4, #6, #7, #8, #10) per validare mass-market jackpot al di fuori del maintainer. Case Study #3 è internal (Beta tester 2 = maintainer profile costruito ad hoc), serve external confirmation.
-- **Side findings da promuovere a fix backlog:**
-  - Companies rubric Analista: 0 NO_GO su 357 companies totali tra 2 run → rubric troppo permissivo, hard requirements (degree, geo) non filtrati upfront
+- **Decisione 2026-06-02:** la matrix 8/12 celle persona×provider **NON è più BLOCKER pre-launch** (vedi memoria [[project-pre-release-test-strategy]]). Razionale: il team JHT è agnostico al persona — l'unica variabile materiale è il provider tier. Coprire 5 persone diverse su Kimi €40 dà info marginale rispetto a 1 solido run Kimi €40 esterno. La narrativa di lancio si basa sui **3 tier signals** (€100 / €40 / €20) onestamente caratterizzati.
+- **Pre-launch (must-have)** — documentare bene quello che già abbiamo:
+  - ✅ Case Study #1 (Claude Max x20, maintainer) — pubblicato in `RESULTS.md`
+  - ✅ Case Study #2 (Codex ProLite €100, Beta tester 1) — pubblicato in `RESULTS.md`
+  - ✅ Case Study #3 (Kimi K2 Pro €40, Beta tester 2) — pubblicato in `RESULTS.md`
+  - 🟡 Run #4 Kimi K2 Pro €40 weekly-distributed maintainer — dati raccolti, **elaborazione pending** → caricare su `/case-studies`
+  - 🟡 Run #5 Claude Max x20 maintainer re-test — monitoring incompleto, **da rifare con instrumentation corretta**
+- **Post-launch (open invitation)** — beta tester di settori vari (NON solo IT/tech), profile-agnostic, struttura `/case-studies` come schema di ingestion per nuovi dump. Vedi [`docs/guides/BETA.md`](docs/guides/BETA.md).
+- **Linked:** [JHT-CASE-STUDIES-WEB] — la pagina `/case-studies` è il prerequisito strutturale; finita lei, l'aggiunta di nuovi run diventa lineare.
+- **Side findings dei 3 run da promuovere a fix backlog (validi indipendentemente dalla matrix):**
+  - Companies rubric Analista: 0 NO_GO su 357 companies totali tra 2 run → rubric troppo permissivo, hard requirements (degree, geo) non filtrati upfront → coerente con [[project-team-value-chain-shift]] (Analisti hanno lavoro espanso)
   - Writer attribution null 93% su Codex run → `written_by` field non popolato consistente
 
 ##### 📊 [JHT-CASE-STUDIES-WEB] Pagina pubblica /case-studies — sessione 23-25/05 done, residui pre-launch ⬜ 🟠 HIGH
@@ -462,7 +465,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - `cb5b9bab` `providers update` IS_CONTAINER passthrough (no docker compose run dentro al container, npm install diretto in /jht_home/.npm-global) + `ensure_bind_owner` chown 1001:1001 sui bind dir su Linux (fix EACCES su VPS root uid 0)
 - **Bug noti residui (non-blocking per il VPS use case):**
   - `[BUG-CLACK-TTY-DOCKER-EXEC]` — wizard interattivo non riceve frecce via docker exec (workaround: `--non-interactive` con tutti i flag, gia' tutti presenti)
-  - `[BUG-VPS-AUTH-TUNNEL]` — Supabase OAuth callback configurato solo per dominio prod, web UI auth non funziona via SSH tunnel `localhost:3000`. **NO workaround:** la dashboard e' l'interfaccia primaria su VPS. Fix actionable in ~10min (aggiungere `http://localhost:3000/**` agli additional redirect URLs Supabase) — vedi entry dedicata nel BUG INDEX.
+  - ~~`[BUG-VPS-AUTH-TUNNEL]`~~ — ✅ FIXED (verificato live 2026-06-02): `localhost:3000-3005` + `127.0.0.1` aggiunti agli allowed redirect URLs Supabase.
   - `[BUG-CSP-JSONLD-LANDING]` (riapertura) — fix dev-4 (`e48eebee`) incompleto, hydration mismatch su `nonce` JSON-LD persiste in produzione
 - **Output:** [`docs/guides/VPS-SETUP.md`](docs/guides/VPS-SETUP.md) (nuovo, ~250 righe) con step-by-step + lifecycle (incluso "trappola billing Hetzner" snapshot+delete) + override env + troubleshooting.
 - **Per il merge:** dev-1 → master quando soddisfati. Una volta merged, immagine GHCR `latest` viene rebuildata da CI e gli utenti pubblici hanno tutti i fix.
@@ -803,7 +806,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
   3. **Auto-push dopo `enable`**: il `jht cloud enable` auto-triggera anche `jht cloud push` come ultima operazione. Riduce 2 comandi a 1. Questa e' la fix piu' veloce a parita' di altre cose.
   4. **🤔 Discovery bidirezionale VPS→cloud**: VPS manda heartbeat anonimo (ID hash, # positions) al cloud. Quando l'utente logga la prima volta, dashboard mostra "Hai un team attivo (VPS 65.108.x.x)? Connettilo." Click → challenge-response automatica. Privacy concern: VPS rivela esistenza prima che l'utente decida di collegarlo. Vagliare con threat model.
 - **Linked:**
-  - `[BUG-VPS-AUTH-TUNNEL]` (post-fix abilita web UI sul tunnel ma NON risolve il pairing — ortogonali)
+  - ✅ `[BUG-VPS-AUTH-TUNNEL]` chiuso (verificato 2026-06-02) — web UI sul tunnel ora funziona; pairing resta ortogonale.
   - `[JHT-VPS-FRIENDLY]` (desktop launcher dovrebbe fare il pairing automaticamente come parte del provisioning, non e' un'alternativa al fix #1 ma un layer sopra)
   - Pattern di riferimento: implementazione device flow di `claude --dangerously-skip-permissions` o `gh auth login`
 - **Priorita':** 🔴 alta — primo touchpoint utente non-tech post-launch. Senza fix, "VPS mode" rimane prerogativa dei tech-user (bypass step 5 SSH e' impossibile per non-tech).
@@ -814,15 +817,15 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 #### 📎 [JHT-VPS-CV-UPLOAD-UX] Upload CV/allegati su VPS via UI (no scp/sftp)
 
 - **Goal:** utente VPS deve poter caricare PDF (CV, certificati, lettere referenze) **senza usare scp/sftp manuale**. Oggi l'unico path funzionante e' `scp -i ~/.ssh/jht_hetzner cv.pdf root@VPS:'/root/Documents/Job Hunter Team/cv/'`, che richiede shell tools, conoscenza del bind path host, e know-how SSH/scp.
-- **Stato attuale (2026-05-08):** `web/app/profile` ha gia' un form di upload (multipart POST → `/api/profile/upload-cv`) che scrive in `/jht_user/cv/`. Funziona in dev e in prod. Su VPS via SSH tunnel `localhost:3000` e' bloccato da `[BUG-VPS-AUTH-TUNNEL]` (Supabase OAuth callback).
+- **Stato attuale (aggiornato 2026-06-02):** `web/app/profile` ha gia' un form di upload (multipart POST → `/api/profile/upload-cv`) che scrive in `/jht_user/cv/`. Funziona in dev e in prod. Auth tunnel `localhost:3000` ora abilitato (✅ `[BUG-VPS-AUTH-TUNNEL]` chiuso) — sblocco prerequisito risolto.
 - **Path forward:**
-  1. **Step 1 (sblocca tutto):** fixare `[BUG-VPS-AUTH-TUNNEL]` aggiungendo `http://localhost:3000/**` agli allowed redirect URLs Supabase. ~10min, owner maintainer (admin Supabase). Senza questo, il resto della UX VPS rimane parzialmente CLI-only.
+  1. ✅ **Step 1 (prerequisito):** `[BUG-VPS-AUTH-TUNNEL]` FIXED — `localhost:3000-3005` + `127.0.0.1` in allow list Supabase.
   2. **Step 2 (UX):** verificare che il form `/profile` upload PDF su VPS via tunnel scriva correttamente in `/jht_user/cv/` (bind-mounted `~/Documents/Job Hunter Team/cv/` host). Test end-to-end sul VPS test.
   3. **Step 3 (OCR):** integrare skill PDF parsing nell'Assistente per auto-estrarre `candidate_profile.yml` dal PDF appena caricato → utente non deve compilare YAML a mano. Skill esiste in `agents/_skills/` (controllare manifest), serve solo cablarla nel flusso `/profile` upload.
   4. **Step 4 (Telegram, futuro):** Assistente accetta documento `.pdf` come allegato Telegram → stessa pipeline OCR. Roadmap PHASE 2.
-- **Documentation:** aggiornare `docs/guides/VPS-SETUP.md` con sezione "Carica il tuo CV" che mostra il flow web (post-fix auth) come path 🥇, scp/sftp come path 🥈 (per power-user / quando l'auth tunnel e' rotto).
-- **Priorita':** alta (segue il fix di `[BUG-VPS-AUTH-TUNNEL]` — senza quello, niente upload via UI).
-- **Linked:** `[BUG-VPS-AUTH-TUNNEL]` (BLOCKER prerequisito), `[JHT-VPS-FRIENDLY]` (per il path desktop wizard).
+- **Documentation:** aggiornare `docs/guides/VPS-SETUP.md` con sezione "Carica il tuo CV" che mostra il flow web come path 🥇, scp/sftp come path 🥈 (per power-user).
+- **Priorita':** alta — ora che il prerequisito auth è chiuso, il path UX è sbloccato.
+- **Linked:** ✅ `[BUG-VPS-AUTH-TUNNEL]` (prerequisito chiuso 2026-06-02), `[JHT-VPS-FRIENDLY]` (per il path desktop wizard).
 
 #### 🔒 [JHT-CLOUD-06] Secure app ↔ cloud tunnel
 
@@ -927,7 +930,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
 Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
-> **Cross-reference**: 🧪 [JHT-TEST-CAMPAIGN] in PHASE 1 is also a launch BLOCKER (coverage matrix in [`docs/guides/BETA.md`](docs/guides/BETA.md#coverage-we-still-need)). Treat it as part of this phase mentally.
+> **Cross-reference**: 🧪 [JHT-TEST-CAMPAIGN] in PHASE 1 — declassato 2026-06-02 da BLOCKER a "documentare run esistenti" (3 done + 2 pending da finalizzare); matrix expansion è ora post-launch open invitation. [JHT-CASE-STUDIES-WEB] è il vero strutturale pre-launch.
 
 **🚦 Suggested execution order** (BLOCKERs first, then rest in parallel):
 
@@ -971,11 +974,12 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 - **Why:** V3→V4→V5 in 2 weeks = churn. Before launch we need 1-2 weeks of freeze, otherwise we'll show up on HN with users opening issues on V5 while we're already on V6.
 - **Task:** freeze monitoring, fix only critical bugs, no refactor before launch.
 
-#### 🧪 [JHT-LAUNCH-07] Beta tester recruitment
+#### 🧪 [JHT-LAUNCH-07] Beta tester recruitment — open invitation post-launch
 
-- ✅ `docs/guides/BETA.md` created
-- ⬜ Publish on 1-2 communities (r/cscareerquestions, r/ItalyCompany, friends list)
-- Feeds the coverage matrix in [`docs/guides/BETA.md`](docs/guides/BETA.md#coverage-we-still-need) ([JHT-TEST-CAMPAIGN] in PHASE 1)
+- ✅ `docs/guides/BETA.md` updated 2026-06-02 — coverage matrix sostituita da "Pre-launch (3 done + 2 pending)" + "Post-launch open invitation, any role/industry, profile-agnostic"
+- ⬜ Publish on 1-2 communities (r/cscareerquestions, r/ItalyCompany, friends list) **post-launch** — non blocker pre-release
+- ⬜ Esplicitare in materiali Show HN che JHT è profile-agnostic e cerca tester da settori vari (marketing, design, finance, ops, healthcare, ecc., non solo IT/tech)
+- **Linked:** [JHT-TEST-CAMPAIGN] (run documentation) + [JHT-CASE-STUDIES-WEB] (struttura di ingestion per nuovi dump)
 
 #### ⭐ [JHT-LAUNCH-06] Awesome lists submissions
 
@@ -1154,25 +1158,22 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   - ⬜ Inferenza automatica branch dal proprio URL — irrisolvibile in modo robusto sotto `curl | bash` perche' `BASH_SOURCE=""` (stdin). Workaround possibile: CI step che sostituisce un marker `__BRANCH__` in install.sh al publish per ogni branch (richiede modifica `.github/workflows/`). **Decisione 2026-05-31**: non vale la candela — devs sanno usare `--branch`, utenti finali curl-ano da `jobhunterteam.ai/install.sh` (sempre master).
 - **File:** `scripts/install.sh:54` (`BRANCH="${JHT_BRANCH:-master}"`), parser L81-115, RAW_BASE L120.
 
-### 🔴 [BUG-VPS-AUTH-TUNNEL] Web UI auth Supabase non funziona via SSH tunnel `localhost:3000`
+### ✅ [BUG-VPS-AUTH-TUNNEL] Web UI auth Supabase via SSH tunnel `localhost:3000` — FIXED (verificato live 2026-06-02)
 
-- **Sintomo:** dopo `jht up` su VPS, browser sul PC va su `http://localhost:3000` (via SSH tunnel `-L 3000:localhost:3000`). La landing page funziona ma `/team`, `/positions`, ecc. redirigono a `/?login=true`. Click "Login with Google" → Supabase OAuth redirige a `https://jobhunterteam.ai/auth/callback`, non al tunnel localhost. L'utente non puo' completare l'auth lato VPS via tunnel.
+- **Sintomo originale:** dopo `jht up` su VPS, browser sul PC va su `http://localhost:3000` (via SSH tunnel `-L 3000:localhost:3000`). La landing page funziona ma `/team`, `/positions`, ecc. redirigono a `/?login=true`. Click "Login with Google" → Supabase OAuth redirige a `https://jobhunterteam.ai/auth/callback`, non al tunnel localhost.
 - **Scoperto:** primo bring-up VPS del 2026-05-06. Riconfermato sul re-test del 2026-05-08.
-- **Causa:** Supabase project ha solo `https://jobhunterteam.ai/**` come allowed redirect URLs. Manca `http://localhost:3000/**` per dev/tunnel mode.
-- **🚫 NO workaround:** la dashboard web e' l'interfaccia primaria. Senza, manca: `/positions` (tabella job), `/team` (chat per agente + start/stop), `/sentinella` (grafici usage), `/profile` (form upload CV). Il fallback CLI e' incompleto e Telegram bot non e' ancora maturo. Il bug e' bloccante per UX VPS.
-- **🛠️ Fix actionable (~10 min, una persona con accesso Supabase admin):**
-  1. Login [supabase.com/dashboard](https://supabase.com/dashboard) → progetto JHT → **Authentication → URL Configuration**.
-  2. **Site URL:** lascia `https://jobhunterteam.ai` (prod).
-  3. **Redirect URLs (allow list):** aggiungi:
-     - `http://localhost:3000/**`
-     - `http://localhost:3001/**` (per dev mode `dev:host`)
-     - `http://127.0.0.1:3000/**` (alias)
-  4. Save → propagazione immediata, no deploy needed.
-  5. Validare end-to-end: SSH tunnel su VPS test, browser → `http://localhost:3000/?login=true` → Google OAuth → callback su `localhost:3000/auth/callback` → cookie set → redirect a `/positions`. Aggiungere screenshot a `docs/guides/VPS-SETUP.md`.
-  6. Aggiornare `docs/guides/VPS-SETUP.md` step 6 con istruzioni tunnel + login flow.
-- **Owner:** chi ha credenziali admin del Supabase project JHT (maintainer).
-- **Priorita':** 🔴 BLOCKER per UX VPS (nessuna alternativa accettabile). Banale da fixare ma richiede credenziali admin Supabase.
-- **Storia:** la limitazione attuale era intenzionale per il pre-launch (solo dominio prod come allowed callback per minimizzare attack surface). Post-launch / per dev/test, localhost deve essere sempre allowed.
+- **Causa:** Supabase project aveva solo `https://jobhunterteam.ai/**` come allowed redirect URLs.
+- **Fix applicato:** Redirect URLs allow list estesa via dashboard Supabase (Authentication → URL Configuration). Stato live verificato 2026-06-02 — totale 11 URLs registrate, di cui localhost incluse:
+  - `http://localhost:3000/auth/callback`
+  - `http://localhost:3001/auth/callback`
+  - `http://localhost:3002/auth/callback`
+  - `http://localhost:3003/auth/callback`
+  - `http://localhost:3004/auth/callback`
+  - `http://localhost:3005/auth/callback`
+  - `http://127.0.0.1:3000/auth/callback`
+  - `http://127.0.0.1:3003/auth/callback`
+- **Follow-up residuo (non-blocker):** screenshot + step 6 "tunnel + login flow" in `docs/guides/VPS-SETUP.md` ancora da aggiungere (doc update only, il fix è in produzione).
+- **Storia:** la limitazione iniziale era intenzionale per il pre-launch (solo dominio prod come allowed callback per minimizzare attack surface). Riaperto e chiuso passando a localhost-allowed per dev/test/tunnel.
 
 ### ✅ [BUG-CSP-JSONLD-LANDING-V2] JSON-LD nonce mismatch — FIXED 2026-05-12
 
@@ -1231,25 +1232,9 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   - ❌ Rimuovere `.js` solo da `web/lib/ssrf.ts` → propaga il problema un livello più in profondità (shared/net/ssrf.ts e i suoi 3 import).
 - **Memoria correlata:** `feedback_no_heavy_smoke_tests_stacking` (no build+dev consecutivi su Windows).
 
-### 🔴 [BUG-TURBOPACK-MONOREPO-RESOLVE] `next dev` resolver cerca `tailwindcss` dal monorepo root
+### 🪛 [BUG-TURBOPACK-MONOREPO-RESOLVE] — spostato in `docs/internal/MINOR-TRACKER.md` (2026-06-02)
 
-- **File:** `web/next.config.ts` (config `outputFileTracingRoot` + Turbopack interaction) + ambient resolution
-- **Errore (riproducibile in dev su Windows):**
-  ```
-  Error: Can't resolve 'tailwindcss' in 'C:\Users\<user>\repos\job-hunter-team\dev-2'
-    resolve as module
-      C:\...\dev-2\node_modules doesn't exist or is not a directory
-      C:\...\repos\node_modules doesn't exist or is not a directory
-      ... (path lookup risale fino a C:\)
-  ```
-- **Causa probabile:** `outputFileTracingRoot: MONOREPO_ROOT` in `next.config.ts` (riga ~9) imposta come root il parent di `web/`. Turbopack/PostCSS in dev usa quel root per la node-module resolution di tailwindcss invece di `web/node_modules/`. Il problema è specifico del setup monorepo Windows; Vercel CI parte già con cwd diverso e potrebbe non vederlo.
-- **Conseguenza:** primo GET `/` dopo `npm run dev` blocca Turbopack su un loop di resolve falliti → CPU/IO saturati → server inutilizzabile per smoke locale. Vedi memoria `feedback_no_heavy_smoke_tests_stacking`.
-- **Storia:** non chiaro quando introdotto; emerso 2026-05-06 durante runtime smoke del fix CSP JSON-LD.
-- **Fix proposto:**
-  - 🥇 Verificare che `outputFileTracingRoot` non venga propagato come module-resolution root in dev (è pensato solo per Vercel file tracing in build).
-  - 🥈 Aggiungere `tailwindcss` esplicitamente in `web/next.config.ts` `experimental.externalDir` o forzare PostCSS config a usare `path.resolve(__dirname, 'node_modules/tailwindcss')`.
-  - 🥉 Test cross-OS: il bug potrebbe non manifestarsi su Linux/macOS — verificare via CI prima di toccare config.
-- **Verifica:** `cd web && npm run dev` + `curl localhost:3000/` deve rispondere 200 senza loop di resolve.
+Bug specifico Windows dev mode, non blocker pre-launch (Vercel deploy funziona, macOS/Linux dev probabilmente non vedono). Dettagli completi + fix proposti in [`docs/internal/MINOR-TRACKER.md`](docs/internal/MINOR-TRACKER.md#-bug-turbopack-monorepo-resolve-turbopack-cerca-tailwindcss-dal-monorepo-root-su-windows-dev).
 
 ---
 
