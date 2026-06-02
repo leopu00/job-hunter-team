@@ -4,7 +4,7 @@ When multiple agents of the same role pull from the same queue, they MUST avoid 
 
 ## 🎯 Per-role lock mechanisms
 
-### 🕵️‍♂️ Scout — pre-INSERT dedup
+### 🕵️ Scout — pre-INSERT dedup
 
 Scouts write *new* records, so they can't lock something that doesn't exist yet. The collision risk is two scouts inserting the same job posting from different sources. Mechanism:
 
@@ -52,7 +52,7 @@ jht-tmux-send <PEER_SESSION> "[@me -> @peer] [INFO] taking IDs 42-44"
 
 ⚠️ **Do not use raw `tmux send-keys`**: Codex/Kimi TUIs lose the Enter character if it arrives in the same `send-keys` call as the text body. The wrapper handles text + Enter atomically with a render pause. Skill: `agents/_skills/tmux-send/jht-tmux-send`.
 
-## 🩺 Stale claims (rare in production)
+## 👨‍⚕️ Stale claims (rare in production)
 
 Production agents run for months without dying — stale claims are mostly a test-environment artifact. When they do happen:
 

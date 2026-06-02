@@ -30,7 +30,7 @@ Each step has a safety gate: `idle > 1h` on the operations that are destructive 
 
 ## When to run
 
-- 🩺 **End of a routine Dottore round** (~24h of continuous run, or at the start of an idle operational day).
+- 👨‍⚕️ **End of a routine Dottore round** (~24h of continuous run, or at the start of an idle operational day).
 - 📉 **On demand** if `du -sh $JHT_HOME/.cache $JHT_HOME/.codex` shows growth > 800 MB total.
 - 🚫 **NEVER** mid-budget-critical (proj > 95%) — the VACUUM 30s blocks the Codex SQLite the Sentinel reads through the bridge.
 - 🚫 **NEVER** in reaction to a Sentinel `[ORDINE]` — orders demand pacing/scaling actions, not housekeeping.

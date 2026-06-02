@@ -189,7 +189,7 @@
     Pendenza ripida = velocità di consumo alta. Plateau orizzontali = pause/silenzi.
     <strong>164.8 MT totali</strong> in 14 giorni. Top consumer: critico (17%), scrittore-1 (17%), scout-1 (13%).
     Il critic-loop drena il 30%+ del budget (<code>critico</code> + multipli <code>CRITICO-S2/S3</code>).
-    Il <strong>🩺 dottore</strong> consuma solo 2.3% nonostante giri ogni 30min.
+    Il <strong>👨‍⚕️ dottore</strong> consuma solo 2.3% nonostante giri ogni 30min.
   </div>
 </div>
 
@@ -204,7 +204,7 @@
   </div>
 </div>
 
-<h2>🩺 Dottore — health-check ogni 30 min (deployato 8 mag 07:00)</h2>
+<h2>👨‍⚕️ Dottore — health-check ogni 30 min (deployato 8 mag 07:00)</h2>
 <div class="card">
   <div id="doctor-summary"></div>
   <div class="narrative">
@@ -292,7 +292,7 @@ function buildKpis(data) {
     { lbl: '✍️ applications scritte', val: data.db.totals.applications, sub: 'di cui 30 approved/ready' },
     { lbl: '🔢 token totali team', val: (totalKt/1000).toFixed(0) + ' MT', sub: '15 giorni · 17 agenti' },
     { lbl: '🎯 peak medio finestre', val: peakAvg.toFixed(0) + '%', sub: `${peak100} ≥95% · ${peakUnder70} <70%` },
-    { lbl: '🩺 round dottore', val: data.doctor.totals.rounds, sub: `${data.doctor.totals.pings} ping · ${data.doctor.totals.restarts} restart` },
+    { lbl: '👨‍⚕️ round dottore', val: data.doctor.totals.rounds, sub: `${data.doctor.totals.pings} ping · ${data.doctor.totals.restarts} restart` },
   ]
   document.getElementById('kpis-top').innerHTML = cards.map(c => `
     <div class="kpi"><div class="lbl">${c.lbl}</div><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>
@@ -480,7 +480,7 @@ function buildDoctorSummary(data) {
   const d = data.doctor
   document.getElementById('doctor-summary').innerHTML = `
     <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px;">
-      <span class="pill">🩺 spawns: ${d.totals.spawns}</span>
+      <span class="pill">👨‍⚕️ spawns: ${d.totals.spawns}</span>
       <span class="pill">✅ rounds: ${d.totals.rounds}</span>
       <span class="pill">📨 ping: ${d.totals.pings}</span>
       <span class="pill ${d.totals.restarts > 0 ? 'warn' : 'good'}">🔄 restart: ${d.totals.restarts}</span>
