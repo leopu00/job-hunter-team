@@ -71,6 +71,12 @@ export default function BetaTeamFlow() {
   const [globeLon, setGlobeLon] = useState<number>(
     LUXURY_POSITIONS[0]?.lon ?? 10,
   );
+  // Vignetta "speech bubble" che ogni tanto compare sopra un agente
+  // durante la fase 1. Null = nessuna vignetta attiva.
+  const [chatter, setChatter] = useState<{
+    nodeKey: NodeId;
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     let frame = 0;
@@ -420,10 +426,30 @@ export default function BetaTeamFlow() {
       return last.lon;
     };
 
+    // Vignette: ogni tanto, durante la fase 1, sopra un agente compare
+    // una speech bubble con una frase breve. Sono distribuite con
+    // "buchi" di silenzio tra una e l'altra (la dura ~360 px di scroll
+    // ognuna). Tutte hanno endT < 6840 (fine fase 1).
+    const CHATTER: Array<{
+      nodeKey: NodeId;
+      text: string;
+      startT: number;
+      endT: number;
+    }> = [
+      { nodeKey: "captain", text: "OK team, let's go!", startT: 60, endT: 360 },
+      { nodeKey: "scout", text: "Found 3 in Europe!", startT: 720, endT: 1080 },
+      { nodeKey: "scout", text: "Asia incoming…", startT: 1440, endT: 1800 },
+      { nodeKey: "scout", text: "Big USA market!", startT: 2160, endT: 2520 },
+      { nodeKey: "analyst", text: "Checking fit…", startT: 2880, endT: 3240 },
+      { nodeKey: "captain", text: "Looking good", startT: 3600, endT: 3960 },
+      { nodeKey: "scorer", text: "Top matches found", startT: 4680, endT: 5040 },
+      { nodeKey: "writer", text: "Writing CVs…", startT: 5760, endT: 6120 },
+      { nodeKey: "critic", text: "Reviewing…", startT: 6480, endT: 6840 },
+    ];
+
     let lastPinColorsKey = "";
-    // Niente NaN init: Math.abs(x - NaN) = NaN e NaN > 0.05 è false,
-    // quindi setGlobeLon non veniva MAI chiamato.
     let lastGlobeLon: number | null = null;
+    let lastChatterKey = "";
 
     const recompute = () => {
       const rectTop = sec ? sec.getBoundingClientRect().top : 0;
@@ -443,6 +469,16 @@ export default function BetaTeamFlow() {
       if (lastGlobeLon === null || Math.abs(newLon - lastGlobeLon) > 0.05) {
         lastGlobeLon = newLon;
         setGlobeLon(newLon);
+      }
+      // 1c) Vignetta attiva per il T corrente.
+      const activeChat =
+        CHATTER.find((c) => T >= c.startT && T < c.endT) ?? null;
+      const chatKey = activeChat
+        ? `${activeChat.nodeKey}|${activeChat.text}`
+        : "";
+      if (chatKey !== lastChatterKey) {
+        lastChatterKey = chatKey;
+        setChatter(activeChat);
       }
 
       // 2) Aggiorno le palline in volo.
@@ -526,12 +562,21 @@ export default function BetaTeamFlow() {
     ref: React.RefObject<HTMLSpanElement | null>,
     extraClass = "",
     nameRef?: React.RefObject<HTMLSpanElement | null>,
+    bubblePlacement: "top" | "bottom" = "top",
   ) => {
     const n = NODES[nodeId];
+    const showChat = chatter?.nodeKey === nodeId;
     return (
       <div
         className={`relative inline-flex select-none flex-col items-center gap-2 shrink-0 ${extraClass}`}
       >
+        {showChat && (
+          <SpeechBubble
+            key={chatter.text}
+            text={chatter.text}
+            placement={bubblePlacement}
+          />
+        )}
         <span
           ref={ref}
           className="text-3xl md:text-4xl leading-none"
@@ -649,31 +694,40 @@ export default function BetaTeamFlow() {
         </svg>
       )}
 
-      {/* Top row: solo Captain, centrato sopra la pipeline */}
+      {/* Top row: solo Captain, centrato sopra la pipeline. Bubble
+          placement "bottom": il Capitano è in cima al pin sticky (top
+          5rem), una bubble sopra di lui finisce sotto la nav. La
+          mettiamo sotto, c'è spazio nel gap mt-24 verso la pipeline. */}
       <div className="flex justify-center items-end">
-        {renderNode("captain", captainEmojiRef, "", captainNameRef)}
+        {renderNode("captain", captainEmojiRef, "", captainNameRef, "bottom")}
       </div>
 
       {/* Pipeline row */}
       <div className="grid grid-cols-5 justify-items-center items-start mt-24">
-        {PIPELINE.map((nodeId, idx) => (
-          <div key={nodeId}>
-            <div className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 min-w-[72px]">
-              <span
-                ref={(node) => {
-                  pipelineRefs.current[idx] = node;
-                }}
-                className="text-3xl md:text-4xl leading-none"
-                aria-hidden="true"
-              >
-                {NODES[nodeId].emoji}
-              </span>
-              <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">
-                {NODES[nodeId].name}
-              </span>
+        {PIPELINE.map((nodeId, idx) => {
+          const showChat = chatter?.nodeKey === nodeId;
+          return (
+            <div key={nodeId}>
+              <div className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 min-w-[72px]">
+                {showChat && (
+                  <SpeechBubble key={chatter.text} text={chatter.text} />
+                )}
+                <span
+                  ref={(node) => {
+                    pipelineRefs.current[idx] = node;
+                  }}
+                  className="text-3xl md:text-4xl leading-none"
+                  aria-hidden="true"
+                >
+                  {NODES[nodeId].emoji}
+                </span>
+                <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">
+                  {NODES[nodeId].name}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Globo come figlio del flow: stesso coordinate space dei path
@@ -685,6 +739,68 @@ export default function BetaTeamFlow() {
       <div ref={globeSlotRef} className="mt-32">
         <HeroGlobe pinColors={pinColors} centerLon={globeLon} />
       </div>
+    </div>
+  );
+}
+
+// Speech bubble posizionata sopra l'emoji di un agente. Fade-in
+// all'apparizione (key sul text fa rimontare il nodo → animazione
+// riparte) e codina inferiore via div ruotato 45° col background del
+// bubble (così copre il bordo della bubble).
+function SpeechBubble({
+  text,
+  placement = "top",
+}: {
+  text: string;
+  placement?: "top" | "bottom";
+}) {
+  const isBottom = placement === "bottom";
+  return (
+    <div
+      className="absolute whitespace-nowrap select-none pointer-events-none"
+      style={{
+        ...(isBottom
+          ? { top: "calc(100% + 8px)" }
+          : { bottom: "calc(100% + 8px)" }),
+        left: "50%",
+        transform: "translateX(-50%)",
+        animation: "chat-bubble-in 0.3s ease both",
+        background: "var(--color-card)",
+        color: "var(--color-bright)",
+        border: "1px solid var(--color-border)",
+        borderRadius: 6,
+        padding: "4px 10px",
+        fontSize: 11,
+        lineHeight: 1.3,
+        boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+        zIndex: 5,
+      }}
+    >
+      {text}
+      {/* Codina: quadrato ruotato 45° col bg + bordi del bubble. Il lato
+          dove sta la codina dipende da placement: top → codina sotto
+          (punta verso emoji sotto), bottom → codina sopra. */}
+      <span
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: "50%",
+          ...(isBottom ? { top: -4 } : { bottom: -4 }),
+          width: 7,
+          height: 7,
+          transform: "translateX(-50%) rotate(45deg)",
+          background: "var(--color-card)",
+          ...(isBottom
+            ? {
+                borderLeft: "1px solid var(--color-border)",
+                borderTop: "1px solid var(--color-border)",
+              }
+            : {
+                borderRight: "1px solid var(--color-border)",
+                borderBottom: "1px solid var(--color-border)",
+              }),
+        }}
+      />
     </div>
   );
 }
