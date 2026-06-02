@@ -37,6 +37,45 @@ function FlagHU() {
   );
 }
 
+function FlagES() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="20" height="14" fill="#AA151B" />
+      <rect y="3.5" width="20" height="7" fill="#F1BF00" />
+    </svg>
+  );
+}
+
+function FlagFR() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="6.67" height="14" fill="#0055A4" />
+      <rect x="6.67" width="6.66" height="14" fill="#fff" />
+      <rect x="13.33" width="6.67" height="14" fill="#EF4135" />
+    </svg>
+  );
+}
+
+function FlagDE() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="20" height="4.67" fill="#000" />
+      <rect y="4.67" width="20" height="4.66" fill="#DD0000" />
+      <rect y="9.33" width="20" height="4.67" fill="#FFCE00" />
+    </svg>
+  );
+}
+
+function FlagPT() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="20" height="14" fill="#FF0000" />
+      <rect width="8" height="14" fill="#006600" />
+      <circle cx="8" cy="7" r="2.1" fill="#FFCC00" />
+    </svg>
+  );
+}
+
 const LANGUAGES: {
   code: Lang;
   label: string;
@@ -44,6 +83,10 @@ const LANGUAGES: {
 }[] = [
   { code: "it", label: "Italiano", Flag: FlagIT },
   { code: "en", label: "English", Flag: FlagEN },
+  { code: "es", label: "Español", Flag: FlagES },
+  { code: "fr", label: "Français", Flag: FlagFR },
+  { code: "de", label: "Deutsch", Flag: FlagDE },
+  { code: "pt", label: "Português", Flag: FlagPT },
   { code: "hu", label: "Magyar", Flag: FlagHU },
 ];
 
