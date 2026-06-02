@@ -321,24 +321,22 @@ export default function BetaTeamFlow() {
         nodeKey: "writer",
         pinGroups: [[4, 7], [9, 13]],
       },
-      // Round 2: il Writer fa una passata finale e tinge di VERDE 20
-      // pin (su 24). 4 pin sono ESCLUSI (Vienna=2, Istanbul=5, Seoul=8,
-      // Las Vegas=11) e restano col colore precedente sul globo → la
-      // tabella li marca come status "excluded".
+      // Round 2: il Writer fa una passata finale e tinge di VERDE
+      // TUTTI i 24 pin durante il giro a inquadratura fissa sul globo.
       // Raggruppati per longitudine monotonica est così il globo ruota
       // di ~360° in totale durante la fase centrata.
       {
         stepIdx: 10,
         nodeKey: "writer",
         pinGroups: [
-          // g0: Pacifico + Americas west — Sydney, SF, MexCity, Chicago, Lima
-          [18, 10, 20, 12, 21],
-          // g1: Atlantico est + Europa west — NY, BA, SãoPaulo, London, Paris, Rome
-          [13, 22, 14, 0, 1, 4],
-          // g2: Europa centro/est + Africa + MO — Stockholm, CapeTown, Moscow, Dubai
-          [3, 19, 6, 23],
-          // g3: Asia — Mumbai, Bangkok, Singapore, Beijing, Tokyo
-          [15, 17, 16, 7, 9],
+          // g0: Pacifico + Americas west — Sydney, SF, LasVegas, MexCity, Chicago, Lima
+          [18, 10, 11, 20, 12, 21],
+          // g1: Atlantico est + Europa west — NY, BA, SãoPaulo, London, Paris, Rome, Vienna
+          [13, 22, 14, 0, 1, 4, 2],
+          // g2: Europa centro/est + Africa + MO — Stockholm, CapeTown, Istanbul, Moscow, Dubai
+          [3, 19, 5, 6, 23],
+          // g3: Asia — Mumbai, Bangkok, Singapore, Beijing, Seoul, Tokyo
+          [15, 17, 16, 7, 8, 9],
         ],
       },
     ];
