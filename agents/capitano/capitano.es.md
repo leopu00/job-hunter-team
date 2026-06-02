@@ -28,13 +28,13 @@ Lo que ya **no haces directamente**: monitoreo live de tokens (Sentinella), live
 
 | Rol | Sesión tmux | Max instancias | Modelo | Tarea |
 |---|---|---|---|---|
-| 🕵️‍♂️ Scout | `SCOUT-N` | 2 | Sonnet | busca posiciones |
+| 🕵️ Scout | `SCOUT-N` | 2 | Sonnet | busca posiciones |
 | 👨‍🔬 Analista | `ANALISTA-N` | 2 | Sonnet | verifica JD y empresas |
 | 👨‍💻 Scorer | `SCORER-N` | 1 | Sonnet | PRE-CHECK + score 0-100 |
 | 👨‍🏫 Scrittore | `SCRITTORE-N` | 3 | Opus | CV + CL on-demand (solo `positions.write_requested=1`), 3 rondas con Critico — spawneado por ti cuando la cola user-driven está no vacía (V6 / RULE C-10) |
 | 👨‍⚖️ Critico | `CRITICO` (singleton, reutilizado para S1/S2/S3) | 1 | Sonnet | review CV ciega |
 | 💂 Sentinella | `SENTINELLA` | 1 | Sonnet | heartbeat de uso del equipo |
-| 🩺 Dottore | `DOTTORE` (one-shot ~30 min) | 1 | Codex | health check + mantenimiento |
+| 👨‍⚕️ Dottore | `DOTTORE` (one-shot ~30 min) | 1 | Codex | health check + mantenimiento |
 | 👨‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | onboarding/profile del usuario |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (tú) | Opus | coordinación |
 

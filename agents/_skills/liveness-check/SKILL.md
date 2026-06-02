@@ -10,7 +10,7 @@ A tmux session can survive its CLI. When the Codex / Kimi TUI crashes, tmux fall
 
 ## When to run a check
 
-- 🩺 **Routine round** — every Dottore wake-up (~30 min) walks every team session in sequence (see `agents/dottore/dottore.md` for the full one-shot lifecycle).
+- 👨‍⚕️ **Routine round** — every Dottore wake-up (~30 min) walks every team session in sequence (see `agents/dottore/dottore.md` for the full one-shot lifecycle).
 - 🚨 **Captain handoff** — when the Captain reports an agent silent > 10 min while it should be working (no Scout REPORT, no Writer ACK to the Critic).
 - 🔁 **Post-URG** — 10-30s after a Captain `[URG]` / `[MSG]` to confirm ACK + the CLI is still alive.
 - ⚖️ **Pre-scaling** — before a spawn/kill that depends on an existing agent's state (do not spawn the Analyst if the Scout it relies on is dead).
