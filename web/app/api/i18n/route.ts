@@ -16,15 +16,22 @@ const SUPPORTED_LOCALES = [
   { code: "it", label: "Italiano", flag: "IT" },
   { code: "en", label: "English", flag: "EN" },
   { code: "hu", label: "Magyar", flag: "HU" },
+  { code: "es", label: "Español", flag: "ES" },
+  { code: "de", label: "Deutsch", flag: "DE" },
+  { code: "fr", label: "Français", flag: "FR" },
+  { code: "pt", label: "Português", flag: "PT" },
 ] as const;
 
-type Locale = "it" | "en" | "hu";
+type Locale = "it" | "en" | "hu" | "es" | "de" | "fr" | "pt";
+
+function isLocale(v: unknown): v is Locale {
+  return v === "it" || v === "en" || v === "hu" || v === "es" || v === "de" || v === "fr" || v === "pt";
+}
 
 function loadPrefs(): { locale: Locale } {
   try {
     const raw = JSON.parse(fs.readFileSync(PREFS_PATH, "utf-8"));
-    if (raw.locale === "it" || raw.locale === "en" || raw.locale === "hu")
-      return raw;
+    if (isLocale(raw.locale)) return raw;
   } catch {
     /* default */
   }
@@ -45,10 +52,7 @@ export async function GET(req: Request) {
   const cookieHeader = req.headers.get("cookie") || "";
   const cookieMatch = cookieHeader.match(/(?:^|;\s*)NEXT_LOCALE=([^;]+)/);
   const cookieLocale = cookieMatch?.[1];
-  const current =
-    cookieLocale === "it" || cookieLocale === "en" || cookieLocale === "hu"
-      ? (cookieLocale as Locale)
-      : loadPrefs().locale;
+  const current = isLocale(cookieLocale) ? cookieLocale : loadPrefs().locale;
   return NextResponse.json({
     current,
     locales: SUPPORTED_LOCALES,
@@ -63,9 +67,9 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const locale = body.locale as string;
 
-    if (locale !== "it" && locale !== "en" && locale !== "hu") {
+    if (!isLocale(locale)) {
       return NextResponse.json(
-        { error: `Locale non supportato: ${locale}. Validi: it, en, hu` },
+        { error: `Locale non supportato: ${locale}. Validi: it, en, hu, es, de, fr, pt` },
         { status: 400 },
       );
     }
