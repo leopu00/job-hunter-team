@@ -1,6 +1,6 @@
 "use client";
 
-// 🩺 DoctorPanel — visualizza i giri del Dottore (health-check agente
+// 👨‍⚕️ DoctorPanel — visualizza i giri del Dottore (health-check agente
 // che si autospawna ogni 30min). Legge /api/dottore/actions, mostra:
 //   • header con stato live (DOTTORE attivo / spento / ultimo round)
 //   • lista round (ultimi 8) con stati aggregati
@@ -59,7 +59,7 @@ type Resp = {
 };
 
 const EVENT_ICON: Record<string, string> = {
-  spawn: "🩺",
+  spawn: "👨‍⚕️",
   ping_sent: "📨",
   diagnosis: "🔍",
   restart: "🔄",
@@ -140,7 +140,7 @@ export default function DoctorPanel() {
       <header className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <span className="text-2xl" aria-hidden>
-            🩺
+            👨‍⚕️
           </span>
           <div>
             <h3 className="text-sm font-semibold text-[var(--color-bright)]">
