@@ -110,11 +110,39 @@ CREATE TABLE IF NOT EXISTS case_study_windows (
 
 CREATE INDEX IF NOT EXISTS idx_csw_case ON case_study_windows(case_study_id, display_order);
 
+-- High-frequency burn samples for a weekly window. Used to render per-5h-window
+-- usage charts (usage % over time within each rolling 5h slice).
+CREATE TABLE IF NOT EXISTS case_study_burn_samples (
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_study_window_id INTEGER NOT NULL,
+  ts                   TIMESTAMP NOT NULL,
+  weekly_usage_pct     DECIMAL NOT NULL,                       -- cumulative weekly budget %
+  window_usage_pct     DECIMAL,                                -- rolling 5h cap % (provider-internal), nullable
+  source               TEXT,                                   -- 'bridge' | 'manual'
+  FOREIGN KEY (case_study_window_id) REFERENCES case_study_windows(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_csbs_window_ts ON case_study_burn_samples(case_study_window_id, ts);
+
+-- Agent activity intervals (start/end of work) inside a weekly window, used to
+-- render the per-agent activity tracks below the per-5h-window charts.
+CREATE TABLE IF NOT EXISTS case_study_agent_activity (
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_study_window_id INTEGER NOT NULL,
+  agent                TEXT NOT NULL,
+  ts_start             TIMESTAMP NOT NULL,
+  ts_end               TIMESTAMP NOT NULL,
+  reason               TEXT,                                   -- short label from the throttle event
+  FOREIGN KEY (case_study_window_id) REFERENCES case_study_windows(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_csaa_window_agent ON case_study_agent_activity(case_study_window_id, agent, ts_start);
+
 -- Schema version stamp (for future migrations)
 CREATE TABLE IF NOT EXISTS schema_meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
 
-INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('version', '2');
+INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('version', '3');
 INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('created_at', CURRENT_TIMESTAMP);
