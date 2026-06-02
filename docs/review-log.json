@@ -372,7 +372,7 @@
     },
     {
       "path": "agents/dottore/dottore.md",
-      "description": "🩺 Dottore — health-check + manutenzione one-shot (~30 min, watchdog)",
+      "description": "👨‍⚕️ Dottore — health-check + manutenzione one-shot (~30 min, watchdog)",
       "last_review": null
     },
     {
