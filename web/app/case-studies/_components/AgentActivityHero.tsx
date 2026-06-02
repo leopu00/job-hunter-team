@@ -1,6 +1,9 @@
+"use client"
+
 import type { CaseStudy, Window } from "./types"
 import { providerColor } from "./types"
 import { AgentTracksChart } from "./AgentTracksChart"
+import { useChartTheme } from "./chart-theme"
 
 type Props = {
   caseStudy: CaseStudy
@@ -11,6 +14,8 @@ type Props = {
 // agent activity charts. Same FiveHourWindowChart used inside the case study
 // card, surfaced as the page's marquee analysis.
 export function AgentActivityHero({ caseStudy, weekly }: Props) {
+  const { mode } = useChartTheme()
+  const isDark = mode === "dark"
   const fiveHour = weekly.five_hour_windows ?? []
   if (fiveHour.length === 0) return null
 
@@ -18,19 +23,39 @@ export function AgentActivityHero({ caseStudy, weekly }: Props) {
   const activity = weekly.agent_activity ?? []
 
   return (
-    <section className="border-b border-slate-800 bg-slate-950 py-10 text-slate-100">
+    <section
+      className={`border-b py-10 ${
+        isDark
+          ? "border-slate-800 bg-slate-950"
+          : "border-slate-200 bg-slate-50"
+      }`}
+      style={{ color: isDark ? "#f1f5f9" : "#0f172a" }}
+    >
       <div className="mx-auto max-w-[1500px] px-6">
         <div className="mb-6 flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-white sm:text-3xl">
-              ⏱ Chi ha lavorato, quanto e quando
+            <h2
+              className="text-2xl font-bold sm:text-3xl"
+              style={{ color: isDark ? "#ffffff" : "#0f172a" }}
+            >
+              💬 Messaggi e azioni del team
             </h2>
-            <p className="mt-1 text-sm text-slate-400">
-              {caseStudy.title} · finestra weekly suddivisa in {fiveHour.length} slice
-              rolling 5h.
+            <p
+              className="mt-1 text-sm"
+              style={{ color: isDark ? "#94a3b8" : "#475569" }}
+            >
+              {caseStudy.title} · ogni blocco è un messaggio inviato/ricevuto o
+              un cambio di stato sul DB. Finestra weekly suddivisa in {fiveHour.length}{" "}
+              slice rolling 5h.
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300">
+          <div
+            className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs ${
+              isDark
+                ? "border-slate-700 text-slate-300"
+                : "border-slate-300 bg-white text-slate-700"
+            }`}
+          >
             <span
               className="inline-block h-2 w-2 rounded-full"
               style={{ backgroundColor: accent }}
