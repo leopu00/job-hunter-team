@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
-import Database from 'better-sqlite3'
-import fs from 'fs'
-import { resolveUser } from '@/lib/team-state/auth'
-import { JHT_DB_PATH } from '@/lib/jht-paths'
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { NextRequest, NextResponse } from "next/server";
+import Database from "better-sqlite3";
+import fs from "fs";
+import { resolveUser } from "@/lib/team-state/auth";
+import { JHT_DB_PATH } from "@/lib/jht-paths";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
 // Geocoding-on-demand: l'utente "richiede" il geocoding ufficio preciso
 // per una posizione cliccando il pulsante "Geocodifica" sulla detail page.
@@ -35,45 +35,49 @@ export const dynamic = 'force-dynamic'
 // + Supabase mig 027.
 
 interface PositionRow {
-  id: number
-  title: string
-  company: string
-  status: string | null
-  loc_city: string | null
-  loc_country_code: string | null
-  geocode_requested: number
-  geocode_requested_at: string | null
-  office_geocoded: number | null
+  id: number;
+  title: string;
+  company: string;
+  status: string | null;
+  loc_city: string | null;
+  loc_country_code: string | null;
+  geocode_requested: number;
+  geocode_requested_at: string | null;
+  office_geocoded: number | null;
 }
 
 interface ResponsePosition {
-  id: string
-  title: string
-  company: string
-  status: string | null
-  loc_city: string | null
-  loc_country_code: string | null
-  geocode_requested: boolean
-  geocode_requested_at: string | null
-  office_geocoded: boolean
+  id: string;
+  title: string;
+  company: string;
+  status: string | null;
+  loc_city: string | null;
+  loc_country_code: string | null;
+  geocode_requested: boolean;
+  geocode_requested_at: string | null;
+  office_geocoded: boolean;
 }
 
 interface ToggleOutcome {
-  position: ResponsePosition
-  cloud_synced: boolean | null
-  source: 'local' | 'cloud'
+  position: ResponsePosition;
+  cloud_synced: boolean | null;
+  source: "local" | "cloud";
 }
 
-function toggleViaLocal(legacyId: number, requested: boolean):
+function toggleViaLocal(
+  legacyId: number,
+  requested: boolean,
+):
   | { ok: true; outcome: ToggleOutcome }
   | { ok: false; status: number; body: Record<string, unknown> } {
-  const db = new Database(JHT_DB_PATH)
+  const db = new Database(JHT_DB_PATH);
   try {
-    db.pragma('journal_mode = WAL')
-    db.pragma('foreign_keys = ON')
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
 
     const row = db
-      .prepare<[number], PositionRow>(`
+      .prepare<[number], PositionRow>(
+        `
         SELECT
           p.id, p.title, p.company, p.status,
           p.loc_city, p.loc_country_code,
@@ -81,22 +85,30 @@ function toggleViaLocal(legacyId: number, requested: boolean):
           p.office_geocoded
         FROM positions p
         WHERE p.id = ?
-      `)
-      .get(legacyId)
+      `,
+      )
+      .get(legacyId);
 
     if (!row) {
-      return { ok: false, status: 404, body: { error: `Posizione #${legacyId} non trovata` } }
+      return {
+        ok: false,
+        status: 404,
+        body: { error: `Posizione #${legacyId} non trovata` },
+      };
     }
 
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE positions
          SET geocode_requested = ?,
              geocode_requested_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE NULL END
        WHERE id = ?
-    `).run(requested ? 1 : 0, requested ? 1 : 0, legacyId)
+    `,
+    ).run(requested ? 1 : 0, requested ? 1 : 0, legacyId);
 
     const updated = db
-      .prepare<[number], PositionRow>(`
+      .prepare<[number], PositionRow>(
+        `
         SELECT
           p.id, p.title, p.company, p.status,
           p.loc_city, p.loc_country_code,
@@ -104,8 +116,9 @@ function toggleViaLocal(legacyId: number, requested: boolean):
           p.office_geocoded
         FROM positions p
         WHERE p.id = ?
-      `)
-      .get(legacyId)!
+      `,
+      )
+      .get(legacyId)!;
 
     return {
       ok: true,
@@ -122,11 +135,11 @@ function toggleViaLocal(legacyId: number, requested: boolean):
           office_geocoded: updated.office_geocoded === 1,
         },
         cloud_synced: null,
-        source: 'local',
+        source: "local",
       },
-    }
+    };
   } finally {
-    db.close()
+    db.close();
   }
 }
 
@@ -136,48 +149,60 @@ async function toggleViaCloud(
   legacyId: number,
   requested: boolean,
 ): Promise<
-  { ok: true; outcome: ToggleOutcome }
+  | { ok: true; outcome: ToggleOutcome }
   | { ok: false; status: number; body: Record<string, unknown> }
 > {
   const { data: row, error } = await supabase
-    .from('positions')
+    .from("positions")
     .select(
-      'id, title, company, status, loc_city, loc_country_code, ' +
-        'geocode_requested, geocode_requested_at, office_geocoded',
+      "id, title, company, status, loc_city, loc_country_code, " +
+        "geocode_requested, geocode_requested_at, office_geocoded",
     )
-    .eq('user_id', userId)
-    .eq('legacy_id', legacyId)
-    .maybeSingle()
+    .eq("user_id", userId)
+    .eq("legacy_id", legacyId)
+    .maybeSingle();
 
   if (error) {
-    return { ok: false, status: 500, body: { error: `Supabase query failed: ${error.message}` } }
+    return {
+      ok: false,
+      status: 500,
+      body: { error: `Supabase query failed: ${error.message}` },
+    };
   }
   if (!row) {
-    return { ok: false, status: 404, body: { error: `Posizione #${legacyId} non trovata` } }
+    return {
+      ok: false,
+      status: 404,
+      body: { error: `Posizione #${legacyId} non trovata` },
+    };
   }
 
   type R = {
-    title: string | null
-    company: string | null
-    status: string | null
-    loc_city: string | null
-    loc_country_code: string | null
-    office_geocoded: boolean | null
-  }
-  const r = row as unknown as R
+    title: string | null;
+    company: string | null;
+    status: string | null;
+    loc_city: string | null;
+    loc_country_code: string | null;
+    office_geocoded: boolean | null;
+  };
+  const r = row as unknown as R;
 
-  const geocodeRequestedAt = requested ? new Date().toISOString() : null
+  const geocodeRequestedAt = requested ? new Date().toISOString() : null;
   const { error: upErr } = await supabase
-    .from('positions')
+    .from("positions")
     .update({
       geocode_requested: requested,
       geocode_requested_at: geocodeRequestedAt,
     })
-    .eq('user_id', userId)
-    .eq('legacy_id', legacyId)
+    .eq("user_id", userId)
+    .eq("legacy_id", legacyId);
 
   if (upErr) {
-    return { ok: false, status: 500, body: { error: `Supabase update failed: ${upErr.message}` } }
+    return {
+      ok: false,
+      status: 500,
+      body: { error: `Supabase update failed: ${upErr.message}` },
+    };
   }
 
   return {
@@ -185,8 +210,8 @@ async function toggleViaCloud(
     outcome: {
       position: {
         id: String(legacyId),
-        title: r.title ?? '',
-        company: r.company ?? '',
+        title: r.title ?? "",
+        company: r.company ?? "",
         status: r.status,
         loc_city: r.loc_city,
         loc_country_code: r.loc_country_code,
@@ -195,9 +220,9 @@ async function toggleViaCloud(
         office_geocoded: r.office_geocoded === true,
       },
       cloud_synced: true,
-      source: 'cloud',
+      source: "cloud",
     },
-  }
+  };
 }
 
 async function handleToggle(
@@ -205,72 +230,74 @@ async function handleToggle(
   legacyIdParam: string,
   requested: boolean,
 ): Promise<NextResponse> {
-  const resolved = await resolveUser(req)
-  if (!resolved.ok) return resolved.res
-  if (resolved.user.source !== 'session') {
+  const resolved = await resolveUser(req);
+  if (!resolved.ok) return resolved.res;
+  if (resolved.user.source !== "session") {
     return NextResponse.json(
-      { error: 'Solo il browser puo\' richiedere il geocoding (no Bearer token)' },
+      {
+        error: "Solo il browser puo' richiedere il geocoding (no Bearer token)",
+      },
       { status: 403 },
-    )
+    );
   }
-  const { userId, supabase } = resolved.user
+  const { userId, supabase } = resolved.user;
 
-  const legacyId = Number.parseInt(legacyIdParam, 10)
+  const legacyId = Number.parseInt(legacyIdParam, 10);
   if (!Number.isInteger(legacyId) || legacyId <= 0) {
-    return NextResponse.json({ error: 'legacyId non valido' }, { status: 400 })
+    return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });
   }
 
-  const hasLocal = fs.existsSync(JHT_DB_PATH)
+  const hasLocal = fs.existsSync(JHT_DB_PATH);
 
   if (hasLocal) {
-    const local = toggleViaLocal(legacyId, requested)
+    const local = toggleViaLocal(legacyId, requested);
     if (!local.ok) {
-      return NextResponse.json(local.body, { status: local.status })
+      return NextResponse.json(local.body, { status: local.status });
     }
-    let cloudOk: boolean | null = null
+    let cloudOk: boolean | null = null;
     try {
       const { error } = await supabase
-        .from('positions')
+        .from("positions")
         .update({
           geocode_requested: requested,
           geocode_requested_at: requested ? new Date().toISOString() : null,
         })
-        .eq('user_id', userId)
-        .eq('legacy_id', legacyId)
-      cloudOk = !error
+        .eq("user_id", userId)
+        .eq("legacy_id", legacyId);
+      cloudOk = !error;
     } catch {
-      cloudOk = false
+      cloudOk = false;
     }
     return NextResponse.json({
       position: local.outcome.position,
       cloud_synced: cloudOk,
-      source: 'local',
-    })
+      source: "local",
+    });
   }
 
-  const cloud = await toggleViaCloud(supabase, userId, legacyId, requested)
+  const cloud = await toggleViaCloud(supabase, userId, legacyId, requested);
   if (!cloud.ok) {
-    return NextResponse.json(cloud.body, { status: cloud.status })
+    return NextResponse.json(cloud.body, { status: cloud.status });
   }
   return NextResponse.json({
     position: cloud.outcome.position,
     cloud_synced: cloud.outcome.cloud_synced,
     source: cloud.outcome.source,
-  })
+  });
 }
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
-  const { legacyId } = await params
-  return handleToggle(req, legacyId, true)
+  const { legacyId } = await params;
+  return handleToggle(req, legacyId, true);
 }
 
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ legacyId: string }> },
 ) {
-  const { legacyId } = await params
-  return handleToggle(req, legacyId, false)
+  const { legacyId } = await params;
+  return handleToggle(req, legacyId, false);
 }
