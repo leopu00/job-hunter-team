@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import HeroGlobe from "./HeroGlobe";
 import { LUXURY_POSITIONS } from "../_data/luxuryPositions";
+import { useLandingI18n } from "./LandingI18n";
 
+// `name` è il fallback EN: il display name passa dal dizionario i18n
+// via agentName() dentro al componente.
 const NODES = {
   captain: { emoji: "👨‍✈️", name: "Captain", color: "#ff9100" },
   scout: { emoji: "🕵️", name: "Scout", color: "#2196f3" },
@@ -15,6 +18,29 @@ const NODES = {
 } as const;
 
 type NodeId = keyof typeof NODES;
+
+// Chiavi i18n per nodi (db escluso, usa il fallback "DB").
+const AGENT_NAME_KEY = {
+  captain: "agent_captain",
+  scout: "agent_scout",
+  analyst: "agent_analyst",
+  scorer: "agent_scorer",
+  writer: "agent_writer",
+  critic: "agent_critic",
+} as const;
+
+// Chiavi i18n per le 10 vignette del team flow.
+type ChatterKey =
+  | "chat_captain_go"
+  | "chat_captain_profile"
+  | "chat_scout_europe"
+  | "chat_scout_asia"
+  | "chat_scout_usa"
+  | "chat_analyst_check"
+  | "chat_captain_good"
+  | "chat_scorer_top"
+  | "chat_writer_cvs"
+  | "chat_critic_reviewing";
 
 type ArrowPath = { id: string; d: string };
 
@@ -32,6 +58,12 @@ const PIPELINE: NodeId[] = ["scout", "analyst", "scorer", "writer", "critic"];
 // (progress * length). Niente timer, niente loop temporali.
 
 export default function BetaTeamFlow() {
+  const { t } = useLandingI18n();
+  // Nome localizzato del nodo. "db" non ha chiave i18n → fallback EN.
+  const agentName = (id: NodeId): string => {
+    if (id === "db") return NODES.db.name;
+    return t(AGENT_NAME_KEY[id]);
+  };
   const flowRef = useRef<HTMLDivElement | null>(null);
   const captainEmojiRef = useRef<HTMLSpanElement | null>(null);
   const captainNameRef = useRef<HTMLSpanElement | null>(null);
@@ -75,7 +107,7 @@ export default function BetaTeamFlow() {
   // durante la fase 1. Null = nessuna vignetta attiva.
   const [chatter, setChatter] = useState<{
     nodeKey: NodeId;
-    text: string;
+    textKey: ChatterKey;
   } | null>(null);
 
   useEffect(() => {
@@ -430,19 +462,20 @@ export default function BetaTeamFlow() {
     // ognuna). Tutte hanno endT < 6840 (fine fase 1).
     const CHATTER: Array<{
       nodeKey: NodeId;
-      text: string;
+      textKey: ChatterKey;
       startT: number;
       endT: number;
     }> = [
-      { nodeKey: "captain", text: "OK team, let's go!", startT: 60, endT: 360 },
-      { nodeKey: "scout", text: "Found 3 in Europe!", startT: 720, endT: 1080 },
-      { nodeKey: "scout", text: "Asia incoming…", startT: 1440, endT: 1800 },
-      { nodeKey: "scout", text: "Big USA market!", startT: 2160, endT: 2520 },
-      { nodeKey: "analyst", text: "Checking fit…", startT: 2880, endT: 3240 },
-      { nodeKey: "captain", text: "Looking good", startT: 3600, endT: 3960 },
-      { nodeKey: "scorer", text: "Top matches found", startT: 4680, endT: 5040 },
-      { nodeKey: "writer", text: "Writing CVs…", startT: 5760, endT: 6120 },
-      { nodeKey: "critic", text: "Reviewing…", startT: 6480, endT: 6840 },
+      { nodeKey: "captain", textKey: "chat_captain_go", startT: 60, endT: 360 },
+      { nodeKey: "captain", textKey: "chat_captain_profile", startT: 420, endT: 720 },
+      { nodeKey: "scout", textKey: "chat_scout_europe", startT: 720, endT: 1080 },
+      { nodeKey: "scout", textKey: "chat_scout_asia", startT: 1440, endT: 1800 },
+      { nodeKey: "scout", textKey: "chat_scout_usa", startT: 2160, endT: 2520 },
+      { nodeKey: "analyst", textKey: "chat_analyst_check", startT: 2880, endT: 3240 },
+      { nodeKey: "captain", textKey: "chat_captain_good", startT: 3600, endT: 3960 },
+      { nodeKey: "scorer", textKey: "chat_scorer_top", startT: 4680, endT: 5040 },
+      { nodeKey: "writer", textKey: "chat_writer_cvs", startT: 5760, endT: 6120 },
+      { nodeKey: "critic", textKey: "chat_critic_reviewing", startT: 6480, endT: 6840 },
     ];
 
     let lastPinColorsKey = "";
@@ -472,7 +505,7 @@ export default function BetaTeamFlow() {
       const activeChat =
         CHATTER.find((c) => T >= c.startT && T < c.endT) ?? null;
       const chatKey = activeChat
-        ? `${activeChat.nodeKey}|${activeChat.text}`
+        ? `${activeChat.nodeKey}|${activeChat.textKey}`
         : "";
       if (chatKey !== lastChatterKey) {
         lastChatterKey = chatKey;
@@ -570,8 +603,8 @@ export default function BetaTeamFlow() {
       >
         {showChat && (
           <SpeechBubble
-            key={chatter.text}
-            text={chatter.text}
+            key={chatter.textKey}
+            text={t(chatter.textKey)}
             placement={bubblePlacement}
           />
         )}
@@ -586,7 +619,7 @@ export default function BetaTeamFlow() {
           ref={nameRef}
           className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center"
         >
-          {n.name}
+          {agentName(nodeId)}
         </span>
       </div>
     );
@@ -708,7 +741,7 @@ export default function BetaTeamFlow() {
             <div key={nodeId}>
               <div className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 min-w-[72px]">
                 {showChat && (
-                  <SpeechBubble key={chatter.text} text={chatter.text} />
+                  <SpeechBubble key={chatter.textKey} text={t(chatter.textKey)} />
                 )}
                 <span
                   ref={(node) => {
@@ -720,7 +753,7 @@ export default function BetaTeamFlow() {
                   {NODES[nodeId].emoji}
                 </span>
                 <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">
-                  {NODES[nodeId].name}
+                  {agentName(nodeId)}
                 </span>
               </div>
             </div>
