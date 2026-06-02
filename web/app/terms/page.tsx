@@ -110,7 +110,7 @@ function Section({ title, body }: { title: string; body: string }) {
 
 function TermsContent() {
   const { lang } = useLandingI18n();
-  const tx = T[lang] ?? T.en;
+  const tx = T[lang as keyof typeof T] ?? T.en;
   const t = (k: TKey) => tx[k] ?? k;
 
   const sections: [TKey, TKey][] = [
