@@ -51,7 +51,7 @@ export function ChartThemeToggle({ className = "" }: { className?: string }) {
       type="button"
       onClick={() => setMode(isDark ? "light" : "dark")}
       className={
-        "inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-medium text-slate-700 shadow-sm transition hover:border-slate-400 hover:bg-slate-50 " +
+        "inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-1 text-[11px] font-medium text-[var(--color-bright)] shadow-sm transition hover:border-[var(--color-border-glow)] hover:bg-[var(--color-card)] " +
         className
       }
       aria-label={`Passa al tema ${isDark ? "light" : "dark"} per i grafici`}
