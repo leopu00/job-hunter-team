@@ -5,14 +5,15 @@
 // Data source = SQLite (dev) / Supabase (prod target).
 // Narrative source of truth = docs/about/RESULTS.md.
 
-import Link from "next/link";
 import type { Payload } from "./_components/types";
+import SiteNav from "./_components/SiteNav";
 import { CaseStudyCard } from "./_components/CaseStudyCard";
 import { CaseFunnel } from "./_components/PipelineFunnel";
 import { CoverageMatrix } from "./_components/CoverageMatrix";
 import { ContributeCta } from "./_components/ContributeCta";
 import { AgentActivityHero } from "./_components/AgentActivityHero";
 import { FiveHourWindowsTab } from "./_components/FiveHourWindowsTab";
+import { TeamActionsTab } from "./_components/TeamActionsTab";
 import { TokensTab } from "./_components/TokensTab";
 import { CaseStudiesTabs } from "./_components/CaseStudiesTabs";
 
@@ -117,6 +118,11 @@ export default async function CaseStudiesPage() {
       content: <FiveHourWindowsTab caseStudy={codex} weekly={codexWeekly} />,
     });
     tabs.push({
+      id: "actions",
+      label: "🔧 Azioni per finestra",
+      content: <TeamActionsTab caseStudy={codex} weekly={codexWeekly} />,
+    });
+    tabs.push({
       id: "tokens",
       label: "💰 Token consumati",
       content: <TokensTab caseStudy={codex} weekly={codexWeekly} />,
@@ -125,26 +131,10 @@ export default async function CaseStudiesPage() {
 
   return (
     <main className="min-h-screen bg-white text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link
-            href="/"
-            className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-700 transition hover:text-emerald-600"
-          >
-            <span
-              aria-hidden="true"
-              className="inline-block size-2 rounded-full bg-emerald-500 shadow-[0_0_8px_var(--color-green,_#10b981)]"
-            />
-            <span className="tracking-widest">JHT</span>
-            <span className="ml-1 text-xs font-normal text-slate-400 transition group-hover:text-emerald-500">
-              ← home
-            </span>
-          </Link>
-          <span className="hidden font-mono text-[11px] uppercase tracking-wider text-slate-400 sm:inline">
-            case studies
-          </span>
-        </div>
-      </header>
+      <SiteNav />
+      {/* Spacer per la nav `fixed` (~56px). Le tab interne sono sticky
+          a top-14 così si fermano subito sotto la nav. */}
+      <div aria-hidden="true" className="h-14" />
       <CaseStudiesTabs tabs={tabs} defaultTab="results" />
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">
         <p>

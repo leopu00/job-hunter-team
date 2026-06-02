@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import HeroGlobe from "./HeroGlobe";
-import { LUXURY_POSITIONS } from "../_data/luxuryPositions";
+import { LUXURY_POSITIONS } from "./_data/luxuryPositions";
 import { useLandingI18n } from "./LandingI18n";
 
 // `name` è il fallback EN: il display name passa dal dizionario i18n

@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  LUXURY_POSITIONS,
-  type LuxuryPosition,
-} from "../_data/luxuryPositions";
+import { LUXURY_POSITIONS, type LuxuryPosition } from "./_data/luxuryPositions";
 import { useLandingI18n } from "./LandingI18n";
 
 const TABLE_LIMIT = 15;
