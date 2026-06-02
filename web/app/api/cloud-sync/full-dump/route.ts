@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { verifyBearerToken } from "@/lib/cloud-sync/auth";
-import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyBearerToken } from '@/lib/cloud-sync/auth'
+import { checkCloudSyncRateLimit } from '@/lib/cloud-sync/rate-limit'
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic'
 
 // GET /api/cloud-sync/full-dump
 //
@@ -31,41 +31,41 @@ export const dynamic = "force-dynamic";
 // 5/min/token: il restore è operazione rara, ma cap basso protegge da
 // abuso e da retry loop accidentali.
 
-const ROW_CAP_PER_TABLE = 10_000;
+const ROW_CAP_PER_TABLE = 10_000
 
 export async function GET(req: NextRequest) {
-  const auth = await verifyBearerToken(req);
-  if (!auth.ok) return auth.res;
-  const { userId, admin, tokenId } = auth.data;
+  const auth = await verifyBearerToken(req)
+  if (!auth.ok) return auth.res
+  const { userId, admin, tokenId } = auth.data
 
-  const rl = await checkCloudSyncRateLimit("full-dump", tokenId, 5);
+  const rl = await checkCloudSyncRateLimit('full-dump', tokenId, 5)
   if (!rl.allowed) {
     return NextResponse.json(
-      { ok: false, error: "rate limited", retry_after_sec: rl.retryAfterSec },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfterSec) } },
-    );
+      { ok: false, error: 'rate limited', retry_after_sec: rl.retryAfterSec },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
+    )
   }
 
   // SELECT * per tabella, filtrando per user_id e righe vive (deleted_at
   // IS NULL). Tutte e 3 le tabelle hanno deleted_at (mig 025 tombstones).
-  const tables = ["positions", "scores", "applications"] as const;
-  const dump: Record<string, unknown[]> = {};
-  const totals: Record<string, number> = {};
+  const tables = ['positions', 'scores', 'applications'] as const
+  const dump: Record<string, unknown[]> = {}
+  const totals: Record<string, number> = {}
 
   for (const table of tables) {
     const { data, error } = await admin
       .from(table)
-      .select("*")
-      .eq("user_id", userId)
-      .is("deleted_at", null)
-      .limit(ROW_CAP_PER_TABLE + 1);
+      .select('*')
+      .eq('user_id', userId)
+      .is('deleted_at', null)
+      .limit(ROW_CAP_PER_TABLE + 1)
     if (error) {
       return NextResponse.json(
         { ok: false, error: `${table} dump failed: ${error.message}` },
         { status: 500 },
-      );
+      )
     }
-    const rows = data || [];
+    const rows = data || []
     if (rows.length > ROW_CAP_PER_TABLE) {
       return NextResponse.json(
         {
@@ -73,10 +73,10 @@ export async function GET(req: NextRequest) {
           error: `${table} oltre cap di ${ROW_CAP_PER_TABLE} righe (full-dump non supporta paginazione in MVP)`,
         },
         { status: 413 },
-      );
+      )
     }
-    dump[table] = rows;
-    totals[table] = rows.length;
+    dump[table] = rows
+    totals[table] = rows.length
   }
 
   return NextResponse.json({
@@ -84,5 +84,5 @@ export async function GET(req: NextRequest) {
     dump,
     totals,
     dumped_at: new Date().toISOString(),
-  });
+  })
 }
