@@ -5,6 +5,7 @@
 // Data source = SQLite (dev) / Supabase (prod target).
 // Narrative source of truth = docs/about/RESULTS.md.
 
+import Link from "next/link";
 import type { Payload } from "./_components/types";
 import { KpiHero } from "./_components/KpiHero";
 import { CaseStudyCard } from "./_components/CaseStudyCard";
@@ -14,6 +15,9 @@ import { TokenStackBar } from "./_components/TokenStackBar";
 import { VelocityBar } from "./_components/VelocityBar";
 import { CoverageMatrix } from "./_components/CoverageMatrix";
 import { ContributeCta } from "./_components/ContributeCta";
+import { AgentActivityHero } from "./_components/AgentActivityHero";
+import { FiveHourWindowsTab } from "./_components/FiveHourWindowsTab";
+import { CaseStudiesTabs } from "./_components/CaseStudiesTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -54,8 +58,13 @@ export default async function CaseStudiesCompany() {
 
   const { caseStudies, coverage } = data;
 
-  return (
-    <main className="min-h-screen bg-white text-slate-900">
+  const codex = caseStudies.find((c) =>
+    c.slug.startsWith("beta-tester-1-codex"),
+  );
+  const codexWeekly = codex?.windows?.find((w) => w.kind === "weekly");
+
+  const resultsContent = (
+    <>
       <KpiHero caseStudies={caseStudies} />
 
       {/* Methodology disclaimer — visible, collapsible */}
@@ -181,7 +190,48 @@ export default async function CaseStudiesCompany() {
 
       {/* CTAs */}
       <ContributeCta />
+    </>
+  );
 
+  const tabs = [
+    { id: "results", label: "📊 Risultati", content: resultsContent },
+  ];
+  if (codex && codexWeekly) {
+    tabs.push({
+      id: "agents",
+      label: "💬 Messaggi e azioni del team",
+      content: <AgentActivityHero caseStudy={codex} weekly={codexWeekly} />,
+    });
+    tabs.push({
+      id: "windows",
+      label: "📈 Finestre 5h",
+      content: <FiveHourWindowsTab caseStudy={codex} weekly={codexWeekly} />,
+    });
+  }
+
+  return (
+    <main className="min-h-screen bg-white text-slate-900">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+          <Link
+            href="/"
+            className="group inline-flex items-center gap-2 text-sm font-semibold text-slate-700 transition hover:text-emerald-600"
+          >
+            <span
+              aria-hidden="true"
+              className="inline-block size-2 rounded-full bg-emerald-500 shadow-[0_0_8px_var(--color-green,_#10b981)]"
+            />
+            <span className="tracking-widest">JHT</span>
+            <span className="ml-1 text-xs font-normal text-slate-400 transition group-hover:text-emerald-500">
+              ← home
+            </span>
+          </Link>
+          <span className="hidden font-mono text-[11px] uppercase tracking-wider text-slate-400 sm:inline">
+            case studies
+          </span>
+        </div>
+      </header>
+      <CaseStudiesTabs tabs={tabs} defaultTab="results" />
       <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">
         <p>
           Data source: SQLite (dev) → Supabase (prod target) ·{" "}
