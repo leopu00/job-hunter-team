@@ -9,7 +9,6 @@ import type { Payload } from "./_components/types";
 import SiteNav from "./_components/SiteNav";
 import { CaseStudyCard } from "./_components/CaseStudyCard";
 import { CaseFunnel } from "./_components/PipelineFunnel";
-import { CoverageMatrix } from "./_components/CoverageMatrix";
 import { ContributeCta } from "./_components/ContributeCta";
 import { AgentActivityHero } from "./_components/AgentActivityHero";
 import { FiveHourWindowsTab } from "./_components/FiveHourWindowsTab";
@@ -54,7 +53,7 @@ export default async function CaseStudiesPage() {
     );
   }
 
-  const { caseStudies, coverage } = data;
+  const { caseStudies } = data;
 
   const codex = caseStudies.find((c) =>
     c.slug.startsWith("beta-tester-1-codex"),
@@ -90,13 +89,6 @@ export default async function CaseStudiesPage() {
           </div>
         </section>
       ))}
-
-      {/* Coverage matrix */}
-      <section className="border-t border-[var(--color-border)] bg-[var(--color-deep)] py-12">
-        <div className="mx-auto max-w-4xl px-6">
-          <CoverageMatrix coverage={coverage} />
-        </div>
-      </section>
 
       {/* CTAs */}
       <ContributeCta />
