@@ -51,11 +51,11 @@ export function TokenStackBar({ caseStudies }: Props) {
   const maxTotal = Math.max(...rows.map((r) => r.total), 1);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6">
-      <h3 className="mb-1 text-sm font-bold text-slate-900">
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6">
+      <h3 className="mb-1 text-sm font-bold text-[var(--color-white)]">
         🧮 Token consumption
       </h3>
-      <p className="mb-4 text-xs text-slate-500">
+      <p className="mb-4 text-xs text-[var(--color-muted)]">
         Fresh tokens (non-cached input + output) vs cache_read (re-used
         context). Cached reads cost a fraction of fresh tokens.
       </p>
@@ -65,7 +65,7 @@ export function TokenStackBar({ caseStudies }: Props) {
           return (
             <div key={r.case_number}>
               <div className="mb-1 flex items-baseline justify-between text-xs">
-                <span className="text-slate-700">
+                <span className="text-[var(--color-bright)]">
                   <span
                     className="mr-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
                     style={{ backgroundColor: r.color }}
@@ -74,12 +74,12 @@ export function TokenStackBar({ caseStudies }: Props) {
                   </span>
                   {r.provider}
                 </span>
-                <span className="font-mono text-sm font-bold text-slate-900">
+                <span className="font-mono text-sm font-bold text-[var(--color-white)]">
                   {r.label}
                 </span>
               </div>
               <div
-                className="flex h-7 overflow-hidden rounded bg-slate-100"
+                className="flex h-7 overflow-hidden rounded bg-[var(--color-card)]"
                 style={{ width: `${widthPct}%` }}
               >
                 {r.mode === "stack" ? (
@@ -120,7 +120,7 @@ export function TokenStackBar({ caseStudies }: Props) {
           );
         })}
       </div>
-      <p className="mt-4 text-xs text-slate-500">
+      <p className="mt-4 text-xs text-[var(--color-muted)]">
         ⚠️ Different providers expose different token counts: Codex publishes a
         proprietary &quot;weighted&quot; figure, Kimi exposes the raw breakdown.
         Direct comparison is indicative.

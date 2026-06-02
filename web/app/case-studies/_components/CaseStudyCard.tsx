@@ -23,11 +23,11 @@ const NOTE_LABEL: Record<
   },
   tweak: {
     title: "🧰 Tweaks",
-    tone: "text-slate-700 border-slate-200 bg-slate-50",
+    tone: "text-[var(--color-bright)] border-[var(--color-border)] bg-[var(--color-deep)]",
   },
   caveat: {
     title: "📝 Caveats",
-    tone: "text-slate-600 border-slate-200 bg-white",
+    tone: "text-[var(--color-muted)] border-[var(--color-border)] bg-[var(--color-panel)]",
   },
 };
 
@@ -43,38 +43,40 @@ export function CaseStudyCard({ cs }: Props) {
 
   return (
     <article
-      className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-md sm:p-8"
+      className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6 shadow-sm transition hover:shadow-md sm:p-8"
       id={cs.slug}
     >
-      <header className="mb-6 flex flex-wrap items-baseline gap-3 border-b border-slate-100 pb-4">
+      <header className="mb-6 flex flex-wrap items-baseline gap-3 border-b border-[var(--color-border)] pb-4">
         <span
           className="rounded-full px-3 py-1 text-xs font-bold text-white"
           style={{ backgroundColor: accent }}
         >
           Case #{cs.case_number}
         </span>
-        <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
+        <h2 className="text-xl font-bold text-[var(--color-white)] sm:text-2xl">
           {cs.title}
         </h2>
-        <span className="text-xs text-slate-500">· {cs.tester_handle}</span>
+        <span className="text-xs text-[var(--color-muted)]">
+          · {cs.tester_handle}
+        </span>
       </header>
 
-      <p className="mb-6 text-sm leading-relaxed text-slate-700">
+      <p className="mb-6 text-sm leading-relaxed text-[var(--color-bright)]">
         {cs.profile_summary}
       </p>
 
       {/* metadata strip — boxed "setup" panel */}
-      <section className="mb-6 rounded-xl border border-slate-100 bg-slate-50/70 p-5">
-        <h3 className="mb-3 text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase">
+      <section className="mb-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-deep)]/70 p-5">
+        <h3 className="mb-3 text-[10px] font-semibold tracking-[0.12em] text-[var(--color-dim)] uppercase">
           Setup
         </h3>
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-3">
           {metaMetrics.map((m) => (
             <div key={m.metric_key} className="min-w-0">
-              <dt className="text-slate-500">
+              <dt className="text-[var(--color-muted)]">
                 {m.emoji} {m.metric_label}
               </dt>
-              <dd className="mt-0.5 text-sm font-medium text-slate-800">
+              <dd className="mt-0.5 text-sm font-medium text-[var(--color-bright)]">
                 {metricText(cs, m.metric_key)}
               </dd>
             </div>
@@ -85,7 +87,7 @@ export function CaseStudyCard({ cs }: Props) {
       {/* hero KPI strip — one accented card per metric */}
       {heroMetrics.length > 0 && (
         <div className="mb-6">
-          <h3 className="mb-3 text-[10px] font-semibold tracking-[0.12em] text-slate-400 uppercase">
+          <h3 className="mb-3 text-[10px] font-semibold tracking-[0.12em] text-[var(--color-dim)] uppercase">
             Risultati chiave
           </h3>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -96,21 +98,21 @@ export function CaseStudyCard({ cs }: Props) {
               return (
                 <div
                   key={m.metric_key}
-                  className="group relative min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  className="group relative min-w-0 overflow-hidden rounded-xl border border-[var(--color-border)] bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                 >
                   <span
                     aria-hidden="true"
                     className="absolute inset-x-0 top-0 h-1 opacity-80"
                     style={{ backgroundColor: accent }}
                   />
-                  <div className="truncate pt-1 text-xs text-slate-500">
+                  <div className="truncate pt-1 text-xs text-[var(--color-muted)]">
                     {m.emoji} {m.metric_label}
                   </div>
-                  <div className="mt-2 text-2xl font-bold leading-none tracking-tight text-slate-900">
+                  <div className="mt-2 text-2xl font-bold leading-none tracking-tight text-[var(--color-white)]">
                     {main}
                   </div>
                   {sub && (
-                    <div className="mt-1.5 text-[11px] leading-snug font-normal text-slate-400">
+                    <div className="mt-1.5 text-[11px] leading-snug font-normal text-[var(--color-dim)]">
                       {sub}
                     </div>
                   )}
@@ -133,7 +135,7 @@ export function CaseStudyCard({ cs }: Props) {
             <details key={t} className={`rounded-lg border p-3 ${label.tone}`}>
               <summary className="cursor-pointer text-sm font-semibold">
                 {label.title}{" "}
-                <span className="ml-1 rounded-full bg-white/60 px-2 py-0.5 text-xs">
+                <span className="ml-1 rounded-full bg-[var(--color-panel)]/60 px-2 py-0.5 text-xs">
                   {ns.length}
                 </span>
               </summary>
@@ -177,6 +179,6 @@ function renderInlineMd(md: string): string {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>")
     .replace(
       /`([^`]+)`/g,
-      '<code class="rounded bg-white/70 px-1 py-0.5 text-xs">$1</code>',
+      '<code class="rounded bg-[var(--color-panel)]/70 px-1 py-0.5 text-xs">$1</code>',
     );
 }

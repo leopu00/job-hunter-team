@@ -1,26 +1,26 @@
-"use client"
+"use client";
 
-import type { CaseStudy, Window } from "./types"
-import { providerColor } from "./types"
-import { AgentTracksChart } from "./AgentTracksChart"
-import { useChartTheme } from "./chart-theme"
+import type { CaseStudy, Window } from "./types";
+import { providerColor } from "./types";
+import { AgentTracksChart } from "./AgentTracksChart";
+import { useChartTheme } from "./chart-theme";
 
 type Props = {
-  caseStudy: CaseStudy
-  weekly: Window
-}
+  caseStudy: CaseStudy;
+  weekly: Window;
+};
 
 // Hero section at the top of /case-studies dedicated to the per-5h-window
 // agent activity charts. Same FiveHourWindowChart used inside the case study
 // card, surfaced as the page's marquee analysis.
 export function AgentActivityHero({ caseStudy, weekly }: Props) {
-  const { mode } = useChartTheme()
-  const isDark = mode === "dark"
-  const fiveHour = weekly.five_hour_windows ?? []
-  if (fiveHour.length === 0) return null
+  const { mode } = useChartTheme();
+  const isDark = mode === "dark";
+  const fiveHour = weekly.five_hour_windows ?? [];
+  if (fiveHour.length === 0) return null;
 
-  const accent = providerColor(caseStudy.provider_name)
-  const activity = weekly.agent_activity ?? []
+  const accent = providerColor(caseStudy.provider_name);
+  const activity = weekly.agent_activity ?? [];
 
   return (
     <section
@@ -45,8 +45,8 @@ export function AgentActivityHero({ caseStudy, weekly }: Props) {
               style={{ color: isDark ? "#94a3b8" : "#475569" }}
             >
               {caseStudy.title} · ogni blocco è un messaggio inviato/ricevuto o
-              un cambio di stato sul DB. Finestra weekly suddivisa in {fiveHour.length}{" "}
-              slice rolling 5h.
+              un cambio di stato sul DB. Finestra weekly suddivisa in{" "}
+              {fiveHour.length} slice rolling 5h.
             </p>
           </div>
           <div
@@ -66,17 +66,23 @@ export function AgentActivityHero({ caseStudy, weekly }: Props) {
 
         <div className="flex flex-col gap-6">
           {fiveHour.map((fhw) => {
-            const start = new Date(fhw.started_at).getTime()
-            const end = new Date(fhw.ended_at).getTime()
+            const start = new Date(fhw.started_at).getTime();
+            const end = new Date(fhw.ended_at).getTime();
             const ivs = activity.filter((a) => {
-              const s = new Date(a.ts_start).getTime()
-              const e = new Date(a.ts_end).getTime()
-              return s <= end && e >= start
-            })
-            return <AgentTracksChart key={fhw.window_number} fiveHourWindow={fhw} activity={ivs} />
+              const s = new Date(a.ts_start).getTime();
+              const e = new Date(a.ts_end).getTime();
+              return s <= end && e >= start;
+            });
+            return (
+              <AgentTracksChart
+                key={fhw.window_number}
+                fiveHourWindow={fhw}
+                activity={ivs}
+              />
+            );
           })}
         </div>
       </div>
     </section>
-  )
+  );
 }
