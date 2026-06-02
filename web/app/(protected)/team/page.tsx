@@ -517,7 +517,7 @@ export default function TeamPage() {
         </div>
       </section>
 
-      {/* 🩺 Dottore — health-check ogni 30min, ping/diagnosi/restart */}
+      {/* 👨‍⚕️ Dottore — health-check ogni 30min, ping/diagnosi/restart */}
       <section className="py-10 border-t border-[var(--color-border)]">
         <div className="mx-auto w-full max-w-[900px]">
           <DoctorPanel />
