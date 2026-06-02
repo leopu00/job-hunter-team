@@ -1,11 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import LandingNav from "./LandingNav";
 import LandingHero from "./LandingHero";
-import { LandingI18nProvider } from "./LandingI18n";
+import LatestPositionsTable from "./LatestPositionsTable";
+import { LandingI18nProvider, useLandingI18n } from "./LandingI18n";
 import { LandingFooter } from "./LandingCTA";
 
 type Props = {
@@ -28,11 +30,143 @@ export default function LandingClient({
           <main style={{ position: "relative", zIndex: 1 }}>
             <LandingNav />
             <LandingHero />
+
+            {/* Ponte di energia: particelle grigie scroll-driven tra il
+                fondo del globo (sopra) e la tabella (sotto). */}
+            <EnergyBridge />
+
+            {/* Pin della tabella top-15: sticky a top 5rem, una riga
+                viene scoperta ad ogni ~200 px di scroll (cfr.
+                LatestPositionsTable). 15 righe ≈ 3000 px + buffer di
+                fine animazione. Mobile: senza pin. */}
+            <div
+              className="relative hidden md:block"
+              data-pin-section="table-reveal"
+              style={{ height: "3300px" }}
+            >
+              <div className="sticky" style={{ top: "5rem" }}>
+                <LatestPositionsTable />
+              </div>
+            </div>
+
+            <div className="md:hidden">
+              <LatestPositionsTable />
+            </div>
+
+            <StartTeamCTA />
           </main>
           <LandingFooter />
         </>
       )}
     </LandingI18nProvider>
+  );
+}
+
+// CTA finale: prima del footer, invita l'utente a creare il proprio
+// team portandolo alla pagina di download del launcher.
+function StartTeamCTA() {
+  const { t } = useLandingI18n();
+  return (
+    <section className="flex justify-center px-5 py-20">
+      <Link
+        href="/download"
+        className="inline-flex items-center px-8 py-3.5 text-[13px] font-bold tracking-wider no-underline transition-all hover:opacity-90"
+        style={{ background: "var(--color-green)", color: "#060608" }}
+      >
+        {t("cta_start_team")}
+      </Link>
+    </section>
+  );
+}
+
+// Ponte di particelle scroll-driven tra il globo (sopra) e la tabella
+// (sotto). Niente keyframe CSS: la posizione Y di ciascuna particella
+// dipende linearmente da `window.scrollY` × velocità individuale, con
+// wrap modulo 200 px (altezza della sezione). Quando l'utente è fermo
+// le particelle sono ferme; scrollando in basso scorrono verso il
+// basso, scrollando in alto verso l'alto. La leggera oscillazione
+// orizzontale è funzione di Y così segue lo stesso scrubbing.
+function EnergyBridge() {
+  const [scrollY, setScrollY] = useState(0);
+  // mounted: evita hydration mismatch sulla precisione del transform
+  // (Math.sin con scrollY iniziale 0 lato server, valore reale lato
+  // client). Prima del mount renderizziamo solo il container vuoto.
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    let ticking = false;
+    const update = () => {
+      setScrollY(window.scrollY);
+      ticking = false;
+    };
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(update);
+    };
+    setScrollY(window.scrollY);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const COUNT = 26;
+  const H = 200;
+  // Margin-top negativo: il container quadrato del globo
+  // (HeroGlobe usa min(90vh,90vw) con aspectRatio 1) lascia ~180 px
+  // vuoti tra la sfera visibile e il fondo del wrapper. Tiriamo su
+  // l'intero bridge così le particelle attaccano subito sotto il
+  // globo e la tabella sale di conseguenza.
+  return (
+    <div
+      aria-hidden="true"
+      className="hidden md:block relative"
+      style={{
+        height: `${H}px`,
+        overflow: "hidden",
+        marginTop: "-180px",
+      }}
+    >
+      {mounted &&
+        Array.from({ length: COUNT }).map((_, i) => {
+          const x = 40 + ((i * 31) % 20);
+          const baseOffset = (i * 41) % H;
+          const speed = 0.4 + ((i * 7) % 10) / 12;
+          const size = 3 + (i % 3);
+          const rawY = baseOffset + scrollY * speed;
+          const y = ((rawY % H) + H) % H;
+          const xOffset = Math.sin((y / H) * Math.PI * 2 + i * 0.5) * 7;
+          let opacity = 0.85;
+          if (y < 20) opacity = (y / 20) * 0.85;
+          else if (y > H - 20) opacity = ((H - y) / 20) * 0.85;
+          const scale =
+            y < 20
+              ? 0.5 + (y / 20) * 0.5
+              : y > H - 20
+                ? 0.5 + ((H - y) / 20) * 0.5
+                : 1;
+          return (
+            <div
+              key={i}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: `${x}%`,
+                marginLeft: -size / 2,
+                width: size,
+                height: size,
+                borderRadius: "50%",
+                background: "rgba(148, 163, 184, 0.9)",
+                boxShadow:
+                  "0 0 6px rgba(148, 163, 184, 0.55), 0 0 12px rgba(148, 163, 184, 0.3)",
+                transform: `translate(${xOffset}px, ${y}px) scale(${scale})`,
+                opacity,
+                willChange: "transform, opacity",
+              }}
+            />
+          );
+        })}
+    </div>
   );
 }
 
