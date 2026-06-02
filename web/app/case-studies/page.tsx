@@ -45,7 +45,7 @@ export default async function CaseStudiesPage() {
         <pre className="rounded bg-red-50 p-4 text-red-800">{String(e)}</pre>
         <p className="mt-4">
           Hint: run{" "}
-          <code className="rounded bg-slate-100 px-2 py-1">
+          <code className="rounded bg-[var(--color-card)] px-2 py-1">
             web/data/case-studies/init.sh
           </code>{" "}
           to rebuild the local SQLite seed.
@@ -70,17 +70,17 @@ export default async function CaseStudiesPage() {
           key={cs.id}
           className={
             i % 2 === 0
-              ? "border-b border-slate-200 py-12"
-              : "border-b border-slate-200 bg-slate-50 py-12"
+              ? "border-b border-[var(--color-border)] py-12"
+              : "border-b border-[var(--color-border)] bg-[var(--color-deep)] py-12"
           }
         >
           <div className="mx-auto max-w-4xl space-y-6 px-6">
             <CaseStudyCard cs={cs} />
-            <div className="rounded-xl border border-slate-200 bg-white p-6">
-              <h3 className="mb-1 text-sm font-bold text-slate-900">
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6">
+              <h3 className="mb-1 text-sm font-bold text-[var(--color-white)]">
                 🌊 Pipeline conversion
               </h3>
-              <p className="mb-5 text-xs text-slate-500">
+              <p className="mb-5 text-xs text-[var(--color-muted)]">
                 From positions analyzed by the pipeline to ready applications.
                 Width = absolute volume. Drop-off shows where positions were
                 excluded.
@@ -92,7 +92,7 @@ export default async function CaseStudiesPage() {
       ))}
 
       {/* Coverage matrix */}
-      <section className="border-t border-slate-200 bg-slate-50 py-12">
+      <section className="border-t border-[var(--color-border)] bg-[var(--color-deep)] py-12">
         <div className="mx-auto max-w-4xl px-6">
           <CoverageMatrix coverage={coverage} />
         </div>
@@ -130,18 +130,18 @@ export default async function CaseStudiesPage() {
   }
 
   return (
-    <main className="min-h-screen bg-white text-slate-900">
+    <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
       <SiteNav />
       {/* Spacer per la nav `fixed` (~56px). Le tab interne sono sticky
           a top-14 così si fermano subito sotto la nav. */}
       <div aria-hidden="true" className="h-14" />
       <CaseStudiesTabs tabs={tabs} defaultTab="results" />
-      <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">
+      <footer className="border-t border-[var(--color-border)] py-6 text-center text-xs text-[var(--color-muted)]">
         <p>
           Data source: SQLite (dev) → Supabase (prod target) ·{" "}
           <a
             href="https://github.com/leopu00/job-hunter-team/blob/master/docs/about/RESULTS.md"
-            className="underline hover:text-slate-700"
+            className="underline hover:text-[var(--color-bright)]"
           >
             narrative source on GitHub
           </a>

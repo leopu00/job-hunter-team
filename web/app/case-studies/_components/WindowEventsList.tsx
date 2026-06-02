@@ -1,12 +1,12 @@
-"use client"
+"use client";
 
-import { useMemo, useState } from "react"
-import type { AgentActivity, FiveHourWindow } from "./types"
+import { useMemo, useState } from "react";
+import type { AgentActivity, FiveHourWindow } from "./types";
 
 type Props = {
-  fiveHourWindow: FiveHourWindow
-  activity: AgentActivity[]
-}
+  fiveHourWindow: FiveHourWindow;
+  activity: AgentActivity[];
+};
 
 const ROLE_EMOJI: Record<string, string> = {
   analista: "👨‍🔬",
@@ -19,7 +19,7 @@ const ROLE_EMOJI: Record<string, string> = {
   assistente: "👨‍💼",
   mentor: "🧙",
   dottore: "👨‍⚕️",
-}
+};
 
 const AGENT_TEXT: Record<string, string> = {
   "analista-1": "text-yellow-300",
@@ -39,35 +39,42 @@ const AGENT_TEXT: Record<string, string> = {
   assistente: "text-cyan-300",
   sentinella: "text-teal-300",
   dottore: "text-sky-300",
-}
+};
 
 function baseRole(agent: string): string {
-  return agent.replace(/-(?:s)?\d+$/, "")
+  return agent.replace(/-(?:s)?\d+$/, "");
 }
 
 function emojiFor(agent: string): string {
-  return ROLE_EMOJI[baseRole(agent)] ?? "🤖"
+  return ROLE_EMOJI[baseRole(agent)] ?? "🤖";
 }
 
 function fmtClock(ts: number): string {
-  const d = new Date(ts)
-  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`
+  const d = new Date(ts);
+  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
 }
 function pad(n: number): string {
-  return n.toString().padStart(2, "0")
+  return n.toString().padStart(2, "0");
 }
 
-type Filter = "all" | "pipeline" | "comm"
+type Filter = "all" | "pipeline" | "comm";
 
 const PIPELINE_AGENTS = new Set([
-  "scout-1","scout-2","analista-1","analista-2","scorer-1","scorer-2",
-  "scrittore-1","scrittore-2","scrittore-3",
-])
-const HIDDEN_AGENTS = new Set(["assistente"])
+  "scout-1",
+  "scout-2",
+  "analista-1",
+  "analista-2",
+  "scorer-1",
+  "scorer-2",
+  "scrittore-1",
+  "scrittore-2",
+  "scrittore-3",
+]);
+const HIDDEN_AGENTS = new Set(["assistente"]);
 
 export function WindowEventsList({ fiveHourWindow: fhw, activity }: Props) {
-  const [filter, setFilter] = useState<Filter>("all")
-  const [search, setSearch] = useState("")
+  const [filter, setFilter] = useState<Filter>("all");
+  const [search, setSearch] = useState("");
 
   const sorted = useMemo(
     () =>
@@ -76,20 +83,24 @@ export function WindowEventsList({ fiveHourWindow: fhw, activity }: Props) {
         .slice()
         .sort((a, b) => a.ts_start.localeCompare(b.ts_start)),
     [activity],
-  )
+  );
 
   const filtered = useMemo(() => {
-    let out = sorted
-    if (filter === "pipeline") out = out.filter((e) => PIPELINE_AGENTS.has(e.agent))
-    if (filter === "comm") out = out.filter((e) => !PIPELINE_AGENTS.has(e.agent))
+    let out = sorted;
+    if (filter === "pipeline")
+      out = out.filter((e) => PIPELINE_AGENTS.has(e.agent));
+    if (filter === "comm")
+      out = out.filter((e) => !PIPELINE_AGENTS.has(e.agent));
     if (search.trim()) {
-      const s = search.toLowerCase()
+      const s = search.toLowerCase();
       out = out.filter(
-        (e) => e.agent.toLowerCase().includes(s) || (e.reason ?? "").toLowerCase().includes(s),
-      )
+        (e) =>
+          e.agent.toLowerCase().includes(s) ||
+          (e.reason ?? "").toLowerCase().includes(s),
+      );
     }
-    return out
-  }, [sorted, filter, search])
+    return out;
+  }, [sorted, filter, search]);
 
   return (
     <div className="flex h-full flex-col rounded-md border border-slate-700 bg-slate-900/60 p-3">
@@ -106,7 +117,7 @@ export function WindowEventsList({ fiveHourWindow: fhw, activity }: Props) {
               className={`rounded px-2 py-0.5 transition ${
                 filter === f
                   ? "bg-emerald-500/20 text-emerald-300"
-                  : "bg-slate-800/60 text-slate-400 hover:bg-slate-800"
+                  : "bg-slate-800/60 text-[var(--color-dim)] hover:bg-slate-800"
               }`}
             >
               {f === "all" ? "tutti" : f === "pipeline" ? "pipeline" : "comm"}
@@ -119,18 +130,18 @@ export function WindowEventsList({ fiveHourWindow: fhw, activity }: Props) {
         placeholder="filtra per agente / testo…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="mb-2 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-100 placeholder:text-slate-600 focus:border-emerald-500 focus:outline-none"
+        className="mb-2 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-100 placeholder:text-[var(--color-muted)] focus:border-emerald-500 focus:outline-none"
       />
       <ul className="min-h-[300px] flex-1 space-y-1 overflow-y-auto pr-1 font-mono text-[11px] leading-tight">
         {filtered.length === 0 && (
-          <li className="italic text-slate-500">— nessun evento</li>
+          <li className="italic text-[var(--color-muted)]">— nessun evento</li>
         )}
         {filtered.map((e, i) => (
           <li
             key={i}
             className="flex items-baseline gap-2 border-b border-slate-800/60 pb-1 last:border-0"
           >
-            <span className="w-16 shrink-0 text-slate-500">
+            <span className="w-16 shrink-0 text-[var(--color-muted)]">
               {fmtClock(new Date(e.ts_start).getTime())}
             </span>
             <span className="w-4 shrink-0">{emojiFor(e.agent)}</span>
@@ -144,5 +155,5 @@ export function WindowEventsList({ fiveHourWindow: fhw, activity }: Props) {
         ))}
       </ul>
     </div>
-  )
+  );
 }

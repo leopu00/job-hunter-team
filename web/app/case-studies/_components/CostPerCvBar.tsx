@@ -38,11 +38,11 @@ export function CostPerCvBar({ caseStudies }: Props) {
   const maxCost = Math.max(...rows.map((r) => r.cost));
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6">
-      <h3 className="mb-1 text-sm font-bold text-slate-900">
+    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6">
+      <h3 className="mb-1 text-sm font-bold text-[var(--color-white)]">
         💰 Cost per ready CV
       </h3>
-      <p className="mb-4 text-xs text-slate-500">
+      <p className="mb-4 text-xs text-[var(--color-muted)]">
         Monthly subscription cost ÷ ready CVs in the first run window. Lower =
         cheaper per CV.
       </p>
@@ -52,7 +52,7 @@ export function CostPerCvBar({ caseStudies }: Props) {
           return (
             <li key={r.case_number}>
               <div className="mb-1 flex items-baseline justify-between text-xs">
-                <span className="text-slate-700">
+                <span className="text-[var(--color-bright)]">
                   <span
                     className="mr-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
                     style={{ backgroundColor: r.color }}
@@ -61,11 +61,11 @@ export function CostPerCvBar({ caseStudies }: Props) {
                   </span>
                   {r.provider}
                 </span>
-                <span className="font-mono text-sm font-bold text-slate-900">
+                <span className="font-mono text-sm font-bold text-[var(--color-white)]">
                   €{r.cost.toFixed(2)}/CV
                 </span>
               </div>
-              <div className="h-6 overflow-hidden rounded bg-slate-100">
+              <div className="h-6 overflow-hidden rounded bg-[var(--color-card)]">
                 <div
                   className="h-full rounded transition-all"
                   style={{ width: `${widthPct}%`, backgroundColor: r.color }}
