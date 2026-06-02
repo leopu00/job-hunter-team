@@ -17,6 +17,7 @@ import { CoverageMatrix } from "./_components/CoverageMatrix";
 import { ContributeCta } from "./_components/ContributeCta";
 import { AgentActivityHero } from "./_components/AgentActivityHero";
 import { FiveHourWindowsTab } from "./_components/FiveHourWindowsTab";
+import { TeamActionsTab } from "./_components/TeamActionsTab";
 import { TokensTab } from "./_components/TokensTab";
 import { CaseStudiesTabs } from "./_components/CaseStudiesTabs";
 
@@ -207,6 +208,11 @@ export default async function CaseStudiesCompany() {
       id: "windows",
       label: "📈 Finestre 5h",
       content: <FiveHourWindowsTab caseStudy={codex} weekly={codexWeekly} />,
+    });
+    tabs.push({
+      id: "actions",
+      label: "🔧 Azioni per finestra",
+      content: <TeamActionsTab caseStudy={codex} weekly={codexWeekly} />,
     });
     tabs.push({
       id: "tokens",
