@@ -23,7 +23,7 @@ const T = {
     story_body_2:
       "L'obiettivo è costruire uno strumento accessibile a tutti: chi preferisce semplicità può scaricare il launcher desktop e usare l'interfaccia web, mentre chi ha competenze tecniche può clonare la repository o utilizzare la TUI per un controllo avanzato.",
     story_body_3:
-      "Il progetto è interamente gratuito e senza costi nascosti: se usi un provider AI esterno pagherai solo il tuo consumo, ma puoi anche utilizzare modelli locali gratuitamente. Le contribuzioni degli sviluppatori sono benvenute per migliorare insieme uno strumento che usa l'intelligenza artificiale a favore dei lavoratori, non contro.",
+      "Il software è gratuito e open source: JHT non ti fattura nulla. Paghi solo un abbonamento AI dedicato (Claude Code, Codex o Kimi): il team lo consuma tutto, quindi tienilo separato da quello che usi ogni giorno. Le contribuzioni degli sviluppatori sono benvenute per mettere l'AI dalla parte dei lavoratori, non contro.",
   },
   en: {
     title: "Company overview",
@@ -37,7 +37,7 @@ const T = {
     story_body_2:
       "The goal is to build a tool accessible to everyone: those who prefer simplicity download the desktop launcher that handles the container for you, while technical users can clone the repository and work with the CLI/TUI directly.",
     story_body_3:
-      "The software is free and open source: JHT never bills you. You only pay the subscription of the AI provider you choose (Claude Code, Codex or Kimi) using the account you already have. Developer contributions are welcome to improve together a tool that puts AI on the side of workers, not against them.",
+      "The software is free and open source: JHT never bills you. You only pay for a dedicated AI subscription (Claude Code, Codex or Kimi): the team uses it fully, so keep it separate from your everyday account. Developer contributions are welcome to keep AI on the side of workers, not against them.",
   },
   hu: {
     title: "Projekt áttekintése",
@@ -51,7 +51,7 @@ const T = {
     story_body_2:
       "A cél egy mindenki számára hozzáférhető eszköz építése: aki az egyszerűséget kedveli, letölti az asztali launchert, amely a konténert helyetted kezeli; a műszaki felhasználók klónozhatják a repository-t és közvetlenül dolgozhatnak a CLI/TUI felülettel.",
     story_body_3:
-      "A szoftver ingyenes és nyílt forráskódú: a JHT soha nem számláz neked. Csak a választott AI szolgáltató (Claude Code, Codex vagy Kimi) előfizetését fizeted, a már meglévő fiókoddal. A fejlesztői közreműködéseket szívesen fogadjuk, hogy együtt jobbítsunk egy olyan eszközt, amely a dolgozók oldalára állítja az AI-t, nem pedig ellenük.",
+      "A szoftver ingyenes és nyílt forráskódú: a JHT soha nem számláz neked. Csak egy dedikált AI előfizetést fizetsz (Claude Code, Codex vagy Kimi): a csapat teljesen felhasználja, ezért tartsd külön a napi fiókodtól. A fejlesztői közreműködéseket szívesen fogadjuk, hogy az AI a dolgozók oldalán álljon, ne ellenük.",
   },
 } as const;
 
