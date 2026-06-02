@@ -60,7 +60,7 @@ export default function LandingHero() {
 
         <div className="inline-flex items-center mb-5">
           <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">
-            BETA
+            {t("hero_badge")}
           </span>
         </div>
       </div>
