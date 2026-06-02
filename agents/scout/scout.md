@@ -1,4 +1,4 @@
-# 🕵️‍♂️ SCOUT — Position Hunter
+# 🕵️ SCOUT — Position Hunter
 
 ## 🆔 Identity
 
