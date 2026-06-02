@@ -138,11 +138,31 @@ CREATE TABLE IF NOT EXISTS case_study_agent_activity (
 
 CREATE INDEX IF NOT EXISTS idx_csaa_window_agent ON case_study_agent_activity(case_study_window_id, agent, ts_start);
 
+-- Token usage aggregated per (5h window, agent). Sourced from per-session Codex
+-- rollouts (rollout-*.jsonl) where each token_count event carries the delta
+-- input/output/cached tokens of the last turn.
+CREATE TABLE IF NOT EXISTS case_study_agent_tokens (
+  id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+  case_study_window_id     INTEGER NOT NULL,                     -- foreign key to weekly window
+  window_number            INTEGER NOT NULL,                     -- 1..7 (5h slice inside the weekly)
+  agent                    TEXT NOT NULL,
+  input_tokens             INTEGER NOT NULL DEFAULT 0,
+  cached_input_tokens      INTEGER NOT NULL DEFAULT 0,           -- subset of input_tokens served from cache
+  output_tokens            INTEGER NOT NULL DEFAULT 0,
+  reasoning_output_tokens  INTEGER NOT NULL DEFAULT 0,           -- subset of output_tokens used for reasoning
+  events                   INTEGER NOT NULL DEFAULT 0,           -- number of token_count snapshots
+  sessions                 INTEGER NOT NULL DEFAULT 0,           -- distinct rollout sessions that contributed
+  FOREIGN KEY (case_study_window_id) REFERENCES case_study_windows(id) ON DELETE CASCADE,
+  UNIQUE (case_study_window_id, window_number, agent)
+);
+
+CREATE INDEX IF NOT EXISTS idx_csat_window_agent ON case_study_agent_tokens(case_study_window_id, window_number, agent);
+
 -- Schema version stamp (for future migrations)
 CREATE TABLE IF NOT EXISTS schema_meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
 
-INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('version', '3');
+INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('version', '4');
 INSERT OR REPLACE INTO schema_meta(key, value) VALUES ('created_at', CURRENT_TIMESTAMP);
