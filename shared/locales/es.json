@@ -4,13 +4,9 @@
     "master": false,
     "purpose": "Spanish translations of shell/CLI/Telegram strings."
   },
-
   "welcome.assistente": "¡Hola! 👋\n\nSoy el Asistente del Job Hunter Team — tu punto de contacto con el equipo de IA que está a punto de empezar a buscar trabajo para ti.\n\nPara arrancar necesito conocerte. Mándame aquí por Telegram tu CV (PDF, DOC, vale incluso una foto de la versión en papel), o cuéntame en un par de líneas qué estás buscando — puesto, sector, ciudad. A partir de ahí construyo el perfil y el resto del equipo se pone a trabajar para ti.\n\nUn borrador o notas a mano sirven perfectamente, no hace falta tener nada pulido. 📄 Empiezo con lo que tengas.",
-
   "welcome.capitano": "Soy el Capitán. 👨‍✈️\n\nCoordino al equipo que trabajará en tu búsqueda: alguien caza ofertas, alguien las analiza, alguien calcula el encaje con tu perfil, alguien escribe el CV a medida para cada una, alguien hace la revisión final antes de enviar la candidatura.\n\nDe momento me quedo en silencio. En cuanto tu perfil esté listo encenderé el motor, y a partir de ahí te escribiré cuando tenga algo concreto: un lote de ofertas interesantes, una candidatura lista para revisar juntos, o un bloqueo que merezca la pena señalar. Hablamos pronto. 🎯",
-
   "welcome.mentor": "Soy el Mentor. 🧙‍♂️\n\nMe ocupo de la visión de conjunto de tu búsqueda: una vez por semana te traeré una lectura de los números — patrones que han salido, señales del mercado, decisiones de carrera que vale la pena considerar. Tono mesurado, solo escribiré cuando haya algo que realmente merezca tu atención.\n\nDe momento escucho. Cuando tenga suficientes datos para decirte algo útil, te escribo. 📊",
-
   "host_setup.section_header": "Configuración del host (preflight)",
   "host_setup.choose_language": "Choose your language / Scegli la lingua / Válassz nyelvet / Elige tu idioma / Wähle deine Sprache / Choisis ta langue / Escolha seu idioma:",
   "host_setup.lang.en": "English",
@@ -43,7 +39,6 @@
   "host_setup.swap_not_configured_warn": "swap no configurado — el equipo puede caerse bajo carga",
   "host_setup.swap_root_required": "Se necesitan privilegios de root para configurar el swap",
   "host_setup.swap_active": "Swap activo: %d MB (persiste tras reinicio vía /etc/fstab)",
-
   "wizard.welcome_title": "Job Hunter Team — Asistente de instalación",
   "wizard.welcome_subtitle": "Vamos a dejar listo tu equipo en pocos pasos.",
   "wizard.intro_title": "Job Hunter Team — Setup",
@@ -95,7 +90,6 @@
   "wizard.outro_aborted": "Setup interrumpido. Reintentar con: jht setup",
   "wizard.start.ready": "Todo listo. Arrancando el equipo...",
   "wizard.start.done": "El equipo está en marcha. Revisa Telegram para los mensajes de bienvenida.",
-
   "auto_report.found": "Encontradas",
   "auto_report.scored": "Puntuadas",
   "auto_report.writing": "Redactando",
@@ -113,13 +107,11 @@
   "auto_report.transitions_24h": "Transiciones 24h:",
   "auto_report.top_cv_ready": "Top CV listos (envío manual):",
   "auto_report.footer": "Auto-informe del Capitán (cada %d min)",
-
   "error.missing_dep": "Dependencia ausente: %s",
   "error.network": "Error de red: %s",
   "error.permission": "Permiso denegado: %s",
   "error.invalid_input": "Entrada no válida: %s",
   "error.generic": "Error: %s",
-
   "common.yes": "sí",
   "common.no": "no",
   "common.ok": "OK",
@@ -128,5 +120,25 @@
   "common.back": "Atrás",
   "common.skip": "Saltar",
   "common.done": "Hecho",
-  "common.retry": "Reintentar"
+  "common.retry": "Reintentar",
+  "bot_commands.assistente.budget": "Gráfico de presupuesto, ventana actual",
+  "bot_commands.assistente.budget_prev": "Gráfico de presupuesto, ventana anterior",
+  "bot_commands.assistente.budget_week": "Tendencia semanal",
+  "bot_commands.assistente.pipeline": "Estado del pipeline (resumen dashboard)",
+  "bot_commands.assistente.candles": "3 velas: inicio/medio/fin de la última ventana",
+  "bot_commands.assistente.mappa": "Mapa de posiciones Europa",
+  "bot_commands.assistente.mappa_it": "Mapa de posiciones Italia",
+  "bot_commands.assistente.stato": "Estado rápido del equipo (texto)",
+  "bot_commands.assistente.help": "Lista de comandos disponibles",
+  "bot_commands.capitano.pipeline": "Estado del pipeline + cuello de botella actual",
+  "bot_commands.capitano.budget": "Consumo de presupuesto, ventana actual",
+  "bot_commands.capitano.team": "Estado de los agentes (quién está activo, qué hace)",
+  "bot_commands.capitano.ready": "CVs listos para envío manual",
+  "bot_commands.capitano.triage": "Forzar un triage del pipeline (skill auto-triage)",
+  "bot_commands.capitano.help": "Lista de comandos disponibles",
+  "bot_commands.mentor.digest": "Resumen semanal de candidaturas + patrones",
+  "bot_commands.mentor.patterns": "Patrones de rechazo recurrentes",
+  "bot_commands.mentor.top": "Top 3 PASS más relevantes para tu perfil",
+  "bot_commands.mentor.salary": "Ajuste salarial + visión de mercado",
+  "bot_commands.mentor.help": "Lista de comandos disponibles"
 }

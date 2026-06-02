@@ -4,13 +4,9 @@
     "master": false,
     "purpose": "German translations of shell/CLI/Telegram strings."
   },
-
   "welcome.assistente": "Hallo! 👋\n\nIch bin der Assistent des Job Hunter Team — dein Kontaktpunkt zu dem KI-Team, das gleich anfangen wird, für dich nach Jobs zu suchen.\n\nUm loszulegen, muss ich dich kennenlernen. Schick mir hier auf Telegram deinen Lebenslauf (PDF, DOC, auch ein Foto der Papierversion reicht), oder erzähl mir in ein paar Zeilen, was du suchst — Rolle, Branche, Stadt. Daraus baue ich das Profil, und der Rest des Teams macht sich für dich an die Arbeit.\n\nEin Entwurf oder grobe Notizen sind völlig in Ordnung, es muss nichts Poliertes sein. 📄 Ich fange mit dem an, was du hast.",
-
   "welcome.capitano": "Ich bin der Kapitän. 👨‍✈️\n\nIch koordiniere das Team, das an deiner Suche arbeitet: jemand jagt Stellenanzeigen, jemand analysiert sie, jemand berechnet den Match mit deinem Profil, jemand schreibt den Lebenslauf maßgeschneidert für jede einzelne, jemand macht den letzten Check vor der Bewerbung.\n\nVorerst bleibe ich still. Sobald dein Profil bereit ist, starte ich den Motor, und von da an melde ich mich, wenn ich etwas Konkretes habe: einen Schwung interessanter Stellen, eine Bewerbung, die wir zusammen prüfen können, oder einen Blocker, der erwähnenswert ist. Bis bald. 🎯",
-
   "welcome.mentor": "Ich bin der Mentor. 🧙‍♂️\n\nIch kümmere mich um das Gesamtbild deiner Suche: einmal pro Woche bringe ich dir eine Lesung der Zahlen — Muster, die aufgetaucht sind, Marktsignale, Karriereentscheidungen, über die es sich nachzudenken lohnt. Ruhiger Ton, ich schreibe nur, wenn es wirklich etwas gibt, das deine Aufmerksamkeit verdient.\n\nVorerst höre ich zu. Sobald ich genug Daten habe, um dir etwas Nützliches zu sagen, melde ich mich. 📊",
-
   "host_setup.section_header": "Host-Setup (Preflight)",
   "host_setup.choose_language": "Choose your language / Scegli la lingua / Válassz nyelvet / Elige tu idioma / Wähle deine Sprache / Choisis ta langue / Escolha seu idioma:",
   "host_setup.lang.en": "English",
@@ -43,7 +39,6 @@
   "host_setup.swap_not_configured_warn": "Swap nicht konfiguriert — das Team könnte unter Last abstürzen",
   "host_setup.swap_root_required": "Root-Rechte werden benötigt, um Swap zu konfigurieren",
   "host_setup.swap_active": "Swap aktiv: %d MB (bleibt nach Neustart via /etc/fstab erhalten)",
-
   "wizard.welcome_title": "Job Hunter Team — Setup-Assistent",
   "wizard.welcome_subtitle": "Bringen wir dein Team in wenigen Schritten an den Start.",
   "wizard.intro_title": "Job Hunter Team — Setup",
@@ -95,7 +90,6 @@
   "wizard.outro_aborted": "Setup abgebrochen. Erneut versuchen mit: jht setup",
   "wizard.start.ready": "Alles bereit. Starte das Team...",
   "wizard.start.done": "Das Team läuft. Schau auf Telegram nach den Willkommensnachrichten.",
-
   "auto_report.found": "Gefunden",
   "auto_report.scored": "Bewertet",
   "auto_report.writing": "In Bearbeitung",
@@ -113,13 +107,11 @@
   "auto_report.transitions_24h": "Übergänge 24h:",
   "auto_report.top_cv_ready": "Top-CVs bereit (manuelle Bewerbung):",
   "auto_report.footer": "Auto-Report Kapitän (alle %d Min.)",
-
   "error.missing_dep": "Fehlende Abhängigkeit: %s",
   "error.network": "Netzwerkfehler: %s",
   "error.permission": "Berechtigung verweigert: %s",
   "error.invalid_input": "Ungültige Eingabe: %s",
   "error.generic": "Fehler: %s",
-
   "common.yes": "ja",
   "common.no": "nein",
   "common.ok": "OK",
@@ -128,5 +120,25 @@
   "common.back": "Zurück",
   "common.skip": "Überspringen",
   "common.done": "Fertig",
-  "common.retry": "Erneut versuchen"
+  "common.retry": "Erneut versuchen",
+  "bot_commands.assistente.budget": "Budget-Chart, aktuelles Fenster",
+  "bot_commands.assistente.budget_prev": "Budget-Chart, vorheriges Fenster",
+  "bot_commands.assistente.budget_week": "Wöchentlicher Trend",
+  "bot_commands.assistente.pipeline": "Pipeline-Status (Dashboard-Übersicht)",
+  "bot_commands.assistente.candles": "3 Candles: Anfang/Mitte/Ende des letzten Fensters",
+  "bot_commands.assistente.mappa": "Stellen-Karte Europa",
+  "bot_commands.assistente.mappa_it": "Stellen-Karte Italien",
+  "bot_commands.assistente.stato": "Schneller Team-Status (Text)",
+  "bot_commands.assistente.help": "Liste der verfügbaren Befehle",
+  "bot_commands.capitano.pipeline": "Pipeline-Status + aktueller Engpass",
+  "bot_commands.capitano.budget": "Budgetverbrauch, aktuelles Fenster",
+  "bot_commands.capitano.team": "Agenten-Status (wer aktiv ist, was er tut)",
+  "bot_commands.capitano.ready": "Lebensläufe bereit für manuellen Versand",
+  "bot_commands.capitano.triage": "Pipeline-Triage erzwingen (Auto-Triage-Skill)",
+  "bot_commands.capitano.help": "Liste der verfügbaren Befehle",
+  "bot_commands.mentor.digest": "Wöchentliche Zusammenfassung von Bewerbungen + Muster",
+  "bot_commands.mentor.patterns": "Wiederkehrende Ablehnungsmuster",
+  "bot_commands.mentor.top": "Top 3 PASS am relevantesten für dein Profil",
+  "bot_commands.mentor.salary": "Gehaltspassung + Marktansicht",
+  "bot_commands.mentor.help": "Liste der verfügbaren Befehle"
 }
