@@ -10,7 +10,7 @@ JHT pins each role to one of **four tiers**, listed from highest to lowest. The 
 |---|---|---|---|---|---|
 | 🥇 **very smart** | 👨‍✈️ Captain | `opus-4-7` · effort `high` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Critical, irreversible decisions — full reasoning depth |
 | 🥈 **expert** | 👨‍🏫 Writer · 👨‍⚖️ Critic · 🧙‍♂️ Mentor | `opus-4-7` · effort `medium` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Pattern-matching against well-known templates (CV, blind review, gap analysis) |
-| 🥉 **smart** | 🕵️‍♂️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👨‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Research, scraping, scoring, user chat |
+| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👨‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Research, scraping, scoring, user chat |
 | 🎖️ **medium** | 💂 Sentinel | `sonnet-4-6` · effort `medium` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Light watchdog — if-then rules, no deep thinking |
 
 **Available effort levels (for reference):**
@@ -28,21 +28,21 @@ JHT pins each role to one of **four tiers**, listed from highest to lowest. The 
      │
      ▼
    👨‍✈️ Captain ──► Phase 1 ──► Phase 2 ──► Phase 3 ──► Phase 4 ──────► Phase 5 ──► 👤 User
-                  🕵️‍♂️ Discover  👨‍🔬 Verify  👨‍💻 Score   👨‍🏫 👨‍⚖️ Write+Review   📲 Notify
+                  🕵️ Discover  👨‍🔬 Verify  👨‍💻 Score   👨‍🏫 👨‍⚖️ Write+Review   📲 Notify
 ```
 
 Each phase below is one specialized agent role. The Captain decides **how many instances** to spin up per role at any given time — agent count is dynamic, not baked into the architecture.
 
 ---
 
-## 1️⃣ Phase 1 — Discovery 🔍 🕵️‍♂️
+## 1️⃣ Phase 1 — Discovery 🔍 🕵️
 
 ```
         👤 candidate_profile.yml ──┐
                                     │ circles, filters, work_mode
                                     ▼
         ┌──────────────────────────────────────┐
-        │ 🕵️‍♂️ Scout pool                       │
+        │ 🕵️ Scout pool                       │
         │ N instances · Captain-managed         │
         │ peer-coordinated (no overlap on       │
         │ circles / sources / URLs)             │
@@ -120,7 +120,7 @@ Available under `/app/shared/skills/`:
                              │ (rejection patterns:
                              │  SENIORITY · STACK · GEO · LINGUA …)
                              ▼
-                        🕵️‍♂️ Scout pool
+                        🕵️ Scout pool
 ```
 
 **What Analysts do.** Pull `status = new` positions, fetch the live JD, validate the link, parse 5 structured fields (`ESPERIENZA_RICHIESTA · ESPERIENZA_TIPO · LAUREA · LINGUA_RICHIESTA · SENIORITY_JD`), and either promote to `checked` or mark `excluded`. Real years are computed from dated entries in the profile, not from the rounded `experience_years` field. The candidate is treated as **adaptable** — adjacent stacks aren't excluded, the Scorer applies a proportional gap penalty downstream.
@@ -178,7 +178,7 @@ When 3 consecutive exclusions hit the same source with the same tag, or a Scout'
                              │ score distribution
                              │ (high-score zones → Scout queries)
                              ▼
-                        🕵️‍♂️ Scout pool  (via 👨‍✈️ Captain)
+                        🕵️ Scout pool  (via 👨‍✈️ Captain)
 ```
 
 **What Scorers do.** Run a **pre-check** (years of experience, location, mandatory degree without "or equivalent") to filter out unscorable positions, then assign a 0-100 score against the candidate profile. `< 40` → `excluded`. `40-49` → `scored` (parking, Captain decides later). `≥ 50` → `scored` + notify Writers.
@@ -327,9 +327,9 @@ The pipeline is not a static N-instances-per-role configuration: it's a **feedba
 When the pipeline starts from zero, priority is feeding the downstream queues fast:
 
 ```
-   T=0       →  3× 🕵️‍♂️ Scout                                    (flood the funnel)
-   T+ a bit  →  2× 🕵️‍♂️ Scout · 1× 👨‍🔬 Analyst                    (first offers to verify)
-   T+ more   →  2× 🕵️‍♂️ Scout · 1× 👨‍🔬 Analyst · 1× 👨‍💻 Scorer    (first verified ready to score)
+   T=0       →  3× 🕵️ Scout                                    (flood the funnel)
+   T+ a bit  →  2× 🕵️ Scout · 1× 👨‍🔬 Analyst                    (first offers to verify)
+   T+ more   →  2× 🕵️ Scout · 1× 👨‍🔬 Analyst · 1× 👨‍💻 Scorer    (first verified ready to score)
 ```
 
 If the Analyst falls behind the Scouts, the Captain rebalances on the fly: `+1 Analyst · −1 Scout`. Same logic flows downstream.
@@ -338,8 +338,8 @@ If the Analyst falls behind the Scouts, the Captain rebalances on the fly: `+1 A
 
 The first batch processed by each downstream role is **golden** — it's the data the downstream agent uses to coach the upstream one:
 
-- **👨‍🔬 Analyst → 🕵️‍♂️ Scout** — after a meaningful first batch, the Analyst flags rejection patterns (companies that close postings fast, scam boards, JD shapes that always fail verification). Scouts skip those upstream.
-- **👨‍💻 Scorer → 🕵️‍♂️ Scout** — once the Scorer has seen a sample, it knows which roles/stacks/geographies score high. It feeds the distribution back so Scouts search closer to the high-score zones.
+- **👨‍🔬 Analyst → 🕵️ Scout** — after a meaningful first batch, the Analyst flags rejection patterns (companies that close postings fast, scam boards, JD shapes that always fail verification). Scouts skip those upstream.
+- **👨‍💻 Scorer → 🕵️ Scout** — once the Scorer has seen a sample, it knows which roles/stacks/geographies score high. It feeds the distribution back so Scouts search closer to the high-score zones.
 
 Result: every cycle, Scouts find better offers, Analysts reject fewer good ones, Scorers see higher score distributions. The team becomes a **self-tuning system**.
 
