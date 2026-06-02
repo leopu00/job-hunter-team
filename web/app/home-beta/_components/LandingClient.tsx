@@ -71,8 +71,13 @@ export default function LandingClient({
 // orizzontale è funzione di Y così segue lo stesso scrubbing.
 function EnergyBridge() {
   const [scrollY, setScrollY] = useState(0);
+  // mounted: evita hydration mismatch sulla precisione del transform
+  // (Math.sin con scrollY iniziale 0 lato server, valore reale lato
+  // client). Prima del mount renderizziamo solo il container vuoto.
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     let ticking = false;
     const update = () => {
       setScrollY(window.scrollY);
@@ -105,7 +110,7 @@ function EnergyBridge() {
         marginTop: "-180px",
       }}
     >
-      {Array.from({ length: COUNT }).map((_, i) => {
+      {mounted && Array.from({ length: COUNT }).map((_, i) => {
         const x = 40 + ((i * 31) % 20);
         const baseOffset = (i * 41) % H;
         const speed = 0.4 + ((i * 7) % 10) / 12;
