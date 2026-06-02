@@ -94,10 +94,15 @@ body::after {
 }
 
 /* ── Typography ──────────────────────────────────────────────────── */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-mono);
-  color: var(--color-white);
-  line-height: 1.2;
+/* In @layer base so Tailwind text-* utilities (e.g. text-slate-900 on the
+   light /case-studies page) can override the default heading color. Unlayered
+   element rules would otherwise win over layered utilities. */
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-mono);
+    color: var(--color-white);
+    line-height: 1.2;
+  }
 }
 
 a { color: var(--color-green); text-decoration: none; }
