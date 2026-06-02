@@ -78,7 +78,7 @@ function BackLink({ label }: { label: string }) {
 
 function ProjectContent() {
   const { lang } = useLandingI18n();
-  const t = T[lang] ?? T.en;
+  const t = T[lang as keyof typeof T] ?? T.en;
 
   // The WebPage JSON-LD that used to live here was a duplicate of the one
   // emitted by `project/layout.tsx` (server component) with the same
