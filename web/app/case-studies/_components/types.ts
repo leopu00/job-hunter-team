@@ -45,6 +45,17 @@ export type AgentActivity = {
   reason: string | null
 }
 
+export type AgentTokens = {
+  window_number: number
+  agent: string
+  input_tokens: number
+  cached_input_tokens: number
+  output_tokens: number
+  reasoning_output_tokens: number
+  events: number
+  sessions: number
+}
+
 export type Window = {
   id: number
   window_number: number
@@ -63,6 +74,7 @@ export type Window = {
   five_hour_windows: FiveHourWindow[] | null
   burn_samples: BurnSample[]
   agent_activity: AgentActivity[]
+  agent_tokens: AgentTokens[]
   display_order: number
 }
 
