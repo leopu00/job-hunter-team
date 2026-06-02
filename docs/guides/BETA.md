@@ -31,26 +31,25 @@ Public users will ask: *"does it work for my role? on my provider? at my cost?"*
 - 🗣️ Be available for a **30-minute call** at the end of the test period
 - 🧪 **No cherry-picking** — report failures and rate-limit incidents too. Bad cells matter as much as good ones.
 
-## Coverage we still need
+## Where we are with case studies
 
-We're tracking a coverage matrix of (provider × persona). Cells #1–3 are maintainer/internal data; cells #4–12 are what we need external beta testers for. **Kimi €40 cells are highest priority** (mass-market target). Pre-launch goal: **at least 8/12 cells filled**.
+Our **pre-launch commitment** is not to fill a coverage matrix — it's to **document well what we have**. The plan is to publish solid case studies on the runs already completed, with a stable schema and visualization on `/case-studies`. Once that structure is in place, new beta testers can plug in their data with low overhead.
+
+**Pre-launch (must-have):**
 
 | # | Persona | Provider tier | Status |
 |---|---|---|---|
-| 1 | Full-stack dev (maintainer baseline) | 🟠 Claude Max x20 | ✅ done — see [Case study #1](../about/RESULTS.md#case-study-1--the-maintainer-legacy-team-early-2026) |
-| 2 | Senior multilingual technical documentation profile (multi-country EU) | 🔵 Codex ProLite €100 | ✅ done — see [Case study #2](../about/RESULTS.md#-case-study-2--beta-tester-1--codex-prolite-senior-multilingual-technical-profile) |
-| 3 | Junior software developer (capital city, no degree) | 🌙 Kimi K2 Pro €40 | ✅ done — see [Case study #3](../about/RESULTS.md#-case-study-3--beta-tester-2--kimi-k2-pro-junior-software-developer) |
-| 4 | Full-stack dev | 🌙 Kimi Pro €40 | ⬜ open |
-| 5 | Data engineer | 🟠 Claude Max x20 | ⬜ open |
-| 6 | Data engineer | 🌙 Kimi Pro €40 | ⬜ open |
-| 7 | Marketing mgr | 🌙 Kimi Pro €40 | ⬜ open |
-| 8 | Junior PM | 🌙 Kimi Pro €40 | ⬜ open |
-| 9 | Senior backend | 🔵 Codex Pro €100 | ⬜ open |
-| 10 | Senior backend | 🌙 Kimi Pro €40 | ⬜ open |
-| 11 | Full-stack dev | 🟠 Claude Pro €20 (re-test) | ⬜ open |
-| 12 | Marketing mgr | 🔵 Codex Plus €20 | ⬜ open |
+| 1 | Full-stack dev (maintainer baseline) | 🟠 Claude Max x20 | ✅ documented — see [Case study #1](../about/RESULTS.md#case-study-1--the-maintainer-legacy-team-early-2026) |
+| 2 | Senior multilingual technical documentation profile (multi-country EU) | 🔵 Codex ProLite €100 | ✅ documented — see [Case study #2](../about/RESULTS.md#-case-study-2--beta-tester-1--codex-prolite-senior-multilingual-technical-profile) |
+| 3 | Junior software developer (capital city, no degree) | 🌙 Kimi K2 Pro €40 | ✅ documented — see [Case study #3](../about/RESULTS.md#-case-study-3--beta-tester-2--kimi-k2-pro-junior-software-developer) |
+| 4 | Maintainer baseline (weekly-distributed run) | 🌙 Kimi K2 Pro €40 | 🟡 data collected, **processing pending** |
+| 5 | Maintainer baseline (re-test with better monitoring) | 🟠 Claude Max x20 | 🟡 previous run lacked instrumentation, **to be re-run + documented** |
 
-If you match one of the open cells, mention the number in your application. Otherwise we'll try to slot you in based on your profile.
+**Post-launch (open invitation):**
+
+We welcome beta testers from **any role and any industry** — not just IT/tech. Marketing, design, finance, ops, sales, healthcare, education, legal: JHT is profile-agnostic, the only variable that materially changes the experience is the **provider tier**. Pick whichever supported subscription you can afford and we'll help you publish your own case study, anonymized if you prefer.
+
+> Why we dropped the "8/12 cells pre-launch" target: the persona × provider matrix was double-counting effort. The team behaves the same whether you're a junior PM or a senior backend — only `candidate_profile.yml` changes. What matters at launch is that the **3 tier signals** (€100 / €40 / €20) are honestly characterized; persona-specific lessons emerge from real post-launch use.
 
 ## How to apply
 
@@ -60,7 +59,7 @@ Open an issue on GitHub with the title **"Beta tester application — [your hand
 2. Where are you based (country / remote)?
 3. Which subscription do you have or plan to get?
 4. How much time per week can you commit?
-5. (Optional) Which cell number from the coverage matrix do you fit?
+5. (Optional) Anything specific about your profile/industry we should know — JHT is profile-agnostic but real-world feedback from outside IT/tech is especially welcome
 6. Anything else we should know
 
 We will reply within a few days.
