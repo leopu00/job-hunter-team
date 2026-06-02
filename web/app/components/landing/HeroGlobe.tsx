@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useTheme } from "@/app/theme-provider";
-import { LUXURY_POSITIONS } from "../_data/luxuryPositions";
+import { LUXURY_POSITIONS } from "./_data/luxuryPositions";
 
 const STYLE_DARK =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
