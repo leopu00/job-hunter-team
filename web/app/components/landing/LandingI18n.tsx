@@ -11,9 +11,23 @@ import {
   type ReactNode,
 } from "react";
 
+import { es } from "./i18n/es";
+import { fr } from "./i18n/fr";
+import { de } from "./i18n/de";
+import { pt } from "./i18n/pt";
+
 const CookieConsent = lazy(() => import("./CookieConsent"));
 
 export type Lang = "it" | "en" | "es" | "fr" | "de" | "pt" | "hu";
+
+// Overlay per le lingue aggiunte sopra la base it/en/hu. La risoluzione in
+// t(): overlay[lang][key] → base[key][lang] → base[key].en (fallback EN).
+const overlays: Partial<Record<Lang, Record<string, string>>> = {
+  es,
+  fr,
+  de,
+  pt,
+};
 
 export const SUPPORTED_LANGS: Lang[] = [
   "it",
@@ -1202,7 +1216,9 @@ export function LandingI18nProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback(
     (key: StringKeys) => {
-      // Entry può avere copertura parziale delle lingue: fallback su `en`.
+      // Overlay lingua → base[lang] → fallback su `en`.
+      const o = overlays[lang]?.[key];
+      if (o) return o;
       const entry = translations[key] as Record<string, string>;
       return entry[lang] ?? entry.en;
     },
