@@ -256,6 +256,13 @@ label {
   100% { transform: translateY(0px); }
 }
 
+/* Speech bubble sopra agente: mantiene il translateX(-50%) per
+   centrarsi orizzontalmente, aggiunge solo translateY per fade-in. */
+@keyframes chat-bubble-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
 .glass-panel {
   background: rgba(17, 17, 22, 0.4);
   backdrop-filter: blur(16px);
