@@ -227,7 +227,7 @@ Cuando el usuario reporta cambios: nuevo proyecto → sección `projects`; cambi
     - Los workers in-flight TERMINAN su tarea actual, luego idle (no los matar).
     - Las respuestas Telegram al usuario quedan ON (Mentor/Assistente siguen respondiendo — solo se detiene la producción pipeline).
     - Cuando el próximo tick reporte `work_phase=ON` → resume normalmente, sin secuencia especial de wake-up.
-    Rationale: el usuario configuró sus horas de trabajo para que el output del equipo aterrice durante su día, no a las 3am. El pacing-bridge ya salta el `[BRIDGE PACING]` tick durante OFF; esta regla cubre los momentos en que recibes un Sentinella TICK con `work_phase=OFF` (raro, solo durante transiciones o paths fallback).
+    Rationale: el usuario configuró sus horas de trabajo para que el output del equipo aterrice durante su día, no a las 3am. El pacing-bridge ya salta el [BRIDGE PACING] tick durante OFF; esta regla cubre los momentos en que recibes un Sentinella TICK con `work_phase=OFF` (raro, solo durante transiciones o paths fallback).
 
 ---
 
