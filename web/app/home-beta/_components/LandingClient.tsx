@@ -32,52 +32,28 @@ export default function LandingClient({
             <LandingHero />
 
 
-            {/* Pin section della tabella: scrollando, la tabella resta
-                centrata in viewport mentre gli status delle 10 righe
-                evolvono in sincrono con la pipeline (stesso ordine
-                degli step DB del team flow), scale 2× così l'animazione
-                tabella è più snella del giro globo.
-                Math: pipeline_T = 8640, T_table = scroll × 2, animation
-                tabella richiede ~4320 px di scroll. */}
-            {/* Ponte di energia: sezione dedicata alta 400 px tra il pin
-                del globo e il pin della tabella. Particelle grigie
-                riempiono la colonna verticale dal globo (sopra) alla
-                tabella (sotto). Quando l'utente scrolla attraverso
-                questa zona, vede contemporaneamente: globo che sta
-                uscendo in alto, particelle che fluttuano lungo tutta
-                la colonna, tabella che sta entrando da sotto. */}
+            {/* Ponte di energia: particelle grigie scroll-driven tra il
+                fondo del globo (sopra) e la tabella (sotto). */}
             <EnergyBridge />
 
+            {/* Pin della tabella top-15: sticky a top 5rem, una riga
+                viene scoperta ad ogni ~200 px di scroll (cfr.
+                LatestPositionsTable). 15 righe ≈ 3000 px + buffer di
+                fine animazione. Mobile: senza pin. */}
             <div
               className="relative hidden md:block"
-              data-pin-section="table-evolution"
-              style={{ height: "5500px" }}
+              data-pin-section="table-reveal"
+              style={{ height: "3300px" }}
             >
-              {/* Sticky naturale ancorato in alto (sotto la nav): la
-                  tabella si attacca subito al top del viewport, niente
-                  flex center → meno spazio vuoto tra il globo (sopra)
-                  e la tabella (qui). */}
               <div className="sticky" style={{ top: "5rem" }}>
                 <LatestPositionsTable />
               </div>
             </div>
 
-            {/* Mobile: tabella senza pin (scroll naturale). */}
             <div className="md:hidden">
               <LatestPositionsTable />
             </div>
 
-            <section className="flex flex-col items-center justify-center py-24 px-6">
-              <span
-                className="text-7xl md:text-9xl leading-none"
-                aria-hidden="true"
-              >
-                🧙‍♂️
-              </span>
-              <span className="mt-4 text-[12px] md:text-[14px] font-semibold tracking-[0.2em] uppercase text-[var(--color-bright)]">
-                Mentor
-              </span>
-            </section>
           </main>
           <LandingFooter />
         </>
