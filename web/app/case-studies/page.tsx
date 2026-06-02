@@ -17,6 +17,7 @@ import { CoverageMatrix } from "./_components/CoverageMatrix"
 import { ContributeCta } from "./_components/ContributeCta"
 import { AgentActivityHero } from "./_components/AgentActivityHero"
 import { FiveHourWindowsTab } from "./_components/FiveHourWindowsTab"
+import { TokensTab } from "./_components/TokensTab"
 import { CaseStudiesTabs } from "./_components/CaseStudiesTabs"
 
 export const dynamic = "force-dynamic"
@@ -182,6 +183,11 @@ export default async function CaseStudiesPage() {
       id: "windows",
       label: "📈 Finestre 5h",
       content: <FiveHourWindowsTab caseStudy={codex} weekly={codexWeekly} />,
+    })
+    tabs.push({
+      id: "tokens",
+      label: "💰 Token consumati",
+      content: <TokensTab caseStudy={codex} weekly={codexWeekly} />,
     })
   }
 

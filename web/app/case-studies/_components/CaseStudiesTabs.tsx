@@ -14,7 +14,7 @@ type Props = {
   defaultTab?: string
 }
 
-const CHARTS_TABS = new Set(["agents", "windows"])
+const CHARTS_TABS = new Set(["agents", "windows", "tokens"])
 
 export function CaseStudiesTabs({ tabs, defaultTab }: Props) {
   const [active, setActive] = useState(defaultTab ?? tabs[0]?.id)
