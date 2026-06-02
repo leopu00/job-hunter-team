@@ -8,7 +8,7 @@ Pipeline handoffs flow naturally through the DB — no tmux notification needed:
 
 | Handoff | Mechanism |
 |---|---|
-| 🕵️‍♂️ Scout → 👨‍🔬 Analyst | Analyst polls `next-for-analista` continuously; sees fresh `status = new` rows immediately |
+| 🕵️ Scout → 👨‍🔬 Analyst | Analyst polls `next-for-analista` continuously; sees fresh `status = new` rows immediately |
 | 👨‍🔬 Analyst → 👨‍💻 Scorer | Scorer polls `next-for-scorer`; picks `status = checked` rows |
 | 👨‍💻 Scorer → 👨‍🏫 Writer | Writer polls `next-for-scrittore` ordered by `score DESC`; picks `status = scored` rows ≥ 50 |
 | 👨‍🏫 Writer → 👤 User | Position lands at `status = ready` + `applications.critic_verdict = PASS`; Captain dashboard surfaces it |
@@ -49,7 +49,7 @@ jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
 
 What each role MUST send via tmux (anything else is DB-driven):
 
-### 🕵️‍♂️ Scout
+### 🕵️ Scout
 - Receives `FEEDBACK` from Analysts → adapt queries; reply `ACK`
 
 ### 👨‍🔬 Analyst

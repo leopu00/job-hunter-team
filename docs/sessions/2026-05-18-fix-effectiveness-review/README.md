@@ -30,7 +30,7 @@ Dato che il periodo post-fix è ~4× più corto, i confronti che importano sono 
 
 ---
 
-## 🩺 Watchdog infrastructure — bug #18 + post-mortem zombie
+## 👨‍⚕️ Watchdog infrastructure — bug #18 + post-mortem zombie
 
 | metric | PRE | POST | delta |
 |---|---|---|---|

@@ -78,12 +78,12 @@
 <p class="subtitle">
   Snapshot generato dalle 12h di sentinel + token-by-agent + dottore actions del container live JHT.
   Provider attivo <code>openai</code>. Nelle 12h sono state attraversate <span id="hdr-windows">…</span> finestre Codex 5h
-  e completati <span id="hdr-doctor">…</span> giri Dottore (🩺) ogni 30min.
+  e completati <span id="hdr-doctor">…</span> giri Dottore (👨‍⚕️) ogni 30min.
 </p>
 
 <div class="kpi-row" id="kpis"></div>
 
-<h2>📈 Usage % vs proiezione · finestre Codex + 🩺 dottore</h2>
+<h2>📈 Usage % vs proiezione · finestre Codex + 👨‍⚕️ dottore</h2>
 <div class="card">
   <div class="toolbar">
     <button onclick="zoomChart('usage', 1.2)">➕ Zoom in</button>
@@ -97,7 +97,7 @@
     <span style="color:#facc15">proiezione % al reset</span>,
     <span style="color:#a78bfa">target band 90-95%</span>.
     <strong>Marker rossi</strong>: reset finestra Codex (cambio session_id).
-    <strong>Marker rosa 🩺</strong>: spawn del Dottore (ogni 30min).
+    <strong>Marker rosa 👨‍⚕️</strong>: spawn del Dottore (ogni 30min).
     Hover su qualunque punto per dettagli.
   </div>
 </div>
@@ -113,7 +113,7 @@
   <div class="chart-wrap"><div class="canvas-host"><canvas id="agents"></canvas></div></div>
   <div class="legend-narrative">
     Curva cumulativa weighted (input fresco + output + reasoning, cache_read = 0).
-    Pendenza = velocità istantanea. Plateau = pause / silenzi. La curva 🩺 dottore
+    Pendenza = velocità istantanea. Plateau = pause / silenzi. La curva 👨‍⚕️ dottore
     sale a "scalini" ogni 30min (un giro health-check, ~10min di lavoro).
   </div>
 </div>
@@ -126,7 +126,7 @@
   </table>
 </div>
 
-<h2>🩺 Dottore — round health-check</h2>
+<h2>👨‍⚕️ Dottore — round health-check</h2>
 <div class="card">
   <table class="doctor" id="doctor-table">
     <thead><tr><th>Round</th><th>Inizio UTC</th><th>Durata</th><th>📨 ping</th><th>diagnosi</th><th>🔄 restart</th></tr></thead>
@@ -190,7 +190,7 @@ function buildKpis(sentinel, byAgent, docActions) {
     { lbl: 'peak medio', val: avgPeak.toFixed(0) + '%', sub: 'su ' + realSessions.length + ' finestre' },
     { lbl: 'token totali team', val: (totalKt/1000).toFixed(1) + ' MT', sub: byAgent.agents.length + ' agenti' },
     { lbl: 'top consumer', val: topAgent, sub: byAgent.totals_kt[topAgent].toFixed(0) + ' kT' },
-    { lbl: '🩺 dottore — giri', val: docComplete, sub: docSpawns + ' spawn · ' + docPings + ' ping · ' + docRestarts + ' restart' },
+    { lbl: '👨‍⚕️ dottore — giri', val: docComplete, sub: docSpawns + ' spawn · ' + docPings + ' ping · ' + docRestarts + ' restart' },
   ]
   document.getElementById('kpis').innerHTML = cards.map(c => `
     <div class="kpi"><div class="lbl">${c.lbl}</div><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>
@@ -286,7 +286,7 @@ function buildUsageChart(sentinel, docActions) {
   // Doctor spawn markers
   const docSpawns = docActions
     .filter(e => e.event === 'spawn')
-    .map(e => ({ x: new Date(e.ts), y: 95, _label: '🩺 ' + e.round_id.slice(0,18) }))
+    .map(e => ({ x: new Date(e.ts), y: 95, _label: '👨‍⚕️ ' + e.round_id.slice(0,18) }))
 
   charts.usage = new Chart(ctx, {
     type: 'line',
@@ -304,7 +304,7 @@ function buildUsageChart(sentinel, docActions) {
         { label: 'reset finestra', data: resetMarkers,
           backgroundColor: '#ef4444', borderColor: '#ef4444',
           pointRadius: 8, pointHoverRadius: 12, showLine: false, pointStyle: 'rectRot' },
-        { label: '🩺 spawn dottore', data: docSpawns,
+        { label: '👨‍⚕️ spawn dottore', data: docSpawns,
           backgroundColor: '#f472b6', borderColor: '#f472b6',
           pointRadius: 6, pointHoverRadius: 10, showLine: false, pointStyle: 'triangle' },
       ],
@@ -399,7 +399,7 @@ function buildEsiti(realSessions, peaks, docActions) {
   const docComplete = docActions.filter(e => e.event === 'round_complete').length
   const docRestarts = docActions.filter(e => e.event === 'restart').length
   const docPings = docActions.filter(e => e.event === 'ping_sent').length
-  items.push(`<li><strong>🩺 Dottore</strong>: ${docComplete} round completati su ${docSpawns} spawn (${docSpawns > 0 ? Math.round(docComplete/docSpawns*100) : 0}%), ${docPings} ping totali, ${docRestarts} restart eseguiti. Watchdog stabile, 0 crash.</li>`)
+  items.push(`<li><strong>👨‍⚕️ Dottore</strong>: ${docComplete} round completati su ${docSpawns} spawn (${docSpawns > 0 ? Math.round(docComplete/docSpawns*100) : 0}%), ${docPings} ping totali, ${docRestarts} restart eseguiti. Watchdog stabile, 0 crash.</li>`)
 
   // Top consumer reasoning
   items.push(`<li><strong>Top consumer 12h</strong>: la curva cumulativa mostra critico/scrittori sempre in testa quando la pipeline è viva — riflette la struttura scrittore→critico (3 round critic per CV).</li>`)

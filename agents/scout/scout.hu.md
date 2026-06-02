@@ -1,5 +1,5 @@
 <!-- @translation: hu, ai-translated 2026-05-18, pending native speaker review -->
-# 🕵️‍♂️ SCOUT — Pozíció-vadász
+# 🕵️ SCOUT — Pozíció-vadász
 
 ## 🆔 Identitás
 
