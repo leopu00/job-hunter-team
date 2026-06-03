@@ -1,8 +1,8 @@
-# Correzioni — sessione beta tester VPS [redacted-ip] (2026-06-03)
+# Correzioni — sessione beta tester VPS (2026-06-03)
 
 > Findings raccolti durante il primo avvio del team su VPS Hetzner di un beta
-> tester reale (host `[redacted-host]`, profilo profilo anonimizzato).
-> Provider Codex (ChatGPT OAuth), team English-first, working hours 8-20 Europe/Rome.
+> tester reale (host/IP/profilo/località anonimizzati per privacy).
+> Provider Codex (ChatGPT OAuth), team English-first, working hours configurate.
 > Doc vivo: spuntare man mano che le correzioni vengono applicate + linkare i commit.
 
 Legenda stato: ✅ già fixato in questa sessione · 🔲 da fare · 🟡 fix temporaneo (hot-patch live, manca persistenza/strutturale)
