@@ -1,5 +1,24 @@
 # 2026-05-20 — Supabase performance backlog (40+ advisor findings)
 
+> **🟢 STATUS UPDATE 2026-05-31**: P0 + P1 + P2 (unused indexes) tutti applicati.
+> Restano solo monitoring tasks su connection pool. Vedi [§ Stato applicazione](#stato-applicazione-2026-05-31).
+
+## Stato applicazione 2026-05-31
+
+| Sezione | Stato | Commit | Migration |
+|---|---|---|---|
+| **P0 — `auth_rls_initplan` × 24** | ✅ DONE 2026-05-22 | `2b78fdd9` | `018_rls_init_plan_fix.sql` |
+| **P1 — `unindexed_foreign_keys` × 9** | ✅ DONE 2026-05-31 | `f2908338` | `024_fk_indexes.sql` |
+| **P2 — `unused_index` × 9** | ✅ DONE 2026-05-31 | `59638b08` | `026_drop_unused_indexes.sql` |
+| **P2 — `auth_db_connections_absolute` × 1** | 🟡 monitoring | — | (no action, watch pool) |
+| **Bonus** — `auth.uid()` per-row v2 (22 policy residue) | ✅ DONE 2026-05-31 | parte di cloud-sync v2 era | `025_rls_initplan_fix_v2.sql` |
+
+Documento storico mantenuto per traceability dell'audit originale e
+delle decisioni prese in quel momento. Per il riferimento corrente sullo
+stato Supabase advisor → BACKLOG.md § INFRA-SUPABASE-PERF.
+
+---
+
 ## Context
 
 Durante l'analisi post-incident del 504-storm del 2026-05-19 ([[cloud-sync-architecture]]),

@@ -67,7 +67,8 @@ export default function PositionTypesPie({
   const [hovered, setHovered] = useState<string | null>(null);
   const labelFor = (family: string) => labels?.[family] ?? family;
   const total = data.reduce((a, d) => a + d.count, 0);
-  const focused = hovered != null ? data.find((d) => d.family === hovered) : null;
+  const focused =
+    hovered != null ? data.find((d) => d.family === hovered) : null;
   const focusedPct =
     focused && total > 0 ? Math.round((focused.count / total) * 100) : null;
 
@@ -83,189 +84,189 @@ export default function PositionTypesPie({
       </div>
 
       <div className="flex items-center gap-4">
-          <svg
-            width={size}
-            height={size}
-            viewBox={`0 0 ${SIZE} ${SIZE}`}
-            className="shrink-0"
-            aria-label={title}
-            role="img"
-            onMouseLeave={() => setHovered(null)}
-          >
-            <circle
-              cx={CX}
-              cy={CY}
-              r={(RADIUS + INNER) / 2}
-              fill="none"
-              stroke="var(--color-border)"
-              strokeWidth={RADIUS - INNER}
-              opacity={total === 0 ? 0.5 : 0}
-            />
-            {(() => {
-              let acc = -Math.PI / 2; // start at top
-              return data.map((d) => {
-                const span = (d.count / total) * 2 * Math.PI;
-                const path = arc(acc, acc + span);
-                acc += span;
-                const isHover = hovered === d.family;
-                const dimmed = hovered != null && !isHover;
-                return (
-                  <path
-                    key={d.family}
-                    d={path}
-                    fill={d.color}
-                    opacity={isHover ? 1 : dimmed ? 0.32 : 0.88}
-                    stroke="var(--color-card)"
-                    strokeWidth={isHover ? 1.5 : 1}
-                    onMouseEnter={() => setHovered(d.family)}
-                    style={{
-                      cursor: "pointer",
-                      transition: "opacity 0.15s ease, stroke-width 0.15s ease",
-                    }}
-                  >
-                    <title>{`${labelFor(d.family)} — ${d.count} (${Math.round((d.count / total) * 100)}%)`}</title>
-                  </path>
-                );
-              });
-            })()}
-
-            {/* Center label: mostra la slice hovered (count + pct).
-                Quando nessuna e' hovered, mostra il totale. */}
-            <text
-              x={CX}
-              y={CY - 4}
-              textAnchor="middle"
-              fontSize={focused ? 11 : 9}
-              fill={focused ? focused.color : "var(--color-dim)"}
-              fontWeight={700}
-              style={{ pointerEvents: "none", fontFamily: "inherit" }}
-            >
-              {focused ? labelFor(focused.family) : "totale"}
-            </text>
-            <text
-              x={CX}
-              y={CY + 11}
-              textAnchor="middle"
-              fontSize={13}
-              fill="var(--color-bright)"
-              fontWeight={700}
-              style={{ pointerEvents: "none", fontFamily: "inherit" }}
-            >
-              {focused ? `${focused.count}` : `${total}`}
-            </text>
-            {focusedPct != null && (
-              <text
-                x={CX}
-                y={CY + 22}
-                textAnchor="middle"
-                fontSize={9}
-                fill="var(--color-muted)"
-                style={{ pointerEvents: "none", fontFamily: "inherit" }}
-              >
-                {focusedPct}%
-              </text>
-            )}
-          </svg>
-
-          <ul
-            className="space-y-1.5 min-w-0"
-            onMouseLeave={() => setHovered(null)}
-          >
-            {/* Header: didascalia colonne. Stesso grid template delle
-                righe sotto così tutto si allinea verticalmente. Tipo a
-                sinistra, numeri subito accanto (non spinti a destra). */}
-            <li
-              className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem_2.25rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
-              aria-hidden
-            >
-              <span>tipo</span>
-              <span>n</span>
-              <span>%</span>
-              <span title="Score medio (0-100)">score</span>
-              <span title="Voto critico medio (0-10)">critic</span>
-            </li>
-            {data.map((d) => {
-              const pct = Math.round((d.count / total) * 100);
+        <svg
+          width={size}
+          height={size}
+          viewBox={`0 0 ${SIZE} ${SIZE}`}
+          className="shrink-0"
+          aria-label={title}
+          role="img"
+          onMouseLeave={() => setHovered(null)}
+        >
+          <circle
+            cx={CX}
+            cy={CY}
+            r={(RADIUS + INNER) / 2}
+            fill="none"
+            stroke="var(--color-border)"
+            strokeWidth={RADIUS - INNER}
+            opacity={total === 0 ? 0.5 : 0}
+          />
+          {(() => {
+            let acc = -Math.PI / 2; // start at top
+            return data.map((d) => {
+              const span = (d.count / total) * 2 * Math.PI;
+              const path = arc(acc, acc + span);
+              acc += span;
               const isHover = hovered === d.family;
               const dimmed = hovered != null && !isHover;
               return (
-                <li
+                <path
                   key={d.family}
+                  d={path}
+                  fill={d.color}
+                  opacity={isHover ? 1 : dimmed ? 0.32 : 0.88}
+                  stroke="var(--color-card)"
+                  strokeWidth={isHover ? 1.5 : 1}
                   onMouseEnter={() => setHovered(d.family)}
-                  className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem_2.25rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
                   style={{
                     cursor: "pointer",
-                    background: isHover ? "var(--color-row)" : "transparent",
-                    opacity: dimmed ? 0.45 : 1,
-                    transition: "background 0.15s ease, opacity 0.15s ease",
+                    transition: "opacity 0.15s ease, stroke-width 0.15s ease",
                   }}
                 >
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="inline-block w-2 h-2 rounded-sm shrink-0"
-                      style={{ background: d.color }}
-                      aria-hidden
-                    />
-                    <span
-                      className="truncate"
-                      style={{
-                        color: isHover
-                          ? "var(--color-bright)"
-                          : "var(--color-muted)",
-                      }}
-                      title={labelFor(d.family)}
-                    >
-                      {labelFor(d.family)}
-                    </span>
-                  </span>
-                  <span className="tabular-nums text-[var(--color-bright)] font-semibold">
-                    {d.count}
-                  </span>
-                  <span className="tabular-nums text-[var(--color-dim)]">
-                    {pct}%
-                  </span>
-                  <span
-                    className="tabular-nums"
-                    title="Score medio (0-100, solo posizioni scorate)"
-                    style={{
-                      color:
-                        d.avgScore == null
-                          ? "var(--color-dim)"
-                          : d.avgScore >= 75
-                            ? "var(--color-green)"
-                            : d.avgScore >= 55
-                              ? "var(--color-yellow)"
-                              : "var(--color-red)",
-                    }}
-                  >
-                    {d.avgScore == null ? "—" : `${Math.round(d.avgScore)}`}
-                  </span>
-                  <span
-                    className="tabular-nums"
-                    title="Voto critico medio (0-10, solo posizioni revisionate)"
-                    style={{
-                      color:
-                        d.avgCritic == null
-                          ? "var(--color-dim)"
-                          : d.avgCritic >= 7
-                            ? "var(--color-green)"
-                            : d.avgCritic >= 5.5
-                              ? "var(--color-yellow)"
-                              : "var(--color-red)",
-                    }}
-                  >
-                    {d.avgCritic == null ? "—" : d.avgCritic.toFixed(1)}
-                  </span>
-                </li>
+                  <title>{`${labelFor(d.family)} — ${d.count} (${Math.round((d.count / total) * 100)}%)`}</title>
+                </path>
               );
-            })}
-            {data.length === 0 && (
-              <li className="text-[10px] text-[var(--color-dim)] italic py-2">
-                {emptyLabel}
+            });
+          })()}
+
+          {/* Center label: mostra la slice hovered (count + pct).
+                Quando nessuna e' hovered, mostra il totale. */}
+          <text
+            x={CX}
+            y={CY - 4}
+            textAnchor="middle"
+            fontSize={focused ? 11 : 9}
+            fill={focused ? focused.color : "var(--color-dim)"}
+            fontWeight={700}
+            style={{ pointerEvents: "none", fontFamily: "inherit" }}
+          >
+            {focused ? labelFor(focused.family) : "totale"}
+          </text>
+          <text
+            x={CX}
+            y={CY + 11}
+            textAnchor="middle"
+            fontSize={13}
+            fill="var(--color-bright)"
+            fontWeight={700}
+            style={{ pointerEvents: "none", fontFamily: "inherit" }}
+          >
+            {focused ? `${focused.count}` : `${total}`}
+          </text>
+          {focusedPct != null && (
+            <text
+              x={CX}
+              y={CY + 22}
+              textAnchor="middle"
+              fontSize={9}
+              fill="var(--color-muted)"
+              style={{ pointerEvents: "none", fontFamily: "inherit" }}
+            >
+              {focusedPct}%
+            </text>
+          )}
+        </svg>
+
+        <ul
+          className="space-y-1.5 min-w-0"
+          onMouseLeave={() => setHovered(null)}
+        >
+          {/* Header: didascalia colonne. Stesso grid template delle
+                righe sotto così tutto si allinea verticalmente. Tipo a
+                sinistra, numeri subito accanto (non spinti a destra). */}
+          <li
+            className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem_2.25rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            aria-hidden
+          >
+            <span>tipo</span>
+            <span>n</span>
+            <span>%</span>
+            <span title="Score medio (0-100)">score</span>
+            <span title="Voto critico medio (0-10)">critic</span>
+          </li>
+          {data.map((d) => {
+            const pct = Math.round((d.count / total) * 100);
+            const isHover = hovered === d.family;
+            const dimmed = hovered != null && !isHover;
+            return (
+              <li
+                key={d.family}
+                onMouseEnter={() => setHovered(d.family)}
+                className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem_2.25rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
+                style={{
+                  cursor: "pointer",
+                  background: isHover ? "var(--color-row)" : "transparent",
+                  opacity: dimmed ? 0.45 : 1,
+                  transition: "background 0.15s ease, opacity 0.15s ease",
+                }}
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="inline-block w-2 h-2 rounded-sm shrink-0"
+                    style={{ background: d.color }}
+                    aria-hidden
+                  />
+                  <span
+                    className="truncate"
+                    style={{
+                      color: isHover
+                        ? "var(--color-bright)"
+                        : "var(--color-muted)",
+                    }}
+                    title={labelFor(d.family)}
+                  >
+                    {labelFor(d.family)}
+                  </span>
+                </span>
+                <span className="tabular-nums text-[var(--color-bright)] font-semibold">
+                  {d.count}
+                </span>
+                <span className="tabular-nums text-[var(--color-dim)]">
+                  {pct}%
+                </span>
+                <span
+                  className="tabular-nums"
+                  title="Score medio (0-100, solo posizioni scorate)"
+                  style={{
+                    color:
+                      d.avgScore == null
+                        ? "var(--color-dim)"
+                        : d.avgScore >= 75
+                          ? "var(--color-green)"
+                          : d.avgScore >= 55
+                            ? "var(--color-yellow)"
+                            : "var(--color-red)",
+                  }}
+                >
+                  {d.avgScore == null ? "—" : `${Math.round(d.avgScore)}`}
+                </span>
+                <span
+                  className="tabular-nums"
+                  title="Voto critico medio (0-10, solo posizioni revisionate)"
+                  style={{
+                    color:
+                      d.avgCritic == null
+                        ? "var(--color-dim)"
+                        : d.avgCritic >= 7
+                          ? "var(--color-green)"
+                          : d.avgCritic >= 5.5
+                            ? "var(--color-yellow)"
+                            : "var(--color-red)",
+                  }}
+                >
+                  {d.avgCritic == null ? "—" : d.avgCritic.toFixed(1)}
+                </span>
               </li>
-            )}
-          </ul>
-        </div>
+            );
+          })}
+          {data.length === 0 && (
+            <li className="text-[10px] text-[var(--color-dim)] italic py-2">
+              {emptyLabel}
+            </li>
+          )}
+        </ul>
+      </div>
     </div>
   );
 }

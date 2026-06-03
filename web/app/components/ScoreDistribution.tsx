@@ -9,7 +9,7 @@ type Props = {
   thresholdReady?: number; // soglia "ready" con linea verticale
   thresholdLabel?: string;
   maxScore?: number; // default 100 (es. 10 per critic_score 0-10)
-  binStep?: number;  // default 5 (es. 0.5 per critic_score)
+  binStep?: number; // default 5 (es. 0.5 per critic_score)
   decimals?: number; // decimali nei tick/tooltip (default 0)
 };
 
@@ -171,10 +171,7 @@ export default function ScoreDistribution({
             color={colorForFraction(stats.avg / maxScore)}
           />
           <Stat label="med" value={stats.median} />
-          <Stat
-            label="p25–p75"
-            value={`${stats.p25}–${stats.p75}`}
-          />
+          <Stat label="p25–p75" value={`${stats.p25}–${stats.p75}`} />
           <Stat label="n" value={stats.n} />
         </div>
       </div>
@@ -301,43 +298,45 @@ export default function ScoreDistribution({
         )}
 
         {/* Hover tooltip */}
-        {hoveredBin != null && hoveredCount > 0 && (() => {
-          const binX = PAD_LEFT + hoveredBin * barW;
-          const tipX = Math.min(W - 110, Math.max(0, binX - 50));
-          const tipY = Math.max(0, by(hoveredCount) - 38);
-          return (
-            <g style={{ pointerEvents: "none" }}>
-              <rect
-                x={tipX}
-                y={tipY}
-                width={108}
-                height={32}
-                rx={4}
-                fill="var(--color-panel)"
-                stroke="var(--color-border)"
-              />
-              <text
-                x={tipX + 8}
-                y={tipY + 14}
-                fontSize={10}
-                fill="var(--color-bright)"
-                fontWeight={700}
-                style={{ fontFamily: "inherit" }}
-              >
-                {hoveredLo}–{hoveredHi}
-              </text>
-              <text
-                x={tipX + 8}
-                y={tipY + 27}
-                fontSize={9}
-                fill="var(--color-muted)"
-                style={{ fontFamily: "inherit" }}
-              >
-                {hoveredCount} · {hoveredPct}%
-              </text>
-            </g>
-          );
-        })()}
+        {hoveredBin != null &&
+          hoveredCount > 0 &&
+          (() => {
+            const binX = PAD_LEFT + hoveredBin * barW;
+            const tipX = Math.min(W - 110, Math.max(0, binX - 50));
+            const tipY = Math.max(0, by(hoveredCount) - 38);
+            return (
+              <g style={{ pointerEvents: "none" }}>
+                <rect
+                  x={tipX}
+                  y={tipY}
+                  width={108}
+                  height={32}
+                  rx={4}
+                  fill="var(--color-panel)"
+                  stroke="var(--color-border)"
+                />
+                <text
+                  x={tipX + 8}
+                  y={tipY + 14}
+                  fontSize={10}
+                  fill="var(--color-bright)"
+                  fontWeight={700}
+                  style={{ fontFamily: "inherit" }}
+                >
+                  {hoveredLo}–{hoveredHi}
+                </text>
+                <text
+                  x={tipX + 8}
+                  y={tipY + 27}
+                  fontSize={9}
+                  fill="var(--color-muted)"
+                  style={{ fontFamily: "inherit" }}
+                >
+                  {hoveredCount} · {hoveredPct}%
+                </text>
+              </g>
+            );
+          })()}
       </svg>
     </div>
   );

@@ -9,10 +9,10 @@
 //   3. Fai LOGOUT dal web (così cade nel ramo "local SQLite").
 //   4. Refresh /dashboard → vedi 251 positions reali.
 
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const Database = require('better-sqlite3');
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Database from 'better-sqlite3';
 
 const TOOL_RESULTS_DIR = path.join(
   os.homedir(),

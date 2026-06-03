@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { verifyBearerToken } from '@/lib/cloud-sync/auth'
+import { NextRequest, NextResponse } from "next/server";
+import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 
-export const dynamic = 'force-dynamic'
+export const dynamic = "force-dynamic";
 
 // GET /api/cloud-sync/team-commands?status=pending
 // Subscriber-side polling endpoint per VPS container. Auth via
@@ -16,31 +16,37 @@ export const dynamic = 'force-dynamic'
 // la PATCH gemella usano jht_sync_ (admin lookup user_id).
 
 export async function GET(req: NextRequest) {
-  const auth = await verifyBearerToken(req)
-  if (!auth.ok) return auth.res
-  const { userId, admin } = auth.data
+  const auth = await verifyBearerToken(req);
+  if (!auth.ok) return auth.res;
+  const { userId, admin } = auth.data;
 
-  const url = new URL(req.url)
-  const status = (url.searchParams.get('status') || 'pending').toLowerCase()
-  const validStatus = new Set(['pending', 'running', 'done', 'error'])
+  const url = new URL(req.url);
+  const status = (url.searchParams.get("status") || "pending").toLowerCase();
+  const validStatus = new Set(["pending", "running", "done", "error"]);
   if (!validStatus.has(status)) {
-    return NextResponse.json({ ok: false, error: 'invalid status filter' }, { status: 400 })
+    return NextResponse.json(
+      { ok: false, error: "invalid status filter" },
+      { status: 400 },
+    );
   }
-  const limit = Math.min(parseInt(url.searchParams.get('limit') || '20', 10) || 20, 100)
+  const limit = Math.min(
+    parseInt(url.searchParams.get("limit") || "20", 10) || 20,
+    100,
+  );
 
   const { data, error } = await admin
-    .from('team_commands')
-    .select('id, action, payload, requested_at, status')
-    .eq('user_id', userId)
-    .eq('status', status)
-    .order('requested_at', { ascending: true })
-    .limit(limit)
+    .from("team_commands")
+    .select("id, action, payload, requested_at, status")
+    .eq("user_id", userId)
+    .eq("status", status)
+    .order("requested_at", { ascending: true })
+    .limit(limit);
 
   if (error) {
     return NextResponse.json(
       { ok: false, error: `query failed: ${error.message}` },
       { status: 500 },
-    )
+    );
   }
-  return NextResponse.json({ ok: true, commands: data || [] })
+  return NextResponse.json({ ok: true, commands: data || [] });
 }

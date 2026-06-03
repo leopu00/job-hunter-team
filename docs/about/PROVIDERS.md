@@ -1,6 +1,6 @@
 # Providers & Pricing
 
-JHT runs on AI subscriptions, **not pay-per-token**. This is a deliberate design choice — see [ADR-0004](adr/0004-subscription-only-no-api-keys.md) for the full reasoning. Short version: a team of 7 agents working in parallel burns through pay-per-use credits in hours; subscriptions cost ~5x less per token.
+JHT runs on AI subscriptions, **not pay-per-token**. This is a deliberate design choice — see [ADR-0004](adr/0004-subscription-only-no-api-keys.md) for the full reasoning. Short version: a team of 10 agents working in parallel burns through pay-per-use credits in hours; subscriptions cost ~5x less per token.
 
 This page tells you which subscription to pick.
 

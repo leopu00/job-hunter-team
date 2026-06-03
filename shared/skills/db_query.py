@@ -12,6 +12,7 @@ Uso:
   python3 db_query.py next-for-scorer       # posizioni checked senza score
   python3 db_query.py next-for-scrittore    # posizioni scored >= 50 senza application
   python3 db_query.py next-for-critico      # application in review senza verdict
+  python3 db_query.py next-for-geocoding    # posizioni con geocoding richiesto dall'utente
   python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
                                             # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
@@ -332,15 +333,22 @@ def next_for_role(role):
         label = "Posizioni checked senza score"
 
     elif role == 'scrittore':
+        # Writer-on-demand (V6, 2026-05-29): filtro `write_requested = 1`.
+        # Il CV viene scritto solo per le posizioni che l'utente ha
+        # esplicitamente selezionato dal dashboard web o via Telegram
+        # (`/cv <id>`). Vedi BACKLOG [JHT-WRITER-ON-DEMAND].
         rows = conn.execute("""
             SELECT p.id, p.title, p.company, s.total_score
             FROM positions p
             JOIN scores s ON s.position_id = p.id
             LEFT JOIN applications a ON a.position_id = p.id
-            WHERE s.total_score >= 50 AND a.id IS NULL AND p.status = 'scored'
-            ORDER BY s.total_score DESC
+            WHERE p.write_requested = 1
+              AND s.total_score >= 50
+              AND a.id IS NULL
+              AND p.status = 'scored'
+            ORDER BY p.write_requested_at ASC, s.total_score DESC
         """).fetchall()
-        label = "Posizioni scored >= 50 senza application"
+        label = "Posizioni con CV richiesto dall'utente (scored >= 50, no application)"
 
     elif role == 'critico':
         rows = conn.execute("""
@@ -351,6 +359,20 @@ def next_for_role(role):
             ORDER BY a.id ASC
         """).fetchall()
         label = "Application in review senza verdict"
+
+    elif role == 'geocoding':
+        # Geocoding-on-demand (V8, 2026-05-31): filtro `geocode_requested = 1`.
+        # L'Analista esegue `office-geocoding` solo per le posizioni che
+        # l'utente ha esplicitamente selezionato dal dashboard web (button
+        # "Geocodifica") o via Telegram. Replica del pattern Writer-on-demand.
+        rows = conn.execute("""
+            SELECT p.id, p.title, p.company, p.loc_city, p.loc_country_code
+            FROM positions p
+            WHERE p.geocode_requested = 1
+              AND (p.office_geocoded IS NULL OR p.office_geocoded = 0)
+            ORDER BY p.geocode_requested_at ASC
+        """).fetchall()
+        label = "Posizioni con geocoding richiesto dall'utente (non ancora geocodate)"
 
     else:
         print(f"Ruolo sconosciuto: {role}")
@@ -485,6 +507,7 @@ def main():
     sub.add_parser('next-for-scorer')
     sub.add_parser('next-for-scrittore')
     sub.add_parser('next-for-critico')
+    sub.add_parser('next-for-geocoding')
 
     # application (anti-riscrittura check)
     ap = sub.add_parser('application')

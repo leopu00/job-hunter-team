@@ -14,7 +14,7 @@ maintainer. Reviewer: the team (post in #launch when ready). Not published yet.
 HN titles get 60 characters max in the front-page list. Test the variants in
 order; if one feels too much like a pitch, fall back to the next.
 
-1. `Show HN: Job Hunter Team — 7-agent pipeline to apply to jobs for you`
+1. `Show HN: Job Hunter Team — 10-agent pipeline to apply to jobs for you`
 2. `Show HN: I open-sourced the AI team that found me 5 interviews`
 3. `Show HN: A Docker-packaged team of AI agents that hunts jobs`
 4. `Show HN: Self-hosted multi-agent job search (Claude/Kimi/Codex)`
@@ -50,9 +50,11 @@ one line. The second one performs better on engagement but reads more
 >
 > **What's in the box**
 >
-> - 7 specialized agents (Captain, Sentinel, Scout, Analyst, Scorer,
->   Writer, Critic) — each with its own prompt and a small set of
->   colocated skills.
+> - 10 specialized agents — Captain (coordinator), Sentinel (budget
+>   watcher), Doctor (liveness checks), Mentor (career coach),
+>   Assistant (user-facing chat), plus the pipeline itself:
+>   Scout → Analyst → Scorer → Writer → Critic. Each with its own
+>   prompt and a small set of colocated skills.
 > - A monitoring layer (Bridge + Sentinel) that calibrates token usage
 >   to stay inside the subscription window — overshoot is what kills
 >   "AI-agent" projects in practice.

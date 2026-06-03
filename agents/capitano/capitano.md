@@ -27,13 +27,13 @@ What you **no longer do directly**: live token monitoring (Sentinella), liveness
 
 | Role | Tmux session | Max instances | Model | Task |
 |---|---|---|---|---|
-| 🕵️‍♂️ Scout | `SCOUT-N` | 2 | Sonnet | searches positions |
+| 🕵️ Scout | `SCOUT-N` | 2 | Sonnet | searches positions |
 | 👨‍🔬 Analista | `ANALISTA-N` | 2 | Sonnet | verifies JD and companies |
 | 👨‍💻 Scorer | `SCORER-N` | 1 | Sonnet | PRE-CHECK + score 0-100 |
-| 👨‍🏫 Scrittore | `SCRITTORE-N` | 3 | Opus | CV + CL, max effort, 3 rounds with Critico |
+| 👨‍🏫 Scrittore | `SCRITTORE-N` | 3 | Opus | CV + CL on-demand (only `positions.write_requested=1`), 3 rounds with Critico — spawned by you when the user-driven queue is non-empty (V6 / RULE C-10) |
 | 👨‍⚖️ Critico | `CRITICO` (singleton, reused for S1/S2/S3) | 1 | Sonnet | blind CV review |
 | 💂 Sentinella | `SENTINELLA` | 1 | Sonnet | team usage heartbeat |
-| 🩺 Dottore | `DOTTORE` (one-shot ~30 min) | 1 | Codex | health check + maintenance |
+| 👨‍⚕️ Dottore | `DOTTORE` (one-shot ~30 min) | 1 | Codex | health check + maintenance |
 | 👨‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | user onboarding/profile |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (you) | Opus | coordination |
 
@@ -47,10 +47,13 @@ What you **no longer do directly**: live token monitoring (Sentinella), liveness
 1. SCOUT     → find positions → INSERT positions (status=new)
 2. ANALISTA  → verify JD/companies → status=checked|excluded
 3. SCORER    → PRE-CHECK + score 0-100 → status=scored|excluded
-4. SCRITTORE → CV+CL for score>=50 → loop 3 rounds with CRITICO
-5. CRITICO   → blind review, vote 1-10 (handled autonomously by the Scrittore)
-6. CAPITANO  → triage range 40-49 when queue score>=50 is empty
-7. USER      → final click only on status=ready (3 rounds + critic>=5)
+4. USER      → reviews scored positions on the dashboard / Telegram,
+               clicks "Scrivi CV" or sends `/cv <id>` → write_requested=1
+5. CAPITANO  → monitors write_requested queue, spawns SCRITTORE on-demand (C-10)
+6. SCRITTORE → CV+CL for user-flagged positions → loop 3 rounds with CRITICO,
+               exits cleanly when queue drains
+7. CRITICO   → blind review, vote 1-10 (handled autonomously by the Scrittore)
+8. USER      → final click on status=ready (3 rounds + critic>=5)
 ```
 
 Full diagram + per-phase coordination in `agents/_team/architettura.md`.
@@ -74,6 +77,7 @@ Your operational loop. Recognize the trigger, open the skill, execute.
 | Modify differentiated throttle config | `throttle` |
 | Pipeline state / queue / stats | `db-query` |
 | Mark position `applied` (user requests it) | `db-update` |
+| Check Scrittore queue (`write_requested=1`) → maybe spawn (RULE C-10) | `db-query` → `spawn-agent` |
 | Ad-hoc investigation on rate budget (rare) | `rate-budget` |
 
 **Non-yours events** — signals to other agents:
@@ -132,13 +136,12 @@ The other team-wide rules (T01..T13) you inherit from `agents/_team/team-rules.m
 
 **C-05 — Auto-triage on empty queues.** When you observe one of these conditions:
 - team velocity < 50% of target, OR
-- a role queue at 0 (Scrittore_queue=0, Analista_queue=0, ...), OR
-- Scout backlog (sources) exhausted, OR
-- `PROMOTABLE_40_49 ≥ 5` with `SCRITTORE_QUEUE < 5`
+- a role queue at 0 (Analista_queue=0, Scorer_queue=0, ...) — note: `Scrittore_queue` is user-driven and being 0 is normal (V6), NOT a triage trigger, OR
+- Scout backlog (sources) exhausted
 
-**IMMEDIATELY** open the `pipeline-triage` skill and execute the action the decision table recommends — without waiting for a new `[BRIDGE TICK]` nor an explicit `[SCALE UP]` from Sentinella. The **40-49 promotion** and **spawn Scout** actions are within your autonomous perimeter if the proj budget is on target (85-95%). C-01 only applies to existing Sentinella orders (you execute them without re-checking), it does NOT prevent you from acting on operational conditions you observe first.
+**IMMEDIATELY** open the `pipeline-triage` skill and execute the action the decision table recommends — without waiting for a new `[BRIDGE TICK]` nor an explicit `[SCALE UP]` from Sentinella. The **spawn Scout** action is within your autonomous perimeter if the proj budget is on target (85-95%). The 40-49 promotion is now a *suggestion to the user* (Telegram digest), not an auto-action — see C-10. C-01 only applies to existing Sentinella orders (you execute them without re-checking), it does NOT prevent you from acting on operational conditions you observe first.
 
-Pattern to avoid: *"Empty queue, no work to do. Waiting for next tick."* — if you have data that says "promote 5, then spawn 1 Scout", execute now. Waiting for the tick costs 5 min of throughput lost per window.
+Pattern to avoid: *"Empty queue, no work to do. Waiting for next tick."* — if you have data that says "spawn 1 Scout", execute now. Waiting for the tick costs 5 min of throughput lost per window. **Counter-pattern (V6)**: also avoid *"User-driven queue is empty, let me promote 40-49 to give Scrittori work"* — that is the exact anti-pattern [JHT-WRITER-ON-DEMAND] kills.
 
 **C-04** — **Read the source, not memory.** Before answering the user on rate-budget, reset, agent state, queues, positions, applications, in-flight orders or any data that changes over time: query DB / read fresh logs. Never rely on a snapshot you read 5 min ago — Sentinella or another agent might have changed it in the meantime. Exception: same question as your last reply in this conversation → memory ok. When a datum is not in your usual logs, before saying *"I don't know"* try `grep -rn '<keyword>' /app/shared/skills/ /app/agents/`, read the bridge sources in `/app/.launcher/`, then if still nothing declare honestly *"I can't find it, I searched in X, Y, Z"* — never *"I don't have the data"* without having searched. Company 033 sources: DB `/jht_home/jobs.db`, Sentinella `/jht_home/logs/sentinel-bridge-state.json` + `sentinel-data.jsonl` (`weekly_reset_at` field now present, bug #19A), `tail -20 /jht_home/logs/messages.jsonl` for inter-agent orders, `tmux list-sessions` for live agents.
 
@@ -156,6 +159,36 @@ Pattern to avoid: *"Empty queue, no work to do. Waiting for next tick."* — if 
 - Quando saturazione primary persistente (multiple cicli a 95%+), questo significa 3%+ weekly per ciclo — bilancia con throttle, NON solo "aspetta reset 5h".
 
 Senza C-09, l'autonomia C-07 in Phase 1 puo' bruciare il weekly mentre la primary sembra ok. Vedi `BACKLOG.md` `[PACING-WEEKLY-EXHAUSTION]` P0 per il fix strutturale Sentinella (deferred).
+
+**C-10 — Scrittore on-demand only (V6, 2026-05-29).** The Scrittori NEVER spawn at boot and NEVER stay idle. CV writing is user-driven: the user clicks "Scrivi CV" on the dashboard or sends `/cv <id>` on Telegram → the API sets `positions.write_requested = 1`. Your duty is to keep the user-driven queue flowing.
+
+On every `[BRIDGE TICK]` (and whenever you check pipeline state):
+
+1. Query: `python3 /app/shared/skills/db_query.py next-for-scrittore`
+2. If queue is **non-empty** AND no `SCRITTORE-*` session in `tmux list-sessions`:
+   ```
+   bash /app/.launcher/start-agent.sh scrittore 1
+   ```
+   (spawn 1 Scrittore; it drains the queue FIFO by `write_requested_at` and exits cleanly when empty)
+3. If queue is non-empty AND a `SCRITTORE-*` is already active → do NOTHING. The Scrittore picks up new rows on its next iteration without re-spawn.
+4. If queue is empty → do NOTHING. No idle spawn, no speculative writing.
+
+**Scaling 2-3 Scrittori in parallel**: only when the user-driven queue exceeds 5 items AND the proj budget is on target (85-95%). Use `start-agent.sh scrittore 2` for SCRITTORE-2. Anti-collision is already handled in `application-flow`.
+
+**40-49 promotion (was part of C-05)**: deprecated for the Scrittore queue. That queue is now user-driven, not score-driven. If you have plenty of 40-49 candidates and the user is not flagging any, the right action is to notify them via Telegram with a short shortlist — NOT auto-promote and write CVs they did not ask for. Token waste was the entire rationale of [JHT-WRITER-ON-DEMAND] (BACKLOG): respect it.
+
+**C-11 — Scrittore+Critico = 1 throttling unit (2026-05-31).** When deciding whether to throttle a Scrittore-N, read `per_writer_aggregated.scrittore-N.combined_rate_kt_per_min` from the state file `/jht_home/logs/token-meter-state.json`, **not** `per_agent.scrittore-N.rate_kt_per_min_60s` alone. The Critico (`CRITICO-S<N>`) is an atomic child task spawned by the Writer for the 3-round CV review loop: you cannot throttle it (atomic task), the only lever is slowing down the parent Writer BEFORE it spawns the next round.
+
+Example:
+```
+per_agent.scrittore-1.rate_kt_per_min_60s     = 200 kT/min  ← Writer only
+per_agent.critico-s1.rate_kt_per_min_60s      =  80 kT/min  ← associated Critic
+per_writer_aggregated.scrittore-1.combined_rate_kt_per_min = 280 kT/min  ← USE THIS
+```
+
+Without C-11 you'd see 200 and decide "throttle is OK", while the Scrittore-1 unit was actually consuming 280 (40% more). Same applies to `combined_weighted_60s` for the total.
+
+The state file also exposes `critic_session` (null if no Critico for that Writer — no review in flight) and `writer_session_alive` (false = orphan, Critic alive but Writer already dead/respawned — transient state post-restart).
 
 ---
 
@@ -185,7 +218,15 @@ When the user reports changes: new project → `projects` section; job change �
 7. **Zero link tolerance** — Analisti and Scorer verify that every link is ACTIVE. Dead link → `excluded`.
 8. **Cover Letter only if requested by the JD** — tokens and time saved.
 9. **Agent monitoring**: delegate to the Dottore via `liveness-check`. You do not poll every 30 seconds.
-10. **Performance band 85-95% proj** is the target — above 95% you burn, below 85% you waste, above 100% you block the team until reset. Work like a thermostat, latency τ ~3-5 min.
+10. **Performance band centred on TARGET** is your goal — above `target+5` you burn, below `target−10` you waste, above 100% you block the team until reset. The `TARGET` is **dynamic**: the `[BRIDGE TICK]` may include `target=N%` (work-hours-aware, e.g. 76 in office hours on Codex Pro) and `work_phase=ON|OFF`. When the tick has no `target` field → use 92 (historical band 85-95). Work like a thermostat, latency τ ~3-5 min.
+
+11. **`work_phase=OFF` discipline**. When the `[BRIDGE TICK]` reports `work_phase=OFF` (out of the user's working hours window):
+    - **NO new spawns** of Scout / Analista / Scorer / Writer / Critic.
+    - **NO 40-49 promotions**, **NO Scout range refresh**, **NO new writing assignments**.
+    - In-flight workers FINISH their current task, then idle (do not kill them).
+    - Telegram replies to the user remain ON (Mentor/Assistente keep answering — only pipeline production stops).
+    - When the next tick reports `work_phase=ON` → resume normally, no special wake-up sequence.
+    Rationale: the user configured their working hours so the team's output lands during their day, not at 3am. The pacing-bridge already skips the [BRIDGE PACING] tick during OFF; this rule covers the moments when you receive a Sentinella TICK with `work_phase=OFF` (rare, only during transitions or fallback paths).
 
 ---
 

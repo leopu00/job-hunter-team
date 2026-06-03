@@ -55,9 +55,15 @@ export async function GET() {
     // Per ogni target (capitano/scout/...) o per 'all', l'ultimo done con
     // action='start' significa attivo, 'stop' significa inattivo.
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json({ agents: [], isLocalhost: false, remote: true });
+      return NextResponse.json({
+        agents: [],
+        isLocalhost: false,
+        remote: true,
+      });
     }
     const { data: cmds } = await supabase
       .from("team_commands")
@@ -68,8 +74,11 @@ export async function GET() {
       .limit(50);
     const lastFor: Record<string, "start" | "stop"> = {};
     for (const c of cmds || []) {
-      const target = String((c.payload as { target?: string })?.target ?? "all").toLowerCase();
-      const act = c.action === "start" ? "start" : c.action === "stop" ? "stop" : null;
+      const target = String(
+        (c.payload as { target?: string })?.target ?? "all",
+      ).toLowerCase();
+      const act =
+        c.action === "start" ? "start" : c.action === "stop" ? "stop" : null;
       if (!act) continue;
       if (target === "all") {
         // team-wide: setta tutti gli agenti che non hanno già un override più recente

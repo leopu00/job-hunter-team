@@ -41,7 +41,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (!isSupabaseConfigured) return EMPTY_STATS
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('status')
+  const { data, error } = await supabase.from('positions').select('status').is('deleted_at', null)
   if (error || !data) return EMPTY_STATS
 
   const counts = data.reduce((acc: Record<string, number>, row: any) => {
@@ -115,42 +115,49 @@ async function getRecentlyTouchedPositionsCloud(limit: number): Promise<Recently
       .from('positions')
       .select('id, found_at, found_by')
       .not('found_at', 'is', null)
+      .is('deleted_at', null)
       .order('found_at', { ascending: false })
       .limit(sampleLimit),
     supabase
       .from('positions')
       .select('id, last_checked')
       .not('last_checked', 'is', null)
+      .is('deleted_at', null)
       .order('last_checked', { ascending: false })
       .limit(sampleLimit),
     supabase
       .from('scores')
       .select('position_id, scored_at, scored_by')
       .not('scored_at', 'is', null)
+      .is('deleted_at', null)
       .order('scored_at', { ascending: false })
       .limit(sampleLimit),
     supabase
       .from('applications')
       .select('position_id, written_at, written_by')
       .not('written_at', 'is', null)
+      .is('deleted_at', null)
       .order('written_at', { ascending: false })
       .limit(sampleLimit),
     supabase
       .from('applications')
       .select('position_id, critic_reviewed_at, reviewed_by')
       .not('critic_reviewed_at', 'is', null)
+      .is('deleted_at', null)
       .order('critic_reviewed_at', { ascending: false })
       .limit(sampleLimit),
     supabase
       .from('applications')
       .select('position_id, applied_at')
       .not('applied_at', 'is', null)
+      .is('deleted_at', null)
       .order('applied_at', { ascending: false })
       .limit(sampleLimit),
     supabase
       .from('applications')
       .select('position_id, response_at')
       .not('response_at', 'is', null)
+      .is('deleted_at', null)
       .order('response_at', { ascending: false })
       .limit(sampleLimit),
   ])
@@ -208,6 +215,7 @@ async function getRecentlyTouchedPositionsCloud(limit: number): Promise<Recently
       )
     `)
     .in('id', ids)
+    .is('deleted_at', null)
 
   if (error || !data) return []
 
@@ -261,6 +269,7 @@ export async function getRecentPositions(limit = 15): Promise<(PositionWithScore
     .from('positions')
     .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, url, source, found_at, last_checked, status, notes, scores ( total_score, scored_at )')
     .not('status', 'eq', 'excluded')
+    .is('deleted_at', null)
     .order('found_at', { ascending: false })
     .limit(limit)
   if (error || !data) return []
@@ -325,6 +334,7 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
   let query = supabase
     .from('positions')
     .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
+    .is('deleted_at', null)
     .order('found_at', { ascending: false })
 
   if (opts?.statuses?.length) query = query.in('status', opts.statuses)
@@ -388,10 +398,10 @@ export async function getPositionById(id: string): Promise<{
 
   const supabase = await createClient()
   const [posRes, scoreRes, hlRes, appRes] = await Promise.all([
-    supabase.from('positions').select('*').eq('id', id).single(),
-    supabase.from('scores').select('*').eq('position_id', id).maybeSingle(),
+    supabase.from('positions').select('*').eq('id', id).is('deleted_at', null).single(),
+    supabase.from('scores').select('*').eq('position_id', id).is('deleted_at', null).maybeSingle(),
     supabase.from('position_highlights').select('*').eq('position_id', id).order('type'),
-    supabase.from('applications').select('*').eq('position_id', id).maybeSingle(),
+    supabase.from('applications').select('*').eq('position_id', id).is('deleted_at', null).maybeSingle(),
   ])
   if (posRes.error || !posRes.data) return null
   const position = posRes.data as Position
@@ -410,7 +420,7 @@ export async function getApplications(): Promise<ApplicationWithPosition[]> {
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('*, positions ( id, title, company, status, url )').order('written_at', { ascending: false })
+  const { data, error } = await supabase.from('applications').select('*, positions ( id, title, company, status, url )').is('deleted_at', null).order('written_at', { ascending: false })
   if (error || !data) return []
   return data as ApplicationWithPosition[]
 }
@@ -422,7 +432,7 @@ export async function getApplicationsByStatus(status: string): Promise<Applicati
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('*, positions ( id, title, company, status, url )').eq('status', status).order('response_at', { ascending: false })
+  const { data, error } = await supabase.from('applications').select('*, positions ( id, title, company, status, url )').eq('status', status).is('deleted_at', null).order('response_at', { ascending: false })
   if (error || !data) return []
   return data as ApplicationWithPosition[]
 }
@@ -434,7 +444,7 @@ export async function getRisposte(): Promise<ApplicationWithPosition[]> {
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('*, positions ( id, title, company, status, url )').or('status.eq.response,response.not.is.null').order('response_at', { ascending: false })
+  const { data, error } = await supabase.from('applications').select('*, positions ( id, title, company, status, url )').or('status.eq.response,response.not.is.null').is('deleted_at', null).order('response_at', { ascending: false })
   if (error || !data) return []
   const seen = new Set<string>()
   return (data as ApplicationWithPosition[]).filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true })
@@ -447,7 +457,7 @@ export async function getRisposteCount(): Promise<number> {
   if (!isSupabaseConfigured) return 0
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('id').or('status.eq.response,response.not.is.null')
+  const { data, error } = await supabase.from('applications').select('id').or('status.eq.response,response.not.is.null').is('deleted_at', null)
   if (error || !data) return 0
   return new Set(data.map((r: any) => r.id)).size
 }
@@ -461,7 +471,7 @@ export async function getScoreDistribution() {
   if (!isSupabaseConfigured) return empty
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('score, scores(total_score)').not('status', 'eq', 'excluded')
+  const { data, error } = await supabase.from('positions').select('score, scores(total_score)').not('status', 'eq', 'excluded').is('deleted_at', null)
   if (error || !data) return empty
 
   const scores = data.map((r: any) => (r.score as number | null) ?? (r as any).scores?.total_score ?? null)
@@ -483,7 +493,7 @@ export async function getSourceDistribution(): Promise<Array<{ source: string; c
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('source').not('status', 'eq', 'excluded')
+  const { data, error } = await supabase.from('positions').select('source').not('status', 'eq', 'excluded').is('deleted_at', null)
   if (error || !data) return []
   const counts: Record<string, number> = {}
   for (const row of data) { const s = row.source ?? 'sconosciuta'; counts[s] = (counts[s] ?? 0) + 1 }
@@ -499,9 +509,10 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, location, office_lat, office_lon, is_remote, scores ( total_score )')
+    .select('id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, is_remote, scores ( total_score )')
     .not('status', 'eq', 'excluded')
     .not('office_lat', 'is', null)
+    .is('deleted_at', null)
   if (error || !data) return []
   return data.map((p: any) => {
     const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
@@ -510,20 +521,92 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
       title: p.title,
       company: p.company,
       status: p.status,
+      role_family: p.role_family ?? null,
       score: typeof score?.total_score === 'number' ? score.total_score : null,
       lat: p.office_lat,
       lon: p.office_lon,
       is_remote: !!p.is_remote,
       location: p.location ?? null,
+      loc_country: p.loc_country ?? null,
+      loc_city: p.loc_city ?? null,
+      office_address: p.office_address ?? null,
     }
   })
 }
 
-// ── Conteggio posizioni per location (per /map sidebar paesi) ─────
-// "Location" è un campo libero, non normalizzato (es. "Milan, IT",
-// "Company", "London"). Non standardizziamo qui: l'utente vede i
-// dati grezzi come sono nel DB.
-export async function getPositionLocations(): Promise<Array<{ location: string; count: number }>> {
+// ── Company gerarchico per /map sidebar Location ──────────────────────
+// Country → cities → positions. Usa `loc_country`/`loc_city` strutturati
+// (popolati dall'analista via skill location-enrichment). Le positions
+// senza loc_country finiscono sotto "(unknown)"; quelle senza loc_city
+// sotto una città chiamata "(country-only)".
+export type LocationPositionLite = {
+  id: string
+  title: string | null
+  company: string | null
+  score: number | null
+}
+export type LocationCity = {
+  city: string | null
+  count: number
+  positions: LocationPositionLite[]
+}
+export type LocationCountry = {
+  country: string
+  count: number
+  cities: LocationCity[]
+}
+
+function buildLocationCompany(rows: Array<{
+  id: string
+  title: string | null
+  company: string | null
+  loc_country: string | null
+  loc_city: string | null
+  score: number | null
+}>): LocationCountry[] {
+  const byCountry = new Map<string, Map<string | null, LocationPositionLite[]>>()
+  for (const r of rows) {
+    const country = r.loc_country?.trim() || '(unknown)'
+    const city = r.loc_city?.trim() || null
+    const cMap = byCountry.get(country) ?? new Map<string | null, LocationPositionLite[]>()
+    const arr = cMap.get(city) ?? []
+    arr.push({
+      id: r.id,
+      title: r.title,
+      company: r.company,
+      score: r.score,
+    })
+    cMap.set(city, arr)
+    byCountry.set(country, cMap)
+  }
+  const out: LocationCountry[] = []
+  for (const [country, cMap] of byCountry) {
+    const cities: LocationCity[] = []
+    let total = 0
+    for (const [city, positions] of cMap) {
+      // Ordina positions per score desc (null in fondo)
+      positions.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
+      cities.push({ city, count: positions.length, positions })
+      total += positions.length
+    }
+    // City con city=null in fondo
+    cities.sort((a, b) => {
+      if (a.city == null) return 1
+      if (b.city == null) return -1
+      return b.count - a.count
+    })
+    out.push({ country, count: total, cities })
+  }
+  // Country sorted by count desc, "(unknown)" in fondo
+  out.sort((a, b) => {
+    if (a.country === '(unknown)') return 1
+    if (b.country === '(unknown)') return -1
+    return b.count - a.count
+  })
+  return out
+}
+
+export async function getPositionLocations(): Promise<LocationCountry[]> {
   const w = await ws()
   if (w) { try { return local.getPositionLocationsLocal(w) } catch { /* fall through */ } }
   if (!isSupabaseConfigured) return []
@@ -531,17 +614,22 @@ export async function getPositionLocations(): Promise<Array<{ location: string; 
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('location')
+    .select('id, title, company, loc_country, loc_city, scores ( total_score )')
     .not('status', 'eq', 'excluded')
+    .is('deleted_at', null)
   if (error || !data) return []
-  const counts: Record<string, number> = {}
-  for (const row of data) {
-    const loc = (row as any).location ?? '—'
-    counts[loc] = (counts[loc] ?? 0) + 1
-  }
-  return Object.entries(counts)
-    .map(([location, count]) => ({ location, count }))
-    .sort((a, b) => b.count - a.count)
+  const rows = (data as any[]).map(p => {
+    const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    return {
+      id: String(p.id),
+      title: p.title ?? null,
+      company: p.company ?? null,
+      loc_country: p.loc_country ?? null,
+      loc_city: p.loc_city ?? null,
+      score: typeof s?.total_score === 'number' ? s.total_score : null,
+    }
+  })
+  return buildLocationCompany(rows)
 }
 
 // ── Positions SENZA coordinate ufficio (per "remote bucket" /map) ─
@@ -558,6 +646,8 @@ export type PositionNoCoord = {
   score: number | null
   is_remote: boolean
   location: string | null
+  loc_country: string | null
+  loc_city: string | null
 }
 export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
   const w = await ws()
@@ -567,9 +657,10 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, role_family, office_lat, is_remote, location, scores ( total_score )')
+    .select('id, title, company, status, role_family, office_lat, is_remote, location, loc_country, loc_city, scores ( total_score )')
     .not('status', 'eq', 'excluded')
     .is('office_lat', null)
+    .is('deleted_at', null)
   if (error || !data) return []
   return (data as any[]).map((p) => {
     const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
@@ -582,6 +673,8 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
       score: typeof score?.total_score === 'number' ? score.total_score : null,
       is_remote: !!p.is_remote,
       location: p.location ?? null,
+      loc_country: p.loc_country ?? null,
+      loc_city: p.loc_city ?? null,
     }
   })
 }
@@ -612,6 +705,7 @@ export async function getPositionStateHistory(): Promise<PositionStateHistory[]>
   const { data, error } = await supabase
     .from('positions')
     .select('id, status, found_at, last_checked, scores(scored_at), applications(written_at, critic_reviewed_at, critic_verdict, applied_at, response_at)')
+    .is('deleted_at', null)
   if (error || !data) return []
   return (data as any[]).map((p) => {
     const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
@@ -643,6 +737,8 @@ export async function getCriticScores(): Promise<number[]> {
     .select('critic_score, positions!inner(status)')
     .not('critic_score', 'is', null)
     .not('positions.status', 'eq', 'excluded')
+    .is('deleted_at', null)
+    .is('positions.deleted_at', null)
   if (error || !data) return []
   return data
     .map((r: any) => r.critic_score)
@@ -666,6 +762,7 @@ export async function getPositionTypeDistribution(): Promise<RoleFamilyCount[]> 
     .from('positions')
     .select('role_family, score, scores(total_score), applications(critic_score)')
     .not('status', 'eq', 'excluded')
+    .is('deleted_at', null)
   if (error || !data) return []
   const rows = (data as any[]).map((r) => {
     const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores
@@ -686,7 +783,7 @@ export async function getPositionsByStatus(): Promise<Record<string, number>> {
   if (!isSupabaseConfigured) return {}
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('status')
+  const { data, error } = await supabase.from('positions').select('status').is('deleted_at', null)
   if (error || !data) return {}
   return data.reduce((acc: Record<string, number>, row: any) => { acc[row.status] = (acc[row.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
 }
@@ -699,8 +796,8 @@ export async function getScoutStats() {
 
   const supabase = await createClient()
   const [posRes, appRes] = await Promise.all([
-    supabase.from('positions').select('id, found_by, status'),
-    supabase.from('applications').select('position_id').or('status.eq.response,response.not.is.null'),
+    supabase.from('positions').select('id, found_by, status').is('deleted_at', null),
+    supabase.from('applications').select('position_id').or('status.eq.response,response.not.is.null').is('deleted_at', null),
   ])
   if (posRes.error || !posRes.data) return []
   const respondedPositionIds = new Set((appRes.data as any[] ?? []).map((a: any) => a.position_id))
@@ -723,7 +820,7 @@ export async function getScorerStats() {
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('scores').select('scored_by, total_score')
+  const { data, error } = await supabase.from('scores').select('scored_by, total_score').is('deleted_at', null)
   if (error || !data) return []
   const grouped: Record<string, number[]> = {}
   for (const row of data) { const key = row.scored_by ?? 'sconosciuto'; if (!grouped[key]) grouped[key] = []; grouped[key].push(row.total_score) }
@@ -740,7 +837,7 @@ export async function getScrittoreStats() {
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('written_by, critic_verdict, applied')
+  const { data, error } = await supabase.from('applications').select('written_by, critic_verdict, applied').is('deleted_at', null)
   if (error || !data) return []
   const grouped: Record<string, { total: number; pass: number; needsWork: number; sent: number }> = {}
   for (const row of data) { const key = row.written_by ?? 'sconosciuto'; if (!grouped[key]) grouped[key] = { total: 0, pass: 0, needsWork: 0, sent: 0 }; grouped[key].total++; if (row.critic_verdict === 'PASS') grouped[key].pass++; if (row.critic_verdict === 'NEEDS_WORK') grouped[key].needsWork++; if (row.applied) grouped[key].sent++ }
@@ -768,7 +865,7 @@ export async function getCriticoStats() {
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('reviewed_by, critic_verdict').not('reviewed_by', 'is', null)
+  const { data, error } = await supabase.from('applications').select('reviewed_by, critic_verdict').not('reviewed_by', 'is', null).is('deleted_at', null)
   if (error || !data) return []
   const grouped: Record<string, { total: number; pass: number; needsWork: number; reject: number }> = {}
   for (const row of data) { const key = row.reviewed_by!; if (!grouped[key]) grouped[key] = { total: 0, pass: 0, needsWork: 0, reject: 0 }; grouped[key].total++; if (row.critic_verdict === 'PASS') grouped[key].pass++; if (row.critic_verdict === 'NEEDS_WORK') grouped[key].needsWork++; if (row.critic_verdict === 'REJECT') grouped[key].reject++ }
@@ -793,7 +890,7 @@ export async function getCriticVerdictTotals(): Promise<CriticVerdictTotals> {
   if (!isSupabaseConfigured) return { pass: 0, needs_work: 0, reject: 0, total: 0 }
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('critic_verdict').not('critic_verdict', 'is', null)
+  const { data, error } = await supabase.from('applications').select('critic_verdict').not('critic_verdict', 'is', null).is('deleted_at', null)
   if (error || !data) return { pass: 0, needs_work: 0, reject: 0, total: 0 }
   const out: CriticVerdictTotals = { pass: 0, needs_work: 0, reject: 0, total: 0 }
   for (const row of data as { critic_verdict: string | null }[]) {
@@ -837,7 +934,7 @@ export async function getApplicationStats(): Promise<Record<string, number>> {
   if (!isSupabaseConfigured) return {}
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('status, applied')
+  const { data, error } = await supabase.from('applications').select('status, applied').is('deleted_at', null)
   if (error || !data) return {}
   const counts = data.reduce((acc: Record<string, number>, row: any) => { acc[row.status] = (acc[row.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
   counts['_total'] = data.length

@@ -18,34 +18,38 @@ interface Group {
 }
 
 const TIER_OPTIONS: Option[] = [
-  { val: "seria",       label: "Seria ≥70",       color: "var(--color-green)" },
-  { val: "practice",    label: "Practice 40-69",  color: "var(--color-yellow)" },
-  { val: "riferimento", label: "Riferimento <40", color: "var(--color-orange)" },
-  { val: "noscore",     label: "Non scored",      color: "var(--color-dim)" },
+  { val: "seria", label: "Seria ≥70", color: "var(--color-green)" },
+  { val: "practice", label: "Practice 40-69", color: "var(--color-yellow)" },
+  {
+    val: "riferimento",
+    label: "Riferimento <40",
+    color: "var(--color-orange)",
+  },
+  { val: "noscore", label: "Non scored", color: "var(--color-dim)" },
 ];
 
 const STATUS_OPTIONS: Option[] = [
-  { val: "new",      label: "new",      color: "var(--color-muted)" },
-  { val: "checked",  label: "checked",  color: "var(--color-blue)" },
-  { val: "scored",   label: "scored",   color: "var(--color-purple)" },
-  { val: "writing",  label: "writing",  color: "var(--color-yellow)" },
-  { val: "review",   label: "review",   color: "var(--color-orange)" },
-  { val: "ready",    label: "ready",    color: "#7fffb2" },
-  { val: "applied",  label: "applied",  color: "var(--color-green)" },
+  { val: "new", label: "new", color: "var(--color-muted)" },
+  { val: "checked", label: "checked", color: "var(--color-blue)" },
+  { val: "scored", label: "scored", color: "var(--color-purple)" },
+  { val: "writing", label: "writing", color: "var(--color-yellow)" },
+  { val: "review", label: "review", color: "var(--color-orange)" },
+  { val: "ready", label: "ready", color: "#7fffb2" },
+  { val: "applied", label: "applied", color: "var(--color-green)" },
   { val: "response", label: "response", color: "#58a6ff" },
   { val: "excluded", label: "excluded", color: "var(--color-red)" },
 ];
 
 const REMOTE_OPTIONS: Option[] = [
   { val: "full_remote", label: "Full remote" },
-  { val: "hybrid",      label: "Hybrid" },
-  { val: "onsite",      label: "On-site" },
+  { val: "hybrid", label: "Hybrid" },
+  { val: "onsite", label: "On-site" },
 ];
 
 const VERDICT_OPTIONS: Option[] = [
-  { val: "PASS",       label: "PASS",       color: "var(--color-green)" },
+  { val: "PASS", label: "PASS", color: "var(--color-green)" },
   { val: "NEEDS_WORK", label: "NEEDS WORK", color: "var(--color-yellow)" },
-  { val: "REJECT",     label: "REJECT",     color: "var(--color-red)" },
+  { val: "REJECT", label: "REJECT", color: "var(--color-red)" },
 ];
 
 const Company_LABELS: Record<FilterKey, string> = {
@@ -77,7 +81,10 @@ export default function FiltersWizard({
     [sp],
   );
 
-  const totalActive = Object.values(urlSelections).reduce((a, v) => a + v.length, 0);
+  const totalActive = Object.values(urlSelections).reduce(
+    (a, v) => a + v.length,
+    0,
+  );
 
   const sourceOptions: Option[] = useMemo(
     () => availableSources.map((s) => ({ val: s, label: s })),
@@ -85,17 +92,18 @@ export default function FiltersWizard({
   );
 
   const groups: Group[] = [
-    { key: "tier",    label: Company_LABELS.tier,    options: TIER_OPTIONS },
-    { key: "status",  label: Company_LABELS.status,  options: STATUS_OPTIONS },
-    { key: "remote",  label: Company_LABELS.remote,  options: REMOTE_OPTIONS },
-    { key: "source",  label: Company_LABELS.source,  options: sourceOptions },
+    { key: "tier", label: Company_LABELS.tier, options: TIER_OPTIONS },
+    { key: "status", label: Company_LABELS.status, options: STATUS_OPTIONS },
+    { key: "remote", label: Company_LABELS.remote, options: REMOTE_OPTIONS },
+    { key: "source", label: Company_LABELS.source, options: sourceOptions },
     { key: "verdict", label: Company_LABELS.verdict, options: VERDICT_OPTIONS },
   ];
 
   function pushURL(selections: Record<FilterKey, string[]>) {
     const next = new URLSearchParams(sp.toString());
     (Object.keys(selections) as FilterKey[]).forEach((k) => {
-      if (selections[k].length) next.set(k === "tier" ? "tier" : k, selections[k].join(","));
+      if (selections[k].length)
+        next.set(k === "tier" ? "tier" : k, selections[k].join(","));
       else next.delete(k);
     });
     next.delete("page");
@@ -119,7 +127,8 @@ export default function FiltersWizard({
         className="px-3 py-1.5 text-[10.5px] font-semibold tracking-[0.12em] uppercase rounded-full border cursor-pointer transition-colors"
         style={{
           color: totalActive > 0 ? "var(--color-bright)" : "var(--color-base)",
-          borderColor: totalActive > 0 ? "var(--color-green)" : "var(--color-border)",
+          borderColor:
+            totalActive > 0 ? "var(--color-green)" : "var(--color-border)",
           background: "var(--color-card)",
         }}
       >
@@ -183,7 +192,8 @@ function GroupChip({
   onEdit: () => void;
   onClear: () => void;
 }) {
-  const preview = values.length === 1 ? values[0] : `${values[0]} +${values.length - 1}`;
+  const preview =
+    values.length === 1 ? values[0] : `${values[0]} +${values.length - 1}`;
   return (
     <span
       className="inline-flex items-center text-[10px] font-semibold rounded-full border overflow-hidden"
@@ -208,7 +218,10 @@ function GroupChip({
         title="Rimuovi filtro"
         aria-label={`Rimuovi filtro ${label}`}
         className="px-2 py-1 cursor-pointer border-l"
-        style={{ color: "var(--color-dim)", borderLeftColor: "var(--color-border)" }}
+        style={{
+          color: "var(--color-dim)",
+          borderLeftColor: "var(--color-border)",
+        }}
       >
         ✕
       </button>
@@ -242,7 +255,10 @@ function WizardModal({
     setDraft((d) => {
       const cur = d[key];
       const has = cur.includes(val);
-      return { ...d, [key]: has ? cur.filter((v) => v !== val) : [...cur, val] };
+      return {
+        ...d,
+        [key]: has ? cur.filter((v) => v !== val) : [...cur, val],
+      };
     });
   }
 
@@ -310,7 +326,13 @@ function WizardModal({
           <button
             type="button"
             onClick={() =>
-              setDraft({ tier: [], status: [], remote: [], source: [], verdict: [] })
+              setDraft({
+                tier: [],
+                status: [],
+                remote: [],
+                source: [],
+                verdict: [],
+              })
             }
             disabled={totalDraft === 0}
             className="text-[10px] font-semibold tracking-[0.1em] uppercase cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -399,7 +421,9 @@ function GroupRow({
                   ? {
                       color: o.color ?? "var(--color-bright)",
                       borderColor: o.color ?? "var(--color-green)",
-                      background: o.color ? `${o.color}20` : "var(--color-card)",
+                      background: o.color
+                        ? `${o.color}20`
+                        : "var(--color-card)",
                     }
                   : {
                       color: "var(--color-dim)",
@@ -420,5 +444,8 @@ function GroupRow({
 
 function csv(v: string | null): string[] {
   if (!v) return [];
-  return v.split(",").map((s) => s.trim()).filter(Boolean);
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }

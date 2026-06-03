@@ -59,7 +59,11 @@ html[data-theme="light"] {
 
 html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 
-::selection { background: rgba(0, 232, 122, 0.25); color: var(--color-white); }
+/* Niente color override: il testo selezionato mantiene il suo colore naturale,
+   così resta leggibile sia su sfondi scuri (shell JHT) sia su superfici chiare
+   come le card Tailwind (bg-white) di /case-studies. Solo lo sfondo è mint. */
+::selection { background: rgba(0, 232, 122, 0.25); }
+::-moz-selection { background: rgba(0, 232, 122, 0.25); }
 
 /* Zoom globale UI: simula il Cmd++ del browser in un unico posto.
    In Chromium `100vh` resta calcolato sul viewport NON zoomato, quindi
@@ -94,10 +98,15 @@ body::after {
 }
 
 /* ── Typography ──────────────────────────────────────────────────── */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-mono);
-  color: var(--color-white);
-  line-height: 1.2;
+/* In @layer base so Tailwind text-* utilities (e.g. text-slate-900 on the
+   light /case-studies page) can override the default heading color. Unlayered
+   element rules would otherwise win over layered utilities. */
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-mono);
+    color: var(--color-white);
+    line-height: 1.2;
+  }
 }
 
 a { color: var(--color-green); text-decoration: none; }
@@ -254,6 +263,13 @@ label {
   0% { transform: translateY(0px); }
   50% { transform: translateY(-10px); }
   100% { transform: translateY(0px); }
+}
+
+/* Speech bubble sopra agente: mantiene il translateX(-50%) per
+   centrarsi orizzontalmente, aggiunge solo translateY per fade-in. */
+@keyframes chat-bubble-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
 }
 
 .glass-panel {

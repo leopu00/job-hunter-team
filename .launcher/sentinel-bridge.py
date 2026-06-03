@@ -90,6 +90,17 @@ GSPOT_LOWER = 80.0    # proj < 80% → sotto g-spot (sottoutilizzo)
 GSPOT_UPPER = 105.0   # proj > 105% → sopra g-spot (critico)
 GSPOT_PROMOTION_TICKS = 3  # tick consecutivi nel g-spot per promuovere stato
 
+# Banda g-spot attorno al target dinamico work-hours-aware. Il g-spot
+# "vero" è centrato sul target del bridge (92% in modalità classica,
+# oppure 75% in office hours su Codex Pro, ecc.). Mantengo la stessa
+# semi-ampiezza storica (80-105 → ±13 attorno a 92 ≈ -12/+13).
+GSPOT_BAND_BELOW = 12.0  # target − 12 = floor g-spot
+GSPOT_BAND_ABOVE = 13.0  # target + 13 = ceiling g-spot
+# Path dello state file del pacing-bridge: contiene current_window_target_pct
+# scritto a ogni tick. Letto lazy nel _is_in_gspot. Se manca → fallback
+# alle costanti statiche (back-compat completa).
+PACING_STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
+
 # ── Notifica Sentinella ──────────────────────────────────────────────────
 # La Sentinella è SVEGLIATA solo quando la proj è fuori dal g-spot.
 # Per evitare il loop autoindotto (Sentinella+Capitano consumano token →
@@ -117,13 +128,52 @@ def read_config():
         return None, "openai"
 
 
-def _is_in_gspot(proj):
-    """True se proj ∈ [GSPOT_LOWER, GSPOT_UPPER]. Banda larga (80-105%)
-    rispetto allo STEADY stretto di compute_metrics (90-95%): qui ci
-    interessa "siamo nella zona buona", non "siamo perfettamente al target"."""
+def _read_dynamic_target():
+    """Legge il target dinamico dal pacing-bridge-state.json se presente.
+
+    Ritorna (target_pct, work_phase) o (None, None) se file mancante /
+    illeggibile / campo assente. Failsafe completo: qualsiasi errore →
+    None, e i chiamanti tornano alle costanti statiche.
+
+    Nota: leggiamo questo file ad ogni tick (~ogni 3-10 min). Costo I/O
+    trascurabile, evita di dover gestire file watching.
+    """
+    try:
+        if not PACING_STATE_FILE.exists():
+            return None, None
+        with PACING_STATE_FILE.open(encoding="utf-8") as f:
+            st = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None, None
+    tgt = st.get("current_window_target_pct")
+    phase = st.get("work_phase")
+    if not isinstance(tgt, (int, float)) or tgt <= 0:
+        return None, phase if isinstance(phase, str) else None
+    return float(tgt), (phase if isinstance(phase, str) else None)
+
+
+def _gspot_bounds(target_pct=None):
+    """Ritorna (lower, upper) della banda g-spot.
+
+    Se `target_pct` è fornito → banda dinamica centrata sul target
+    (target-12 .. target+13). Altrimenti → costanti storiche 80-105.
+    """
+    if isinstance(target_pct, (int, float)) and target_pct > 0:
+        return (
+            max(0.0, target_pct - GSPOT_BAND_BELOW),
+            target_pct + GSPOT_BAND_ABOVE,
+        )
+    return GSPOT_LOWER, GSPOT_UPPER
+
+
+def _is_in_gspot(proj, target_pct=None):
+    """True se proj è nella banda g-spot. Banda dinamica quando il
+    pacing-bridge espone un target work-hours-aware, altrimenti banda
+    statica 80-105 (back-compat)."""
     if not isinstance(proj, (int, float)):
         return False
-    return GSPOT_LOWER <= proj <= GSPOT_UPPER
+    lo, hi = _gspot_bounds(target_pct)
+    return lo <= proj <= hi
 
 
 def _choose_tick_interval(state, override_min=None):
@@ -886,20 +936,36 @@ def main():
             # nel JSONL (monitoring puro), ma manda [BRIDGE TICK] alla
             # Sentinella solo quando proj è fuori dal g-spot e il cooldown
             # è scaduto. In g-spot la Sentinella resta in standby.
-            in_gspot = _is_in_gspot(proj)
+            #
+            # Target dinamico work-hours-aware (V8): il g-spot si centra
+            # sul target scritto dal pacing-bridge invece che sul 92% fisso.
+            # Quando schedule + ratio mancano → fallback alla banda storica.
+            dyn_target, work_phase = _read_dynamic_target()
+            in_gspot = _is_in_gspot(proj, target_pct=dyn_target)
             _advance_tick_phase(state, in_gspot)
             now_ts = time.time()
             should_notify = _should_notify_sentinella(in_gspot, state, now_ts)
 
+            target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
+            phase_dbg = f" phase={work_phase}" if work_phase else ""
             print(
                 f"[bridge V6] {now_h} OK usage={usage}% proj={proj} status={status} "
-                f"phase={state['tick_phase']} gspot={in_gspot} notify={should_notify}"
+                f"phase={state['tick_phase']} gspot={in_gspot} {target_dbg}{phase_dbg} "
+                f"notify={should_notify}"
             )
 
             if should_notify and session_exists(SENTINELLA_SESSION):
+                # Includi il target nel tick così la Sentinella sa contro
+                # quale soglia confrontare proj/usage senza dover leggere
+                # un secondo file. Quando dyn_target è None il messaggio
+                # NON menziona target (Sentinella usa il 92 storico dalla
+                # skill decision-throttle).
+                tgt_field = f" target={dyn_target:.0f}%" if dyn_target else ""
+                phase_field = f" work_phase={work_phase}" if work_phase else ""
                 jht_tmux_send(
                     SENTINELLA_SESSION,
-                    f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% status={status} reset={reset} src=bridge."
+                    f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
+                    f"status={status} reset={reset}{tgt_field}{phase_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
 

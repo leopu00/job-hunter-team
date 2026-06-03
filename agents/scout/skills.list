@@ -14,6 +14,9 @@ db-update
 # Throttle (cooldown loop, freeze)
 throttle
 
+# User feedback signal (like/dislike/hide/star from web dashboard)
+feedback-query
+
 # Scout-only operative skills
 scout-coord
 circles-and-sources

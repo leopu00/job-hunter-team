@@ -1,6 +1,6 @@
 {
   "name": "job-hunter-team",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "> Un framework multi-agente AI open-source che automatizza la tua ricerca lavoro — dalla scoperta di posizioni alla scrittura di CV e cover letter su misura.",
   "main": "index.js",
   "directories": {
@@ -25,9 +25,6 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
-    "next": "^16.2.2",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
     "zod": "^4.3.6"
   }
 }

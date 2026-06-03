@@ -32,7 +32,7 @@ riempimento disk, posizionamento file. Snapshot puntuale 14:09 UTC del
 | 👨‍✈️ CAPITANO | 16/05 | 0.9% | 172M | 🟢 coordina |
 | 💬 ASSISTENTE | 16/05 | 3.8% | 192M | 🟢 |
 | 🧙‍♂️ MENTOR | 16/05 | 2.2% | 161M | 🟢 |
-| 🩺 **DOTTORE** | — | — | — | **❌ MAI SPAWNATO** ([bug #18](../../internal/2026-05-17-team-strategy-bugs.md#-18-dottore-mai-spawnato--watchdog-non-lo-include-bridge-mancante)) |
+| 👨‍⚕️ **DOTTORE** | — | — | — | **❌ MAI SPAWNATO** ([bug #18](../../internal/2026-05-17-team-strategy-bugs.md#-18-dottore-mai-spawnato--watchdog-non-lo-include-bridge-mancante)) |
 
 → **10/11 agenti attivi**. Tutti i ruoli operativi presenti. Solo Dottore assente.
 

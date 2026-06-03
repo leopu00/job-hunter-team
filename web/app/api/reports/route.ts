@@ -150,7 +150,10 @@ export async function GET(req: NextRequest) {
   // application è ancora stata marcata come inviata.
   const byCompany = new Map<string, TopCompany>();
   for (const a of applied) {
-    const pos = a.position as { company?: string } | { company?: string }[] | null;
+    const pos = a.position as
+      | { company?: string }
+      | { company?: string }[]
+      | null;
     const company = Array.isArray(pos) ? pos[0]?.company : pos?.company;
     if (!company) continue;
     const cur =

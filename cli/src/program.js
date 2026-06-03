@@ -2,6 +2,7 @@ import pkg from '../package.json' with { type: 'json' };
 import { Command } from 'commander';
 import { registerSetupCommand } from './commands/setup.js';
 import { registerConfigCommand } from './commands/config.js';
+import { registerWorkingHoursCommand } from './commands/working-hours.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerTeamCommand } from './commands/team/index.js';
 import { registerCronCommand } from './commands/cron.js';
@@ -11,6 +12,7 @@ import { registerHealthCommand } from './commands/health.js';
 import { registerBackupCommand } from './commands/backup.js';
 import { registerMigrateCommand } from './commands/migrate.js';
 import { registerCacheCommand } from './commands/cache.js';
+import { registerToolsCommand } from './commands/tools.js';
 import { registerLogsCommand } from './commands/logs.js';
 import { registerProvidersCommand } from './commands/providers.js';
 import { registerStatsCommand } from './commands/stats.js';
@@ -71,6 +73,7 @@ export function buildProgram() {
 
   registerSetupCommand(program);
   registerConfigCommand(program);
+  registerWorkingHoursCommand(program);
   registerStatusCommand(program);
   registerTeamCommand(program);
   registerCronCommand(program);
@@ -80,6 +83,7 @@ export function buildProgram() {
   registerBackupCommand(program);
   registerMigrateCommand(program);
   registerCacheCommand(program);
+  registerToolsCommand(program);
   registerLogsCommand(program);
   registerProvidersCommand(program);
   registerStatsCommand(program);

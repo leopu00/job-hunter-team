@@ -37,7 +37,10 @@ function publishPending(hasProfile: boolean) {
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: pending }));
 }
 
-export default function OnboardingPopup({ hasProfile, translations: t }: Props) {
+export default function OnboardingPopup({
+  hasProfile,
+  translations: t,
+}: Props) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {

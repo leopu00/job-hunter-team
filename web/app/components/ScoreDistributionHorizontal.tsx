@@ -201,73 +201,74 @@ export default function ScoreDistributionHorizontal({
           {/* Riga speciale "senza score" — in fondo (ultima riga).
               I bin score occupano rowIdx 0..visibleBins.length-1
               (alto-score in cima). Unscored = rowIdx visibleBins.length. */}
-          {hasUnscored && (() => {
-            const y = PAD_TOP + visibleBins.length * ROW_H;
-            const barH = ROW_H - 4;
-            const w = (unscoredCount / barMax) * chartW;
-            const isHover = hover === -1;
-            const isSelected = unscoredSelected;
-            const active = isHover || isSelected;
-            const dimmed =
-              (hover != null && !isHover && !isSelected) ||
-              (hover == null && hasRangeSelection && !isSelected);
-            return (
-              <g
-                onMouseEnter={() => setHover(-1)}
-                onClick={() => onToggleUnscored?.()}
-                style={{ cursor: onToggleUnscored ? "pointer" : "default" }}
-              >
-                <text
-                  x={PAD_LEFT + chartW + GAP}
-                  y={y + barH / 2 + 3}
-                  fontSize={LABEL_FONT}
-                  textAnchor="start"
-                  fill={
-                    isSelected ? "var(--color-bright)" : "var(--color-muted)"
-                  }
-                  fontWeight={isSelected ? 700 : 400}
-                  style={{ fontFamily: "inherit" }}
+          {hasUnscored &&
+            (() => {
+              const y = PAD_TOP + visibleBins.length * ROW_H;
+              const barH = ROW_H - 4;
+              const w = (unscoredCount / barMax) * chartW;
+              const isHover = hover === -1;
+              const isSelected = unscoredSelected;
+              const active = isHover || isSelected;
+              const dimmed =
+                (hover != null && !isHover && !isSelected) ||
+                (hover == null && hasRangeSelection && !isSelected);
+              return (
+                <g
+                  onMouseEnter={() => setHover(-1)}
+                  onClick={() => onToggleUnscored?.()}
+                  style={{ cursor: onToggleUnscored ? "pointer" : "default" }}
                 >
-                  {unscoredCount}
-                </text>
-                <rect
-                  x={PAD_LEFT}
-                  y={y}
-                  width={chartW}
-                  height={barH}
-                  fill="var(--color-border)"
-                  opacity={0.25}
-                />
-                <rect
-                  x={PAD_LEFT + chartW - Math.max(0, w)}
-                  y={y}
-                  width={Math.max(0, w)}
-                  height={barH}
-                  fill="var(--color-muted)"
-                  opacity={active ? 1 : dimmed ? 0.32 : 0.7}
-                  stroke={isSelected ? "var(--color-bright)" : "none"}
-                  strokeWidth={isSelected ? 1.5 : 0}
-                  style={{
-                    transition: "opacity 0.12s, stroke-width 0.12s",
-                  }}
-                />
-                <text
-                  x={RANGE_W - 4}
-                  y={y + barH / 2 + 3}
-                  fontSize={LABEL_FONT}
-                  textAnchor="end"
-                  fill={
-                    isSelected ? "var(--color-bright)" : "var(--color-dim)"
-                  }
-                  fontWeight={isSelected ? 700 : 400}
-                  fontStyle="italic"
-                  style={{ fontFamily: "inherit" }}
-                >
-                  no score
-                </text>
-              </g>
-            );
-          })()}
+                  <text
+                    x={PAD_LEFT + chartW + GAP}
+                    y={y + barH / 2 + 3}
+                    fontSize={LABEL_FONT}
+                    textAnchor="start"
+                    fill={
+                      isSelected ? "var(--color-bright)" : "var(--color-muted)"
+                    }
+                    fontWeight={isSelected ? 700 : 400}
+                    style={{ fontFamily: "inherit" }}
+                  >
+                    {unscoredCount}
+                  </text>
+                  <rect
+                    x={PAD_LEFT}
+                    y={y}
+                    width={chartW}
+                    height={barH}
+                    fill="var(--color-border)"
+                    opacity={0.25}
+                  />
+                  <rect
+                    x={PAD_LEFT + chartW - Math.max(0, w)}
+                    y={y}
+                    width={Math.max(0, w)}
+                    height={barH}
+                    fill="var(--color-muted)"
+                    opacity={active ? 1 : dimmed ? 0.32 : 0.7}
+                    stroke={isSelected ? "var(--color-bright)" : "none"}
+                    strokeWidth={isSelected ? 1.5 : 0}
+                    style={{
+                      transition: "opacity 0.12s, stroke-width 0.12s",
+                    }}
+                  />
+                  <text
+                    x={RANGE_W - 4}
+                    y={y + barH / 2 + 3}
+                    fontSize={LABEL_FONT}
+                    textAnchor="end"
+                    fill={
+                      isSelected ? "var(--color-bright)" : "var(--color-dim)"
+                    }
+                    fontWeight={isSelected ? 700 : 400}
+                    fontStyle="italic"
+                    style={{ fontFamily: "inherit" }}
+                  >
+                    no score
+                  </text>
+                </g>
+              );
+            })()}
 
           {visibleBins.map(({ count, i }, visIdx) => {
             const lo = (stats.firstBin + i) * stats.activeStep;
@@ -340,9 +341,7 @@ export default function ScoreDistributionHorizontal({
                   y={y + barH / 2 + 3}
                   fontSize={LABEL_FONT}
                   textAnchor="end"
-                  fill={
-                    isSelected ? "var(--color-bright)" : "var(--color-dim)"
-                  }
+                  fill={isSelected ? "var(--color-bright)" : "var(--color-dim)"}
                   fontWeight={isSelected ? 700 : 400}
                   style={{ fontFamily: "inherit" }}
                 >

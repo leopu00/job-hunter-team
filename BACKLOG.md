@@ -26,13 +26,13 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 - 🐳 Container runtime = Docker + Docker Compose
 - ⌨️ CLI **driveable by AI agents** (Claude Code, 🦞 OpenClaw, Codex, Cursor) — USP
 - 💬 **Telegram** — 3-bot setup shipped 2026-05-13 (Assistente + Capitano + Mentor, all mandatory in onboarding); roadmap: per-agent 1:1 chat + "team forum" channel where the user can join the whole team's conversation
-- 🧙‍♂️ **Mentor** career-coach agent (planned) — see [`docs/about/VISION.md`](docs/about/VISION.md)
+- 🧙‍♂️ **Mentor** career-coach agent (shipped 2026-05-13, runtime `.launcher/start-agent.sh`) — see [`docs/about/VISION.md`](docs/about/VISION.md)
 
 ---
 
-## 📊 CURRENT STATE (2026-05-14)
+## 📊 CURRENT STATE (2026-05-29)
 
-**Estimated maturity: ~82%** *(subjective estimate based on completed roadmap items — not a measured metric)* (was ~78% on 04-27; bumped by VPS T1-T4 shipping, Telegram 3-bot live, security review + SECURITY.md + COC complete, migration 011 onboarding-state)
+**Estimated maturity: ~85%** *(subjective estimate based on completed roadmap items — not a measured metric)* (was ~82% on 05-14; bumped by: OAuth login DONE + cloud sync core + VPS friendly + auto-pairing 4/4 path + i18n EN baseline + Windows install.ps1 + work-hours enforcement + weekly cap awareness C-09/S-06)
 
 ### 🏗️ Infrastructure completed
 
@@ -61,7 +61,7 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 
 ### 🤖 Team & monitoring (post 04-11)
 
-- ✅ **8-agent team** (Captain + Sentinel + Scout + Analyst + Scorer + Writer + Critic + Assistant) **+ 🧙‍♂️ Mentor (planned)**
+- ✅ **9-agent team** (Captain + Sentinel + Scout + Analyst + Scorer + Writer + Critic + Assistant + 🧙‍♂️ Mentor) — Mentor shipped 2026-05-13 con 9 skills (chat-web, telegram-send, notify-user, user-reply-check, tmux-send, db-query, mentor-patterns, mentor-output, spawn-doctor)
 - ✅ **📡 Bridge** as separate role (`sentinel-bridge.py` clock-only daemon)
 - ✅ **Monitoring V5** (Bridge → Sentinel event-driven → Captain autonomous, multi-source)
 - ✅ Sentinel refactor (491→130 lines + 6 on-demand skills: `check_usage_http/tui`, `decision_throttle`, `emergency_handling`, `memory_state`, `order_formats`)
@@ -101,16 +101,32 @@ See also the **launcher-distributed skill discovery** punch list in [`docs/about
 
 ### 🧪 Real-world tests (preliminary, partially documented)
 
-> ✅ **Status 2026-05-23**: 3 run pubblicati come Case Study in `docs/about/RESULTS.md`. Staging doc: `docs/internal/2026-05-23-case-study-staging.md` (analisi DB raw + log + cost breakdown). Coverage tracker: [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — ora 3/12 done.
+> ✅ **Status 2026-06-02**: 3 run pubblicati come Case Study in `docs/about/RESULTS.md`. 2 ulteriori run **da finalizzare pre-release** (dati raccolti, elaborazione/monitoring incompleti). Staging doc: `docs/internal/2026-05-23-case-study-staging.md`. Strategia test consolidata 2026-06-02 — vedi memorie [[project-pre-release-test-strategy]] e [[project-team-value-chain-shift]].
 
 - ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1)
 - ✅ **Codex ProLite × Beta tester 1** (senior multilingual technical) — 34.84h run: 206 pos → 105 ready (51%), critic 6.35, 88.2% PASS, €100/mo (Case Study #2)
 - ✅ **Kimi K2 Pro × Beta tester 2** (junior software dev) — 75h run: 251 pos → 56 ready (22%), critic 5.05, 51% PASS, €40/mo, 1.61B token totali aggregati da wire.jsonl (Case Study #3)
-- ❌ Claude Pro €20 — not viable (single agent burns the window)
-- ⬜ Kimi €40 mass-market — almeno 2 tester esterni necessari per validare jackpot in profili diversi (Case Study #3 è maintainer-internal)
-- ⬜ Multi-week tests — i 3 case study attuali sono <4 giorni ciascuno (burst usage). Servono test 4-settimane (= 1 abbonamento mensile speso) per dati steady-state
+- 🟡 **Kimi K2 Pro × maintainer weekly-distributed** — dati raccolti, **elaborazione pending** (non ancora caricati su `/case-studies`)
+- 🟡 **Claude Max x20 × maintainer re-test** — run precedente con monitoring incompleto, **da rifare con instrumentation corretta**
+- ❌ Claude Pro €20 — not viable on first attempt (single agent burns the window); re-test possibile post-launch
+- 🟢 **Espansione matrix → POST-launch**: la varietà profili (settori non-IT inclusi) arriva da uso reale di beta tester aperti, non da run sintetici pre-launch. JHT è profile-agnostic; il provider tier è l'unica variabile materiale.
 
 For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
+
+### 🆕 Feature shipped 2026-05-14 → 2026-05-29 (oltre roadmap)
+
+Dal `CURRENT STATE` precedente sono shipped 269 commit in 15 giorni (~18/giorno). Highlights non già coperti dalle voci roadmap:
+
+- 🗺️ **Web Map** — location tree drilldown full-width, caret separato dal click, cluster client-side, geocoding office skill (REGOLA-16 analista)
+- ⏰ **Working hours UI completa** — config CLI + step wizard + sweet-spot meter + 7×24 heatmap (chiude `[JHT-MONITORING-WORKHOURS]`)
+- 📊 **Case Studies dashboard** — pipeline funnel 5-stage data-driven (`role_family`), case-study-extract tool, Kimi funnel
+- 🛑 **`.team-halted.flag` gate centrale** — Task #14 done 2026-05-25; watchdog/spawner/pid1/jht-start rispettano user Stop
+- 🪟 **Windows native installer** — `scripts/install.ps1` (389 righe) + `scripts/jht-wrapper.ps1` (233 righe), shipped `d87890f8` 2026-05-22
+- 🔧 **VPS bootstrap fixes** — `79f63324` 2026-05-21: codex provider alias + trust prompt + auto-migrate
+- 📈 **Weekly cap awareness** — `9e7ece9f` (C-09 Capitano) + `86da0f03` (S-06 Sentinella) 2026-05-22, chiude `[PACING-WEEKLY-EXHAUSTION]`
+- 🌐 **i18n agent prompts EN baseline** — `[JHT-I18N-TRANSLATE]` done 2026-05-19 (9 ruoli)
+
+Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Turbopack del 2026-05-06; deploy master→production il 2026-05-23 e 2026-05-25).
 
 ---
 
@@ -124,6 +140,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 
 > 📐 Architettura & stato implementazione consolidati in [`docs/internal/cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md) (living doc). Voci sotto = riepilogo BACKLOG; per dettagli decisione macro-events e incident RobertHalf vedi il doc.
 
+**Fondazione (✅)**
 - ✅ `cloud_sync_tokens` schema + RLS (migration 006)
 - ✅ API CRUD `/api/cloud-sync/tokens` (GET/POST/DELETE, soft-delete)
 - ✅ UI `/settings/cloud-sync` (plaintext token shown only once)
@@ -135,57 +152,131 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - ✅ **Web fallback** quando manca SQLite locale (commit `cc52acca`, 2026-05-22)
 - ✅ **`positions.location` cap ≤ 200 char** (migration 015, post-incident RobertHalf)
 - ✅ **Rimozione `sentinel_ticks` dal push daemon** (commit `f68a127d`)
-- ✅ **Refactor `team_commands` → `team_state` desired-state + event lanes** (mig 019–022, 2026-05-23) — accorpa single-team enforcement + status inference + chat/feedback lanes; `team_commands` resta vivo in parallelo durante cutover (Step 5–6 in `cloud-sync-architecture.md`)
+- ✅ **Periodic sync loop** (commit `690534e0`, 2026-05-22) — push daemon attivo, cadenza 30s→60s + delta-only + halt-flag guard
+- ✅ **SQLite CHECK constraints** (commit `3602d42e`, 2026-05-22) — replica CHECK length Postgres mig 015 su SQLite (title/company/location)
+- ✅ **RLS init plan fix** (commit `2b78fdd9` + mig 018, 2026-05-22) — 24 policy `auth.uid()` per-row → `(select auth.uid())`, chiude advisor critical
+
+**Refactor desired-state 2026-05-23 (✅)** — passaggio da push-only a bidirezionalità Kubernetes-style
+- ✅ **`team_commands` → `team_state` desired-state + 3 event lanes** (mig 019–022) — single-team enforcement + status inference + `user_to_agent_messages` + `position_feedback`; `team_commands` resta vivo in parallelo durante cutover
 - ✅ **Realtime publication su team_state + lanes** (mig 021) — browser live (~200ms) via Supabase Realtime
-- ✅ **Fix RLS `location_geocode`** (mig 020) — close advisor critical: cache poisoning via anon key
-- ✅ **P0 — SQLite CHECK constraints** (commit `3602d42e`, 2026-05-22) — replica CHECK length di Postgres mig 015 su SQLite locale (title/company/location)
-- ✅ **P0 — RLS init plan fix** (commit `2b78fdd9` + migration 018, 2026-05-22) — 24 policy migrate da `auth.uid()` per-row a `(select auth.uid())`, chiude advisor critical
-- ⬜ **P0 — DELETE propagation con tombstone** (push è solo UPSERT — vedi `cloud-sync-architecture.md` #4)
-- ✅ **P1 — Daemon alert + auto-shutdown** (commit `ad2e8076`, 2026-05-22) — counter consecutiveFails: warning a ≥3, auto-shutdown a ≥5, reset su success. Origin incident RobertHalf 2026-05-19
-- ⬜ **P1 — Killswitch 401/403** (oggi daemon continua loop infinito su token revocato)
-- ⬜ **P1 — `jht cloud restore`** comando esplicito disaster recovery
-- ⬜ **P1 — Subscriber on-demand 🅲** (polling spento se team giù, post-team_state)
-- ⬜ **P1 — Polling adattivo** basato su `team_state.last_user_activity_at`
-- ⬜ **P1 — Feedback like/dislike** istruire scout/scorer a reagire
-- ✅ **Periodic sync loop** (commit `690534e0`, 2026-05-22) — push daemon attivo, cadenza tunata 30s→60s + delta-only via `updated_at` cursor + halt-flag guard
+- ✅ **Fix RLS `location_geocode`** (mig 020) — chiude advisor critical: cache poisoning via anon key
+- ✅ **Hardening trigger team_state** (mig 023) — search_path + REVOKE EXECUTE
+- ✅ **Reconciler container** (`cli/src/lib/team-state-reconciler.js`) — long-poll 5s su `/api/team-state`, applica start/stop/restart atomici, rispetta `.team-halted.flag`
+- ✅ **Single-team enforcement runtime** — claim 409 + push 409 + PATCH 409 (commit `3427a304`)
+
+**Writer-on-demand cloud-side 2026-05-29 (✅)** — replica pattern desired-state su flag per-row
+- ✅ **`positions.write_requested` + `write_requested_at`** (mig 024) — schema, push delta CLI, push web `/api/local/sync`, receive `/api/cloud-sync/push`
+- ✅ **Endpoint web** `/api/positions/[legacyId]/write-request` — UPDATE SQLite locale + best-effort PATCH Supabase
+- ✅ **Capitano lazy-spawn Scrittore on-demand** (RULE C-10 V6, commit `a9596002`)
+- ✅ **Telegram `/cv` handler + `write_request.py` skill** (commit `5cef55fc`)
+
+**🔴 Pending P0 — correttezza flusso** (vedi [`cloud-sync-architecture.md` § Pending](docs/internal/cloud-sync-architecture.md#-pending-in-ordine-di-priorità))
+- ✅ **P0 — Pull cloud→SQLite per desired-state al boot container** *(DONE 2026-05-31, commit `af3302bd` + `1a918531`)*. GET `/api/cloud-sync/pull-desired-state?since=<ISO>` (web) + `jht cloud pull-desired-state` (CLI) + wire al boot di `startActionContainer`. Scope MVP: `positions.write_requested` + `write_requested_at`. Cursor separato `.cloud-pull-cursor.json`. Smoke e2e green. **Limite noto chiuso poco dopo**: la route web richiedeva SQLite locale e ritornava 500 in cloud-mode → vedi commit `0ada62ea` sotto.
+- ✅ **P0 — Route write-request supporta cloud-mode senza SQLite locale** *(DONE 2026-05-31, commit `0ada62ea`)*. Discriminazione `hasLocal`: SQLite presente → path locale (immutato); SQLite assente → SELECT+UPDATE solo Supabase con embedded validate. Loop chiuso: utente clicca su Vercel con container offline → flag su cloud → pull al boot applica → Capitano spawn Scrittore.
+- ✅ **P0 — DELETE propagation con tombstone** *(DONE 2026-05-31, commit `6499b3db`)*. Supabase mig 025 (deleted_at TIMESTAMPTZ + index partial) su positions/scores/applications; SQLite V7 (tabella `_tombstones` + 3 trigger BEFORE DELETE in `shared/skills/_db.py::_migrate_v6_to_v7_tombstones`); CLI push include tombstones nel payload con cursor proprio; web receive UPDATE soft con idempotency `WHERE deleted_at IS NULL` + lookup legacy_id→UUID per scores/apps. Scope ridotto a 3 tabelle (companies/highlights non sono pushate oggi). **Follow-up**: (a) 30 query in `web/lib/queries.ts` da aggiornare con `.is('deleted_at', null)` filter — PR dedicato; (b) cron Supabase hard-delete `deleted_at < now()-30d`.
+- ✅ **P0 — Killswitch 401/403** *(DONE 2026-05-31, commit `07d0109a`)*. handlePush ritorna `{ok, authFailed}`; daemon ha counter dedicato `MAX_CONSECUTIVE_AUTH_FAILS=3` (vs 5 generico, perché token revocato non recupera mai). Halt + INSERT `pending_user_messages` con istruzioni "riapri pairing + jht cloud login". Reset solo su push success 200 (un 500 transient non resetta).
+- 🪛 **CI/Tests/Lint minor debt** — declassato 2026-06-02. Stato live: CI/Tests/Security/Docker ✅, Lint Prettier era l'unico rosso → FIXED 2026-06-02 (8 file riformattati). 40 test in `tests/js/tasks/_disabled/` sono debt non-blocker — vedi `docs/internal/MINOR-TRACKER.md` per dettagli (`MINOR-DISABLED-TESTS`, `MINOR-PRECOMMIT-DRIFT`).
+- ✅ **P1 — Pull periodico nel daemon** *(DONE 2026-05-31, commit `968ef913`)*. `handleDaemon` invoca `handlePullDesiredState` ad ogni tick dopo il push (cadenza condivisa intervalSec). Pull isolato dal counter consecutiveFails. Log "✓ N applicate" bypassa silent quando N>0. Chiude il caso multi-device "live" (mobile click + team su VPS).
+
+**🟠 Pending P1 — chiusura loop feedback agenti** (bidirezionalità incompleta: schema + RLS + Realtime ✅ done, container NON legge)
+- ✅ **P1 — Reader container per `user_to_agent_messages`** *(DONE 2026-05-31, commit `4774c190`)*. `cli/src/lib/user-messages-poller.js` fa long-poll `/api/messages?status=pending&limit=50`, sort FIFO, claim atomico via PATCH `status=delivered`, forward al tmux pane dell'agente target via `jht-tmux-send`. Mapping agent→session: ruolo base lowercase + uppercase (`scout-1` → `SCOUT`), whitelist allineata a `realtime-subscriber.js`. tmux fail → PATCH `expired` (non si re-processa). Rispetta `.team-halted.flag` + `.weekly-halt.flag`. Killswitch 401/403 dopo 3 fail consecutivi (allineato `handlePush`). Wire in `pid1.js`: spawn al boot + watcher cloud.json + respawn 5s + kill su shutdown.
+- ✅ **P1 — Reader agenti per `position_feedback`** *(DONE 2026-05-31, commit `093027c1`)*. Skill `shared/skills/feedback_query.py` (mode `check <legacy_id>`) + `agents/_skills/feedback-query/SKILL.md`. Aggiunta a `scorer/skills.list` e `scout/skills.list`. **Scorer**: nuovo Step 5 obbligatorio post-score-base con multiplier (`like ×1.10`, `star ×1.15`, `dislike ×0.85`, `hide → status=excluded`), cap 100. **Scout**: skill esposta come signal opzionale (skip per-posizione gia' coperto da SC-05 dedup), pattern uso = prioritizzazione fonti su rivalutazione. Fallback neutro (`latest_action=null` + `note`) quando cloud disabled/irraggiungibile: agenti non hard-failano mai. Aggiornati EN + IT baseline (HU community update pending). **Follow-up**: aggregato `recent` per pattern company-level richiede endpoint dedicato + push delta — tracciato in P1 "Feedback loop esteso" sotto.
+- 🟢 **P1 — Subscriber on-demand** *(scope-reduced 2026-05-31, parzialmente coperto da polling adattivo `acc293de`)*. Kill/spawn duro dei poller `team-state-reconciler` e `realtime-subscriber` agganciato a `is_running` NON è fattibile architettonicamente: sono loro che applicano il `should_run=true` dal browser, killarli rompe il restart loop. Per `user-messages-poller` invece il polling adattivo (3 tier 5s/30s/120s) riduce il carico del 90% quando idle senza richiedere riarchitettura. **Follow-up**: investigare se per `team-state-reconciler` ha senso un tier `deep-idle` (60s+) quando team is_running=false stabilmente.
+- ✅ **P1 — Polling adattivo** *(DONE 2026-05-31, commit `acc293de`, scope-reduced)*. `user-messages-poller` 3 tier basati sull'ultima consegna riuscita: `active` 5s (<5min), `idle` 30s (5-30min), `deep-idle` 120s (>30min). Reset a active appena arriva un messaggio. Backoff esponenziale on error si compone col tier corrente. **Scope ridotto**: il task indicava interval basato su `team_state.last_user_activity_at` che richiederebbe heartbeat browser-side via PATCH — fuori scope MVP. La proxy "ultima consegna" ottiene lo stesso outcome (idle → poll giù) senza touch web.
+
+**🟠 Pending P1 — hardening + UX**
+- ✅ **P1 — Daemon alert + auto-shutdown** (commit `ad2e8076`, 2026-05-22) — WARN_AT=3, MAX=5 → auto-shutdown. Vale anche per 409 not_active_device
+- ✅ **P1 — `jht cloud restore`** *(DONE 2026-05-31, commit `10c57c8f`)*. Comando CLI dedicato + endpoint `/api/cloud-sync/full-dump` (3 tabelle: positions/scores/applications, deleted_at IS NULL, cap 10k righe/tabella, rate limit 5/min). Conferma esplicita interattiva via `@clack/prompts` ("Procedo con upsert di N righe in <path>?"), flag `--confirm-restore` per skip in CI. Mappa cloud_uuid→legacy_id per scores/apps. INSERT OR REPLACE su id=legacy_id (idempotente). Reset cursor push a "now". Scope MVP: companies e position_highlights escluse (ricostruite dall'Analista nel normal loop). Errori user-friendly: SQLite assente → "lancia `jht team start` una volta poi riprova", cloud non configurato → "esegui `jht cloud login`".
+- 🟡 **P1 — Cutover `team_commands` → `team_state` finale** — rename file `realtime-subscriber.js → team-commands-poller.js` ✅ done 2026-05-31 (commit `48363c94`). **Resta**: (a) `handleAction` singolo agente in `web/app/(protected)/team/page.tsx` + 3 sub-page (capitano/assistente/sentinella) ancora su `useTeamCommandPoller`; migrare a `team_state.agents_enabled` richiede estensione reconciler container (oggi gestisce solo `should_run` globale) + probabile nuovo campo `agents_running` come observed mirror; (b) drop tabella `team_commands` + rimozione file `team-commands-poller.js` quando nessuno scrive più; (c) rename comando CLI `jht cloud realtime-listen` → `team-commands-listen` al drop finale (oggi mantenuto per compat pid1 deployati).
+- ✅ **P1 — Geocoding opt-in/out per-position** *(DONE 2026-05-31, 4 commit `6e2b75bf`+`48f803f3`+`9a846035`+`32b917ca` + rename mig 029)*. Replica esatta del pattern Writer-on-demand: SQLite V8 + Supabase **mig 029** (`positions.geocode_requested` + `geocode_requested_at` + partial index), push delta + pull-desired-state cablati, endpoint POST/DELETE `/api/positions/[legacyId]/geocode-request` con dual-path local/cloud, button "Geocodifica/Ricalcola" nella detail page, Analista REGOLA-16 diventa OPT-IN (skippa silenziosamente quando flag=0) + nuova coda parallela `next-for-geocoding` per posizioni gia' processate. **Scope**: solo analista.it.md (EN baseline non aveva REGOLA-16). **Telegram follow-up shipped 2026-05-31** (commit `60f2e17f` skill + commit successivo bot): `shared/skills/geocode_request.py` (no guard status/app), entry `/geo` nel menu, case handler in `bridge.ts` con risposta HTML (badge "↻ già richiesto" / "✓ ricalcolo" / "✓ Geocoding richiesto"), refactor `runJsonSkill<T>` helper generico estratto da `runWriteRequest`. **Follow-up rimanente**: allineamento EN/IT/HU per REGOLA-16 (in analista.md + analista.hu.md). **Nota**: migration era 027 originale, rinominata 029 dal commit `11a1dcfd` per evitare collisione con 027_write_requested già su master.
+- ✅ **P1 — Feedback loop esteso** *(DONE 2026-05-31, commit `34614783`)*. Mig Supabase 028: ALTER TABLE `position_feedback` ADD `comment` TEXT (≤2000), `score` INTEGER 1-5, `direction` TEXT ('more_like_this'|'less_like_this'). POST `/api/positions/[id]/feedback` accetta i campi opzionali con validate. Skill `feedback_query.py` espone i campi + nuovo top-level `latest_direction` (più recente non-NULL nella storia). Scout prompt EN+IT aggiornato con sezione "pattern steering": `less_like_this` → deprioritize fonte/company, `more_like_this` → replica pattern. **Scope MVP**: backend + skill + prompt. UI per comment/score/direction è follow-up (l'utente può POSTare via API). HU baseline non aggiornato (parita' con commit precedente Scout/Scorer).
+- ✅ **P1 — `JHT-LOCAL-NO-API`** *(DONE 2026-05-31, commit `193d06fd`)*. Privacy-first switch: `web/lib/workspace.ts` espone `isCloudEnabled()` (legge `~/.jht/cloud.json`) e `isLocalOnlyMode()` (workspaceHasDb && !isCloudEnabled). `queries.ts` era già a posto (pattern `if (ws()) return local.X()`). Patch a `layout.tsx`, `dashboard/page.tsx`, `map/page.tsx`, `positions/page.tsx`: skip `supabase.auth.getUser()` e fetch Supabase quando localOnly=true. Su Vercel/remote sempre false (no SQLite locale), comportamento immutato. Localhost+cloud paired idem (dual-write). Localhost+cloud disabled → 100% local, zero chiamate Supabase.
+
+**🟡 Pending P2**
+- ⬜ Account Supabase mismatch warning UI (memoria `project_supabase_dual_accounts`)
+- ⬜ Schema drift alert su fallback full-read
+- ⬜ Canary endpoint per distinguere "Supabase saturo" da "Vercel slow"
+
+**Future / nice-to-have**
 - ⬜ **Google Drive integration** (`drive.file` scope, CV/cover letter upload)
 - ⬜ **"Enable cloud sync" toggle** in desktop launcher + CLI wizard
 - ⬜ **Self-hosted Supabase docs** (BYO backend for technical users)
 
-##### 🔌 [JHT-LOCAL-NO-API] Local PC mode bypassa Supabase
+##### ✅ [JHT-LOCAL-NO-API] Local PC mode bypassa Supabase — DONE 2026-05-31
 
 - **Decisione 2026-05-20** ([`cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md)): in Local PC mode (`cloud.json.enabled=false`) il web bypassa Supabase e legge direttamente `jobs.db` via `web/lib/local-queries.ts`.
-- **Done:** `local-queries.ts` esiste e funziona ([`web/lib/local-queries.ts`](web/lib/local-queries.ts), commit `cc52acca` ha esteso il fallback).
-- **Pending:** `web/lib/queries.ts` deve switchare su `local-queries.ts` quando `cloud.json.enabled=false`. Verificare `MainChrome.tsx` + `dashboard/page.tsx` per consumi residui.
-- **Priority:** 🟡 P1 (privacy-first feature + sblocca path Local PC mode senza touch Supabase).
+- **Done 2026-05-31 (commit `193d06fd`):**
+  - `web/lib/workspace.ts` espone `isCloudEnabled()` (legge `~/.jht/cloud.json`) e `isLocalOnlyMode()` (workspaceHasDb && !isCloudEnabled).
+  - `queries.ts` era già a posto via pattern `if (await ws()) return local.X()`.
+  - Patch a `(protected)/layout.tsx`, `dashboard/page.tsx`, `map/page.tsx`, `positions/page.tsx`: skip `supabase.auth.getUser()` + fetch Supabase quando `localOnly=true`.
+- **Casi:** Vercel/remote → localOnly=false sempre (no SQLite locale, comportamento immutato). Localhost+cloud paired → localOnly=false (dual-write attuale). Localhost+cloud disabled → 100% local, zero chiamate Supabase.
+- **Follow-up:** allineare anche `profile/page.tsx` (gia' aveva check `!isLocalRequest()` ma puo' essere unificato con `isLocalOnlyMode()` per coerenza), e `(protected)/settings/cloud-sync/CloudSyncClient.tsx` (client component, gestione manuale del pairing — ok cosi'). Non-blocker.
 
-##### 🟡 [JHT-MONITORING-WEEKLY] Weekly window calibration — data-layer DONE 2026-05-19
+##### 🚦 [INFRA-VERCEL-QUOTA] Vercel quota exhaustion — sostenibilità post-incident 2026-05-22 🟢 quasi tutto done
 
-- **Problem:** monitoring is currently calibrated on 5h windows, but Anthropic's real reset is weekly. Two days of intensive use can burn through the weekly cap even if every 5h window stays under 95%.
+- **Incident:** `jobhunterteam.ai` offline (HTTP 402) per quota Hobby exhausted: Fast Origin Transfer 305%, Fluid CPU 149%, Function Invocations 120% (vedi [`docs/internal/2026-05-22-vercel-quota-exhaustion.md`](docs/internal/2026-05-22-vercel-quota-exhaustion.md)).
 - **Stato implementazione:**
-  1. ✅ `compute_metrics.py` espone `weekly_usage`, `weekly_reset_at`, `weekly_reset_at_unix` (bug #19A: disponibili al Capitano/Sentinella senza calcoli runtime); flag `--weekly` su CLI.
-  2. 🟡 API `/api/sentinella/data` consuma i nuovi campi (`web/app/api/sentinella/data/route.ts`); UI breakdown per 5h ancora da verificare/cablare lato dashboard.
-  3. ⬜ Switch target 95 % settimanale (oggi rimane 95 % per finestra) — decisione + tuning bridge.
-  4. ⬜ Test su sessione settimanale completa Claude Max + Kimi.
+  - ✅ **Push delta-only** (commit `690534e0`, 2026-05-22) — riduce upload ~95% via cursor `updated_at`
+  - ✅ **Dashboard polling adattivo** ([`web/components/AgentInteraction.tsx:87`](web/components/AgentInteraction.tsx)): 1500ms fissi → backoff esponenziale 1.5s→20s + pausa quando `visibilityState !== 'visible'`. Stessa logica in `ProfileAssistantFab.tsx`.
+  - ✅ **Pause cloud-sync durante HALT-WEEKLY** ([`cli/src/commands/cloud.js:877`](cli/src/commands/cloud.js)): guard `WEEKLY_HALT_FLAG` salta `handlePush` quando file presente, log ogni 10 skip.
+  - ⬜ **Vercel spending limit alert** — config dashboard 50/80/95% sulle 3 metriche critiche (10 min, una tantum).
+  - ⬜ **CV PDF su Cloudflare R2/Backblaze B2** — solo se PDF download torna a essere quota di rilievo (1 giorno dev).
+- **Rilevanza beta forum:** la doc dice esplicitamente "non siamo pronti per beta forum pubblica finché push daemon e dashboard polling non sono fixati" — i due fix critici sono ora ✅, manca solo l'alert preventivo.
+- **Priority:** 🟢 LOW (lavoro critico già completato, residuo è alert + opzionale R2 migration).
 
-##### ⏰ [JHT-MONITORING-WORKHOURS] User-defined work hours
+##### 🗄️ [INFRA-SUPABASE-PERF] Supabase advisor findings — 40+ items (P0 done)
+
+- **Source:** [`docs/internal/2026-05-20-supabase-perf-backlog.md`](docs/internal/2026-05-20-supabase-perf-backlog.md) — 40+ findings da `get_advisors`.
+- **Stato implementazione:**
+  - ✅ **P0 — `auth_rls_initplan` × 24 occorrenze** (migration `018_rls_init_plan_fix.sql` + commit `2b78fdd9`, 2026-05-22) — 24 policy migrate da `auth.uid()` per-row a `(select auth.uid())`. Chiude advisor critical, impatto plausibile sull'incident del 2026-05-19.
+  - ✅ **P1 — `unindexed_foreign_keys` × 9 occorrenze** — DONE 2026-05-31 (migration `024_fk_indexes.sql`, commit `f2908338`). 9 FK indexes emessi con `IF NOT EXISTS`.
+  - ✅ **P2 — `unused_index` × 9 occorrenze** — DONE 2026-05-31 (migration `026_drop_unused_indexes.sql`, commit `59638b08`). 9 unused indexes droppati.
+  - ⬜ **P2 — `auth_db_connections_absolute` × 1** (INFO). Monitor connection pool, no action immediato.
+- **Priority:** 🟢 LOW residual (solo monitoring connection pool).
+
+##### ✅ [JHT-MONITORING-WEEKLY] Weekly window calibration — DONE 2026-05-26
+
+- **Problem:** monitoring was calibrated on 5h windows, but the real Anthropic / Codex reset is weekly. Two days of intensive use could burn through the weekly cap even if every 5h window stayed under 95%.
+- **Soluzione shipped:** target dinamico work-hours-aware sostituisce il `TARGET_BAND_CENTER=92` fisso. Il pacing-bridge calcola per ogni finestra 5h corrente il target = `(active_hours_in_window / weekly_active_hours) × 100% / window_cap_pct_of_weekly`. Provider seed table + EMA auto-calibration via `window_ratio_meter.py` daemon (half-life 7gg, blend `min(1, days/4)`). Sentinel-bridge g-spot ora dinamico (`target±12`), Capitano regola 11 per work_phase=OFF (no spawn, finisci in-flight). Fallback completo al 92% fisso quando schedule assente.
+- **Commits:** `1b506bd3` (skills), `f7b52e52` (bridge+agents), `fae5aefa` (CLI+API+UI minimale), `237c8447` (heatmap+sweet-spot+wizard).
+- **Residual:**
+  1. ⬜ Cloud-sync di `team.working_hours` su Supabase per bootstrap multi-device (oggi local-only — accettabile perché in VPS/Dedicated PC il file vive sul backend, una sola sorgente di verità per device).
+  2. ⬜ Test su sessione settimanale completa Claude Max — il seed `15%` è stima, serve case study reale per riportare confidence high.
+  3. ⬜ Backfill EMA convergence verification — dopo 1 settimana di run reale verificare che `observed_ratio_pct` converga al seed `±5%`.
+
+##### 🔐 [JHT-ACCESS-CREDENTIALS-GAPS] Access & credentials — gap doc vs codice (NEW 2026-05-26)
+
+- **Context:** sessione di consolidamento doc 2026-05-26 (`docs/internal/access-and-credentials.md`) ha riallineato la storia "dove vivono le credenziali" e rivelato 6 punti dove la doc promette qualcosa che il codice non implementa ancora.
+- **Tickets sotto (priorità bassa, non blockers):**
+  1. `[JHT-SSH-PASSPHRASE-KEYRING]` — wizard salva la passphrase della SSH key in OS keyring quando l'utente la setta. Oggi rimane da inserire ad ogni `ssh-add` → blocca automation/LLM-agent path. Fix: `cli/wizard/setup-steps.js` durante key gen, + lib `desktop/vps/ssh-keychain.js` (nuovo).
+  2. `[JHT-HETZNER-TOKEN-SECRETS]` — `web/lib/hetzner.ts:49` legge solo `process.env.HCLOUD_TOKEN`. Dovrebbe avere fallback a `jht secrets get HCLOUD_TOKEN` (decifrato con `JHT_CREDENTIALS_KEY` dal keyring). Riallinea doc `vps.md` § "Cosa va nel cloud, cosa resta locale" col comportamento reale.
+  3. `[JHT-LLM-AGENT-CONTRACT]` — discovery contract per LLM agent locali (Claude Code, Codex, Kimi): endpoint `/api/agent/discovery` (or static JSON file in `~/.jht/agent-contract.json`) che dichiara quali credenziali sono presenti, in quale storage, e che capability sbloccano. Vedi access-and-credentials.md §3.1-3.2.
+  4. `[JHT-CRED-SCOPED-GRANT]` — `jht credentials grant <scope> --expiry 1h` per token derivati a tempo per LLM agent remoti. Out of scope v1, ma traccia.
+  5. `[JHT-BACKUP-ROUNDTRIP]` — verifica end-to-end scenari recovery S1-S5 di access-and-credentials.md §4. Oggi `jht backup export/import` esiste ma roundtrip su nuovo PC non testato.
+- **Priority:** 🟢 LOW per tutti — il funzionale beta 0 regge col path A (utente paste IP, no API token automation). Da attaccare quando il path B2 LLM-agent diventa primary (Beta 1+).
+
+##### ✅ [JHT-MONITORING-WORKHOURS] User-defined work hours — DONE 2026-05-26
 
 - **Problem:** team runs 24/7 once started — wasting tokens during unproductive hours and burning the weekly budget.
-- **Tasks:**
-  1. UI in `/team` to define hour slots (e.g., 09:00–13:00 + 14:00–18:00 weekday)
-  2. Captain respects the slots: idle outside, active inside
-  3. Sentinel aligns usage projection to actual slots (no 24/7 projection)
-  4. "Team as employee" model — works on user-defined office hours
+- **Shipped:**
+  1. ✅ Algoritmo + storage local-first (`shared/skills/work_hours_target.py`)
+  2. ✅ Capitano rispetta lo schedule (regola 11): no spawn / no promozioni / no nuovo writing in OFF; in-flight finisce; Mentor/Assistente sempre on
+  3. ✅ Sentinella + Bridge allineano projection al target dinamico (`current_window_target_pct`)
+  4. ✅ "Team as employee" model — 5 preset built-in + custom heatmap 7×24
+  5. ✅ 3 vie configurazione: CLI (`jht working-hours`), wizard desktop (5 preset + skip), web UI `/team` (heatmap + bar chart + sweet-spot meter)
+- **Commits cronologia:** `13318e1d` (gate tick Capitano + notify-user), `99bab572` (design UI + autocalibrazione 5h), `1b506bd3` (target distribution + provider ratio), `f7b52e52` (bridge+agents dynamic target end-to-end), `d8ae0da2` (pacing-bridge popola work-hours fields anche durante tick saltati).
 
 ##### 🌙 [JHT-KIMI-OPTIMIZE] Kimi €40 mass-market calibration
 
-- **Problem:** Kimi projection oscillation is ±10–15% (vs Claude ±5%). Current target is 85% (15% safety buffer = wasted capacity).
-- **Tasks:**
-  1. Analyze Kimi response-size distribution
-  2. Adapt projection model for higher variance
-  3. Final target: 90%+ with <10% oscillation (= Claude equivalent)
-  4. Stress test: 1 month of real job-hunting
-- **Benefit:** if it holds → JHT becomes accessible to anyone for €40/month (vs €200 Claude Max). "Mass-market jackpot" — see `docs/about/PROVIDERS.md` and `docs/about/MONITORING.md`.
+- **Problem originale:** Kimi projection oscillation ±10–15% (vs Claude ±5%). Target conservativo 85% (15% safety buffer = wasted capacity).
+- **Stato 2026-05-25 (refresh post case study #3 + work-hours design):**
+  1. ✅ **Token-meter calibration done** (2026-05-01): empirico `1% rate budget Kimi K2 = 30 kT weighted`, stabile. Per-agent attribution funziona via `state.json.custom_title` regex.
+  2. ✅ **Case study #3 reale** (2026-05-23): run 75h, 56 CV ready, €0.71/CV, burn 5.37%/h, 1.61B token aggregati. Dati pubblicati in `docs/about/RESULTS.md` e `web/data/case-studies/seed.sql`. **Internal-only** (maintainer-built profile).
+  3. ⬜ **Variance analysis dentro finestra 5h** — vero blocker per ridurre buffer 85% → 90%. Kimi NON ha weekly cap quindi work-hours design ([`docs/internal/2026-05-25-work-hours-design.md`](docs/internal/2026-05-25-work-hours-design.md)) NON risolve l'oscillazione (risolve solo il problema weekly exhaustion che vale per Claude/Codex).
+  4. ✅ **Pacing-bridge per-provider tuning** — DONE 2026-05-31. `.launcher/pacing-bridge.py` ora ha `_PROVIDER_TARGET_BAND` map: Kimi 88%, Codex/Claude/openai 92%. Risoluzione: env `JHT_PACING_TARGET_PCT` > provider lookup > 92 default. Provider attivo letto da `$JHT_HOME/jht.config.json`. Smoke test 5/5 (kimi=88, codex=92, env override=75, provider sconosciuto=92, no config=92).
+  5. ⬜ **External beta testers post-launch** — open invitation tramite [`docs/guides/BETA.md`](docs/guides/BETA.md) per validare il "mass-market jackpot" Kimi €40 su profili esterni vari (non più matrix-driven, vedi [[project-pre-release-test-strategy]]). Almeno 1-2 run esterni per consolidare il signal.
+  6. ⬜ **Stress test 1 mese** real job-hunting (steady-state, non burst — Case Study #3 era 4 giorni intensivi).
+- **Benefit:** se regge → JHT accessibile a €40/mo (vs €200 Claude Max). "Mass-market jackpot" — vedi `docs/about/PROVIDERS.md` e `docs/about/MONITORING.md`.
 
 ##### 💂 [JHT-SENTINELLA-OPTIMIZE] Reduce Sentinel token consumption — partially addressed by V6 (2026-05-01)
 
@@ -241,17 +332,19 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Co-maintainer:** identify within 60 days post-launch (can be informal, just someone who triages issues — fratello / amico fidato).
 - **Reasoning:** see `docs/internal/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
 
-##### 🧪 [JHT-TEST-CAMPAIGN] Fill coverage matrix (8/12 cells) 🟡 3/12 done — BLOCKER residuo
+##### 🧪 [JHT-TEST-CAMPAIGN] Documentare run esistenti (NO matrix coverage pre-launch) 🟢 declassato 2026-06-02
 
-- **Problem:** today's test claims are anecdotal (single profile, single provider). Public users will ask "does it work for *my* setup?" — we need data.
-- **Coverage tracker:** [`docs/guides/BETA.md` § Coverage we still need](docs/guides/BETA.md#coverage-we-still-need) — 12 cells (provider × persona), **3 done** (#1 maintainer Claude Max anecdotal, #2 Codex/translator, #3 Kimi/Python junior), 9 open. Target: **8/12** filled before launch.
-- **Pipeline:** beta tester applies via [`docs/guides/BETA.md`](docs/guides/BETA.md) → self-assigns to a cell → runs JHT 2+ weeks → submits results PR adding a row to [`docs/about/RESULTS.md`](docs/about/RESULTS.md) and updating cell status in BETA.
-- **Why:** highest-leverage milestone to publish before public launch. The first HN/Reddit question will be "does it work for X?".
-- **Priority:** 🔴 BLOCKER pre-launch (5 cells residue)
-- **✅ Done 2026-05-23**: estrazione DB raw da entrambe le VPS Hetzner (Codex VPS1 + Kimi VPS), analisi pipeline + cost + token, anonimizzazione, scrittura Case Study #2 + #3 in `RESULTS.md`, matrix BETA.md aggiornata 1/10 → 3/12. Staging doc: [`docs/internal/2026-05-23-case-study-staging.md`](docs/internal/2026-05-23-case-study-staging.md).
-- **Residual gap:** trovare **almeno 2 tester Kimi €40 esterni** (cell #4, #6, #7, #8, #10) per validare mass-market jackpot al di fuori del maintainer. Case Study #3 è internal (Beta tester 2 = maintainer profile costruito ad hoc), serve external confirmation.
-- **Side findings da promuovere a fix backlog:**
-  - Companies rubric Analista: 0 NO_GO su 357 companies totali tra 2 run → rubric troppo permissivo, hard requirements (degree, geo) non filtrati upfront
+- **Decisione 2026-06-02:** la matrix 8/12 celle persona×provider **NON è più BLOCKER pre-launch** (vedi memoria [[project-pre-release-test-strategy]]). Razionale: il team JHT è agnostico al persona — l'unica variabile materiale è il provider tier. Coprire 5 persone diverse su Kimi €40 dà info marginale rispetto a 1 solido run Kimi €40 esterno. La narrativa di lancio si basa sui **3 tier signals** (€100 / €40 / €20) onestamente caratterizzati.
+- **Pre-launch (must-have)** — documentare bene quello che già abbiamo:
+  - ✅ Case Study #1 (Claude Max x20, maintainer) — pubblicato in `RESULTS.md`
+  - ✅ Case Study #2 (Codex ProLite €100, Beta tester 1) — pubblicato in `RESULTS.md`
+  - ✅ Case Study #3 (Kimi K2 Pro €40, Beta tester 2) — pubblicato in `RESULTS.md`
+  - 🟡 Run #4 Kimi K2 Pro €40 weekly-distributed maintainer — dati raccolti, **elaborazione pending** → caricare su `/case-studies`
+  - 🟡 Run #5 Claude Max x20 maintainer re-test — monitoring incompleto, **da rifare con instrumentation corretta**
+- **Post-launch (open invitation)** — beta tester di settori vari (NON solo IT/tech), profile-agnostic, struttura `/case-studies` come schema di ingestion per nuovi dump. Vedi [`docs/guides/BETA.md`](docs/guides/BETA.md).
+- **Linked:** [JHT-CASE-STUDIES-WEB] — la pagina `/case-studies` è il prerequisito strutturale; finita lei, l'aggiunta di nuovi run diventa lineare.
+- **Side findings dei 3 run da promuovere a fix backlog (validi indipendentemente dalla matrix):**
+  - Companies rubric Analista: 0 NO_GO su 357 companies totali tra 2 run → rubric troppo permissivo, hard requirements (degree, geo) non filtrati upfront → coerente con [[project-team-value-chain-shift]] (Analisti hanno lavoro espanso)
   - Writer attribution null 93% su Codex run → `written_by` field non popolato consistente
 
 ##### 📊 [JHT-CASE-STUDIES-WEB] Pagina pubblica /case-studies — sessione 23-25/05 done, residui pre-launch ⬜ 🟠 HIGH
@@ -271,9 +364,18 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **🟢 Operativo:** shutdown VPS Hetzner (€19.50/mo combinati per 2 CPX22 ferme). Investigare auto-restart container Kimi (osservato 2× durante sessione).
 - **🐛 Bug minori funnel:** labels phase troncati su viewport stretti, legend duplicata Codex+Kimi, Pre-LinkedIn funnel "distorto" da 84 untracked.
 
-##### ✍️ [JHT-WRITER-ON-DEMAND] Scrittore + Critico spawn SOLO su selezione utente esplicita ⬜ 🔴 URGENTE pre-next-test
+##### ✍️ [JHT-WRITER-ON-DEMAND] Scrittore + Critico spawn SOLO su selezione utente esplicita ✅ DONE 2026-05-29
 
-- **Background scoperto da case study #2/#3 (2026-05-23)**: gli Scrittori sono i top consumer di token del team (spawn 3-round + Critico che a sua volta consuma per leggere CV+JD+scrivere critica). Il Critico è concettualmente "fuori dal team" (spawnato dallo Scrittore) ma il suo consumo dovrebbe essere attribuito allo Scrittore per i calcoli di throttling del Capitano. Inoltre molti CV scritti finiscono in `ready` senza che l'utente li voglia davvero → token bruciati su posizioni che l'utente non applierà mai. Su VPS Codex: 105 ready ma applied=0; su VPS Kimi: 56 ready ma applied=0.
+- **Stato implementazione (branch `dev3`, 6 commit sequenziali 2026-05-29):**
+  - ✅ DB foundation (`1744938e`): SQLite V6 con `positions.write_requested` + `write_requested_at`, migrazione idempotente `_migrate_positions_write_requested`, partial index `WHERE write_requested = 1`, mig Supabase 024. `next-for-scrittore` filtra `write_requested=1` con ordering FIFO su `write_requested_at`.
+  - ✅ API web (`0ac03951`): `POST/DELETE /api/positions/[legacyId]/write-request` (session-only, double-write SQLite + Supabase best-effort). Push delta cablato: `write_requested[_at]` nel whitelist `cli/src/commands/cloud.js` e nel receive endpoint `web/app/api/cloud-sync/push/route.ts`.
+  - ✅ UI web (`d7fdf924`): button "🖊 Scrivi CV" nella detail page `/positions/[id]` con toggle pulito (POST/DELETE), optimistic update + rollback, disabled quando `status != 'scored'` o application esiste.
+  - ✅ Scrittore prompt (`ac90fc94`, EN+IT baseline): on-demand mode, drain-and-exit (no idle loop), target = solo user-flagged. HU community update pending.
+  - ✅ Capitano prompt + RULE C-10 (`a9596002`, EN+IT): lazy-spawn protocol, NIENTE Scrittori al boot, check `next-for-scrittore` ogni BRIDGE TICK, spawn solo se coda non vuota AND nessun SCRITTORE-* attivo. Rimosso trigger `PROMOTABLE_40_49` da C-05 (anti-pattern V6 esplicito).
+  - ✅ Telegram `/cv <id>` (`5cef55fc`): handler in `telegram-bridge/src/bridge.ts` + nuova skill `shared/skills/write_request.py` (wrapper Python atomico validate+UPDATE, output JSON, riusabile da bridge/Capitano/CLI). Same guard della API web. Notify ad-hoc al Capitano via tmux per evitare attesa BRIDGE TICK.
+- **Decisione architetturale lockata** (vedi memoria `project_writer_on_demand_arch`): lazy-spawn dal Capitano (no boot), MVP single-button + `/cv` Telegram (NO batch multi-select per ora — rinviato se feedback lo richiede).
+- **Componenti rimasti opzionali (post-launch)**: batch multi-select UI lista, comando `/cv all-score-80plus` per gruppo, scaling automatico 2-3 Scrittori in parallelo (C-10 lo descrive ma da validare in produzione).
+- **Background originale**: gli Scrittori sono i top consumer di token del team (spawn 3-round + Critico che a sua volta consuma per leggere CV+JD+scrivere critica). Il Critico è concettualmente "fuori dal team" (spawnato dallo Scrittore) ma il suo consumo dovrebbe essere attribuito allo Scrittore per i calcoli di throttling del Capitano. Inoltre molti CV scritti finiscono in `ready` senza che l'utente li voglia davvero → token bruciati su posizioni che l'utente non applierà mai. Su VPS Codex: 105 ready ma applied=0; su VPS Kimi: 56 ready ma applied=0.
 - **Problem statement**: oggi la pipeline scrive CV per **tutto** ciò che passa lo Scorer (default ≥60). Risultato: forte spreco di token su CV non desiderati + scarsa potenza di ricerca perché Scrittori "rubano" risorse a Scout/Analista/Scorer.
 - **Soluzione proposta** (rivoluzione architettonica per i prossimi beta test):
   1. **Default mode = "SEARCH ONLY"**: all'avvio del team, Scrittori in stand-by. Il team gira solo come motore di ricerca + analisi + scoring → accumula posizioni con score nel DB.
@@ -292,10 +394,10 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - DB: aggiungere `positions.write_requested BOOLEAN DEFAULT 0` + `positions.write_requested_at TIMESTAMP`
   - Skill nuova `[JHT-SKILL-WRITE-REQUEST]` per Scrittore: pull next position con `write_requested=true AND status='scored'`
   - Migration Supabase: stesso campo per cloud sync
-- **Priority**: 🔴 URGENTE — da implementare PRIMA dei prossimi test beta. Cambia profondamente i numeri di consumo token e quindi la validità delle metriche.
+- **Priority**: ✅ DONE 2026-05-29 — shipped end-to-end (DB + API + UI + Telegram + Scrittore + Capitano). Validare in real beta test per misurare impatto reale sul token spend.
 - **Linked**: [JHT-TOKEN-MONITOR-WRITER-CRITIC] (sotto), [JHT-COST-VALIDATION-PAYG-VS-SUB] (sotto).
 
-##### 📊 [JHT-TOKEN-MONITOR-WRITER-CRITIC] Aggrega consumo Scrittore+Critico come unità singola per throttling Capitano ⬜ 🟠 HIGH
+##### 📊 [JHT-TOKEN-MONITOR-WRITER-CRITIC] Aggrega consumo Scrittore+Critico come unità singola per throttling Capitano 🟡 MVP DONE 2026-05-31 🟠 HIGH
 
 - **Background scoperto 2026-05-23**: il Critico è spawnato dallo Scrittore (~3-round critic loop). Il suo consumo token NON è attribuito allo Scrittore nel `token-meter` attuale, ma per le decisioni di throttling del Capitano dovrebbe essere considerato "1 unit" insieme allo Scrittore. Inoltre il Critico ha task atomica (read CV + JD + scrivere critica) — non può essere throttlato facilmente, quindi l'unico leva è rallentare lo Scrittore "padre" prima che spawni il Critico.
 - **Task**:
@@ -305,8 +407,10 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   4. Dashboard web `/team`: tab "Per-writer cost" con barra stacked (writer own + critic spawn).
 - **Linked**: [JHT-WRITER-ON-DEMAND] (sopra) sblocca anche questa misurazione perché senza writer-spawn-burst il rate aggregato resta naturalmente sotto soglia.
 - **Side bug da fix**: `token-meter.csv` non è durable cross container restart (verificato su VPS Kimi 2026-05-23, file resettato sul restart, 35 righe vs 10752 di Codex). Da rendere durable con append-mode + rotazione invece di overwrite.
+- **MVP shipped 2026-05-31**: nuova funzione `aggregate_writer_critic_rates()` in `shared/skills/token_metrics_lib.py` mappa `scrittore-N` ↔ `critico-sN` (pattern 1:1 stabilito da `critic-loop` skill) e ritorna `{own_rate, critic_rate, combined_rate, own_weighted, critic_weighted, combined_weighted, critic_session, writer_session_alive}`. `token-meter.py` espone il dict aggregato come `per_writer_aggregated` nel state JSON (per_agent invariato per compat). Nuova RULE Capitano **C-11** (IT + EN) istruisce a leggere `per_writer_aggregated.scrittore-N.combined_rate_kt_per_min` invece di `per_agent.scrittore-N.rate_kt_per_min_60s` per decisioni throttle. Gestiti edge case: writer senza critic (review non in flight → combined=own), critic orphan post-restart (writer_session_alive=false → combined=critic rate).
+- **UI shipped 2026-05-31** (commit `82219a38` API + commit successivo UI): `/api/tokens/status` espone `perWriterAggregated`. Widget `WriterCriticBreakdown.tsx` in `/team` mostra per ciascuno Scrittore una barra stacked own + critic con i valori numerici a destra (own + critic = combined kT/min); polling 15s; empty state spiega che è normale in Writer-on-demand V6; orphan badge giallo se writer_session_alive=false. **Scope ridotto**: (a) side bug durability `token-meter.csv` NON toccato (issue separato, append-mode già usato — il reset cross-restart richiede investigazione VPS Kimi specifica).
 
-##### 🩺 [JHT-DOCTOR-DAILY-RESTART] Dottori riavviano ogni agente almeno 1×/giorno per context freshness ⬜ 🟠 HIGH
+##### 🩺 [JHT-DOCTOR-DAILY-RESTART] Dottori riavviano ogni agente almeno 1×/giorno per context freshness 🟡 MVP DONE 2026-05-31 🟠 HIGH
 
 - **Background scoperto durante Codex run 2026-05-19/21** (Case Study #1 nella pagina pubblica): a un certo punto gli agenti del team non venivano più riavviati automaticamente dai Dottori, restavano in idle con contesto vecchio di ore. Il maintainer ha dovuto fare 1 intervento manuale: missione esplicita ai Dottori per riavviare tutto il team. Ogni agente al riavvio prende un contesto fresco e ricostruisce lo stato del team in autonomia (basta guardare DB + handoff snapshot + leggersi qualche messaggio recente).
 - **Premise architetturale**: anche senza una "context window" esplicita visibile (es. Codex non la mostra come Claude/Kimi), una sessione fresca di N minuti **è sempre meglio** di una sessione che gira da ore. Drift di prompt, accumulazione di "rumore" nel ragionamento, dimenticanze, decisioni che si rifanno a fatti vecchi non più validi. Esempio empirico: Codex run del 19-21/05 ha mostrato decisioni progressivamente meno lucide nelle ore finali → il restart manuale ha riportato il team a comportamento netto.
@@ -318,6 +422,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
 - **Vantaggi misurabili attesi**: meno token consumati per task ripetitive ben note (perché agente riconosce ridondanza), meno errori di drift, meno necessità di intervento utente manuale.
 - **Acceptance**: dopo 1 settimana di Codex run con questa feature attiva, confrontare metriche (positions/h, critic pass rate, errori loggati, intervento utente count) vs Case Study #1 (1 restart manuale) → deve mostrare miglioramento o almeno non-regressione, senza richiedere intervento utente.
 - **Linked**: chiude il gap segnalato in `docs/about/RESULTS.md` Case Study #1 note "Future runs will have doctors auto-restart every agent at least once per day for context freshness".
+- **MVP shipped 2026-05-31**: nuova skill `agents/_skills/daily-restart-wave/SKILL.md` (gating su finestra 03:00 UTC ± 30 min + 23h anti-thrash + rispetto `.team-halted.flag`/`.weekly-halt.flag`), aggiunta a `agents/dottore/skills.list`, sezione lifecycle + indice skill aggiornati in `dottore.it.md` + `dottore.md` (EN). HU non aggiornato (parità con commit precedenti, allineamento HU community pending). **Scope ridotto**: (a) snapshot pre-restart per-agente NON implementato — richiederebbe modifica a 10 prompt agent, scope explosion; il MVP usa capture-pane in `/tmp/` + db-query come fallback; (b) `~/.jht/preferences.json` schema NON wired — default hard-coded nella skill (03:00 UTC, ±30 min, 23h anti-thrash); (c) heads-up Capitano 10 min prima della wave incluso nella skill, ma snapshot strutturato handoff resta follow-up.
 
 ##### 🧪 [JHT-COST-VALIDATION-PAYG-VS-SUB] Validazione cost — €40 di token Kimi pay-per-use vs €40 sub mensile ⬜ 🟡 MEDIUM
 
@@ -376,7 +481,7 @@ For full provider matrix → see [`docs/about/PROVIDERS.md`](docs/about/PROVIDER
   - `cb5b9bab` `providers update` IS_CONTAINER passthrough (no docker compose run dentro al container, npm install diretto in /jht_home/.npm-global) + `ensure_bind_owner` chown 1001:1001 sui bind dir su Linux (fix EACCES su VPS root uid 0)
 - **Bug noti residui (non-blocking per il VPS use case):**
   - `[BUG-CLACK-TTY-DOCKER-EXEC]` — wizard interattivo non riceve frecce via docker exec (workaround: `--non-interactive` con tutti i flag, gia' tutti presenti)
-  - `[BUG-VPS-AUTH-TUNNEL]` — Supabase OAuth callback configurato solo per dominio prod, web UI auth non funziona via SSH tunnel `localhost:3000`. **NO workaround:** la dashboard e' l'interfaccia primaria su VPS. Fix actionable in ~10min (aggiungere `http://localhost:3000/**` agli additional redirect URLs Supabase) — vedi entry dedicata nel BUG INDEX.
+  - ~~`[BUG-VPS-AUTH-TUNNEL]`~~ — ✅ FIXED (verificato live 2026-06-02): `localhost:3000-3005` + `127.0.0.1` aggiunti agli allowed redirect URLs Supabase.
   - `[BUG-CSP-JSONLD-LANDING]` (riapertura) — fix dev-4 (`e48eebee`) incompleto, hydration mismatch su `nonce` JSON-LD persiste in produzione
 - **Output:** [`docs/guides/VPS-SETUP.md`](docs/guides/VPS-SETUP.md) (nuovo, ~250 righe) con step-by-step + lifecycle (incluso "trappola billing Hetzner" snapshot+delete) + override env + troubleshooting.
 - **Per il merge:** dev-1 → master quando soddisfati. Una volta merged, immagine GHCR `latest` viene rebuildata da CI e gli utenti pubblici hanno tutti i fix.
@@ -502,7 +607,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - **[JHT-HOME-CONFIG-Company]** 5 config files at the top of `~/.jht/`: `jht.config.json`, `preferences.json`, `cloud.json`, `i18n-prefs.json`, `.claude.json`. Move the first 4 into `~/.jht/config/` (leave `.claude.json` alone — the claude CLI looks for it at `$HOME`). Update readers in `cli/`, `web/`, `tui/`, agents.
 - **[JHT-HOME-LEFTOVERS]** Cleanup empty leftover dirs. `~/.jht/credentials/` (empty since Apr 10), `~/.jht/.config/` (only matplotlib settings). Remove from launcher if no longer created by anyone, or document their purpose.
 - 🟡 **[JHT-HOME-CACHE-PRUNE]** Recurring cache hygiene under `~/.jht/.cache/` + `~/.jht/.codex/logs_2.sqlite`. *Audit 2026-05-02:* `.cache/` was 1.3 GB — `ms-playwright/` 928M (cause: no `PLAYWRIGHT_BROWSERS_PATH`, full Chromium downloaded but never used) + `uv/` 364M (no prune) + tiny matplotlib/claude-cli. Codex SQLite logs were 223M (108K rows, 71% TRACE — Codex's internal 10-day retention only runs when the CLI is active, so idle installs accumulate). *Already done 2026-05-02:* one-shot `rm chromium-1208/` + `uv cache prune` recovered 928M (commits `794e87f9`, `2efb4cce`); Dockerfile now pins `PLAYWRIGHT_BROWSERS_PATH=/opt/playwright` and pre-installs only `--only-shell chromium`; `jht cache prune` extended to also DELETE+VACUUM `~/.jht/.codex/logs_2.sqlite` when >50 MB AND mtime-idle >1h, with the Captain instructed to run it ~daily. *Still open:* (a) after the next image rebuild, manually `rm -rf ~/.jht/.cache/ms-playwright/{chromium_headless_shell-1208,ffmpeg-1011}` (~326M leftover from before the Dockerfile fix); (b) watch `.cache/claude-cli-nodejs/` — currently 1.9M but grows linearly with the number of distinct agent cwds spawned over the system's lifetime; (c) decide whether to extend `cache prune` to also handle `npm cache verify` (331M in `.npm/_cacache`).
-- 🟡 **[JHT-PY-TOOLS-CENTRALIZE]** Single shared Python user-base for ALL agent installs (RULE-T13). *Audit 2026-05-02:* `~/.jht/.local/lib/python3.11/site-packages/` was 412M with 5 concurrent PDF libraries (weasyprint, reportlab, fpdf, pymupdf, pdfminer/pdfplumber) installed by different writers in parallel; another ~70M of duplicated wheels in `agents/scrittore-1/.venv/` + `.venv_uv/`; system site-packages also dirty. Cause: passwordless sudo + `pip install` was the path of least resistance. *Done 2026-05-02:* sudoers tightened to a whitelist (`apt-get`, `apt`, `apt-cache`, `mkdir`, `chown`, `ln`) so `sudo pip` returns `command not allowed`; `ENV PYTHONUSERBASE=/jht_home/.local` baked into the image so `uv pip install --user` always lands in the shared magazzino; RULE-T13 added to `agents/_team/team-rules.md` and inherited by all 9 agent prompts. *Still open:* (a) one-shot migration when team is fully down — `rm -rf agents/scrittore-1/.venv*` + `find ~/.jht/.local -type d -name __pycache__ -exec rm -rf {} +` to recover ~90-100M; (b) `jht tools` subcommand mirroring `jht cache prune` — `list/outdated/dups` to make Python pkg state observable and let the Captain audit it weekly; (c) post-PDF-CONSOLIDATE, `pip uninstall` of the 4 unchosen PDF libraries (~70M).
+- 🟡 **[JHT-PY-TOOLS-CENTRALIZE]** Single shared Python user-base for ALL agent installs (RULE-T13). *Audit 2026-05-02:* `~/.jht/.local/lib/python3.11/site-packages/` was 412M with 5 concurrent PDF libraries (weasyprint, reportlab, fpdf, pymupdf, pdfminer/pdfplumber) installed by different writers in parallel; another ~70M of duplicated wheels in `agents/scrittore-1/.venv/` + `.venv_uv/`; system site-packages also dirty. Cause: passwordless sudo + `pip install` was the path of least resistance. *Done 2026-05-02:* sudoers tightened to a whitelist (`apt-get`, `apt`, `apt-cache`, `mkdir`, `chown`, `ln`) so `sudo pip` returns `command not allowed`; `ENV PYTHONUSERBASE=/jht_home/.local` baked into the image so `uv pip install --user` always lands in the shared magazzino; RULE-T13 added to `agents/_team/team-rules.md` and inherited by all 9 agent prompts. *Still open:* (a) one-shot migration when team is fully down — `rm -rf agents/scrittore-1/.venv*` + `find ~/.jht/.local -type d -name __pycache__ -exec rm -rf {} +` to recover ~90-100M; ✅ **(b) `jht tools` subcommand — DONE 2026-05-31** ([`cli/src/commands/tools.js`](cli/src/commands/tools.js)). 4 azioni: `stats` (pkg count + size + overlap summary), `list` (pip list), `outdated` (pip list --outdated), `dups` (gruppi pre-definiti pdf-generate / pdf-parse / http-client / html-parse / yaml / image, segnala quando >1 installato). Tutti read-only, proxati al container via execInContainer. Fail-fast su container down; (c) post-PDF-CONSOLIDATE, `pip uninstall` of the 4 unchosen PDF libraries (~70M).
 
 #### 🟢 LOW PRIORITY
 
@@ -560,7 +665,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 ##### ☁️ [JHT-DESKTOP-SYNC] Encrypted cloud sync of config + VPS metadata — **CORE DONE 2026-05-13**
 
-- **Stato implementazione (merge `8040a576` dev1 + `14d84633` cloud-sync direction lockata + dev2 commit `61a544aa/a4112d10/bae27059`):** sync push-only `local → cloud` cablato; endpoint `web/app/api/cloud-sync/{push,device-register,ping,tokens}/route.ts` live; CLI `cli/src/commands/cloud.js` con `enable/pair/status/push/disable`; bootstrap automatico al primo login (decisione lockata, `[JHT-CLOUD-RESTORE]`). **Ancora aperto**: passphrase recovery end-to-end (`[JHT-DESKTOP-RECOVERY]` sotto) e profile/theme sync (`[JHT-CLOUD-SYNC-PROFILE/THEME]`).
+- **Stato implementazione (merge `8040a576` dev1 + `14d84633` cloud-sync direction lockata + dev2 commit `61a544aa/a4112d10/bae27059`):** sync push-only `local → cloud` cablato (modello successivamente esteso a bidirezionalità desired-state — vedi [`cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md)); endpoint `web/app/api/cloud-sync/{push,device-register,ping,tokens}/route.ts` live; CLI `cli/src/commands/cloud.js` con `enable/pair/status/push/disable`; bootstrap automatico al primo login (decisione lockata, `[JHT-CLOUD-RESTORE]`). **Ancora aperto**: passphrase recovery end-to-end (`[JHT-DESKTOP-RECOVERY]` sotto) e profile/theme sync (`[JHT-CLOUD-SYNC-PROFILE/THEME]`).
 - **Why:** without cloud sync of essential metadata, cross-device recovery is impossible. But syncing master credentials (Hetzner token) is too risky — single point of failure if our cloud is breached.
 - **Sync to cloud (Supabase, encrypted user-side with passphrase):**
   - Profile + preferences
@@ -651,7 +756,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
 ---
 
-### 3️⃣ PHASE 3 — ☁️ Multi-Provider Cloud Provisioning (future, post-1.0)
+### 3️⃣ PHASE 3 — ☁️ Multi-Provider Cloud Provisioning
 
 > 🌉 **Bridge to today**: il desktop launcher può già fare bring-up di una VPS via SSH (path T1-T4 shipped 2026-05-13: `SshExec` + IPC routing, install remoto, login PTY, telegram tokens). Phase 3 generalizza quel flusso single-VPS in un'esperienza one-click multi-provider con cost estimation e billing alerts.
 
@@ -717,7 +822,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
   3. **Auto-push dopo `enable`**: il `jht cloud enable` auto-triggera anche `jht cloud push` come ultima operazione. Riduce 2 comandi a 1. Questa e' la fix piu' veloce a parita' di altre cose.
   4. **🤔 Discovery bidirezionale VPS→cloud**: VPS manda heartbeat anonimo (ID hash, # positions) al cloud. Quando l'utente logga la prima volta, dashboard mostra "Hai un team attivo (VPS 65.108.x.x)? Connettilo." Click → challenge-response automatica. Privacy concern: VPS rivela esistenza prima che l'utente decida di collegarlo. Vagliare con threat model.
 - **Linked:**
-  - `[BUG-VPS-AUTH-TUNNEL]` (post-fix abilita web UI sul tunnel ma NON risolve il pairing — ortogonali)
+  - ✅ `[BUG-VPS-AUTH-TUNNEL]` chiuso (verificato 2026-06-02) — web UI sul tunnel ora funziona; pairing resta ortogonale.
   - `[JHT-VPS-FRIENDLY]` (desktop launcher dovrebbe fare il pairing automaticamente come parte del provisioning, non e' un'alternativa al fix #1 ma un layer sopra)
   - Pattern di riferimento: implementazione device flow di `claude --dangerously-skip-permissions` o `gh auth login`
 - **Priorita':** 🔴 alta — primo touchpoint utente non-tech post-launch. Senza fix, "VPS mode" rimane prerogativa dei tech-user (bypass step 5 SSH e' impossibile per non-tech).
@@ -728,15 +833,15 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 #### 📎 [JHT-VPS-CV-UPLOAD-UX] Upload CV/allegati su VPS via UI (no scp/sftp)
 
 - **Goal:** utente VPS deve poter caricare PDF (CV, certificati, lettere referenze) **senza usare scp/sftp manuale**. Oggi l'unico path funzionante e' `scp -i ~/.ssh/jht_hetzner cv.pdf root@VPS:'/root/Documents/Job Hunter Team/cv/'`, che richiede shell tools, conoscenza del bind path host, e know-how SSH/scp.
-- **Stato attuale (2026-05-08):** `web/app/profile` ha gia' un form di upload (multipart POST → `/api/profile/upload-cv`) che scrive in `/jht_user/cv/`. Funziona in dev e in prod. Su VPS via SSH tunnel `localhost:3000` e' bloccato da `[BUG-VPS-AUTH-TUNNEL]` (Supabase OAuth callback).
+- **Stato attuale (aggiornato 2026-06-02):** `web/app/profile` ha gia' un form di upload (multipart POST → `/api/profile/upload-cv`) che scrive in `/jht_user/cv/`. Funziona in dev e in prod. Auth tunnel `localhost:3000` ora abilitato (✅ `[BUG-VPS-AUTH-TUNNEL]` chiuso) — sblocco prerequisito risolto.
 - **Path forward:**
-  1. **Step 1 (sblocca tutto):** fixare `[BUG-VPS-AUTH-TUNNEL]` aggiungendo `http://localhost:3000/**` agli allowed redirect URLs Supabase. ~10min, owner maintainer (admin Supabase). Senza questo, il resto della UX VPS rimane parzialmente CLI-only.
+  1. ✅ **Step 1 (prerequisito):** `[BUG-VPS-AUTH-TUNNEL]` FIXED — `localhost:3000-3005` + `127.0.0.1` in allow list Supabase.
   2. **Step 2 (UX):** verificare che il form `/profile` upload PDF su VPS via tunnel scriva correttamente in `/jht_user/cv/` (bind-mounted `~/Documents/Job Hunter Team/cv/` host). Test end-to-end sul VPS test.
   3. **Step 3 (OCR):** integrare skill PDF parsing nell'Assistente per auto-estrarre `candidate_profile.yml` dal PDF appena caricato → utente non deve compilare YAML a mano. Skill esiste in `agents/_skills/` (controllare manifest), serve solo cablarla nel flusso `/profile` upload.
   4. **Step 4 (Telegram, futuro):** Assistente accetta documento `.pdf` come allegato Telegram → stessa pipeline OCR. Roadmap PHASE 2.
-- **Documentation:** aggiornare `docs/guides/VPS-SETUP.md` con sezione "Carica il tuo CV" che mostra il flow web (post-fix auth) come path 🥇, scp/sftp come path 🥈 (per power-user / quando l'auth tunnel e' rotto).
-- **Priorita':** alta (segue il fix di `[BUG-VPS-AUTH-TUNNEL]` — senza quello, niente upload via UI).
-- **Linked:** `[BUG-VPS-AUTH-TUNNEL]` (BLOCKER prerequisito), `[JHT-VPS-FRIENDLY]` (per il path desktop wizard).
+- **Documentation:** aggiornare `docs/guides/VPS-SETUP.md` con sezione "Carica il tuo CV" che mostra il flow web come path 🥇, scp/sftp come path 🥈 (per power-user).
+- **Priorita':** alta — ora che il prerequisito auth è chiuso, il path UX è sbloccato.
+- **Linked:** ✅ `[BUG-VPS-AUTH-TUNNEL]` (prerequisito chiuso 2026-06-02), `[JHT-VPS-FRIENDLY]` (per il path desktop wizard).
 
 #### 🔒 [JHT-CLOUD-06] Secure app ↔ cloud tunnel
 
@@ -765,10 +870,10 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
 #### 🌍 [JHT-I18N-02] Infrastructure for additional languages — partial
 
-- ✅ Per-language JSON files in `web/messages/` (today: `en.json`, `hu.json` — Hungarian already partially translated)
+- 🟡 Per-language JSON files in `web/messages/` (oggi: `en.json` + `hu.json`; ⚠️ `it.json` MANCA pur essendo dichiarata locale supportata)
 - ⬜ Refactor `shared/i18n/translations.ts` to load per-language files (today inline)
-- ✅ **Fix mismatch DEFAULT_LOCALE** (2026-05-06): `shared/i18n/types.ts` allineato a `'en'`, e con esso il fallback in `web/app/api/i18n/route.ts` (`loadPrefs()`) e i context default in `web/app/components/DashboardI18n.tsx`. Il fallback per chiavi mancanti in `t()` (riga 557, `TRANSLATIONS['it']`) resta `'it'` perché è secondary fallback per traduzioni assenti, non default-locale utente.
-- ⬜ Language switcher in web dashboard (desktop launcher already has one)
+- 🟡 **Fix mismatch DEFAULT_LOCALE** (2026-05-06): `shared/i18n/types.ts` allineato a `'en'`, e con esso il fallback in `web/app/api/i18n/route.ts` (`loadPrefs()`) e i context default in `web/app/components/DashboardI18n.tsx`. ⚠️ Audit 2026-05-29 rileva drift residuo: `web/app/api/i18n/route.ts:31` ha ancora default fallback `'it'` su un path non-`loadPrefs`; `LOCALES` in `types.ts` non include `'hu'` pur essendo supportato da `route.ts`. Da riconciliare in una pass dedicata. Il fallback per chiavi mancanti in `t()` (riga 557, `TRANSLATIONS['it']`) resta `'it'` perché è secondary fallback per traduzioni assenti, non default-locale utente.
+- ✅ Language switcher in web dashboard — `web/app/components/LanguageSwitcher.tsx` (EN/IT/HU con flag SVG)
 - 🟡 **[JHT-I18N-AGENT-PROMPTS] Localizzazione prompt d'identità agenti** *(architettura scaffolded 2026-05-06, contenuti DA FARE)*.
 
   **Problema:** Anthropic doc avverte che system prompt pesanti in lingua ≠ user causano "language drift" (Claude risponde nella lingua del prompt invece che dell'utente). Su JHT i 9 prompt agenti sommano ~2500+ righe in italiano (capitano.md 647) → un nuovo utente con `DEFAULT_LOCALE='en'` che scrive `find me python jobs` rischia risposta italiana.
@@ -793,6 +898,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 ##### ✅ [JHT-I18N-TRANSLATE] Traduzione baseline prompt agenti IT → EN — DONE 2026-05-19
 
 - **Stato implementazione:** baseline EN deployed per tutti i 9 prompt agenti (`analista.md`, `assistente.md`, `capitano.md`, `critico.md`, `dottore.md`, `mentor.md`, `scorer.md`, `scout.md`, `scrittore.md`, `sentinella.md`). Header verificato in EN ("You are a **Scout**", "You are **Capitano**", ecc.) — niente più "Sei lo Scout/Sei il Capitano" baseline.
+- **⚠️ Overlay IT incompleti (audit 2026-05-29):** 8/10 presenti — **mancano `agents/critico/critico.it.md` e `agents/mentor/mentor.it.md`**. Da chiudere prima di considerare l'item completamente done per utenti italianofoni.
 - **Overlay IT preservato:** `agents/<role>/<role>.it.md` siblings per fallback locale=it (9 file).
 - **Bonus 🇭🇺:** traduzione Hungarian community-contributed shipped contestualmente — `agents/<role>/<role>.hu.md` per 10 ruoli (incluso `mentor.hu.md`). HU sblocca il primo beta tester non-anglofono/non-italianofono.
 - **Architettura risoluzione (gia' deployed 2026-05-06):** `.launcher/start-agent.sh` legge `~/.jht/i18n-prefs.json`, prova `<role>.<locale>.md`, fallback al baseline `<role>.md` (ora EN). Protocol token (`STEADY`, `ATTENZIONE`, `RECOVERY TRACKING`, ecc.) preservati invariati come da spec.
@@ -837,16 +943,16 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
 ---
 
-### 6️⃣ PHASE 6 — 🚢 Pre-Launch Public OSS (NEW)
+### 6️⃣ PHASE 6 — 🚢 Pre-Launch Public OSS
 
 Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
-> **Cross-reference**: 🧪 [JHT-TEST-CAMPAIGN] in PHASE 1 is also a launch BLOCKER (coverage matrix in [`docs/guides/BETA.md`](docs/guides/BETA.md#coverage-we-still-need)). Treat it as part of this phase mentally.
+> **Cross-reference**: 🧪 [JHT-TEST-CAMPAIGN] in PHASE 1 — declassato 2026-06-02 da BLOCKER a "documentare run esistenti" (3 done + 2 pending da finalizzare); matrix expansion è ora post-launch open invitation. [JHT-CASE-STUDIES-WEB] è il vero strutturale pre-launch.
 
 **🚦 Suggested execution order** (BLOCKERs first, then rest in parallel):
 
 1. ✅ SECURITY.md + CODE_OF_CONDUCT.md (done — root, EN, Contributor Covenant 2.1)
-2. ✅ Security review (done — 33/35 task chiusi, see `docs/security/`)
+2. ✅ Security review (done — 31/34 task chiusi, see `docs/security/`)
 3. Test campaign matrix (parallel with reviews — slowest cell determines launch date)
 4. Demo video (after monitoring is frozen)
 5. Beta tester recruitment + Show HN draft + Press kit + Awesome lists submissions
@@ -874,7 +980,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
 #### 🛡️ [JHT-LAUNCH-04] Security review (gitleaks + audit) ✅
 
-- **Done 2026-04-27** — hardening sprint dev-1..dev-4 in parallelo, 33/35 task chiusi in `master` (sha `7a2cb6ae`), security score 30% → 74%.
+- **Done 2026-04-27** — hardening sprint dev-1..dev-4 in parallelo, 31/34 task chiusi in `master` (sha `7a2cb6ae`), security score 30% → 74%. Conteggio attendibile: `docs/security/README.md`.
 - **Output:** `docs/security/` (7 file, ~2336 righe) — pre-launch review, OpenClaw comparison, threat model, checklist, post-fix snapshot.
 - **Phase 1 bloccanti pre-launch:** 9/9 ✅ (C1-C5, H1, H2, H8, H9). **Phase 2 post-launch:** 12/12 ✅. **Phase 3 hardening:** 10/13 🟡.
 - **Gap residui (continuous hardening, non blocker):** suite `tests/security/` regression + comando `jht doctor security`. Tutti i blocker per il public release sono chiusi: SSRF dispatcher (4 commit, integrato a webhooks + gateway), L1 CSP nonce-based (cda78a17), `resolve-system-bin` deferito con razionale.
@@ -885,11 +991,12 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 - **Why:** V3→V4→V5 in 2 weeks = churn. Before launch we need 1-2 weeks of freeze, otherwise we'll show up on HN with users opening issues on V5 while we're already on V6.
 - **Task:** freeze monitoring, fix only critical bugs, no refactor before launch.
 
-#### 🧪 [JHT-LAUNCH-07] Beta tester recruitment
+#### 🧪 [JHT-LAUNCH-07] Beta tester recruitment — open invitation post-launch
 
-- ✅ `docs/guides/BETA.md` created
-- ⬜ Publish on 1-2 communities (r/cscareerquestions, r/ItalyCompany, friends list)
-- Feeds the coverage matrix in [`docs/guides/BETA.md`](docs/guides/BETA.md#coverage-we-still-need) ([JHT-TEST-CAMPAIGN] in PHASE 1)
+- ✅ `docs/guides/BETA.md` updated 2026-06-02 — coverage matrix sostituita da "Pre-launch (3 done + 2 pending)" + "Post-launch open invitation, any role/industry, profile-agnostic"
+- ⬜ Publish on 1-2 communities (r/cscareerquestions, r/ItalyCompany, friends list) **post-launch** — non blocker pre-release
+- ⬜ Esplicitare in materiali Show HN che JHT è profile-agnostic e cerca tester da settori vari (marketing, design, finance, ops, healthcare, ecc., non solo IT/tech)
+- **Linked:** [JHT-TEST-CAMPAIGN] (run documentation) + [JHT-CASE-STUDIES-WEB] (struttura di ingestion per nuovi dump)
 
 #### ⭐ [JHT-LAUNCH-06] Awesome lists submissions
 
@@ -1042,58 +1149,48 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **Validato 2026-05-08:** VPS Hetzner CPX22, immagine `ghcr.io/leopu00/jht:dev-1` con `start-agent.sh` patched via `docker cp`. CAPITANO + SENTINELLA mostrano `⏵⏵ bypass permissions on (shift+tab to cycle)`, kick-off arrivato, CAPITANO ha auto-spawnato SCOUT-1 (validation ricorsiva: il fix copre anche gli agenti spawn-ati dal Capitano).
 - **Storia:** scoperto durante retest VPS del 2026-05-07 dopo fix bootstrap V5 (`6958fb42`). Fix scelto: opzione 3 (detect-respond robusto) invece di opzione 1 (settings.json) o 2 (Down+Enter cieco).
 
-### 🟡 [BUG-INSTALL-PATH-NOT-EXPORTED] `install.sh` non esporta `/root/.local/bin` al PATH di sistema
+### ✅ [BUG-INSTALL-PATH-NOT-EXPORTED] `install.sh` non esporta `/root/.local/bin` al PATH — FIXED 2026-05-09
 
-- **Sintomo:** dopo `curl install.sh | bash` su VPS Ubuntu 24.04 fresca, lanciare `jht <subcmd>` ritorna `Command 'jht' not found, did you mean: ...`. Il wrapper esiste in `/root/.local/bin/jht` ma quel path non e' nel PATH della shell perche' la dir non esisteva al login (Bash su Ubuntu auto-popola `~/.local/bin` solo se la dir gia' esiste — vedi `/etc/skel/.profile` con `if [ -d "$HOME/.local/bin" ]`).
-- **Scoperto:** retest VPS Hetzner del 2026-05-08 (commit `7106ef6e`).
-- **Stato attuale:** install.sh stampa un warning + istruzione manuale (`export PATH="$PATH:/root/.local/bin"`) ma NON automatizza. Tutti i comandi successivi nel wizard (es. `jht up`, `jht setup`) falliscono a meno che l'utente non rilegga la guida e copi-incolli il comando export.
-- **Fix proposto:** install.sh deve scrivere automaticamente il PATH a una location persistente:
-  - **root user**: `/etc/profile.d/jht.sh` (system-wide, picked up da ogni nuovo shell login)
-  - **non-root user**: append `~/.bashrc` + `~/.zshrc` se esistono e non gia' presente
-  - Stampare comunque il workaround per la sessione corrente (`export PATH=...`) perche' subshell di curl|bash non puo' modificare il parent shell.
-- **Priorita':** media — bloccante per UX VPS, workaround disponibile ma cattivo first-impression.
-- **File:** `scripts/install.sh:309-356` (funzione `download_runtime_files()`).
+- **Sintomo originale:** dopo `curl install.sh | bash` su VPS Ubuntu 24.04 fresca, lanciare `jht <subcmd>` ritorna `Command 'jht' not found`. Il wrapper esiste in `/root/.local/bin/jht` ma quel path non e' nel PATH della shell perche' la dir non esisteva al login (Bash su Ubuntu auto-popola `~/.local/bin` solo se gia' esistente — vedi `/etc/skel/.profile`).
+- **Fix applicato** (commit `7c14d12f` + `1abc9dec`, [`scripts/install.sh:401-447`](scripts/install.sh#L401)):
+  - **root user**: scrive `/etc/profile.d/jht.sh` (system-wide, sourced da ogni login interactive shell).
+  - **non-root user**: append idempotente a `~/.bashrc`, `~/.zshrc`, `~/.profile` con grep guard.
+  - **Sessione corrente**: `export PATH="$BIN_DIR:$PATH"` per i comandi successivi (wizard) → nessun crash mid-install.
+  - **Fallback**: warning + istruzione manuale se nessun rc disponibile.
+- **Memoria correlata:** vedi anche scelta `BIN_DIR` in `scripts/install.sh:62-67` — root su Linux/WSL preferisce `/usr/local/bin` (sempre nel PATH default).
 
-### 🟡 [BUG-INSTALL-BRANCH-MASTER-DEFAULT] `install.sh` scarica runtime files da `master` anche se fetch-ato da branch dev-N
+### 🟡 [BUG-INSTALL-BRANCH-MASTER-DEFAULT] `install.sh` scarica runtime files da `master` anche se fetch-ato da branch dev-N — MOSTLY FIXED 2026-05-09
 
-- **Sintomo:** `curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash` esegue install.sh dalla branch `dev-1` ma poi scarica `docker-compose.yml` e `jht-wrapper.sh` da `master` (default `BRANCH="${JHT_BRANCH:-master}"`). Risultato su VPS dev-1: container partiva con compose master vecchio (no `${JHT_IMAGE:-}` override del commit `4b10a9db`), pullando `:latest` invece di `:dev-1`. Lo split master/dev-1 cli falliva poi su `--subscription-email` (presente solo nel CLI di `:dev-1`, image fix `86c08174`).
-- **Scoperto:** retest VPS Hetzner del 2026-05-08 (commit `7106ef6e`).
-- **Workaround attuale:** prefissare `JHT_BRANCH=dev-1`:
+- **Sintomo originale:** `curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash` esegue install.sh dalla branch `dev-1` ma poi scarica `docker-compose.yml` e `jht-wrapper.sh` da `master`. Container partiva con compose vecchio, pullando `:latest` invece di `:dev-1`.
+- **Fix applicato** (commit `f79dcfcb`, [`scripts/install.sh:86-94`](scripts/install.sh#L86) + L120):
+  - ✅ Flag `--branch <name>` esplicito (anche `--branch=name`). Sintassi a coppia `$1 $2` con guard.
+  - ✅ `RAW_BASE` ricalcolato **post** arg-parse, così `--branch dev-1` impatta i download successivi.
+  - ✅ Env var `JHT_BRANCH=dev-1` resta alias retro-compat.
+  - ✅ Header docstring documenta entrambe le forme con esempi.
+- **Sintassi consigliata per testing branch dev-N:**
   ```bash
-  JHT_BRANCH=dev-1 curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/install.sh | bash -s -- --branch dev-1
   ```
-  Oppure post-install, ri-scaricare manualmente:
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/docker-compose.yml -o /root/.jht/runtime/docker-compose.yml
-  curl -fsSL https://raw.githubusercontent.com/leopu00/job-hunter-team/dev-1/scripts/jht-wrapper.sh -o /root/.local/bin/jht
-  ```
-- **Fix proposti:**
-  1. install.sh accetta argomento posizionale `--branch dev-1` per esplicito.
-  2. install.sh prova a inferire la branch dal proprio URL via `$0` e `BASH_SOURCE` (rotto sotto `curl | bash` perche' lo script viene letto da stdin, ma marker file con SHA potrebbe funzionare).
-  3. Build step CI che inietta `BRANCH=<branch_name>` nel publish di install.sh per ogni branch (substituzione marker `__BRANCH__`).
-  4. Documentazione esplicita in `VPS-SETUP.md` + `quickstart.md` su `JHT_BRANCH` env var per devs.
-- **Priorita':** media (devs only — utenti finali curl-ano da `jobhunterteam.ai/install.sh` che servono master). Bloccante per workflow di test branch su VPS.
-- **File:** `scripts/install.sh:51` (`BRANCH="${JHT_BRANCH:-master}"`).
+- **Residui (low priority, edge case):**
+  - ⬜ Inferenza automatica branch dal proprio URL — irrisolvibile in modo robusto sotto `curl | bash` perche' `BASH_SOURCE=""` (stdin). Workaround possibile: CI step che sostituisce un marker `__BRANCH__` in install.sh al publish per ogni branch (richiede modifica `.github/workflows/`). **Decisione 2026-05-31**: non vale la candela — devs sanno usare `--branch`, utenti finali curl-ano da `jobhunterteam.ai/install.sh` (sempre master).
+- **File:** `scripts/install.sh:54` (`BRANCH="${JHT_BRANCH:-master}"`), parser L81-115, RAW_BASE L120.
 
-### 🔴 [BUG-VPS-AUTH-TUNNEL] Web UI auth Supabase non funziona via SSH tunnel `localhost:3000`
+### ✅ [BUG-VPS-AUTH-TUNNEL] Web UI auth Supabase via SSH tunnel `localhost:3000` — FIXED (verificato live 2026-06-02)
 
-- **Sintomo:** dopo `jht up` su VPS, browser sul PC va su `http://localhost:3000` (via SSH tunnel `-L 3000:localhost:3000`). La landing page funziona ma `/team`, `/positions`, ecc. redirigono a `/?login=true`. Click "Login with Google" → Supabase OAuth redirige a `https://jobhunterteam.ai/auth/callback`, non al tunnel localhost. L'utente non puo' completare l'auth lato VPS via tunnel.
+- **Sintomo originale:** dopo `jht up` su VPS, browser sul PC va su `http://localhost:3000` (via SSH tunnel `-L 3000:localhost:3000`). La landing page funziona ma `/team`, `/positions`, ecc. redirigono a `/?login=true`. Click "Login with Google" → Supabase OAuth redirige a `https://jobhunterteam.ai/auth/callback`, non al tunnel localhost.
 - **Scoperto:** primo bring-up VPS del 2026-05-06. Riconfermato sul re-test del 2026-05-08.
-- **Causa:** Supabase project ha solo `https://jobhunterteam.ai/**` come allowed redirect URLs. Manca `http://localhost:3000/**` per dev/tunnel mode.
-- **🚫 NO workaround:** la dashboard web e' l'interfaccia primaria. Senza, manca: `/positions` (tabella job), `/team` (chat per agente + start/stop), `/sentinella` (grafici usage), `/profile` (form upload CV). Il fallback CLI e' incompleto e Telegram bot non e' ancora maturo. Il bug e' bloccante per UX VPS.
-- **🛠️ Fix actionable (~10 min, una persona con accesso Supabase admin):**
-  1. Login [supabase.com/dashboard](https://supabase.com/dashboard) → progetto JHT → **Authentication → URL Configuration**.
-  2. **Site URL:** lascia `https://jobhunterteam.ai` (prod).
-  3. **Redirect URLs (allow list):** aggiungi:
-     - `http://localhost:3000/**`
-     - `http://localhost:3001/**` (per dev mode `dev:host`)
-     - `http://127.0.0.1:3000/**` (alias)
-  4. Save → propagazione immediata, no deploy needed.
-  5. Validare end-to-end: SSH tunnel su VPS test, browser → `http://localhost:3000/?login=true` → Google OAuth → callback su `localhost:3000/auth/callback` → cookie set → redirect a `/positions`. Aggiungere screenshot a `docs/guides/VPS-SETUP.md`.
-  6. Aggiornare `docs/guides/VPS-SETUP.md` step 6 con istruzioni tunnel + login flow.
-- **Owner:** chi ha credenziali admin del Supabase project JHT (maintainer).
-- **Priorita':** 🔴 BLOCKER per UX VPS (nessuna alternativa accettabile). Banale da fixare ma richiede credenziali admin Supabase.
-- **Storia:** la limitazione attuale era intenzionale per il pre-launch (solo dominio prod come allowed callback per minimizzare attack surface). Post-launch / per dev/test, localhost deve essere sempre allowed.
+- **Causa:** Supabase project aveva solo `https://jobhunterteam.ai/**` come allowed redirect URLs.
+- **Fix applicato:** Redirect URLs allow list estesa via dashboard Supabase (Authentication → URL Configuration). Stato live verificato 2026-06-02 — totale 11 URLs registrate, di cui localhost incluse:
+  - `http://localhost:3000/auth/callback`
+  - `http://localhost:3001/auth/callback`
+  - `http://localhost:3002/auth/callback`
+  - `http://localhost:3003/auth/callback`
+  - `http://localhost:3004/auth/callback`
+  - `http://localhost:3005/auth/callback`
+  - `http://127.0.0.1:3000/auth/callback`
+  - `http://127.0.0.1:3003/auth/callback`
+- **Follow-up residuo (non-blocker):** screenshot + step 6 "tunnel + login flow" in `docs/guides/VPS-SETUP.md` ancora da aggiungere (doc update only, il fix è in produzione).
+- **Storia:** la limitazione iniziale era intenzionale per il pre-launch (solo dominio prod come allowed callback per minimizzare attack surface). Riaperto e chiuso passando a localhost-allowed per dev/test/tunnel.
 
 ### ✅ [BUG-CSP-JSONLD-LANDING-V2] JSON-LD nonce mismatch — FIXED 2026-05-12
 
@@ -1118,7 +1215,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **Verifica:** type-check pulito sui file toccati. Da fare in prod: DevTools console = 0 violation CSP, JSON-LD presente nel DOM, Google Rich Results Test verde.
 - **Storia:** introdotto dal commit CSP `cda78a17`; cleanup successivo aveva tolto `getNonce()` come quick fix per sbloccare il dev mode. Risolto definitivamente con questo split.
 
-### ✅ [BUG-TURBOPACK-SHARED-RESOLVE] `next build` fallisce — Turbopack non risolve `.js` ESM imports da `shared/` — FIXED 2026-05-06 (commit `8c85bf27`)
+### ✅ [BUG-TURBOPACK-SHARED-RESOLVE] `next build` fallisce — Turbopack non risolve `.js` ESM imports da `shared/` — FIXED 2026-05-06 (commit `cedb3efd`)
 
 - **Fix applicato — Strategia 4 (copia `shared/net/*` in `web/lib/net/`):** dopo aver fallito 1-3 (transpilePackages, no-extension, experimental.externalDir), si è copiato i 4 file production-grade di `shared/net/` dentro `web/lib/net/`. `web/` era l'unico consumer cross-package; nessuna regressione su altri package. `shared/net/*` invariato come ref OpenClaw + per futuri consumer node ESM (`cli/`, `tui/`). `web/lib/ssrf.ts` ora punta a `./net/ssrf` (relative dentro `web/`). Verifica: `vercel deploy` → ✅ Compiled in 29.8s, 112/112 static pages.
 - **Storico:** PRIORITÀ MASSIMA — bloccava QUALSIASI deploy production via Vercel. Master era 783 commit avanti rispetto a `production` ma il build falliva sulla CI Vercel ufficiale (Linux infra). Production ferma alla v0.1.12 per 19 giorni.
@@ -1152,54 +1249,38 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   - ❌ Rimuovere `.js` solo da `web/lib/ssrf.ts` → propaga il problema un livello più in profondità (shared/net/ssrf.ts e i suoi 3 import).
 - **Memoria correlata:** `feedback_no_heavy_smoke_tests_stacking` (no build+dev consecutivi su Windows).
 
-### 🔴 [BUG-TURBOPACK-MONOREPO-RESOLVE] `next dev` resolver cerca `tailwindcss` dal monorepo root
+### 🪛 [BUG-TURBOPACK-MONOREPO-RESOLVE] — spostato in `docs/internal/MINOR-TRACKER.md` (2026-06-02)
 
-- **File:** `web/next.config.ts` (config `outputFileTracingRoot` + Turbopack interaction) + ambient resolution
-- **Errore (riproducibile in dev su Windows):**
-  ```
-  Error: Can't resolve 'tailwindcss' in 'C:\Users\<user>\repos\job-hunter-team\dev-2'
-    resolve as module
-      C:\...\dev-2\node_modules doesn't exist or is not a directory
-      C:\...\repos\node_modules doesn't exist or is not a directory
-      ... (path lookup risale fino a C:\)
-  ```
-- **Causa probabile:** `outputFileTracingRoot: MONOREPO_ROOT` in `next.config.ts` (riga ~9) imposta come root il parent di `web/`. Turbopack/PostCSS in dev usa quel root per la node-module resolution di tailwindcss invece di `web/node_modules/`. Il problema è specifico del setup monorepo Windows; Vercel CI parte già con cwd diverso e potrebbe non vederlo.
-- **Conseguenza:** primo GET `/` dopo `npm run dev` blocca Turbopack su un loop di resolve falliti → CPU/IO saturati → server inutilizzabile per smoke locale. Vedi memoria `feedback_no_heavy_smoke_tests_stacking`.
-- **Storia:** non chiaro quando introdotto; emerso 2026-05-06 durante runtime smoke del fix CSP JSON-LD.
-- **Fix proposto:**
-  - 🥇 Verificare che `outputFileTracingRoot` non venga propagato come module-resolution root in dev (è pensato solo per Vercel file tracing in build).
-  - 🥈 Aggiungere `tailwindcss` esplicitamente in `web/next.config.ts` `experimental.externalDir` o forzare PostCSS config a usare `path.resolve(__dirname, 'node_modules/tailwindcss')`.
-  - 🥉 Test cross-OS: il bug potrebbe non manifestarsi su Linux/macOS — verificare via CI prima di toccare config.
-- **Verifica:** `cd web && npm run dev` + `curl localhost:3000/` deve rispondere 200 senza loop di resolve.
+Bug specifico Windows dev mode, non blocker pre-launch (Vercel deploy funziona, macOS/Linux dev probabilmente non vedono). Dettagli completi + fix proposti in [`docs/internal/MINOR-TRACKER.md`](docs/internal/MINOR-TRACKER.md#-bug-turbopack-monorepo-resolve-turbopack-cerca-tailwindcss-dal-monorepo-root-su-windows-dev).
 
 ---
 
 ## 🔭 OBSERVABILITY GAPS
 
-### 🟡 [OBS-TELEGRAM-SEND-LOG] `jht-telegram-send` senza log centrale outgoing
+### ✅ [OBS-TELEGRAM-SEND-LOG] `jht-telegram-send` senza log centrale outgoing — DONE 2026-05-31
 
-- **File:** `/app/agents/_tools/jht-telegram-send` (bash + curl POST a Bot API)
-- **Sintomo:** quando un agente (Capitano, Assistente, Mentor) invia un messaggio Telegram all'utente, **non c'è log persistente centralizzato**. Le tracce sono solo:
-  - Pane tmux live (volatile, scrolla fuori dopo ~60-1000 righe)
-  - `/jht_home/logs/dottore-captures/*.txt` (snapshot parziali ogni 2h, max 60 righe del pane catturate al momento del round)
-- **Conseguenza:** impossibile rispondere a domande tipo "quanto frequentemente il Capitano scrive all'utente", "ricostruisci la timeline degli invii Telegram di ieri", "qual è il delta medio risposta agente → utente". Misurato 2026-05-20: ~9 messaggi Capitano confermati in 14h (≈ 1 ogni 1.5h), ma il numero reale è probabilmente maggiore — i precedenti sono scrollati fuori da tutte le fonti.
-- **Fix proposto:** aggiungere a `jht-telegram-send` (subito dopo la chiamata curl che riceve `ok:true`) un append idempotente a `$JHT_HOME/logs/telegram-sent.jsonl`:
-  ```bash
-  printf '{"ts":"%s","from":"%s","chat_id":"%s","chars":%d,"parse_mode":"%s","ok":true}\n' \
-    "$(date -u +%FT%TZ)" "$role" "$chat_id" "${#text}" "$parse_mode" \
-    >> "$JHT_HOME/logs/telegram-sent.jsonl"
+- **File:** [`agents/_tools/jht-telegram-send`](agents/_tools/jht-telegram-send)
+- **Fix applicato:** funzione `_log_outgoing` invocata in tutti i path (send_one OK/fail, sendPhoto OK/fail) scrive 1 JSON line per chunk a `$JHT_HOME/logs/telegram-sent.jsonl`. Append `>> 2>/dev/null || true` — niente fail dell'invio se il disco è KO. mkdir idempotente.
+- **Schema log line:**
+  ```json
+  {"ts":"2026-05-31T16:16:35Z","from":"capitano","chat_id":"123456",
+   "kind":"text","ok":false,"http":404,"chars":10,"chunks":1,
+   "parse_mode":"","keyboard":""}
   ```
-  Senza body completo (privacy + size), solo metadati (mittente, lunghezza, parse_mode, esito). Da loggare anche i fallimenti (`ok:false`, status code HTTP).
-- **Effort:** ~15 minuti (5 righe shell + test su un invio singolo).
-- **Memoria correlata:** [[context-watchdog-spec]] (sezione "Side effect Telegram per Assistente"), [[2026-05-21-vps1-run-postmortem]] (i gap di idle includono buchi anche di comunicazione TG non misurabili oggi).
+- **Privacy:** SOLO metadati (mittente, chat, kind text/photo, ok, http code, lunghezza chunk, parse_mode, keyboard role). Niente body/caption/photo path — il log è side-effect locale tracciabile, non un mirror del messaggio.
+- **Granularità:** 1 entry per chunk (sendMessage call). Un msg lungo split in 3 chunks → 3 entry — il consumer aggrega per `from+ts` se vuole misurare msg-utente.
+- **Test:** smoke test con token bogus → HTTP 404 → JSONL scritto con `ok:false`, chars corretto, mittente corretto. Validato 2026-05-31.
+- **Use cases sbloccati:** `jq -s 'group_by(.from)|.[]|{from:.[0].from,count:length}' telegram-sent.jsonl` per ratio per agente; `jq 'select(.ok==false)'` per error breakdown; timeline ricostruibile.
+- **Memoria correlata:** [[context-watchdog-spec]] sezione "Side effect Telegram per Assistente".
 
 ---
 
 ## 📦 PACKAGING & DISTRIBUTION
 
-### 🔴 [PACING-WEEKLY-EXHAUSTION] Team esaurisce weekly cap Codex in ~2 giorni invece di 7
+### 🟡 [PACING-WEEKLY-EXHAUSTION] Team esaurisce weekly cap Codex in ~2 giorni invece di 7 — MVP DONE 2026-05-31
 
-- **Sintomo:** la Sentinella ottimizza il singolo cycle 5h (target 92% per finestra) ma **ignora il weekly cap** di Codex ProLite. Risultato: in 2-3 giorni di operatività intensa il team consuma il 100% del weekly e poi gli agenti smettono di rispondere per 4-5 giorni fino al reset settimanale.
+- **Stato fix:** weekly cap awareness shipped 2026-05-22: `9e7ece9f` (C-09 — Capitano weekly cap awareness), `86da0f03` (S-06 — Sentinella weekly cap parallel constraint). Il throttle ora considera il minimo tra cycle-target e weekly-target.
+- **Sintomo (storico):** la Sentinella ottimizzava il singolo cycle 5h (target 92% per finestra) ma **ignorava il weekly cap** di Codex ProLite. Risultato: in 2-3 giorni di operatività intensa il team consumava il 100% del weekly e poi gli agenti smettevano di rispondere per 4-5 giorni fino al reset settimanale.
 - **Evidenza misurata 2026-05-20 (VPS1, primo giro reale beta):**
   - Boot: 2026-05-19 20:14 UTC
   - Snapshot 22:30 (giorno 1, +2h): primary 47%, weekly **7%**
@@ -1218,7 +1299,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   - Una finestra 5h al ritmo sostenibile chiude a 22% (vs target 92% attuale)
   - Quindi: o **target band 22% per finestra H24** oppure **finestre intensive 92% ma con periodi off**
 - **Fix proposti (in ordine di preferenza):**
-  - 🥇 **Estendere Sentinella con dial weekly**: nuovo campo `weekly_proj` nel `pacing-bridge-state.json` che proietta il consumo a 7 giorni; la Sentinella usa il minimo tra cycle-target e weekly-target per decidere il throttle. Già discusso nelle convo del 2026-05-20 ma non implementato.
+  - ✅ **Estendere Sentinella con dial weekly** — DONE 2026-05-31. `work_hours_target.compute_target` ora accetta `weekly_used_pct` + `weekly_reset_at_utc`; il pacing-bridge li legge dal sample sentinel (`weekly_usage`, `weekly_reset_at_unix`) e distribuisce solo il budget weekly **residuo** sulle ore ON rimanenti fino al reset (invece di assumere sempre 100% su 7 giorni puliti). Su 24/7 con weekly al 60% e 72h al reset il target finestra scende da 20.25% (legacy) a 18.9% (weekly-aware); il throttle si stringe man mano che `weekly_usage` cresce, auto-correggendo. Nuovi campi in `pacing-bridge-state.json`: `weekly_remaining_pct`, `weekly_window_source`, source tag `schedule+ratio+weekly`. Self-test esteso con 4 nuovi scenari (38/38 verdi).
   - 🥈 **Pacing scheduler esterno**: un cron-like che spegne il team per X ore al giorno (es. spegnimento notturno) per spalmare il consumo. Meno fine-grained ma molto semplice.
   - 🥉 **Mode "marathon"**: configurazione utente (`jht.config.json.pacing.mode = "marathon"`) che imposta target_band_center=22% invece di 92%. Default = "sprint" attuale.
   - 🥉 **Telemetria pre-allarme**: notifica Telegram all'utente "weekly al 50%, mancano X giorni al reset" così l'utente decide se fermare/rallentare. Banale (1 cron + 1 send).

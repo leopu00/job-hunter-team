@@ -108,3 +108,6 @@
 - name: feedback:hn
   color: c5def5
   description: Direct feedback from the Hacker News launch thread
+- name: beta-feedback
+  color: c5def5
+  description: Feedback from a beta tester (often via the beta_feedback template)

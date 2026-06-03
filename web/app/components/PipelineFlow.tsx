@@ -230,9 +230,9 @@ export default function PipelineFlow({ steps, title }: Props) {
       const p1 = pts[i];
       const p2 = pts[i + 1];
       const p3 = pts[i + 2] ?? p2;
-      let cp1x = p1.x + (p2.x - p0.x) * t;
+      const cp1x = p1.x + (p2.x - p0.x) * t;
       let cp1y = p1.y + (p2.y - p0.y) * t;
-      let cp2x = p2.x - (p3.x - p1.x) * t;
+      const cp2x = p2.x - (p3.x - p1.x) * t;
       let cp2y = p2.y - (p3.y - p1.y) * t;
       // Phase shift 0.55 per segmento + delta 0.28 fra i due CP →
       // onda viaggiante uniforme, senza zigzag fra i punti dati.
@@ -265,7 +265,8 @@ export default function PipelineFlow({ steps, title }: Props) {
       const phase = (now - start) * omega;
       const target = pointsRef.current;
       // Match length se cambia (improbabile a runtime, ma safe)
-      while (easedY.length < target.length) easedY.push(target[easedY.length].y);
+      while (easedY.length < target.length)
+        easedY.push(target[easedY.length].y);
       easedY.length = target.length;
       for (let i = 0; i < target.length; i++) {
         easedY[i] += (target[i].y - easedY[i]) * SMOOTH;
@@ -340,12 +341,24 @@ export default function PipelineFlow({ steps, title }: Props) {
       >
         <defs>
           <linearGradient id="pipeline-flow-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-green)" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="var(--color-green)" stopOpacity="0.04" />
+            <stop
+              offset="0%"
+              stopColor="var(--color-green)"
+              stopOpacity="0.5"
+            />
+            <stop
+              offset="100%"
+              stopColor="var(--color-green)"
+              stopOpacity="0.04"
+            />
           </linearGradient>
         </defs>
 
-        <path ref={areaPathRef} d={initial.area} fill="url(#pipeline-flow-grad)" />
+        <path
+          ref={areaPathRef}
+          d={initial.area}
+          fill="url(#pipeline-flow-grad)"
+        />
         <path
           ref={linePathRef}
           d={initial.line}

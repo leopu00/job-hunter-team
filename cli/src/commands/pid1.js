@@ -423,6 +423,7 @@ async function dispatch() {
   const daemonCmd = [JHT_ENTRY, 'cloud', 'daemon'];
   const realtimeCmd = [JHT_ENTRY, 'cloud', 'realtime-listen'];
   const teamStateCmd = [JHT_ENTRY, 'cloud', 'team-state-listen'];
+  const userMessagesCmd = [JHT_ENTRY, 'cloud', 'messages-listen'];
 
   // ── Dashboard: lifetime = container, parte sempre.
   pid1Log(isVps ? 'mode: VPS' : 'mode: local');
@@ -586,9 +587,11 @@ async function dispatch() {
   let daemonChild = null;
   let realtimeChild = null;
   let teamStateChild = null;
+  let userMessagesChild = null;
   let daemonRespawnTimer = null;
   let realtimeRespawnTimer = null;
   let teamStateRespawnTimer = null;
+  let userMessagesRespawnTimer = null;
 
   const startDaemon = () => {
     if (daemonChild && !daemonChild.killed) return;
@@ -629,6 +632,30 @@ async function dispatch() {
         if (await isCloudConfigured()) {
           pid1Log('realtime subscriber respawn dopo crash');
           startRealtime();
+        }
+      }, 5000);
+      void exitedChild;
+    });
+  };
+
+  // user_to_agent_messages poller: long-poll /api/messages?status=pending,
+  // claim atomico via PATCH delivered, forward al tmux pane dell'agente
+  // target. Crash recovery debounce 5s come gli altri reader.
+  const startUserMessages = () => {
+    if (userMessagesChild && !userMessagesChild.killed) return;
+    pid1Log('starting user-messages poller (user_to_agent_messages → tmux)');
+    userMessagesChild = spawnLabeled('user-msg', process.execPath, userMessagesCmd);
+    userMessagesChild.on('exit', (code, signal) => {
+      const exitedChild = userMessagesChild;
+      userMessagesChild = null;
+      if (shuttingDown) return;
+      pid1Log(`user-messages poller exited (code=${code} signal=${signal})`);
+      if (userMessagesRespawnTimer) clearTimeout(userMessagesRespawnTimer);
+      userMessagesRespawnTimer = setTimeout(async () => {
+        if (shuttingDown) return;
+        if (await isCloudConfigured()) {
+          pid1Log('user-messages poller respawn dopo crash');
+          startUserMessages();
         }
       }, 5000);
       void exitedChild;
@@ -684,13 +711,23 @@ async function dispatch() {
       pid1Log(`stopping team_state reconciler (${reason})`);
       teamStateChild.kill('SIGTERM');
     }
+    if (userMessagesRespawnTimer) {
+      clearTimeout(userMessagesRespawnTimer);
+      userMessagesRespawnTimer = null;
+    }
+    if (userMessagesChild && !userMessagesChild.killed) {
+      pid1Log(`stopping user-messages poller (${reason})`);
+      userMessagesChild.kill('SIGTERM');
+    }
   };
 
-  // Stato iniziale del cloud: se gia' paired, daemon + realtime + team_state partono.
+  // Stato iniziale del cloud: se gia' paired, daemon + realtime + team_state +
+  // user-messages partono.
   if (isVps && await isCloudConfigured()) {
     startDaemon();
     startRealtime();
     startTeamState();
+    startUserMessages();
   } else if (isVps) {
     pid1Log('cloud sync non ancora configurato: aspetto cloud.json (auto-start dopo pairing)');
   }
@@ -712,10 +749,11 @@ async function dispatch() {
         if (nowConfigured === lastConfigured) return;
         lastConfigured = nowConfigured;
         if (nowConfigured) {
-          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber + team_state reconciler');
+          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber + team_state reconciler + user-messages poller');
           startDaemon();
           startRealtime();
           startTeamState();
+          startUserMessages();
         } else {
           stopDaemon('cloud.json rimosso o disabilitato');
         }
@@ -735,6 +773,7 @@ async function dispatch() {
     if (daemonChild && !daemonChild.killed) daemonChild.kill(sig);
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
     if (teamStateChild && !teamStateChild.killed) teamStateChild.kill(sig);
+    if (userMessagesChild && !userMessagesChild.killed) userMessagesChild.kill(sig);
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
     if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);

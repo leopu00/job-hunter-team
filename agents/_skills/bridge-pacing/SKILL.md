@@ -13,21 +13,28 @@ The bridge runs a measurement window every 15 min (aligned to :00/:15/:30/:45 UT
 ```
 [BRIDGE PACING] HH:MM UTC window=15m (effettivi Xm) samples=N |
   usage=U% proj=P% reset_in=Rh reset_at=THH:MM UTC |
-  vel_team=V%/h | vel_target=T%/h (per chiudere a 92% al reset) |
+  vel_team=V%/h | vel_target=T%/h (per chiudere a TGT% al reset) [schedule+ratio phase=ON] |
   ratio=K kT/% (team Σ kT / Δusage) |
   agenti: name=p%/h [kT/Xm → kT/h ÷ K = p%/h, share s%, cadenza c/min (n chk in Xm)] ; ... |
   VERDETTO: SFORO|MARGINE|ALLINEATO ...
 ```
 
+`TGT` is the **dynamic target** chosen by the bridge:
+- 24/7 config or no schedule → `TGT=92` (band center, historical default)
+- work-hours config + provider with weekly cap (Codex/Claude) → `TGT` is the % needed at reset so the weekly budget is distributed exactly across the user's active hours. Example: office hours 9-18 on Codex Pro → `TGT≈76`.
+- work-hours config + Kimi (no weekly cap) → `TGT=92` (band center fallback).
+
+The `[schedule+ratio phase=ON]` tag in parentheses is the **source** of the target — `band_center` (no work-hours), `schedule+ratio` (full work-hours-aware), `schedule+band` (work-hours + Kimi fallback). Use it to debug unexpected targets.
+
 ## Fields you actually use
 
-| Field             | What it tells you                                                                               |
-|-------------------|-------------------------------------------------------------------------------------------------|
-| **`vel_team`**    | measured team rate, in budget %-points per hour                                                 |
-| **`vel_target`**  | rate that would land at ~92% at reset (centre of the 90-95 band)                                |
-| **`share s%`**    | per-agent weight on the total rate (Σ shares ≈ 100%) — tells you **WHO** to slow down          |
-| **`cadenza c/min`** | per-agent `jht-throttle` calls per minute in the window — tells you **HOW MUCH** to add to the config |
-| **`VERDETTO`**    | actionable summary; map directly to the table below                                             |
+| Field             | What it tells you                                                                                          |
+|-------------------|------------------------------------------------------------------------------------------------------------|
+| **`vel_team`**    | measured team rate, in budget %-points per hour                                                            |
+| **`vel_target`**  | rate that would land at `TGT%` at reset (centre of the ±10pt band around `TGT`)                            |
+| **`share s%`**    | per-agent weight on the total rate (Σ shares ≈ 100%) — tells you **WHO** to slow down                      |
+| **`cadenza c/min`** | per-agent `jht-throttle` calls per minute in the window — tells you **HOW MUCH** to add to the config    |
+| **`VERDETTO`**    | actionable summary; map directly to the table below                                                        |
 
 ## Verdict → action
 

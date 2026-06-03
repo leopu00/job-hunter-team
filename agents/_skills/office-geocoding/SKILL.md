@@ -21,21 +21,45 @@ office_verified   bool     true se SEI SICURO sia l'ufficio giusto;
                            false se city-level fallback / multi-ambiguo
 ```
 
-## REGOLA d'oro: sforzo aggressivo prima di skip
+## REGOLA d'oro: web verification obbligatoria
 
-**NON arrenderti al primo "no results"**. Effettua **almeno 3 tentativi
-distinti** prima di skippare:
+**NON salvare mai un indirizzo street-level senza prima averlo
+verificato via web** come ufficio reale della company. La sequenza
+corretta è **web search PRIMA, geocoding DOPO** — non l'inverso.
 
-1. **Tentativo 1 — Nominatim diretto** con `"<Company> <City>"`
-2. **Tentativo 2 — Web search** per "company HQ address" / "company
-   office <city>" / "company sede legale", estrai indirizzo da
-   risultati ufficiali (sito company, LinkedIn, registri d'impresa)
-3. **Tentativo 3 — Photon fallback** + estrazione manuale da JD
-   (alcuni JD mettono l'indirizzo nelle note tipo "Visit us at...")
+### Sequenza canonica (sempre in quest'ordine)
 
-Solo dopo **3 tentativi falliti** o **ambiguità irrisolvibile** (es. la
-company ha 5 uffici in city e JD non specifica) puoi skippare con
-`office_geocoded=false`.
+1. **Tentativo 1 — Web search HQ company nella city**
+   - Query: `"<Company> headquarters <city> address"`, `"<Company>
+     sede <city>"`, `"<Company> office <city>"`, `"<Company> contact"`
+   - Sorgenti accettabili come prova: sito company ufficiale,
+     LinkedIn "About", Crunchbase, registri d'impresa (partitaiva.it,
+     cerved.com per IT), Google Maps result della company.
+   - **Estrai l'indirizzo** dalla sorgente trovata.
+
+2. **Tentativo 2 — Estrazione da JD**
+   - Cerca pattern "Visit us at...", "Sede operativa:", "Our office",
+     indirizzo nel piè di pagina dello JD.
+
+3. **Tentativo 3 — Webfetch di una sorgente sospetta**
+   - Se la web search mostra titolo ma non snippet con indirizzo,
+     `WebFetch` della pagina ufficiale per estrarre.
+
+4. **Geocoding via Nominatim/Photon** **SOLO dopo** aver trovato
+   l'indirizzo. Nominatim/Photon convertono testo→coordinate, **non
+   sono verification**. Niente address da web → niente
+   `office_verified=true`.
+
+5. **Fallback city-level** quando tutti i tentativi sopra falliscono:
+   geocoda il **nome city** (es. `"Roma, Italy"`), salva con
+   `office_verified=false` e `office_address = <city>, <country>`.
+   **MAI lasciare NULL se la position ha city/country dal location-
+   enrichment** — usa il fallback city.
+
+### Quando skippa con TUTTO NULL
+
+Solo se la position è full-remote senza loc_city/loc_country (niente
+ufficio fisico da geocodare). Vedi sezione "Quando SKIP" sotto.
 
 ## Quando popolare con `office_verified=true`
 
@@ -197,3 +221,9 @@ work_mode = remote, loc_city = NULL
 - ❌ Rinunciare dopo UN solo tentativo Nominatim vuoto
 - ❌ Geocodare full-remote (niente ufficio fisico)
 - ❌ Lasciare `office_geocoded=NULL` (deve essere `true` o `false` esplicito)
+- ❌ Salvare un indirizzo Nominatim "trovato" senza prima averlo
+  ancorato a una fonte web (sito company / LinkedIn / registro
+  impresa) → rischio di geocodare un nome simile in un'altra città
+- ❌ Lasciare `office_address=NULL` per positions che HANNO city/country:
+  fallback obbligatorio `office_address = "<city>, <country>"` con
+  `office_verified=false`

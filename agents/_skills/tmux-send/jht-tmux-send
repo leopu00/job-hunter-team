@@ -98,10 +98,14 @@ out = {
     "from": from_.lower(),
     "to": to_.lower(),
     "type": kind,
+    # Keep preview for backwards compat with older readers, but also persist
+    # the FULL message body so the case-studies UI can show what the agents
+    # actually said. Cap at 4kB just to bound the log line size.
     "preview": msg[:80],
+    "body": msg[:4096],
 }
 with open(os.path.join(log_dir, "messages.jsonl"), "a") as f:
-    f.write(json.dumps(out) + "\n")
+    f.write(json.dumps(out, ensure_ascii=False) + "\n")
 PYEOF
 fi
 

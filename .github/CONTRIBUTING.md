@@ -44,6 +44,31 @@ Full contributor setup (Node 20+, tmux, agent CLIs, TUI/CLI build from source) i
 - **Do not push directly to `master`**
 - Open a Pull Request and wait for review
 
+## What your PR should show
+
+We love evidence. The clearer you show that your change makes things
+better, the smoother the review — and the faster the merge.
+
+**Small fixes go fast.** Typos, doc tweaks, and < 50 LOC fixes don't
+need ceremony. Open the PR, mention what you changed, and we'll get it in.
+
+**Substantial changes earn their merge with evidence.** When your PR
+affects user-facing behavior, performance, or architecture, attach the
+proof. The kind of proof depends on the area:
+
+| Area | What helps us say yes |
+|---|---|
+| Team ops (skills, prompts, coordination) | metrics from a reproducible sim, before vs after |
+| Frontend (UI, UX, dashboard) | screenshot or short video, before vs after |
+| Infrastructure (CLI, container, cloud sync) | benchmark, incident replay, or perf trace |
+| Security | what attack this prevents + how the mitigation works |
+| Onboarding (DMG, wizard, setup) | time-to-complete metric, or a recording of a new user |
+| Documentation | list of updated files + confirm no broken links |
+
+Tests passing and a clean compile are the floor — that's the harness
+saying nothing is broken. Showing the impact of your change is what
+makes a PR memorable.
+
 ## Commits
 
 Format: `type(scope): short description`

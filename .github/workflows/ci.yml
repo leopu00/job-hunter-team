@@ -21,11 +21,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            shared/package-lock.json
 
-      - name: Install dependencies
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Install shared dependencies
+        working-directory: shared
         run: npm ci
 
       - name: Lint
@@ -43,12 +49,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
           cache-dependency-path: |
             tests/js/package-lock.json
             web/package-lock.json
             cli/package-lock.json
+            shared/package-lock.json
             shared/cron/package-lock.json
 
       - name: Install test runner dependencies
@@ -61,6 +68,10 @@ jobs:
 
       - name: Install CLI dependencies for imported commands
         working-directory: cli
+        run: npm ci
+
+      - name: Install shared dependencies for imported modules
+        working-directory: shared
         run: npm ci
 
       - name: Install cron dependencies for imported modules
@@ -83,11 +94,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            shared/package-lock.json
 
-      - name: Install dependencies
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Install shared dependencies
+        working-directory: shared
         run: npm ci
 
       - name: Build

@@ -29,17 +29,17 @@
  *   }
  */
 
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured } from '@/lib/workspace';
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/workspace";
 
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const SUPABASE_TIMEOUT_MS = 2_000;
 const SLOW_THRESHOLD_MS = 800;
 
-type ProbeStatus = 'ok' | 'slow' | 'timeout' | 'error' | 'not-configured';
+type ProbeStatus = "ok" | "slow" | "timeout" | "error" | "not-configured";
 
 interface ProbeResult {
   status: ProbeStatus;
@@ -49,7 +49,7 @@ interface ProbeResult {
 
 async function probeSupabase(): Promise<ProbeResult> {
   if (!isSupabaseConfigured) {
-    return { status: 'not-configured', latency_ms: 0 };
+    return { status: "not-configured", latency_ms: 0 };
   }
 
   const supabase = await createClient();
@@ -63,7 +63,7 @@ async function probeSupabase(): Promise<ProbeResult> {
   const timeoutPromise = new Promise<ProbeResult>((resolve) => {
     timer = setTimeout(() => {
       resolve({
-        status: 'timeout',
+        status: "timeout",
         latency_ms: SUPABASE_TIMEOUT_MS,
         error: `query exceeded ${SUPABASE_TIMEOUT_MS}ms`,
       });
@@ -75,24 +75,24 @@ async function probeSupabase(): Promise<ProbeResult> {
       // `count: 'exact', head: true` evita di scaricare row e fa solo HEAD.
       // companies e' una delle tabelle piu' piccole e ha sempre almeno 0 row.
       const { error } = await supabase
-        .from('companies')
-        .select('*', { count: 'exact', head: true });
+        .from("companies")
+        .select("*", { count: "exact", head: true });
       const latency = Date.now() - t0;
       if (error) {
         return {
-          status: 'error',
+          status: "error",
           latency_ms: latency,
           error: error.message,
         };
       }
       return {
-        status: latency > SLOW_THRESHOLD_MS ? 'slow' : 'ok',
+        status: latency > SLOW_THRESHOLD_MS ? "slow" : "ok",
         latency_ms: latency,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return {
-        status: 'error',
+        status: "error",
         latency_ms: Date.now() - t0,
         error: message,
       };
@@ -105,22 +105,22 @@ async function probeSupabase(): Promise<ProbeResult> {
 }
 
 function interpret(supabase: ProbeResult, vercelProcessMs: number): string {
-  if (supabase.status === 'not-configured') {
-    return 'Supabase not configured on this deployment';
+  if (supabase.status === "not-configured") {
+    return "Supabase not configured on this deployment";
   }
-  if (supabase.status === 'timeout') {
-    return 'Supabase saturated/down — Vercel responding normally';
+  if (supabase.status === "timeout") {
+    return "Supabase saturated/down — Vercel responding normally";
   }
-  if (supabase.status === 'error') {
-    return `Supabase error — check Postgres logs: ${supabase.error ?? 'unknown'}`;
+  if (supabase.status === "error") {
+    return `Supabase error — check Postgres logs: ${supabase.error ?? "unknown"}`;
   }
-  if (supabase.status === 'slow') {
+  if (supabase.status === "slow") {
     return `Supabase responding but slow (${supabase.latency_ms}ms > ${SLOW_THRESHOLD_MS}ms) — check advisors`;
   }
   if (vercelProcessMs > 3_000) {
     return `Supabase ok but Vercel slow (${vercelProcessMs}ms total) — check Vercel function logs`;
   }
-  return 'all good';
+  return "all good";
 }
 
 export async function GET() {
@@ -135,7 +135,7 @@ export async function GET() {
       ...(supabase.error ? { error: supabase.error } : {}),
     },
     vercel: {
-      status: vercelProcessMs > 3_000 ? 'slow' : 'ok',
+      status: vercelProcessMs > 3_000 ? "slow" : "ok",
       process_ms: vercelProcessMs,
     },
     interpretation: interpret(supabase, vercelProcessMs),
@@ -147,7 +147,7 @@ export async function GET() {
   return NextResponse.json(body, {
     headers: {
       // No-cache: oncall vuole letture fresche.
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      "Cache-Control": "no-store, no-cache, must-revalidate",
     },
   });
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getPositions, getSourceDistribution } from "@/lib/queries";
 import type { PositionWithScore } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
+import { isLocalOnlyMode } from "@/lib/workspace";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
 import FiltersWizard from "./FiltersWizard";
 
@@ -70,7 +71,10 @@ interface CompanyProps {
 // Empty / undefined → [].
 function csv(v: string | undefined): string[] {
   if (!v) return [];
-  return v.split(",").map(s => s.trim()).filter(Boolean);
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
@@ -148,22 +152,26 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
   // Fetch dei legacy_id già su Supabase per l'utente loggato (set per
   // lookup O(1) dentro il loop righe). Errori → set vuoto, niente icona
   // ma la lista funziona comunque.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // JHT-LOCAL-NO-API: in local-only mode skippiamo (nessuna nozione di
+  // "synced" quando il cloud è disabilitato).
   let syncedIds = new Set<number>();
-  if (user) {
-    const { data } = await supabase
-      .from("positions")
-      .select("legacy_id")
-      .eq("user_id", user.id)
-      .not("legacy_id", "is", null);
-    syncedIds = new Set(
-      (data ?? [])
-        .map((r: { legacy_id: number | null }) => r.legacy_id)
-        .filter((x: number | null): x is number => typeof x === "number"),
-    );
+  if (!isLocalOnlyMode()) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data } = await supabase
+        .from("positions")
+        .select("legacy_id")
+        .eq("user_id", user.id)
+        .not("legacy_id", "is", null);
+      syncedIds = new Set(
+        (data ?? [])
+          .map((r: { legacy_id: number | null }) => r.legacy_id)
+          .filter((x: number | null): x is number => typeof x === "number"),
+      );
+    }
   }
 
   const positions = allPositions;
@@ -178,14 +186,7 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
   // Helper per costruire URL preservando filtri attivi.
   const buildHref = (
     overrides: Partial<
-      Record<
-        | "sort"
-        | "dir"
-        | "expand"
-        | "page"
-        | "pageSize",
-        string
-      >
+      Record<"sort" | "dir" | "expand" | "page" | "pageSize", string>
     >,
   ) => {
     const merged: Record<string, string> = {};
@@ -196,7 +197,8 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
     if (verdicts.length) merged.verdict = verdicts.join(",");
     if (sortCol !== "found_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
-    if (expandedCols.size > 0) merged.expand = Array.from(expandedCols).join(",");
+    if (expandedCols.size > 0)
+      merged.expand = Array.from(expandedCols).join(",");
     if (page !== 1) merged.page = String(page);
     if (pageSize !== DEFAULT_PAGE_SIZE) merged.pageSize = String(pageSize);
     Object.assign(merged, overrides);
@@ -205,8 +207,10 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
       if (k === "sort" && merged[k] === "found_at") delete merged[k];
       if (k === "dir" && merged[k] === "desc") delete merged[k];
       if (k === "expand" && merged[k] === "") delete merged[k];
-      if (k === "page" && (merged[k] === "1" || merged[k] === "")) delete merged[k];
-      if (k === "pageSize" && merged[k] === String(DEFAULT_PAGE_SIZE)) delete merged[k];
+      if (k === "page" && (merged[k] === "1" || merged[k] === ""))
+        delete merged[k];
+      if (k === "pageSize" && merged[k] === String(DEFAULT_PAGE_SIZE))
+        delete merged[k];
     }
     const qs = new URLSearchParams(merged).toString();
     return qs ? `/positions?${qs}` : "/positions";
@@ -523,7 +527,9 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
                         )}
                       </div>
                     ) : (
-                      <span className="text-[var(--color-dim)] text-[11px]">—</span>
+                      <span className="text-[var(--color-dim)] text-[11px]">
+                        —
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -572,4 +578,3 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
     </div>
   );
 }
-

@@ -38,6 +38,23 @@ import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 
+# i18n: shared/i18n.py sits in <repo>/shared/, this file in <repo>/.launcher/.
+# Try multiple resolution paths so bridge works both in-container
+# (/app/shared) and host (<repo>/shared) and from cwd.
+_THIS_DIR = Path(__file__).resolve().parent
+for _candidate in (
+    _THIS_DIR.parent / "shared",       # <repo>/shared
+    Path("/app/shared"),                # container path
+):
+    if (_candidate / "i18n.py").exists():
+        sys.path.insert(0, str(_candidate))
+        break
+try:
+    from i18n import t as _i18n_t  # type: ignore
+except Exception:
+    def _i18n_t(key: str) -> str:  # type: ignore
+        return key
+
 VALID_ROLES = ("assistente", "capitano", "mentor")
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
@@ -61,35 +78,39 @@ MAX_DOC_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB hard limit Bot API
 # ── Commands per Telegram Bot API setMyCommands ────────────────────────
 # F-1 task #50 (bug #16): slash commands cliccabili nel menu "/" del client
 # Telegram. Bootstrap idempotente al primo boot del bridge. Le keys del
-# dict sono i 3 ruoli user-facing; ogni lista è un set di (command, desc)
-# specifico al dominio dell'agente. Senza questi, l'utente nuovo non sa
-# cosa chiedere — vede una chat vuota e cerca di indovinare.
+# dict sono i 3 ruoli user-facing; ogni lista è un set di (command, key)
+# dove `key` è la i18n key da risolvere via shared/i18n.py → JHT_LANG.
+# Senza questi, l'utente nuovo non sa cosa chiedere — vede una chat vuota
+# e cerca di indovinare.
+#
+# i18n: descrizioni vengono da shared/locales/<lang>.json. Stesso pattern
+# di welcome-send.sh / auto_report.py. Fallback alla key se locale missing.
 BOT_COMMANDS = {
     "assistente": [
-        ("budget", "Grafico budget finestra corrente"),
-        ("budget_prev", "Grafico finestra precedente"),
-        ("budget_week", "Andamento settimanale"),
-        ("pipeline", "Stato pipeline (overview dashboard)"),
-        ("candles", "3 candle inizio/mezzo/fine ultima finestra"),
-        ("mappa", "Mappa posizioni Europa"),
-        ("mappa_it", "Mappa posizioni Italia"),
-        ("stato", "Stato rapido team (testuale)"),
-        ("help", "Lista comandi disponibili"),
+        ("budget",      "bot_commands.assistente.budget"),
+        ("budget_prev", "bot_commands.assistente.budget_prev"),
+        ("budget_week", "bot_commands.assistente.budget_week"),
+        ("pipeline",    "bot_commands.assistente.pipeline"),
+        ("candles",     "bot_commands.assistente.candles"),
+        ("mappa",       "bot_commands.assistente.mappa"),
+        ("mappa_it",    "bot_commands.assistente.mappa_it"),
+        ("stato",       "bot_commands.assistente.stato"),
+        ("help",        "bot_commands.assistente.help"),
     ],
     "capitano": [
-        ("pipeline", "Stato pipeline + bottleneck attuale"),
-        ("budget", "Consumo budget finestra corrente"),
-        ("team", "Stato agenti (chi è attivo, cosa sta facendo)"),
-        ("ready", "Lista CV pronti per apply manuale"),
-        ("triage", "Forza un triage pipeline (skill auto-triage)"),
-        ("help", "Lista comandi disponibili"),
+        ("pipeline", "bot_commands.capitano.pipeline"),
+        ("budget",   "bot_commands.capitano.budget"),
+        ("team",     "bot_commands.capitano.team"),
+        ("ready",    "bot_commands.capitano.ready"),
+        ("triage",   "bot_commands.capitano.triage"),
+        ("help",     "bot_commands.capitano.help"),
     ],
     "mentor": [
-        ("digest", "Digest settimanale candidature + pattern"),
-        ("patterns", "Pattern rejection ricorrenti"),
-        ("top", "Top 3 PASS più rilevanti per il tuo profilo"),
-        ("salary", "Vista salary fit + mercato di riferimento"),
-        ("help", "Lista comandi disponibili"),
+        ("digest",   "bot_commands.mentor.digest"),
+        ("patterns", "bot_commands.mentor.patterns"),
+        ("top",      "bot_commands.mentor.top"),
+        ("salary",   "bot_commands.mentor.salary"),
+        ("help",     "bot_commands.mentor.help"),
     ],
 }
 
@@ -106,7 +127,7 @@ def setup_bot_commands(token: str) -> None:
         log("setMyCommands: no command list for this role, skip")
         return
     payload = json.dumps({
-        "commands": [{"command": c, "description": d} for c, d in cmds]
+        "commands": [{"command": c, "description": _i18n_t(k)} for c, k in cmds]
     }).encode("utf-8")
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/setMyCommands",

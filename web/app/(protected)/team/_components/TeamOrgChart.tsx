@@ -67,7 +67,7 @@ const PACING_NODE = {
 // per mostrare un timeline live nella pagina /team (DoctorPanel).
 const DOCTOR_AGENT = {
   roleId: "dottore",
-  emoji: "🩺",
+  emoji: "👨‍⚕️",
   name: "Doctor",
   desc: "Health-check on demand — every 30 min pings each agent, restarts the stuck ones, then self-destructs.",
 };

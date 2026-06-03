@@ -20,6 +20,7 @@ import {
 import {
   promptTelegramRequired,
   promptSubscription,
+  promptWorkingHours,
   assembleAndSaveConfig,
   showSummary,
 } from './setup-steps.js';
@@ -204,10 +205,19 @@ export async function runSetupWizard(prompter) {
   // diventa opzionale → si configura dopo con `jht config`.
   let telegramChannel = baseConfig.channels?.telegram || undefined;
 
+  // --- Working hours: orari di lavoro del team (distribuzione weekly) ---
+  // Step non-bloccante: skip = 24/7 (default storico). Lo facciamo PRIMA
+  // di salvare il config così atterra in jht.config.json al primo write,
+  // e il bridge li raccoglie immediatamente al boot del team.
+  const workingHours = await promptWorkingHours(
+    prompter,
+    baseConfig.team?.working_hours,
+  );
+
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
     providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
-    telegramChannel, baseProviders: baseConfig.providers || {},
+    telegramChannel, baseProviders: baseConfig.providers || {}, workingHours,
   });
 
   await showSummary(prompter, {
@@ -250,7 +260,7 @@ export async function runSetupWizard(prompter) {
     // Aggiorno config sul disco con il telegram appena configurato.
     await assembleAndSaveConfig(prompter, {
       providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
-      telegramChannel, baseProviders: baseConfig.providers || {},
+      telegramChannel, baseProviders: baseConfig.providers || {}, workingHours,
     });
   }
 

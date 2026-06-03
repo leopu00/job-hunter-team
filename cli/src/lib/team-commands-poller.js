@@ -1,5 +1,10 @@
 /**
- * Team commands subscriber (polling-based).
+ * Team commands poller (HTTP long-poll).
+ *
+ * Renamed 2026-05-31: precedente nome `realtime-subscriber.js` era
+ * ingannevole — questo file NON usa WebSocket/Supabase Realtime, fa
+ * long-poll HTTP. Vedi `docs/internal/cloud-sync-architecture.md` §
+ * "Nota architetturale sulla nomenclatura".
  *
  * Long-running process che fa long-poll su
  * /api/cloud-sync/team-commands ogni N secondi (default 5s) usando
@@ -40,7 +45,7 @@ const POLL_INTERVAL_MAX_MS = 60000;
 
 function log(level, msg, meta) {
   const ts = new Date().toISOString();
-  const tag = level === 'error' ? pc.red('[team-subscriber]') : pc.dim('[team-subscriber]');
+  const tag = level === 'error' ? pc.red('[team-commands-poller]') : pc.dim('[team-commands-poller]');
   const metaStr = meta ? ` ${JSON.stringify(meta)}` : '';
   const stream = level === 'error' || level === 'warn' ? console.error : console.log;
   stream(`${tag} ${ts} ${msg}${metaStr}`);
@@ -204,7 +209,7 @@ async function processCommand(baseUrl, token, command) {
   });
 }
 
-export async function runRealtimeSubscriber() {
+export async function runTeamCommandsPoller() {
   const config = await loadCloudConfig();
   if (!config?.enabled) {
     log('warn', 'startup.skipped', { reason: 'cloud sync not enabled' });

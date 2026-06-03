@@ -22,7 +22,7 @@ JHT su tre provider:
   7. 🤖 Funnel pipeline (scout → ready)
   8. 🔢 Token cumulativi per agente
   9. 📬 Bridge mailbox summary
-  10. 🩺 Doctor stats summary
+  10. 👨‍⚕️ Doctor stats summary
   + sezione finale "Esiti chiave" (cosa e' andato bene / male / da cambiare)
 
 ## 🗂️ JSON snapshot

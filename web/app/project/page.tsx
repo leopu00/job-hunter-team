@@ -23,7 +23,7 @@ const T = {
     story_body_2:
       "L'obiettivo è costruire uno strumento accessibile a tutti: chi preferisce semplicità può scaricare il launcher desktop e usare l'interfaccia web, mentre chi ha competenze tecniche può clonare la repository o utilizzare la TUI per un controllo avanzato.",
     story_body_3:
-      "Il progetto è interamente gratuito e senza costi nascosti: se usi un provider AI esterno pagherai solo il tuo consumo, ma puoi anche utilizzare modelli locali gratuitamente. Le contribuzioni degli sviluppatori sono benvenute per migliorare insieme uno strumento che usa l'intelligenza artificiale a favore dei lavoratori, non contro.",
+      "Il software è gratuito e open source: JHT non ti fattura nulla. Paghi solo un abbonamento AI dedicato (Claude Code, Codex o Kimi): il team lo consuma tutto, quindi tienilo separato da quello che usi ogni giorno. Le contribuzioni degli sviluppatori sono benvenute per mettere l'AI dalla parte dei lavoratori, non contro.",
   },
   en: {
     title: "Company overview",
@@ -37,7 +37,7 @@ const T = {
     story_body_2:
       "The goal is to build a tool accessible to everyone: those who prefer simplicity download the desktop launcher that handles the container for you, while technical users can clone the repository and work with the CLI/TUI directly.",
     story_body_3:
-      "The software is free and open source: JHT never bills you. You only pay the subscription of the AI provider you choose (Claude Code, Codex or Kimi) using the account you already have. Developer contributions are welcome to improve together a tool that puts AI on the side of workers, not against them.",
+      "The software is free and open source: JHT never bills you. You only pay for a dedicated AI subscription (Claude Code, Codex or Kimi): the team uses it fully, so keep it separate from your everyday account. Developer contributions are welcome to keep AI on the side of workers, not against them.",
   },
   hu: {
     title: "Projekt áttekintése",
@@ -51,21 +51,9 @@ const T = {
     story_body_2:
       "A cél egy mindenki számára hozzáférhető eszköz építése: aki az egyszerűséget kedveli, letölti az asztali launchert, amely a konténert helyetted kezeli; a műszaki felhasználók klónozhatják a repository-t és közvetlenül dolgozhatnak a CLI/TUI felülettel.",
     story_body_3:
-      "A szoftver ingyenes és nyílt forráskódú: a JHT soha nem számláz neked. Csak a választott AI szolgáltató (Claude Code, Codex vagy Kimi) előfizetését fizeted, a már meglévő fiókoddal. A fejlesztői közreműködéseket szívesen fogadjuk, hogy együtt jobbítsunk egy olyan eszközt, amely a dolgozók oldalára állítja az AI-t, nem pedig ellenük.",
+      "A szoftver ingyenes és nyílt forráskódú: a JHT soha nem számláz neked. Csak egy dedikált AI előfizetést fizetsz (Claude Code, Codex vagy Kimi): a csapat teljesen felhasználja, ezért tartsd külön a napi fiókodtól. A fejlesztői közreműködéseket szívesen fogadjuk, hogy az AI a dolgozók oldalán álljon, ne ellenük.",
   },
 } as const;
-
-function GitHubIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="w-4 h-4 fill-current"
-    >
-      <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49C4 14.09 3.48 13.22 3.32 12.77c-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.5 7.5 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-    </svg>
-  );
-}
 
 function BackLink({ label }: { label: string }) {
   const router = useRouter();
@@ -90,7 +78,7 @@ function BackLink({ label }: { label: string }) {
 
 function CompanyContent() {
   const { lang } = useLandingI18n();
-  const t = T[lang] ?? T.en;
+  const t = T[lang as keyof typeof T] ?? T.en;
 
   // The WebCompany JSON-LD that used to live here was a duplicate of the one
   // emitted by `project/layout.tsx` (server component) with the same
@@ -121,16 +109,6 @@ function CompanyContent() {
                 {t.open_source}
               </span>
             </div>
-            <a
-              href="https://github.com/leopu00/job-hunter-team"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold tracking-wide no-underline transition-all hover:opacity-90"
-              style={{ background: "var(--color-green)", color: "#060608" }}
-            >
-              <GitHubIcon />
-              <span>{t.repo_cta}</span>
-            </a>
           </div>
         </div>
 

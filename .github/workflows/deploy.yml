@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node 20
         uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
       - name: Verify linked Vercel project
         run: node .github/scripts/verify-vercel-production.mjs
         env:

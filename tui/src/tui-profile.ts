@@ -129,6 +129,8 @@ CREATE TABLE IF NOT EXISTS positions (
   )),
   notes TEXT,
   last_checked TIMESTAMP,
+  write_requested INTEGER DEFAULT 0,
+  write_requested_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (company_id) REFERENCES companies(id)
@@ -137,6 +139,7 @@ CREATE TABLE IF NOT EXISTS positions (
 CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
 CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
 CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
+CREATE INDEX IF NOT EXISTS idx_positions_write_requested ON positions(write_requested) WHERE write_requested = 1;
 
 CREATE TABLE IF NOT EXISTS position_highlights (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
