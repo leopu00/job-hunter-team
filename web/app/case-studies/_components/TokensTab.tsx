@@ -450,9 +450,9 @@ export function TokensTab({ caseStudy, weekly }: Props) {
           <strong>Cosa stai vedendo</strong>: ogni sessione Codex (1 per agente
           al boot, più i respawn) emette un evento <code>token_count</code> a
           ogni turn con i token consumati. Sommiamo i delta per finestra 5h e
-          per agente. <strong>Cached</strong> = parte dell'input riusata dalla
-          cache del provider (sconto pagato). <strong>Output</strong> = token
-          generati dal modello (i più costosi).
+          per agente. <strong>Cached</strong> = parte dell&apos;input riusata
+          dalla cache del provider (sconto pagato). <strong>Output</strong> =
+          token generati dal modello (i più costosi).
         </p>
       </div>
     </section>
