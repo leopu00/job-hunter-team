@@ -850,7 +850,7 @@ def _do_fetch(provider):
             return None, "claude_tui_fail+claude_api_none"
         return r, None
 
-    if provider == "openai":
+    if provider in ("openai", "codex"):
         p = fetch_codex_rollout()
         return (p, None) if p else (None, "codex_rollout_none")
 
