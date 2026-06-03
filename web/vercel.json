@@ -1,7 +1,7 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run build",
-  "installCommand": "npm install",
+  "installCommand": "npm install && cd ../shared && npm install",
   "outputDirectory": ".next",
   "regions": ["cdg1"],
   "cleanUrls": true
