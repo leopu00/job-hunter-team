@@ -86,7 +86,7 @@ export const LUXURY_POSITIONS: LuxuryPosition[] = [
     company: "Hotel Sacher Wien",
     location: "Vienna, Austria",
     lon: 16.3697,
-    lat: 48.2050,
+    lat: 48.205,
     status: "new",
     source: "hosco.com",
     score: null,
