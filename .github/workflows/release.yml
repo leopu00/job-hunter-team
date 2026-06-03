@@ -168,10 +168,20 @@ jobs:
         with:
           node-version: "24"
           cache: "npm"
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            shared/package-lock.json
 
       - name: Install web dependencies
         working-directory: web
+        run: npm ci
+
+      # Il build web importa shared/config/schema.ts, che dipende da `zod`.
+      # Senza le deps di shared installate, turbopack non risolve `zod` da
+      # shared/node_modules e il build fallisce (Vercel lo risolve via root
+      # npm install). Allineato al job "Build Web" della CI (ci.yml).
+      - name: Install shared dependencies
+        working-directory: shared
         run: npm ci
 
       - name: Build web
