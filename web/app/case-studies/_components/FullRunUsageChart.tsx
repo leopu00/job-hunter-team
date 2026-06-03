@@ -48,6 +48,26 @@ export function FullRunUsageChart({ weekly, accentColor, capPct = 92 }: Props) {
       .sort((a, b) => a.ts - b.ts);
   }, [burnSamples]);
 
+  // Hooks must run before any early return — see rules-of-hooks.
+  const hoverData = useMemo(() => {
+    if (!hover || samplesByTs.length === 0) return null;
+    let nearest = samplesByTs[0];
+    let bestDist = Math.abs(nearest.ts - hover.ts);
+    for (const s of samplesByTs) {
+      const d = Math.abs(s.ts - hover.ts);
+      if (d < bestDist) {
+        bestDist = d;
+        nearest = s;
+      }
+    }
+    const win = fiveHour.find((f) => {
+      const a = new Date(f.started_at).getTime();
+      const b = new Date(f.ended_at).getTime();
+      return hover.ts >= a && hover.ts <= b;
+    });
+    return { nearest, window: win };
+  }, [hover, samplesByTs, fiveHour]);
+
   if (!start || !end || burnSamples.length === 0) return null;
 
   const totalH = (end - start) / 3_600_000;
@@ -146,7 +166,7 @@ export function FullRunUsageChart({ weekly, accentColor, capPct = 92 }: Props) {
   function handleMove(e: React.MouseEvent<SVGSVGElement>) {
     const svg = svgRef.current;
     const fig = figureRef.current;
-    if (!svg || !fig) return;
+    if (!svg || !fig || start == null || end == null) return;
     const rect = svg.getBoundingClientRect();
     const figRect = fig.getBoundingClientRect();
     const px = ((e.clientX - rect.left) / rect.width) * w;
@@ -163,25 +183,6 @@ export function FullRunUsageChart({ weekly, accentColor, capPct = 92 }: Props) {
       figY: e.clientY - figRect.top,
     });
   }
-
-  const hoverData = useMemo(() => {
-    if (!hover || samplesByTs.length === 0) return null;
-    let nearest = samplesByTs[0];
-    let bestDist = Math.abs(nearest.ts - hover.ts);
-    for (const s of samplesByTs) {
-      const d = Math.abs(s.ts - hover.ts);
-      if (d < bestDist) {
-        bestDist = d;
-        nearest = s;
-      }
-    }
-    const win = fiveHour.find((f) => {
-      const a = new Date(f.started_at).getTime();
-      const b = new Date(f.ended_at).getTime();
-      return hover.ts >= a && hover.ts <= b;
-    });
-    return { nearest, window: win };
-  }, [hover, samplesByTs, fiveHour]);
 
   return (
     <figure
