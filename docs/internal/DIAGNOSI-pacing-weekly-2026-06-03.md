@@ -115,6 +115,16 @@ Lavoro `12h × 7 = `**`84h attive/sett`**. Finestre 5h che partono col team → 
 - Verifica: `dottore.md` non cita `working_hours`; nessun watchdog in `cli/` chiama `is_within_working_hours` (solo il pacing-bridge lo usa).
 - **FIX [dev1]**: (a) Dottore/watchdog **gate-aware** (niente spawn/health-check in OFF, o cadenza ridottissima); (b) `target=0` (OFF) deve tradursi in **PAUSA REALE** (stop spawn/wake), non solo un numero; (c) lasciare al più la Sentinella a tick ridotto.
 
+**📌 Note implementative [dev1] (per il fix futuro — non ancora implementato):**
+- **File da toccare**:
+  - `.launcher/doctor-watchdog.sh:20` → `INTERVAL_SEC="${DOCTOR_WATCHDOG_INTERVAL:-7200}"` (2h). Alle **righe 44-54 c'è GIÀ un gate sul `halt flag`** (`team_state.should_run` → "spawn dottore disabilitato"): **riusare lo stesso pattern** per un check `is_within_working_hours` → in OFF skip dello spawn (o cadenza ridottissima). È il punto di intervento principale, basso rischio (simmetrico al gate esistente).
+  - `.launcher/spawn-doctor.sh` → spawn effettivo del Dottore (secondo gate possibile, difesa in profondità).
+  - `agents/dottore/dottore*.md` → prompt Dottore gate-aware (sospendere health/freshness/self-restart in OFF). Oggi **non cita** `working_hours`.
+  - `cli/src/commands/pid1.js:567` → pid1 lancia il watchdog (`DOCTOR_WATCHDOG_SCRIPT`).
+  - gate condiviso già esistente: `shared/skills/working_hours.py::is_within_working_hours` (oggi usato **solo** dal pacing-bridge).
+- **Breakdown consumo OFF per agente** (verificato dev1, priorità del fix): capitano 3.55M/40turn · dottore 2.00M/65turn (+3 sessioni fresche 18:33/20:33/22:33) · analista-1 1.53M · sentinella 1.31M/36turn · scorer-1 1.14M · assistente 759k · scout-1 610k · scout-2 508k · analista-2 168k · mentor 115k. Fresh non-cached ≈ **1.29M input + 31k output** (resto cached).
+- **Eccezione da valutare**: la Sentinella può restare a tick ridotto in OFF (monitor leggero); gli altri in pausa piena.
+
 ---
 
 ## 🔧 Azioni proposte (riepilogo)
