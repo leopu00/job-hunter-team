@@ -255,6 +255,15 @@ if [ -t 0 ] && [ "$NON_INTERACTIVE" -eq 0 ]; then
 fi
 ok "Timezone: $JHT_USER_TZ"
 
+# #13 — su VPS / non-interattivo il prompt sopra è saltato, quindi resta
+# l'UTC del SERVER (non la timezone dell'utente, che sta altrove nel mondo).
+# Senza la TZ reale il Capitano mostra orari/reset sfasati e le working-hours
+# valgono in UTC invece che nelle ore locali dell'utente (sul beta VPS si è
+# dovuto passare --tz Europe/Rome a mano). Avvisa esplicitamente come correggere.
+if { [ ! -t 0 ] || [ "$NON_INTERACTIVE" -eq 1 ]; } && [ "$JHT_USER_TZ" = "UTC" ]; then
+  warn "$(ts host_setup.timezone_vps_utc 'Timezone non rilevata: il team userà UTC. Imposta la tua con  jht wh --tz Europe/Rome  (o dalla dashboard), sennò orari Telegram e working-hours saranno in UTC.')"
+fi
+
 # Persisti la scelta in ~/.jht/host.env cosi' il wrapper bash + il wizard
 # Node sanno se siamo su VPS (per attivare step obbligatori cloud + telegram).
 # Riscriviamo l'intero file mantenendo JHT_LANG + JHT_USER_TZ. Se in
