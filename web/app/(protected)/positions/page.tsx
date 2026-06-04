@@ -313,307 +313,309 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       <div className="flex gap-6 items-start">
         <PositionsFilterSidebar />
         <div className="flex-1 min-w-0">
-      {/* ── Filtri (wizard a sinistra, righe-per-pagina a destra) ── */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <FiltersWizard availableSources={availableSources} />
-        <div className="flex items-center gap-1.5">
-          <span className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
-            Righe per pagina
-          </span>
-          {PAGE_SIZE_OPTIONS.map((size) => (
-            <Link
-              key={size}
-              href={buildHref({ pageSize: String(size), page: "1" })}
-              className="px-2 py-0.5 text-[10px] font-semibold rounded-full border transition-colors no-underline"
-              style={
-                pageSize === size
-                  ? {
-                      color: "var(--color-bright)",
-                      borderColor: "var(--color-green)",
-                      background: "var(--color-card)",
-                    }
-                  : {
-                      color: "var(--color-dim)",
-                      borderColor: "var(--color-border)",
-                    }
-              }
-            >
-              {size}
-            </Link>
-          ))}
-        </div>
-      </div>
+          {/* ── Filtri (wizard a sinistra, righe-per-pagina a destra) ── */}
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <FiltersWizard availableSources={availableSources} />
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
+                Righe per pagina
+              </span>
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <Link
+                  key={size}
+                  href={buildHref({ pageSize: String(size), page: "1" })}
+                  className="px-2 py-0.5 text-[10px] font-semibold rounded-full border transition-colors no-underline"
+                  style={
+                    pageSize === size
+                      ? {
+                          color: "var(--color-bright)",
+                          borderColor: "var(--color-green)",
+                          background: "var(--color-card)",
+                        }
+                      : {
+                          color: "var(--color-dim)",
+                          borderColor: "var(--color-border)",
+                        }
+                  }
+                >
+                  {size}
+                </Link>
+              ))}
+            </div>
+          </div>
 
-      {/* ── Table ───────────────────────────────────────────────── */}
-      {/* La pagina /positions è in MainChrome FULLSCREEN_FLOWS, quindi
+          {/* ── Table ───────────────────────────────────────────────── */}
+          {/* La pagina /positions è in MainChrome FULLSCREEN_FLOWS, quindi
           il main è già full-width con padding 48px. La tabella prende
           100% e ha scroll-x se eccede. */}
-      <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
-        <table
-          className="w-full text-[12px]"
-          style={{ borderCollapse: "collapse" }}
-          aria-label="Lista posizioni"
-        >
-          <thead>
-            <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-              {[
-                { col: "found_at", label: "Rilevata" },
-                { col: "id", label: "ID" },
-                { col: "title", label: "Titolo" },
-                { col: "company", label: "Azienda" },
-                { col: "source", label: "Fonte" },
-                { col: "location", label: "Location" },
-                { col: "score", label: "Score" },
-                { col: "status", label: "Stato" },
-                { col: "critic", label: "Voto finale" },
-              ].map(({ col, label }) => (
-                <th
-                  key={col}
-                  scope="col"
-                  className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
-                  style={{
-                    color:
-                      sortCol === col
-                        ? "var(--color-bright)"
-                        : "var(--color-dim)",
-                  }}
-                >
-                  <span className="inline-flex items-center gap-1.5">
-                    <Link
-                      href={sortHref(col)}
-                      className="no-underline hover:text-[var(--color-green)] transition-colors"
-                      style={{ color: "inherit" }}
-                    >
-                      {label}
-                      <span aria-hidden="true">{sortIndicator(col)}</span>
-                    </Link>
-                    {EXPANDABLE_COLUMNS.has(col) && (
-                      <Link
-                        href={expandHref(col)}
-                        title={
-                          isExpanded(col)
-                            ? "Comprimi colonna"
-                            : "Espandi colonna"
-                        }
-                        aria-label={
-                          isExpanded(col)
-                            ? "Comprimi colonna"
-                            : "Espandi colonna"
-                        }
-                        className="no-underline text-[10px] leading-none px-1 rounded hover:bg-[var(--color-card)] hover:text-[var(--color-green)] transition-colors"
-                        style={{
-                          color: isExpanded(col)
-                            ? "var(--color-green)"
-                            : "var(--color-dim)",
-                        }}
-                      >
-                        {isExpanded(col) ? "⇲" : "⇱"}
-                      </Link>
-                    )}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {visiblePositions.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={9}
-                  className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
-                >
-                  Nessuna posizione trovata con questi filtri.
-                </td>
-              </tr>
-            ) : (
-              visiblePositions.map((p: PositionWithScore, i: number) => (
-                <tr
-                  key={p.id}
-                  className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
-                  style={{
-                    borderBottomColor:
-                      i === visiblePositions.length - 1
-                        ? "transparent"
-                        : undefined,
-                    background:
-                      i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
-                  }}
-                >
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
-                    {formatFoundAt(p.found_at)}
-                  </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                    <span className="inline-flex items-center gap-1.5">
-                      {p.legacy_id
-                        ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                        : p.id.slice(0, 8)}
-                      {p.legacy_id != null && syncedIds.has(p.legacy_id) && (
-                        <span
-                          title="Sincronizzato sul cloud"
-                          aria-label="Sincronizzato sul cloud"
-                          style={{
-                            color: "var(--color-green)",
-                            fontSize: "11px",
-                            lineHeight: 1,
-                          }}
-                        >
-                          ☁
-                        </span>
-                      )}
-                    </span>
-                  </td>
-                  <td
-                    className={`px-4 py-3 font-medium ${
-                      isExpanded("title") ? "" : "max-w-[220px]"
-                    }`}
-                  >
-                    <Link
-                      href={`/positions/${p.id}`}
-                      className={`text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors ${
-                        isExpanded("title") ? "" : "line-clamp-2"
-                      }`}
-                    >
-                      {p.title}
-                    </Link>
-                  </td>
-                  <td
-                    className={`px-4 py-3 text-[var(--color-base)] ${
-                      isExpanded("company")
-                        ? "whitespace-normal"
-                        : "whitespace-nowrap max-w-[140px] truncate"
-                    }`}
-                    title={p.company}
-                  >
-                    {p.company}
-                  </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
-                    {p.source ?? "—"}
-                  </td>
-                  <td
-                    className={`px-4 py-3 text-[11px] text-[var(--color-muted)] ${
-                      isExpanded("location")
-                        ? "whitespace-normal"
-                        : "max-w-[200px] truncate whitespace-nowrap"
-                    }`}
-                    title={p.location ?? undefined}
-                  >
-                    {p.location ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
-                      <span
-                        className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
-                      >
-                        {p.score ?? "—"}
-                      </span>
-                      <div
-                        className="w-10 h-1 rounded-full overflow-hidden"
-                        style={{ background: "var(--color-border)" }}
-                      >
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${p.score ?? 0}%`,
-                            background: scoreBg(p.score),
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
+          <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+            <table
+              className="w-full text-[12px]"
+              style={{ borderCollapse: "collapse" }}
+              aria-label="Lista posizioni"
+            >
+              <thead>
+                <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
+                  {[
+                    { col: "found_at", label: "Rilevata" },
+                    { col: "id", label: "ID" },
+                    { col: "title", label: "Titolo" },
+                    { col: "company", label: "Azienda" },
+                    { col: "source", label: "Fonte" },
+                    { col: "location", label: "Location" },
+                    { col: "score", label: "Score" },
+                    { col: "status", label: "Stato" },
+                    { col: "critic", label: "Voto finale" },
+                  ].map(({ col, label }) => (
+                    <th
+                      key={col}
+                      scope="col"
+                      className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
                       style={{
-                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                        borderColor:
-                          STATUS_COLORS[p.status] ?? "var(--color-border)",
-                        background: `${STATUS_COLORS[p.status]}18`,
+                        color:
+                          sortCol === col
+                            ? "var(--color-bright)"
+                            : "var(--color-dim)",
                       }}
                     >
-                      {p.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {p.critic_score != null || p.critic_verdict ? (
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-[12px] font-semibold tabular-nums"
-                          style={{
-                            color:
-                              CRITIC_COLORS[p.critic_verdict ?? ""] ??
-                              "var(--color-muted)",
-                          }}
+                      <span className="inline-flex items-center gap-1.5">
+                        <Link
+                          href={sortHref(col)}
+                          className="no-underline hover:text-[var(--color-green)] transition-colors"
+                          style={{ color: "inherit" }}
                         >
-                          {p.critic_score != null
-                            ? p.critic_score.toFixed(1)
-                            : "—"}
-                        </span>
-                        {p.critic_verdict && (
-                          <span
-                            className="text-[9px] font-semibold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded border"
+                          {label}
+                          <span aria-hidden="true">{sortIndicator(col)}</span>
+                        </Link>
+                        {EXPANDABLE_COLUMNS.has(col) && (
+                          <Link
+                            href={expandHref(col)}
+                            title={
+                              isExpanded(col)
+                                ? "Comprimi colonna"
+                                : "Espandi colonna"
+                            }
+                            aria-label={
+                              isExpanded(col)
+                                ? "Comprimi colonna"
+                                : "Espandi colonna"
+                            }
+                            className="no-underline text-[10px] leading-none px-1 rounded hover:bg-[var(--color-card)] hover:text-[var(--color-green)] transition-colors"
                             style={{
-                              color:
-                                CRITIC_COLORS[p.critic_verdict] ??
-                                "var(--color-dim)",
-                              borderColor:
-                                CRITIC_COLORS[p.critic_verdict] ??
-                                "var(--color-border)",
-                              background: `${CRITIC_COLORS[p.critic_verdict] ?? "var(--color-border)"}18`,
+                              color: isExpanded(col)
+                                ? "var(--color-green)"
+                                : "var(--color-dim)",
                             }}
                           >
-                            {p.critic_verdict.replace("_", " ")}
+                            {isExpanded(col) ? "⇲" : "⇱"}
+                          </Link>
+                        )}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visiblePositions.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
+                    >
+                      Nessuna posizione trovata con questi filtri.
+                    </td>
+                  </tr>
+                ) : (
+                  visiblePositions.map((p: PositionWithScore, i: number) => (
+                    <tr
+                      key={p.id}
+                      className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
+                      style={{
+                        borderBottomColor:
+                          i === visiblePositions.length - 1
+                            ? "transparent"
+                            : undefined,
+                        background:
+                          i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
+                      }}
+                    >
+                      <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
+                        {formatFoundAt(p.found_at)}
+                      </td>
+                      <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5">
+                          {p.legacy_id
+                            ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                            : p.id.slice(0, 8)}
+                          {p.legacy_id != null &&
+                            syncedIds.has(p.legacy_id) && (
+                              <span
+                                title="Sincronizzato sul cloud"
+                                aria-label="Sincronizzato sul cloud"
+                                style={{
+                                  color: "var(--color-green)",
+                                  fontSize: "11px",
+                                  lineHeight: 1,
+                                }}
+                              >
+                                ☁
+                              </span>
+                            )}
+                        </span>
+                      </td>
+                      <td
+                        className={`px-4 py-3 font-medium ${
+                          isExpanded("title") ? "" : "max-w-[220px]"
+                        }`}
+                      >
+                        <Link
+                          href={`/positions/${p.id}`}
+                          className={`text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors ${
+                            isExpanded("title") ? "" : "line-clamp-2"
+                          }`}
+                        >
+                          {p.title}
+                        </Link>
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-[var(--color-base)] ${
+                          isExpanded("company")
+                            ? "whitespace-normal"
+                            : "whitespace-nowrap max-w-[140px] truncate"
+                        }`}
+                        title={p.company}
+                      >
+                        {p.company}
+                      </td>
+                      <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
+                        {p.source ?? "—"}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-[11px] text-[var(--color-muted)] ${
+                          isExpanded("location")
+                            ? "whitespace-normal"
+                            : "max-w-[200px] truncate whitespace-nowrap"
+                        }`}
+                        title={p.location ?? undefined}
+                      >
+                        {p.location ?? "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 justify-end">
+                          <span
+                            className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
+                          >
+                            {p.score ?? "—"}
+                          </span>
+                          <div
+                            className="w-10 h-1 rounded-full overflow-hidden"
+                            style={{ background: "var(--color-border)" }}
+                          >
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${p.score ?? 0}%`,
+                                background: scoreBg(p.score),
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
+                          style={{
+                            color:
+                              STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                            borderColor:
+                              STATUS_COLORS[p.status] ?? "var(--color-border)",
+                            background: `${STATUS_COLORS[p.status]}18`,
+                          }}
+                        >
+                          {p.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {p.critic_score != null || p.critic_verdict ? (
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-[12px] font-semibold tabular-nums"
+                              style={{
+                                color:
+                                  CRITIC_COLORS[p.critic_verdict ?? ""] ??
+                                  "var(--color-muted)",
+                              }}
+                            >
+                              {p.critic_score != null
+                                ? p.critic_score.toFixed(1)
+                                : "—"}
+                            </span>
+                            {p.critic_verdict && (
+                              <span
+                                className="text-[9px] font-semibold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded border"
+                                style={{
+                                  color:
+                                    CRITIC_COLORS[p.critic_verdict] ??
+                                    "var(--color-dim)",
+                                  borderColor:
+                                    CRITIC_COLORS[p.critic_verdict] ??
+                                    "var(--color-border)",
+                                  background: `${CRITIC_COLORS[p.critic_verdict] ?? "var(--color-border)"}18`,
+                                }}
+                              >
+                                {p.critic_verdict.replace("_", " ")}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[var(--color-dim)] text-[11px]">
+                            —
                           </span>
                         )}
-                      </div>
-                    ) : (
-                      <span className="text-[var(--color-dim)] text-[11px]">
-                        —
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* ── Pagination ──────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mt-4 text-[11px] text-[var(--color-muted)]">
-        <div>
-          {totalResults === 0
-            ? "0 risultati"
-            : `${startIdx + 1}–${Math.min(startIdx + pageSize, totalResults)} di ${totalResults} · pagina ${page} / ${pageCount}`}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1">
-            {page > 1 ? (
-              <Link
-                href={buildHref({ page: String(page - 1) })}
-                className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors no-underline text-[var(--color-base)]"
-              >
-                ← Precedenti
-              </Link>
-            ) : (
-              <span className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] text-[var(--color-dim)] opacity-50">
-                ← Precedenti
-              </span>
-            )}
-            {page < pageCount ? (
-              <Link
-                href={buildHref({ page: String(page + 1) })}
-                className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors no-underline text-[var(--color-base)]"
-              >
-                Successivi →
-              </Link>
-            ) : (
-              <span className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] text-[var(--color-dim)] opacity-50">
-                Successivi →
-              </span>
-            )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
-      </div>
+
+          {/* ── Pagination ──────────────────────────────────────────── */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-4 text-[11px] text-[var(--color-muted)]">
+            <div>
+              {totalResults === 0
+                ? "0 risultati"
+                : `${startIdx + 1}–${Math.min(startIdx + pageSize, totalResults)} di ${totalResults} · pagina ${page} / ${pageCount}`}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1">
+                {page > 1 ? (
+                  <Link
+                    href={buildHref({ page: String(page - 1) })}
+                    className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors no-underline text-[var(--color-base)]"
+                  >
+                    ← Precedenti
+                  </Link>
+                ) : (
+                  <span className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] text-[var(--color-dim)] opacity-50">
+                    ← Precedenti
+                  </span>
+                )}
+                {page < pageCount ? (
+                  <Link
+                    href={buildHref({ page: String(page + 1) })}
+                    className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors no-underline text-[var(--color-base)]"
+                  >
+                    Successivi →
+                  </Link>
+                ) : (
+                  <span className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] text-[var(--color-dim)] opacity-50">
+                    Successivi →
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
