@@ -1,6 +1,6 @@
 ---
 name: scout-web-access
-description: Strato web-access cross-provider per gli Scout (F-2). 5 componenti coordinati — anti-bot robust scrape, LinkedIn session + search, email IMAP poll, multi-Scout workspace claim, freshness focus. Usato come stack base per ogni sweep: lo Scout sceglie il livello di accesso più leggero che funziona, e sale solo quando bloccato.
+description: "Strato web-access cross-provider per gli Scout (F-2). 5 componenti coordinati — anti-bot robust scrape, LinkedIn session + search, email IMAP poll, multi-Scout workspace claim, freshness focus. Usato come stack base per ogni sweep: lo Scout sceglie il livello di accesso più leggero che funziona, e sale solo quando bloccato."
 allowed-tools: Bash(python3 /app/shared/skills/web_scrape_robust.py *), Bash(python3 /app/shared/skills/linkedin_access.py *), Bash(python3 /app/shared/skills/email_monitor.py *), Bash(python3 /app/shared/skills/scout_workspace.py *), Bash(python3 /app/shared/skills/deadline_extract.py *), Bash(python3 /app/shared/skills/db_insert.py *), Bash(python3 /app/shared/skills/db_query.py *)
 ---
 

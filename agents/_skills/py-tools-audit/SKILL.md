@@ -1,6 +1,6 @@
 ---
 name: py-tools-audit
-description: Coordinated, team-wide cleanup of Python packages installed under `$JHT_HOME/.local` via `uv pip install --user` (T13 magazzino). Owned by the Dottore. The audit is NOT unilateral — only the Writer / Critic agents know whether a library they imported dynamically still serves them, so the flow is broadcast → 1h consent window → uninstall the silent set → re-audit. Because the Dottore is one-shot (~10 min per round, ~30 min apart), the 1h consent window spans 2 Dottore rounds: round N starts the audit + broadcast, round N+1 collects answers + uninstalls.
+description: "Coordinated, team-wide cleanup of Python packages installed under `$JHT_HOME/.local` via `uv pip install --user` (T13 magazzino). Owned by the Dottore. The audit is NOT unilateral — only the Writer / Critic agents know whether a library they imported dynamically still serves them, so the flow is broadcast → 1h consent window → uninstall the silent set → re-audit. Because the Dottore is one-shot (~10 min per round, ~30 min apart), the 1h consent window spans 2 Dottore rounds: round N starts the audit + broadcast, round N+1 collects answers + uninstalls."
 allowed-tools: Bash(python3 /app/shared/skills/py_tools_audit.py *), Bash(uv pip uninstall *), Bash(jht-tmux-send *), Bash(tmux *), Bash(du *), Bash(xargs *)
 ---
 
