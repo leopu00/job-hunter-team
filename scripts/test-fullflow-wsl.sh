@@ -3,7 +3,7 @@
 # Simula gli effetti di install.sh (no curl: copia da repo locale).
 set -euo pipefail
 
-REPO=/mnt/c/Users/leone.puglisi/repos/job-hunter-team/dev-1
+REPO=/mnt/c/Users/owner/repos/job-hunter-team/dev-1
 TEST_RUNTIME=$HOME/.jht/runtime/test-flow
 TEST_BIN=$HOME/.local/bin/jht-test
 TEST_CONTAINER=jht-flow-test
