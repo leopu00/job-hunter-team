@@ -78,15 +78,15 @@ Diacritici scout→ normalizzati per uniformità (vedi sopra)
 
 Dopo la fine della simulazione, i 206 record arricchiti del SQLite locale
 sono stati importati su Supabase project `smittwvohsnwwwisqdrh` per
-l'utente `leone.puglisi@gmail.com` tramite UPDATE batch (6 chunk SQL).
+l'utente `owner@example.com` tramite UPDATE batch (6 chunk SQL).
 
-Sync limitato esclusivamente a `leone.puglisi`:
+Sync limitato esclusivamente a `owner`:
 
 | email | role_family popolato dopo sync |
 |---|---:|
-| `leone.puglisi@gmail.com` | 206/206 |
-| `betauser97@gmail.com` | 0 (intatto) |
-| `leopu00@gmail.com` | 0 (intatto) |
+| `owner@example.com` | 206/206 |
+| `maintainer@example.com` | 0 (intatto) |
+| `owner@example.com` | 0 (intatto) |
 
 Campi sovrascritti: solo i 11 `loc_*/work_*/role_family/is_multi_location/
 location_notes`. NON toccati: `status`, `notes`, `office_*` (preservato

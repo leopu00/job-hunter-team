@@ -1,8 +1,8 @@
-# Simulazione 5 — office geocoding su leone.puglisi (Marton / Tech Writer)
+# Simulazione 5 — office geocoding su owner (Marton / Tech Writer)
 
 Data: 2026-05-25
 Container: `jht-sim-d2` (reset totale, candidate_profile.yml ripristinato su Marton Kovacs)
-Dataset: 206 record di `leone.puglisi@gmail.com` con `loc_*/work_*/role_family` **già popolati da sim 2** (preservati nel reseed).
+Dataset: 206 record di `owner@example.com` con `loc_*/work_*/role_family` **già popolati da sim 2** (preservati nel reseed).
 
 ## Setup
 
@@ -50,30 +50,30 @@ HARMAN International → Aszalvölgyi út 3-5, 8000 Székesfehérvár, Hungary
 Larian Studios       → 17A New Bride Street, Dublin 8, D08 Y80E, Ireland
 Platin Gaming        → 109 Sir William Reid Street, Gżira, Malta
 GE Vingmed Ultrasound→ Strandpromenaden 45, 3183 Horten, Norway
-Sanofi Prague      → Fiastyúk utca 4-8, Prague, Hungary
-LEGO Group           → Váci út 1-3, Prague, Hungary
+Sanofi Vienna      → Fiastyúk utca 4-8, Vienna, Hungary
+LEGO Group           → Váci út 1-3, Vienna, Hungary
 Nebius Group         → Gustav Mahlerlaan 308, 1082 ME Amsterdam, Netherlands
 ```
 
-## Sync verso Supabase prod (leone.puglisi only)
+## Sync verso Supabase prod (owner only)
 
-UPDATE batch su 172 record con filtro `user_id = leone.puglisi@gmail.com`. Solo i 5 campi `office_lat/lon/address/geocoded/verified` toccati. Niente altri campi.
+UPDATE batch su 172 record con filtro `user_id = owner@example.com`. Solo i 5 campi `office_lat/lon/address/geocoded/verified` toccati. Niente altri campi.
 
 **Verifica safety post-sync**:
 
 | email | total | office_lat | office_verified |
 |---|---:|---:|---:|
-| `leone.puglisi@gmail.com` | 206 | **116** | **76** |
-| `leopu00@gmail.com` | 300 | 114 | 66 (intatto) |
-| `betauser97@gmail.com` | 206 | 0 | 0 (intatto) |
+| `owner@example.com` | 206 | **116** | **76** |
+| `owner@example.com` | 300 | 114 | 66 (intatto) |
+| `maintainer@example.com` | 206 | 0 | 0 (intatto) |
 
-Nota: leone.puglisi su Supabase ora ha 116 office_lat (vs 134 nel container) perché la query di sync filtrava per `last_actor IS NOT NULL` → 172 record, di cui 134 hanno office_lat valorizzato; il delta 116 vs 134 (18 record) sono casi dove il sync ha trovato URL non matchato in Supabase (race con scout? URL leggermente diverso). Da indagare se rilevante.
+Nota: owner su Supabase ora ha 116 office_lat (vs 134 nel container) perché la query di sync filtrava per `last_actor IS NOT NULL` → 172 record, di cui 134 hanno office_lat valorizzato; il delta 116 vs 134 (18 record) sono casi dove il sync ha trovato URL non matchato in Supabase (race con scout? URL leggermente diverso). Da indagare se rilevante.
 
 ## Sim 1-5 confronto sintetico
 
 | Metrica | sim 1 | sim 2 | sim 3 | sim 4 | sim 5 |
 |---|---|---|---|---|---|
-| Candidato | leone.puglisi | leone.puglisi | leopu00 | leopu00 | leone.puglisi |
+| Candidato | owner | owner | owner | owner | owner |
 | Profilo | Tech Writer | Tech Writer | Python Dev | Python Dev | Tech Writer |
 | Analisti | 3 | 3 | 3 | 6 | 6 |
 | Missione | location | location | location | location+office | **solo office** |
