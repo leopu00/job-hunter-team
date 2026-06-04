@@ -2,13 +2,13 @@
 
 Data: 2026-05-23
 Container: `jht-sim-d2` (reset totale via `sim-reset.sh`)
-Profilo: Leone Emanuel Puglisi (`info@jobhunterteam.ai`) — Python Developer
+Profilo: Mario Rossi (`owner@example.com`) — Python Developer
 junior, Roma, 1 anno esperienza, skills Python/SQL/ML/Git.
 Dataset: 249 record (251 - 2 skip per CHECK constraint company > 300 char).
 
 Differenze setup vs sim 2:
 - Profilo **completamente diverso** (dev junior vs technical writer senior)
-- Dataset **diverso** (251 record di leopu00 vs 206 di leone.puglisi)
+- Dataset **diverso** (251 record di owner vs 206 di owner)
 - Container ricreato da zero via `sim-reset.sh --total`
 - Prompt analista **refactored** A+B (skill location-enrichment lazy-load,
   4 regole comportamentali R12-R15 in cima al prompt)
@@ -95,17 +95,17 @@ L'analista ha distinto correttamente il paese fisico del candidato
   (GEO), JD da non considerare
 - Affirm Spain/Poland-only: work_country=Spain/Poland (entity locale)
 
-## Sync verso Supabase prod (leopu00)
+## Sync verso Supabase prod (owner)
 
 | metrica | valore |
 |---|---:|
-| Record total leopu00 in Supabase | 251 |
+| Record total owner in Supabase | 251 |
 | Wipati pre-sim (office_*, role_family, loc_*, work_*) | 251 |
 | Sincronizzati post-sim | 226 |
 | Non sincronizzati (excluded senza role_family) | 25 |
 
-Sync limitato a `info@jobhunterteam.ai` via filtro `user_id`. Verificato
-post-sync che `leone.puglisi` (206/206 da sim 2) e `beta-user2` (0)
+Sync limitato a `owner@example.com` via filtro `user_id`. Verificato
+post-sync che `owner` (206/206 da sim 2) e `maintainer` (0)
 sono intatti.
 
 Campi sovrascritti: solo `role_family`, `loc_*` (5 colonne), `work_*`
@@ -120,6 +120,6 @@ funziona end-to-end per profili diversi. La skill
 `location-enrichment` mantiene la qualità tra profili eterogenei
 (tech writer ↔ python dev) senza modifiche al codice.
 
-Prossimo step opzionale: geocoding office-precise per leopu00 (al
+Prossimo step opzionale: geocoding office-precise per owner (al
 momento sono solo NULL — non è critico per la dashboard se basta il
 centroide loc_country).
