@@ -14,13 +14,6 @@ import {
 import PositionTypesPie from "@/app/components/PositionTypesPie";
 import ScoreDistribution from "@/app/components/ScoreDistribution";
 import PipelineFlow from "@/app/components/PipelineFlow";
-// JobsGlobe usa maplibre-gl (~1 MB parsed): caricato via wrapper Client
-// che fa dynamic import. Il wrapper e' Client Component perche'
-// dynamic({ssr:false}) non e' permesso in Server Component da Next 14+.
-// Cosi' il chunk maplibre viene scaricato solo quando il browser monta
-// JobsGlobeLazy, non al primo paint della dashboard.
-// Vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md insight #10.
-import JobsGlobeLazy from "@/app/components/JobsGlobeLazy";
 import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
@@ -239,30 +232,9 @@ export default async function DashboardPage() {
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both", position: "relative" }}>
-      {/* ── World globe — sticky sotto navbar (h-14=56px), z-0.
-          Resta ancorato mentre il contenuto sottostante (z-1 + bg
-          opaco) scrolla sopra coprendolo: il globo NON viene
-          spinto via, viene coperto. */}
-      <div
-        style={{
-          position: "sticky",
-          top: 56,
-          height: 620,
-          zIndex: 0,
-          animation: "fade-in 0.35s ease both 0.05s",
-        }}
-      >
-        <JobsGlobeLazy hero />
-      </div>
-
-      {/* ── Tutto il resto: bg opaco full-width che copre il globo
-          edge-to-edge durante lo scroll; layer esterno fa da pannello,
-          quello interno centra i contenuti come prima. z-1 sopra al
-          globo (z-0). ── */}
       <div
         style={{
           position: "relative",
-          zIndex: 1,
           background: "var(--color-deep)",
         }}
       >
