@@ -34,8 +34,12 @@ Dati personali reali (di un beta tester e dell'owner) sono finiti nei **case-stu
 
 ## 📋 Piano a fasi
 
-### Fase 0 — Conferma sorgente dati live
-Verificare se il sito serve i case-study da **SQLite buildato dal seed** (bundlato nel deploy Vercel) o da **Supabase cloud**. Determina se basta sanitizzare il seed + redeploy o se serve anche aggiornare un DB cloud.
+### Fase 0 — ✅ RISOLTA (2026-06-04): il sito NON serve la PII
+Verificato in live: `GET https://jobhunterteam.ai/api/case-studies` → **500 `case-studies.db not found`** (`expectedPath=/var/task/web/data/case-studies/case-studies.db`).
+- Il `.db` è **gitignorato** (`.gitignore` `*.db`) e **NON viene rigenerato al build Vercel** (`web/vercel.json buildCommand = "npm run build" = next build`, nessuno step `init.sh`).
+- Conseguenza: **la PII dei case-study NON è esposta sul sito live**. L'esposizione reale è **repo + storia git** (i file `web/data/case-studies/*.sql` sono tracciati), NON il sito.
+- **Ricalibrazione urgenza**: le righe "🔴 sito + repo" nella mappa PII sopra vanno lette come **"repo + storia"** (il sito non serve nulla finché la db non viene buildata al deploy — oggi non lo è). Niente fuga live in corso.
+- **Effetto collaterale separato (non-PII)**: la pagina `/case-studies` in prod è **rotta** (API 500). Decisione di prodotto: o si builda la db sanitizzata al deploy, o si lascia la pagina senza dati per la beta. NON è un blocker PII.
 
 ### Fase 1 — Mappa di sostituzione (da concordare)
 - **Nome candidato** → pseudonimo (`Beta Tester 1` / `Candidate-1`); path CV → `CV_candidate1_<id>_<azienda>.pdf`.
