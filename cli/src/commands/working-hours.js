@@ -1,7 +1,15 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { JHT_HOME } from '../jht-paths.js';
+
+// #9 — `jht wh simulate` girava SEMPRE via `docker exec jht`, ma il wrapper
+// `jht` esegue già DENTRO il container (JHT_SHELL_VIA=docker:jht): da lì non
+// esiste il binario `docker` → `spawn docker ENOENT`. Se siamo già nel
+// container (lo `/app/shared/skills` esiste) eseguiamo il comando diretto;
+// solo dall'host vero passiamo da `docker exec`.
+const IN_CONTAINER = existsSync('/app/shared/skills');
 
 const CONFIG_FILE = join(JHT_HOME, 'jht.config.json');
 const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -152,7 +160,11 @@ async function handleClear() {
 
 function dockerExec(args) {
   return new Promise((resolve, reject) => {
-    const p = spawn('docker', ['exec', 'jht', ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+    // Dentro il container: esegui diretto (niente docker). Dall'host: docker exec.
+    const [cmd, cmdArgs] = IN_CONTAINER
+      ? [args[0], args.slice(1)]
+      : ['docker', ['exec', 'jht', ...args]];
+    const p = spawn(cmd, cmdArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '', err = '';
     p.stdout.on('data', d => out += d);
     p.stderr.on('data', d => err += d);
