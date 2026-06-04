@@ -1661,8 +1661,8 @@ export function registerCloudCommand(program) {
     .command('realtime-listen')
     .description('Subscriber Realtime per comandi team (start/stop) dal web')
     .action(async () => {
-      const { runRealtimeSubscriber } = await import('../lib/realtime-subscriber.js');
-      await runRealtimeSubscriber();
+      const { runTeamCommandsPoller } = await import('../lib/team-commands-poller.js');
+      await runTeamCommandsPoller();
     });
 
   // `team-state-listen` — desired-state reconciler che polla /api/team-state
