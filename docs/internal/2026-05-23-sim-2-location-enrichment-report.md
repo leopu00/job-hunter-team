@@ -65,7 +65,7 @@ Niente "UK", "Italia", abbreviazioni. Diacritici preservati e normalizzati
                    (HQ via web search)
 "Remote" puro    → loc_country=NULL, continent dedotto, work_country da HQ
 "Italy" + remote → loc_country=Italy, work_country=United States
-                   (DataAnnotation, iMerit, Lilt, Crossing Hurdles riconosciuti
+                   (Company 044, iMerit, Company 097, Company 041 riconosciuti
                     come US company che assumono contractor IT)
 "Spain" + remote → loc/work=Spain (azienda spagnola, entity locale)
 "EMEA - Flexible"→ continent=Europe, work_country=Ireland (ServiceNow EU HQ)
