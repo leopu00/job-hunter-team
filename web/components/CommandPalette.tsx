@@ -15,10 +15,6 @@ type Cmd = { id: string; label: string; detail: string; category: string; href?:
 const STATIC_COMMANDS: Cmd[] = [
   { id: 'dashboard',    label: 'Dashboard',        detail: 'Vista riepilogativa lavoro in corso', category: 'Pagine',  href: '/dashboard' },
   { id: 'positions',    label: 'Offerte',          detail: 'Job trovati dagli agenti',            category: 'Pagine',  href: '/positions' },
-  { id: 'ready',        label: 'Pronte all\'invio', detail: 'CV+CL generati, pronte da spedire',   category: 'Pagine',  href: '/ready' },
-  { id: 'risposte',     label: 'Risposte',         detail: 'Risposte ricevute dalle aziende',     category: 'Pagine',  href: '/risposte' },
-  { id: 'crescita',     label: 'Crescita',         detail: 'Analytics personale + trend',         category: 'Pagine',  href: '/crescita' },
-  { id: 'reports',      label: 'Report',           detail: 'Report periodici sul team',           category: 'Pagine',  href: '/reports' },
   { id: 'team',         label: 'Team',             detail: 'Stato agenti AI + chat',              category: 'Pagine',  href: '/team' },
   { id: 'profile',      label: 'Profilo',          detail: 'Candidato e dati personali',          category: 'Pagine',  href: '/profile' },
   { id: 'settings',     label: 'Impostazioni',     detail: 'Provider AI, Telegram, cron',         category: 'Config',  href: '/settings' },
