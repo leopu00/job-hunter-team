@@ -2,14 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import { readLocaleCookie } from "@/lib/use-locale";
 
 /* ── i18n inline ──────────────────────────────────────────────────── */
 
 type Lang = "it" | "en";
 
+// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Dizionario it/en,
+// le altre lingue ricadono su en.
 function getLang(): Lang {
-  if (typeof window === "undefined") return "it";
-  return localStorage.getItem("jht-lang") === "en" ? "en" : "it";
+  return readLocaleCookie() === "it" ? "it" : "en";
 }
 
 // Gate locale "primo accesso": una volta chiuso il tour su questo browser
