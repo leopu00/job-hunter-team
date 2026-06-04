@@ -35,6 +35,12 @@ export interface Position {
   status: PositionStatus
   notes: string | null
   last_checked: string | null
+  // Faceting fields (popolati dall'analista). Colonne DB reali, opzionali
+  // perché caricate solo dalle query che le selezionano esplicitamente
+  // (es. /positions per i filtri intelligenti donut/location).
+  role_family?: string | null
+  loc_country?: string | null
+  loc_city?: string | null
   // V6 (2026-05-29) — Writer-on-demand: utente seleziona da dashboard
   // o /cv Telegram. Il Capitano spawna Scrittori solo quando = true.
   write_requested?: boolean

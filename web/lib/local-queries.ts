@@ -517,6 +517,29 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
   }))
 }
 
+// ── Faceting dataset per la sidebar /positions ────────────────────
+// Universo completo (incluse excluded) con i campi per donut/score/location.
+export function getPositionFacetsLocal(ws: string) {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.id, p.title, p.company, p.status, p.role_family,
+           p.loc_country, p.loc_city,
+           s.total_score as score
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+  `).all() as any[]
+  return rows.map(r => ({
+    id: sid(r.id),
+    role_family: (r.role_family as string | null) ?? null,
+    score: typeof r.score === 'number' ? r.score : null,
+    loc_country: (r.loc_country as string | null) ?? null,
+    loc_city: (r.loc_city as string | null) ?? null,
+    status: r.status as string,
+    title: (r.title as string | null) ?? null,
+    company: (r.company as string | null) ?? null,
+  }))
+}
+
 // ── Position state-history (timestamp transizioni) ────────────────
 export function getPositionStateHistoryLocal(ws: string) {
   const db = getDb(ws)
@@ -793,6 +816,9 @@ function mapPosition(r: any): PositionWithScore {
     url: r.url, source: r.source, jd_text: r.jd_text ?? null, requirements: r.requirements ?? null,
     found_by: r.found_by, found_at: r.found_at ?? '', deadline: r.deadline ?? null,
     status: r.status, notes: r.notes ?? null, last_checked: r.last_checked ?? null,
+    role_family: r.role_family ?? null,
+    loc_country: r.loc_country ?? null,
+    loc_city: r.loc_city ?? null,
     score: r.score ?? undefined,
     critic_score: r.critic_score ?? null,
     critic_verdict: r.critic_verdict ?? null,

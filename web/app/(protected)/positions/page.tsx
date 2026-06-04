@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isLocalOnlyMode } from "@/lib/workspace";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
 import FiltersWizard from "./FiltersWizard";
+import PositionsFilterSidebar from "./PositionsFilterSidebar";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "var(--color-muted)",
@@ -59,12 +60,30 @@ interface CompanyProps {
     tier?: string;
     source?: string;
     verdict?: string;
+    // Filtri "intelligenti" sidebar (donut/location/score).
+    family?: string;
+    country?: string;
+    city?: string;
+    band?: string; // CSV di "lo-hi"
+    noscore?: string; // "1" = includi posizioni senza score
     sort?: string;
     dir?: string;
     expand?: string;
     page?: string;
     pageSize?: string;
   }>;
+}
+
+// Parse CSV di fasce score "90-94,85-89" → [{lo:90,hi:94},...].
+function parseBands(v: string | undefined): Array<{ lo: number; hi: number }> {
+  if (!v) return [];
+  return v
+    .split(",")
+    .map((tok) => {
+      const [lo, hi] = tok.split("-").map((n) => parseInt(n.trim(), 10));
+      return Number.isFinite(lo) && Number.isFinite(hi) ? { lo, hi } : null;
+    })
+    .filter((r): r is { lo: number; hi: number } => r != null);
 }
 
 // Parse CSV multi-valore da URL: "scored,checked" → ["scored","checked"].
@@ -110,6 +129,11 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
   const tiers = csv(params.tier);
   const sources = csv(params.source);
   const verdicts = csv(params.verdict);
+  const families = csv(params.family);
+  const countries = csv(params.country);
+  const cities = csv(params.city);
+  const scoreBands = parseBands(params.band);
+  const unscored = params.noscore === "1";
 
   const sortCol = SORTABLE_COLUMNS.has(params.sort ?? "")
     ? params.sort!
@@ -141,6 +165,11 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
       sources: sources.length ? sources : undefined,
       tiers: tiers.length ? tiers : undefined,
       verdicts: verdicts.length ? verdicts : undefined,
+      families: families.length ? families : undefined,
+      countries: countries.length ? countries : undefined,
+      cities: cities.length ? cities : undefined,
+      scoreBands: scoreBands.length ? scoreBands : undefined,
+      unscored: unscored || undefined,
       limit: 2000,
       sort: sortCol,
       dir: sortDir,
@@ -195,6 +224,12 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
     if (tiers.length) merged.tier = tiers.join(",");
     if (sources.length) merged.source = sources.join(",");
     if (verdicts.length) merged.verdict = verdicts.join(",");
+    if (families.length) merged.family = families.join(",");
+    if (countries.length) merged.country = countries.join(",");
+    if (cities.length) merged.city = cities.join(",");
+    if (scoreBands.length)
+      merged.band = scoreBands.map((b) => `${b.lo}-${b.hi}`).join(",");
+    if (unscored) merged.noscore = "1";
     if (sortCol !== "found_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
     if (expandedCols.size > 0)
@@ -274,6 +309,10 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
       {/* Banner stato cloud-sync (compatto, nascosto se non loggato). */}
       <CloudSyncStatusBanner />
 
+      {/* ── Layout a 2 colonne: sidebar filtri intelligenti + contenuto ── */}
+      <div className="flex gap-6 items-start">
+        <PositionsFilterSidebar />
+        <div className="flex-1 min-w-0">
       {/* ── Filtri (wizard a sinistra, righe-per-pagina a destra) ── */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <FiltersWizard availableSources={availableSources} />
@@ -573,6 +612,8 @@ export default async function PositionsCompany({ searchParams }: CompanyProps) {
               </span>
             )}
           </div>
+        </div>
+      </div>
         </div>
       </div>
     </div>
