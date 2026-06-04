@@ -25,7 +25,7 @@ Dataset: 206 posizioni `status=new` da scout (vergini), playbook
 1. **Anti-collision deterministica** via range disgiunti dichiarati dal
    Capitano nel brief. Nessun analista ha mai scritto fuori range.
 2. **Diacritici preservati e normalizzati**: gli analisti hanno corretto
-   `Szekesfehervar` → `Székesfehérvár`, mantenuto `Pécs`, `Prüm`,
+   `Plzen` → `Plzeň`, mantenuto `Ústí`, `Žďár`,
    `Saint-Médard-en-Jalles`.
 3. **Web search per `work_country`**: deduzione corretta del paese
    contrattuale per remote in EU da aziende US (Company 044, iMerit,
