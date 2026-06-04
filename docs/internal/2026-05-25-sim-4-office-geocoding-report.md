@@ -2,7 +2,7 @@
 
 Data: 2026-05-25 (avvio 22:45 del 2026-05-24, chiusura ~01:50 del 2026-05-25)
 Container: `jht-sim-d2` (reset totale via `sim-reset.sh`)
-Profilo: Leone Emanuel Puglisi (`leopu00@gmail.com`) — Python Developer
+Profilo: Mario Rossi (`owner@example.com`) — Python Developer
 junior, Roma, 1 anno esperienza.
 Dataset: 272 record (273 - 1 skip CHECK constraint).
 
@@ -100,10 +100,10 @@ issues + interventi esterni").
 
 ```
 SIAE                  →  Viale della Letteratura 30, Roma EUR     (41.83, 12.48)
-IT Partner Italia     →  Via Jacopo Dal Verme 7, Milano           (45.49,  9.19)
-KPMG Italy            →  Via Ettore Petrolini 2, Parioli Roma     (41.93, 12.49)
+Company 182     →  [address redacted]
+Company 183            →  [address redacted]
 Knowmad Mood          →  Calle de Jacinto Benavente 2, Las Rozas  (40.52, -3.89)
-Sentry                →  Jakov-Lind-Straße 5/4 OG, Wien           (48.22, 16.39)
+Company 184                →  [address redacted]
 ```
 
 L'analista ha riconosciuto sedi reali via web search del sito company /
@@ -171,7 +171,7 @@ respawn rinforzi A4/A5/A6 ha sbloccato il flusso.
 
 | Metrica | sim 1 | sim 2 | sim 3 | sim 4 |
 |---|---|---|---|---|
-| Candidato | leone.puglisi | leone.puglisi | leopu00 | leopu00 |
+| Candidato | owner | owner | owner | owner |
 | Profilo | Tech Writer | Tech Writer | Python Dev | Python Dev |
 | N record | 206 | 206 | 249 | 272 |
 | Analisti | 3 | 3 | 3 | 6 |
@@ -210,13 +210,13 @@ respawn rinforzi A4/A5/A6 ha sbloccato il flusso.
    intervento serve una sim 5 con monitoring puramente osservativo
    (niente fix mid-sim).
 
-## Sync verso Supabase prod (leopu00) — pendente
+## Sync verso Supabase prod (owner) — pendente
 
 I 114 `office_lat/lon/address` + i campi enrichment finali (post-
 consolidation) sono nel SQLite del container ma **non ancora
 sincronizzati su Supabase prod**. Pending decisione utente.
 
-Quando sync: filtro su `user_id = leopu00`, campi da sincronizzare solo
+Quando sync: filtro su `user_id = owner`, campi da sincronizzare solo
 `role_family + loc_* + work_* + is_multi_location + location_notes +
 office_*`. NON toccare `status`, `notes`. Verificare zero contaminazione
-su `leone.puglisi` e `betauser97` con count post-sync.
+su `owner` e `maintainer` con count post-sync.
