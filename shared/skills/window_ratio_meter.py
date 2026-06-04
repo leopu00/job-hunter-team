@@ -46,14 +46,20 @@ STATE_FILE = LOGS_DIR / "window-ratio-state.json"
 CONFIG_FILE = JHT_HOME / "jht.config.json"
 
 # Soglie:
-#   MIN_DELTA_5H_PCT  — sotto questa Δ il rapporto è troppo rumoroso (round-off
-#                       dei provider). 0.5pp ≈ 1-2 min di consumo team a regime.
-#   MIN_DELTA_WEEKLY  — idem per il weekly: micro-fluttuazioni di quantizzazione.
-#   MAX_GAP_MIN       — se due sample consecutivi sono più distanti, salta
-#                       (probabilmente reset session o pausa lunga).
-MIN_DELTA_5H_PCT = 0.5
-MIN_DELTA_WEEKLY_PCT = 0.05
+#   MIN_DELTA_5H_ACCUM_PCT — `usage` e `weekly_usage` dal bridge sono INTERI
+#       (usage=int(round(...))). Calcolare il ratio per-tick su Δ interi piccoli
+#       (es. +1/+1) dà rapporti assurdi (100%, 50%) → EMA avvelenata. Quindi NON
+#       si calcola tick-per-tick: si accumulano Δu/Δw finché Δu_cum ≥ questa
+#       soglia, poi UN solo ratio sul denominatore grande (errore di
+#       quantizzazione < ~10%). 10pp ≈ mezza finestra 5h a regime.
+#   MAX_GAP_MIN — se due sample consecutivi sono più distanti, scarta l'accumulo
+#       (probabilmente reset session o pausa lunga).
+#   RATIO_SANE_* — clamp di sanità: un ratio finestra→weekly fuori da questa
+#       banda è quasi certamente rumore residuo → si scarta (non aggiorna l'EMA).
+MIN_DELTA_5H_ACCUM_PCT = 10.0
 MAX_GAP_MIN = 30.0
+RATIO_SANE_MIN_PCT = 2.0
+RATIO_SANE_MAX_PCT = 60.0
 
 # EMA half-life giorni: il rapporto è fisso per piano, quindi calibratura
 # può essere lenta. 7gg = molto smooth, resiste a rumore di un tick.
@@ -164,14 +170,26 @@ def update_ratio(state: dict, provider: str) -> dict:
     last_ts = state.get("last_processed_ts") or 0.0
     samples_count = int(state.get("samples_count") or 0)
     first_sample_ts = state.get("first_sample_ts")
+    last_inst_ratio = state.get("last_instantaneous_ratio_pct")
 
-    prev_ts = None
-    prev_u = None
-    prev_w = None
-    prev_session = None
+    # Accumulatore Δu/Δw + ultimo sample visto, PERSISTITI nello state: un
+    # singolo run del daemon (tick 5min) può non raggiungere la soglia di
+    # accumulo, quindi continuiamo a sommare attraverso i run.
+    pending_du = float(state.get("pending_du") or 0.0)
+    pending_dw = float(state.get("pending_dw") or 0.0)
+    pending_dt_days = float(state.get("pending_dt_days") or 0.0)
+    prev_ts = state.get("cont_ts")
+    prev_u = state.get("cont_u")
+    prev_w = state.get("cont_w")
+    prev_session = state.get("cont_session")
+
+    def _reset_accum():
+        nonlocal pending_du, pending_dw, pending_dt_days
+        pending_du = 0.0
+        pending_dw = 0.0
+        pending_dt_days = 0.0
 
     new_last_ts = last_ts
-    last_inst_ratio = state.get("last_instantaneous_ratio_pct")
 
     for ts, u, w, sess in _iter_samples(since_ts=last_ts):
         if first_sample_ts is None:
@@ -186,20 +204,40 @@ def update_ratio(state: dict, provider: str) -> dict:
             if gap_min <= MAX_GAP_MIN and same_session:
                 du = u - prev_u
                 dw = w - prev_w
-                if (
-                    du >= MIN_DELTA_5H_PCT
-                    and dw >= MIN_DELTA_WEEKLY_PCT
-                    and du > 0
-                ):
-                    ratio_inst = dw / du * 100.0  # in punti percentuali
-                    last_inst_ratio = round(ratio_inst, 3)
-                    dt_days = (ts - (prev_ts or ts)) / 86400.0
-                    a = _ema_alpha_from_halflife(dt_days)
-                    if ema is None:
-                        ema = ratio_inst
-                    else:
-                        ema = a * ratio_inst + (1.0 - a) * ema
-                    samples_count += 1
+                if du < 0 or dw < 0:
+                    # Reset finestra primary (usage cala) o reset weekly:
+                    # l'accumulo non può attraversare un reset → scarta il
+                    # parziale e riparte dal prossimo Δ valido.
+                    _reset_accum()
+                else:
+                    pending_du += du
+                    pending_dw += dw
+                    pending_dt_days += (ts - prev_ts) / 86400.0
+                    if pending_du >= MIN_DELTA_5H_ACCUM_PCT:
+                        ratio_inst = pending_dw / pending_du * 100.0
+                        if RATIO_SANE_MIN_PCT <= ratio_inst <= RATIO_SANE_MAX_PCT:
+                            last_inst_ratio = round(ratio_inst, 3)
+                            samples_count += 1
+                            if ema is None:
+                                ema = ratio_inst
+                            else:
+                                # Cold-start fix: in warmup usa alpha = 1/n
+                                # (media corrente sui primi sample) così l'EMA
+                                # CONVERGE al ratio vero invece di restare
+                                # incollata al primo sample (half-life 7gg lo
+                                # renderebbe quasi immobile). Quando 1/n scende
+                                # sotto l'alpha dell'half-life, subentra lo
+                                # smoothing lento normale.
+                                a = max(
+                                    _ema_alpha_from_halflife(pending_dt_days),
+                                    1.0 / samples_count,
+                                )
+                                ema = a * ratio_inst + (1.0 - a) * ema
+                        # emesso (o scartato perché fuori banda): azzera comunque
+                        _reset_accum()
+            else:
+                # Cambio sessione o gap troppo grande → scarta l'accumulo.
+                _reset_accum()
         prev_ts, prev_u, prev_w, prev_session = ts, u, w, sess
         new_last_ts = ts
 
@@ -220,6 +258,14 @@ def update_ratio(state: dict, provider: str) -> dict:
         "last_processed_ts": new_last_ts,
         "days_observed": round(days_observed, 2),
         "confidence_0_1": round(confidence, 3),
+        # Stato accumulatore (continuità cross-run).
+        "pending_du": round(pending_du, 4),
+        "pending_dw": round(pending_dw, 4),
+        "pending_dt_days": round(pending_dt_days, 6),
+        "cont_ts": prev_ts,
+        "cont_u": prev_u,
+        "cont_w": prev_w,
+        "cont_session": prev_session,
         "updated_at": _now_utc().isoformat(),
     }
 
@@ -305,16 +351,49 @@ def _self_test() -> int:
             fails += 1
 
     ok("provider rilevato", state["provider"] == "openai")
-    ok("samples_count > 50", state["samples_count"] > 50)
+    # Con l'accumulo Δu≥10pp si emette ~1 ratio ogni ~12 tick → molti meno
+    # sample del per-tick, ma molto meno rumorosi.
+    ok(f"samples_count accumulati >= 3 (got {state['samples_count']})",
+       state["samples_count"] >= 3)
     ok(
         f"ema vicino a 14.7 (got {state['ema_ratio_pct']})",
-        abs(state["ema_ratio_pct"] - 14.7) < 0.5,
+        abs(state["ema_ratio_pct"] - 14.7) < 1.5,
     )
 
     # Re-run: dev'essere idempotente, nessun nuovo sample
     before_count = state["samples_count"]
     state2 = run_once()
     ok("idempotente (no nuovi sample)", state2["samples_count"] == before_count)
+
+    # ── Test QUANTIZZAZIONE (il bug reale) ───────────────────────────────
+    # Bridge reale: usage=int(round(...)) e weekly interi. Ratio vero 15%.
+    # Per-tick i Δ interi (+1/+1=100%, +1/0=0%) avvelenavano l'EMA a 25-100%.
+    # Con l'accumulo (Δu≥10pp) l'EMA resta vicina al 15% vero.
+    tmp2 = Path(tempfile.mkdtemp(prefix="wrm_quant_"))
+    LOGS_DIR = tmp2 / "logs"
+    LOGS_DIR.mkdir(parents=True)
+    SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
+    STATE_FILE = LOGS_DIR / "window-ratio-state.json"
+    CONFIG_FILE = tmp2 / "jht.config.json"
+    CONFIG_FILE.write_text(json.dumps({"active_provider": "openai"}))
+    base2 = datetime(2026, 5, 26, 9, 0, tzinfo=timezone.utc).timestamp()
+    with SENTINEL_JSONL.open("w", encoding="utf-8") as f:
+        for i in range(120):
+            ts = base2 + i * 300
+            usage_i = i + 1  # intero, +1/tick
+            weekly_i = 50 + round(usage_i * 0.15)  # intero, ratio vero 15%
+            f.write(json.dumps({
+                "ts": datetime.fromtimestamp(ts, timezone.utc).isoformat(),
+                "usage": usage_i,
+                "weekly_usage": weekly_i,
+                "session_id": "Q1",
+            }) + "\n")
+    qstate = run_once()
+    qema = qstate["ema_ratio_pct"]
+    ok(f"quantizz: ema ~15 vero (got {qema})",
+       qema is not None and 11.0 <= qema <= 19.0)
+    ok(f"quantizz: NIENTE overshoot >40 (col bug era 25-100, got {qema})",
+       qema is not None and qema < 40.0)
 
     # Provider change: reset
     CONFIG_FILE.write_text(json.dumps({"active_provider": "claude"}))
