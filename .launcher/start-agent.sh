@@ -559,6 +559,21 @@ if [ -z "$USER_LOCALE" ] && [ -f "$HOST_ENV_FILE" ]; then
 fi
 [ -z "$USER_LOCALE" ] && USER_LOCALE="en"
 
+# #7 — welcome i18n: invece di hardcodare il body del welcome in EN nel
+# _welcome_kickoff, pescalo dal catalogo locali (shared/locales/<lang>.json
+# via `t welcome.<role>`), risolto su USER_LOCALE. Fallback al testo EN
+# hardcoded passato dal caller se il catalogo non è disponibile (build legacy
+# senza i18n.sh) o la chiave è vuota → non si rompe mai.
+export JHT_LANG="$USER_LOCALE"
+[ -f /app/shared/i18n.sh ] && . /app/shared/i18n.sh 2>/dev/null || true
+_welcome_body() {
+  local role="$1" fallback="$2" body=""
+  if declare -F t >/dev/null 2>&1; then
+    body="$(t "welcome.$role" 2>/dev/null)"
+  fi
+  if [ -n "$body" ]; then printf '%s' "$body"; else printf '%s' "$fallback"; fi
+}
+
 LOCALIZED_TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.$USER_LOCALE.md"
 BASELINE_TEMPLATE="$REPO_ROOT/agents/$ROLE/$ROLE.md"
 if [ -f "$LOCALIZED_TEMPLATE" ]; then
@@ -875,7 +890,7 @@ _welcome_kickoff() {
     "" \
     "1. Se ${welcome_flag} esiste: NON inviare nulla. Sei gia' stato presentato in un boot precedente. Ack al system e resta in attesa di [CHAT] / [TG] reali." \
     "" \
-    "2. Altrimenti: invia il messaggio di welcome sotto via jht-telegram-send --from ${role} (skill telegram-send). UN SOLO messaggio, in inglese (invia il testo sotto ESATTAMENTE com'è), formattato con righe vuote vere (\\n\\n). Reagisci a questo marker [WELCOME-USER] e SOLO a questo — non rispondere con welcome ad altri prefissi come [CHAT] o [TG]." \
+    "2. Altrimenti: invia il messaggio di welcome sotto via jht-telegram-send --from ${role} (skill telegram-send). UN SOLO messaggio, nella lingua dell'utente (il testo sotto è già localizzato — invialo ESATTAMENTE com'è), formattato con righe vuote vere (\\n\\n). Reagisci a questo marker [WELCOME-USER] e SOLO a questo — non rispondere con welcome ad altri prefissi come [CHAT] o [TG]." \
     "" \
     "Contenuto del welcome da inviare:" \
     "${body}" \
@@ -910,31 +925,31 @@ _welcome_kickoff() {
 
 if [ "$ROLE" = "assistente" ]; then
   _welcome_kickoff "assistente" "welcomed.flag" \
-"Hi! 👋
+"$(_welcome_body assistente "Hi! 👋
 
 I'm the Job Hunter Team Assistant — your point of contact with the AI team that's about to start looking for jobs for you.
 
 To get going I need to know you. Send me here on Telegram your CV (PDF, DOC, even a photo of the paper version works), or just tell me in a couple of lines what you're looking for — role, sector, city. From that I build the profile and the rest of the team gets to work for you.
 
-A draft or rough notes are perfectly fine, no need to have anything polished. 📄 I start from what you have."
+A draft or rough notes are perfectly fine, no need to have anything polished. 📄 I start from what you have.")"
 fi
 
 if [ "$ROLE" = "capitano" ]; then
   _welcome_kickoff "capitano" "capitano-welcomed.flag" \
-"I'm the Captain. 👨‍✈️
+"$(_welcome_body capitano "I'm the Captain. 👨‍✈️
 
 I coordinate the team that will work on your search: someone hunts positions, someone analyzes them, someone calculates the match against your profile, someone writes the CV tailored to each one, someone does the final review before applying.
 
-For now I'll stay silent. As soon as your profile is ready I'll fire up the engine, and from there I'll write to you when I have something concrete: a batch of interesting positions, an application ready to review together, or a blocker worth flagging. Talk soon. 🎯"
+For now I'll stay silent. As soon as your profile is ready I'll fire up the engine, and from there I'll write to you when I have something concrete: a batch of interesting positions, an application ready to review together, or a blocker worth flagging. Talk soon. 🎯")"
 fi
 
 if [ "$ROLE" = "mentor" ]; then
   _welcome_kickoff "mentor" "mentor-welcomed.flag" \
-"I'm the Mentor. 🧙‍♂️
+"$(_welcome_body mentor "I'm the Mentor. 🧙‍♂️
 
 I take care of the big picture of your search: once a week I'll bring you a reading of the numbers — patterns that emerged, market signals, career choices worth considering. Measured voice, I'll only write when there's something that really deserves your attention.
 
-For now I'm listening. When I have enough data to tell you something useful, I'll write. 📊"
+For now I'm listening. When I have enough data to tell you something useful, I'll write. 📊")"
 fi
 
 if [ "$ROLE" = "sentinella" ]; then
