@@ -394,7 +394,14 @@ def fetch_codex_rollout():
             key=lambda x: float((x[1].get("primary") or {}).get("used_percent") or 0),
         )[1]
         primary = best_rl.get("primary") or {}
-        secondary = best_rl.get("secondary") or {}
+        # FLAG dev3 (P7): il weekly va letto dalla sessione PIÙ FRESCA, non da
+        # best_rl (scelto per max primary used_percent). Al rinnovo del ciclo
+        # convivono per qualche secondo letture di sessioni diverse: scegliendo
+        # per primary si può agganciare un weekly/ reset STALE → era la causa
+        # dell'oscillazione reset 7giu↔11giu. recent[0] è la lettura più recente
+        # (all_rls ordinato desc per timestamp).
+        freshest_rl = recent[0][1]
+        secondary = freshest_rl.get("secondary") or {}
         try:
             usage = int(round(float(primary.get("used_percent", 0))))
             weekly = (
@@ -945,6 +952,20 @@ def main():
             _advance_tick_phase(state, in_gspot)
             now_ts = time.time()
             should_notify = _should_notify_sentinella(in_gspot, state, now_ts)
+            # P3 doppio-gate: la proj PRIMARY mira al riempimento 100% della
+            # finestra, quindi a inizio finestra (velocità di burst alta) finisce
+            # SOPRA un g-spot centrato sul target weekly-spalmato anche se l'usage
+            # ASSOLUTO è ancora sano. Non svegliare la Sentinella in questo caso:
+            # proj alta + usage<=target = sola velocità istantanea, non sforo
+            # accumulato. Vale SOLO per il lato alto (proj>target); sotto il
+            # g-spot (sottoutilizzo) la notifica serve eccome.
+            if (
+                should_notify
+                and dyn_target
+                and isinstance(proj, (int, float)) and proj > dyn_target
+                and isinstance(usage, (int, float)) and usage <= dyn_target
+            ):
+                should_notify = False
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""
@@ -962,10 +983,31 @@ def main():
                 # skill decision-throttle).
                 tgt_field = f" target={dyn_target:.0f}%" if dyn_target else ""
                 phase_field = f" work_phase={work_phase}" if work_phase else ""
+                # P7: propaga SEMPRE il vincolo weekly nel tick. Prima il tick
+                # portava solo la finestra primary 5h (usage/proj/reset), quindi
+                # la Sentinella non vedeva mai il cap settimanale né un cambio di
+                # reset weekly. weekly_usage/weekly_reset_at sono già nell'entry.
+                wk_usage = entry.get("weekly_usage")
+                # FLAG dev3: HH:MM da solo e ambiguo — non distingue un salto di
+                # GIORNI (il caso reale 7giu->11giu al rinnovo ciclo). Usa la DATA
+                # completa da weekly_reset_at_unix cosi WEEKLY RESET DETECTED puo
+                # vedere lo spostamento del reset; fallback a HH:MM se l'unix manca.
+                wk_reset_unix = entry.get("weekly_reset_at_unix")
+                if isinstance(wk_reset_unix, (int, float)):
+                    wk_reset = datetime.fromtimestamp(
+                        wk_reset_unix, timezone.utc
+                    ).astimezone().strftime("%d/%m %H:%M")
+                else:
+                    wk_reset = entry.get("weekly_reset_at")
+                weekly_field = (
+                    f" weekly={wk_usage}% weekly_reset={wk_reset}"
+                    if wk_usage is not None
+                    else ""
+                )
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
-                    f"status={status} reset={reset}{tgt_field}{phase_field} src=bridge."
+                    f"status={status} reset={reset}{tgt_field}{phase_field}{weekly_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
 
