@@ -32,12 +32,9 @@ Legenda stato: ✅ già fixato in questa sessione · 🔲 da fare · 🟡 fix te
 
 ## 🔲 Da correggere (strutturali)
 
-### 4. Capitano: cap fisso "Max instances" per categoria → serve autonomia di scaling
-- **Dove**: `agents/capitano/capitano.md` (sorgente) + runtime `/jht_home/agents/capitano/AGENTS.md`, tabella "👥 Team" colonna **Max instances**.
-- **Stato attuale**: Scout=2, Analista=2, Scorer=1, Scrittore=3, Critico/Sentinella/Dottore/Assistente=1.
-- **Problema**: il Capitano NON può spawnare oltre il cap (es. Scout-3 impossibile). L'ordine utente "spawna Scout-3" non è eseguibile.
-- **Correzione richiesta (utente)**: il Capitano deve essere **libero di decidere quanti agenti per categoria** ritiene giusti, **limitato dal budget** (proj 5h + weekly) e dalla profondità delle code, NON da un numero fisso. Sostituire i cap fissi con: autonomia bounded-by-budget (già esiste la logica C-07 throttle + C-09 weekly-awareness + pipeline-triage). Eventualmente tenere solo un tetto di sicurezza alto (es. anti-runaway) invece di 1-2.
-- **Attenzione**: più agenti paralleli = finestra 5h bruciata più in fretta → la guardia deve restare il budget, non il count.
+### 4. ✅ Capitano: cap fisso "Max instances" → autonomia bounded-by-budget
+- **Dove**: `agents/capitano/capitano.md` tabella "👥 Team".
+- **Fix applicato (via merge)**: i worker scalabili sono ora `budget-bound` (Scout ≤6, Analista ≤6, Scorer ≤3, Scrittore ≤4) — i numeri sono **tetti anti-runaway**, non target/limiti operativi. Nota esplicita riga 40: "decidi tu quanti spawnarne in base a code + budget (C-07 throttle + C-09 weekly-awareness + pipeline-triage). La guardia è il budget, non il count." Singleton (Critico/Sentinella/Dottore/Assistente/Capitano) restano 1 by design. Verificato in `32924b76`.
 
 ### 5. tg-bridge non parte al boot se config vuota a pid1-time
 - **Dove**: `cli/src/commands/pid1.js` (avvio bridge) + flusso wizard.
