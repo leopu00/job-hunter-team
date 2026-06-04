@@ -156,7 +156,7 @@
 
   // -------------------- finestre di sessione --------------------
 
-  // PERIMETRO DEFINITIVO (Leone 2026-05-04): l'analisi del report copre SOLO
+  // PERIMETRO DEFINITIVO (Mario 2026-05-04): l'analisi del report copre SOLO
   // queste 3 finestre Kimi K2, non il warm-up serale, le micro-finestre o i
   // gap intermedi. Durata totale attiva = 1h1m + 4h48m + 4h54m = 10h 43m.
   const SESSION_WINDOWS = [

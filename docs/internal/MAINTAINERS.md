@@ -13,7 +13,7 @@ Region:       in web/.env.local (see compliance doc — DO NOT mention in public
 Credentials:  in web/.env.local (NOT in git)
 ```
 
-> Keys and project ref live only in `web/.env.local` (not versioned). Workers who need access must ask the project coordinator (info@jobhunterteam.ai).
+> Keys and project ref live only in `web/.env.local` (not versioned). Workers who need access must ask the project coordinator (owner@example.com).
 
 ### Database — applied migrations
 
@@ -182,5 +182,5 @@ Developer ID certs expire after 5 years. To rotate: repeat steps 2–4 with a fr
 
 For anything that needs maintainer-level access:
 
-- **Leone P.** — `info@jobhunterteam.ai`
-- GitHub: [@leopu00](https://github.com/leopu00)
+- **Mario R.** — `owner@example.com`
+- GitHub: [@owner](https://github.com/leopu00)
