@@ -4,8 +4,10 @@ provider_capacity.py — `window_cap_pct_of_weekly` per provider attivo.
 
 Concetto: ogni piano (Codex Pro, Claude Max x20, Kimi Plan, ecc.) ha un
 rapporto fisso tra il cap della finestra rate-limit 5h e il cap del
-weekly budget. Esempio Codex Pro: una finestra 5h piena vale ~14.7% del
-weekly budget (caso studio 2026-05-21, 396.9M token in 34.84h continuativi).
+weekly budget. Esempio Codex Pro: una finestra 5h piena vale ~17% del
+weekly budget (misura beta VPS 2026-06-03/04: finestra primary 0→79% →
+weekly 0→15%, ratio ≈16-17% per finestra piena; il vecchio 14.7% del caso
+studio 2026-05-21 sottostimava → target/finestra troppo generoso).
 
 Questo modulo espone un'unica funzione:
 
@@ -50,13 +52,13 @@ from typing import Optional
 #                               per saturare il sub al 100% del weekly cap).
 #   confidence                — "high" se basato su run reale, "low" se stima.
 _PROVIDER_SEEDS: dict[str, dict] = {
-    "openai":      {"window_cap_pct_of_weekly": 14.7,
+    "openai":      {"window_cap_pct_of_weekly": 17.0,
                     "natural_burn_pct_per_h":   2.70,
                     "confidence": "high"},
-    "codex":       {"window_cap_pct_of_weekly": 14.7,
+    "codex":       {"window_cap_pct_of_weekly": 17.0,
                     "natural_burn_pct_per_h":   2.70,
                     "confidence": "high"},
-    "codex-plus":  {"window_cap_pct_of_weekly": 14.7,
+    "codex-plus":  {"window_cap_pct_of_weekly": 17.0,
                     "natural_burn_pct_per_h":   2.70,
                     "confidence": "low"},
     "claude":      {"window_cap_pct_of_weekly": 15.0,
