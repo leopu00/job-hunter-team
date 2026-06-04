@@ -26,6 +26,12 @@ INTERVAL_SEC="${DOCTOR_WATCHDOG_INTERVAL:-7200}"  # 2h default
 # `spawn-doctor` che invoca questo script on-demand.
 SPAWNER="/app/.launcher/spawn-doctor.sh"
 
+# In OFF (fuori working hours) NON spawniamo, ma ricontrolliamo più spesso del
+# normale INTERVAL_SEC (max 15 min): così al rientro in ON il Dottore riparte
+# entro ~15 min invece di restare fermo fino a 2h (nota review dev1 su P6).
+OFF_RECHECK_SEC="$INTERVAL_SEC"
+[ "$OFF_RECHECK_SEC" -gt 900 ] && OFF_RECHECK_SEC=900
+
 log() {
   local ts
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -77,7 +83,7 @@ except Exception:
         log "fuori working hours — spawn dottore sospeso (pausa OFF reale)"
       fi
       offhours_log_tick=$((offhours_log_tick + 1))
-      sleep "$INTERVAL_SEC"
+      sleep "$OFF_RECHECK_SEC"
       continue
     fi
     if [ "$offhours_log_tick" -gt 0 ]; then
