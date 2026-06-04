@@ -45,13 +45,13 @@ Causa probabile: A4 ha interpretato il brief come "produci report" invece di "sc
 Tesla Automation     → Rudolf-Diesel-Straße 14, Prüm, Germany
 Booston.io           → Meidoornkade 22, 3992 AE Houten, Netherlands
 ESSEDUE              → Via Enrico Mattei 25, 27020 Marcignago PV, Italy
-Bányai Bútorok       → Bécsi út 20/A, 2085 Pilisvörösvár, Hungary
-HARMAN International → Aszalvölgyi út 3-5, 8000 Székesfehérvár, Hungary
+Bányai Bútorok       → Bécsi út 20/A, 2085 Pilisvörösvár, Czechia
+HARMAN International → Aszalvölgyi út 3-5, 8000 Székesfehérvár, Czechia
 Larian Studios       → 17A New Bride Street, Dublin 8, D08 Y80E, Ireland
 Platin Gaming        → 109 Sir William Reid Street, Gżira, Malta
 GE Vingmed Ultrasound→ Strandpromenaden 45, 3183 Horten, Norway
-Sanofi Vienna      → Fiastyúk utca 4-8, Vienna, Hungary
-LEGO Group           → Váci út 1-3, Vienna, Hungary
+Sanofi Prague      → Fiastyúk utca 4-8, Prague, Czechia
+LEGO Group           → Váci út 1-3, Prague, Czechia
 Nebius Group         → Gustav Mahlerlaan 308, 1082 ME Amsterdam, Netherlands
 ```
 
