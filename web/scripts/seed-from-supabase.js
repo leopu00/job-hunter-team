@@ -244,7 +244,7 @@ candidate:
   education:
     - degree: "Diploma di maturità in Informatica"
       institution: "Liceo Artistico Waldorf"
-      location: "Vienna"
+      location: "Prague"
       year: 2020
     - degree: "Specializzazione in Data Science"
       institution: "Develhope"
