@@ -175,6 +175,23 @@ if [ "$ROLE" = "bridge" ]; then
     echo "⚠ $WRM_SCRIPT non trovato — calibrazione auto N/D (seed only)"
   fi
 
+  # Codex auth-healer (#6) — rileva "session has ended"/refresh-fail nei pane
+  # degli agenti e li riavvia per ri-leggere la auth.json CONDIVISA fresca
+  # (l'ultimo refresh valido è sempre nel file → un restart cura l'agente con
+  # token stale in memoria). Standalone, non tocca agent-watchdog/Dottore.
+  # Stesso pattern: setsid + singleton via /proc cmdline + cooldown anti-storm.
+  HEALER_SCRIPT="/app/.launcher/codex-auth-healer.sh"
+  if [ -f "$HEALER_SCRIPT" ]; then
+    for _pid in $(grep -l codex-auth-healer.sh /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -TERM "$_pid" 2>/dev/null || true
+    done
+    sleep 0.5
+    setsid sh -c "
+      JHT_HOME='${JHT_HOME:-/jht_home}' bash $HEALER_SCRIPT >> ${JHT_HOME:-/jht_home}/logs/codex-auth-healer.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ codex-auth-healer partito (#6, log codex-auth-healer.log)"
+  fi
+
   exit 0
 fi
 
