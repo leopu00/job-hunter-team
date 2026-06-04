@@ -189,11 +189,11 @@ function writeProfileYaml() {
   const profileDir = path.join(JHT_HOME, 'profile');
   const profilePath = path.join(profileDir, 'candidate_profile.yml');
   fs.mkdirSync(profileDir, { recursive: true });
-  const yaml = `name: "Leone Emanuel Puglisi"
+  const yaml = `name: "Mario Rossi"
 target_role: "Python Developer"
 location: "Roma"
 experience_years: 1
-email: "beta-user@example.com"
+email: "owner@example.com"
 has_degree: false
 seniority_target: "junior"
 work_authorization:
@@ -227,10 +227,10 @@ languages:
     level: native
 
 candidate:
-  name: "Leone Emanuel Puglisi"
+  name: "Mario Rossi"
   target_role: "Python Developer"
   contacts:
-    email: "beta-user@example.com"
+    email: "owner@example.com"
   experience:
     - role: "Apprendista Programmatore"
       company: "Fincontinuo Spa"
@@ -244,7 +244,7 @@ candidate:
   education:
     - degree: "Diploma di maturità in Informatica"
       institution: "Liceo Artistico Waldorf"
-      location: "Prague"
+      location: "Vienna"
       year: 2020
     - degree: "Specializzazione in Data Science"
       institution: "Develhope"
@@ -314,7 +314,7 @@ function main() {
     },
     {
       agent: 'capitano',
-      body: 'CV pronto per posizione #8 (Rinse Software Engineer). Critic verdict: PASS (6.0/10). PDF: /jht_user/cv/CV_Leone_Puglisi_Rinse.pdf',
+      body: 'CV pronto per posizione #8 (Rinse Software Engineer). Critic verdict: PASS (6.0/10). PDF: /jht_user/cv/CV_Mario_Rossi_Rinse.pdf',
       kind: 'notification',
       related_position_uuid: '0a2e05a4-c3be-4b44-8e04-0c53968f4a10',
       delivered_via: 'telegram',
