@@ -49,7 +49,7 @@ fi
 mkdir -p "$SIM_HOME"/{user,logs,agents}
 chmod 700 "$SIM_HOME"
 
-# Profilo candidato di leone.puglisi (TODO: estrai da Supabase o copia da
+# Profilo candidato di owner (TODO: estrai da Supabase o copia da
 # ~/.jht/profile/candidate_profile.yml se presente).
 if [ ! -f "$SIM_HOME/candidate_profile.yml" ]; then
   if [ -f "${HOME}/.jht/profile/candidate_profile.yml" ]; then
