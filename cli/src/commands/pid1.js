@@ -436,11 +436,12 @@ async function dispatch() {
   // Senza, l'utente Telegram → assistente non riceve nulla anche se
   // tmux ASSISTENTE è up.
   const hasBots = await hasTelegramBotsConfigured();
-  let tgBridgeUp = hasBots;
+  let tgBridgeStarted = false;
   if (hasBots) {
     startTgBridge();
+    tgBridgeStarted = true;
   } else {
-    pid1Log('tg-bridge: nessun bot in jht.config.json, skip — riprova dopo wizard');
+    pid1Log('tg-bridge: nessun bot in jht.config.json, skip');
   }
 
   // Bridge Python (sentinel + pacing): partono SEMPRE indipendentemente
@@ -448,42 +449,12 @@ async function dispatch() {
   // bloccca pensando che la pipeline sia in standby. Il provider Kimi
   // deve essere configurato per generare tick utili (default OK se
   // active_provider è set, lo script legge il config a runtime).
-  let sentinelUp = await hasActiveProviderConfigured();
-  if (sentinelUp) {
+  let sentinelBridgesStarted = false;
+  if (await hasActiveProviderConfigured()) {
     startSentinelBridges();
+    sentinelBridgesStarted = true;
   } else {
     pid1Log('sentinel/pacing bridge: active_provider mancante, skip — riprova dopo wizard');
-  }
-
-  // #5 — Re-check post-wizard: il wizard scrive bot + active_provider in
-  // jht.config.json DOPO il boot di pid1, quindi i bridge skippati qui
-  // sopra non partirebbero MAI (sintomo osservato: "scrivo ai bot e non
-  // risponde nessuno", Capitano idle col profilo pronto). Poll del config
-  // ogni 10s finché i bridge mancanti possono partire, poi stop. Idempotente
-  // (avvia ciascun bridge una sola volta), unref per non bloccare l'exit.
-  if (!tgBridgeUp || !sentinelUp) {
-    let attempts = 0;
-    const MAX_ATTEMPTS = 180; // 180 × 10s = 30 min
-    const poll = setInterval(async () => {
-      attempts += 1;
-      if (!tgBridgeUp && (await hasTelegramBotsConfigured())) {
-        pid1Log('tg-bridge: bot configurati post-wizard → avvio ora');
-        startTgBridge();
-        tgBridgeUp = true;
-      }
-      if (!sentinelUp && (await hasActiveProviderConfigured())) {
-        pid1Log('sentinel/pacing bridge: active_provider configurato post-wizard → avvio ora');
-        startSentinelBridges();
-        sentinelUp = true;
-      }
-      if ((tgBridgeUp && sentinelUp) || attempts >= MAX_ATTEMPTS) {
-        clearInterval(poll);
-        if (!tgBridgeUp || !sentinelUp) {
-          pid1Log('bridge post-wizard watcher: timeout 30min, config ancora incompleta — alcuni bridge non avviati');
-        }
-      }
-    }, 10_000);
-    poll.unref?.();
   }
 
   // ── Welcome iniziale dei 3 bot Telegram (script bash deterministico,
@@ -520,6 +491,43 @@ async function dispatch() {
     );
   } else if (hasBots && (await hasActiveProviderConfigured())) {
     pid1Log('auto-start agenti rinviato: provider OAuth non ancora completato (watchdog provvederà)');
+  }
+
+  // ── #5: Watcher su jht.config.json — il wizard scrive bot/provider DOPO
+  // il boot di pid1 (config spesso vuota all'avvio del container). Senza
+  // questo, tg-bridge e sentinel/pacing-bridge skippati al boot NON ripartono
+  // finché il container non viene riavviato → bug "scrivo ai bot e non
+  // risponde nessuno" + Capitano in standby (osservato beta tester 2026-06-03).
+  // Mirror del watcher cloud.json sotto; idempotente, si auto-chiude quando
+  // entrambi i bridge sono partiti.
+  if (!tgBridgeStarted || !sentinelBridgesStarted) {
+    let cfgWatcher = null;
+    try {
+      cfgWatcher = watch(dirname(JHT_CONFIG_PATH), { persistent: true }, async (eventType, filename) => {
+        if (filename !== 'jht.config.json') return;
+        await new Promise((r) => setTimeout(r, 250)); // debounce write atomico (tmp+rename)
+        if (!tgBridgeStarted && (await hasTelegramBotsConfigured())) {
+          pid1Log('jht.config.json aggiornato (bot configurati post-wizard): avvio tg-bridge + welcome');
+          startTgBridge();
+          tgBridgeStarted = true;
+          spawn('/bin/bash', [WELCOME_SEND_SCRIPT], { stdio: 'inherit' })
+            .on('exit', (code) => pid1Log(`welcome-send (post-wizard): exit ${code}`));
+        }
+        if (!sentinelBridgesStarted && (await hasActiveProviderConfigured())) {
+          pid1Log('jht.config.json aggiornato (active_provider post-wizard): avvio sentinel + pacing bridge');
+          startSentinelBridges();
+          sentinelBridgesStarted = true;
+        }
+        if (tgBridgeStarted && sentinelBridgesStarted && cfgWatcher) {
+          pid1Log('config watcher: tg-bridge + sentinel/pacing attivi, chiudo il watcher');
+          cfgWatcher.close();
+          cfgWatcher = null;
+        }
+      });
+      process.on('exit', () => { if (cfgWatcher) cfgWatcher.close(); });
+    } catch (err) {
+      pid1Log(`config watcher fallito (${err.message}) — bridge non auto-ripartiranno post-wizard`);
+    }
   }
 
   // ── Shutdown gate (usato anche da watchdog respawn). Definito qui

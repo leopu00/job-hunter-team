@@ -35,6 +35,7 @@ log() {
 TEAM_HALTED_FLAG="$JHT_HOME/.team-halted.flag"
 WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
 halt_log_tick=0
+offhours_log_tick=0
 
 log "watchdog starting · interval=${INTERVAL_SEC}s · spawner=$SPAWNER"
 
@@ -53,6 +54,36 @@ while true; do
   if [ "$halt_log_tick" -gt 0 ]; then
     log "halt flag rimosso — riprendo spawn dottore"
     halt_log_tick=0
+  fi
+
+  # Working-hours gate (P6 — pausa OFF = stop reale): fuori dalla finestra di
+  # lavoro il team è in pausa, quindi NON spawnare il Dottore. Il suo sweep di
+  # liveness/freshness risveglia TUTTI gli agenti e brucia budget anche di
+  # notte (verificato: ~3 sessioni Codex/notte ogni 2h). Fail-open: se il check
+  # fallisce (config rotta / import error) assume ON, per non bloccare mai il
+  # Dottore. Disattivabile con DOCTOR_WATCHDOG_RESPECT_WORKING_HOURS=0.
+  if [ "${DOCTOR_WATCHDOG_RESPECT_WORKING_HOURS:-1}" = "1" ]; then
+    phase=$(python3 -c "
+import sys
+sys.path.insert(0, '/app')
+try:
+    from shared.skills.working_hours import is_within_working_hours
+    print('ON' if is_within_working_hours() else 'OFF')
+except Exception:
+    print('ON')
+" 2>/dev/null) || phase=ON
+    if [ "$phase" = "OFF" ]; then
+      if [ $((offhours_log_tick % 4)) -eq 0 ]; then
+        log "fuori working hours — spawn dottore sospeso (pausa OFF reale)"
+      fi
+      offhours_log_tick=$((offhours_log_tick + 1))
+      sleep "$INTERVAL_SEC"
+      continue
+    fi
+    if [ "$offhours_log_tick" -gt 0 ]; then
+      log "rientro in working hours — riprendo spawn dottore"
+      offhours_log_tick=0
+    fi
   fi
 
   if [ ! -x "$SPAWNER" ] && [ ! -f "$SPAWNER" ]; then
