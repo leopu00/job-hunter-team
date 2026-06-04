@@ -1,6 +1,6 @@
 ---
 name: critic-loop
-description: Run the mandatory 3-round CV review loop with the Critico — autonomously, without going through the Capitano. For each round you spawn a FRESH `CRITICO-S<N>` session (same N as your Scrittore session: SCRITTORE-2 → CRITICO-S2), send PDF + JD, wait for the structured verdict, kill the Critic, correct the CV, regenerate the PDF, and start the next round with another fresh instance. Three rounds are non-negotiable — neither 1 nor 2. After the 3rd round, gate: `critic_score ≥ 5` → `ready`, else `excluded`. Owned by the Scrittore.
+description: "Run the mandatory 3-round CV review loop with the Critico — autonomously, without going through the Capitano. For each round you spawn a FRESH `CRITICO-S<N>` session (same N as your Scrittore session: SCRITTORE-2 → CRITICO-S2), send PDF + JD, wait for the structured verdict, kill the Critic, correct the CV, regenerate the PDF, and start the next round with another fresh instance. Three rounds are non-negotiable — neither 1 nor 2. After the 3rd round, gate: `critic_score ≥ 5` → `ready`, else `excluded`. Owned by the Scrittore."
 allowed-tools: Bash(tmux *), Bash(jht-tmux-send *), Bash(jht-throttle *), Bash(jht-throttle-check *), Bash(jht-throttle-wait *), Bash(python3 *), Bash(unset *)
 ---
 
