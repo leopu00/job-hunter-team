@@ -41,6 +41,22 @@ self-destruct (saját tmux session kill)
 
 ---
 
+## 🌙 Munkaidő-kapu — OFF szünet = valódi leállás (P6)
+
+A kör előtt ellenőrizd a munkafázist:
+`python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skills.working_hours import is_within_working_hours as f; print('ON' if f() else 'OFF')"`
+(fail-open: bármilyen hiba esetén kezeld **ON**-ként).
+
+**Ha OFF (a munkaidő-ablakon kívül): a csapat szünetel.** NE futtasd a teljes kört — az ágensek `[HEALTH]` pingelése felébreszti az LLM sessionjüket és éjjel budgetet éget (ez a P6 bug: ~3 Codex session/éjszaka 2 óránként spawnolva). Csak egy **minimális passzív menetet** csinálj:
+- a 4 user-facing (ASSISTENTE/CAPITANO/MENTOR/SENTINELLA): csak a `pane_current_command`-ot nézd, **ping és sleep nélkül**; respawn **csak ha tényleg halott** (cmd nem kimi/claude/codex).
+- **Semmi `[HEALTH]` ping a worker-eknek (PRIORITY 2)** — OFF-ban idle-ek, hagyd őket aludni.
+- **Hagyd ki a teljes kör-végét** (cache-prune, daily-restart-wave, py-audit).
+- logold `round_complete`-et `phase=OFF`-fal és azonnal self-destruct.
+
+A watchdog normál esetben NEM spawnol OFF-ban (kapu a `doctor-watchdog.sh`-ban); ez a szabály az explicit on-demand spawnt fedi.
+
+---
+
 ## 📋 Kör procedúra (magas szint)
 
 ```
