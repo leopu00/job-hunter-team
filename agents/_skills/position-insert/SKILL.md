@@ -1,6 +1,6 @@
 ---
 name: position-insert
-description: The 5-gate sequence the Scout runs for EACH candidate position before INSERTing into `positions`: dedup → link verification → JD fetch → permissive filters → INSERT. Skipping any gate fills the DB with duplicates, dead links, or out-of-scope rows that the Analyst then has to drop — wasted Sonnet budget downstream. Owned by the Scout role; pair with `circles-and-sources` (decides WHERE to look) and `scout-coord` (decides WHO looks where).
+description: "The 5-gate sequence the Scout runs for EACH candidate position before INSERTing into `positions`: dedup → link verification → JD fetch → permissive filters → INSERT. Skipping any gate fills the DB with duplicates, dead links, or out-of-scope rows that the Analyst then has to drop — wasted Sonnet budget downstream. Owned by the Scout role; pair with `circles-and-sources` (decides WHERE to look) and `scout-coord` (decides WHO looks where)."
 allowed-tools: Bash(curl *), Bash(python3 *), Bash(grep *)
 ---
 
