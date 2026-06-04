@@ -1,6 +1,6 @@
 ---
 name: pipeline-triage
-description: Decide WHICH role to spawn / pause / kill based on backlog state, not gut feel. Open this skill EVERY TIME you observe — vel team < 50% target, OR any role queue = 0, OR Scout sources exhausted, OR [SCALA UP] from Sentinella, OR `PIPELINE VUOTA + UNDERSHOOT`, OR `MARGINE` from bridge-pacing, OR cold start, OR whenever you are tempted to "just spawn another Scout". Do NOT wait for an explicit [SCALA UP] from Sentinella when the conditions are already visible to you in the metrics. The whole point: read 4 numbers, pick the one role that breaks the bottleneck, hand off to `spawn-agent`.
+description: "Decide WHICH role to spawn / pause / kill based on backlog state, not gut feel. Open this skill EVERY TIME you observe — vel team < 50% target, OR any role queue = 0, OR Scout sources exhausted, OR [SCALA UP] from Sentinella, OR `PIPELINE VUOTA + UNDERSHOOT`, OR `MARGINE` from bridge-pacing, OR cold start, OR whenever you are tempted to \"just spawn another Scout\". Do NOT wait for an explicit [SCALA UP] from Sentinella when the conditions are already visible to you in the metrics. The whole point: read 4 numbers, pick the one role that breaks the bottleneck, hand off to `spawn-agent`."
 allowed-tools: Bash(python3 /app/shared/skills/db_query.py *), Bash(tmux *)
 ---
 
