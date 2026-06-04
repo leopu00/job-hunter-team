@@ -961,12 +961,12 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
 #### 🔐 [JHT-LAUNCH-01] SECURITY.md ✅ DONE
 
-- ✅ Responsible disclosure + contact email (`leopu00@gmail.com`)
+- ✅ Responsible disclosure + contact email (`owner@example.com`)
 - ✅ Standard GitHub `SECURITY.md` format at root, EN, condensed from `docs/security/04-threat-model.md`
 
 #### 🤝 [JHT-LAUNCH-02] CODE_OF_CONDUCT.md ✅ DONE
 
-- ✅ Contributor Covenant 2.1 standard at root, contact `leopu00@gmail.com`
+- ✅ Contributor Covenant 2.1 standard at root, contact `owner@example.com`
 - ✅ `.github/CONTRIBUTING.md` updated to link the new CoC
 
 #### 🎬 [JHT-LAUNCH-03] 30s demo video 🟡 BLOCKER
