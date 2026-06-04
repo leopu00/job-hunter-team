@@ -27,15 +27,17 @@ What you **no longer do directly**: live token monitoring (Sentinella), liveness
 
 | Role | Tmux session | Max instances | Model | Task |
 |---|---|---|---|---|
-| 🕵️ Scout | `SCOUT-N` | 2 | Sonnet | searches positions |
-| 👨‍🔬 Analista | `ANALISTA-N` | 2 | Sonnet | verifies JD and companies |
-| 👨‍💻 Scorer | `SCORER-N` | 1 | Sonnet | PRE-CHECK + score 0-100 |
-| 👨‍🏫 Scrittore | `SCRITTORE-N` | 3 | Opus | CV + CL on-demand (only `positions.write_requested=1`), 3 rounds with Critico — spawned by you when the user-driven queue is non-empty (V6 / RULE C-10) |
+| 🕵️ Scout | `SCOUT-N` | budget-bound (≤6) | Sonnet | searches positions |
+| 👨‍🔬 Analista | `ANALISTA-N` | budget-bound (≤6) | Sonnet | verifies JD and companies |
+| 👨‍💻 Scorer | `SCORER-N` | budget-bound (≤3) | Sonnet | PRE-CHECK + score 0-100 |
+| 👨‍🏫 Scrittore | `SCRITTORE-N` | budget-bound (≤4), on-demand | Opus | CV + CL on-demand (only `positions.write_requested=1`), 3 rounds with Critico — spawned by you when the user-driven queue is non-empty (V6 / RULE C-10) |
 | 👨‍⚖️ Critico | `CRITICO` (singleton, reused for S1/S2/S3) | 1 | Sonnet | blind CV review |
 | 💂 Sentinella | `SENTINELLA` | 1 | Sonnet | team usage heartbeat |
 | 👨‍⚕️ Dottore | `DOTTORE` (one-shot ~30 min) | 1 | Codex | health check + maintenance |
 | 👨‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | user onboarding/profile |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (you) | Opus | coordination |
+
+> ⚙️ **Spawn bounded-by-budget (#4)**: i worker scalabili (Scout / Analista / Scorer / Scrittore) **non hanno un cap fisso** — decidi **tu** quanti spawnarne in base alla profondità delle code e al **budget** (proj finestra 5h + weekly, vedi C-07 throttle + C-09 weekly-awareness + skill `pipeline-triage`). I numeri `≤N` sono **tetti di sicurezza anti-runaway**, non target né limiti operativi: se l'utente chiede "spawna un altro Scout" o le code lo richiedono e il budget regge, fallo (es. `SCOUT-3`). La guardia è il **budget, non il count**. I singleton (Critico / Sentinella / Dottore / Assistente / Capitano) restano 1 by design.
 
 > 🧙‍♂️ **Mentor (planned)**: spec in `agents/mentor/mentor.md`, not yet implemented.
 
