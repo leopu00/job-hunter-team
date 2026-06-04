@@ -952,6 +952,20 @@ def main():
             _advance_tick_phase(state, in_gspot)
             now_ts = time.time()
             should_notify = _should_notify_sentinella(in_gspot, state, now_ts)
+            # P3 doppio-gate: la proj PRIMARY mira al riempimento 100% della
+            # finestra, quindi a inizio finestra (velocità di burst alta) finisce
+            # SOPRA un g-spot centrato sul target weekly-spalmato anche se l'usage
+            # ASSOLUTO è ancora sano. Non svegliare la Sentinella in questo caso:
+            # proj alta + usage<=target = sola velocità istantanea, non sforo
+            # accumulato. Vale SOLO per il lato alto (proj>target); sotto il
+            # g-spot (sottoutilizzo) la notifica serve eccome.
+            if (
+                should_notify
+                and dyn_target
+                and isinstance(proj, (int, float)) and proj > dyn_target
+                and isinstance(usage, (int, float)) and usage <= dyn_target
+            ):
+                should_notify = False
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""
