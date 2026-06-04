@@ -7,6 +7,8 @@
 .env
 .env.local
 .env.*.local
+.env.vercel
+.env.vercel.*
 .mcp.json
 *.mcp.json
 CLAUDE.md
