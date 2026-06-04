@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/workspace'
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
-import { aggregateRoleFamilies, type RoleFamilyCount } from '@/lib/position-classifier'
+import { aggregateRoleFamilies, UNCATEGORIZED_LABEL, type RoleFamilyCount } from '@/lib/position-classifier'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -298,10 +298,52 @@ export type PositionFilterOpts = {
   sources?: string[]
   tiers?: string[]       // ['seria','practice','riferimento','noscore']
   verdicts?: string[]    // applications.critic_verdict (PASS|NEEDS_WORK|REJECT)
+  // ── Filtri "intelligenti" (sidebar /positions, stile mappa) ──
+  families?: string[]    // positions.role_family (UNCATEGORIZED_LABEL = "Da categorizzare")
+  countries?: string[]   // loc_country ("(unknown)" = senza paese)
+  cities?: string[]      // chiavi "Country|City" ("(country-only)" = senza città)
+  scoreBands?: Array<{ lo: number; hi: number }> // fasce score (OR tra loro)
+  unscored?: boolean     // include posizioni senza score numerico
   limit?: number
   offset?: number
   sort?: string
   dir?: 'asc' | 'desc'
+}
+
+// Chiave city coerente con la sidebar/mappa: "Country|City". Country vuoto
+// → "(unknown)"; city vuota → "(country-only)".
+function facetCityKey(country: string | null | undefined, city: string | null | undefined): string {
+  const c = (country ?? '').trim() || '(unknown)'
+  const ci = (city ?? '').trim() || '(country-only)'
+  return `${c}|${ci}`
+}
+
+// Filtri faceted applicati post-fetch (uniformi tra Supabase e local, così
+// la logica vive in un solo posto). Tra dimensioni diverse: AND. Dentro la
+// stessa dimensione: OR. Lo score band + unscored sono OR fra loro.
+function applyFacetFilters(rows: PositionWithScore[], opts?: PositionFilterOpts): PositionWithScore[] {
+  let out = rows
+  if (opts?.families?.length) {
+    const set = new Set(opts.families)
+    out = out.filter(p => set.has((p.role_family ?? '').trim() || UNCATEGORIZED_LABEL))
+  }
+  if (opts?.countries?.length) {
+    const set = new Set(opts.countries)
+    out = out.filter(p => set.has((p.loc_country ?? '').trim() || '(unknown)'))
+  }
+  if (opts?.cities?.length) {
+    const set = new Set(opts.cities)
+    out = out.filter(p => set.has(facetCityKey(p.loc_country, p.loc_city)))
+  }
+  const bands = opts?.scoreBands ?? []
+  if (bands.length || opts?.unscored) {
+    out = out.filter(p => {
+      const s = p.score
+      if (s == null || s === 0) return !!opts?.unscored
+      return bands.some(b => s >= b.lo && s <= b.hi)
+    })
+  }
+  return out
 }
 
 // Tier → score-range. 'noscore' = score null/0.
@@ -327,13 +369,13 @@ function applyTierFilter(rows: PositionWithScore[], tiers: string[]): PositionWi
 
 export async function getPositions(opts?: PositionFilterOpts): Promise<PositionWithScore[]> {
   const w = await ws()
-  if (w) { try { return local.getPositionsLocal(w, opts) } catch { return [] } }
+  if (w) { try { return applyFacetFilters(local.getPositionsLocal(w, opts), opts) } catch { return [] } }
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
   let query = supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
+    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, role_family, loc_country, loc_city, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
 
@@ -362,6 +404,8 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
     const set = new Set(opts.verdicts)
     mapped = mapped.filter(p => p.critic_verdict && set.has(p.critic_verdict))
   }
+  // Filtri "intelligenti" sidebar (family/location/score band).
+  mapped = applyFacetFilters(mapped, opts)
 
   // Sort in memoria per le colonne richieste dalla UI.
   const sortKey: PositionSortKey | null = POSITION_SORT_KEYS.includes(opts?.sort as PositionSortKey)
@@ -501,6 +545,49 @@ export async function getSourceDistribution(): Promise<Array<{ source: string; c
 }
 
 // ── Positions con coordinate ufficio (per JobsGlobe) ───────────────
+// ── Faceting dataset per la sidebar /positions ─────────────────────
+// Universo COMPLETO (incluse le excluded, che la tabella mostra) con i
+// soli campi necessari a ricalcolare donut/istogramma/location lato
+// client, con conteggi che si incrociano. Diverso da coords/no-coords
+// del map (che escludono le 'excluded' e dipendono dalle coordinate).
+export type PositionFacet = {
+  id: string
+  role_family: string | null
+  score: number | null
+  loc_country: string | null
+  loc_city: string | null
+  status: string
+  title: string | null
+  company: string | null
+}
+
+export async function getPositionFacets(): Promise<PositionFacet[]> {
+  const w = await ws()
+  if (w) { try { return local.getPositionFacetsLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score )')
+    .is('deleted_at', null)
+  if (error || !data) return []
+  return (data as any[]).map((p) => {
+    const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    const score = (p.score as number | null) ?? (typeof s?.total_score === 'number' ? s.total_score : null)
+    return {
+      id: String(p.id),
+      role_family: p.role_family ?? null,
+      score: typeof score === 'number' ? score : null,
+      loc_country: p.loc_country ?? null,
+      loc_city: p.loc_city ?? null,
+      status: p.status,
+      title: p.title ?? null,
+      company: p.company ?? null,
+    }
+  })
+}
+
 export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const w = await ws()
   if (w) { try { return local.getPositionsWithCoordsLocal(w) } catch { return [] } }
