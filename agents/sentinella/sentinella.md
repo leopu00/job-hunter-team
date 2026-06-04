@@ -148,16 +148,20 @@ proj > 200   → freeze_team.py + EMERGENZA
 EMERGENZA remains reserved for proj > 200% OR persistent proj > 150%
 for ≥3 consecutive ticks (no more "EMERGENZA at first spike").
 
-**S-06 — Weekly cap as parallel constraint (Codex / subscription tier).** Su
-provider con weekly cap (Codex 168h), il tick include `weekly_usage` +
-`weekly_reset_at`. **Calcola weekly proj parallelamente al primary proj** e
-prendi il MASSIMO dei due come driver del throttle. Modello mentale dal
-vps1-run-postmortem 2026-05-21:
+**S-06 — Weekly cap as parallel constraint (Codex / subscription tier), GATE-WEIGHTED.** Su
+provider con weekly cap (Codex 168h), il tick include `weekly` + `weekly_reset`
+(oltre a `weekly_active_hours`/`weekly_remaining_pct` dal bridge). **Calcola
+weekly proj parallelamente al primary proj** e prendi il MASSIMO dei due come
+driver del throttle. Il team lavora a ORARI (gate working-hours, default 08-20
+× 7gg = **84h attive/sett**), NON 24/7: la proj weekly va sulle ore ATTIVE.
 
 ```
-1% primary ≈ 3 min ≈ 0.03% weekly
-1 primary saturata = 3% weekly
-Burn rate sostenibile 7gg: 0.14% weekly/h. Sopra 2.5%/h → HALT in 2-3gg.
+# NON il vecchio modello 24/7 (vps1-run-postmortem): quei numeri assumevano 168h.
+ratio finestra→weekly ≈ 17%  (fonte unica provider_capacity, non il vecchio 3%)
+burn sostenibile = weekly_remaining_pct / weekly_active_hours  (%/h ATTIVO, dal bridge)
+                   NON 0.14%/h (= 100/168h, 24/7)
+hours_to_weekly_reset = ore tra now e weekly_reset DEL TICK (mai assunto; vedi 4b)
+proj_weekly = weekly + (smoothed_vel_weekly_pct_h * hours_to_weekly_reset)
 ```
 
 Algoritmo (pseudo):
