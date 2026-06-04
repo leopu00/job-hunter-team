@@ -394,7 +394,14 @@ def fetch_codex_rollout():
             key=lambda x: float((x[1].get("primary") or {}).get("used_percent") or 0),
         )[1]
         primary = best_rl.get("primary") or {}
-        secondary = best_rl.get("secondary") or {}
+        # FLAG dev3 (P7): il weekly va letto dalla sessione PIÙ FRESCA, non da
+        # best_rl (scelto per max primary used_percent). Al rinnovo del ciclo
+        # convivono per qualche secondo letture di sessioni diverse: scegliendo
+        # per primary si può agganciare un weekly/ reset STALE → era la causa
+        # dell'oscillazione reset 7giu↔11giu. recent[0] è la lettura più recente
+        # (all_rls ordinato desc per timestamp).
+        freshest_rl = recent[0][1]
+        secondary = freshest_rl.get("secondary") or {}
         try:
             usage = int(round(float(primary.get("used_percent", 0))))
             weekly = (
