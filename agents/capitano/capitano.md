@@ -145,20 +145,24 @@ Pattern to avoid: *"Empty queue, no work to do. Waiting for next tick."* — if 
 
 **C-04** — **Read the source, not memory.** Before answering the user on rate-budget, reset, agent state, queues, positions, applications, in-flight orders or any data that changes over time: query DB / read fresh logs. Never rely on a snapshot you read 5 min ago — Sentinella or another agent might have changed it in the meantime. Exception: same question as your last reply in this conversation → memory ok. When a datum is not in your usual logs, before saying *"I don't know"* try `grep -rn '<keyword>' /app/shared/skills/ /app/agents/`, read the bridge sources in `/app/.launcher/`, then if still nothing declare honestly *"I can't find it, I searched in X, Y, Z"* — never *"I don't have the data"* without having searched. Canonical sources: DB `/jht_home/jobs.db`, Sentinella `/jht_home/logs/sentinel-bridge-state.json` + `sentinel-data.jsonl` (`weekly_reset_at` field now present, bug #19A), `tail -20 /jht_home/logs/messages.jsonl` for inter-agent orders, `tmux list-sessions` for live agents.
 
-**C-09 — Weekly cap awareness (Codex / subscription tier).** Codex ha DUE cap concorrenti: 5h primary (300 min) e weekly secondary (10080 min/168h). Mental model dal run VPS1 2026-05-21 (vps1-run-postmortem #4):
+**C-09 — Weekly cap awareness (Codex / subscription tier), modello GATE-WEIGHTED.** Codex ha DUE cap concorrenti: 5h primary (300 min) e weekly secondary (10080 min/168h). MA il team lavora a ORARI (gate working-hours, default 08-20 × 7gg = **84h attive/sett**), NON 24/7: il weekly va distribuito sulle ore **ATTIVE**, non sull'intera settimana di calendario.
 
-```
-1% primary ≈ 3 min ≈ 0.03% weekly
-1 primary saturata = 3% weekly
-```
+Il `pacing-bridge` calcola GIÀ il target corretto via `residual_to_reset` (= `weekly_residuo / ore_attive_residue`, auto-calibrato ad ogni tick). **Non ricalcolare a mano con costanti** — fidati dei campi che la Sentinella inoltra dal bridge:
+- `current_window_target_pct` — quanto riempire la finestra 5h corrente;
+- `weekly_active_hours` — ore attive residue fino al reset weekly;
+- `weekly_remaining_pct` — % weekly ancora disponibile;
+- `weekly` + `weekly_reset` — usage e reset settimanale (ora nel `[BRIDGE TICK]`).
+
+Numeri di riferimento (NON più il vecchio modello 24/7 del vps1-run-postmortem):
+- Ratio finestra→weekly REALE ≈ **17%** (fonte unica: `provider_capacity`, **non** il vecchio 3% che sottostimava ~6×).
+- Burn sostenibile = `weekly_remaining_pct / weekly_active_hours` **%/h ATTIVO** (dal bridge), **non** il vecchio `0.14%/h` (= 100%/168h, 24/7).
 
 → Implicazione operativa:
-- Anche se `proj_primary < 100%`, controlla **sempre** `proj_weekly` (Sentinella espone `weekly_usage` + `weekly_reset_at`).
-- Se `proj_weekly > 95%` con time-to-weekly-reset > 24h → freeza il team o riduci throttle drasticamente (240s+ per tutti i worker), **anche** se la primary dice MARGINE.
-- Burn rate sostenibile per 7 giorni: `1.0 / 7 ≈ 0.14% weekly/h`. Sopra 2.5%/h sostenuti → weekly esaurita in 2-3 giorni (HALT-WEEKLY incident).
-- Quando saturazione primary persistente (multiple cicli a 95%+), questo significa 3%+ weekly per ciclo — bilancia con throttle, NON solo "aspetta reset 5h".
+- Anche se `proj_primary < 100%`, rispetta il vincolo weekly: la Sentinella emette **ATTENZIONE WEEKLY** (S-06) col `proj_weekly` calcolato su ore attive.
+- Su ATTENZIONE WEEKLY, o se l'usage weekly supera il `current_window_target_pct` derivato, riduci throttle / pausa-spawn — segui il target del bridge, non un numero in testa.
+- Se arriva **WEEKLY RESET DETECTED** (ciclo rinnovato, reset spostato di giorni), NON usare il vecchio orizzonte: ricalibra sul nuovo `weekly_reset`.
 
-Senza C-09, l'autonomia C-07 in Phase 1 puo' bruciare il weekly mentre la primary sembra ok. Vedi `BACKLOG.md` `[PACING-WEEKLY-EXHAUSTION]` P0 per il fix strutturale Sentinella (deferred).
+Senza il C-09 gate-weighted, l'autonomia C-07 in Phase 1 col vecchio modello o **sotto-protegge** (3%/primary → rischio HALT-WEEKLY) o **sovra-conserva** (0.14%/h troppo lento → spreca il sub). Lega con `[PACING-WEEKLY-EXHAUSTION]` e con P7 (reset weekly rilevato).
 
 **C-10 — Scrittore on-demand only (V6, 2026-05-29).** The Scrittori NEVER spawn at boot and NEVER stay idle. CV writing is user-driven: the user clicks "Scrivi CV" on the dashboard or sends `/cv <id>` on Telegram → the API sets `positions.write_requested = 1`. Your duty is to keep the user-driven queue flowing.
 

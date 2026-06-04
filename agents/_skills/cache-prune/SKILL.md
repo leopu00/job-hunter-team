@@ -1,6 +1,6 @@
 ---
 name: cache-prune
-description: Reclaim disk on the shared JHT caches (`uv` wheel cache + `codex` SQLite log) every ~24h. Owned by the Dottore — single-instance, runs at the end of a routine round when the team is idle. Never run mid-emergency: the SQLite VACUUM blocks for ~30s on a 200 MB DB and would steal cycles from a Sentinel-driven recovery. Migrated from the Captain so the Captain stays focused on coordination, not housekeeping.
+description: "Reclaim disk on the shared JHT caches (`uv` wheel cache + `codex` SQLite log) every ~24h. Owned by the Dottore — single-instance, runs at the end of a routine round when the team is idle. Never run mid-emergency: the SQLite VACUUM blocks for ~30s on a 200 MB DB and would steal cycles from a Sentinel-driven recovery. Migrated from the Captain so the Captain stays focused on coordination, not housekeeping."
 allowed-tools: Bash(node /app/cli/bin/jht.js cache *), Bash(du *), Bash(df *)
 ---
 
