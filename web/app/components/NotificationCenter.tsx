@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { readLocaleCookie } from "@/lib/use-locale";
 
 /* ── Types ────────────────────────────────────────────────────────── */
 
@@ -39,11 +40,10 @@ const I18N: Record<Lang, Record<string, string>> = {
   },
 };
 
+// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Questo dizionario
+// copre solo it/en, quindi le altre lingue ricadono su en.
 function detectLang(): Lang {
-  if (typeof window === "undefined") return "it";
-  const stored = localStorage.getItem("jht-lang");
-  if (stored === "en" || stored === "it") return stored;
-  return navigator.language.startsWith("en") ? "en" : "it";
+  return readLocaleCookie() === "it" ? "it" : "en";
 }
 
 /* ── Config ───────────────────────────────────────────────────────── */
