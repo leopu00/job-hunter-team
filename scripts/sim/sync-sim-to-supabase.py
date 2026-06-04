@@ -11,7 +11,7 @@ Usage (preflight):
     SUPABASE_SERVICE_ROLE_KEY=eyJ... \\
     python3 scripts/sim/sync-sim-to-supabase.py [--email <e>] [--dry-run]
 
-Default email: leone.puglisi@gmail.com
+Default email: owner@example.com
 """
 import os
 import sys
@@ -94,7 +94,7 @@ print(json.dumps(out, ensure_ascii=False))
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--email", default="leone.puglisi@gmail.com")
+    parser.add_argument("--email", default="owner@example.com")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int, default=0)
     args = parser.parse_args()

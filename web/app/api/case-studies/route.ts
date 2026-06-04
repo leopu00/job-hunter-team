@@ -7,12 +7,27 @@
 // Response shape is stable: { caseStudies: [...], coverage: [...] }.
 
 import { NextResponse } from "next/server";
+// @ts-expect-error node:sqlite richiede Node 22.5+ — runtime ok su Vercel/dev,
+// types @types/node attuali non lo dichiarano. Quando aggiorniamo @types/node si rimuove.
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
 import fs from "node:fs";
 import { deriveFiveHourWindows, type BurnPoint } from "@/lib/five-hour-windows";
 
 export const dynamic = "force-dynamic"; // never cache during dev iterations
+
+// Defense-in-depth PII scrub on served free-text. The seed data is sanitized at
+// the source (web/data/case-studies/*.sql), but this guard ensures the public
+// API never serves raw URLs or email addresses even if an un-sanitized DB is
+// loaded. Pattern-based ONLY — no real PII value is hardcoded here.
+const URL_RE = /https?:\/\/[^\s"'<>)\]]+/gi;
+const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+function scrubText<T extends string | null | undefined>(s: T): T {
+  if (typeof s !== "string") return s;
+  return s
+    .replace(URL_RE, "[link removed]")
+    .replace(EMAIL_RE, "[email removed]") as T;
+}
 
 type MetricRow = {
   case_study_id: number;
@@ -256,12 +271,17 @@ export async function GET() {
 
     const out = caseStudies.map((cs) => ({
       ...cs,
+      profile_summary: scrubText(cs.profile_summary),
       highlighted: Boolean(cs as unknown as { highlighted?: number }),
       metrics: (metricsByCs.get(cs.id) ?? []).map((m) => ({
         ...m,
+        value_text: scrubText(m.value_text),
         highlighted: Boolean(m.highlighted),
       })),
-      notes: notesByCs.get(cs.id) ?? [],
+      notes: (notesByCs.get(cs.id) ?? []).map((n) => ({
+        ...n,
+        body_md: scrubText(n.body_md),
+      })),
       windows: (windowsByCs.get(cs.id) ?? []).map((w) => {
         const burn = w.burn_curve_json
           ? (JSON.parse(w.burn_curve_json) as BurnPoint[])
@@ -272,10 +292,14 @@ export async function GET() {
             : null;
         return {
           ...w,
+          notes_md: scrubText(w.notes_md),
           burn_curve: burn,
           five_hour_windows: fiveHour,
           burn_samples: burnByWin.get(w.id) ?? [],
-          agent_activity: activityByWin.get(w.id) ?? [],
+          agent_activity: (activityByWin.get(w.id) ?? []).map((a) => ({
+            ...a,
+            reason: scrubText(a.reason),
+          })),
           agent_tokens: tokensByWin.get(w.id) ?? [],
         };
       }),

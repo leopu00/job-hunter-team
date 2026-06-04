@@ -5,7 +5,7 @@ MVP locale: scrive solo su ~/.jht/jobs.db (SQLite). Niente Supabase.
 
 Strategia office-level (priority chain per ogni position):
   1. extracted address dal jd_text (regex indirizzi italiani / europei)
-  2. company name + location  (es. "Avanade Roma" -> ufficio specifico)
+  2. company name + location  (es. "Avanade Milano" -> ufficio specifico)
   3. location text                (city-center fallback)
   4. marca is_remote=1 se location ha keyword remote
 
@@ -29,7 +29,7 @@ import json
 
 DB_PATH = os.path.expanduser("~/.jht/jobs.db")
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "JobHunterTeam/0.1 (leone.puglisi@gmail.com) - office-level geocoding"
+USER_AGENT = "JobHunterTeam/0.1 (owner@example.com) - office-level geocoding"
 
 REMOTE_KW = re.compile(
     r"\b(remote|worldwide|anywhere|teleworking|wfh|home[\s-]?based|smart\s*work|"
@@ -39,7 +39,7 @@ REMOTE_KW = re.compile(
 
 SKIP_NON_PLACE = {"advice", "european union", "europe", "eu"}
 
-# Regex indirizzi: "Via Roma 12, 00100 Roma" / "Via X N. Y" / etc.
+# Regex indirizzi: "Via Milano 12, 00100 Milano" / "Via X N. Y" / etc.
 ADDRESS_RX = re.compile(
     r"\b("
     r"(?:via|viale|piazza|corso|largo|vicolo|strada)\s+"
@@ -191,7 +191,7 @@ def process_position(c, pid, title, company, location, jd_text):
         return None, None, None, "remote"
 
     # 3. Company + city — SEMPRE tentato, anche se cache location esiste.
-    #    Le 30+ positions a Roma di company diverse NON devono finire
+    #    Le 30+ positions a Milano di company diverse NON devono finire
     #    sullo stesso centro citta'.
     if company and location:
         city = extract_city(location)
