@@ -12,6 +12,31 @@ function getLang(): Lang {
   return localStorage.getItem("jht-lang") === "en" ? "en" : "it";
 }
 
+// Gate locale "primo accesso": una volta chiuso il tour su questo browser
+// non riappare piu', anche se la persistenza DB fallisce (migration 016
+// non applicata, service role key assente, o FS ephemeral su Vercel).
+// localStorage e' sincrono e per-browser: e' la fonte di verita' immediata.
+// Il DB (/api/preferences) resta come sync cross-device best-effort.
+const TOUR_DONE_KEY = "jht-tour-done";
+
+function localTourDone(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(TOUR_DONE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markLocalTourDone(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(TOUR_DONE_KEY, "1");
+  } catch {
+    /* storage non disponibile (private mode / quota) — ignora */
+  }
+}
+
 const T = {
   skip: { it: "Salta", en: "Skip" },
   next: { it: "Avanti", en: "Next" },
@@ -67,12 +92,22 @@ export default function OnboardingWizard() {
 
   useEffect(() => {
     setLang(getLang());
+    // Gate locale: se gia' chiuso su questo browser, non mostrare nulla
+    // (ne' fare il fetch). Questo e' il fix definitivo al "riappare a ogni
+    // accesso" quando la persistenza DB non e' attiva.
+    if (localTourDone()) return;
     let cancelled = false;
     fetch("/api/preferences")
       .then((r) => (r.ok ? r.json() : null))
       .then((prefs) => {
         if (cancelled) return;
-        if (!prefs?.ui_state?.tour_done) setVisible(true);
+        if (prefs?.ui_state?.tour_done) {
+          // Gia' completato lato server (altro device): allinea il gate
+          // locale cosi' i prossimi mount sono istantanei e offline-safe.
+          markLocalTourDone();
+          return;
+        }
+        setVisible(true);
       })
       .catch(() => {
         /* API down → don't pester user with the tour */
@@ -84,6 +119,9 @@ export default function OnboardingWizard() {
 
   const dismiss = useCallback(() => {
     setVisible(false);
+    // Persisti subito il gate locale: garantisce "solo primo accesso" su
+    // questo browser anche se il PATCH DB sotto fallisce.
+    markLocalTourDone();
     fetch("/api/preferences", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
