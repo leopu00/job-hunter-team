@@ -31,7 +31,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [README.md](../README.md) | Entry point del repo: vision, install, panoramica team agenti, provider | — | 2026-04-30 | ✅ |
 | [BACKLOG.md](../BACKLOG.md) | Roadmap completa con priorità e fasi 1-6, blocker pre-launch | — | 2026-05-10 | ✅ |
 | [CHANGELOG.md](../CHANGELOG.md) | Changelog formato Keep-a-Changelog, cronologia rilasci | — | 2026-04-28 | ✅ |
-| [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `info@jobhunterteam.ai` | — | 2026-04-30 | ✅ |
+| [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Contributor Covenant 2.1, contatto `owner@example.com` | — | 2026-04-30 | ✅ |
 | [SECURITY.md](../SECURITY.md) | Responsible disclosure + contatti security | — | 2026-04-30 | ✅ |
 
 
