@@ -18,7 +18,7 @@ const TOOL_RESULTS_DIR = path.join(
   os.homedir(),
   '.claude',
   'projects',
-  'C--Users-leone-puglisi-repos-job-hunter-team-dev2',
+  'C--Users-mario-rossi-repos-job-hunter-team-dev2',
   'b6ab0688-f39e-4c59-b254-6abf0cd0b86b',
   'tool-results',
 );
