@@ -373,8 +373,29 @@ def _read_throttle_events(since_ts: float, now_ts: float) -> dict[str, int]:
     return counts
 
 
-def hours_to_reset(reset_hhmm: str | None, now: datetime) -> float | None:
-    """Ore (float) tra `now` e il prossimo reset_hhmm UTC. None se input invalido."""
+# Una finestra rate-limit PRIMARY (rolling 5h) non resetta mai a più di 5h di
+# distanza: usato come clamp difensivo contro l'ambiguità di data del HH:MM.
+PRIMARY_WINDOW_HOURS = 5.0
+
+
+def hours_to_reset(
+    reset_hhmm: str | None,
+    now: datetime,
+    reset_at_unix: float | None = None,
+) -> float | None:
+    """Ore (float) tra `now` e il prossimo reset della finestra PRIMARY 5h.
+
+    Preferisce `reset_at_unix` (timestamp assoluto, NON ambiguo). Il fallback
+    sulla stringa HH:MM è insidioso: ricostruendo la "prossima occorrenza" di
+    HH:MM, subito dopo un reset `target <= now` aggiunge 1 giorno → ritorna
+    ~24h invece di ~5h, gonfiando proiezioni e vel_target (bug P1: proj 421%).
+    Per questo il risultato è SEMPRE clampato a [0, 5h].
+    """
+    # Path preferito: timestamp assoluto dal sample → nessuna ambiguità di data.
+    if isinstance(reset_at_unix, (int, float)) and reset_at_unix > 0:
+        hrs = (float(reset_at_unix) - now.timestamp()) / 3600.0
+        return max(0.0, min(hrs, PRIMARY_WINDOW_HOURS))
+    # Fallback HH:MM (ambiguo): ricostruisci la prossima occorrenza, poi clampa.
     if not reset_hhmm:
         return None
     try:
@@ -384,7 +405,8 @@ def hours_to_reset(reset_hhmm: str | None, now: datetime) -> float | None:
     target = now.replace(hour=h, minute=m, second=0, microsecond=0)
     if target <= now:
         target = target + timedelta(days=1)
-    return (target - now).total_seconds() / 3600.0
+    hrs = (target - now).total_seconds() / 3600.0
+    return max(0.0, min(hrs, PRIMARY_WINDOW_HOURS))
 
 
 def compute_tick(ast, tba, rb, now: datetime,
@@ -471,7 +493,9 @@ def compute_tick(ast, tba, rb, now: datetime,
                 "team_kt": team_kt,
                 "usage_now": usage_now,
                 "proj": proj,
-                "h_to_reset": hours_to_reset(sample.get("reset_at"), now),
+                "h_to_reset": hours_to_reset(
+                    sample.get("reset_at"), now, sample.get("reset_at_unix")
+                ),
                 "hint": "PIPELINE STALLED — pochi token consumati e proj "
                         "sotto target. Riaccendere pipeline da monte.",
             }
@@ -495,7 +519,7 @@ def compute_tick(ast, tba, rb, now: datetime,
     usage_now = sample.get("usage", u_last)
     proj = sample.get("projection")
     reset_at = sample.get("reset_at")
-    h_to_reset = hours_to_reset(reset_at, now)
+    h_to_reset = hours_to_reset(reset_at, now, sample.get("reset_at_unix"))
 
     # 4) Target dinamico per la finestra 5h corrente.
     #    Sostituisce il TARGET_BAND_CENTER fisso 92% con un target che
