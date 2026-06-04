@@ -162,6 +162,10 @@ Burn rate sostenibile 7gg: 0.14% weekly/h. Sopra 2.5%/h → HALT in 2-3gg.
 
 Algoritmo (pseudo):
 ```
+# hours_to_weekly_reset SEMPRE dal weekly_reset del TICK CORRENTE (now -> weekly_reset),
+# mai un valore assunto/memorizzato: il reset weekly puo' cambiare a ciclo rinnovato
+# (vedi WEEKLY RESET DETECTED). Se la regola 4b scatta, ricalcola da capo su quello nuovo.
+hours_to_weekly_reset = ore tra now e weekly_reset (dal tick)
 proj_weekly = weekly_usage + (smoothed_vel_weekly_pct_h * hours_to_weekly_reset)
 proj_binding = max(proj_primary, proj_weekly)
 use proj_binding nei threshold S-05 (95/100/110/130/150/200)
