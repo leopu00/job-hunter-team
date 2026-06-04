@@ -27,7 +27,7 @@ Dati personali reali (di un beta tester e dell'owner) sono finiti nei **case-stu
 
 ### 🟢 NON toccare (contenuto legittimo, non PII)
 - `web/public/data/countries.geojson` (Ungheria come paese)
-- `shared/locales/hu.json` (esempio timezone `Europe/Budapest`)
+- `shared/locales/hu.json` (esempio timezone `Europe/Vienna`)
 - `web/app/components/JobsGlobe.tsx`
 
 ---

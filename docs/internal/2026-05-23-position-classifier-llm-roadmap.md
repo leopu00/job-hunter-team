@@ -13,7 +13,7 @@ writer, CAD/CNC, translator, QA, content, customer support, …): per questi
 profili la tassonomia software è inadatta e 80 %+ dei titoli cadono in
 "Other".
 
-Caso reale `leone.puglisi@gmail.com` (143 posizioni non-excluded):
+Caso reale `owner@example.com` (143 posizioni non-excluded):
 
 | Famiglia data-driven                | n  | %      |
 | ----------------------------------- | -- | ------ |
@@ -48,10 +48,10 @@ senza dedurre dal title. `web/lib/dashboard-i18n.ts` non ha più chiavi
 leggibile, scritto dall'analista).
 
 **Backfill simulato** dell'output del team analyst eseguito una volta via
-SQL solo sull'utente `leone.puglisi@gmail.com` (143 posizioni). Le regex
+SQL solo sull'utente `owner@example.com` (143 posizioni). Le regex
 del classifier vecchio sono confluite *nella query SQL di backfill*, non
-sono più nel codice runtime. Tutti gli altri utenti (`leopu00`,
-`betauser97`) hanno `role_family = NULL` → la dashboard li raggruppa
+sono più nel codice runtime. Tutti gli altri utenti (`owner`,
+`maintainer`) hanno `role_family = NULL` → la dashboard li raggruppa
 sotto "Da categorizzare" finché il team non li classifica.
 
 Quello che manca (questa nota): **come si popola `role_family` in modo
