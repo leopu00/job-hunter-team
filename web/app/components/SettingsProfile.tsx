@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { readLocaleCookie } from "@/lib/use-locale";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
 
@@ -49,11 +50,12 @@ const T: Record<string, Record<Lang, string>> = {
   edit_profile: { it: "Modifica profilo", en: "Edit profile" },
 };
 
+// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Dizionario it/en,
+// le altre lingue ricadono su en.
 function useLang(): Lang {
   const [lang, setLang] = useState<Lang>("it");
   useEffect(() => {
-    const stored = localStorage.getItem("jht-lang");
-    if (stored === "en") setLang("en");
+    setLang(readLocaleCookie() === "it" ? "it" : "en");
   }, []);
   return lang;
 }

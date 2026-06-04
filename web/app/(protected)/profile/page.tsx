@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { isLocalRequest } from "@/lib/auth";
 import type { CandidateProfile } from "@/lib/types";
+import { locales, defaultLocale, type Locale } from "@/i18n/config";
+import { getProfileT } from "@/lib/profile-i18n";
 import ProfileStats from "@/components/ProfileStats";
 import ProfileAssistantFab from "@/components/ProfileAssistantFab";
 
@@ -19,6 +22,16 @@ const SKILL_CATEGORY_COLORS = [
 ];
 
 export default async function ProfileCompany() {
+  // Locale corrente dalla fonte unica (cookie NEXT_LOCALE), come next-intl.
+  const cookieStore = await cookies();
+  const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
+  const locale: Locale =
+    cookieLocale && (locales as string[]).includes(cookieLocale)
+      ? (cookieLocale as Locale)
+      : defaultLocale;
+  const t = getProfileT(locale);
+  const dateLocale = locale === "it" ? "it-IT" : locale;
+
   let profile: CandidateProfile | null = null;
 
   // In locale (desktop container su localhost) il profilo vive nel
@@ -109,7 +122,7 @@ export default async function ProfileCompany() {
               href="/dashboard"
               className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
             >
-              Dashboard
+              {t("bc_dashboard")}
             </Link>
             <span className="text-[var(--color-border)]" aria-hidden="true">
               /
@@ -118,18 +131,18 @@ export default async function ProfileCompany() {
               className="text-[10px] text-[var(--color-muted)]"
               aria-current="page"
             >
-              Profile
+              {t("bc_profile")}
             </span>
           </nav>
           <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-                Candidate Profile
+                {t("page_title")}
               </h1>
               {profile?.updated_at && (
                 <p className="text-[var(--color-muted)] text-[11px] mt-1">
-                  Updated on{" "}
-                  {new Date(profile.updated_at).toLocaleDateString("it-IT")}
+                  {t("updated_on")}{" "}
+                  {new Date(profile.updated_at).toLocaleDateString(dateLocale)}
                 </p>
               )}
             </div>
@@ -151,7 +164,7 @@ export default async function ProfileCompany() {
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                 </svg>
-                Edit
+                {t("edit")}
               </Link>
               {profile && (
                 <a
@@ -176,7 +189,7 @@ export default async function ProfileCompany() {
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
-                  Export JSON
+                  {t("export_json")}
                 </a>
               )}
             </div>
@@ -191,11 +204,10 @@ export default async function ProfileCompany() {
               👤
             </div>
             <p className="text-[13px] text-[var(--color-muted)] font-semibold">
-              No profile configured
+              {t("no_profile_title")}
             </p>
             <p className="text-[11px] text-[var(--color-dim)] mt-1 max-w-md">
-              Fill out the form below or upload a CV to extract data
-              automatically.
+              {t("no_profile_desc")}
             </p>
           </div>
         )}
@@ -203,28 +215,28 @@ export default async function ProfileCompany() {
         {profile && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* Basic Info */}
-            <ProfileSection id="info-base" title="Info Base">
-              <ProfileField label="Name" value={profile.name} />
-              <ProfileField label="Target role" value={profile.target_role} />
-              <ProfileField label="Location" value={profile.location} />
+            <ProfileSection id="info-base" title={t("sec_info_base")}>
+              <ProfileField label={t("f_name")} value={profile.name} />
+              <ProfileField label={t("f_target_role")} value={profile.target_role} />
+              <ProfileField label={t("f_location")} value={profile.location} />
               <ProfileField
-                label="Experience"
+                label={t("f_experience")}
                 value={
                   profile.experience_years != null
-                    ? `${profile.experience_years} years`
+                    ? `${profile.experience_years} ${t("years")}`
                     : null
                 }
               />
               <ProfileField
-                label="Degree"
-                value={profile.has_degree ? "Yes" : "No"}
+                label={t("f_degree")}
+                value={profile.has_degree ? t("f_yes") : t("f_no")}
               />
-              <ProfileField label="Email" value={profile.email} />
+              <ProfileField label={t("f_email")} value={profile.email} />
             </ProfileSection>
 
             {/* Contacts */}
             {(profile.email || hasContacts) && (
-              <ProfileSection id="contatti" title="Contatti">
+              <ProfileSection id="contatti" title={t("sec_contacts")}>
                 <div className="flex flex-col gap-2.5">
                   {profile.email && (
                     <ContactRow
@@ -234,7 +246,7 @@ export default async function ProfileCompany() {
                           <polyline points="22,6 12,13 2,6" />
                         </>
                       }
-                      label="Email"
+                      label={t("f_email")}
                       value={profile.email}
                       href={`mailto:${profile.email}`}
                     />
@@ -244,7 +256,7 @@ export default async function ProfileCompany() {
                       icon={
                         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
                       }
-                      label="Phone"
+                      label={t("c_phone")}
                       value={contacts.phone}
                       href={`tel:${contacts.phone}`}
                     />
@@ -290,7 +302,7 @@ export default async function ProfileCompany() {
                           <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                         </>
                       }
-                      label="Website"
+                      label={t("c_website")}
                       value={contacts.website}
                       href={
                         contacts.website.startsWith("http")
@@ -304,7 +316,7 @@ export default async function ProfileCompany() {
             )}
 
             {/* Languages */}
-            <ProfileSection id="lingue" title="Lingue">
+            <ProfileSection id="lingue" title={t("sec_languages")}>
               {profile.languages && profile.languages.length > 0 ? (
                 <div className="flex flex-col gap-2">
                   {profile.languages.map((l) => (
@@ -323,7 +335,7 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No languages entered
+                  {t("empty_languages")}
                 </span>
               )}
             </ProfileSection>
@@ -331,7 +343,7 @@ export default async function ProfileCompany() {
             {/* Skills */}
             <ProfileSection
               id="skills"
-              title={`Skills${allSkills.length > 0 ? ` (${allSkills.length})` : ""}`}
+              title={`${t("sec_skills")}${allSkills.length > 0 ? ` (${allSkills.length})` : ""}`}
             >
               {allSkills.length > 0 ? (
                 <div className="flex flex-col gap-3">
@@ -377,7 +389,7 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No skills entered
+                  {t("empty_skills")}
                 </span>
               )}
             </ProfileSection>
@@ -385,7 +397,7 @@ export default async function ProfileCompany() {
             {/* Esperienza lavorativa */}
             <ProfileSection
               id="esperienza-lavorativa"
-              title={`Work Experience${hasExperience ? ` (${experience.length})` : ""}`}
+              title={`${t("sec_experience")}${hasExperience ? ` (${experience.length})` : ""}`}
             >
               {hasExperience ? (
                 <div className="flex flex-col">
@@ -442,7 +454,7 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No experience entered
+                  {t("empty_experience")}
                 </span>
               )}
             </ProfileSection>
@@ -450,7 +462,7 @@ export default async function ProfileCompany() {
             {/* Formazione */}
             <ProfileSection
               id="formazione"
-              title={`Education & Certifications${hasEducation ? ` (${education.length + certifications.length})` : ""}`}
+              title={`${t("sec_education")}${hasEducation ? ` (${education.length + certifications.length})` : ""}`}
             >
               {hasEducation ? (
                 <div className="flex flex-col">
@@ -501,7 +513,7 @@ export default async function ProfileCompany() {
                   {certifications.length > 0 && (
                     <div className="mt-1">
                       <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-2">
-                        Certifications
+                        {t("cert_label")}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {certifications.map((c, i) => (
@@ -518,14 +530,14 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No education entered
+                  {t("empty_education")}
                 </span>
               )}
             </ProfileSection>
 
             {/* Progetti personali */}
             <ProfileSection
-              title={`Personal Companys${hasCompanys ? ` (${projects.length})` : ""}`}
+              title={`${t("sec_projects")}${hasCompanys ? ` (${projects.length})` : ""}`}
             >
               {hasCompanys ? (
                 <div className="flex flex-col gap-2">
@@ -576,7 +588,7 @@ export default async function ProfileCompany() {
                               <polyline points="15 3 21 3 21 9" />
                               <line x1="10" y1="14" x2="21" y2="3" />
                             </svg>
-                            link
+                            {t("link")}
                           </a>
                         )}
                       </div>
@@ -590,7 +602,7 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No projects entered
+                  {t("empty_projects")}
                 </span>
               )}
             </ProfileSection>
@@ -598,7 +610,7 @@ export default async function ProfileCompany() {
             {/* Target Roles */}
             <ProfileSection
               id="ruoli-target"
-              title={`Ruoli target${profile.job_titles?.length ? ` (${profile.job_titles.length})` : ""}`}
+              title={`${t("sec_target_roles")}${profile.job_titles?.length ? ` (${profile.job_titles.length})` : ""}`}
             >
               {profile.job_titles && profile.job_titles.length > 0 ? (
                 <div className="flex flex-col gap-2">
@@ -632,13 +644,13 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No roles entered
+                  {t("empty_roles")}
                 </span>
               )}
             </ProfileSection>
 
             {/* Preferenze lavoro */}
-            <ProfileSection id="location-preferite" title="Job Preferences">
+            <ProfileSection id="location-preferite" title={t("sec_job_prefs")}>
               {profile.location_preferences &&
               profile.location_preferences.length > 0 ? (
                 <div className="flex flex-wrap gap-2 mb-3">
@@ -668,7 +680,7 @@ export default async function ProfileCompany() {
                           {lp.region && lp.region}
                           {lp.cities && lp.cities.join(", ")}
                           {lp.max_days != null &&
-                            ` (max ${lp.max_days}gg/sett)`}
+                            ` (max ${lp.max_days} ${t("days_per_week")})`}
                           {lp.note && lp.note}
                         </span>
                       </div>
@@ -677,7 +689,7 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No preferences
+                  {t("empty_prefs")}
                 </span>
               )}
               {profile.salary_target &&
@@ -688,12 +700,12 @@ export default async function ProfileCompany() {
                     className="mt-3 pt-3 border-t border-[var(--color-border)] scroll-mt-20"
                   >
                     <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-3">
-                      Salary target
+                      {t("salary_target")}
                     </div>
                     <div className="flex flex-col gap-3">
                       {profile.salary_target.italy_min != null && (
                         <SalaryRange
-                          label="Italia"
+                          label={t("salary_italy")}
                           min={profile.salary_target.italy_min}
                           max={
                             profile.salary_target.italy_max ??
@@ -704,7 +716,7 @@ export default async function ProfileCompany() {
                       )}
                       {profile.salary_target.remote_eu_min != null && (
                         <SalaryRange
-                          label="Company EU"
+                          label={t("salary_remote_eu")}
                           min={profile.salary_target.remote_eu_min}
                           max={
                             profile.salary_target.remote_eu_max ??
@@ -719,21 +731,21 @@ export default async function ProfileCompany() {
             </ProfileSection>
 
             {/* Obiettivi di carriera */}
-            <ProfileSection id="obiettivi-carriera" title="Career Goals">
+            <ProfileSection id="obiettivi-carriera" title={t("sec_career_goals")}>
               {hasCareerGoals ? (
                 <div className="flex flex-col gap-2">
                   <ProfileField
-                    label="Direction"
+                    label={t("cg_direction")}
                     value={careerGoals.direction || null}
                   />
                   <ProfileField
-                    label="Target job"
+                    label={t("cg_target_job")}
                     value={careerGoals.target_job || null}
                   />
                   {(careerGoals.specializations?.length ?? 0) > 0 && (
                     <div className="py-1.5 border-b border-[var(--color-border)]">
                       <div className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] mb-1.5">
-                        Specializations
+                        {t("cg_specializations")}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {careerGoals.specializations!.map((s, i) => (
@@ -750,7 +762,7 @@ export default async function ProfileCompany() {
                   {(careerGoals.desired_courses?.length ?? 0) > 0 && (
                     <div className="py-1.5">
                       <div className="text-[10px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] mb-1.5">
-                        Desired courses
+                        {t("cg_desired_courses")}
                       </div>
                       <div className="flex flex-col gap-1">
                         {careerGoals.desired_courses!.map((c, i) => (
@@ -767,13 +779,13 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No goals entered
+                  {t("empty_goals")}
                 </span>
               )}
             </ProfileSection>
 
             {/* Desideri e aspirazioni */}
-            <ProfileSection title="Wishes & Aspirations">
+            <ProfileSection title={t("sec_aspirations")}>
               {hasAspirations ? (
                 <div className="flex flex-col gap-2">
                   {aspirations.short_term && (
@@ -794,7 +806,7 @@ export default async function ProfileCompany() {
                       </svg>
                       <div>
                         <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-yellow)] mb-0.5">
-                          Short term
+                          {t("asp_short")}
                         </div>
                         <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">
                           {aspirations.short_term}
@@ -821,7 +833,7 @@ export default async function ProfileCompany() {
                       </svg>
                       <div>
                         <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-blue)] mb-0.5">
-                          Long term
+                          {t("asp_long")}
                         </div>
                         <p className="text-[11px] text-[var(--color-bright)] leading-relaxed">
                           {aspirations.long_term}
@@ -846,7 +858,7 @@ export default async function ProfileCompany() {
                       </svg>
                       <div>
                         <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-green)] mb-0.5">
-                          Ambitious aspirations
+                          {t("asp_ambitious")}
                         </div>
                         <p className="text-[11px] text-[var(--color-bright)] leading-relaxed italic">
                           {aspirations.ambitious}
@@ -857,7 +869,7 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No aspirations entered
+                  {t("empty_aspirations")}
                 </span>
               )}
             </ProfileSection>
@@ -866,7 +878,7 @@ export default async function ProfileCompany() {
             `#punti-di-forza` dai chip "campi mancanti" trova la sezione. */}
             <ProfileSection
               id="punti-di-forza"
-              title={`Strengths${strengths.length > 0 ? ` (${strengths.length})` : ""}`}
+              title={`${t("sec_strengths")}${strengths.length > 0 ? ` (${strengths.length})` : ""}`}
             >
               {strengths.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
@@ -892,7 +904,7 @@ export default async function ProfileCompany() {
                 </div>
               ) : (
                 <span className="text-[var(--color-dim)] text-[11px]">
-                  No strengths entered
+                  {t("empty_strengths")}
                 </span>
               )}
             </ProfileSection>
@@ -900,7 +912,7 @@ export default async function ProfileCompany() {
             {/* Note libere — full width */}
             {freeNotes && (
               <div className="md:col-span-2">
-                <ProfileSection title="Free Notes">
+                <ProfileSection title={t("sec_free_notes")}>
                   <p className="text-[12px] text-[var(--color-bright)] leading-relaxed whitespace-pre-wrap">
                     {freeNotes}
                   </p>
