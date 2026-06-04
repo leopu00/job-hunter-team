@@ -1,6 +1,6 @@
 ---
 name: spawn-agent
-description: Spawn a JHT team agent (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) via the launcher, then deliver the kick-off message that actually starts its main loop. Captain-only — the Captain is the single owner of team scaling. ALWAYS use this skill: bypassing `start-agent.sh` with `tmux new-session` + raw `send-keys "kimi ..."` produces sessions where the CLI never boots (`command not found`), the Captain sees a "live" session that is actually dead, and the team silently underperforms.
+description: "Spawn a JHT team agent (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) via the launcher, then deliver the kick-off message that actually starts its main loop. Captain-only — the Captain is the single owner of team scaling. ALWAYS use this skill: bypassing `start-agent.sh` with `tmux new-session` + raw `send-keys \"kimi ...\"` produces sessions where the CLI never boots (`command not found`), the Captain sees a \"live\" session that is actually dead, and the team silently underperforms."
 allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(sleep *)
 ---
 
