@@ -28,8 +28,8 @@ Dataset: 206 posizioni `status=new` da scout (vergini), playbook
    `Szekesfehervar` → `Székesfehérvár`, mantenuto `Pécs`, `Prüm`,
    `Saint-Médard-en-Jalles`.
 3. **Web search per `work_country`**: deduzione corretta del paese
-   contrattuale per remote in EU da aziende US (DataAnnotation, iMerit,
-   Crossing Hurdles → work_country=United States).
+   contrattuale per remote in EU da aziende US (Company 044, iMerit,
+   Company 041 → work_country=United States).
 4. **`work_mode` standardizzato**: solo `onsite|hybrid|remote`, zero
    improvvisazioni.
 5. **Capitano monitora** con `[PROGRESS] N/206` come da brief.
@@ -85,8 +85,8 @@ A2 e A3 hanno lasciato `work_country=NULL` per ~3 record con annotazione
 tipo "work_country TBD / unverifiable", invece di fare un secondo giro
 di web search più approfondito o fallback al paese del job board.
 
-Esempi: id=140 (Railsware → HQ Ucraina, ma A3 ha messo NULL), id=114
-(Top Remote Talent → società CR, A2 ha messo TBD).
+Esempi: id=140 (Company 135 → HQ Ucraina, ma A3 ha messo NULL), id=114
+(Company 167 → società CR, A2 ha messo TBD).
 
 **Fix proposto**: nel playbook, regola esplicita "se HQ non trovato dopo
 2 attempts: imposta `work_country` al paese del posting board /

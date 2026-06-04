@@ -184,14 +184,14 @@ function backupExisting() {
 
 // candidate_profile.yml: serve per soddisfare isProfileComplete() del layout
 // quando l'utente è loggato-out e va su localhost. Dati copiati da
-// candidate_profiles (Supabase) per user_id e_36c8539-…
+// candidate_profiles (Supabase) per user_id <redacted>
 function writeProfileYaml() {
   const profileDir = path.join(JHT_HOME, 'profile');
   const profilePath = path.join(profileDir, 'candidate_profile.yml');
   fs.mkdirSync(profileDir, { recursive: true });
   const yaml = `name: "Mario Rossi"
 target_role: "Python Developer"
-location: "Roma"
+location: "Milano"
 experience_years: 1
 email: "owner@example.com"
 has_degree: false
@@ -235,7 +235,7 @@ candidate:
     - role: "Apprendista Programmatore"
       company: "Fincontinuo Spa"
       years: "2025 - in corso"
-      location: "Roma"
+      location: "Milano"
       summary: |
         Sviluppo soluzioni software interne in Python per automatizzare processi
         aziendali nel settore finanziario. Realizzata applicazione di gestione
@@ -305,7 +305,7 @@ function main() {
   const PENDING_MESSAGES = [
     {
       agent: 'capitano',
-      body: 'Motore acceso. 🚀\n\nHo dato il via allo Scout-1 per cercare posizioni Python developer junior (remoto / Roma). Ti scrivo non appena ho il primo lotto da mostrarti.',
+      body: 'Motore acceso. 🚀\n\nHo dato il via allo Scout-1 per cercare posizioni Python developer junior (remoto / Milano). Ti scrivo non appena ho il primo lotto da mostrarti.',
       kind: 'notification',
       related_position_uuid: null,
       delivered_via: 'telegram',
