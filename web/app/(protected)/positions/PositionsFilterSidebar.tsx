@@ -33,7 +33,10 @@ function familyKey(rf: string | null): string {
 
 function csv(v: string | null): string[] {
   if (!v) return [];
-  return v.split(",").map((s) => s.trim()).filter(Boolean);
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function parseBands(v: string | null): ScoreRange[] {
@@ -88,7 +91,10 @@ export default function PositionsFilterSidebar() {
   }
   function toggleInParam(key: string, value: string) {
     const cur = csv(sp.get(key));
-    setParam(key, cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value]);
+    setParam(
+      key,
+      cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value],
+    );
   }
   function toggleFamily(f: string) {
     // Cambiare scope tipo ricalcola i bin score: pulisco selezione score.
@@ -145,7 +151,9 @@ export default function PositionsFilterSidebar() {
   function resetAll() {
     setScoreAnchor(null);
     const next = new URLSearchParams(sp.toString());
-    ["family", "country", "city", "band", "noscore"].forEach((k) => next.delete(k));
+    ["family", "country", "city", "band", "noscore"].forEach((k) =>
+      next.delete(k),
+    );
     pushURL(next);
   }
 
@@ -159,7 +167,8 @@ export default function PositionsFilterSidebar() {
     selectedCountries.length > 0 || selectedCities.length > 0;
   const passLocation = (p: Facet) => {
     if (!locationActive) return true;
-    if (selectedCities.includes(cityKey(p.loc_country, p.loc_city))) return true;
+    if (selectedCities.includes(cityKey(p.loc_country, p.loc_city)))
+      return true;
     if (selectedCountries.includes(countryKey(p.loc_country))) return true;
     return false;
   };
@@ -246,7 +255,10 @@ export default function PositionsFilterSidebar() {
       cities: Array.from(cityMap.entries())
         .map(([key, count]) => ({
           key,
-          label: key.split("|")[1] === "(country-only)" ? "(senza città)" : key.split("|")[1],
+          label:
+            key.split("|")[1] === "(country-only)"
+              ? "(senza città)"
+              : key.split("|")[1],
           count,
         }))
         .sort((a, b) => b.count - a.count),
@@ -296,10 +308,7 @@ export default function PositionsFilterSidebar() {
   }
 
   return (
-    <aside
-      className="shrink-0 flex flex-col gap-4 pr-1"
-      style={{ width: 300 }}
-    >
+    <aside className="shrink-0 flex flex-col gap-4 pr-1" style={{ width: 300 }}>
       {/* Header sidebar */}
       <div className="flex items-center justify-between">
         <span
@@ -416,7 +425,10 @@ export default function PositionsFilterSidebar() {
       {/* Albero Location */}
       <Section title="Location" badge={`${locationTree.length} · ${treeTotal}`}>
         {locationTree.length === 0 ? (
-          <div className="text-[11px] py-3 text-center" style={{ color: "var(--color-dim)" }}>
+          <div
+            className="text-[11px] py-3 text-center"
+            style={{ color: "var(--color-dim)" }}
+          >
             Nessun dato
           </div>
         ) : (
@@ -428,7 +440,10 @@ export default function PositionsFilterSidebar() {
               const isOpen = openCountry === country.country;
               const isSelected = selectedCountries.includes(country.country);
               return (
-                <li key={country.country} style={{ borderColor: "var(--color-border)" }}>
+                <li
+                  key={country.country}
+                  style={{ borderColor: "var(--color-border)" }}
+                >
                   <div
                     onClick={() => {
                       setOpenCountry(isOpen ? null : country.country);
@@ -492,7 +507,10 @@ export default function PositionsFilterSidebar() {
                       {country.cities.map((city) => {
                         const isCitySel = selectedCities.includes(city.key);
                         return (
-                          <li key={city.key} style={{ borderColor: "var(--color-border)" }}>
+                          <li
+                            key={city.key}
+                            style={{ borderColor: "var(--color-border)" }}
+                          >
                             <div
                               onClick={() => toggleInParam("city", city.key)}
                               className="px-3 py-1 pl-7 text-[10.5px] flex items-baseline justify-between gap-2 cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"

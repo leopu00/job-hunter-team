@@ -217,7 +217,10 @@ export default async function ProfilePage() {
             {/* Basic Info */}
             <ProfileSection id="info-base" title={t("sec_info_base")}>
               <ProfileField label={t("f_name")} value={profile.name} />
-              <ProfileField label={t("f_target_role")} value={profile.target_role} />
+              <ProfileField
+                label={t("f_target_role")}
+                value={profile.target_role}
+              />
               <ProfileField label={t("f_location")} value={profile.location} />
               <ProfileField
                 label={t("f_experience")}
@@ -731,7 +734,10 @@ export default async function ProfilePage() {
             </ProfileSection>
 
             {/* Obiettivi di carriera */}
-            <ProfileSection id="obiettivi-carriera" title={t("sec_career_goals")}>
+            <ProfileSection
+              id="obiettivi-carriera"
+              title={t("sec_career_goals")}
+            >
               {hasCareerGoals ? (
                 <div className="flex flex-col gap-2">
                   <ProfileField
