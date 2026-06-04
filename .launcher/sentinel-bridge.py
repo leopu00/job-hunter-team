@@ -962,10 +962,21 @@ def main():
                 # skill decision-throttle).
                 tgt_field = f" target={dyn_target:.0f}%" if dyn_target else ""
                 phase_field = f" work_phase={work_phase}" if work_phase else ""
+                # P7: propaga SEMPRE il vincolo weekly nel tick. Prima il tick
+                # portava solo la finestra primary 5h (usage/proj/reset), quindi
+                # la Sentinella non vedeva mai il cap settimanale né un cambio di
+                # reset weekly. weekly_usage/weekly_reset_at sono già nell'entry.
+                wk_usage = entry.get("weekly_usage")
+                wk_reset = entry.get("weekly_reset_at")
+                weekly_field = (
+                    f" weekly={wk_usage}% weekly_reset={wk_reset}"
+                    if wk_usage is not None
+                    else ""
+                )
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
-                    f"status={status} reset={reset}{tgt_field}{phase_field} src=bridge."
+                    f"status={status} reset={reset}{tgt_field}{phase_field}{weekly_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
 
