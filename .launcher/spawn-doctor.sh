@@ -76,7 +76,42 @@ sleep 1
 # 6) Avvia codex --yolo (effort=high per evitare diagnosi superficiali).
 tmux send-keys -t "$SESSION" "codex --yolo -c model_reasoning_effort=high" C-m
 
-# 6) Auto-accept dei trust/approval dialogs (3 Enter cadenzati come
+# 6b) Robustezza REPL (#12): verifica che il REPL Codex sia EFFETTIVAMENTE
+#     partito prima di iniettare il prompt. Se codex crasha al boot (auth
+#     assente, binario ko, update fallito), il pane ricade su una shell:
+#     senza questo check inietteremmo il prompt-di-lavoro in una shell (che lo
+#     eseguirebbe come comando) e riporteremmo "avviato" falsamente, ingannando
+#     il watchdog. Poll del pane_current_command; se resta una shell → 1 retry,
+#     poi spawn_failed + exit 1 così il watchdog logga FAILED e ritenta.
+repl_up=0
+attempt=1
+while : ; do
+  for _i in $(seq 1 12); do
+    sleep 1
+    cmd=$(tmux display-message -p -t "$SESSION" '#{pane_current_command}' 2>/dev/null || echo "")
+    case "$cmd" in
+      ""|bash|sh|zsh|dash|-bash|-sh|-zsh) : ;;   # shell o vuoto → non ancora su
+      *) repl_up=1; break ;;                       # un processo gira → REPL up
+    esac
+  done
+  [ "$repl_up" -eq 1 ] && break
+  if [ "$attempt" -ge 2 ]; then
+    last_cmd=$(tmux display-message -p -t "$SESSION" '#{pane_current_command}' 2>/dev/null || echo "?")
+    echo "[spawn-doctor] ERROR: REPL Codex non partito dopo 2 tentativi (pane=$last_cmd) — spawn fallito" >&2
+    TS_FAIL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '{"ts":"%s","session":"%s","role":"dottore","event":"spawn_failed","reason":"repl_not_up","pane_cmd":"%s","src":"spawn-doctor.sh"}\n' \
+      "$TS_FAIL" "$SESSION" "$last_cmd" >> "$LOGS_DIR/dottore-actions.jsonl"
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+    exit 1
+  fi
+  echo "[spawn-doctor] REPL non salito (tentativo $attempt) — retry codex" >&2
+  tmux send-keys -t "$SESSION" C-c 2>/dev/null || true
+  sleep 1
+  tmux send-keys -t "$SESSION" "codex --yolo -c model_reasoning_effort=high" C-m
+  attempt=$((attempt + 1))
+done
+
+# 6c) Auto-accept dei trust/approval dialogs (3 Enter cadenzati come
 #    start-agent.sh) e SOLO DOPO inietta il prompt iniziale. Setsid
 #    scollega dal nostro process group così il watchdog può uscire senza
 #    ammazzare lo sleep. Cadenze allungate: codex ci mette ~6s a renderizzare
