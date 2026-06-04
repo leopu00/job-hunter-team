@@ -100,10 +100,10 @@ issues + interventi esterni").
 
 ```
 SIAE                  →  Viale della Letteratura 30, Roma EUR     (41.83, 12.48)
-IT Partner Italia     →  Via Jacopo Dal Verme 7, Milano           (45.49,  9.19)
-KPMG Italy            →  Via Ettore Petrolini 2, Parioli Roma     (41.93, 12.49)
+Company 182     →  [address redacted]
+Company 183            →  [address redacted]
 Knowmad Mood          →  Calle de Jacinto Benavente 2, Las Rozas  (40.52, -3.89)
-Sentry                →  Jakov-Lind-Straße 5/4 OG, Praha           (48.22, 16.39)
+Company 184                →  [address redacted]
 ```
 
 L'analista ha riconosciuto sedi reali via web search del sito company /

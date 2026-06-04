@@ -62,7 +62,7 @@ hardcoda categorie — emergono dai dati e dal target_role del candidato.
 
 ```
 149  Italy             ← dominante (candidato Roma)
- 20  United Kingdom    ← Canonical, Treasury Spring, ecc.
+ 20  United Kingdom    ← Company 033, Treasury Spring, ecc.
  12  Poland            ← justjoin.it Polonia
   7  Spain
   5  United States     ← contractor remote
@@ -76,7 +76,7 @@ hardcoda categorie — emergono dai dati e dal target_role del candidato.
 
 ```
  7  record con work_country=United States
-    (Canonical UK, Gr4vy, Rinse, SerpApi, MixRank, Fliff, Axle, ...)
+    (Company 033 UK, Gr4vy, Rinse, SerpApi, MixRank, Fliff, Axle, ...)
 ```
 
 L'analista ha distinto correttamente il paese fisico del candidato
@@ -90,7 +90,7 @@ L'analista ha distinto correttamente il paese fisico del candidato
   simulazione** (input grezzo malformato)
 - ION Group, Bending Spoons, Sisal: multi-sede italiane → 1 pin Roma
   + is_multi_location=true + location_notes con città disponibili
-- Canonical (HQ UK): tutti i loro 8+ remote postings → work_country=UK
+- Company 033 (HQ UK): tutti i loro 8+ remote postings → work_country=UK
 - Twilio Estonia "Estonia-based candidates only": esclusione corretta
   (GEO), JD da non considerare
 - Affirm Spain/Poland-only: work_country=Spain/Poland (entity locale)

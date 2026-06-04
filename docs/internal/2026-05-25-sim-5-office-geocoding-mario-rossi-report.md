@@ -31,7 +31,7 @@ Dataset: 206 record di `owner@example.com` con `loc_*/work_*/role_family` **già
 
 ### Caso A4 — pane mostra completed, DB non scritto
 
-A4 ha completato il **reasoning** (8m 34s di Crunched, pane mostra report finale con tabella di riepilogo `18 geocodati, 13 verified, 5 false`, lista posizioni: 836 Olive Tree Rome, 847 Vestas Taranto, 849 Gruppo AB Orzinuovi, 861 Contentful London, 862 BlueCat Belgrade). Ha citato sedi specifiche trovate via web (Nebius Gustav Mahlerlaan 300, Veeam Argentinská 4, Kontron Lehrbachgasse 11, ALTEN Kopparbergsvägen 8, Edwards Kenn Road, ecc.) e ha annunciato `STOP confermato, missione completata`.
+A4 ha completato il **reasoning** (8m 34s di Crunched, pane mostra report finale con tabella di riepilogo `18 geocodati, 13 verified, 5 false`, lista posizioni: 836 Olive Tree Rome, 847 Company 176 Taranto, 849 Gruppo AB Orzinuovi, 861 Company 039 London, 862 Company 028 Belgrade). Ha citato sedi specifiche trovate via web (Company 111 Gustav Mahlerlaan 300, Company 173 Argentinská 4, Kontron Lehrbachgasse 11, Company 008 Kopparbergsvägen 8, Edwards Kenn Road, ecc.) e ha annunciato `STOP confermato, missione completata`.
 
 MA **non ha mai chiamato `db_update.py`**: i 34 record nel range 830-863 hanno `last_actor=NULL` e `office_geocoded=0` post-sim. Il lavoro mentale è andato perso.
 
@@ -42,17 +42,17 @@ Causa probabile: A4 ha interpretato il brief come "produci report" invece di "sc
 ### Sample office verified (street-level reali)
 
 ```
-Tesla Automation     → Rudolf-Diesel-Straße 14, Prüm, Germany
-Booston.io           → Meidoornkade 22, 3992 AE Houten, Netherlands
-ESSEDUE              → Via Enrico Mattei 25, 27020 Marcignago PV, Italy
-Bányai Bútorok       → Bécsi út 20/A, 2085 Pilisvörösvár, Czechia
-HARMAN International → Aszalvölgyi út 3-5, 8000 Székesfehérvár, Czechia
-Larian Studios       → 17A New Bride Street, Dublin 8, D08 Y80E, Ireland
-Platin Gaming        → 109 Sir William Reid Street, Gżira, Malta
-GE Vingmed Ultrasound→ Strandpromenaden 45, 3183 Horten, Norway
-Sanofi Prague      → Fiastyúk utca 4-8, Prague, Czechia
-LEGO Group           → Váci út 1-3, Prague, Czechia
-Nebius Group         → Gustav Mahlerlaan 308, 1082 ME Amsterdam, Netherlands
+Company 185     → [address redacted]
+Company 029           → [address redacted]
+Company 186              → [address redacted]
+Company 187       → [address redacted]
+Company 077 → [address redacted]
+Company 094       → [address redacted]
+Company 188        → [address redacted]
+Company 189→ [address redacted]
+Company 141 Prague      → [address redacted]
+Company 190           → [address redacted]
+Company 111 Group         → [address redacted]
 ```
 
 ## Sync verso Supabase prod (owner only)
