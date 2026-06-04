@@ -28,27 +28,6 @@ const ITEM_DEFS: ItemDef[] = [
     href: "/positions",
   },
   {
-    id: "ready",
-    labelKey: "gs_ready_label",
-    detailKey: "gs_ready_detail",
-    catKey: "cat_pages",
-    href: "/ready",
-  },
-  {
-    id: "risposte",
-    labelKey: "gs_risposte_label",
-    detailKey: "gs_risposte_detail",
-    catKey: "cat_pages",
-    href: "/risposte",
-  },
-  {
-    id: "crescita",
-    labelKey: "gs_crescita_label",
-    detailKey: "gs_crescita_detail",
-    catKey: "cat_pages",
-    href: "/crescita",
-  },
-  {
     id: "profile",
     labelKey: "gs_profile_label",
     detailKey: "gs_profile_detail",
@@ -68,13 +47,6 @@ const ITEM_DEFS: ItemDef[] = [
     detailKey: "gs_assistente_detail",
     catKey: "cat_pages",
     href: "/team/assistente",
-  },
-  {
-    id: "reports",
-    labelKey: "gs_reports_label",
-    detailKey: "gs_reports_detail",
-    catKey: "cat_pages",
-    href: "/reports",
   },
   {
     id: "integrations",
