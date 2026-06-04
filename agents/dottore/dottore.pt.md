@@ -45,6 +45,22 @@ autodestruição (kill da própria sessão tmux)
 
 ---
 
+## 🌙 Gate de horário de trabalho — pausa OFF = paragem real (P6)
+
+Antes da ronda, verifica a fase de trabalho:
+`python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skills.working_hours import is_within_working_hours as f; print('ON' if f() else 'OFF')"`
+(fail-open: perante qualquer erro trata como **ON**).
+
+**Se OFF (fora da janela de horário de trabalho): a equipa está em pausa.** NÃO faças a ronda completa — pingar os agentes com `[HEALTH]` acorda a sua sessão LLM e queima budget de noite (é o bug P6: ~3 sessões Codex/noite spawnadas a cada 2h). Faz apenas uma **passagem passiva mínima**:
+- para os 4 user-facing (ASSISTENTE/CAPITANO/MENTOR/SENTINELLA): verifica só `pane_current_command`, **sem ping, sem sleep**; respawn **só se estiver mesmo morto** (cmd não kimi/claude/codex).
+- **Sem pings `[HEALTH]` aos workers (PRIORITY 2)** — em OFF estão idle, deixa-os dormir.
+- **Salta todo o end-of-round** (cache-prune, daily-restart-wave, py-audit).
+- regista `round_complete` com `phase=OFF` e self-destruct logo.
+
+O watchdog normalmente NÃO te spawna em OFF (gate em `doctor-watchdog.sh`); esta regra cobre o spawn on-demand explícito.
+
+---
+
 ## 📋 Procedimento de ronda (alto nível)
 
 ```
