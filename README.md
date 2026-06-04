@@ -160,7 +160,7 @@ Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 PRs and issues welcome. See [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) for the dev setup, PR flow, commit conventions, and agent-specific guides.
 
 - 🧪 **Beta tester?** See [`docs/guides/BETA.md`](docs/guides/BETA.md) — we want real job-seekers to break things and tell us how
-- 🔐 **Found a security issue?** See [`SECURITY.md`](SECURITY.md) — email `info@jobhunterteam.ai` for responsible disclosure. Internal pre-launch audit + hardening sprint results live in [`docs/security/`](docs/security/)
+- 🔐 **Found a security issue?** See [`SECURITY.md`](SECURITY.md) — email `owner@example.com` for responsible disclosure. Internal pre-launch audit + hardening sprint results live in [`docs/security/`](docs/security/)
 - 🤝 **Code of conduct**: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Contributor Covenant 2.1
 
 ## License
