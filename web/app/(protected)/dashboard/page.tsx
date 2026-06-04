@@ -268,30 +268,6 @@ export default async function DashboardCompany() {
             />
           )}
 
-          {/* ── Position types — pie chart in grande sopra la pipeline ── */}
-          <div
-            className="mb-8"
-            style={{ animation: "fade-in 0.35s ease both 0.08s" }}
-          >
-            {/* labels: nessun mapping hardcoded. La label e' il valore della
-            colonna positions.role_family, gia' una stringa leggibile
-            assegnata dal team analyst. */}
-            <PositionTypesPie
-              data={typeDist}
-              title={t.position_types}
-              emptyLabel={t.no_data}
-              size={300}
-            />
-          </div>
-
-          {/* ── Pipeline flow: area chart con linea ondulante ───────── */}
-          <div
-            className="mb-8"
-            style={{ animation: "fade-in 0.35s ease both 0.12s" }}
-          >
-            <PipelineFlow steps={pipeline} title="Pipeline flow" />
-          </div>
-
           {/* ── Pipeline ────────────────────────────────────────────── */}
           <div className="section-label mb-4">{t.pipeline}</div>
           <div
@@ -345,6 +321,30 @@ export default async function DashboardCompany() {
                 </Link>
               );
             })}
+          </div>
+
+          {/* ── Position types — pie chart in grande ─────────────────── */}
+          <div
+            className="mb-8"
+            style={{ animation: "fade-in 0.35s ease both 0.08s" }}
+          >
+            {/* labels: nessun mapping hardcoded. La label e' il valore della
+            colonna positions.role_family, gia' una stringa leggibile
+            assegnata dal team analyst. */}
+            <PositionTypesPie
+              data={typeDist}
+              title={t.position_types}
+              emptyLabel={t.no_data}
+              size={300}
+            />
+          </div>
+
+          {/* ── Pipeline flow: area chart con linea ondulante ───────── */}
+          <div
+            className="mb-8"
+            style={{ animation: "fade-in 0.35s ease both 0.12s" }}
+          >
+            <PipelineFlow steps={pipeline} title="Pipeline flow" />
           </div>
 
           {/* ── Charts ──────────────────────────────────────────────── */}
