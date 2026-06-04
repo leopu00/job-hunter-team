@@ -967,7 +967,17 @@ def main():
                 # la Sentinella non vedeva mai il cap settimanale né un cambio di
                 # reset weekly. weekly_usage/weekly_reset_at sono già nell'entry.
                 wk_usage = entry.get("weekly_usage")
-                wk_reset = entry.get("weekly_reset_at")
+                # FLAG dev3: HH:MM da solo e ambiguo — non distingue un salto di
+                # GIORNI (il caso reale 7giu->11giu al rinnovo ciclo). Usa la DATA
+                # completa da weekly_reset_at_unix cosi WEEKLY RESET DETECTED puo
+                # vedere lo spostamento del reset; fallback a HH:MM se l'unix manca.
+                wk_reset_unix = entry.get("weekly_reset_at_unix")
+                if isinstance(wk_reset_unix, (int, float)):
+                    wk_reset = datetime.fromtimestamp(
+                        wk_reset_unix, timezone.utc
+                    ).astimezone().strftime("%d/%m %H:%M")
+                else:
+                    wk_reset = entry.get("weekly_reset_at")
                 weekly_field = (
                     f" weekly={wk_usage}% weekly_reset={wk_reset}"
                     if wk_usage is not None
