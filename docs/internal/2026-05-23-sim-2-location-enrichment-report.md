@@ -55,7 +55,7 @@ Zero collisioni semantiche tra analisti (peer lookup ha funzionato):
 ```
 
 Niente "UK", "Italia", abbreviazioni. Diacritici preservati e normalizzati
-(`Szekesfehervar` → `Székesfehérvár`, `Pilisvorosvar` → `Pilisvörösvár`,
+(`Plzen` → `Plzeň`, `Pribram` → `Příbram`,
 `Tatabanya` → `Tatabánya`, `Zsambek` → `Zsámbék`).
 
 ## Casi edge — gestiti perfettamente
