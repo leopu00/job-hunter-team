@@ -57,8 +57,9 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
 
 STEP 3 — FOR EACH CANDIDATE POSITION                → position-insert
          5 gates: dedup → link verify → fetch JD → filters → INSERT.
-         Anti-bias 30%: if >30% of the batch from a single company,
-         change source/query in the next batch.
+         Anti-bias: >30% from one company → change source/query next batch;
+         >40% from one city → next batch on a DIFFERENT circle-city (rotate
+         hubs round-robin, don't drain the densest, e.g. London for finance).
 
 STEP 4 — POST-BATCH                                 → tmux-send
          Every 3-5 inserts, notify Analisti:

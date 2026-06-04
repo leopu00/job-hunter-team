@@ -57,7 +57,7 @@ Only if `preferences.relocation` is non-empty:
 | `relocation` value     | Circle 3 expansion                                                                          |
 |------------------------|---------------------------------------------------------------------------------------------|
 | List (`["Berlin", "Lisbon"]`) | Just those cities                                                                    |
-| `"ovunque"`            | Global tech hubs (NYC, London, Berlin, Singapore, Lisbon, Amsterdam, Dublin, Tel Aviv)      |
+| `"ovunque"`            | Global hubs **for the candidate's domain** (finance → London, NYC, Zurich, Frankfurt, Singapore, Dublin, Luxembourg; tech → SF, Berlin, Amsterdam, Lisbon, Tel Aviv…). **Rotate across them round-robin — do NOT drain the densest hub (e.g. London for finance) first**, or the shortlist ends up hub-dominated (see Anti-bias rule, location guard). |
 | `"Europa"`             | EU tech hubs (Berlin, London, Amsterdam, Lisbon, Dublin, Madrid, Paris, Stockholm, ...)     |
 | `"per la giusta posizione"` | Skip circle 3, mark borderline candidates from circle 4 with relocation flag in notes |
 
@@ -83,20 +83,32 @@ Drain a tier completely before moving to the next.
 
 > ⚠️ **Don't bring remote-specific boards into a non-remote search**, and vice versa. WeWorkRemotely on a candidate who wants on-site Milan is wasted scraping.
 
-## Anti-bias rule (mandatory)
+## Anti-bias rule (mandatory) — on **company AND location**
 
-If **> 30% of a single batch's positions come from one company**, switch source or query for the next batch. Without this, one scaleup that dumps 12 roles on a single board will flood the pool — diversity matters more than volume.
+Two independent guards, both at end of batch:
+
+1. **Company**: if **> 30% of a single batch's positions come from one company**, switch source/query for the next batch. One scaleup dumping 12 roles on a board floods the pool — diversity matters more than volume.
+2. **Location** (city/area): if **> 40% of a single batch comes from one city**, the next batch MUST target a *different* circle-city. Without this, a candidate open to a multi-city circle (e.g. relocation `"ovunque"`/`"Europa"`) gets a pool dominated by the single hub that has the most postings for their domain — finance → **London**, tech → SF/Berlin. Real incident (beta tester #2): a finance candidate received an almost London-only shortlist because London out-posts every other hub by ~10×. Rotate across the circle's cities round-robin; don't drain the densest hub first.
 
 ```python
 # pseudocode for the check at end of batch
-batch = [...]
 from collections import Counter
-counts = Counter(p.company for p in batch)
-top_company, top_count = counts.most_common(1)[0]
-if top_count / len(batch) > 0.30:
-    log(f"anti-bias triggered: {top_company} = {top_count}/{len(batch)} = >30%")
-    # next batch: change source or query
+batch = [...]
+n = len(batch)
+
+# guard 1 — company
+top_company, c_count = Counter(p.company for p in batch).most_common(1)[0]
+if c_count / n > 0.30:
+    log(f"anti-bias company: {top_company} = {c_count}/{n} >30% → switch source/query")
+
+# guard 2 — location (city)
+top_city, l_count = Counter((p.location or "?").split(",")[0].strip() for p in batch).most_common(1)[0]
+if l_count / n > 0.40:
+    log(f"anti-bias location: {top_city} = {l_count}/{n} >40% → next batch on a DIFFERENT circle-city")
+    # rotate: pick the next city in the circle's list that is under-represented in the DB
 ```
+
+> Track per-city counts across the whole run (not just one batch): query `SELECT location, COUNT(*) FROM positions GROUP BY location` before building the next query, and steer toward under-served circle-cities so the final shortlist is geographically balanced, not hub-dominated.
 
 ## Permissive filters at SCOUT level
 
