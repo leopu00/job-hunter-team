@@ -69,7 +69,7 @@ parte da `loc_city + loc_country`.
 
 | Sì ✓ | No ✗ |
 |---|---|
-| `Székesfehérvár` | `Szekesfehervar` |
+| `Plzeň` | `Plzen` |
 | `Pécs` | `Pecs` |
 | `Łódź` | `Lodz` |
 | `Brașov` | `Brasov` |
