@@ -29,7 +29,7 @@ import json
 
 DB_PATH = os.path.expanduser("~/.jht/jobs.db")
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
-USER_AGENT = "JobHunterTeam/0.1 (marco.rossi@example.com) - office-level geocoding"
+USER_AGENT = "JobHunterTeam/0.1 (owner@example.com) - office-level geocoding"
 
 REMOTE_KW = re.compile(
     r"\b(remote|worldwide|anywhere|teleworking|wfh|home[\s-]?based|smart\s*work|"
