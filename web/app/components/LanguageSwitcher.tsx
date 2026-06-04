@@ -84,6 +84,12 @@ export default function LanguageSwitcher({
     }).catch(() => null);
     if (res?.ok) {
       setCurrent(code);
+      // Tiene in sync la landing, che legge la lingua da localStorage.
+      try {
+        localStorage.setItem("jht-lang", code);
+      } catch {
+        /* localStorage non disponibile */
+      }
       window.location.reload();
     }
   };
