@@ -219,17 +219,26 @@ fi
 # euristica dal sistema host come proposta di default; l'utente conferma
 # o sostituisce.
 JHT_USER_TZ_DEFAULT="UTC"
-# 1. host /etc/timezone (Linux/Mac container host)
+# 1. system detection (buona proposta su install LOCALE; su VPS il TZ del
+#    server è quasi sempre UTC e NON è il fuso dell'utente — vedi step 2).
 if [ -r /etc/timezone ]; then
   _tz=$(tr -d '[:space:]' < /etc/timezone 2>/dev/null || true)
   [ -n "$_tz" ] && JHT_USER_TZ_DEFAULT="$_tz"
 fi
-# 2. host /etc/localtime symlink (più affidabile su macOS host)
+# host /etc/localtime symlink (più affidabile su macOS host)
 if [ -L /etc/localtime ]; then
   _tz=$(readlink /etc/localtime 2>/dev/null | sed 's|.*/zoneinfo/||')
   [ -n "$_tz" ] && JHT_USER_TZ_DEFAULT="$_tz"
 fi
-# 3. Esiste già in host.env? Skip prompt, riusa.
+# 2. TZ esplicito dal caller/wizard (env JHT_USER_TZ = tz del BROWSER utente)
+#    — VINCE sul system: su VPS il fuso reale arriva dal browser, non dal
+#    server. Bug #13 (beta tester 2026-06-03): VPS=UTC ma utente Europe/Rome
+#    → orari sfasati di 2h nei messaggi del Capitano.
+if [ -n "${JHT_USER_TZ:-}" ] && python3 -c "from zoneinfo import ZoneInfo; ZoneInfo('${JHT_USER_TZ}')" 2>/dev/null; then
+  JHT_USER_TZ_DEFAULT="$JHT_USER_TZ"
+fi
+# 3. Esiste già in host.env? Skip prompt, riusa (scelta confermata in un
+#    install precedente — priorità massima).
 if [ -f "$HOST_ENV_PATH" ]; then
   EXISTING_TZ=$(. "$HOST_ENV_PATH" 2>/dev/null; printf %s "${JHT_USER_TZ:-}")
   if [ -n "$EXISTING_TZ" ]; then

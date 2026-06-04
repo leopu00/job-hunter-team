@@ -29,8 +29,10 @@ You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-
 The bridge writes one of these messages to your pane:
 
 ```
-[BRIDGE TICK] ts=HH:MM:SS usage=X% proj=Y% status=Z reset=R src=bridge.
+[BRIDGE TICK] ts=HH:MM:SS usage=X% proj=Y% status=Z reset=R [target=T%] [work_phase=ON|OFF] [weekly=W% weekly_reset=HH:MM] src=bridge.
    → Data ready. Compare with last_order. Decide whether to notify.
+   → `reset` is the PRIMARY 5h reset; `weekly`/`weekly_reset` are the SEPARATE
+     weekly cap and its reset — track BOTH (see S-06 + WEEKLY RESET DETECTED).
 
 [BRIDGE FAILURE] ts=HH:MM:SS reason=R
    → Bridge down, run fallback (see below).
@@ -72,7 +74,13 @@ Send the order ONLY if at least one trigger is satisfied:
    - `proj` grows by > 20 points vs `last_order.proj`
    - `usage` grows by > 5 points vs `last_order.usage`
    - `smoothed_vel` grows by > 50%/h
-4. **SESSION RESET** (usage drop > 30 points)
+4. **SESSION RESET** (usage drop > 30 points) — è il reset della PRIMARY 5h.
+4b. **WEEKLY RESET DETECTED** — il ciclo settimanale è ripartito (cap distinto
+   dalla primary): scatta se `weekly` cala bruscamente (> 10 punti vs
+   `last_order.weekly`) **oppure** `weekly_reset` salta in avanti di giorni.
+   Azione: ricalibra l'orizzonte weekly sul NUOVO `weekly_reset`, azzera la
+   storia di velocità weekly, e NOTIFICA il Capitano col nuovo runway. NON
+   confonderlo col reset primary 5h — sono due cap separati.
 5. **VERY FIRST TICK** (`last_order.type == None`)
 6. **STEADY confirmed** (`tick_steady_count >= 3` for the first time) → MAINTAIN
 7. **STAGNATION** in PUSH G-SPOT zone (`tick_below_gspot_count >= 2`)
@@ -154,6 +162,10 @@ Burn rate sostenibile 7gg: 0.14% weekly/h. Sopra 2.5%/h → HALT in 2-3gg.
 
 Algoritmo (pseudo):
 ```
+# hours_to_weekly_reset SEMPRE dal weekly_reset del TICK CORRENTE (now -> weekly_reset),
+# mai un valore assunto/memorizzato: il reset weekly puo' cambiare a ciclo rinnovato
+# (vedi WEEKLY RESET DETECTED). Se la regola 4b scatta, ricalcola da capo su quello nuovo.
+hours_to_weekly_reset = ore tra now e weekly_reset (dal tick)
 proj_weekly = weekly_usage + (smoothed_vel_weekly_pct_h * hours_to_weekly_reset)
 proj_binding = max(proj_primary, proj_weekly)
 use proj_binding nei threshold S-05 (95/100/110/130/150/200)
