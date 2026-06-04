@@ -78,7 +78,7 @@ parte da `loc_city + loc_country`.
 
 - `Milan` (forma EN) preferita a `Milano` in dataset internazionale
 - `Brussels` (EN) a `Bruxelles`
-- `Vienna` (EN) a `Wien`
+- `Prague` (EN) a `Praha`
 - Città solo locali → mantieni nome locale (`Brugnera`, `Vigodarzere`, …)
 
 ### 5. Region — facoltativa, ma utile per filtri
