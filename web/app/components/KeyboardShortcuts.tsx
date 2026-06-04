@@ -131,7 +131,6 @@ function HelpOverlay({ onClose }: { onClose: () => void }) {
 const GOTO: Record<string, string> = {
   d: "/dashboard",
   p: "/positions",
-  r: "/ready",
   t: "/team",
   f: "/profile",
 };
