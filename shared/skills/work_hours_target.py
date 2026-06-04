@@ -587,10 +587,23 @@ def _self_test() -> int:
 if __name__ == "__main__":
     if "--self-test" in sys.argv:
         sys.exit(_self_test())
-    # Default: dump esempio di compute_target con la config attiva
+    # Default: dump esempio di compute_target con la config attiva.
+    # #10 — fetch il ratio REALE da provider_capacity (come fa il daemon
+    # pacing-bridge) invece di passare None: senza, lo standalone cadeva sul
+    # fallback `mode=unlimited weekly-legacy` / target 92%, che NON è quello
+    # che il daemon applica (~40% col ratio) → diagnosi errata "team al 92%".
     import json
+    try:
+        import provider_capacity as _pcap
+        _ratio = _pcap.get_window_cap_pct_of_weekly()
+    except Exception:
+        _ratio = None
     now = datetime.now(timezone.utc)
     win_start = now.replace(minute=0, second=0, microsecond=0)
     win_end = win_start + timedelta(hours=5)
-    out = compute_target(now, win_start, win_end, None)
+    out = compute_target(now, win_start, win_end, _ratio)
+    out["_note"] = (
+        "ratio da provider_capacity; per il target LIVE reale leggi "
+        "pacing-bridge-state.json (current_window_target_pct/target_source)"
+    )
     print(json.dumps(out, indent=2, default=str))
