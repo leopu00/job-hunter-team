@@ -1,6 +1,6 @@
 # Vercel quota exhaustion — jobhunterteam.ai down (HTTP 402)
 
-Snapshot: 2026-05-22 mattina. Il dominio production `jobhunterteam.ai` (e tutti gli altri progetti del team `leopu00s-projects`) restituiscono **HTTP 402** con body `Payment required / DEPLOYMENT_DISABLED`.
+Snapshot: 2026-05-22 mattina. Il dominio production `jobhunterteam.ai` (e tutti gli altri progetti del team `owners-projects`) restituiscono **HTTP 402** con body `Payment required / DEPLOYMENT_DISABLED`.
 
 Tutti i deploy del team sono **paused** automaticamente da Vercel: quota del piano Hobby (free) superata su 3 metriche su 4.
 

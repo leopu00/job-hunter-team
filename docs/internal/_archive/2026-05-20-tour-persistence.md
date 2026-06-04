@@ -76,7 +76,7 @@ Reset manuale per ri-testare:
 ```sql
 UPDATE user_onboarding_state
 SET tour_done_at = NULL
-WHERE user_id = (SELECT id FROM auth.users WHERE email = 'info@jobhunterteam.ai');
+WHERE user_id = (SELECT id FROM auth.users WHERE email = 'owner@example.com');
 ```
 
 ## 🔄 Comportamento prima/dopo
