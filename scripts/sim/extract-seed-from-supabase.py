@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Estrae positions da Supabase prod come `seed.json` per la sim.
 
-Filtra per `user_id` risolto da email (default: leone.puglisi@gmail.com).
+Filtra per `user_id` risolto da email (default: owner@example.com).
 Scrive ~/.jht-sim-d2/seed.json con tutti i campi raw che `seed_import.py`
 si aspetta. Non include i campi di enrichment (role_family, loc_*, work_*,
 office_*): quelli verranno popolati dagli analisti nella sim.
@@ -13,7 +13,7 @@ Usage:
     SUPABASE_SERVICE_ROLE_KEY=eyJ... \\
     python3 web/scripts/sim/extract-seed-from-supabase.py [--email <e>] [--out <path>] [--status-any]
 
-Default email: leone.puglisi@gmail.com
+Default email: owner@example.com
 Default out:   ~/.jht-sim-d2/seed.json
 Default scope: tutte le posizioni dell'utente (--status-any è default per
                permettere alla sim di rifare l'enrichment su tutto il dataset)
@@ -77,7 +77,7 @@ SEED_FIELDS = [
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--email", default="leone.puglisi@gmail.com")
+    parser.add_argument("--email", default="owner@example.com")
     parser.add_argument(
         "--out",
         default=os.path.expanduser("~/.jht-sim-d2/seed.json"),
