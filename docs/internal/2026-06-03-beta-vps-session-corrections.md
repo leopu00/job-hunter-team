@@ -84,6 +84,19 @@ Legenda stato: ✅ già fixato in questa sessione · 🔲 da fare · 🟡 fix te
 - **Problema**: il TZ del team era `Etc/UTC`; le working hours "8-20" rischiavano di valere in UTC. Design doc prevede TZ IANA da onboarding browser → `schedule.json.timezone`. Sul VPS era UTC e ho dovuto passare `--tz Europe/Rome` a mano.
 - **Fix**: propagare il TZ utente dall'onboarding fino a host.env / working_hours di default.
 
+### 14. ✅ `sentinel-bridge.py`: provider "codex" cade in `unsupported` → Sentinella cieca sui token
+- **Dove**: `.launcher/sentinel-bridge.py` (dispatch provider → fetch).
+- **Problema**: `if provider == "openai":` per chiamare `fetch_codex_rollout()`, ma il wizard scrive `active_provider: "codex"` → nessun ramo matcha → `unsupported:codex`. La Sentinella **non leggeva il consumo token Codex** per i primi ~8 min dopo l'avvio dei bridge → pacing cieco al boot. Il codice Codex (`fetch_codex_rollout`) c'era già: puro mismatch config↔dispatch.
+- **Fix applicato (dev3)**: `if provider in ("openai", "codex"):`. Commit `6dbe8e23` (cherry-pickato in master) + hot-patch container → verificato `OK usage SOTTOUTILIZZO`.
+
+### 15. 🔲 Calibrazione ratio finestra→weekly INCOERENTE (3% vs 14.7% vs 19% misurato)
+- **Dove**: `capitano.md` (regola C-09) + seed `window_cap_pct_of_weekly` (`provider_capacity`) + `window-ratio-meter`.
+- **Problema**: tre valori per la stessa grandezza: C-09 mental model = **3%**; seed bridge = **14.7%**; **misurato su questo run (dev3) = 19%** (Δprimary 0→79% ⇒ Δweekly 0→15%); meter ~25% low-confidence. Il mental model C-09 sottostima ~6× → se il Capitano si fida del 3% sotto-protegge il weekly (rischio HALT-WEEKLY).
+- **Fix**: una sola fonte-di-verità per il ratio (~17-19% misurato), propagata a C-09 + seed + meter. Mitigante: `residual_to_reset` auto-corregge dal `weekly_used` reale ad ogni tick. (Lega con #8 g_spot + con i pezzi P4/P5 della DIAGNOSI.)
+
+### 16. (contesto, non bug) Distribuzione weekly con orari lavorativi — verificata OK
+- Orari `Europe/Rome 08-20` = 06-18 UTC = 12h attive/die. Il bridge distribuisce il weekly sulle ore ON (`residual_to_reset`), non 24/7. Pace sostenibile per chiudere a 100% al reset. Vedi `DIAGNOSI-pacing-weekly-2026-06-03.md` per il modello completo.
+
 ---
 
 ## Note di contesto (non bug, da sapere)
