@@ -50,7 +50,7 @@ Zero collisioni semantiche tra analisti (peer lookup ha funzionato):
 ## Standardizzazione paesi (ISO English)
 
 ```
-65 Italy           23 Hungary       12 Netherlands     12 Ireland
+65 Italy           23 Czechia       12 Netherlands     12 Ireland
 11 Germany          8 Spain          7 United Kingdom   5 Poland
 ```
 
