@@ -54,7 +54,9 @@ type PacingReport = {
   ratio_kt_per_pct: number;
   vel_team: number;
   vel_target: number | null;
-  target_band_center: number;
+  // Nullable: il pacing-bridge lo emette a null quando il driver è weekly-aware
+  // (vale current_window_target_pct); number solo come fallback band-center.
+  target_band_center: number | null;
   agents: PacingAgent[];
   skipped: string[];
   verdict: PacingVerdict;
@@ -69,7 +71,7 @@ type PacingState = {
   updated_at?: string;
   next_tick_at?: string;
   tick_interval_min?: number;
-  target_band_center?: number;
+  target_band_center?: number | null;
   target_session?: string;
   last_tick_at?: string | null;
   last_report?: PacingReport | null;
