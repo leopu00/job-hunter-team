@@ -512,6 +512,55 @@ def _save_claude_429_cooldown(until_epoch):
 
 _claude_429_until = _load_claude_429_cooldown()
 
+# ── Weekly reset STICKY (il team deve sempre conoscere gli orari finestre) ──
+# Il reset weekly cambia solo ~settimanalmente e SOLO l'HTTP /oauth/usage lo
+# espone (la primaria claude è il worker TUI, che porta usage% ma NON il weekly
+# reset). Lo memorizziamo in un file: se un fetch ce l'ha lo salviamo; se manca,
+# lo riempiamo dalla cache (finché il reset è nel futuro). Così il pacing usa
+# sempre `residual_to_reset` ancorato al reset reale invece del fallback
+# `rolling_7d`. Idempotente, fail-open.
+WEEKLY_RESET_CACHE_FILE = LOGS_DIR / "weekly-reset-cache.json"
+
+
+def _save_weekly_reset_cache(at, at_unix):
+    try:
+        WEEKLY_RESET_CACHE_FILE.write_text(
+            json.dumps({"weekly_reset_at": at, "weekly_reset_at_unix": at_unix}),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
+
+
+def _load_weekly_reset_cache():
+    try:
+        return json.loads(WEEKLY_RESET_CACHE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _apply_sticky_weekly_reset(parsed):
+    """Garantisce che `parsed` porti il weekly reset (vedi nota sopra)."""
+    if not isinstance(parsed, dict):
+        return parsed
+    pu = parsed.get("weekly_reset_at_unix")
+    if isinstance(pu, (int, float)) and pu > time.time():
+        _save_weekly_reset_cache(parsed.get("weekly_reset_at"), pu)
+        return parsed
+    cache = _load_weekly_reset_cache()
+    cu = cache.get("weekly_reset_at_unix")
+    # Cache vuota/scaduta → un fetch HTTP mirato per seedarla (rispetta il 429).
+    if not (isinstance(cu, (int, float)) and cu > time.time()):
+        http = fetch_claude_api()
+        if isinstance(http, dict) and isinstance(http.get("weekly_reset_at_unix"), (int, float)):
+            _save_weekly_reset_cache(http.get("weekly_reset_at"), http["weekly_reset_at_unix"])
+            cache = _load_weekly_reset_cache()
+            cu = cache.get("weekly_reset_at_unix")
+    if isinstance(cu, (int, float)) and cu > time.time():
+        parsed["weekly_reset_at"] = cache.get("weekly_reset_at")
+        parsed["weekly_reset_at_unix"] = cu
+    return parsed
+
 
 def fetch_claude_api():
     """Ritorna dict {usage, reset_at, weekly_usage}, None, o 'RATE_LIMIT'."""
@@ -958,6 +1007,12 @@ def main():
         if parsed:
             # ── Path successo: scrivi sample, tick alla Sentinella ────
             parsed["provider"] = provider
+            # Claude: la primaria (worker TUI) non porta il weekly reset → lo
+            # iniettiamo dalla cache sticky (seedata via HTTP) così il team
+            # conosce sempre l'orario del reset settimanale e il pacing usa
+            # residual_to_reset invece del fallback rolling_7d.
+            if provider in ("anthropic", "claude"):
+                parsed = _apply_sticky_weekly_reset(parsed)
             if is_first_tick:
                 last = None
                 history = []
