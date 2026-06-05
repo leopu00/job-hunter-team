@@ -12,7 +12,7 @@ The bridge runs a measurement window every 15 min (aligned to :00/:15/:30/:45 UT
 
 ```
 [BRIDGE PACING] HH:MM UTC window=15m (effettivi Xm) samples=N |
-  usage=U% proj=P% reset_in=Rh reset_at=THH:MM UTC |
+  usage=U% reset_in=Rh reset_at=THH:MM UTC (proj=P% — INFO, secondario non-driver) |
   vel_team=V%/h | vel_target=T%/h (per chiudere a TGT% al reset) [schedule+ratio phase=ON] |
   ratio=K kT/% (team Σ kT / Δusage) |
   agenti: name=p%/h [kT/Xm → kT/h ÷ K = p%/h, share s%, cadenza c/min (n chk in Xm)] ; ... |
@@ -35,6 +35,11 @@ The `[schedule+ratio phase=ON]` tag in parentheses is the **source** of the targ
 | **`share s%`**    | per-agent weight on the total rate (Σ shares ≈ 100%) — tells you **WHO** to slow down                      |
 | **`cadenza c/min`** | per-agent `jht-throttle` calls per minute in the window — tells you **HOW MUCH** to add to the config    |
 | **`VERDETTO`**    | actionable summary; map directly to the table below                                                        |
+
+> ⚠️ **`proj` is INFO only — do NOT act on it.** It is a volatile extrapolation of
+> short-window velocity (e.g. it printed `proj=-8.66%` while the team was merely a
+> hair under target). The control loop is **`vel_team` vs `vel_target`** (both
+> weekly-aware) + `weekly_remaining`. Ignore `proj` for throttle/spawn decisions.
 
 ## Verdict → action
 
