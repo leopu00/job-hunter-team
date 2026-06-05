@@ -433,7 +433,7 @@ function PacingReport({
     ratio_kt_per_pct: number;
     vel_team: number;
     vel_target: number | null;
-    target_band_center: number;
+    target_band_center: number | null;
     agents: Array<{
       name: string;
       kt: number;
@@ -866,7 +866,7 @@ export default function TeamOrgChart({
     ratio_kt_per_pct: number;
     vel_team: number;
     vel_target: number | null;
-    target_band_center: number;
+    target_band_center: number | null;
     agents: PacingAgentRow[];
     skipped: string[];
     verdict: {

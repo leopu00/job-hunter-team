@@ -613,12 +613,15 @@ def compute_tick(ast, tba, rb, now: datetime,
         "vel_team": vel_team,
         "vel_target": vel_target,
         # target_band_center (92% storico) è SOLO il fallback per setup senza
-        # working-hours. Quando il driver è weekly-aware NON è il numero usato
-        # (vale current_window_target_pct/target_pct) — resta emesso come number
-        # per back-compat dei consumer web (route.ts/TeamOrgChart), ma è INFO.
-        # Vedi pacing-migration-plan-2026-06-05.md (Phase 1: rendere nullable
-        # anche i consumer web prima di azzerarlo).
-        "target_band_center": TARGET_BAND_CENTER,
+        # working-hours: quando il driver è weekly-aware lo emettiamo a None per
+        # non confondere (vale current_window_target_pct). I consumer web sono
+        # ora nullable (route.ts/TeamOrgChart) e nessuno lo renderizza; il sentinel
+        # usa current_window_target_pct. Vedi pacing-migration-plan-2026-06-05.md.
+        "target_band_center": (
+            None
+            if target_info.get("target_source") not in (None, "band_center")
+            else TARGET_BAND_CENTER
+        ),
         # Target dinamico work-hours-aware (replacement di target_band_center).
         # Quando schedule e ratio sono disponibili → questo è il numero
         # effettivamente usato; altrimenti coincide con TARGET_BAND_CENTER.

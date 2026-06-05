@@ -96,6 +96,14 @@ GSPOT_PROMOTION_TICKS = 3  # tick consecutivi nel g-spot per promuovere stato
 # semi-ampiezza storica (80-105 → ±13 attorno a 92 ≈ -12/+13).
 GSPOT_BAND_BELOW = 12.0  # target − 12 = floor g-spot
 GSPOT_BAND_ABOVE = 13.0  # target + 13 = ceiling g-spot
+
+# Phase 1 migrazione weekly (pacing-migration-plan-2026-06-05): la cadenza tick
+# e il wake della Sentinella si ancorano al segnale STABILE vel_team vs vel_target
+# (dal pacing-bridge) invece che a `proj` (volatile: oscilla ±400pt tick-to-tick).
+# On-pace = il team NON sta bruciando sopra il target di velocità. L'under-utilizzo
+# NON è un allarme per la Sentinella (lo gestisce il Capitano spawnando; il pipeline
+# stall ha già il path PIPELINE STALLED dedicato nel pacing-bridge).
+PACE_OVER_TOL = 1.0  # %/h sopra vel_target oltre cui il team "sta bruciando" → alert
 # Path dello state file del pacing-bridge: contiene current_window_target_pct
 # scritto a ogni tick. Letto lazy nel _is_in_gspot. Se manca → fallback
 # alle costanti statiche (back-compat completa).
@@ -174,6 +182,39 @@ def _is_in_gspot(proj, target_pct=None):
         return False
     lo, hi = _gspot_bounds(target_pct)
     return lo <= proj <= hi
+
+
+def _read_pacing_pace():
+    """Legge vel_team/vel_target dall'ultimo report del pacing-bridge.
+    Segnale STABILE (la velocità misurata vs quella necessaria al reset),
+    a differenza di proj che è l'estrapolazione volatile a fine finestra.
+    Ritorna (vel_team, vel_target) o (None, None) se assenti/illeggibili."""
+    try:
+        if not PACING_STATE_FILE.exists():
+            return None, None
+        with PACING_STATE_FILE.open(encoding="utf-8") as f:
+            st = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None, None
+    r = st.get("last_report") or {}
+    vt = r.get("vel_team")
+    vtg = r.get("vel_target")
+    return (
+        vt if isinstance(vt, (int, float)) else None,
+        vtg if isinstance(vtg, (int, float)) else None,
+    )
+
+
+def _is_on_pace(vel_team, vel_target, proj, target_pct=None):
+    """True se il team è 'on-pace' (zona calma → cadenza lenta, niente wake).
+
+    Phase 1: ancorato a vel_team vs vel_target (stabile). On-pace = il team NON
+    sta bruciando oltre `vel_target + PACE_OVER_TOL`. L'under-pace (vel sotto
+    target) NON è un allarme per la Sentinella. Quando vel non è disponibile →
+    fallback alla banda g-spot proj-based (back-compat)."""
+    if isinstance(vel_team, (int, float)) and isinstance(vel_target, (int, float)):
+        return vel_team <= vel_target + PACE_OVER_TOL
+    return _is_in_gspot(proj, target_pct)
 
 
 def _choose_tick_interval(state, override_min=None):
@@ -948,30 +989,31 @@ def main():
             # sul target scritto dal pacing-bridge invece che sul 92% fisso.
             # Quando schedule + ratio mancano → fallback alla banda storica.
             dyn_target, work_phase = _read_dynamic_target()
-            in_gspot = _is_in_gspot(proj, target_pct=dyn_target)
-            _advance_tick_phase(state, in_gspot)
+            # Phase 1 (pacing-migration-plan-2026-06-05): cadenza tick e wake della
+            # Sentinella ancorati al segnale STABILE vel_team vs vel_target (dal
+            # pacing-bridge), NON a `proj` (volatile, ±400pt tick-to-tick).
+            #   on_pace=True  → zona calma: cadenza lenta, niente wake.
+            #   on_pace=False → il team brucia sopra vel_target → wake + cadenza veloce.
+            # Fallback a proj-band quando vel non è disponibile (pre-primo-tick).
+            # Il vecchio gate P3 (proj>target & usage<=target → no-wake) è rimosso:
+            # con vel, una velocità alta è ESATTAMENTE ciò che vogliamo intercettare
+            # presto (l'under-utilizzo invece non sveglia — lo gestisce il Capitano).
+            vel_team_s, vel_target_s = _read_pacing_pace()
+            on_pace = _is_on_pace(vel_team_s, vel_target_s, proj, dyn_target)
+            _advance_tick_phase(state, on_pace)
             now_ts = time.time()
-            should_notify = _should_notify_sentinella(in_gspot, state, now_ts)
-            # P3 doppio-gate: la proj PRIMARY mira al riempimento 100% della
-            # finestra, quindi a inizio finestra (velocità di burst alta) finisce
-            # SOPRA un g-spot centrato sul target weekly-spalmato anche se l'usage
-            # ASSOLUTO è ancora sano. Non svegliare la Sentinella in questo caso:
-            # proj alta + usage<=target = sola velocità istantanea, non sforo
-            # accumulato. Vale SOLO per il lato alto (proj>target); sotto il
-            # g-spot (sottoutilizzo) la notifica serve eccome.
-            if (
-                should_notify
-                and dyn_target
-                and isinstance(proj, (int, float)) and proj > dyn_target
-                and isinstance(usage, (int, float)) and usage <= dyn_target
-            ):
-                should_notify = False
+            should_notify = _should_notify_sentinella(on_pace, state, now_ts)
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""
+            vel_dbg = (
+                f" vel={vel_team_s:.2f}/{vel_target_s:.2f}"
+                if isinstance(vel_team_s, (int, float)) and isinstance(vel_target_s, (int, float))
+                else ""
+            )
             print(
                 f"[bridge V6] {now_h} OK usage={usage}% proj={proj} status={status} "
-                f"phase={state['tick_phase']} gspot={in_gspot} {target_dbg}{phase_dbg} "
+                f"phase={state['tick_phase']} on_pace={on_pace}{vel_dbg} {target_dbg}{phase_dbg} "
                 f"notify={should_notify}"
             )
 

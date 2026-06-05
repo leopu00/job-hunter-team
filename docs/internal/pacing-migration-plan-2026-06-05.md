@@ -1,6 +1,9 @@
 # Piano di migrazione pacing — completare il passaggio al modello weekly-aware
 
-> Stato: **PIANO (da approvare)** · 2026-06-05 · nessuna modifica ancora eseguita.
+> Stato: **Phase 0 + Phase 1 IMPLEMENTATE** · 2026-06-05 (su master, da validare con simulazione su VPS nuova prima di considerarle confermate).
+> - ✅ Phase 0: proj→INFO nel messaggio/skill + capitano regola 10 (92→fallback).
+> - ✅ Phase 1: sentinel cadenza/wake ancorati a `vel_team vs vel_target` (`_is_on_pace`, fallback proj-band); capitano C-07 + gate spawn ri-ancorati; `target_band_center`→None quando weekly (consumer web resi nullable); skill `sentinel-orders`/`pipeline-triage`/`rate-budget` ri-ancorate a vel/usage/weekly.
+> - ⏳ DA FARE: validare con simulazione su VPS nuova (il team userà i nuovi segnali); deploy su VPS andris.
 > Contesto: il pacing è migrato dal modello "riempi ogni finestra 5h fino al ~92%"
 > al modello **weekly-aware** (budget weekly ÷ ore attive → target per-finestra
 > ~20%, controllo `vel_team vs vel_target`, auto-calibrazione sul residuo).

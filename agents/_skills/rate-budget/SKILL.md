@@ -33,11 +33,11 @@ Typical output:
   Last tick:        2026-04-24T10:23:18.705062+00:00
 ```
 
-**Captain interpretation:**
-- `Throttle T0–T1` + `Projection < 80%` → full spawn (Scout + Analyst + Scorer + Writer + Critic)
-- `Throttle T1–T2` + `Projection 80–100%` → reduced spawn (one instance per role)
-- `Throttle T2+` or `Projection > 100%` → **no spawn**, wait for the bridge to clear the throttle
-- `Margin to 92% target` tells you how much budget you can still consume before overshooting
+**Captain interpretation** (usa `Measured velocity` vs `Target velocity` — NON `Reset projection`, che è INFO volatile):
+- `Throttle T0–T1` + `Measured velocity` ben sotto `Target velocity` (under-pace) → full spawn (Scout + Analyst + Scorer + Writer + Critic)
+- `Throttle T1–T2` + `Measured` ≈ `Target` (on-pace) → reduced spawn (one instance per role)
+- `Throttle T2+` or `Measured velocity` sopra `Target velocity` (burning) → **no spawn**, wait for the bridge to clear the throttle
+- `Reset projection` è solo INFO (estrapolazione volatile a fine finestra) — non basare lo spawn su quello.
 
 **If output is `NO_DATA`:** the bridge hasn't polled yet. Wait 1–2 min and retry. Do not start the team without this signal — you risk saturating the rate-limit blind.
 
