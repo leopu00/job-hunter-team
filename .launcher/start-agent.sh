@@ -46,6 +46,29 @@ ROLE="$1"
 INSTANCE="${2:-}"
 MODE="${3:-default}"
 
+# ── Provider claude: pre-seed onboarding (BUG-CLAUDE-TRUST-PROMPT) ─────
+# Su una install fresca la CLI claude (TUI) blocca gli agenti sul wizard
+# first-run: theme-picker → browser-login → "Bypass Permissions mode".
+# Pre-seediamo i flag in ~/.claude.json così la TUI salta il wizard e usa
+# direttamente il token (CLAUDE_CODE_OAUTH_TOKEN) / le credenziali persistite.
+# Idempotente. IS_SANDBOX=1 (esportato sotto) salta anche il warning bypass.
+_ensure_claude_onboarding() {
+  local home="${1:-${JHT_HOME:-/jht_home}}"
+  python3 - "$home/.claude.json" <<'PY' 2>/dev/null || true
+import json, sys, os
+f = sys.argv[1]
+try:
+    d = json.load(open(f))
+except Exception:
+    d = {}
+d["hasCompletedOnboarding"] = True
+d.setdefault("theme", "dark")
+d["bypassPermissionsModeAccepted"] = True
+os.makedirs(os.path.dirname(f), exist_ok=True)
+json.dump(d, open(f, "w"), indent=2)
+PY
+}
+
 # ── Worker sentinel (fallback /usage per bridge) ─────────────────────
 # Short-circuit per un ruolo speciale "worker": spawna una sessione
 # SENTINELLA-WORKER con un claude CLI idle, da interrogare col comando
@@ -59,9 +82,11 @@ if [ "$ROLE" = "worker" ]; then
     exit 0
   fi
   : "${JHT_HOME:=/jht_home}"
+  _ensure_claude_onboarding "$JHT_HOME"
   tmux new-session -d -x 220 -y 50 -s "$WORKER_SESSION" -c "$JHT_HOME"
   tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
   tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:\$PATH'" C-m
+  tmux send-keys -t "$WORKER_SESSION" "export IS_SANDBOX=1" C-m
   tmux send-keys -t "$WORKER_SESSION" "claude --dangerously-skip-permissions" C-m
   # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
   # Enter. Claude Code 2.1.x mostra il "Bypass Permissions mode" warning
@@ -697,6 +722,10 @@ fi
 # one-shot non-TUI, usa credentials.json e popola .claude.json all'avvio).
 # Skippato se gia' popolato (es. agenti successivi al primo).
 if [ "$CLI_BIN" = "claude" ] && [ -n "${JHT_HOME:-}" ]; then
+  # Salta il wizard first-run della TUI claude + il warning bypass-permissions
+  # (vedi _ensure_claude_onboarding sopra). Senza, ogni agente si blocca.
+  _ensure_claude_onboarding "$JHT_HOME"
+  CLI_ENV_PREFIX="IS_SANDBOX=1 ${CLI_ENV_PREFIX}"
   _claude_json="$JHT_HOME/.claude.json"
   if [ ! -s "$_claude_json" ] && [ -s "$JHT_HOME/.claude/.credentials.json" ]; then
     echo "  → warmup ~/.claude.json (mancante, popolo via claude -p)"
