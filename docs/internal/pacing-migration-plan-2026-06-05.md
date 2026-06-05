@@ -31,7 +31,7 @@ Niente più framing concorrenti (92%, proj-verso-riempimento-finestra).
 | Artefatto | Dove | Azione |
 |---|---|---|
 | `_PROVIDER_TARGET_BAND` = 92 per tutti + `TARGET_BAND_CENTER` | righe 76-115 | **Tenere solo come fallback** per setup senza working-hours. |
-| `target_band_center: 92.0` emesso in OGNI tick | report (riga ~230 + last_report) | **Non emetterlo** quando `target_source` è weekly-aware (`schedule+ratio+weekly`); se serve, esporlo come `fallback_band_center` solo quando davvero usato. **(rischio: 0 — display)** |
+| `target_band_center: 92.0` emesso in OGNI tick | report (riga ~230 + last_report) | **Phase 1** (NON zero-risk): ha consumer web (`web/app/api/team/pacing-bridge/route.ts:57`, `TeamOrgChart.tsx:436/869`) tipizzati `number` non-nullable. Prima renderli nullable, POI emetterlo a None quando weekly-aware. Per ora resta emesso (INFO, non è il driver). |
 | `proj` letto dal sample e propagato | righe 472/520/649-684 | **Declassare a INFO**: resta nel log/tick ma etichettato come segnale secondario; verificare che nessuna decisione a valle ci si appoggi (le decisioni usano già `vel_target`). |
 
 ### B. `.launcher/sentinel-bridge.py`
