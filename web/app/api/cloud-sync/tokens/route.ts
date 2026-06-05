@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   );
   if (!rl.allowed) return rateLimitedResponse(rl.retryAfterSec);
 
-  let body: { name?: string } = {};
+  let body: { name?: string; expires_in_days?: number | null } = {};
   try {
     body = await req.json();
   } catch {
@@ -86,11 +86,33 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Scadenza token (audit #1): default 90 giorni per i token creati da UI
+  // (l'utente puo' rigenerarli facilmente). `expires_in_days: null` o `0`
+  // = nessuna scadenza (riservato ai device headless; sconsigliato da UI).
+  // Campo assente → default sicuro 90gg.
+  const DEFAULT_TTL_DAYS = 90;
+  let expiresAt: string | null;
+  if (body.expires_in_days === null || body.expires_in_days === 0) {
+    expiresAt = null;
+  } else {
+    const days =
+      typeof body.expires_in_days === "number" && body.expires_in_days > 0
+        ? body.expires_in_days
+        : DEFAULT_TTL_DAYS;
+    expiresAt = new Date(Date.now() + days * 86_400_000).toISOString();
+  }
+
   const { token, prefix, hash } = generateSyncToken();
   const { data, error } = await supabase
     .from("cloud_sync_tokens")
-    .insert({ user_id: user.id, name, token_prefix: prefix, token_hash: hash })
-    .select("id, name, token_prefix, created_at")
+    .insert({
+      user_id: user.id,
+      name,
+      token_prefix: prefix,
+      token_hash: hash,
+      expires_at: expiresAt,
+    })
+    .select("id, name, token_prefix, created_at, expires_at")
     .single();
 
   if (error)
