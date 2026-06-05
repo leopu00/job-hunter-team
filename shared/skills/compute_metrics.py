@@ -323,6 +323,11 @@ def compute_metrics(parsed, last, history=None):
         "phase": phase,
         "suggested_throttle_s": suggested_throttle_s,
         "reset_at": parsed.get("reset_at"),
+        # Finestra 5h come epoch: l'HH:MM nudo (`reset_at`) è ambiguo a cavallo
+        # di mezzanotte e non distingue uno slittamento di giorno. Il bridge
+        # popola `reset_at_unix` (HTTP nativo, o ricostruito da `_ensure_reset_unix`
+        # sul path worker TUI) → propaghiamolo come per il weekly.
+        "reset_at_unix": parsed.get("reset_at_unix"),
         "weekly_usage": parsed.get("weekly_usage"),
         # Bug #19A: reset weekly disponibile per Capitano/Sentinella senza
         # grep nei sorgenti del bridge. None se il provider non lo espone.
