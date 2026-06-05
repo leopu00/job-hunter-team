@@ -11,6 +11,10 @@ type Props = {
   maxScore?: number; // default 100 (es. 10 per critic_score 0-10)
   binStep?: number; // default 5 (es. 0.5 per critic_score)
   decimals?: number; // decimali nei tick/tooltip (default 0)
+  // Cross-filtering: estremi inferiori (lo) dei bin selezionati + toggle.
+  // Vuoto/assente = grafico non interattivo (comportamento storico).
+  selectedBins?: number[];
+  onToggleBin?: (lo: number) => void;
 };
 
 const W = 480;
@@ -59,8 +63,11 @@ export default function ScoreDistribution({
   maxScore = 100,
   binStep = 5,
   decimals = 0,
+  selectedBins = [],
+  onToggleBin,
 }: Props) {
   const [hover, setHover] = useState<number | null>(null);
+  const hasSelection = selectedBins.length > 0;
   const BINS = Math.max(1, Math.round(maxScore / binStep));
 
   const stats = useMemo(() => {
@@ -229,7 +236,20 @@ export default function ScoreDistribution({
           const y = by(count);
           const h = PAD_TOP + chartH - y;
           const isHover = hover === i;
-          const score = (stats.firstBin + i) * binStep + binStep / 2;
+          const binLo = (stats.firstBin + i) * binStep;
+          const isSelected = selectedBins.includes(binLo);
+          const score = binLo + binStep / 2;
+          // Hover prevale; in presenza di selezione, i bin non selezionati
+          // (e non hovered) sono attenuati.
+          const opacity = isHover
+            ? 1
+            : hover != null
+              ? 0.35
+              : hasSelection
+                ? isSelected
+                  ? 1
+                  : 0.28
+                : 0.85;
           return (
             <rect
               key={i}
@@ -238,9 +258,15 @@ export default function ScoreDistribution({
               width={Math.max(1, barW - 1)}
               height={h}
               fill={colorForFraction(score / maxScore)}
-              opacity={hover == null ? 0.85 : isHover ? 1 : 0.35}
+              opacity={opacity}
+              stroke={isSelected ? "var(--color-bright)" : "none"}
+              strokeWidth={isSelected ? 1 : 0}
               onMouseEnter={() => setHover(i)}
-              style={{ cursor: "pointer", transition: "opacity 0.12s" }}
+              onClick={() => onToggleBin?.(binLo)}
+              style={{
+                cursor: onToggleBin ? "pointer" : "default",
+                transition: "opacity 0.12s",
+              }}
             />
           );
         })}

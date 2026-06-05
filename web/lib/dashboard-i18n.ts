@@ -51,11 +51,15 @@ const T = {
 
     // Position types pie
     position_types:       'Tipologie',
+    position_countries:   'Paesi',
+    position_cities:      'Città',
+    reset_filters:        'reset',
     // Le etichette delle famiglie sono ora il valore di positions.role_family
     // (popolato dal team analyst), non più hardcoded qui.
 
     // Table
     recent_positions:     'Posizioni Recenti',
+    recent_positions_filtered: 'Posizioni Filtrate',
     view_all:             'Vedi tutte →',
     col_id:               'ID',
     col_title:            'Titolo',
@@ -125,10 +129,14 @@ const T = {
 
     // Position types pie
     position_types:       'Types',
+    position_countries:   'Countries',
+    position_cities:      'Cities',
+    reset_filters:        'reset',
     // Family labels now come from positions.role_family in the DB
     // (populated by the team analyst), not hardcoded here.
 
     recent_positions:     'Recent Positions',
+    recent_positions_filtered: 'Filtered Positions',
     view_all:             'View all →',
     col_id:               'ID',
     col_title:            'Title',
@@ -197,10 +205,14 @@ const T = {
 
     // Position types pie
     position_types:       'Típusok',
+    position_countries:   'Országok',
+    position_cities:      'Városok',
+    reset_filters:        'visszaállítás',
     // A családneveket most a positions.role_family DB oszlop adja
     // (a team analyst populálja), nincs hardkódolva itt.
 
     recent_positions:     'Legutóbbi állások',
+    recent_positions_filtered: 'Szűrt állások',
     view_all:             'Összes megtekintése →',
     col_id:               'ID',
     col_title:            'Cím',
