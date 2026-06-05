@@ -101,14 +101,35 @@ top_company, c_count = Counter(p.company for p in batch).most_common(1)[0]
 if c_count / n > 0.30:
     log(f"anti-bias company: {top_company} = {c_count}/{n} >30% → switch source/query")
 
-# guard 2 — location (city)
-top_city, l_count = Counter((p.location or "?").split(",")[0].strip() for p in batch).most_common(1)[0]
-if l_count / n > 0.40:
-    log(f"anti-bias location: {top_city} = {l_count}/{n} >40% → next batch on a DIFFERENT circle-city")
-    # rotate: pick the next city in the circle's list that is under-represented in the DB
+# guard 2 — location (city), CUMULATIVO sull'intero run (NON solo questo batch)
+# Il guard per-batch non basta: un hub (London per la finanza) resta sotto-soglia
+# in ogni singolo batch eppure accumula il 60% del DB nel tempo (visto live sul
+# beta: London=57/97=59%). Misura sul TOTALE del DB.
+db_by_city = dict(db.execute(
+    "SELECT COALESCE(loc_city, TRIM(SUBSTR(location,1,INSTR(location||',',',')-1))), COUNT(*) "
+    "FROM positions GROUP BY 1"))
+db_total = sum(db_by_city.values()) or 1
+top_city, top_n = max(db_by_city.items(), key=lambda kv: kv[1])
+if top_n / db_total > 0.35:                       # SOFT cap: nessuna città > ~35% del run
+    log(f"anti-bias location CUMULATIVO: {top_city}={top_n}/{db_total} (>35%) → "
+        f"STOP queries su {top_city}, prossimo sweep su città prioritarie sotto-servite")
 ```
 
-> Track per-city counts across the whole run (not just one batch): query `SELECT location, COUNT(*) FROM positions GROUP BY location` before building the next query, and steer toward under-served circle-cities so the final shortlist is geographically balanced, not hub-dominated.
+**Regola di bilanciamento geografico (cumulativa, soft-cap) — incentiva lo spread, non impone la parità:**
+
+1. **Leggi il profilo**: le `priority cities` (campo `location` / `preferences.relocation`) sono il target. È normale e giusto che le città con più fit pesino di più — NON forzare uno split uniforme.
+2. **Misura sul run intero** prima di ogni nuovo sweep: `SELECT loc_city, COUNT(*) FROM positions GROUP BY loc_city ORDER BY 2 DESC`.
+3. **Soft-cap ~35%**: se UNA sola città supera il ~35% del totale DB, **smetti di interrogarla** per i prossimi sweep e ridirigi lo sforzo. Un hub (es. London per la finanza out-posta ogni altra città ~10×): lasciarlo correre produce uno shortlist hub-dominated, inutile per chi ha priorità multi-città.
+4. **Quota di copertura priorità**: le priority-city del profilo a **0 o sotto-servite** hanno precedenza nei prossimi sweep — dedica query mirate (`<provider>:<keyword>:<city>`) finché non hanno una presenza minima, prima di tornare sugli hub già pieni.
+5. **Città fuori-profilo come hub = doppio allarme**: se la città dominante NON è tra le priority del profilo, è hub-bias + off-target → ribilancia con urgenza.
+
+### ⚠️ Work-authorization come filtro PRIMA del bilanciamento (Brexit, visti)
+
+Bilanciare le location non serve se le offerte non sono **lavorabili** dall'utente. Prima di accettare un hub, verifica la compatibilità di work-permit col profilo (cittadinanza / visti dichiarati):
+
+- 🇬🇧 **UK post-Brexit**: un cittadino **UE senza visto UK** NON può lavorare a Londra/UK senza **sponsorship** (Skilled Worker visa). Quindi per un profilo solo-UE le offerte UK valgono **solo se** il JD menziona esplicitamente *visa sponsorship*; altrimenti sono work-auth incompatibili → SKIP (vedi "Permissive filters", regola geo).
+- 🇨🇭 **Svizzera / non-UE**: stessa logica — verifica permesso di lavoro.
+- Regola pratica: se l'hub dominante è in un paese che richiede un permesso che l'utente non ha (e i JD non offrono sponsorship), quel volume è **fantasma** — non conta come copertura e va escluso dal pool, non solo bilanciato.
 
 ## Permissive filters at SCOUT level
 
