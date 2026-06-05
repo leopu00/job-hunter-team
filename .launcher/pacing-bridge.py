@@ -612,7 +612,15 @@ def compute_tick(ast, tba, rb, now: datetime,
         "ratio": ratio,
         "vel_team": vel_team,
         "vel_target": vel_target,
-        "target_band_center": TARGET_BAND_CENTER,
+        # target_band_center (92% storico) è SOLO il fallback per setup senza
+        # working-hours: quando il modello weekly-aware è il driver lo emettiamo
+        # a None per non confondere (nessun consumer lo legge — il sentinel usa
+        # current_window_target_pct). Vedi pacing-migration-plan-2026-06-05.
+        "target_band_center": (
+            None
+            if target_info.get("target_source") not in (None, "band_center")
+            else TARGET_BAND_CENTER
+        ),
         # Target dinamico work-hours-aware (replacement di target_band_center).
         # Quando schedule e ratio sono disponibili → questo è il numero
         # effettivamente usato; altrimenti coincide con TARGET_BAND_CENTER.
@@ -681,7 +689,9 @@ def format_message(d: dict) -> str:
     )
     parts = [
         f"[BRIDGE PACING] {ts} window={eff_str} samples={d['n_samples']}",
-        f"usage={usage_now}% proj={proj}% reset_in={h_str} reset_at={reset_at}UTC",
+        f"usage={usage_now}% reset_in={h_str} reset_at={reset_at}UTC "
+        f"(proj={proj}% — INFO, segnale secondario volatile: NON guida le "
+        f"decisioni, usa vel_team vs vel_target)",
         f"vel_team={d['vel_team']:.2f}%/h",
     ]
 
@@ -689,7 +699,9 @@ def format_message(d: dict) -> str:
         # Quando il target è work-hours-aware mostriamo il valore effettivo
         # invece del band center fisso: il Capitano sa che il bridge sta
         # puntando es. al 75% anziché al 92% perché l'utente lavora 9-18.
-        target_pct = d.get("target_pct", d["target_band_center"])
+        target_pct = d.get("target_pct")
+        if target_pct is None:
+            target_pct = d.get("target_band_center") or TARGET_BAND_CENTER
         src = d.get("target_source") or "band_center"
         src_tag = (
             ""
