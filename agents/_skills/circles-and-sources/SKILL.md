@@ -131,6 +131,17 @@ Bilanciare le location non serve se le offerte non sono **lavorabili** dall'uten
 - 🇨🇭 **Svizzera / non-UE**: stessa logica — verifica permesso di lavoro.
 - Regola pratica: se l'hub dominante è in un paese che richiede un permesso che l'utente non ha (e i JD non offrono sponsorship), quel volume è **fantasma** — non conta come copertura e va escluso dal pool, non solo bilanciato.
 
+### 🗣️ Language-aware sourcing — non raccogliere ciò che verrà escluso per lingua
+
+Stesso principio della work-auth, sul fronte linguistico. Se le **lingue dell'utente** (`languages`, con livello) NON coprono la **lingua di lavoro locale** di una città target, i ruoli che la richiedono saranno scartati a valle dall'Analista (`[LANGUAGE]`) — raccoglierli è spreco. Caso reale (beta): candidato con inglese C1 + tedesco solo conversazionale + niente IT/ES/FR → su 18 escluse, 11 erano per lingua locale obbligatoria (M&A in tedesco a Monaco/Zurigo, IB in italiano a Milano, ecc.).
+
+**Regola:** prima di interrogare una città il cui idioma locale l'utente non padroneggia a livello business, **biasa le query verso ruoli English-first / international**:
+- Aggiungi qualificatori alla query: `"English-speaking"`, `"international team"`, `"English required"`, nome di multinazionali/firm globali (Big4, bulge-bracket, scale-up internazionali) che lavorano in inglese anche in mercati non-anglofoni.
+- Per i ruoli che invece **richiedono** la lingua locale (e l'utente non l'ha a livello business): trattali come i UK-no-sponsor — non inserirli, oppure inseriscili solo se il JD dice esplicitamente che la lingua locale non è richiesta.
+- Inglese come lingua di lavoro ≠ paese anglofono: a Amsterdam, Zurigo, Lussemburgo, Lisbona molti ruoli finance girano in inglese. Sono il **sweet spot** per chi parla solo inglese ma vuole l'Europa continentale.
+
+Esito: il pool che sopravvive all'Analista è più piccolo ma **ad alto rendimento** (accessibile per lingua E per work-auth), invece di gonfiarsi di ruoli che verranno scartati.
+
 ## Permissive filters at SCOUT level
 
 The Scout pre-filters only the **totally out-of-scope** cases. **Do not do the Analyst's job** — the candidate is treated as adaptable to adjacent roles. Skip a posting only if:
