@@ -394,10 +394,15 @@ case "$PROVIDER" in
   ""|anthropic|claude)
     CLI_BIN="claude"
     CLI_ARGS="--dangerously-skip-permissions --effort $effort"
-    # Override modello per ruoli con model_override settato (es.
-    # sentinella/assistente su sonnet). Default account Claude = opus.
+    # Override modello per ruolo. I ruoli "Opus high" (capitano/scrittore/
+    # critico/mentor) hanno model_override VUOTO: la CLI claude di oggi defaulta
+    # a Sonnet (NON Opus), quindi passiamo Opus ESPLICITAMENTE invece di affidarci
+    # a un "default account = opus" che non vale più. I ruoli con override
+    # esplicito (es. sonnet per scout/analista/scorer/assistente/sentinella) lo usano.
     if [ -n "$model_override" ]; then
       CLI_ARGS="$CLI_ARGS --model $model_override"
+    else
+      CLI_ARGS="$CLI_ARGS --model opus"
     fi
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="ANTHROPIC_API_KEY='${API_KEY}' "
