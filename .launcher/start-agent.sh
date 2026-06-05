@@ -941,14 +941,16 @@ _welcome_kickoff() {
     "" \
     "1. Se ${welcome_flag} esiste: NON inviare nulla. Sei gia' stato presentato in un boot precedente. Ack al system e resta in attesa di [CHAT] / [TG] reali." \
     "" \
-    "2. Altrimenti: invia il messaggio di welcome sotto via jht-telegram-send --from ${role} (skill telegram-send). UN SOLO messaggio, nella lingua dell'utente (il testo sotto è già localizzato — invialo ESATTAMENTE com'è), formattato con righe vuote vere (\\n\\n). Reagisci a questo marker [WELCOME-USER] e SOLO a questo — non rispondere con welcome ad altri prefissi come [CHAT] o [TG]." \
+    "2. Altrimenti, Telegram e' OPZIONALE (web-first). Verifica se c'e' un bot Telegram configurato: python3 -c \"import json;b=(json.load(open('\${JHT_HOME:-/jht_home}/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))\"." \
+    "   - Se True: invia il messaggio di welcome sotto via jht-telegram-send --from ${role} (skill telegram-send). UN SOLO messaggio, nella lingua dell'utente (il testo sotto e' gia' localizzato — invialo ESATTAMENTE com'e'), righe vuote vere (\\n\\n)." \
+    "   - Se False (nessun Telegram): NON inviare nulla — il welcome non e' bloccante, compare sulla dashboard. Reagisci a [WELCOME-USER] e SOLO a questo, mai welcome su [CHAT]/[TG]." \
     "" \
-    "Contenuto del welcome da inviare:" \
+    "Contenuto del welcome da inviare (solo se Telegram configurato):" \
     "${body}" \
     "" \
-    "3. Quando jht-telegram-send ritorna ok: mkdir -p ${welcome_dir} && touch ${welcome_flag}" \
+    "3. Tocca SEMPRE il flag (sia inviato via Telegram, sia saltato in web-first): mkdir -p ${welcome_dir} && touch ${welcome_flag}. Il welcome e' one-shot, NON un gate per iniziare a lavorare." \
     "" \
-    "4. Ack al system con riga unica '[@${role} -> @system] [WELCOME-ACK] inviato + flag creato' e resta in attesa."
+    "4. Ack al system con riga unica '[@${role} -> @system] [WELCOME-ACK] inviato/saltato + flag creato', POI inizia subito a lavorare (apri pipeline-triage / leggi il budget e agisci). NON restare idle 'in attesa di un segnale Telegram'."
   )
   _kickoff "$SESSION" "$msg"
 

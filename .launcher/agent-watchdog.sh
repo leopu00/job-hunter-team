@@ -11,9 +11,11 @@
 # Idempotente: `jht team start` skippa session già attive.
 # Failure mode: log + retry al prossimo tick, non fail-fast.
 #
-# Trigger gate: parte solo se ci sono bot Telegram configurati E
-# active_provider settato in jht.config.json. Senza, gli agenti non
-# possono partire — niente loop spazzatura.
+# Trigger gate: parte se active_provider è settato in jht.config.json E
+# le credenziali del provider sono presenti. Telegram NON è più richiesto:
+# l'interazione è web-first (chat/feedback dalla dashboard), Telegram è un
+# canale secondario opzionale. Richiederlo bloccava Capitano/Mentor in
+# modalità no-telegram (il watchdog non li spawnava mai → team monco al boot).
 
 set -u
 
@@ -33,10 +35,11 @@ log() {
 }
 
 config_ready() {
-  # active_provider + almeno 1 bot Telegram con bot_token + credenziali
-  # OAuth del provider presenti (es. kimi.json scritto da `kimi --yolo`
-  # post-OAuth). Senza credenziali, l'agente parte ma kimi mostra "LLM
-  # not set" e resta inutilizzabile (visto 2026-05-16 in cold fresh test).
+  # active_provider + credenziali OAuth del provider presenti (es. kimi.json
+  # scritto da `kimi --yolo` post-OAuth). Senza credenziali, l'agente parte ma
+  # mostra "LLM not set" e resta inutilizzabile (visto 2026-05-16 in cold fresh
+  # test). Telegram NON è più richiesto (canale secondario opzionale): un bot
+  # configurato è solo INFO, non un prerequisito allo spawn.
   python3 - "$CONFIG" "$JHT_HOME" 2>/dev/null <<'PYEOF'
 import json, os, sys
 cfg_path, jht_home = sys.argv[1], sys.argv[2]
@@ -45,15 +48,13 @@ try:
 except Exception:
   sys.exit(1)
 prov = (d.get('active_provider') or '').strip().lower()
-bots = (d.get('channels') or {}).get('telegram', {}).get('bots') or {}
-has_bot = any((b or {}).get('bot_token','').strip() for b in bots.values())
 markers = {
   'kimi':   f'{jht_home}/.kimi/kimi.json',
   'claude': f'{jht_home}/.claude/.credentials.json',
   'codex':  f'{jht_home}/.codex/auth.json',
 }
 has_creds = bool(prov) and os.path.exists(markers.get(prov, ''))
-sys.exit(0 if (prov and has_bot and has_creds) else 1)
+sys.exit(0 if (prov and has_creds) else 1)
 PYEOF
 }
 
