@@ -6,7 +6,7 @@ allowed-tools: Bash(jht-tmux-send *), Bash(python3 /app/shared/skills/throttle-c
 
 # sentinel-orders — react to the watchdog
 
-The Sentinel emits a tick every ~5 min and converts usage / projection into one of the orders below. Each order maps to a precise action. Stick to the mapping; do not improvise.
+The Sentinel emits a tick every ~5 min and converts usage + velocity (`vel_team` vs `vel_target`) + weekly into one of the orders below. Each order maps to a precise action. Stick to the mapping; do not improvise. **NB: `proj` nel tick è INFO volatile (oscilla ±400pt) — NON è il trigger; usa `vel_team` vs `vel_target` + `usage` vs `target` + `weekly`.**
 
 ## Throttle table (config-driven)
 
@@ -52,9 +52,9 @@ If a target agent's `tmux capture-pane` shows `Killed by timeout (60s)`, the age
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `[URG] RALLENTARE` `Throttle: N`               | velocity above target                                              | apply throttle level N immediately                                                                                |
 | `ACCELERARE` `Throttle: 0`                     | first green light after a slowdown                                 | spawn **one** agent only, wait for next tick before the second (never 5 in a row)                                 |
-| `SCALA UP`                                     | proj < 70% for 2+ ticks                                            | use `pipeline-triage` to pick the bottleneck role, spawn 1, wait for next tick                                    |
-| `PUSH G-SPOT`                                  | proj 70-90% stagnating                                             | one light agent (Writer if score ≥50 queue, otherwise the bottleneck) to push to 90-95                            |
-| `MANTIENI`                                     | proj 90-95% for ≥3 ticks                                           | do nothing — no spawn, no throttle change. Just ACK.                                                              |
+| `SCALA UP`                                     | `vel_team` ben sotto `vel_target` (under-pace) per 2+ tick, backlog non vuoto | use `pipeline-triage` to pick the bottleneck role, spawn 1, wait for next tick                                    |
+| `PUSH G-SPOT`                                  | `vel_team` lievemente sotto `vel_target`, stagnante                | one light agent (Writer if score ≥50 queue, otherwise the bottleneck) to push back on-pace                        |
+| `MANTIENI`                                     | on-pace (`vel_team` ≈ `vel_target`, verdetto ALLINEATO) per ≥3 tick | do nothing — no spawn, no throttle change. Just ACK.                                                              |
 | `RIENTRO`                                      | back to nominal pace                                               | resume normal plan                                                                                                |
 | `RESET SESSIONE`                               | usage window dropped from high → ~0%                               | start over from SCOUT-1, wait for orders before scaling                                                           |
 
@@ -62,7 +62,7 @@ If a target agent's `tmux capture-pane` shows `Killed by timeout (60s)`, the age
 
 | Order                                          | Meaning                                                            | Action                                                                                                            |
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
-| `PIPELINE VUOTA + UNDERSHOOT`                  | proj < 80% AND writer queue empty (scored ≥ 50)                    | **Don't wait for new orders.** Open the `pipeline-triage` skill — it tells you which role to spawn (rarely Scout). |
+| `PIPELINE VUOTA + UNDERSHOOT`                  | under-pace (`vel_team` sotto `vel_target`) AND writer queue empty (scored ≥ 50) | **Don't wait for new orders.** Open the `pipeline-triage` skill — it tells you which role to spawn (rarely Scout). |
 
 ### Emergencies
 
@@ -70,8 +70,8 @@ If a target agent's `tmux capture-pane` shows `Killed by timeout (60s)`, the age
 |------------------------------------------------|--------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 | `[EMERGENZA] FREEZATO`                         | Sentinel already pressed ESC on the team                           | decide whether to resume after the rate-window reset; do not fight the freeze                                     |
 | `[RECOVERY TRACKING]`                          | INFO during recovery, no action by default                         | if Δ recovery is too slow, run an autonomous diagnosis (`db_query`, on-demand `rate_budget live`) and decide cuts |
-| `[URG] STAGNAZIONE CRITICA`                    | recovery is failing, proj > 150% for 5+ ticks                      | kill heavy operators (even Sonnet) — pick those in tool calls (`tmux capture-pane`). Above 200% → `freeze_team.py` |
-| `[URG] PEGGIORAMENTO POST-FREEZE`              | proj climbed back up after dropping                                | drastic: `freeze_team.py` + `tmux kill-session` on every Sonnet. Keep alive only CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
+| `[URG] STAGNAZIONE CRITICA`                    | recovery is failing, burn severo sostenuto (`vel_team` ≫ `vel_target`) per 5+ tick + usage che sale verso 100% | kill heavy operators (even Sonnet) — pick those in tool calls (`tmux capture-pane`). Usage > 100% imminente → `freeze_team.py` |
+| `[URG] PEGGIORAMENTO POST-FREEZE`              | `vel`/usage risaliti dopo il calo                                  | drastic: `freeze_team.py` + `tmux kill-session` on every Sonnet. Keep alive only CAPITANO / SENTINELLA / SENTINELLA-WORKER / ASSISTENTE |
 
 ### Source-failure messages (rare, critical)
 
@@ -100,7 +100,7 @@ done
 
 ## Default behavior — execute without second-guessing
 
-The Sentinel sees velocity + projection; you see only the present moment. **Apply orders without re-checking.** A nearby `rate_budget live` after a Sentinel order writes a sample tagged `source=capitano` into the JSONL, inflates `velocity_smooth`, and induces the *next* Sentinel order to be wrong.
+The Sentinel sees velocity + trend over time (`vel_team` vs `vel_target`); you see only the present moment. **Apply orders without re-checking.** A nearby `rate_budget live` after a Sentinel order writes a sample tagged `source=capitano` into the JSONL, inflates `velocity_smooth`, and induces the *next* Sentinel order to be wrong.
 
 When verification IS justified:
 - before applying a heavy throttle (3 or 4) on an `[URG]` / `[EMERGENZA]` — two-source check via `rate_budget live`
@@ -115,7 +115,7 @@ When verification is NOT justified:
 
 - Wait the effect of a throttle (3-5 min) before another intervention.
 - Below 85% with no Sentinel order → add capacity at the bottleneck (use `pipeline-triage`), do NOT spawn at random.
-- Do not argue with a throttle because "the team is working well": the Sentinel sees projection, you see only the present.
+- Do not argue with a throttle because "the team is working well": the Sentinel sees velocity + trend (`vel_team` vs `vel_target`), you see only the present.
 
 ## See also
 

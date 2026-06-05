@@ -65,7 +65,7 @@ Once you have picked the role, hand off to `spawn-agent` for the actual launch +
 
 ## Empirical rationale (why this order, not a different one)
 
-Observed in windows W3-W6 (median peak proj 57-61%): Scouts produce ~3 positions/h consistently, but Scorer/Critic do NOT drain the backlog → 88 unscored and 217 drafts piled up = 12+ rate-budget points unused. **The cure is downstream, not upstream.** Whenever proj is below target with non-empty backlog, the cause is almost always Scorer or Critic, never Scout.
+Observed in windows W3-W6 (median peak proj 57-61%): Scouts produce ~3 positions/h consistently, but Scorer/Critic do NOT drain the backlog → 88 unscored and 217 drafts piled up = 12+ rate-budget points unused. **The cure is downstream, not upstream.** Whenever you are under-pace (`vel_team` below `vel_target`) with non-empty backlog, the cause is almost always Scorer or Critic, never Scout. *(Ignora `proj`: è INFO volatile, non un trigger.)*
 
 ## Per-role consumption — choose with cost in mind
 
