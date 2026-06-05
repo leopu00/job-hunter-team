@@ -120,8 +120,12 @@ for try in $(seq 1 "$attempts"); do
   sleep 1
   pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
   case "$pane" in
-    *"$signature"*)
-      # Testo visibile nel prompt. Submit.
+    *"$signature"*|*"Pasted text"*|*"pasted text"*)
+      # Testo visibile nel prompt (match diretto del signature) OPPURE la TUI
+      # claude ha COLLASSATO un paste multi-riga in "[Pasted text +N lines]"
+      # (il signature non comparirebbe mai → senza questo ramo l'Enter non
+      # verrebbe inviato e il messaggio resterebbe appeso). In entrambi i casi
+      # il testo è nel buffer di input → submit.
       sleep 0.3
       tmux send-keys -t "$session" Enter
       # Kimi: con solo Enter il messaggio puo' restare accodato in pending
