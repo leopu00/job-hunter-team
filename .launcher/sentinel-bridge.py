@@ -562,6 +562,38 @@ def _apply_sticky_weekly_reset(parsed):
     return parsed
 
 
+def _ensure_reset_unix(parsed):
+    """Garantisce che la finestra 5h porti `reset_at_unix` (epoch), non solo
+    `reset_at` HH:MM.
+
+    Il path worker della TUI claude (`_try_claude_tui_parser`) estrae solo
+    l'HH:MM del reset 5h e lascia `reset_at_unix=None`: il tick mostrava quindi
+    il reset 5h come orario nudo, senza la DATA (ambiguo a cavallo di mezzanotte
+    e indistinguibile da uno slittamento di giorno). Quando l'unix manca lo
+    ricostruiamo dall'HH:MM come PROSSIMA occorrenza entro le ~5h del ciclo
+    (oggi se l'orario è ancora futuro, domani altrimenti). Idempotente,
+    fail-open. Mirror di `_apply_sticky_weekly_reset` per la finestra primaria.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    ru = parsed.get("reset_at_unix")
+    if isinstance(ru, (int, float)) and ru > time.time():
+        return parsed
+    hhmm = parsed.get("reset_at")
+    if not (isinstance(hhmm, str) and ":" in hhmm):
+        return parsed
+    try:
+        hh, mm = (int(x) for x in hhmm.split(":", 1))
+    except (ValueError, TypeError):
+        return parsed
+    now = datetime.now().astimezone()
+    cand = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    if cand <= now:
+        cand += timedelta(days=1)
+    parsed["reset_at_unix"] = cand.timestamp()
+    return parsed
+
+
 def fetch_claude_api():
     """Ritorna dict {usage, reset_at, weekly_usage}, None, o 'RATE_LIMIT'."""
     global _claude_429_until
@@ -781,6 +813,7 @@ def _compute_metrics_via_skill(parsed, last, history):
             "provider": parsed.get("provider"),
             "usage": parsed.get("usage"),
             "reset_at": parsed.get("reset_at"),
+            "reset_at_unix": parsed.get("reset_at_unix"),
             "weekly_usage": parsed.get("weekly_usage"),
             "weekly_reset_at": parsed.get("weekly_reset_at"),
             "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
@@ -1013,6 +1046,10 @@ def main():
             # residual_to_reset invece del fallback rolling_7d.
             if provider in ("anthropic", "claude"):
                 parsed = _apply_sticky_weekly_reset(parsed)
+                # …e analogamente la finestra 5h: il worker TUI dà solo l'HH:MM,
+                # ricostruiamo l'epoch così il tick mostra DATA+ORARIO anche per
+                # la primaria (non solo per il weekly).
+                parsed = _ensure_reset_unix(parsed)
             if is_first_tick:
                 last = None
                 history = []
@@ -1032,7 +1069,15 @@ def main():
             usage = entry.get("usage")
             proj = entry.get("projection")
             status = entry.get("status")
-            reset = entry.get("reset_at") or "?"
+            # Reset 5h: come per il weekly, preferiamo DATA+ORARIO da reset_at_unix
+            # (HH:MM nudo è ambiguo a cavallo di mezzanotte); fallback all'HH:MM.
+            reset_unix = entry.get("reset_at_unix")
+            if isinstance(reset_unix, (int, float)):
+                reset = datetime.fromtimestamp(
+                    reset_unix, timezone.utc
+                ).astimezone().strftime("%d/%m %H:%M")
+            else:
+                reset = entry.get("reset_at") or "?"
 
             # V6: aggiorna state machine del tick interval e decide se
             # svegliare la Sentinella. Il bridge scrive SEMPRE il sample
