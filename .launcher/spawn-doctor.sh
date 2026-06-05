@@ -73,8 +73,29 @@ tmux new-session -d -x 220 -y 50 -s "$SESSION" -c "$DOTTORE_DIR" || {
 tmux send-keys -t "$SESSION" "export PATH='/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'" C-m
 sleep 1
 
-# 6) Avvia codex --yolo (effort=high per evitare diagnosi superficiali).
-tmux send-keys -t "$SESSION" "codex --yolo -c model_reasoning_effort=high" C-m
+# 6) Avvia il REPL del PROVIDER ATTIVO (NON più codex hardcoded): il Dottore
+#    deve usare lo stesso provider del team — su un setup claude, lanciare codex
+#    fallirebbe (CLI/auth assenti). effort=high per diagnosi non superficiali.
+#    Per claude: pre-seed onboarding (skip wizard TUI) + IS_SANDBOX.
+DOCTOR_PROVIDER=$(python3 -c "import json;print(json.load(open('$JHT_HOME/jht.config.json')).get('active_provider','claude'))" 2>/dev/null || echo claude)
+case "$DOCTOR_PROVIDER" in
+  openai|codex) DOCTOR_CMD="codex --yolo -c model_reasoning_effort=high" ;;
+  kimi)         DOCTOR_CMD="kimi --yolo" ;;
+  *)  # claude / anthropic / default
+    python3 - "$JHT_HOME/.claude.json" <<'PYDOC' 2>/dev/null || true
+import json, sys, os
+f = sys.argv[1]
+try: d = json.load(open(f))
+except Exception: d = {}
+d["hasCompletedOnboarding"] = True
+d.setdefault("theme", "dark")
+d["bypassPermissionsModeAccepted"] = True
+os.makedirs(os.path.dirname(f), exist_ok=True)
+json.dump(d, open(f, "w"), indent=2)
+PYDOC
+    DOCTOR_CMD="IS_SANDBOX=1 claude --dangerously-skip-permissions --effort high --model sonnet" ;;
+esac
+tmux send-keys -t "$SESSION" "$DOCTOR_CMD" C-m
 
 # 6b) Robustezza REPL (#12): verifica che il REPL Codex sia EFFETTIVAMENTE
 #     partito prima di iniettare il prompt. Se codex crasha al boot (auth
@@ -97,17 +118,17 @@ while : ; do
   [ "$repl_up" -eq 1 ] && break
   if [ "$attempt" -ge 2 ]; then
     last_cmd=$(tmux display-message -p -t "$SESSION" '#{pane_current_command}' 2>/dev/null || echo "?")
-    echo "[spawn-doctor] ERROR: REPL Codex non partito dopo 2 tentativi (pane=$last_cmd) — spawn fallito" >&2
+    echo "[spawn-doctor] ERROR: REPL ($DOCTOR_PROVIDER) non partito dopo 2 tentativi (pane=$last_cmd) — spawn fallito" >&2
     TS_FAIL="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf '{"ts":"%s","session":"%s","role":"dottore","event":"spawn_failed","reason":"repl_not_up","pane_cmd":"%s","src":"spawn-doctor.sh"}\n' \
       "$TS_FAIL" "$SESSION" "$last_cmd" >> "$LOGS_DIR/dottore-actions.jsonl"
     tmux kill-session -t "$SESSION" 2>/dev/null || true
     exit 1
   fi
-  echo "[spawn-doctor] REPL non salito (tentativo $attempt) — retry codex" >&2
+  echo "[spawn-doctor] REPL non salito (tentativo $attempt) — retry ($DOCTOR_PROVIDER)" >&2
   tmux send-keys -t "$SESSION" C-c 2>/dev/null || true
   sleep 1
-  tmux send-keys -t "$SESSION" "codex --yolo -c model_reasoning_effort=high" C-m
+  tmux send-keys -t "$SESSION" "$DOCTOR_CMD" C-m
   attempt=$((attempt + 1))
 done
 
