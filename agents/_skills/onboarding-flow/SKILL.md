@@ -41,6 +41,7 @@ The frontend disables "Vai alla dashboard" until **every** field below is presen
 | Nome e cognome                 | `name` + `candidate.name`                       | "Come ti chiami?"                                                       |
 | Ruolo target                   | `target_role` + `candidate.target_role`         | "Che ruolo stai cercando?"                                              |
 | Città / zona                   | `location`                                      | "In che città o zona cerchi?"                                           |
+| Cittadinanza / work-auth       | `candidate.citizenship` + `preferences.work_authorization` | "Di che nazionalità sei, e hai già il diritto di lavorare nelle zone che ti interessano?" (vedi due-diligence sotto) |
 | Anni di esperienza             | `experience_years`                              | "Quanti anni di esperienza hai nel ruolo?"                              |
 | Email contatto                 | `candidate.contacts.email`                      | "Che email vuoi usare per le candidature?"                              |
 | ≥2 skill primarie              | `skills.primary` (≥2 voci)                      | "Quali sono le tue 3 competenze più forti?"                             |
@@ -61,7 +62,35 @@ Una volta passata la checklist di blocco, **continua** a chiedere campi della ch
 - `candidate.contacts.phone`, `.linkedin`, `.github`, `.website`
 - `has_degree`, `seniority_target`
 - `preferences.work_mode`, `relocation`, `salary_annual_eur`
+- `preferences.work_authorization` per regione (vedi due-diligence sotto)
 - Progetti personali, pubblicazioni, open-source, volontariato, certificati
+
+## Work-authorization — due diligence (NON saltarla)
+
+Senza sapere **dove l'utente può legalmente lavorare**, lo Scout raccoglie e lo Scorer punteggia offerte che il candidato non può accettare: shortlist gonfiata di volume-fantasma. Caso reale (beta): candidato UE con shortlist al 59% su Londra — ma **post-Brexit un cittadino UE senza visto UK non può lavorarci senza sponsorship**, quindi gran parte di quelle offerte erano inaccessibili. L'Assistente non l'aveva mai chiesto.
+
+**Cosa catturare sempre:**
+1. **Cittadinanza** (`candidate.citizenship`) — una o più. Sblocca tutto il resto.
+2. **Diritto di lavoro per regione target** (`preferences.work_authorization`) — per OGNI paese tra le città prioritarie/relocation, l'utente ha già il diritto di lavoro o serve un visto?
+
+**Quando approfondire (regola):** appena la `location`/`relocation` tocca **più di un paese** o un paese **diverso dalla cittadinanza**, fai la domanda mirata. Casi che richiedono sempre un chiarimento esplicito:
+- 🇬🇧 **UK** per un non-britannico (post-Brexit anche per UE): "hai già il diritto di lavoro in UK o ti serve sponsorship?"
+- 🇨🇭 **Svizzera**, 🇺🇸 **USA**, 🇨🇦 **Canada**, Emirati ecc. per chi non è cittadino/residente: stesso chiarimento.
+- **UE → altra UE**: di norma OK per cittadini UE (libera circolazione) — conferma la cittadinanza UE e procedi.
+
+**Come registrarlo** (esempi `preferences.work_authorization`):
+```yaml
+candidate:
+  citizenship: ["Hungarian (EU)"]
+preferences:
+  work_authorization:
+    eu: "yes (citizen, free movement)"
+    uk: "no — needs visa sponsorship (post-Brexit)"
+    ch: "no — needs work permit"
+    us: "no"
+```
+
+**Tono:** una domanda naturale, non un form burocratico. Es.: *"Visto che guardi anche a Londra e Zurigo: hai già il diritto di lavorare lì, o per quelle servirebbe uno sponsor/visto? Così evito di proporti ruoli non accessibili."* Spiega sempre il **perché** (= shortlist più utile), non chiederlo a freddo.
 
 ## Settore-agnostic — NEVER default to IT
 
