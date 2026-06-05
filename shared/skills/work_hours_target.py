@@ -38,6 +38,14 @@ except ImportError:  # pragma: no cover
 _WEEKDAY_NAMES = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 _DEFAULT_TARGET_BAND_PCT = 92.0
 
+# Durata nominale della finestra rate-limit rolling (5h dei provider).
+# Usata per il framing esplicito "il weekly residuo diviso in finestre da 5h".
+# NB: il calcolo NON assume che il team sia partito a inizio finestra/settimana
+# (sarebbe ipotetico): usa SEMPRE il residuo reale [now → reset] sia per le ore
+# che per il budget, così il target per-finestra si auto-calibra sulla
+# situazione di partenza effettiva.
+WINDOW_HOURS = 5.0
+
 
 def _resolve_tz(cfg: dict):
     wh = (cfg.get("team") or {}).get("working_hours") if isinstance(cfg, dict) else None
@@ -278,6 +286,30 @@ def compute_target(
     # che il weekly budget richiesto eccede il cap della finestra → tetto.
     target_of_window_cap = max(0.0, min(100.0, target_of_window_cap))
 
+    # ── Framing esplicito "finestre da 5h" (auto-calibrante sul RESIDUO) ────
+    # Tutto basato sul residuo reale, non su un ipotetico start-of-window:
+    #   - even_pace_pct_per_active_hour = budget_residuo / ore_attive_a_reset
+    #       → il %/h attivo costante per atterrare a 100% all'ultimo minuto.
+    #   - windows_remaining_to_reset = ore_attive_a_reset / 5
+    #       → quante finestre 5h-attive restano prima del reset weekly.
+    #   - target_per_remaining_window_pct_of_weekly = residuo / finestre_residue
+    #       → il target (in % del weekly) per una finestra 5h PIENA da qui in
+    #         avanti. Si auto-calibra: se la finestra precedente ha speso meno
+    #         del target il residuo è più alto → le successive salgono, e
+    #         viceversa. `target_pct_of_weekly` sopra è la quota di QUESTA
+    #         finestra, già pesata sulle sue ore attive effettive (h_in_window).
+    even_pace_pct_per_active_hour = (
+        weekly_remaining_pct / h_weekly if h_weekly > 0 else 0.0
+    )
+    windows_remaining_to_reset = (
+        h_weekly / WINDOW_HOURS if h_weekly > 0 else 0.0
+    )
+    target_per_remaining_window_pct_of_weekly = (
+        weekly_remaining_pct / windows_remaining_to_reset
+        if windows_remaining_to_reset > 0
+        else 0.0
+    )
+
     ratio_tag = (
         "unlimited"
         if window_cap_pct_of_weekly in (None, 0)
@@ -302,6 +334,11 @@ def compute_target(
         "weekly_active_hours": round(h_weekly, 3),
         "weekly_remaining_pct": round(weekly_remaining_pct, 3),
         "weekly_window_source": weekly_window_source,
+        "even_pace_pct_per_active_hour": round(even_pace_pct_per_active_hour, 4),
+        "windows_remaining_to_reset": round(windows_remaining_to_reset, 2),
+        "target_per_remaining_window_pct_of_weekly": round(
+            target_per_remaining_window_pct_of_weekly, 3
+        ),
         "window_cap_pct_of_weekly": window_cap_pct_of_weekly,
         "next_phase_transition_at": (
             next_at.isoformat() if next_at else None
@@ -575,6 +612,56 @@ def _self_test() -> int:
         "Roma weekly = 45h",
         abs(r["weekly_active_hours"] - 45.0) < 0.01,
     )
+
+    print("─ test 10: 7/7 08-20, partenza a META settimana (residual-based)")
+    SEVEN_SEVEN = {
+        "team": {
+            "working_hours": {
+                "timezone": "UTC",
+                "windows": [{
+                    "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+                    "start": "08:00",
+                    "end": "20:00",
+                }],
+            }
+        }
+    }
+    # now = lun 2026-06-01 12:00 UTC; reset weekly = ven 2026-06-05 12:00 UTC.
+    # Ore attive nel residuo [lun12 → ven12]: lun 8 + mar/mer/gio 12×3 + ven 4 = 48h.
+    now10 = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    reset10 = datetime(2026, 6, 5, 12, 0, tzinfo=timezone.utc)
+    full_win_s = datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc)
+    full_win_e = datetime(2026, 6, 1, 17, 0, tzinfo=timezone.utc)  # 5h tutte ON
+    r = compute_target(
+        now10, full_win_s, full_win_e, 14.7, SEVEN_SEVEN,
+        weekly_used_pct=20.0, weekly_reset_at_utc=reset10,
+    )
+    failures += ok("source residual_to_reset", r["weekly_window_source"] == "residual_to_reset")
+    failures += ok("h_weekly residuo = 48h (non 84)", abs(r["weekly_active_hours"] - 48.0) < 0.05)
+    failures += ok("even_pace ≈ 1.667%/h (80/48)", abs(r["even_pace_pct_per_active_hour"] - 1.6667) < 0.01)
+    failures += ok("windows_remaining = 9.6 (48/5)", abs(r["windows_remaining_to_reset"] - 9.6) < 0.01)
+    failures += ok("target/finestra residua ≈ 8.333% (80/9.6)", abs(r["target_per_remaining_window_pct_of_weekly"] - 8.333) < 0.01)
+    # Finestra piena → la quota di QUESTA finestra coincide col target/finestra.
+    failures += ok("finestra piena: target_pct_of_weekly ≈ 8.333", abs(r["target_pct_of_weekly"] - 8.333) < 0.01)
+
+    # Auto-calibrazione: stesso istante ma budget più speso (40%) → target più basso.
+    r_cal = compute_target(
+        now10, full_win_s, full_win_e, 14.7, SEVEN_SEVEN,
+        weekly_used_pct=40.0, weekly_reset_at_utc=reset10,
+    )
+    failures += ok("auto-calibra giù: 40% speso → 6.25% (60/9.6)", abs(r_cal["target_per_remaining_window_pct_of_weekly"] - 6.25) < 0.01)
+    failures += ok("auto-calibra: target più basso del caso 20%", r_cal["target_per_remaining_window_pct_of_weekly"] < r["target_per_remaining_window_pct_of_weekly"])
+
+    # Finestra che scavalla le 20:00 → solo le ore attive contano (la quota cala,
+    # MA il riferimento per-finestra-piena resta 8.333).
+    strad_s = datetime(2026, 6, 1, 18, 0, tzinfo=timezone.utc)
+    strad_e = datetime(2026, 6, 1, 23, 0, tzinfo=timezone.utc)  # solo 18-20 = 2h ON
+    r_str = compute_target(
+        now10, strad_s, strad_e, 14.7, SEVEN_SEVEN,
+        weekly_used_pct=20.0, weekly_reset_at_utc=reset10,
+    )
+    failures += ok("finestra a cavallo 20:00: 2h attive", abs(r_str["active_hours_in_window"] - 2.0) < 0.05)
+    failures += ok("quota finestra parziale ≈ 3.333% (80×2/48)", abs(r_str["target_pct_of_weekly"] - 3.333) < 0.05)
 
     print()
     if failures:
