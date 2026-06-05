@@ -588,6 +588,66 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
   })
 }
 
+// ── Dataset dashboard: universo ATTIVO con campi-facet + campi-tabella ──
+// Un solo fetch alimenta i grafici collegati (role_family/score/loc per le
+// distribuzioni) E la tabella "Recent Positions" filtrata (legacy_id,
+// location, remote_type, recency). Esclude le 'excluded', coerente con le
+// altre metriche della dashboard. Ordinato per ultima azione desc.
+export type DashboardPosition = {
+  id: string
+  legacy_id: number | null
+  title: string | null
+  company: string | null
+  location: string | null
+  remote_type: string | null
+  status: string
+  score: number | null
+  role_family: string | null
+  loc_country: string | null
+  loc_city: string | null
+  found_at: string | null
+  last_action_at: string
+}
+
+export async function getDashboardPositions(): Promise<DashboardPosition[]> {
+  const w = await ws()
+  if (w) { try { return local.getDashboardPositionsLocal(w) } catch { return [] } }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('positions')
+    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, found_at, last_checked, scores ( total_score, scored_at )')
+    .not('status', 'eq', 'excluded')
+    .is('deleted_at', null)
+    .order('found_at', { ascending: false })
+    .limit(1000)
+  if (error || !data) return []
+  return (data as any[]).map((p) => {
+    const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    const score = (p.score as number | null) ?? (typeof s?.total_score === 'number' ? s.total_score : null)
+    const candidates = [p.found_at, p.last_checked, s?.scored_at].filter(Boolean) as string[]
+    const last_action_at = candidates.length > 0
+      ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
+      : (p.found_at ?? '')
+    return {
+      id: String(p.id),
+      legacy_id: (p.legacy_id as number | null) ?? null,
+      title: p.title ?? null,
+      company: p.company ?? null,
+      location: p.location ?? null,
+      remote_type: p.remote_type ?? null,
+      status: p.status,
+      score: typeof score === 'number' ? score : null,
+      role_family: p.role_family ?? null,
+      loc_country: p.loc_country ?? null,
+      loc_city: p.loc_city ?? null,
+      found_at: p.found_at ?? null,
+      last_action_at,
+    }
+  })
+}
+
 export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const w = await ws()
   if (w) { try { return local.getPositionsWithCoordsLocal(w) } catch { return [] } }
