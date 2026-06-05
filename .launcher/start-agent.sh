@@ -316,9 +316,9 @@ get_agent_info() {
     # Mentor (user-facing always-on, come l'Assistente):
     # Opus high — coaching/posizionamento richiedono nuance reasoning.
     mentor)     echo "MENTOR|high|" ;;
-    # Sonnet (no high) — watchdog: logica if-then semplice, non serve
-    # reasoning profondo. Riduce il costo del polling 10-min sostenuto.
-    sentinella) echo "SENTINELLA|medium|sonnet" ;;
+    # Sonnet high — la Sentinella governa pacing/throttle/escalation: le
+    # decisioni (vel vs target, ordini al Capitano) meritano effort high.
+    sentinella) echo "SENTINELLA|high|sonnet" ;;
     *)          echo "" ;;
   esac
 }
