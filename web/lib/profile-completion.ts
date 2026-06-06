@@ -19,7 +19,8 @@ export interface ProfileRequirement {
   key: string; // id stabile
   level: FieldLevel;
   labelKey: string; // chiave i18n per la UI
-  anchor: string; // ancora della sezione in /profile
+  anchor: string; // ancora della sezione in /profile (pagina di view)
+  editAnchor: string; // ancora della FormSection in /profile/edit (deep-link dai chip "campi mancanti")
   check: (p: CandidateProfile) => boolean;
 }
 
@@ -40,29 +41,30 @@ const hasWorkAuth = (p: CandidateProfile) => {
 
 export const PROFILE_REQUIREMENTS: ProfileRequirement[] = [
   // 🔴 required — sblocca il team
-  { key: "name", level: "required", labelKey: "f_name", anchor: "info-base", check: (p) => !!p.name },
-  { key: "email", level: "required", labelKey: "f_email", anchor: "contatti", check: hasEmail },
-  { key: "target_role", level: "required", labelKey: "f_target_role", anchor: "info-base", check: (p) => !!p.target_role },
-  { key: "location", level: "required", labelKey: "f_location", anchor: "info-base", check: (p) => !!p.location },
-  { key: "experience_years", level: "required", labelKey: "mf_exp_years", anchor: "info-base", check: (p) => p.experience_years != null },
-  { key: "seniority_target", level: "required", labelKey: "mf_seniority", anchor: "info-base", check: (p) => !!pos(p).seniority_target },
-  { key: "skills", level: "required", labelKey: "sec_skills", anchor: "skills", check: (p) => skillCount(p) >= 2 },
-  { key: "languages", level: "required", labelKey: "sec_languages", anchor: "lingue", check: (p) => arr(p.languages).length >= 1 },
+  { key: "name", level: "required", labelKey: "f_name", anchor: "info-base", editAnchor: "info-base", check: (p) => !!p.name },
+  { key: "email", level: "required", labelKey: "f_email", anchor: "contatti", editAnchor: "contatti", check: hasEmail },
+  { key: "target_role", level: "required", labelKey: "f_target_role", anchor: "info-base", editAnchor: "info-base", check: (p) => !!p.target_role },
+  { key: "location", level: "required", labelKey: "f_location", anchor: "info-base", editAnchor: "info-base", check: (p) => !!p.location },
+  { key: "experience_years", level: "required", labelKey: "mf_exp_years", anchor: "info-base", editAnchor: "info-base", check: (p) => p.experience_years != null },
+  { key: "seniority_target", level: "required", labelKey: "mf_seniority", anchor: "info-base", editAnchor: "info-base", check: (p) => !!pos(p).seniority_target },
+  { key: "skills", level: "required", labelKey: "sec_skills", anchor: "skills", editAnchor: "skills", check: (p) => skillCount(p) >= 2 },
+  { key: "languages", level: "required", labelKey: "sec_languages", anchor: "lingue", editAnchor: "lingue", check: (p) => arr(p.languages).length >= 1 },
 
   // 🟡 recommended — non bloccante, grande miglioramento
-  { key: "experience", level: "recommended", labelKey: "f_experience", anchor: "esperienza-lavorativa", check: (p) => arr(pos(p).experience).length >= 1 },
-  { key: "education", level: "recommended", labelKey: "mf_education", anchor: "formazione", check: (p) => arr(pos(p).education).length >= 1 },
-  { key: "industry", level: "recommended", labelKey: "f_industry", anchor: "info-base", check: (p) => !!pos(p).industry },
-  { key: "work_authorization", level: "recommended", labelKey: "mf_work_auth", anchor: "info-base", check: hasWorkAuth },
-  { key: "location_preferences", level: "recommended", labelKey: "mf_location_prefs", anchor: "preferenze-lavoro", check: (p) => arr(p.location_preferences).length >= 1 },
+  { key: "job_titles", level: "recommended", labelKey: "mf_desired_roles", anchor: "ruoli-target", editAnchor: "ruoli-target", check: (p) => arr(p.job_titles).length >= 1 },
+  { key: "experience", level: "recommended", labelKey: "f_experience", anchor: "esperienza-lavorativa", editAnchor: "esperienza-lavorativa", check: (p) => arr(pos(p).experience).length >= 1 },
+  { key: "education", level: "recommended", labelKey: "mf_education", anchor: "formazione", editAnchor: "formazione", check: (p) => arr(pos(p).education).length >= 1 },
+  { key: "industry", level: "recommended", labelKey: "f_industry", anchor: "info-base", editAnchor: "info-base", check: (p) => !!pos(p).industry },
+  { key: "work_authorization", level: "recommended", labelKey: "mf_work_auth", anchor: "info-base", editAnchor: "info-base", check: hasWorkAuth },
+  { key: "location_preferences", level: "recommended", labelKey: "mf_location_prefs", anchor: "preferenze-lavoro", editAnchor: "location-preferite", check: (p) => arr(p.location_preferences).length >= 1 },
 
   // 🟢 optional — su misura massima
-  { key: "certifications", level: "optional", labelKey: "sec_certifications", anchor: "formazione", check: (p) => arr(pos(p).certifications).length >= 1 },
-  { key: "projects", level: "optional", labelKey: "sec_projects", anchor: "progetti", check: (p) => arr(pos(p).projects).length >= 1 },
-  { key: "strengths", level: "optional", labelKey: "sec_strengths", anchor: "punti-di-forza", check: (p) => arr(pos(p).strengths).length >= 1 },
-  { key: "career_goals", level: "optional", labelKey: "sec_career_goals", anchor: "obiettivi-carriera", check: (p) => !!(pos(p).career_goals && Object.values(pos(p).career_goals as Record<string, unknown>).some(Boolean)) },
-  { key: "salary_target", level: "optional", labelKey: "salary_target", anchor: "preferenze-lavoro", check: (p) => p.salary_target != null },
-  { key: "contacts_extra", level: "optional", labelKey: "sec_contacts", anchor: "contatti", check: (p) => {
+  { key: "certifications", level: "optional", labelKey: "sec_certifications", anchor: "formazione", editAnchor: "formazione", check: (p) => arr(pos(p).certifications).length >= 1 },
+  { key: "projects", level: "optional", labelKey: "sec_projects", anchor: "progetti", editAnchor: "progetti", check: (p) => arr(pos(p).projects).length >= 1 },
+  { key: "strengths", level: "optional", labelKey: "sec_strengths", anchor: "punti-di-forza", editAnchor: "punti-di-forza", check: (p) => arr(pos(p).strengths).length >= 1 },
+  { key: "career_goals", level: "optional", labelKey: "sec_career_goals", anchor: "obiettivi-carriera", editAnchor: "obiettivi-carriera", check: (p) => !!(pos(p).career_goals && Object.values(pos(p).career_goals as Record<string, unknown>).some(Boolean)) },
+  { key: "salary_target", level: "optional", labelKey: "salary_target", anchor: "preferenze-lavoro", editAnchor: "salary-target", check: (p) => p.salary_target != null },
+  { key: "contacts_extra", level: "optional", labelKey: "sec_contacts", anchor: "contatti", editAnchor: "contatti", check: (p) => {
       const c = (pos(p).contacts ?? {}) as Record<string, unknown>;
       return Boolean(c.phone || c.linkedin || c.github || c.website);
     } },

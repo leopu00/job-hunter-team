@@ -911,7 +911,7 @@ export default function ProfileEditPage() {
           </FormSection>
 
           {/* ── Progetti ── */}
-          <FormSection title="Progetti Personali">
+          <FormSection id="progetti" title="Progetti Personali">
             {projects.length > 0 && (
               <div className="flex flex-col gap-2 mb-4">
                 {projects.map((p, i) => (
