@@ -10,6 +10,7 @@ import { getProfileT } from "@/lib/profile-i18n";
 import ProfileStats from "@/components/ProfileStats";
 import ProfileAssistantFab from "@/components/ProfileAssistantFab";
 import RevealableContactRow from "@/app/components/RevealableContactRow";
+import ProfileBlockRenderer from "@/app/components/ProfileBlockRenderer";
 
 const SKILL_CATEGORY_COLORS = [
   "var(--color-blue)",
@@ -46,6 +47,13 @@ export default async function ProfilePage() {
   const dateLocale = locale === "it" ? "it-IT" : locale;
 
   let profile: CandidateProfile | null = null;
+  let blocks: {
+    key: string;
+    kind: string;
+    title: string;
+    content: unknown;
+    ord?: number;
+  }[] = [];
 
   // In locale (desktop container su localhost) il profilo vive nel
   // workspace YAML, Supabase non viene interpellato — coerente con il
@@ -71,9 +79,21 @@ export default async function ProfilePage() {
       .eq("user_id", user.id)
       .single()) as { data: CandidateProfile | null };
     profile = data;
+    const { data: blocksData } = await supabase
+      .from("candidate_blocks")
+      .select("key,kind,title,content,ord")
+      .eq("user_id", user.id)
+      .order("ord", { ascending: true });
+    blocks = blocksData ?? [];
   } else {
     profile = readWorkspaceProfile();
   }
+
+  // Blocchi L2/L3 NON coperti dalle sezioni fisse → "Approfondimenti" in fondo.
+  // Evita doppioni con about/goals/preferences/strengths/… già renderizzati.
+  const COVERED_BLOCK =
+    /^(about|goals|preferences|pref_|strengths|aspirations|free_notes|projects|experience|education|skills|languages|contacts)/;
+  const extraBlocks = blocks.filter((b) => b.key && !COVERED_BLOCK.test(b.key));
 
   const pos = profile?.positioning ?? {};
   const contacts = (pos.contacts ?? {}) as Record<string, string>;
@@ -942,6 +962,15 @@ export default async function ProfilePage() {
                 </ProfileSection>
               </div>
             )}
+
+            {/* Approfondimenti — blocchi L2/L3 non coperti dalle sezioni fisse.
+                Data-driven: ogni kind ha il suo renderer, un blocco custom nuovo
+                appare senza toccare codice. */}
+            {extraBlocks.map((b) => (
+              <ProfileSection key={b.key} id={b.key} title={b.title}>
+                <ProfileBlockRenderer kind={b.kind} content={b.content} />
+              </ProfileSection>
+            ))}
           </div>
         )}
       </div>
