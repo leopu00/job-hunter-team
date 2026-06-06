@@ -43,6 +43,7 @@ const T = {
 
     // Charts
     score_distribution:   'Distribuzione Score',
+    salary_distribution:  'Distribuzione Stipendi',
     score_footer:         (w: number, t: number) => `${w} di ${t} con score · ${t - w} senza`,
     sources:              'Fonti',
     critic_votes:         'Voti Critico',
@@ -67,6 +68,8 @@ const T = {
     col_location:         'Luogo',
     col_remote:           'Remote',
     col_score:            'Score',
+    col_salary:           'Stipendio',
+    col_monthly:          'Lordo/mese',
     col_status:           'Stato',
     col_updated:          'Aggiornato',
     no_positions:         'Nessuna posizione trovata.',
@@ -121,6 +124,7 @@ const T = {
     p_applied:            'Sent',
 
     score_distribution:   'Score Distribution',
+    salary_distribution:  'Salary Distribution',
     score_footer:         (w: number, t: number) => `${w} of ${t} with score · ${t - w} without`,
     sources:              'Sources',
     critic_votes:         'Critic Votes',
@@ -144,6 +148,8 @@ const T = {
     col_location:         'Location',
     col_remote:           'Remote',
     col_score:            'Score',
+    col_salary:           'Salary',
+    col_monthly:          'Gross/mo',
     col_status:           'Status',
     col_updated:          'Updated',
     no_positions:         'No positions found.',
@@ -197,6 +203,7 @@ const T = {
     p_applied:            'Elküldve',
 
     score_distribution:   'Pontszám eloszlás',
+    salary_distribution:  'Fizetés eloszlás',
     score_footer:         (w: number, t: number) => `${w} / ${t} pontszámmal · ${t - w} nélkül`,
     sources:              'Források',
     critic_votes:         'Kritikus pontok',
@@ -220,6 +227,8 @@ const T = {
     col_location:         'Helyszín',
     col_remote:           'Távmunka',
     col_score:            'Pontszám',
+    col_salary:           'Fizetés',
+    col_monthly:          'Bruttó/hó',
     col_status:           'Állapot',
     col_updated:          'Frissítve',
     no_positions:         'Nem találhatók állások.',
