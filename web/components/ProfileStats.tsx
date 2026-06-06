@@ -79,6 +79,12 @@ interface Props {
   profile: CandidateProfile | null
 }
 
+const LEVEL_ROWS = [
+  { key: 'required' as const, baseColor: 'var(--color-red)' },
+  { key: 'recommended' as const, baseColor: 'var(--color-yellow)' },
+  { key: 'optional' as const, baseColor: 'var(--color-blue)' },
+]
+
 export default function ProfileStats({ profile }: Props) {
   const locale = useLocale()
   const t = getProfileT(locale)
@@ -87,7 +93,8 @@ export default function ProfileStats({ profile }: Props) {
   const animatedCompletion = useAnimatedCount(completion)
   const missingFields = profile ? calcCompletionChecks(profile).filter(c => !c.ok) : []
   const teamUnlocked = isTeamUnlocked(profile)
-  const requiredMissing = completionByLevel(profile).required.missing.length
+  const levels = completionByLevel(profile)
+  const requiredMissing = levels.required.missing.length
 
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -264,6 +271,31 @@ export default function ProfileStats({ profile }: Props) {
                 }}
               />
             </div>
+            {/* Completezza per livello (tassonomia 3 livelli) */}
+            {profile && (
+              <div className="mt-3 flex flex-col gap-1.5">
+                {LEVEL_ROWS.map(({ key, baseColor }) => {
+                  const prog = levels[key]
+                  const pct = prog.total ? Math.round((prog.filled / prog.total) * 100) : 0
+                  const done = prog.filled === prog.total
+                  const color = done ? 'var(--color-green)' : baseColor
+                  return (
+                    <div key={key}>
+                      <div className="flex items-center justify-between text-[9px] mb-0.5">
+                        <span className="uppercase tracking-[0.08em]" style={{ color }}>
+                          {t(`ps_lvl_${key}`)}
+                          {key === 'required' ? ` · ${t('ps_lvl_required_hint')}` : ''}
+                        </span>
+                        <span className="tabular-nums text-[var(--color-dim)]">{prog.filled}/{prog.total}</span>
+                      </div>
+                      <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

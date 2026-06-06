@@ -94,6 +94,10 @@ const T: Record<string, Entry> = {
 
   // ── ProfileStats ─────────────────────────────────────────────────
   ps_completion: { it: "Completamento profilo", en: "Profile completion", hu: "Profil kitöltöttsége", es: "Completitud del perfil", de: "Profil-Vollständigkeit", fr: "Complétude du profil", pt: "Conclusão do perfil" },
+  ps_lvl_required: { it: "Obbligatori", en: "Required", hu: "Kötelező", es: "Obligatorios", de: "Erforderlich", fr: "Obligatoires", pt: "Obrigatórios" },
+  ps_lvl_recommended: { it: "Consigliati", en: "Recommended", hu: "Ajánlott", es: "Recomendados", de: "Empfohlen", fr: "Recommandés", pt: "Recomendados" },
+  ps_lvl_optional: { it: "Su misura", en: "Optional", hu: "Választható", es: "Opcionales", de: "Optional", fr: "Optionnels", pt: "Opcionais" },
+  ps_lvl_required_hint: { it: "sbloccano il team", en: "unlock the team", hu: "feloldják a csapatot", es: "desbloquean el equipo", de: "schalten das Team frei", fr: "débloquent l'équipe", pt: "desbloqueiam a equipe" },
   ps_recent: { it: "Ultime candidature", en: "Recent applications", hu: "Legutóbbi jelentkezések", es: "Candidaturas recientes", de: "Letzte Bewerbungen", fr: "Candidatures récentes", pt: "Candidaturas recentes" },
   ps_no_apps: { it: "Nessuna candidatura ancora", en: "No applications yet", hu: "Még nincs jelentkezés", es: "Aún no hay candidaturas", de: "Noch keine Bewerbungen", fr: "Aucune candidature pour l'instant", pt: "Ainda não há candidaturas" },
   ps_cv_preview: { it: "Anteprima CV", en: "CV Preview", hu: "Önéletrajz előnézet", es: "Vista previa del CV", de: "Lebenslauf-Vorschau", fr: "Aperçu du CV", pt: "Pré-visualização do CV" },
