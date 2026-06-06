@@ -77,7 +77,29 @@ biztosan, NE hagyd NULL-on. Haladj tovább:
 3. Végső megoldás: a `loc_continent` mint placeholder + megjegyzés
    `"work_country=Europe placeholder, entity unverified"`
 
+### R4 — Peer DB lookup városok (MIELŐTT `loc_city`-t írnál)
+
+Pontosan mint R2 a `role_family`-hoz, de a **városokra**. MIELŐTT
+`loc_city`-t írnál, ellenőrizd, milyen formát használtak már a kollégák
+az adott országban, hogy ne hozz létre duplikátumot más nyelven
+(Rome vs Roma, Milan vs Milano):
+
+```bash
+python3 /app/shared/skills/db_query.py raw \
+  "SELECT loc_country, loc_city, COUNT(*) AS n FROM positions
+   WHERE loc_city IS NOT NULL
+   GROUP BY loc_country, loc_city ORDER BY loc_country, n DESC"
+```
+
+- Ha a város **már jelen van** egy formában → IGAZODJ ahhoz
+  (feltéve, hogy megfelel az "angol exonima" szabványnak, lásd lent).
+- Ha egy másik nyelven lévő duplikátumot látsz már a DB-ben (pl.
+  létezik `Roma` és `Rome` is), használd az **angol** formát és
+  jegyezd fel a `location_notes`-ban a konszolidálandó formát.
+
 ## Írásbeli szabvány
+
+### Országok (`loc_country` / `work_country`)
 
 | Igen ✓ | Nem ✗ |
 |---|---|
@@ -87,6 +109,35 @@ biztosan, NE hagyd NULL-on. Haladj tovább:
 | `Netherlands` | `Holland`, `The Netherlands` |
 | `Székesfehérvár` | `Szekesfehervar` (mindig őrizd meg a diakritikus jeleket) |
 | ISO-2 `IT, IE, HU, NL, DE, GB, US, ES` | ISO-3, kisbetűs |
+
+### Városok (`loc_city`) — angol EXONIMA ha létezik
+
+**Egyetlen szabály**: mindig az **angol** formát írd a városnévnél, ha
+létezik bevett exonima. Ha a városnak NINCS angol exonimája, használd a
+helyi nevet **a diakritikus jelek megőrzésével**. Ez igazítja az
+Analista-t a Scout dedup térképéhez (`_CITY_SYNONYMS` a
+`shared/skills/db_insert.py`-ban) és kiküszöböli a Rome/Roma,
+Milan/Milano duplikátumokat.
+
+| Igen ✓ (EN exonima) | Nem ✗ (helyi forma) |
+|---|---|
+| `Rome` | `Roma` |
+| `Milan` | `Milano` |
+| `Naples` | `Napoli` |
+| `Turin` | `Torino` |
+| `Florence` | `Firenze` |
+| `Venice` | `Venezia` |
+| `Genoa` | `Genova` |
+| `Munich` | `München`, `Monaco di Baviera` |
+| `Cologne` | `Köln` |
+| `Vienna` | `Wien` |
+| `Prague` | `Praha` |
+| `Brussels` | `Bruxelles` |
+| `Lisbon` | `Lisboa` |
+| `Plzeň` (nincs exonima → helyi + diakritikus jelek) | `Plzen` |
+
+Ha kétséged van egy bevett exonima létezéséről, alkalmazd a peer DB
+lookup-ot (R4) és **igazodj a már meglévő formához** az adott városnál.
 
 ## Speciális esetek (standard döntés)
 
@@ -198,6 +249,9 @@ alkalmazd az R3 tartalékot (hirdetési board országa) + jegyezd fel.
 - ❌ "EMEA" leképezése "Europe"-ra ellenőrzés nélkül (tartalmazza a Middle East + Africa-t)
 - ❌ `work_country = NULL` egy `checked` pozíción (elrontja a fizetési UI-t)
 - ❌ role_family kitalálása, ha a kollégák már hasonlót használtak → lásd R2
+- ❌ `loc_city` írása helyi nyelven, amikor létezik az angol exonima
+  (`Roma`, `Milano`, `Napoli` → használd `Rome`, `Milan`, `Naples`)
+  vagy peer DB lookup nélkül → lásd R4 + várostáblázat
 - ❌ A teljes köteg betöltése a saját tartományodból → lásd R1
 - ❌ **`loc_city = "Remote" / "Anywhere" / "Distributed"`** — EZEK NEM városok.
   Ha a pozíció full-remote specifikus város nélkül, `loc_city = NULL`.

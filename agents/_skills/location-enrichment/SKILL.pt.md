@@ -77,7 +77,29 @@ certeza, NÃO deixar NULL. Proceder:
 3. Última instância: o `loc_continent` como placeholder + nota
    `"work_country=Europe placeholder, entity unverified"`
 
+### R4 — Lookup de cidades na DB dos pares (ANTES de escrever `loc_city`)
+
+Exatamente como R2 para `role_family`, mas para as **cidades**. ANTES de
+escrever `loc_city`, verificar que forma os colegas já usaram para esse
+país, para não criar um duplicado noutro idioma
+(Rome vs Roma, Milan vs Milano):
+
+```bash
+python3 /app/shared/skills/db_query.py raw \
+  "SELECT loc_country, loc_city, COUNT(*) AS n FROM positions
+   WHERE loc_city IS NOT NULL
+   GROUP BY loc_country, loc_city ORDER BY loc_country, n DESC"
+```
+
+- Se a cidade **já está presente** numa forma → ALINHAR a essa
+  (desde que respeite o padrão "exonimo inglês", ver abaixo).
+- Se vir um duplicado noutro idioma já na DB (ex. existem tanto
+  `Roma` como `Rome`), usar a forma **inglesa** e anotar em
+  `location_notes` a forma a consolidar.
+
 ## Padrão de escrita
+
+### Países (`loc_country` / `work_country`)
 
 | Sim ✓ | Não ✗ |
 |---|---|
@@ -87,6 +109,36 @@ certeza, NÃO deixar NULL. Proceder:
 | `Netherlands` | `Holland`, `The Netherlands` |
 | `Székesfehérvár` | `Szekesfehervar` (preservar sempre os diacríticos) |
 | ISO-2 `IT, IE, HU, NL, DE, GB, US, ES` | ISO-3, lowercase |
+
+### Cidades (`loc_city`) — exonimo INGLÊS quando existe
+
+**Regra única**: escrever sempre a forma **inglesa** da cidade quando
+existe um exonimo consolidado. Se a cidade NÃO tem um exonimo inglês,
+usar o nome local **preservando os diacríticos**. Isto alinha o Analista
+com o mapa de dedup do Scout (`_CITY_SYNONYMS` em
+`shared/skills/db_insert.py`) e elimina os duplicados Rome/Roma,
+Milan/Milano.
+
+| Sim ✓ (exonimo EN) | Não ✗ (forma local) |
+|---|---|
+| `Rome` | `Roma` |
+| `Milan` | `Milano` |
+| `Naples` | `Napoli` |
+| `Turin` | `Torino` |
+| `Florence` | `Firenze` |
+| `Venice` | `Venezia` |
+| `Genoa` | `Genova` |
+| `Munich` | `München`, `Monaco di Baviera` |
+| `Cologne` | `Köln` |
+| `Vienna` | `Wien` |
+| `Prague` | `Praha` |
+| `Brussels` | `Bruxelles` |
+| `Lisbon` | `Lisboa` |
+| `Plzeň` (sem exonimo → local + diacríticos) | `Plzen` |
+
+Em caso de dúvida sobre a existência de um exonimo consolidado, aplicar
+o peer DB lookup (R4) e **alinhar-se à forma já presente** para essa
+cidade.
 
 ## Casos especiais (decisão padrão)
 
@@ -198,6 +250,9 @@ aplicar fallback R3 (país do posting board) + anotar.
 - ❌ Mapear "EMEA" como "Europe" sem verificar (inclui Middle East + Africa)
 - ❌ `work_country = NULL` numa posição `checked` (quebra UI de salário)
 - ❌ Inventar role_family se os colegas já usaram similares → ver R2
+- ❌ Escrever `loc_city` no idioma local quando existe o exonimo
+  inglês (`Roma`, `Milano`, `Napoli` → usar `Rome`, `Milan`, `Naples`)
+  ou sem peer DB lookup → ver R4 + tabela de cidades
 - ❌ Carregar o batch inteiro do seu range → ver R1
 - ❌ **`loc_city = "Remote" / "Anywhere" / "Distributed"`** — NÃO são cidades.
   Se a posição é full-remote sem city específica, `loc_city = NULL`.
