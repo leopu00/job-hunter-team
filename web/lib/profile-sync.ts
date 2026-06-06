@@ -102,7 +102,11 @@ function titleFor(key: string): string {
 }
 
 // ── main mapper ──────────────────────────────────────────────────────
-export function mapYamlToCanonical(raw: Dict, userId: string): CanonicalProfile {
+export function mapYamlToCanonical(
+  raw: Dict,
+  userId: string,
+  summaries: Record<string, string> = {},
+): CanonicalProfile {
   const candidate = isObj(raw.candidate) ? raw.candidate : {};
   const personal = isObj(raw.personal) ? raw.personal : {};
 
@@ -213,13 +217,28 @@ export function mapYamlToCanonical(raw: Dict, userId: string): CanonicalProfile 
   };
   const hasContact = Object.values(contacts).some(Boolean);
 
-  // ── blocks (L2/L3) dai campi narrativi noti ────────────────────────
+  // ── blocks (L2/L3): summary .md narrativi + campi narrativi del raw ──
   const blocks: Array<Dict> = [];
-  const addBlock = (key: string, value: unknown, title?: string) => {
+  const seenKeys = new Set<string>();
+  const addBlock = (key: string, value: unknown, title?: string, source = "import") => {
+    if (seenKeys.has(key)) return;
     const b = valueToBlock(value);
-    if (b) blocks.push({ user_id: userId, key, kind: b.kind, title: title ?? titleFor(key), content: b.content, ord: blocks.length, source: "import" });
+    if (!b) return;
+    seenKeys.add(key);
+    blocks.push({ user_id: userId, key, kind: b.kind, title: title ?? titleFor(key), content: b.content, ord: blocks.length, source });
   };
-  // sezioni narrative ricorrenti (best-effort, copre betaA/betaB)
+  // 1) summary .md dell'Assistente (about/goals/preferences/strengths) → narrative.
+  //    Priorità sui blocchi derivati dal raw (stessa key → vince il summary).
+  const SUMMARY_TITLES: Record<string, string> = {
+    about: "Chi sono",
+    goals: "Obiettivi",
+    preferences: "Preferenze di lavoro",
+    strengths: "Punti di forza",
+  };
+  for (const [k, v] of Object.entries(summaries)) {
+    addBlock(k, v, SUMMARY_TITLES[k] ?? titleFor(k), "assistant");
+  }
+  // 2) campi narrativi del raw (saltati se già coperti da un summary)
   addBlock("goals", raw.goals ?? candidate.career_goals, "Obiettivi");
   addBlock("aspirations", candidate.aspirations ?? raw.aspirations, "Aspirazioni");
   addBlock("strengths", candidate.strengths ?? raw.strengths ?? raw.domain_expertise, "Punti di forza");

@@ -661,6 +661,7 @@ export async function POST(req: NextRequest) {
           const canonical = mapYamlToCanonical(
             parsed as Record<string, unknown>,
             userId,
+            body.profile.summaries ?? {},
           );
           const sync = await syncProfileToSupabase(admin, userId, canonical);
           if (!sync.ok) {
