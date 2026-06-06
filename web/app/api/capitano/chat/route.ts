@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
 import { getAgentDir } from "@/lib/jht-paths";
 import { parseJsonl } from "@/lib/agent-chat";
+import { requireAuth } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 
@@ -13,6 +14,8 @@ function getChatFile(): string {
 
 /** GET — leggi messaggi */
 export async function GET(req: NextRequest) {
+  const authError = await requireAuth();
+  if (authError) return authError;
   const chatFile = getChatFile();
   const after = parseFloat(req.nextUrl.searchParams.get("after") ?? "0");
 
@@ -28,6 +31,8 @@ export async function GET(req: NextRequest) {
 
 /** DELETE — pulisci la chat */
 export async function DELETE() {
+  const authError = await requireAuth();
+  if (authError) return authError;
   const chatFile = getChatFile();
   if (fs.existsSync(chatFile)) {
     fs.writeFileSync(chatFile, "", "utf-8");
@@ -37,6 +42,8 @@ export async function DELETE() {
 
 /** POST — invia messaggio utente */
 export async function POST(req: NextRequest) {
+  const authError = await requireAuth();
+  if (authError) return authError;
   const { text } = await req.json();
   if (typeof text !== "string" || !text.trim()) {
     return NextResponse.json({ error: "empty message" }, { status: 400 });
