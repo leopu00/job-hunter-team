@@ -9,17 +9,17 @@ This page tells you which subscription to pick.
 | Profile | Pick |
 |---|---|
 | 💼 You can spend €200/month for the best result | 🟠 **Claude Max x20** |
-| 🎯 You want JHT to actually work without breaking the bank | 🌙 **Kimi €40** *(target setup)* |
-| 🧪 Mid-tier with strong reasoning | 🔵 **Codex Plus / Pro €100** *(benchmark in progress)* |
+| 🎯 You want JHT to actually work without breaking the bank | 🌙 **Kimi €40** *(validated)* |
+| 🧪 Mid-tier with strong reasoning | 🔵 **Codex Plus / Pro €100** *(tested)* |
 
 ## Supported subscriptions
 
 | Provider | Plan | Cost / month | ~Tokens / month | JHT verdict | Status |
 |---|---|---|---|---|---|
 | 🟠 **Claude** | Max x20 | ~€200 | ~400M | ✅ **Best in class** — usage projection oscillates within ±5% of target. Captain + Sentinel hit ~95% of the 5h window with surgical precision. | Tested, production-ready |
-| 🌙 **Kimi** | Pro | ~€40 | ~320M | 🎯 **The mass-market target** — works, but usage projection oscillates ±10–15%. Recommended target: 85% (15% safety buffer). If Kimi €40 holds for a full month under load, JHT becomes affordable for everyone. | Tested, optimization in progress |
+| 🌙 **Kimi** | Pro | ~€40 | ~320M | ✅ **Mass-market tier validated** — usage projection oscillates ±10–15% (mitigated by 88% target). 75h run: 251 pos, 56 ready (Case Study #3). 10-day beta: 557 pos, 264 scored. JHT is affordable for everyone at this tier. | Tested, per-provider pacing tuned |
 | 🟠 **Claude** | Pro | ~€20 | ~50M | ❌ Insufficient — burns out before a single agent finishes a meaningful work session. | Tested, not viable |
-| 🔵 **Codex / OpenAI** | Plus / Pro | ~€100 | varies | 🔬 Supported by the agent runtime, not yet benchmarked end-to-end | TBD |
+| 🔵 **Codex / OpenAI** | Plus / Pro | ~€100 | varies | ✅ **Tested** — 131 positions in 48h beta run on VPS. Pacing tuned at 92% target. | Tested, production-ready |
 
 > **Note**: token counts are approximate and depend on the provider's current allowance. Always check the provider's pricing page before subscribing.
 
@@ -36,8 +36,8 @@ For the actual numbers we measured during testing, see [`MONITORING.md`](MONITOR
 
 ## What we're working on
 
-- ⏰ **Weekly window calibration** instead of 5h (Anthropic's real reset is weekly — current 5h calibration risks burning through the weekly cap if the team runs intensively)
-- 📅 **User-defined work hours** — the team behaves like a real employee: works in the slots you pick, idle outside them
+- ✅ ~~Weekly window calibration~~ — **Done**. Weekly-aware pacing (`schedule+ratio+weekly`) distributes budget across working hours, not just 5h windows.
+- ✅ ~~User-defined work hours~~ — **Done**. Config + gate in pacing-bridge, UI in CLI + web + wizard.
 - ⚡ **Lower Sentinel token consumption** — the Sentinel itself eats too many tokens today; reducing this is the key to making the €20 base tier viable
 
 ## What about pay-per-use?

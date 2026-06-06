@@ -8,15 +8,15 @@ Get the team running in **about 10 minutes**, depending on the path you pick.
 
 ## ⚠️ Before you start
 
-JHT runs ~**400M tokens/month** (8 agents working in parallel, around the clock). To make this affordable, **JHT runs on LLM subscriptions, not pay-per-use API keys** — see [`docs/PROVIDERS.md`](../about/PROVIDERS.md) and [ADR-0004](../adr/0004-subscription-only-no-api-keys.md).
+JHT runs ~**400M tokens/month** (10 agents working in parallel, around the clock). To make this affordable, **JHT runs on LLM subscriptions, not pay-per-use API keys** — see [`docs/PROVIDERS.md`](../about/PROVIDERS.md) and [ADR-0004](../adr/0004-subscription-only-no-api-keys.md).
 
 You need an active subscription to **one** of:
 
 | | Provider | Plan | Cost/mo | Status |
 |---|---|---|---|---|
 | 🟠 | **Claude** | Max x20 | ~€200 | ✅ Production-ready, best precision |
-| 🔵 | **Codex** | Plus / Pro | ~€100 | 🔬 Supported, benchmark in progress |
-| 🌙 | **Kimi** | Pro | ~€40 | 🎯 Mass-market target (calibration in progress) |
+| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Tested — 131 positions in 48h beta run |
+| 🌙 | **Kimi** | Pro | ~€40 | ✅ Tested — mass-market tier (75h + 10-day beta runs) |
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.
 
