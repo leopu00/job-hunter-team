@@ -6,9 +6,9 @@ import { readLocaleCookie } from "@/lib/use-locale";
 
 /* ── i18n inline ──────────────────────────────────────────────────── */
 
-type Lang = "it" | "en" | "es" | "de" | "fr" | "pt";
+type Lang = "it" | "en" | "es" | "de" | "fr" | "pt" | "hu";
 
-const SUPPORTED_LANGS: Lang[] = ["it", "en", "es", "de", "fr", "pt"];
+const SUPPORTED_LANGS: Lang[] = ["it", "en", "es", "de", "fr", "pt", "hu"];
 
 // Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Copre it/en/es/de/fr/pt;
 // qualsiasi locale non supportata (es. hu) ricade su en.
@@ -50,6 +50,7 @@ const T = {
     de: "Überspringen",
     fr: "Passer",
     pt: "Pular",
+    hu: "Kihagyás",
   },
   next: {
     it: "Avanti",
@@ -58,6 +59,7 @@ const T = {
     de: "Weiter",
     fr: "Suivant",
     pt: "Avançar",
+    hu: "Tovább",
   },
   back: {
     it: "Indietro",
@@ -66,6 +68,7 @@ const T = {
     de: "Zurück",
     fr: "Retour",
     pt: "Voltar",
+    hu: "Vissza",
   },
   finish: {
     it: "Ho capito",
@@ -74,6 +77,7 @@ const T = {
     de: "Verstanden",
     fr: "Compris",
     pt: "Entendi",
+    hu: "Értem",
   },
 } as const;
 
@@ -95,6 +99,7 @@ const STEPS: StepDef[] = [
       de: "Willkommen im Dashboard",
       fr: "Bienvenue dans le tableau de bord",
       pt: "Bem-vindo ao painel",
+      hu: "Üdvözlünk az irányítópulton",
     },
     body: {
       it: "Il profilo è pronto. Da qui in poi pilotano gli agenti AI: facciamo un giro veloce delle pagine principali.",
@@ -103,6 +108,7 @@ const STEPS: StepDef[] = [
       de: "Dein Profil ist fertig. Ab hier übernehmen die KI-Agenten — machen wir eine kurze Tour durch die wichtigsten Seiten.",
       fr: "Votre profil est prêt. À partir d'ici, les agents IA prennent le relais — faisons un tour rapide des pages principales.",
       pt: "O seu perfil está pronto. A partir daqui os agentes de IA assumem o controlo — vamos fazer um tour rápido pelas páginas principais.",
+      hu: "A profilod készen áll. Innentől az MI-ügynökök veszik át az irányítást — nézzük meg gyorsan a fő oldalakat.",
     },
   },
   {
@@ -114,6 +120,7 @@ const STEPS: StepDef[] = [
       de: "Positions",
       fr: "Positions",
       pt: "Positions",
+      hu: "Positions",
     },
     body: {
       it: "Tutte le offerte trovate dagli agenti. Le puoi filtrare, scartare o passare allo stato successivo.",
@@ -122,6 +129,7 @@ const STEPS: StepDef[] = [
       de: "Alle Stellen, die die Agenten gefunden haben. Filtere, verwerfe oder verschiebe sie in die nächste Phase.",
       fr: "Toutes les offres trouvées par les agents. Filtrez-les, écartez-les ou faites-les passer à l'étape suivante.",
       pt: "Todas as ofertas encontradas pelos agentes. Pode filtrá-las, descartá-las ou passá-las à fase seguinte.",
+      hu: "Az ügynökök által talált összes állás. Szűrheted, elvetheted vagy a következő szakaszba léptetheted őket.",
     },
   },
   {
@@ -133,6 +141,7 @@ const STEPS: StepDef[] = [
       de: "Team",
       fr: "Team",
       pt: "Team",
+      hu: "Team",
     },
     body: {
       it: "Qui avvii, fermi e controlli gli agenti: Scout, Analista, Scorer, Scrittore. Il resto è automatico.",
@@ -141,6 +150,7 @@ const STEPS: StepDef[] = [
       de: "Hier startest, stoppst und überwachst du die Agenten: Scout, Analyst, Scorer, Writer. Der Rest läuft automatisch.",
       fr: "Ici, vous démarrez, arrêtez et surveillez les agents : Scout, Analyste, Scorer, Rédacteur. Le reste est automatique.",
       pt: "Aqui inicia, para e monitoriza os agentes: Scout, Analista, Scorer, Redator. O resto é automático.",
+      hu: "Itt indíthatod, állíthatod le és felügyelheted az ügynököket: Scout, Elemző, Scorer, Író. A többi automatikus.",
     },
   },
 ];

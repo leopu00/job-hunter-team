@@ -2,17 +2,206 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocale } from '@/lib/use-locale'
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
 type AgentStatus = 'unknown' | 'active' | 'inactive' | 'starting'
 
-const QUICK_ACTIONS = [
-  'Analizza il mio profilo',
-  'Quali skill mi mancano?',
-  'Suggerisci un target ruolo',
-]
+const T: Record<string, Record<string, string>> = {
+  quick_analyze: {
+    it: 'Analizza il mio profilo',
+    en: 'Analyze my profile',
+    hu: 'Elemezd a profilomat',
+    es: 'Analiza mi perfil',
+    de: 'Analysiere mein Profil',
+    fr: 'Analyse mon profil',
+    pt: 'Analisa o meu perfil',
+  },
+  quick_skills: {
+    it: 'Quali skill mi mancano?',
+    en: 'Which skills am I missing?',
+    hu: 'Milyen készségeim hiányoznak?',
+    es: '¿Qué habilidades me faltan?',
+    de: 'Welche Fähigkeiten fehlen mir?',
+    fr: 'Quelles compétences me manquent ?',
+    pt: 'Que competências me faltam?',
+  },
+  quick_target: {
+    it: 'Suggerisci un target ruolo',
+    en: 'Suggest a target role',
+    hu: 'Javasolj egy cél pozíciót',
+    es: 'Sugiere un puesto objetivo',
+    de: 'Schlage eine Zielrolle vor',
+    fr: 'Suggère un poste cible',
+    pt: 'Sugere um cargo-alvo',
+  },
+  fab_close: {
+    it: 'Chiudi assistente profilo',
+    en: 'Close profile assistant',
+    hu: 'Profil asszisztens bezárása',
+    es: 'Cerrar asistente de perfil',
+    de: 'Profil-Assistent schließen',
+    fr: 'Fermer l’assistant de profil',
+    pt: 'Fechar assistente de perfil',
+  },
+  fab_open: {
+    it: 'Apri assistente profilo',
+    en: 'Open profile assistant',
+    hu: 'Profil asszisztens megnyitása',
+    es: 'Abrir asistente de perfil',
+    de: 'Profil-Assistent öffnen',
+    fr: 'Ouvrir l’assistant de profil',
+    pt: 'Abrir assistente de perfil',
+  },
+  fab_title: {
+    it: 'Assistente profilo',
+    en: 'Profile assistant',
+    hu: 'Profil asszisztens',
+    es: 'Asistente de perfil',
+    de: 'Profil-Assistent',
+    fr: 'Assistant de profil',
+    pt: 'Assistente de perfil',
+  },
+  dialog_label: {
+    it: "Chat con l'assistente del profilo",
+    en: 'Chat with the profile assistant',
+    hu: 'Csevegés a profil asszisztenssel',
+    es: 'Chat con el asistente de perfil',
+    de: 'Chat mit dem Profil-Assistenten',
+    fr: 'Discussion avec l’assistant de profil',
+    pt: 'Conversa com o assistente de perfil',
+  },
+  header_title: {
+    it: 'Assistente',
+    en: 'Assistant',
+    hu: 'Asszisztens',
+    es: 'Asistente',
+    de: 'Assistent',
+    fr: 'Assistant',
+    pt: 'Assistente',
+  },
+  status_active: {
+    it: '● attivo',
+    en: '● active',
+    hu: '● aktív',
+    es: '● activo',
+    de: '● aktiv',
+    fr: '● actif',
+    pt: '● ativo',
+  },
+  status_starting: {
+    it: '↻ avvio…',
+    en: '↻ starting…',
+    hu: '↻ indítás…',
+    es: '↻ iniciando…',
+    de: '↻ wird gestartet…',
+    fr: '↻ démarrage…',
+    pt: '↻ a iniciar…',
+  },
+  status_inactive: {
+    it: '○ inattivo',
+    en: '○ inactive',
+    hu: '○ inaktív',
+    es: '○ inactivo',
+    de: '○ inaktiv',
+    fr: '○ inactif',
+    pt: '○ inativo',
+  },
+  close_assistant: {
+    it: 'Chiudi assistente',
+    en: 'Close assistant',
+    hu: 'Asszisztens bezárása',
+    es: 'Cerrar asistente',
+    de: 'Assistent schließen',
+    fr: 'Fermer l’assistant',
+    pt: 'Fechar assistente',
+  },
+  messages_label: {
+    it: 'Messaggi chat',
+    en: 'Chat messages',
+    hu: 'Csevegés üzenetek',
+    es: 'Mensajes del chat',
+    de: 'Chat-Nachrichten',
+    fr: 'Messages du chat',
+    pt: 'Mensagens do chat',
+  },
+  not_active: {
+    it: "L'Assistente non è attivo.",
+    en: 'The Assistant is not active.',
+    hu: 'Az asszisztens nem aktív.',
+    es: 'El asistente no está activo.',
+    de: 'Der Assistent ist nicht aktiv.',
+    fr: 'L’assistant n’est pas actif.',
+    pt: 'O assistente não está ativo.',
+  },
+  start_assistant: {
+    it: 'Avvia Assistente',
+    en: 'Start Assistant',
+    hu: 'Asszisztens indítása',
+    es: 'Iniciar asistente',
+    de: 'Assistent starten',
+    fr: 'Démarrer l’assistant',
+    pt: 'Iniciar assistente',
+  },
+  greeting: {
+    it: 'Ciao! Come posso aiutarti col profilo?',
+    en: 'Hi! How can I help with your profile?',
+    hu: 'Szia! Miben segíthetek a profiloddal?',
+    es: '¡Hola! ¿Cómo puedo ayudarte con tu perfil?',
+    de: 'Hallo! Wie kann ich dir bei deinem Profil helfen?',
+    fr: 'Bonjour ! Comment puis-je vous aider avec votre profil ?',
+    pt: 'Olá! Como posso ajudar com o teu perfil?',
+  },
+  send_message_form: {
+    it: "Invia messaggio all'assistente",
+    en: 'Send a message to the assistant',
+    hu: 'Üzenet küldése az asszisztensnek',
+    es: 'Enviar un mensaje al asistente',
+    de: 'Nachricht an den Assistenten senden',
+    fr: 'Envoyer un message à l’assistant',
+    pt: 'Enviar uma mensagem ao assistente',
+  },
+  placeholder_start_first: {
+    it: "Avvia prima l'assistente…",
+    en: 'Start the assistant first…',
+    hu: 'Előbb indítsd el az asszisztenst…',
+    es: 'Inicia primero el asistente…',
+    de: 'Starte zuerst den Assistenten…',
+    fr: 'Démarrez d’abord l’assistant…',
+    pt: 'Inicia primeiro o assistente…',
+  },
+  placeholder_write: {
+    it: 'Scrivi un messaggio…',
+    en: 'Write a message…',
+    hu: 'Írj egy üzenetet…',
+    es: 'Escribe un mensaje…',
+    de: 'Schreibe eine Nachricht…',
+    fr: 'Écrivez un message…',
+    pt: 'Escreve uma mensagem…',
+  },
+  write_message: {
+    it: 'Scrivi un messaggio',
+    en: 'Write a message',
+    hu: 'Írj egy üzenetet',
+    es: 'Escribe un mensaje',
+    de: 'Schreibe eine Nachricht',
+    fr: 'Écrivez un message',
+    pt: 'Escreve uma mensagem',
+  },
+  send_message: {
+    it: 'Invia messaggio',
+    en: 'Send message',
+    hu: 'Üzenet küldése',
+    es: 'Enviar mensaje',
+    de: 'Nachricht senden',
+    fr: 'Envoyer le message',
+    pt: 'Enviar mensagem',
+  },
+}
 
 export default function ProfileAssistantFab() {
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
   const [bodyContainer, setBodyContainer] = useState<HTMLElement | null>(null)
   const [sideContainer, setSideContainer] = useState<HTMLElement | null>(null)
   const [open, setOpen] = useState(false)
@@ -23,6 +212,8 @@ export default function ProfileAssistantFab() {
   const inputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const prevCount = useRef(0)
+
+  const quickActions = [tr('quick_analyze'), tr('quick_skills'), tr('quick_target')]
 
   // Due portali separati:
   // - bodyContainer: per il bottone FAB cerchio (position:fixed bottom-right,
@@ -128,8 +319,8 @@ export default function ProfileAssistantFab() {
       type="button"
       onClick={() => setOpen((v) => !v)}
       aria-expanded={open}
-      aria-label={open ? 'Chiudi assistente profilo' : 'Apri assistente profilo'}
-      title="Assistente profilo"
+      aria-label={open ? tr('fab_close') : tr('fab_open')}
+      title={tr('fab_title')}
       className="fixed bottom-6 right-6 z-50 flex items-center justify-center w-14 h-14 rounded-full transition-all hover:scale-105 active:scale-95"
       style={{
         background: 'var(--color-green)',
@@ -157,7 +348,7 @@ export default function ProfileAssistantFab() {
   const chatPanel = open && (
     <aside
       role="dialog"
-      aria-label="Chat con l'assistente del profilo"
+      aria-label={tr('dialog_label')}
       className="flex flex-col border-l w-full lg:w-[40vw] flex-shrink-0 self-stretch sticky top-14"
       style={{
         background: 'var(--color-panel)',
@@ -174,7 +365,7 @@ export default function ProfileAssistantFab() {
           <span className="text-base" aria-hidden="true">👨‍💼</span>
           <div className="min-w-0">
             <div className="text-[12px] font-bold text-[var(--color-white)]">
-              Assistente
+              {tr('header_title')}
             </div>
             <div
               className="text-[9px] font-semibold tracking-widest uppercase"
@@ -185,17 +376,17 @@ export default function ProfileAssistantFab() {
               {agentStatus === 'unknown'
                 ? '…'
                 : agentStatus === 'active'
-                ? '● attivo'
+                ? tr('status_active')
                 : agentStatus === 'starting'
-                ? '↻ avvio…'
-                : '○ inattivo'}
+                ? tr('status_starting')
+                : tr('status_inactive')}
             </div>
           </div>
         </div>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          aria-label="Chiudi assistente"
+          aria-label={tr('close_assistant')}
           className="flex items-center justify-center w-7 h-7 rounded transition-colors hover:bg-[var(--color-row)]"
           style={{ color: 'var(--color-muted)' }}
         >
@@ -211,21 +402,21 @@ export default function ProfileAssistantFab() {
         className="flex-1 overflow-y-auto px-3 py-3"
         role="log"
         aria-live="polite"
-        aria-label="Messaggi chat"
+        aria-label={tr('messages_label')}
         style={{ background: 'var(--color-card)' }}
       >
         {agentStatus === 'inactive' && (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <div className="text-3xl mb-3 opacity-30" aria-hidden="true">👨‍💼</div>
             <p className="text-[var(--color-muted)] text-[12px] mb-4">
-              L&apos;Assistente non è attivo.
+              {tr('not_active')}
             </p>
             <button
               onClick={startAgent}
               className="px-4 py-2 rounded-lg text-[11px] font-bold tracking-wide cursor-pointer"
               style={{ background: 'var(--color-green)', color: '#000' }}
             >
-              Avvia Assistente
+              {tr('start_assistant')}
             </button>
           </div>
         )}
@@ -233,10 +424,10 @@ export default function ProfileAssistantFab() {
           <div className="flex flex-col items-center py-6 text-center">
             <div className="text-3xl mb-2" aria-hidden="true">👨‍💼</div>
             <p className="text-[var(--color-muted)] text-[11px] mb-4">
-              Ciao! Come posso aiutarti col profilo?
+              {tr('greeting')}
             </p>
             <div className="flex flex-wrap gap-1.5 justify-center">
-              {QUICK_ACTIONS.map((a) => (
+              {quickActions.map((a) => (
                 <button
                   key={a}
                   onClick={() => sendMessage(a)}
@@ -272,7 +463,7 @@ export default function ProfileAssistantFab() {
           e.preventDefault()
           sendMessage(input)
         }}
-        aria-label="Invia messaggio all'assistente"
+        aria-label={tr('send_message_form')}
         className="border-t flex-shrink-0 px-3 py-2.5"
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}
       >
@@ -285,15 +476,15 @@ export default function ProfileAssistantFab() {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={agentStatus !== 'active' ? "Avvia prima l'assistente…" : 'Scrivi un messaggio…'}
+            placeholder={agentStatus !== 'active' ? tr('placeholder_start_first') : tr('placeholder_write')}
             disabled={sending || agentStatus !== 'active'}
-            aria-label="Scrivi un messaggio"
+            aria-label={tr('write_message')}
             className="flex-1 bg-transparent border-0 outline-none text-[12px] text-[var(--color-bright)] placeholder:text-[var(--color-dim)]"
           />
           <button
             type="submit"
             disabled={!input.trim() || sending || agentStatus !== 'active'}
-            aria-label="Invia messaggio"
+            aria-label={tr('send_message')}
             className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
             style={{
               background: input.trim() && agentStatus === 'active' ? 'var(--color-green)' : 'var(--color-border)',
