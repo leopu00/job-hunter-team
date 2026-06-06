@@ -252,7 +252,7 @@ export function GlobalSearch() {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Ricerca globale"
+      aria-label={t("gs_dialog_label")}
       className="fixed inset-0 flex items-start justify-center pt-[10vh] px-4 z-[9990]"
       style={{
         background: "rgba(0,0,0,0.65)",
@@ -284,9 +284,9 @@ export function GlobalSearch() {
           <input
             ref={inputRef}
             value={query}
-            placeholder="Cerca pagine, sezioni…"
+            placeholder={t("gs_input_placeholder")}
             role="combobox"
-            aria-label="Cerca pagine e sezioni"
+            aria-label={t("gs_input_label")}
             aria-expanded={displayList.length > 0}
             aria-controls="search-listbox"
             aria-activedescendant={
@@ -325,7 +325,7 @@ export function GlobalSearch() {
               className="px-4 pt-2.5 pb-1 text-[9px] font-bold uppercase tracking-widest"
               style={{ color: "var(--color-dim)" }}
             >
-              Recenti
+              {t("gs_recent")}
             </p>
           )}
           {displayList.length === 0 && query.length > 0 && (
@@ -333,7 +333,7 @@ export function GlobalSearch() {
               className="px-4 py-6 text-[11px] text-center"
               style={{ color: "var(--color-dim)" }}
             >
-              Nessun risultato per &ldquo;{query}&rdquo;
+              {t("gs_no_results")} &ldquo;{query}&rdquo;
             </p>
           )}
           {displayList.map((item, i) => (
@@ -396,7 +396,7 @@ export function GlobalSearch() {
             color: "var(--color-dim)",
           }}
         >
-          ↑↓ naviga · ↵ apri · Esc chiudi
+          {t("gs_footer")}
         </p>
       </div>
     </div>

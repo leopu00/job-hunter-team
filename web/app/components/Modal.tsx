@@ -1,6 +1,30 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+
+const T: Record<string, Record<string, string>> = {
+  dialog: {
+    it: "Finestra di dialogo",
+    en: "Dialog",
+    hu: "Párbeszédablak",
+    es: "Cuadro de diálogo",
+    de: "Dialogfenster",
+    fr: "Boîte de dialogue",
+    pt: "Caixa de diálogo",
+  },
+  close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -85,6 +109,8 @@ export function Modal({
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const titleId = `modal-title-${Math.random().toString(36).slice(2)}`;
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
 
   // Escape
   useEffect(() => {
@@ -128,7 +154,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
-        aria-label={!title ? (ariaLabel ?? "Finestra di dialogo") : undefined}
+        aria-label={!title ? (ariaLabel ?? tr("dialog")) : undefined}
         className={`w-full flex flex-col rounded-xl overflow-hidden ${className ?? ""}`}
         style={{
           maxWidth: width ? `${width}px` : SIZE_MAX[size],
@@ -159,7 +185,7 @@ export function Modal({
             {!hideClose && (
               <button
                 onClick={onClose}
-                aria-label="Chiudi"
+                aria-label={tr("close")}
                 className="text-[18px] leading-none cursor-pointer transition-opacity hover:opacity-60 flex-shrink-0"
                 style={{
                   color: "var(--color-dim)",
