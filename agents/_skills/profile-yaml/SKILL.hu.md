@@ -1,8 +1,8 @@
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 ---
 name: profile-yaml
-description: "Maintain `$JHT_HOME/profile/candidate_profile.yml` — the structured candidate data the entire team consumes. The frontend polls this file every ~2s; an invalid YAML makes the user's left panel go silently blank. Owned by the Assistente. Use this skill on EVERY new piece of information from the user (text or uploaded file): write incrementally, validate immediately, talk to the user only after the validator says VALID_YAML. Also covers `ready.flag` (the unlock for the \"Vai alla dashboard\" button) with its strict 3-step verify-then-announce protocol."
-allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
+description: "Maintain `$JHT_HOME/profile/candidate_profile.yml` — the structured candidate data the entire team consumes. The frontend polls this file every ~2s; an invalid YAML makes the user's left panel go silently blank. Owned by the Assistente. Use this skill on EVERY new piece of information from the user (text or uploaded file): write incrementally, validate immediately, talk to the user only after the validator says VALID_PROFILE. Also covers `ready.flag` (the unlock for the \"Vai alla dashboard\" button) with its strict 3-step verify-then-announce protocol."
+allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
 ---
 
 # profile-yaml — az egyetlen igazsagforras a jeloltrol
@@ -33,13 +33,21 @@ Minden uj adat = egy `Write` vagy `Edit` a fajlon. Aztan validald. Aztan folytas
 
 ## Kotelezo validalas MINDEN write/edit utan
 
+Validald a **kanonikus sema** ellen (nem csak "parsolhato-e a YAML"): lasd a
+[`profile-schema`](../profile-schema/SKILL.md) skillt a teljes semahoz.
+
 ```bash
-python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' \
-    "$JHT_HOME/profile/candidate_profile.yml" \
-    && echo VALID_YAML || echo INVALID_YAML
+jht profile validate
+# kozvetlen fallback:
+# python3 /app/shared/skills/validate_profile.py "$JHT_HOME/profile/candidate_profile.yml"
 ```
 
-Ha `INVALID_YAML` → olvasd be a fajlt `Read`-del, keresd meg a Python hiba altal jelzett sort, javitsd, validald ujra. **NE folytasd a beszelgetest a felhasznaloval, amig VALID_YAML nem lesz.** Egyetlen hibas YAML torli az egesz bal panelt; a felhasznalo azt gondolja, hogy az alkalmazas osszeomlott.
+`VALID_PROFILE` → folytasd. `INVALID_PROFILE` → olvasd el az `ERROR:` sorokat (mezo + ok),
+javitsd az adott mezot, validald ujra. A `WARN:` sorok (legacy kulcsok, pl. `languages[].name`
+`language` helyett) nem blokkolo jeleguek, de javitsd oket, amikor azt a szekciot szerkeszted.
+
+**NE folytasd a beszelgetest a felhasznaloval, amig `VALID_PROFILE` nem lesz.** Egy hibas profil
+torli az egesz bal panelt; a felhasznalo azt gondolja, hogy az alkalmazas osszeomlott.
 
 Ha elfelejtetted hozzaadni a validalasi lepest, biztos lehetsz benne, hogy a fajl hibas — nincs "valoszinuleg rendben". Mindig futtasd le.
 
@@ -189,7 +197,7 @@ Es ertesitsd a felhasznalot: "visszaallitottam a gombot varakozasra — tekintsu
 
 ### NE hozd letre a flag-et, ha
 
-- az utolso YAML validalas `INVALID_YAML`-t irt ki (meg egyszer is az utolso Write utan);
+- az utolso profil validalas `INVALID_PROFILE`-t irt ki (meg egyszer is az utolso Write utan);
 - hianyzik: nev, cel pozicio, varos, tapasztalati evek, email;
 - hianyzik: kepessegek (≥2), nyelvek (≥1), tapasztalatok (≥1), vegzettsegek (≥1).
 
