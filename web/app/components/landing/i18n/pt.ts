@@ -30,6 +30,7 @@ export const pt: Record<string, string> = {
   cta_start_team: "Cria a tua equipa",
 
   // Features
+  feat_aria: "Funcionalidades",
   feat_label: "capacidades",
   feat_title_1: "Tudo o que precisas,",
   feat_title_2: "nada de supérfluo",

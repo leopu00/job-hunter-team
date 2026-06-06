@@ -5,8 +5,309 @@ import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useDevMode } from "@/components/SettingsMenu";
 import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
+import { useLocale } from "@/lib/use-locale";
 
 const ACCENT = "#ff9100";
+
+const T: Record<string, Record<string, string>> = {
+  sending: {
+    it: "Invio…",
+    en: "Sending…",
+    hu: "Küldés…",
+    es: "Enviando…",
+    de: "Senden…",
+    fr: "Envoi…",
+    pt: "Enviando…",
+  },
+  queuedVps: {
+    it: "In coda sulla VPS…",
+    en: "Queued on the VPS…",
+    hu: "Sorban a VPS-en…",
+    es: "En cola en el VPS…",
+    de: "In Warteschlange auf dem VPS…",
+    fr: "En file d'attente sur le VPS…",
+    pt: "Na fila no VPS…",
+  },
+  starting: {
+    it: "Avvio in corso…",
+    en: "Starting…",
+    hu: "Indítás folyamatban…",
+    es: "Iniciando…",
+    de: "Wird gestartet…",
+    fr: "Démarrage en cours…",
+    pt: "Iniciando…",
+  },
+  startCaptain: {
+    it: "Avvia Capitano",
+    en: "Start Captain",
+    hu: "Kapitány indítása",
+    es: "Iniciar Capitán",
+    de: "Kapitän starten",
+    fr: "Démarrer le Capitaine",
+    pt: "Iniciar Capitão",
+  },
+  timeoutSubscriber: {
+    it: "Timeout: il subscriber sulla VPS non risponde.",
+    en: "Timeout: the subscriber on the VPS is not responding.",
+    hu: "Időtúllépés: a VPS-en lévő feliratkozó nem válaszol.",
+    es: "Tiempo agotado: el suscriptor en el VPS no responde.",
+    de: "Zeitüberschreitung: Der Subscriber auf dem VPS antwortet nicht.",
+    fr: "Délai dépassé : l'abonné sur le VPS ne répond pas.",
+    pt: "Tempo esgotado: o subscriber no VPS não responde.",
+  },
+  chatCaptain: {
+    it: "chat · capitano",
+    en: "chat · captain",
+    hu: "chat · kapitány",
+    es: "chat · capitán",
+    de: "Chat · Kapitän",
+    fr: "chat · capitaine",
+    pt: "chat · capitão",
+  },
+  clear: {
+    it: "pulisci",
+    en: "clear",
+    hu: "törlés",
+    es: "limpiar",
+    de: "leeren",
+    fr: "effacer",
+    pt: "limpar",
+  },
+  exit: {
+    it: "esci",
+    en: "exit",
+    hu: "kilépés",
+    es: "salir",
+    de: "schließen",
+    fr: "quitter",
+    pt: "sair",
+  },
+  expand: {
+    it: "espandi",
+    en: "expand",
+    hu: "kibontás",
+    es: "ampliar",
+    de: "erweitern",
+    fr: "agrandir",
+    pt: "expandir",
+  },
+  chatMessages: {
+    it: "Messaggi chat",
+    en: "Chat messages",
+    hu: "Chat üzenetek",
+    es: "Mensajes del chat",
+    de: "Chat-Nachrichten",
+    fr: "Messages du chat",
+    pt: "Mensagens do chat",
+  },
+  writeToStart: {
+    it: "Scrivi un messaggio per iniziare la conversazione.",
+    en: "Write a message to start the conversation.",
+    hu: "Írj egy üzenetet a beszélgetés megkezdéséhez.",
+    es: "Escribe un mensaje para iniciar la conversación.",
+    de: "Schreibe eine Nachricht, um das Gespräch zu beginnen.",
+    fr: "Écris un message pour démarrer la conversation.",
+    pt: "Escreva uma mensagem para iniciar a conversa.",
+  },
+  sendToCaptain: {
+    it: "Invia messaggio al capitano",
+    en: "Send message to the captain",
+    hu: "Üzenet küldése a kapitánynak",
+    es: "Enviar mensaje al capitán",
+    de: "Nachricht an den Kapitän senden",
+    fr: "Envoyer un message au capitaine",
+    pt: "Enviar mensagem ao capitão",
+  },
+  inputPlaceholder: {
+    it: "Scrivi un messaggio...",
+    en: "Write a message...",
+    hu: "Írj egy üzenetet...",
+    es: "Escribe un mensaje...",
+    de: "Nachricht schreiben...",
+    fr: "Écris un message...",
+    pt: "Escreva uma mensagem...",
+  },
+  send: {
+    it: "invia",
+    en: "send",
+    hu: "küldés",
+    es: "enviar",
+    de: "senden",
+    fr: "envoyer",
+    pt: "enviar",
+  },
+  terminal: {
+    it: "Terminale",
+    en: "Terminal",
+    hu: "Terminál",
+    es: "Terminal",
+    de: "Terminal",
+    fr: "Terminal",
+    pt: "Terminal",
+  },
+  captainSession: {
+    it: "sessione CAPITANO",
+    en: "CAPTAIN session",
+    hu: "KAPITÁNY munkamenet",
+    es: "sesión CAPITÁN",
+    de: "KAPITÄN-Sitzung",
+    fr: "session CAPITAINE",
+    pt: "sessão CAPITÃO",
+  },
+  noOutput: {
+    it: "nessun output…",
+    en: "no output…",
+    hu: "nincs kimenet…",
+    es: "sin salida…",
+    de: "keine Ausgabe…",
+    fr: "aucune sortie…",
+    pt: "sem saída…",
+  },
+  dashboard: {
+    it: "Dashboard",
+    en: "Dashboard",
+    hu: "Irányítópult",
+    es: "Panel",
+    de: "Dashboard",
+    fr: "Tableau de bord",
+    pt: "Painel",
+  },
+  team: {
+    it: "Team",
+    en: "Team",
+    hu: "Csapat",
+    es: "Equipo",
+    de: "Team",
+    fr: "Équipe",
+    pt: "Equipe",
+  },
+  captain: {
+    it: "Capitano",
+    en: "Captain",
+    hu: "Kapitány",
+    es: "Capitán",
+    de: "Kapitän",
+    fr: "Capitaine",
+    pt: "Capitão",
+  },
+  orchestrates: {
+    it: "Orchestra tutta la pipeline Job Hunter",
+    en: "Orchestrates the entire Job Hunter pipeline",
+    hu: "A teljes Job Hunter folyamatot vezényli",
+    es: "Orquesta todo el pipeline de Job Hunter",
+    de: "Orchestriert die gesamte Job-Hunter-Pipeline",
+    fr: "Orchestre tout le pipeline Job Hunter",
+    pt: "Orquestra todo o pipeline do Job Hunter",
+  },
+  connecting: {
+    it: "connessione…",
+    en: "connecting…",
+    hu: "kapcsolódás…",
+    es: "conectando…",
+    de: "verbinde…",
+    fr: "connexion…",
+    pt: "conectando…",
+  },
+  active: {
+    it: "attivo",
+    en: "active",
+    hu: "aktív",
+    es: "activo",
+    de: "aktiv",
+    fr: "actif",
+    pt: "ativo",
+  },
+  inactive: {
+    it: "inattivo",
+    en: "inactive",
+    hu: "inaktív",
+    es: "inactivo",
+    de: "inaktiv",
+    fr: "inactif",
+    pt: "inativo",
+  },
+  stopping: {
+    it: "Fermando…",
+    en: "Stopping…",
+    hu: "Leállítás…",
+    es: "Deteniendo…",
+    de: "Wird gestoppt…",
+    fr: "Arrêt…",
+    pt: "Parando…",
+  },
+  stop: {
+    it: "Ferma",
+    en: "Stop",
+    hu: "Leállítás",
+    es: "Detener",
+    de: "Stoppen",
+    fr: "Arrêter",
+    pt: "Parar",
+  },
+  hideTerminal: {
+    it: "nascondi terminale",
+    en: "hide terminal",
+    hu: "terminál elrejtése",
+    es: "ocultar terminal",
+    de: "Terminal ausblenden",
+    fr: "masquer le terminal",
+    pt: "ocultar terminal",
+  },
+  showTerminal: {
+    it: "mostra terminale",
+    en: "show terminal",
+    hu: "terminál megjelenítése",
+    es: "mostrar terminal",
+    de: "Terminal anzeigen",
+    fr: "afficher le terminal",
+    pt: "mostrar terminal",
+  },
+  openTerminal: {
+    it: "apri terminale",
+    en: "open terminal",
+    hu: "terminál megnyitása",
+    es: "abrir terminal",
+    de: "Terminal öffnen",
+    fr: "ouvrir le terminal",
+    pt: "abrir terminal",
+  },
+  openPowershell: {
+    it: "apri powershell",
+    en: "open powershell",
+    hu: "powershell megnyitása",
+    es: "abrir powershell",
+    de: "PowerShell öffnen",
+    fr: "ouvrir powershell",
+    pt: "abrir powershell",
+  },
+  captainNotActive: {
+    it: "Il Capitano non è attivo.",
+    en: "The Captain is not active.",
+    hu: "A Kapitány nem aktív.",
+    es: "El Capitán no está activo.",
+    de: "Der Kapitän ist nicht aktiv.",
+    fr: "Le Capitaine n'est pas actif.",
+    pt: "O Capitão não está ativo.",
+  },
+  pressStartPrefix: {
+    it: "Premi ",
+    en: "Press ",
+    hu: "Nyomd meg: ",
+    es: "Pulsa ",
+    de: "Drücke ",
+    fr: "Appuie sur ",
+    pt: "Pressione ",
+  },
+  pressStartSuffix: {
+    it: " per avviare la sessione.",
+    en: " to start the session.",
+    hu: " a munkamenet indításához.",
+    es: " para iniciar la sesión.",
+    de: ", um die Sitzung zu starten.",
+    fr: " pour démarrer la session.",
+    pt: " para iniciar a sessão.",
+  },
+};
 
 type Status = { active: boolean; output: string };
 type ChatMsg = { role: "user" | "assistant"; text: string; ts: number };
@@ -46,7 +347,20 @@ function renderMarkdown(text: string) {
   });
 }
 
+const LOCALE_TAG: Record<string, string> = {
+  it: "it-IT",
+  en: "en-GB",
+  hu: "hu-HU",
+  es: "es-ES",
+  de: "de-DE",
+  fr: "fr-FR",
+  pt: "pt-PT",
+};
+
 export default function CapitanoPage() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const localeTag = LOCALE_TAG[locale] ?? "en-GB";
   const [status, setStatus] = useState<Status | null>(null);
   const startCmd = useTeamCommandPoller();
   const stopCmd = useTeamCommandPoller();
@@ -143,17 +457,15 @@ export default function CapitanoPage() {
     stopCmd.state === "running";
   const startLabel =
     startCmd.state === "posting"
-      ? "Invio…"
+      ? tr("sending")
       : startCmd.state === "pending"
-        ? "In coda sulla VPS…"
+        ? tr("queuedVps")
         : startCmd.state === "running"
-          ? "Avvio in corso…"
-          : "Avvia Capitano";
+          ? tr("starting")
+          : tr("startCaptain");
   const startBanner =
     startCmd.error ||
-    (startCmd.state === "timeout"
-      ? "Timeout: il subscriber sulla VPS non risponde."
-      : null) ||
+    (startCmd.state === "timeout" ? tr("timeoutSubscriber") : null) ||
     startCmd.message ||
     stopCmd.error ||
     stopCmd.message;
@@ -216,7 +528,7 @@ export default function CapitanoPage() {
               }}
             />
             <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">
-              chat · capitano
+              {tr("chatCaptain")}
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -228,14 +540,14 @@ export default function CapitanoPage() {
                 }}
                 className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-red)] transition-colors cursor-pointer"
               >
-                pulisci
+                {tr("clear")}
               </button>
             )}
             <button
               onClick={() => setChatFullscreen((v) => !v)}
               className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer"
             >
-              {chatFullscreen ? "esci" : "espandi"}
+              {chatFullscreen ? tr("exit") : tr("expand")}
             </button>
           </div>
         </div>
@@ -244,7 +556,7 @@ export default function CapitanoPage() {
           className="px-4 py-4 overflow-auto"
           role="log"
           aria-live="polite"
-          aria-label="Messaggi chat"
+          aria-label={tr("chatMessages")}
           style={{
             height: chatFullscreen ? undefined : "45vh",
             flex: chatFullscreen ? 1 : undefined,
@@ -256,7 +568,7 @@ export default function CapitanoPage() {
                 👨‍✈️
               </div>
               <p className="text-[var(--color-dim)] text-[11px]">
-                Scrivi un messaggio per iniziare la conversazione.
+                {tr("writeToStart")}
               </p>
             </div>
           )}
@@ -283,7 +595,7 @@ export default function CapitanoPage() {
                   {renderMarkdown(msg.text)}
                 </div>
                 <div className="text-[9px] mt-1 opacity-50 text-right">
-                  {new Date(msg.ts * 1000).toLocaleTimeString("it-IT", {
+                  {new Date(msg.ts * 1000).toLocaleTimeString(localeTag, {
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
@@ -333,7 +645,7 @@ export default function CapitanoPage() {
 
       {/* Input chat */}
       <form
-        aria-label="Invia messaggio al capitano"
+        aria-label={tr("sendToCaptain")}
         onSubmit={(e) => {
           e.preventDefault();
           handleSend();
@@ -350,7 +662,7 @@ export default function CapitanoPage() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Scrivi un messaggio..."
+          placeholder={tr("inputPlaceholder")}
           disabled={sending}
           className="flex-1 px-4 py-3 text-[12px] bg-transparent outline-none"
           style={{ color: "var(--color-bright)" }}
@@ -364,7 +676,7 @@ export default function CapitanoPage() {
             cursor: !input.trim() || sending ? "default" : "pointer",
           }}
         >
-          {sending ? "…" : "invia"}
+          {sending ? "…" : tr("send")}
         </button>
       </form>
 
@@ -372,9 +684,9 @@ export default function CapitanoPage() {
       {showTerminal && !chatFullscreen && (
         <div className="mt-4" style={{ animation: "fade-in 0.25s ease both" }}>
           <div className="flex items-center justify-between mb-2">
-            <div className="section-label">Terminale</div>
+            <div className="section-label">{tr("terminal")}</div>
             <span className="text-[9px] text-[var(--color-dim)] font-mono">
-              sessione CAPITANO
+              {tr("captainSession")}
             </span>
           </div>
           <div
@@ -392,7 +704,7 @@ export default function CapitanoPage() {
             {status?.output ? (
               status.output
             ) : (
-              <span style={{ color: "var(--color-dim)" }}>nessun output…</span>
+              <span style={{ color: "var(--color-dim)" }}>{tr("noOutput")}</span>
             )}
           </div>
         </div>
@@ -409,7 +721,7 @@ export default function CapitanoPage() {
             href="/dashboard"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Dashboard
+            {tr("dashboard")}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -418,7 +730,7 @@ export default function CapitanoPage() {
             href="/team"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Team
+            {tr("team")}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -427,7 +739,7 @@ export default function CapitanoPage() {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Capitano
+            {tr("captain")}
           </span>
         </nav>
         <div className="mt-4 flex items-start gap-5">
@@ -436,10 +748,10 @@ export default function CapitanoPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-              Capitano
+              {tr("captain")}
             </h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
-              Orchestra tutta la pipeline Job Hunter
+              {tr("orchestrates")}
             </p>
           </div>
         </div>
@@ -473,7 +785,11 @@ export default function CapitanoPage() {
                     : "var(--color-dim)",
             }}
           >
-            {status == null ? "connessione…" : isActive ? "attivo" : "inattivo"}
+            {status == null
+              ? tr("connecting")
+              : isActive
+                ? tr("active")
+                : tr("inactive")}
           </span>
         </div>
 
@@ -506,7 +822,7 @@ export default function CapitanoPage() {
               opacity: stopBusy ? 0.6 : 1,
             }}
           >
-            {stopBusy ? "Fermando…" : "Ferma"}
+            {stopBusy ? tr("stopping") : tr("stop")}
           </button>
         )}
 
@@ -515,7 +831,7 @@ export default function CapitanoPage() {
             onClick={() => setShowTerminal((v) => !v)}
             className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer"
           >
-            {showTerminal ? "nascondi terminale" : "mostra terminale"}
+            {showTerminal ? tr("hideTerminal") : tr("showTerminal")}
           </button>
         )}
 
@@ -527,8 +843,8 @@ export default function CapitanoPage() {
             className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
           >
             {typeof navigator !== "undefined" && /Mac/.test(navigator.platform)
-              ? "apri terminale"
-              : "apri powershell"}
+              ? tr("openTerminal")
+              : tr("openPowershell")}
           </button>
         )}
 
@@ -563,11 +879,12 @@ export default function CapitanoPage() {
             👨‍✈️
           </div>
           <p className="text-[var(--color-muted)] text-[13px]">
-            Il Capitano non è attivo.
+            {tr("captainNotActive")}
           </p>
           <p className="text-[var(--color-dim)] text-[11px] mt-1">
-            Premi <span style={{ color: ACCENT }}>Avvia Capitano</span> per
-            avviare la sessione.
+            {tr("pressStartPrefix")}
+            <span style={{ color: ACCENT }}>{tr("startCaptain")}</span>
+            {tr("pressStartSuffix")}
           </p>
         </div>
       )}

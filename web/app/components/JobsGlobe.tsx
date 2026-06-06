@@ -5,7 +5,93 @@ import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
+import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
+
+// Stringhe UI hardcoded localizzate (chart/empty/aria/popup).
+const T: Record<string, Record<string, string>> = {
+  jobs_map: {
+    it: "Mappa offerte",
+    en: "Jobs map",
+    hu: "Állástérkép",
+    es: "Mapa de ofertas",
+    de: "Stellenkarte",
+    fr: "Carte des offres",
+    pt: "Mapa de vagas",
+  },
+  with_coords: {
+    it: "con coordinate",
+    en: "with coordinates",
+    hu: "koordinátákkal",
+    es: "con coordenadas",
+    de: "mit Koordinaten",
+    fr: "avec coordonnées",
+    pt: "com coordenadas",
+  },
+  remote: {
+    it: "remote",
+    en: "remote",
+    hu: "távmunka",
+    es: "remoto",
+    de: "Remote",
+    fr: "à distance",
+    pt: "remoto",
+  },
+  overview: {
+    it: "Vista generale",
+    en: "Overview",
+    hu: "Áttekintés",
+    es: "Vista general",
+    de: "Übersicht",
+    fr: "Vue d'ensemble",
+    pt: "Visão geral",
+  },
+  overview_title: {
+    it: "Vista generale — mostra tutti i pin",
+    en: "Overview — show all pins",
+    hu: "Áttekintés — minden jelölő megjelenítése",
+    es: "Vista general — mostrar todos los pines",
+    de: "Übersicht — alle Pins anzeigen",
+    fr: "Vue d'ensemble — afficher tous les points",
+    pt: "Visão geral — mostrar todos os pins",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Laden…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+  looking_address: {
+    it: "cercando indirizzo…",
+    en: "looking up address…",
+    hu: "cím keresése…",
+    es: "buscando dirección…",
+    de: "Adresse wird gesucht…",
+    fr: "recherche d'adresse…",
+    pt: "buscando endereço…",
+  },
+  open: {
+    it: "Apri →",
+    en: "Open →",
+    hu: "Megnyitás →",
+    es: "Abrir →",
+    de: "Öffnen →",
+    fr: "Ouvrir →",
+    pt: "Abrir →",
+  },
+};
 
 const SOURCE_ID = "jht-jobs";
 const LAYER_HALO_ID = "jht-jobs-halo";
@@ -524,6 +610,8 @@ export default function JobsGlobe({
   selectedCities?: string[];
 } = {}) {
   const { resolvedTheme } = useTheme();
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [data, setData] = useState<PositionCoord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [selected, setSelected] = useState<PositionCoord | null>(null);
@@ -1095,7 +1183,7 @@ export default function JobsGlobe({
     <div className={wrapClass}>
       {!hero && !fullscreen && (
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-          <span className="section-label">Mappa offerte</span>
+          <span className="section-label">{tr("jobs_map")}</span>
           <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
             {loaded && (
               <>
@@ -1103,7 +1191,7 @@ export default function JobsGlobe({
                   <span className="text-[var(--color-bright)] font-semibold">
                     {data.length}
                   </span>{" "}
-                  con coordinate
+                  {tr("with_coords")}
                 </span>
                 {remoteCount > 0 && (
                   <span>
@@ -1111,7 +1199,7 @@ export default function JobsGlobe({
                     <span className="text-[var(--color-bright)] font-semibold">
                       {remoteCount}
                     </span>{" "}
-                    remote
+                    {tr("remote")}
                   </span>
                 )}
               </>
@@ -1163,8 +1251,8 @@ export default function JobsGlobe({
         {loaded && data.length > 0 && (
           <button
             onClick={flyToAll}
-            aria-label="Vista generale"
-            title="Vista generale — mostra tutti i pin"
+            aria-label={tr("overview")}
+            title={tr("overview_title")}
             className="absolute top-2 z-10 text-[10px] font-semibold tracking-widest uppercase"
             style={{
               // Bordo destro del bottone a (50% - 30px) → resta ~8px
@@ -1181,13 +1269,13 @@ export default function JobsGlobe({
               boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
             }}
           >
-            ⊕ Vista generale
+            ⊕ {tr("overview")}
           </button>
         )}
 
         {!loaded && (
           <p className="absolute inset-0 grid place-items-center text-[11px] text-[var(--color-dim)] pointer-events-none">
-            Caricamento…
+            {tr("loading")}
           </p>
         )}
 
@@ -1220,7 +1308,7 @@ export default function JobsGlobe({
               </span>
               <button
                 onClick={() => setSelected(null)}
-                aria-label="Chiudi"
+                aria-label={tr("close")}
                 style={{
                   background: "transparent",
                   border: "none",
@@ -1265,7 +1353,7 @@ export default function JobsGlobe({
                             className="ml-1 italic"
                             style={{ color: "var(--color-dim)" }}
                           >
-                            cercando indirizzo…
+                            {tr("looking_address")}
                           </span>
                         )}
                       </span>
@@ -1292,7 +1380,7 @@ export default function JobsGlobe({
               href={`/positions/${selected.id}`}
               className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] hover:underline no-underline"
             >
-              Apri →
+              {tr("open")}
             </Link>
 
             {/* Coda della vignetta: triangolo SVG centrato sotto al

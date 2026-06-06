@@ -2,12 +2,237 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useLocale } from "@/lib/use-locale";
+
+/* ── i18n inline ─────────────────────────────────────────────────── */
+
+const T: Record<string, Record<string, string>> = {
+  filters: {
+    it: "Filtri",
+    en: "Filters",
+    hu: "Szűrők",
+    es: "Filtros",
+    de: "Filter",
+    fr: "Filtres",
+    pt: "Filtros",
+  },
+  reset: {
+    it: "Reset",
+    en: "Reset",
+    hu: "Visszaállítás",
+    es: "Restablecer",
+    de: "Zurücksetzen",
+    fr: "Réinitialiser",
+    pt: "Repor",
+  },
+  reset_all: {
+    it: "Reset tutti",
+    en: "Reset all",
+    hu: "Összes visszaállítása",
+    es: "Restablecer todo",
+    de: "Alle zurücksetzen",
+    fr: "Tout réinitialiser",
+    pt: "Repor tudo",
+  },
+  edit_filter: {
+    it: "Modifica filtro",
+    en: "Edit filter",
+    hu: "Szűrő szerkesztése",
+    es: "Editar filtro",
+    de: "Filter bearbeiten",
+    fr: "Modifier le filtre",
+    pt: "Editar filtro",
+  },
+  remove_filter: {
+    it: "Rimuovi filtro",
+    en: "Remove filter",
+    hu: "Szűrő eltávolítása",
+    es: "Quitar filtro",
+    de: "Filter entfernen",
+    fr: "Supprimer le filtre",
+    pt: "Remover filtro",
+  },
+  remove_filter_named: {
+    it: "Rimuovi filtro {label}",
+    en: "Remove filter {label}",
+    hu: "{label} szűrő eltávolítása",
+    es: "Quitar filtro {label}",
+    de: "Filter {label} entfernen",
+    fr: "Supprimer le filtre {label}",
+    pt: "Remover filtro {label}",
+  },
+  position_filters: {
+    it: "Filtri posizioni",
+    en: "Position filters",
+    hu: "Pozíciószűrők",
+    es: "Filtros de posiciones",
+    de: "Stellenfilter",
+    fr: "Filtres de postes",
+    pt: "Filtros de vagas",
+  },
+  close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+  cancel: {
+    it: "Annulla",
+    en: "Cancel",
+    hu: "Mégse",
+    es: "Cancelar",
+    de: "Abbrechen",
+    fr: "Annuler",
+    pt: "Cancelar",
+  },
+  apply: {
+    it: "Applica",
+    en: "Apply",
+    hu: "Alkalmaz",
+    es: "Aplicar",
+    de: "Anwenden",
+    fr: "Appliquer",
+    pt: "Aplicar",
+  },
+  clear: {
+    it: "Pulisci",
+    en: "Clear",
+    hu: "Törlés",
+    es: "Limpiar",
+    de: "Löschen",
+    fr: "Effacer",
+    pt: "Limpar",
+  },
+  clear_named: {
+    it: "Pulisci {label}",
+    en: "Clear {label}",
+    hu: "{label} törlése",
+    es: "Limpiar {label}",
+    de: "{label} löschen",
+    fr: "Effacer {label}",
+    pt: "Limpar {label}",
+  },
+  g_tier: {
+    it: "Tier",
+    en: "Tier",
+    hu: "Szint",
+    es: "Nivel",
+    de: "Stufe",
+    fr: "Niveau",
+    pt: "Nível",
+  },
+  g_status: {
+    it: "Status",
+    en: "Status",
+    hu: "Állapot",
+    es: "Estado",
+    de: "Status",
+    fr: "Statut",
+    pt: "Estado",
+  },
+  g_remote: {
+    it: "Remote",
+    en: "Remote",
+    hu: "Távoli",
+    es: "Remoto",
+    de: "Remote",
+    fr: "À distance",
+    pt: "Remoto",
+  },
+  g_source: {
+    it: "Fonte",
+    en: "Source",
+    hu: "Forrás",
+    es: "Fuente",
+    de: "Quelle",
+    fr: "Source",
+    pt: "Fonte",
+  },
+  g_verdict: {
+    it: "Voto critico",
+    en: "Critic verdict",
+    hu: "Kritikai értékelés",
+    es: "Veredicto crítico",
+    de: "Kritiker-Urteil",
+    fr: "Verdict critique",
+    pt: "Veredito crítico",
+  },
+  opt_seria: {
+    it: "Seria ≥70",
+    en: "Serious ≥70",
+    hu: "Komoly ≥70",
+    es: "Seria ≥70",
+    de: "Ernst ≥70",
+    fr: "Sérieuse ≥70",
+    pt: "Séria ≥70",
+  },
+  opt_practice: {
+    it: "Practice 40-69",
+    en: "Practice 40-69",
+    hu: "Gyakorló 40-69",
+    es: "Práctica 40-69",
+    de: "Übung 40-69",
+    fr: "Entraînement 40-69",
+    pt: "Prática 40-69",
+  },
+  opt_riferimento: {
+    it: "Riferimento <40",
+    en: "Reference <40",
+    hu: "Referencia <40",
+    es: "Referencia <40",
+    de: "Referenz <40",
+    fr: "Référence <40",
+    pt: "Referência <40",
+  },
+  opt_noscore: {
+    it: "Non scored",
+    en: "Not scored",
+    hu: "Nincs pontozva",
+    es: "Sin puntuar",
+    de: "Nicht bewertet",
+    fr: "Non noté",
+    pt: "Sem pontuação",
+  },
+  opt_full_remote: {
+    it: "Full remote",
+    en: "Full remote",
+    hu: "Teljesen távoli",
+    es: "Totalmente remoto",
+    de: "Vollständig remote",
+    fr: "100 % à distance",
+    pt: "Totalmente remoto",
+  },
+  opt_hybrid: {
+    it: "Hybrid",
+    en: "Hybrid",
+    hu: "Hibrid",
+    es: "Híbrido",
+    de: "Hybrid",
+    fr: "Hybride",
+    pt: "Híbrido",
+  },
+  opt_onsite: {
+    it: "On-site",
+    en: "On-site",
+    hu: "Helyszíni",
+    es: "Presencial",
+    de: "Vor Ort",
+    fr: "Sur site",
+    pt: "Presencial",
+  },
+};
 
 type FilterKey = "tier" | "status" | "remote" | "source" | "verdict";
 
 interface Option {
   val: string;
   label: string;
+  // Chiave i18n opzionale: se presente, l'etichetta viene tradotta a render.
+  // Status/verdict usano valori tecnici come label (new, PASS…) → no labelKey.
+  labelKey?: string;
   color?: string;
 }
 
@@ -18,14 +243,30 @@ interface Group {
 }
 
 const TIER_OPTIONS: Option[] = [
-  { val: "seria", label: "Seria ≥70", color: "var(--color-green)" },
-  { val: "practice", label: "Practice 40-69", color: "var(--color-yellow)" },
+  {
+    val: "seria",
+    label: "Seria ≥70",
+    labelKey: "opt_seria",
+    color: "var(--color-green)",
+  },
+  {
+    val: "practice",
+    label: "Practice 40-69",
+    labelKey: "opt_practice",
+    color: "var(--color-yellow)",
+  },
   {
     val: "riferimento",
     label: "Riferimento <40",
+    labelKey: "opt_riferimento",
     color: "var(--color-orange)",
   },
-  { val: "noscore", label: "Non scored", color: "var(--color-dim)" },
+  {
+    val: "noscore",
+    label: "Non scored",
+    labelKey: "opt_noscore",
+    color: "var(--color-dim)",
+  },
 ];
 
 const STATUS_OPTIONS: Option[] = [
@@ -41,9 +282,9 @@ const STATUS_OPTIONS: Option[] = [
 ];
 
 const REMOTE_OPTIONS: Option[] = [
-  { val: "full_remote", label: "Full remote" },
-  { val: "hybrid", label: "Hybrid" },
-  { val: "onsite", label: "On-site" },
+  { val: "full_remote", label: "Full remote", labelKey: "opt_full_remote" },
+  { val: "hybrid", label: "Hybrid", labelKey: "opt_hybrid" },
+  { val: "onsite", label: "On-site", labelKey: "opt_onsite" },
 ];
 
 const VERDICT_OPTIONS: Option[] = [
@@ -52,12 +293,13 @@ const VERDICT_OPTIONS: Option[] = [
   { val: "REJECT", label: "REJECT", color: "var(--color-red)" },
 ];
 
-const GROUP_LABELS: Record<FilterKey, string> = {
-  tier: "Tier",
-  status: "Status",
-  remote: "Remote",
-  source: "Fonte",
-  verdict: "Voto critico",
+// Chiavi i18n per le label di gruppo (risolte a render via tr()).
+const GROUP_LABEL_KEYS: Record<FilterKey, string> = {
+  tier: "g_tier",
+  status: "g_status",
+  remote: "g_remote",
+  source: "g_source",
+  verdict: "g_verdict",
 };
 
 export default function FiltersWizard({
@@ -68,6 +310,9 @@ export default function FiltersWizard({
   const router = useRouter();
   const sp = useSearchParams();
   const [open, setOpen] = useState(false);
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const groupLabel = (k: FilterKey) => tr(GROUP_LABEL_KEYS[k]);
 
   // Stato URL = "applicato". Draft = stato locale del wizard.
   const urlSelections = useMemo<Record<FilterKey, string[]>>(
@@ -92,11 +337,11 @@ export default function FiltersWizard({
   );
 
   const groups: Group[] = [
-    { key: "tier", label: GROUP_LABELS.tier, options: TIER_OPTIONS },
-    { key: "status", label: GROUP_LABELS.status, options: STATUS_OPTIONS },
-    { key: "remote", label: GROUP_LABELS.remote, options: REMOTE_OPTIONS },
-    { key: "source", label: GROUP_LABELS.source, options: sourceOptions },
-    { key: "verdict", label: GROUP_LABELS.verdict, options: VERDICT_OPTIONS },
+    { key: "tier", label: groupLabel("tier"), options: TIER_OPTIONS },
+    { key: "status", label: groupLabel("status"), options: STATUS_OPTIONS },
+    { key: "remote", label: groupLabel("remote"), options: REMOTE_OPTIONS },
+    { key: "source", label: groupLabel("source"), options: sourceOptions },
+    { key: "verdict", label: groupLabel("verdict"), options: VERDICT_OPTIONS },
   ];
 
   function pushURL(selections: Record<FilterKey, string[]>) {
@@ -132,7 +377,8 @@ export default function FiltersWizard({
           background: "var(--color-card)",
         }}
       >
-        ⚙ Filtri{totalActive > 0 ? ` · ${totalActive}` : ""}
+        ⚙ {tr("filters")}
+        {totalActive > 0 ? ` · ${totalActive}` : ""}
       </button>
 
       {/* Chip riassuntive per gruppo: click = clear-only di quel gruppo.
@@ -143,10 +389,11 @@ export default function FiltersWizard({
         return (
           <GroupChip
             key={k}
-            label={GROUP_LABELS[k]}
+            label={groupLabel(k)}
             values={vals}
             onClear={() => clearGroup(k)}
             onEdit={() => setOpen(true)}
+            tr={tr}
           />
         );
       })}
@@ -162,7 +409,7 @@ export default function FiltersWizard({
             background: "transparent",
           }}
         >
-          ✕ Reset
+          ✕ {tr("reset")}
         </button>
       )}
 
@@ -175,6 +422,7 @@ export default function FiltersWizard({
             pushURL(s);
             setOpen(false);
           }}
+          tr={tr}
         />
       )}
     </div>
@@ -186,11 +434,13 @@ function GroupChip({
   values,
   onEdit,
   onClear,
+  tr,
 }: {
   label: string;
   values: string[];
   onEdit: () => void;
   onClear: () => void;
+  tr: (k: string) => string;
 }) {
   const preview =
     values.length === 1 ? values[0] : `${values[0]} +${values.length - 1}`;
@@ -207,7 +457,7 @@ function GroupChip({
         type="button"
         onClick={onEdit}
         className="px-2.5 py-1 cursor-pointer"
-        title="Modifica filtro"
+        title={tr("edit_filter")}
       >
         <span style={{ color: "var(--color-dim)" }}>{label}:</span>{" "}
         <span>{preview}</span>
@@ -215,8 +465,8 @@ function GroupChip({
       <button
         type="button"
         onClick={onClear}
-        title="Rimuovi filtro"
-        aria-label={`Rimuovi filtro ${label}`}
+        title={tr("remove_filter")}
+        aria-label={tr("remove_filter_named").replace("{label}", label)}
         className="px-2 py-1 cursor-pointer border-l"
         style={{
           color: "var(--color-dim)",
@@ -234,11 +484,13 @@ function WizardModal({
   initial,
   onClose,
   onApply,
+  tr,
 }: {
   groups: Group[];
   initial: Record<FilterKey, string[]>;
   onClose: () => void;
   onApply: (selections: Record<FilterKey, string[]>) => void;
+  tr: (k: string) => string;
 }) {
   const [draft, setDraft] = useState<Record<FilterKey, string[]>>(initial);
 
@@ -276,7 +528,7 @@ function WizardModal({
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Filtri posizioni"
+      aria-label={tr("position_filters")}
     >
       <div
         className="w-full max-w-3xl rounded-lg border shadow-2xl my-8"
@@ -294,12 +546,13 @@ function WizardModal({
             className="text-[12.5px] font-bold tracking-[0.08em] uppercase"
             style={{ color: "var(--color-white)" }}
           >
-            Filtri posizioni{totalDraft > 0 ? ` · ${totalDraft}` : ""}
+            {tr("position_filters")}
+            {totalDraft > 0 ? ` · ${totalDraft}` : ""}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Chiudi"
+            aria-label={tr("close")}
             className="text-[16px] cursor-pointer leading-none"
             style={{ color: "var(--color-dim)" }}
           >
@@ -315,6 +568,7 @@ function WizardModal({
               selected={draft[g.key]}
               onToggle={(v) => toggle(g.key, v)}
               onClear={() => clearGroup(g.key)}
+              tr={tr}
             />
           ))}
         </div>
@@ -338,7 +592,7 @@ function WizardModal({
             className="text-[10px] font-semibold tracking-[0.1em] uppercase cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ color: "var(--color-dim)" }}
           >
-            ✕ Reset tutti
+            ✕ {tr("reset_all")}
           </button>
           <div className="flex gap-2">
             <button
@@ -351,7 +605,7 @@ function WizardModal({
                 background: "transparent",
               }}
             >
-              Annulla
+              {tr("cancel")}
             </button>
             <button
               type="button"
@@ -364,7 +618,7 @@ function WizardModal({
                 background: "transparent",
               }}
             >
-              Applica
+              {tr("apply")}
             </button>
           </div>
         </div>
@@ -378,11 +632,13 @@ function GroupRow({
   selected,
   onToggle,
   onClear,
+  tr,
 }: {
   group: Group;
   selected: string[];
   onToggle: (val: string) => void;
   onClear: () => void;
+  tr: (k: string) => string;
 }) {
   if (!group.options.length) return null;
   return (
@@ -398,8 +654,8 @@ function GroupRow({
           <button
             type="button"
             onClick={onClear}
-            aria-label={`Pulisci ${group.label}`}
-            title="Pulisci"
+            aria-label={tr("clear_named").replace("{label}", group.label)}
+            title={tr("clear")}
             className="text-[10px] cursor-pointer leading-none"
             style={{ color: "var(--color-dim)" }}
           >
@@ -433,7 +689,7 @@ function GroupRow({
               }
               aria-pressed={active}
             >
-              {o.label}
+              {o.labelKey ? tr(o.labelKey) : o.label}
             </button>
           );
         })}
