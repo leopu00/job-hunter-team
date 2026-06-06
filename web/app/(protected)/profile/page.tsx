@@ -370,9 +370,9 @@ export default async function ProfilePage() {
             <ProfileSection id="lingue" title={t("sec_languages")}>
               {profile.languages && profile.languages.length > 0 ? (
                 <div className="flex flex-col gap-2">
-                  {profile.languages.map((l) => (
+                  {profile.languages.map((l, i) => (
                     <div
-                      key={l.language}
+                      key={`${l.language}-${i}`}
                       className="flex items-center justify-between"
                     >
                       <span className="text-[var(--color-bright)] text-[12px]">

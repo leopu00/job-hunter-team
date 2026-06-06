@@ -37,10 +37,53 @@ function FlagHU() {
   );
 }
 
+function FlagES() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="20" height="14" fill="#AA151B" />
+      <rect y="3.5" width="20" height="7" fill="#F1BF00" />
+    </svg>
+  );
+}
+
+function FlagDE() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="20" height="4.67" fill="#000" />
+      <rect y="4.67" width="20" height="4.66" fill="#DD0000" />
+      <rect y="9.33" width="20" height="4.67" fill="#FFCE00" />
+    </svg>
+  );
+}
+
+function FlagFR() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="6.67" height="14" fill="#0055A4" />
+      <rect x="6.67" width="6.66" height="14" fill="#fff" />
+      <rect x="13.33" width="6.67" height="14" fill="#EF4135" />
+    </svg>
+  );
+}
+
+function FlagPT() {
+  return (
+    <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
+      <rect width="8" height="14" fill="#006600" />
+      <rect x="8" width="12" height="14" fill="#FF0000" />
+      <circle cx="8" cy="7" r="2.4" fill="none" stroke="#FFD700" strokeWidth="1" />
+    </svg>
+  );
+}
+
 const FLAGS: Record<string, () => React.JSX.Element> = {
   it: FlagIT,
   en: FlagEN,
   hu: FlagHU,
+  es: FlagES,
+  de: FlagDE,
+  fr: FlagFR,
+  pt: FlagPT,
 };
 
 export default function LanguageSwitcher({
@@ -139,7 +182,9 @@ export default function LanguageSwitcher({
             minWidth: 140,
           }}
         >
-          {locales.map((l) => {
+          {[...locales]
+            .sort((a, b) => a.label.localeCompare(b.label))
+            .map((l) => {
             const Flag = FLAGS[l.code] || FlagEN;
             return (
               <button

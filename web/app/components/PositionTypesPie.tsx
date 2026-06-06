@@ -12,6 +12,10 @@ type Props = {
   title: string;
   emptyLabel: string;
   size?: number; // px reso. viewBox scala tutta la geometria interna.
+  // Cross-filtering: family attualmente selezionate + callback toggle.
+  // Vuoto/assente = grafico non interattivo (comportamento storico).
+  selectedTypes?: string[];
+  onToggleType?: (family: string) => void;
 };
 
 const SIZE = 130;
@@ -63,12 +67,20 @@ export default function PositionTypesPie({
   title,
   emptyLabel,
   size = SIZE,
+  selectedTypes = [],
+  onToggleType,
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
   const labelFor = (family: string) => labels?.[family] ?? family;
   const total = data.reduce((a, d) => a + d.count, 0);
+  const hasSelection = selectedTypes.length > 0;
+  // Centro: hover prevale; altrimenti se UNA sola family selezionata la mostro.
+  const focusedFamily =
+    hovered ?? (selectedTypes.length === 1 ? selectedTypes[0] : null);
   const focused =
-    hovered != null ? data.find((d) => d.family === hovered) : null;
+    focusedFamily != null
+      ? data.find((d) => d.family === focusedFamily)
+      : null;
   const focusedPct =
     focused && total > 0 ? Math.round((focused.count / total) * 100) : null;
 
@@ -83,7 +95,7 @@ export default function PositionTypesPie({
         )}
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-8">
         <svg
           width={size}
           height={size}
@@ -109,18 +121,23 @@ export default function PositionTypesPie({
               const path = arc(acc, acc + span);
               acc += span;
               const isHover = hovered === d.family;
-              const dimmed = hovered != null && !isHover;
+              const isSelected = selectedTypes.includes(d.family);
+              const active = isHover || isSelected;
+              const dimmed =
+                (hovered != null && !isHover && !isSelected) ||
+                (hovered == null && hasSelection && !isSelected);
               return (
                 <path
                   key={d.family}
                   d={path}
                   fill={d.color}
-                  opacity={isHover ? 1 : dimmed ? 0.32 : 0.88}
+                  opacity={active ? 1 : dimmed ? 0.32 : 0.88}
                   stroke="var(--color-card)"
-                  strokeWidth={isHover ? 1.5 : 1}
+                  strokeWidth={active ? 1.5 : 1}
                   onMouseEnter={() => setHovered(d.family)}
+                  onClick={() => onToggleType?.(d.family)}
                   style={{
-                    cursor: "pointer",
+                    cursor: onToggleType ? "pointer" : "default",
                     transition: "opacity 0.15s ease, stroke-width 0.15s ease",
                   }}
                 >
@@ -169,34 +186,40 @@ export default function PositionTypesPie({
         </svg>
 
         <ul
-          className="space-y-1.5 min-w-0"
+          className="space-y-1.5 min-w-0 flex-1"
           onMouseLeave={() => setHovered(null)}
         >
-          {/* Header: didascalia colonne. Stesso grid template delle
-                righe sotto così tutto si allinea verticalmente. Tipo a
-                sinistra, numeri subito accanto (non spinti a destra). */}
+          {/* Header: didascalia colonne. Prima colonna flessibile così la
+                tabella riempie la larghezza del card (donut a tutta riga). */}
           <li
-            className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem_2.25rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            className="grid grid-cols-[1fr_3rem_3rem_3.5rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
             <span>tipo</span>
             <span>n</span>
             <span>%</span>
             <span title="Score medio (0-100)">score</span>
-            <span title="Voto critico medio (0-10)">critic</span>
           </li>
           {data.map((d) => {
             const pct = Math.round((d.count / total) * 100);
             const isHover = hovered === d.family;
-            const dimmed = hovered != null && !isHover;
+            const isSelected = selectedTypes.includes(d.family);
+            const dimmed =
+              (hovered != null && !isHover && !isSelected) ||
+              (hovered == null && hasSelection && !isSelected);
             return (
               <li
                 key={d.family}
                 onMouseEnter={() => setHovered(d.family)}
-                className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem_2.25rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
+                onClick={() => onToggleType?.(d.family)}
+                className="grid grid-cols-[1fr_3rem_3rem_3.5rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
                 style={{
-                  cursor: "pointer",
-                  background: isHover ? "var(--color-row)" : "transparent",
+                  cursor: onToggleType ? "pointer" : "default",
+                  background: isSelected
+                    ? "rgba(255,255,255,0.06)"
+                    : isHover
+                      ? "var(--color-row)"
+                      : "transparent",
                   opacity: dimmed ? 0.45 : 1,
                   transition: "background 0.15s ease, opacity 0.15s ease",
                 }}
@@ -210,9 +233,11 @@ export default function PositionTypesPie({
                   <span
                     className="truncate"
                     style={{
-                      color: isHover
-                        ? "var(--color-bright)"
-                        : "var(--color-muted)",
+                      color:
+                        isHover || isSelected
+                          ? "var(--color-bright)"
+                          : "var(--color-muted)",
+                      fontWeight: isSelected ? 600 : 400,
                     }}
                     title={labelFor(d.family)}
                   >
@@ -240,22 +265,6 @@ export default function PositionTypesPie({
                   }}
                 >
                   {d.avgScore == null ? "—" : `${Math.round(d.avgScore)}`}
-                </span>
-                <span
-                  className="tabular-nums"
-                  title="Voto critico medio (0-10, solo posizioni revisionate)"
-                  style={{
-                    color:
-                      d.avgCritic == null
-                        ? "var(--color-dim)"
-                        : d.avgCritic >= 7
-                          ? "var(--color-green)"
-                          : d.avgCritic >= 5.5
-                            ? "var(--color-yellow)"
-                            : "var(--color-red)",
-                  }}
-                >
-                  {d.avgCritic == null ? "—" : d.avgCritic.toFixed(1)}
                 </span>
               </li>
             );
