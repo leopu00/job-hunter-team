@@ -4,17 +4,15 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   getDashboardStats,
-  getRecentPositions,
-  getScoreDistribution,
-  getCriticScores,
-  getPositionTypeDistribution,
+  getDashboardPositions,
   getPendingMessages,
   getCriticVerdictTotals,
 } from "@/lib/queries";
-import PositionTypesPie from "@/app/components/PositionTypesPie";
-import ScoreDistribution from "@/app/components/ScoreDistribution";
+import type { DashboardPosition } from "@/lib/queries";
+import { getExchangeRates } from "@/lib/exchange-rates";
+import { getDisplayCurrencies } from "@/lib/dashboard-currencies";
+import DashboardLinkedCharts from "@/app/components/DashboardLinkedCharts";
 import PipelineFlow from "@/app/components/PipelineFlow";
-import { formatFoundAt } from "@/lib/format-time";
 import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { getServerLocale } from "@/lib/server-locale";
@@ -44,20 +42,6 @@ const STATUS_COLORS: Record<string, string> = {
   response: "#58a6ff",
   excluded: "var(--color-red)",
 };
-
-function scoreClass(s?: number) {
-  if (!s) return "text-[var(--color-dim)]";
-  if (s >= 75) return "text-[var(--color-green)]";
-  if (s >= 55) return "text-[var(--color-yellow)]";
-  return "text-[var(--color-red)]";
-}
-
-function scoreBg(s?: number) {
-  if (!s) return "var(--color-border)";
-  if (s >= 75) return "var(--color-green)";
-  if (s >= 55) return "var(--color-yellow)";
-  return "var(--color-red)";
-}
 
 export default async function DashboardPage() {
   const locale = getServerLocale();
@@ -91,32 +75,46 @@ export default async function DashboardPage() {
   }
 
   const demoData = demoMode ? getDemoDashboardData() : null;
-  const [
-    stats,
-    positions,
-    scoreDist,
-    criticScores,
-    typeDist,
-    pendingMessages,
-    criticTotals,
-  ] = demoData
+  // Demo: le posizioni demo non hanno role_family/loc strutturati → li
+  // mappo a null (i grafici li mostrano come "Da categorizzare"/"Senza
+  // paese", la tabella resta pienamente funzionante).
+  const demoDashPositions: DashboardPosition[] = demoData
+    ? demoData.positions.map((p) => ({
+        id: p.id,
+        legacy_id: p.legacy_id ?? null,
+        title: p.title ?? null,
+        company: p.company ?? null,
+        location: p.location ?? null,
+        remote_type: p.remote_type ?? null,
+        status: p.status,
+        score: p.score ?? null,
+        role_family: null,
+        loc_country: null,
+        loc_city: null,
+        salary_min: p.salary_declared_min ?? null,
+        salary_max: p.salary_declared_max ?? null,
+        salary_currency: "EUR",
+        found_at: p.found_at ?? null,
+        last_action_at:
+          (p as { last_action_at?: string }).last_action_at ??
+          p.found_at ??
+          "",
+      }))
+    : [];
+  const [stats, dashPositions, pendingMessages, criticTotals, rates] = demoData
     ? [
         demoData.stats,
-        demoData.positions,
-        demoData.scoreDistribution,
-        [] as number[],
-        [],
+        demoDashPositions,
         demoData.pendingMessages,
         { pass: 0, needs_work: 0, reject: 0, total: 0 },
+        { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
       ]
     : await Promise.all([
         getDashboardStats(),
-        getRecentPositions(15),
-        getScoreDistribution(),
-        getCriticScores(),
-        getPositionTypeDistribution(),
+        getDashboardPositions(),
         getPendingMessages(20),
         getCriticVerdictTotals(),
+        getExchangeRates(),
       ]);
 
   const activeTotal = stats.total - stats.excluded;
@@ -323,198 +321,44 @@ export default async function DashboardPage() {
             })}
           </div>
 
-          {/* ── Position types — pie chart in grande ─────────────────── */}
+          {/* ── Grafici collegati: Types + Score + Paesi + Città ─────────
+          Cliccando una sezione di un grafico si filtrano gli altri
+          (cross-filter lato client sui facets per-posizione). */}
           <div
             className="mb-8"
             style={{ animation: "fade-in 0.35s ease both 0.08s" }}
           >
-            {/* labels: nessun mapping hardcoded. La label e' il valore della
-            colonna positions.role_family, gia' una stringa leggibile
-            assegnata dal team analyst. */}
-            <PositionTypesPie
-              data={typeDist}
-              title={t.position_types}
-              emptyLabel={t.no_data}
-              size={300}
+            <DashboardLinkedCharts
+              positions={dashPositions}
+              rates={rates}
+              currencies={getDisplayCurrencies()}
+              labels={{
+                types: t.position_types,
+                countries: t.position_countries,
+                cities: t.position_cities,
+                score: t.score_distribution,
+                salary: t.salary_distribution,
+                noData: t.no_data,
+                reset: t.reset_filters,
+                table: {
+                  title: t.recent_positions,
+                  titleFiltered: t.recent_positions_filtered,
+                  viewAll: t.view_all,
+                  noPositions: t.no_positions,
+                  colId: t.col_id,
+                  colTitle: t.col_title,
+                  colCompany: t.col_company,
+                  colCountry: t.col_country,
+                  colCity: t.col_city,
+                  colRemote: t.col_remote,
+                  colScore: t.col_score,
+                  colSalary: t.col_salary,
+                  colMonthly: t.col_monthly,
+                  colStatus: t.col_status,
+                  colUpdated: t.col_updated,
+                },
+              }}
             />
-          </div>
-
-          {/* ── Pipeline flow: area chart con linea ondulante ───────── */}
-          <div
-            className="mb-8"
-            style={{ animation: "fade-in 0.35s ease both 0.12s" }}
-          >
-            <PipelineFlow steps={pipeline} title="Pipeline flow" />
-          </div>
-
-          {/* ── Charts ──────────────────────────────────────────────── */}
-          <div
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
-            style={{ animation: "fade-in 0.35s ease both 0.1s" }}
-          >
-            {/* Score distribution — histogram fine-grained */}
-            <ScoreDistribution
-              scores={scoreDist.scores ?? []}
-              title={t.score_distribution}
-              emptyLabel={t.no_data}
-            />
-
-            {/* Critic votes distribution (0-10) */}
-            <ScoreDistribution
-              scores={criticScores}
-              title={t.critic_votes}
-              emptyLabel={t.no_data}
-              maxScore={10}
-              binStep={0.5}
-              decimals={1}
-              thresholdReady={5.5}
-              thresholdLabel={t.critic_ready}
-            />
-          </div>
-
-          {/* ── Positions table ─────────────────────────────────────── */}
-          <div className="flex items-center justify-between mb-4">
-            <span className="section-label">{t.recent_positions}</span>
-            <Link
-              href="/positions"
-              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
-            >
-              {t.view_all}
-            </Link>
-          </div>
-          <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg mb-8">
-            <table
-              className="w-full text-[12px]"
-              style={{ borderCollapse: "collapse" }}
-              aria-label={t.recent_positions}
-            >
-              <thead>
-                <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
-                  {[
-                    t.col_id,
-                    t.col_title,
-                    t.col_company,
-                    t.col_location,
-                    t.col_remote,
-                    t.col_score,
-                    t.col_status,
-                    t.col_updated,
-                  ].map((h) => (
-                    <th
-                      key={h}
-                      scope="col"
-                      className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
-                      style={{ color: "var(--color-dim)" }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {positions.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
-                    >
-                      {t.no_positions}
-                    </td>
-                  </tr>
-                ) : (
-                  positions.map((p, i: number) => (
-                    <tr
-                      key={p.id}
-                      className="border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors"
-                      style={{
-                        borderBottomColor:
-                          i === positions.length - 1
-                            ? "transparent"
-                            : undefined,
-                        background:
-                          i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
-                      }}
-                    >
-                      <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                        {p.legacy_id
-                          ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                          : p.id.slice(0, 8)}
-                      </td>
-                      <td
-                        className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
-                        title={p.title}
-                      >
-                        <Link
-                          href={`/positions/${p.id}`}
-                          className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
-                        >
-                          {p.title}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
-                        {p.company}
-                      </td>
-                      <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
-                        {p.location ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className="text-[10px]"
-                          style={{
-                            color:
-                              p.remote_type === "full_remote"
-                                ? "var(--color-green)"
-                                : p.remote_type === "hybrid"
-                                  ? "var(--color-yellow)"
-                                  : "var(--color-red)",
-                          }}
-                        >
-                          {p.remote_type?.replace("_", " ") ?? "—"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 justify-end">
-                          <span
-                            className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
-                          >
-                            {p.score ?? "—"}
-                          </span>
-                          <div
-                            className="w-10 h-1 rounded-full overflow-hidden"
-                            style={{ background: "var(--color-border)" }}
-                          >
-                            <div
-                              className="h-full rounded-full"
-                              style={{
-                                width: `${p.score ?? 0}%`,
-                                background: scoreBg(p.score),
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
-                          style={{
-                            color:
-                              STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                            borderColor:
-                              STATUS_COLORS[p.status] ?? "var(--color-border)",
-                            background: `${STATUS_COLORS[p.status]}18`,
-                          }}
-                        >
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
-                        {formatFoundAt(p.last_action_at ?? p.found_at)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
           </div>
 
           {/* ── Conversion rate ─────────────────────────────────────── */}
@@ -715,6 +559,14 @@ export default async function DashboardPage() {
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* ── Pipeline flow: area chart con linea ondulante (in fondo) ─ */}
+          <div
+            className="mb-8"
+            style={{ animation: "fade-in 0.35s ease both 0.12s" }}
+          >
+            <PipelineFlow steps={pipeline} title="Pipeline flow" />
           </div>
         </div>
       </div>
