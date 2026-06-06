@@ -119,6 +119,10 @@ const T: Record<string, Entry> = {
   mf_desired_roles: { it: "Ruoli desiderati", en: "Desired roles", hu: "Kívánt pozíciók", es: "Roles deseados", de: "Gewünschte Rollen", fr: "Postes souhaités", pt: "Cargos desejados" },
   mf_location_prefs: { it: "Preferenze sede", en: "Location prefs", hu: "Helyszín-preferenciák", es: "Preferencias de ubicación", de: "Standort-Präferenzen", fr: "Préférences de lieu", pt: "Preferências de local" },
   mf_education: { it: "Formazione", en: "Education", hu: "Tanulmányok", es: "Formación", de: "Ausbildung", fr: "Formation", pt: "Formação" },
+  mf_seniority: { it: "Livello target", en: "Target seniority", hu: "Cél szint", es: "Nivel objetivo", de: "Ziel-Seniorität", fr: "Niveau visé", pt: "Nível alvo" },
+  f_industry: { it: "Settore", en: "Industry", hu: "Iparág", es: "Sector", de: "Branche", fr: "Secteur", pt: "Setor" },
+  mf_work_auth: { it: "Diritto di lavoro", en: "Work authorization", hu: "Munkavállalási jog", es: "Autorización de trabajo", de: "Arbeitserlaubnis", fr: "Autorisation de travail", pt: "Autorização de trabalho" },
+  sec_certifications: { it: "Certificazioni", en: "Certifications", hu: "Tanúsítványok", es: "Certificaciones", de: "Zertifizierungen", fr: "Certifications", pt: "Certificações" },
 };
 
 export type ProfileT = (key: keyof typeof T | string) => string;
