@@ -1,8 +1,8 @@
 <!-- @translation: de, ai-translated 2026-06-06 -->
 ---
 name: profile-yaml
-description: "Maintain `$JHT_HOME/profile/candidate_profile.yml` — the structured candidate data the entire team consumes. The frontend polls this file every ~2s; an invalid YAML makes the user's left panel go silently blank. Owned by the Assistente. Use this skill on EVERY new piece of information from the user (text or uploaded file): write incrementally, validate immediately, talk to the user only after the validator says VALID_YAML. Also covers `ready.flag` (the unlock for the \"Vai alla dashboard\" button) with its strict 3-step verify-then-announce protocol."
-allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
+description: "Maintain `$JHT_HOME/profile/candidate_profile.yml` — the structured candidate data the entire team consumes. The frontend polls this file every ~2s; an invalid YAML makes the user's left panel go silently blank. Owned by the Assistente. Use this skill on EVERY new piece of information from the user (text or uploaded file): write incrementally, validate immediately, talk to the user only after the validator says VALID_PROFILE. Also covers `ready.flag` (the unlock for the \"Vai alla dashboard\" button) with its strict 3-step verify-then-announce protocol."
+allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
 ---
 
 # profile-yaml — einzige Quelle der Wahrheit über den Kandidaten
@@ -33,13 +33,21 @@ Jedes neue Datum = ein `Write` oder `Edit` auf der Datei. Dann validieren. Dann 
 
 ## Pflichtvalidierung nach JEDEM Write/Edit
 
+Validieren Sie gegen das **kanonische Schema** (nicht nur "ist das YAML parsebar"): siehe die Skill
+[`profile-schema`](../profile-schema/SKILL.md) für das vollständige Schema.
+
 ```bash
-python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' \
-    "$JHT_HOME/profile/candidate_profile.yml" \
-    && echo VALID_YAML || echo INVALID_YAML
+jht profile validate
+# direkter Fallback:
+# python3 /app/shared/skills/validate_profile.py "$JHT_HOME/profile/candidate_profile.yml"
 ```
 
-Falls `INVALID_YAML` → lesen Sie die Datei mit `Read`, finden Sie die Zeile, auf die der Python-Fehler hinweist, korrigieren Sie, validieren Sie erneut. **Setzen Sie die Konversation mit dem Benutzer NICHT fort, bis VALID_YAML erscheint.** Ein einziges kaputtes YAML löscht das gesamte linke Panel; der Benutzer denkt, die App sei abgestürzt.
+`VALID_PROFILE` → weiter. `INVALID_PROFILE` → lesen Sie die `ERROR:`-Meldungen (Feld + Grund),
+korrigieren Sie das Feld, validieren Sie erneut. Die `WARN:`-Meldungen (Legacy-Schlüssel, z.B. `languages[].name` statt
+`language`) blockieren nicht, sollten aber behoben werden, wenn Sie diesen Abschnitt bearbeiten.
+
+**Setzen Sie die Konversation mit dem Benutzer NICHT fort, bis `VALID_PROFILE` erscheint.** Ein kaputtes Profil
+leert das gesamte linke Panel; der Benutzer denkt, die App sei abgestürzt.
 
 Wenn Sie vergessen haben, den Validierungsschritt hinzuzufügen, können Sie sicher sein, dass die Datei kaputt ist — es gibt kein "wahrscheinlich ok". Führen Sie ihn immer aus.
 
@@ -189,7 +197,7 @@ Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt
 
 ### Das Flag NICHT erstellen, wenn
 
-- die letzte YAML-Validierung `INVALID_YAML` ausgegeben hat (auch nur einmal nach dem letzten Write);
+- die letzte Profilvalidierung `INVALID_PROFILE` ausgegeben hat (auch nur einmal nach dem letzten Write);
 - fehlen: Name, Zielrolle, Stadt, Erfahrungsjahre, E-Mail;
 - fehlen: Fähigkeiten (≥2), Sprachen (≥1), Erfahrungen (≥1), Abschlüsse (≥1).
 
