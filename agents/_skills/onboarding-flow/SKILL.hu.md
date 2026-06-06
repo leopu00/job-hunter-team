@@ -32,39 +32,52 @@ A felhasználó MINDEN olyan köre után, ami új információt hoz:
 
 Kérdés nélküli válasz CSAK akkor elfogadható, ha a blokkoló ellenőrzőlista teljesen teljesítve van.
 
-## Blokkoló ellenőrzőlista — a küszöb, ami feloldja a dashboardot
+Három szint (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED feloldja a
+csapatot · 🟡 RECOMMENDED nem blokkol, de sokat javít · 🟢 OPTIONAL = maximális személyre szabás.
 
-A frontend letiltja a "Vai alla dashboard" gombot, amíg az alábbi **összes** mező jelen van és nem üres (vagy amíg kifejezetten be nem állítod a `ready.flag`-et — lásd `profile-yaml`):
+## 🔴 Blokkoló ellenőrzőlista — REQUIRED (feloldja a csapatot)
 
-| Mező                           | YAML útvonal                                    | Semleges kérdéspélda                                                    |
-|--------------------------------|-------------------------------------------------|-------------------------------------------------------------------------|
-| Szektor                        | `industry`                                      | "Milyen szektorban dolgozol?"                                           |
-| Vezeték- és keresztnév         | `name` + `candidate.name`                       | "Hogy hívnak?"                                                          |
-| Célpozíció                     | `target_role` + `candidate.target_role`         | "Milyen pozíciót keresel?"                                              |
-| Város / terület                | `location`                                      | "Melyik városban vagy területen keresel?"                               |
-| Állampolgárság / munkavállalási engedély | `candidate.citizenship` + `preferences.work_authorization` | "Milyen állampolgárságod van, és van-e már munkavállalási jogod azokon a területeken, amelyek érdekelnek?" (lásd az alábbi due-diligence részt) |
-| Tapasztalat évei               | `experience_years`                              | "Hány év tapasztalatod van a pozícióban?"                               |
-| Kapcsolattartó email           | `candidate.contacts.email`                      | "Milyen emailt szeretnél használni a jelentkezésekhez?"                  |
-| ≥2 elsődleges készség          | `skills.primary` (≥2 elem)                      | "Melyek a 3 legerősebb kompetenciád?"                                   |
-| ≥1 nyelv                       | `languages` (≥1 elem `level`-lel)               | "Milyen nyelveket beszélsz és milyen szinten?" (A1/B1/C1/native)        |
-| ≥1 tapasztalat                 | `candidate.experience` (≥1 company/role/years/summary-vel) | "Mesélj az utolsó pozíciódról: cég, feladatkör, évek, egy sor arról, mit csináltál" |
-| ≥1 végzettség                  | `candidate.education` (≥1 institution/degree/year-rel)     | "Milyen tanulmányaid vannak? (iskola/egyetem, végzettség, év)"           |
+A csapat NEM indul el, amíg az alábbi **összes** mező jelen van és nem üres (vagy amíg
+kifejezetten be nem állítod a `ready.flag`-et — lásd `profile-yaml`). Ez a minimum a
+pozíciók **kereséséhez és pontozásához**:
+
+| Mező                 | YAML útvonal                 | Semleges kérdéspélda                              |
+|----------------------|------------------------------|---------------------------------------------------|
+| Vezeték- és keresztnév | `name`                     | "Hogy hívnak?"                                    |
+| Célpozíció           | `target_role`                | "Milyen pozíciót keresel?"                        |
+| Város / terület      | `location`                   | "Melyik városban vagy területen keresel?"         |
+| Tapasztalat évei     | `experience_years`           | "Hány év tapasztalatod van a pozícióban?"         |
+| Cél szenioritás      | `seniority_target`           | "Milyen szintet keresel? (junior / mid / senior)" |
+| Kapcsolattartó email | `candidate.contacts.email`   | "Milyen emailt szeretnél használni a jelentkezésekhez?" |
+| ≥2 elsődleges készség | `skills.primary` (≥2 elem)  | "Melyek a 3 legerősebb kompetenciád?"             |
+| ≥1 nyelv             | `languages` (≥1 `level`-lel) | "Milyen nyelveket beszélsz és milyen szinten?" (A1..C2/native) |
+
+## 🟡 RECOMMENDED — nem blokkolók, de "mindent megváltoztatnak"
+
+A csapat ezek nélkül is elindul, de velük a keresés célzott és a CV-k személyre szabottak.
+Kérdezd ezeket **közvetlenül a feloldás után**, a többi előtt:
+
+| Mező                     | YAML útvonal                                               | Miért                                   |
+|--------------------------|------------------------------------------------------------|-----------------------------------------|
+| ≥1 tapasztalat           | `candidate.experience` (company/role/years/summary)        | nem általános CV-k + pontos scoring     |
+| ≥1 végzettség            | `candidate.education` (institution/degree/year)            | képzési követelmények + CV              |
+| Szektor                  | `industry`                                                 | irányítja a keresést                    |
+| Állampolgárság / work-auth | `candidate.citizenship` + `preferences.work_authorization` | elkerüli az elérhetetlen pozíciókat (due-diligence lent) |
+| Preferált helyszínek     | `preferences.geography` / `location_preferences`           | célzott Scout                           |
 
 Minden tapasztalatnak KÖTELEZŐEN tartalmaznia kell: `company`, `role`, `years`, `summary` (≥1 mondat). Minden `education`-nek legalább: `institution`, `degree`, `year`.
 
-## Gazdag ellenőrzőlista — amitől a Writer-ek hasznosak lesznek
+## 🟢 OPTIONAL — maximális személyre szabás
 
-Miután a blokkoló ellenőrzőlista teljesült, **folytasd** a gazdag ellenőrzőlista mezőinek kérdezését, amíg a felhasználó nem mondja, hogy álljál meg:
+Folytasd a kérdezést, amíg a felhasználó nem mondja, hogy álljál meg — több adat = személyre szabottabb CV és keresés:
 
-- `candidate.experience[]` — ideálisan az utolsó 3 tapasztalat, mindegyik summary ≥3 sor, technológiák/eszközök, konkrét eredmények (számok, ahol lehet)
-- `candidate.education[]` — minden releváns végzettség, tanúsítványok
-- `skills.primary` / `skills.secondary` — ≥5 elsődleges, ≥5 másodlagos
-- `languages` — minden beszélt nyelv CEFR szinttel
-- `candidate.contacts.phone`, `.linkedin`, `.github`, `.website`
-- `has_degree`, `seniority_target`
+- `candidate.experience[]` — utolsó 3, summary ≥3 sor, technológiák/eszközök, eredmények (számok)
+- `candidate.certifications`, `candidate.projects`, `candidate.strengths`
+- `skills.primary` / `skills.secondary` — ≥5 + ≥5 · `languages` mind CEFR-rel
+- `candidate.contacts.phone` / `.linkedin` / `.github` / `.website`
+- `has_degree` · narratív összefoglalók (lásd `profile-summaries`)
 - `preferences.work_mode`, `relocation`, `salary_annual_eur`
-- `preferences.work_authorization` régiónként (lásd az alábbi due-diligence részt)
-- Személyes projektek, publikációk, open-source, önkéntes munka, tanúsítványok
+- Projektek, publikációk, open-source, önkéntes munka, tanúsítványok, `sector_details`
 
 ## Work-authorization — átvilágítás (NE hagyd ki)
 
