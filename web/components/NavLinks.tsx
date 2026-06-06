@@ -4,13 +4,20 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useDashboardT } from '@/app/components/DashboardI18n'
+import { useLocale } from '@/lib/use-locale'
 
 type Pending = { profile: boolean; team: boolean }
 const PENDING_KEY = 'onboarding-popup:pending'
 const EVENT_NAME = 'onboarding-popup-update'
 
+const T: Record<string, Record<string, string>> = {
+  setup_pending: { it: 'configurazione in sospeso', en: 'setup pending', hu: 'beállítás függőben', es: 'configuración pendiente', de: 'Einrichtung ausstehend', fr: 'configuration en attente', pt: 'configuração pendente' },
+}
+
 export default function NavLinks() {
   const { t } = useDashboardT()
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
   const pathname = usePathname() ?? ''
   const [pending, setPending] = useState<Pending>({ profile: false, team: false })
 
@@ -38,10 +45,10 @@ export default function NavLinks() {
   return (
     <div className="flex items-center gap-1">
       <NavLink href="/dashboard" pathname={pathname} tour="dashboard">{t('nav_dashboard')}</NavLink>
-      <NavLink href="/map" pathname={pathname}>Map</NavLink>
+      <NavLink href="/map" pathname={pathname}>{t('nav_map')}</NavLink>
       <NavLink href="/positions" pathname={pathname} tour="positions">{t('nav_positions')}</NavLink>
-      <NavLink href="/team" pathname={pathname} tour="team" badge={pending.team}>Team</NavLink>
-      <NavLink href="/profile" pathname={pathname} badge={pending.profile}>{t('nav_profile')}</NavLink>
+      <NavLink href="/team" pathname={pathname} tour="team" badge={pending.team} badgeLabel={tr('setup_pending')}>{t('nav_team')}</NavLink>
+      <NavLink href="/profile" pathname={pathname} badge={pending.profile} badgeLabel={tr('setup_pending')}>{t('nav_profile')}</NavLink>
     </div>
   )
 }
@@ -53,6 +60,7 @@ function NavLink({
   tour,
   pathname,
   badge,
+  badgeLabel,
 }: {
   href: string
   children: React.ReactNode
@@ -60,6 +68,7 @@ function NavLink({
   tour?: string
   pathname: string
   badge?: boolean
+  badgeLabel?: string
 }) {
   // Active quando il pathname è esattamente la voce o un suo sotto-percorso
   // (es. /team/v2 mantiene "Team" attivo). Stato attivo = colore bianco
@@ -82,7 +91,7 @@ function NavLink({
       {children}
       {badge && (
         <span
-          aria-label="setup pending"
+          aria-label={badgeLabel ?? 'setup pending'}
           className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center w-3 h-3 rounded-full text-[8px] font-bold leading-none"
           style={{
             background: 'var(--color-yellow)',

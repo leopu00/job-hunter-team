@@ -577,6 +577,26 @@ const translations = {
       "Húzd a JHT Desktopot az Alkalmazások mappába",
       "Indítsd el a JHT Desktopot: a launcher megnyitja az irányítópultot a böngészőben",
     ],
+    es: [
+      "Abre el archivo .dmg descargado",
+      "Arrastra JHT Desktop a la carpeta Aplicaciones",
+      "Inicia JHT Desktop: el launcher abrirá el panel en tu navegador",
+    ],
+    de: [
+      "Öffne die heruntergeladene .dmg-Datei",
+      "Ziehe JHT Desktop in den Ordner „Programme“",
+      "Starte JHT Desktop: Der Launcher öffnet das Dashboard in deinem Browser",
+    ],
+    fr: [
+      "Ouvrez le fichier .dmg téléchargé",
+      "Faites glisser JHT Desktop dans le dossier Applications",
+      "Lancez JHT Desktop : le launcher ouvrira le tableau de bord dans votre navigateur",
+    ],
+    pt: [
+      "Abra o ficheiro .dmg transferido",
+      "Arraste o JHT Desktop para a pasta Aplicações",
+      "Inicie o JHT Desktop: o launcher abrirá o painel no seu navegador",
+    ],
   },
   dl_linux_instr: {
     it: [
@@ -594,6 +614,26 @@ const translations = {
       "Tedd végrehajthatóvá és indítsd el: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
       "A JHT Desktop megnyitja a helyi irányítópultot a böngészőben",
     ],
+    es: [
+      "Descarga el archivo .AppImage",
+      "Hazlo ejecutable e iníccialo: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
+      "JHT Desktop abre el panel local en tu navegador",
+    ],
+    de: [
+      "Lade die .AppImage-Datei herunter",
+      "Mache sie ausführbar und starte sie: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
+      "JHT Desktop öffnet das lokale Dashboard in deinem Browser",
+    ],
+    fr: [
+      "Téléchargez le fichier .AppImage",
+      "Rendez-le exécutable et lancez-le : chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
+      "JHT Desktop ouvre le tableau de bord local dans votre navigateur",
+    ],
+    pt: [
+      "Transfira o ficheiro .AppImage",
+      "Torne-o executável e inicie-o: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
+      "O JHT Desktop abre o painel local no seu navegador",
+    ],
   },
   dl_windows_instr: {
     it: [
@@ -610,6 +650,26 @@ const translations = {
       "Töltsd le az .exe fájlt",
       "Futtasd az NSIS telepítő varázslót és fejezd be a telepítést",
       "Nyisd meg a JHT Desktopot a Start menüből: a launcher elindítja a helyi irányítópultot a böngészőben",
+    ],
+    es: [
+      "Descarga el archivo .exe",
+      "Ejecuta el asistente de instalación NSIS y completa la instalación",
+      "Abre JHT Desktop desde el menú Inicio: el launcher inicia el panel local en tu navegador",
+    ],
+    de: [
+      "Lade die .exe-Datei herunter",
+      "Führe den NSIS-Installationsassistenten aus und schließe die Installation ab",
+      "Öffne JHT Desktop über das Startmenü: Der Launcher startet das lokale Dashboard in deinem Browser",
+    ],
+    fr: [
+      "Téléchargez le fichier .exe",
+      "Exécutez l'assistant d'installation NSIS et terminez l'installation",
+      "Ouvrez JHT Desktop depuis le menu Démarrer : le launcher démarre le tableau de bord local dans votre navigateur",
+    ],
+    pt: [
+      "Transfira o ficheiro .exe",
+      "Execute o assistente de instalação NSIS e conclua a instalação",
+      "Abra o JHT Desktop a partir do menu Iniciar: o launcher inicia o painel local no seu navegador",
     ],
   },
   dl_mac_guide_title: {
@@ -641,6 +701,30 @@ const translations = {
       "Internetkapcsolat a csomag letöltéséhez és az első bootstraphez",
       "Engedély a helyi böngésző megnyitásához, ha szükséges",
     ],
+    es: [
+      "macOS 12 Monterey o posterior",
+      "Unos 500 MB de espacio libre en disco",
+      "Conexión a internet para descargar el paquete y completar el primer bootstrap",
+      "Permiso para abrir el navegador local cuando se solicite",
+    ],
+    de: [
+      "macOS 12 Monterey oder neuer",
+      "Etwa 500 MB freier Speicherplatz",
+      "Internetverbindung zum Herunterladen des Pakets und für den ersten Bootstrap",
+      "Berechtigung zum Öffnen des lokalen Browsers bei Aufforderung",
+    ],
+    fr: [
+      "macOS 12 Monterey ou version ultérieure",
+      "Environ 500 Mo d'espace disque libre",
+      "Connexion internet pour télécharger le paquet et effectuer le premier bootstrap",
+      "Autorisation d'ouvrir le navigateur local lorsque demandé",
+    ],
+    pt: [
+      "macOS 12 Monterey ou posterior",
+      "Cerca de 500 MB de espaço livre em disco",
+      "Ligação à internet para transferir o pacote e concluir o primeiro bootstrap",
+      "Permissão para abrir o navegador local quando solicitado",
+    ],
   },
   dl_mac_node_title: {
     it: "Passo 1 — Apri il pacchetto",
@@ -670,6 +754,30 @@ const translations = {
       "Nyisd meg a letöltött .dmg fájlt",
       "Húzd a JHT Desktopot az Alkalmazások mappába",
       "Ha a macOS megerősítést kér, engedélyezd az app megnyitását",
+    ],
+    es: [
+      "Descarga el paquete de macOS desde el botón de arriba",
+      "Abre el archivo .dmg descargado",
+      "Arrastra JHT Desktop a Aplicaciones",
+      "Si macOS pide confirmación, permite que la app se abra",
+    ],
+    de: [
+      "Lade das macOS-Paket über die Schaltfläche oben herunter",
+      "Öffne die heruntergeladene .dmg-Datei",
+      "Ziehe JHT Desktop in den Ordner „Programme“",
+      "Wenn macOS eine Bestätigung verlangt, erlaube das Öffnen der App",
+    ],
+    fr: [
+      "Téléchargez le paquet macOS depuis le bouton ci-dessus",
+      "Ouvrez le fichier .dmg téléchargé",
+      "Faites glisser JHT Desktop dans Applications",
+      "Si macOS demande une confirmation, autorisez l'ouverture de l'application",
+    ],
+    pt: [
+      "Transfira o pacote macOS a partir do botão acima",
+      "Abra o ficheiro .dmg transferido",
+      "Arraste o JHT Desktop para Aplicações",
+      "Se o macOS pedir confirmação, permita a abertura da aplicação",
     ],
   },
   dl_mac_node_alt: {
@@ -701,6 +809,30 @@ const translations = {
       "Ha szükséges, engedélyezd az appnak a böngésző megnyitását",
       "Az irányítópult automatikusan megnyílik a localhoston",
     ],
+    es: [
+      "Abre JHT Desktop desde la carpeta Aplicaciones",
+      "Espera al primer bootstrap del runtime local",
+      "Si se solicita, permite que la app abra el navegador",
+      "El panel se abrirá automáticamente en localhost",
+    ],
+    de: [
+      "Öffne JHT Desktop aus dem Ordner „Programme“",
+      "Warte auf den ersten Bootstrap der lokalen Laufzeitumgebung",
+      "Erlaube der App bei Aufforderung, den Browser zu öffnen",
+      "Das Dashboard öffnet sich automatisch auf localhost",
+    ],
+    fr: [
+      "Ouvrez JHT Desktop depuis le dossier Applications",
+      "Attendez le premier bootstrap de l'environnement d'exécution local",
+      "Si demandé, autorisez l'application à ouvrir le navigateur",
+      "Le tableau de bord s'ouvrira automatiquement sur localhost",
+    ],
+    pt: [
+      "Abra o JHT Desktop a partir da pasta Aplicações",
+      "Aguarde o primeiro bootstrap do runtime local",
+      "Se solicitado, permita que a aplicação abra o navegador",
+      "O painel abrirá automaticamente em localhost",
+    ],
   },
   dl_mac_expect_title: {
     it: "Cosa succede",
@@ -731,6 +863,38 @@ const translations = {
       "Leállíthatod vagy újra megnyithatod a JHT-t az asztali launcherről",
       "Ha a 3000-es port foglalt, a launcher egy közeli szabad portot választ",
       "A naplók helyben maradnak a lemezen hibakereséshez",
+    ],
+    es: [
+      "El launcher verifica el payload web incluido en la app",
+      "Inicia el runtime local en un puerto libre, 3000 por defecto",
+      "Abre automáticamente el navegador en el panel local",
+      "Puedes detener o reabrir JHT desde el launcher de escritorio",
+      "Si el puerto 3000 está ocupado, el launcher elige un puerto libre cercano",
+      "Los registros quedan guardados localmente para depuración",
+    ],
+    de: [
+      "Der Launcher überprüft das in der App enthaltene Web-Payload",
+      "Er startet die lokale Laufzeitumgebung auf einem freien Port, standardmäßig 3000",
+      "Er öffnet automatisch den Browser mit dem lokalen Dashboard",
+      "Du kannst JHT über den Desktop-Launcher stoppen oder erneut öffnen",
+      "Ist Port 3000 belegt, wählt der Launcher einen nahegelegenen freien Port",
+      "Die Protokolle bleiben lokal auf der Festplatte für die Fehlersuche",
+    ],
+    fr: [
+      "Le launcher vérifie le payload web inclus dans l'application",
+      "Il démarre l'environnement d'exécution local sur un port libre, 3000 par défaut",
+      "Il ouvre automatiquement le navigateur sur le tableau de bord local",
+      "Vous pouvez arrêter ou rouvrir JHT depuis le launcher de bureau",
+      "Si le port 3000 est occupé, le launcher choisit un port libre voisin",
+      "Les journaux restent enregistrés localement pour le débogage",
+    ],
+    pt: [
+      "O launcher verifica o payload web incluído na app",
+      "Inicia o runtime local numa porta livre, 3000 por predefinição",
+      "Abre automaticamente o navegador no painel local",
+      "Pode parar ou reabrir o JHT a partir do launcher de ambiente de trabalho",
+      "Se a porta 3000 estiver ocupada, o launcher escolhe uma porta livre próxima",
+      "Os registos ficam guardados localmente para depuração",
     ],
   },
 
