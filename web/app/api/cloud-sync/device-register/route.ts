@@ -176,6 +176,10 @@ export async function POST(req: NextRequest) {
   ).slice(0, 100);
 
   const { token, prefix, hash } = generateSyncToken();
+  // Scadenza (audit #1): i device VPS sono headless e NON hanno auto-refresh
+  // del sync token — una scadenza secca li costringerebbe a un ri-pairing
+  // manuale ricorrente. Quindi expires_at = NULL (nessuna scadenza), scelta
+  // esplicita e tracciata. La revoca resta possibile via UI (`revoked_at`).
   const { data, error } = await admin
     .from("cloud_sync_tokens")
     .insert({
@@ -183,6 +187,7 @@ export async function POST(req: NextRequest) {
       name: tokenName,
       token_prefix: prefix,
       token_hash: hash,
+      expires_at: null,
     })
     .select("id, name, token_prefix, created_at")
     .single();

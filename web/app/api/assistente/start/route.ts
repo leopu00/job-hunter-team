@@ -2,10 +2,13 @@ import { NextResponse } from "next/server";
 import path from "path";
 import { runBash, runScript, toWslPath } from "@/lib/shell";
 import { enqueueIfRemote } from "@/lib/team-bus";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST() {
+  const authError = await requireAuth();
+  if (authError) return authError;
   const remote = await enqueueIfRemote("start", "assistente");
   if (remote) return remote;
   try {

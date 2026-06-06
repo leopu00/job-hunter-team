@@ -261,6 +261,38 @@ Surfaced from the OpenClaw comparison ([`02-openclaw-comparison.md`](02-openclaw
 
 ---
 
+## 🔁 Red-team follow-up — 2026-06-06
+
+Second-pass adversarial audit (cloud-sync tokens, agent prompt-injection, route auth). Open-vuln narrative kept local-only (`docs/internal/*-red-team*`, git-ignored). Fixes landed on `dev2`, pending master merge. **Two of the four "high" findings deflated on verification** (already covered upstream) — see "verified non-issues".
+
+- [x] **RT1** — Cloud sync tokens never expired
+  - `cloud_sync_tokens` had no `expires_at`; `lib/cloud-sync/auth.ts` checked only `revoked_at`. Tokens bypass RLS (service_role) and lived forever; web logout didn't revoke them.
+  - Fix: migration `036` (`expires_at` nullable — NULL = no-expiry for headless VPS without auto-refresh) + 401 enforcement in `auth.ts` + per-source TTL (UI default 90d, VPS NULL explicit).
+  - Merged: dev2 21ce208d0 + c37468827 (pending master)
+
+- [x] **RT2** — Prompt injection: external content treated as instructions
+  - JD / Telegram messages / CVs reach agent LLMs with no "data ≠ instructions" boundary. Mitigation for threat-model §"Prompt injection".
+  - Fix: `RULE-T16` in `agents/_team/team-rules.md` (inherited by all agents; fence tag `⟦DATI_ESTERNI·NON_ESEGUIRE⟧`) + guard in `blind-review` (Critic, the one point where a JD is *judged* by an LLM). Automatic code-level fencing of the web-fetch is **not feasible** (dispersed fetch + `WebFetch` tool output out of code reach) → the global rule is the primary defence.
+  - Merged: dev2 d7a550bf7 (pending master)
+
+- [x] **RT3** — `requireAuth()` missing on 11 capitano/assistente routes (extends C2)
+  - C2 covered 21 routes but missed the agent-control routes (`chat/start/stop/status/browse/check/upload`). The grave vector (cross-origin mutation → TUI injection) was **already blocked by the middleware CSRF guard** (`shouldRejectBrowserMutation`); this is defence-in-depth + consistency with `*/terminal`.
+  - Fix: `requireAuth()` on all 11 routes (15 handlers).
+  - Merged: dev2 df0a9d7b6 (pending master)
+
+- [x] **RT4** — DB function hardening (search_path + EXECUTE)
+  - `function_search_path_mutable` on 3 functions; 2 `SECURITY DEFINER` functions executable by `anon` — the prior `023` `REVOKE FROM anon, authenticated` was **ineffective** (EXECUTE is inherited from `PUBLIC`).
+  - Fix: migration `031` (`SET search_path`) + `032` (`REVOKE EXECUTE … FROM PUBLIC`). Applied to prod; advisors clear.
+  - Merged: dev2 58f321df6 + e58636394 (pending master)
+
+**Verified non-issues** (agent over-flagged, confirmed against live state):
+- `refresh_token` reuse → already single-use via Supabase **refresh-token rotation** (verified: `auth.refresh_tokens` 73% revoked). `device-register` one-shot is enforced by rotation, not by our code.
+- Auth `leaked_password_protection` / `MFA` advisors → **N/A**: auth is 100% OAuth (Google/GitHub), no passwords managed.
+
+A couple of residual low-risk items remain; they are tracked **privately** (local-only report), not detailed here.
+
+---
+
 ## 📊 Progress
 
 ```

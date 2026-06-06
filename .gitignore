@@ -19,6 +19,12 @@ google-service-account.json
 linkedin-cookies.json
 .secrets-patterns
 
+# ── SECURITY AUDIT — vulnerabilità APERTE, MAI su repo pubblica ──
+# Report red-team con falle non ancora corrette: è una roadmap di
+# attacco. Rimuovere dall'ignore solo dopo che le falle sono chiuse.
+docs/internal/*security-audit*
+docs/internal/*-red-team*
+
 # ── DATI PERSONALI — MAI committare ─────────────────────────
 # PDF: CV, cover letter, documenti personali
 *.pdf
