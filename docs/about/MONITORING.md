@@ -41,9 +41,9 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 | Captain idle time | low |
 | Verdict | 🎯 Viable. Lowering oscillation is the active work. |
 
-**Why less precise**: the usage signal we read from Kimi is more variable, and response sizes have a wider distribution. The current mitigation is the 85% target — wasteful but safe.
+**Why less precise**: the usage signal we read from Kimi is more variable, and response sizes have a wider distribution. The current mitigation is the 88% target (tuned per-provider in pacing-bridge).
 
-If Kimi €40 holds at >90% target with <10% oscillation for a full month under real load, **the mass-market threshold is reached** — see [`PROVIDERS.md`](PROVIDERS.md).
+**Validated**: 75h run (Case Study #3, 251 positions) + 10-day beta run (557 positions) both completed within budget. Pacing-bridge per-provider tuning (Kimi 88%, Codex/Claude 92%) landed 2026-05-31. The mass-market threshold is functional — remaining work is oscillation reduction, not viability.
 
 ### 🟣 Claude Pro €20 — not viable
 

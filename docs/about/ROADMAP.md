@@ -235,12 +235,12 @@ For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-
 
 ✅ 🔐 SECURITY.md — root file with responsible disclosure (audit in docs/security/)
 ✅ 🤝 CODE_OF_CONDUCT.md — Contributor Covenant 2.1
-⬜ 🎬 30s demo video (BLOCKER) — README above the fold
+⬜ 🎬 Animated GIFs (BLOCKER) — README above the fold (dashboard, team pipeline, onboarding); video deferred
 ✅ 🛡️ Security review — 31/34 fix, score 30→74%, see docs/security/ (tutti i blocker pre-launch chiusi: SSRF dispatcher integrato a webhooks+gateway, CSP nonce-based in prod via `web/middleware.ts`, resolve-system-bin deferito con razionale Homebrew/Docker macOS; verificato 2026-06-02)
 ✅ 🧪 docs/guides/BETA.md created (con "Coverage we still need" matrix)
 🟡 🐛 GitHub issue triage — templates (bug_report.md, feature_request.md) + .github/labels.yml (25 label) + docs/internal/triage.md SLA 48h/24h DONE; manca `gh label sync` live + project board
-🟡 📰 Show HN draft — docs/launch/show-hn-draft.md (171 righe, 4 title variants, Plan B subreddits); manca screenshots/GIF embedded (dipende da demo)
-🟡 🎬 30s demo storyboard — docs/launch/demo-storyboard.md (202 righe, 6-beat shot list, asciinema commands); mancano demo-profile.yml + assets/demo-fixtures/ + .cast/.gif
+🟡 📰 Show HN draft — docs/launch/show-hn-draft.md (171 righe, 4 title variants, Plan B subreddits); manca GIF embedded (dipende da LAUNCH-03 GIFs)
+🟡 🎬 Demo storyboard — docs/launch/demo-storyboard.md (202 righe, 6-beat shot list); pivot to GIF-first, video deferred
 ⬜ 🧊 Stabilize monitoring architecture (1-2 weeks freeze pre-launch)
 ⬜ 🧪 Beta tester recruitment (publish on r/cscareerquestions, friends list)
 ⬜ ⭐ Awesome lists submissions (awesome-ai-agents, awesome-claude, awesome-selfhosted)
