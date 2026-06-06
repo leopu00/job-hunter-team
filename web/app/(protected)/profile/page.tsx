@@ -9,6 +9,8 @@ import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { getProfileT } from "@/lib/profile-i18n";
 import ProfileStats from "@/components/ProfileStats";
 import ProfileAssistantFab from "@/components/ProfileAssistantFab";
+import RevealableContactRow from "@/app/components/RevealableContactRow";
+import ProfileBlockRenderer from "@/app/components/ProfileBlockRenderer";
 
 const SKILL_CATEGORY_COLORS = [
   "var(--color-blue)",
@@ -20,6 +22,18 @@ const SKILL_CATEGORY_COLORS = [
   "#f78166",
   "#d2a8ff",
 ];
+
+/**
+ * Chiave di ordinamento cronologico per l'esperienza: estrae l'anno di fine dal
+ * campo `period` grezzo ("Sep 2021 - Feb 2023"). "present/in corso" → in cima.
+ */
+function experienceSortKey(period?: string): number {
+  if (!period) return 0;
+  if (/present|in corso|current|ongoing|attuale|adesso|oggi|presente|now/i.test(period))
+    return 999999;
+  const years = (period.match(/\b(?:19|20)\d{2}\b/g) ?? []).map(Number);
+  return years.length ? Math.max(...years) : 0;
+}
 
 export default async function ProfilePage() {
   // Locale corrente dalla fonte unica (cookie NEXT_LOCALE), come next-intl.
@@ -33,6 +47,13 @@ export default async function ProfilePage() {
   const dateLocale = locale === "it" ? "it-IT" : locale;
 
   let profile: CandidateProfile | null = null;
+  let blocks: {
+    key: string;
+    kind: string;
+    title: string;
+    content: unknown;
+    ord?: number;
+  }[] = [];
 
   // In locale (desktop container su localhost) il profilo vive nel
   // workspace YAML, Supabase non viene interpellato — coerente con il
@@ -58,9 +79,21 @@ export default async function ProfilePage() {
       .eq("user_id", user.id)
       .single()) as { data: CandidateProfile | null };
     profile = data;
+    const { data: blocksData } = await supabase
+      .from("candidate_blocks")
+      .select("key,kind,title,content,ord")
+      .eq("user_id", user.id)
+      .order("ord", { ascending: true });
+    blocks = blocksData ?? [];
   } else {
     profile = readWorkspaceProfile();
   }
+
+  // Blocchi L2/L3 NON coperti dalle sezioni fisse → "Approfondimenti" in fondo.
+  // Evita doppioni con about/goals/preferences/strengths/… già renderizzati.
+  const COVERED_BLOCK =
+    /^(about|goals|preferences|pref_|strengths|aspirations|free_notes|projects|experience|education|skills|languages|contacts)/;
+  const extraBlocks = blocks.filter((b) => b.key && !COVERED_BLOCK.test(b.key));
 
   const pos = profile?.positioning ?? {};
   const contacts = (pos.contacts ?? {}) as Record<string, string>;
@@ -70,6 +103,10 @@ export default async function ProfilePage() {
     period?: string;
     description?: string;
   }[];
+  // Ordine cronologico: più recente in cima (period grezzo parsato).
+  const sortedExperience = [...experience].sort(
+    (a, b) => experienceSortKey(b.period) - experienceSortKey(a.period),
+  );
   const education = (pos.education ?? []) as {
     title?: string;
     institution?: string;
@@ -255,13 +292,13 @@ export default async function ProfilePage() {
                     />
                   )}
                   {contacts.phone && (
-                    <ContactRow
+                    <RevealableContactRow
                       icon={
                         <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
                       }
                       label={t("c_phone")}
                       value={contacts.phone}
-                      href={`tel:${contacts.phone}`}
+                      hrefPrefix="tel:"
                     />
                   )}
                   {contacts.linkedin && (
@@ -404,7 +441,7 @@ export default async function ProfilePage() {
             >
               {hasExperience ? (
                 <div className="flex flex-col">
-                  {experience.map((e, i) => (
+                  {sortedExperience.map((e, i) => (
                     <div key={i} className="flex gap-3">
                       {/* Timeline */}
                       <div
@@ -422,7 +459,7 @@ export default async function ProfilePage() {
                               i === 0 ? "0 0 8px rgba(0,232,122,0.4)" : "none",
                           }}
                         />
-                        {i < experience.length - 1 && (
+                        {i < sortedExperience.length - 1 && (
                           <div
                             className="w-px flex-1 min-h-[16px]"
                             style={{ background: "var(--color-border)" }}
@@ -925,6 +962,15 @@ export default async function ProfilePage() {
                 </ProfileSection>
               </div>
             )}
+
+            {/* Approfondimenti — blocchi L2/L3 non coperti dalle sezioni fisse.
+                Data-driven: ogni kind ha il suo renderer, un blocco custom nuovo
+                appare senza toccare codice. */}
+            {extraBlocks.map((b) => (
+              <ProfileSection key={b.key} id={b.key} title={b.title}>
+                <ProfileBlockRenderer kind={b.kind} content={b.content} />
+              </ProfileSection>
+            ))}
           </div>
         )}
       </div>

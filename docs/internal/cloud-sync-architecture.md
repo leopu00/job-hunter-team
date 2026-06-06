@@ -48,7 +48,8 @@
 | `positions` (+ `write_requested`, `write_requested_at`) | Delta-only ogni ~30s via `updated_at` cursor | mig 024 aggiunge flag writer-on-demand al push |
 | `scores`, `applications`, `position_highlights` | Event-coalesced con positions | push insieme alla transizione |
 | `companies` | Event-driven | nuova company o metadata user-visible cambiato |
-| `candidate_profiles`, `user_onboarding_state`, `encrypted_user_blobs` | Event-driven | invariati |
+| `candidate_profiles` (+ tabelle profilo normalizzate, `candidate_blocks`, `candidate_contacts`) | Event-driven | **modello a 3 livelli** dal 2026-06-06 — push completo (no scarto) + `pull-profile` cloud→locale. Vedi `candidate-profile-cloud-sync-redesign-2026-06-05.md` |
+| `user_onboarding_state`, `encrypted_user_blobs` | Event-driven | invariati |
 | `pending_user_messages` (mig 010) | Full-push (volume piccolo) | canale fallback notifiche agent→user |
 | `sentinel_ticks` (mig 013) | ⛔ **rimosso dal push** (`f68a127d`) | ~720 row/h/utente, solo container ne ha bisogno |
 | `team_commands` (mig 012) | ⛔ scrittura container disattivata | resta vivo per il subscriber legacy, vedi sotto |
@@ -183,6 +184,8 @@ Entrambe le event lane sono ora osservate (commit `4774c190` + `093027c1`, 2026-
 | **Pull desired-state ad ogni tick del daemon** (multi-device live, isolato dal counter consecutiveFails del push) | `968ef913` | 2026-05-31 |
 | **Killswitch dedicato 401/403** (threshold 3, halt + notifica `pending_user_messages` agent='cloud-sync') | `07d0109a` | 2026-05-31 |
 | **Tombstone propagation end-to-end** (Supabase mig 025 + SQLite V7 + CLI push + web receive) | `6499b3db` | 2026-05-31 |
+| **Profilo: modello a 3 livelli** (mig 033–035: tabelle normalizzate + `candidate_blocks` + `candidate_contacts`) + push completo no-scarto | `e52d31b2…76a150dc` | 2026-06-06 |
+| **`pull-profile` (hydration profilo cloud→locale)**: endpoint + `jht cloud pull-profile` only-if-absent + boot hook (PC nuovo / container ricreato) | `cabee35f` | 2026-06-06 |
 
 ### ⬜ Pending (in ordine di priorità)
 
