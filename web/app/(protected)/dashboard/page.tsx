@@ -9,6 +9,7 @@ import {
   getCriticVerdictTotals,
 } from "@/lib/queries";
 import type { DashboardPosition } from "@/lib/queries";
+import { getExchangeRates } from "@/lib/exchange-rates";
 import DashboardLinkedCharts from "@/app/components/DashboardLinkedCharts";
 import PipelineFlow from "@/app/components/PipelineFlow";
 import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
@@ -89,6 +90,9 @@ export default async function DashboardPage() {
         role_family: null,
         loc_country: null,
         loc_city: null,
+        salary_min: p.salary_declared_min ?? null,
+        salary_max: p.salary_declared_max ?? null,
+        salary_currency: "EUR",
         found_at: p.found_at ?? null,
         last_action_at:
           (p as { last_action_at?: string }).last_action_at ??
@@ -96,18 +100,20 @@ export default async function DashboardPage() {
           "",
       }))
     : [];
-  const [stats, dashPositions, pendingMessages, criticTotals] = demoData
+  const [stats, dashPositions, pendingMessages, criticTotals, rates] = demoData
     ? [
         demoData.stats,
         demoDashPositions,
         demoData.pendingMessages,
         { pass: 0, needs_work: 0, reject: 0, total: 0 },
+        { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
       ]
     : await Promise.all([
         getDashboardStats(),
         getDashboardPositions(),
         getPendingMessages(20),
         getCriticVerdictTotals(),
+        getExchangeRates(),
       ]);
 
   const activeTotal = stats.total - stats.excluded;
@@ -323,11 +329,13 @@ export default async function DashboardPage() {
           >
             <DashboardLinkedCharts
               positions={dashPositions}
+              rates={rates}
               labels={{
                 types: t.position_types,
                 countries: t.position_countries,
                 cities: t.position_cities,
                 score: t.score_distribution,
+                salary: t.salary_distribution,
                 noData: t.no_data,
                 reset: t.reset_filters,
                 table: {
@@ -341,6 +349,8 @@ export default async function DashboardPage() {
                   colLocation: t.col_location,
                   colRemote: t.col_remote,
                   colScore: t.col_score,
+                  colSalary: t.col_salary,
+                  colMonthly: t.col_monthly,
                   colStatus: t.col_status,
                   colUpdated: t.col_updated,
                 },
