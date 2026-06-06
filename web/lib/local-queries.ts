@@ -540,6 +540,46 @@ export function getPositionFacetsLocal(ws: string) {
   }))
 }
 
+// ── Dataset dashboard: facet + campi tabella + recency (universo attivo) ──
+export function getDashboardPositionsLocal(ws: string) {
+  const db = getDb(ws)
+  const rows = db.prepare(`
+    SELECT p.id, p.legacy_id, p.title, p.company, p.location, p.remote_type,
+           p.status, p.role_family, p.loc_country, p.loc_city,
+           p.salary_estimated_min, p.salary_estimated_max, p.salary_estimated_currency,
+           p.salary_declared_min, p.salary_declared_max, p.salary_declared_currency,
+           p.found_at,
+           s.total_score as score,
+           MAX(
+             COALESCE(p.found_at, '1970-01-01'),
+             COALESCE(p.last_checked, '1970-01-01'),
+             COALESCE(s.scored_at, '1970-01-01')
+           ) AS last_action_at
+    FROM positions p
+    LEFT JOIN scores s ON s.position_id = p.id
+    WHERE p.status != 'excluded'
+    ORDER BY last_action_at DESC
+  `).all() as any[]
+  return rows.map(r => ({
+    id: sid(r.id),
+    legacy_id: (r.legacy_id as number | null) ?? null,
+    title: (r.title as string | null) ?? null,
+    company: (r.company as string | null) ?? null,
+    location: (r.location as string | null) ?? null,
+    remote_type: (r.remote_type as string | null) ?? null,
+    status: r.status as string,
+    score: typeof r.score === 'number' ? r.score : null,
+    role_family: (r.role_family as string | null) ?? null,
+    loc_country: (r.loc_country as string | null) ?? null,
+    loc_city: (r.loc_city as string | null) ?? null,
+    salary_min: ((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_min : r.salary_declared_min) as number | null ?? null,
+    salary_max: ((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_max : r.salary_declared_max) as number | null ?? null,
+    salary_currency: (((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_currency : r.salary_declared_currency) as string | null) ?? 'EUR',
+    found_at: (r.found_at as string | null) ?? null,
+    last_action_at: (r.last_action_at as string | null) ?? '',
+  }))
+}
+
 // ── Position state-history (timestamp transizioni) ────────────────
 export function getPositionStateHistoryLocal(ws: string) {
   const db = getDb(ws)

@@ -11,6 +11,16 @@ type Props = {
   maxScore?: number; // default 100 (es. 10 per critic_score 0-10)
   binStep?: number; // default 5 (es. 0.5 per critic_score)
   decimals?: number; // decimali nei tick/tooltip (default 0)
+  // Cross-filtering: estremi inferiori (lo) dei bin selezionati + toggle.
+  // Vuoto/assente = grafico non interattivo (comportamento storico).
+  selectedBins?: number[];
+  onToggleBin?: (lo: number) => void;
+  // Formattazione valori su assi/tooltip/stat (es. "70k" per stipendi).
+  valueFormat?: (n: number) => string;
+  // Colore fisso delle barre (salta la scala semantica score→colore).
+  barColor?: string;
+  // Contenuto extra nell'header (es. selettore valuta), accanto agli stat.
+  headerExtra?: React.ReactNode;
 };
 
 const W = 480;
@@ -59,8 +69,14 @@ export default function ScoreDistribution({
   maxScore = 100,
   binStep = 5,
   decimals = 0,
+  selectedBins = [],
+  onToggleBin,
+  valueFormat,
+  barColor,
+  headerExtra,
 }: Props) {
   const [hover, setHover] = useState<number | null>(null);
+  const hasSelection = selectedBins.length > 0;
   const BINS = Math.max(1, Math.round(maxScore / binStep));
 
   const stats = useMemo(() => {
@@ -139,15 +155,14 @@ export default function ScoreDistribution({
 
   const hoveredBin = hover != null ? hover : null;
   const hoveredCount = hoveredBin != null ? stats.bins[hoveredBin] : 0;
-  const formatVal = (v: number) =>
+  const defaultFmt = (v: number) =>
     decimals > 0 ? v.toFixed(decimals) : Math.round(v).toString();
+  const fmt = valueFormat ?? defaultFmt;
   const hoveredLo =
-    hoveredBin != null
-      ? formatVal((stats.firstBin + hoveredBin) * binStep)
-      : "";
+    hoveredBin != null ? fmt((stats.firstBin + hoveredBin) * binStep) : "";
   const hoveredHi =
     hoveredBin != null
-      ? formatVal(
+      ? fmt(
           Math.min(
             maxScore,
             (stats.firstBin + hoveredBin + 1) * binStep -
@@ -161,27 +176,41 @@ export default function ScoreDistribution({
       : 0;
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+    <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-        <span className="section-label">{title}</span>
-        <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)] tabular-nums">
-          <Stat
-            label="avg"
-            value={stats.avg}
-            color={colorForFraction(stats.avg / maxScore)}
-          />
-          <Stat label="med" value={stats.median} />
-          <Stat label="p25–p75" value={`${stats.p25}–${stats.p75}`} />
-          <Stat label="n" value={stats.n} />
-        </div>
+        <span className="section-label flex items-center gap-3">
+          {title}
+          {headerExtra}
+        </span>
+        {stats.n > 0 && (
+          <div className="flex items-center gap-3 text-[10px] text-[var(--color-muted)] tabular-nums">
+            <Stat
+              label="avg"
+              value={fmt(stats.avg)}
+              color={barColor ?? colorForFraction(stats.avg / maxScore)}
+            />
+            <Stat label="med" value={fmt(stats.median)} />
+            <Stat
+              label="p25–p75"
+              value={`${fmt(stats.p25)}–${fmt(stats.p75)}`}
+            />
+            <Stat label="n" value={stats.n} />
+          </div>
+        )}
       </div>
 
+      {stats.n === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-[11px] text-[var(--color-dim)] italic">
+          {emptyLabel}
+        </div>
+      ) : (
       <svg
         width="100%"
         height={H}
         viewBox={`0 0 ${W} ${H}`}
         role="img"
         aria-label={title}
+        className="my-auto"
         style={{ overflow: "visible" }}
         onMouseLeave={() => setHover(null)}
       >
@@ -218,7 +247,7 @@ export default function ScoreDistribution({
               fill="var(--color-dim)"
               style={{ fontFamily: "inherit" }}
             >
-              {v}
+              {fmt(v)}
             </text>
           </g>
         ))}
@@ -229,7 +258,20 @@ export default function ScoreDistribution({
           const y = by(count);
           const h = PAD_TOP + chartH - y;
           const isHover = hover === i;
-          const score = (stats.firstBin + i) * binStep + binStep / 2;
+          const binLo = (stats.firstBin + i) * binStep;
+          const isSelected = selectedBins.includes(binLo);
+          const score = binLo + binStep / 2;
+          // Hover prevale; in presenza di selezione, i bin non selezionati
+          // (e non hovered) sono attenuati.
+          const opacity = isHover
+            ? 1
+            : hover != null
+              ? 0.35
+              : hasSelection
+                ? isSelected
+                  ? 1
+                  : 0.28
+                : 0.85;
           return (
             <rect
               key={i}
@@ -237,10 +279,16 @@ export default function ScoreDistribution({
               y={y}
               width={Math.max(1, barW - 1)}
               height={h}
-              fill={colorForFraction(score / maxScore)}
-              opacity={hover == null ? 0.85 : isHover ? 1 : 0.35}
+              fill={barColor ?? colorForFraction(score / maxScore)}
+              opacity={opacity}
+              stroke={isSelected ? "var(--color-bright)" : "none"}
+              strokeWidth={isSelected ? 1 : 0}
               onMouseEnter={() => setHover(i)}
-              style={{ cursor: "pointer", transition: "opacity 0.12s" }}
+              onClick={() => onToggleBin?.(binLo)}
+              style={{
+                cursor: onToggleBin ? "pointer" : "default",
+                transition: "opacity 0.12s",
+              }}
             />
           );
         })}
@@ -266,7 +314,7 @@ export default function ScoreDistribution({
               fontWeight={700}
               style={{ fontFamily: "inherit" }}
             >
-              avg {stats.avg}
+              avg {fmt(stats.avg)}
             </text>
           </g>
         )}
@@ -338,6 +386,7 @@ export default function ScoreDistribution({
             );
           })()}
       </svg>
+      )}
     </div>
   );
 }

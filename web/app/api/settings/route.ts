@@ -59,12 +59,17 @@ export async function PATCH(req: NextRequest) {
   }
   const app = (body.app ?? {}) as Record<string, unknown>;
   const notif = (body.notifications ?? {}) as Record<string, unknown>;
+  const dashboard = (body.dashboard ?? {}) as Record<string, unknown>;
   const updated = {
     ...existing,
     app: { ...((existing.app as Record<string, unknown>) ?? {}), ...app },
     notifications: {
       ...((existing.notifications as Record<string, unknown>) ?? {}),
       ...notif,
+    },
+    dashboard: {
+      ...((existing.dashboard as Record<string, unknown>) ?? {}),
+      ...dashboard,
     },
   };
   try {
