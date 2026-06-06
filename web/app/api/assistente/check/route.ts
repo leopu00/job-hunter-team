@@ -8,6 +8,7 @@ import {
   JHT_PROFILE_YAML,
   JHT_USER_DIR,
 } from "@/lib/jht-paths";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ type Check = {
 };
 
 export async function GET() {
+  const authError = await requireAuth();
+  if (authError) return authError;
   const repoRoot = path.resolve(process.cwd(), "..");
   const repoPath = toWslPath(repoRoot);
   const checks: Check[] = [];

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
-import { isLocalRequest } from "@/lib/auth";
+import { isLocalRequest, requireAuth } from "@/lib/auth";
 import { inferAgentActiveFromBus } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const authError = await requireAuth();
+  if (authError) return authError;
   // Su Vercel (no tmux) deduciamo l'active state dallo storico del bus
   // team_commands. Il polling UI così vede subito "ATTIVO" dopo che il
   // subscriber sulla VPS ha completato il start, senza dover prendere
