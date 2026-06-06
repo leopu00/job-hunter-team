@@ -1,8 +1,8 @@
 <!-- @translation: it, ai-translated 2026-06-06 -->
 ---
 name: profile-yaml
-description: "Mantieni `$JHT_HOME/profile/candidate_profile.yml` — il dato strutturato del candidato che tutto il team consuma. Il frontend polla questo file ogni ~2s; uno YAML invalido fa andare silenziosamente in bianco il pannello sinistro dell'utente. Responsabilità dell'Assistente. Usa questa skill ad OGNI nuova informazione dall'utente (testo o file caricato): scrivi incrementalmente, valida immediatamente, parla con l'utente solo dopo che il validatore dice VALID_YAML. Copre anche `ready.flag` (lo sblocco per il bottone \"Vai alla dashboard\") con il suo rigoroso protocollo a 3 step verifica-poi-annuncia."
-allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
+description: "Mantieni `$JHT_HOME/profile/candidate_profile.yml` — il dato strutturato del candidato che tutto il team consuma. Il frontend polla questo file ogni ~2s; uno YAML invalido fa andare silenziosamente in bianco il pannello sinistro dell'utente. Responsabilità dell'Assistente. Usa questa skill ad OGNI nuova informazione dall'utente (testo o file caricato): scrivi incrementalmente, valida immediatamente, parla con l'utente solo dopo che il validatore dice VALID_PROFILE. Copre anche `ready.flag` (lo sblocco per il bottone \"Vai alla dashboard\") con il suo rigoroso protocollo a 3 step verifica-poi-annuncia."
+allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
 ---
 
 # profile-yaml — fonte unica di verità sul candidato
@@ -33,13 +33,21 @@ Ogni nuovo dato = una `Write` o `Edit` sul file. Poi valida. Poi continua la con
 
 ## Validazione obbligatoria dopo OGNI write/edit
 
+Valida contro lo **schema canonico** (non solo "è YAML parsabile"): vedi la skill
+[`profile-schema`](../profile-schema/SKILL.md) per lo schema completo.
+
 ```bash
-python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' \
-    "$JHT_HOME/profile/candidate_profile.yml" \
-    && echo VALID_YAML || echo INVALID_YAML
+jht profile validate
+# fallback diretto:
+# python3 /app/shared/skills/validate_profile.py "$JHT_HOME/profile/candidate_profile.yml"
 ```
 
-Se `INVALID_YAML` → leggi il file con `Read`, trova la riga indicata dall'errore Python, correggi, valida di nuovo. **NON continuare la conversazione con l'utente finché non hai VALID_YAML.** Un singolo YAML rotto cancella l'intero pannello sinistro; l'utente pensa che l'app sia crashata.
+`VALID_PROFILE` → prosegui. `INVALID_PROFILE` → leggi gli `ERROR:` (campo + motivo),
+correggi quel campo, rivalida. I `WARN:` (chiavi legacy, es. `languages[].name` invece
+di `language`) non bloccano ma vanno sistemati quando tocchi quella sezione.
+
+**NON continuare la conversazione con l'utente finché non hai `VALID_PROFILE`.** Un profilo rotto
+svuota l'intero pannello sinistro; l'utente pensa che l'app sia crashata.
 
 Se hai dimenticato di aggiungere lo step di validazione puoi star certo che il file è rotto — non esiste un "probabilmente ok". Eseguila sempre.
 
@@ -189,7 +197,7 @@ E avvisa l'utente: "ho rimesso il bottone in attesa — rivediamo questo punto p
 
 ### NON creare il flag se
 
-- l'ultima validazione dello YAML ha stampato `INVALID_YAML` (anche una sola volta dopo l'ultimo Write);
+- l'ultima validazione del profilo ha stampato `INVALID_PROFILE` (anche una sola volta dopo l'ultimo Write);
 - mancano: nome, ruolo target, città, anni di esperienza, email;
 - mancano: skills (≥2), lingue (≥1), esperienze (≥1), titoli di studio (≥1).
 
@@ -206,7 +214,7 @@ Se non sai un campo: **lascia `""` o ometti**, mai inventare un valore plausibil
 ## Anti-pattern
 
 - ❌ Scrivere il profilo nella tua cwd `$JHT_AGENT_DIR` invece che in `$JHT_HOME/profile/` — il frontend non lo trova.
-- ❌ Saltare la validazione "tanto era una piccola modifica" — ogni Write può rompere lo YAML, sempre.
+- ❌ Saltare la validazione "tanto era una piccola modifica" — ogni Write può rompere YAML, sempre.
 - ❌ Mostrare YAML / JSON / path nella chat — l'utente è non-tecnico (vedi `assistente.md` sezione linguaggio utente).
 - ❌ Annunciare lo sblocco senza il `test -f` — è la classica allucinazione "ho fatto X" senza averlo fatto.
 - ❌ Append (Edit) in sezioni esistenti senza riguardare il contesto — lo YAML va riscritto in modo coerente, non patchato a casaccio.

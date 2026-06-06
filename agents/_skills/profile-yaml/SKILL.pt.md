@@ -1,8 +1,8 @@
 <!-- @translation: pt, ai-translated 2026-06-06 -->
 ---
 name: profile-yaml
-description: "Maintain `$JHT_HOME/profile/candidate_profile.yml` — the structured candidate data the entire team consumes. The frontend polls this file every ~2s; an invalid YAML makes the user's left panel go silently blank. Owned by the Assistente. Use this skill on EVERY new piece of information from the user (text or uploaded file): write incrementally, validate immediately, talk to the user only after the validator says VALID_YAML. Also covers `ready.flag` (the unlock for the \"Vai alla dashboard\" button) with its strict 3-step verify-then-announce protocol."
-allowed-tools: Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
+description: "Maintain `$JHT_HOME/profile/candidate_profile.yml` — the structured candidate data the entire team consumes. The frontend polls this file every ~2s; an invalid YAML makes the user's left panel go silently blank. Owned by the Assistente. Use this skill on EVERY new piece of information from the user (text or uploaded file): write incrementally, validate immediately, talk to the user only after the validator says VALID_PROFILE. Also covers `ready.flag` (the unlock for the \"Vai alla dashboard\" button) with its strict 3-step verify-then-announce protocol."
+allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
 ---
 
 # profile-yaml — fonte unica de verdade sobre o candidato
@@ -33,13 +33,21 @@ Cada novo dado = um `Write` ou `Edit` no ficheiro. Depois valide. Depois continu
 
 ## Validacao obrigatoria apos CADA write/edit
 
+Valide contra o **schema canonico** (nao apenas "e YAML parseavel"): veja a skill
+[`profile-schema`](../profile-schema/SKILL.md) para o schema completo.
+
 ```bash
-python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1]))' \
-    "$JHT_HOME/profile/candidate_profile.yml" \
-    && echo VALID_YAML || echo INVALID_YAML
+jht profile validate
+# fallback direto:
+# python3 /app/shared/skills/validate_profile.py "$JHT_HOME/profile/candidate_profile.yml"
 ```
 
-Se `INVALID_YAML` → leia o ficheiro com `Read`, encontre a linha indicada pelo erro Python, corrija, valide novamente. **NAO continue a conversa com o utilizador ate obter VALID_YAML.** Um unico YAML quebrado apaga todo o painel esquerdo; o utilizador pensa que a aplicacao crashou.
+`VALID_PROFILE` → prossiga. `INVALID_PROFILE` → leia os `ERROR:` (campo + motivo),
+corrija esse campo, revalide. Os `WARN:` (chaves legacy, ex. `languages[].name` em vez
+de `language`) nao bloqueiam mas devem ser corrigidos quando tocar nessa secao.
+
+**NAO continue a conversa com o utilizador ate obter `VALID_PROFILE`.** Um perfil quebrado
+esvazia todo o painel esquerdo; o utilizador pensa que a aplicacao crashou.
 
 Se esqueceu de adicionar o passo de validacao, pode ter a certeza de que o ficheiro esta quebrado — nao existe "provavelmente ok". Execute-o sempre.
 
@@ -189,7 +197,7 @@ E avise o utilizador: "voltei a colocar o botao em espera — vamos rever este p
 
 ### NAO criar o flag se
 
-- a ultima validacao do YAML mostrou `INVALID_YAML` (mesmo uma unica vez apos o ultimo Write);
+- a ultima validacao do perfil mostrou `INVALID_PROFILE` (mesmo uma unica vez apos o ultimo Write);
 - faltam: nome, cargo alvo, cidade, anos de experiencia, email;
 - faltam: competencias (≥2), linguas (≥1), experiencias (≥1), formacoes (≥1).
 
