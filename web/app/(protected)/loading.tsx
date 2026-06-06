@@ -1,9 +1,36 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  loading: {
+    it: "Caricamento",
+    en: "Loading",
+    hu: "Betöltés",
+    es: "Cargando",
+    de: "Wird geladen",
+    fr: "Chargement",
+    pt: "Carregando",
+  },
+  loading_lower: {
+    it: "caricamento…",
+    en: "loading…",
+    hu: "betöltés…",
+    es: "cargando…",
+    de: "wird geladen…",
+    fr: "chargement…",
+    pt: "carregando…",
+  },
+};
+
 export default function ProtectedLoading() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   return (
     <div
       role="status"
       aria-busy="true"
-      aria-label="Caricamento"
+      aria-label={tr("loading")}
       className="flex items-center justify-center py-20"
       style={{ animation: "fade-in 0.2s ease both" }}
     >
@@ -25,7 +52,7 @@ export default function ProtectedLoading() {
           className="text-[10px] uppercase tracking-widest"
           style={{ color: "var(--color-dim)" }}
         >
-          caricamento…
+          {tr("loading_lower")}
         </p>
       </div>
     </div>

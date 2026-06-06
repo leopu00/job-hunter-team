@@ -1,8 +1,26 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  loading_setup: {
+    it: "Caricamento setup",
+    en: "Loading setup",
+    hu: "Beállítás betöltése",
+    es: "Cargando configuración",
+    de: "Einrichtung wird geladen",
+    fr: "Chargement de la configuration",
+    pt: "Carregando configuração",
+  },
+};
+
 export default function SetupLoading() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   return (
     <main
       aria-busy="true"
-      aria-label="Caricamento setup"
+      aria-label={tr("loading_setup")}
       className="min-h-screen flex items-center justify-center px-5 py-10"
     >
       <div

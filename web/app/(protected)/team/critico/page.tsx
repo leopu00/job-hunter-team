@@ -3,6 +3,344 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import AgentInteraction from "@/components/AgentInteraction";
+import { useLocale } from "@/lib/use-locale";
+
+const LOCALE_TAG: Record<string, string> = {
+  it: "it-IT",
+  en: "en-GB",
+  hu: "hu-HU",
+  es: "es-ES",
+  de: "de-DE",
+  fr: "fr-FR",
+  pt: "pt-PT",
+};
+
+const T: Record<string, Record<string, string>> = {
+  fetchError: {
+    it: "Errore fetch",
+    en: "Fetch error",
+    hu: "Lekérési hiba",
+    es: "Error de obtención",
+    de: "Abruffehler",
+    fr: "Erreur de récupération",
+    pt: "Erro ao buscar",
+  },
+  dashboard: {
+    it: "Dashboard",
+    en: "Dashboard",
+    hu: "Irányítópult",
+    es: "Panel",
+    de: "Dashboard",
+    fr: "Tableau de bord",
+    pt: "Painel",
+  },
+  team: {
+    it: "Team",
+    en: "Team",
+    hu: "Csapat",
+    es: "Equipo",
+    de: "Team",
+    fr: "Équipe",
+    pt: "Equipe",
+  },
+  critic: {
+    it: "Critico",
+    en: "Critic",
+    hu: "Kritikus",
+    es: "Crítico",
+    de: "Kritiker",
+    fr: "Critique",
+    pt: "Crítico",
+  },
+  subtitle: {
+    it: "Revisioni CV · aggiornamento automatico ogni 8s",
+    en: "CV reviews · auto-refresh every 8s",
+    hu: "Önéletrajz-felülvizsgálatok · automatikus frissítés 8 mp-enként",
+    es: "Revisiones de CV · actualización automática cada 8s",
+    de: "Lebenslauf-Prüfungen · automatische Aktualisierung alle 8 s",
+    fr: "Revues de CV · actualisation automatique toutes les 8 s",
+    pt: "Revisões de CV · atualização automática a cada 8s",
+  },
+  updatedAt: {
+    it: "agg. ",
+    en: "upd. ",
+    hu: "frissítve ",
+    es: "act. ",
+    de: "akt. ",
+    fr: "maj ",
+    pt: "atual. ",
+  },
+  connError: {
+    it: "Errore connessione: {e}",
+    en: "Connection error: {e}",
+    hu: "Kapcsolódási hiba: {e}",
+    es: "Error de conexión: {e}",
+    de: "Verbindungsfehler: {e}",
+    fr: "Erreur de connexion : {e}",
+    pt: "Erro de conexão: {e}",
+  },
+  statsRealtime: {
+    it: "Stats real-time",
+    en: "Real-time stats",
+    hu: "Valós idejű statisztikák",
+    es: "Estadísticas en tiempo real",
+    de: "Echtzeit-Statistiken",
+    fr: "Stats en temps réel",
+    pt: "Estatísticas em tempo real",
+  },
+  totalReviews: {
+    it: "Revisioni totali",
+    en: "Total reviews",
+    hu: "Összes felülvizsgálat",
+    es: "Revisiones totales",
+    de: "Prüfungen gesamt",
+    fr: "Revues totales",
+    pt: "Revisões totais",
+  },
+  inQueue: {
+    it: "In attesa coda",
+    en: "Queue waiting",
+    hu: "Sorban várakozik",
+    es: "En espera en cola",
+    de: "Warteschlange",
+    fr: "En file d'attente",
+    pt: "Aguardando na fila",
+  },
+  needsWork: {
+    it: "Needs Work",
+    en: "Needs Work",
+    hu: "Javítás szükséges",
+    es: "Necesita trabajo",
+    de: "Nachbesserung",
+    fr: "À retravailler",
+    pt: "Precisa de trabalho",
+  },
+  reject: {
+    it: "Reject",
+    en: "Reject",
+    hu: "Elutasítás",
+    es: "Rechazar",
+    de: "Ablehnen",
+    fr: "Rejet",
+    pt: "Rejeitar",
+  },
+  avgScore: {
+    it: "Media voto",
+    en: "Avg score",
+    hu: "Átlagpontszám",
+    es: "Nota media",
+    de: "Durchschnittsnote",
+    fr: "Note moyenne",
+    pt: "Nota média",
+  },
+  reviewQueue: {
+    it: "Coda review in attesa",
+    en: "Pending review queue",
+    hu: "Függőben lévő felülvizsgálati sor",
+    es: "Cola de revisión pendiente",
+    de: "Warteschlange offener Prüfungen",
+    fr: "File de revues en attente",
+    pt: "Fila de revisões pendentes",
+  },
+  inQueueCount: {
+    it: "{n} in coda",
+    en: "{n} in queue",
+    hu: "{n} a sorban",
+    es: "{n} en cola",
+    de: "{n} in Warteschlange",
+    fr: "{n} en file",
+    pt: "{n} na fila",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  queueEmpty: {
+    it: "Coda vuota — nessun CV in attesa di review.",
+    en: "Queue empty — no CV awaiting review.",
+    hu: "A sor üres — nincs felülvizsgálatra váró önéletrajz.",
+    es: "Cola vacía — ningún CV esperando revisión.",
+    de: "Warteschlange leer — kein Lebenslauf zur Prüfung.",
+    fr: "File vide — aucun CV en attente de revue.",
+    pt: "Fila vazia — nenhum CV aguardando revisão.",
+  },
+  cvQueueAria: {
+    it: "Coda revisioni CV",
+    en: "CV review queue",
+    hu: "Önéletrajz-felülvizsgálati sor",
+    es: "Cola de revisiones de CV",
+    de: "Lebenslauf-Prüfungswarteschlange",
+    fr: "File de revues de CV",
+    pt: "Fila de revisões de CV",
+  },
+  colPosition: {
+    it: "Posizione",
+    en: "Position",
+    hu: "Pozíció",
+    es: "Puesto",
+    de: "Position",
+    fr: "Poste",
+    pt: "Vaga",
+  },
+  colCompany: {
+    it: "Azienda",
+    en: "Company",
+    hu: "Cég",
+    es: "Empresa",
+    de: "Unternehmen",
+    fr: "Entreprise",
+    pt: "Empresa",
+  },
+  colWriter: {
+    it: "Scrittore",
+    en: "Writer",
+    hu: "Író",
+    es: "Redactor",
+    de: "Verfasser",
+    fr: "Rédacteur",
+    pt: "Redator",
+  },
+  colWrittenAt: {
+    it: "Scritto il",
+    en: "Written on",
+    hu: "Megírva",
+    es: "Escrito el",
+    de: "Geschrieben am",
+    fr: "Rédigé le",
+    pt: "Escrito em",
+  },
+  latestReviews: {
+    it: "Ultime revisioni",
+    en: "Latest reviews",
+    hu: "Legutóbbi felülvizsgálatok",
+    es: "Últimas revisiones",
+    de: "Neueste Prüfungen",
+    fr: "Dernières revues",
+    pt: "Últimas revisões",
+  },
+  lastVerdicts: {
+    it: "ultimi {n} verdetti",
+    en: "last {n} verdicts",
+    hu: "utolsó {n} verdikt",
+    es: "últimos {n} veredictos",
+    de: "letzte {n} Urteile",
+    fr: "{n} derniers verdicts",
+    pt: "últimos {n} veredictos",
+  },
+  noReviews: {
+    it: "Nessuna revisione completata.",
+    en: "No completed reviews.",
+    hu: "Nincs befejezett felülvizsgálat.",
+    es: "Ninguna revisión completada.",
+    de: "Keine abgeschlossenen Prüfungen.",
+    fr: "Aucune revue terminée.",
+    pt: "Nenhuma revisão concluída.",
+  },
+  completedReviewsAria: {
+    it: "Revisioni completate",
+    en: "Completed reviews",
+    hu: "Befejezett felülvizsgálatok",
+    es: "Revisiones completadas",
+    de: "Abgeschlossene Prüfungen",
+    fr: "Revues terminées",
+    pt: "Revisões concluídas",
+  },
+  colVerdict: {
+    it: "Verdetto",
+    en: "Verdict",
+    hu: "Verdikt",
+    es: "Veredicto",
+    de: "Urteil",
+    fr: "Verdict",
+    pt: "Veredicto",
+  },
+  colScore: {
+    it: "Voto",
+    en: "Score",
+    hu: "Pontszám",
+    es: "Nota",
+    de: "Note",
+    fr: "Note",
+    pt: "Nota",
+  },
+  colRound: {
+    it: "Round",
+    en: "Round",
+    hu: "Kör",
+    es: "Ronda",
+    de: "Runde",
+    fr: "Tour",
+    pt: "Rodada",
+  },
+  colReviewer: {
+    it: "Revisore",
+    en: "Reviewer",
+    hu: "Felülvizsgáló",
+    es: "Revisor",
+    de: "Prüfer",
+    fr: "Relecteur",
+    pt: "Revisor",
+  },
+  colReviewDate: {
+    it: "Data review",
+    en: "Review date",
+    hu: "Felülvizsgálat dátuma",
+    es: "Fecha de revisión",
+    de: "Prüfdatum",
+    fr: "Date de revue",
+    pt: "Data da revisão",
+  },
+  activityPerCritic: {
+    it: "Attività per Critico",
+    en: "Activity per Critic",
+    hu: "Tevékenység kritikusonként",
+    es: "Actividad por Crítico",
+    de: "Aktivität pro Kritiker",
+    fr: "Activité par Critique",
+    pt: "Atividade por Crítico",
+  },
+  reviewsCount: {
+    it: "{n} revisioni",
+    en: "{n} reviews",
+    hu: "{n} felülvizsgálat",
+    es: "{n} revisiones",
+    de: "{n} Prüfungen",
+    fr: "{n} revues",
+    pt: "{n} revisões",
+  },
+  pctPass: {
+    it: "{pct}% PASS",
+    en: "{pct}% PASS",
+    hu: "{pct}% PASS",
+    es: "{pct}% PASS",
+    de: "{pct}% PASS",
+    fr: "{pct}% PASS",
+    pt: "{pct}% PASS",
+  },
+  verdict: {
+    it: "verdict",
+    en: "verdict",
+    hu: "verdikt",
+    es: "veredicto",
+    de: "Urteil",
+    fr: "verdict",
+    pt: "veredicto",
+  },
+  criticLabel: {
+    it: "Critico",
+    en: "Critic",
+    hu: "Kritikus",
+    es: "Crítico",
+    de: "Kritiker",
+    fr: "Critique",
+    pt: "Crítico",
+  },
+};
 
 // ── Types ──────────────────────────────────────────────────────────
 interface LiveStats {
@@ -50,9 +388,9 @@ interface LiveData {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
-function fmtTs(ts: string | null): string {
+function fmtTs(ts: string | null, localeTag = "it-IT"): string {
   if (!ts) return "—";
-  return new Date(ts).toLocaleString("it-IT", {
+  return new Date(ts).toLocaleString(localeTag, {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
@@ -133,6 +471,9 @@ function VerdictBadge({ verdict }: { verdict: string | null }) {
 
 // ── Page ───────────────────────────────────────────────────────────
 export default function CriticoPage() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const localeTag = LOCALE_TAG[locale] ?? "en-GB";
   const [live, setLive] = useState<LiveData | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +487,7 @@ export default function CriticoPage() {
       setLastUpdate(new Date());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Errore fetch");
+      setError(e instanceof Error ? e.message : tr("fetchError"));
     }
   }, []);
 
@@ -171,7 +512,7 @@ export default function CriticoPage() {
             href="/dashboard"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Dashboard
+            {tr("dashboard")}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -180,7 +521,7 @@ export default function CriticoPage() {
             href="/team"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Team
+            {tr("team")}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -189,23 +530,23 @@ export default function CriticoPage() {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Critico
+            {tr("critic")}
           </span>
         </nav>
         <div className="mt-3 flex items-end justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-              ⚖️ Critico
+              ⚖️ {tr("critic")}
             </h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
-              Revisioni CV · aggiornamento automatico ogni 8s
+              {tr("subtitle")}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {lastUpdate && (
               <span className="text-[9px] text-[var(--color-dim)]">
-                agg.{" "}
-                {lastUpdate.toLocaleTimeString("it-IT", {
+                {tr("updatedAt")}
+                {lastUpdate.toLocaleTimeString(localeTag, {
                   hour: "2-digit",
                   minute: "2-digit",
                   second: "2-digit",
@@ -241,7 +582,7 @@ export default function CriticoPage() {
             color: "var(--color-red)",
           }}
         >
-          Errore connessione: {error}
+          {tr("connError").replace("{e}", error)}
         </div>
       )}
 
@@ -250,19 +591,19 @@ export default function CriticoPage() {
         className="section-label mb-4"
         style={{ animation: "fade-in 0.35s ease both" }}
       >
-        Stats real-time
+        {tr("statsRealtime")}
       </div>
       <div
         className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-10"
         style={{ animation: "fade-in 0.35s ease both" }}
       >
         <StatCard
-          label="Revisioni totali"
+          label={tr("totalReviews")}
           val={stats?.total ?? "—"}
           color="var(--color-orange)"
         />
         <StatCard
-          label="In attesa coda"
+          label={tr("inQueue")}
           val={stats?.pending ?? "—"}
           color="#58a6ff"
         />
@@ -272,17 +613,17 @@ export default function CriticoPage() {
           color="var(--color-green)"
         />
         <StatCard
-          label="Needs Work"
+          label={tr("needsWork")}
           val={stats?.needsWork ?? "—"}
           color="var(--color-yellow)"
         />
         <StatCard
-          label="Reject"
+          label={tr("reject")}
           val={stats?.reject ?? "—"}
           color="var(--color-red)"
         />
         <StatCard
-          label="Media voto"
+          label={tr("avgScore")}
           val={stats?.avgScore != null ? stats.avgScore : "—"}
           color="var(--color-cyan)"
           sub={stats?.avgScore != null ? "/10" : undefined}
@@ -294,7 +635,7 @@ export default function CriticoPage() {
         className="flex items-center justify-between mb-4"
         style={{ animation: "fade-in 0.35s ease 0.05s both" }}
       >
-        <div className="section-label">Coda review in attesa</div>
+        <div className="section-label">{tr("reviewQueue")}</div>
         <span
           className="text-[10px] font-bold px-2 py-0.5 rounded"
           style={{
@@ -303,7 +644,7 @@ export default function CriticoPage() {
             border: "1px solid #58a6ff40",
           }}
         >
-          {queue.length} in coda
+          {tr("inQueueCount").replace("{n}", String(queue.length))}
         </span>
       </div>
 
@@ -313,32 +654,36 @@ export default function CriticoPage() {
           role="status"
           aria-live="polite"
         >
-          Caricamento…
+          {tr("loading")}
         </div>
       ) : queue.length === 0 ? (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10">
-          Coda vuota — nessun CV in attesa di review.
+          {tr("queueEmpty")}
         </div>
       ) : (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg overflow-hidden mb-10">
           <table
             className="w-full border-collapse"
-            aria-label="Coda revisioni CV"
+            aria-label={tr("cvQueueAria")}
           >
             <thead>
               <tr style={{ borderBottom: "2px solid var(--color-border)" }}>
-                {["#", "Posizione", "Azienda", "Scrittore", "Scritto il"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      scope="col"
-                      className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
-                      style={{ color: "var(--color-dim)" }}
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  "#",
+                  tr("colPosition"),
+                  tr("colCompany"),
+                  tr("colWriter"),
+                  tr("colWrittenAt"),
+                ].map((h) => (
+                  <th
+                    key={h}
+                    scope="col"
+                    className="text-left px-4 py-3 text-[9px] font-semibold tracking-widest uppercase"
+                    style={{ color: "var(--color-dim)" }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -387,7 +732,7 @@ export default function CriticoPage() {
                     className="px-4 py-3 text-[11px]"
                     style={{ color: "var(--color-dim)" }}
                   >
-                    {fmtTs(item.written_at)}
+                    {fmtTs(item.written_at, localeTag)}
                   </td>
                 </tr>
               ))}
@@ -401,9 +746,9 @@ export default function CriticoPage() {
         className="flex items-center justify-between mb-4"
         style={{ animation: "fade-in 0.35s ease 0.1s both" }}
       >
-        <div className="section-label">Ultime revisioni</div>
+        <div className="section-label">{tr("latestReviews")}</div>
         <span className="text-[9px]" style={{ color: "var(--color-dim)" }}>
-          ultimi {feed.length} verdetti
+          {tr("lastVerdicts").replace("{n}", String(feed.length))}
         </span>
       </div>
 
@@ -413,28 +758,28 @@ export default function CriticoPage() {
           role="status"
           aria-live="polite"
         >
-          Caricamento…
+          {tr("loading")}
         </div>
       ) : feed.length === 0 ? (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-6 text-center text-[var(--color-dim)] text-[11px] mb-10">
-          Nessuna revisione completata.
+          {tr("noReviews")}
         </div>
       ) : (
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg overflow-hidden mb-10">
           <table
             className="w-full border-collapse"
-            aria-label="Revisioni completate"
+            aria-label={tr("completedReviewsAria")}
           >
             <thead>
               <tr style={{ borderBottom: "2px solid var(--color-border)" }}>
                 {[
-                  "Posizione",
-                  "Azienda",
-                  "Verdetto",
-                  "Voto",
-                  "Round",
-                  "Revisore",
-                  "Data review",
+                  tr("colPosition"),
+                  tr("colCompany"),
+                  tr("colVerdict"),
+                  tr("colScore"),
+                  tr("colRound"),
+                  tr("colReviewer"),
+                  tr("colReviewDate"),
                 ].map((h) => (
                   <th
                     key={h}
@@ -502,7 +847,7 @@ export default function CriticoPage() {
                     className="px-4 py-3 text-[11px]"
                     style={{ color: "var(--color-dim)", whiteSpace: "nowrap" }}
                   >
-                    {fmtTs(item.critic_reviewed_at)}
+                    {fmtTs(item.critic_reviewed_at, localeTag)}
                   </td>
                 </tr>
               ))}
@@ -514,7 +859,7 @@ export default function CriticoPage() {
       {/* ── Stats per agente ──────────────────────────────────────── */}
       {byAgent.length > 0 && (
         <div style={{ animation: "fade-in 0.35s ease 0.15s both" }}>
-          <div className="section-label mb-4">Attività per Critico</div>
+          <div className="section-label mb-4">{tr("activityPerCritic")}</div>
           <div className="space-y-4">
             {byAgent.map((s, i) => {
               const colors = [
@@ -537,24 +882,35 @@ export default function CriticoPage() {
                         {s.critico}
                       </span>
                       <span className="text-[10px] text-[var(--color-dim)] ml-2">
-                        {s.total} revisioni
+                        {tr("reviewsCount").replace("{n}", String(s.total))}
                       </span>
                     </div>
                     <div className="text-[10px] text-[var(--color-dim)]">
-                      {pctPass}% PASS
+                      {tr("pctPass").replace("{pct}", pctPass)}
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                     {[
-                      { label: "PASS", val: s.pass, c: "var(--color-green)" },
                       {
-                        label: "Needs Work",
+                        key: "PASS",
+                        label: "PASS",
+                        val: s.pass,
+                        c: "var(--color-green)",
+                      },
+                      {
+                        key: "needsWork",
+                        label: tr("needsWork"),
                         val: s.needsWork,
                         c: "var(--color-yellow)",
                       },
-                      { label: "Reject", val: s.reject, c: "var(--color-red)" },
-                    ].map(({ label, val, c }) => (
-                      <div key={label} className="text-center">
+                      {
+                        key: "reject",
+                        label: tr("reject"),
+                        val: s.reject,
+                        c: "var(--color-red)",
+                      },
+                    ].map(({ key, label, val, c }) => (
+                      <div key={key} className="text-center">
                         <div
                           className="text-[9px] font-semibold tracking-widest uppercase mb-1"
                           style={{ color: c }}
@@ -578,7 +934,7 @@ export default function CriticoPage() {
                   {/* Stacked bar */}
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] text-[var(--color-dim)] w-14 text-right shrink-0">
-                      verdict
+                      {tr("verdict")}
                     </span>
                     <div
                       className="flex-1 h-1.5 rounded-full overflow-hidden flex"
@@ -621,7 +977,7 @@ export default function CriticoPage() {
       <AgentInteraction
         sessionPrefix="CRITICO"
         color="#f44336"
-        label="Critico"
+        label={tr("criticLabel")}
       />
     </div>
   );

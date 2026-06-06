@@ -106,6 +106,7 @@ const translations = {
   },
 
   // Features
+  feat_aria: { it: "Funzionalità", en: "Features", hu: "Funkciók" },
   feat_label: { it: "capabilities", en: "capabilities", hu: "képességek" },
   feat_title_1: {
     it: "Tutto ciò che serve,",
