@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { CandidateProfile } from '@/lib/types'
 import { useLocale } from '@/lib/use-locale'
 import { getProfileT } from '@/lib/profile-i18n'
+import { weightedCompletion, isTeamUnlocked, completionByLevel } from '@/lib/profile-completion'
 
 /* ── Completion calc ─────────────────────────────────────────────── */
 
@@ -33,13 +34,6 @@ function calcCompletionChecks(p: CandidateProfile | null): CompletionCheck[] {
     { ok: !!(p.positioning?.career_goals && Object.values(p.positioning.career_goals).some(Boolean)), tkey: 'sec_career_goals', anchor: 'obiettivi-carriera' },
     { ok: !!(p.positioning?.strengths && (p.positioning.strengths as unknown[]).length > 0), tkey: 'sec_strengths', anchor: 'punti-di-forza' },
   ]
-}
-
-function calcCompletion(p: CandidateProfile | null): number {
-  if (!p) return 0
-  const checks = calcCompletionChecks(p)
-  const filled = checks.filter(c => c.ok).length
-  return Math.round((filled / checks.length) * 100)
 }
 
 /* ── Animated counter hook ────────────────────────────────────────── */
@@ -89,9 +83,11 @@ export default function ProfileStats({ profile }: Props) {
   const locale = useLocale()
   const t = getProfileT(locale)
 
-  const completion = calcCompletion(profile)
+  const completion = weightedCompletion(profile)
   const animatedCompletion = useAnimatedCount(completion)
   const missingFields = profile ? calcCompletionChecks(profile).filter(c => !c.ok) : []
+  const teamUnlocked = isTeamUnlocked(profile)
+  const requiredMissing = completionByLevel(profile).required.missing.length
 
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -246,6 +242,17 @@ export default function ProfileStats({ profile }: Props) {
             <div className="flex items-end gap-2">
               <span className="text-2xl font-bold tabular-nums" style={{ color: completion >= 80 ? 'var(--color-green)' : completion >= 50 ? 'var(--color-yellow)' : 'var(--color-red)' }}>
                 {animatedCompletion}%
+              </span>
+              {/* Gate: i campi REQUIRED sbloccano il team (tassonomia 3 livelli). */}
+              <span
+                className="mb-1 text-[9px] font-semibold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full border whitespace-nowrap"
+                style={
+                  teamUnlocked
+                    ? { color: 'var(--color-green)', borderColor: 'var(--color-green)' }
+                    : { color: 'var(--color-red)', borderColor: 'var(--color-red)' }
+                }
+              >
+                {teamUnlocked ? '✓ team attivabile' : `${requiredMissing} obbligatori mancanti`}
               </span>
             </div>
             <div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Completamento profilo" className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
