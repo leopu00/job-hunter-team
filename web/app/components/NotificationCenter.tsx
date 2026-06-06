@@ -23,7 +23,7 @@ export interface AppNotification {
 
 /* ── i18n ─────────────────────────────────────────────────────────── */
 
-type Lang = "it" | "en" | "es" | "de" | "fr" | "pt";
+type Lang = "it" | "en" | "es" | "de" | "fr" | "pt" | "hu";
 
 const I18N: Record<Lang, Record<string, string>> = {
   it: {
@@ -61,6 +61,12 @@ const I18N: Record<Lang, Record<string, string>> = {
     mark_all: "Marcar todas como lidas",
     empty: "Sem notificações",
     clear: "Limpar tudo",
+  },
+  hu: {
+    title: "Értesítések",
+    mark_all: "Összes olvasottnak jelölése",
+    empty: "Nincs értesítés",
+    clear: "Összes törlése",
   },
 };
 
@@ -139,6 +145,7 @@ function timeAgo(ts: number, lang: Lang): string {
     de: " her",
     fr: "",
     pt: " atrás",
+    hu: "",
   };
   const suffix = SUFFIX[lang];
   if (diff < 60) return `${diff}s${suffix}`;

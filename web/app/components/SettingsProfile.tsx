@@ -5,9 +5,9 @@ import { readLocaleCookie } from "@/lib/use-locale";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
 
-type Lang = "it" | "en" | "es" | "de" | "fr" | "pt";
+type Lang = "it" | "en" | "es" | "de" | "fr" | "pt" | "hu";
 
-const SUPPORTED_LANGS: Lang[] = ["it", "en", "es", "de", "fr", "pt"];
+const SUPPORTED_LANGS: Lang[] = ["it", "en", "es", "de", "fr", "pt", "hu"];
 
 const T: Record<string, Record<Lang, string>> = {
   avatar_title: {
@@ -17,6 +17,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Profilfoto",
     fr: "Photo de profil",
     pt: "Foto de perfil",
+    hu: "Profilkép",
   },
   avatar_hint: {
     it: "PNG, JPG o WebP — max 2 MB",
@@ -25,6 +26,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "PNG, JPG oder WebP — max. 2 MB",
     fr: "PNG, JPG ou WebP — max 2 Mo",
     pt: "PNG, JPG ou WebP — máx. 2 MB",
+    hu: "PNG, JPG vagy WebP — max. 2 MB",
   },
   avatar_change: {
     it: "Cambia foto",
@@ -33,6 +35,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Foto ändern",
     fr: "Changer la photo",
     pt: "Alterar foto",
+    hu: "Kép módosítása",
   },
   avatar_remove: {
     it: "Rimuovi",
@@ -41,6 +44,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Entfernen",
     fr: "Supprimer",
     pt: "Remover",
+    hu: "Eltávolítás",
   },
   avatar_error: {
     it: "Errore nel caricamento",
@@ -49,6 +53,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Upload-Fehler",
     fr: "Erreur de téléversement",
     pt: "Erro no carregamento",
+    hu: "Feltöltési hiba",
   },
   profile_info: {
     it: "Informazioni profilo",
@@ -57,6 +62,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Profilinformationen",
     fr: "Informations du profil",
     pt: "Informações do perfil",
+    hu: "Profiladatok",
   },
   name: {
     it: "Nome",
@@ -65,6 +71,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Name",
     fr: "Nom",
     pt: "Nome",
+    hu: "Név",
   },
   role: {
     it: "Ruolo target",
@@ -73,6 +80,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Zielrolle",
     fr: "Poste visé",
     pt: "Cargo-alvo",
+    hu: "Célpozíció",
   },
   location: {
     it: "Posizione",
@@ -81,6 +89,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Standort",
     fr: "Localisation",
     pt: "Localização",
+    hu: "Helyszín",
   },
   experience: {
     it: "Anni esperienza",
@@ -89,6 +98,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Jahre Erfahrung",
     fr: "Années d'expérience",
     pt: "Anos de experiência",
+    hu: "Tapasztalat (év)",
   },
   completion: {
     it: "Completamento profilo",
@@ -97,6 +107,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Profilvollständigkeit",
     fr: "Complétion du profil",
     pt: "Conclusão do perfil",
+    hu: "Profil kitöltöttsége",
   },
   match_avg: {
     it: "Match score medio",
@@ -105,6 +116,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Durchschnittlicher Match-Score",
     fr: "Score de correspondance moyen",
     pt: "Pontuação média de correspondência",
+    hu: "Átlagos egyezési pontszám",
   },
   applications: {
     it: "Candidature totali",
@@ -113,6 +125,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Bewerbungen gesamt",
     fr: "Candidatures totales",
     pt: "Candidaturas totais",
+    hu: "Összes jelentkezés",
   },
   stats_title: {
     it: "Statistiche",
@@ -121,6 +134,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Statistiken",
     fr: "Statistiques",
     pt: "Estatísticas",
+    hu: "Statisztikák",
   },
   cv_title: {
     it: "Documenti CV",
@@ -129,6 +143,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "CV-Dokumente",
     fr: "Documents CV",
     pt: "Documentos de CV",
+    hu: "Önéletrajz-dokumentumok",
   },
   cv_hint: {
     it: "PDF, DOC, DOCX, TXT — max 10 MB",
@@ -137,6 +152,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "PDF, DOC, DOCX, TXT — max. 10 MB",
     fr: "PDF, DOC, DOCX, TXT — max 10 Mo",
     pt: "PDF, DOC, DOCX, TXT — máx. 10 MB",
+    hu: "PDF, DOC, DOCX, TXT — max. 10 MB",
   },
   cv_upload: {
     it: "Carica documento",
@@ -145,6 +161,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Dokument hochladen",
     fr: "Téléverser un document",
     pt: "Carregar documento",
+    hu: "Dokumentum feltöltése",
   },
   cv_open: {
     it: "Apri",
@@ -153,6 +170,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Öffnen",
     fr: "Ouvrir",
     pt: "Abrir",
+    hu: "Megnyitás",
   },
   cv_delete: {
     it: "Elimina",
@@ -161,6 +179,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Löschen",
     fr: "Supprimer",
     pt: "Eliminar",
+    hu: "Törlés",
   },
   cv_none: {
     it: "Nessun documento caricato",
@@ -169,6 +188,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Keine Dokumente hochgeladen",
     fr: "Aucun document téléversé",
     pt: "Nenhum documento carregado",
+    hu: "Nincs feltöltött dokumentum",
   },
   cv_uploading: {
     it: "Caricamento...",
@@ -177,6 +197,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Wird hochgeladen...",
     fr: "Téléversement...",
     pt: "A carregar...",
+    hu: "Feltöltés...",
   },
   history_title: {
     it: "Ultime candidature",
@@ -185,6 +206,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Letzte Bewerbungen",
     fr: "Candidatures récentes",
     pt: "Candidaturas recentes",
+    hu: "Legutóbbi jelentkezések",
   },
   no_apps: {
     it: "Nessuna candidatura ancora",
@@ -193,6 +215,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Noch keine Bewerbungen",
     fr: "Aucune candidature pour le moment",
     pt: "Ainda não há candidaturas",
+    hu: "Még nincs jelentkezés",
   },
   sent: {
     it: "Inviate",
@@ -201,6 +224,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Gesendet",
     fr: "Envoyées",
     pt: "Enviadas",
+    hu: "Elküldve",
   },
   interview: {
     it: "Colloquio",
@@ -209,6 +233,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Vorstellungsgespräch",
     fr: "Entretien",
     pt: "Entrevista",
+    hu: "Interjú",
   },
   offer: {
     it: "Offerta",
@@ -217,6 +242,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Angebot",
     fr: "Offre",
     pt: "Oferta",
+    hu: "Ajánlat",
   },
   rejected: {
     it: "Rifiutata",
@@ -225,6 +251,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Abgelehnt",
     fr: "Refusée",
     pt: "Rejeitada",
+    hu: "Elutasítva",
   },
   viewed: {
     it: "Vista",
@@ -233,6 +260,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Angesehen",
     fr: "Vue",
     pt: "Vista",
+    hu: "Megtekintve",
   },
   draft: {
     it: "Bozza",
@@ -241,6 +269,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Entwurf",
     fr: "Brouillon",
     pt: "Rascunho",
+    hu: "Piszkozat",
   },
   no_profile: {
     it: "Profilo non ancora configurato",
@@ -249,6 +278,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Profil noch nicht konfiguriert",
     fr: "Profil pas encore configuré",
     pt: "Perfil ainda não configurado",
+    hu: "A profil még nincs beállítva",
   },
   edit_profile: {
     it: "Modifica profilo",
@@ -257,6 +287,7 @@ const T: Record<string, Record<Lang, string>> = {
     de: "Profil bearbeiten",
     fr: "Modifier le profil",
     pt: "Editar perfil",
+    hu: "Profil szerkesztése",
   },
 };
 
@@ -1005,6 +1036,7 @@ export default function SettingsProfile() {
                       de: "de-DE",
                       fr: "fr-FR",
                       pt: "pt-PT",
+                      hu: "hu-HU",
                     }[lang],
                     { day: "2-digit", month: "short" },
                   )}
