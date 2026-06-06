@@ -32,39 +32,52 @@ Após CADA turno do utilizador que traga nova informação:
 
 Uma resposta sem próxima pergunta é aceitável APENAS quando a checklist de bloqueio está totalmente satisfeita.
 
-## Checklist de bloqueio — o piso que desbloqueia o dashboard
+Três níveis (single source: `web/lib/profile-completion.ts`). 🔴 REQUIRED desbloqueia a
+equipa · 🟡 RECOMMENDED não bloqueia mas melhora muito · 🟢 OPTIONAL = personalização máxima.
 
-O frontend desativa "Ir para o dashboard" até **cada** campo abaixo estar presente e não-vazio (ou até definir `ready.flag` explicitamente — ver `profile-yaml`):
+## 🔴 Checklist de bloqueio — REQUIRED (desbloqueia a equipa)
 
-| Campo                          | Caminho YAML                                    | Exemplo de pergunta neutra                                              |
-|--------------------------------|-------------------------------------------------|-------------------------------------------------------------------------|
-| Setor                          | `industry`                                      | "Em que setor trabalhas?"                                               |
-| Nome e apelido                 | `name` + `candidate.name`                       | "Como te chamas?"                                                       |
-| Papel alvo                     | `target_role` + `candidate.target_role`         | "Que papel estás à procura?"                                            |
-| Cidade / zona                  | `location`                                      | "Em que cidade ou zona procuras?"                                       |
-| Cidadania / work-auth          | `candidate.citizenship` + `preferences.work_authorization` | "De que nacionalidade és, e já tens direito de trabalhar nas zonas que te interessam?" (ver due-diligence abaixo) |
-| Anos de experiência            | `experience_years`                              | "Quantos anos de experiência tens no papel?"                            |
-| Email de contacto              | `candidate.contacts.email`                      | "Que email queres usar para as candidaturas?"                           |
-| ≥2 competências primárias      | `skills.primary` (≥2 entradas)                  | "Quais são as tuas 3 competências mais fortes?"                         |
-| ≥1 idioma                      | `languages` (≥1 entrada com `level`)             | "Que línguas falas e a que nível?" (A1/B1/C1/nativo)                    |
-| ≥1 experiência                 | `candidate.experience` (≥1 com company/role/years/summary) | "Fala-me do último papel: empresa, função, anos, uma frase do que fazias" |
-| ≥1 título de estudo            | `candidate.education` (≥1 com institution/degree/year)     | "Que percurso de estudos tens? (escola/universidade, título, ano)"       |
+A equipa NÃO arranca enquanto **cada** campo abaixo não estiver presente e não-vazio (ou
+enquanto não definires `ready.flag` explícito — ver `profile-yaml`). É o mínimo para
+**procurar e pontuar** as vagas:
+
+| Campo                | Caminho YAML                 | Exemplo de pergunta neutra                        |
+|----------------------|------------------------------|---------------------------------------------------|
+| Nome e apelido       | `name`                       | "Como te chamas?"                                 |
+| Papel alvo           | `target_role`                | "Que papel estás à procura?"                      |
+| Cidade / zona        | `location`                   | "Em que cidade ou zona procuras?"                 |
+| Anos de experiência  | `experience_years`           | "Quantos anos de experiência tens no papel?"      |
+| Senioridade alvo     | `seniority_target`           | "Que nível procuras? (junior / mid / senior)"     |
+| Email de contacto    | `candidate.contacts.email`   | "Que email queres usar para as candidaturas?"     |
+| ≥2 competências primárias | `skills.primary` (≥2 entradas) | "Quais são as tuas 3 competências mais fortes?" |
+| ≥1 idioma            | `languages` (≥1 com `level`) | "Que línguas falas e a que nível?" (A1..C2/nativo)|
+
+## 🟡 RECOMMENDED — não bloqueantes, mas "mudam tudo"
+
+A equipa arranca mesmo sem, mas com estes a procura é direcionada e os CV à medida. Pede-os
+**logo após** desbloquear, antes do resto:
+
+| Campo                    | Caminho YAML                                               | Porquê                                  |
+|--------------------------|------------------------------------------------------------|-----------------------------------------|
+| ≥1 experiência           | `candidate.experience` (company/role/years/summary)        | CV não genéricos + scoring preciso      |
+| ≥1 título de estudo      | `candidate.education` (institution/degree/year)            | requisitos formativos + CV              |
+| Setor                    | `industry`                                                 | orienta a procura                       |
+| Cidadania / work-auth    | `candidate.citizenship` + `preferences.work_authorization` | evita vagas inacessíveis (due-diligence abaixo) |
+| Localidades preferidas   | `preferences.geography` / `location_preferences`           | Scout direcionado                       |
 
 Cada experiência DEVE ter `company`, `role`, `years`, `summary` (≥1 frase). Cada `education` pelo menos `institution`, `degree`, `year`.
 
-## Checklist rica — o que torna os Scrittori úteis
+## 🟢 OPTIONAL — personalização máxima
 
-Uma vez passada a checklist de bloqueio, **continuar** a pedir campos da checklist rica até o utilizador dizer para parar:
+Continua a pedir até o utilizador dizer para parar — mais dados = CV e procura mais à medida:
 
-- `candidate.experience[]` — idealmente as últimas 3 experiências com summary ≥3 linhas cada, tecnologias/ferramentas, resultados concretos (números onde possível)
-- `candidate.education[]` — todos os títulos relevantes, certificações
-- `skills.primary` / `skills.secondary` — ≥5 primárias, ≥5 secundárias
-- `languages` — todos os idiomas falados com nível CEFR
-- `candidate.contacts.phone`, `.linkedin`, `.github`, `.website`
-- `has_degree`, `seniority_target`
+- `candidate.experience[]` — últimas 3 com summary ≥3 linhas, tecnologias/ferramentas, resultados (números)
+- `candidate.certifications`, `candidate.projects`, `candidate.strengths`
+- `skills.primary` / `skills.secondary` — ≥5 + ≥5 · `languages` todas com CEFR
+- `candidate.contacts.phone` / `.linkedin` / `.github` / `.website`
+- `has_degree` · resumos narrativos (ver `profile-summaries`)
 - `preferences.work_mode`, `relocation`, `salary_annual_eur`
-- `preferences.work_authorization` por região (ver due-diligence abaixo)
-- Projetos pessoais, publicações, open-source, voluntariado, certificados
+- Projetos, publicações, open-source, voluntariado, certificados, `sector_details`
 
 ## Work-authorization — due diligence (NÃO saltar)
 

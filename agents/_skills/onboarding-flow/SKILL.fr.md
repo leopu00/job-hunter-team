@@ -32,39 +32,52 @@ Après CHAQUE tour utilisateur qui apporte une nouvelle information :
 
 Une réponse sans question suivante est acceptable UNIQUEMENT quand la checklist bloquante est entièrement satisfaite.
 
-## Checklist bloquante — le plancher qui débloque le tableau de bord
+Trois niveaux (single source : `web/lib/profile-completion.ts`). 🔴 REQUIRED débloque
+l'équipe · 🟡 RECOMMENDED ne bloque pas mais améliore beaucoup · 🟢 OPTIONAL = personnalisation maximale.
 
-Le frontend désactive "Vai alla dashboard" jusqu'à ce que **chaque** champ ci-dessous soit présent et non-vide (ou jusqu'à ce que vous définissiez `ready.flag` explicitement — voir `profile-yaml`) :
+## 🔴 Checklist bloquante — REQUIRED (débloque l'équipe)
 
-| Champ                          | Chemin YAML                                     | Exemple de question neutre                                              |
-|--------------------------------|-------------------------------------------------|-------------------------------------------------------------------------|
-| Secteur                        | `industry`                                      | "Dans quel secteur travaillez-vous ?"                                   |
-| Nom et prénom                  | `name` + `candidate.name`                       | "Comment vous appelez-vous ?"                                           |
-| Rôle cible                     | `target_role` + `candidate.target_role`         | "Quel rôle recherchez-vous ?"                                           |
-| Ville / zone                   | `location`                                      | "Dans quelle ville ou zone cherchez-vous ?"                             |
-| Citoyenneté / autorisation de travail | `candidate.citizenship` + `preferences.work_authorization` | "De quelle nationalité êtes-vous, et avez-vous déjà le droit de travailler dans les zones qui vous intéressent ?" (voir due diligence ci-dessous) |
-| Années d'expérience            | `experience_years`                              | "Combien d'années d'expérience avez-vous dans le rôle ?"                |
-| Email de contact               | `candidate.contacts.email`                      | "Quelle email voulez-vous utiliser pour les candidatures ?"             |
-| ≥2 compétences principales     | `skills.primary` (≥2 entrées)                   | "Quelles sont vos 3 compétences les plus fortes ?"                      |
-| ≥1 langue                      | `languages` (≥1 entrée avec `level`)             | "Quelles langues parlez-vous et à quel niveau ?" (A1/B1/C1/native)      |
-| ≥1 expérience                  | `candidate.experience` (≥1 avec company/role/years/summary) | "Parlez-moi de votre dernier rôle : entreprise, poste, années, une ligne sur ce que vous faisiez" |
-| ≥1 diplôme                     | `candidate.education` (≥1 avec institution/degree/year) | "Quel parcours d'études avez-vous ? (école/université, diplôme, année)" |
+L'équipe NE démarre PAS tant que **chaque** champ ci-dessous n'est pas présent et non-vide
+(ou tant que vous ne définissez pas `ready.flag` explicite — voir `profile-yaml`). C'est le
+minimum pour **chercher et noter** les offres :
+
+| Champ                | Chemin YAML                  | Exemple de question neutre                        |
+|----------------------|------------------------------|---------------------------------------------------|
+| Nom et prénom        | `name`                       | "Comment vous appelez-vous ?"                     |
+| Rôle cible           | `target_role`                | "Quel rôle recherchez-vous ?"                     |
+| Ville / zone         | `location`                   | "Dans quelle ville ou zone cherchez-vous ?"       |
+| Années d'expérience  | `experience_years`           | "Combien d'années d'expérience avez-vous dans le rôle ?" |
+| Séniorité cible      | `seniority_target`           | "Quel niveau cherchez-vous ? (junior / mid / senior)" |
+| Email de contact     | `candidate.contacts.email`   | "Quelle email voulez-vous utiliser pour les candidatures ?" |
+| ≥2 compétences principales | `skills.primary` (≥2 entrées) | "Quelles sont vos 3 compétences les plus fortes ?" |
+| ≥1 langue            | `languages` (≥1 avec `level`)| "Quelles langues parlez-vous et à quel niveau ?" (A1..C2/native) |
+
+## 🟡 RECOMMENDED — non bloquants, mais "changent tout"
+
+L'équipe démarre même sans, mais avec ceux-ci la recherche est ciblée et les CV sur mesure.
+Demandez-les **juste après** avoir débloqué, avant le reste :
+
+| Champ                    | Chemin YAML                                                 | Pourquoi                                |
+|--------------------------|------------------------------------------------------------|-----------------------------------------|
+| ≥1 expérience            | `candidate.experience` (company/role/years/summary)        | CV non génériques + scoring précis      |
+| ≥1 diplôme               | `candidate.education` (institution/degree/year)            | exigences de formation + CV             |
+| Secteur                  | `industry`                                                 | oriente la recherche                    |
+| Citoyenneté / work-auth  | `candidate.citizenship` + `preferences.work_authorization` | évite les offres inaccessibles (due diligence ci-dessous) |
+| Localités préférées      | `preferences.geography` / `location_preferences`           | Scout ciblé                             |
 
 Chaque expérience DOIT avoir `company`, `role`, `years`, `summary` (≥1 phrase). Chaque `education` au moins `institution`, `degree`, `year`.
 
-## Checklist riche — ce qui rend les Scrittore utiles
+## 🟢 OPTIONAL — personnalisation maximale
 
-Une fois la checklist bloquante passée, **continuez** à poser des questions sur les champs de la checklist riche jusqu'à ce que l'utilisateur vous demande d'arrêter :
+Continuez à poser des questions jusqu'à ce que l'utilisateur vous demande d'arrêter — plus de données = CV et recherche plus sur mesure :
 
-- `candidate.experience[]` — idéalement les 3 dernières expériences avec summary ≥3 lignes chacune, technologies/outils, résultats concrets (chiffres quand possible)
-- `candidate.education[]` — tous les diplômes pertinents, certifications
-- `skills.primary` / `skills.secondary` — ≥5 principales, ≥5 secondaires
-- `languages` — toutes les langues parlées avec niveau CECR
-- `candidate.contacts.phone`, `.linkedin`, `.github`, `.website`
-- `has_degree`, `seniority_target`
+- `candidate.experience[]` — les 3 dernières avec summary ≥3 lignes, technologies/outils, résultats (chiffres)
+- `candidate.certifications`, `candidate.projects`, `candidate.strengths`
+- `skills.primary` / `skills.secondary` — ≥5 + ≥5 · `languages` toutes avec CECR
+- `candidate.contacts.phone` / `.linkedin` / `.github` / `.website`
+- `has_degree` · résumés narratifs (voir `profile-summaries`)
 - `preferences.work_mode`, `relocation`, `salary_annual_eur`
-- `preferences.work_authorization` par région (voir due diligence ci-dessous)
-- Projets personnels, publications, open-source, bénévolat, certificats
+- Projets, publications, open-source, bénévolat, certificats, `sector_details`
 
 ## Autorisation de travail — due diligence (NE PAS la sauter)
 
