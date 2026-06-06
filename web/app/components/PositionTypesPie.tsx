@@ -95,7 +95,7 @@ export default function PositionTypesPie({
         )}
       </div>
 
-      <div className="flex items-center justify-center gap-4">
+      <div className="flex items-center gap-8">
         <svg
           width={size}
           height={size}
@@ -186,14 +186,13 @@ export default function PositionTypesPie({
         </svg>
 
         <ul
-          className="space-y-1.5 min-w-0"
+          className="space-y-1.5 min-w-0 flex-1"
           onMouseLeave={() => setHovered(null)}
         >
-          {/* Header: didascalia colonne. Stesso grid template delle
-                righe sotto così tutto si allinea verticalmente. Tipo a
-                sinistra, numeri subito accanto (non spinti a destra). */}
+          {/* Header: didascalia colonne. Prima colonna flessibile così la
+                tabella riempie la larghezza del card (donut a tutta riga). */}
           <li
-            className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            className="grid grid-cols-[1fr_3rem_3rem_3.5rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
             <span>tipo</span>
@@ -213,7 +212,7 @@ export default function PositionTypesPie({
                 key={d.family}
                 onMouseEnter={() => setHovered(d.family)}
                 onClick={() => onToggleType?.(d.family)}
-                className="grid grid-cols-[11rem_1.75rem_2rem_2.25rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
+                className="grid grid-cols-[1fr_3rem_3rem_3.5rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
                 style={{
                   cursor: onToggleType ? "pointer" : "default",
                   background: isSelected
