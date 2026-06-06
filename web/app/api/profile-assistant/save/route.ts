@@ -10,6 +10,7 @@ import {
   JHT_PROFILE_YAML,
   JHT_USER_DIR,
 } from "@/lib/jht-paths";
+import { validateCandidateProfile } from "../../../../../shared/config/profile-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -203,6 +204,17 @@ function saveToYaml(profile: Record<string, unknown>) {
     aspirations: positioning.aspirations ?? {},
     free_notes: positioning.free_notes ?? "",
   };
+
+  // Validazione transizionale contro lo schema canonico (shared/config/profile-schema).
+  // Il form genera ancora il formato legacy (la migrazione a canonico è Fase 4b),
+  // quindi NON blocca il salvataggio: logga solo i mismatch per guidare la migrazione.
+  const schemaCheck = validateCandidateProfile(yamlData);
+  if (!schemaCheck.ok) {
+    console.warn(
+      "[profile-assistant/save] profilo non ancora conforme allo schema canonico:",
+      schemaCheck.errors.slice(0, 5),
+    );
+  }
 
   try {
     const yamlStr = yaml.dump(yamlData, { lineWidth: 120, noRefs: true });
