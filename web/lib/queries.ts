@@ -605,6 +605,9 @@ export type DashboardPosition = {
   role_family: string | null
   loc_country: string | null
   loc_city: string | null
+  salary_min: number | null
+  salary_max: number | null
+  salary_currency: string
   found_at: string | null
   last_action_at: string
 }
@@ -617,7 +620,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, found_at, last_checked, scores ( total_score, scored_at )')
+    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, last_checked, scores ( total_score, scored_at )')
     .not('status', 'eq', 'excluded')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
@@ -630,6 +633,12 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
     const last_action_at = candidates.length > 0
       ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
       : (p.found_at ?? '')
+    // Stipendio: preferisci la stima del team, fallback sul dichiarato.
+    // min/max/currency provengono dalla STESSA fonte per non mischiare valute.
+    const useEst = p.salary_estimated_min != null || p.salary_estimated_max != null
+    const salary_min = (useEst ? p.salary_estimated_min : p.salary_declared_min) as number | null ?? null
+    const salary_max = (useEst ? p.salary_estimated_max : p.salary_declared_max) as number | null ?? null
+    const salary_currency = ((useEst ? p.salary_estimated_currency : p.salary_declared_currency) as string | null) ?? 'EUR'
     return {
       id: String(p.id),
       legacy_id: (p.legacy_id as number | null) ?? null,
@@ -642,6 +651,9 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       role_family: p.role_family ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
+      salary_min: typeof salary_min === 'number' ? salary_min : null,
+      salary_max: typeof salary_max === 'number' ? salary_max : null,
+      salary_currency,
       found_at: p.found_at ?? null,
       last_action_at,
     }

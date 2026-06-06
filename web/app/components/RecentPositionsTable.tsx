@@ -3,6 +3,11 @@
 import Link from "next/link";
 import type { DashboardPosition } from "@/lib/queries";
 import { formatFoundAt } from "@/lib/format-time";
+import {
+  convertCurrency,
+  CURRENCY_SYMBOL,
+  type Rates,
+} from "@/lib/exchange-rates";
 
 // Duplicato locale (stesso pattern di JobsGlobe/dashboard): la mappa è
 // piccola e specifica della UI, non vale un modulo condiviso.
@@ -31,6 +36,46 @@ function scoreBg(s?: number | null) {
   return "var(--color-red)";
 }
 
+// Range stipendio compatto in "k", convertito nella valuta scelta
+// (es. "€60–80k", "$≥70k"). null → "—".
+function formatSalary(
+  min: number | null,
+  max: number | null,
+  from: string,
+  to: string,
+  rates: Rates,
+): string {
+  const sym = CURRENCY_SYMBOL[to] ?? "";
+  const k = (n: number) =>
+    `${Math.round(convertCurrency(n, from, to, rates) / 1000)}k`;
+  const num = (n: number) =>
+    `${Math.round(convertCurrency(n, from, to, rates) / 1000)}`;
+  if (min != null && max != null)
+    return min === max ? `${sym}${k(min)}` : `${sym}${num(min)}–${k(max)}`;
+  if (min != null) return `${sym}≥${k(min)}`;
+  if (max != null) return `${sym}≤${k(max)}`;
+  return "—";
+}
+
+// Lordo mensile = lordo annuo / 12, convertito e in "k" con 1 decimale
+// (es. "€5.0–6.7k"). È una semplice divisione: NON è il netto.
+function formatMonthly(
+  min: number | null,
+  max: number | null,
+  from: string,
+  to: string,
+  rates: Rates,
+): string {
+  const sym = CURRENCY_SYMBOL[to] ?? "";
+  const m = (n: number) =>
+    (convertCurrency(n, from, to, rates) / 12 / 1000).toFixed(1);
+  if (min != null && max != null)
+    return min === max ? `${sym}${m(min)}k` : `${sym}${m(min)}–${m(max)}k`;
+  if (min != null) return `${sym}≥${m(min)}k`;
+  if (max != null) return `${sym}≤${m(max)}k`;
+  return "—";
+}
+
 export type TableLabels = {
   title: string;
   titleFiltered: string;
@@ -42,6 +87,8 @@ export type TableLabels = {
   colLocation: string;
   colRemote: string;
   colScore: string;
+  colSalary: string;
+  colMonthly: string;
   colStatus: string;
   colUpdated: string;
 };
@@ -53,6 +100,9 @@ type Props = {
   // Filtri cross-chart attivi → titolo + conteggio totale filtrato.
   filtered: boolean;
   totalFiltered: number;
+  // Conversione stipendio: tassi + valuta di visualizzazione corrente.
+  rates: Rates;
+  displayCurrency: string;
 };
 
 export default function RecentPositionsTable({
@@ -60,6 +110,8 @@ export default function RecentPositionsTable({
   labels,
   filtered,
   totalFiltered,
+  rates,
+  displayCurrency,
 }: Props) {
   return (
     <div className="mb-8">
@@ -89,6 +141,8 @@ export default function RecentPositionsTable({
                 labels.colLocation,
                 labels.colRemote,
                 labels.colScore,
+                labels.colSalary,
+                labels.colMonthly,
                 labels.colStatus,
                 labels.colUpdated,
               ].map((h) => (
@@ -107,7 +161,7 @@ export default function RecentPositionsTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={10}
                   className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   {labels.noPositions}
@@ -182,6 +236,24 @@ export default function RecentPositionsTable({
                         />
                       </div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-right">
+                    {formatSalary(
+                      p.salary_min,
+                      p.salary_max,
+                      p.salary_currency,
+                      displayCurrency,
+                      rates,
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
+                    {formatMonthly(
+                      p.salary_min,
+                      p.salary_max,
+                      p.salary_currency,
+                      displayCurrency,
+                      rates,
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span
