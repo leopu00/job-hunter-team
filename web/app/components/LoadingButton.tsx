@@ -1,6 +1,21 @@
 "use client";
 
 import React from "react";
+import { useLocale } from "@/lib/use-locale";
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+
+const T: Record<string, Record<string, string>> = {
+  loading: {
+    it: "Caricamento",
+    en: "Loading",
+    hu: "Betöltés",
+    es: "Cargando",
+    de: "Wird geladen",
+    fr: "Chargement",
+    pt: "Carregando",
+  },
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -56,10 +71,11 @@ const SPINNER_SIZE: Record<ButtonSize, number> = { sm: 10, md: 12, lg: 14 };
 // ── Spinner ────────────────────────────────────────────────────────────────
 
 function Spinner({ size }: { size: number }) {
+  const locale = useLocale();
   return (
     <span
       role="status"
-      aria-label="Caricamento"
+      aria-label={T.loading[locale] ?? T.loading.en}
       className="inline-block rounded-full border-2 flex-shrink-0 animate-spin"
       style={{
         width: size,

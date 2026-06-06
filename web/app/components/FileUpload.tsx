@@ -1,6 +1,98 @@
 "use client";
 
 import { useState, useRef, useCallback, useId } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+
+const T: Record<string, Record<string, string>> = {
+  uploadFailed: {
+    it: "Upload fallito",
+    en: "Upload failed",
+    hu: "A feltöltés sikertelen",
+    es: "Error al subir",
+    de: "Upload fehlgeschlagen",
+    fr: "Échec de l'envoi",
+    pt: "Falha no envio",
+  },
+  removeFile: {
+    it: "Rimuovi file",
+    en: "Remove file",
+    hu: "Fájl eltávolítása",
+    es: "Eliminar archivo",
+    de: "Datei entfernen",
+    fr: "Supprimer le fichier",
+    pt: "Remover ficheiro",
+  },
+  selectToUpload: {
+    it: "Seleziona file da caricare",
+    en: "Select files to upload",
+    hu: "Válassz feltöltendő fájlokat",
+    es: "Selecciona archivos para subir",
+    de: "Dateien zum Hochladen auswählen",
+    fr: "Sélectionner les fichiers à envoyer",
+    pt: "Selecionar ficheiros para enviar",
+  },
+  dragHere: {
+    it: "Trascina qui o ",
+    en: "Drag here or ",
+    hu: "Húzd ide vagy ",
+    es: "Arrastra aquí o ",
+    de: "Hierher ziehen oder ",
+    fr: "Glisse ici ou ",
+    pt: "Arrasta aqui ou ",
+  },
+  selectFile: {
+    it: "seleziona file",
+    en: "select files",
+    hu: "válassz fájlt",
+    es: "selecciona archivos",
+    de: "Dateien auswählen",
+    fr: "sélectionner des fichiers",
+    pt: "selecionar ficheiros",
+  },
+  allTypes: {
+    it: "Tutti i tipi",
+    en: "All types",
+    hu: "Minden típus",
+    es: "Todos los tipos",
+    de: "Alle Typen",
+    fr: "Tous les types",
+    pt: "Todos os tipos",
+  },
+  max: {
+    it: "max",
+    en: "max",
+    hu: "max.",
+    es: "máx",
+    de: "max.",
+    fr: "max",
+    pt: "máx",
+  },
+};
+
+// `File troppo grande (max N MB)`
+const TOO_LARGE: Record<string, (mb: number) => string> = {
+  it: (mb) => `File troppo grande (max ${mb} MB)`,
+  en: (mb) => `File too large (max ${mb} MB)`,
+  hu: (mb) => `A fájl túl nagy (max. ${mb} MB)`,
+  es: (mb) => `Archivo demasiado grande (máx ${mb} MB)`,
+  de: (mb) => `Datei zu groß (max. ${mb} MB)`,
+  fr: (mb) => `Fichier trop volumineux (max ${mb} Mo)`,
+  pt: (mb) => `Ficheiro demasiado grande (máx ${mb} MB)`,
+};
+
+// `Tipo non supportato (accettati: ...)`
+const UNSUPPORTED: Record<string, (list: string) => string> = {
+  it: (l) => `Tipo non supportato (accettati: ${l})`,
+  en: (l) => `Unsupported type (accepted: ${l})`,
+  hu: (l) => `Nem támogatott típus (elfogadott: ${l})`,
+  es: (l) => `Tipo no admitido (aceptados: ${l})`,
+  de: (l) => `Nicht unterstützter Typ (akzeptiert: ${l})`,
+  fr: (l) => `Type non pris en charge (acceptés : ${l})`,
+  pt: (l) => `Tipo não suportado (aceites: ${l})`,
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -41,16 +133,18 @@ function validateFile(
   file: File,
   accept: string[],
   maxSizeMb: number,
+  locale: Locale,
 ): string | null {
   if (maxSizeMb && file.size > maxSizeMb * 1024 * 1024)
-    return `File troppo grande (max ${maxSizeMb} MB)`;
+    return (TOO_LARGE[locale] ?? TOO_LARGE.en)(maxSizeMb);
   if (accept.length > 0) {
     const ok = accept.some((a) =>
       a.startsWith(".")
         ? file.name.toLowerCase().endsWith(a.toLowerCase())
         : file.type === a,
     );
-    if (!ok) return `Tipo non supportato (accettati: ${accept.join(", ")})`;
+    if (!ok)
+      return (UNSUPPORTED[locale] ?? UNSUPPORTED.en)(accept.join(", "));
   }
   return null;
 }
@@ -58,6 +152,7 @@ function validateFile(
 // ── FileRow ────────────────────────────────────────────────────────────────
 
 function FileRow({ uf, onRemove }: { uf: UploadedFile; onRemove: () => void }) {
+  const locale = useLocale();
   return (
     <div
       className="flex flex-col gap-1 px-3 py-2 rounded-lg"
@@ -102,7 +197,7 @@ function FileRow({ uf, onRemove }: { uf: UploadedFile; onRemove: () => void }) {
         )}
         <button
           onClick={onRemove}
-          aria-label="Rimuovi file"
+          aria-label={T.removeFile[locale] ?? T.removeFile.en}
           className="flex-shrink-0 text-[11px] hover:opacity-60 transition-opacity"
           style={{ color: "var(--color-dim)" }}
         >
@@ -142,6 +237,8 @@ export function FileUpload({
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const uid = useId();
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
 
   const processFiles = useCallback(
     async (incoming: FileList | File[]) => {
@@ -151,7 +248,7 @@ export function FileUpload({
         file: f,
         progress: 0,
         done: false,
-        error: validateFile(f, accept, maxSizeMb) ?? undefined,
+        error: validateFile(f, accept, maxSizeMb, locale) ?? undefined,
       }));
       setFiles((prev) => (multiple ? [...prev, ...newUfs] : newUfs));
 
@@ -188,7 +285,7 @@ export function FileUpload({
         setFiles((prev) =>
           prev.map((u) =>
             valid.find((v) => v.id === u.id)
-              ? { ...u, error: "Upload fallito" }
+              ? { ...u, error: tr("uploadFailed") }
               : u,
           ),
         );
@@ -196,7 +293,8 @@ export function FileUpload({
         clearInterval(tick);
       }
     },
-    [accept, maxSizeMb, multiple, onUpload, uid],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [accept, maxSizeMb, multiple, onUpload, uid, locale],
   );
 
   const handleDrop = (e: React.DragEvent) => {
@@ -241,7 +339,7 @@ export function FileUpload({
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
-        aria-label="Seleziona file da caricare"
+        aria-label={tr("selectToUpload")}
         className="flex flex-col items-center justify-center gap-1 py-6 rounded-xl cursor-pointer transition-colors"
         style={{
           border: `1.5px dashed ${color}`,
@@ -252,12 +350,12 @@ export function FileUpload({
           📂
         </span>
         <p className="text-[10px]" style={{ color: "var(--color-muted)" }}>
-          Trascina qui o{" "}
-          <span style={{ color: "var(--color-blue)" }}>seleziona file</span>
+          {tr("dragHere")}
+          <span style={{ color: "var(--color-blue)" }}>{tr("selectFile")}</span>
         </p>
         <p className="text-[9px]" style={{ color: "var(--color-dim)" }}>
-          {accept.length ? accept.join(", ") : "Tutti i tipi"} · max {maxSizeMb}{" "}
-          MB
+          {accept.length ? accept.join(", ") : tr("allTypes")} · {tr("max")}{" "}
+          {maxSizeMb} MB
         </p>
       </div>
 
