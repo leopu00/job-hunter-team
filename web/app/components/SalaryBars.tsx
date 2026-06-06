@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatMoneyCompact } from "@/lib/exchange-rates";
 
 type Props = {
   // Valori SEMPRE in EUR (il binning è in EUR così la forma non dipende dalla
@@ -66,8 +67,9 @@ export default function SalaryBars({
   const sorted = [...data].sort((a, b) => a - b);
   const avg = n > 0 ? sorted.reduce((s, v) => s + v, 0) / n : 0;
   const med = percentile(sorted, 0.5);
-  const k = (eur: number) => Math.round(convert(eur) / 1000);
-  const bandLabel = (lo: number) => `${symbol}${k(lo)}–${k(lo + bandStep)}k`;
+  const fmt = (eur: number) => formatMoneyCompact(convert(eur));
+  const bandLabel = (lo: number) =>
+    `${symbol}${fmt(lo)}–${fmt(lo + bandStep)}`;
 
   return (
     <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
@@ -82,14 +84,14 @@ export default function SalaryBars({
               <span className="text-[var(--color-dim)]">avg</span>{" "}
               <span className="font-semibold" style={{ color: accent }}>
                 {symbol}
-                {k(avg)}k
+                {fmt(avg)}
               </span>
             </span>
             <span>
               <span className="text-[var(--color-dim)]">med</span>{" "}
               <span className="font-semibold text-[var(--color-bright)]">
                 {symbol}
-                {k(med)}k
+                {fmt(med)}
               </span>
             </span>
             <span>

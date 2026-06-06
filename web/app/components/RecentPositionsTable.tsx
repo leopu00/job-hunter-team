@@ -5,7 +5,8 @@ import type { DashboardPosition } from "@/lib/queries";
 import { formatFoundAt } from "@/lib/format-time";
 import {
   convertCurrency,
-  CURRENCY_SYMBOL,
+  currencySymbol,
+  formatMoneyCompact,
   type Rates,
 } from "@/lib/exchange-rates";
 
@@ -45,15 +46,12 @@ function formatSalary(
   to: string,
   rates: Rates,
 ): string {
-  const sym = CURRENCY_SYMBOL[to] ?? "";
-  const k = (n: number) =>
-    `${Math.round(convertCurrency(n, from, to, rates) / 1000)}k`;
-  const num = (n: number) =>
-    `${Math.round(convertCurrency(n, from, to, rates) / 1000)}`;
+  const sym = currencySymbol(to);
+  const f = (n: number) => formatMoneyCompact(convertCurrency(n, from, to, rates));
   if (min != null && max != null)
-    return min === max ? `${sym}${k(min)}` : `${sym}${num(min)}–${k(max)}`;
-  if (min != null) return `${sym}≥${k(min)}`;
-  if (max != null) return `${sym}≤${k(max)}`;
+    return min === max ? `${sym}${f(min)}` : `${sym}${f(min)}–${f(max)}`;
+  if (min != null) return `${sym}≥${f(min)}`;
+  if (max != null) return `${sym}≤${f(max)}`;
   return "—";
 }
 
@@ -66,13 +64,13 @@ function formatMonthly(
   to: string,
   rates: Rates,
 ): string {
-  const sym = CURRENCY_SYMBOL[to] ?? "";
+  const sym = currencySymbol(to);
   const m = (n: number) =>
-    (convertCurrency(n, from, to, rates) / 12 / 1000).toFixed(1);
+    formatMoneyCompact(convertCurrency(n, from, to, rates) / 12);
   if (min != null && max != null)
-    return min === max ? `${sym}${m(min)}k` : `${sym}${m(min)}–${m(max)}k`;
-  if (min != null) return `${sym}≥${m(min)}k`;
-  if (max != null) return `${sym}≤${m(max)}k`;
+    return min === max ? `${sym}${m(min)}` : `${sym}${m(min)}–${m(max)}`;
+  if (min != null) return `${sym}≥${m(min)}`;
+  if (max != null) return `${sym}≤${m(max)}`;
   return "—";
 }
 
