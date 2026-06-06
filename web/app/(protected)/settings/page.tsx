@@ -5,19 +5,25 @@ import { useState, useEffect, useCallback } from "react";
 import { Tabs, Tab } from "../../components/Tabs";
 import { useToast } from "../../components/Toast";
 import SettingsProfile from "../../components/SettingsProfile";
+import { AVAILABLE_CURRENCIES, BASE_CURRENCIES } from "@/lib/exchange-rates";
 
 type NotifKey = "telegram" | "email" | "desktop";
 type Settings = {
   app_name: string;
   language: string;
   notifications: Record<NotifKey, boolean>;
+  // Valute extra (oltre alle base EUR/USD/GBP) per il grafico stipendi.
+  currencies: string[];
 };
 
 const DEFAULTS: Settings = {
   app_name: "Job Hunter Team",
   language: "it",
   notifications: { telegram: true, email: false, desktop: false },
+  currencies: [],
 };
+
+const BASE = BASE_CURRENCIES as readonly string[];
 
 const inp: React.CSSProperties = {
   border: "1px solid var(--color-border)",
@@ -110,13 +116,20 @@ function SaveBtn({ busy, onClick }: { busy: boolean; onClick: () => void }) {
   );
 }
 
-type TabId = "profile" | "general" | "notifications" | "security" | "danger";
+type TabId =
+  | "profile"
+  | "general"
+  | "currencies"
+  | "notifications"
+  | "security"
+  | "danger";
 
 export default function SettingsPage() {
   const [s, setS] = useState<Settings>(DEFAULTS);
   const [loading, setL] = useState(true);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<TabId>("profile");
+  const [curQuery, setCurQuery] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -131,6 +144,11 @@ export default function SettingsPage() {
               ...DEFAULTS.notifications,
               ...config.notifications,
             },
+            currencies: Array.isArray(config.dashboard?.currencies)
+              ? config.dashboard.currencies.filter(
+                  (c: string) => !BASE.includes(c),
+                )
+              : [],
           });
         setL(false);
       })
@@ -146,6 +164,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           app: { name: s.app_name, language: s.language },
           notifications: s.notifications,
+          dashboard: { currencies: s.currencies },
         }),
       });
       const d = await r.json();
@@ -193,6 +212,7 @@ export default function SettingsPage() {
   const TABS: Tab<TabId>[] = [
     { id: "profile", label: "Profilo" },
     { id: "general", label: "Generale" },
+    { id: "currencies", label: "Valute" },
     { id: "notifications", label: "Notifiche" },
     { id: "security", label: "Sicurezza" },
     { id: "danger", label: "Danger Zone" },
@@ -260,6 +280,82 @@ export default function SettingsPage() {
                   <option value="en">English</option>
                 </select>
               </Row>
+              <SaveBtn busy={busy} onClick={save} />
+            </>
+          )}
+
+          {tab === "currencies" && (
+            <>
+              <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
+                Le valute selezionate appariranno nel selettore del grafico
+                <strong> Distribuzione Stipendi</strong>. EUR, USD e GBP sono
+                sempre disponibili; aggiungine altre (es. il fiorino ungherese)
+                per convertire le stime nella valuta che preferisci.
+              </p>
+              <input
+                style={{ ...inp, maxWidth: 320 }}
+                value={curQuery}
+                onChange={(e) => setCurQuery(e.target.value)}
+                placeholder="Cerca valuta (codice o nome)…"
+                aria-label="Cerca valuta"
+              />
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_CURRENCIES.filter((c) => {
+                  const q = curQuery.trim().toLowerCase();
+                  return (
+                    !q ||
+                    c.code.toLowerCase().includes(q) ||
+                    c.name.toLowerCase().includes(q)
+                  );
+                }).map((c) => {
+                  const isBase = BASE.includes(c.code);
+                  const active = isBase || s.currencies.includes(c.code);
+                  return (
+                    <button
+                      key={c.code}
+                      type="button"
+                      disabled={isBase}
+                      onClick={() =>
+                        setS((p) => ({
+                          ...p,
+                          currencies: p.currencies.includes(c.code)
+                            ? p.currencies.filter((x) => x !== c.code)
+                            : [...p.currencies, c.code],
+                        }))
+                      }
+                      title={isBase ? "Sempre disponibile" : c.name}
+                      className="flex items-center gap-2 px-3 py-2 rounded text-[11px] transition-colors"
+                      style={{
+                        border: `1px solid ${active ? "var(--color-green)" : "var(--color-border)"}`,
+                        background: active
+                          ? "rgba(0,232,122,0.08)"
+                          : "var(--color-card)",
+                        color: active
+                          ? "var(--color-bright)"
+                          : "var(--color-muted)",
+                        cursor: isBase ? "default" : "pointer",
+                        opacity: isBase ? 0.85 : 1,
+                      }}
+                    >
+                      <span className="font-semibold tabular-nums">
+                        {c.code}
+                      </span>
+                      <span style={{ color: "var(--color-dim)" }}>{c.name}</span>
+                      {isBase && (
+                        <span
+                          className="text-[8px] uppercase tracking-wider px-1 py-0.5 rounded"
+                          style={{
+                            background: "var(--color-border)",
+                            color: "var(--color-dim)",
+                          }}
+                        >
+                          base
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
               <SaveBtn busy={busy} onClick={save} />
             </>
           )}
