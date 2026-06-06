@@ -1,0 +1,108 @@
+<!-- @translation: it, ai-translated 2026-06-06 -->
+---
+name: spawn-agent
+description: "Avvia un agente del team JHT (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) tramite il launcher, poi invia il messaggio di kick-off che effettivamente avvia il suo loop principale. Solo Capitano — il Capitano è l'unico proprietario dello scaling del team. Usa SEMPRE questa skill: bypassare `start-agent.sh` con `tmux new-session` + `send-keys \"kimi ...\"` crudo produce sessioni in cui la CLI non parte (`command not found`), il Capitano vede una sessione \"attiva\" che in realtà è morta, e il team sotto-performa silenziosamente."
+allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(sleep *)
+---
+
+# spawn-agent — portare un agente online
+
+Contratto a due fasi: **avviare** la CLI, poi **kick-off** del suo loop. Saltare il kick-off lascia l'agente a un prompt vuoto — il Capitano pensa che stia lavorando, ma non è così.
+
+## Fase 1 — avvio tramite `start-agent.sh`
+
+```bash
+bash /app/.launcher/start-agent.sh <role> [instance_number]
+```
+
+Esempi:
+```bash
+bash /app/.launcher/start-agent.sh scout 2       # SCOUT-2
+bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
+bash /app/.launcher/start-agent.sh critico       # CRITICO (singleton, senza numero)
+```
+
+Il launcher esegue, atomicamente:
+- crea la sessione tmux con il nome canonico (`SCOUT-2`, `ANALISTA-1`, …)
+- imposta `cwd` a `$JHT_HOME/agents/<role>[-N]/`
+- esporta `JHT_HOME · JHT_DB · JHT_AGENT_DIR · PATH · JHT_USER_DIR · JHT_CONFIG`
+- rileva il provider attivo da `jht.config.json` (claude / kimi / codex)
+- copia `agents/<role>/<role>.md` nel workspace come `CLAUDE.md` / `AGENTS.md`
+- avvia la CLI con i flag corretti per quel provider + tier
+
+> ⚠️ **MAI** avviare con `tmux new-session ... ; tmux send-keys "kimi ..."`. La CLI non è nel `PATH` al di fuori dell'ambiente del launcher → `command not found` → la sessione è solo bash. Il `jht-tmux-send` del Capitano restituisce `exit 0` scrivendo su quel bash vuoto, il messaggio viene perso silenziosamente, e il team sotto-performa senza causa visibile.
+
+## Fase 2 — kick-off (obbligatorio)
+
+Il launcher avvia la CLI ma **non invia alcun primo messaggio**. Senza un kick-off l'agente resta in attesa a un prompt vuoto per sempre.
+
+Sequenza standard:
+```bash
+bash /app/.launcher/start-agent.sh scout 1
+sleep 12   # Boot CLI 8-15s — mai meno di 10
+jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <corpo del kick-off>"
+```
+
+### Corpo del kick-off per ruolo
+
+| Ruolo       | Corpo del kick-off                                                                                           |
+|-------------|--------------------------------------------------------------------------------------------------------------|
+| `scout`     | "Avvia il loop principale. Leggi il tuo prompt, il profilo candidato (`$JHT_HOME/profile/candidate_profile.yml`), e inizia dal CERCHIO 1 (preferenza primaria). Notifica gli Analisti dopo batch di 3-5 posizioni." |
+| `analista`  | "Avvia il loop principale. Coda: `db_query.py next-for-analista`. Per ogni posizione, compila i 5 campi obbligatori e promuovi a `checked` o `excluded`." |
+| `scorer`    | "Avvia il loop principale. Coda: `db_query.py next-for-scorer`. PRE-CHECK prima, poi punteggio 0-100. Gate: <40 escluso, 40-49 parcheggio, ≥50 notifica Scrittori." |
+| `scrittore` | "Avvia il loop principale. Coda: `db_query.py next-for-scrittore`. Massimo impegno, 3 round obbligatori con il Critico. Il PDF va sotto `$JHT_USER_DIR/cv/`." |
+| `critico`   | "Verrai chiamato dal tuo Scrittore padre con PDF + JD. Una revisione cieca per chiamata, poi stop." |
+| `assistente`| "Avvia il loop principale. Attendi `[@utente -> @assistente] [CHAT]` dalla web UI." |
+
+Se il contesto posizione-curriculum non è banale (l'agente aveva lavoro in corso prima di un crash), aggiungilo al kick-off così riprende da dove si era fermato — mai dire solo "riprendi", specifica *cosa* e *dove*:
+
+```bash
+jht-tmux-send SCRITTORE-1 "[@capitano -> @scrittore-1] [MSG] Riprendi: posizione #281 (Qargo TMS), il round 2 con il Critico stava per iniziare. Riparti da lì, NON ricominciare da zero."
+```
+
+## Fase 3 — verificare che il boot sia riuscito
+
+Circa 5 secondi dopo il kick-off:
+```bash
+tmux capture-pane -t <SESSION> -p | tail -10
+```
+
+Leggi l'output:
+- ✅ Banner CLI + spinner + corpo del kick-off visibile nell'area di input → boot OK
+- 🟡 `context: 0.0%` e area di input vuota → il kick-off non è arrivato, riprova una volta
+- 🔴 Prompt shell `jht@host:~/agents/<role>$` (nessuna CLI) → errore del launcher, vedi fallback sotto
+
+> Nota: i controlli di salute periodici (rilevamento zombie, agenti silenziosi > 10 min) NON sono compito di questa skill — appartengono al **Dottore** tramite la skill `liveness-check`. Questa skill termina una volta che la Fase 3 conferma il boot.
+
+## Fallback — errore del launcher
+
+Se la Fase 3 mostra un prompt shell puro (nessuna CLI avviata), controlla prima:
+
+```bash
+tmux capture-pane -t <SESSION> -p -S -50 | grep -iE "command not found|permission denied|no such file"
+```
+
+Cause probabili:
+1. CLI del provider non nel `PATH` per l'ambiente del launcher → controlla che il provider in `jht.config.json` corrisponda alla CLI installata
+2. Il template del ruolo `agents/<role>/<role>.md` manca → il launcher copia un file vuoto → la CLI parte ma non ha istruzioni
+3. `$JHT_HOME` non impostato / non esportato nel parent → escalation all'utente, NON provare a impostarlo manualmente
+
+Termina la sessione rotta prima di riprovare:
+```bash
+tmux kill-session -t <SESSION>
+bash /app/.launcher/start-agent.sh <role> <N>
+```
+
+## Anti-pattern
+
+- ❌ Avviare più agenti in un loop serrato senza pacing di 1 tick — vedi `pipeline-triage` per le regole di scaling (1 spawn per tick del Sentinel, ~5 min di distanza).
+- ❌ Ri-avviare alla cieca dopo un crash senza leggere `db_query.py` per recuperare lo stato dell'ultimo task — il nuovo agente parte da zero e duplica il lavoro.
+- ❌ Usare questa skill per "riavviare" un agente funzionante perché sembra lento. Lento ≠ morto. Turni lunghi con output di token visibile non sono un caso di spawn — sono un caso di `liveness-check` (Dottore).
+- ❌ Avviare un Critico. Lo Scrittore avvia il proprio `CRITICO-S<N>` autonomamente — il Capitano non tocca mai il Critico direttamente.
+
+## Vedi anche
+
+- `liveness-check` (Dottore) — quando un agente esistente sembra morto.
+- `pipeline-triage` (Capitano) — *quale* ruolo avviare in base al backlog.
+- `tmux-send` — convenzioni per l'envelope dei messaggi.
+- `agents/_team/team-rules.md` T01 — mai terminare la sessione di un altro agente.
