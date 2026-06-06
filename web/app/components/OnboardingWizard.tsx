@@ -6,12 +6,15 @@ import { readLocaleCookie } from "@/lib/use-locale";
 
 /* ── i18n inline ──────────────────────────────────────────────────── */
 
-type Lang = "it" | "en";
+type Lang = "it" | "en" | "es" | "de" | "fr" | "pt";
 
-// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Dizionario it/en,
-// le altre lingue ricadono su en.
+const SUPPORTED_LANGS: Lang[] = ["it", "en", "es", "de", "fr", "pt"];
+
+// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Copre it/en/es/de/fr/pt;
+// qualsiasi locale non supportata (es. hu) ricade su en.
 function getLang(): Lang {
-  return readLocaleCookie() === "it" ? "it" : "en";
+  const l = readLocaleCookie();
+  return (SUPPORTED_LANGS as string[]).includes(l) ? (l as Lang) : "en";
 }
 
 // Gate locale "primo accesso": una volta chiuso il tour su questo browser
@@ -40,41 +43,104 @@ function markLocalTourDone(): void {
 }
 
 const T = {
-  skip: { it: "Salta", en: "Skip" },
-  next: { it: "Avanti", en: "Next" },
-  back: { it: "Indietro", en: "Back" },
-  finish: { it: "Ho capito", en: "Got it" },
+  skip: {
+    it: "Salta",
+    en: "Skip",
+    es: "Saltar",
+    de: "Überspringen",
+    fr: "Passer",
+    pt: "Pular",
+  },
+  next: {
+    it: "Avanti",
+    en: "Next",
+    es: "Siguiente",
+    de: "Weiter",
+    fr: "Suivant",
+    pt: "Avançar",
+  },
+  back: {
+    it: "Indietro",
+    en: "Back",
+    es: "Atrás",
+    de: "Zurück",
+    fr: "Retour",
+    pt: "Voltar",
+  },
+  finish: {
+    it: "Ho capito",
+    en: "Got it",
+    es: "Entendido",
+    de: "Verstanden",
+    fr: "Compris",
+    pt: "Entendi",
+  },
 } as const;
+
+type LangText = Record<Lang, string>;
 
 type StepDef = {
   selector: string | null;
-  title: { it: string; en: string };
-  body: { it: string; en: string };
+  title: LangText;
+  body: LangText;
 };
 
 const STEPS: StepDef[] = [
   {
     selector: null,
-    title: { it: "Benvenuto nella dashboard", en: "Welcome to the dashboard" },
+    title: {
+      it: "Benvenuto nella dashboard",
+      en: "Welcome to the dashboard",
+      es: "Bienvenido al panel",
+      de: "Willkommen im Dashboard",
+      fr: "Bienvenue dans le tableau de bord",
+      pt: "Bem-vindo ao painel",
+    },
     body: {
       it: "Il profilo è pronto. Da qui in poi pilotano gli agenti AI: facciamo un giro veloce delle pagine principali.",
       en: "Your profile is ready. From here the AI agents take over — let's do a quick tour of the main pages.",
+      es: "Tu perfil está listo. A partir de aquí toman el control los agentes de IA: hagamos un recorrido rápido por las páginas principales.",
+      de: "Dein Profil ist fertig. Ab hier übernehmen die KI-Agenten — machen wir eine kurze Tour durch die wichtigsten Seiten.",
+      fr: "Votre profil est prêt. À partir d'ici, les agents IA prennent le relais — faisons un tour rapide des pages principales.",
+      pt: "O seu perfil está pronto. A partir daqui os agentes de IA assumem o controlo — vamos fazer um tour rápido pelas páginas principais.",
     },
   },
   {
     selector: '[data-tour="positions"]',
-    title: { it: "Positions", en: "Positions" },
+    title: {
+      it: "Positions",
+      en: "Positions",
+      es: "Positions",
+      de: "Positions",
+      fr: "Positions",
+      pt: "Positions",
+    },
     body: {
       it: "Tutte le offerte trovate dagli agenti. Le puoi filtrare, scartare o passare allo stato successivo.",
       en: "Every listing the agents found. Filter, dismiss, or move them to the next stage.",
+      es: "Todas las ofertas que han encontrado los agentes. Puedes filtrarlas, descartarlas o pasarlas a la siguiente fase.",
+      de: "Alle Stellen, die die Agenten gefunden haben. Filtere, verwerfe oder verschiebe sie in die nächste Phase.",
+      fr: "Toutes les offres trouvées par les agents. Filtrez-les, écartez-les ou faites-les passer à l'étape suivante.",
+      pt: "Todas as ofertas encontradas pelos agentes. Pode filtrá-las, descartá-las ou passá-las à fase seguinte.",
     },
   },
   {
     selector: '[data-tour="team"]',
-    title: { it: "Team", en: "Team" },
+    title: {
+      it: "Team",
+      en: "Team",
+      es: "Team",
+      de: "Team",
+      fr: "Team",
+      pt: "Team",
+    },
     body: {
       it: "Qui avvii, fermi e controlli gli agenti: Scout, Analista, Scorer, Scrittore. Il resto è automatico.",
       en: "Start, stop, and monitor the agents here: Scout, Analyst, Scorer, Writer. The rest is automatic.",
+      es: "Aquí inicias, detienes y supervisas a los agentes: Scout, Analista, Scorer, Redactor. El resto es automático.",
+      de: "Hier startest, stoppst und überwachst du die Agenten: Scout, Analyst, Scorer, Writer. Der Rest läuft automatisch.",
+      fr: "Ici, vous démarrez, arrêtez et surveillez les agents : Scout, Analyste, Scorer, Rédacteur. Le reste est automatique.",
+      pt: "Aqui inicia, para e monitoriza os agentes: Scout, Analista, Scorer, Redator. O resto é automático.",
     },
   },
 ];
