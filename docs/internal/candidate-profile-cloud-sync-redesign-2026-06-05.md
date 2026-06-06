@@ -230,6 +230,24 @@ Comportamentale → isolata. Scorer pesa con `scoring_weights`; Scout/Analista a
 
 ---
 
+## 🎚️ Completezza & gate del team (decisione 2026-06-06)
+
+Distinta dal modello-schema L1/L2/L3 (struttura dati): qui è *"quali campi servono"*.
+3 livelli, single source in `web/lib/profile-completion.ts`:
+
+| Livello | Campi | Effetto |
+|---|---|---|
+| 🔴 REQUIRED | name · email · target_role · location · experience_years · seniority_target · ≥2 skill · ≥1 lingua | **sblocca il team** (minimo per cercare + valutare) |
+| 🟡 RECOMMENDED | ≥1 esperienza · ≥1 titolo · industry · work-auth · località preferite | non bloccanti, migliorano ricerca mirata + CV su misura |
+| 🟢 OPTIONAL | certificazioni · progetti · strengths · about/goals · narrativi · contatti extra · salary · sector_details | personalizzazione massima |
+
+- **Gate** `isProfileComplete` = `isTeamUnlocked` (tutti i required soddisfatti).
+- **`%` pesato**: required ×3, recommended ×2, optional ×1 (`weightedCompletion`).
+- **UI** (`ProfileStats`): 3 barre + badge "team attivabile / N obbligatori mancanti".
+- **Skill** `onboarding-flow` allineata (chiede prima i required).
+- ⚖️ Esperienza/educazione/work-auth **NON più bloccanti** → raccomandati (il team
+  parte; servono per CV su misura e posizioni lavorabili).
+
 ## 🗺️ Piano & stato (agg. 2026-06-06)
 
 | Fase | Cosa | Stato | Commit |
@@ -247,6 +265,14 @@ Comportamentale → isolata. Scorer pesa con `scoring_weights`; Scout/Analista a
 > evitare collisione; prod↔repo allineati (vedi `list_migrations`).
 
 ## 🔮 Implementazioni future (dettaglio)
+
+> **Stato 2026-06-06**: ✅ fatti — summary→blocchi, Approfondimenti, validatore wired
+> negli agenti, form web validato, test (cross-check + round-trip + completezza),
+> **completezza a 3 livelli** (gate/Uit/skill), **PII encryption** (`candidate_contacts`),
+> **traduzioni skill** (6 lingue), **card vuote** nascoste. ⛔ **Fase 5** (filters/scoring
+> runtime) **deprecata**: campi non usati nei profili reali, fuori dallo schema canonico —
+> sarebbe una feature comportamentale nuova, non un gap. 🚀 Resta il **deploy** (release
+> `dev1 → master → production` + tag/versione).
 
 ### 🥇 Priorità
 - ✅ **Fase 3 — `pull-profile` (hydration cloud→locale)** — FATTO (`cabee35f`). Endpoint +

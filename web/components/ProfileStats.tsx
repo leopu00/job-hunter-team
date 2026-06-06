@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { CandidateProfile } from '@/lib/types'
 import { useLocale } from '@/lib/use-locale'
 import { getProfileT } from '@/lib/profile-i18n'
+import { weightedCompletion, isTeamUnlocked, completionByLevel } from '@/lib/profile-completion'
 
 /* ── Completion calc ─────────────────────────────────────────────── */
 
@@ -33,13 +34,6 @@ function calcCompletionChecks(p: CandidateProfile | null): CompletionCheck[] {
     { ok: !!(p.positioning?.career_goals && Object.values(p.positioning.career_goals).some(Boolean)), tkey: 'sec_career_goals', anchor: 'obiettivi-carriera' },
     { ok: !!(p.positioning?.strengths && (p.positioning.strengths as unknown[]).length > 0), tkey: 'sec_strengths', anchor: 'punti-di-forza' },
   ]
-}
-
-function calcCompletion(p: CandidateProfile | null): number {
-  if (!p) return 0
-  const checks = calcCompletionChecks(p)
-  const filled = checks.filter(c => c.ok).length
-  return Math.round((filled / checks.length) * 100)
 }
 
 /* ── Animated counter hook ────────────────────────────────────────── */
@@ -85,13 +79,22 @@ interface Props {
   profile: CandidateProfile | null
 }
 
+const LEVEL_ROWS = [
+  { key: 'required' as const, baseColor: 'var(--color-red)' },
+  { key: 'recommended' as const, baseColor: 'var(--color-yellow)' },
+  { key: 'optional' as const, baseColor: 'var(--color-blue)' },
+]
+
 export default function ProfileStats({ profile }: Props) {
   const locale = useLocale()
   const t = getProfileT(locale)
 
-  const completion = calcCompletion(profile)
+  const completion = weightedCompletion(profile)
   const animatedCompletion = useAnimatedCount(completion)
   const missingFields = profile ? calcCompletionChecks(profile).filter(c => !c.ok) : []
+  const teamUnlocked = isTeamUnlocked(profile)
+  const levels = completionByLevel(profile)
+  const requiredMissing = levels.required.missing.length
 
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -247,6 +250,17 @@ export default function ProfileStats({ profile }: Props) {
               <span className="text-2xl font-bold tabular-nums" style={{ color: completion >= 80 ? 'var(--color-green)' : completion >= 50 ? 'var(--color-yellow)' : 'var(--color-red)' }}>
                 {animatedCompletion}%
               </span>
+              {/* Gate: i campi REQUIRED sbloccano il team (tassonomia 3 livelli). */}
+              <span
+                className="mb-1 text-[9px] font-semibold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full border whitespace-nowrap"
+                style={
+                  teamUnlocked
+                    ? { color: 'var(--color-green)', borderColor: 'var(--color-green)' }
+                    : { color: 'var(--color-red)', borderColor: 'var(--color-red)' }
+                }
+              >
+                {teamUnlocked ? '✓ team attivabile' : `${requiredMissing} obbligatori mancanti`}
+              </span>
             </div>
             <div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label="Completamento profilo" className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
               <div
@@ -257,6 +271,31 @@ export default function ProfileStats({ profile }: Props) {
                 }}
               />
             </div>
+            {/* Completezza per livello (tassonomia 3 livelli) */}
+            {profile && (
+              <div className="mt-3 flex flex-col gap-1.5">
+                {LEVEL_ROWS.map(({ key, baseColor }) => {
+                  const prog = levels[key]
+                  const pct = prog.total ? Math.round((prog.filled / prog.total) * 100) : 0
+                  const done = prog.filled === prog.total
+                  const color = done ? 'var(--color-green)' : baseColor
+                  return (
+                    <div key={key}>
+                      <div className="flex items-center justify-between text-[9px] mb-0.5">
+                        <span className="uppercase tracking-[0.08em]" style={{ color }}>
+                          {t(`ps_lvl_${key}`)}
+                          {key === 'required' ? ` · ${t('ps_lvl_required_hint')}` : ''}
+                        </span>
+                        <span className="tabular-nums text-[var(--color-dim)]">{prog.filled}/{prog.total}</span>
+                      </div>
+                      <div className="h-1 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -271,7 +310,7 @@ export default function ProfileStats({ profile }: Props) {
             {missingFields.map((f, i) => (
               <Link
                 key={i}
-                href={`/profile#${f.anchor}`}
+                href={`/profile/edit#${f.anchor}`}
                 title={`${t('go_to')} "${t(f.tkey)}"`}
                 className="text-[10px] px-2 py-0.5 rounded border font-semibold no-underline transition-colors hover:bg-[var(--color-yellow)]/15 hover:border-[var(--color-yellow)]/60"
                 style={{ color: 'var(--color-yellow)', borderColor: 'var(--color-yellow)/30', background: 'var(--color-yellow)/8' }}
