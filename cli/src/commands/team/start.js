@@ -115,6 +115,18 @@ async function startActionContainer(agentArg, options = {}) {
       console.log(c.dim(`  ℹ pull desired-state non applicato: ${lastLine}`));
     }
 
+    // Pull profilo cloud → candidate_profile.yml se il file locale manca
+    // (PC nuovo / container ricreato): chiude il cerchio cloud→locale. Only-if
+    // -absent (non sovrascrive un profilo locale esistente). Best-effort 15s.
+    const profileRes = execInContainer(
+      'node /app/cli/bin/jht.js cloud pull-profile --silent',
+      { timeoutMs: 15_000 },
+    );
+    if (profileRes.code !== 0 && profileRes.stderr && !/non abilitato/i.test(profileRes.stderr)) {
+      const lastLine = profileRes.stderr.trim().split('\n').slice(-1)[0];
+      console.log(c.dim(`  ℹ pull profilo non applicato: ${lastLine}`));
+    }
+
     for (const item of bootstrap) {
       if (item.preDelayMs && item.preDelayMs > 0) {
         console.log(c.dim(`  ⏳ Attendo ${Math.round(item.preDelayMs / 1000)}s prima di ${item.session}...`));
