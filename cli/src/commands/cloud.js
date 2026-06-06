@@ -1571,6 +1571,61 @@ async function handleDaemon(options) {
 // process.exitCode così il boot prosegue anche se cloud è giù.
 export { handlePullDesiredState };
 
+/**
+ * pull-profile — scarica il profilo dal cloud e ricostruisce
+ * candidate_profile.yml (only-if-absent). Inverso del push del profilo: chiude
+ * il caso "PC nuovo / container ricreato" dove il file locale manca ma il
+ * profilo esiste su Supabase. Best-effort: errori non bloccano il boot.
+ */
+async function handlePullProfile(options = {}) {
+  const log = (msg) => { if (!options.silent) console.log(msg); };
+  const config = await loadCloudConfig();
+  if (!config || config.enabled === false) {
+    log(pc.dim('cloud non abilitato — skip pull-profile'));
+    return;
+  }
+  const baseUrl = (config.base_url || '').replace(/\/+$/, '');
+  const token = config.token;
+  if (!baseUrl || !token) {
+    if (!options.silent) console.error(pc.red('config cloud incompleta (base_url/token)'));
+    return;
+  }
+
+  const profilePath = join(PROFILE_DIR, 'candidate_profile.yml');
+  if (existsSync(profilePath) && !options.force) {
+    log(pc.dim("profilo locale gia' presente — skip (usa --force per sovrascrivere)"));
+    return;
+  }
+
+  let res;
+  try {
+    res = await fetch(`${baseUrl}/api/cloud-sync/pull-profile`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (err) {
+    if (!options.silent) console.error(pc.red('pull-profile: errore di rete'), err.message);
+    return;
+  }
+  if (!res.ok) {
+    if (!options.silent) console.error(pc.red(`pull-profile: HTTP ${res.status}`));
+    return;
+  }
+  let data;
+  try { data = await res.json(); } catch { data = null; }
+  if (!data || !data.ok) {
+    if (!options.silent) console.error(pc.red('pull-profile: ' + ((data && data.error) || 'risposta non valida')));
+    return;
+  }
+  if (!data.configured || !data.yaml) {
+    log(pc.dim('nessun profilo sul cloud — niente da scaricare'));
+    return;
+  }
+
+  await mkdir(PROFILE_DIR, { recursive: true });
+  await writeFile(profilePath, data.yaml);
+  log(pc.green('✓') + ` profilo scaricato dal cloud -> ${profilePath}`);
+}
+
 export function registerCloudCommand(program) {
   const cloud = program
     .command('cloud')
@@ -1624,6 +1679,13 @@ export function registerCloudCommand(program) {
     .option('--limit <n>', 'Max righe per chiamata (default 500, max 2000)')
     .option('--dry-run', 'Mostra cosa verrebbe applicato senza UPDATE')
     .action(handlePullDesiredState);
+
+  cloud
+    .command('pull-profile')
+    .description('Scarica il profilo dal cloud -> candidate_profile.yml (only-if-absent)')
+    .option('--force', "Sovrascrive il profilo locale anche se gia' presente")
+    .option('--silent', 'Output minimo (per il boot)')
+    .action(handlePullProfile);
 
   cloud
     .command('disable')
