@@ -119,7 +119,7 @@ JHT is designed and tested for:
 
 To report a vulnerability:
 1. **DO NOT** open a public issue.
-2. Email `owner@example.com` (interim, until `security@jobhunterteam.ai` is set up) with:
+2. Email `leopu00@gmail.com` with:
    - Descriptive title
    - Estimated severity (Critical/High/Medium/Low)
    - Path + function + lines of vulnerable code

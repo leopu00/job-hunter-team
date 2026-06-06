@@ -127,9 +127,9 @@ answer fast. Pre-write these so we don't fumble live.
 > your LinkedIn account is too expensive a failure mode.
 
 ### "Can it really run on €40/month?"
-> Honestly: TBD. Kimi K2 at €40/mo handles the load in my smoke tests
-> but I haven't run a full 2-week campaign on it yet — that's the next
-> piece of work I want to publish numbers on.
+> Yes. Kimi K2 at €40/mo has been validated in two real beta runs: a
+> 75-hour campaign (251 positions, 56 ready) and a 10-day run (557
+> positions, 264 scored). Full numbers in the Case Studies page.
 
 ## Timing
 

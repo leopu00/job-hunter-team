@@ -929,13 +929,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 - ✅ Quickstart + Story + Providers + AI-Agent Integration + Vision + Beta + Results + Monitoring (8 docs)
 - ⬜ **Launcher screenshots** — *soft BLOCKER pre-launch, improves quickstart credibility*
 - ⬜ **Visual FAQ** — common error states, install warnings, what each agent does
-- ⬜ **Video tutorial series** — multiple short walkthroughs (2-5 min each), NOT one long video. Examples:
-  - "Install JHT in 5 minutes"
-  - "Configure your profile with the Assistant"
-  - "Read your first results dashboard"
-  - "Adjust the team's working hours"
-  - "Switch provider (Claude → Kimi)"
-  - *Distinct scope from [JHT-LAUNCH-03] which is a 30s pipeline demo for HN/launch*
+- ⬜ **Video tutorial series** — deferred post-launch. GIFs cover the immediate need (README, Show HN). When a clear use case emerges (e.g. install walkthrough, provider switch), record short walkthroughs (2-5 min each).
 
 #### 🌐 [JHT-WEB-04] Domain + DNS ✅ COMPLETED
 
@@ -954,7 +948,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 1. ✅ SECURITY.md + CODE_OF_CONDUCT.md (done — root, EN, Contributor Covenant 2.1)
 2. ✅ Security review (done — 31/34 task chiusi, see `docs/security/`)
 3. Test campaign matrix (parallel with reviews — slowest cell determines launch date)
-4. Demo video (after monitoring is frozen)
+4. Demo GIFs (after monitoring is frozen; video deferred)
 5. Beta tester recruitment + Show HN draft + Press kit + Awesome lists submissions
 
 ---
@@ -969,14 +963,16 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 - ✅ Contributor Covenant 2.1 standard at root, contact `owner@example.com`
 - ✅ `.github/CONTRIBUTING.md` updated to link the new CoC
 
-#### 🎬 [JHT-LAUNCH-03] 30s demo video 🟡 BLOCKER
+#### 🎬 [JHT-LAUNCH-03] Demo GIFs 🟡 BLOCKER
 
-- ✅ Storyboard + recording plan landed at [`docs/launch/demo-storyboard.md`](docs/launch/demo-storyboard.md): 6-beat shot list timed to 30s, asciinema record/convert commands (`.cast` → `.gif` via `agg`, ≤ 2.5 MB target), captions, README embed snippet, Show HN/press-kit reuse plan.
-- ⬜ Remaining (maintainer-only — needs the live install + the demo SQLite snapshot):
-  - Add `--demo-profile` to `jht setup` and `--fixture` to `jht sentinella tail` (or drop beat 4 of the storyboard)
-  - Ship `docs/launch/demo-profile.yml` (anonymised) + `assets/demo-fixtures/` snapshot
-  - Record, convert, verify size, upload `.cast` to asciinema.org
-  - Replace the README "🚧 Coming soon" placeholder with the embed snippet, drop the URL into the Show HN draft
+> **Pivot (2026-06-05):** GIF-first instead of 30s video. Faster to produce, auto-loop, work everywhere (README, social, Show HN). Video deferred to post-launch when a clear narrative emerges.
+
+- ✅ Storyboard + recording plan at [`docs/launch/demo-storyboard.md`](docs/launch/demo-storyboard.md) (reusable for GIF framing)
+- ⬜ Remaining (maintainer-only):
+  - Record 2-3 GIFs: dashboard live, team pipeline working, onboarding flow
+  - Each GIF ≤ 2.5 MB, looping, no audio
+  - Replace the README "🚧 Coming soon" placeholder with GIF embeds
+  - Drop GIFs into Show HN draft + press kit
 
 #### 🛡️ [JHT-LAUNCH-04] Security review (gitleaks + audit) ✅
 
@@ -1013,14 +1009,14 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 #### 📰 [JHT-LAUNCH-09] Show HN post draft 🟡
 
 - Draft landed at [`docs/launch/show-hn-draft.md`](docs/launch/show-hn-draft.md): 4 title variants, body in dev-to-dev tone with the 200/20/5 numbers, 5 pre-written first-comment answers, timing window (Tue/Wed 13-15 UTC) and Plan B fallback subreddits.
-- Still ⬜: screenshots/GIF embedded in the body (waits on LAUNCH-03 demo + LAUNCH-10 press kit), final pass once README is frozen, decide who posts (maintainer vs. a friend account with karma already).
+- Still ⬜: GIFs embedded in the body (waits on LAUNCH-03 GIFs + LAUNCH-10 press kit), final pass once README is frozen, decide who posts (maintainer vs. a friend account with karma already).
 
 #### 🎙️ [JHT-LAUNCH-10] Press kit ⬜
 
 - **Assets:**
   - Logo (svg + png in 3 sizes)
   - 5+ screenshots (orgchart, dashboard, web team page, terminal, profile)
-  - 30s demo video (from LAUNCH-03)
+  - Demo GIFs (from LAUNCH-03)
   - 1-paragraph description (3 length variants: 30 words / 100 words / 300 words)
   - Project facts sheet (license, language, lines of code, contributor count)
 - **Location:** `/press` page on `jobhunterteam.ai` + `assets/press-kit/` in repo
