@@ -310,7 +310,7 @@ export default function ProfileStats({ profile }: Props) {
             {missingFields.map((f, i) => (
               <Link
                 key={i}
-                href={`/profile#${f.anchor}`}
+                href={`/profile/edit#${f.anchor}`}
                 title={`${t('go_to')} "${t(f.tkey)}"`}
                 className="text-[10px] px-2 py-0.5 rounded border font-semibold no-underline transition-colors hover:bg-[var(--color-yellow)]/15 hover:border-[var(--color-yellow)]/60"
                 style={{ color: 'var(--color-yellow)', borderColor: 'var(--color-yellow)/30', background: 'var(--color-yellow)/8' }}

@@ -587,10 +587,10 @@ export default async function ProfilePage() {
             </ProfileSection>
 
             {/* Progetti personali */}
-            <ProfileSection
-              title={`${t("sec_projects")}${hasProjects ? ` (${projects.length})` : ""}`}
-            >
-              {hasProjects ? (
+            {hasProjects && (
+              <ProfileSection
+                title={`${t("sec_projects")} (${projects.length})`}
+              >
                 <div className="flex flex-col gap-2">
                   {projects.map((p, i) => (
                     <div
@@ -651,19 +651,15 @@ export default async function ProfilePage() {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <span className="text-[var(--color-dim)] text-[11px]">
-                  {t("empty_projects")}
-                </span>
-              )}
-            </ProfileSection>
+              </ProfileSection>
+            )}
 
             {/* Target Roles */}
-            <ProfileSection
-              id="ruoli-target"
-              title={`${t("sec_target_roles")}${profile.job_titles?.length ? ` (${profile.job_titles.length})` : ""}`}
-            >
-              {profile.job_titles && profile.job_titles.length > 0 ? (
+            {profile.job_titles && profile.job_titles.length > 0 && (
+              <ProfileSection
+                id="ruoli-target"
+                title={`${t("sec_target_roles")} (${profile.job_titles.length})`}
+              >
                 <div className="flex flex-col gap-2">
                   {profile.job_titles.map((r, i) => (
                     <div
@@ -693,18 +689,17 @@ export default async function ProfilePage() {
                     </div>
                   ))}
                 </div>
-              ) : (
-                <span className="text-[var(--color-dim)] text-[11px]">
-                  {t("empty_roles")}
-                </span>
-              )}
-            </ProfileSection>
+              </ProfileSection>
+            )}
 
             {/* Preferenze lavoro */}
-            <ProfileSection id="location-preferite" title={t("sec_job_prefs")}>
-              {profile.location_preferences &&
-              profile.location_preferences.length > 0 ? (
-                <div className="flex flex-wrap gap-2 mb-3">
+            {profile.location_preferences &&
+              profile.location_preferences.length > 0 && (
+                <ProfileSection
+                  id="location-preferite"
+                  title={t("sec_job_prefs")}
+                >
+                  <div className="flex flex-wrap gap-2 mb-3">
                   {profile.location_preferences.map((lp, i) => (
                     <div
                       key={i}
@@ -736,57 +731,53 @@ export default async function ProfilePage() {
                         </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <span className="text-[var(--color-dim)] text-[11px]">
-                  {t("empty_prefs")}
-                </span>
-              )}
-              {profile.salary_target &&
-                (profile.salary_target.italy_min != null ||
-                  profile.salary_target.remote_eu_min != null) && (
-                  <div
-                    id="salary-target"
-                    className="mt-3 pt-3 border-t border-[var(--color-border)] scroll-mt-20"
-                  >
-                    <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-3">
-                      {t("salary_target")}
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      {profile.salary_target.italy_min != null && (
-                        <SalaryRange
-                          label={t("salary_italy")}
-                          min={profile.salary_target.italy_min}
-                          max={
-                            profile.salary_target.italy_max ??
-                            profile.salary_target.italy_min
-                          }
-                          color="var(--color-green)"
-                        />
-                      )}
-                      {profile.salary_target.remote_eu_min != null && (
-                        <SalaryRange
-                          label={t("salary_remote_eu")}
-                          min={profile.salary_target.remote_eu_min}
-                          max={
-                            profile.salary_target.remote_eu_max ??
-                            profile.salary_target.remote_eu_min
-                          }
-                          color="var(--color-blue)"
-                        />
-                      )}
-                    </div>
+                    ))}
                   </div>
-                )}
-            </ProfileSection>
+                  {profile.salary_target &&
+                    (profile.salary_target.italy_min != null ||
+                      profile.salary_target.remote_eu_min != null) && (
+                      <div
+                        id="salary-target"
+                        className="mt-3 pt-3 border-t border-[var(--color-border)] scroll-mt-20"
+                      >
+                        <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-3">
+                          {t("salary_target")}
+                        </div>
+                        <div className="flex flex-col gap-3">
+                          {profile.salary_target.italy_min != null && (
+                            <SalaryRange
+                              label={t("salary_italy")}
+                              min={profile.salary_target.italy_min}
+                              max={
+                                profile.salary_target.italy_max ??
+                                profile.salary_target.italy_min
+                              }
+                              color="var(--color-green)"
+                            />
+                          )}
+                          {profile.salary_target.remote_eu_min != null && (
+                            <SalaryRange
+                              label={t("salary_remote_eu")}
+                              min={profile.salary_target.remote_eu_min}
+                              max={
+                                profile.salary_target.remote_eu_max ??
+                                profile.salary_target.remote_eu_min
+                              }
+                              color="var(--color-blue)"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                </ProfileSection>
+              )}
 
             {/* Obiettivi di carriera */}
-            <ProfileSection
-              id="obiettivi-carriera"
-              title={t("sec_career_goals")}
-            >
-              {hasCareerGoals ? (
+            {hasCareerGoals && (
+              <ProfileSection
+                id="obiettivi-carriera"
+                title={t("sec_career_goals")}
+              >
                 <div className="flex flex-col gap-2">
                   <ProfileField
                     label={t("cg_direction")}
@@ -831,16 +822,12 @@ export default async function ProfilePage() {
                     </div>
                   )}
                 </div>
-              ) : (
-                <span className="text-[var(--color-dim)] text-[11px]">
-                  {t("empty_goals")}
-                </span>
-              )}
-            </ProfileSection>
+              </ProfileSection>
+            )}
 
             {/* Desideri e aspirazioni */}
-            <ProfileSection title={t("sec_aspirations")}>
-              {hasAspirations ? (
+            {hasAspirations && (
+              <ProfileSection title={t("sec_aspirations")}>
                 <div className="flex flex-col gap-2">
                   {aspirations.short_term && (
                     <div className="flex gap-3 px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
@@ -921,20 +908,16 @@ export default async function ProfilePage() {
                     </div>
                   )}
                 </div>
-              ) : (
-                <span className="text-[var(--color-dim)] text-[11px]">
-                  {t("empty_aspirations")}
-                </span>
-              )}
-            </ProfileSection>
+              </ProfileSection>
+            )}
 
-            {/* Strengths — sempre renderizzato (anche vuoto) cosi` il deep-link
-            `#punti-di-forza` dai chip "campi mancanti" trova la sezione. */}
-            <ProfileSection
-              id="punti-di-forza"
-              title={`${t("sec_strengths")}${strengths.length > 0 ? ` (${strengths.length})` : ""}`}
-            >
-              {strengths.length > 0 ? (
+            {/* Strengths — nascosto quando vuoto; i chip "campi mancanti"
+                puntano a /profile/edit, non a questa sezione di view. */}
+            {strengths.length > 0 && (
+              <ProfileSection
+                id="punti-di-forza"
+                title={`${t("sec_strengths")} (${strengths.length})`}
+              >
                 <div className="flex flex-wrap gap-2">
                   {strengths.map((s, i) => (
                     <span
@@ -956,12 +939,8 @@ export default async function ProfilePage() {
                     </span>
                   ))}
                 </div>
-              ) : (
-                <span className="text-[var(--color-dim)] text-[11px]">
-                  {t("empty_strengths")}
-                </span>
-              )}
-            </ProfileSection>
+              </ProfileSection>
+            )}
 
             {/* Note libere — full width */}
             {freeNotes && (
