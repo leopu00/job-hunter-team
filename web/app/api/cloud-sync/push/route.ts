@@ -3,6 +3,7 @@ import yaml from "js-yaml";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
+import { mapYamlToCanonical, syncProfileToSupabase } from "@/lib/profile-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -138,72 +139,6 @@ interface PushBody {
   sentinel_ticks?: SentinelTickIn[];
   tombstones?: TombstoneIn[];
   profile?: ProfileIn;
-}
-
-/**
- * Mappa il yaml parsato del candidate_profile.yml al payload della
- * tabella candidate_profiles. Schema tollerante: se i campi top-level
- * mancano, prova a leggerli dalla sezione `candidate:` (lo schema reale
- * scritto dall'Assistente). Tutto cio' che non riconosce va in
- * positioning come freeform.
- */
-function mapYamlToProfile(raw: Record<string, unknown>, userId: string) {
-  const obj = (v: unknown): Record<string, unknown> =>
-    v && typeof v === "object" && !Array.isArray(v)
-      ? (v as Record<string, unknown>)
-      : {};
-  const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-  const str = (v: unknown): string | null =>
-    typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
-  const num = (v: unknown): number | null =>
-    typeof v === "number" && Number.isFinite(v)
-      ? v
-      : typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v.trim())
-        ? Number(v)
-        : null;
-  const bool = (v: unknown): boolean | null =>
-    typeof v === "boolean" ? v : null;
-
-  const cand = obj(raw.candidate);
-  const contacts = obj(cand.contacts);
-  const name = str(raw.name) ?? str(cand.name) ?? "Candidato";
-  const email = str(raw.email) ?? str(contacts.email);
-  const location = str(raw.location) ?? str(cand.location);
-  const yearsExp = num(raw.experience_years) ?? num(cand.experience_years) ?? 0;
-  const monthsExp =
-    num(raw.experience_months) ?? num(cand.experience_months) ?? yearsExp * 12;
-
-  // positioning: dump dei campi narrativi (headline, summary, industry)
-  // che non mappano a colonne strutturate. La dashboard sa leggerli da li'.
-  const positioning: Record<string, unknown> = {};
-  if (str(cand.headline)) positioning.headline = str(cand.headline);
-  if (str(cand.summary)) positioning.summary = str(cand.summary);
-  if (str(raw.industry)) positioning.industry = str(raw.industry);
-  if (cand.experience) positioning.experience = cand.experience;
-  if (cand.education) positioning.education = cand.education;
-
-  return {
-    user_id: userId,
-    name,
-    email,
-    location,
-    birth_year: num(raw.birth_year) ?? num(cand.birth_year),
-    nationality: str(raw.nationality) ?? str(cand.nationality),
-    work_authorization: arr(raw.work_authorization),
-    target_role: str(raw.target_role) ?? str(cand.target_role),
-    experience_years: Math.round(yearsExp),
-    experience_months: Math.round(monthsExp),
-    has_degree: bool(raw.has_degree) ?? bool(cand.has_degree) ?? false,
-    languages: arr(raw.languages),
-    // Skills puo' essere object {primary, secondary} o array piatto:
-    // serializziamo as-is, la dashboard sa entrambi i formati.
-    skills: raw.skills && typeof raw.skills === "object" ? raw.skills : [],
-    seniority_target: str(raw.seniority_target) ?? str(cand.seniority_target),
-    job_titles: arr(raw.job_titles),
-    location_preferences: arr(raw.location_preferences),
-    salary_target: obj(raw.salary_target),
-    positioning,
-  };
 }
 
 const ALLOWED_POSITION_STATUS = new Set([
@@ -720,17 +655,24 @@ export async function POST(req: NextRequest) {
       try {
         const parsed = yaml.load(yamlRaw, { schema: yaml.CORE_SCHEMA });
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          const profileRow = mapYamlToProfile(
+          // Modello a 3 livelli: candidate_profiles (core + JSONB legacy) +
+          // tabelle normalizzate + candidate_blocks + candidate_contacts.
+          // Best-effort sulle tabelle figlie; il core resta critico.
+          const canonical = mapYamlToCanonical(
             parsed as Record<string, unknown>,
             userId,
           );
-          const { error: pe } = await admin
-            .from("candidate_profiles")
-            .upsert(profileRow, { onConflict: "user_id" });
-          if (pe) {
-            profileError = pe.message;
+          const sync = await syncProfileToSupabase(admin, userId, canonical);
+          if (!sync.ok) {
+            profileError = sync.error;
           } else {
             profileUpserted = true;
+            if (sync.warnings.length) {
+              console.warn(
+                "[cloud-sync/push] profile sync warnings:",
+                sync.warnings,
+              );
+            }
             // Segna lo stato di onboarding: primo upsert di candidate_profiles
             // con successo = profilo configurato. Best-effort, non rompe la
             // response del push se fallisce. Il flag e' "primo successo" —
