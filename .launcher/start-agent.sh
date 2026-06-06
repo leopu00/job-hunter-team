@@ -672,6 +672,15 @@ _copy_skill() {
   local name="$2"
   cp -R "$src" "$CLAUDE_SKILLS_DIR/$name"
   cp -R "$src" "$AGENTS_SKILLS_DIR/$name"
+  # Locale-aware: if SKILL.<locale>.md exists, use it as SKILL.md
+  local localized="$src/SKILL.$USER_LOCALE.md"
+  if [ "$USER_LOCALE" != "en" ] && [ -f "$localized" ]; then
+    cp "$localized" "$CLAUDE_SKILLS_DIR/$name/SKILL.md"
+    cp "$localized" "$AGENTS_SKILLS_DIR/$name/SKILL.md"
+  fi
+  # Remove locale variants from workspace (agent sees only SKILL.md)
+  rm -f "$CLAUDE_SKILLS_DIR/$name"/SKILL.*.md
+  rm -f "$AGENTS_SKILLS_DIR/$name"/SKILL.*.md
 }
 
 _skills_count=0
