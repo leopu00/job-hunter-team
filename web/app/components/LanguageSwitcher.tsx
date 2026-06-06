@@ -182,7 +182,9 @@ export default function LanguageSwitcher({
             minWidth: 140,
           }}
         >
-          {locales.map((l) => {
+          {[...locales]
+            .sort((a, b) => a.label.localeCompare(b.label))
+            .map((l) => {
             const Flag = FLAGS[l.code] || FlagEN;
             return (
               <button
