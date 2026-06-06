@@ -89,10 +89,12 @@ export default async function ProfilePage() {
     profile = readWorkspaceProfile();
   }
 
-  // Blocchi L2/L3 NON coperti dalle sezioni fisse → "Approfondimenti" in fondo.
-  // Evita doppioni con about/goals/preferences/strengths/… già renderizzati.
-  const COVERED_BLOCK =
-    /^(about|goals|preferences|pref_|strengths|aspirations|free_notes|projects|experience|education|skills|languages|contacts)/;
+  // Blocchi L2/L3 → "Approfondimenti" in fondo. Escludiamo SOLO le key che hanno
+  // già una sezione fissa strutturata che le mostra bene (esperienza, formazione,
+  // competenze, lingue, contatti, note libere). I blocchi narrativi/semi-liberi
+  // (about, goals, strengths, preferences, positioning_*, interessi…) non hanno
+  // una resa fissa equivalente — vanno mostrati qui, altrimenti restano invisibili.
+  const COVERED_BLOCK = /^(experience|education|skills|languages|contacts|free_notes)/;
   const extraBlocks = blocks.filter((b) => b.key && !COVERED_BLOCK.test(b.key));
 
   const pos = profile?.positioning ?? {};
