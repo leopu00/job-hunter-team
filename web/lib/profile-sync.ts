@@ -325,3 +325,71 @@ export async function syncProfileToSupabase(
 
   return { ok: true, error: null, warnings };
 }
+
+// ── reconstruct (pull-profile: tabelle Supabase → YAML canonico) ─────
+export interface ProfileTables {
+  profile: Dict | null;
+  skills: Array<{ name: string; category: string }>;
+  languages: Array<{ language: string; level: string }>;
+  experiences: Array<Dict>;
+  education: Array<Dict>;
+  workAuth: Array<{ region: string; status: string }>;
+  locationPrefs: Array<{ value: string }>;
+  contacts: Dict | null;
+  blocks: Array<{ key: string; kind: string; title: string; content: unknown; ord?: number }>;
+}
+
+/** Rimuove chiavi null/undefined/'' e array/oggetti vuoti (YAML pulito). */
+function clean<T extends Dict>(obj: T): Dict {
+  const out: Dict = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v == null || v === "") continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    if (isObj(v) && Object.keys(v).length === 0) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * Inverso di mapYamlToCanonical: ricostruisce l'oggetto profilo canonico dalle
+ * righe delle tabelle Supabase. L'endpoint pull-profile lo serializza in YAML.
+ */
+export function reconstructCanonicalProfile(d: ProfileTables): Dict {
+  const p = d.profile ?? {};
+  const skillsByCat: Record<string, string[]> = {};
+  for (const s of d.skills) (skillsByCat[s.category] ??= []).push(s.name);
+
+  return clean({
+    schema_version: 1,
+    name: p.name,
+    target_role: p.target_role,
+    location: p.location,
+    timezone: p.timezone,
+    nationality: p.nationality,
+    birth_year: p.birth_year,
+    industry: p.industry,
+    email: p.email,
+    experience_years: p.experience_years,
+    experience_months: p.experience_months,
+    has_degree: p.has_degree ?? false,
+    seniority_target: p.seniority_target,
+    skills: clean({ primary: skillsByCat.primary ?? [], secondary: skillsByCat.secondary ?? [] }),
+    languages: d.languages.map((l) => ({ language: l.language, level: l.level })),
+    experience: d.experiences.map((e) =>
+      clean({ company: e.company, role: e.role, period: e.period, start: e.start_date, end: e.end_date, location: e.location, summary: e.summary }),
+    ),
+    education: d.education
+      .filter((e) => e.kind !== "certification")
+      .map((e) => clean({ institution: e.institution, degree: e.degree, year: e.year, period: e.period, location: e.location, details: e.details })),
+    certifications: d.education
+      .filter((e) => e.kind === "certification")
+      .map((e) => clean({ name: e.degree, issuer: e.institution, year: e.year })),
+    work_authorization: d.workAuth.map((w) => ({ region: w.region, status: w.status })),
+    location_preferences: d.locationPrefs.map((l) => l.value),
+    contacts: d.contacts
+      ? clean({ email: d.contacts.email, phone: d.contacts.phone, linkedin: d.contacts.linkedin, github: d.contacts.github, website: d.contacts.website, address: d.contacts.address })
+      : undefined,
+    blocks: d.blocks.map((b) => clean({ key: b.key, kind: b.kind, title: b.title, content: b.content, ord: b.ord })),
+  });
+}
