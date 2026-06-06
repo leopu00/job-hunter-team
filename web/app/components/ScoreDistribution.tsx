@@ -176,7 +176,7 @@ export default function ScoreDistribution({
       : 0;
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+    <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <span className="section-label flex items-center gap-3">
           {title}
@@ -200,10 +200,7 @@ export default function ScoreDistribution({
       </div>
 
       {stats.n === 0 ? (
-        <div
-          className="flex items-center justify-center text-[11px] text-[var(--color-dim)] italic"
-          style={{ height: H }}
-        >
+        <div className="flex-1 flex items-center justify-center text-[11px] text-[var(--color-dim)] italic">
           {emptyLabel}
         </div>
       ) : (
@@ -213,6 +210,7 @@ export default function ScoreDistribution({
         viewBox={`0 0 ${W} ${H}`}
         role="img"
         aria-label={title}
+        className="my-auto"
         style={{ overflow: "visible" }}
         onMouseLeave={() => setHover(null)}
       >

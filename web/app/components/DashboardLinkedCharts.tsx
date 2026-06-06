@@ -14,6 +14,7 @@ import LocationBarList, {
 import RecentPositionsTable, {
   type TableLabels,
 } from "@/app/components/RecentPositionsTable";
+import SalaryBars from "@/app/components/SalaryBars";
 import {
   convertCurrency,
   CURRENCY_SYMBOL,
@@ -48,7 +49,7 @@ type Props = {
 };
 
 const SCORE_BIN = 5;
-const SALARY_BIN = 10000;
+const SALARY_BIN = 20000;
 const UNKNOWN = "(unknown)";
 const COUNTRY_ONLY = "(country-only)";
 
@@ -269,105 +270,107 @@ export default function DashboardLinkedCharts({
 
   return (
     <div>
-      {totalActive > 0 && (
-        <div className="flex items-center justify-end mb-2">
-          <button
-            type="button"
-            onClick={resetAll}
-            className="text-[9px] font-semibold tracking-[0.12em] uppercase cursor-pointer text-[var(--color-dim)] hover:text-[var(--color-bright)] transition-colors"
-            title="Rimuovi tutti i filtri"
-          >
-            ✕ {labels.reset} · {totalActive}
-          </button>
-        </div>
-      )}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] items-start mb-8">
-        {/* Colonna sinistra: Types sopra, Score distribution sotto. */}
-        <div className="flex flex-col gap-4">
-          <PositionTypesPie
-            data={typeData}
-            title={labels.types}
-            emptyLabel={labels.noData}
-            size={300}
-            selectedTypes={selectedFamilies}
-            onToggleType={(f) => toggle(setSelectedFamilies, f)}
-          />
-          <ScoreDistribution
-            scores={scoreData}
-            title={labels.score}
-            emptyLabel={labels.noData}
-            selectedBins={selectedScoreBins}
-            onToggleBin={(lo) =>
-              setSelectedScoreBins((cur) =>
-                cur.includes(lo) ? cur.filter((v) => v !== lo) : [...cur, lo],
-              )
-            }
-          />
-          {/* Distribuzione stipendi (punto medio del range), convertita
-          nella valuta scelta dal selettore. */}
-          <ScoreDistribution
-            scores={salaryData}
-            title={labels.salary}
-            emptyLabel={labels.noData}
-            maxScore={SALARY_MAX_EUR}
-            binStep={SALARY_BIN}
-            barColor="var(--color-green)"
-            valueFormat={(n) =>
-              `${CURRENCY_SYMBOL[displayCurrency] ?? ""}${Math.round(
-                convertCurrency(n, "EUR", displayCurrency, rates) / 1000,
-              )}k`
-            }
-            selectedBins={selectedSalaryBins}
-            onToggleBin={(lo) =>
-              setSelectedSalaryBins((cur) =>
-                cur.includes(lo) ? cur.filter((v) => v !== lo) : [...cur, lo],
-              )
-            }
-            headerExtra={
-              <span className="flex items-center gap-0.5">
-                {SUPPORTED_CURRENCIES.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setDisplayCurrency(c)}
-                    className="text-[9px] font-semibold px-1.5 py-0.5 rounded cursor-pointer transition-colors tracking-wide"
-                    style={{
-                      color:
-                        displayCurrency === c
-                          ? "var(--color-bright)"
-                          : "var(--color-dim)",
-                      background:
-                        displayCurrency === c
-                          ? "rgba(255,255,255,0.08)"
-                          : "transparent",
-                    }}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </span>
-            }
-          />
-        </div>
-        {/* Colonna destra: Paesi sopra, Città sotto. */}
-        <div className="flex flex-col gap-4">
-          <LocationBarList
-            items={countryItems.items}
-            title={labels.countries}
-            emptyLabel={labels.noData}
-            headerCount={countryItems.distinct}
-            selectedKeys={selectedCountries}
-            onToggle={(k) => toggle(setSelectedCountries, k)}
-          />
-          <LocationBarList
-            items={cityItems.items}
-            title={labels.cities}
-            emptyLabel={labels.noData}
-            headerCount={cityItems.distinct}
-            selectedKeys={selectedCities}
-            onToggle={(k) => toggle(setSelectedCities, k)}
-          />
-        </div>
+      {/* Riga reset ad altezza FISSA: il bottone appare/scompare ma lo
+      spazio è sempre riservato, così i grafici non si spostano. */}
+      <div className="flex items-center justify-end mb-2 h-[16px]">
+        <button
+          type="button"
+          onClick={resetAll}
+          className="text-[9px] font-semibold tracking-[0.12em] uppercase cursor-pointer text-[var(--color-dim)] hover:text-[var(--color-bright)] transition-colors"
+          title="Rimuovi tutti i filtri"
+          style={{
+            visibility: totalActive > 0 ? "visible" : "hidden",
+            pointerEvents: totalActive > 0 ? "auto" : "none",
+          }}
+        >
+          ✕ {labels.reset} · {totalActive}
+        </button>
+      </div>
+      {/* Riga 1: donut Tipologie a tutta larghezza. */}
+      <div className="mb-4">
+        <PositionTypesPie
+          data={typeData}
+          title={labels.types}
+          emptyLabel={labels.noData}
+          size={300}
+          selectedTypes={selectedFamilies}
+          onToggleType={(f) => toggle(setSelectedFamilies, f)}
+        />
+      </div>
+
+      {/* Riga 2: Paesi (sx) + Distribuzione Score (dx), stessa altezza. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 lg:auto-rows-[260px] gap-4 mb-4 items-stretch">
+        <LocationBarList
+          items={countryItems.items}
+          title={labels.countries}
+          emptyLabel={labels.noData}
+          headerCount={countryItems.distinct}
+          maxRows={100}
+          selectedKeys={selectedCountries}
+          onToggle={(k) => toggle(setSelectedCountries, k)}
+        />
+        <ScoreDistribution
+          scores={scoreData}
+          title={labels.score}
+          emptyLabel={labels.noData}
+          selectedBins={selectedScoreBins}
+          onToggleBin={(lo) =>
+            setSelectedScoreBins((cur) =>
+              cur.includes(lo) ? cur.filter((v) => v !== lo) : [...cur, lo],
+            )
+          }
+        />
+      </div>
+
+      {/* Riga 3: Distribuzione Stipendi (sx) + Città (dx), stessa altezza. */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 lg:auto-rows-[260px] gap-4 mb-8 items-stretch">
+        <SalaryBars
+          data={salaryData}
+          title={labels.salary}
+          emptyLabel={labels.noData}
+          bandStep={SALARY_BIN}
+          convert={(eur) => convertCurrency(eur, "EUR", displayCurrency, rates)}
+          symbol={CURRENCY_SYMBOL[displayCurrency] ?? ""}
+          selectedBands={selectedSalaryBins}
+          onToggleBand={(lo) =>
+            setSelectedSalaryBins((cur) =>
+              cur.includes(lo) ? cur.filter((v) => v !== lo) : [...cur, lo],
+            )
+          }
+          headerExtra={
+            <span className="flex items-center gap-0.5">
+              {SUPPORTED_CURRENCIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setDisplayCurrency(c)}
+                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded cursor-pointer transition-colors tracking-wide"
+                  style={{
+                    color:
+                      displayCurrency === c
+                        ? "var(--color-bright)"
+                        : "var(--color-dim)",
+                    background:
+                      displayCurrency === c
+                        ? "rgba(255,255,255,0.08)"
+                        : "transparent",
+                  }}
+                >
+                  {c}
+                </button>
+              ))}
+            </span>
+          }
+        />
+        <LocationBarList
+          items={cityItems.items}
+          title={labels.cities}
+          emptyLabel={labels.noData}
+          headerCount={cityItems.distinct}
+          maxRows={100}
+          selectedKeys={selectedCities}
+          onToggle={(k) => toggle(setSelectedCities, k)}
+        />
       </div>
 
       {/* Tabella collegata ai filtri: senza filtri = più recenti; con

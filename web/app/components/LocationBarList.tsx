@@ -49,7 +49,7 @@ export default function LocationBarList({
   const restCount = rest.reduce((a, d) => a + d.count, 0);
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+    <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-4">
         <span className="section-label">{title}</span>
         {total > 0 && headerCount != null && (
@@ -60,11 +60,14 @@ export default function LocationBarList({
       </div>
 
       {total === 0 ? (
-        <div className="text-[10px] text-[var(--color-dim)] italic py-2">
+        <div className="flex-1 flex items-center text-[10px] text-[var(--color-dim)] italic py-2">
           {emptyLabel}
         </div>
       ) : (
-        <ul className="space-y-1.5" onMouseLeave={() => setHovered(null)}>
+        <ul
+          className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1"
+          onMouseLeave={() => setHovered(null)}
+        >
           {visible.map((d) => {
             const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
             const isHover = hovered === d.key;
