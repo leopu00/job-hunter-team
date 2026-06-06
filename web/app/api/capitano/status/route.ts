@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
-import { isLocalRequest } from "@/lib/auth";
+import { isLocalRequest, requireAuth } from "@/lib/auth";
 import { inferAgentActiveFromBus } from "@/lib/team-bus";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const authError = await requireAuth();
+  if (authError) return authError;
   if (!(await isLocalRequest())) {
     const inferred = await inferAgentActiveFromBus("capitano");
     if (!inferred) {
