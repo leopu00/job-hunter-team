@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Tabs, Tab } from "../../components/Tabs";
 import { useToast } from "../../components/Toast";
 import SettingsProfile from "../../components/SettingsProfile";
+import WorkHoursPicker from "../../components/WorkHoursPicker";
 
 type NotifKey = "telegram" | "email" | "desktop";
 type Settings = {
@@ -110,7 +111,13 @@ function SaveBtn({ busy, onClick }: { busy: boolean; onClick: () => void }) {
   );
 }
 
-type TabId = "profile" | "general" | "notifications" | "security" | "danger";
+type TabId =
+  | "profile"
+  | "general"
+  | "working-hours"
+  | "notifications"
+  | "security"
+  | "danger";
 
 export default function SettingsPage() {
   const [s, setS] = useState<Settings>(DEFAULTS);
@@ -193,6 +200,7 @@ export default function SettingsPage() {
   const TABS: Tab<TabId>[] = [
     { id: "profile", label: "Profilo" },
     { id: "general", label: "Generale" },
+    { id: "working-hours", label: "Orari di lavoro" },
     { id: "notifications", label: "Notifiche" },
     { id: "security", label: "Sicurezza" },
     { id: "danger", label: "Danger Zone" },
@@ -263,6 +271,8 @@ export default function SettingsPage() {
               <SaveBtn busy={busy} onClick={save} />
             </>
           )}
+
+          {tab === "working-hours" && <WorkHoursPicker />}
 
           {tab === "notifications" && (
             <>
