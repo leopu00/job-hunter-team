@@ -1,6 +1,21 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+
+const T: Record<string, Record<string, string>> = {
+  close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +94,8 @@ export function Drawer({
   size = "md",
 }: DrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   useFocusTrap(panelRef, open);
 
   // Scroll lock + ESC
@@ -158,7 +175,7 @@ export function Drawer({
             onClick={onClose}
             className="flex items-center justify-center w-7 h-7 rounded cursor-pointer bg-transparent border-0 transition-opacity hover:opacity-60"
             style={{ color: "var(--color-dim)" }}
-            aria-label="Chiudi"
+            aria-label={tr("close")}
           >
             <svg
               width="14"

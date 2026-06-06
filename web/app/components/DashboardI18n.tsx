@@ -188,6 +188,14 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     gs_deploy_detail: "Stato servizi e daemon",
     gs_gateway_label: "Gateway",
     gs_gateway_detail: "Canali e pipeline middleware",
+
+    // GlobalSearch UI
+    gs_dialog_label: "Ricerca globale",
+    gs_input_placeholder: "Cerca pagine, sezioni…",
+    gs_input_label: "Cerca pagine e sezioni",
+    gs_recent: "Recenti",
+    gs_no_results: "Nessun risultato per",
+    gs_footer: "↑↓ naviga · ↵ apri · Esc chiudi",
   },
 
   en: {
@@ -357,6 +365,14 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     gs_deploy_detail: "Services and daemon status",
     gs_gateway_label: "Gateway",
     gs_gateway_detail: "Channels and middleware pipeline",
+
+    // GlobalSearch UI
+    gs_dialog_label: "Global search",
+    gs_input_placeholder: "Search pages, sections…",
+    gs_input_label: "Search pages and sections",
+    gs_recent: "Recent",
+    gs_no_results: "No results for",
+    gs_footer: "↑↓ navigate · ↵ open · Esc close",
   },
 
   hu: {
@@ -526,6 +542,14 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     gs_deploy_detail: "Szolgáltatások és daemon állapota",
     gs_gateway_label: "Átjáró",
     gs_gateway_detail: "Csatornák és middleware pipeline",
+
+    // GlobalSearch UI
+    gs_dialog_label: "Globális keresés",
+    gs_input_placeholder: "Oldalak, szakaszok keresése…",
+    gs_input_label: "Oldalak és szakaszok keresése",
+    gs_recent: "Legutóbbiak",
+    gs_no_results: "Nincs találat erre:",
+    gs_footer: "↑↓ navigálás · ↵ megnyitás · Esc bezárás",
   },
 
   es: {
@@ -695,6 +719,14 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     gs_deploy_detail: "Estado de servicios y daemon",
     gs_gateway_label: "Pasarela",
     gs_gateway_detail: "Canales y pipeline de middleware",
+
+    // GlobalSearch UI
+    gs_dialog_label: "Búsqueda global",
+    gs_input_placeholder: "Buscar páginas, secciones…",
+    gs_input_label: "Buscar páginas y secciones",
+    gs_recent: "Recientes",
+    gs_no_results: "Sin resultados para",
+    gs_footer: "↑↓ navegar · ↵ abrir · Esc cerrar",
   },
 
   de: {
@@ -864,6 +896,14 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     gs_deploy_detail: "Dienste- und Daemon-Status",
     gs_gateway_label: "Gateway",
     gs_gateway_detail: "Kanäle und Middleware-Pipeline",
+
+    // GlobalSearch UI
+    gs_dialog_label: "Globale Suche",
+    gs_input_placeholder: "Seiten, Abschnitte suchen…",
+    gs_input_label: "Seiten und Abschnitte suchen",
+    gs_recent: "Zuletzt verwendet",
+    gs_no_results: "Keine Ergebnisse für",
+    gs_footer: "↑↓ navigieren · ↵ öffnen · Esc schließen",
   },
 
   fr: {
@@ -1033,6 +1073,14 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     gs_deploy_detail: "État des services et du daemon",
     gs_gateway_label: "Passerelle",
     gs_gateway_detail: "Canaux et pipeline middleware",
+
+    // GlobalSearch UI
+    gs_dialog_label: "Recherche globale",
+    gs_input_placeholder: "Rechercher pages, sections…",
+    gs_input_label: "Rechercher pages et sections",
+    gs_recent: "Récents",
+    gs_no_results: "Aucun résultat pour",
+    gs_footer: "↑↓ naviguer · ↵ ouvrir · Esc fermer",
   },
 
   pt: {
@@ -1202,6 +1250,14 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
     gs_deploy_detail: "Status de serviços e daemon",
     gs_gateway_label: "Gateway",
     gs_gateway_detail: "Canais e pipeline de middleware",
+
+    // GlobalSearch UI
+    gs_dialog_label: "Pesquisa global",
+    gs_input_placeholder: "Pesquisar páginas, seções…",
+    gs_input_label: "Pesquisar páginas e seções",
+    gs_recent: "Recentes",
+    gs_no_results: "Nenhum resultado para",
+    gs_footer: "↑↓ navegar · ↵ abrir · Esc fechar",
   },
 };
 
