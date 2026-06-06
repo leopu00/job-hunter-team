@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { JHT_USER_UPLOADS_DIR } from "@/lib/jht-paths";
 import fs from "fs";
 import path from "path";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,8 @@ const ALLOWED_EXTENSIONS = [
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function POST(req: NextRequest) {
+  const authError = await requireAuth();
+  if (authError) return authError;
   let formData: FormData;
   try {
     formData = await req.formData();

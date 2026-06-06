@@ -50,7 +50,7 @@ export async function verifyBearerToken(req: NextRequest): Promise<VerifyResult>
   const hash = hashSyncToken(match[1])
   const { data, error } = await admin
     .from('cloud_sync_tokens')
-    .select('id, user_id, name, revoked_at, last_used_at')
+    .select('id, user_id, name, revoked_at, last_used_at, expires_at')
     .eq('token_hash', hash)
     .maybeSingle()
 
@@ -62,6 +62,11 @@ export async function verifyBearerToken(req: NextRequest): Promise<VerifyResult>
   }
   if (data.revoked_at) {
     return { ok: false, res: NextResponse.json({ error: 'token revocato' }, { status: 401 }) }
+  }
+  // Scadenza (audit #1): expires_at NULL = nessuna scadenza (device headless).
+  // Se valorizzato e nel passato → token scaduto, 401.
+  if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) {
+    return { ok: false, res: NextResponse.json({ error: 'token scaduto' }, { status: 401 }) }
   }
 
   const shouldUpdate =
