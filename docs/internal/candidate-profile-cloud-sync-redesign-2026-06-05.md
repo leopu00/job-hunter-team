@@ -266,6 +266,14 @@ Distinta dal modello-schema L1/L2/L3 (struttura dati): qui è *"quali campi serv
 
 ## 🔮 Implementazioni future (dettaglio)
 
+> **Stato 2026-06-06**: ✅ fatti — summary→blocchi, Approfondimenti, validatore wired
+> negli agenti, form web validato, test (cross-check + round-trip + completezza),
+> **completezza a 3 livelli** (gate/Uit/skill), **PII encryption** (`candidate_contacts`),
+> **traduzioni skill** (6 lingue), **card vuote** nascoste. ⛔ **Fase 5** (filters/scoring
+> runtime) **deprecata**: campi non usati nei profili reali, fuori dallo schema canonico —
+> sarebbe una feature comportamentale nuova, non un gap. 🚀 Resta il **deploy** (release
+> `dev1 → master → production` + tag/versione).
+
 ### 🥇 Priorità
 - ✅ **Fase 3 — `pull-profile` (hydration cloud→locale)** — FATTO (`cabee35f`). Endpoint +
   `jht cloud pull-profile` (only-if-absent) + boot hook + round-trip verificato. Resta da
