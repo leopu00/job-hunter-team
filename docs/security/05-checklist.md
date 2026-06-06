@@ -267,7 +267,7 @@ Second-pass adversarial audit (cloud-sync tokens, agent prompt-injection, route 
 
 - [x] **RT1** — Cloud sync tokens never expired
   - `cloud_sync_tokens` had no `expires_at`; `lib/cloud-sync/auth.ts` checked only `revoked_at`. Tokens bypass RLS (service_role) and lived forever; web logout didn't revoke them.
-  - Fix: migration `033` (`expires_at` nullable — NULL = no-expiry for headless VPS without auto-refresh) + 401 enforcement in `auth.ts` + per-source TTL (UI default 90d, VPS NULL explicit).
+  - Fix: migration `036` (`expires_at` nullable — NULL = no-expiry for headless VPS without auto-refresh) + 401 enforcement in `auth.ts` + per-source TTL (UI default 90d, VPS NULL explicit).
   - Merged: dev2 21ce208d0 + c37468827 (pending master)
 
 - [x] **RT2** — Prompt injection: external content treated as instructions

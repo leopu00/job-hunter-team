@@ -1,5 +1,5 @@
 -- ╔══════════════════════════════════════════════════════════════════════════╗
--- ║ Migration 033 — scadenza opzionale dei cloud_sync_tokens (audit #1)      ║
+-- ║ Migration 036 — scadenza opzionale dei cloud_sync_tokens (audit #1)      ║
 -- ╠══════════════════════════════════════════════════════════════════════════╣
 -- ║                                                                          ║
 -- ║ I token `jht_sync_` autorizzano le route cloud-sync, che girano con      ║
