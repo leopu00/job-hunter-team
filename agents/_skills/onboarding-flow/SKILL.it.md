@@ -59,6 +59,7 @@ Il team parte anche senza, ma con questi la ricerca è mirata e i CV su misura. 
 
 | Campo                    | Path YAML                                                   | Perché                                  |
 |--------------------------|------------------------------------------------------------|-----------------------------------------|
+| Ruoli desiderati (lista) | `target_roles_priority` (2-5 titoli concreti, in priorità) | Lo Scout cerca su QUESTI titoli, non sulla frase libera di `target_role` |
 | ≥1 esperienza            | `candidate.experience` (company/role/years/summary)        | CV non generici + scoring accurato      |
 | ≥1 titolo di studio      | `candidate.education` (institution/degree/year)            | requisiti formativi + CV                |
 | Settore                  | `industry`                                                 | orienta la ricerca                      |
@@ -66,6 +67,8 @@ Il team parte anche senza, ma con questi la ricerca è mirata e i CV su misura. 
 | Località preferite       | `preferences.geography` / `location_preferences`           | Scout mirato                            |
 
 Ogni esperienza DEVE avere `company`, `role`, `years`, `summary` (≥1 frase). Ogni `education` almeno `institution`, `degree`, `year`.
+
+**`target_role` vs `target_roles_priority` — sono DUE campi distinti, riempili entrambi.** `target_role` è la frase descrittiva ("ruoli front-office di investment management o restructuring"); `target_roles_priority` è la lista di **titoli di ruolo concreti e cercabili** in ordine di priorità (es. "Investment Analyst", "Private Equity Analyst", "Restructuring Analyst"). Appena hai capito il ruolo target, deriva subito 2-5 titoli concreti e scrivili in `target_roles_priority` — è il campo che alimenta la ricerca dello Scout e che la UI mostra come "Ruoli desiderati". Senza, quella sezione resta vuota anche se `target_role` è pieno.
 
 ## 🟢 OPTIONAL — su misura massima
 
@@ -153,7 +156,7 @@ Ogni risposta dell'assistente è breve (2-4 righe). Niente muro di testo. Ricord
 - Hai ruolo + anni + ≥1 esperienza → scrivi/aggiorna `about.md`.
 - Discutete modalità lavoro / trasferimento / retribuzione → scrivi/aggiorna `preferences.md`.
 - Emerge dream job / contesto ideale → scrivi/aggiorna `goals.md`. Se non emerge spontaneamente, chiedi UNA volta: *"c'è un tipo di contesto o azienda in cui ti vedresti particolarmente bene?"*.
-- 2+ esperienze raccolte → aggiorna `strengths.md` con 2-4 qualità.
+- 2+ esperienze raccolte → aggiorna `strengths.md` con 2-4 qualità **E** scrivi le stesse 2-4 qualità come voci brevi nell'array strutturato `candidate.strengths` (es. `["Analisi del rischio di credito", "Modellazione DCF", "Presentazione a stakeholder senior"]`). Sono DUE artefatti distinti: `strengths.md` è il racconto narrativo per lo Scrittore; `candidate.strengths` è la lista di tag che la UI mostra come "Punti di forza" e che il completamento profilo controlla. Compilando solo il primo, la sezione "Punti di forza" resta vuota.
 
 ## Upload file — sequenza checkpoint (obbligatoria)
 
