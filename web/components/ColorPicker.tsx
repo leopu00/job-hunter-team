@@ -1,6 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  select_color: {
+    it: 'Seleziona colore', en: 'Select color', hu: 'Szín kiválasztása', es: 'Seleccionar color', de: 'Farbe auswählen', fr: 'Sélectionner une couleur', pt: 'Selecionar cor',
+  },
+}
 
 export interface ColorPickerProps {
   value: string
@@ -29,6 +36,8 @@ export default function ColorPicker({ value, onChange, label, disabled = false }
   const [hex, setHex]         = useState(value)
   const [hexError, setHexError] = useState(false)
   const containerRef          = useRef<HTMLDivElement>(null)
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   // Sincronizza input hex con value esterno
   useEffect(() => { setHex(value) }, [value])
@@ -59,7 +68,7 @@ export default function ColorPicker({ value, onChange, label, disabled = false }
       {/* Trigger */}
       <button
         aria-expanded={open}
-        aria-label="Seleziona colore"
+        aria-label={tr('select_color')}
         onClick={() => !disabled && setOpen(v => !v)}
         disabled={disabled}
         style={{

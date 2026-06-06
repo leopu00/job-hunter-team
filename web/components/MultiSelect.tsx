@@ -1,6 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  placeholder: { it: 'Seleziona…', en: 'Select…', hu: 'Válasszon…', es: 'Seleccionar…', de: 'Auswählen…', fr: 'Sélectionner…', pt: 'Selecionar…' },
+  searchPlaceholder: { it: 'Cerca…', en: 'Search…', hu: 'Keresés…', es: 'Buscar…', de: 'Suchen…', fr: 'Rechercher…', pt: 'Pesquisar…' },
+  selectAll: { it: 'Seleziona tutti', en: 'Select all', hu: 'Összes kijelölése', es: 'Seleccionar todos', de: 'Alle auswählen', fr: 'Tout sélectionner', pt: 'Selecionar todos' },
+  deselect: { it: 'Deseleziona', en: 'Deselect', hu: 'Kijelölés törlése', es: 'Deseleccionar', de: 'Abwählen', fr: 'Désélectionner', pt: 'Desmarcar' },
+  noResults: { it: 'Nessun risultato', en: 'No results', hu: 'Nincs találat', es: 'Sin resultados', de: 'Keine Ergebnisse', fr: 'Aucun résultat', pt: 'Nenhum resultado' },
+  remove: { it: 'Rimuovi {x}', en: 'Remove {x}', hu: '{x} eltávolítása', es: 'Eliminar {x}', de: '{x} entfernen', fr: 'Supprimer {x}', pt: 'Remover {x}' },
+}
 
 export interface MSOption { value: string; label: string; disabled?: boolean }
 
@@ -18,9 +28,11 @@ export interface MultiSelectProps {
 
 export default function MultiSelect({
   options, value: ctrl, defaultValue = [], onChange,
-  placeholder = 'Seleziona…', searchPlaceholder = 'Cerca…',
+  placeholder, searchPlaceholder,
   maxSelections, disabled = false, width = '100%',
 }: MultiSelectProps) {
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
   const isCtrl = ctrl !== undefined
   const [internal, setInternal] = useState<string[]>(defaultValue)
   const selected = isCtrl ? ctrl! : internal
@@ -69,7 +81,7 @@ export default function MultiSelect({
           transition: 'border-color 0.15s',
         }}>
         {selected.length === 0
-          ? <span style={{ fontSize: 12, color: 'var(--color-dim)' }}>{placeholder}</span>
+          ? <span style={{ fontSize: 12, color: 'var(--color-dim)' }}>{placeholder ?? tr('placeholder')}</span>
           : selected.map(val => {
               const lbl = options.find(o => o.value === val)?.label ?? val
               return (
@@ -77,7 +89,7 @@ export default function MultiSelect({
                   borderRadius: 4, background: 'var(--color-green, #00e87a)', color: '#000',
                   fontSize: 11, fontWeight: 600, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {lbl}
-                  <span role="button" aria-label={`Rimuovi ${lbl}`} onClick={e => { e.stopPropagation(); commit(selected.filter(v => v !== val)) }} style={{ cursor: 'pointer' }}>×</span>
+                  <span role="button" aria-label={tr('remove').replace('{x}', lbl)} onClick={e => { e.stopPropagation(); commit(selected.filter(v => v !== val)) }} style={{ cursor: 'pointer' }}>×</span>
                 </span>
               )
             })
@@ -96,7 +108,7 @@ export default function MultiSelect({
           {/* Search */}
           <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--color-border)' }}>
             <input ref={searchRef} value={query} onChange={e => setQuery(e.target.value)}
-              placeholder={searchPlaceholder}
+              placeholder={searchPlaceholder ?? tr('searchPlaceholder')}
               style={{ width: '100%', boxSizing: 'border-box', background: 'var(--color-row)',
                 border: '1px solid var(--color-border)', borderRadius: 6, padding: '4px 8px',
                 fontSize: 12, color: 'var(--color-bright)', outline: 'none' }} />
@@ -104,14 +116,14 @@ export default function MultiSelect({
 
           {/* Select all / Clear */}
           <div style={{ display: 'flex', gap: 4, padding: '5px 8px', borderBottom: '1px solid var(--color-border)' }}>
-            <button onClick={selectAll} disabled={allSelected} style={base}>Seleziona tutti</button>
-            <button onClick={() => commit([])} disabled={selected.length === 0} style={base}>Deseleziona</button>
+            <button onClick={selectAll} disabled={allSelected} style={base}>{tr('selectAll')}</button>
+            <button onClick={() => commit([])} disabled={selected.length === 0} style={base}>{tr('deselect')}</button>
           </div>
 
           {/* Opzioni */}
           <div role="listbox" aria-multiselectable="true" style={{ maxHeight: 200, overflowY: 'auto' }}>
             {filtered.length === 0 && (
-              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--color-dim)', textAlign: 'center' }}>Nessun risultato</div>
+              <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--color-dim)', textAlign: 'center' }}>{tr('noResults')}</div>
             )}
             {filtered.map(opt => {
               const isSel = selected.includes(opt.value)

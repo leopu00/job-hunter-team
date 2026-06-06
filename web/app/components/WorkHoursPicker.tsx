@@ -12,6 +12,141 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/app/components/Toast";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  preset_office: {
+    it: "Office (Lun-Ven 9-18)", en: "Office (Mon-Fri 9-18)", hu: "Iroda (H-P 9-18)", es: "Oficina (Lun-Vie 9-18)", de: "Büro (Mo-Fr 9-18)", fr: "Bureau (Lun-Ven 9-18)", pt: "Escritório (Seg-Sex 9-18)",
+  },
+  preset_weekend: {
+    it: "Weekend (Sab-Dom 9-18)", en: "Weekend (Sat-Sun 9-18)", hu: "Hétvége (Szo-V 9-18)", es: "Fin de semana (Sáb-Dom 9-18)", de: "Wochenende (Sa-So 9-18)", fr: "Week-end (Sam-Dim 9-18)", pt: "Fim de semana (Sáb-Dom 9-18)",
+  },
+  preset_daytime: {
+    it: "Tutti i giorni 9-18", en: "Every day 9-18", hu: "Minden nap 9-18", es: "Todos los días 9-18", de: "Jeden Tag 9-18", fr: "Tous les jours 9-18", pt: "Todos os dias 9-18",
+  },
+  preset_night: {
+    it: "Notturno (22-07)", en: "Night (22-07)", hu: "Éjszakai (22-07)", es: "Nocturno (22-07)", de: "Nachts (22-07)", fr: "Nuit (22-07)", pt: "Noturno (22-07)",
+  },
+  preset_247: {
+    it: "24/7 (sempre attivo)", en: "24/7 (always on)", hu: "24/7 (mindig aktív)", es: "24/7 (siempre activo)", de: "24/7 (immer aktiv)", fr: "24/7 (toujours actif)", pt: "24/7 (sempre ativo)",
+  },
+  day_mon: { it: "Lun", en: "Mon", hu: "Hét", es: "Lun", de: "Mo", fr: "Lun", pt: "Seg" },
+  day_tue: { it: "Mar", en: "Tue", hu: "Ked", es: "Mar", de: "Di", fr: "Mar", pt: "Ter" },
+  day_wed: { it: "Mer", en: "Wed", hu: "Sze", es: "Mié", de: "Mi", fr: "Mer", pt: "Qua" },
+  day_thu: { it: "Gio", en: "Thu", hu: "Csü", es: "Jue", de: "Do", fr: "Jeu", pt: "Qui" },
+  day_fri: { it: "Ven", en: "Fri", hu: "Pén", es: "Vie", de: "Fr", fr: "Ven", pt: "Sex" },
+  day_sat: { it: "Sab", en: "Sat", hu: "Szo", es: "Sáb", de: "Sa", fr: "Sam", pt: "Sáb" },
+  day_sun: { it: "Dom", en: "Sun", hu: "Vas", es: "Dom", de: "So", fr: "Dim", pt: "Dom" },
+  custom: { it: "Custom", en: "Custom", hu: "Egyéni", es: "Personalizado", de: "Benutzerdefiniert", fr: "Personnalisé", pt: "Personalizado" },
+  toast_load_err: {
+    it: "Errore caricamento working hours", en: "Error loading working hours", hu: "Hiba a munkaidő betöltésekor", es: "Error al cargar el horario de trabajo", de: "Fehler beim Laden der Arbeitszeiten", fr: "Erreur de chargement des horaires", pt: "Erro ao carregar o horário de trabalho",
+  },
+  toast_removed: {
+    it: "Team 24/7 (working hours rimosse)", en: "Team 24/7 (working hours removed)", hu: "Csapat 24/7 (munkaidő eltávolítva)", es: "Equipo 24/7 (horario de trabajo eliminado)", de: "Team 24/7 (Arbeitszeiten entfernt)", fr: "Équipe 24/7 (horaires supprimés)", pt: "Equipa 24/7 (horário de trabalho removido)",
+  },
+  toast_saved: {
+    it: "Working hours salvate", en: "Working hours saved", hu: "Munkaidő elmentve", es: "Horario de trabajo guardado", de: "Arbeitszeiten gespeichert", fr: "Horaires enregistrés", pt: "Horário de trabalho guardado",
+  },
+  toast_err: {
+    it: "Errore: {msg}", en: "Error: {msg}", hu: "Hiba: {msg}", es: "Error: {msg}", de: "Fehler: {msg}", fr: "Erreur : {msg}", pt: "Erro: {msg}",
+  },
+  loading: {
+    it: "Caricamento…", en: "Loading…", hu: "Betöltés…", es: "Cargando…", de: "Lädt…", fr: "Chargement…", pt: "A carregar…",
+  },
+  wh_title: {
+    it: "Working hours", en: "Working hours", hu: "Munkaidő", es: "Horario de trabajo", de: "Arbeitszeiten", fr: "Horaires de travail", pt: "Horário de trabalho",
+  },
+  wh_desc: {
+    it: "Le ore in cui il team lavora. Il budget weekly viene distribuito solo su queste ore.",
+    en: "The hours when the team works. The weekly budget is distributed only across these hours.",
+    hu: "Az órák, amikor a csapat dolgozik. A heti keret csak ezekre az órákra oszlik el.",
+    es: "Las horas en que trabaja el equipo. El presupuesto semanal se distribuye solo en estas horas.",
+    de: "Die Stunden, in denen das Team arbeitet. Das Wochenbudget wird nur auf diese Stunden verteilt.",
+    fr: "Les heures où l'équipe travaille. Le budget hebdomadaire est réparti uniquement sur ces heures.",
+    pt: "As horas em que a equipa trabalha. O orçamento semanal é distribuído apenas por estas horas.",
+  },
+  per_week: {
+    it: "/ settimana", en: "/ week", hu: "/ hét", es: "/ semana", de: "/ Woche", fr: "/ semaine", pt: "/ semana",
+  },
+  tz_label: {
+    it: "Timezone IANA", en: "IANA timezone", hu: "IANA időzóna", es: "Zona horaria IANA", de: "IANA-Zeitzone", fr: "Fuseau horaire IANA", pt: "Fuso horário IANA",
+  },
+  tz_use_local: {
+    it: "usa locale ({tz})", en: "use local ({tz})", hu: "helyi használata ({tz})", es: "usar local ({tz})", de: "lokale verwenden ({tz})", fr: "utiliser local ({tz})", pt: "usar local ({tz})",
+  },
+  heatmap_hint: {
+    it: "Clicca le celle per attivare/disattivare. Click sul giorno o sull'ora per toggle riga/colonna.",
+    en: "Click cells to toggle on/off. Click the day or hour to toggle the row/column.",
+    hu: "Kattints a cellákra a be-/kikapcsoláshoz. Kattints a napra vagy órára a sor/oszlop váltásához.",
+    es: "Haz clic en las celdas para activar/desactivar. Haz clic en el día o la hora para alternar fila/columna.",
+    de: "Klicke auf Zellen zum Ein-/Ausschalten. Klicke auf Tag oder Stunde, um Zeile/Spalte umzuschalten.",
+    fr: "Cliquez sur les cellules pour activer/désactiver. Cliquez sur le jour ou l'heure pour basculer la ligne/colonne.",
+    pt: "Clique nas células para ativar/desativar. Clique no dia ou na hora para alternar a linha/coluna.",
+  },
+  saving: {
+    it: "Salvataggio…", en: "Saving…", hu: "Mentés…", es: "Guardando…", de: "Speichern…", fr: "Enregistrement…", pt: "A guardar…",
+  },
+  save_custom: {
+    it: "Salva custom", en: "Save custom", hu: "Egyéni mentése", es: "Guardar personalizado", de: "Benutzerdefiniert speichern", fr: "Enregistrer personnalisé", pt: "Guardar personalizado",
+  },
+  cancel: {
+    it: "Annulla", en: "Cancel", hu: "Mégse", es: "Cancelar", de: "Abbrechen", fr: "Annuler", pt: "Cancelar",
+  },
+  weekly_distribution: {
+    it: "Distribuzione settimanale", en: "Weekly distribution", hu: "Heti eloszlás", es: "Distribución semanal", de: "Wöchentliche Verteilung", fr: "Répartition hebdomadaire", pt: "Distribuição semanal",
+  },
+  sweet_spot_provider: {
+    it: "Sweet spot — provider", en: "Sweet spot — provider", hu: "Sweet spot — szolgáltató", es: "Punto óptimo — proveedor", de: "Sweet Spot — Anbieter", fr: "Point optimal — fournisseur", pt: "Ponto ideal — fornecedor",
+  },
+  weekly_unlimited: {
+    it: "🟢 Weekly unlimited (nessun vincolo)", en: "🟢 Weekly unlimited (no constraint)", hu: "🟢 Heti korlátlan (nincs megkötés)", es: "🟢 Semanal ilimitado (sin restricción)", de: "🟢 Wöchentlich unbegrenzt (keine Einschränkung)", fr: "🟢 Hebdomadaire illimité (aucune contrainte)", pt: "🟢 Semanal ilimitado (sem restrição)",
+  },
+  below_sweet_spot: {
+    it: "⚠️ Sotto sweet spot", en: "⚠️ Below sweet spot", hu: "⚠️ Sweet spot alatt", es: "⚠️ Por debajo del punto óptimo", de: "⚠️ Unter dem Sweet Spot", fr: "⚠️ Sous le point optimal", pt: "⚠️ Abaixo do ponto ideal",
+  },
+  above_sweet_spot: {
+    it: "⚠️ Sopra sweet spot", en: "⚠️ Above sweet spot", hu: "⚠️ Sweet spot felett", es: "⚠️ Por encima del punto óptimo", de: "⚠️ Über dem Sweet Spot", fr: "⚠️ Au-dessus du point optimal", pt: "⚠️ Acima do ponto ideal",
+  },
+  warn_low: {
+    it: "~{pct}% del weekly budget non sarà utilizzato (troppe poche ore).",
+    en: "~{pct}% of the weekly budget will not be used (too few hours).",
+    hu: "A heti keret ~{pct}%-a nem lesz felhasználva (túl kevés óra).",
+    es: "~{pct}% del presupuesto semanal no se usará (muy pocas horas).",
+    de: "~{pct}% des Wochenbudgets werden nicht genutzt (zu wenige Stunden).",
+    fr: "~{pct}% du budget hebdomadaire ne sera pas utilisé (trop peu d'heures).",
+    pt: "~{pct}% do orçamento semanal não será utilizado (poucas horas).",
+  },
+  warn_high: {
+    it: "Le finestre 5h userebbero <25% del cap (overhead alto). Riduci di ~{h}h.",
+    en: "The 5h windows would use <25% of the cap (high overhead). Reduce by ~{h}h.",
+    hu: "Az 5 órás ablakok a felső határ <25%-át használnák (magas többletköltség). Csökkentsd ~{h} órával.",
+    es: "Las ventanas de 5h usarían <25% del tope (sobrecarga alta). Reduce ~{h}h.",
+    de: "Die 5-h-Fenster würden <25 % des Limits nutzen (hoher Overhead). Reduziere um ~{h} h.",
+    fr: "Les fenêtres de 5h utiliseraient <25% du plafond (surcharge élevée). Réduisez de ~{h}h.",
+    pt: "As janelas de 5h usariam <25% do limite (sobrecarga alta). Reduza ~{h}h.",
+  },
+  current_phase: {
+    it: "Fase corrente", en: "Current phase", hu: "Aktuális fázis", es: "Fase actual", de: "Aktuelle Phase", fr: "Phase actuelle", pt: "Fase atual",
+  },
+  window_target: {
+    it: "Target finestra 5h", en: "5h window target", hu: "5 órás ablak cél", es: "Objetivo ventana 5h", de: "5-h-Fensterziel", fr: "Cible fenêtre 5h", pt: "Meta janela 5h",
+  },
+  next_transition: {
+    it: "Prossima transizione", en: "Next transition", hu: "Következő átmenet", es: "Próxima transición", de: "Nächster Übergang", fr: "Prochaine transition", pt: "Próxima transição",
+  },
+  ratio_cap: {
+    it: "Ratio cap-5h / weekly", en: "5h-cap / weekly ratio", hu: "5h-keret / heti arány", es: "Ratio tope-5h / semanal", de: "Verhältnis 5-h-Limit / wöchentlich", fr: "Ratio plafond-5h / hebdo", pt: "Rácio limite-5h / semanal",
+  },
+  preview_hint: {
+    it: "ℹ️ Preview disponibile solo con container attivo (`jht team start`).",
+    en: "ℹ️ Preview available only with an active container (`jht team start`).",
+    hu: "ℹ️ Az előnézet csak aktív konténerrel érhető el (`jht team start`).",
+    es: "ℹ️ Vista previa disponible solo con un contenedor activo (`jht team start`).",
+    de: "ℹ️ Vorschau nur mit aktivem Container verfügbar (`jht team start`).",
+    fr: "ℹ️ Aperçu disponible uniquement avec un conteneur actif (`jht team start`).",
+    pt: "ℹ️ Pré-visualização disponível apenas com um contentor ativo (`jht team start`).",
+  },
+};
 
 type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
@@ -50,23 +185,29 @@ type Preview = {
 type PresetKey = "office" | "weekend" | "daytime" | "night" | "24-7" | "custom";
 
 const ALL_DAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const DAY_LABELS: Record<Weekday, string> = {
-  mon: "Lun",
-  tue: "Mar",
-  wed: "Mer",
-  thu: "Gio",
-  fri: "Ven",
-  sat: "Sab",
-  sun: "Dom",
+const DAY_TKEY: Record<Weekday, string> = {
+  mon: "day_mon",
+  tue: "day_tue",
+  wed: "day_wed",
+  thu: "day_thu",
+  fri: "day_fri",
+  sat: "day_sat",
+  sun: "day_sun",
+};
+const PRESET_TKEY: Record<Exclude<PresetKey, "custom">, string> = {
+  office: "preset_office",
+  weekend: "preset_weekend",
+  daytime: "preset_daytime",
+  night: "preset_night",
+  "24-7": "preset_247",
 };
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 const PRESETS: Record<
   Exclude<PresetKey, "custom">,
-  { label: string; icon: string; cfg: WorkingHoursConfig | null }
+  { icon: string; cfg: WorkingHoursConfig | null }
 > = {
   office: {
-    label: "Office (Lun-Ven 9-18)",
     icon: "💼",
     cfg: {
       timezone: "",
@@ -80,7 +221,6 @@ const PRESETS: Record<
     },
   },
   weekend: {
-    label: "Weekend (Sab-Dom 9-18)",
     icon: "🌴",
     cfg: {
       timezone: "",
@@ -88,7 +228,6 @@ const PRESETS: Record<
     },
   },
   daytime: {
-    label: "Tutti i giorni 9-18",
     icon: "☀️",
     cfg: {
       timezone: "",
@@ -96,14 +235,13 @@ const PRESETS: Record<
     },
   },
   night: {
-    label: "Notturno (22-07)",
     icon: "🌙",
     cfg: {
       timezone: "",
       windows: [{ days: ALL_DAYS, start: "22:00", end: "07:00" }],
     },
   },
-  "24-7": { label: "24/7 (sempre attivo)", icon: "🌐", cfg: null },
+  "24-7": { icon: "🌐", cfg: null },
 };
 
 function detectLocalTz(): string {
@@ -248,6 +386,8 @@ function computeWeeklyHours(cfg: WorkingHoursConfig | null): number {
 
 export default function WorkHoursPicker() {
   const { toast } = useToast();
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cfg, setCfg] = useState<WorkingHoursConfig | null>(null);
@@ -265,11 +405,12 @@ export default function WorkHoursPicker() {
       setCfg(data.working_hours ?? null);
       setPreview(data.preview ?? null);
     } catch {
-      toast("Errore caricamento working hours", "error");
+      toast(tr("toast_load_err"), "error");
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast, locale]);
 
   useEffect(() => {
     loadState();
@@ -290,18 +431,17 @@ export default function WorkHoursPicker() {
         setPreview(data.preview ?? null);
         setEditGrid(null);
         toast(
-          next === null
-            ? "Team 24/7 (working hours rimosse)"
-            : "Working hours salvate",
+          next === null ? tr("toast_removed") : tr("toast_saved"),
           "success",
         );
       } catch (e: any) {
-        toast(`Errore: ${e.message}`, "error");
+        toast(tr("toast_err").replace("{msg}", e.message), "error");
       } finally {
         setSaving(false);
       }
     },
-    [toast],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [toast, locale],
   );
 
   const applyPreset = useCallback(
@@ -351,8 +491,8 @@ export default function WorkHoursPicker() {
   if (loading) {
     return (
       <div className="rounded-lg border border-[var(--color-border)] p-6">
-        <h2 className="text-lg font-medium mb-2">📅 Working hours</h2>
-        <p className="text-sm opacity-60">Caricamento…</p>
+        <h2 className="text-lg font-medium mb-2">📅 {tr("wh_title")}</h2>
+        <p className="text-sm opacity-60">{tr("loading")}</p>
       </div>
     );
   }
@@ -374,12 +514,15 @@ export default function WorkHoursPicker() {
     const wasted = Math.round((1 - weeklyHours / minH) * 100);
     sweetSpotWarn = {
       kind: "low",
-      msg: `~${wasted}% del weekly budget non sarà utilizzato (troppe poche ore).`,
+      msg: tr("warn_low").replace("{pct}", String(wasted)),
     };
   } else if (!unlimited && maxH != null && weeklyHours > maxH) {
     sweetSpotWarn = {
       kind: "high",
-      msg: `Le finestre 5h userebbero <25% del cap (overhead alto). Riduci di ~${Math.round(weeklyHours - maxH)}h.`,
+      msg: tr("warn_high").replace(
+        "{h}",
+        String(Math.round(weeklyHours - maxH)),
+      ),
     };
   }
 
@@ -387,15 +530,12 @@ export default function WorkHoursPicker() {
     <div className="rounded-lg border border-[var(--color-border)] p-6">
       <div className="flex items-baseline justify-between mb-4 gap-4 flex-wrap">
         <div>
-          <h2 className="text-lg font-medium">📅 Working hours</h2>
-          <p className="text-xs opacity-60 mt-1">
-            Le ore in cui il team lavora. Il budget weekly viene distribuito
-            solo su queste ore.
-          </p>
+          <h2 className="text-lg font-medium">📅 {tr("wh_title")}</h2>
+          <p className="text-xs opacity-60 mt-1">{tr("wh_desc")}</p>
         </div>
         <div className="text-right">
           <div className="text-2xl font-mono">{weeklyHours}h</div>
-          <div className="text-xs opacity-60">/ settimana</div>
+          <div className="text-xs opacity-60">{tr("per_week")}</div>
         </div>
       </div>
 
@@ -414,7 +554,7 @@ export default function WorkHoursPicker() {
             }
           >
             <span className="mr-1.5">{PRESETS[k].icon}</span>
-            {PRESETS[k].label}
+            {tr(PRESET_TKEY[k])}
           </button>
         ))}
         <button
@@ -428,7 +568,7 @@ export default function WorkHoursPicker() {
           }
         >
           <span className="mr-1.5">🎛️</span>
-          Custom
+          {tr("custom")}
         </button>
       </div>
 
@@ -437,7 +577,7 @@ export default function WorkHoursPicker() {
         <div className="space-y-4 mt-4 pt-4 border-t border-[var(--color-border)]">
           <div>
             <label className="block text-xs opacity-60 mb-1">
-              Timezone IANA
+              {tr("tz_label")}
             </label>
             <input
               type="text"
@@ -461,15 +601,12 @@ export default function WorkHoursPicker() {
               }
               className="ml-2 text-xs opacity-60 hover:opacity-100"
             >
-              usa locale ({detectLocalTz()})
+              {tr("tz_use_local").replace("{tz}", detectLocalTz())}
             </button>
           </div>
 
           <div className="overflow-x-auto">
-            <p className="text-xs opacity-60 mb-2">
-              Clicca le celle per attivare/disattivare. Click sul giorno o
-              sull&apos;ora per toggle riga/colonna.
-            </p>
+            <p className="text-xs opacity-60 mb-2">{tr("heatmap_hint")}</p>
             <table className="border-separate" style={{ borderSpacing: "1px" }}>
               <thead>
                 <tr>
@@ -492,7 +629,7 @@ export default function WorkHoursPicker() {
                       onClick={() => toggleDayRow(di)}
                       className="text-xs pr-2 cursor-pointer opacity-70 hover:opacity-100 select-none"
                     >
-                      {DAY_LABELS[d]}
+                      {tr(DAY_TKEY[d])}
                     </td>
                     {HOURS.map((h) => (
                       <td
@@ -504,7 +641,7 @@ export default function WorkHoursPicker() {
                             ? "bg-orange-500 hover:bg-orange-400"
                             : "bg-white/5 hover:bg-white/10")
                         }
-                        title={`${DAY_LABELS[d]} ${String(h).padStart(2, "0")}:00`}
+                        title={`${tr(DAY_TKEY[d])} ${String(h).padStart(2, "0")}:00`}
                       />
                     ))}
                   </tr>
@@ -527,7 +664,7 @@ export default function WorkHoursPicker() {
             disabled={saving || weeklyHours === 0}
             className="px-4 py-1.5 rounded-md bg-orange-600 hover:bg-orange-500 text-sm disabled:opacity-40"
           >
-            {saving ? "Salvataggio…" : "💾 Salva custom"}
+            {saving ? tr("saving") : `💾 ${tr("save_custom")}`}
           </button>
           <button
             onClick={() => {
@@ -537,14 +674,14 @@ export default function WorkHoursPicker() {
             disabled={saving}
             className="ml-2 px-4 py-1.5 rounded-md border border-[var(--color-border)] hover:border-white/30 text-sm"
           >
-            Annulla
+            {tr("cancel")}
           </button>
         </div>
       )}
 
       {/* Bar chart per-giorno (sempre visibile) */}
       <div className="mt-6 pt-4 border-t border-[var(--color-border)]">
-        <div className="text-xs opacity-60 mb-2">Distribuzione settimanale</div>
+        <div className="text-xs opacity-60 mb-2">{tr("weekly_distribution")}</div>
         <div className="space-y-1.5">
           {ALL_DAYS.map((d, di) => {
             const h = perDayHours[di];
@@ -552,7 +689,7 @@ export default function WorkHoursPicker() {
             const widthPct = (h / maxDayHours) * 100;
             return (
               <div key={d} className="flex items-center text-xs gap-2">
-                <div className="w-10 opacity-60">{DAY_LABELS[d]}</div>
+                <div className="w-10 opacity-60">{tr(DAY_TKEY[d])}</div>
                 <div className="flex-1 bg-white/5 rounded h-3.5 overflow-hidden">
                   <div
                     className="h-full bg-orange-500/70 transition-all"
@@ -573,12 +710,12 @@ export default function WorkHoursPicker() {
         <div className="mt-6 pt-4 border-t border-[var(--color-border)]">
           <div className="flex items-baseline justify-between mb-2">
             <div className="text-xs opacity-60">
-              Sweet spot — provider{" "}
+              {tr("sweet_spot_provider")}{" "}
               <span className="font-mono opacity-100">{provInfo.provider}</span>
             </div>
             {unlimited ? (
               <div className="text-xs text-green-400">
-                🟢 Weekly unlimited (nessun vincolo)
+                {tr("weekly_unlimited")}
               </div>
             ) : (
               <div className="text-xs opacity-70 font-mono">
@@ -599,8 +736,8 @@ export default function WorkHoursPicker() {
               }
             >
               {sweetSpotWarn.kind === "low"
-                ? "⚠️ Sotto sweet spot"
-                : "⚠️ Sopra sweet spot"}
+                ? tr("below_sweet_spot")
+                : tr("above_sweet_spot")}
               : {sweetSpotWarn.msg}
             </div>
           )}
@@ -611,7 +748,7 @@ export default function WorkHoursPicker() {
       {preview && (
         <div className="mt-6 pt-4 border-t border-[var(--color-border)] grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
-            <div className="text-xs opacity-60">Fase corrente</div>
+            <div className="text-xs opacity-60">{tr("current_phase")}</div>
             <div
               className={
                 "font-mono mt-1 " +
@@ -624,7 +761,7 @@ export default function WorkHoursPicker() {
             </div>
           </div>
           <div>
-            <div className="text-xs opacity-60">Target finestra 5h</div>
+            <div className="text-xs opacity-60">{tr("window_target")}</div>
             <div className="font-mono mt-1">
               {typeof preview.current_window_target_pct === "number"
                 ? `${preview.current_window_target_pct.toFixed(0)}%`
@@ -632,13 +769,13 @@ export default function WorkHoursPicker() {
             </div>
           </div>
           <div>
-            <div className="text-xs opacity-60">Prossima transizione</div>
+            <div className="text-xs opacity-60">{tr("next_transition")}</div>
             <div className="font-mono mt-1">
               {fmtTransition(preview.next_phase_transition_at)}
             </div>
           </div>
           <div>
-            <div className="text-xs opacity-60">Ratio cap-5h / weekly</div>
+            <div className="text-xs opacity-60">{tr("ratio_cap")}</div>
             <div className="font-mono mt-1">
               {preview.window_cap_pct_of_weekly != null
                 ? `${preview.window_cap_pct_of_weekly}%`
@@ -649,9 +786,7 @@ export default function WorkHoursPicker() {
       )}
 
       {!preview && cfg && (
-        <p className="mt-4 text-xs opacity-50">
-          ℹ️ Preview disponibile solo con container attivo (`jht team start`).
-        </p>
+        <p className="mt-4 text-xs opacity-50">{tr("preview_hint")}</p>
       )}
     </div>
   );
