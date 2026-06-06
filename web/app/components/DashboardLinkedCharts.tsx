@@ -17,8 +17,7 @@ import RecentPositionsTable, {
 import SalaryBars from "@/app/components/SalaryBars";
 import {
   convertCurrency,
-  CURRENCY_SYMBOL,
-  SUPPORTED_CURRENCIES,
+  currencySymbol,
   type Rates,
 } from "@/lib/exchange-rates";
 
@@ -44,6 +43,8 @@ type Props = {
   labels: Labels;
   // Tassi di cambio (base EUR) per il convertitore stipendi.
   rates: Rates;
+  // Valute selezionabili nel selettore (base + aggiunte in Impostazioni).
+  currencies: string[];
   // Quante righe mostrare in tabella (default 15, come prima).
   tableLimit?: number;
 };
@@ -65,6 +66,7 @@ export default function DashboardLinkedCharts({
   positions,
   labels,
   rates,
+  currencies,
   tableLimit = 15,
 }: Props) {
   // La dashboard ragiona sull'universo "attivo" (la query già esclude le
@@ -330,7 +332,7 @@ export default function DashboardLinkedCharts({
           emptyLabel={labels.noData}
           bandStep={SALARY_BIN}
           convert={(eur) => convertCurrency(eur, "EUR", displayCurrency, rates)}
-          symbol={CURRENCY_SYMBOL[displayCurrency] ?? ""}
+          symbol={currencySymbol(displayCurrency)}
           selectedBands={selectedSalaryBins}
           onToggleBand={(lo) =>
             setSelectedSalaryBins((cur) =>
@@ -339,7 +341,7 @@ export default function DashboardLinkedCharts({
           }
           headerExtra={
             <span className="flex items-center gap-0.5">
-              {SUPPORTED_CURRENCIES.map((c) => (
+              {currencies.map((c) => (
                 <button
                   key={c}
                   type="button"

@@ -10,6 +10,7 @@ import {
 } from "@/lib/queries";
 import type { DashboardPosition } from "@/lib/queries";
 import { getExchangeRates } from "@/lib/exchange-rates";
+import { getDisplayCurrencies } from "@/lib/dashboard-currencies";
 import DashboardLinkedCharts from "@/app/components/DashboardLinkedCharts";
 import PipelineFlow from "@/app/components/PipelineFlow";
 import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
@@ -330,6 +331,7 @@ export default async function DashboardPage() {
             <DashboardLinkedCharts
               positions={dashPositions}
               rates={rates}
+              currencies={getDisplayCurrencies()}
               labels={{
                 types: t.position_types,
                 countries: t.position_countries,
