@@ -11,6 +11,7 @@ import ProfileStats from "@/components/ProfileStats";
 import ProfileAssistantFab from "@/components/ProfileAssistantFab";
 import RevealableContactRow from "@/app/components/RevealableContactRow";
 import ProfileBlockRenderer from "@/app/components/ProfileBlockRenderer";
+import { decryptContacts } from "@/lib/pii-crypto";
 
 const SKILL_CATEGORY_COLORS = [
   "var(--color-blue)",
@@ -54,6 +55,7 @@ export default async function ProfilePage() {
     content: unknown;
     ord?: number;
   }[] = [];
+  let cloudContacts: Record<string, string | null> | null = null;
 
   // In locale (desktop container su localhost) il profilo vive nel
   // workspace YAML, Supabase non viene interpellato — coerente con il
@@ -85,6 +87,13 @@ export default async function ProfilePage() {
       .eq("user_id", user.id)
       .order("ord", { ascending: true });
     blocks = blocksData ?? [];
+    // Contatti (PII): vivono in candidate_contacts (cifrata), non in positioning.
+    const { data: contactsRow } = await supabase
+      .from("candidate_contacts")
+      .select("email,phone,linkedin,github,website,address")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    cloudContacts = decryptContacts(contactsRow) as Record<string, string | null> | null;
   } else {
     profile = readWorkspaceProfile();
   }
@@ -98,7 +107,7 @@ export default async function ProfilePage() {
   const extraBlocks = blocks.filter((b) => b.key && !COVERED_BLOCK.test(b.key));
 
   const pos = profile?.positioning ?? {};
-  const contacts = (pos.contacts ?? {}) as Record<string, string>;
+  const contacts = (cloudContacts ?? pos.contacts ?? {}) as Record<string, string>;
   const experience = (pos.experience ?? []) as {
     role?: string;
     company?: string;
