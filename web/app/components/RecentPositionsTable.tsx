@@ -84,7 +84,8 @@ export type TableLabels = {
   colId: string;
   colTitle: string;
   colCompany: string;
-  colLocation: string;
+  colCountry: string;
+  colCity: string;
   colRemote: string;
   colScore: string;
   colSalary: string;
@@ -138,7 +139,8 @@ export default function RecentPositionsTable({
                 labels.colId,
                 labels.colTitle,
                 labels.colCompany,
-                labels.colLocation,
+                labels.colCountry,
+                labels.colCity,
                 labels.colRemote,
                 labels.colScore,
                 labels.colSalary,
@@ -161,7 +163,7 @@ export default function RecentPositionsTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11}
                   className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   {labels.noPositions}
@@ -198,9 +200,34 @@ export default function RecentPositionsTable({
                   <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
                     {p.company}
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
-                    {p.location ?? "—"}
-                  </td>
+                  {(() => {
+                    const country = (p.loc_country ?? "").trim();
+                    const city = (p.loc_city ?? "").trim();
+                    const remoteNoCountry =
+                      !country && p.remote_type === "full_remote";
+                    return (
+                      <>
+                        <td className="px-4 py-3 text-[11px] whitespace-nowrap">
+                          {country ? (
+                            <span className="text-[var(--color-base)]">
+                              {country}
+                            </span>
+                          ) : remoteNoCountry ? (
+                            <span className="italic text-[var(--color-dim)]">
+                              Remote
+                            </span>
+                          ) : (
+                            <span className="text-[var(--color-dim)]">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
+                          {city || (
+                            <span className="text-[var(--color-dim)]">—</span>
+                          )}
+                        </td>
+                      </>
+                    );
+                  })()}
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span
                       className="text-[10px]"
