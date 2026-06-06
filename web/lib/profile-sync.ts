@@ -19,6 +19,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { encryptContacts } from "./pii-crypto";
 
 type Dict = Record<string, unknown>;
 const BLOCK_KINDS = ["key_value", "tag_list", "timeline", "narrative", "key_points", "distribution"] as const;
@@ -284,7 +285,8 @@ export function mapYamlToCanonical(
       strengths: candidate.strengths ?? raw.strengths,
       career_goals: candidate.career_goals ?? raw.goals,
       aspirations: candidate.aspirations,
-      contacts: hasContact ? contacts : undefined,
+      // PII: i contatti NON vanno in chiaro in positioning → vivono solo in
+      // candidate_contacts (cifrata). La pagina cloud li legge da lì.
     },
   };
 
@@ -335,7 +337,7 @@ export async function syncProfileToSupabase(
     try {
       const { error } = await admin
         .from("candidate_contacts")
-        .upsert({ user_id: userId, ...c.contacts, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+        .upsert({ user_id: userId, ...encryptContacts(c.contacts), updated_at: new Date().toISOString() }, { onConflict: "user_id" });
       if (error) throw error;
     } catch (e) {
       warnings.push(`candidate_contacts: ${(e as Error).message}`);

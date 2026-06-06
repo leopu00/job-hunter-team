@@ -3,6 +3,7 @@ import yaml from "js-yaml";
 import { verifyBearerToken } from "@/lib/cloud-sync/auth";
 import { checkCloudSyncRateLimit } from "@/lib/cloud-sync/rate-limit";
 import { reconstructCanonicalProfile } from "@/lib/profile-sync";
+import { decryptContacts } from "@/lib/pii-crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
     education: education.data ?? [],
     workAuth: workAuth.data ?? [],
     locationPrefs: locationPrefs.data ?? [],
-    contacts: contacts.data ?? null,
+    contacts: decryptContacts(contacts.data) ?? null,
     blocks: blocks.data ?? [],
   });
 
