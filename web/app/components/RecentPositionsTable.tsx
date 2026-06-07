@@ -215,7 +215,7 @@ export default function RecentPositionsTable({
                 <th
                   key={h}
                   scope="col"
-                  className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
+                  className={`px-4 py-3 ${h === labels.colCritic ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
                   style={{ color: "var(--color-dim)" }}
                 >
                   {h}
@@ -368,7 +368,7 @@ export default function RecentPositionsTable({
                       <span className="text-[var(--color-dim)]">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap tabular-nums text-right">
+                  <td className="px-4 py-3 whitespace-nowrap tabular-nums text-center">
                     {p.critic_score != null ? (
                       <span
                         className="text-[12px] font-semibold"
