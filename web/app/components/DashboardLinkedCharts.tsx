@@ -353,8 +353,9 @@ export default function DashboardLinkedCharts({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, selectedCountries, selectedCities, selectedFamilies, selectedSalaryBins]);
 
-  // Stipendi: distribuzione del subset che soddisfa TUTTI i filtri attivi.
-  // Non è una dimensione di filtro (solo visualizzazione reattiva).
+  // Stipendi: scope per family + location + score (esclude la PROPRIA
+  // dimensione, come gli altri grafici-filtro, così selezionare una fascia
+  // non fa sparire le altre). È a tutti gli effetti una dimensione di filtro.
   const salaryData = useMemo(
     () =>
       rows
