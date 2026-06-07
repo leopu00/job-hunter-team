@@ -311,7 +311,7 @@ export default function ProfileStats({ profile }: Props) {
               <button
                 key={i}
                 type="button"
-                onClick={() => openProfileAssistant(`Vorrei aggiungere "${t(f.tkey)}" al mio profilo`)}
+                onClick={() => openProfileAssistant(t('chat_add_field_msg').replace('{field}', t(f.tkey)))}
                 title={`${t('go_to')} "${t(f.tkey)}"`}
                 className="text-[10px] px-2 py-0.5 rounded border font-semibold no-underline transition-colors cursor-pointer hover:bg-[var(--color-yellow)]/15 hover:border-[var(--color-yellow)]/60"
                 style={{ color: 'var(--color-yellow)', borderColor: 'var(--color-yellow)/30', background: 'var(--color-yellow)/8' }}
