@@ -196,7 +196,7 @@ export default async function ProfilePage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <ProfileEditButton label={t("edit")} />
+              <ProfileEditButton label={t("edit")} message={t("chat_edit_msg")} />
               {profile && (
                 <a
                   href="/api/profile/export"

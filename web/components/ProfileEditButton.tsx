@@ -9,11 +9,17 @@ import { openProfileAssistant } from "@/lib/profile-assistant-bus";
  * Il profilo ha una struttura a blocchi che solo l'Assistente sa comporre
  * correttamente — l'editing manuale rompeva i dati (due modelli divergenti).
  */
-export default function ProfileEditButton({ label }: { label: string }) {
+export default function ProfileEditButton({
+  label,
+  message,
+}: {
+  label: string;
+  message: string;
+}) {
   return (
     <button
       type="button"
-      onClick={() => openProfileAssistant("Vorrei modificare il mio profilo")}
+      onClick={() => openProfileAssistant(message)}
       className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold no-underline transition-all hover:opacity-90 cursor-pointer border-0"
       style={{ background: "var(--color-green)", color: "#000" }}
     >
