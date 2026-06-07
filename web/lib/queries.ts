@@ -668,7 +668,7 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, is_remote, scores ( total_score )')
+    .select('id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, is_remote, created_at, scores ( total_score )')
     .not('status', 'eq', 'excluded')
     .not('office_lat', 'is', null)
     .is('deleted_at', null)
@@ -689,6 +689,7 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
       office_address: p.office_address ?? null,
+      created_at: p.created_at ?? null,
     }
   })
 }
@@ -807,6 +808,7 @@ export type PositionNoCoord = {
   location: string | null
   loc_country: string | null
   loc_city: string | null
+  created_at: string | null
 }
 export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
   const w = await ws()
@@ -816,7 +818,7 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, role_family, office_lat, is_remote, location, loc_country, loc_city, scores ( total_score )')
+    .select('id, title, company, status, role_family, office_lat, is_remote, location, loc_country, loc_city, created_at, scores ( total_score )')
     .not('status', 'eq', 'excluded')
     .is('office_lat', null)
     .is('deleted_at', null)
@@ -834,6 +836,7 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
       location: p.location ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
+      created_at: p.created_at ?? null,
     }
   })
 }
