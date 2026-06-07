@@ -46,6 +46,8 @@ Quando arriva un'informazione che cambia il senso di un MD esistente, **riscrivi
 | `goals.md`        | L'utente ha raccontato aspirazioni / contesto ideale / dream job (anche parziale). Non forzare la mano: se non emerge spontaneamente, **chiedi una sola volta** "c'è un tipo di contesto o azienda in cui ti vedresti particolarmente bene?". |
 | `strengths.md`    | Hai raccolto **2+ esperienze o progetti rilevanti**. Estrai 2-4 qualità ricorrenti dal pattern.                                                                                                       |
 
+> ⚠️ Quando scrivi `strengths.md`, popola SEMPRE anche l'array strutturato `candidate.strengths` nel YAML (le stesse 2-4 qualità come voci brevi) — vedi `profile-yaml`. Il MD è il racconto per lo Scrittore; l'array è ciò che la UI mostra come "Punti di forza" e che il completamento profilo controlla. Scrivere solo il MD lascia la sezione vuota.
+
 ## Boot rule — primo CV caricato
 
 Quando l'utente carica un CV, dopo aver popolato il YAML scrivi MINIMO **`about.md` + `strengths.md`** nello stesso turno. Hai abbastanza dati (ruolo, anni, esperienze, competenze, tono) per farlo subito; non rimandare. Saltare questo step significa che lo Scrittore CV a valle non avrà mai il contesto narrativo del candidato → produrrà CV sterili. Tu sei l'unico punto in cui quella narrativa viene catturata.
