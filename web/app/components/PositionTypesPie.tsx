@@ -7,13 +7,13 @@ import type { RoleFamilyCount } from "@/lib/position-classifier";
 // Etichetta colonna "score medio" della legenda (è la media, non lo score di
 // una singola posizione). Compatta per stare nella colonna stretta.
 const AVG_LABEL: Record<string, string> = {
-  it: "media",
-  en: "avg",
-  hu: "átl",
-  es: "media",
-  de: "Ø",
-  fr: "moy",
-  pt: "média",
+  it: "media score",
+  en: "avg score",
+  hu: "átl. pont",
+  es: "media score",
+  de: "Ø score",
+  fr: "score moy",
+  pt: "média score",
 };
 
 type Props = {
@@ -234,14 +234,17 @@ export default function PositionTypesPie({
           {/* Header: didascalia colonne. Colonna 'tipo' a larghezza limitata +
                 colonna barra flessibile (1fr) che riempie lo spazio prima vuoto. */}
           <li
-            className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_3.5rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
             <span>tipo</span>
             <span />
             <span>n</span>
             <span>%</span>
-            <span className="text-center" title="Score medio (0-100)">
+            <span
+              className="text-center leading-tight"
+              title="Score medio (0-100)"
+            >
               {avgLabel}
             </span>
           </li>
@@ -257,7 +260,7 @@ export default function PositionTypesPie({
                 key={d.family}
                 onMouseEnter={() => setHovered(d.family)}
                 onClick={() => onToggleType?.(d.family)}
-                className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_3.5rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
+                className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
                 style={{
                   cursor: onToggleType ? "pointer" : "default",
                   background: isSelected
