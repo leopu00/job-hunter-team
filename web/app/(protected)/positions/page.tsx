@@ -213,11 +213,11 @@ const T: Record<string, Record<string, string>> = {
   col_updated_by: { it: "Aggiornato da", en: "Updated by", hu: "Frissítette", es: "Actualizado por", de: "Aktualisiert von", fr: "Mis à jour par", pt: "Atualizado por" },
   col_country: { it: "Paese", en: "Country", hu: "Ország", es: "País", de: "Land", fr: "Pays", pt: "País" },
   col_city: { it: "Città", en: "City", hu: "Város", es: "Ciudad", de: "Stadt", fr: "Ville", pt: "Cidade" },
-  col_remote: { it: "Remote", en: "Remote", hu: "Távmunka", es: "Remoto", de: "Remote", fr: "Télétravail", pt: "Remoto" },
+  col_remote: { it: "Modalità", en: "Mode", hu: "Mód", es: "Modalidad", de: "Modus", fr: "Mode", pt: "Modalidade" },
   col_score: { it: "Score", en: "Score", hu: "Pontszám", es: "Puntuación", de: "Score", fr: "Score", pt: "Pontuação" },
   col_voto: { it: "Voto critico", en: "Critic score", hu: "Kritikus pontszám", es: "Nota crítico", de: "Kritiker-Note", fr: "Note critique", pt: "Nota crítico" },
   col_salary: { it: "Stipendio", en: "Salary", hu: "Fizetés", es: "Salario", de: "Gehalt", fr: "Salaire", pt: "Salário" },
-  col_monthly: { it: "Mensile", en: "Monthly", hu: "Havi", es: "Mensual", de: "Monatlich", fr: "Mensuel", pt: "Mensal" },
+  col_monthly: { it: "Lordo/mese", en: "Gross/mo", hu: "Bruttó/hó", es: "Bruto/mes", de: "Brutto/Mon.", fr: "Brut/mois", pt: "Bruto/mês" },
   expand_col: { it: "Espandi colonna", en: "Expand column", hu: "Oszlop kibontása", es: "Expandir columna", de: "Spalte erweitern", fr: "Développer la colonne", pt: "Expandir coluna" },
   collapse_col: { it: "Comprimi colonna", en: "Collapse column", hu: "Oszlop összecsukása", es: "Contraer columna", de: "Spalte einklappen", fr: "Réduire la colonne", pt: "Recolher coluna" },
   synced_cloud: { it: "Sincronizzato sul cloud", en: "Synced to cloud", hu: "Felhőbe szinkronizálva", es: "Sincronizado en la nube", de: "In die Cloud synchronisiert", fr: "Synchronisé sur le cloud", pt: "Sincronizado na nuvem" },
@@ -490,10 +490,10 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     { col: "loc_city", label: tr("col_city"), sortable: true },
                     { col: "remote", label: tr("col_remote"), sortable: false },
                     { col: "score", label: tr("col_score"), sortable: true },
-                    { col: "critic", label: tr("col_voto"), sortable: true },
                     { col: "salary", label: tr("col_salary"), sortable: false },
                     { col: "monthly", label: tr("col_monthly"), sortable: false },
                     { col: "last_action_by", label: tr("col_updated_by"), sortable: false },
+                    { col: "critic", label: tr("col_voto"), sortable: true },
                     { col: "status", label: tr("col_status"), sortable: true },
                   ].map(({ col, label, sortable }) => (
                     <th
@@ -715,25 +715,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           </div>
                         </div>
                       </td>
-                      {/* Voto critico */}
-                      <td className="px-4 py-3 whitespace-nowrap tabular-nums text-right">
-                        {p.critic_score != null ? (
-                          <span
-                            className="text-[12px] font-semibold"
-                            style={{
-                              color:
-                                CRITIC_COLORS[p.critic_verdict ?? ""] ??
-                                "var(--color-muted)",
-                            }}
-                          >
-                            {p.critic_score.toFixed(1)}
-                          </span>
-                        ) : (
-                          <span className="text-[var(--color-dim)] text-[11px]">
-                            —
-                          </span>
-                        )}
-                      </td>
                       {/* Stipendio */}
                       <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-right">
                         {formatSalary(
@@ -765,6 +746,25 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           </span>
                         ) : (
                           <span className="text-[var(--color-dim)]">—</span>
+                        )}
+                      </td>
+                      {/* Voto critico */}
+                      <td className="px-4 py-3 whitespace-nowrap tabular-nums text-right">
+                        {p.critic_score != null ? (
+                          <span
+                            className="text-[12px] font-semibold"
+                            style={{
+                              color:
+                                CRITIC_COLORS[p.critic_verdict ?? ""] ??
+                                "var(--color-muted)",
+                            }}
+                          >
+                            {p.critic_score.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)] text-[11px]">
+                            —
+                          </span>
                         )}
                       </td>
                       {/* Stato */}
