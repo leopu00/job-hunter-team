@@ -147,15 +147,17 @@ containment per evitare traversal.
 - [x] Endpoint VPS-facing (`/api/cloud-sync/file-bridge*`, `/file-index`)
 - [x] Endpoint browser-facing (`/api/profile/files*`) + UI cloud-aware
 - [x] Poller `file-bridge-poller.js` + comando `cloud file-bridge-listen` + wiring pid1
-- [ ] **Manuale**: applicare la migration su Supabase prod + verificare bucket
-      `file-transit` (privato)
+- [x] **Applicata** la migration su Supabase prod (`smittwvohsnwwwisqdrh`,
+      2026-06-07): tabelle + RLS + 6 indici + bucket `file-transit` (privato)
+      verificati. Advisor: le 2 tabelle hanno solo il warning `pg_graphql_*`
+      condiviso da tutte le 28 tabelle public (RLS select-own protegge i dati) —
+      nessuna azione, coerente con lo schema esistente.
 - [ ] **Manuale**: rebuild immagine container con il nuovo poller + deploy VPS
-- [ ] Test end-to-end (richiede VPS paired + Vercel) — non testabile da qui
-      senza VPS reale + bucket creato
+- [ ] Test end-to-end (richiede VPS paired + Vercel + immagine deployata)
 
-> **Nota**: tutto il codice è scritto, lint+typecheck puliti e su `origin/dev2`.
-> Restano i 2 passi manuali infra (migration prod + rebuild/deploy immagine) e
-> il test end-to-end, che richiedono accesso runtime non disponibile in dev.
+> **Nota**: codice su `origin/dev2` (lint+typecheck puliti) e DB prod pronto.
+> Resta solo il rebuild/deploy dell'immagine container (per far girare il nuovo
+> poller `cloud file-bridge-listen` sulla VPS) e il test end-to-end.
 
 ## 🔭 Note / evoluzioni
 - File grandi: il design evita il route-through-Vercel proprio per non incappare
