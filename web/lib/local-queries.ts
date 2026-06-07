@@ -242,7 +242,10 @@ export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): P
   const sql = `
     SELECT p.*, s.total_score as score,
       s.stack_match, s.remote_fit, s.salary_fit, s.strategic_fit,
-      a.critic_score, a.critic_verdict
+      s.scored_at, s.scored_by,
+      a.critic_score, a.critic_verdict,
+      a.written_at, a.written_by, a.critic_reviewed_at, a.reviewed_by,
+      a.applied_at, a.response_at
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     LEFT JOIN applications a ON a.position_id = p.id
@@ -251,7 +254,34 @@ export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): P
     ${limitClause} ${offsetClause}
   `
   const rows = db.prepare(sql).all(...params) as any[]
-  return rows.map(r => mapPosition(r))
+  const mapped = rows.map(r => {
+    // Stipendio: stima del team se presente, altrimenti il dichiarato.
+    const useEst = r.salary_estimated_min != null || r.salary_estimated_max != null
+    const salary_min = (useEst ? r.salary_estimated_min : r.salary_declared_min) ?? null
+    const salary_max = (useEst ? r.salary_estimated_max : r.salary_declared_max) ?? null
+    const salary_currency = (useEst ? r.salary_estimated_currency : r.salary_declared_currency) ?? 'EUR'
+    const la = pickLastActionLocal([
+      { ts: r.found_at, by: 'scout', actor: r.found_by },
+      { ts: r.last_checked, by: 'analista', actor: 'analista' },
+      { ts: r.scored_at, by: 'scorer', actor: r.scored_by },
+      { ts: r.written_at, by: 'scrittore', actor: r.written_by },
+      { ts: r.critic_reviewed_at, by: 'critico', actor: r.reviewed_by },
+      { ts: r.applied_at, by: 'user', actor: 'user' },
+      { ts: r.response_at, by: 'user', actor: 'user' },
+      { ts: r.status_changed_at, by: 'user', actor: r.last_actor },
+    ])
+    return {
+      ...mapPosition(r),
+      salary_min, salary_max, salary_currency,
+      last_action_at: la.at, last_action_by: la.by, last_action_actor: la.actor,
+    }
+  })
+  // last_action_at è derivato in JS → non ordinabile via SQL. Re-sort qui.
+  if (opts?.sort === 'last_action_at') {
+    const mul = opts?.dir === 'asc' ? 1 : -1
+    mapped.sort((a, b) => (a.last_action_at || '').localeCompare(b.last_action_at || '') * mul)
+  }
+  return mapped
 }
 
 // ── Single position with all details ───────────────────────────────

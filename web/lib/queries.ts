@@ -302,7 +302,7 @@ export async function getRecentPositions(limit = 15): Promise<(PositionWithScore
 // (default). Per gli altri ordinamenti (score, critic, ecc.) il fetch
 // resta su found_at e poi riordiniamo in memoria — limit 600 in chiamata
 // è gestibile e tiene la logica fuori da PostgREST nested ordering.
-const POSITION_SORT_KEYS = ['id', 'title', 'company', 'role_family', 'source', 'location', 'loc_city', 'loc_country', 'score', 'critic', 'found_at', 'status'] as const
+const POSITION_SORT_KEYS = ['id', 'title', 'company', 'role_family', 'source', 'location', 'loc_city', 'loc_country', 'score', 'critic', 'found_at', 'last_action_at', 'status'] as const
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
 
 export type PositionFilterOpts = {
@@ -383,7 +383,7 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
   const supabase = await createClient()
   let query = supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
+    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
 
@@ -396,13 +396,37 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
   const { data, error } = await query
   if (error || !data) return []
   let mapped: PositionWithScore[] = data.map((p: any) => {
-    const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
+    const s = firstRelated<any>(p.scores)
+    const app = firstRelated<any>(p.applications)
+    // Stipendio: stima del team se presente, fallback sul dichiarato (stessa
+    // fonte per min/max/currency, così non mischiamo valute).
+    const useEst = p.salary_estimated_min != null || p.salary_estimated_max != null
+    const salary_min = (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null
+    const salary_max = (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null
+    const salary_currency = (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ?? 'EUR'
+    // Ultima azione (stesso mapping di getDashboardPositions).
+    const { at: last_action_at, by: last_action_by, actor: last_action_actor } =
+      pickLastAction([
+        { ts: p.found_at, by: 'scout', actor: p.found_by },
+        { ts: p.last_checked, by: 'analista', actor: 'analista' },
+        { ts: s?.scored_at, by: 'scorer', actor: s?.scored_by },
+        { ts: app?.written_at, by: 'scrittore', actor: app?.written_by },
+        { ts: app?.critic_reviewed_at, by: 'critico', actor: app?.reviewed_by },
+        { ts: app?.applied_at, by: 'user', actor: 'user' },
+        { ts: app?.response_at, by: 'user', actor: 'user' },
+      ])
     return {
       ...p,
-      score: p.score ?? p.scores?.total_score ?? undefined,
+      score: p.score ?? s?.total_score ?? undefined,
       scores: p.scores ?? undefined,
       critic_score: app?.critic_score ?? null,
       critic_verdict: app?.critic_verdict ?? null,
+      salary_min,
+      salary_max,
+      salary_currency,
+      last_action_at,
+      last_action_by,
+      last_action_actor,
     }
   })
 
