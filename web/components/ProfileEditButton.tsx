@@ -1,6 +1,7 @@
 "use client";
 
 import { openProfileAssistant } from "@/lib/profile-assistant-bus";
+import { useLocale } from "@/lib/use-locale";
 
 /**
  * Bottone "Modifica" della pagina profilo. Non porta più al form manuale
@@ -9,11 +10,25 @@ import { openProfileAssistant } from "@/lib/profile-assistant-bus";
  * Il profilo ha una struttura a blocchi che solo l'Assistente sa comporre
  * correttamente — l'editing manuale rompeva i dati (due modelli divergenti).
  */
+// Messaggio iniettato nella chat (compare come messaggio utente): localizzato.
+const SEED_MESSAGE: Record<string, string> = {
+  it: "Vorrei modificare il mio profilo",
+  en: "I'd like to edit my profile",
+  hu: "Szeretném szerkeszteni a profilomat",
+  es: "Me gustaría editar mi perfil",
+  de: "Ich möchte mein Profil bearbeiten",
+  fr: "Je voudrais modifier mon profil",
+  pt: "Gostaria de editar o meu perfil",
+};
+
 export default function ProfileEditButton({ label }: { label: string }) {
+  const locale = useLocale();
   return (
     <button
       type="button"
-      onClick={() => openProfileAssistant("Vorrei modificare il mio profilo")}
+      onClick={() =>
+        openProfileAssistant(SEED_MESSAGE[locale] ?? SEED_MESSAGE.en)
+      }
       className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold no-underline transition-all hover:opacity-90 cursor-pointer border-0"
       style={{ background: "var(--color-green)", color: "#000" }}
     >
