@@ -1611,6 +1611,8 @@ export default function JobsGlobe({
             </div>
             <Link
               href={`/positions/${selected.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] hover:underline no-underline"
             >
               {tr("open")}
