@@ -244,7 +244,7 @@ export default async function ProfilePage() {
         )}
 
         {profile && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 items-start">
             {/* Basic Info */}
             <ProfileSection id="info-base" title={t("sec_info_base")}>
               <ProfileField label={t("f_name")} value={profile.name} />
