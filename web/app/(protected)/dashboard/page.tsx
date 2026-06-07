@@ -256,7 +256,7 @@ export default async function DashboardPage() {
                 >
                   <div>
                     <div
-                      className="text-[9px] font-semibold tracking-[0.14em] uppercase mb-3 truncate"
+                      className="text-[9px] font-semibold tracking-[0.14em] uppercase mb-3 leading-tight min-h-[24px]"
                       style={{ color: "var(--color-dim)" }}
                       title={step.label}
                     >
