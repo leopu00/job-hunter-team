@@ -13,7 +13,7 @@ import type { PositionWithScore } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import { isLocalOnlyMode } from "@/lib/workspace";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
-import PositionsFilterSidebar from "./PositionsFilterSidebar";
+import PositionsShell from "./PositionsShell";
 import TableScrollSync from "./TableScrollSync";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -200,6 +200,7 @@ const T: Record<string, Record<string, string>> = {
   positions: { it: "Posizioni", en: "Positions", hu: "Állások", es: "Posiciones", de: "Stellen", fr: "Postes", pt: "Vagas" },
   results: { it: "risultati", en: "results", hu: "találat", es: "resultados", de: "Ergebnisse", fr: "résultats", pt: "resultados" },
   rows_per_page: { it: "Righe per pagina", en: "Rows per page", hu: "Sor oldalanként", es: "Filas por página", de: "Zeilen pro Seite", fr: "Lignes par page", pt: "Linhas por página" },
+  filters: { it: "Filtri", en: "Filters", hu: "Szűrők", es: "Filtros", de: "Filter", fr: "Filtres", pt: "Filtros" },
   list_positions: { it: "Lista posizioni", en: "Positions list", hu: "Álláslista", es: "Lista de posiciones", de: "Stellenliste", fr: "Liste des postes", pt: "Lista de vagas" },
   col_detected: { it: "Rilevata", en: "Detected", hu: "Észlelve", es: "Detectada", de: "Erkannt", fr: "Détectée", pt: "Detetada" },
   col_title: { it: "Titolo", en: "Title", hu: "Cím", es: "Título", de: "Titel", fr: "Titre", pt: "Título" },
@@ -432,15 +433,14 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       {/* Banner stato cloud-sync (compatto, nascosto se non loggato). */}
       <CloudSyncStatusBanner />
 
-      {/* ── Layout a 2 colonne: sidebar filtri intelligenti + contenuto ── */}
-      <div className="flex gap-6 items-start">
-        <PositionsFilterSidebar availableSources={availableSources} />
-        <div className="flex-1 min-w-0">
-          {/* ── Righe per pagina (tutti i filtri ora nella sidebar) ──
-              h-8 + mb-4 = stessa altezza/margine della header sidebar, così
-              la tabella si allinea con la prima card dei filtri. ── */}
-          <div className="mb-4 h-8 flex items-center justify-end gap-3">
-            <div className="flex items-center gap-1.5">
+      {/* ── Layout: sidebar filtri (collassabile) + contenuto ──
+          PositionsShell gestisce il collapse: da chiuso niente sidebar (tabella
+          full-width) e il pulsante "Filtri" passa nella toolbar a sinistra. ── */}
+      <PositionsShell
+        availableSources={availableSources}
+        filtersLabel={tr("filters")}
+        rowsControl={
+          <div className="flex items-center gap-1.5">
               <span className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
                 {tr("rows_per_page")}
               </span>
@@ -466,8 +466,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 </Link>
               ))}
             </div>
-          </div>
-
+          }
+        >
           {/* ── Table ───────────────────────────────────────────────── */}
           {/* La pagina /positions è in MainChrome FULLSCREEN_FLOWS, quindi
           il main è già full-width con padding 48px. La tabella prende
@@ -825,8 +825,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </PositionsShell>
     </div>
   );
 }
