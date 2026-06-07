@@ -453,11 +453,14 @@ export default function MapCharts({
 
   // typeDist effective derivato dal subset filtered (preserva color
   // dai typeDist prop, che è il source-of-truth per palette/labels).
+  // Cross-filtering: applica location E score (ma NON il filtro tipo,
+  // perché la donut È il selettore di tipo e deve mostrarli tutti).
   const effectiveTypeDist = useMemo<RoleFamilyCount[]>(() => {
     // Pre-fetch: fallback ai typeDist server-side (no filter applicato).
     if (allItemsLite.length === 0) return typeDist;
     const byFamily = new Map<string, { count: number; scores: number[] }>();
     for (const p of locScopeItems) {
+      if (!passScoreFilter(p.score)) continue;
       const f = p.role_family ?? UNCATEGORIZED_LABEL;
       const e = byFamily.get(f) ?? { count: 0, scores: [] };
       e.count++;
@@ -477,7 +480,14 @@ export default function MapCharts({
         } as RoleFamilyCount;
       })
       .sort((a, b) => b.count - a.count);
-  }, [allItemsLite, locScopeItems, typeDist]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    allItemsLite,
+    locScopeItems,
+    typeDist,
+    selectedRanges,
+    unscoredSelected,
+  ]);
 
   // Score grezzi mostrati nel histogram (subset filtered location +
   // tipi selezionati).
