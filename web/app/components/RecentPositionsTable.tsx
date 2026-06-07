@@ -81,6 +81,8 @@ export type TableLabels = {
   viewAll: string;
   noPositions: string;
   colId: string;
+  colUpdated: string;
+  colUpdatedBy: string;
   colTitle: string;
   colCompany: string;
   colCategory: string;
@@ -91,7 +93,6 @@ export type TableLabels = {
   colSalary: string;
   colMonthly: string;
   colStatus: string;
-  colUpdated: string;
 };
 
 type Props = {
@@ -137,6 +138,8 @@ export default function RecentPositionsTable({
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {[
                 labels.colId,
+                labels.colUpdated,
+                labels.colUpdatedBy,
                 labels.colTitle,
                 labels.colCompany,
                 labels.colCategory,
@@ -147,7 +150,6 @@ export default function RecentPositionsTable({
                 labels.colSalary,
                 labels.colMonthly,
                 labels.colStatus,
-                labels.colUpdated,
               ].map((h) => (
                 <th
                   key={h}
@@ -164,7 +166,7 @@ export default function RecentPositionsTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={13}
                   className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   {labels.noPositions}
@@ -186,6 +188,18 @@ export default function RecentPositionsTable({
                     {p.legacy_id
                       ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
                       : p.id.slice(0, 8)}
+                  </td>
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
+                    {formatFoundAt(p.last_action_at || p.found_at || "")}
+                  </td>
+                  <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
+                    {p.last_action_actor ? (
+                      <span className="text-[var(--color-muted)]">
+                        {p.last_action_actor}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)]">—</span>
+                    )}
                   </td>
                   <td
                     className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
@@ -312,9 +326,6 @@ export default function RecentPositionsTable({
                     >
                       {p.status}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
-                    {formatFoundAt(p.last_action_at || p.found_at || "")}
                   </td>
                 </tr>
               ))
