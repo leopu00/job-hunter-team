@@ -440,7 +440,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     { col: "monthly", label: tr("col_monthly"), sortable: true },
                     { col: "last_action_by", label: tr("col_updated_by"), sortable: true, center: true },
                     { col: "critic", label: tr("col_voto"), sortable: true, center: true },
-                    { col: "status", label: tr("col_status"), sortable: true },
+                    { col: "status", label: tr("col_status"), sortable: true, center: true },
                   ].map(({ col, label, sortable, center }) => (
                     <th
                       key={col}
@@ -653,7 +653,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         )}
                       </td>
                       {/* Stato */}
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-center">
                         <span
                           className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
                           style={{
