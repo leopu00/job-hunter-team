@@ -2,6 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useTheme, type Theme } from '../app/theme-provider'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  sec_appearance: { it: 'Aspetto', en: 'Appearance', hu: 'Megjelenés', es: 'Apariencia', de: 'Darstellung', fr: 'Apparence', pt: 'Aparência' },
+  sec_notifications: { it: 'Notifiche', en: 'Notifications', hu: 'Értesítések', es: 'Notificaciones', de: 'Benachrichtigungen', fr: 'Notifications', pt: 'Notificações' },
+  sec_shortcuts: { it: 'Scorciatoie', en: 'Shortcuts', hu: 'Gyorsbillentyűk', es: 'Atajos', de: 'Tastenkürzel', fr: 'Raccourcis', pt: 'Atalhos' },
+}
 
 type Prefs = {
   theme: Theme
@@ -48,6 +55,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function UserPreferences({ onClose }: { onClose: () => void }) {
   const { theme, setTheme } = useTheme()
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
   const [prefs, setPrefs] = useState<Prefs>({ ...DEFAULTS, theme: theme === 'system' ? 'dark' : theme })
   const [status, setStatus] = useState<'idle' | 'saving' | 'ok'>('idle')
 
@@ -75,7 +84,7 @@ export default function UserPreferences({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="flex flex-col gap-5 min-w-[280px]">
-      <Section title="Aspetto">
+      <Section title={tr('sec_appearance')}>
         <label className="flex items-center justify-between py-1.5">
           <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Tema</span>
           <div className="flex gap-1.5">
@@ -102,13 +111,13 @@ export default function UserPreferences({ onClose }: { onClose: () => void }) {
         </label>
       </Section>
 
-      <Section title="Notifiche">
+      <Section title={tr('sec_notifications')}>
         <Toggle checked={prefs.notifications.enabled} label="Notifiche attive" onChange={v => patch({ notifications: { ...prefs.notifications, enabled: v } })} />
         <Toggle checked={prefs.notifications.sound}   label="Suono"           onChange={v => patch({ notifications: { ...prefs.notifications, sound:   v } })} />
         <Toggle checked={prefs.notifications.desktop} label="Desktop"         onChange={v => patch({ notifications: { ...prefs.notifications, desktop: v } })} />
       </Section>
 
-      <Section title="Scorciatoie">
+      <Section title={tr('sec_shortcuts')}>
         {Object.entries(SHORTCUT_LABELS).map(([key, label]) => (
           <div key={key} className="flex items-center justify-between py-1">
             <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>{label}</span>

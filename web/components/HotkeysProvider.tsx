@@ -1,6 +1,16 @@
 'use client'
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  cheatsheet_title: {
+    it: 'Scorciatoie tastiera', en: 'Keyboard shortcuts', hu: 'Billentyűparancsok', es: 'Atajos de teclado', de: 'Tastenkürzel', fr: 'Raccourcis clavier', pt: 'Atalhos de teclado',
+  },
+  no_shortcuts: {
+    it: 'Nessuna shortcut registrata', en: 'No shortcuts registered', hu: 'Nincs regisztrált parancs', es: 'No hay atajos registrados', de: 'Keine Kürzel registriert', fr: 'Aucun raccourci enregistré', pt: 'Nenhum atalho registado',
+  },
+}
 
 /* ── Tipi ── */
 export interface Hotkey {
@@ -101,6 +111,8 @@ export function useHotkeysScope() {
 
 /* ── Cheatsheet modal ── */
 function Cheatsheet({ hotkeys, onClose }: { hotkeys: Hotkey[]; onClose: () => void }) {
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
   const grouped = hotkeys.reduce<Record<string, Hotkey[]>>((acc, h) => {
     const s = h.scope ?? 'global'
     ;(acc[s] ??= []).push(h)
@@ -111,7 +123,7 @@ function Cheatsheet({ hotkeys, onClose }: { hotkeys: Hotkey[]; onClose: () => vo
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9500, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: 'var(--color-panel)', border: '1px solid var(--color-border)', borderRadius: 12, padding: '20px 24px', maxWidth: 480, width: '100%', maxHeight: '70vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--color-bright)' }}>Scorciatoie tastiera</h3>
+          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'var(--color-bright)' }}>{tr('cheatsheet_title')}</h3>
           <kbd style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, border: '1px solid var(--color-border)', color: 'var(--color-dim)' }}>?</kbd>
         </div>
         {Object.entries(grouped).map(([scope, hs]) => (
@@ -126,7 +138,7 @@ function Cheatsheet({ hotkeys, onClose }: { hotkeys: Hotkey[]; onClose: () => vo
           </div>
         ))}
         {hotkeys.filter(h => h.description).length === 0 && (
-          <p style={{ fontSize: 11, color: 'var(--color-dim)', textAlign: 'center' }}>Nessuna shortcut registrata</p>
+          <p style={{ fontSize: 11, color: 'var(--color-dim)', textAlign: 'center' }}>{tr('no_shortcuts')}</p>
         )}
       </div>
     </div>

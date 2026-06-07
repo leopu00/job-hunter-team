@@ -8,6 +8,19 @@ import {
   useRef,
   useState,
 } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  closeNotification: {
+    it: "Chiudi notifica",
+    en: "Close notification",
+    hu: "Értesítés bezárása",
+    es: "Cerrar notificación",
+    de: "Benachrichtigung schließen",
+    fr: "Fermer la notification",
+    pt: "Fechar notificação",
+  },
+};
 
 export type ToastType = "success" | "error" | "warning" | "info";
 
@@ -60,6 +73,8 @@ function ToastItem({
   const [visible, setVisible] = useState(false);
   const cfg = TYPE_CFG[t.type];
   const dur = t.durationMs ?? 4000;
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
 
   useEffect(() => {
     requestAnimationFrame(() => setVisible(true));
@@ -104,7 +119,7 @@ function ToastItem({
         </span>
         <button
           onClick={dismiss}
-          aria-label="Chiudi notifica"
+          aria-label={tr("closeNotification")}
           className="flex-shrink-0 text-[14px] leading-none cursor-pointer"
           style={{
             color: "var(--color-dim)",
