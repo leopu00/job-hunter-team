@@ -14,6 +14,7 @@ const NotificationCenter = dynamic(() =>
 // Maps url segment → i18n key (bc_*)
 const SEG_KEY: Record<string, string> = {
   dashboard: "bc_dashboard",
+  analisi: "bc_analisi",
   agents: "bc_agents",
   tasks: "bc_tasks",
   assistant: "bc_assistant",
