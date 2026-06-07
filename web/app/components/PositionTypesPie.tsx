@@ -87,13 +87,36 @@ export default function PositionTypesPie({
   const focusedPct =
     focused && total > 0 ? Math.round((focused.count / total) * 100) : null;
 
+  // Centro del donut: con UNA family in focus (hover o singola selezione)
+  // mostra quella; con PIÙ family selezionate mostra la somma dei selezionati
+  // ("selezionate" + N) invece del totale; senza selezione mostra il totale.
+  const selectedCount = data
+    .filter((d) => selectedTypes.includes(d.family))
+    .reduce((a, d) => a + d.count, 0);
+  const showSelected = !focused && selectedTypes.length > 1;
+  const centerLabel = focused
+    ? labelFor(focused.family)
+    : showSelected
+      ? "selezionate"
+      : "totale";
+  const centerValue = focused
+    ? focused.count
+    : showSelected
+      ? selectedCount
+      : total;
+  const centerPct = focused
+    ? focusedPct
+    : showSelected && total > 0
+      ? Math.round((selectedCount / total) * 100)
+      : null;
+
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-4">
         <span className="section-label">{title}</span>
         {total > 0 && (
           <span className="text-[11px] font-semibold text-[var(--color-muted)]">
-            {total}
+            {selectedTypes.length >= 1 ? selectedCount : total}
           </span>
         )}
       </div>
@@ -161,7 +184,7 @@ export default function PositionTypesPie({
             fontWeight={700}
             style={{ pointerEvents: "none", fontFamily: "inherit" }}
           >
-            {focused ? labelFor(focused.family) : "totale"}
+            {centerLabel}
           </text>
           <text
             x={CX}
@@ -172,9 +195,9 @@ export default function PositionTypesPie({
             fontWeight={700}
             style={{ pointerEvents: "none", fontFamily: "inherit" }}
           >
-            {focused ? `${focused.count}` : `${total}`}
+            {centerValue}
           </text>
-          {focusedPct != null && (
+          {centerPct != null && (
             <text
               x={CX}
               y={CY + 22}
@@ -183,7 +206,7 @@ export default function PositionTypesPie({
               fill="var(--color-muted)"
               style={{ pointerEvents: "none", fontFamily: "inherit" }}
             >
-              {focusedPct}%
+              {centerPct}%
             </text>
           )}
         </svg>
