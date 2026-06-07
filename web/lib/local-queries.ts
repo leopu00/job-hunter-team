@@ -609,7 +609,9 @@ export function getDashboardPositionsLocal(ws: string) {
       { ts: r.last_checked, by: 'analista', actor: 'analista' },
       { ts: r.scored_at, by: 'scorer', actor: r.scored_by },
       { ts: r.written_at, by: 'scrittore', actor: r.written_by },
-      { ts: r.critic_reviewed_at, by: 'critico', actor: r.reviewed_by },
+      // critic_reviewed_at è scritto dallo SCRITTORE (chiamata --critic-score;
+      // il critico non tocca mai il DB — single-writer rule, bug #21).
+      { ts: r.critic_reviewed_at, by: 'scrittore', actor: r.written_by },
       { ts: r.applied_at, by: 'user', actor: 'user' },
       { ts: r.response_at, by: 'user', actor: 'user' },
     ])
