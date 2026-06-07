@@ -427,7 +427,6 @@ export default function PositionsFilterSidebar({
                   dot={r.color}
                   label={r.family}
                   count={r.count}
-                  pct={r.pct}
                 />
               );
             })}
@@ -728,7 +727,6 @@ function FacetRow({
   dot,
   label,
   count,
-  pct,
   mono,
   italic,
 }: {
@@ -737,7 +735,6 @@ function FacetRow({
   dot?: string;
   label: string;
   count: number;
-  pct: number;
   mono?: boolean;
   italic?: boolean;
 }) {
@@ -775,12 +772,6 @@ function FacetRow({
         style={{ color: active ? "var(--color-bright)" : "var(--color-muted)" }}
       >
         {count}
-      </span>
-      <span
-        className="text-[9.5px] tabular-nums w-8 text-right flex-shrink-0"
-        style={{ color: "var(--color-dim)" }}
-      >
-        {pct}%
       </span>
     </li>
   );
