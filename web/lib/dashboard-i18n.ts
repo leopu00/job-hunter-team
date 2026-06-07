@@ -80,6 +80,7 @@ const T = {
     col_monthly:          'Lordo/mese',
     col_status:           'Stato',
     col_updated:          'Aggiornato',
+    col_updated_by:       'Aggiornato da',
     no_positions:         'Nessuna posizione trovata.',
 
     // Pipeline statuses
@@ -168,6 +169,7 @@ const T = {
     col_monthly:          'Gross/mo',
     col_status:           'Status',
     col_updated:          'Updated',
+    col_updated_by:       'Updated by',
     no_positions:         'No positions found.',
 
     status_new:      'New',
@@ -255,6 +257,7 @@ const T = {
     col_monthly:          'Bruttó/hó',
     col_status:           'Állapot',
     col_updated:          'Frissítve',
+    col_updated_by:       'Frissítette',
     no_positions:         'Nem találhatók állások.',
 
     status_new:      'Új',
@@ -339,6 +342,7 @@ const T = {
     col_monthly:          'Bruto/mes',
     col_status:           'Estado',
     col_updated:          'Actualizada',
+    col_updated_by:       'Actualizado por',
     no_positions:         'No se encontraron posiciones.',
 
     status_new:      'Nueva',
@@ -423,6 +427,7 @@ const T = {
     col_monthly:          'Brutto/Mon.',
     col_status:           'Status',
     col_updated:          'Aktualisiert',
+    col_updated_by:       'Aktualisiert von',
     no_positions:         'Keine Stellen gefunden.',
 
     status_new:      'Neu',
@@ -507,6 +512,7 @@ const T = {
     col_monthly:          'Brut/mois',
     col_status:           'Statut',
     col_updated:          'Mis à jour',
+    col_updated_by:       'Mis à jour par',
     no_positions:         'Aucun poste trouvé.',
 
     status_new:      'Nouveau',
@@ -591,6 +597,7 @@ const T = {
     col_monthly:          'Bruto/mês',
     col_status:           'Status',
     col_updated:          'Atualizado',
+    col_updated_by:       'Atualizado por',
     no_positions:         'Nenhuma vaga encontrada.',
 
     status_new:      'Nova',

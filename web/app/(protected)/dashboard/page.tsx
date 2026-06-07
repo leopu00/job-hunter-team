@@ -41,6 +41,18 @@ const STATUS_COLORS: Record<string, string> = {
   excluded: "var(--color-red)",
 };
 
+// Demo: stato corrente → attore plausibile dell'ultima azione.
+const DEMO_ACTOR_BY_STATUS: Record<string, string> = {
+  new: "scout",
+  checked: "analista",
+  scored: "scorer",
+  writing: "scrittore",
+  review: "critico",
+  ready: "critico",
+  applied: "user",
+  response: "user",
+};
+
 export default async function DashboardPage() {
   const locale = getServerLocale();
   const t = getDashboardT(locale);
@@ -97,6 +109,9 @@ export default async function DashboardPage() {
           (p as { last_action_at?: string }).last_action_at ??
           p.found_at ??
           "",
+        // Demo: attore plausibile dedotto dallo stato corrente.
+        last_action_by: DEMO_ACTOR_BY_STATUS[p.status] ?? "scout",
+        last_action_actor: DEMO_ACTOR_BY_STATUS[p.status] ?? "scout",
       }))
     : [];
   const [stats, dashPositions, pendingMessages, rates] = demoData
@@ -305,6 +320,7 @@ export default async function DashboardPage() {
                   colMonthly: t.col_monthly,
                   colStatus: t.col_status,
                   colUpdated: t.col_updated,
+                  colUpdatedBy: t.col_updated_by,
                 },
               }}
             />

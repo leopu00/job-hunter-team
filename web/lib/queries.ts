@@ -623,6 +623,31 @@ export type DashboardPosition = {
   salary_currency: string
   found_at: string | null
   last_action_at: string
+  // Chi ha eseguito l'ultima azione: ruolo (scout/analista/scorer/scrittore/
+  // critico/user) e nome istanza (es. 'scout-1', fallback al ruolo).
+  last_action_by: string
+  last_action_actor: string
+}
+
+// Sceglie l'evento con timestamp più recente tra i candidati passati.
+// Usato sia dal path cloud sia (replicato) dal path locale per derivare
+// last_action_at/by/actor in modo coerente con getRecentlyTouchedPositions.
+export type LastActionCandidate = {
+  ts: string | null | undefined
+  by: string
+  actor: string | null | undefined
+}
+export function pickLastAction(
+  cands: LastActionCandidate[],
+): { at: string; by: string; actor: string } {
+  let best: { at: string; by: string; actor: string } | null = null
+  for (const c of cands) {
+    if (!c.ts) continue
+    if (!best || c.ts > best.at) {
+      best = { at: c.ts, by: c.by, actor: c.actor || c.by }
+    }
+  }
+  return best ?? { at: '', by: 'scout', actor: 'scout' }
 }
 
 export async function getDashboardPositions(): Promise<DashboardPosition[]> {
@@ -633,7 +658,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, last_checked, scores ( total_score, scored_at )')
+    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
     .not('status', 'eq', 'excluded')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
@@ -641,11 +666,20 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   if (error || !data) return []
   return (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    const a = Array.isArray(p.applications) ? p.applications[0] : p.applications
     const score = (p.score as number | null) ?? (typeof s?.total_score === 'number' ? s.total_score : null)
-    const candidates = [p.found_at, p.last_checked, s?.scored_at].filter(Boolean) as string[]
-    const last_action_at = candidates.length > 0
-      ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
-      : (p.found_at ?? '')
+    // last_action_at + chi: stesso mapping ruolo/attore di
+    // getRecentlyTouchedPositions, ma derivato inline per riga.
+    const { at: last_action_at, by: last_action_by, actor: last_action_actor } =
+      pickLastAction([
+        { ts: p.found_at, by: 'scout', actor: p.found_by },
+        { ts: p.last_checked, by: 'analista', actor: 'analista' },
+        { ts: s?.scored_at, by: 'scorer', actor: s?.scored_by },
+        { ts: a?.written_at, by: 'scrittore', actor: a?.written_by },
+        { ts: a?.critic_reviewed_at, by: 'critico', actor: a?.reviewed_by },
+        { ts: a?.applied_at, by: 'user', actor: 'user' },
+        { ts: a?.response_at, by: 'user', actor: 'user' },
+      ])
     // Stipendio: preferisci la stima del team, fallback sul dichiarato.
     // min/max/currency provengono dalla STESSA fonte per non mischiare valute.
     const useEst = p.salary_estimated_min != null || p.salary_estimated_max != null
@@ -668,7 +702,9 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       salary_max: typeof salary_max === 'number' ? salary_max : null,
       salary_currency,
       found_at: p.found_at ?? null,
-      last_action_at,
+      last_action_at: last_action_at || (p.found_at ?? ''),
+      last_action_by,
+      last_action_actor,
     }
   })
 }
