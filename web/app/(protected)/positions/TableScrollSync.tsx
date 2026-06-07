@@ -54,13 +54,16 @@ export default function TableScrollSync({
   };
 
   return (
-    <div>
+    // relative: la barra in alto è ASSOLUTA (fuori dal flusso) così non spinge
+    // giù il bordo della tabella → il bordo resta allineato con la prima card
+    // dei filtri. La barra galleggia nello spazio sopra la tabella.
+    <div className="relative">
       {overflowing && (
         <div
           ref={topRef}
           onScroll={onScroll("top")}
-          className="h-scroll-top overflow-x-scroll overflow-y-hidden mb-1.5"
-          style={{ height: 14 }}
+          className="h-scroll-top overflow-x-scroll overflow-y-hidden absolute left-0 right-0"
+          style={{ height: 14, top: -16 }}
           aria-hidden="true"
         >
           <div style={{ width: scrollW, height: 1 }} />
