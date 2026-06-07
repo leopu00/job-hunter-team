@@ -91,6 +91,24 @@ const T: Record<string, Record<string, string>> = {
     fr: "Ouvrir →",
     pt: "Abrir →",
   },
+  match_score: {
+    it: "Match score",
+    en: "Match score",
+    hu: "Match pontszám",
+    es: "Match score",
+    de: "Match-Score",
+    fr: "Score de match",
+    pt: "Match score",
+  },
+  found_on: {
+    it: "Trovata il",
+    en: "Found on",
+    hu: "Megtalálva",
+    es: "Encontrada el",
+    de: "Gefunden am",
+    fr: "Trouvée le",
+    pt: "Encontrada em",
+  },
   zoom_in: {
     it: "Ingrandisci",
     en: "Zoom in",
@@ -354,17 +372,6 @@ const STYLE_DARK =
 const STYLE_LIGHT =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 
-const STATUS_COLORS: Record<string, string> = {
-  new: "#7a7a96",
-  checked: "#4d9fff",
-  scored: "#a855f7",
-  writing: "#f5c518",
-  review: "#ff8c42",
-  ready: "#7fffb2",
-  applied: "#00e87a",
-  response: "#58a6ff",
-};
-
 type PositionCoord = {
   id: string;
   title: string;
@@ -387,6 +394,9 @@ type PositionCoord = {
   // se l'analista non ha trovato un indirizzo preciso (ufficio mai
   // pubblicato, JD vaga, remote). Vedi migration 017.
   office_address: string | null;
+  // Data di creazione della posizione (≈ primo ritrovamento). Usata
+  // nella vignetta come "trovata il".
+  created_at: string | null;
 };
 
 // Un gruppo di posizioni che condividono la stessa coordinata
@@ -637,6 +647,25 @@ function tintMap(map: MaplibreMap, mode: "dark" | "light") {
       }
     }
   }
+}
+
+// Colore del match score (fasce allineate alla pagina Posizioni).
+function matchScoreColor(s: number | null): string {
+  if (s == null) return "var(--color-dim)";
+  if (s >= 75) return "var(--color-green)";
+  if (s >= 55) return "var(--color-yellow)";
+  return "var(--color-red)";
+}
+
+// Data "trovata il" leggibile (gg/mm/aaaa). Solo client (la vignetta
+// si renderizza on-click), niente rischio di hydration mismatch.
+function formatFoundDate(ts: string | null): string | null {
+  if (!ts) return null;
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return null;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
 export default function JobsGlobe({
@@ -1532,11 +1561,9 @@ export default function JobsGlobe({
             <div className="flex items-start justify-between gap-3 mb-1">
               <span
                 className="text-[9px] font-semibold tracking-widest uppercase"
-                style={{
-                  color: STATUS_COLORS[selected.status] ?? "var(--color-dim)",
-                }}
+                style={{ color: matchScoreColor(selected.score) }}
               >
-                {selected.status}
+                {tr("match_score")}
                 {selected.score != null ? ` · ${selected.score}` : ""}
               </span>
               <button
@@ -1603,12 +1630,24 @@ export default function JobsGlobe({
                 </>
               );
             })()}
-            <div
-              className="text-[9px] mb-2 tabular-nums"
-              style={{ color: "var(--color-dim)" }}
-            >
-              {selected.lat.toFixed(4)}, {selected.lon.toFixed(4)}
-            </div>
+            {/* Tipologia (role_family) + data primo ritrovamento. */}
+            {selected.role_family && (
+              <div
+                className="text-[10px] mb-1 truncate"
+                style={{ color: "var(--color-base)" }}
+                title={selected.role_family}
+              >
+                {selected.role_family}
+              </div>
+            )}
+            {formatFoundDate(selected.created_at) && (
+              <div
+                className="text-[9px] mb-2 tabular-nums"
+                style={{ color: "var(--color-dim)" }}
+              >
+                {tr("found_on")} {formatFoundDate(selected.created_at)}
+              </div>
+            )}
             <Link
               href={`/positions/${selected.id}`}
               target="_blank"
