@@ -345,35 +345,32 @@ export default function PositionsFilterSidebar({
       {/* Header sidebar — altezza fissa per allinearsi alla toolbar a destra,
           così la prima card e la tabella partono allo stesso livello. */}
       <div className="h-8 flex items-center justify-between">
-        <span
-          className="text-[10px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2"
+        {/* Tutto il "⚙ Filtri" è cliccabile per chiudere (target ampio). */}
+        <button
+          type="button"
+          onClick={() => onCollapse?.()}
+          title="Chiudi filtri"
+          aria-label="Chiudi filtri"
+          className="text-[10px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2 cursor-pointer transition-colors hover:text-[var(--color-base)]"
           style={{ color: "var(--color-dim)" }}
         >
-          ⚙ Filtri{totalActive > 0 ? ` · ${totalActive}` : ""}
-        </span>
-        <div className="flex items-center gap-2">
-          {totalActive > 0 && (
-            <button
-              type="button"
-              onClick={resetAll}
-              className="text-[9px] font-semibold tracking-[0.1em] uppercase cursor-pointer"
-              style={{ color: "var(--color-dim)" }}
-              title="Rimuovi tutti i filtri"
-            >
-              ✕ reset
-            </button>
-          )}
+          <span aria-hidden>⚙</span>
+          Filtri{totalActive > 0 ? ` · ${totalActive}` : ""}
+          <span aria-hidden className="text-[12px] leading-none">
+            ⟨
+          </span>
+        </button>
+        {totalActive > 0 && (
           <button
             type="button"
-            onClick={() => onCollapse?.()}
-            title="Comprimi"
-            aria-label="Comprimi filtri"
-            className="text-[12px] leading-none cursor-pointer"
+            onClick={resetAll}
+            className="text-[9px] font-semibold tracking-[0.1em] uppercase cursor-pointer"
             style={{ color: "var(--color-dim)" }}
+            title="Rimuovi tutti i filtri"
           >
-            ⟨
+            ✕ reset
           </button>
-        </div>
+        )}
       </div>
 
       {/* Categoria — elenco con conteggi e percentuali */}
@@ -590,6 +587,22 @@ export default function PositionsFilterSidebar({
           onClear={() => setParam(g.key, [])}
         />
       ))}
+
+      {/* Chiusura anche da fondo: non solo dall'header in cima. */}
+      <button
+        type="button"
+        onClick={() => onCollapse?.()}
+        className="h-8 flex items-center justify-center gap-2 rounded-lg border cursor-pointer transition-colors text-[9.5px] font-semibold tracking-[0.16em] uppercase hover:text-[var(--color-base)]"
+        style={{
+          borderColor: "var(--color-border)",
+          background: "var(--color-card)",
+          color: "var(--color-dim)",
+        }}
+        title="Chiudi filtri"
+        aria-label="Chiudi filtri"
+      >
+        <span aria-hidden>⟨</span> Chiudi filtri
+      </button>
     </aside>
   );
 }
@@ -760,7 +773,7 @@ function Section({
   title,
   badge,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
 }: {
   title: string;
   badge?: string;
