@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getPositionById } from "@/lib/queries";
 import type { PositionHighlight } from "@/lib/types";
+import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
@@ -370,6 +371,156 @@ const T: Record<string, Record<string, string>> = {
     fr: "Notes",
     pt: "Notas",
   },
+  team_analysis: {
+    it: "Analisi del team",
+    en: "Team analysis",
+    hu: "Csapat elemzése",
+    es: "Análisis del equipo",
+    de: "Team-Analyse",
+    fr: "Analyse de l'équipe",
+    pt: "Análise da equipa",
+  },
+  an_requirements: {
+    it: "Requisiti chiave",
+    en: "Key requirements",
+    hu: "Fő követelmények",
+    es: "Requisitos clave",
+    de: "Kernanforderungen",
+    fr: "Exigences clés",
+    pt: "Requisitos-chave",
+  },
+  an_mismatches: {
+    it: "Disallineamenti",
+    en: "Mismatches",
+    hu: "Eltérések",
+    es: "Desajustes",
+    de: "Abweichungen",
+    fr: "Écarts",
+    pt: "Desalinhamentos",
+  },
+  an_excluded: {
+    it: "Motivo esclusione",
+    en: "Exclusion reason",
+    hu: "Kizárás oka",
+    es: "Motivo de exclusión",
+    de: "Ausschlussgrund",
+    fr: "Motif d'exclusion",
+    pt: "Motivo de exclusão",
+  },
+  an_notes: {
+    it: "Note del team",
+    en: "Team notes",
+    hu: "Csapat jegyzetei",
+    es: "Notas del equipo",
+    de: "Team-Notizen",
+    fr: "Notes de l'équipe",
+    pt: "Notas da equipa",
+  },
+  meta_seniority_jd: {
+    it: "Seniority",
+    en: "Seniority",
+    hu: "Szint",
+    es: "Seniority",
+    de: "Seniorität",
+    fr: "Séniorité",
+    pt: "Senioridade",
+  },
+  meta_experience_required: {
+    it: "Esperienza richiesta",
+    en: "Experience required",
+    hu: "Szükséges tapasztalat",
+    es: "Experiencia requerida",
+    de: "Erforderliche Erfahrung",
+    fr: "Expérience requise",
+    pt: "Experiência exigida",
+  },
+  meta_experience_type: {
+    it: "Tipo esperienza",
+    en: "Experience type",
+    hu: "Tapasztalat típusa",
+    es: "Tipo de experiencia",
+    de: "Erfahrungstyp",
+    fr: "Type d'expérience",
+    pt: "Tipo de experiência",
+  },
+  meta_degree: {
+    it: "Laurea",
+    en: "Degree",
+    hu: "Diploma",
+    es: "Titulación",
+    de: "Abschluss",
+    fr: "Diplôme",
+    pt: "Diploma",
+  },
+  meta_language_required: {
+    it: "Lingua",
+    en: "Language",
+    hu: "Nyelv",
+    es: "Idioma",
+    de: "Sprache",
+    fr: "Langue",
+    pt: "Idioma",
+  },
+};
+
+// Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
+// inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
+// (anni, nomi lingua, livelli seniority) si rende il valore grezzo.
+const VAL: Record<string, Record<string, string>> = {
+  "not specified": {
+    it: "non specificato",
+    en: "not specified",
+    hu: "nincs megadva",
+    es: "no especificado",
+    de: "nicht angegeben",
+    fr: "non spécifié",
+    pt: "não especificado",
+  },
+  "not required": {
+    it: "non richiesta",
+    en: "not required",
+    hu: "nem szükséges",
+    es: "no requerida",
+    de: "nicht erforderlich",
+    fr: "non requise",
+    pt: "não exigida",
+  },
+  "not mentioned": {
+    it: "non indicato",
+    en: "not mentioned",
+    hu: "nincs említve",
+    es: "no mencionado",
+    de: "nicht erwähnt",
+    fr: "non mentionné",
+    pt: "não mencionado",
+  },
+  mandatory: {
+    it: "obbligatoria",
+    en: "mandatory",
+    hu: "kötelező",
+    es: "obligatoria",
+    de: "obligatorisch",
+    fr: "obligatoire",
+    pt: "obrigatória",
+  },
+  required: {
+    it: "richiesta",
+    en: "required",
+    hu: "szükséges",
+    es: "requerida",
+    de: "erforderlich",
+    fr: "requise",
+    pt: "exigida",
+  },
+  preferred: {
+    it: "preferita",
+    en: "preferred",
+    hu: "előnyben",
+    es: "preferida",
+    de: "bevorzugt",
+    fr: "souhaitée",
+    pt: "preferida",
+  },
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -391,6 +542,17 @@ function scoreColor(s: number | null) {
   return "var(--color-red)";
 }
 
+// Colore di un sotto-punteggio relativo al SUO massimo (stack /40, remote
+// /25, …): un 26/40 (65%) è "buono", non "rosso". Il colore precedente
+// usava soglie assolute → tutte le barre apparivano rosse anche con fit ok.
+function ratioColor(value: number | null, max: number) {
+  if (value == null || max <= 0) return "var(--color-dim)";
+  const pct = (value / max) * 100;
+  if (pct >= 70) return "var(--color-green)";
+  if (pct >= 45) return "var(--color-yellow)";
+  return "var(--color-red)";
+}
+
 function ScoreBar({
   label,
   value,
@@ -401,6 +563,7 @@ function ScoreBar({
   max: number;
 }) {
   const pct = value ? Math.round((value / max) * 100) : 0;
+  const color = ratioColor(value, max);
   return (
     <div className="flex items-center gap-3">
       <span className="text-[10px] text-[var(--color-dim)] w-28 shrink-0">
@@ -412,14 +575,15 @@ function ScoreBar({
       >
         <div
           className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, background: scoreColor(value) }}
+          style={{ width: `${pct}%`, background: color }}
         />
       </div>
       <span
-        className="text-[11px] font-semibold w-8 text-right"
-        style={{ color: scoreColor(value) }}
+        className="text-[11px] font-semibold w-12 text-right tabular-nums"
+        style={{ color }}
       >
         {value ?? "—"}
+        <span className="text-[var(--color-dim)] font-normal">/{max}</span>
       </span>
     </div>
   );
@@ -448,6 +612,14 @@ export default async function PositionDetailPage({ params }: PageProps) {
   const { position, score, highlights, company, application } = data;
   const pros = highlights.filter((h: PositionHighlight) => h.type === "pro");
   const cons = highlights.filter((h: PositionHighlight) => h.type === "con");
+
+  // Analisi semi-strutturata dell'Analista (campo notes) → metadati,
+  // motivo esclusione, disallineamenti, prosa. Vedi lib/parse-analysis.
+  const analysis = parseAnalysisNotes(position.notes);
+  const vt = (v: string) => {
+    const k = v.trim().toLowerCase();
+    return VAL[k]?.[locale] ?? VAL[k]?.en ?? v;
+  };
 
   const statusColor = STATUS_COLORS[position.status] ?? "var(--color-dim)";
 
@@ -947,13 +1119,107 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Notes */}
+          {/* Team analysis — parsing del campo notes (vedi parse-analysis) */}
           {position.notes && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-2">{t("notes")}</div>
-              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
-                {position.notes}
-              </p>
+              <div className="section-label mb-3">{t("team_analysis")}</div>
+
+              {analysis.raw ? (
+                <p className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap">
+                  {position.notes}
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {/* Requisiti chiave estratti (seniority, esperienza, …) */}
+                  {analysis.meta.length > 0 && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("an_requirements")}
+                      </div>
+                      <div className="space-y-2">
+                        {analysis.meta.map((m) => (
+                          <InfoRow
+                            key={m.key}
+                            label={t(`meta_${m.key}`)}
+                            value={vt(m.value)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Motivo esclusione (banner rosso) */}
+                  {analysis.excluded && (
+                    <div
+                      className="rounded-lg border p-3"
+                      style={{
+                        borderColor: "var(--color-red)",
+                        background:
+                          "color-mix(in srgb, var(--color-red) 9%, transparent)",
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0"
+                          style={{
+                            color: "var(--color-red)",
+                            borderColor: "var(--color-red)",
+                          }}
+                        >
+                          {analysis.excluded.tag || t("an_excluded")}
+                        </span>
+                        <span className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-red)]">
+                          {t("an_excluded")}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
+                        {analysis.excluded.text}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Disallineamenti taggati (STACK / GEO / SENIORITY / …) */}
+                  {analysis.mismatches.length > 0 && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("an_mismatches")}
+                      </div>
+                      <ul className="space-y-2.5">
+                        {analysis.mismatches.map((mm, i) => (
+                          <li key={i} className="flex gap-2">
+                            {mm.tag && (
+                              <span
+                                className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 h-fit"
+                                style={{
+                                  color: tagColor(mm.tag),
+                                  borderColor: tagColor(mm.tag),
+                                }}
+                              >
+                                {mm.tag}
+                              </span>
+                            )}
+                            <span className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+                              {mm.text}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Prosa libera residua */}
+                  {analysis.prose && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("an_notes")}
+                      </div>
+                      <p className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap">
+                        {analysis.prose}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
