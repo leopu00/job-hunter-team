@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { DashboardPosition } from "@/lib/queries";
 import { formatFoundAt } from "@/lib/format-time";
@@ -135,6 +136,32 @@ export default function RecentPositionsTable({
   rates,
   displayCurrency,
 }: Props) {
+  // Doppia scrollbar orizzontale: una barra-proxy in cima sincronizzata con
+  // il contenitore della tabella in fondo (utile con tabella larga + tante
+  // righe, così non devi scorrere fino in fondo per scrollare a destra).
+  const topRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [scrollW, setScrollW] = useState(0);
+
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const update = () => setScrollW(el.scrollWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [rows]);
+
+  // Sync bidirezionale dello scrollLeft tra le due barre.
+  const syncing = useRef(false);
+  const mirror = (from: HTMLDivElement | null, to: HTMLDivElement | null) => {
+    if (syncing.current || !from || !to) return;
+    syncing.current = true;
+    to.scrollLeft = from.scrollLeft;
+    syncing.current = false;
+  };
+
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-4">
@@ -148,7 +175,20 @@ export default function RecentPositionsTable({
           {labels.viewAll}
         </Link>
       </div>
-      <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+      {/* Scrollbar orizzontale in cima (proxy sincronizzata con la tabella) */}
+      <div
+        ref={topRef}
+        onScroll={() => mirror(topRef.current, bottomRef.current)}
+        className="overflow-x-auto overflow-y-hidden"
+        aria-hidden="true"
+      >
+        <div style={{ width: scrollW, height: 1 }} />
+      </div>
+      <div
+        ref={bottomRef}
+        onScroll={() => mirror(bottomRef.current, topRef.current)}
+        className="overflow-x-auto border border-[var(--color-border)] rounded-lg"
+      >
         <table
           className="w-full text-[12px]"
           style={{ borderCollapse: "collapse" }}
