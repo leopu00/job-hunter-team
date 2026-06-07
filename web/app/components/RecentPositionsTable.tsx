@@ -208,8 +208,8 @@ export default function RecentPositionsTable({
                 labels.colScore,
                 labels.colSalary,
                 labels.colMonthly,
-                labels.colCritic,
                 labels.colUpdatedBy,
+                labels.colCritic,
                 labels.colStatus,
               ].map((h) => (
                 <th
@@ -356,6 +356,18 @@ export default function RecentPositionsTable({
                       rates,
                     )}
                   </td>
+                  <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
+                    {p.last_action_actor ? (
+                      <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
+                        <span aria-hidden="true">
+                          {ACTOR_EMOJI[p.last_action_by] ?? "🤖"}
+                        </span>
+                        {p.last_action_actor}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)]">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap tabular-nums text-right">
                     {p.critic_score != null ? (
                       <span
@@ -372,18 +384,6 @@ export default function RecentPositionsTable({
                       <span className="text-[var(--color-dim)] text-[11px]">
                         —
                       </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
-                    {p.last_action_actor ? (
-                      <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
-                        <span aria-hidden="true">
-                          {ACTOR_EMOJI[p.last_action_by] ?? "🤖"}
-                        </span>
-                        {p.last_action_actor}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-dim)]">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
