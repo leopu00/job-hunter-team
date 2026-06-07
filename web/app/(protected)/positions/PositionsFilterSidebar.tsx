@@ -92,13 +92,14 @@ function parseRange(v: string | null): Range | null {
 
 export default function PositionsFilterSidebar({
   availableSources = [],
+  onCollapse,
 }: {
   availableSources?: string[];
+  onCollapse?: () => void;
 }) {
   const router = useRouter();
   const sp = useSearchParams();
   const [facets, setFacets] = useState<Facet[]>([]);
-  const [collapsed, setCollapsed] = useState(false);
   const [openCountry, setOpenCountry] = useState<string | null>(null);
 
   // Stato applicato = URL (source of truth).
@@ -339,39 +340,6 @@ export default function PositionsFilterSidebar({
 
   const treeTotal = locationTree.reduce((s, c) => s + c.count, 0);
 
-  if (collapsed) {
-    return (
-      <aside
-        className="shrink-0 flex flex-col items-center pt-1"
-        style={{ width: 40 }}
-      >
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          title="Espandi filtri"
-          aria-label="Espandi filtri"
-          className="w-9 h-9 rounded-lg border flex items-center justify-center cursor-pointer transition-colors"
-          style={{
-            borderColor:
-              totalActive > 0 ? "var(--color-green)" : "var(--color-border)",
-            color: totalActive > 0 ? "var(--color-bright)" : "var(--color-dim)",
-            background: "var(--color-card)",
-          }}
-        >
-          ⚙
-        </button>
-        {totalActive > 0 && (
-          <span
-            className="mt-1 text-[9px] font-bold tabular-nums"
-            style={{ color: "var(--color-green)" }}
-          >
-            {totalActive}
-          </span>
-        )}
-      </aside>
-    );
-  }
-
   return (
     <aside className="shrink-0 flex flex-col gap-4 pr-1" style={{ width: 300 }}>
       {/* Header sidebar — altezza fissa per allinearsi alla toolbar a destra,
@@ -397,7 +365,7 @@ export default function PositionsFilterSidebar({
           )}
           <button
             type="button"
-            onClick={() => setCollapsed(true)}
+            onClick={() => onCollapse?.()}
             title="Comprimi"
             aria-label="Comprimi filtri"
             className="text-[12px] leading-none cursor-pointer"
