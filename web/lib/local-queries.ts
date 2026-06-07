@@ -198,32 +198,11 @@ type LocalPositionFilterOpts = {
   statuses?: string[]
   remoteTypes?: string[]
   sources?: string[]
-  tiers?: string[]
   verdicts?: string[]
   limit?: number
   offset?: number
   sort?: string
   dir?: 'asc' | 'desc'
-}
-
-const LOCAL_TIER_RANGES: Record<string, { min?: number; max?: number; noScore?: boolean }> = {
-  seria:       { min: 70 },
-  practice:    { min: 40, max: 69 },
-  riferimento: { min: 1,  max: 39 },
-  noscore:     { noScore: true },
-}
-
-function tierClauses(tiers: string[]): string {
-  const parts: string[] = []
-  for (const t of tiers) {
-    const r = LOCAL_TIER_RANGES[t]; if (!r) continue
-    if (r.noScore) { parts.push('(s.total_score IS NULL OR s.total_score = 0)'); continue }
-    const sub: string[] = []
-    if (r.min != null) sub.push(`s.total_score >= ${r.min}`)
-    if (r.max != null) sub.push(`s.total_score <= ${r.max}`)
-    if (sub.length) parts.push(`(${sub.join(' AND ')})`)
-  }
-  return parts.length ? `(${parts.join(' OR ')})` : ''
 }
 
 export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): PositionWithScore[] {
@@ -247,10 +226,6 @@ export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): P
     where.push(`a.critic_verdict IN (${opts.verdicts.map(() => '?').join(',')})`)
     params.push(...opts.verdicts)
   }
-  if (opts?.tiers?.length) {
-    const tc = tierClauses(opts.tiers)
-    if (tc) where.push(tc)
-  }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
   const limitClause = opts?.limit ? `LIMIT ?` : ''
@@ -267,7 +242,10 @@ export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): P
   const sql = `
     SELECT p.*, s.total_score as score,
       s.stack_match, s.remote_fit, s.salary_fit, s.strategic_fit,
-      a.critic_score, a.critic_verdict
+      s.scored_at, s.scored_by,
+      a.critic_score, a.critic_verdict,
+      a.written_at, a.written_by, a.critic_reviewed_at, a.reviewed_by,
+      a.applied_at, a.response_at
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     LEFT JOIN applications a ON a.position_id = p.id
@@ -276,7 +254,64 @@ export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): P
     ${limitClause} ${offsetClause}
   `
   const rows = db.prepare(sql).all(...params) as any[]
-  return rows.map(r => mapPosition(r))
+  const mapped = rows.map(r => {
+    // Stipendio: stima del team se presente, altrimenti il dichiarato.
+    const useEst = r.salary_estimated_min != null || r.salary_estimated_max != null
+    const salary_min = (useEst ? r.salary_estimated_min : r.salary_declared_min) ?? null
+    const salary_max = (useEst ? r.salary_estimated_max : r.salary_declared_max) ?? null
+    const salary_currency = (useEst ? r.salary_estimated_currency : r.salary_declared_currency) ?? 'EUR'
+    const la = pickLastActionLocal([
+      { ts: r.found_at, by: 'scout', actor: r.found_by },
+      { ts: r.last_checked, by: 'analista', actor: 'analista' },
+      { ts: r.scored_at, by: 'scorer', actor: r.scored_by },
+      { ts: r.written_at, by: 'scrittore', actor: r.written_by },
+      { ts: r.critic_reviewed_at, by: 'critico', actor: r.reviewed_by },
+      { ts: r.applied_at, by: 'user', actor: 'user' },
+      { ts: r.response_at, by: 'user', actor: 'user' },
+      { ts: r.status_changed_at, by: 'user', actor: r.last_actor },
+    ])
+    return {
+      ...mapPosition(r),
+      salary_min, salary_max, salary_currency,
+      last_action_at: la.at, last_action_by: la.by, last_action_actor: la.actor,
+    }
+  })
+  // Sort in JS su QUALSIASI colonna (incluse quelle derivate: salary, voto,
+  // last_action_*). Uniforme col path cloud, così ogni intestazione ordina
+  // davvero anche in locale. La ORDER BY SQL resta come ordine di base.
+  if (opts?.sort) {
+    const mul = opts.dir === 'asc' ? 1 : -1
+    const val = (p: PositionWithScore): string | number | null => {
+      switch (opts.sort) {
+        case 'id': return p.legacy_id ?? null
+        case 'score': return p.score ?? null
+        case 'critic': return p.critic_score ?? null
+        case 'salary': case 'monthly': return p.salary_min ?? null
+        case 'remote': return p.remote_type ?? null
+        case 'last_action_by': return p.last_action_actor ?? null
+        case 'last_action_at': return p.last_action_at ?? null
+        case 'found_at': return p.found_at ?? null
+        case 'role_family': return p.role_family ?? null
+        case 'loc_country': return p.loc_country ?? null
+        case 'loc_city': return p.loc_city ?? null
+        case 'title': return p.title ?? null
+        case 'company': return p.company ?? null
+        case 'source': return p.source ?? null
+        case 'location': return p.location ?? null
+        case 'status': return p.status ?? null
+        default: return null
+      }
+    }
+    mapped.sort((a, b) => {
+      const va = val(a), vb = val(b)
+      if (va == null && vb == null) return 0
+      if (va == null) return 1
+      if (vb == null) return -1
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mul
+      return String(va).localeCompare(String(vb)) * mul
+    })
+  }
+  return mapped
 }
 
 // ── Single position with all details ───────────────────────────────
@@ -545,14 +580,17 @@ export function getPositionFacetsLocal(ws: string) {
   const rows = db.prepare(`
     SELECT p.id, p.title, p.company, p.status, p.role_family,
            p.loc_country, p.loc_city,
-           s.total_score as score
+           s.total_score as score,
+           a.critic_score as critic_score
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
+    LEFT JOIN applications a ON a.position_id = p.id
   `).all() as any[]
   return rows.map(r => ({
     id: sid(r.id),
     role_family: (r.role_family as string | null) ?? null,
     score: typeof r.score === 'number' ? r.score : null,
+    critic_score: typeof r.critic_score === 'number' ? r.critic_score : null,
     loc_country: (r.loc_country as string | null) ?? null,
     loc_city: (r.loc_city as string | null) ?? null,
     status: r.status as string,
