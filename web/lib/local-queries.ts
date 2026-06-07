@@ -440,12 +440,13 @@ export interface PositionCoord {
   loc_country: string | null
   loc_city: string | null
   office_address: string | null
+  created_at: string | null
 }
 export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
   const db = getDb(ws)
   const rows = db.prepare(`
     SELECT p.id, p.title, p.company, p.status, p.role_family, p.location,
-           p.loc_country, p.loc_city, p.office_address,
+           p.loc_country, p.loc_city, p.office_address, p.created_at,
            s.total_score as score,
            p.office_lat as lat, p.office_lon as lon,
            p.is_remote
@@ -468,6 +469,7 @@ export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
     loc_country: r.loc_country ?? null,
     loc_city: r.loc_city ?? null,
     office_address: r.office_address ?? null,
+    created_at: r.created_at ?? null,
   }))
 }
 
@@ -551,7 +553,7 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
   const rows = db.prepare(`
     SELECT p.id, p.title, p.company, p.status, p.location,
            p.loc_country, p.loc_city,
-           p.role_family,
+           p.role_family, p.created_at,
            s.total_score as score,
            p.is_remote
     FROM positions p
@@ -570,6 +572,7 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
     location: (r.location as string | null) ?? null,
     loc_country: (r.loc_country as string | null) ?? null,
     loc_city: (r.loc_city as string | null) ?? null,
+    created_at: (r.created_at as string | null) ?? null,
   }))
 }
 

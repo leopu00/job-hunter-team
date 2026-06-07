@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocale } from "@/lib/use-locale";
 import {
   UNCATEGORIZED_LABEL,
@@ -26,33 +26,6 @@ const T: Record<string, Record<string, string>> = {
     de: "Remote",
     fr: "à distance",
     pt: "remoto",
-  },
-  remote_title: {
-    it: "Remote",
-    en: "Remote",
-    hu: "Távmunka",
-    es: "Remoto",
-    de: "Remote",
-    fr: "À distance",
-    pt: "Remoto",
-  },
-  not_on_map: {
-    it: "non sulla mappa",
-    en: "not on map",
-    hu: "nincs a térképen",
-    es: "no en el mapa",
-    de: "nicht auf der Karte",
-    fr: "pas sur la carte",
-    pt: "não no mapa",
-  },
-  avg: {
-    it: "avg",
-    en: "avg",
-    hu: "átl.",
-    es: "med.",
-    de: "Ø",
-    fr: "moy.",
-    pt: "méd.",
   },
   no_title: {
     it: "(senza titolo)",
@@ -126,6 +99,69 @@ const T: Record<string, Record<string, string>> = {
     fr: "Fermer",
     pt: "Fechar",
   },
+  filters: {
+    it: "Filtri",
+    en: "Filters",
+    hu: "Szűrők",
+    es: "Filtros",
+    de: "Filter",
+    fr: "Filtres",
+    pt: "Filtros",
+  },
+  filters_active: {
+    it: "Filtri attivi",
+    en: "Active filters",
+    hu: "Aktív szűrők",
+    es: "Filtros activos",
+    de: "Aktive Filter",
+    fr: "Filtres actifs",
+    pt: "Filtros ativos",
+  },
+  types_title: {
+    it: "Tipologie",
+    en: "Position types",
+    hu: "Típusok",
+    es: "Tipologías",
+    de: "Typen",
+    fr: "Typologies",
+    pt: "Tipologias",
+  },
+  positions_title: {
+    it: "Posizioni",
+    en: "Positions",
+    hu: "Pozíciók",
+    es: "Posiciones",
+    de: "Positionen",
+    fr: "Postes",
+    pt: "Posições",
+  },
+  no_positions: {
+    it: "Nessuna posizione",
+    en: "No positions",
+    hu: "Nincs pozíció",
+    es: "Sin posiciones",
+    de: "Keine Positionen",
+    fr: "Aucun poste",
+    pt: "Nenhuma posição",
+  },
+  expand: {
+    it: "Espandi",
+    en: "Expand",
+    hu: "Kibontás",
+    es: "Expandir",
+    de: "Aufklappen",
+    fr: "Développer",
+    pt: "Expandir",
+  },
+  collapse: {
+    it: "Comprimi",
+    en: "Collapse",
+    hu: "Összecsukás",
+    es: "Contraer",
+    de: "Zuklappen",
+    fr: "Réduire",
+    pt: "Recolher",
+  },
 };
 
 type Tr = (k: string) => string;
@@ -144,6 +180,7 @@ type NoCoordItem = {
   location: string | null;
   loc_country: string | null;
   loc_city: string | null;
+  created_at: string | null;
 };
 
 // Subset campi PositionCoord che servono per re-derivare donut/histogram
@@ -153,11 +190,24 @@ type CoordItem = {
   id: string;
   title: string | null;
   company: string | null;
+  status: string;
   role_family: string | null;
   score: number | null;
   loc_country: string | null;
   loc_city: string | null;
+  created_at: string | null;
 };
+
+// Etichetta della "location" sintetica per le posizioni remote (senza
+// coordinate): le raggruppiamo sotto questo nodo nella card Location.
+const REMOTE_LABEL = "Remote";
+
+function scoreColor(s: number | null): string {
+  if (s == null) return "var(--color-dim)";
+  if (s >= 75) return "var(--color-green)";
+  if (s >= 55) return "var(--color-yellow)";
+  return "var(--color-red)";
+}
 
 // Tree gerarchico restituito da /api/positions/locations
 type LocationPositionLite = {
@@ -185,6 +235,22 @@ type Props = {
   scoreTitle: string;
 };
 
+// Dimensione uniforme delle 4 card d'angolo (Location, Score, Donut,
+// Remote). Misura tarata sul widget donut (grafico + legenda + labels)
+// così tutte e quattro hanno la stessa larghezza/altezza.
+const CARD_W = 420;
+const CARD_H = 250;
+// Altezza header-titolo e padding del corpo (per calcolare l'area utile
+// del grafico score in fit-mode con l'header presente).
+const HEADER_H = 33;
+const BODY_PAD = 16;
+// Margini d'angolo: top a 24; bottom a 48 per non coprire l'attribution
+// OSM/CARTO (la (i)) nell'angolo basso-destra.
+const CARD_TOP = 24;
+const CARD_BOTTOM = 48;
+const CARD_SIDE = 24;
+const CARD_MAXW = "calc(50vw - 32px)";
+
 export default function MapCharts({
   typeDist,
   fallbackScores,
@@ -194,6 +260,24 @@ export default function MapCharts({
 }: Props) {
   const locale = useLocale();
   const tr: Tr = (k) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  // Collapse per ciascuna delle 4 card: cliccando il titolo si
+  // nasconde il corpo (grafico/lista) e resta solo l'header.
+  const [collapsed, setCollapsed] = useState<{
+    location: boolean;
+    score: boolean;
+    donut: boolean;
+    remote: boolean;
+  }>({ location: false, score: false, donut: false, remote: false });
+  const toggleCollapse = (k: "location" | "score" | "donut" | "remote") =>
+    setCollapsed((c) => ({ ...c, [k]: !c[k] }));
+  // Richiesta di "focus" su un pin: cliccando una posizione (con
+  // coordinate) nella card Posizioni, la mappa ci zooma sopra e la
+  // seleziona. `tick` permette di ri-triggerare lo stesso id.
+  const [focusReq, setFocusReq] = useState<{ id: string; tick: number } | null>(
+    null,
+  );
+  const focusPin = (id: string) =>
+    setFocusReq((cur) => ({ id, tick: (cur?.tick ?? 0) + 1 }));
   // Multi-selezione. Vuoto = nessun filtro (mostra tutto).
   // Tra tipologie diverse: AND. Dentro la stessa tipologia: OR.
   // Post-dev2 refactor 2026-05-23: classificazione è data-driven da
@@ -262,35 +346,6 @@ export default function MapCharts({
     return selectedRanges.some((r) => score >= r.lo && score <= r.hi);
   };
 
-  // Filtro stesse regole della mappa (tipo + score + location).
-  const noCoordsFiltered = useMemo(() => {
-    return noCoords.filter((p) => {
-      if (
-        selectedTypes.length > 0 &&
-        !selectedTypes.includes(p.role_family ?? UNCATEGORIZED_LABEL)
-      )
-        return false;
-      if (!passScoreFilter(p.score)) return false;
-      if (selectedCountries.length > 0 || selectedCities.length > 0) {
-        const country = (p.loc_country ?? "").trim() || "(unknown)";
-        const city = (p.loc_city ?? "").trim() || null;
-        const cityKey = `${country}|${city ?? "(country-only)"}`;
-        const matchCity = selectedCities.includes(cityKey);
-        const matchCountry = selectedCountries.includes(country);
-        if (!matchCity && !matchCountry) return false;
-      }
-      return true;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    noCoords,
-    selectedTypes,
-    selectedRanges,
-    unscoredSelected,
-    selectedCountries,
-    selectedCities,
-  ]);
-
   // Tutte le posizioni (coords + no-coords) usate per re-derivare
   // donut/histogram/tree Location quando un filtro è attivo. Include
   // title+company per popolare le posizioni del drilldown Location.
@@ -300,22 +355,81 @@ export default function MapCharts({
         id: p.id,
         title: p.title,
         company: p.company,
+        status: p.status,
         role_family: p.role_family,
         score: p.score,
         loc_country: p.loc_country,
         loc_city: p.loc_city,
+        created_at: p.created_at,
+        remote: false,
       })),
+      // Le posizioni senza coordinate (remote) vengono raggruppate sotto
+      // un nodo location sintetico "Remote" (loc_country forzato), così
+      // appaiono nella card Location e sono filtrabili come un paese.
       ...noCoords.map((p) => ({
         id: p.id,
         title: p.title,
         company: p.company,
+        status: p.status,
         role_family: p.role_family,
         score: p.score,
-        loc_country: p.loc_country,
-        loc_city: p.loc_city,
+        loc_country: REMOTE_LABEL,
+        loc_city: null as string | null,
+        created_at: p.created_at,
+        remote: true,
       })),
     ];
   }, [coordItems, noCoords]);
+
+  // Click su una posizione (card Posizioni o drill-down Location):
+  // se ha coordinate → zoom sul pin + vignetta; se remote (no pin) →
+  // apre il dettaglio in nuova scheda.
+  const openPosition = (id: string) => {
+    const it = allItemsLite.find((x) => x.id === id);
+    if (it?.remote) {
+      window.open(`/positions/${id}`, "_blank", "noopener,noreferrer");
+    } else {
+      focusPin(id);
+    }
+  };
+
+  // Elenco di TUTTE le posizioni che passano i filtri correnti
+  // (tipo + score + location), ordinate per più recenti. Alimenta la
+  // card in basso a destra (ex "Remote") come tabella posizioni.
+  const filteredPositions = useMemo(() => {
+    const passLoc = (country: string, cityKey: string) => {
+      if (selectedCountries.length === 0 && selectedCities.length === 0)
+        return true;
+      return (
+        selectedCities.includes(cityKey) || selectedCountries.includes(country)
+      );
+    };
+    return allItemsLite
+      .filter((p) => {
+        if (
+          selectedTypes.length > 0 &&
+          !selectedTypes.includes(p.role_family ?? UNCATEGORIZED_LABEL)
+        )
+          return false;
+        if (!passScoreFilter(p.score)) return false;
+        const country = (p.loc_country ?? "").trim() || "(unknown)";
+        const city = (p.loc_city ?? "").trim() || null;
+        const cityKey = `${country}|${city ?? "(country-only)"}`;
+        if (!passLoc(country, cityKey)) return false;
+        return true;
+      })
+      .sort((a, b) =>
+        (b.created_at ?? "").localeCompare(a.created_at ?? ""),
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    allItemsLite,
+    selectedTypes,
+    selectedRanges,
+    unscoredSelected,
+    selectedCountries,
+    selectedCities,
+  ]);
 
   const locationFilterActive =
     selectedCountries.length > 0 || selectedCities.length > 0;
@@ -339,11 +453,14 @@ export default function MapCharts({
 
   // typeDist effective derivato dal subset filtered (preserva color
   // dai typeDist prop, che è il source-of-truth per palette/labels).
+  // Cross-filtering: applica location E score (ma NON il filtro tipo,
+  // perché la donut È il selettore di tipo e deve mostrarli tutti).
   const effectiveTypeDist = useMemo<RoleFamilyCount[]>(() => {
     // Pre-fetch: fallback ai typeDist server-side (no filter applicato).
     if (allItemsLite.length === 0) return typeDist;
     const byFamily = new Map<string, { count: number; scores: number[] }>();
     for (const p of locScopeItems) {
+      if (!passScoreFilter(p.score)) continue;
       const f = p.role_family ?? UNCATEGORIZED_LABEL;
       const e = byFamily.get(f) ?? { count: 0, scores: [] };
       e.count++;
@@ -363,7 +480,14 @@ export default function MapCharts({
         } as RoleFamilyCount;
       })
       .sort((a, b) => b.count - a.count);
-  }, [allItemsLite, locScopeItems, typeDist]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    allItemsLite,
+    locScopeItems,
+    typeDist,
+    selectedRanges,
+    unscoredSelected,
+  ]);
 
   // Score grezzi mostrati nel histogram (subset filtered location +
   // tipi selezionati).
@@ -502,7 +626,10 @@ export default function MapCharts({
 
   return (
     <>
-      {/* Globo — riceve tutte le selezioni di filtro */}
+      {/* Globo — riceve tutte le selezioni di filtro. La pill "Filtri"
+          è passata come bottomCenterExtra così sta nella STESSA riga
+          flex dei controlli mappa (Vista generale + zoom) in basso-
+          centro → l'insieme si ricentra da solo quando compare. */}
       <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
         <JobsGlobeLazy
           fullscreen
@@ -511,182 +638,188 @@ export default function MapCharts({
           selectedUnscored={unscoredSelected}
           selectedCountries={selectedCountries}
           selectedCities={selectedCities}
+          focusPosition={focusReq}
+          familyColors={Object.fromEntries(
+            typeDist.map((d) => [d.family, d.color ?? "var(--color-muted)"]),
+          )}
+          bottomCenterExtra={
+            <FilterButton
+              chips={(() => {
+                const arr: FilterChipDesc[] = [];
+                for (const t of selectedTypes) {
+                  arr.push({
+                    key: `t-${t}`,
+                    label: labels[t] ?? String(t),
+                    color: typeDist.find((d) => d.family === t)?.color,
+                    onRemove: () => toggleType(t),
+                  });
+                }
+                for (const r of selectedRanges) {
+                  arr.push({
+                    key: `r-${r.lo}-${r.hi}`,
+                    label: `${r.lo}–${r.hi}`,
+                    onRemove: () => toggleRange(r),
+                  });
+                }
+                if (unscoredSelected) {
+                  arr.push({
+                    key: "unscored",
+                    label: tr("no_score"),
+                    onRemove: () => setUnscoredSelected(false),
+                  });
+                }
+                for (const c of selectedCountries) {
+                  arr.push({
+                    key: `co-${c}`,
+                    label: c,
+                    onRemove: () => toggleCountry(c),
+                  });
+                }
+                for (const ck of selectedCities) {
+                  // Mostra "City" (Country implicito) nel chip per brevità.
+                  const [country, city] = ck.split("|");
+                  arr.push({
+                    key: `ci-${ck}`,
+                    label:
+                      city === "(country-only)" ? country : (city ?? country),
+                    onRemove: () => toggleCity(ck),
+                  });
+                }
+                return arr;
+              })()}
+              clearAll={() => {
+                setSelectedTypes([]);
+                setSelectedRanges([]);
+                setUnscoredSelected(false);
+                setSelectedCountries([]);
+                setSelectedCities([]);
+              }}
+              tr={tr}
+            />
+          }
         />
       </div>
 
-      {/* Chart top-right: posizione FISSA, mai si sposta. Eventuali
-          chip della riga 1 vanno sopra (z-index più alto). */}
+      {/* Card Score top-right: header collassabile + grafico. */}
       <div
-        className="map-bare-chart"
+        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
         style={{
           position: "absolute",
-          top: 24,
-          right: 24,
-          width: 420,
-          maxWidth: "calc(100vw - 48px)",
+          top: CARD_TOP,
+          right: CARD_SIDE,
+          width: CARD_W,
+          height: collapsed.score ? "auto" : CARD_H,
+          maxWidth: CARD_MAXW,
           zIndex: 10,
           pointerEvents: "auto",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
         }}
       >
-        <ScoreDistributionHorizontal
-          scores={histogramScores}
+        <CardHeader
           title={scoreTitle}
-          emptyLabel={emptyLabel}
-          selectedRanges={selectedRanges}
-          onToggleRange={toggleRange}
-          unscoredCount={unscoredCount}
-          unscoredSelected={unscoredSelected}
-          onToggleUnscored={() => setUnscoredSelected((v) => !v)}
+          collapsed={collapsed.score}
+          onToggle={() => toggleCollapse("score")}
+          tr={tr}
         />
+        {!collapsed.score && (
+          <div
+            className="map-bare-chart"
+            style={{ flex: 1, minHeight: 0, padding: BODY_PAD }}
+          >
+            <ScoreDistributionHorizontal
+              scores={histogramScores}
+              title={scoreTitle}
+              emptyLabel={emptyLabel}
+              selectedRanges={selectedRanges}
+              onToggleRange={toggleRange}
+              unscoredCount={unscoredCount}
+              unscoredSelected={unscoredSelected}
+              onToggleUnscored={() => setUnscoredSelected((v) => !v)}
+              fit
+              // Area utile = box meno header e padding → riempie esatto.
+              fitAspect={
+                (CARD_W - 2 * BODY_PAD) /
+                (CARD_H - HEADER_H - 2 * BODY_PAD)
+              }
+            />
+          </div>
+        )}
       </div>
 
-      <FilterChipsBar
-        chips={(() => {
-          const arr: FilterChipDesc[] = [];
-          for (const t of selectedTypes) {
-            arr.push({
-              key: `t-${t}`,
-              label: labels[t] ?? String(t),
-              color: typeDist.find((d) => d.family === t)?.color,
-              onRemove: () => toggleType(t),
-            });
-          }
-          for (const r of selectedRanges) {
-            arr.push({
-              key: `r-${r.lo}-${r.hi}`,
-              label: `${r.lo}–${r.hi}`,
-              onRemove: () => toggleRange(r),
-            });
-          }
-          if (unscoredSelected) {
-            arr.push({
-              key: "unscored",
-              label: tr("no_score"),
-              onRemove: () => setUnscoredSelected(false),
-            });
-          }
-          for (const c of selectedCountries) {
-            arr.push({
-              key: `co-${c}`,
-              label: c,
-              onRemove: () => toggleCountry(c),
-            });
-          }
-          for (const ck of selectedCities) {
-            // Mostra "City" (Country implicito) nel chip per brevità.
-            const [country, city] = ck.split("|");
-            arr.push({
-              key: `ci-${ck}`,
-              label: city === "(country-only)" ? country : (city ?? country),
-              onRemove: () => toggleCity(ck),
-            });
-          }
-          return arr;
-        })()}
-        clearAll={() => {
-          setSelectedTypes([]);
-          setSelectedRanges([]);
-          setUnscoredSelected(false);
-          setSelectedCountries([]);
-          setSelectedCities([]);
+      {/* Card "Posizioni" — overlay bottom-right. Elenco di TUTTE le
+          posizioni che passano i filtri correnti (tipo+score+location),
+          più recenti in cima. Mostra titolo, azienda, location, score e
+          stato (come la tabella della pagina Posizioni). Click su una
+          posizione con coordinate → zoom sul pin in mappa; remote →
+          apre il dettaglio. */}
+      <div
+        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
+        style={{
+          position: "absolute",
+          bottom: CARD_BOTTOM,
+          right: CARD_SIDE,
+          zIndex: 10,
+          width: CARD_W,
+          maxWidth: CARD_MAXW,
+          height: collapsed.remote ? "auto" : CARD_H,
+          display: "flex",
+          flexDirection: "column",
+          pointerEvents: "auto",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+          overflow: "hidden",
         }}
-        chartReserveRight={24 + 420 + 12}
-        tr={tr}
-      />
-
-      {/* Card "Remote" — overlay bottom-right. Mostra le posizioni
-          che non hanno coordinate (quindi non rappresentabili sulla
-          mappa): tipicamente remote-only. Filtrata coerentemente
-          con donut/histogram. */}
-      {noCoordsFiltered.length > 0 &&
-        (() => {
-          const scored = noCoordsFiltered.filter(
-            (p): p is NoCoordItem & { score: number } =>
-              typeof p.score === "number",
-          );
-          const avg =
-            scored.length > 0
-              ? Math.round(
-                  scored.reduce((a, s) => a + s.score, 0) / scored.length,
-                )
-              : null;
-          return (
-            <div
-              className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
-              style={{
-                position: "absolute",
-                bottom: 24,
-                right: 24,
-                zIndex: 10,
-                width: 340,
-                // Compatto: 280px max così non copre il chart Score
-                // Distribution che sta in alto a dx; la lista scorre
-                // internamente se ci sono molte righe.
-                maxHeight: 280,
-                display: "flex",
-                flexDirection: "column",
-                pointerEvents: "auto",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-              }}
-            >
-              <div
-                className="px-4 py-3 border-b flex items-baseline justify-between gap-3"
-                style={{ borderColor: "var(--color-border)" }}
+      >
+        <CardHeader
+          title={tr("positions_title")}
+          meta={filteredPositions.length}
+          collapsed={collapsed.remote}
+          onToggle={() => toggleCollapse("remote")}
+          tr={tr}
+        />
+        {!collapsed.remote && (
+          <ul
+            className="divide-y overflow-y-auto"
+            style={{
+              borderColor: "var(--color-border)",
+              flex: 1,
+              minHeight: 0,
+              // Niente scroll-chaining alla pagina (mappa) a fine lista.
+              overscrollBehavior: "contain",
+            }}
+          >
+            {filteredPositions.length === 0 && (
+              <li
+                className="px-4 py-6 text-[11px] text-center"
+                style={{ color: "var(--color-dim)" }}
               >
-                <div>
-                  <div
-                    className="text-[10px] font-semibold tracking-[0.14em] uppercase"
-                    style={{ color: "var(--color-dim)" }}
-                  >
-                    {tr("remote_title")}
-                  </div>
-                  <div
-                    className="text-[9px] mt-0.5"
-                    style={{ color: "var(--color-dim)" }}
-                  >
-                    {tr("not_on_map")}
-                  </div>
-                </div>
-                <div className="flex items-baseline gap-3 tabular-nums">
-                  <span
-                    className="text-[18px] font-bold"
-                    style={{ color: "var(--color-bright)" }}
-                  >
-                    {noCoordsFiltered.length}
-                  </span>
-                  {avg != null && (
-                    <span
-                      className="text-[10px]"
-                      style={{ color: "var(--color-muted)" }}
-                    >
-                      <span style={{ color: "var(--color-dim)" }}>
-                        {tr("avg")}
-                      </span>{" "}
-                      <span
-                        style={{
-                          color: "var(--color-bright)",
-                          fontWeight: 600,
-                        }}
-                      >
-                        {avg}
-                      </span>
-                    </span>
-                  )}
-                </div>
-              </div>
-              <ul
-                className="divide-y overflow-y-auto"
-                style={{ borderColor: "var(--color-border)" }}
-              >
-                {noCoordsFiltered.map((p) => (
-                  <li
-                    key={p.id}
-                    className="px-4 py-2 text-[11px]"
-                    style={{ borderColor: "var(--color-border)" }}
+                {tr("no_positions")}
+              </li>
+            )}
+            {filteredPositions.map((p) => {
+              const loc = p.remote
+                ? REMOTE_LABEL
+                : [p.loc_city, p.loc_country].filter(Boolean).join(", ") || "—";
+              const family = p.role_family ?? UNCATEGORIZED_LABEL;
+              const famColor =
+                typeDist.find((d) => d.family === family)?.color ??
+                "var(--color-muted)";
+              return (
+                <li key={p.id} style={{ borderColor: "var(--color-border)" }}>
+                  <button
+                    onClick={() => openPosition(p.id)}
+                    className="block w-full text-left px-4 py-2 hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
                   >
                     <div className="flex items-baseline justify-between gap-2">
                       <span
-                        className="font-medium truncate"
+                        className="text-[11px] font-medium truncate"
                         style={{ color: "var(--color-bright)" }}
                         title={p.title ?? ""}
                       >
@@ -694,8 +827,8 @@ export default function MapCharts({
                       </span>
                       {typeof p.score === "number" ? (
                         <span
-                          className="tabular-nums font-semibold flex-shrink-0"
-                          style={{ color: "var(--color-muted)" }}
+                          className="tabular-nums font-semibold flex-shrink-0 text-[11px]"
+                          style={{ color: scoreColor(p.score) }}
                         >
                           {p.score}
                         </span>
@@ -709,28 +842,45 @@ export default function MapCharts({
                       )}
                     </div>
                     <div
-                      className="text-[10px] truncate flex items-center gap-2"
+                      className="text-[10px] truncate"
                       style={{ color: "var(--color-muted)" }}
                     >
-                      <span className="truncate">{p.company ?? "—"}</span>
-                      {p.is_remote && (
-                        <span
-                          className="text-[8px] font-semibold tracking-widest uppercase px-1 rounded flex-shrink-0"
-                          style={{
-                            color: "var(--color-green)",
-                            background: "rgba(127,255,178,0.08)",
-                          }}
-                        >
-                          {tr("remote")}
-                        </span>
-                      )}
+                      {p.company ?? "—"}
                     </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })()}
+                    <div className="flex items-center justify-between gap-2 mt-0.5">
+                      <span
+                        className="text-[9px] truncate"
+                        style={{ color: "var(--color-dim)" }}
+                        title={loc}
+                      >
+                        {loc}
+                      </span>
+                      {/* Tipologia (role_family) col colore della donut. */}
+                      <span
+                        className="text-[9px] truncate flex items-center gap-1 flex-shrink-0"
+                        style={{ color: "var(--color-muted)", maxWidth: "55%" }}
+                        title={family}
+                      >
+                        <span
+                          aria-hidden
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: famColor,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span className="truncate">{family}</span>
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
 
       {/* Tree gerarchico Location: country → city → posizioni.
           Ricalcolato client-side da allItemsLite con i filtri tipi+score
@@ -741,6 +891,9 @@ export default function MapCharts({
         <LocationTree
           tree={effectiveLocationTree}
           tr={tr}
+          collapsed={collapsed.location}
+          onToggleCollapse={() => toggleCollapse("location")}
+          onPositionClick={openPosition}
           openCountry={openCountry}
           openCity={openCity}
           selectedCountries={selectedCountries}
@@ -749,12 +902,29 @@ export default function MapCharts({
             const isOpen = openCountry === c;
             setOpenCountry(isOpen ? null : c);
             setOpenCity(null);
+            const willSelect = !selectedCountries.includes(c);
             toggleCountry(c);
+            // Selezionare un paese intero azzera eventuali sue città già
+            // filtrate (paese e città dello stesso paese sono mutuamente
+            // esclusivi: o tutto il paese, o città specifiche).
+            if (willSelect) {
+              setSelectedCities((cur) =>
+                cur.filter((k) => k.split("|")[0] !== c),
+              );
+            }
           }}
           onCityClick={(key) => {
             const isOpen = openCity === key;
             setOpenCity(isOpen ? null : key);
+            const willSelect = !selectedCities.includes(key);
             toggleCity(key);
+            // Selezionare una città restringe a quella: rimuovi il filtro
+            // del paese genitore (altrimenti l'OR mostrerebbe tutto il
+            // paese invece della sola città).
+            if (willSelect) {
+              const country = key.split("|")[0];
+              setSelectedCountries((cur) => cur.filter((c) => c !== country));
+            }
           }}
           onCountryCaret={(c) => {
             setOpenCountry((cur) => (cur === c ? null : c));
@@ -766,30 +936,60 @@ export default function MapCharts({
         />
       )}
 
-      {/* Position Types donut — overlay bottom-left */}
+      {/* Position Types donut — overlay bottom-left. Header collassabile
+          + donut/legenda. È il riferimento dimensionale delle 4 card. */}
       <div
+        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
         style={{
           position: "absolute",
-          bottom: 24,
-          left: 24,
+          bottom: CARD_BOTTOM,
+          left: CARD_SIDE,
+          width: CARD_W,
+          maxWidth: CARD_MAXW,
+          height: collapsed.donut ? "auto" : CARD_H,
           zIndex: 10,
           pointerEvents: "auto",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
         }}
       >
-        <PositionTypesDonut
-          data={effectiveTypeDist}
-          emptyLabel={emptyLabel}
-          size={280}
-          labels={labels}
-          selectedTypes={selectedTypes}
-          onToggleType={(t) => {
-            toggleType(t);
-            // Pulisci selezioni score: i bin si ricalcolano, e anche
-            // unscored cambia conteggio col nuovo scope.
-            setSelectedRanges([]);
-            setUnscoredSelected(false);
-          }}
+        <CardHeader
+          title={tr("types_title")}
+          meta={effectiveTypeDist.reduce((a, d) => a + d.count, 0) || null}
+          collapsed={collapsed.donut}
+          onToggle={() => toggleCollapse("donut")}
+          tr={tr}
         />
+        {!collapsed.donut && (
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              alignItems: "center",
+              // Padding ridotto: con l'header la legenda (fino a ~9 voci)
+              // deve starci senza essere tagliata.
+              padding: 12,
+            }}
+          >
+            <PositionTypesDonut
+              data={effectiveTypeDist}
+              emptyLabel={emptyLabel}
+              size={150}
+              labels={labels}
+              selectedTypes={selectedTypes}
+              onToggleType={(t) => {
+                toggleType(t);
+                // Pulisci selezioni score: i bin si ricalcolano, e anche
+                // unscored cambia conteggio col nuovo scope.
+                setSelectedRanges([]);
+                setUnscoredSelected(false);
+              }}
+            />
+          </div>
+        )}
       </div>
     </>
   );
@@ -802,142 +1002,139 @@ type FilterChipDesc = {
   onRemove: () => void;
 };
 
-function FilterChipsBar({
+// Bottone-filtro compatto: una sola icona a imbuto con il numero di
+// filtri attivi, ancorata in basso-centro (zona della mappa sempre
+// libera). Cliccando si apre un banner sopra il bottone con tutti i
+// filtri selezionati, ognuno rimovibile via "×", più "rimuovi tutto".
+// Se non c'è nessun filtro attivo, il bottone non viene mostrato.
+function FilterButton({
   chips,
   clearAll,
-  chartReserveRight,
   tr,
 }: {
   chips: FilterChipDesc[];
   clearAll: () => void;
-  chartReserveRight: number;
   tr: Tr;
 }) {
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [row1End, setRow1End] = useState(chips.length);
+  const [open, setOpen] = useState(false);
 
-  useLayoutEffect(() => {
-    const el = measureRef.current;
-    if (!el) return;
-    const kids = Array.from(el.children) as HTMLElement[];
-    if (kids.length === 0) {
-      setRow1End(0);
-      return;
-    }
-    const top0 = kids[0].offsetTop;
-    let i = 0;
-    for (; i < kids.length; i++) {
-      if (kids[i].offsetTop !== top0) break;
-    }
-    setRow1End(i);
-  });
+  // Niente filtri → niente icona (e chiudi un eventuale banner aperto).
+  useEffect(() => {
+    if (chips.length === 0 && open) setOpen(false);
+  }, [chips.length, open]);
 
   if (chips.length === 0) return null;
 
-  const row1 = chips.slice(0, row1End);
-  const extra = chips.slice(row1End);
-
   return (
-    <>
-      {/* Container "measure" invisibile: misura quanti chip stanno
-          nella riga 1 full-width (= dal bordo destro dello schermo
-          fino a left:24). Include uno spacer per il bottone "clear
-          all" che sarà aggiunto nella riga 2 se overflow. */}
-      <div
-        ref={measureRef}
-        aria-hidden
-        style={{
-          position: "absolute",
-          top: -9999,
-          left: 0,
-          // larghezza measurement piu' stretta del container reale
-          // (-16px buffer) cosi' la conta non eccede mai e i chip
-          // restano dentro lo schermo senza essere tagliati a sx.
-          width: "calc(100vw - 64px)",
-          visibility: "hidden",
-          display: "flex",
-          flexWrap: "wrap",
-          justifyContent: "flex-end",
-          alignItems: "center",
-          gap: 4,
-          pointerEvents: "none",
-        }}
-      >
-        {chips.map((c) => (
-          <FilterChip
-            key={c.key}
-            label={c.label}
-            color={c.color}
-            onRemove={c.onRemove}
-            tr={tr}
-          />
-        ))}
-      </div>
-
-      {/* Riga 1: full screen width, ancorata a right:24. Va SOPRA
-          al chart (z-index alto) — chart resta fermo a top:24.
-          overflow:hidden + height:30: se la measurement contasse
-          un chip in più (precisione pixel sub-pixel), l'eccedenza
-          a sx resta tagliata invece di sforare fuori schermo. */}
-      <div
-        style={{
-          position: "absolute",
-          top: 24,
-          left: 24,
-          right: 24,
-          height: 30,
-          overflow: "hidden",
-          zIndex: 20,
-          display: "flex",
-          flexWrap: "nowrap",
-          alignItems: "center",
-          justifyContent: "flex-end",
-          gap: 4,
-          pointerEvents: "auto",
-        }}
-      >
-        {row1.map((c) => (
-          <FilterChip
-            key={c.key}
-            label={c.label}
-            color={c.color}
-            onRemove={c.onRemove}
-            tr={tr}
-          />
-        ))}
-        {extra.length === 0 && <ClearAllButton onClick={clearAll} tr={tr} />}
-      </div>
-
-      {/* Riga 2+: limitata a sinistra del chart, sotto la riga 1. */}
-      {extra.length > 0 && (
+    <div
+      style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        pointerEvents: "auto",
+      }}
+    >
+      {/* Banner filtri: ancorato in posizione assoluta SOPRA il bottone
+          (così non altera il layout della riga controlli). */}
+      {open && (
         <div
+          className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
           style={{
             position: "absolute",
-            top: 56,
-            left: 24,
-            right: chartReserveRight,
-            zIndex: 10,
+            bottom: "calc(100% + 8px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            padding: 10,
+            width: 360,
+            maxWidth: "calc(100vw - 48px)",
+            maxHeight: 240,
+            overflowY: "auto",
+            overscrollBehavior: "contain",
             display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            gap: 4,
-            pointerEvents: "auto",
+            flexDirection: "column",
+            gap: 8,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
           }}
         >
-          {extra.map((c) => (
-            <FilterChip
-              key={c.key}
-              label={c.label}
-              color={c.color}
-              onRemove={c.onRemove}
-              tr={tr}
-            />
-          ))}
-          <ClearAllButton onClick={clearAll} tr={tr} />
+          <div className="flex items-center justify-between gap-3 px-1">
+            <span
+              className="text-[10px] font-semibold tracking-[0.14em] uppercase"
+              style={{ color: "var(--color-dim)" }}
+            >
+              {tr("filters_active")} · {chips.length}
+            </span>
+            <ClearAllButton onClick={clearAll} tr={tr} />
+          </div>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: 4,
+            }}
+          >
+            {chips.map((c) => (
+              <FilterChip
+                key={c.key}
+                label={c.label}
+                color={c.color}
+                onRemove={c.onRemove}
+                tr={tr}
+              />
+            ))}
+          </div>
         </div>
       )}
-    </>
+
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title={tr("filters_active")}
+        aria-label={`${tr("filters_active")} · ${chips.length}`}
+        className="flex items-center gap-2 rounded-full border transition-colors hover:border-[var(--color-border-glow)]"
+        style={{
+          background: "var(--color-panel)",
+          borderColor: open
+            ? "var(--color-border-glow)"
+            : "var(--color-border)",
+          color: "var(--color-bright)",
+          padding: "8px 12px",
+          cursor: "pointer",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+        }}
+      >
+        {/* Icona imbuto (filtro) */}
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+        <span className="text-[11px] font-semibold tracking-wide">
+          {tr("filters")}
+        </span>
+        <span
+          className="text-[10px] font-bold tabular-nums rounded-full"
+          style={{
+            background: "var(--color-green)",
+            color: "var(--color-deep)",
+            minWidth: 16,
+            textAlign: "center",
+            padding: "0 5px",
+            lineHeight: "16px",
+          }}
+        >
+          {chips.length}
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -1010,12 +1207,60 @@ function FilterChip({
   );
 }
 
+// Header cliccabile condiviso dalle 4 card d'angolo: titolo + caret
+// (▶/▼) a sinistra, meta opzionale a destra. Click → collapse/expand.
+function CardHeader({
+  title,
+  meta,
+  collapsed,
+  onToggle,
+  tr,
+}: {
+  title: string;
+  meta?: ReactNode;
+  collapsed: boolean;
+  onToggle: () => void;
+  tr: Tr;
+}) {
+  return (
+    <div
+      onClick={onToggle}
+      role="button"
+      aria-expanded={!collapsed}
+      title={collapsed ? tr("expand") : tr("collapse")}
+      className="px-4 py-2 text-[10px] font-semibold tracking-[0.14em] uppercase flex items-baseline justify-between gap-2 cursor-pointer select-none hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+      style={{
+        borderBottom: collapsed ? "none" : "1px solid var(--color-border)",
+        color: "var(--color-dim)",
+        flexShrink: 0,
+      }}
+    >
+      <span className="flex items-baseline gap-1.5">
+        <span style={{ fontSize: 9, color: "var(--color-dim)" }}>
+          {collapsed ? "▶" : "▼"}
+        </span>
+        {title}
+      </span>
+      {meta != null && (
+        <span
+          className="tabular-nums"
+          style={{ color: "var(--color-muted)" }}
+        >
+          {meta}
+        </span>
+      )}
+    </div>
+  );
+}
+
 // ── Sidebar Location: tree gerarchico country → cities → positions ──
 // Una sola country aperta alla volta, una sola city aperta dentro di
 // essa. Click su una position apre /positions/<id> in nuova tab.
 function LocationTree({
   tree,
   tr,
+  collapsed,
+  onToggleCollapse,
   openCountry,
   openCity,
   selectedCountries,
@@ -1024,9 +1269,12 @@ function LocationTree({
   onCityClick,
   onCountryCaret,
   onCityCaret,
+  onPositionClick,
 }: {
   tree: LocationCountry[];
   tr: Tr;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   openCountry: string | null;
   openCity: string | null;
   selectedCountries: string[];
@@ -1036,6 +1284,9 @@ function LocationTree({
   // Click solo sulla freccia ▶/▼: apri/chiudi senza toccare il filtro.
   onCountryCaret: (c: string) => void;
   onCityCaret: (key: string) => void;
+  // Click su una posizione: localizza il pin sulla mappa (o apre il
+  // dettaglio se remote).
+  onPositionClick: (id: string) => void;
 }) {
   // Conteggio totale (somma count countries) per il badge header.
   const total = tree.reduce((s, c) => s + c.count, 0);
@@ -1044,37 +1295,38 @@ function LocationTree({
       className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg"
       style={{
         position: "absolute",
-        // Top: 60 → la riga "LOCATION header" coincide visualmente
-        // con la prima barra del chart Score Distribution dx (che ha
-        // un padding-top interno SVG che pushava la prima barra in giù).
-        top: 60,
-        left: 24,
-        bottom: 24 + 280 + 16,
+        // Angolo in alto a sinistra, stessa dimensione fissa delle altre
+        // card; la lista paesi scorre internamente (auto se collassata).
+        top: CARD_TOP,
+        left: CARD_SIDE,
+        height: collapsed ? "auto" : CARD_H,
         zIndex: 10,
-        // Width: donut (280) + gap (16) + zona label (~160) ≈ 460
-        // → la card Location si allinea sotto al donut+labels.
-        width: 460,
+        width: CARD_W,
+        maxWidth: CARD_MAXW,
         display: "flex",
         flexDirection: "column",
         pointerEvents: "auto",
+        overflow: "hidden",
         boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
       }}
     >
-      <div
-        className="px-4 py-2 border-b text-[10px] font-semibold tracking-[0.14em] uppercase flex items-baseline justify-between"
-        style={{
-          borderColor: "var(--color-border)",
-          color: "var(--color-dim)",
-        }}
-      >
-        <span>{tr("location")}</span>
-        <span className="tabular-nums" style={{ color: "var(--color-muted)" }}>
-          {tree.length} · {total}
-        </span>
-      </div>
+      <CardHeader
+        title={tr("location")}
+        meta={`${tree.length} · ${total}`}
+        collapsed={collapsed}
+        onToggle={onToggleCollapse}
+        tr={tr}
+      />
+      {!collapsed && (
       <ul
         className="divide-y overflow-y-auto"
-        style={{ borderColor: "var(--color-border)" }}
+        style={{
+          borderColor: "var(--color-border)",
+          flex: 1,
+          minHeight: 0,
+          // Niente scroll-chaining alla pagina (mappa) a fine lista.
+          overscrollBehavior: "contain",
+        }}
       >
         {tree.map((country) => {
           const isOpen = openCountry === country.country;
@@ -1220,31 +1472,22 @@ function LocationTree({
                                 key={p.id}
                                 style={{ borderColor: "var(--color-border)" }}
                               >
-                                <a
-                                  href={`/positions/${p.id}`}
-                                  target="_blank"
-                                  rel="noopener"
-                                  className="block px-4 py-1 pl-10 text-[10px] hover:bg-[rgba(255,255,255,0.04)] transition-colors"
-                                  style={{ textDecoration: "none" }}
+                                <button
+                                  onClick={() => onPositionClick(p.id)}
+                                  className="block w-full text-left px-4 py-1 pl-10 text-[10px] hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                  }}
                                 >
-                                  <div className="flex items-baseline justify-between gap-2">
-                                    <span
-                                      className="truncate"
-                                      style={{ color: "var(--color-base)" }}
-                                      title={p.title ?? ""}
-                                    >
-                                      {p.title ?? tr("no_title")}
-                                    </span>
-                                    {typeof p.score === "number" && (
-                                      <span
-                                        className="tabular-nums font-semibold flex-shrink-0"
-                                        style={{
-                                          color: "var(--color-muted)",
-                                        }}
-                                      >
-                                        {p.score}
-                                      </span>
-                                    )}
+                                  {/* Solo titolo + azienda (niente score). */}
+                                  <div
+                                    className="truncate"
+                                    style={{ color: "var(--color-base)" }}
+                                    title={p.title ?? ""}
+                                  >
+                                    {p.title ?? tr("no_title")}
                                   </div>
                                   <div
                                     className="text-[9px] truncate"
@@ -1252,7 +1495,7 @@ function LocationTree({
                                   >
                                     {p.company ?? "—"}
                                   </div>
-                                </a>
+                                </button>
                               </li>
                             ))}
                           </ul>
@@ -1266,6 +1509,7 @@ function LocationTree({
           );
         })}
       </ul>
+      )}
     </div>
   );
 }
