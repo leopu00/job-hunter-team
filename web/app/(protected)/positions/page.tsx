@@ -3,9 +3,10 @@ import { getPositions, getSourceDistribution } from "@/lib/queries";
 import type { PositionWithScore } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import { isLocalOnlyMode } from "@/lib/workspace";
+import { UNCATEGORIZED_LABEL, colorForFamily } from "@/lib/position-classifier";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
-import FiltersWizard from "./FiltersWizard";
 import PositionsFilterSidebar from "./PositionsFilterSidebar";
+import TableScrollSync from "./TableScrollSync";
 
 const STATUS_COLORS: Record<string, string> = {
   new: "var(--color-muted)",
@@ -57,15 +58,16 @@ interface PageProps {
   searchParams: Promise<{
     status?: string;
     remote?: string;
-    tier?: string;
     source?: string;
     verdict?: string;
-    // Filtri "intelligenti" sidebar (donut/location/score).
+    // Filtri "intelligenti" sidebar (donut/location/score/voto critico).
     family?: string;
     country?: string;
     city?: string;
-    band?: string; // CSV di "lo-hi"
+    band?: string; // "lo-hi" range score
     noscore?: string; // "1" = includi posizioni senza score
+    cscore?: string; // "lo-hi" range voto critico (0-10)
+    cnoscore?: string; // "1" = includi posizioni senza voto
     sort?: string;
     dir?: string;
     expand?: string;
@@ -74,13 +76,14 @@ interface PageProps {
   }>;
 }
 
-// Parse CSV di fasce score "90-94,85-89" → [{lo:90,hi:94},...].
+// Parse CSV di range "90-94,85-89" → [{lo:90,hi:94},...]. parseFloat per
+// supportare i decimali del voto critico ("4.5-9").
 function parseBands(v: string | undefined): Array<{ lo: number; hi: number }> {
   if (!v) return [];
   return v
     .split(",")
     .map((tok) => {
-      const [lo, hi] = tok.split("-").map((n) => parseInt(n.trim(), 10));
+      const [lo, hi] = tok.split("-").map((n) => parseFloat(n.trim()));
       return Number.isFinite(lo) && Number.isFinite(hi) ? { lo, hi } : null;
     })
     .filter((r): r is { lo: number; hi: number } => r != null);
@@ -101,7 +104,14 @@ const DEFAULT_PAGE_SIZE = 50;
 
 // Colonne espandibili (testo libero, può eccedere). Per le altre
 // (id, score, voto, rilevata, stato) lo spazio fisso è già adeguato.
-const EXPANDABLE_COLUMNS = new Set(["title", "company", "location"]);
+const EXPANDABLE_COLUMNS = new Set([
+  "title",
+  "company",
+  "location",
+  "role_family",
+  "loc_city",
+  "loc_country",
+]);
 
 const SORTABLE_COLUMNS = new Set([
   "id",
@@ -109,6 +119,9 @@ const SORTABLE_COLUMNS = new Set([
   "company",
   "source",
   "location",
+  "role_family",
+  "loc_city",
+  "loc_country",
   "score",
   "critic",
   "found_at",
@@ -126,7 +139,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const statuses = csv(params.status);
   const remotes = csv(params.remote);
-  const tiers = csv(params.tier);
   const sources = csv(params.source);
   const verdicts = csv(params.verdict);
   const families = csv(params.family);
@@ -134,6 +146,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const cities = csv(params.city);
   const scoreBands = parseBands(params.band);
   const unscored = params.noscore === "1";
+  const criticBands = parseBands(params.cscore);
+  const criticUnscored = params.cnoscore === "1";
 
   const sortCol = SORTABLE_COLUMNS.has(params.sort ?? "")
     ? params.sort!
@@ -163,13 +177,14 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       statuses: statuses.length ? statuses : undefined,
       remoteTypes: remotes.length ? remotes : undefined,
       sources: sources.length ? sources : undefined,
-      tiers: tiers.length ? tiers : undefined,
       verdicts: verdicts.length ? verdicts : undefined,
       families: families.length ? families : undefined,
       countries: countries.length ? countries : undefined,
       cities: cities.length ? cities : undefined,
       scoreBands: scoreBands.length ? scoreBands : undefined,
       unscored: unscored || undefined,
+      criticBands: criticBands.length ? criticBands : undefined,
+      criticUnscored: criticUnscored || undefined,
       limit: 2000,
       sort: sortCol,
       dir: sortDir,
@@ -221,7 +236,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     const merged: Record<string, string> = {};
     if (statuses.length) merged.status = statuses.join(",");
     if (remotes.length) merged.remote = remotes.join(",");
-    if (tiers.length) merged.tier = tiers.join(",");
     if (sources.length) merged.source = sources.join(",");
     if (verdicts.length) merged.verdict = verdicts.join(",");
     if (families.length) merged.family = families.join(",");
@@ -230,6 +244,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     if (scoreBands.length)
       merged.band = scoreBands.map((b) => `${b.lo}-${b.hi}`).join(",");
     if (unscored) merged.noscore = "1";
+    if (criticBands.length)
+      merged.cscore = criticBands.map((b) => `${b.lo}-${b.hi}`).join(",");
+    if (criticUnscored) merged.cnoscore = "1";
     if (sortCol !== "found_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
     if (expandedCols.size > 0)
@@ -311,11 +328,12 @@ export default async function PositionsPage({ searchParams }: PageProps) {
 
       {/* ── Layout a 2 colonne: sidebar filtri intelligenti + contenuto ── */}
       <div className="flex gap-6 items-start">
-        <PositionsFilterSidebar />
+        <PositionsFilterSidebar availableSources={availableSources} />
         <div className="flex-1 min-w-0">
-          {/* ── Filtri (wizard a sinistra, righe-per-pagina a destra) ── */}
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <FiltersWizard availableSources={availableSources} />
+          {/* ── Righe per pagina (tutti i filtri ora nella sidebar) ──
+              h-8 + mb-4 = stessa altezza/margine della header sidebar, così
+              la tabella si allinea con la prima card dei filtri. ── */}
+          <div className="mb-4 h-8 flex items-center justify-end gap-3">
             <div className="flex items-center gap-1.5">
               <span className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
                 Righe per pagina
@@ -348,7 +366,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
           {/* La pagina /positions è in MainChrome FULLSCREEN_FLOWS, quindi
           il main è già full-width con padding 48px. La tabella prende
           100% e ha scroll-x se eccede. */}
-          <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+          <TableScrollSync className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
             <table
               className="w-full text-[12px]"
               style={{ borderCollapse: "collapse" }}
@@ -361,8 +379,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     { col: "id", label: "ID" },
                     { col: "title", label: "Titolo" },
                     { col: "company", label: "Azienda" },
+                    { col: "role_family", label: "Categoria" },
                     { col: "source", label: "Fonte" },
                     { col: "location", label: "Location" },
+                    { col: "loc_city", label: "Città" },
+                    { col: "loc_country", label: "Paese" },
                     { col: "score", label: "Score" },
                     { col: "status", label: "Stato" },
                     { col: "critic", label: "Voto finale" },
@@ -419,7 +440,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 {visiblePositions.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={12}
                       className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
                     >
                       Nessuna posizione trovata con questi filtri.
@@ -487,6 +508,34 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       >
                         {p.company}
                       </td>
+                      <td
+                        className={`px-4 py-3 text-[11px] text-[var(--color-base)] ${
+                          isExpanded("role_family")
+                            ? "whitespace-normal"
+                            : "max-w-[160px] truncate whitespace-nowrap"
+                        }`}
+                        title={p.role_family ?? undefined}
+                      >
+                        {p.role_family ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              aria-hidden
+                              style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: "50%",
+                                background: colorForFamily(p.role_family),
+                                flexShrink: 0,
+                              }}
+                            />
+                            {p.role_family}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)]">
+                            {UNCATEGORIZED_LABEL}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
                         {p.source ?? "—"}
                       </td>
@@ -499,6 +548,26 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         title={p.location ?? undefined}
                       >
                         {p.location ?? "—"}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-[11px] text-[var(--color-muted)] ${
+                          isExpanded("loc_city")
+                            ? "whitespace-normal"
+                            : "max-w-[140px] truncate whitespace-nowrap"
+                        }`}
+                        title={p.loc_city ?? undefined}
+                      >
+                        {p.loc_city ?? "—"}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-[11px] text-[var(--color-muted)] ${
+                          isExpanded("loc_country")
+                            ? "whitespace-normal"
+                            : "max-w-[140px] truncate whitespace-nowrap"
+                        }`}
+                        title={p.loc_country ?? undefined}
+                      >
+                        {p.loc_country ?? "—"}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 justify-end">
@@ -578,7 +647,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 )}
               </tbody>
             </table>
-          </div>
+          </TableScrollSync>
 
           {/* ── Pagination ──────────────────────────────────────────── */}
           <div className="flex flex-wrap items-center justify-between gap-3 mt-4 text-[11px] text-[var(--color-muted)]">
