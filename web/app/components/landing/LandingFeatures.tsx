@@ -46,7 +46,7 @@ export default function LandingFeatures() {
 
   return (
     <section
-      aria-label="Funzionalità"
+      aria-label={t("feat_aria")}
       id="features"
       className="px-6 py-24 relative"
     >

@@ -1,5 +1,21 @@
 "use client";
 
+import { useLocale } from "@/lib/use-locale";
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+
+const T: Record<string, Record<string, string>> = {
+  remove: {
+    it: "Rimuovi",
+    en: "Remove",
+    hu: "Eltávolítás",
+    es: "Eliminar",
+    de: "Entfernen",
+    fr: "Supprimer",
+    pt: "Remover",
+  },
+};
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type BadgeVariant =
@@ -86,6 +102,8 @@ export function Badge({
   onRemove,
   className = "",
 }: BadgeProps) {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   // Pure dot — no label, just a colored circle
   if (dot && !label) {
     const px = DOT_PX[size];
@@ -130,7 +148,7 @@ export function Badge({
             width: RMV_PX[size],
             height: RMV_PX[size],
           }}
-          aria-label="Rimuovi"
+          aria-label={tr("remove")}
         >
           <svg
             viewBox="0 0 24 24"

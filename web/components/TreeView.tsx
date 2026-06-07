@@ -1,6 +1,12 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  search: { it: 'Cerca...', en: 'Search...', hu: 'Keresés...', es: 'Buscar...', de: 'Suchen...', fr: 'Rechercher...', pt: 'Pesquisar...' },
+  noResults: { it: 'Nessun risultato', en: 'No results', hu: 'Nincs találat', es: 'Sin resultados', de: 'Keine Ergebnisse', fr: 'Aucun résultat', pt: 'Nenhum resultado' },
+}
 
 export interface TreeNode {
   id: string
@@ -109,6 +115,8 @@ export default function TreeView({
   const [search, setSearch]   = useState('')
   const [focusedId, setFocused] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   const expanded = expandedIds ?? internalExpanded
   const toggle   = onToggle ?? ((id: string) => setInternalExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n }))
@@ -135,11 +143,11 @@ export default function TreeView({
   return (
     <div ref={containerRef} role="tree" onKeyDown={handleKeyDown} style={{ outline: 'none' }}>
       {searchable && (
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca..."
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={tr('search')}
           style={{ width: '100%', marginBottom: 8, padding: '5px 10px', fontSize: 11, borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-row)', color: 'var(--color-bright)', outline: 'none', boxSizing: 'border-box' }} />
       )}
       {filtered.length === 0
-        ? <div style={{ fontSize: 11, color: 'var(--color-dim)', padding: '12px 8px' }}>Nessun risultato</div>
+        ? <div style={{ fontSize: 11, color: 'var(--color-dim)', padding: '12px 8px' }}>{tr('noResults')}</div>
         : filtered.map(node => (
           <TreeNodeRow key={node.id} node={node} depth={0} expanded={effectiveExpanded}
             selected={selectedId} onToggle={toggle} onSelect={select}

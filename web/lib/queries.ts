@@ -31,7 +31,7 @@ async function ws(): Promise<string | null> {
 }
 
 // ── Dashboard Stats ────────────────────────────────────────────────
-const EMPTY_STATS: DashboardStats = { total: 0, new: 0, checked: 0, scored: 0, writing: 0, review: 0, ready: 0, applied: 0, excluded: 0, response: 0 }
+const EMPTY_STATS: DashboardStats = { total: 0, new: 0, checked: 0, scored: 0, writing: 0, review: 0, ready: 0, applied: 0, excluded: 0, response: 0, scored_open: 0, to_write: 0 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const w = await ws()
@@ -41,7 +41,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (!isSupabaseConfigured) return EMPTY_STATS
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('status').is('deleted_at', null)
+  const { data, error } = await supabase.from('positions').select('status, write_requested').is('deleted_at', null)
   if (error || !data) return EMPTY_STATS
 
   const counts = data.reduce((acc: Record<string, number>, row: any) => {
@@ -49,11 +49,24 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     return acc
   }, {} as Record<string, number>)
 
+  // Pipeline write-requested-aware: il box "Da scrivere" conta le posizioni
+  // selezionate dall'utente (write_requested) ma con CV non ancora pronto
+  // (scored/writing/review); "Con lo score" conta le scored NON selezionate.
+  const TO_WRITE_STATUSES = new Set(['scored', 'writing', 'review'])
+  let to_write = 0
+  let scored_requested = 0
+  for (const row of data as any[]) {
+    if (row.write_requested && TO_WRITE_STATUSES.has(row.status)) to_write++
+    if (row.write_requested && row.status === 'scored') scored_requested++
+  }
+  const scored_open = (counts['scored'] ?? 0) - scored_requested
+
   return {
     total: data.length, new: counts['new'] ?? 0, checked: counts['checked'] ?? 0,
     scored: counts['scored'] ?? 0, writing: counts['writing'] ?? 0, review: counts['review'] ?? 0,
     ready: counts['ready'] ?? 0, applied: counts['applied'] ?? 0, excluded: counts['excluded'] ?? 0,
     response: counts['response'] ?? 0,
+    scored_open, to_write,
   }
 }
 
@@ -289,7 +302,7 @@ export async function getRecentPositions(limit = 15): Promise<(PositionWithScore
 // (default). Per gli altri ordinamenti (score, critic, ecc.) il fetch
 // resta su found_at e poi riordiniamo in memoria — limit 600 in chiamata
 // è gestibile e tiene la logica fuori da PostgREST nested ordering.
-const POSITION_SORT_KEYS = ['id', 'title', 'company', 'source', 'location', 'role_family', 'loc_city', 'loc_country', 'score', 'critic', 'found_at', 'status'] as const
+const POSITION_SORT_KEYS = ['id', 'title', 'company', 'role_family', 'source', 'location', 'loc_city', 'loc_country', 'score', 'critic', 'found_at', 'status'] as const
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
 
 export type PositionFilterOpts = {
@@ -305,6 +318,10 @@ export type PositionFilterOpts = {
   unscored?: boolean     // include posizioni senza score numerico
   criticBands?: Array<{ lo: number; hi: number }> // range voto critico 0-10 (OR)
   criticUnscored?: boolean // include posizioni senza voto del critico
+  // true = solo selezionate dall'utente (write_requested); false = solo NON
+  // selezionate; undefined = nessun filtro. Alimenta i deep-link delle card
+  // pipeline "Da scrivere" / "Con lo score".
+  writeRequested?: boolean
   limit?: number
   offset?: number
   sort?: string
@@ -352,6 +369,9 @@ function applyFacetFilters(rows: PositionWithScore[], opts?: PositionFilterOpts)
       return cbands.some(b => c >= b.lo && c <= b.hi)
     })
   }
+  if (opts?.writeRequested != null) {
+    out = out.filter(p => Boolean(p.write_requested) === opts.writeRequested)
+  }
   return out
 }
 
@@ -363,7 +383,7 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
   const supabase = await createClient()
   let query = supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, role_family, loc_country, loc_city, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
+    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
 
@@ -601,6 +621,35 @@ export type DashboardPosition = {
   salary_currency: string
   found_at: string | null
   last_action_at: string
+  // Chi ha eseguito l'ultima azione: ruolo (scout/analista/scorer/scrittore/
+  // critico/user) e nome istanza (es. 'scout-1', fallback al ruolo).
+  last_action_by: string
+  last_action_actor: string
+  // Voto del Critico (0-10) + verdetto (PASS|NEEDS_WORK|REJECT), null se non
+  // ancora revisionata.
+  critic_score: number | null
+  critic_verdict: string | null
+}
+
+// Sceglie l'evento con timestamp più recente tra i candidati passati.
+// Usato sia dal path cloud sia (replicato) dal path locale per derivare
+// last_action_at/by/actor in modo coerente con getRecentlyTouchedPositions.
+export type LastActionCandidate = {
+  ts: string | null | undefined
+  by: string
+  actor: string | null | undefined
+}
+export function pickLastAction(
+  cands: LastActionCandidate[],
+): { at: string; by: string; actor: string } {
+  let best: { at: string; by: string; actor: string } | null = null
+  for (const c of cands) {
+    if (!c.ts) continue
+    if (!best || c.ts > best.at) {
+      best = { at: c.ts, by: c.by, actor: c.actor || c.by }
+    }
+  }
+  return best ?? { at: '', by: 'scout', actor: 'scout' }
 }
 
 export async function getDashboardPositions(): Promise<DashboardPosition[]> {
@@ -611,7 +660,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, last_checked, scores ( total_score, scored_at )')
+    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
     .not('status', 'eq', 'excluded')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
@@ -619,11 +668,20 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   if (error || !data) return []
   return (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    const a = Array.isArray(p.applications) ? p.applications[0] : p.applications
     const score = (p.score as number | null) ?? (typeof s?.total_score === 'number' ? s.total_score : null)
-    const candidates = [p.found_at, p.last_checked, s?.scored_at].filter(Boolean) as string[]
-    const last_action_at = candidates.length > 0
-      ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
-      : (p.found_at ?? '')
+    // last_action_at + chi: stesso mapping ruolo/attore di
+    // getRecentlyTouchedPositions, ma derivato inline per riga.
+    const { at: last_action_at, by: last_action_by, actor: last_action_actor } =
+      pickLastAction([
+        { ts: p.found_at, by: 'scout', actor: p.found_by },
+        { ts: p.last_checked, by: 'analista', actor: 'analista' },
+        { ts: s?.scored_at, by: 'scorer', actor: s?.scored_by },
+        { ts: a?.written_at, by: 'scrittore', actor: a?.written_by },
+        { ts: a?.critic_reviewed_at, by: 'critico', actor: a?.reviewed_by },
+        { ts: a?.applied_at, by: 'user', actor: 'user' },
+        { ts: a?.response_at, by: 'user', actor: 'user' },
+      ])
     // Stipendio: preferisci la stima del team, fallback sul dichiarato.
     // min/max/currency provengono dalla STESSA fonte per non mischiare valute.
     const useEst = p.salary_estimated_min != null || p.salary_estimated_max != null
@@ -646,7 +704,11 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       salary_max: typeof salary_max === 'number' ? salary_max : null,
       salary_currency,
       found_at: p.found_at ?? null,
-      last_action_at,
+      last_action_at: last_action_at || (p.found_at ?? ''),
+      last_action_by,
+      last_action_actor,
+      critic_score: typeof a?.critic_score === 'number' ? a.critic_score : null,
+      critic_verdict: a?.critic_verdict ?? null,
     }
   })
 }

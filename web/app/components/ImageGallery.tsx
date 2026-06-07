@@ -1,6 +1,97 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+
+const T: Record<string, Record<string, string>> = {
+  zoomTitle: {
+    it: "Zoom (Z)",
+    en: "Zoom (Z)",
+    hu: "Nagyítás (Z)",
+    es: "Zoom (Z)",
+    de: "Zoom (Z)",
+    fr: "Zoom (Z)",
+    pt: "Zoom (Z)",
+  },
+  zoomOut: {
+    it: "Riduci zoom",
+    en: "Zoom out",
+    hu: "Kicsinyítés",
+    es: "Reducir zoom",
+    de: "Verkleinern",
+    fr: "Dézoomer",
+    pt: "Reduzir zoom",
+  },
+  zoomIn: {
+    it: "Ingrandisci",
+    en: "Zoom in",
+    hu: "Nagyítás",
+    es: "Ampliar",
+    de: "Vergrößern",
+    fr: "Agrandir",
+    pt: "Ampliar",
+  },
+  closeTitle: {
+    it: "Chiudi (Esc)",
+    en: "Close (Esc)",
+    hu: "Bezárás (Esc)",
+    es: "Cerrar (Esc)",
+    de: "Schließen (Esc)",
+    fr: "Fermer (Échap)",
+    pt: "Fechar (Esc)",
+  },
+  closeLightbox: {
+    it: "Chiudi lightbox",
+    en: "Close lightbox",
+    hu: "Lightbox bezárása",
+    es: "Cerrar lightbox",
+    de: "Lightbox schließen",
+    fr: "Fermer la visionneuse",
+    pt: "Fechar lightbox",
+  },
+  prevImage: {
+    it: "Immagine precedente",
+    en: "Previous image",
+    hu: "Előző kép",
+    es: "Imagen anterior",
+    de: "Vorheriges Bild",
+    fr: "Image précédente",
+    pt: "Imagem anterior",
+  },
+  nextImage: {
+    it: "Immagine successiva",
+    en: "Next image",
+    hu: "Következő kép",
+    es: "Imagen siguiente",
+    de: "Nächstes Bild",
+    fr: "Image suivante",
+    pt: "Próxima imagem",
+  },
+};
+
+// `Immagine N di M` (aria del dialog)
+const IMAGE_OF: Record<string, (n: number, m: number) => string> = {
+  it: (n, m) => `Immagine ${n} di ${m}`,
+  en: (n, m) => `Image ${n} of ${m}`,
+  hu: (n, m) => `${n}. kép / ${m}`,
+  es: (n, m) => `Imagen ${n} de ${m}`,
+  de: (n, m) => `Bild ${n} von ${m}`,
+  fr: (n, m) => `Image ${n} sur ${m}`,
+  pt: (n, m) => `Imagem ${n} de ${m}`,
+};
+
+// `Vai all'immagine N` (aria dei dot)
+const GO_TO_IMAGE: Record<string, (n: number) => string> = {
+  it: (n) => `Vai all'immagine ${n}`,
+  en: (n) => `Go to image ${n}`,
+  hu: (n) => `Ugrás a(z) ${n}. képre`,
+  es: (n) => `Ir a la imagen ${n}`,
+  de: (n) => `Zu Bild ${n} gehen`,
+  fr: (n) => `Aller à l'image ${n}`,
+  pt: (n) => `Ir para a imagem ${n}`,
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -31,6 +122,8 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
   const hasPrev = index > 0;
   const hasNext = index < images.length - 1;
   const [zoom, setZoom] = useState(false);
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
 
   // Keyboard nav
   useEffect(() => {
@@ -57,7 +150,7 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
   return (
     <div
       role="dialog"
-      aria-label={`Immagine ${index + 1} di ${images.length}`}
+      aria-label={(IMAGE_OF[locale] ?? IMAGE_OF.en)(index + 1, images.length)}
       className="fixed inset-0 flex flex-col items-center justify-center"
       style={{
         zIndex: 9999,
@@ -85,8 +178,8 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setZoom((v) => !v)}
-            title="Zoom (Z)"
-            aria-label={zoom ? "Riduci zoom" : "Ingrandisci"}
+            title={tr("zoomTitle")}
+            aria-label={zoom ? tr("zoomOut") : tr("zoomIn")}
             className="text-[11px] px-2 py-1 rounded transition-opacity hover:opacity-70"
             style={{
               background: zoom ? "var(--color-blue)22" : "transparent",
@@ -98,8 +191,8 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
           </button>
           <button
             onClick={onClose}
-            title="Chiudi (Esc)"
-            aria-label="Chiudi lightbox"
+            title={tr("closeTitle")}
+            aria-label={tr("closeLightbox")}
             className="text-[18px] leading-none hover:opacity-70 transition-opacity"
             style={{
               color: "var(--color-dim)",
@@ -117,7 +210,7 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
       {hasPrev && (
         <button
           onClick={() => onNav(index - 1)}
-          aria-label="Immagine precedente"
+          aria-label={tr("prevImage")}
           className="absolute left-3 text-[24px] w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity"
           style={{
             background: "rgba(255,255,255,0.08)",
@@ -152,7 +245,7 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
       {hasNext && (
         <button
           onClick={() => onNav(index + 1)}
-          aria-label="Immagine successiva"
+          aria-label={tr("nextImage")}
           className="absolute right-3 text-[24px] w-10 h-10 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity"
           style={{
             background: "rgba(255,255,255,0.08)",
@@ -184,7 +277,7 @@ function Lightbox({ images, index, onClose, onNav }: LightboxProps) {
             <button
               key={i}
               onClick={() => onNav(i)}
-              aria-label={`Vai all'immagine ${i + 1}`}
+              aria-label={(GO_TO_IMAGE[locale] ?? GO_TO_IMAGE.en)(i + 1)}
               className="rounded-full transition-all"
               style={{
                 width: i === index ? 16 : 6,
