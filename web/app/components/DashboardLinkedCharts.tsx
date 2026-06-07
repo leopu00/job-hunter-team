@@ -241,6 +241,11 @@ export default function DashboardLinkedCharts({
     if (selectedCountries.includes(countryKey(p.loc_country))) return true;
     return false;
   };
+  // Paese↔città sono gerarchici: la lista Città è ristretta ai paesi
+  // selezionati (ma NON alle città già scelte, così puoi sceglierne altre).
+  const passSelectedCountry = (p: DashboardPosition) =>
+    selectedCountries.length === 0 ||
+    selectedCountries.includes(countryKey(p.loc_country));
   const passScore = (score: number | null) => {
     if (selectedScoreBins.length === 0) return true;
     if (score == null || score <= 0) return false;
@@ -297,7 +302,11 @@ export default function DashboardLinkedCharts({
   // aggregata non filtrabile.
   const cityItems = useMemo(() => {
     const pool = rows.filter(
-      (p) => passFamily(p) && passScore(p.score) && passSalary(p),
+      (p) =>
+        passFamily(p) &&
+        passScore(p.score) &&
+        passSalary(p) &&
+        passSelectedCountry(p),
     );
     const byCity = new Map<string, { count: number; country: string }>();
     let noCity = 0;
@@ -331,7 +340,7 @@ export default function DashboardLinkedCharts({
       });
     return { items, distinct: real.length };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedFamilies, selectedScoreBins, selectedSalaryBins]);
+  }, [rows, selectedFamilies, selectedScoreBins, selectedSalaryBins, selectedCountries]);
 
   // Score: scope per location + family (esclude la propria dimensione).
   const scoreData = useMemo(() => {
