@@ -25,6 +25,17 @@ const STATUS_COLORS: Record<string, string> = {
   excluded: "var(--color-red)",
 };
 
+// Emoji per ruolo dell'ultima azione (colonna "Aggiornato da").
+// La chiave è last_action_by (ruolo), non il nome istanza.
+const ACTOR_EMOJI: Record<string, string> = {
+  scout: "🔍",
+  analista: "🔬",
+  scorer: "🎯",
+  scrittore: "✍️",
+  critico: "⚖️",
+  user: "👤",
+};
+
 function scoreClass(s?: number | null) {
   if (!s) return "text-[var(--color-dim)]";
   if (s >= 75) return "text-[var(--color-green)]";
@@ -137,9 +148,6 @@ export default function RecentPositionsTable({
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {[
-                labels.colId,
-                labels.colUpdated,
-                labels.colUpdatedBy,
                 labels.colTitle,
                 labels.colCompany,
                 labels.colCategory,
@@ -150,6 +158,9 @@ export default function RecentPositionsTable({
                 labels.colSalary,
                 labels.colMonthly,
                 labels.colStatus,
+                labels.colUpdatedBy,
+                labels.colUpdated,
+                labels.colId,
               ].map((h) => (
                 <th
                   key={h}
@@ -184,23 +195,6 @@ export default function RecentPositionsTable({
                       i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
                   }}
                 >
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                    {p.legacy_id
-                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                      : p.id.slice(0, 8)}
-                  </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
-                    {formatFoundAt(p.last_action_at || p.found_at || "")}
-                  </td>
-                  <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
-                    {p.last_action_actor ? (
-                      <span className="text-[var(--color-muted)]">
-                        {p.last_action_actor}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-dim)]">—</span>
-                    )}
-                  </td>
                   <td
                     className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
                     title={p.title ?? undefined}
@@ -326,6 +320,26 @@ export default function RecentPositionsTable({
                     >
                       {p.status}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
+                    {p.last_action_actor ? (
+                      <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
+                        <span aria-hidden="true">
+                          {ACTOR_EMOJI[p.last_action_by] ?? "🤖"}
+                        </span>
+                        {p.last_action_actor}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)]">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
+                    {formatFoundAt(p.last_action_at || p.found_at || "")}
+                  </td>
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                    {p.legacy_id
+                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                      : p.id.slice(0, 8)}
                   </td>
                 </tr>
               ))
