@@ -202,19 +202,6 @@ type CoordItem = {
 // coordinate): le raggruppiamo sotto questo nodo nella card Location.
 const REMOTE_LABEL = "Remote";
 
-// Colori di stato (allineati alla pagina Posizioni) per il badge nella
-// card Posizioni.
-const STATUS_COLORS: Record<string, string> = {
-  new: "var(--color-muted)",
-  checked: "var(--color-blue)",
-  scored: "var(--color-purple)",
-  writing: "var(--color-yellow)",
-  review: "var(--color-orange)",
-  ready: "#7fffb2",
-  applied: "var(--color-green)",
-  response: "#58a6ff",
-  excluded: "var(--color-red)",
-};
 function scoreColor(s: number | null): string {
   if (s == null) return "var(--color-dim)";
   if (s >= 75) return "var(--color-green)";
@@ -790,6 +777,10 @@ export default function MapCharts({
               const loc = p.remote
                 ? REMOTE_LABEL
                 : [p.loc_city, p.loc_country].filter(Boolean).join(", ") || "—";
+              const family = p.role_family ?? UNCATEGORIZED_LABEL;
+              const famColor =
+                typeDist.find((d) => d.family === family)?.color ??
+                "var(--color-muted)";
               return (
                 <li key={p.id} style={{ borderColor: "var(--color-border)" }}>
                   <button
@@ -821,12 +812,19 @@ export default function MapCharts({
                       >
                         {p.title ?? tr("no_title")}
                       </span>
-                      {typeof p.score === "number" && (
+                      {typeof p.score === "number" ? (
                         <span
                           className="tabular-nums font-semibold flex-shrink-0 text-[11px]"
                           style={{ color: scoreColor(p.score) }}
                         >
                           {p.score}
+                        </span>
+                      ) : (
+                        <span
+                          className="text-[9px] italic flex-shrink-0"
+                          style={{ color: "var(--color-dim)" }}
+                        >
+                          {tr("no_score")}
                         </span>
                       )}
                     </div>
@@ -844,14 +842,23 @@ export default function MapCharts({
                       >
                         {loc}
                       </span>
+                      {/* Tipologia (role_family) col colore della donut. */}
                       <span
-                        className="text-[8px] font-semibold tracking-widest uppercase px-1 rounded flex-shrink-0"
-                        style={{
-                          color: STATUS_COLORS[p.status] ?? "var(--color-muted)",
-                          background: `${STATUS_COLORS[p.status] ?? "var(--color-muted)"}1a`,
-                        }}
+                        className="text-[9px] truncate flex items-center gap-1 flex-shrink-0"
+                        style={{ color: "var(--color-muted)", maxWidth: "55%" }}
+                        title={family}
                       >
-                        {p.status}
+                        <span
+                          aria-hidden
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: famColor,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <span className="truncate">{family}</span>
                       </span>
                     </div>
                   </button>
