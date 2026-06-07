@@ -77,7 +77,6 @@ interface PageProps {
     writereq?: string; // "1" = solo selezionate (write_requested); "0" = solo non
     sort?: string;
     dir?: string;
-    expand?: string;
     page?: string;
     pageSize?: string;
   }>;
@@ -108,15 +107,6 @@ function csv(v: string | undefined): string[] {
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
 const DEFAULT_PAGE_SIZE = 50;
-
-// Colonne espandibili (testo libero, può eccedere). Per le altre
-// (id, score, voto, rilevata, stato) lo spazio fisso è già adeguato.
-const EXPANDABLE_COLUMNS = new Set([
-  "company",
-  "role_family",
-  "loc_city",
-  "loc_country",
-]);
 
 const SORTABLE_COLUMNS = new Set([
   "id",
@@ -254,15 +244,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     : "last_action_at";
   const sortDir: "asc" | "desc" = params.dir === "asc" ? "asc" : "desc";
 
-  // expand=title,location → set di colonne mostrate full-width.
-  const expandedCols = new Set(
-    (params.expand ?? "")
-      .split(",")
-      .map((c) => c.trim())
-      .filter((c) => EXPANDABLE_COLUMNS.has(c)),
-  );
-  const isExpanded = (col: string) => expandedCols.has(col);
-
   // Paginazione: pageSize (whitelist), page 1-based.
   const requestedPageSize = parseInt(params.pageSize ?? "", 10);
   const pageSize = (PAGE_SIZE_OPTIONS as readonly number[]).includes(
@@ -310,9 +291,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
 
   // Helper per costruire URL preservando filtri attivi.
   const buildHref = (
-    overrides: Partial<
-      Record<"sort" | "dir" | "expand" | "page" | "pageSize", string>
-    >,
+    overrides: Partial<Record<"sort" | "dir" | "page" | "pageSize", string>>,
   ) => {
     const merged: Record<string, string> = {};
     if (statuses.length) merged.status = statuses.join(",");
@@ -332,8 +311,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     else if (writeRequested === false) merged.writereq = "0";
     if (sortCol !== "last_action_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
-    if (expandedCols.size > 0)
-      merged.expand = Array.from(expandedCols).join(",");
     if (page !== 1) merged.page = String(page);
     if (pageSize !== DEFAULT_PAGE_SIZE) merged.pageSize = String(pageSize);
     Object.assign(merged, overrides);
@@ -341,7 +318,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     for (const k of Object.keys(merged)) {
       if (k === "sort" && merged[k] === "last_action_at") delete merged[k];
       if (k === "dir" && merged[k] === "desc") delete merged[k];
-      if (k === "expand" && merged[k] === "") delete merged[k];
       if (k === "page" && (merged[k] === "1" || merged[k] === ""))
         delete merged[k];
       if (k === "pageSize" && merged[k] === String(DEFAULT_PAGE_SIZE))
@@ -349,14 +325,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     }
     const qs = new URLSearchParams(merged).toString();
     return qs ? `/positions?${qs}` : "/positions";
-  };
-
-  // Toggle expand di una colonna: aggiunge/rimuove dalla CSV `expand`.
-  const expandHref = (col: string) => {
-    const next = new Set(expandedCols);
-    if (next.has(col)) next.delete(col);
-    else next.add(col);
-    return buildHref({ expand: next.size ? Array.from(next).join(",") : "" });
   };
 
   // Link per ordinare cliccando un header: se la colonna è già attiva
@@ -498,29 +466,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         ) : (
                           <span>{label}</span>
                         )}
-                        {EXPANDABLE_COLUMNS.has(col) && (
-                          <Link
-                            href={expandHref(col)}
-                            title={
-                              isExpanded(col)
-                                ? tr("collapse_col")
-                                : tr("expand_col")
-                            }
-                            aria-label={
-                              isExpanded(col)
-                                ? tr("collapse_col")
-                                : tr("expand_col")
-                            }
-                            className="no-underline text-[10px] leading-none px-1 rounded hover:bg-[var(--color-card)] hover:text-[var(--color-green)] transition-colors"
-                            style={{
-                              color: isExpanded(col)
-                                ? "var(--color-green)"
-                                : "var(--color-dim)",
-                            }}
-                          >
-                            {isExpanded(col) ? "⇲" : "⇱"}
-                          </Link>
-                        )}
                       </span>
                     </th>
                   ))}
@@ -571,22 +516,14 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       </td>
                       {/* Azienda */}
                       <td
-                        className={`px-4 py-3 text-[var(--color-base)] ${
-                          isExpanded("company")
-                            ? "whitespace-normal"
-                            : "whitespace-nowrap max-w-[140px] truncate"
-                        }`}
+                        className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap"
                         title={p.company}
                       >
                         {p.company}
                       </td>
                       {/* Categoria */}
                       <td
-                        className={`px-4 py-3 text-[11px] text-[var(--color-base)] ${
-                          isExpanded("role_family")
-                            ? "whitespace-normal"
-                            : "max-w-[160px] truncate whitespace-nowrap"
-                        }`}
+                        className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap"
                         title={p.role_family ?? undefined}
                       >
                         {p.role_family && p.role_family.trim() ? (
@@ -609,11 +546,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       </td>
                       {/* Paese (Remote in corsivo se senza paese ma full remote) */}
                       <td
-                        className={`px-4 py-3 text-[11px] ${
-                          isExpanded("loc_country")
-                            ? "whitespace-normal"
-                            : "max-w-[140px] truncate whitespace-nowrap"
-                        }`}
+                        className="px-4 py-3 text-[11px] whitespace-nowrap"
                         title={p.loc_country ?? undefined}
                       >
                         {p.loc_country && p.loc_country.trim() ? (
@@ -630,11 +563,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       </td>
                       {/* Città */}
                       <td
-                        className={`px-4 py-3 text-[11px] text-[var(--color-muted)] ${
-                          isExpanded("loc_city")
-                            ? "whitespace-normal"
-                            : "max-w-[140px] truncate whitespace-nowrap"
-                        }`}
+                        className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap"
                         title={p.loc_city ?? undefined}
                       >
                         {p.loc_city && p.loc_city.trim() ? (
