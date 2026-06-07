@@ -31,7 +31,7 @@ async function ws(): Promise<string | null> {
 }
 
 // ── Dashboard Stats ────────────────────────────────────────────────
-const EMPTY_STATS: DashboardStats = { total: 0, new: 0, checked: 0, scored: 0, writing: 0, review: 0, ready: 0, applied: 0, excluded: 0, response: 0 }
+const EMPTY_STATS: DashboardStats = { total: 0, new: 0, checked: 0, scored: 0, writing: 0, review: 0, ready: 0, applied: 0, excluded: 0, response: 0, scored_open: 0, to_write: 0 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const w = await ws()
@@ -41,7 +41,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (!isSupabaseConfigured) return EMPTY_STATS
 
   const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('status').is('deleted_at', null)
+  const { data, error } = await supabase.from('positions').select('status, write_requested').is('deleted_at', null)
   if (error || !data) return EMPTY_STATS
 
   const counts = data.reduce((acc: Record<string, number>, row: any) => {
@@ -49,11 +49,24 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     return acc
   }, {} as Record<string, number>)
 
+  // Pipeline write-requested-aware: il box "Da scrivere" conta le posizioni
+  // selezionate dall'utente (write_requested) ma con CV non ancora pronto
+  // (scored/writing/review); "Con lo score" conta le scored NON selezionate.
+  const TO_WRITE_STATUSES = new Set(['scored', 'writing', 'review'])
+  let to_write = 0
+  let scored_requested = 0
+  for (const row of data as any[]) {
+    if (row.write_requested && TO_WRITE_STATUSES.has(row.status)) to_write++
+    if (row.write_requested && row.status === 'scored') scored_requested++
+  }
+  const scored_open = (counts['scored'] ?? 0) - scored_requested
+
   return {
     total: data.length, new: counts['new'] ?? 0, checked: counts['checked'] ?? 0,
     scored: counts['scored'] ?? 0, writing: counts['writing'] ?? 0, review: counts['review'] ?? 0,
     ready: counts['ready'] ?? 0, applied: counts['applied'] ?? 0, excluded: counts['excluded'] ?? 0,
     response: counts['response'] ?? 0,
+    scored_open, to_write,
   }
 }
 

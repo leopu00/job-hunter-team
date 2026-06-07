@@ -26,6 +26,24 @@ export function getDashboardStatsLocal(ws: string): DashboardStats {
     counts[r.status] = r.cnt
     total += r.cnt
   }
+
+  // Pipeline write-requested-aware: "Da scrivere" = selezionate dall'utente
+  // (write_requested) con CV non ancora pronto; "Con lo score" = scored non
+  // selezionate. Guardato in try/catch: workspace vecchi seedati da Supabase
+  // potrebbero non avere ancora la colonna write_requested → degrada a 0.
+  let to_write = 0
+  let scored_requested = 0
+  try {
+    to_write = (db.prepare(
+      "SELECT COUNT(*) as cnt FROM positions WHERE write_requested = 1 AND status IN ('scored','writing','review')",
+    ).get() as { cnt: number }).cnt
+    scored_requested = (db.prepare(
+      "SELECT COUNT(*) as cnt FROM positions WHERE write_requested = 1 AND status = 'scored'",
+    ).get() as { cnt: number }).cnt
+  } catch {
+    /* colonna write_requested assente: box 'Da scrivere' a 0 */
+  }
+
   return {
     total,
     new: counts['new'] ?? 0,
@@ -37,6 +55,8 @@ export function getDashboardStatsLocal(ws: string): DashboardStats {
     applied: counts['applied'] ?? 0,
     excluded: counts['excluded'] ?? 0,
     response: counts['response'] ?? 0,
+    scored_open: (counts['scored'] ?? 0) - scored_requested,
+    to_write,
   }
 }
 
