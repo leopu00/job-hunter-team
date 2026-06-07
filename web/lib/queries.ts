@@ -302,21 +302,22 @@ export async function getRecentPositions(limit = 15): Promise<(PositionWithScore
 // (default). Per gli altri ordinamenti (score, critic, ecc.) il fetch
 // resta su found_at e poi riordiniamo in memoria — limit 600 in chiamata
 // è gestibile e tiene la logica fuori da PostgREST nested ordering.
-const POSITION_SORT_KEYS = ['id', 'title', 'company', 'role_family', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
+const POSITION_SORT_KEYS = ['id', 'title', 'company', 'role_family', 'source', 'location', 'loc_city', 'loc_country', 'remote', 'score', 'salary', 'monthly', 'last_action_by', 'critic', 'found_at', 'last_action_at', 'status'] as const
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
 
 export type PositionFilterOpts = {
   statuses?: string[]
   remoteTypes?: string[]
   sources?: string[]
-  tiers?: string[]       // ['seria','practice','riferimento','noscore']
   verdicts?: string[]    // applications.critic_verdict (PASS|NEEDS_WORK|REJECT)
   // ── Filtri "intelligenti" (sidebar /positions, stile mappa) ──
   families?: string[]    // positions.role_family (UNCATEGORIZED_LABEL = "Da categorizzare")
   countries?: string[]   // loc_country ("(unknown)" = senza paese)
   cities?: string[]      // chiavi "Country|City" ("(country-only)" = senza città)
-  scoreBands?: Array<{ lo: number; hi: number }> // fasce score (OR tra loro)
+  scoreBands?: Array<{ lo: number; hi: number }> // range score (OR tra loro)
   unscored?: boolean     // include posizioni senza score numerico
+  criticBands?: Array<{ lo: number; hi: number }> // range voto critico 0-10 (OR)
+  criticUnscored?: boolean // include posizioni senza voto del critico
   // true = solo selezionate dall'utente (write_requested); false = solo NON
   // selezionate; undefined = nessun filtro. Alimenta i deep-link delle card
   // pipeline "Da scrivere" / "Con lo score".
@@ -360,31 +361,18 @@ function applyFacetFilters(rows: PositionWithScore[], opts?: PositionFilterOpts)
       return bands.some(b => s >= b.lo && s <= b.hi)
     })
   }
+  const cbands = opts?.criticBands ?? []
+  if (cbands.length || opts?.criticUnscored) {
+    out = out.filter(p => {
+      const c = p.critic_score
+      if (c == null) return !!opts?.criticUnscored
+      return cbands.some(b => c >= b.lo && c <= b.hi)
+    })
+  }
   if (opts?.writeRequested != null) {
     out = out.filter(p => Boolean(p.write_requested) === opts.writeRequested)
   }
   return out
-}
-
-// Tier → score-range. 'noscore' = score null/0.
-const TIER_RANGES: Record<string, { min?: number; max?: number; noScore?: boolean }> = {
-  seria:       { min: 70 },
-  practice:    { min: 40, max: 69 },
-  riferimento: { min: 1,  max: 39 },
-  noscore:     { noScore: true },
-}
-
-function applyTierFilter(rows: PositionWithScore[], tiers: string[]): PositionWithScore[] {
-  if (!tiers.length) return rows
-  return rows.filter(p => tiers.some(t => {
-    const r = TIER_RANGES[t]; if (!r) return false
-    const s = p.score
-    if (r.noScore) return s == null || s === 0
-    if (s == null || s === 0) return false
-    if (r.min != null && s < r.min) return false
-    if (r.max != null && s > r.max) return false
-    return true
-  }))
 }
 
 export async function getPositions(opts?: PositionFilterOpts): Promise<PositionWithScore[]> {
@@ -395,7 +383,7 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
   const supabase = await createClient()
   let query = supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
+    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
 
@@ -408,18 +396,41 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
   const { data, error } = await query
   if (error || !data) return []
   let mapped: PositionWithScore[] = data.map((p: any) => {
-    const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
+    const s = firstRelated<any>(p.scores)
+    const app = firstRelated<any>(p.applications)
+    // Stipendio: stima del team se presente, fallback sul dichiarato (stessa
+    // fonte per min/max/currency, così non mischiamo valute).
+    const useEst = p.salary_estimated_min != null || p.salary_estimated_max != null
+    const salary_min = (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null
+    const salary_max = (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null
+    const salary_currency = (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ?? 'EUR'
+    // Ultima azione (stesso mapping di getDashboardPositions).
+    const { at: last_action_at, by: last_action_by, actor: last_action_actor } =
+      pickLastAction([
+        { ts: p.found_at, by: 'scout', actor: p.found_by },
+        { ts: p.last_checked, by: 'analista', actor: 'analista' },
+        { ts: s?.scored_at, by: 'scorer', actor: s?.scored_by },
+        { ts: app?.written_at, by: 'scrittore', actor: app?.written_by },
+        { ts: app?.critic_reviewed_at, by: 'critico', actor: app?.reviewed_by },
+        { ts: app?.applied_at, by: 'user', actor: 'user' },
+        { ts: app?.response_at, by: 'user', actor: 'user' },
+      ])
     return {
       ...p,
-      score: p.score ?? p.scores?.total_score ?? undefined,
+      score: p.score ?? s?.total_score ?? undefined,
       scores: p.scores ?? undefined,
       critic_score: app?.critic_score ?? null,
       critic_verdict: app?.critic_verdict ?? null,
+      salary_min,
+      salary_max,
+      salary_currency,
+      last_action_at,
+      last_action_by,
+      last_action_actor,
     }
   })
 
-  // Filtri post-fetch: tier (range union) + verdict (nested join).
-  if (opts?.tiers?.length) mapped = applyTierFilter(mapped, opts.tiers)
+  // Filtri post-fetch: verdict (nested join).
   if (opts?.verdicts?.length) {
     const set = new Set(opts.verdicts)
     mapped = mapped.filter(p => p.critic_verdict && set.has(p.critic_verdict))
@@ -438,6 +449,10 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
       case 'score': return p.score ?? null
       case 'critic': return p.critic_score ?? null
       case 'found_at': return p.found_at ?? null
+      case 'remote': return p.remote_type ?? null
+      case 'salary': case 'monthly': return p.salary_min ?? null
+      case 'last_action_by': return p.last_action_actor ?? null
+      case 'id': return p.legacy_id ?? null
       default: return (p as any)[sortKey] ?? null
     }
   }
@@ -574,6 +589,7 @@ export type PositionFacet = {
   id: string
   role_family: string | null
   score: number | null
+  critic_score: number | null
   loc_country: string | null
   loc_city: string | null
   status: string
@@ -589,16 +605,19 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score )')
+    .select('id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score ), applications ( critic_score )')
     .is('deleted_at', null)
   if (error || !data) return []
   return (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
     const score = (p.score as number | null) ?? (typeof s?.total_score === 'number' ? s.total_score : null)
+    const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
+    const critic = typeof app?.critic_score === 'number' ? app.critic_score : null
     return {
       id: String(p.id),
       role_family: p.role_family ?? null,
       score: typeof score === 'number' ? score : null,
+      critic_score: critic,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
       status: p.status,
