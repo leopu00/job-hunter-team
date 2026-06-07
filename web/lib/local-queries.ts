@@ -587,6 +587,7 @@ export function getDashboardPositionsLocal(ws: string) {
            a.written_at AS written_at, a.written_by AS written_by,
            a.critic_reviewed_at AS critic_reviewed_at, a.reviewed_by AS reviewed_by,
            a.applied_at AS applied_at, a.response_at AS response_at,
+           a.critic_score AS critic_score, a.critic_verdict AS critic_verdict,
            MAX(
              COALESCE(p.found_at, '1970-01-01'),
              COALESCE(p.last_checked, '1970-01-01'),
@@ -631,6 +632,8 @@ export function getDashboardPositionsLocal(ws: string) {
     last_action_at: ((r.last_action_at as string | null) ?? '') || at,
     last_action_by,
     last_action_actor,
+    critic_score: typeof r.critic_score === 'number' ? r.critic_score : null,
+    critic_verdict: (r.critic_verdict as string | null) ?? null,
     }
   })
 }
