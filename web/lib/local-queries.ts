@@ -26,6 +26,24 @@ export function getDashboardStatsLocal(ws: string): DashboardStats {
     counts[r.status] = r.cnt
     total += r.cnt
   }
+
+  // Pipeline write-requested-aware: "Da scrivere" = selezionate dall'utente
+  // (write_requested) con CV non ancora pronto; "Con lo score" = scored non
+  // selezionate. Guardato in try/catch: workspace vecchi seedati da Supabase
+  // potrebbero non avere ancora la colonna write_requested → degrada a 0.
+  let to_write = 0
+  let scored_requested = 0
+  try {
+    to_write = (db.prepare(
+      "SELECT COUNT(*) as cnt FROM positions WHERE write_requested = 1 AND status IN ('scored','writing','review')",
+    ).get() as { cnt: number }).cnt
+    scored_requested = (db.prepare(
+      "SELECT COUNT(*) as cnt FROM positions WHERE write_requested = 1 AND status = 'scored'",
+    ).get() as { cnt: number }).cnt
+  } catch {
+    /* colonna write_requested assente: box 'Da scrivere' a 0 */
+  }
+
   return {
     total,
     new: counts['new'] ?? 0,
@@ -37,6 +55,8 @@ export function getDashboardStatsLocal(ws: string): DashboardStats {
     applied: counts['applied'] ?? 0,
     excluded: counts['excluded'] ?? 0,
     response: counts['response'] ?? 0,
+    scored_open: (counts['scored'] ?? 0) - scored_requested,
+    to_write,
   }
 }
 
@@ -165,6 +185,7 @@ const POSITION_SORT_COLUMNS: Record<string, string> = {
   id: 'p.id',
   title: 'p.title',
   company: 'p.company',
+  role_family: 'p.role_family',
   source: 'p.source',
   location: 'p.location',
   score: 's.total_score',
@@ -541,6 +562,19 @@ export function getPositionFacetsLocal(ws: string) {
 }
 
 // ── Dataset dashboard: facet + campi tabella + recency (universo attivo) ──
+// Sceglie l'evento col timestamp più recente (copia locale di pickLastAction
+// in queries.ts: evita un import circolare local-queries <-> queries).
+function pickLastActionLocal(
+  cands: Array<{ ts: string | null | undefined; by: string; actor: string | null | undefined }>,
+): { at: string; by: string; actor: string } {
+  let best: { at: string; by: string; actor: string } | null = null
+  for (const c of cands) {
+    if (!c.ts) continue
+    if (!best || c.ts > best.at) best = { at: c.ts, by: c.by, actor: c.actor || c.by }
+  }
+  return best ?? { at: '', by: 'scout', actor: 'scout' }
+}
+
 export function getDashboardPositionsLocal(ws: string) {
   const db = getDb(ws)
   const rows = db.prepare(`
@@ -548,19 +582,40 @@ export function getDashboardPositionsLocal(ws: string) {
            p.status, p.role_family, p.loc_country, p.loc_city,
            p.salary_estimated_min, p.salary_estimated_max, p.salary_estimated_currency,
            p.salary_declared_min, p.salary_declared_max, p.salary_declared_currency,
-           p.found_at,
-           s.total_score as score,
+           p.found_at, p.found_by,
+           s.total_score as score, s.scored_at AS scored_at, s.scored_by AS scored_by,
+           a.written_at AS written_at, a.written_by AS written_by,
+           a.critic_reviewed_at AS critic_reviewed_at, a.reviewed_by AS reviewed_by,
+           a.applied_at AS applied_at, a.response_at AS response_at,
+           a.critic_score AS critic_score, a.critic_verdict AS critic_verdict,
            MAX(
              COALESCE(p.found_at, '1970-01-01'),
              COALESCE(p.last_checked, '1970-01-01'),
-             COALESCE(s.scored_at, '1970-01-01')
+             COALESCE(s.scored_at, '1970-01-01'),
+             COALESCE(a.written_at, '1970-01-01'),
+             COALESCE(a.critic_reviewed_at, '1970-01-01'),
+             COALESCE(a.applied_at, '1970-01-01'),
+             COALESCE(a.response_at, '1970-01-01')
            ) AS last_action_at
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
+    LEFT JOIN applications a ON a.position_id = p.id
     WHERE p.status != 'excluded'
     ORDER BY last_action_at DESC
   `).all() as any[]
-  return rows.map(r => ({
+  return rows.map(r => {
+    const { at, by: last_action_by, actor: last_action_actor } = pickLastActionLocal([
+      { ts: r.found_at, by: 'scout', actor: r.found_by },
+      { ts: r.last_checked, by: 'analista', actor: 'analista' },
+      { ts: r.scored_at, by: 'scorer', actor: r.scored_by },
+      { ts: r.written_at, by: 'scrittore', actor: r.written_by },
+      // critic_reviewed_at è scritto dallo SCRITTORE (chiamata --critic-score;
+      // il critico non tocca mai il DB — single-writer rule, bug #21).
+      { ts: r.critic_reviewed_at, by: 'scrittore', actor: r.written_by },
+      { ts: r.applied_at, by: 'user', actor: 'user' },
+      { ts: r.response_at, by: 'user', actor: 'user' },
+    ])
+    return {
     id: sid(r.id),
     legacy_id: (r.legacy_id as number | null) ?? null,
     title: (r.title as string | null) ?? null,
@@ -576,8 +631,13 @@ export function getDashboardPositionsLocal(ws: string) {
     salary_max: ((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_max : r.salary_declared_max) as number | null ?? null,
     salary_currency: (((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_currency : r.salary_declared_currency) as string | null) ?? 'EUR',
     found_at: (r.found_at as string | null) ?? null,
-    last_action_at: (r.last_action_at as string | null) ?? '',
-  }))
+    last_action_at: ((r.last_action_at as string | null) ?? '') || at,
+    last_action_by,
+    last_action_actor,
+    critic_score: typeof r.critic_score === 'number' ? r.critic_score : null,
+    critic_verdict: (r.critic_verdict as string | null) ?? null,
+    }
+  })
 }
 
 // ── Position state-history (timestamp transizioni) ────────────────

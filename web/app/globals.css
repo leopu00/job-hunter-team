@@ -23,6 +23,7 @@
 
   /* Accents */
   --color-green:  #00e87a;
+  --color-ready:  #7fffb2; /* verde mint stato 'ready' / score alto */
   --color-yellow: #f5c518;
   --color-blue:   #4d9fff;
   --color-red:    #ff4560;
@@ -52,6 +53,12 @@ html[data-theme="light"] {
   --color-white:        #0a0a20;
   --color-grid:         rgba(0, 0, 0, 0.022);
   --sync-warn:          #8b6914;
+  /* I verdi fosforescenti (dark) sono troppo chiari su sfondo bianco: in light
+     teniamo LA STESSA tinta verde-foglia a piena saturazione, solo abbassata
+     di luminosità quel tanto che basta a leggerla (NON desaturata/spenta).
+     Vale per link/titoli, score alti, voto critico PASS, 'ready'/'applied'. */
+  --color-green:        #0ec85c;
+  --color-ready:        #22d36a;
 }
 
 /* ── Base ────────────────────────────────────────────────────────── */
@@ -159,7 +166,7 @@ a:hover { text-decoration: underline; }
 .badge-scored   { background:#a855f71a; color:#a855f7; border:1px solid #a855f733; }
 .badge-writing  { background:#f5c5181a; color:#f5c518; border:1px solid #f5c51833; }
 .badge-review   { background:#ff8c421a; color:#ff8c42; border:1px solid #ff8c4233; }
-.badge-ready    { background:#00e87a1a; color:#7fffb2; border:1px solid #00e87a33; }
+.badge-ready    { background:#00e87a1a; color:var(--color-ready); border:1px solid #00e87a33; }
 .badge-applied  { background:#00e87a33; color:#00e87a; border:1px solid #00e87a; box-shadow:0 0 6px #00e87a22; }
 .badge-excluded { background:#ff45601a; color:#ff4560; border:1px solid #ff456033; }
 
