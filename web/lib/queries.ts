@@ -317,6 +317,10 @@ export type PositionFilterOpts = {
   cities?: string[]      // chiavi "Country|City" ("(country-only)" = senza città)
   scoreBands?: Array<{ lo: number; hi: number }> // fasce score (OR tra loro)
   unscored?: boolean     // include posizioni senza score numerico
+  // true = solo selezionate dall'utente (write_requested); false = solo NON
+  // selezionate; undefined = nessun filtro. Alimenta i deep-link delle card
+  // pipeline "Da scrivere" / "Con lo score".
+  writeRequested?: boolean
   limit?: number
   offset?: number
   sort?: string
@@ -356,6 +360,9 @@ function applyFacetFilters(rows: PositionWithScore[], opts?: PositionFilterOpts)
       return bands.some(b => s >= b.lo && s <= b.hi)
     })
   }
+  if (opts?.writeRequested != null) {
+    out = out.filter(p => Boolean(p.write_requested) === opts.writeRequested)
+  }
   return out
 }
 
@@ -388,7 +395,7 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
   const supabase = await createClient()
   let query = supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, role_family, loc_country, loc_city, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
+    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
 
