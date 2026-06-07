@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import maplibregl, { type Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Link from "next/link";
@@ -90,6 +90,24 @@ const T: Record<string, Record<string, string>> = {
     de: "Öffnen →",
     fr: "Ouvrir →",
     pt: "Abrir →",
+  },
+  zoom_in: {
+    it: "Ingrandisci",
+    en: "Zoom in",
+    hu: "Nagyítás",
+    es: "Acercar",
+    de: "Vergrößern",
+    fr: "Zoom avant",
+    pt: "Aproximar",
+  },
+  zoom_out: {
+    it: "Rimpicciolisci",
+    en: "Zoom out",
+    hu: "Kicsinyítés",
+    es: "Alejar",
+    de: "Verkleinern",
+    fr: "Zoom arrière",
+    pt: "Afastar",
   },
 };
 
@@ -444,31 +462,62 @@ function hashStr(s: string): number {
   return h >>> 0;
 }
 
-// Esplode i group coord-coincident in singletons con micro-offset
-// radiale, perché a zoom street-level ogni position deve essere
-// cliccabile (con N positions sulla stessa coord il click cade su
-// uno solo). Offset deterministico via hash dell'id → stabile su
-// refresh. Raggio in metri scalato col zoom: ~40m a z=14, ~10m a z=16.
+// Esplode i group coord-coincident in singletons, perché a zoom
+// street-level ogni position deve essere cliccabile (con N positions
+// sulla stessa coord il click cade su uno solo).
+//
+// I pin sono FASCI VERTICALI: disposti in cerchio le colonne si
+// incrociano (pin sopra/sotto condividono la x) → click ambiguo. Li
+// disponiamo invece in una FILA ORIZZONTALE — tutti alla stessa
+// latitudine, distanziati lungo la longitudine — così ogni colonna è
+// isolata e selezionabile. Spaziatura in PIXEL (costante a schermo a
+// qualunque zoom) via la proiezione reale; fallback a stima metrica.
+// Ordine stabile (per id) → la fila non "balla" tra refresh/zoom.
 function explodeGroups(
   groups: GroupedFeature[],
   zoom: number,
+  map?: MaplibreMap | null,
 ): GroupedFeature[] {
-  const meters = 50 / Math.pow(2, Math.max(0, zoom - 14));
+  // Spaziatura orizzontale fra pin (px) — supera l'ingombro dell'icona
+  // così i box di click non si sovrappongono.
+  const SPACING_PX = 64;
   const out: GroupedFeature[] = [];
   for (const g of groups) {
     if (g.count <= 1) {
       out.push(g);
       continue;
     }
-    const radiusDeg = meters / 111000; // ≈ deg latitudine per metro
-    const lonScale = 1 / Math.cos((g.lat * Math.PI) / 180); // anti-distorsione
-    g.positions.forEach((p, i) => {
-      // Angle deterministico: posizione equispaziata sul cerchio +
-      // jitter piccolo da hashStr(p.id) per evitare allineamenti.
-      const angle =
-        (i / g.count) * 2 * Math.PI + (hashStr(p.id) & 0xff) * (Math.PI / 256);
-      const lat = g.lat + radiusDeg * Math.sin(angle);
-      const lon = g.lon + radiusDeg * Math.cos(angle) * lonScale;
+    let center: { x: number; y: number } | null = null;
+    if (map) {
+      try {
+        center = map.project([g.lon, g.lat]);
+      } catch {
+        center = null;
+      }
+    }
+    // Fallback metrico (proiezione assente): ground-meters per pixel in
+    // Web Mercator alla latitudine del gruppo → spaziatura in longitudine.
+    const mpp =
+      (156543.03392 * Math.cos((g.lat * Math.PI) / 180)) / Math.pow(2, zoom);
+    const lonScale = 1 / Math.cos((g.lat * Math.PI) / 180);
+    const stable = [...g.positions].sort((a, b) =>
+      a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+    );
+    const mid = (g.count - 1) / 2;
+    stable.forEach((p, i) => {
+      // Offset orizzontale centrato sulla coord del gruppo.
+      const offset = (i - mid) * SPACING_PX;
+      let lat: number;
+      let lon: number;
+      if (center && map) {
+        const ll = map.unproject([center.x + offset, center.y]);
+        lat = ll.lat;
+        lon = ll.lng;
+      } else {
+        const meters = offset * mpp;
+        lat = g.lat;
+        lon = g.lon + ((meters / 111000) * lonScale);
+      }
       const singleScores: (number | null)[] = [p.score];
       out.push({
         groupKey: `single|${p.id}`,
@@ -498,12 +547,13 @@ function explodeGroups(
 function reclusterByZoom(
   groups: GroupedFeature[],
   zoom: number,
+  map?: MaplibreMap | null,
 ): GroupedFeature[] {
   if (groups.length === 0) return [];
   const radiusDeg = clusterRadiusDeg(zoom);
   if (radiusDeg <= 0) {
     // Street zoom: esplode i groups in singleton click-target.
-    return explodeGroups(groups, zoom);
+    return explodeGroups(groups, zoom, map);
   }
   const buckets = new Map<string, GroupedFeature[]>();
   for (const g of groups) {
@@ -597,6 +647,8 @@ export default function JobsGlobe({
   selectedUnscored = false,
   selectedCountries = [],
   selectedCities = [],
+  bottomCenterExtra = null,
+  focusPosition = null,
 }: {
   hero?: boolean;
   fullscreen?: boolean;
@@ -608,6 +660,14 @@ export default function JobsGlobe({
   // Filtro city formato "<Country>|<City>" per evitare collisioni
   // omonime (es. "Italy|Milan" vs "Spain|Milan(?)" — improbabile ma safe).
   selectedCities?: string[];
+  // Slot opzionale renderizzato nella barra controlli in basso-centro,
+  // a destra di "Vista generale" + zoom (es. la pill "Filtri" di /map).
+  // Sta nella stessa riga flex → l'insieme si ricentra automaticamente.
+  bottomCenterExtra?: ReactNode;
+  // Richiesta di focus su una posizione (dalla card Posizioni di /map):
+  // la mappa zooma sul suo pin e lo seleziona. `tick` ri-triggera lo
+  // stesso id. null = nessuna richiesta.
+  focusPosition?: { id: string; tick: number } | null;
 } = {}) {
   const { resolvedTheme } = useTheme();
   const locale = useLocale();
@@ -777,6 +837,12 @@ export default function JobsGlobe({
       }
       // Force resize: container 0x0 al primo render (animazione fade-in).
       map.resize();
+      // Attribution (obbligo licenza OSM/CARTO): parte COLLASSATA sulla
+      // sola (i) — maplibre a volte la inizializza espansa (-show). Il
+      // credito riappare al click sulla (i) o su hover (vedi CSS sotto).
+      container
+        .querySelector(".maplibregl-ctrl-attrib")
+        ?.classList.remove("maplibregl-compact-show");
       // Tinta theme-aware sui layer base.
       tintMap(map, themeRef.current);
       // Aggiungo source + layer per i pin. WebGL native = follow-mappa
@@ -934,25 +1000,81 @@ export default function JobsGlobe({
     });
 
     // Click handler sul layer: identifica il gruppo via groupKey e
-    // recupera la lista positions dal ref. Singleton → popup diretto;
-    // gruppo → zoom in + popup sul migliore (top score).
+    // recupera la lista positions dal ref.
+    //  • singleton → popup diretto + zoom-in moderato sul pin.
+    //  • gruppo → INQUADRA tutte le posizioni del gruppo (fitBounds sui
+    //    loro bounds reali) così le si vede tutte; niente popup, perché
+    //    salendo di zoom il cluster si ri-divide nei pin individuali.
+    //    Se le posizioni sono coincidenti (stessa coord) → zoom profondo
+    //    che le "esplode" con micro-offset rendendole cliccabili.
     map.on("click", LAYER_DOT_ID, (e) => {
-      const f = e.features?.[0];
-      if (!f) return;
+      // I fasci sono icone alte: i loro box di click si sovrappongono,
+      // quindi e.features[0] (il top in z-order) NON è quello puntato.
+      // Interroghiamo un riquadro attorno al click e scegliamo la
+      // feature il cui PIN (base) proietta più vicino al punto cliccato
+      // → si seleziona quello che si mira.
+      const R = 44;
+      const near = map.queryRenderedFeatures(
+        [
+          [e.point.x - R, e.point.y - R],
+          [e.point.x + R, e.point.y + R],
+        ],
+        { layers: [LAYER_DOT_ID] },
+      );
+      const feats = near.length > 0 ? near : (e.features ?? []);
+      if (feats.length === 0) return;
+      let f = feats[0];
+      let bestD = Infinity;
+      for (const cand of feats) {
+        const geom = cand.geometry;
+        if (geom.type !== "Point") continue;
+        const [lon, lat] = geom.coordinates as [number, number];
+        const pt = map.project([lon, lat]);
+        const d =
+          (pt.x - e.point.x) * (pt.x - e.point.x) +
+          (pt.y - e.point.y) * (pt.y - e.point.y);
+        if (d < bestD) {
+          bestD = d;
+          f = cand;
+        }
+      }
       const groupKey = (f.properties as { groupKey?: string })?.groupKey;
       if (!groupKey) return;
       const g = clusteredRef.current.find((x) => x.groupKey === groupKey);
       if (!g) return;
-      // Apri popup sulla posizione con score più alto del gruppo
-      // (l'ultima dopo sort asc, o la prima senza score).
-      const top =
-        g.positions
-          .filter((p) => p.score != null)
-          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0] ?? g.positions[0];
-      setSelected(top);
+
+      if (g.count > 1) {
+        setSelected(null);
+        const vp = bestViewport(g.positions);
+        const spread =
+          vp != null &&
+          (vp.bounds[1][0] - vp.bounds[0][0] > 1e-4 ||
+            vp.bounds[1][1] - vp.bounds[0][1] > 1e-4);
+        if (vp && spread) {
+          // Inquadra tutto il gruppo. Padding-top generoso: i fasci dei
+          // pin si sviluppano verso l'alto e non devono uscire dal frame.
+          map.fitBounds(vp.bounds, {
+            padding: { top: 140, bottom: 90, left: 90, right: 90 },
+            duration: 800,
+            maxZoom: 14,
+          });
+        } else {
+          // Posizioni coincidenti: zoom street-level → explodeCoincident
+          // le separa con micro-offset.
+          map.flyTo({
+            center: [g.lon, g.lat],
+            zoom: Math.max(map.getZoom() + 2, 15),
+            duration: 800,
+          });
+        }
+        return;
+      }
+
+      // Singleton: popup diretto sul pin + zoom-in moderato.
+      setSelected(g.positions[0]);
       map.flyTo({
         center: [g.lon, g.lat],
-        zoom: Math.max(map.getZoom(), g.count > 1 ? 10 : 11),
+        zoom: Math.max(map.getZoom(), 11),
         duration: 800,
       });
     });
@@ -964,9 +1086,10 @@ export default function JobsGlobe({
       map.getCanvas().style.cursor = "";
     });
 
-    // NavigationControl in top-left (poi spostato CSS-side al
-    // top-center per liberare la colonna sinistra alla card Location).
-    map.addControl(new maplibregl.NavigationControl(), "top-left");
+    // Controlli zoom/bussola: NON usiamo più NavigationControl di
+    // maplibre (DOM gestito da maplibre, layout verticale fisso).
+    // Renderizziamo bottoni custom (zoom +/-/nord) nella barra in
+    // basso-centro, orizzontali e affiancati a "Vista generale".
     mapRef.current = map;
 
     const ro = new ResizeObserver(() => {
@@ -990,7 +1113,7 @@ export default function JobsGlobe({
   const clustered = useMemo(() => {
     const map = mapRef.current;
     if (!map || !layersReadyRef.current) return grouped;
-    return reclusterByZoom(grouped, map.getZoom());
+    return reclusterByZoom(grouped, map.getZoom(), map);
   }, [grouped, reclusterTick]);
 
   // Listener `zoomend` (fired UNA volta a fine animazione di zoom)
@@ -1103,8 +1226,19 @@ export default function JobsGlobe({
       padding: { top: 60, bottom: 60, left: 60, right: 60 },
       duration: 800,
       maxZoom: 7,
+      // Reset anche dell'inclinazione (pitch) e dell'orientamento
+      // (bearing) → torna alla vista piatta di default, non solo al
+      // centro/zoom. L'utente può inclinare col touchpad; questo
+      // pulsante rimette tutto a posto.
+      pitch: 0,
+      bearing: 0,
     });
   }
+
+  // Controlli zoom custom (rimpiazzano NavigationControl). Niente
+  // reset-nord: il globo non ruota e "Vista generale" già riallinea.
+  const zoomIn = () => mapRef.current?.zoomIn();
+  const zoomOut = () => mapRef.current?.zoomOut();
 
   // Traccia la posizione schermo del pin selezionato: aggiorna ad
   // ogni movimento/zoom mappa per tenere il popup ancorato sopra.
@@ -1115,7 +1249,16 @@ export default function JobsGlobe({
       return;
     }
     const update = () => {
-      const pt = map.project([selected.lon, selected.lat]);
+      // Ancora il popup alla coordinata RENDERIZZATA del pin (che può
+      // essere esplosa/offsettata in una fila), non a quella originale
+      // condivisa dal gruppo — altrimenti la vignetta finisce al centro
+      // del gruppo invece che sopra il pin selezionato.
+      const grp = clusteredRef.current.find((x) =>
+        x.positions.some((p) => p.id === selected.id),
+      );
+      const lon = grp ? grp.lon : selected.lon;
+      const lat = grp ? grp.lat : selected.lat;
+      const pt = map.project([lon, lat]);
       setPopupAnchor({ x: pt.x, y: pt.y });
     };
     update();
@@ -1166,11 +1309,32 @@ export default function JobsGlobe({
     const vp = bestViewport(displayData);
     if (!vp) return;
     map.fitBounds(vp.bounds, {
-      padding: { top: 60, bottom: 60, left: 60, right: 60 },
+      padding: { top: 80, bottom: 80, left: 80, right: 80 },
       duration: 800,
-      maxZoom: 7,
+      // maxZoom city-level (era 7 = livello stato): filtrando una città
+      // si scende fino allo zoom città; per insiemi più ampi (paese,
+      // tutto) fitBounds sceglie comunque uno zoom inferiore.
+      maxZoom: 12,
     });
   }, [displayData]);
+
+  // Focus su una posizione richiesto dalla card Posizioni: zoom sul pin
+  // + selezione (popup). Cerca la posizione fra quelle con coordinate.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focusPosition) return;
+    const pos = data.find((d) => d.id === focusPosition.id);
+    if (!pos) return;
+    // Zoom street-level (>=12): il pin non è clusterizzato → singolo e
+    // ben visibile. Poi lo selezioniamo per aprire la vignetta.
+    map.flyTo({
+      center: [pos.lon, pos.lat],
+      zoom: Math.max(map.getZoom(), 12),
+      duration: 800,
+    });
+    setSelected(pos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPosition?.tick]);
 
   const wrapClass =
     hero || fullscreen
@@ -1208,18 +1372,14 @@ export default function JobsGlobe({
         </div>
       )}
 
-      {/* Sposta i controlli zoom +/- dal top-left al top-CENTER
-          (liberiamo la colonna sinistra alla card Location). Il
-          bottone "Vista generale" si affianca a sinistra dei controlli
-          zoom — l'insieme è centrato orizzontalmente. */}
+      {/* Attribution compatta: di default mostra solo la (i); il testo
+          "© CARTO, © OpenStreetMap contributors" appare su hover o
+          quando l'utente apre col click (stato -show). Conforme alla
+          licenza (il credito resta accessibile) ma non invadente. */}
       <style>{`
-        .jht-globe-wrap .maplibregl-ctrl-top-left {
-          left: 50%;
-          transform: translateX(-50%);
-        }
-        .jht-globe-wrap .maplibregl-ctrl-top-left .maplibregl-ctrl-group {
-          margin-top: 0;
-        }
+        .jht-globe-wrap .maplibregl-ctrl-attrib-inner { display: none; }
+        .jht-globe-wrap .maplibregl-ctrl-attrib:hover .maplibregl-ctrl-attrib-inner,
+        .jht-globe-wrap .maplibregl-ctrl-attrib.maplibregl-compact-show .maplibregl-ctrl-attrib-inner { display: block; }
       `}</style>
       <div
         ref={mapWrapRef}
@@ -1246,31 +1406,104 @@ export default function JobsGlobe({
           }}
         />
 
-        {/* Bottone "Vista generale": fitBounds sulla faccia migliore.
-            Posizionato top-center, affiancato ai controlli zoom +/-. */}
-        {loaded && data.length > 0 && (
-          <button
-            onClick={flyToAll}
-            aria-label={tr("overview")}
-            title={tr("overview_title")}
-            className="absolute top-2 z-10 text-[10px] font-semibold tracking-widest uppercase"
+        {/* Barra controlli in basso-centro: [Vista generale] +
+            [zoom +/-/nord orizzontale] + slot opzionale (pill "Filtri"
+            di /map). Tutti nella stessa riga flex centrata → l'insieme
+            si ricentra da solo e "Vista generale" si sposta quando
+            compaiono i filtri. */}
+        {loaded && (
+          <div
+            className="absolute z-10"
             style={{
-              // Bordo destro del bottone a (50% - 30px) → resta ~8px
-              // di gap a sinistra del ctrl-group +/- centrato sul 50%.
-              left: "calc(50% - 30px)",
-              transform: "translateX(-100%)",
-              padding: "6px 10px",
-              borderRadius: 6,
-              background: "var(--color-panel)",
-              border: "1px solid var(--color-border)",
-              color: "var(--color-bright)",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+              bottom: 24,
+              left: "50%",
+              transform: "translateX(-50%)",
+              display: "flex",
+              alignItems: "flex-end",
+              gap: 8,
+              pointerEvents: "auto",
             }}
           >
-            ⊕ {tr("overview")}
-          </button>
+            {/* Widget unico orizzontale: + | − | ⊕ (Vista generale).
+                Niente più bottone "Vista generale" separato: l'ultimo
+                tasto del widget reinquadra tutti i pin (flyToAll). */}
+            <div
+              className="flex items-stretch"
+              style={{
+                background: "var(--color-panel)",
+                border: "1px solid var(--color-border)",
+                borderRadius: 9999,
+                overflow: "hidden",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
+              }}
+            >
+              <GlobeCtrlButton onClick={zoomIn} label={tr("zoom_in")}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  aria-hidden
+                >
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </GlobeCtrlButton>
+              <span
+                aria-hidden
+                style={{ width: 1, background: "var(--color-border)" }}
+              />
+              <GlobeCtrlButton onClick={zoomOut} label={tr("zoom_out")}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  aria-hidden
+                >
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+              </GlobeCtrlButton>
+              {data.length > 0 && (
+                <>
+                  <span
+                    aria-hidden
+                    style={{ width: 1, background: "var(--color-border)" }}
+                  />
+                  <GlobeCtrlButton
+                    onClick={flyToAll}
+                    label={tr("overview_title")}
+                  >
+                    {/* ⊕ — reinquadra tutti i pin (vista generale) */}
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      aria-hidden
+                    >
+                      <circle cx="12" cy="12" r="8" />
+                      <line x1="12" y1="1.5" x2="12" y2="5.5" />
+                      <line x1="12" y1="18.5" x2="12" y2="22.5" />
+                      <line x1="1.5" y1="12" x2="5.5" y2="12" />
+                      <line x1="18.5" y1="12" x2="22.5" y2="12" />
+                    </svg>
+                  </GlobeCtrlButton>
+                </>
+              )}
+            </div>
+
+            {bottomCenterExtra}
+          </div>
         )}
 
         {!loaded && (
@@ -1417,5 +1650,36 @@ export default function JobsGlobe({
         )}
       </div>
     </div>
+  );
+}
+
+// Bottone singolo del widget zoom orizzontale (icona centrata, hover
+// leggero). Usato per +, − e reset-nord nella barra controlli mappa.
+function GlobeCtrlButton({
+  onClick,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex items-center justify-center transition-colors hover:bg-[var(--color-card)]"
+      style={{
+        width: 34,
+        height: 34,
+        background: "transparent",
+        border: "none",
+        color: "var(--color-bright)",
+        cursor: "pointer",
+      }}
+    >
+      {children}
+    </button>
   );
 }
