@@ -180,12 +180,20 @@ export interface PositionWithScore extends Position {
   scores?: Score
   critic_score?: number | null
   critic_verdict?: string | null
+  // Stipendio coalescato (stima team o, in fallback, dichiarato) — stessa
+  // fonte per min/max/currency. Popolato da getPositions/getDashboardPositions.
+  salary_min?: number | null
+  salary_max?: number | null
+  salary_currency?: string
   // Ultima azione tracciata sulla position (es. ACK Capitano, write CV).
   // Aggiunto nei merge dev1/dev2/dev3 del 2026-05-21 per il widget
   // "Recent positions shows last-action timestamp" (commit a89d75d5).
   // Opzionale: presente solo nelle query che fanno join con
   // applications/state-history (vedi getRecentPositions).
   last_action_at?: string
+  // Chi ha eseguito l'ultima azione (ruolo + istanza concreta).
+  last_action_by?: string
+  last_action_actor?: string
 }
 
 export interface ApplicationWithPosition extends Application {
