@@ -381,6 +381,18 @@ export default function MapCharts({
     ];
   }, [coordItems, noCoords]);
 
+  // Click su una posizione (card Posizioni o drill-down Location):
+  // se ha coordinate → zoom sul pin + vignetta; se remote (no pin) →
+  // apre il dettaglio in nuova scheda.
+  const openPosition = (id: string) => {
+    const it = allItemsLite.find((x) => x.id === id);
+    if (it?.remote) {
+      window.open(`/positions/${id}`, "_blank", "noopener,noreferrer");
+    } else {
+      focusPin(id);
+    }
+  };
+
   // Elenco di TUTTE le posizioni che passano i filtri correnti
   // (tipo + score + location), ordinate per più recenti. Alimenta la
   // card in basso a destra (ex "Remote") come tabella posizioni.
@@ -784,19 +796,7 @@ export default function MapCharts({
               return (
                 <li key={p.id} style={{ borderColor: "var(--color-border)" }}>
                   <button
-                    onClick={() => {
-                      // Con coordinate → zoom sul pin in mappa; remote (no
-                      // pin) → apre il dettaglio in nuova scheda.
-                      if (p.remote) {
-                        window.open(
-                          `/positions/${p.id}`,
-                          "_blank",
-                          "noopener,noreferrer",
-                        );
-                      } else {
-                        focusPin(p.id);
-                      }
-                    }}
+                    onClick={() => openPosition(p.id)}
                     className="block w-full text-left px-4 py-2 hover:bg-[rgba(255,255,255,0.04)] transition-colors"
                     style={{
                       background: "transparent",
@@ -880,6 +880,7 @@ export default function MapCharts({
           tr={tr}
           collapsed={collapsed.location}
           onToggleCollapse={() => toggleCollapse("location")}
+          onPositionClick={openPosition}
           openCountry={openCountry}
           openCity={openCity}
           selectedCountries={selectedCountries}
@@ -1255,6 +1256,7 @@ function LocationTree({
   onCityClick,
   onCountryCaret,
   onCityCaret,
+  onPositionClick,
 }: {
   tree: LocationCountry[];
   tr: Tr;
@@ -1269,6 +1271,9 @@ function LocationTree({
   // Click solo sulla freccia ▶/▼: apri/chiudi senza toccare il filtro.
   onCountryCaret: (c: string) => void;
   onCityCaret: (key: string) => void;
+  // Click su una posizione: localizza il pin sulla mappa (o apre il
+  // dettaglio se remote).
+  onPositionClick: (id: string) => void;
 }) {
   // Conteggio totale (somma count countries) per il badge header.
   const total = tree.reduce((s, c) => s + c.count, 0);
@@ -1454,12 +1459,14 @@ function LocationTree({
                                 key={p.id}
                                 style={{ borderColor: "var(--color-border)" }}
                               >
-                                <a
-                                  href={`/positions/${p.id}`}
-                                  target="_blank"
-                                  rel="noopener"
-                                  className="block px-4 py-1 pl-10 text-[10px] hover:bg-[rgba(255,255,255,0.04)] transition-colors"
-                                  style={{ textDecoration: "none" }}
+                                <button
+                                  onClick={() => onPositionClick(p.id)}
+                                  className="block w-full text-left px-4 py-1 pl-10 text-[10px] hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                  }}
                                 >
                                   {/* Solo titolo + azienda (niente score). */}
                                   <div
@@ -1475,7 +1482,7 @@ function LocationTree({
                                   >
                                     {p.company ?? "—"}
                                   </div>
-                                </a>
+                                </button>
                               </li>
                             ))}
                           </ul>
