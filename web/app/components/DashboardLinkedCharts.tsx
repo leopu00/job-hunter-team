@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
 import {
   aggregateRoleFamilies,
   UNCATEGORIZED_LABEL,
@@ -49,6 +50,38 @@ type Props = {
   tableLimit?: number;
 };
 
+// Stringhe UI hardcoded localizzate (le altre arrivano già tradotte via
+// `labels` dal server component).
+const T: Record<string, Record<string, string>> = {
+  no_country: {
+    it: "Senza paese",
+    en: "No country",
+    hu: "Nincs ország",
+    es: "Sin país",
+    de: "Ohne Land",
+    fr: "Sans pays",
+    pt: "Sem país",
+  },
+  no_city: {
+    it: "Senza città",
+    en: "No city",
+    hu: "Nincs város",
+    es: "Sin ciudad",
+    de: "Ohne Stadt",
+    fr: "Sans ville",
+    pt: "Sem cidade",
+  },
+  reset_all: {
+    it: "Rimuovi tutti i filtri",
+    en: "Clear all filters",
+    hu: "Összes szűrő törlése",
+    es: "Quitar todos los filtros",
+    de: "Alle Filter entfernen",
+    fr: "Supprimer tous les filtres",
+    pt: "Remover todos os filtros",
+  },
+};
+
 const SCORE_BIN = 5;
 const SALARY_BIN = 20000;
 const UNKNOWN = "(unknown)";
@@ -69,6 +102,8 @@ export default function DashboardLinkedCharts({
   currencies,
   tableLimit = 15,
 }: Props) {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   // La dashboard ragiona sull'universo "attivo" (la query già esclude le
   // scartate, ma teniamo il filtro per robustezza anche in demo).
   const rows = useMemo(
@@ -176,7 +211,7 @@ export default function DashboardLinkedCharts({
     if (unknown > 0)
       real.push({
         key: UNKNOWN,
-        label: "Senza paese",
+        label: tr("no_country"),
         count: unknown,
         muted: true,
       });
@@ -216,7 +251,7 @@ export default function DashboardLinkedCharts({
     if (noCity > 0)
       items.push({
         key: "(no-city)",
-        label: "Senza città",
+        label: tr("no_city"),
         count: noCity,
         muted: true,
         selectable: false,
@@ -279,7 +314,7 @@ export default function DashboardLinkedCharts({
           type="button"
           onClick={resetAll}
           className="text-[9px] font-semibold tracking-[0.12em] uppercase cursor-pointer text-[var(--color-dim)] hover:text-[var(--color-bright)] transition-colors"
-          title="Rimuovi tutti i filtri"
+          title={tr("reset_all")}
           style={{
             visibility: totalActive > 0 ? "visible" : "hidden",
             pointerEvents: totalActive > 0 ? "auto" : "none",

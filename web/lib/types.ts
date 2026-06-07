@@ -166,6 +166,12 @@ export interface DashboardStats {
   response: number
   review: number
   new: number
+  // Pipeline write-requested-aware (2026-06-07):
+  // scored_open = status 'scored' NON ancora selezionate (write_requested != true)
+  // to_write    = selezionate dall'utente (write_requested) ma CV non ancora
+  //               pronto (status in scored/writing/review)
+  scored_open: number
+  to_write: number
 }
 
 // ── Composite types ────────────────────────────────────────────────

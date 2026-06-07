@@ -1,6 +1,13 @@
 'use client'
 
 import { useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  dismiss: {
+    it: 'Chiudi', en: 'Close', hu: 'Bezárás', es: 'Cerrar', de: 'Schließen', fr: 'Fermer', pt: 'Fechar',
+  },
+}
 
 export type BannerVariant = 'info' | 'warning' | 'error' | 'success'
 
@@ -43,6 +50,8 @@ export default function Banner({
 }: BannerProps) {
   const [visible, setVisible] = useState(defaultVisible)
   const [hiding, setHiding]   = useState(false)
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   const cfg = VARIANT_CONFIG[variant]
 
@@ -121,7 +130,7 @@ export default function Banner({
       {dismissible && (
         <button
           onClick={dismiss}
-          aria-label="Chiudi"
+          aria-label={tr('dismiss')}
           style={{
             flexShrink: 0, background: 'none', border: 'none',
             color: 'var(--color-dim)', cursor: 'pointer',

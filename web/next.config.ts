@@ -83,6 +83,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      // Il form manuale /profile/edit è stato rimosso: la modifica del profilo
+      // passa dalla chat con l'Assistente (vedi ProfileAssistantFab). Vecchi
+      // bookmark/link → pagina profilo.
+      { source: '/profile/edit', destination: '/profile', permanent: false },
+    ]
+  },
   async headers() {
     return [
       {

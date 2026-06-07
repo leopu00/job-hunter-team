@@ -1,6 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+
+const T: Record<string, Record<string, string>> = {
+  close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -122,6 +137,8 @@ export function AlertBanner({
   onDismiss,
 }: AlertBannerProps) {
   const [visible, setVisible] = useState(true);
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
 
   if (!visible) return null;
 
@@ -187,7 +204,7 @@ export function AlertBanner({
               onClick={dismiss}
               className="flex-shrink-0 flex items-center justify-center cursor-pointer bg-transparent border-0 p-0 transition-opacity hover:opacity-60"
               style={{ color: "currentColor" }}
-              aria-label="Chiudi"
+              aria-label={tr("close")}
             >
               <svg
                 width="14"

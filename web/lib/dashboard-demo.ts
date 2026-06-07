@@ -259,6 +259,8 @@ const stats: DashboardStats = {
   applied: 4,
   response: 1,
   excluded: 5,
+  scored_open: 6,
+  to_write: 13,
 };
 
 // Demo scores: 29 valori plausibili che riproducono i bucket sopra

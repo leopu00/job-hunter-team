@@ -1,9 +1,36 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  loading: {
+    it: "Caricamento",
+    en: "Loading",
+    hu: "Betöltés",
+    es: "Cargando",
+    de: "Wird geladen",
+    fr: "Chargement",
+    pt: "Carregando",
+  },
+  loading_lower: {
+    it: "caricamento…",
+    en: "loading…",
+    hu: "betöltés…",
+    es: "cargando…",
+    de: "wird geladen…",
+    fr: "chargement…",
+    pt: "carregando…",
+  },
+};
+
 export default function Loading() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   return (
     <main
       role="status"
       aria-busy="true"
-      aria-label="Caricamento"
+      aria-label={tr("loading")}
       className="min-h-screen flex items-center justify-center"
     >
       <div className="flex flex-col items-center gap-3">
@@ -24,7 +51,7 @@ export default function Loading() {
           className="text-[10px] uppercase tracking-widest"
           style={{ color: "var(--color-dim)" }}
         >
-          caricamento…
+          {tr("loading_lower")}
         </p>
       </div>
     </main>

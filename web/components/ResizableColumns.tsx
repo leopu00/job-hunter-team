@@ -1,6 +1,19 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  resize_hint: {
+    it: 'Trascina per ridimensionare — doppio click per reset',
+    en: 'Drag to resize — double click to reset',
+    hu: 'Húzd az átméretezéshez — dupla kattintás a visszaállításhoz',
+    es: 'Arrastra para redimensionar — doble clic para restablecer',
+    de: 'Zum Anpassen ziehen — Doppelklick zum Zurücksetzen',
+    fr: 'Glisser pour redimensionner — double-clic pour réinitialiser',
+    pt: 'Arraste para redimensionar — duplo clique para repor',
+  },
+}
 
 export interface ColumnDef {
   id: string
@@ -34,6 +47,8 @@ function loadWidths(key: string, cols: ColumnDef[]): number[] {
 
 export default function ResizableColumns({ columns, storageKey, height = 'auto', gap = 0 }: ResizableColumnsProps) {
   const storKey = storageKey ?? null
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
   const [widths, setWidths] = useState<number[]>(() =>
     storKey ? loadWidths(storKey, columns) : columns.map(c => c.defaultWidth ?? 200)
   )
@@ -130,7 +145,7 @@ export default function ResizableColumns({ columns, storageKey, height = 'auto',
               onMouseDown={e => onMouseDown(e, i)}
               onTouchStart={e => onTouchStart(e, i)}
               onDoubleClick={resetWidths}
-              title="Trascina per ridimensionare — doppio click per reset"
+              title={tr('resize_hint')}
               style={{
                 width: HANDLE_W, flexShrink: 0,
                 cursor: 'col-resize',

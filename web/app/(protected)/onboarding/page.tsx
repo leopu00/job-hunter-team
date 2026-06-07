@@ -2,6 +2,160 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "@/lib/use-locale";
+
+/* ── i18n inline ─────────────────────────────────────────────────── */
+
+const T: Record<string, Record<string, string>> = {
+  attach_title: {
+    it: "Allega CV, certificati o altri documenti",
+    en: "Attach CV, certificates or other documents",
+    hu: "CV, bizonyítványok vagy más dokumentumok csatolása",
+    es: "Adjunta CV, certificados u otros documentos",
+    de: "Lebenslauf, Zeugnisse oder andere Dokumente anhängen",
+    fr: "Joindre un CV, des certificats ou d'autres documents",
+    pt: "Anexar CV, certificados ou outros documentos",
+  },
+  attach_aria: {
+    it: "Allega file",
+    en: "Attach file",
+    hu: "Fájl csatolása",
+    es: "Adjuntar archivo",
+    de: "Datei anhängen",
+    fr: "Joindre un fichier",
+    pt: "Anexar ficheiro",
+  },
+  ph_name: {
+    it: "Mario Rossi",
+    en: "John Smith",
+    hu: "Kovács János",
+    es: "Juan Pérez",
+    de: "Max Mustermann",
+    fr: "Jean Dupont",
+    pt: "João Silva",
+  },
+  ph_experience: {
+    it: "Es. 5",
+    en: "E.g. 5",
+    hu: "Pl. 5",
+    es: "Ej. 5",
+    de: "Z. B. 5",
+    fr: "Ex. 5",
+    pt: "Ex. 5",
+  },
+  ph_email: {
+    it: "nome@example.com",
+    en: "name@example.com",
+    hu: "nev@example.com",
+    es: "nombre@example.com",
+    de: "name@example.com",
+    fr: "nom@example.com",
+    pt: "nome@example.com",
+  },
+  ph_phone: {
+    it: "+39 …",
+    en: "+1 …",
+    hu: "+36 …",
+    es: "+34 …",
+    de: "+49 …",
+    fr: "+33 …",
+    pt: "+351 …",
+  },
+  mic_title: {
+    it: "Microfono bloccato",
+    en: "Microphone blocked",
+    hu: "Mikrofon letiltva",
+    es: "Micrófono bloqueado",
+    de: "Mikrofon blockiert",
+    fr: "Microphone bloqué",
+    pt: "Microfone bloqueado",
+  },
+  mic_intro: {
+    it: "Per dettare a voce devi autorizzare Chrome a usare il microfono su questa pagina. Due modi rapidi:",
+    en: "To dictate by voice you must allow Chrome to use the microphone on this page. Two quick ways:",
+    hu: "A hangos diktáláshoz engedélyezned kell a Chrome számára a mikrofon használatát ezen az oldalon. Két gyors módszer:",
+    es: "Para dictar por voz debes autorizar a Chrome a usar el micrófono en esta página. Dos formas rápidas:",
+    de: "Um per Sprache zu diktieren, musst du Chrome erlauben, das Mikrofon auf dieser Seite zu verwenden. Zwei schnelle Wege:",
+    fr: "Pour dicter à la voix, vous devez autoriser Chrome à utiliser le microphone sur cette page. Deux moyens rapides :",
+    pt: "Para ditar por voz tens de autorizar o Chrome a usar o microfone nesta página. Duas formas rápidas:",
+  },
+  mic_step1: {
+    it: "Clicca il <strong>lucchetto 🔒</strong> accanto a <code class=\"text-[10.5px] px-1 rounded bg-[var(--color-panel)]\">localhost:3000</code> nella barra indirizzi → <strong>Impostazioni sito</strong> → <strong>Microfono</strong> → <strong>Consenti</strong>.",
+    en: "Click the <strong>padlock 🔒</strong> next to <code class=\"text-[10.5px] px-1 rounded bg-[var(--color-panel)]\">localhost:3000</code> in the address bar → <strong>Site settings</strong> → <strong>Microphone</strong> → <strong>Allow</strong>.",
+    hu: "Kattints a <strong>lakatra 🔒</strong> a <code class=\"text-[10.5px] px-1 rounded bg-[var(--color-panel)]\">localhost:3000</code> mellett a címsorban → <strong>Webhely beállításai</strong> → <strong>Mikrofon</strong> → <strong>Engedélyezés</strong>.",
+    es: "Haz clic en el <strong>candado 🔒</strong> junto a <code class=\"text-[10.5px] px-1 rounded bg-[var(--color-panel)]\">localhost:3000</code> en la barra de direcciones → <strong>Configuración del sitio</strong> → <strong>Micrófono</strong> → <strong>Permitir</strong>.",
+    de: "Klicke auf das <strong>Schloss 🔒</strong> neben <code class=\"text-[10.5px] px-1 rounded bg-[var(--color-panel)]\">localhost:3000</code> in der Adressleiste → <strong>Website-Einstellungen</strong> → <strong>Mikrofon</strong> → <strong>Zulassen</strong>.",
+    fr: "Cliquez sur le <strong>cadenas 🔒</strong> à côté de <code class=\"text-[10.5px] px-1 rounded bg-[var(--color-panel)]\">localhost:3000</code> dans la barre d'adresse → <strong>Paramètres du site</strong> → <strong>Microphone</strong> → <strong>Autoriser</strong>.",
+    pt: "Clica no <strong>cadeado 🔒</strong> ao lado de <code class=\"text-[10.5px] px-1 rounded bg-[var(--color-panel)]\">localhost:3000</code> na barra de endereços → <strong>Definições do site</strong> → <strong>Microfone</strong> → <strong>Permitir</strong>.",
+  },
+  mic_step2_pre: {
+    it: "In alternativa apri le impostazioni globali:",
+    en: "Alternatively open the global settings:",
+    hu: "Másik lehetőségként nyisd meg a globális beállításokat:",
+    es: "Como alternativa, abre la configuración global:",
+    de: "Alternativ öffne die globalen Einstellungen:",
+    fr: "Vous pouvez aussi ouvrir les paramètres globaux :",
+    pt: "Em alternativa, abre as definições globais:",
+  },
+  mic_step2_post: {
+    it: "e aggiungi",
+    en: "and add",
+    hu: "és add hozzá a",
+    es: "y añade",
+    de: "und füge",
+    fr: "et ajoutez",
+    pt: "e adiciona",
+  },
+  mic_step2_allow: {
+    it: "a <em>Consenti</em>.",
+    en: "to <em>Allow</em>.",
+    hu: "az <em>Engedélyezés</em> listához.",
+    es: "a <em>Permitir</em>.",
+    de: "zu <em>Zulassen</em> hinzu.",
+    fr: "à <em>Autoriser</em>.",
+    pt: "a <em>Permitir</em>.",
+  },
+  mic_step3: {
+    it: "Se hai anche il check a livello macOS: <strong>Impostazioni → Privacy → Microfono</strong> → spunta Chrome.",
+    en: "If you also have the macOS-level check: <strong>Settings → Privacy → Microphone</strong> → tick Chrome.",
+    hu: "Ha a macOS szintű ellenőrzés is aktív: <strong>Beállítások → Adatvédelem → Mikrofon</strong> → pipáld ki a Chrome-ot.",
+    es: "Si también tienes el control a nivel de macOS: <strong>Ajustes → Privacidad → Micrófono</strong> → marca Chrome.",
+    de: "Falls du auch die Prüfung auf macOS-Ebene hast: <strong>Einstellungen → Datenschutz → Mikrofon</strong> → Chrome ankreuzen.",
+    fr: "Si vous avez aussi le contrôle au niveau de macOS : <strong>Réglages → Confidentialité → Microphone</strong> → cochez Chrome.",
+    pt: "Se também tens o controlo ao nível do macOS: <strong>Definições → Privacidade → Microfone</strong> → marca o Chrome.",
+  },
+  mic_footer: {
+    it: "Fatto uno dei passaggi, ricarica la pagina o clicca <em>Riprova</em>: Chrome ti riproporrà il prompt del microfono.",
+    en: "Once you've done one of these steps, reload the page or click <em>Retry</em>: Chrome will show the microphone prompt again.",
+    hu: "Ha elvégezted az egyik lépést, töltsd újra az oldalt vagy kattints az <em>Újra</em> gombra: a Chrome újra felkínálja a mikrofon engedélyezését.",
+    es: "Tras realizar uno de los pasos, recarga la página o haz clic en <em>Reintentar</em>: Chrome volverá a mostrar el aviso del micrófono.",
+    de: "Wenn du einen der Schritte ausgeführt hast, lade die Seite neu oder klicke auf <em>Erneut versuchen</em>: Chrome zeigt die Mikrofon-Abfrage erneut an.",
+    fr: "Après avoir effectué l'une de ces étapes, rechargez la page ou cliquez sur <em>Réessayer</em> : Chrome réaffichera l'invite du microphone.",
+    pt: "Depois de fazer um dos passos, recarrega a página ou clica em <em>Tentar novamente</em>: o Chrome volta a mostrar o pedido do microfone.",
+  },
+  mic_close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+  mic_retry: {
+    it: "Riprova 🎤",
+    en: "Retry 🎤",
+    hu: "Újra 🎤",
+    es: "Reintentar 🎤",
+    de: "Erneut versuchen 🎤",
+    fr: "Réessayer 🎤",
+    pt: "Tentar novamente 🎤",
+  },
+};
+
+function makeTr(locale: string) {
+  return (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+}
 
 // `done` è opzionale per retrocompatibilità: messaggi vecchi senza il flag
 // vengono trattati come turno finito (done=true implicito). L'agente usa
@@ -85,6 +239,8 @@ const WELCOME_TEXT =
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const tr = makeTr(locale);
 
   // Profilo (sinistra, polling YAML)
   const [profile, setProfile] = useState<Profile>(null);
@@ -751,7 +907,7 @@ export default function OnboardingPage() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={sending || !status?.active}
-              title="Allega CV, certificati o altri documenti"
+              title={tr("attach_title")}
               className="px-3 py-3 transition-colors cursor-pointer disabled:cursor-not-allowed"
               style={{
                 color:
@@ -759,7 +915,7 @@ export default function OnboardingPage() {
                     ? "var(--color-green)"
                     : "var(--color-dim)",
               }}
-              aria-label="Allega file"
+              aria-label={tr("attach_aria")}
             >
               <svg
                 aria-hidden="true"
@@ -1171,6 +1327,8 @@ function ProfileLive({
   // ristorante / alberghiero — non tech, default neutro), poi dopo il mount
   // useEffect sceglie un settore casuale. Il flip è istantaneo all'occhio.
   const [phIdx, setPhIdx] = useState(0);
+  const locale = useLocale();
+  const tr = makeTr(locale);
   useEffect(() => {
     setPhIdx(pickIndex());
   }, []);
@@ -1211,7 +1369,7 @@ function ProfileLive({
           <Field
             label="Nome"
             value={profile?.name}
-            placeholder="Mario Rossi"
+            placeholder={tr("ph_name")}
             highlight
           />
           <Field
@@ -1232,7 +1390,7 @@ function ProfileLive({
                 ? String(profile.experience_years)
                 : null
             }
-            placeholder="Es. 5"
+            placeholder={tr("ph_experience")}
           />
         </div>
       </Section>
@@ -1242,12 +1400,12 @@ function ProfileLive({
           <Field
             label="Email"
             value={profile?.email ?? contacts.email ?? null}
-            placeholder="nome@example.com"
+            placeholder={tr("ph_email")}
           />
           <Field
             label="Telefono"
             value={contacts.phone ?? null}
-            placeholder="+39 …"
+            placeholder={tr("ph_phone")}
           />
           {contacts.linkedin && (
             <Field label="LinkedIn" value={contacts.linkedin} />
@@ -1580,6 +1738,8 @@ function MicBlockedModal({
   // per security — l'utente deve cliccarlo manualmente. Forniamo il
   // link come <a> così il click diretto funziona.
   const chromeSettingsUrl = "chrome://settings/content/microphone";
+  const locale = useLocale();
+  const tr = makeTr(locale);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
@@ -1598,26 +1758,18 @@ function MicBlockedModal({
           <div className="text-2xl">🎤</div>
           <div>
             <h2 className="text-[14px] font-bold text-[var(--color-bright)] mb-1">
-              Microfono bloccato
+              {tr("mic_title")}
             </h2>
             <p className="text-[11.5px] text-[var(--color-muted)] leading-relaxed">
-              Per dettare a voce devi autorizzare Chrome a usare il microfono su
-              questa pagina. Due modi rapidi:
+              {tr("mic_intro")}
             </p>
           </div>
         </div>
 
         <ol className="text-[11.5px] text-[var(--color-bright)] space-y-3 pl-5 list-decimal mb-5">
+          <li dangerouslySetInnerHTML={{ __html: tr("mic_step1") }} />
           <li>
-            Clicca il <strong>lucchetto 🔒</strong> accanto a{" "}
-            <code className="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">
-              localhost:3000
-            </code>{" "}
-            nella barra indirizzi → <strong>Impostazioni sito</strong> →{" "}
-            <strong>Microfono</strong> → <strong>Consenti</strong>.
-          </li>
-          <li>
-            In alternativa apri le impostazioni globali:
+            {tr("mic_step2_pre")}
             <a
               href={chromeSettingsUrl}
               target="_blank"
@@ -1626,22 +1778,19 @@ function MicBlockedModal({
             >
               chrome://settings/content/microphone
             </a>{" "}
-            e aggiungi{" "}
+            {tr("mic_step2_post")}{" "}
             <code className="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">
               http://localhost:3000
             </code>{" "}
-            a <em>Consenti</em>.
+            <span dangerouslySetInnerHTML={{ __html: tr("mic_step2_allow") }} />
           </li>
-          <li>
-            Se hai anche il check a livello macOS:{" "}
-            <strong>Impostazioni → Privacy → Microfono</strong> → spunta Chrome.
-          </li>
+          <li dangerouslySetInnerHTML={{ __html: tr("mic_step3") }} />
         </ol>
 
-        <p className="text-[10.5px] text-[var(--color-dim)] mb-4">
-          Fatto uno dei passaggi, ricarica la pagina o clicca <em>Riprova</em>:
-          Chrome ti riproporrà il prompt del microfono.
-        </p>
+        <p
+          className="text-[10.5px] text-[var(--color-dim)] mb-4"
+          dangerouslySetInnerHTML={{ __html: tr("mic_footer") }}
+        />
 
         <div className="flex gap-2 justify-end">
           <button
@@ -1653,7 +1802,7 @@ function MicBlockedModal({
               color: "var(--color-muted)",
             }}
           >
-            Chiudi
+            {tr("mic_close")}
           </button>
           <button
             onClick={onRetry}
@@ -1661,7 +1810,7 @@ function MicBlockedModal({
             className="px-4 py-2 rounded-md text-[11px] font-bold tracking-wide transition-opacity cursor-pointer"
             style={{ background: "var(--color-green)", color: "#000" }}
           >
-            Riprova 🎤
+            {tr("mic_retry")}
           </button>
         </div>
       </div>

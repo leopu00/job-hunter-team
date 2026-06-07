@@ -11,6 +11,100 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { colorForAgent } from "./agent-colors";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  noConsumptionAria: {
+    it: "Nessun consumo nella finestra",
+    en: "No consumption in window",
+    hu: "Nincs fogyasztás az ablakban",
+    es: "Sin consumo en la ventana",
+    de: "Kein Verbrauch im Zeitfenster",
+    fr: "Aucune consommation sur la fenêtre",
+    pt: "Sem consumo na janela",
+  },
+  noConsumption: {
+    it: "nessun consumo",
+    en: "no consumption",
+    hu: "nincs fogyasztás",
+    es: "sin consumo",
+    de: "kein Verbrauch",
+    fr: "aucune consommation",
+    pt: "sem consumo",
+  },
+  distributionAria: {
+    it: "Distribuzione token per agente",
+    en: "Token distribution per agent",
+    hu: "Token-eloszlás ügynökönként",
+    es: "Distribución de tokens por agente",
+    de: "Token-Verteilung pro Agent",
+    fr: "Répartition des tokens par agent",
+    pt: "Distribuição de tokens por agente",
+  },
+  whoConsumes: {
+    it: "Chi consuma quanti token",
+    en: "Who consumes how many tokens",
+    hu: "Ki mennyi tokent fogyaszt",
+    es: "Quién consume cuántos tokens",
+    de: "Wer wie viele Tokens verbraucht",
+    fr: "Qui consomme combien de tokens",
+    pt: "Quem consome quantos tokens",
+  },
+  activeAgentsAvg: {
+    it: "{n} agenti attivi · media team {avg} kT/min",
+    en: "{n} active agents · team avg {avg} kT/min",
+    hu: "{n} aktív ügynök · csapatátlag {avg} kT/perc",
+    es: "{n} agentes activos · media equipo {avg} kT/min",
+    de: "{n} aktive Agenten · Team-Durchschnitt {avg} kT/min",
+    fr: "{n} agents actifs · moyenne équipe {avg} kT/min",
+    pt: "{n} agentes ativos · média equipe {avg} kT/min",
+  },
+  timeWindow: {
+    it: "finestra temporale",
+    en: "time window",
+    hu: "időablak",
+    es: "ventana temporal",
+    de: "Zeitfenster",
+    fr: "fenêtre temporelle",
+    pt: "janela temporal",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  noneConsumed: {
+    it: "Nessun agente ha consumato token negli ultimi {w}.",
+    en: "No agent consumed tokens in the last {w}.",
+    hu: "Egy ügynök sem fogyasztott tokent az elmúlt {w} alatt.",
+    es: "Ningún agente consumió tokens en los últimos {w}.",
+    de: "Kein Agent hat in den letzten {w} Tokens verbraucht.",
+    fr: "Aucun agent n'a consommé de tokens sur les {w} dernières.",
+    pt: "Nenhum agente consumiu tokens nos últimos {w}.",
+  },
+  teamShareAria: {
+    it: "{pct}% del consumo team",
+    en: "{pct}% of team consumption",
+    hu: "a csapatfogyasztás {pct}%-a",
+    es: "{pct}% del consumo del equipo",
+    de: "{pct}% des Team-Verbrauchs",
+    fr: "{pct}% de la consommation de l'équipe",
+    pt: "{pct}% do consumo da equipe",
+  },
+  avgRateTitle: {
+    it: "media kT/min nella finestra",
+    en: "avg kT/min in window",
+    hu: "átlag kT/perc az ablakban",
+    es: "media kT/min en la ventana",
+    de: "Durchschnitt kT/min im Fenster",
+    fr: "moyenne kT/min sur la fenêtre",
+    pt: "média kT/min na janela",
+  },
+};
 
 const WINDOWS = [
   { id: "10m", label: "10m", minutes: 10 },
@@ -30,9 +124,11 @@ type ApiResponse = {
 function Pie({
   slices,
   size = 220,
+  tr,
 }: {
   slices: { agent: string; kt: number; color: string }[];
   size?: number;
+  tr: (k: string) => string;
 }) {
   const r = size / 2 - 4;
   const cx = size / 2;
@@ -45,7 +141,7 @@ function Pie({
         width={size}
         height={size}
         viewBox={`0 0 ${size} ${size}`}
-        aria-label="Nessun consumo nella finestra"
+        aria-label={tr("noConsumptionAria")}
       >
         <circle
           cx={cx}
@@ -63,7 +159,7 @@ function Pie({
           fill="var(--color-dim)"
           textAnchor="middle"
         >
-          nessun consumo
+          {tr("noConsumption")}
         </text>
       </svg>
     );
@@ -117,7 +213,7 @@ function Pie({
       height={size}
       viewBox={`0 0 ${size} ${size}`}
       role="img"
-      aria-label="Distribuzione token per agente"
+      aria-label={tr("distributionAria")}
     >
       {paths.map((p, i) => (
         <path key={i} d={p.d} fill={p.color} stroke="#0f172a" strokeWidth={1}>
@@ -131,6 +227,8 @@ function Pie({
 }
 
 export default function TokenBreakdown() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [windowId, setWindowId] = useState<WindowId>("30m");
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -193,13 +291,19 @@ export default function TokenBreakdown() {
       <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-baseline gap-3 flex-wrap">
           <span className="text-[11px] uppercase tracking-wide text-[var(--color-dim)]">
-            Chi consuma quanti token
+            {tr("whoConsumes")}
           </span>
           <span className="text-[11px] text-[var(--color-muted)]">
-            {rows.length} agenti attivi · team avg {teamAvg.toFixed(1)} kT/min
+            {tr("activeAgentsAvg")
+              .replace("{n}", String(rows.length))
+              .replace("{avg}", teamAvg.toFixed(1))}
           </span>
         </div>
-        <div className="flex gap-1" role="radiogroup" aria-label="time window">
+        <div
+          className="flex gap-1"
+          role="radiogroup"
+          aria-label={tr("timeWindow")}
+        >
           {WINDOWS.map((w) => {
             const active = w.id === windowId;
             return (
@@ -227,7 +331,7 @@ export default function TokenBreakdown() {
 
       {loading && !data ? (
         <div className="text-[11px] text-[var(--color-dim)] py-6 text-center">
-          Caricamento…
+          {tr("loading")}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6 items-start">
@@ -239,13 +343,14 @@ export default function TokenBreakdown() {
                 color: r.color,
               }))}
               size={240}
+              tr={tr}
             />
           </div>
 
           <div>
             {rows.length === 0 ? (
               <div className="text-[11px] text-[var(--color-dim)] py-3">
-                Nessun agente ha consumato token negli ultimi {windowId}.
+                {tr("noneConsumed").replace("{w}", windowId)}
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -287,7 +392,10 @@ export default function TokenBreakdown() {
                             background: r.color,
                             opacity: 0.8,
                           }}
-                          aria-label={`${sharePct.toFixed(1)}% del consumo team`}
+                          aria-label={tr("teamShareAria").replace(
+                            "{pct}",
+                            sharePct.toFixed(1),
+                          )}
                         />
                       </div>
                       <div className="flex items-baseline gap-3 text-[10px] font-mono whitespace-nowrap">
@@ -298,7 +406,7 @@ export default function TokenBreakdown() {
                         </span>
                         <span
                           className="text-[var(--color-muted)] tabular-nums"
-                          title="media kT/min nella finestra"
+                          title={tr("avgRateTitle")}
                         >
                           {r.avgRate.toFixed(2)}/min
                         </span>
