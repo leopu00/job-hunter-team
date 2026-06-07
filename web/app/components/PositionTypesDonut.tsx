@@ -211,7 +211,6 @@ export default function PositionTypesDonut({
           const dimmed =
             (hovered != null && !isHover && !isSelected) ||
             (hovered == null && hasSelection && !isSelected);
-          const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
           return (
             <li
               key={d.family}
@@ -256,7 +255,7 @@ export default function PositionTypesDonut({
                   fontWeight: 600,
                 }}
               >
-                {pct}%
+                {d.count}
               </span>
             </li>
           );
