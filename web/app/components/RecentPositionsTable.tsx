@@ -148,6 +148,7 @@ export default function RecentPositionsTable({
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {[
+                labels.colUpdated,
                 labels.colTitle,
                 labels.colCompany,
                 labels.colCategory,
@@ -159,7 +160,6 @@ export default function RecentPositionsTable({
                 labels.colMonthly,
                 labels.colStatus,
                 labels.colUpdatedBy,
-                labels.colUpdated,
                 labels.colId,
               ].map((h) => (
                 <th
@@ -195,6 +195,9 @@ export default function RecentPositionsTable({
                       i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
                   }}
                 >
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
+                    {formatFoundAt(p.last_action_at || p.found_at || "")}
+                  </td>
                   <td
                     className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
                     title={p.title ?? undefined}
@@ -332,9 +335,6 @@ export default function RecentPositionsTable({
                     ) : (
                       <span className="text-[var(--color-dim)]">—</span>
                     )}
-                  </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
-                    {formatFoundAt(p.last_action_at || p.found_at || "")}
                   </td>
                   <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
                     {p.legacy_id
