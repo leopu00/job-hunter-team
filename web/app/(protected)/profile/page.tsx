@@ -244,7 +244,7 @@ export default async function ProfilePage() {
         )}
 
         {profile && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 items-start">
+          <div className="columns-1 md:columns-2 gap-6 mb-8">
             {/* Basic Info */}
             <ProfileSection id="info-base" title={t("sec_info_base")}>
               <ProfileField label={t("f_name")} value={profile.name} />
@@ -925,15 +925,13 @@ export default async function ProfilePage() {
               </ProfileSection>
             )}
 
-            {/* Note libere — full width */}
+            {/* Note libere */}
             {freeNotes && (
-              <div className="md:col-span-2">
-                <ProfileSection title={t("sec_free_notes")}>
-                  <p className="text-[12px] text-[var(--color-bright)] leading-relaxed whitespace-pre-wrap">
-                    {freeNotes}
-                  </p>
-                </ProfileSection>
-              </div>
+              <ProfileSection title={t("sec_free_notes")}>
+                <p className="text-[12px] text-[var(--color-bright)] leading-relaxed whitespace-pre-wrap">
+                  {freeNotes}
+                </p>
+              </ProfileSection>
             )}
 
             {/* Approfondimenti — blocchi L2/L3 non coperti dalle sezioni fisse.
@@ -966,7 +964,7 @@ function ProfileSection({
   return (
     <div
       id={id}
-      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors scroll-mt-20"
+      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors scroll-mt-20 break-inside-avoid mb-6"
     >
       <div className="section-label mb-4">{title}</div>
       {children}
