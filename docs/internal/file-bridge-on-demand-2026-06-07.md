@@ -143,13 +143,19 @@ containment per evitare traversal.
 
 ## 📊 Stato implementazione (2026-06-07)
 - [x] Design doc (questo file)
-- [ ] Migration `037_file_bridge.sql` (+ bucket + RLS)
-- [ ] Endpoint VPS-facing (`/api/cloud-sync/file-bridge*`, `/file-index`)
-- [ ] Endpoint browser-facing (`/api/profile/files*`) + UI cloud-aware
-- [ ] Poller `file-bridge-poller.js` + comando `cloud file-bridge-listen` + wiring pid1
+- [x] Migration `037_file_bridge.sql` (+ bucket + RLS)
+- [x] Endpoint VPS-facing (`/api/cloud-sync/file-bridge*`, `/file-index`)
+- [x] Endpoint browser-facing (`/api/profile/files*`) + UI cloud-aware
+- [x] Poller `file-bridge-poller.js` + comando `cloud file-bridge-listen` + wiring pid1
 - [ ] **Manuale**: applicare la migration su Supabase prod + verificare bucket
+      `file-transit` (privato)
 - [ ] **Manuale**: rebuild immagine container con il nuovo poller + deploy VPS
-- [ ] Test end-to-end (richiede VPS paired + Vercel)
+- [ ] Test end-to-end (richiede VPS paired + Vercel) — non testabile da qui
+      senza VPS reale + bucket creato
+
+> **Nota**: tutto il codice è scritto, lint+typecheck puliti e su `origin/dev2`.
+> Restano i 2 passi manuali infra (migration prod + rebuild/deploy immagine) e
+> il test end-to-end, che richiedono accesso runtime non disponibile in dev.
 
 ## 🔭 Note / evoluzioni
 - File grandi: il design evita il route-through-Vercel proprio per non incappare
