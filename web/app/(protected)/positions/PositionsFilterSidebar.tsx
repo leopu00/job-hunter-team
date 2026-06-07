@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { UNCATEGORIZED_LABEL, colorForFamily } from "@/lib/position-classifier";
+import RangeHistogram, { buildBins, type Range } from "./RangeHistogram";
 
 // Dataset leggero servito da /api/positions/facets.
 type Facet = {
   id: string;
   role_family: string | null;
   score: number | null;
+  critic_score: number | null;
   loc_country: string | null;
   loc_city: string | null;
   status: string;
@@ -17,6 +19,38 @@ type Facet = {
 };
 
 type ScoreRange = { lo: number; hi: number };
+
+// Step dei bin degli istogrammi: score 0-100 a passo 5, voto critico 0-10 a 0.5.
+const SCORE_STEP = 5;
+const CRITIC_STEP = 0.5;
+
+// ── Filtri "diretti" (ex-wizard): toggle semplici, niente cross-filtering ──
+type DirectKey = "status" | "remote" | "source";
+type Option = { val: string; label: string; color?: string };
+
+const STATUS_OPTIONS: Option[] = [
+  { val: "new", label: "new", color: "var(--color-muted)" },
+  { val: "checked", label: "checked", color: "var(--color-blue)" },
+  { val: "scored", label: "scored", color: "var(--color-purple)" },
+  { val: "writing", label: "writing", color: "var(--color-yellow)" },
+  { val: "review", label: "review", color: "var(--color-orange)" },
+  { val: "ready", label: "ready", color: "#7fffb2" },
+  { val: "applied", label: "applied", color: "var(--color-green)" },
+  { val: "response", label: "response", color: "#58a6ff" },
+  { val: "excluded", label: "excluded", color: "var(--color-red)" },
+];
+
+const REMOTE_OPTIONS: Option[] = [
+  { val: "full_remote", label: "Full remote" },
+  { val: "hybrid", label: "Hybrid" },
+  { val: "onsite", label: "On-site" },
+];
+
+const DIRECT_LABELS: Record<DirectKey, string> = {
+  status: "Status",
+  remote: "Remote",
+  source: "Fonte",
+};
 
 // Chiave city coerente con il server (queries.ts facetCityKey).
 function cityKey(country: string | null, city: string | null): string {
@@ -48,21 +82,57 @@ function parseBands(v: string | null): ScoreRange[] {
     .filter((r): r is ScoreRange => r != null);
 }
 
-export default function PositionsFilterSidebar() {
+// Singolo range "lo-hi" con decimali (voto critico). hi può iniziare con "-"
+// solo per valori negativi che qui non esistono, quindi split su "-" è sicuro.
+function parseRange(v: string | null): Range | null {
+  if (!v) return null;
+  const [lo, hi] = v.split("-").map((n) => parseFloat(n.trim()));
+  return Number.isFinite(lo) && Number.isFinite(hi) ? { lo, hi } : null;
+}
+
+export default function PositionsFilterSidebar({
+  availableSources = [],
+}: {
+  availableSources?: string[];
+}) {
   const router = useRouter();
   const sp = useSearchParams();
   const [facets, setFacets] = useState<Facet[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [openCountry, setOpenCountry] = useState<string | null>(null);
-  // Inizio range score in attesa del secondo clic (lo del bin ancora).
-  const [scoreAnchor, setScoreAnchor] = useState<number | null>(null);
 
   // Stato applicato = URL (source of truth).
   const selectedFamilies = useMemo(() => csv(sp.get("family")), [sp]);
   const selectedCountries = useMemo(() => csv(sp.get("country")), [sp]);
   const selectedCities = useMemo(() => csv(sp.get("city")), [sp]);
   const selectedRanges = useMemo(() => parseBands(sp.get("band")), [sp]);
+  const scoreRange = selectedRanges[0] ?? null;
   const unscoredSelected = sp.get("noscore") === "1";
+  const criticRange = useMemo(() => parseRange(sp.get("cscore")), [sp]);
+  const criticUnscored = sp.get("cnoscore") === "1";
+
+  // Filtri diretti (ex-wizard): un array di valori selezionati per chiave.
+  const directSelections = useMemo<Record<DirectKey, string[]>>(
+    () => ({
+      status: csv(sp.get("status")),
+      remote: csv(sp.get("remote")),
+      source: csv(sp.get("source")),
+    }),
+    [sp],
+  );
+
+  // Gruppi diretti renderizzati come sezioni a chip (source è dinamico).
+  const directGroups = useMemo(
+    () => [
+      { key: "status" as DirectKey, options: STATUS_OPTIONS },
+      { key: "remote" as DirectKey, options: REMOTE_OPTIONS },
+      {
+        key: "source" as DirectKey,
+        options: availableSources.map((s) => ({ val: s, label: s })),
+      },
+    ],
+    [availableSources],
+  );
 
   useEffect(() => {
     let cancel = false;
@@ -97,71 +167,70 @@ export default function PositionsFilterSidebar() {
     );
   }
   function toggleFamily(f: string) {
-    // Cambiare scope tipo ricalcola i bin score: pulisco selezione score.
+    // Cambiare scope tipo ricalcola i bin di score/voto: pulisco le selezioni.
     const next = new URLSearchParams(sp.toString());
     const cur = csv(sp.get("family"));
     const nf = cur.includes(f) ? cur.filter((v) => v !== f) : [...cur, f];
     if (nf.length) next.set("family", nf.join(","));
     else next.delete("family");
-    next.delete("band");
-    next.delete("noscore");
+    ["band", "noscore", "cscore", "cnoscore"].forEach((k) => next.delete(k));
     pushURL(next);
   }
-  // Selezione a range: primo clic = inizio (anchor), secondo clic = fine.
-  // Lo score filter è un singolo range contiguo {lo,hi}. Terzo clic = nuovo
-  // inizio. Clic sullo stesso bin singolo = deseleziona.
-  function clickScoreBand(r: ScoreRange) {
-    if (scoreAnchor != null) {
-      if (scoreAnchor === r.lo) {
-        setScoreAnchor(null);
-        setParam("band", []);
-        return;
-      }
-      const lo = Math.min(scoreAnchor, r.lo);
-      const hi = Math.max(scoreAnchor + 4, r.hi);
-      setScoreAnchor(null);
-      setParam("band", [`${lo}-${hi}`]);
-      return;
-    }
-    const isSingleSame =
-      selectedRanges.length === 1 &&
-      selectedRanges[0].lo === r.lo &&
-      selectedRanges[0].hi === r.hi;
-    if (isSingleSame) {
-      setParam("band", []);
-      return;
-    }
-    setScoreAnchor(r.lo);
-    setParam("band", [`${r.lo}-${r.hi}`]);
+  // Range singolo "lo-hi" su un parametro URL (band per lo score, cscore per
+  // il voto). null = rimuove il filtro.
+  function setRangeParam(key: string, range: Range | null) {
+    setParam(key, range ? [`${range.lo}-${range.hi}`] : []);
   }
-  function toggleUnscored() {
+  function toggleFlag(key: string, on: boolean) {
     const next = new URLSearchParams(sp.toString());
-    if (unscoredSelected) next.delete("noscore");
-    else next.set("noscore", "1");
+    if (on) next.set(key, "1");
+    else next.delete(key);
     pushURL(next);
   }
 
+  const directActive = Object.values(directSelections).reduce(
+    (a, v) => a + v.length,
+    0,
+  );
   const totalActive =
     selectedFamilies.length +
     selectedCountries.length +
     selectedCities.length +
-    selectedRanges.length +
-    (unscoredSelected ? 1 : 0);
+    (scoreRange ? 1 : 0) +
+    (unscoredSelected ? 1 : 0) +
+    (criticRange ? 1 : 0) +
+    (criticUnscored ? 1 : 0) +
+    directActive;
 
   function resetAll() {
-    setScoreAnchor(null);
     const next = new URLSearchParams(sp.toString());
-    ["family", "country", "city", "band", "noscore"].forEach((k) =>
-      next.delete(k),
-    );
+    [
+      "family",
+      "country",
+      "city",
+      "band",
+      "noscore",
+      "cscore",
+      "cnoscore",
+      "status",
+      "remote",
+      "source",
+      "verdict",
+      "tier",
+    ].forEach((k) => next.delete(k));
     pushURL(next);
   }
 
   // ── Cross-filtering (mirror di MapCharts) ──
   const passScore = (score: number | null) => {
-    if (selectedRanges.length === 0 && !unscoredSelected) return true;
+    if (!scoreRange && !unscoredSelected) return true;
     if (score == null || score === 0) return unscoredSelected;
-    return selectedRanges.some((r) => score >= r.lo && score <= r.hi);
+    return scoreRange ? score >= scoreRange.lo && score <= scoreRange.hi : false;
+  };
+  const passCritic = (c: number | null) => {
+    if (!criticRange && !criticUnscored) return true;
+    if (c == null) return criticUnscored;
+    return criticRange ? c >= criticRange.lo && c <= criticRange.hi : false;
   };
   const locationActive =
     selectedCountries.length > 0 || selectedCities.length > 0;
@@ -199,46 +268,42 @@ export default function PositionsFilterSidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facets, selectedCountries, selectedCities]);
 
-  // Score: scope per location + family (esclude la propria dimensione).
-  // Bin fissi da 5 punti (90-94, 85-89, ...), solo quelli non vuoti.
-  const scoreList = useMemo(() => {
-    const pool = facets.filter((p) => passLocation(p) && passFamily(p));
-    const total = pool.length;
-    const bins = new Map<number, number>(); // idx (score/5) → count
+  // Score: istogramma, scope per location + family + voto (esclude sé stesso).
+  // Bin auto-fittati al range reale dei dati (niente code vuote).
+  const scoreHist = useMemo(() => {
+    const pool = facets.filter(
+      (p) => passLocation(p) && passFamily(p) && passCritic(p.critic_score),
+    );
+    const scored: number[] = [];
     let unscored = 0;
     for (const p of pool) {
-      if (typeof p.score === "number" && p.score > 0) {
-        const idx = Math.min(19, Math.floor(p.score / 5));
-        bins.set(idx, (bins.get(idx) ?? 0) + 1);
-      } else {
-        unscored++;
-      }
+      if (typeof p.score === "number" && p.score > 0) scored.push(p.score);
+      else unscored++;
     }
-    const rows = Array.from(bins.entries())
-      .map(([idx, count]) => {
-        const lo = idx * 5;
-        const hi = lo + 4;
-        return {
-          lo,
-          hi,
-          label: `${lo}-${hi}`,
-          count,
-          pct: total ? Math.round((count / total) * 100) : 0,
-        };
-      })
-      .sort((a, b) => b.lo - a.lo);
-    return {
-      total,
-      rows,
-      unscored,
-      unscoredPct: total ? Math.round((unscored / total) * 100) : 0,
-    };
+    return { bins: buildBins(scored, SCORE_STEP), total: pool.length, unscored };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facets, selectedCountries, selectedCities, selectedFamilies]);
+  }, [facets, selectedCountries, selectedCities, selectedFamilies, criticRange, criticUnscored]);
 
-  // Location tree: scope per family + score (esclude la propria dimensione).
+  // Voto critico (0-10): istogramma, scope per location + family + score.
+  const criticHist = useMemo(() => {
+    const pool = facets.filter(
+      (p) => passLocation(p) && passFamily(p) && passScore(p.score),
+    );
+    const voted: number[] = [];
+    let unscored = 0;
+    for (const p of pool) {
+      if (typeof p.critic_score === "number") voted.push(p.critic_score);
+      else unscored++;
+    }
+    return { bins: buildBins(voted, CRITIC_STEP), total: pool.length, unscored };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [facets, selectedCountries, selectedCities, selectedFamilies, scoreRange, unscoredSelected]);
+
+  // Location tree: scope per family + score + voto (esclude la propria dim.).
   const locationTree = useMemo(() => {
-    const pool = facets.filter((p) => passFamily(p) && passScore(p.score));
+    const pool = facets.filter(
+      (p) => passFamily(p) && passScore(p.score) && passCritic(p.critic_score),
+    );
     const byCountry = new Map<string, Map<string, number>>();
     const countryTotals = new Map<string, number>();
     for (const p of pool) {
@@ -270,7 +335,7 @@ export default function PositionsFilterSidebar() {
     });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facets, selectedFamilies, selectedRanges, unscoredSelected]);
+  }, [facets, selectedFamilies, scoreRange, unscoredSelected, criticRange, criticUnscored]);
 
   const treeTotal = locationTree.reduce((s, c) => s + c.count, 0);
 
@@ -309,8 +374,9 @@ export default function PositionsFilterSidebar() {
 
   return (
     <aside className="shrink-0 flex flex-col gap-4 pr-1" style={{ width: 300 }}>
-      {/* Header sidebar */}
-      <div className="flex items-center justify-between">
+      {/* Header sidebar — altezza fissa per allinearsi alla toolbar a destra,
+          così la prima card e la tabella partono allo stesso livello. */}
+      <div className="h-8 flex items-center justify-between">
         <span
           className="text-[10px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2"
           style={{ color: "var(--color-dim)" }}
@@ -369,57 +435,44 @@ export default function PositionsFilterSidebar() {
         )}
       </Section>
 
-      {/* Score — elenco fasce con conteggi e percentuali, selezione a range */}
+      {/* Score — istogramma con selezione a range + input precisi */}
       <Section
         title="Score"
         badge={
-          selectedRanges[0]
-            ? `${selectedRanges[0].lo}–${selectedRanges[0].hi}`
-            : `${scoreList.total}`
+          scoreRange ? `${scoreRange.lo}–${scoreRange.hi}` : `${scoreHist.total}`
         }
       >
-        {scoreAnchor != null && (
-          <div
-            className="text-[9px] mb-1 px-2"
-            style={{ color: "var(--color-green)" }}
-          >
-            Seleziona la fine del range…
-          </div>
-        )}
-        {scoreList.rows.length === 0 && scoreList.unscored === 0 ? (
-          <EmptyRow />
-        ) : (
-          <ul className="flex flex-col">
-            {scoreList.rows.map((r) => {
-              const range = selectedRanges[0];
-              const inRange = range
-                ? r.lo >= range.lo && r.hi <= range.hi
-                : false;
-              const isAnchor = scoreAnchor === r.lo;
-              return (
-                <FacetRow
-                  key={r.label}
-                  active={inRange || isAnchor}
-                  onClick={() => clickScoreBand({ lo: r.lo, hi: r.hi })}
-                  label={r.label}
-                  mono
-                  count={r.count}
-                  pct={r.pct}
-                />
-              );
-            })}
-            {scoreList.unscored > 0 && (
-              <FacetRow
-                active={unscoredSelected}
-                onClick={toggleUnscored}
-                label="senza score"
-                italic
-                count={scoreList.unscored}
-                pct={scoreList.unscoredPct}
-              />
-            )}
-          </ul>
-        )}
+        <RangeHistogram
+          bins={scoreHist.bins}
+          value={scoreRange}
+          onChange={(r) => setRangeParam("band", r)}
+          decimals={0}
+          unscoredCount={scoreHist.unscored}
+          unscoredSelected={unscoredSelected}
+          onToggleUnscored={() => toggleFlag("noscore", !unscoredSelected)}
+          unscoredLabel="senza score"
+        />
+      </Section>
+
+      {/* Voto critico (0-10) — istogramma con selezione a range + input */}
+      <Section
+        title="Voto critico"
+        badge={
+          criticRange
+            ? `${criticRange.lo}–${criticRange.hi}`
+            : `${criticHist.total}`
+        }
+      >
+        <RangeHistogram
+          bins={criticHist.bins}
+          value={criticRange}
+          onChange={(r) => setRangeParam("cscore", r)}
+          decimals={1}
+          unscoredCount={criticHist.unscored}
+          unscoredSelected={criticUnscored}
+          onToggleUnscored={() => toggleFlag("cnoscore", !criticUnscored)}
+          unscoredLabel="senza voto"
+        />
       </Section>
 
       {/* Albero Location */}
@@ -558,7 +611,113 @@ export default function PositionsFilterSidebar() {
           </ul>
         )}
       </Section>
+
+      {/* Filtri diretti (ex-wizard): Tier / Status / Remote / Fonte / Voto */}
+      {directGroups.map((g) => (
+        <ChipSection
+          key={g.key}
+          title={DIRECT_LABELS[g.key]}
+          options={g.options}
+          selected={directSelections[g.key]}
+          onToggle={(val) => toggleInParam(g.key, val)}
+          onClear={() => setParam(g.key, [])}
+        />
+      ))}
     </aside>
+  );
+}
+
+// Sezione a chip toggle per i filtri diretti. Collassabile; di default
+// aperta solo se ha selezioni attive (così la sidebar resta compatta).
+function ChipSection({
+  title,
+  options,
+  selected,
+  onToggle,
+  onClear,
+}: {
+  title: string;
+  options: Option[];
+  selected: string[];
+  onToggle: (val: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(selected.length > 0);
+  if (options.length === 0) return null;
+  return (
+    <div
+      className="rounded-lg border p-3"
+      style={{
+        borderColor: "var(--color-border)",
+        background: "var(--color-card)",
+      }}
+    >
+      <div className="flex items-baseline justify-between mb-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-baseline gap-1.5 cursor-pointer min-w-0"
+        >
+          <span
+            className="text-[8px]"
+            style={{ color: "var(--color-dim)" }}
+            aria-hidden
+          >
+            {open ? "▼" : "▶"}
+          </span>
+          <span
+            className="text-[9.5px] font-semibold tracking-[0.16em] uppercase"
+            style={{ color: "var(--color-dim)" }}
+          >
+            {title}
+          </span>
+        </button>
+        {selected.length > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label={`Pulisci ${title}`}
+            title="Pulisci"
+            className="text-[9px] tabular-nums cursor-pointer leading-none flex items-center gap-1"
+            style={{ color: "var(--color-green)" }}
+          >
+            {selected.length} ✕
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="flex flex-wrap gap-1.5">
+          {options.map((o) => {
+            const active = selected.includes(o.val);
+            return (
+              <button
+                key={o.val}
+                type="button"
+                onClick={() => onToggle(o.val)}
+                aria-pressed={active}
+                className="px-2 py-0.5 text-[10px] font-semibold rounded-full border cursor-pointer transition-colors whitespace-nowrap"
+                style={
+                  active
+                    ? {
+                        color: o.color ?? "var(--color-bright)",
+                        borderColor: o.color ?? "var(--color-green)",
+                        background: o.color ? `${o.color}20` : "var(--color-card)",
+                      }
+                    : {
+                        color: "var(--color-dim)",
+                        borderColor: "var(--color-border)",
+                        background: "transparent",
+                      }
+                }
+                title={o.label}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -642,11 +801,14 @@ function Section({
   title,
   badge,
   children,
+  defaultOpen = true,
 }: {
   title: string;
   badge?: string;
   children: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div
       className="rounded-lg border p-3"
@@ -655,23 +817,38 @@ function Section({
         background: "var(--color-card)",
       }}
     >
-      <div className="flex items-baseline justify-between mb-2">
-        <span
-          className="text-[9.5px] font-semibold tracking-[0.16em] uppercase"
-          style={{ color: "var(--color-dim)" }}
+      <div
+        className={`flex items-baseline justify-between gap-2 ${open ? "mb-2" : ""}`}
+      >
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-baseline gap-1.5 cursor-pointer min-w-0"
         >
-          {title}
-        </span>
+          <span
+            className="text-[8px]"
+            style={{ color: "var(--color-dim)" }}
+            aria-hidden
+          >
+            {open ? "▼" : "▶"}
+          </span>
+          <span
+            className="text-[9.5px] font-semibold tracking-[0.16em] uppercase"
+            style={{ color: "var(--color-dim)" }}
+          >
+            {title}
+          </span>
+        </button>
         {badge && (
           <span
-            className="text-[9.5px] tabular-nums"
+            className="text-[9.5px] tabular-nums flex-shrink-0"
             style={{ color: "var(--color-muted)" }}
           >
             {badge}
           </span>
         )}
       </div>
-      {children}
+      {open && children}
     </div>
   );
 }
