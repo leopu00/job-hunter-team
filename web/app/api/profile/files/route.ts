@@ -31,11 +31,12 @@ export async function GET() {
       size: (f.size as number) ?? 0,
       modified: f.updated_at ? new Date(f.updated_at as string).getTime() : 0,
     }));
-    return NextResponse.json({ files });
+    // mode=cloud: il client apre i file via bridge on-demand, non con link diretto.
+    return NextResponse.json({ files, mode: "cloud" });
   }
 
   const uploadsDir = JHT_USER_UPLOADS_DIR;
-  if (!fs.existsSync(uploadsDir)) return NextResponse.json({ files: [] });
+  if (!fs.existsSync(uploadsDir)) return NextResponse.json({ files: [], mode: "local" });
 
   try {
     const entries = fs.readdirSync(uploadsDir, { withFileTypes: true });
@@ -46,9 +47,9 @@ export async function GET() {
         return { name: e.name, size: stat.size, modified: stat.mtimeMs };
       })
       .sort((a, b) => b.modified - a.modified);
-    return NextResponse.json({ files });
+    return NextResponse.json({ files, mode: "local" });
   } catch {
-    return NextResponse.json({ files: [] });
+    return NextResponse.json({ files: [], mode: "local" });
   }
 }
 
