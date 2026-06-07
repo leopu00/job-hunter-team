@@ -1,6 +1,11 @@
 'use client'
 
 import { useRef, useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  remove_file: { it: 'Rimuovi file', en: 'Remove file', hu: 'Fájl eltávolítása', es: 'Eliminar archivo', de: 'Datei entfernen', fr: 'Supprimer le fichier', pt: 'Remover ficheiro' },
+}
 
 export interface PreviewFile {
   id: string
@@ -59,6 +64,8 @@ function FileItem({
   onDrop: () => void; onDragEnd: () => void
 }) {
   const img = isImage(file.type)
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   const itemStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 8,
@@ -129,7 +136,7 @@ function FileItem({
       {onDelete && (
         <button
           onClick={() => onDelete(file.id)}
-          title="Rimuovi file"
+          title={tr('remove_file')}
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
             color: 'var(--color-red, #ff4d4d)', fontSize: 16,

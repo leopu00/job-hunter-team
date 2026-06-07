@@ -1,8 +1,26 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  loading_profile_edit: {
+    it: "Caricamento modifica profilo",
+    en: "Loading profile editor",
+    hu: "Profilszerkesztő betöltése",
+    es: "Cargando edición de perfil",
+    de: "Profilbearbeitung wird geladen",
+    fr: "Chargement de la modification du profil",
+    pt: "Carregando edição de perfil",
+  },
+};
+
 export default function ProfileEditLoading() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   return (
     <div
       aria-busy="true"
-      aria-label="Caricamento modifica profilo"
+      aria-label={tr("loading_profile_edit")}
       style={{ animation: "fade-in 0.2s ease both" }}
     >
       {/* Header */}

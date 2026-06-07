@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useLocale } from "@/lib/use-locale";
 import {
   AI_ASSISTANT_SUGGESTIONS,
   loadStoredAssistantHistory,
@@ -8,6 +9,135 @@ import {
   type AssistantChatMessage,
   type AssistantSuggestion,
 } from "@/lib/ai-assistant";
+
+const T: Record<string, Record<string, string>> = {
+  close_chat: {
+    it: "Chiudi chat",
+    en: "Close chat",
+    hu: "Csevegés bezárása",
+    es: "Cerrar chat",
+    de: "Chat schließen",
+    fr: "Fermer le chat",
+    pt: "Fechar chat",
+  },
+  open_assistant: {
+    it: "Apri AI Assistant",
+    en: "Open AI Assistant",
+    hu: "AI Asszisztens megnyitása",
+    es: "Abrir AI Assistant",
+    de: "AI Assistant öffnen",
+    fr: "Ouvrir l'AI Assistant",
+    pt: "Abrir AI Assistant",
+  },
+  panel_label: {
+    it: "Chat AI Assistant",
+    en: "AI Assistant chat",
+    hu: "AI Asszisztens csevegés",
+    es: "Chat de AI Assistant",
+    de: "AI Assistant Chat",
+    fr: "Chat AI Assistant",
+    pt: "Chat do AI Assistant",
+  },
+  close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+  offline: {
+    it: "offline",
+    en: "offline",
+    hu: "offline",
+    es: "sin conexión",
+    de: "offline",
+    fr: "hors ligne",
+    pt: "offline",
+  },
+  online: {
+    it: "online",
+    en: "online",
+    hu: "online",
+    es: "en línea",
+    de: "online",
+    fr: "en ligne",
+    pt: "online",
+  },
+  not_active: {
+    it: "Chatbot non attivo: manca `OPENAI_API_KEY` sul server.",
+    en: "Chatbot not active: `OPENAI_API_KEY` is missing on the server.",
+    hu: "A chatbot nem aktív: hiányzik az `OPENAI_API_KEY` a szerveren.",
+    es: "Chatbot no activo: falta `OPENAI_API_KEY` en el servidor.",
+    de: "Chatbot nicht aktiv: `OPENAI_API_KEY` fehlt auf dem Server.",
+    fr: "Chatbot inactif : `OPENAI_API_KEY` est manquant sur le serveur.",
+    pt: "Chatbot inativo: falta `OPENAI_API_KEY` no servidor.",
+  },
+  intro: {
+    it: "Ti aiuto a capire la piattaforma e da dove iniziare.",
+    en: "I help you understand the platform and where to start.",
+    hu: "Segítek megérteni a platformot, és hogy hol kezdd.",
+    es: "Te ayudo a entender la plataforma y por dónde empezar.",
+    de: "Ich helfe dir, die Plattform zu verstehen und wo du anfangen sollst.",
+    fr: "Je vous aide à comprendre la plateforme et par où commencer.",
+    pt: "Ajudo você a entender a plataforma e por onde começar.",
+  },
+  thinking: {
+    it: "Sto pensando...",
+    en: "Thinking...",
+    hu: "Gondolkodom...",
+    es: "Pensando...",
+    de: "Ich denke nach...",
+    fr: "Réflexion...",
+    pt: "Pensando...",
+  },
+  placeholder_unconfigured: {
+    it: "Chatbot non configurato",
+    en: "Chatbot not configured",
+    hu: "A chatbot nincs beállítva",
+    es: "Chatbot no configurado",
+    de: "Chatbot nicht konfiguriert",
+    fr: "Chatbot non configuré",
+    pt: "Chatbot não configurado",
+  },
+  placeholder_message: {
+    it: "Scrivi un messaggio...",
+    en: "Write a message...",
+    hu: "Írj egy üzenetet...",
+    es: "Escribe un mensaje...",
+    de: "Schreibe eine Nachricht...",
+    fr: "Écrivez un message...",
+    pt: "Escreva uma mensagem...",
+  },
+  input_label: {
+    it: "Scrivi un messaggio all'assistente",
+    en: "Write a message to the assistant",
+    hu: "Írj üzenetet az asszisztensnek",
+    es: "Escribe un mensaje al asistente",
+    de: "Schreibe eine Nachricht an den Assistenten",
+    fr: "Écrivez un message à l'assistant",
+    pt: "Escreva uma mensagem ao assistente",
+  },
+  send: {
+    it: "Invia messaggio",
+    en: "Send message",
+    hu: "Üzenet küldése",
+    es: "Enviar mensaje",
+    de: "Nachricht senden",
+    fr: "Envoyer le message",
+    pt: "Enviar mensagem",
+  },
+  reply_error: {
+    it: "Il chatbot non è riuscito a rispondere in questo momento.",
+    en: "The chatbot was unable to respond at this time.",
+    hu: "A chatbot most nem tudott válaszolni.",
+    es: "El chatbot no pudo responder en este momento.",
+    de: "Der Chatbot konnte momentan nicht antworten.",
+    fr: "Le chatbot n'a pas pu répondre pour le moment.",
+    pt: "O chatbot não conseguiu responder neste momento.",
+  },
+};
 
 type AssistantBootstrap = {
   suggestions?: AssistantSuggestion[];
@@ -29,6 +159,8 @@ export default function FloatingChat() {
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [model, setModel] = useState<string>("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
 
   const fetchHistory = useCallback(async () => {
     setMessages(loadStoredAssistantHistory());
@@ -94,9 +226,7 @@ export default function FloatingChat() {
         ...prev,
         {
           role: "assistant",
-          content:
-            data?.error ??
-            "Il chatbot non è riuscito a rispondere in questo momento.",
+          content: data?.error ?? tr("reply_error"),
           timestamp: Date.now(),
         },
       ]);
@@ -123,7 +253,7 @@ export default function FloatingChat() {
           color: "var(--color-void)",
           zIndex: 60,
         }}
-        aria-label={open ? "Chiudi chat" : "Apri AI Assistant"}
+        aria-label={open ? tr("close_chat") : tr("open_assistant")}
       >
         {open ? (
           <svg
@@ -157,7 +287,7 @@ export default function FloatingChat() {
       {open && (
         <div
           role="complementary"
-          aria-label="AI Assistant chat"
+          aria-label={tr("panel_label")}
           className="fixed bottom-24 right-6 w-96 flex flex-col rounded-xl overflow-hidden shadow-2xl"
           style={{
             maxHeight: 560,
@@ -193,13 +323,13 @@ export default function FloatingChat() {
                     : "var(--color-dim)",
               }}
             >
-              {configured === false ? "offline" : model || "online"}
+              {configured === false ? tr("offline") : model || tr("online")}
             </div>
             <button
               onClick={() => setOpen(false)}
               className="cursor-pointer bg-transparent border-0 p-0 flex items-center"
               style={{ color: "var(--color-dim)" }}
-              aria-label="Chiudi"
+              aria-label={tr("close")}
             >
               <svg
                 width="14"
@@ -232,7 +362,7 @@ export default function FloatingChat() {
                   border: "1px solid rgba(245,197,24,0.24)",
                 }}
               >
-                Chatbot non attivo: manca `OPENAI_API_KEY` sul server.
+                {tr("not_active")}
               </div>
             )}
             {messages.length === 0 && (
@@ -241,7 +371,7 @@ export default function FloatingChat() {
                   className="text-[12px] mb-4"
                   style={{ color: "var(--color-dim)" }}
                 >
-                  Ti aiuto a capire la piattaforma e da dove iniziare.
+                  {tr("intro")}
                 </p>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   {suggestions.map((s) => (
@@ -299,7 +429,7 @@ export default function FloatingChat() {
                     className="text-[11px]"
                     style={{ color: "var(--color-dim)" }}
                   >
-                    Sto pensando...
+                    {tr("thinking")}
                   </span>
                 </div>
               </div>
@@ -339,10 +469,10 @@ export default function FloatingChat() {
               onKeyDown={(e) => e.key === "Enter" && send()}
               placeholder={
                 configured === false
-                  ? "Chatbot non configurato"
-                  : "Scrivi un messaggio..."
+                  ? tr("placeholder_unconfigured")
+                  : tr("placeholder_message")
               }
-              aria-label="Scrivi un messaggio all'assistente"
+              aria-label={tr("input_label")}
               disabled={configured === false}
               className="flex-1 text-[11px] px-3 py-2 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]"
               style={{
@@ -355,7 +485,7 @@ export default function FloatingChat() {
             <button
               onClick={() => send()}
               disabled={sending || !input.trim() || configured === false}
-              aria-label="Invia messaggio"
+              aria-label={tr("send")}
               className="px-4 py-2 rounded-lg text-[11px] font-bold cursor-pointer transition-colors"
               style={{
                 background:

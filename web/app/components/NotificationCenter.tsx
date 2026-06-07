@@ -23,7 +23,7 @@ export interface AppNotification {
 
 /* ── i18n ─────────────────────────────────────────────────────────── */
 
-type Lang = "it" | "en";
+type Lang = "it" | "en" | "es" | "de" | "fr" | "pt" | "hu";
 
 const I18N: Record<Lang, Record<string, string>> = {
   it: {
@@ -38,12 +38,43 @@ const I18N: Record<Lang, Record<string, string>> = {
     empty: "No notifications",
     clear: "Clear all",
   },
+  es: {
+    title: "Notificaciones",
+    mark_all: "Marcar todas como leídas",
+    empty: "Sin notificaciones",
+    clear: "Borrar todo",
+  },
+  de: {
+    title: "Benachrichtigungen",
+    mark_all: "Alle als gelesen markieren",
+    empty: "Keine Benachrichtigungen",
+    clear: "Alle löschen",
+  },
+  fr: {
+    title: "Notifications",
+    mark_all: "Tout marquer comme lu",
+    empty: "Aucune notification",
+    clear: "Tout effacer",
+  },
+  pt: {
+    title: "Notificações",
+    mark_all: "Marcar todas como lidas",
+    empty: "Sem notificações",
+    clear: "Limpar tudo",
+  },
+  hu: {
+    title: "Értesítések",
+    mark_all: "Összes olvasottnak jelölése",
+    empty: "Nincs értesítés",
+    clear: "Összes törlése",
+  },
 };
 
-// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Questo dizionario
-// copre solo it/en, quindi le altre lingue ricadono su en.
+// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Copre it/en/es/de/fr/pt;
+// qualsiasi locale non supportata (es. hu) ricade su en.
 function detectLang(): Lang {
-  return readLocaleCookie() === "it" ? "it" : "en";
+  const l = readLocaleCookie();
+  return l in I18N ? (l as Lang) : "en";
 }
 
 /* ── Config ───────────────────────────────────────────────────────── */
@@ -107,7 +138,16 @@ export function pushNotification(
 
 function timeAgo(ts: number, lang: Lang): string {
   const diff = Math.floor((Date.now() - ts) / 1000);
-  const suffix = lang === "it" ? " fa" : " ago";
+  const SUFFIX: Record<Lang, string> = {
+    it: " fa",
+    en: " ago",
+    es: " atrás",
+    de: " her",
+    fr: "",
+    pt: " atrás",
+    hu: "",
+  };
+  const suffix = SUFFIX[lang];
   if (diff < 60) return `${diff}s${suffix}`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m${suffix}`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h${suffix}`;

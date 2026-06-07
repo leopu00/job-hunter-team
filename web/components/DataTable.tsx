@@ -1,6 +1,16 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  selectedOne: { it: 'selezionato', en: 'selected', hu: 'kijelölve', es: 'seleccionado', de: 'ausgewählt', fr: 'sélectionné', pt: 'selecionado' },
+  selectedMany: { it: 'selezionati', en: 'selected', hu: 'kijelölve', es: 'seleccionados', de: 'ausgewählt', fr: 'sélectionnés', pt: 'selecionados' },
+  rows: { it: 'righe', en: 'rows', hu: 'sor', es: 'filas', de: 'Zeilen', fr: 'lignes', pt: 'linhas' },
+  selectAll: { it: 'Seleziona tutti', en: 'Select all', hu: 'Összes kijelölése', es: 'Seleccionar todos', de: 'Alle auswählen', fr: 'Tout sélectionner', pt: 'Selecionar todos' },
+  selectRow: { it: 'Seleziona riga', en: 'Select row', hu: 'Sor kijelölése', es: 'Seleccionar fila', de: 'Zeile auswählen', fr: 'Sélectionner la ligne', pt: 'Selecionar linha' },
+  noData: { it: 'Nessun dato', en: 'No data', hu: 'Nincs adat', es: 'Sin datos', de: 'Keine Daten', fr: 'Aucune donnée', pt: 'Nenhum dado' },
+}
 
 export interface DataColumn<T> {
   key: string
@@ -43,6 +53,8 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
     () => Object.fromEntries(columns.map(c => [c.key, c.width ?? 160]))
   )
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null)
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   /* ── Sorting ── */
   const sorted = [...rows].sort((a, b) => {
@@ -94,7 +106,7 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 10, color: 'var(--color-dim)', flex: 1 }}>
-          {selCount > 0 ? `${selCount} selezionat${selCount === 1 ? 'o' : 'i'}` : `${sorted.length} righe`}
+          {selCount > 0 ? `${selCount} ${selCount === 1 ? tr('selectedOne') : tr('selectedMany')}` : `${sorted.length} ${tr('rows')}`}
         </span>
         <button onClick={handleExport} className="outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)]" style={{ fontSize: 10, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-panel)', color: 'var(--color-muted)', cursor: 'pointer' }}>
           ↓ CSV{selCount > 0 ? ` (${selCount})` : ''}
@@ -107,7 +119,7 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
           <thead>
             <tr style={{ background: 'var(--color-row)' }}>
               <th scope="col" style={{ ...th, width: 36 }}>
-                <input type="checkbox" aria-label="Seleziona tutti" checked={allSelected} onChange={toggleAll} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
+                <input type="checkbox" aria-label={tr('selectAll')} checked={allSelected} onChange={toggleAll} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
               </th>
               {columns.map(col => (
                 <th key={col.key} scope="col" style={{ ...th, width: colWidths[col.key] }}>
@@ -133,7 +145,7 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
                 onMouseEnter={e => { if (!selected.has(row.id)) e.currentTarget.style.background = 'rgba(0,232,122,0.03)' }}
                 onMouseLeave={e => { if (!selected.has(row.id)) e.currentTarget.style.background = ri % 2 ? 'var(--color-row)' : 'transparent' }}>
                 <td style={td}>
-                  <input type="checkbox" aria-label="Seleziona riga" checked={selected.has(row.id)} onChange={() => toggleRow(row.id)} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
+                  <input type="checkbox" aria-label={tr('selectRow')} checked={selected.has(row.id)} onChange={() => toggleRow(row.id)} style={{ cursor: 'pointer', accentColor: 'var(--color-green)' }} />
                 </td>
                 {columns.map(col => (
                   <td key={col.key} style={td}>
@@ -143,7 +155,7 @@ export default function DataTable<T extends { id: string }>({ columns, rows, onE
               </tr>
             ))}
             {sorted.length === 0 && (
-              <tr><td colSpan={columns.length + 1} style={{ padding: 24, textAlign: 'center', fontSize: 11, color: 'var(--color-dim)' }}>Nessun dato</td></tr>
+              <tr><td colSpan={columns.length + 1} style={{ padding: 24, textAlign: 'center', fontSize: 11, color: 'var(--color-dim)' }}>{tr('noData')}</td></tr>
             )}
           </tbody>
         </table>

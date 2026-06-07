@@ -2,11 +2,29 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  search_placeholder: {
+    it: 'Cerca... (⌘K)',
+    en: 'Search... (⌘K)',
+    hu: 'Keresés... (⌘K)',
+    es: 'Buscar... (⌘K)',
+    de: 'Suchen... (⌘K)',
+    fr: 'Rechercher... (⌘K)',
+    pt: 'Pesquisar... (⌘K)',
+  },
+  type_page: { it: 'Pagina', en: 'Page', hu: 'Oldal', es: 'Página', de: 'Seite', fr: 'Page', pt: 'Página' },
+  type_agent: { it: 'Agente', en: 'Agent', hu: 'Ügynök', es: 'Agente', de: 'Agent', fr: 'Agent', pt: 'Agente' },
+  type_session: { it: 'Sessione', en: 'Session', hu: 'Munkamenet', es: 'Sesión', de: 'Sitzung', fr: 'Session', pt: 'Sessão' },
+  type_task: { it: 'Task', en: 'Task', hu: 'Feladat', es: 'Tarea', de: 'Aufgabe', fr: 'Tâche', pt: 'Tarefa' },
+  type_plugin: { it: 'Plugin', en: 'Plugin', hu: 'Bővítmény', es: 'Plugin', de: 'Plugin', fr: 'Plugin', pt: 'Plugin' },
+}
 
 type SearchResult = { type: string; id: string; title: string; detail: string; href: string }
 
-const TYPE_LABELS: Record<string, string> = {
-  page: 'Pagina', agent: 'Agente', session: 'Sessione', task: 'Task', plugin: 'Plugin',
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  page: 'type_page', agent: 'type_agent', session: 'type_session', task: 'type_task', plugin: 'type_plugin',
 }
 const TYPE_COLORS: Record<string, string> = {
   page: 'var(--color-blue)', agent: 'var(--color-green)', session: 'var(--color-cyan)',
@@ -23,6 +41,8 @@ export default function SearchBar() {
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   const search = useCallback(async (q: string) => {
     if (q.length < 2) { setResults([]); setOpen(false); return }
@@ -82,7 +102,7 @@ export default function SearchBar() {
       <div className="relative">
         <input ref={inputRef} type="text" value={query} onChange={e => handleChange(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)} onKeyDown={handleKeyDown}
-          placeholder="Cerca... (⌘K)"
+          placeholder={tr('search_placeholder')}
           className="w-full px-3 py-1.5 pl-8 rounded text-[11px] bg-[var(--color-bg)] border border-[var(--color-border)] text-[var(--color-bright)] placeholder:text-[var(--color-dim)] outline-none focus:border-[var(--color-border-glow)] transition-colors" />
         <svg aria-hidden="true" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5" fill="none" stroke="var(--color-dim)" strokeWidth="2" viewBox="0 0 24 24">
           <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
@@ -101,7 +121,7 @@ export default function SearchBar() {
                 className="flex items-center gap-2.5 w-full px-3 py-2 text-left cursor-pointer transition-colors"
                 style={{ background: selected === i ? 'var(--color-row)' : 'transparent' }}>
                 <span className="text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold shrink-0"
-                  style={{ background: `${color}22`, color }}>{TYPE_LABELS[r.type] ?? r.type}</span>
+                  style={{ background: `${color}22`, color }}>{TYPE_LABEL_KEYS[r.type] ? tr(TYPE_LABEL_KEYS[r.type]) : r.type}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-semibold text-[var(--color-bright)] truncate" title={r.title}>{r.title}</p>
                   <p className="text-[9px] text-[var(--color-dim)] truncate" title={r.detail}>{r.detail}</p>
