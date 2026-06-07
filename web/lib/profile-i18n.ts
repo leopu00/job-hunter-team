@@ -17,6 +17,10 @@ const T: Record<string, Entry> = {
   page_title: { it: "Profilo candidato", en: "Candidate Profile", hu: "Jelölt profil", es: "Perfil del candidato", de: "Kandidatenprofil", fr: "Profil du candidat", pt: "Perfil do candidato" },
   updated_on: { it: "Aggiornato il", en: "Updated on", hu: "Frissítve", es: "Actualizado el", de: "Aktualisiert am", fr: "Mis à jour le", pt: "Atualizado em" },
   edit: { it: "Modifica", en: "Edit", hu: "Szerkesztés", es: "Editar", de: "Bearbeiten", fr: "Modifier", pt: "Editar" },
+  // Messaggi inviati alla chat dell'Assistente dai trigger della pagina
+  // profilo (bottone Modifica, chip "campi mancanti"). {field} = nome campo.
+  chat_edit_msg: { it: "Vorrei modificare il mio profilo", en: "I want to edit my profile", hu: "Szeretném módosítani a profilomat", es: "Quiero editar mi perfil", de: "Ich möchte mein Profil bearbeiten", fr: "Je veux modifier mon profil", pt: "Quero editar o meu perfil" },
+  chat_add_field_msg: { it: "Vorrei aggiungere \"{field}\" al mio profilo", en: "I want to add \"{field}\" to my profile", hu: "Szeretném hozzáadni a következőt a profilomhoz: \"{field}\"", es: "Quiero añadir \"{field}\" a mi perfil", de: "Ich möchte \"{field}\" zu meinem Profil hinzufügen", fr: "Je veux ajouter \"{field}\" à mon profil", pt: "Quero adicionar \"{field}\" ao meu perfil" },
   export_json: { it: "Esporta JSON", en: "Export JSON", hu: "JSON exportálása", es: "Exportar JSON", de: "JSON exportieren", fr: "Exporter JSON", pt: "Exportar JSON" },
   no_profile_title: { it: "Nessun profilo configurato", en: "No profile configured", hu: "Nincs profil beállítva", es: "Ningún perfil configurado", de: "Kein Profil konfiguriert", fr: "Aucun profil configuré", pt: "Nenhum perfil configurado" },
   no_profile_desc: {
