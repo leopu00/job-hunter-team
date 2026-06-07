@@ -639,6 +639,9 @@ export default function MapCharts({
           selectedCountries={selectedCountries}
           selectedCities={selectedCities}
           focusPosition={focusReq}
+          familyColors={Object.fromEntries(
+            typeDist.map((d) => [d.family, d.color ?? "var(--color-muted)"]),
+          )}
           bottomCenterExtra={
             <FilterButton
               chips={(() => {
