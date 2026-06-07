@@ -634,6 +634,10 @@ export type DashboardPosition = {
   // critico/user) e nome istanza (es. 'scout-1', fallback al ruolo).
   last_action_by: string
   last_action_actor: string
+  // Voto del Critico (0-10) + verdetto (PASS|NEEDS_WORK|REJECT), null se non
+  // ancora revisionata.
+  critic_score: number | null
+  critic_verdict: string | null
 }
 
 // Sceglie l'evento con timestamp più recente tra i candidati passati.
@@ -665,7 +669,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
+    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
     .not('status', 'eq', 'excluded')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
@@ -712,6 +716,8 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       last_action_at: last_action_at || (p.found_at ?? ''),
       last_action_by,
       last_action_actor,
+      critic_score: typeof a?.critic_score === 'number' ? a.critic_score : null,
+      critic_verdict: a?.critic_verdict ?? null,
     }
   })
 }

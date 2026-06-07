@@ -112,6 +112,10 @@ export default async function DashboardPage() {
         // Demo: attore plausibile dedotto dallo stato corrente.
         last_action_by: DEMO_ACTOR_BY_STATUS[p.status] ?? "scout",
         last_action_actor: DEMO_ACTOR_BY_STATUS[p.status] ?? "scout",
+        critic_score:
+          (p as { critic_score?: number | null }).critic_score ?? null,
+        critic_verdict:
+          (p as { critic_verdict?: string | null }).critic_verdict ?? null,
       }))
     : [];
   const [stats, dashPositions, pendingMessages, rates] = demoData
@@ -318,6 +322,7 @@ export default async function DashboardPage() {
                   colCity: t.col_city,
                   colRemote: t.col_remote,
                   colScore: t.col_score,
+                  colCritic: t.col_critic,
                   colSalary: t.col_salary,
                   colMonthly: t.col_monthly,
                   colStatus: t.col_status,

@@ -36,6 +36,14 @@ const ACTOR_EMOJI: Record<string, string> = {
   user: "👤",
 };
 
+// Verdetto critico → colore del voto (qui il colore È semantico: è un
+// giudizio di qualità, non come la modalità remote).
+const CRITIC_COLORS: Record<string, string> = {
+  PASS: "var(--color-green)",
+  NEEDS_WORK: "var(--color-yellow)",
+  REJECT: "var(--color-red)",
+};
+
 function scoreClass(s?: number | null) {
   if (!s) return "text-[var(--color-dim)]";
   if (s >= 75) return "text-[var(--color-green)]";
@@ -101,6 +109,7 @@ export type TableLabels = {
   colCity: string;
   colRemote: string;
   colScore: string;
+  colCritic: string;
   colSalary: string;
   colMonthly: string;
   colStatus: string;
@@ -157,6 +166,7 @@ export default function RecentPositionsTable({
                 labels.colCity,
                 labels.colRemote,
                 labels.colScore,
+                labels.colCritic,
                 labels.colSalary,
                 labels.colMonthly,
                 labels.colUpdatedBy,
@@ -177,7 +187,7 @@ export default function RecentPositionsTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={13}
+                  colSpan={14}
                   className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   {labels.noPositions}
@@ -263,17 +273,7 @@ export default function RecentPositionsTable({
                     );
                   })()}
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span
-                      className="text-[10px]"
-                      style={{
-                        color:
-                          p.remote_type === "full_remote"
-                            ? "var(--color-green)"
-                            : p.remote_type === "hybrid"
-                              ? "var(--color-yellow)"
-                              : "var(--color-red)",
-                      }}
-                    >
+                    <span className="text-[10px] text-[var(--color-muted)]">
                       {p.remote_type?.replace("_", " ") ?? "—"}
                     </span>
                   </td>
@@ -297,6 +297,24 @@ export default function RecentPositionsTable({
                         />
                       </div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap tabular-nums text-right">
+                    {p.critic_score != null ? (
+                      <span
+                        className="text-[12px] font-semibold"
+                        style={{
+                          color:
+                            CRITIC_COLORS[p.critic_verdict ?? ""] ??
+                            "var(--color-muted)",
+                        }}
+                      >
+                        {p.critic_score.toFixed(1)}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)] text-[11px]">
+                        —
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-right">
                     {formatSalary(
