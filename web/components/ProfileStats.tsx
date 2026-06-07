@@ -1,18 +1,18 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import Link from 'next/link'
 import type { CandidateProfile } from '@/lib/types'
+import { openProfileAssistant } from '@/lib/profile-assistant-bus'
 import { useLocale } from '@/lib/use-locale'
 import { getProfileT } from '@/lib/profile-i18n'
 import { weightedCompletion, isTeamUnlocked, completionByLevel } from '@/lib/profile-completion'
 
 /* ── Completion calc ─────────────────────────────────────────────── */
 
-// `tkey` è la chiave nel dizionario condiviso profile-i18n; `anchor` punta
-// all'id della FormSection corrispondente in /profile/edit. Cambiando
-// un'ancora qui aggiorna anche il deep-link cliccando il chip del campo
-// mancante.
+// `tkey` è la chiave nel dizionario condiviso profile-i18n. `anchor` era il
+// deep-link alla FormSection di /profile/edit (form rimosso): cliccando il
+// chip del campo mancante ora si apre la chat dell'Assistente. Tenuto come
+// label semantica del campo, non più usato come ancora.
 type CompletionCheck = { ok: boolean; tkey: string; anchor: string }
 
 function calcCompletionChecks(p: CandidateProfile | null): CompletionCheck[] {
@@ -308,15 +308,16 @@ export default function ProfileStats({ profile }: Props) {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {missingFields.map((f, i) => (
-              <Link
+              <button
                 key={i}
-                href={`/profile/edit#${f.anchor}`}
+                type="button"
+                onClick={() => openProfileAssistant(`Vorrei aggiungere "${t(f.tkey)}" al mio profilo`)}
                 title={`${t('go_to')} "${t(f.tkey)}"`}
-                className="text-[10px] px-2 py-0.5 rounded border font-semibold no-underline transition-colors hover:bg-[var(--color-yellow)]/15 hover:border-[var(--color-yellow)]/60"
+                className="text-[10px] px-2 py-0.5 rounded border font-semibold no-underline transition-colors cursor-pointer hover:bg-[var(--color-yellow)]/15 hover:border-[var(--color-yellow)]/60"
                 style={{ color: 'var(--color-yellow)', borderColor: 'var(--color-yellow)/30', background: 'var(--color-yellow)/8' }}
               >
                 {t(f.tkey)}
-              </Link>
+              </button>
             ))}
           </div>
         </div>

@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocale } from '@/lib/use-locale'
+import {
+  OPEN_ASSISTANT_EVENT,
+  type OpenAssistantDetail,
+} from '@/lib/profile-assistant-bus'
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
 type AgentStatus = 'unknown' | 'active' | 'inactive' | 'starting'
@@ -199,6 +203,13 @@ const T: Record<string, Record<string, string>> = {
   },
 }
 
+const QUICK_ACTIONS = [
+  'Vorrei modificare il mio profilo',
+  'Analizza il mio profilo',
+  'Quali skill mi mancano?',
+  'Suggerisci un target ruolo',
+]
+
 export default function ProfileAssistantFab() {
   const locale = useLocale()
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
@@ -291,25 +302,51 @@ export default function ProfileAssistantFab() {
     prevCount.current = messages.length
   }, [messages])
 
-  const startAgent = async () => {
+  const startAgent = useCallback(async () => {
     setAgentStatus('starting')
     await fetch('/api/assistente/start', { method: 'POST' }).catch(() => null)
     setTimeout(fetchStatus, 3000)
-  }
+  }, [fetchStatus])
 
-  const sendMessage = async (text: string) => {
-    if (!text.trim() || sending) return
-    setSending(true)
-    setInput('')
-    await fetch('/api/assistente/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    }).catch(() => null)
-    await fetchMessages()
-    setSending(false)
-    inputRef.current?.focus()
-  }
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim() || sending) return
+      setSending(true)
+      setInput('')
+      await fetch('/api/assistente/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      }).catch(() => null)
+      await fetchMessages()
+      setSending(false)
+      inputRef.current?.focus()
+    },
+    [sending, fetchMessages],
+  )
+
+  // Apertura esterna (bottone "Modifica" / chip "campi mancanti" → bus eventi):
+  // apre il pannello e mette in coda un eventuale messaggio iniziale.
+  const [pending, setPending] = useState<string | null>(null)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<OpenAssistantDetail>).detail
+      setOpen(true)
+      if (detail?.message) setPending(detail.message)
+    }
+    window.addEventListener(OPEN_ASSISTANT_EVENT, handler)
+    return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, handler)
+  }, [])
+
+  // Flush del messaggio in coda quando il pannello è aperto. Se l'Assistente è
+  // spento lo avvio, così la risposta arriva senza un click extra dell'utente.
+  useEffect(() => {
+    if (!open || pending == null || sending) return
+    const msg = pending
+    setPending(null)
+    if (agentStatus === 'inactive') startAgent()
+    sendMessage(msg)
+  }, [open, pending, sending, agentStatus, startAgent, sendMessage])
 
   const isWaiting = messages.length > 0 && messages[messages.length - 1].role === 'user'
 
