@@ -165,6 +165,7 @@ const POSITION_SORT_COLUMNS: Record<string, string> = {
   id: 'p.id',
   title: 'p.title',
   company: 'p.company',
+  role_family: 'p.role_family',
   source: 'p.source',
   location: 'p.location',
   score: 's.total_score',
