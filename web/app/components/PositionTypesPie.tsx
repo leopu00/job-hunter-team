@@ -73,6 +73,9 @@ export default function PositionTypesPie({
   const [hovered, setHovered] = useState<string | null>(null);
   const labelFor = (family: string) => labels?.[family] ?? family;
   const total = data.reduce((a, d) => a + d.count, 0);
+  // Per la barra proporzionale di ogni riga (riempie lo spazio orizzontale
+  // della legenda, prima vuoto): larghezza relativa al tipo più numeroso.
+  const maxCount = data.reduce((m, d) => Math.max(m, d.count), 0) || 1;
   const hasSelection = selectedTypes.length > 0;
   // Centro: hover prevale; altrimenti se UNA sola family selezionata la mostro.
   const focusedFamily =
@@ -186,16 +189,17 @@ export default function PositionTypesPie({
         </svg>
 
         <ul
-          className="space-y-1.5 min-w-0 flex-1"
+          className="space-y-3 min-w-0 flex-1"
           onMouseLeave={() => setHovered(null)}
         >
-          {/* Header: didascalia colonne. Prima colonna flessibile così la
-                tabella riempie la larghezza del card (donut a tutta riga). */}
+          {/* Header: didascalia colonne. Colonna 'tipo' a larghezza limitata +
+                colonna barra flessibile (1fr) che riempie lo spazio prima vuoto. */}
           <li
-            className="grid grid-cols-[1fr_3rem_3rem_3.5rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_3rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
             <span>tipo</span>
+            <span />
             <span>n</span>
             <span>%</span>
             <span title="Score medio (0-100)">score</span>
@@ -212,7 +216,7 @@ export default function PositionTypesPie({
                 key={d.family}
                 onMouseEnter={() => setHovered(d.family)}
                 onClick={() => onToggleType?.(d.family)}
-                className="grid grid-cols-[1fr_3rem_3rem_3.5rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
+                className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_3rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
                 style={{
                   cursor: onToggleType ? "pointer" : "default",
                   background: isSelected
@@ -243,6 +247,22 @@ export default function PositionTypesPie({
                   >
                     {labelFor(d.family)}
                   </span>
+                </span>
+                {/* Barra proporzionale: riempie lo spazio orizzontale prima
+                    vuoto e dà un colpo d'occhio sulla distribuzione. */}
+                <span
+                  className="block h-2 rounded-full overflow-hidden"
+                  style={{ background: "var(--color-border)" }}
+                  aria-hidden
+                >
+                  <span
+                    className="block h-full rounded-full"
+                    style={{
+                      width: `${(d.count / maxCount) * 100}%`,
+                      background: d.color,
+                      opacity: dimmed ? 0.4 : 0.85,
+                    }}
+                  />
                 </span>
                 <span className="tabular-nums text-[var(--color-bright)] font-semibold">
                   {d.count}

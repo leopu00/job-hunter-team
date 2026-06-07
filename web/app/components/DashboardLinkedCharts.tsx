@@ -329,7 +329,7 @@ export default function DashboardLinkedCharts({
           data={typeData}
           title={labels.types}
           emptyLabel={labels.noData}
-          size={300}
+          size={360}
           selectedTypes={selectedFamilies}
           onToggleType={(f) => toggle(setSelectedFamilies, f)}
         />
