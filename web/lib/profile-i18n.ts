@@ -105,6 +105,7 @@ const T: Record<string, Entry> = {
   ps_cv_preview: { it: "Anteprima CV", en: "CV Preview", hu: "Önéletrajz előnézet", es: "Vista previa del CV", de: "Lebenslauf-Vorschau", fr: "Aperçu du CV", pt: "Pré-visualização do CV" },
   ps_cv_open: { it: "Apri documento", en: "Open document", hu: "Dokumentum megnyitása", es: "Abrir documento", de: "Dokument öffnen", fr: "Ouvrir le document", pt: "Abrir documento" },
   ps_avatar_error: { it: "Errore nel caricamento", en: "Upload error", hu: "Feltöltési hiba", es: "Error de carga", de: "Upload-Fehler", fr: "Erreur de téléchargement", pt: "Erro de upload" },
+  ps_close: { it: "Chiudi", en: "Close", hu: "Bezárás", es: "Cerrar", de: "Schließen", fr: "Fermer", pt: "Fechar" },
 
   // Campi mancanti
   mf_label: { it: "campi mancanti", en: "missing fields", hu: "hiányzó mező", es: "campos faltantes", de: "fehlende Felder", fr: "champs manquants", pt: "campos em falta" },
