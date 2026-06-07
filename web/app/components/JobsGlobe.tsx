@@ -1558,13 +1558,13 @@ export default function JobsGlobe({
               boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
             }}
           >
-            <div className="flex items-start justify-between gap-3 mb-1">
+            {/* Header: etichetta match score (sx) + chiudi (dx). */}
+            <div className="flex items-center justify-between gap-2 mb-1.5">
               <span
-                className="text-[9px] font-semibold tracking-widest uppercase"
-                style={{ color: matchScoreColor(selected.score) }}
+                className="text-[8px] font-semibold tracking-widest uppercase"
+                style={{ color: "var(--color-dim)" }}
               >
                 {tr("match_score")}
-                {selected.score != null ? ` · ${selected.score}` : ""}
               </span>
               <button
                 onClick={() => setSelected(null)}
@@ -1582,80 +1582,99 @@ export default function JobsGlobe({
                 ×
               </button>
             </div>
-            <div className="font-semibold text-[var(--color-bright)] mb-0.5">
-              {selected.title}
+
+            {/* Titolo/azienda (sx) + score grande (dx). */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div
+                  className="font-semibold leading-tight"
+                  style={{ color: "var(--color-bright)" }}
+                >
+                  {selected.title}
+                </div>
+                <div
+                  className="text-[10px] mt-0.5 truncate"
+                  style={{ color: "var(--color-muted)" }}
+                  title={selected.company ?? ""}
+                >
+                  {selected.company}
+                </div>
+              </div>
+              <div
+                className="text-[24px] font-bold leading-none tabular-nums flex-shrink-0"
+                style={{ color: matchScoreColor(selected.score) }}
+              >
+                {selected.score ?? "—"}
+              </div>
             </div>
-            <div className="text-[var(--color-muted)] mb-1">
-              {selected.company}
-            </div>
+
+            {/* Location */}
             {(() => {
               const lazyAddr = reverseAddrs[selected.id];
               const street = selected.office_address || lazyAddr || null;
               const fallback = selected.location;
               const showStreet = street && street.length > 0;
-              const showFallback =
-                fallback && fallback.length > 0 && fallback !== street;
               const looking =
                 !selected.office_address && lazyAddr === undefined;
+              if (!showStreet && !fallback) return null;
               return (
-                <>
-                  {(showStreet || fallback) && (
-                    <div
-                      className="text-[10px] mb-1 flex items-start gap-1"
-                      style={{ color: "var(--color-base)" }}
-                      title={street ?? fallback ?? ""}
-                    >
-                      <span aria-hidden>📍</span>
-                      <span className="leading-tight">
-                        {showStreet ? street : fallback}
-                        {looking && (
-                          <span
-                            className="ml-1 italic"
-                            style={{ color: "var(--color-dim)" }}
-                          >
-                            {tr("looking_address")}
-                          </span>
-                        )}
+                <div
+                  className="text-[10px] mt-2 flex items-start gap-1"
+                  style={{ color: "var(--color-base)" }}
+                  title={street ?? fallback ?? ""}
+                >
+                  <span aria-hidden>📍</span>
+                  <span className="leading-tight">
+                    {showStreet ? street : fallback}
+                    {looking && (
+                      <span
+                        className="ml-1 italic"
+                        style={{ color: "var(--color-dim)" }}
+                      >
+                        {tr("looking_address")}
                       </span>
-                    </div>
-                  )}
-                  {showStreet && showFallback && (
-                    <div
-                      className="text-[9px] mb-1 truncate"
-                      style={{ color: "var(--color-dim)" }}
-                    >
-                      {fallback}
-                    </div>
-                  )}
-                </>
+                    )}
+                  </span>
+                </div>
               );
             })()}
-            {/* Tipologia (role_family) + data primo ritrovamento. */}
-            {selected.role_family && (
+
+            {/* Divisore + riga meta: tipologia (sx) | data (dx). */}
+            {(selected.role_family ||
+              formatFoundDate(selected.created_at)) && (
               <div
-                className="text-[10px] mb-1 truncate"
-                style={{ color: "var(--color-base)" }}
-                title={selected.role_family}
+                className="mt-2 pt-2 flex items-center justify-between gap-2 text-[9px]"
+                style={{ borderTop: "1px solid var(--color-border)" }}
               >
-                {selected.role_family}
+                <span
+                  className="truncate"
+                  style={{ color: "var(--color-base)" }}
+                  title={selected.role_family ?? ""}
+                >
+                  {selected.role_family ?? ""}
+                </span>
+                {formatFoundDate(selected.created_at) && (
+                  <span
+                    className="tabular-nums flex-shrink-0"
+                    style={{ color: "var(--color-dim)" }}
+                  >
+                    {tr("found_on")} {formatFoundDate(selected.created_at)}
+                  </span>
+                )}
               </div>
             )}
-            {formatFoundDate(selected.created_at) && (
-              <div
-                className="text-[9px] mb-2 tabular-nums"
-                style={{ color: "var(--color-dim)" }}
+
+            {/* Azione */}
+            <div className="mt-2 text-right">
+              <Link
+                href={`/positions/${selected.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] hover:underline no-underline"
               >
-                {tr("found_on")} {formatFoundDate(selected.created_at)}
-              </div>
-            )}
-            <Link
-              href={`/positions/${selected.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-green)] hover:underline no-underline"
-            >
-              {tr("open")}
-            </Link>
+                {tr("open")}
+              </Link>
+            </div>
 
             {/* Coda della vignetta: triangolo SVG centrato sotto al
                 box, punta verso il basso (verso il pin). Riga top
