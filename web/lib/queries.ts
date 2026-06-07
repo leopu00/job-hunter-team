@@ -289,21 +289,22 @@ export async function getRecentPositions(limit = 15): Promise<(PositionWithScore
 // (default). Per gli altri ordinamenti (score, critic, ecc.) il fetch
 // resta su found_at e poi riordiniamo in memoria — limit 600 in chiamata
 // è gestibile e tiene la logica fuori da PostgREST nested ordering.
-const POSITION_SORT_KEYS = ['id', 'title', 'company', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
+const POSITION_SORT_KEYS = ['id', 'title', 'company', 'source', 'location', 'role_family', 'loc_city', 'loc_country', 'score', 'critic', 'found_at', 'status'] as const
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
 
 export type PositionFilterOpts = {
   statuses?: string[]
   remoteTypes?: string[]
   sources?: string[]
-  tiers?: string[]       // ['seria','practice','riferimento','noscore']
   verdicts?: string[]    // applications.critic_verdict (PASS|NEEDS_WORK|REJECT)
   // ── Filtri "intelligenti" (sidebar /positions, stile mappa) ──
   families?: string[]    // positions.role_family (UNCATEGORIZED_LABEL = "Da categorizzare")
   countries?: string[]   // loc_country ("(unknown)" = senza paese)
   cities?: string[]      // chiavi "Country|City" ("(country-only)" = senza città)
-  scoreBands?: Array<{ lo: number; hi: number }> // fasce score (OR tra loro)
+  scoreBands?: Array<{ lo: number; hi: number }> // range score (OR tra loro)
   unscored?: boolean     // include posizioni senza score numerico
+  criticBands?: Array<{ lo: number; hi: number }> // range voto critico 0-10 (OR)
+  criticUnscored?: boolean // include posizioni senza voto del critico
   limit?: number
   offset?: number
   sort?: string
@@ -343,28 +344,15 @@ function applyFacetFilters(rows: PositionWithScore[], opts?: PositionFilterOpts)
       return bands.some(b => s >= b.lo && s <= b.hi)
     })
   }
+  const cbands = opts?.criticBands ?? []
+  if (cbands.length || opts?.criticUnscored) {
+    out = out.filter(p => {
+      const c = p.critic_score
+      if (c == null) return !!opts?.criticUnscored
+      return cbands.some(b => c >= b.lo && c <= b.hi)
+    })
+  }
   return out
-}
-
-// Tier → score-range. 'noscore' = score null/0.
-const TIER_RANGES: Record<string, { min?: number; max?: number; noScore?: boolean }> = {
-  seria:       { min: 70 },
-  practice:    { min: 40, max: 69 },
-  riferimento: { min: 1,  max: 39 },
-  noscore:     { noScore: true },
-}
-
-function applyTierFilter(rows: PositionWithScore[], tiers: string[]): PositionWithScore[] {
-  if (!tiers.length) return rows
-  return rows.filter(p => tiers.some(t => {
-    const r = TIER_RANGES[t]; if (!r) return false
-    const s = p.score
-    if (r.noScore) return s == null || s === 0
-    if (s == null || s === 0) return false
-    if (r.min != null && s < r.min) return false
-    if (r.max != null && s > r.max) return false
-    return true
-  }))
 }
 
 export async function getPositions(opts?: PositionFilterOpts): Promise<PositionWithScore[]> {
@@ -398,8 +386,7 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
     }
   })
 
-  // Filtri post-fetch: tier (range union) + verdict (nested join).
-  if (opts?.tiers?.length) mapped = applyTierFilter(mapped, opts.tiers)
+  // Filtri post-fetch: verdict (nested join).
   if (opts?.verdicts?.length) {
     const set = new Set(opts.verdicts)
     mapped = mapped.filter(p => p.critic_verdict && set.has(p.critic_verdict))
@@ -554,6 +541,7 @@ export type PositionFacet = {
   id: string
   role_family: string | null
   score: number | null
+  critic_score: number | null
   loc_country: string | null
   loc_city: string | null
   status: string
@@ -569,16 +557,19 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score )')
+    .select('id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score ), applications ( critic_score )')
     .is('deleted_at', null)
   if (error || !data) return []
   return (data as any[]).map((p) => {
     const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
     const score = (p.score as number | null) ?? (typeof s?.total_score === 'number' ? s.total_score : null)
+    const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
+    const critic = typeof app?.critic_score === 'number' ? app.critic_score : null
     return {
       id: String(p.id),
       role_family: p.role_family ?? null,
       score: typeof score === 'number' ? score : null,
+      critic_score: critic,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
       status: p.status,
