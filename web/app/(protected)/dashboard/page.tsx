@@ -170,7 +170,8 @@ export default async function DashboardPage() {
       label: t.pl_with_score,
       count: stats.scored_open,
       color: STATUS_COLORS.scored,
-      href: "/positions?status=scored",
+      // scored NON ancora selezionate → status=scored + writereq=0
+      href: "/positions?status=scored&writereq=0",
       basis: activeTotal,
     },
     {
@@ -178,7 +179,8 @@ export default async function DashboardPage() {
       label: t.pl_to_write,
       count: stats.to_write,
       color: STATUS_COLORS.writing,
-      href: "/positions",
+      // selezionate ma CV non pronto → status in (scored,writing,review) + writereq=1
+      href: "/positions?status=scored,writing,review&writereq=1",
       basis: activeTotal,
     },
     {
