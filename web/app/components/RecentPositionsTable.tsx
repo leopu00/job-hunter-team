@@ -148,6 +148,7 @@ export default function RecentPositionsTable({
           <thead>
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {[
+                labels.colId,
                 labels.colUpdated,
                 labels.colTitle,
                 labels.colCompany,
@@ -158,9 +159,8 @@ export default function RecentPositionsTable({
                 labels.colScore,
                 labels.colSalary,
                 labels.colMonthly,
-                labels.colStatus,
                 labels.colUpdatedBy,
-                labels.colId,
+                labels.colStatus,
               ].map((h) => (
                 <th
                   key={h}
@@ -195,6 +195,11 @@ export default function RecentPositionsTable({
                       i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
                   }}
                 >
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
+                    {p.legacy_id
+                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                      : p.id.slice(0, 8)}
+                  </td>
                   <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
                     {formatFoundAt(p.last_action_at || p.found_at || "")}
                   </td>
@@ -311,19 +316,6 @@ export default function RecentPositionsTable({
                       rates,
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
-                      style={{
-                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
-                        borderColor:
-                          STATUS_COLORS[p.status] ?? "var(--color-border)",
-                        background: `${STATUS_COLORS[p.status]}18`,
-                      }}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
                   <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
                     {p.last_action_actor ? (
                       <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
@@ -336,10 +328,18 @@ export default function RecentPositionsTable({
                       <span className="text-[var(--color-dim)]">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                    {p.legacy_id
-                      ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                      : p.id.slice(0, 8)}
+                  <td className="px-4 py-3">
+                    <span
+                      className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border"
+                      style={{
+                        color: STATUS_COLORS[p.status] ?? "var(--color-dim)",
+                        borderColor:
+                          STATUS_COLORS[p.status] ?? "var(--color-border)",
+                        background: `${STATUS_COLORS[p.status]}18`,
+                      }}
+                    >
+                      {p.status}
+                    </span>
                   </td>
                 </tr>
               ))
