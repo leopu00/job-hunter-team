@@ -162,6 +162,16 @@ export default function RecentPositionsTable({
     syncing.current = false;
   };
 
+  // Colonne "dati" allineate al centro (header + valore): le altre (testo:
+  // titolo/azienda/paese…) restano a sinistra, che si legge meglio.
+  const centeredHeaders = new Set([
+    labels.colScore,
+    labels.colSalary,
+    labels.colMonthly,
+    labels.colUpdatedBy,
+    labels.colCritic,
+  ]);
+
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-4">
@@ -215,7 +225,7 @@ export default function RecentPositionsTable({
                 <th
                   key={h}
                   scope="col"
-                  className={`px-4 py-3 ${h === labels.colCritic ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
+                  className={`px-4 py-3 ${centeredHeaders.has(h) ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
                   style={{ color: "var(--color-dim)" }}
                 >
                   {h}
@@ -318,7 +328,7 @@ export default function RecentPositionsTable({
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
+                    <div className="flex items-center gap-2 justify-center">
                       <span
                         className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
                       >
@@ -338,7 +348,7 @@ export default function RecentPositionsTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-right">
+                  <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-center">
                     {formatSalary(
                       p.salary_min,
                       p.salary_max,
@@ -347,7 +357,7 @@ export default function RecentPositionsTable({
                       rates,
                     )}
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
+                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-center">
                     {formatMonthly(
                       p.salary_min,
                       p.salary_max,
@@ -356,7 +366,7 @@ export default function RecentPositionsTable({
                       rates,
                     )}
                   </td>
-                  <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
+                  <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">
                     {p.last_action_actor ? (
                       <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
                         <span aria-hidden="true">
