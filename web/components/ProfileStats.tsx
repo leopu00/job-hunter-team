@@ -9,32 +9,11 @@ import { weightedCompletion, isTeamUnlocked, completionByLevel } from '@/lib/pro
 
 /* ── Completion calc ─────────────────────────────────────────────── */
 
-// `tkey` è la chiave nel dizionario condiviso profile-i18n. `anchor` era il
-// deep-link alla FormSection di /profile/edit (form rimosso): cliccando il
-// chip del campo mancante ora si apre la chat dell'Assistente. Tenuto come
-// label semantica del campo, non più usato come ancora.
-type CompletionCheck = { ok: boolean; tkey: string; anchor: string }
-
-function calcCompletionChecks(p: CandidateProfile | null): CompletionCheck[] {
-  if (!p) return []
-  return [
-    { ok: !!p.name, tkey: 'f_name', anchor: 'info-base' },
-    { ok: !!p.email, tkey: 'f_email', anchor: 'info-base' },
-    { ok: !!p.target_role, tkey: 'f_target_role', anchor: 'info-base' },
-    { ok: !!p.location, tkey: 'f_location', anchor: 'info-base' },
-    { ok: p.experience_years != null, tkey: 'mf_exp_years', anchor: 'info-base' },
-    { ok: !!(p.skills && Object.keys(p.skills).length > 0), tkey: 'sec_skills', anchor: 'skills' },
-    { ok: !!(p.languages && p.languages.length > 0), tkey: 'sec_languages', anchor: 'lingue' },
-    { ok: !!(p.job_titles && p.job_titles.length > 0), tkey: 'mf_desired_roles', anchor: 'ruoli-target' },
-    { ok: !!(p.location_preferences && p.location_preferences.length > 0), tkey: 'mf_location_prefs', anchor: 'location-preferite' },
-    { ok: p.salary_target != null, tkey: 'salary_target', anchor: 'salary-target' },
-    { ok: !!(p.positioning?.contacts && Object.values(p.positioning.contacts).some(Boolean)), tkey: 'sec_contacts', anchor: 'contatti' },
-    { ok: !!(p.positioning?.experience && (p.positioning.experience as unknown[]).length > 0), tkey: 'f_experience', anchor: 'esperienza-lavorativa' },
-    { ok: !!(p.positioning?.education && (p.positioning.education as unknown[]).length > 0), tkey: 'mf_education', anchor: 'formazione' },
-    { ok: !!(p.positioning?.career_goals && Object.values(p.positioning.career_goals).some(Boolean)), tkey: 'sec_career_goals', anchor: 'obiettivi-carriera' },
-    { ok: !!(p.positioning?.strengths && (p.positioning.strengths as unknown[]).length > 0), tkey: 'sec_strengths', anchor: 'punti-di-forza' },
-  ]
-}
+// I "campi mancanti" derivano da un'UNICA fonte: PROFILE_REQUIREMENTS in
+// profile-completion.ts (stessa tassonomia usata per gate del team e barre di
+// progresso). Niente più lista duplicata qui: ogni requisito porta con sé la
+// chiave i18n (`labelKey`) e l'ancora della FormSection in /profile/edit
+// (`editAnchor`) per il deep-link del chip.
 
 /* ── Animated counter hook ────────────────────────────────────────── */
 
@@ -91,10 +70,16 @@ export default function ProfileStats({ profile }: Props) {
 
   const completion = weightedCompletion(profile)
   const animatedCompletion = useAnimatedCount(completion)
-  const missingFields = profile ? calcCompletionChecks(profile).filter(c => !c.ok) : []
   const teamUnlocked = isTeamUnlocked(profile)
   const levels = completionByLevel(profile)
   const requiredMissing = levels.required.missing.length
+  // Chip "campi mancanti": unica fonte (PROFILE_REQUIREMENTS), solo i livelli
+  // azionabili — required + recommended. Gli optional ("su misura massima")
+  // restano tracciati dalla barra di progresso, ma non diventano nag-chip.
+  const missingFields = [
+    ...levels.required.missing,
+    ...levels.recommended.missing,
+  ].map((r) => ({ tkey: r.labelKey, anchor: r.editAnchor }))
 
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
