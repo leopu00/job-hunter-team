@@ -104,6 +104,8 @@ const T: Record<string, Entry> = {
   ps_lvl_required_hint: { it: "sbloccano il team", en: "unlock the team", hu: "feloldják a csapatot", es: "desbloquean el equipo", de: "schalten das Team frei", fr: "débloquent l'équipe", pt: "desbloqueiam a equipe" },
   ps_cv_preview: { it: "Anteprima CV", en: "CV Preview", hu: "Önéletrajz előnézet", es: "Vista previa del CV", de: "Lebenslauf-Vorschau", fr: "Aperçu du CV", pt: "Pré-visualização do CV" },
   ps_cv_open: { it: "Apri documento", en: "Open document", hu: "Dokumentum megnyitása", es: "Abrir documento", de: "Dokument öffnen", fr: "Ouvrir le document", pt: "Abrir documento" },
+  ps_cv_preparing: { it: "Preparazione…", en: "Preparing…", hu: "Előkészítés…", es: "Preparando…", de: "Wird vorbereitet…", fr: "Préparation…", pt: "A preparar…" },
+  ps_cv_retry: { it: "Riprova", en: "Retry", hu: "Újra", es: "Reintentar", de: "Erneut versuchen", fr: "Réessayer", pt: "Tentar de novo" },
   ps_avatar_error: { it: "Errore nel caricamento", en: "Upload error", hu: "Feltöltési hiba", es: "Error de carga", de: "Upload-Fehler", fr: "Erreur de téléchargement", pt: "Erro de upload" },
   ps_close: { it: "Chiudi", en: "Close", hu: "Bezárás", es: "Cerrar", de: "Schließen", fr: "Fermer", pt: "Fechar" },
 

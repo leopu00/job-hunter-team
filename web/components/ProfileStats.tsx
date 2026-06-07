@@ -97,8 +97,13 @@ export default function ProfileStats({ profile }: Props) {
   // Applications (solo i conteggi: lo storico vive nella dashboard)
   const [appCounts, setAppCounts] = useState<Record<string, number>>({})
 
-  // CV files
+  // CV files. fileMode: 'local' = link diretto al filesystem; 'cloud' = il
+  // file vive sulla VPS, si apre via bridge on-demand (request → poll → signed
+  // URL). Vedi docs/internal/file-bridge-on-demand-2026-06-07.md
   const [cvFiles, setCvFiles] = useState<{ name: string; size: number }[]>([])
+  const [fileMode, setFileMode] = useState<'local' | 'cloud'>('local')
+  // Stato per-file dell'apertura via bridge: 'loading' | 'error'.
+  const [bridge, setBridge] = useState<Record<string, 'loading' | 'error'>>({})
 
   // Fetch avatar
   useEffect(() => {
@@ -123,6 +128,7 @@ export default function ProfileStats({ profile }: Props) {
     fetch('/api/profile/files')
       .then(r => r.json())
       .then(data => {
+        if (data.mode === 'cloud' || data.mode === 'local') setFileMode(data.mode)
         if (Array.isArray(data.files)) {
           setCvFiles(data.files.filter((f: { name: string }) =>
             /\.(pdf|doc|docx|txt|md)$/i.test(f.name)
@@ -130,6 +136,40 @@ export default function ProfileStats({ profile }: Props) {
         }
       })
       .catch(() => {})
+  }, [])
+
+  // Apre un file su cloud via bridge on-demand: crea la richiesta, polla
+  // finché il poller VPS ha caricato il file nel bucket effimero, poi apre la
+  // signed URL. In locale si usa invece il link diretto al filesystem.
+  const openViaBridge = useCallback(async (name: string) => {
+    setBridge(prev => ({ ...prev, [name]: 'loading' }))
+    try {
+      const res = await fetch('/api/profile/files/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.requestId) throw new Error(data.error || 'request failed')
+
+      // Poll: ~40 tentativi × 1.5s = 60s max (il poller VPS gira ogni ~5s).
+      for (let i = 0; i < 40; i++) {
+        await new Promise(r => setTimeout(r, 1500))
+        const pr = await fetch(`/api/profile/files/request/${data.requestId}`)
+        const pd = await pr.json()
+        if (pd.status === 'ready' && pd.url) {
+          window.open(pd.url, '_blank', 'noopener,noreferrer')
+          setBridge(prev => { const n = { ...prev }; delete n[name]; return n })
+          return
+        }
+        if (pd.status === 'error' || pd.status === 'expired') {
+          throw new Error(pd.error || pd.status)
+        }
+      }
+      throw new Error('timeout')
+    } catch {
+      setBridge(prev => ({ ...prev, [name]: 'error' }))
+    }
   }, [])
 
   // Esc chiude il popup dettaglio
@@ -406,14 +446,33 @@ export default function ProfileStats({ profile }: Props) {
                   {f.size < 1024 ? `${f.size} B` : f.size < 1024 * 1024 ? `${Math.round(f.size / 1024)} KB` : `${(f.size / (1024 * 1024)).toFixed(1)} MB`}
                 </span>
                 {/\.pdf$/i.test(f.name) && (
-                  <a
-                    href={`/api/profile/files/${encodeURIComponent(f.name)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[9px] font-semibold text-[var(--color-blue)] hover:underline no-underline flex-shrink-0"
-                  >
-                    {t('ps_cv_open')}
-                  </a>
+                  fileMode === 'cloud' ? (
+                    // Cloud: il file vive sulla VPS → apertura via bridge on-demand.
+                    bridge[f.name] === 'loading' ? (
+                      <span className="text-[9px] font-semibold text-[var(--color-dim)] flex-shrink-0 animate-pulse">
+                        {t('ps_cv_preparing')}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openViaBridge(f.name)}
+                        className="text-[9px] font-semibold flex-shrink-0 hover:underline cursor-pointer border-0 bg-transparent"
+                        style={{ color: bridge[f.name] === 'error' ? 'var(--color-red)' : 'var(--color-blue)' }}
+                      >
+                        {bridge[f.name] === 'error' ? t('ps_cv_retry') : t('ps_cv_open')}
+                      </button>
+                    )
+                  ) : (
+                    // Locale: link diretto al filesystem del container.
+                    <a
+                      href={`/api/profile/files/${encodeURIComponent(f.name)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[9px] font-semibold text-[var(--color-blue)] hover:underline no-underline flex-shrink-0"
+                    >
+                      {t('ps_cv_open')}
+                    </a>
+                  )
                 )}
               </div>
             ))}
