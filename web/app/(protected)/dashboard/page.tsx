@@ -35,7 +35,7 @@ const STATUS_COLORS: Record<string, string> = {
   scored: "var(--color-purple)",
   writing: "var(--color-yellow)",
   review: "var(--color-orange)",
-  ready: "#7fffb2",
+  ready: "var(--color-ready)",
   applied: "var(--color-green)",
   response: "#58a6ff",
   excluded: "var(--color-red)",

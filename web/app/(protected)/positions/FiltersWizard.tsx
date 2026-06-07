@@ -275,7 +275,7 @@ const STATUS_OPTIONS: Option[] = [
   { val: "scored", label: "scored", color: "var(--color-purple)" },
   { val: "writing", label: "writing", color: "var(--color-yellow)" },
   { val: "review", label: "review", color: "var(--color-orange)" },
-  { val: "ready", label: "ready", color: "#7fffb2" },
+  { val: "ready", label: "ready", color: "var(--color-ready)" },
   { val: "applied", label: "applied", color: "var(--color-green)" },
   { val: "response", label: "response", color: "#58a6ff" },
   { val: "excluded", label: "excluded", color: "var(--color-red)" },
