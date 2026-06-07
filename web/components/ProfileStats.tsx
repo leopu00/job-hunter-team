@@ -73,12 +73,12 @@ export default function ProfileStats({ profile }: Props) {
   const teamUnlocked = isTeamUnlocked(profile)
   const levels = completionByLevel(profile)
   const requiredMissing = levels.required.missing.length
-  // Chip "campi mancanti": unica fonte (PROFILE_REQUIREMENTS), ordinati per
-  // priorità (required → recommended → optional) e mappati su {tkey, anchor}.
+  // Chip "campi mancanti": unica fonte (PROFILE_REQUIREMENTS), solo i livelli
+  // azionabili — required + recommended. Gli optional ("su misura massima")
+  // restano tracciati dalla barra di progresso, ma non diventano nag-chip.
   const missingFields = [
     ...levels.required.missing,
     ...levels.recommended.missing,
-    ...levels.optional.missing,
   ].map((r) => ({ tkey: r.labelKey, anchor: r.editAnchor }))
 
   // Avatar
