@@ -59,20 +59,6 @@ function useAnimatedCount(target: number, duration = 800): number {
   return count
 }
 
-/* ── Types ────────────────────────────────────────────────────────── */
-
-type AppStatus = 'draft' | 'sent' | 'viewed' | 'interview' | 'offer' | 'rejected'
-type MiniApp = { id: string; jobTitle: string; company: string; status: AppStatus; updatedAt: number }
-
-const STATUS_COLOR: Record<AppStatus, string> = {
-  draft:     'var(--color-dim)',
-  sent:      'var(--color-blue)',
-  viewed:    'var(--color-yellow)',
-  interview: 'var(--color-green)',
-  offer:     'var(--color-green)',
-  rejected:  'var(--color-red)',
-}
-
 /* ── Component ────────────────────────────────────────────────────── */
 
 interface Props {
@@ -102,8 +88,7 @@ export default function ProfileStats({ profile }: Props) {
   const [avatarError, setAvatarError] = useState<string | null>(null)
   const avatarRef = useRef<HTMLInputElement>(null)
 
-  // Applications
-  const [apps, setApps] = useState<MiniApp[]>([])
+  // Applications (solo i conteggi: lo storico vive nella dashboard)
   const [appCounts, setAppCounts] = useState<Record<string, number>>({})
 
   // CV files
@@ -122,7 +107,6 @@ export default function ProfileStats({ profile }: Props) {
     fetch('/api/applications')
       .then(r => r.json())
       .then(data => {
-        if (Array.isArray(data.applications)) setApps(data.applications.slice(0, 5))
         if (data.counts) setAppCounts(data.counts)
       })
       .catch(() => {})
@@ -355,44 +339,6 @@ export default function ProfileStats({ profile }: Props) {
           </div>
         </div>
       )}
-
-      {/* ── Storico candidature ─────────────────────────────────── */}
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
-        <div className="text-[9px] font-bold tracking-[0.15em] uppercase text-[var(--color-dim)] mb-3">
-          {t('ps_recent')}
-        </div>
-        {apps.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            {apps.map(app => (
-              <div key={app.id} className="flex items-center gap-3 px-3 py-2.5 rounded bg-[var(--color-panel)] border border-[var(--color-border)]">
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ background: STATUS_COLOR[app.status] }}
-                />
-                <div className="flex-1 min-w-0">
-                  <span className="text-[11px] font-semibold text-[var(--color-bright)] truncate block">{app.jobTitle}</span>
-                  <span className="text-[10px] text-[var(--color-muted)]">{app.company}</span>
-                </div>
-                <span
-                  className="text-[9px] font-semibold px-2 py-0.5 rounded flex-shrink-0"
-                  style={{
-                    color: STATUS_COLOR[app.status],
-                    background: `color-mix(in srgb, ${STATUS_COLOR[app.status]} 10%, transparent)`,
-                    border: `1px solid color-mix(in srgb, ${STATUS_COLOR[app.status]} 20%, transparent)`,
-                  }}
-                >
-                  {t(`status_${app.status}`)}
-                </span>
-                <span className="text-[9px] text-[var(--color-dim)] flex-shrink-0 font-mono">
-                  {new Date(app.updatedAt).toLocaleDateString(locale === 'it' ? 'it-IT' : locale, { day: '2-digit', month: 'short' })}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[11px] text-[var(--color-dim)]">{t('ps_no_apps')}</p>
-        )}
-      </div>
     </div>
   )
 }

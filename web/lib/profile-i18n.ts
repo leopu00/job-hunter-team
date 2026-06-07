@@ -102,19 +102,9 @@ const T: Record<string, Entry> = {
   ps_lvl_recommended: { it: "Consigliati", en: "Recommended", hu: "Ajánlott", es: "Recomendados", de: "Empfohlen", fr: "Recommandés", pt: "Recomendados" },
   ps_lvl_optional: { it: "Su misura", en: "Optional", hu: "Választható", es: "Opcionales", de: "Optional", fr: "Optionnels", pt: "Opcionais" },
   ps_lvl_required_hint: { it: "sbloccano il team", en: "unlock the team", hu: "feloldják a csapatot", es: "desbloquean el equipo", de: "schalten das Team frei", fr: "débloquent l'équipe", pt: "desbloqueiam a equipe" },
-  ps_recent: { it: "Ultime candidature", en: "Recent applications", hu: "Legutóbbi jelentkezések", es: "Candidaturas recientes", de: "Letzte Bewerbungen", fr: "Candidatures récentes", pt: "Candidaturas recentes" },
-  ps_no_apps: { it: "Nessuna candidatura ancora", en: "No applications yet", hu: "Még nincs jelentkezés", es: "Aún no hay candidaturas", de: "Noch keine Bewerbungen", fr: "Aucune candidature pour l'instant", pt: "Ainda não há candidaturas" },
   ps_cv_preview: { it: "Anteprima CV", en: "CV Preview", hu: "Önéletrajz előnézet", es: "Vista previa del CV", de: "Lebenslauf-Vorschau", fr: "Aperçu du CV", pt: "Pré-visualização do CV" },
   ps_cv_open: { it: "Apri documento", en: "Open document", hu: "Dokumentum megnyitása", es: "Abrir documento", de: "Dokument öffnen", fr: "Ouvrir le document", pt: "Abrir documento" },
   ps_avatar_error: { it: "Errore nel caricamento", en: "Upload error", hu: "Feltöltési hiba", es: "Error de carga", de: "Upload-Fehler", fr: "Erreur de téléchargement", pt: "Erro de upload" },
-
-  // Stati candidatura (badge)
-  status_draft: { it: "Bozza", en: "Draft", hu: "Vázlat", es: "Borrador", de: "Entwurf", fr: "Brouillon", pt: "Rascunho" },
-  status_sent: { it: "Inviata", en: "Sent", hu: "Elküldve", es: "Enviada", de: "Gesendet", fr: "Envoyée", pt: "Enviada" },
-  status_viewed: { it: "Vista", en: "Viewed", hu: "Megtekintve", es: "Vista", de: "Angesehen", fr: "Vue", pt: "Visualizada" },
-  status_interview: { it: "Colloquio", en: "Interview", hu: "Interjú", es: "Entrevista", de: "Vorstellungsgespräch", fr: "Entretien", pt: "Entrevista" },
-  status_offer: { it: "Offerta", en: "Offer", hu: "Ajánlat", es: "Oferta", de: "Angebot", fr: "Offre", pt: "Oferta" },
-  status_rejected: { it: "Rifiutata", en: "Rejected", hu: "Elutasítva", es: "Rechazada", de: "Abgelehnt", fr: "Refusée", pt: "Rejeitada" },
 
   // Campi mancanti
   mf_label: { it: "campi mancanti", en: "missing fields", hu: "hiányzó mező", es: "campos faltantes", de: "fehlende Felder", fr: "champs manquants", pt: "campos em falta" },
