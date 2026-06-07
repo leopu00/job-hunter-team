@@ -68,6 +68,7 @@ interface PageProps {
     city?: string;
     band?: string; // CSV di "lo-hi"
     noscore?: string; // "1" = includi posizioni senza score
+    writereq?: string; // "1" = solo selezionate (write_requested); "0" = solo non
     sort?: string;
     dir?: string;
     expand?: string;
@@ -166,6 +167,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const cities = csv(params.city);
   const scoreBands = parseBands(params.band);
   const unscored = params.noscore === "1";
+  // writereq: "1" = solo selezionate, "0" = solo non selezionate, assente = no filtro
+  const writeRequested =
+    params.writereq === "1" ? true : params.writereq === "0" ? false : undefined;
 
   const sortCol = SORTABLE_COLUMNS.has(params.sort ?? "")
     ? params.sort!
@@ -202,6 +206,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       cities: cities.length ? cities : undefined,
       scoreBands: scoreBands.length ? scoreBands : undefined,
       unscored: unscored || undefined,
+      writeRequested,
       limit: 2000,
       sort: sortCol,
       dir: sortDir,
@@ -262,6 +267,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     if (scoreBands.length)
       merged.band = scoreBands.map((b) => `${b.lo}-${b.hi}`).join(",");
     if (unscored) merged.noscore = "1";
+    if (writeRequested === true) merged.writereq = "1";
+    else if (writeRequested === false) merged.writereq = "0";
     if (sortCol !== "found_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
     if (expandedCols.size > 0)
