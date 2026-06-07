@@ -1752,6 +1752,19 @@ export function registerCloudCommand(program) {
       await runUserMessagesPoller();
     });
 
+  // `file-bridge-listen` — poller del bridge effimero dei file. Pubblica
+  // l'indice dei file del container e serve le richieste on-demand del web
+  // caricando i file in un bucket Supabase di transito via signed upload URL
+  // (poi purgati). Co-spawnato da pid1 accanto agli altri reader. Vedi
+  // docs/internal/file-bridge-on-demand-2026-06-07.md
+  cloud
+    .command('file-bridge-listen')
+    .description('Poller file bridge (indice + upload on-demand CV/allegati al web)')
+    .action(async () => {
+      const { runFileBridgePoller } = await import('../lib/file-bridge-poller.js');
+      await runFileBridgePoller();
+    });
+
   // `cloud preflight` — single-team enforcement check post-pairing.
   // Esce con codice 0 se il claim è libero/recuperabile, 2 se un altro device
   // ha il claim attivo (heartbeat <5min). Stampa info su stdout per script
