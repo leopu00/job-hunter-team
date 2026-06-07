@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { getPositions, getSourceDistribution } from "@/lib/queries";
-import { UNCATEGORIZED_LABEL, colorForFamily } from "@/lib/position-classifier";
+import { colorForFamily } from "@/lib/position-classifier";
+import {
+  getExchangeRates,
+  convertCurrency,
+  currencySymbol,
+  formatMoneyCompact,
+  type Rates,
+} from "@/lib/exchange-rates";
 import { getServerLocale } from "@/lib/server-locale";
 import type { PositionWithScore } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
@@ -109,7 +116,6 @@ const DEFAULT_PAGE_SIZE = 50;
 const EXPANDABLE_COLUMNS = new Set([
   "title",
   "company",
-  "location",
   "role_family",
   "loc_city",
   "loc_country",
@@ -127,6 +133,7 @@ const SORTABLE_COLUMNS = new Set([
   "score",
   "critic",
   "found_at",
+  "last_action_at",
   "status",
 ]);
 
@@ -136,6 +143,54 @@ const CRITIC_COLORS: Record<string, string> = {
   NEEDS_WORK: "var(--color-yellow)",
   REJECT: "var(--color-red)",
 };
+
+// Emoji per ruolo dell'ultima azione (colonna "Aggiornato da"). Allineato a
+// RecentPositionsTable per coerenza tra dashboard e /positions.
+const ACTOR_EMOJI: Record<string, string> = {
+  scout: "🔍",
+  analista: "🔬",
+  scorer: "🎯",
+  scrittore: "✍️",
+  critico: "⚖️",
+  user: "👤",
+};
+
+// Range stipendio annuo compatto in "k", convertito nella valuta scelta
+// (es. "€60–80k", "$≥70k"). null → "—". Stesso formato del dashboard.
+function formatSalary(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  from: string,
+  to: string,
+  rates: Rates,
+): string {
+  const sym = currencySymbol(to);
+  const f = (n: number) =>
+    formatMoneyCompact(convertCurrency(n, from, to, rates));
+  if (min != null && max != null)
+    return min === max ? `${sym}${f(min)}` : `${sym}${f(min)}–${f(max)}`;
+  if (min != null) return `${sym}≥${f(min)}`;
+  if (max != null) return `${sym}≤${f(max)}`;
+  return "—";
+}
+
+// Lordo mensile = lordo annuo / 12, convertito e in "k" (es. "€5.0–6.7k").
+function formatMonthly(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  from: string,
+  to: string,
+  rates: Rates,
+): string {
+  const sym = currencySymbol(to);
+  const m = (n: number) =>
+    formatMoneyCompact(convertCurrency(n, from, to, rates) / 12);
+  if (min != null && max != null)
+    return min === max ? `${sym}${m(min)}` : `${sym}${m(min)}–${m(max)}`;
+  if (min != null) return `${sym}≥${m(min)}`;
+  if (max != null) return `${sym}≤${m(max)}`;
+  return "—";
+}
 
 // i18n: dict inline 7 lingue (pattern server-component del progetto, vedi
 // architettura i18n). La testata di questa tabella era hardcoded in italiano.
@@ -154,6 +209,15 @@ const T: Record<string, Record<string, string>> = {
   col_location: { it: "Luogo", en: "Location", hu: "Hely", es: "Ubicación", de: "Standort", fr: "Lieu", pt: "Local" },
   col_status: { it: "Stato", en: "Status", hu: "Állapot", es: "Estado", de: "Status", fr: "Statut", pt: "Estado" },
   col_critic: { it: "Voto finale", en: "Final score", hu: "Végső pontszám", es: "Nota final", de: "Endnote", fr: "Note finale", pt: "Nota final" },
+  col_updated: { it: "Aggiornato", en: "Updated", hu: "Frissítve", es: "Actualizado", de: "Aktualisiert", fr: "Mis à jour", pt: "Atualizado" },
+  col_updated_by: { it: "Aggiornato da", en: "Updated by", hu: "Frissítette", es: "Actualizado por", de: "Aktualisiert von", fr: "Mis à jour par", pt: "Atualizado por" },
+  col_country: { it: "Paese", en: "Country", hu: "Ország", es: "País", de: "Land", fr: "Pays", pt: "País" },
+  col_city: { it: "Città", en: "City", hu: "Város", es: "Ciudad", de: "Stadt", fr: "Ville", pt: "Cidade" },
+  col_remote: { it: "Remote", en: "Remote", hu: "Távmunka", es: "Remoto", de: "Remote", fr: "Télétravail", pt: "Remoto" },
+  col_score: { it: "Score", en: "Score", hu: "Pontszám", es: "Puntuación", de: "Score", fr: "Score", pt: "Pontuação" },
+  col_voto: { it: "Voto critico", en: "Critic score", hu: "Kritikus pontszám", es: "Nota crítico", de: "Kritiker-Note", fr: "Note critique", pt: "Nota crítico" },
+  col_salary: { it: "Stipendio", en: "Salary", hu: "Fizetés", es: "Salario", de: "Gehalt", fr: "Salaire", pt: "Salário" },
+  col_monthly: { it: "Mensile", en: "Monthly", hu: "Havi", es: "Mensual", de: "Monatlich", fr: "Mensuel", pt: "Mensal" },
   expand_col: { it: "Espandi colonna", en: "Expand column", hu: "Oszlop kibontása", es: "Expandir columna", de: "Spalte erweitern", fr: "Développer la colonne", pt: "Expandir coluna" },
   collapse_col: { it: "Comprimi colonna", en: "Collapse column", hu: "Oszlop összecsukása", es: "Contraer columna", de: "Spalte einklappen", fr: "Réduire la colonne", pt: "Recolher coluna" },
   synced_cloud: { it: "Sincronizzato sul cloud", en: "Synced to cloud", hu: "Felhőbe szinkronizálva", es: "Sincronizado en la nube", de: "In die Cloud synchronisiert", fr: "Synchronisé sur le cloud", pt: "Sincronizado na nuvem" },
@@ -185,7 +249,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
 
   const sortCol = SORTABLE_COLUMNS.has(params.sort ?? "")
     ? params.sort!
-    : "found_at";
+    : "last_action_at";
   const sortDir: "asc" | "desc" = params.dir === "asc" ? "asc" : "desc";
 
   // expand=title,location → set di colonne mostrate full-width.
@@ -227,6 +291,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     getSourceDistribution(),
   ]);
   const availableSources = sourceList.map((s) => s.source);
+
+  // Tassi di cambio per le colonne Stipendio/Mensile (default valuta EUR,
+  // come la tabella del dashboard). Errore rete → fallback già in getExchangeRates.
+  const rates = await getExchangeRates();
+  const displayCurrency = "EUR";
 
   // Fetch dei legacy_id già su Supabase per l'utente loggato (set per
   // lookup O(1) dentro il loop righe). Errori → set vuoto, niente icona
@@ -284,7 +353,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     if (criticUnscored) merged.cnoscore = "1";
     if (writeRequested === true) merged.writereq = "1";
     else if (writeRequested === false) merged.writereq = "0";
-    if (sortCol !== "found_at") merged.sort = sortCol;
+    if (sortCol !== "last_action_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
     if (expandedCols.size > 0)
       merged.expand = Array.from(expandedCols).join(",");
@@ -293,7 +362,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     Object.assign(merged, overrides);
     // Cleanup default values → URL pulito
     for (const k of Object.keys(merged)) {
-      if (k === "sort" && merged[k] === "found_at") delete merged[k];
+      if (k === "sort" && merged[k] === "last_action_at") delete merged[k];
       if (k === "dir" && merged[k] === "desc") delete merged[k];
       if (k === "expand" && merged[k] === "") delete merged[k];
       if (k === "page" && (merged[k] === "1" || merged[k] === ""))
@@ -318,7 +387,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // default (desc per metriche numeriche e id, asc per testo).
   const sortHref = (col: string) => {
     const isActive = sortCol === col;
-    const NUMERIC = new Set(["id", "score", "critic", "found_at"]);
+    const NUMERIC = new Set(["id", "score", "critic", "found_at", "last_action_at"]);
     const defaultDir = NUMERIC.has(col) ? "desc" : "asc";
     const nextDir = isActive
       ? sortDir === "asc"
@@ -412,39 +481,45 @@ export default async function PositionsPage({ searchParams }: PageProps) {
               <thead>
                 <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
                   {[
-                    { col: "found_at", label: tr("col_detected") },
-                    { col: "id", label: "ID" },
-                    { col: "title", label: tr("col_title") },
-                    { col: "company", label: tr("col_company") },
-                    { col: "role_family", label: tr("col_category") },
-                    { col: "source", label: tr("col_source") },
-                    { col: "location", label: tr("col_location") },
-                    { col: "loc_city", label: "Città" },
-                    { col: "loc_country", label: "Paese" },
-                    { col: "score", label: "Score" },
-                    { col: "status", label: tr("col_status") },
-                    { col: "critic", label: tr("col_critic") },
-                  ].map(({ col, label }) => (
+                    { col: "id", label: "ID", sortable: true },
+                    { col: "last_action_at", label: tr("col_updated"), sortable: true },
+                    { col: "title", label: tr("col_title"), sortable: true },
+                    { col: "company", label: tr("col_company"), sortable: true },
+                    { col: "role_family", label: tr("col_category"), sortable: true },
+                    { col: "loc_country", label: tr("col_country"), sortable: true },
+                    { col: "loc_city", label: tr("col_city"), sortable: true },
+                    { col: "remote", label: tr("col_remote"), sortable: false },
+                    { col: "score", label: tr("col_score"), sortable: true },
+                    { col: "critic", label: tr("col_voto"), sortable: true },
+                    { col: "salary", label: tr("col_salary"), sortable: false },
+                    { col: "monthly", label: tr("col_monthly"), sortable: false },
+                    { col: "last_action_by", label: tr("col_updated_by"), sortable: false },
+                    { col: "status", label: tr("col_status"), sortable: true },
+                  ].map(({ col, label, sortable }) => (
                     <th
                       key={col}
                       scope="col"
                       className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
                       style={{
                         color:
-                          sortCol === col
+                          sortable && sortCol === col
                             ? "var(--color-bright)"
                             : "var(--color-dim)",
                       }}
                     >
                       <span className="inline-flex items-center gap-1.5">
-                        <Link
-                          href={sortHref(col)}
-                          className="no-underline hover:text-[var(--color-green)] transition-colors"
-                          style={{ color: "inherit" }}
-                        >
-                          {label}
-                          <span aria-hidden="true">{sortIndicator(col)}</span>
-                        </Link>
+                        {sortable ? (
+                          <Link
+                            href={sortHref(col)}
+                            className="no-underline hover:text-[var(--color-green)] transition-colors"
+                            style={{ color: "inherit" }}
+                          >
+                            {label}
+                            <span aria-hidden="true">{sortIndicator(col)}</span>
+                          </Link>
+                        ) : (
+                          <span>{label}</span>
+                        )}
                         {EXPANDABLE_COLUMNS.has(col) && (
                           <Link
                             href={expandHref(col)}
@@ -477,7 +552,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 {visiblePositions.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={12}
+                      colSpan={14}
                       className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
                     >
                       {tr("no_positions_filtered")}
@@ -497,9 +572,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           i % 2 === 1 ? "rgba(255,255,255,0.008)" : undefined,
                       }}
                     >
-                      <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
-                        {formatFoundAt(p.found_at)}
-                      </td>
+                      {/* ID */}
                       <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
                         <span className="inline-flex items-center gap-1.5">
                           {p.legacy_id
@@ -521,6 +594,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                             )}
                         </span>
                       </td>
+                      {/* Aggiornato (ultima azione, fallback rilevazione) */}
+                      <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
+                        {formatFoundAt(p.last_action_at || p.found_at)}
+                      </td>
+                      {/* Titolo */}
                       <td
                         className={`px-4 py-3 font-medium ${
                           isExpanded("title") ? "" : "max-w-[220px]"
@@ -535,6 +613,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           {p.title}
                         </Link>
                       </td>
+                      {/* Azienda */}
                       <td
                         className={`px-4 py-3 text-[var(--color-base)] ${
                           isExpanded("company")
@@ -545,6 +624,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       >
                         {p.company}
                       </td>
+                      {/* Categoria */}
                       <td
                         className={`px-4 py-3 text-[11px] text-[var(--color-base)] ${
                           isExpanded("role_family")
@@ -553,39 +633,46 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         }`}
                         title={p.role_family ?? undefined}
                       >
-                        {p.role_family ? (
+                        {p.role_family && p.role_family.trim() ? (
                           <span className="inline-flex items-center gap-1.5">
                             <span
                               aria-hidden
                               style={{
-                                width: 7,
-                                height: 7,
+                                width: 8,
+                                height: 8,
                                 borderRadius: "50%",
-                                background: colorForFamily(p.role_family),
+                                background: colorForFamily(p.role_family.trim()),
                                 flexShrink: 0,
                               }}
                             />
-                            {p.role_family}
+                            {p.role_family.trim()}
                           </span>
                         ) : (
-                          <span className="text-[var(--color-dim)]">
-                            {UNCATEGORIZED_LABEL}
-                          </span>
+                          <span className="text-[var(--color-dim)]">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
-                        {p.source ?? "—"}
-                      </td>
+                      {/* Paese (Remote in corsivo se senza paese ma full remote) */}
                       <td
-                        className={`px-4 py-3 text-[11px] text-[var(--color-muted)] ${
-                          isExpanded("location")
+                        className={`px-4 py-3 text-[11px] ${
+                          isExpanded("loc_country")
                             ? "whitespace-normal"
-                            : "max-w-[200px] truncate whitespace-nowrap"
+                            : "max-w-[140px] truncate whitespace-nowrap"
                         }`}
-                        title={p.location ?? undefined}
+                        title={p.loc_country ?? undefined}
                       >
-                        {p.location ?? "—"}
+                        {p.loc_country && p.loc_country.trim() ? (
+                          <span className="text-[var(--color-base)]">
+                            {p.loc_country.trim()}
+                          </span>
+                        ) : p.remote_type === "full_remote" ? (
+                          <span className="italic text-[var(--color-dim)]">
+                            Remote
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)]">—</span>
+                        )}
                       </td>
+                      {/* Città */}
                       <td
                         className={`px-4 py-3 text-[11px] text-[var(--color-muted)] ${
                           isExpanded("loc_city")
@@ -594,18 +681,19 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         }`}
                         title={p.loc_city ?? undefined}
                       >
-                        {p.loc_city ?? "—"}
+                        {p.loc_city && p.loc_city.trim() ? (
+                          p.loc_city.trim()
+                        ) : (
+                          <span className="text-[var(--color-dim)]">—</span>
+                        )}
                       </td>
-                      <td
-                        className={`px-4 py-3 text-[11px] text-[var(--color-muted)] ${
-                          isExpanded("loc_country")
-                            ? "whitespace-normal"
-                            : "max-w-[140px] truncate whitespace-nowrap"
-                        }`}
-                        title={p.loc_country ?? undefined}
-                      >
-                        {p.loc_country ?? "—"}
+                      {/* Remote */}
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="text-[10px] text-[var(--color-muted)]">
+                          {p.remote_type?.replace("_", " ") ?? "—"}
+                        </span>
                       </td>
+                      {/* Score */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 justify-end">
                           <span
@@ -627,6 +715,59 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           </div>
                         </div>
                       </td>
+                      {/* Voto critico */}
+                      <td className="px-4 py-3 whitespace-nowrap tabular-nums text-right">
+                        {p.critic_score != null ? (
+                          <span
+                            className="text-[12px] font-semibold"
+                            style={{
+                              color:
+                                CRITIC_COLORS[p.critic_verdict ?? ""] ??
+                                "var(--color-muted)",
+                            }}
+                          >
+                            {p.critic_score.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)] text-[11px]">
+                            —
+                          </span>
+                        )}
+                      </td>
+                      {/* Stipendio */}
+                      <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-right">
+                        {formatSalary(
+                          p.salary_min,
+                          p.salary_max,
+                          p.salary_currency ?? "EUR",
+                          displayCurrency,
+                          rates,
+                        )}
+                      </td>
+                      {/* Mensile */}
+                      <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
+                        {formatMonthly(
+                          p.salary_min,
+                          p.salary_max,
+                          p.salary_currency ?? "EUR",
+                          displayCurrency,
+                          rates,
+                        )}
+                      </td>
+                      {/* Aggiornato da */}
+                      <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
+                        {p.last_action_actor ? (
+                          <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
+                            <span aria-hidden="true">
+                              {ACTOR_EMOJI[p.last_action_by ?? ""] ?? "🤖"}
+                            </span>
+                            {p.last_action_actor}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)]">—</span>
+                        )}
+                      </td>
+                      {/* Stato */}
                       <td className="px-4 py-3">
                         <span
                           className="text-[9.5px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap"
@@ -640,44 +781,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         >
                           {p.status}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {p.critic_score != null || p.critic_verdict ? (
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="text-[12px] font-semibold tabular-nums"
-                              style={{
-                                color:
-                                  CRITIC_COLORS[p.critic_verdict ?? ""] ??
-                                  "var(--color-muted)",
-                              }}
-                            >
-                              {p.critic_score != null
-                                ? p.critic_score.toFixed(1)
-                                : "—"}
-                            </span>
-                            {p.critic_verdict && (
-                              <span
-                                className="text-[9px] font-semibold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded border"
-                                style={{
-                                  color:
-                                    CRITIC_COLORS[p.critic_verdict] ??
-                                    "var(--color-dim)",
-                                  borderColor:
-                                    CRITIC_COLORS[p.critic_verdict] ??
-                                    "var(--color-border)",
-                                  background: `${CRITIC_COLORS[p.critic_verdict] ?? "var(--color-border)"}18`,
-                                }}
-                              >
-                                {p.critic_verdict.replace("_", " ")}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-[var(--color-dim)] text-[11px]">
-                            —
-                          </span>
-                        )}
                       </td>
                     </tr>
                   ))
