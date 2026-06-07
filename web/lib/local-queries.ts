@@ -276,10 +276,40 @@ export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): P
       last_action_at: la.at, last_action_by: la.by, last_action_actor: la.actor,
     }
   })
-  // last_action_at è derivato in JS → non ordinabile via SQL. Re-sort qui.
-  if (opts?.sort === 'last_action_at') {
-    const mul = opts?.dir === 'asc' ? 1 : -1
-    mapped.sort((a, b) => (a.last_action_at || '').localeCompare(b.last_action_at || '') * mul)
+  // Sort in JS su QUALSIASI colonna (incluse quelle derivate: salary, voto,
+  // last_action_*). Uniforme col path cloud, così ogni intestazione ordina
+  // davvero anche in locale. La ORDER BY SQL resta come ordine di base.
+  if (opts?.sort) {
+    const mul = opts.dir === 'asc' ? 1 : -1
+    const val = (p: PositionWithScore): string | number | null => {
+      switch (opts.sort) {
+        case 'id': return p.legacy_id ?? null
+        case 'score': return p.score ?? null
+        case 'critic': return p.critic_score ?? null
+        case 'salary': case 'monthly': return p.salary_min ?? null
+        case 'remote': return p.remote_type ?? null
+        case 'last_action_by': return p.last_action_actor ?? null
+        case 'last_action_at': return p.last_action_at ?? null
+        case 'found_at': return p.found_at ?? null
+        case 'role_family': return p.role_family ?? null
+        case 'loc_country': return p.loc_country ?? null
+        case 'loc_city': return p.loc_city ?? null
+        case 'title': return p.title ?? null
+        case 'company': return p.company ?? null
+        case 'source': return p.source ?? null
+        case 'location': return p.location ?? null
+        case 'status': return p.status ?? null
+        default: return null
+      }
+    }
+    mapped.sort((a, b) => {
+      const va = val(a), vb = val(b)
+      if (va == null && vb == null) return 0
+      if (va == null) return 1
+      if (vb == null) return -1
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mul
+      return String(va).localeCompare(String(vb)) * mul
+    })
   }
   return mapped
 }
