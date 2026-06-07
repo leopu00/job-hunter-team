@@ -122,11 +122,14 @@ export default function PositionTypesPie({
       </div>
 
       <div className="flex items-center gap-8">
+        <div
+          className="relative shrink-0"
+          style={{ width: size, height: size }}
+        >
         <svg
           width={size}
           height={size}
           viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="shrink-0"
           aria-label={title}
           role="img"
           onMouseLeave={() => setHovered(null)}
@@ -173,43 +176,41 @@ export default function PositionTypesPie({
             });
           })()}
 
-          {/* Center label: mostra la slice hovered (count + pct).
-                Quando nessuna e' hovered, mostra il totale. */}
-          <text
-            x={CX}
-            y={CY - 4}
-            textAnchor="middle"
-            fontSize={focused ? 11 : 9}
-            fill={focused ? focused.color : "var(--color-dim)"}
-            fontWeight={700}
-            style={{ pointerEvents: "none", fontFamily: "inherit" }}
+        </svg>
+
+        {/* Etichetta centrale come overlay HTML: vincolata alla larghezza del
+            foro del donut (wrapping su 2 righe + ellissi), così i nomi lunghi
+            non escono dal donut. Sfondo scuro del foro = sempre leggibile,
+            anche se il colore family coincide con una fetta. pointer-events
+            disabilitati per non rubare l'hover alle fette sotto. */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-1">
+          <div
+            className="font-bold leading-tight line-clamp-2"
+            style={{
+              maxWidth: ((INNER * 2) / SIZE) * size,
+              fontSize: 14,
+              color: focused ? focused.color : "var(--color-dim)",
+            }}
+            title={centerLabel}
           >
             {centerLabel}
-          </text>
-          <text
-            x={CX}
-            y={CY + 11}
-            textAnchor="middle"
-            fontSize={13}
-            fill="var(--color-bright)"
-            fontWeight={700}
-            style={{ pointerEvents: "none", fontFamily: "inherit" }}
+          </div>
+          <div
+            className="font-bold leading-none text-[var(--color-bright)]"
+            style={{ fontSize: 32, marginTop: 4 }}
           >
             {centerValue}
-          </text>
+          </div>
           {centerPct != null && (
-            <text
-              x={CX}
-              y={CY + 22}
-              textAnchor="middle"
-              fontSize={9}
-              fill="var(--color-muted)"
-              style={{ pointerEvents: "none", fontFamily: "inherit" }}
+            <div
+              className="text-[var(--color-muted)]"
+              style={{ fontSize: 13, marginTop: 2 }}
             >
               {centerPct}%
-            </text>
+            </div>
           )}
-        </svg>
+        </div>
+        </div>
 
         <ul
           className="space-y-3 min-w-0 flex-1"
