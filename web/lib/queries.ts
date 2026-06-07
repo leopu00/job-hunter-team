@@ -687,7 +687,12 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
         { ts: p.last_checked, by: 'analista', actor: 'analista' },
         { ts: s?.scored_at, by: 'scorer', actor: s?.scored_by },
         { ts: a?.written_at, by: 'scrittore', actor: a?.written_by },
-        { ts: a?.critic_reviewed_at, by: 'critico', actor: a?.reviewed_by },
+        // critic_reviewed_at è auto-settato dalla chiamata --critic-score
+        // che esegue lo SCRITTORE (single-writer rule, bug #21): il critico
+        // non scrive mai sul DB. Quindi l'autore di quell'update è lo
+        // scrittore, non il critico. Il voto del critico vive nella sua
+        // colonna dedicata.
+        { ts: a?.critic_reviewed_at, by: 'scrittore', actor: a?.written_by },
         { ts: a?.applied_at, by: 'user', actor: 'user' },
         { ts: a?.response_at, by: 'user', actor: 'user' },
       ])
