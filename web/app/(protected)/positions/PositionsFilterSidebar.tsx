@@ -3,6 +3,73 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { UNCATEGORIZED_LABEL, colorForFamily } from "@/lib/position-classifier";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  expand_filters: {
+    it: "Espandi filtri", en: "Expand filters", hu: "Szűrők kibontása",
+    es: "Expandir filtros", de: "Filter erweitern", fr: "Déployer les filtres", pt: "Expandir filtros",
+  },
+  filters: {
+    it: "Filtri", en: "Filters", hu: "Szűrők",
+    es: "Filtros", de: "Filter", fr: "Filtres", pt: "Filtros",
+  },
+  reset_title: {
+    it: "Rimuovi tutti i filtri", en: "Clear all filters", hu: "Összes szűrő törlése",
+    es: "Borrar todos los filtros", de: "Alle Filter entfernen", fr: "Effacer tous les filtres", pt: "Limpar todos os filtros",
+  },
+  reset: {
+    it: "reset", en: "reset", hu: "törlés",
+    es: "borrar", de: "zurücksetzen", fr: "réinit.", pt: "limpar",
+  },
+  collapse: {
+    it: "Comprimi", en: "Collapse", hu: "Összecsukás",
+    es: "Contraer", de: "Einklappen", fr: "Réduire", pt: "Recolher",
+  },
+  collapse_filters: {
+    it: "Comprimi filtri", en: "Collapse filters", hu: "Szűrők összecsukása",
+    es: "Contraer filtros", de: "Filter einklappen", fr: "Réduire les filtres", pt: "Recolher filtros",
+  },
+  category: {
+    it: "Categoria", en: "Category", hu: "Kategória",
+    es: "Categoría", de: "Kategorie", fr: "Catégorie", pt: "Categoria",
+  },
+  score: {
+    it: "Score", en: "Score", hu: "Pontszám",
+    es: "Puntuación", de: "Score", fr: "Score", pt: "Pontuação",
+  },
+  location: {
+    it: "Location", en: "Location", hu: "Helyszín",
+    es: "Ubicación", de: "Standort", fr: "Lieu", pt: "Localização",
+  },
+  select_range_end: {
+    it: "Seleziona la fine del range…", en: "Select the end of the range…", hu: "Válaszd ki a tartomány végét…",
+    es: "Selecciona el final del rango…", de: "Wähle das Ende des Bereichs…", fr: "Sélectionnez la fin de la plage…", pt: "Selecione o fim do intervalo…",
+  },
+  no_score: {
+    it: "senza score", en: "no score", hu: "pontszám nélkül",
+    es: "sin puntuación", de: "ohne Score", fr: "sans score", pt: "sem pontuação",
+  },
+  no_data: {
+    it: "Nessun dato", en: "No data", hu: "Nincs adat",
+    es: "Sin datos", de: "Keine Daten", fr: "Aucune donnée", pt: "Sem dados",
+  },
+  no_city: {
+    it: "(senza città)", en: "(no city)", hu: "(város nélkül)",
+    es: "(sin ciudad)", de: "(ohne Stadt)", fr: "(sans ville)", pt: "(sem cidade)",
+  },
+  close: {
+    it: "Chiudi", en: "Close", hu: "Bezárás",
+    es: "Cerrar", de: "Schließen", fr: "Fermer", pt: "Fechar",
+  },
+  open: {
+    it: "Apri", en: "Open", hu: "Megnyitás",
+    es: "Abrir", de: "Öffnen", fr: "Ouvrir", pt: "Abrir",
+  },
+};
+
+// Sentinella stabile (indipendente dalla lingua) per la chiave city senza città.
+const NO_CITY_SENTINEL = "(country-only)";
 
 // Dataset leggero servito da /api/positions/facets.
 type Facet = {
@@ -51,6 +118,8 @@ function parseBands(v: string | null): ScoreRange[] {
 export default function PositionsFilterSidebar() {
   const router = useRouter();
   const sp = useSearchParams();
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [facets, setFacets] = useState<Facet[]>([]);
   const [collapsed, setCollapsed] = useState(false);
   const [openCountry, setOpenCountry] = useState<string | null>(null);
@@ -253,14 +322,15 @@ export default function PositionsFilterSidebar() {
       country,
       count: countryTotals.get(country) ?? 0,
       cities: Array.from(cityMap.entries())
-        .map(([key, count]) => ({
-          key,
-          label:
-            key.split("|")[1] === "(country-only)"
-              ? "(senza città)"
-              : key.split("|")[1],
-          count,
-        }))
+        .map(([key, count]) => {
+          const noCity = key.split("|")[1] === NO_CITY_SENTINEL;
+          return {
+            key,
+            label: noCity ? tr("no_city") : key.split("|")[1],
+            noCity,
+            count,
+          };
+        })
         .sort((a, b) => b.count - a.count),
     }));
     out.sort((a, b) => {
@@ -283,8 +353,8 @@ export default function PositionsFilterSidebar() {
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          title="Espandi filtri"
-          aria-label="Espandi filtri"
+          title={tr("expand_filters")}
+          aria-label={tr("expand_filters")}
           className="w-9 h-9 rounded-lg border flex items-center justify-center cursor-pointer transition-colors"
           style={{
             borderColor:
@@ -315,7 +385,7 @@ export default function PositionsFilterSidebar() {
           className="text-[10px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2"
           style={{ color: "var(--color-dim)" }}
         >
-          ⚙ Filtri{totalActive > 0 ? ` · ${totalActive}` : ""}
+          ⚙ {tr("filters")}{totalActive > 0 ? ` · ${totalActive}` : ""}
         </span>
         <div className="flex items-center gap-2">
           {totalActive > 0 && (
@@ -324,16 +394,16 @@ export default function PositionsFilterSidebar() {
               onClick={resetAll}
               className="text-[9px] font-semibold tracking-[0.1em] uppercase cursor-pointer"
               style={{ color: "var(--color-dim)" }}
-              title="Rimuovi tutti i filtri"
+              title={tr("reset_title")}
             >
-              ✕ reset
+              ✕ {tr("reset")}
             </button>
           )}
           <button
             type="button"
             onClick={() => setCollapsed(true)}
-            title="Comprimi"
-            aria-label="Comprimi filtri"
+            title={tr("collapse")}
+            aria-label={tr("collapse_filters")}
             className="text-[12px] leading-none cursor-pointer"
             style={{ color: "var(--color-dim)" }}
           >
@@ -344,11 +414,11 @@ export default function PositionsFilterSidebar() {
 
       {/* Categoria — elenco con conteggi e percentuali */}
       <Section
-        title="Categoria"
+        title={tr("category")}
         badge={`${familyList.rows.length} · ${familyList.total}`}
       >
         {familyList.rows.length === 0 ? (
-          <EmptyRow />
+          <EmptyRow label={tr("no_data")} />
         ) : (
           <ul className="flex flex-col">
             {familyList.rows.map((r) => {
@@ -371,7 +441,7 @@ export default function PositionsFilterSidebar() {
 
       {/* Score — elenco fasce con conteggi e percentuali, selezione a range */}
       <Section
-        title="Score"
+        title={tr("score")}
         badge={
           selectedRanges[0]
             ? `${selectedRanges[0].lo}–${selectedRanges[0].hi}`
@@ -383,11 +453,11 @@ export default function PositionsFilterSidebar() {
             className="text-[9px] mb-1 px-2"
             style={{ color: "var(--color-green)" }}
           >
-            Seleziona la fine del range…
+            {tr("select_range_end")}
           </div>
         )}
         {scoreList.rows.length === 0 && scoreList.unscored === 0 ? (
-          <EmptyRow />
+          <EmptyRow label={tr("no_data")} />
         ) : (
           <ul className="flex flex-col">
             {scoreList.rows.map((r) => {
@@ -412,7 +482,7 @@ export default function PositionsFilterSidebar() {
               <FacetRow
                 active={unscoredSelected}
                 onClick={toggleUnscored}
-                label="senza score"
+                label={tr("no_score")}
                 italic
                 count={scoreList.unscored}
                 pct={scoreList.unscoredPct}
@@ -423,13 +493,13 @@ export default function PositionsFilterSidebar() {
       </Section>
 
       {/* Albero Location */}
-      <Section title="Location" badge={`${locationTree.length} · ${treeTotal}`}>
+      <Section title={tr("location")} badge={`${locationTree.length} · ${treeTotal}`}>
         {locationTree.length === 0 ? (
           <div
             className="text-[11px] py-3 text-center"
             style={{ color: "var(--color-dim)" }}
           >
-            Nessun dato
+            {tr("no_data")}
           </div>
         ) : (
           <ul
@@ -470,7 +540,7 @@ export default function PositionsFilterSidebar() {
                       title={country.country}
                     >
                       <button
-                        aria-label={isOpen ? "Chiudi" : "Apri"}
+                        aria-label={isOpen ? tr("close") : tr("open")}
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenCountry(isOpen ? null : country.country);
@@ -527,10 +597,7 @@ export default function PositionsFilterSidebar() {
                                     ? "var(--color-bright)"
                                     : "var(--color-muted)",
                                   fontWeight: isCitySel ? 600 : 400,
-                                  fontStyle:
-                                    city.label === "(senza città)"
-                                      ? "italic"
-                                      : "normal",
+                                  fontStyle: city.noCity ? "italic" : "normal",
                                 }}
                                 title={city.label}
                               >
@@ -627,13 +694,13 @@ function FacetRow({
   );
 }
 
-function EmptyRow() {
+function EmptyRow({ label }: { label: string }) {
   return (
     <div
       className="text-[11px] py-3 text-center"
       style={{ color: "var(--color-dim)" }}
     >
-      Nessun dato
+      {label}
     </div>
   );
 }

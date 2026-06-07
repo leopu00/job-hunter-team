@@ -1,6 +1,15 @@
 'use client'
 
 import { useRef } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  sec_profile: { it: 'Profilo', en: 'Profile', hu: 'Profil', es: 'Perfil', de: 'Profil', fr: 'Profil', pt: 'Perfil' },
+  sec_experience: { it: 'Esperienza', en: 'Experience', hu: 'Tapasztalat', es: 'Experiencia', de: 'Erfahrung', fr: 'Expérience', pt: 'Experiência' },
+  sec_education: { it: 'Istruzione', en: 'Education', hu: 'Tanulmányok', es: 'Educación', de: 'Ausbildung', fr: 'Formation', pt: 'Educação' },
+  sec_skills: { it: 'Competenze', en: 'Skills', hu: 'Készségek', es: 'Competencias', de: 'Kompetenzen', fr: 'Compétences', pt: 'Competências' },
+  sec_languages: { it: 'Lingue', en: 'Languages', hu: 'Nyelvek', es: 'Idiomas', de: 'Sprachen', fr: 'Langues', pt: 'Idiomas' },
+}
 
 export interface ExperienceEntry {
   company: string; role: string; startDate: string; endDate?: string
@@ -54,6 +63,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function ResumePreview({ data, printable = true }: ResumePreviewProps) {
   const printRef = useRef<HTMLDivElement>(null)
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   const handlePrint = () => {
     const el = printRef.current
@@ -96,14 +107,14 @@ export default function ResumePreview({ data, printable = true }: ResumePreviewP
 
         {/* Summary */}
         {data.summary && (
-          <Section title="Profilo">
+          <Section title={tr('sec_profile')}>
             <p style={S.small}>{data.summary}</p>
           </Section>
         )}
 
         {/* Experience */}
         {data.experience.length > 0 && (
-          <Section title="Esperienza">
+          <Section title={tr('sec_experience')}>
             {data.experience.map((e, i) => (
               <div key={i} style={{ marginBottom: i < data.experience.length - 1 ? 12 : 0 }}>
                 <div style={S.row}>
@@ -123,7 +134,7 @@ export default function ResumePreview({ data, printable = true }: ResumePreviewP
 
         {/* Education */}
         {data.education.length > 0 && (
-          <Section title="Istruzione">
+          <Section title={tr('sec_education')}>
             {data.education.map((e, i) => (
               <div key={i} style={{ marginBottom: i < data.education.length - 1 ? 8 : 0 }}>
                 <div style={S.row}>
@@ -138,7 +149,7 @@ export default function ResumePreview({ data, printable = true }: ResumePreviewP
 
         {/* Skills */}
         {data.skills.length > 0 && (
-          <Section title="Competenze">
+          <Section title={tr('sec_skills')}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px' }}>
               {data.skills.map((s, i) => (
                 <span key={i} style={{ fontSize: 10, background: '#f0f0f0', borderRadius: 3, padding: '1px 6px', color: '#333' }}>{s}</span>
@@ -149,7 +160,7 @@ export default function ResumePreview({ data, printable = true }: ResumePreviewP
 
         {/* Languages */}
         {data.languages.length > 0 && (
-          <Section title="Lingue">
+          <Section title={tr('sec_languages')}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 20px' }}>
               {data.languages.map((l, i) => (
                 <span key={i} style={S.small}><strong>{l.language}</strong> — {l.level}</span>

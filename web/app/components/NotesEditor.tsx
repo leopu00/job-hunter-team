@@ -1,6 +1,37 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  placeholder: {
+    it: "Scrivi note… Supporta **grassetto**, *corsivo*, `codice`, # titoli, - liste",
+    en: "Write notes… Supports **bold**, *italic*, `code`, # headings, - lists",
+    hu: "Írj jegyzeteket… Támogatja a **félkövér**, *dőlt*, `kód`, # címsorok, - listák formázást",
+    es: "Escribe notas… Admite **negrita**, *cursiva*, `código`, # títulos, - listas",
+    de: "Notizen schreiben… Unterstützt **fett**, *kursiv*, `Code`, # Überschriften, - Listen",
+    fr: "Écris des notes… Prend en charge **gras**, *italique*, `code`, # titres, - listes",
+    pt: "Escreva notas… Suporta **negrito**, *itálico*, `código`, # títulos, - listas",
+  },
+  edit: {
+    it: "Modifica", en: "Edit", hu: "Szerkesztés", es: "Editar", de: "Bearbeiten", fr: "Modifier", pt: "Editar",
+  },
+  preview: {
+    it: "Preview", en: "Preview", hu: "Előnézet", es: "Vista previa", de: "Vorschau", fr: "Aperçu", pt: "Pré-visualização",
+  },
+  words_chars: {
+    it: "{w}p · {c}c", en: "{w}w · {c}c", hu: "{w}sz · {c}k", es: "{w}p · {c}c", de: "{w}W · {c}Z", fr: "{w}m · {c}c", pt: "{w}p · {c}c",
+  },
+  saving: {
+    it: "● salvataggio…", en: "● saving…", hu: "● mentés…", es: "● guardando…", de: "● Speichern…", fr: "● enregistrement…", pt: "● a guardar…",
+  },
+  modified: {
+    it: "● modificato", en: "● modified", hu: "● módosítva", es: "● modificado", de: "● geändert", fr: "● modifié", pt: "● modificado",
+  },
+  no_note: {
+    it: "Nessuna nota", en: "No note", hu: "Nincs jegyzet", es: "Sin notas", de: "Keine Notiz", fr: "Aucune note", pt: "Sem nota",
+  },
+};
 
 // ── Markdown renderer (no deps) ────────────────────────────────────────────
 // Escape HTML first, then apply markdown — sicuro da XSS
@@ -62,11 +93,14 @@ type NotesEditorProps = {
 export function NotesEditor({
   initialValue = "",
   onSave,
-  placeholder = "Scrivi note… Supporta **grassetto**, *corsivo*, `codice`, # titoli, - liste",
+  placeholder,
   label,
   debounceMs = 1500,
   className,
 }: NotesEditorProps) {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const ph = placeholder ?? tr("placeholder");
   const [text, setText] = useState(initialValue);
   const [tab, setTab] = useState<"edit" | "preview">("edit");
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -151,7 +185,7 @@ export function NotesEditor({
                   color: tab === t ? "var(--color-bright)" : "var(--color-dim)",
                 }}
               >
-                {t === "edit" ? "Modifica" : "Preview"}
+                {t === "edit" ? tr("edit") : tr("preview")}
               </button>
             ))}
           </div>
@@ -163,7 +197,7 @@ export function NotesEditor({
             className="text-[9px] font-mono"
             style={{ color: "var(--color-dim)" }}
           >
-            {words}p · {chars}c
+            {tr("words_chars").replace("{w}", String(words)).replace("{c}", String(chars))}
           </span>
           <span
             className="text-[9px]"
@@ -176,9 +210,9 @@ export function NotesEditor({
             }}
           >
             {saving
-              ? "● salvataggio…"
+              ? tr("saving")
               : dirty
-                ? "● modificato"
+                ? tr("modified")
                 : lastSaved
                   ? `✓ ${fmtTs(lastSaved)}`
                   : ""}
@@ -191,7 +225,7 @@ export function NotesEditor({
         <textarea
           value={text}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder={ph}
           rows={8}
           className="w-full resize-y bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-green)] p-3 text-[11px] font-mono leading-relaxed"
           style={{ color: "var(--color-muted)", minHeight: 120 }}
@@ -208,7 +242,7 @@ export function NotesEditor({
           {text ? (
             <div dangerouslySetInnerHTML={{ __html: renderMd(text) }} />
           ) : (
-            <span style={{ color: "var(--color-dim)" }}>Nessuna nota</span>
+            <span style={{ color: "var(--color-dim)" }}>{tr("no_note")}</span>
           )}
         </div>
       )}

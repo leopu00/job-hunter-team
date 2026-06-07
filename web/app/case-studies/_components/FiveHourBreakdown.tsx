@@ -1,6 +1,260 @@
+"use client";
+
 import type { FiveHourWindow, BurnSample, AgentActivity } from "./types";
 import { FiveHourWindowChart } from "./FiveHourWindowChart";
 import { ZoomableChart } from "./ZoomableChart";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<string, Record<string, string>> = {
+  header_title: {
+    it: "⏱ Finestre rolling 5h ({n}) — peak della 5h-cap per finestra",
+    en: "⏱ Rolling 5h windows ({n}) — peak 5h-cap per window",
+    hu: "⏱ Gördülő 5 órás ablakok ({n}) — 5h-limit csúcs ablakonként",
+    es: "⏱ Ventanas rodantes de 5h ({n}) — pico del límite 5h por ventana",
+    de: "⏱ Rollierende 5h-Fenster ({n}) — Spitze des 5h-Limits pro Fenster",
+    fr: "⏱ Fenêtres glissantes de 5h ({n}) — pic du plafond 5h par fenêtre",
+    pt: "⏱ Janelas rolantes de 5h ({n}) — pico do limite 5h por janela",
+  },
+  cap_eq: {
+    it: "cap = 92%",
+    en: "cap = 92%",
+    hu: "limit = 92%",
+    es: "límite = 92%",
+    de: "Limit = 92%",
+    fr: "plafond = 92%",
+    pt: "limite = 92%",
+  },
+  over_cap_count: {
+    it: "· {n}/{tot} finestre oltre cap",
+    en: "· {n}/{tot} windows over cap",
+    hu: "· {n}/{tot} ablak a limit felett",
+    es: "· {n}/{tot} ventanas sobre el límite",
+    de: "· {n}/{tot} Fenster über dem Limit",
+    fr: "· {n}/{tot} fenêtres au-delà du plafond",
+    pt: "· {n}/{tot} janelas acima do limite",
+  },
+  window_label: {
+    it: "Finestra {n}",
+    en: "Window {n}",
+    hu: "{n}. ablak",
+    es: "Ventana {n}",
+    de: "Fenster {n}",
+    fr: "Fenêtre {n}",
+    pt: "Janela {n}",
+  },
+  chart_aria: {
+    it: "Finestre rolling 5 ore: utilizzo di picco del cap 5h per finestra",
+    en: "Rolling 5-hour windows: peak 5h cap usage per window",
+    hu: "Gördülő 5 órás ablakok: 5h-limit csúcskihasználtság ablakonként",
+    es: "Ventanas rodantes de 5 horas: uso pico del límite 5h por ventana",
+    de: "Rollierende 5-Stunden-Fenster: Spitzennutzung des 5h-Limits pro Fenster",
+    fr: "Fenêtres glissantes de 5 heures : utilisation de pointe du plafond 5h par fenêtre",
+    pt: "Janelas rolantes de 5 horas: uso de pico do limite 5h por janela",
+  },
+  cap_n: {
+    it: "cap {n}%",
+    en: "cap {n}%",
+    hu: "limit {n}%",
+    es: "límite {n}%",
+    de: "Limit {n}%",
+    fr: "plafond {n}%",
+    pt: "limite {n}%",
+  },
+  legend_peak: {
+    it: "peak 5h-cap %",
+    en: "peak 5h-cap %",
+    hu: "5h-limit csúcs %",
+    es: "pico límite 5h %",
+    de: "Spitze 5h-Limit %",
+    fr: "pic plafond 5h %",
+    pt: "pico limite 5h %",
+  },
+  legend_over_cap: {
+    it: "oltre cap 92%",
+    en: "over cap 92%",
+    hu: "92% limit felett",
+    es: "sobre límite 92%",
+    de: "über Limit 92%",
+    fr: "au-delà plafond 92%",
+    pt: "acima limite 92%",
+  },
+  col_window: {
+    it: "finestra",
+    en: "window",
+    hu: "ablak",
+    es: "ventana",
+    de: "Fenster",
+    fr: "fenêtre",
+    pt: "janela",
+  },
+  col_time_utc: {
+    it: "orario (UTC)",
+    en: "time (UTC)",
+    hu: "idő (UTC)",
+    es: "hora (UTC)",
+    de: "Zeit (UTC)",
+    fr: "heure (UTC)",
+    pt: "hora (UTC)",
+  },
+  col_near_limit: {
+    it: "quanto vicino al limite 5h?",
+    en: "how close to the 5h limit?",
+    hu: "milyen közel az 5h limithez?",
+    es: "¿qué tan cerca del límite 5h?",
+    de: "wie nah am 5h-Limit?",
+    fr: "à quel point près du plafond 5h ?",
+    pt: "quão perto do limite 5h?",
+  },
+  col_near_limit_title: {
+    it: "quanto la finestra rolling 5h è arrivata vicino al limite del provider (cap 92%). Sopra cap = throttle",
+    en: "how close the rolling 5h window got to the provider limit (92% cap). Over cap = throttle",
+    hu: "mennyire került közel a gördülő 5h ablak a szolgáltató limitjéhez (92% limit). Limit felett = throttle",
+    es: "qué tan cerca llegó la ventana rodante 5h al límite del proveedor (límite 92%). Sobre el límite = throttle",
+    de: "wie nah das rollierende 5h-Fenster an das Provider-Limit kam (92% Limit). Über dem Limit = Throttle",
+    fr: "à quel point la fenêtre glissante 5h s'est approchée du plafond du fournisseur (plafond 92%). Au-delà = throttle",
+    pt: "quão perto a janela rolante 5h chegou do limite do provedor (limite 92%). Acima = throttle",
+  },
+  col_weekly_budget: {
+    it: "budget settimanale",
+    en: "weekly budget",
+    hu: "heti keret",
+    es: "presupuesto semanal",
+    de: "Wochenbudget",
+    fr: "budget hebdomadaire",
+    pt: "orçamento semanal",
+  },
+  col_weekly_budget_title: {
+    it: "totale del budget settimanale consumato fino a fine slice",
+    en: "total weekly budget consumed up to the end of the slice",
+    hu: "a teljes heti keret a szelet végéig elhasználva",
+    es: "total del presupuesto semanal consumido hasta el final del segmento",
+    de: "gesamtes Wochenbudget, verbraucht bis zum Ende des Abschnitts",
+    fr: "total du budget hebdomadaire consommé jusqu'à la fin de la tranche",
+    pt: "total do orçamento semanal consumido até o fim da fatia",
+  },
+  peak_title: {
+    it: "picco 5h = {n}% (cap provider 92%)",
+    en: "5h peak = {n}% (provider cap 92%)",
+    hu: "5h csúcs = {n}% (szolgáltató limit 92%)",
+    es: "pico 5h = {n}% (límite proveedor 92%)",
+    de: "5h-Spitze = {n}% (Provider-Limit 92%)",
+    fr: "pic 5h = {n}% (plafond fournisseur 92%)",
+    pt: "pico 5h = {n}% (limite provedor 92%)",
+  },
+  cap_92_title: {
+    it: "cap 92%",
+    en: "cap 92%",
+    hu: "limit 92%",
+    es: "límite 92%",
+    de: "Limit 92%",
+    fr: "plafond 92%",
+    pt: "limite 92%",
+  },
+  how_to_read: {
+    it: "Come leggere",
+    en: "How to read",
+    hu: "Hogyan olvasd",
+    es: "Cómo leer",
+    de: "So liest du es",
+    fr: "Comment lire",
+    pt: "Como ler",
+  },
+  read_near_strong: {
+    it: "Quanto vicino al limite 5h?",
+    en: "How close to the 5h limit?",
+    hu: "Milyen közel az 5h limithez?",
+    es: "¿Qué tan cerca del límite 5h?",
+    de: "Wie nah am 5h-Limit?",
+    fr: "À quel point près du plafond 5h ?",
+    pt: "Quão perto do limite 5h?",
+  },
+  read_near_1: {
+    it: " Il provider (Codex Pro) blocca quando le ultime 5h superano il ",
+    en: " The provider (Codex Pro) blocks when the last 5h exceed ",
+    hu: " A szolgáltató (Codex Pro) blokkol, amikor az utolsó 5h meghaladja a ",
+    es: " El proveedor (Codex Pro) bloquea cuando las últimas 5h superan el ",
+    de: " Der Provider (Codex Pro) blockiert, wenn die letzten 5h die ",
+    fr: " Le fournisseur (Codex Pro) bloque quand les 5 dernières heures dépassent ",
+    pt: " O provedor (Codex Pro) bloqueia quando as últimas 5h ultrapassam ",
+  },
+  read_near_2: {
+    it: " di consumo. La barra mostra il ",
+    en: " of consumption. The bar shows the ",
+    hu: "-os fogyasztást. A sáv a szeleten belül elért ",
+    es: " de consumo. La barra muestra el ",
+    de: " des Verbrauchs überschreiten. Der Balken zeigt die ",
+    fr: " de consommation. La barre montre le ",
+    pt: " de consumo. A barra mostra o ",
+  },
+  read_near_peak: {
+    it: "picco",
+    en: "peak",
+    hu: "csúcsot",
+    es: "pico",
+    de: "Spitze",
+    fr: "pic",
+    pt: "pico",
+  },
+  read_near_3: {
+    it: " raggiunto dentro la slice. Tacca grigia = soglia cap. Barra rossa = soglia sforata → throttle scattato.",
+    en: " reached inside the slice. Grey notch = cap threshold. Red bar = threshold exceeded → throttle triggered.",
+    hu: " jelzi. Szürke jelölés = limit küszöb. Piros sáv = küszöb túllépve → throttle aktiválva.",
+    es: " alcanzado dentro del segmento. Marca gris = umbral del límite. Barra roja = umbral superado → throttle activado.",
+    de: " innerhalb des Abschnitts. Graue Kerbe = Limit-Schwelle. Roter Balken = Schwelle überschritten → Throttle ausgelöst.",
+    fr: " atteint dans la tranche. Encoche grise = seuil du plafond. Barre rouge = seuil dépassé → throttle déclenché.",
+    pt: " alcançado dentro da fatia. Marca cinza = limiar do limite. Barra vermelha = limiar excedido → throttle acionado.",
+  },
+  read_budget_strong: {
+    it: "Budget settimanale",
+    en: "Weekly budget",
+    hu: "Heti keret",
+    es: "Presupuesto semanal",
+    de: "Wochenbudget",
+    fr: "Budget hebdomadaire",
+    pt: "Orçamento semanal",
+  },
+  read_budget_1: {
+    it: " = totale cumulativo della quota settimanale fino a fine slice (parte da 0%, finisce vicino al 100%). ",
+    en: " = cumulative total of the weekly quota up to the end of the slice (starts at 0%, ends near 100%). ",
+    hu: " = a heti kvóta kumulatív összege a szelet végéig (0%-ról indul, 100% közelében végződik). ",
+    es: " = total acumulado de la cuota semanal hasta el final del segmento (empieza en 0%, termina cerca del 100%). ",
+    de: " = kumulativer Gesamtwert des Wochenkontingents bis zum Ende des Abschnitts (beginnt bei 0%, endet nahe 100%). ",
+    fr: " = total cumulé du quota hebdomadaire jusqu'à la fin de la tranche (commence à 0%, finit près de 100%). ",
+    pt: " = total cumulativo da cota semanal até o fim da fatia (começa em 0%, termina perto de 100%). ",
+  },
+  read_budget_2: {
+    it: " = quanti punti percentuali di quel budget sono stati spesi ",
+    en: " = how many percentage points of that budget were spent ",
+    hu: " = a keret hány százalékpontját költötték el ",
+    es: " = cuántos puntos porcentuales de ese presupuesto se gastaron ",
+    de: " = wie viele Prozentpunkte dieses Budgets ausgegeben wurden ",
+    fr: " = combien de points de pourcentage de ce budget ont été dépensés ",
+    pt: " = quantos pontos percentuais desse orçamento foram gastos ",
+  },
+  read_budget_only: {
+    it: "solo",
+    en: "only",
+    hu: "csak",
+    es: "solo",
+    de: "nur",
+    fr: "seulement",
+    pt: "apenas",
+  },
+  read_budget_3: {
+    it: " in questa slice.",
+    en: " in this slice.",
+    hu: " ebben a szeletben.",
+    es: " en este segmento.",
+    de: " in diesem Abschnitt.",
+    fr: " dans cette tranche.",
+    pt: " nesta fatia.",
+  },
+};
+
+function tr(k: string, locale: Locale): string {
+  return T[k]?.[locale] ?? T[k]?.en ?? k;
+}
 
 type Props = {
   windows: FiveHourWindow[];
@@ -86,6 +340,8 @@ export function FiveHourBreakdown({
   burnSamples,
   agentActivity,
 }: Props) {
+  const locale = useLocale();
+
   if (!windows || windows.length === 0) return null;
 
   const stats = computeStats(windows, burnSamples);
@@ -97,14 +353,16 @@ export function FiveHourBreakdown({
     <section className="mt-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-3">
       <header className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h6 className="text-xs font-semibold text-[var(--color-bright)]">
-          ⏱ Rolling 5h windows ({windows.length}) — peak della 5h-cap per
-          finestra
+          {tr("header_title", locale).replace("{n}", String(windows.length))}
         </h6>
         <span className="text-[10px] text-[var(--color-muted)]">
-          cap = 92%
+          {tr("cap_eq", locale)}
           {overCapCount > 0 && (
             <span className="ml-2 text-rose-600">
-              · {overCapCount}/{windows.length} finestre oltre cap
+              {" "}
+              {tr("over_cap_count", locale)
+                .replace("{n}", String(overCapCount))
+                .replace("{tot}", String(windows.length))}
             </span>
           )}
         </span>
@@ -132,7 +390,10 @@ export function FiveHourBreakdown({
             return (
               <ZoomableChart
                 key={fhw.window_number}
-                label={`Finestra ${fhw.window_number}`}
+                label={tr("window_label", locale).replace(
+                  "{n}",
+                  String(fhw.window_number),
+                )}
               >
                 <FiveHourWindowChart
                   fiveHourWindow={fhw}
@@ -156,6 +417,7 @@ function Chart({
   stats: WinStats[];
   accentColor: string;
 }) {
+  const locale = useLocale();
   const w = 720;
   const h = 200;
   const padL = 36;
@@ -183,7 +445,7 @@ function Chart({
       viewBox={`0 0 ${w} ${h}`}
       className="h-44 w-full"
       role="img"
-      aria-label="Rolling 5-hour windows: peak 5h cap usage per window"
+      aria-label={tr("chart_aria", locale)}
     >
       {/* background bands per window */}
       {segments.map((s, i) => (
@@ -237,7 +499,7 @@ function Chart({
         textAnchor="end"
         fill="#ef4444"
       >
-        cap {CAP_5H}%
+        {tr("cap_n", locale).replace("{n}", String(CAP_5H))}
       </text>
 
       {/* peak bars */}
@@ -343,7 +605,7 @@ function Chart({
           rx="1"
         />
         <text x="13" y="0" fontSize="8" fill="#475569">
-          peak 5h-cap %
+          {tr("legend_peak", locale)}
         </text>
         <g transform="translate(110, 0)">
           <rect
@@ -355,7 +617,7 @@ function Chart({
             rx="1"
           />
           <text x="13" y="0" fontSize="8" fill="#475569">
-            oltre cap 92%
+            {tr("legend_over_cap", locale)}
           </text>
         </g>
       </g>
@@ -370,6 +632,7 @@ function Table({
   stats: WinStats[];
   accentColor: string;
 }) {
+  const locale = useLocale();
   const fmt = new Intl.DateTimeFormat("it-IT", {
     weekday: "short",
     day: "2-digit",
@@ -390,22 +653,22 @@ function Table({
         <thead>
           <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-muted)]">
             <th className="py-2 pr-2 text-[10px] font-medium uppercase tracking-wide">
-              finestra
+              {tr("col_window", locale)}
             </th>
             <th className="py-2 pr-3 text-[10px] font-medium uppercase tracking-wide">
-              orario (UTC)
+              {tr("col_time_utc", locale)}
             </th>
             <th
               className="py-2 pr-3 text-[10px] font-medium uppercase tracking-wide"
-              title="quanto la finestra rolling 5h è arrivata vicino al limite del provider (cap 92%). Sopra cap = throttle"
+              title={tr("col_near_limit_title", locale)}
             >
-              quanto vicino al limite 5h?
+              {tr("col_near_limit", locale)}
             </th>
             <th
               className="py-2 pr-2 text-right text-[10px] font-medium uppercase tracking-wide"
-              title="totale del budget settimanale consumato fino a fine slice"
+              title={tr("col_weekly_budget_title", locale)}
             >
-              budget settimanale
+              {tr("col_weekly_budget", locale)}
             </th>
           </tr>
         </thead>
@@ -435,7 +698,10 @@ function Table({
                   >
                     <div
                       className="relative h-3.5 flex-1 overflow-hidden rounded-sm bg-[var(--color-card)]"
-                      title={`picco 5h = ${Math.round(s.peakCap5h)}% (cap provider 92%)`}
+                      title={tr("peak_title", locale).replace(
+                        "{n}",
+                        String(Math.round(s.peakCap5h)),
+                      )}
                     >
                       {/* Barra proporzionale 0..100% del peak diretto */}
                       <div
@@ -450,7 +716,7 @@ function Table({
                       <div
                         className="absolute inset-y-0 w-px bg-slate-600"
                         style={{ left: `${CAP_5H}%` }}
-                        title="cap 92%"
+                        title={tr("cap_92_title", locale)}
                       />
                     </div>
                     <span
@@ -477,21 +743,24 @@ function Table({
       </table>
       <div className="mt-3 rounded-md border border-[var(--color-border)] bg-[var(--color-deep)] p-3 text-[11px] leading-relaxed text-[var(--color-bright)]">
         <p className="mb-1 font-semibold text-[var(--color-bright)]">
-          Come leggere
+          {tr("how_to_read", locale)}
         </p>
         <ul className="ml-4 list-disc space-y-1">
           <li>
-            <strong>Quanto vicino al limite 5h?</strong> Il provider (Codex Pro)
-            blocca quando le ultime 5h superano il <strong>92%</strong> di
-            consumo. La barra mostra il <em>picco</em> raggiunto dentro la
-            slice. Tacca grigia = soglia cap. Barra rossa = soglia sforata →
-            throttle scattato.
+            <strong>{tr("read_near_strong", locale)}</strong>
+            {tr("read_near_1", locale)}
+            <strong>92%</strong>
+            {tr("read_near_2", locale)}
+            <em>{tr("read_near_peak", locale)}</em>
+            {tr("read_near_3", locale)}
           </li>
           <li>
-            <strong>Budget settimanale</strong> = totale cumulativo della quota
-            settimanale fino a fine slice (parte da 0%, finisce vicino al 100%).
-            <em>+Xpp</em> = quanti punti percentuali di quel budget sono stati
-            spesi <em>solo</em> in questa slice.
+            <strong>{tr("read_budget_strong", locale)}</strong>
+            {tr("read_budget_1", locale)}
+            <em>+Xpp</em>
+            {tr("read_budget_2", locale)}
+            <em>{tr("read_budget_only", locale)}</em>
+            {tr("read_budget_3", locale)}
           </li>
         </ul>
       </div>

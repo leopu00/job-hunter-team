@@ -1,6 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  search_placeholder: { it: 'Cerca emoji...', en: 'Search emoji...', hu: 'Emoji keresése...', es: 'Buscar emoji...', de: 'Emoji suchen...', fr: 'Rechercher un emoji...', pt: 'Procurar emoji...' },
+  select_emoji: { it: 'Seleziona emoji', en: 'Select emoji', hu: 'Emoji kiválasztása', es: 'Seleccionar emoji', de: 'Emoji auswählen', fr: 'Sélectionner un emoji', pt: 'Selecionar emoji' },
+  no_results: { it: 'Nessun risultato', en: 'No results', hu: 'Nincs találat', es: 'Sin resultados', de: 'Keine Ergebnisse', fr: 'Aucun résultat', pt: 'Sem resultados' },
+}
 
 const CATEGORIES: Record<string, { icon: string; emojis: string[] }> = {
   recenti:  { icon: '🕐', emojis: [] },
@@ -28,6 +35,8 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
   const [cat, setCat]         = useState<CategoryKey>('sorrisi')
   const [recents, setRecents] = useState<string[]>([])
   const ref = useRef<HTMLDivElement>(null)
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   useEffect(() => {
     try { setRecents(JSON.parse(localStorage.getItem(LS_KEY) ?? '[]')) } catch {}
@@ -52,7 +61,7 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <div role="button" aria-expanded={open} aria-label="Seleziona emoji" onClick={() => setOpen(v => !v)} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+      <div role="button" aria-expanded={open} aria-label={tr('select_emoji')} onClick={() => setOpen(v => !v)} style={{ cursor: 'pointer', display: 'inline-flex' }}>
         {trigger ?? <button style={{ fontSize: 18, background: 'none', border: '1px solid var(--color-border)', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>😀</button>}
       </div>
 
@@ -60,7 +69,7 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
         <div style={{ position: 'absolute', bottom: '110%', left: 0, zIndex: 200, background: 'var(--color-panel)', border: '1px solid var(--color-border)', borderRadius: 10, boxShadow: '0 4px 24px rgba(0,0,0,0.4)', width: 280, animation: 'fade-in 0.1s ease both' }}>
           {/* Search */}
           <div style={{ padding: '8px 8px 4px' }}>
-            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca emoji..."
+            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder={tr('search_placeholder')}
               style={{ width: '100%', padding: '5px 8px', fontSize: 11, borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-row)', color: 'var(--color-bright)', outline: 'none', boxSizing: 'border-box' }} />
           </div>
 
@@ -79,7 +88,7 @@ export default function EmojiPicker({ onSelect, trigger }: EmojiPickerProps) {
           {/* Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 1, padding: 6, maxHeight: 200, overflowY: 'auto' }}>
             {displayEmojis.length === 0
-              ? <div style={{ gridColumn: '1/-1', textAlign: 'center', fontSize: 10, color: 'var(--color-dim)', padding: '16px 0' }}>Nessun risultato</div>
+              ? <div style={{ gridColumn: '1/-1', textAlign: 'center', fontSize: 10, color: 'var(--color-dim)', padding: '16px 0' }}>{tr('no_results')}</div>
               : displayEmojis.map((emoji: string, i: number) => (
                 <button key={i} onClick={() => select(emoji)} title={emoji}
                   style={{ fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', borderRadius: 4, padding: 2, lineHeight: 1.2 }}

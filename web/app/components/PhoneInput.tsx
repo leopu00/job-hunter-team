@@ -1,6 +1,86 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+// ── i18n (UI) ──────────────────────────────────────────────────────────────
+
+const T: Record<string, Record<string, string>> = {
+  searchCountry: {
+    it: "Cerca paese...",
+    en: "Search country...",
+    hu: "Ország keresése...",
+    es: "Buscar país...",
+    de: "Land suchen...",
+    fr: "Rechercher un pays...",
+    pt: "Procurar país...",
+  },
+  phoneNumber: {
+    it: "Numero di telefono",
+    en: "Phone number",
+    hu: "Telefonszám",
+    es: "Número de teléfono",
+    de: "Telefonnummer",
+    fr: "Numéro de téléphone",
+    pt: "Número de telefone",
+  },
+  noResults: {
+    it: "Nessun risultato",
+    en: "No results",
+    hu: "Nincs találat",
+    es: "Sin resultados",
+    de: "Keine Ergebnisse",
+    fr: "Aucun résultat",
+    pt: "Nenhum resultado",
+  },
+};
+
+// `Numero completo: +39 320 ...` (title del campo)
+const FULL_NUMBER: Record<string, (n: string) => string> = {
+  it: (n) => `Numero completo: ${n}`,
+  en: (n) => `Full number: ${n}`,
+  hu: (n) => `Teljes szám: ${n}`,
+  es: (n) => `Número completo: ${n}`,
+  de: (n) => `Vollständige Nummer: ${n}`,
+  fr: (n) => `Numéro complet : ${n}`,
+  pt: (n) => `Número completo: ${n}`,
+};
+
+// Nomi paese localizzati, per codice ISO. La `name` in COUNTRIES resta in IT
+// per retro-compatibilità con eventuali consumer dell'export.
+const COUNTRY_NAMES: Record<string, Record<Locale, string>> = {
+  IT: { it: "Italia", en: "Italy", hu: "Olaszország", es: "Italia", de: "Italien", fr: "Italie", pt: "Itália" },
+  US: { it: "USA", en: "USA", hu: "USA", es: "EE. UU.", de: "USA", fr: "États-Unis", pt: "EUA" },
+  GB: { it: "Regno Unito", en: "United Kingdom", hu: "Egyesült Királyság", es: "Reino Unido", de: "Vereinigtes Königreich", fr: "Royaume-Uni", pt: "Reino Unido" },
+  DE: { it: "Germania", en: "Germany", hu: "Németország", es: "Alemania", de: "Deutschland", fr: "Allemagne", pt: "Alemanha" },
+  FR: { it: "Francia", en: "France", hu: "Franciaország", es: "Francia", de: "Frankreich", fr: "France", pt: "França" },
+  ES: { it: "Spagna", en: "Spain", hu: "Spanyolország", es: "España", de: "Spanien", fr: "Espagne", pt: "Espanha" },
+  PT: { it: "Portogallo", en: "Portugal", hu: "Portugália", es: "Portugal", de: "Portugal", fr: "Portugal", pt: "Portugal" },
+  NL: { it: "Olanda", en: "Netherlands", hu: "Hollandia", es: "Países Bajos", de: "Niederlande", fr: "Pays-Bas", pt: "Países Baixos" },
+  BE: { it: "Belgio", en: "Belgium", hu: "Belgium", es: "Bélgica", de: "Belgien", fr: "Belgique", pt: "Bélgica" },
+  CH: { it: "Svizzera", en: "Switzerland", hu: "Svájc", es: "Suiza", de: "Schweiz", fr: "Suisse", pt: "Suíça" },
+  AT: { it: "Austria", en: "Austria", hu: "Ausztria", es: "Austria", de: "Österreich", fr: "Autriche", pt: "Áustria" },
+  PL: { it: "Polonia", en: "Poland", hu: "Lengyelország", es: "Polonia", de: "Polen", fr: "Pologne", pt: "Polónia" },
+  SE: { it: "Svezia", en: "Sweden", hu: "Svédország", es: "Suecia", de: "Schweden", fr: "Suède", pt: "Suécia" },
+  NO: { it: "Norvegia", en: "Norway", hu: "Norvégia", es: "Noruega", de: "Norwegen", fr: "Norvège", pt: "Noruega" },
+  DK: { it: "Danimarca", en: "Denmark", hu: "Dánia", es: "Dinamarca", de: "Dänemark", fr: "Danemark", pt: "Dinamarca" },
+  CA: { it: "Canada", en: "Canada", hu: "Kanada", es: "Canadá", de: "Kanada", fr: "Canada", pt: "Canadá" },
+  AU: { it: "Australia", en: "Australia", hu: "Ausztrália", es: "Australia", de: "Australien", fr: "Australie", pt: "Austrália" },
+  JP: { it: "Giappone", en: "Japan", hu: "Japán", es: "Japón", de: "Japan", fr: "Japon", pt: "Japão" },
+  CN: { it: "Cina", en: "China", hu: "Kína", es: "China", de: "China", fr: "Chine", pt: "China" },
+  IN: { it: "India", en: "India", hu: "India", es: "India", de: "Indien", fr: "Inde", pt: "Índia" },
+  BR: { it: "Brasile", en: "Brazil", hu: "Brazília", es: "Brasil", de: "Brasilien", fr: "Brésil", pt: "Brasil" },
+  AR: { it: "Argentina", en: "Argentina", hu: "Argentína", es: "Argentina", de: "Argentinien", fr: "Argentine", pt: "Argentina" },
+  MX: { it: "Messico", en: "Mexico", hu: "Mexikó", es: "México", de: "Mexiko", fr: "Mexique", pt: "México" },
+  RU: { it: "Russia", en: "Russia", hu: "Oroszország", es: "Rusia", de: "Russland", fr: "Russie", pt: "Rússia" },
+  TR: { it: "Turchia", en: "Turkey", hu: "Törökország", es: "Turquía", de: "Türkei", fr: "Turquie", pt: "Turquia" },
+  AE: { it: "Emirati Arabi", en: "United Arab Emirates", hu: "Egyesült Arab Emírségek", es: "Emiratos Árabes Unidos", de: "Vereinigte Arabische Emirate", fr: "Émirats arabes unis", pt: "Emirados Árabes Unidos" },
+};
+
+function countryName(c: Country, locale: Locale): string {
+  return COUNTRY_NAMES[c.code]?.[locale] ?? c.name;
+}
 
 // ── Country data ───────────────────────────────────────────────────────────
 
@@ -82,6 +162,8 @@ export function PhoneInput({
   disabled = false,
   className = "",
 }: PhoneInputProps) {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [country, setCountry] = useState<Country>(
@@ -102,6 +184,7 @@ export function PhoneInput({
   const filtered = query
     ? countries.filter(
         (c) =>
+          countryName(c, locale).toLowerCase().includes(query.toLowerCase()) ||
           c.name.toLowerCase().includes(query.toLowerCase()) ||
           c.dial.includes(query),
       )
@@ -181,11 +264,13 @@ export function PhoneInput({
           onChange={(e) => onChange(formatPhone(e.target.value))}
           className="flex-1 min-w-0 bg-transparent outline-none font-mono px-3 py-2 text-[11px]"
           style={{ color: "var(--color-bright)", border: "none" }}
-          aria-label="Numero di telefono"
+          aria-label={tr("phoneNumber")}
           aria-invalid={!!error}
           autoComplete="tel"
           title={
-            full && isValid(value) ? `Numero completo: ${full}` : undefined
+            full && isValid(value)
+              ? (FULL_NUMBER[locale] ?? FULL_NUMBER.en)(full)
+              : undefined
           }
         />
 
@@ -231,7 +316,7 @@ export function PhoneInput({
                 autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Cerca paese..."
+                placeholder={tr("searchCountry")}
                 className="w-full bg-transparent outline-none text-[10px] font-mono"
                 style={{ color: "var(--color-bright)", border: "none" }}
                 autoComplete="off"
@@ -273,7 +358,7 @@ export function PhoneInput({
                     flex: 1,
                   }}
                 >
-                  {c.name}
+                  {countryName(c, locale)}
                 </span>
                 <span
                   style={{
@@ -295,7 +380,7 @@ export function PhoneInput({
                   fontFamily: "var(--font-mono)",
                 }}
               >
-                Nessun risultato
+                {tr("noResults")}
               </p>
             )}
           </div>

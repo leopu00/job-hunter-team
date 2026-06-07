@@ -1,6 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  noData: { it: "Nessun dato", en: "No data", hu: "Nincs adat", es: "Sin datos", de: "Keine Daten", fr: "Aucune donnée", pt: "Nenhum dado" },
+  loading: { it: "Caricamento…", en: "Loading…", hu: "Betöltés…", es: "Cargando…", de: "Wird geladen…", fr: "Chargement…", pt: "Carregando…" },
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -80,13 +86,15 @@ export function Table<T extends Record<string, unknown>>({
   striped = false,
   hoverable = true,
   compact = false,
-  emptyMessage = "Nessun dato",
+  emptyMessage,
   loading = false,
   className = "",
   ariaLabel,
 }: TableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
 
   const toggleSort = (key: string) => {
     if (sortKey !== key) {
@@ -161,7 +169,7 @@ export function Table<T extends Record<string, unknown>>({
                 className={`${pad} text-center`}
                 style={{ color: "var(--color-dim)" }}
               >
-                <span className={`${fs} animate-pulse`}>Caricamento…</span>
+                <span className={`${fs} animate-pulse`}>{tr("loading")}</span>
               </td>
             </tr>
           ) : rows.length === 0 ? (
@@ -171,7 +179,7 @@ export function Table<T extends Record<string, unknown>>({
                 className={`${pad} text-center ${fs}`}
                 style={{ color: "var(--color-dim)" }}
               >
-                {emptyMessage}
+                {emptyMessage ?? tr("noData")}
               </td>
             </tr>
           ) : (

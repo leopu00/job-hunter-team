@@ -25,6 +25,30 @@ const T = {
     decline: "Csak szükséges",
     privacy: "Adatvédelmi Irányelvek",
   },
+  es: {
+    text: "Este sitio utiliza cookies técnicas para el funcionamiento y cookies analíticas para mejorar tu experiencia.",
+    accept: "Aceptar",
+    decline: "Solo necesarias",
+    privacy: "Política de Privacidad",
+  },
+  de: {
+    text: "Diese Website verwendet technische Cookies für die Funktionalität und Analyse-Cookies, um deine Erfahrung zu verbessern.",
+    accept: "Akzeptieren",
+    decline: "Nur notwendige",
+    privacy: "Datenschutzerklärung",
+  },
+  fr: {
+    text: "Ce site utilise des cookies techniques pour le fonctionnement et des cookies analytiques pour améliorer votre expérience.",
+    accept: "Accepter",
+    decline: "Nécessaires uniquement",
+    privacy: "Politique de Confidentialité",
+  },
+  pt: {
+    text: "Este site utiliza cookies técnicos para o funcionamento e cookies analíticos para melhorar a sua experiência.",
+    accept: "Aceitar",
+    decline: "Apenas necessários",
+    privacy: "Política de Privacidade",
+  },
 };
 
 export default function CookieConsent() {

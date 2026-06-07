@@ -1,6 +1,25 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  zoom: {
+    it: 'Zoom', en: 'Zoom', hu: 'Nagyítás', es: 'Zoom', de: 'Zoom', fr: 'Zoom', pt: 'Zoom',
+  },
+  rotate_left: {
+    it: 'Ruota a sinistra', en: 'Rotate left', hu: 'Forgatás balra', es: 'Girar a la izquierda', de: 'Nach links drehen', fr: 'Pivoter à gauche', pt: 'Girar para a esquerda',
+  },
+  rotate_right: {
+    it: 'Ruota a destra', en: 'Rotate right', hu: 'Forgatás jobbra', es: 'Girar a la derecha', de: 'Nach rechts drehen', fr: 'Pivoter à droite', pt: 'Girar para a direita',
+  },
+  cancel: {
+    it: 'Annulla', en: 'Cancel', hu: 'Mégse', es: 'Cancelar', de: 'Abbrechen', fr: 'Annuler', pt: 'Cancelar',
+  },
+  crop: {
+    it: 'Ritaglia', en: 'Crop', hu: 'Vágás', es: 'Recortar', de: 'Zuschneiden', fr: 'Recadrer', pt: 'Recortar',
+  },
+}
 
 export interface CropperProps {
   src: string
@@ -22,6 +41,8 @@ export default function Cropper({ src, aspectRatio = 1, onCrop, onCancel, output
   const [crop, setCrop]     = useState<Crop>({ x: 60, y: 60, w: 200, h: 200 })
   const [dragging, setDragging] = useState<'move' | 'resize' | null>(null)
   const dragStart  = useRef({ mx: 0, my: 0, crop: crop })
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   /* ── Carica immagine ── */
   useEffect(() => {
@@ -128,13 +149,13 @@ export default function Cropper({ src, aspectRatio = 1, onCrop, onCancel, output
         style={{ borderRadius: 8, border: '1px solid var(--color-border)', cursor: dragging ? 'grabbing' : 'crosshair', width: '100%', maxWidth: CANVAS_SIZE }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 10, color: 'var(--color-dim)', flexShrink: 0 }}>🔍</span>
-        <input aria-label="Zoom" type="range" min={0.5} max={3} step={0.05} value={zoom} onChange={e => setZoom(+e.target.value)} style={{ flex: 1, accentColor: 'var(--color-green)' }} />
-        <button aria-label="Ruota a sinistra" onClick={() => setRotate(r => r - 90)} style={{ fontSize: 14, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>↺</button>
-        <button aria-label="Ruota a destra" onClick={() => setRotate(r => r + 90)} style={{ fontSize: 14, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>↻</button>
+        <input aria-label={tr('zoom')} type="range" min={0.5} max={3} step={0.05} value={zoom} onChange={e => setZoom(+e.target.value)} style={{ flex: 1, accentColor: 'var(--color-green)' }} />
+        <button aria-label={tr('rotate_left')} onClick={() => setRotate(r => r - 90)} style={{ fontSize: 14, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>↺</button>
+        <button aria-label={tr('rotate_right')} onClick={() => setRotate(r => r + 90)} style={{ fontSize: 14, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>↻</button>
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        {onCancel && <button onClick={onCancel} style={{ padding: '6px 14px', fontSize: 11, borderRadius: 7, border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-muted)', cursor: 'pointer' }}>Annulla</button>}
-        <button onClick={handleCrop} style={{ padding: '6px 16px', fontSize: 11, fontWeight: 700, borderRadius: 7, border: 'none', background: 'var(--color-green)', color: '#000', cursor: 'pointer' }}>Ritaglia ✓</button>
+        {onCancel && <button onClick={onCancel} style={{ padding: '6px 14px', fontSize: 11, borderRadius: 7, border: '1px solid var(--color-border)', background: 'transparent', color: 'var(--color-muted)', cursor: 'pointer' }}>{tr('cancel')}</button>}
+        <button onClick={handleCrop} style={{ padding: '6px 16px', fontSize: 11, fontWeight: 700, borderRadius: 7, border: 'none', background: 'var(--color-green)', color: '#000', cursor: 'pointer' }}>{tr('crop')} ✓</button>
       </div>
     </div>
   )

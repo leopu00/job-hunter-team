@@ -53,6 +53,62 @@ const T = {
     story_body_3:
       "A szoftver ingyenes és nyílt forráskódú: a JHT soha nem számláz neked. Csak egy dedikált AI előfizetést fizetsz (Claude Code, Codex vagy Kimi): a csapat teljesen felhasználja, ezért tartsd külön a napi fiókodtól. A fejlesztői közreműködéseket szívesen fogadjuk, hogy az AI a dolgozók oldalán álljon, ne ellenük.",
   },
+  es: {
+    title: "Descripción del proyecto",
+    subtitle: "Un equipo de agentes de IA que busca trabajo por ti.",
+    back: "← Atrás",
+    open_source: "código abierto",
+    repo_cta: "Repositorio",
+    story_title: "Historia y objetivo",
+    story_body_1:
+      "Job Hunter Team nació como un proyecto de código abierto para automatizar la búsqueda de empleo mediante una cadena de agentes de IA especializados, que se ejecuta localmente dentro de un contenedor Docker y está controlada por el usuario.",
+    story_body_2:
+      "El objetivo es construir una herramienta accesible para todos: quienes prefieren la simplicidad descargan el lanzador de escritorio que gestiona el contenedor por ti, mientras que los usuarios técnicos pueden clonar el repositorio y trabajar directamente con la CLI/TUI.",
+    story_body_3:
+      "El software es gratuito y de código abierto: JHT nunca te factura. Solo pagas una suscripción de IA dedicada (Claude Code, Codex o Kimi): el equipo la consume por completo, así que mantenla separada de tu cuenta de uso diario. Las contribuciones de los desarrolladores son bienvenidas para poner la IA del lado de los trabajadores, no en su contra.",
+  },
+  de: {
+    title: "Projektübersicht",
+    subtitle: "Ein KI-Agenten-Team, das Jobs für dich findet.",
+    back: "← Zurück",
+    open_source: "Open Source",
+    repo_cta: "Repository",
+    story_title: "Geschichte und Ziel",
+    story_body_1:
+      "Job Hunter Team begann als Open-Source-Projekt, um die Jobsuche über eine Pipeline spezialisierter KI-Agenten zu automatisieren, die lokal in einem Docker-Container läuft und vom Nutzer gesteuert wird.",
+    story_body_2:
+      "Das Ziel ist es, ein für alle zugängliches Werkzeug zu schaffen: Wer Einfachheit bevorzugt, lädt den Desktop-Launcher herunter, der den Container für dich verwaltet, während technische Nutzer das Repository klonen und direkt mit der CLI/TUI arbeiten können.",
+    story_body_3:
+      "Die Software ist kostenlos und Open Source: JHT stellt dir niemals etwas in Rechnung. Du zahlst nur für ein dediziertes KI-Abonnement (Claude Code, Codex oder Kimi): Das Team verbraucht es vollständig, halte es daher von deinem Alltagskonto getrennt. Beiträge von Entwicklern sind willkommen, damit die KI auf der Seite der Arbeitnehmer steht und nicht gegen sie.",
+  },
+  fr: {
+    title: "Présentation du projet",
+    subtitle: "Une équipe d'agents IA qui trouve des emplois pour vous.",
+    back: "← Retour",
+    open_source: "open source",
+    repo_cta: "Dépôt",
+    story_title: "Histoire et objectif",
+    story_body_1:
+      "Job Hunter Team a débuté comme un projet open source visant à automatiser la recherche d'emploi grâce à un pipeline d'agents IA spécialisés, exécuté localement dans un conteneur Docker et contrôlé par l'utilisateur.",
+    story_body_2:
+      "L'objectif est de construire un outil accessible à tous : ceux qui préfèrent la simplicité téléchargent le lanceur de bureau qui gère le conteneur pour vous, tandis que les utilisateurs techniques peuvent cloner le dépôt et travailler directement avec la CLI/TUI.",
+    story_body_3:
+      "Le logiciel est gratuit et open source : JHT ne vous facture jamais rien. Vous ne payez qu'un abonnement IA dédié (Claude Code, Codex ou Kimi) : l'équipe le consomme entièrement, alors gardez-le séparé de votre compte quotidien. Les contributions des développeurs sont les bienvenues pour mettre l'IA du côté des travailleurs, et non contre eux.",
+  },
+  pt: {
+    title: "Visão geral do projeto",
+    subtitle: "Uma equipa de agentes de IA que procura emprego por si.",
+    back: "← Voltar",
+    open_source: "código aberto",
+    repo_cta: "Repositório",
+    story_title: "História e objetivo",
+    story_body_1:
+      "O Job Hunter Team nasceu como um projeto de código aberto para automatizar a procura de emprego através de uma pipeline de agentes de IA especializados, executada localmente dentro de um contentor Docker e controlada pelo utilizador.",
+    story_body_2:
+      "O objetivo é construir uma ferramenta acessível a todos: quem prefere a simplicidade descarrega o lançador de ambiente de trabalho que gere o contentor por si, enquanto os utilizadores técnicos podem clonar o repositório e trabalhar diretamente com a CLI/TUI.",
+    story_body_3:
+      "O software é gratuito e de código aberto: o JHT nunca lhe cobra nada. Paga apenas uma subscrição de IA dedicada (Claude Code, Codex ou Kimi): a equipa consome-a totalmente, por isso mantenha-a separada da sua conta do dia a dia. As contribuições dos programadores são bem-vindas para colocar a IA do lado dos trabalhadores, e não contra eles.",
+  },
 } as const;
 
 function BackLink({ label }: { label: string }) {
