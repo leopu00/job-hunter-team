@@ -72,7 +72,10 @@ Il frontend ha un fallback che sblocca "Vai alla dashboard" quando questi sono p
 
 ```yaml
 name: <Nome Cognome>
-target_role: <ruolo target>
+target_role: <ruolo target — frase descrittiva>
+target_roles_priority:        # 2-5 titoli di ruolo CONCRETI e cercabili, in priorità
+  - <es. "Investment Analyst">  # è il campo "Ruoli desiderati" che la UI mostra
+  - <es. "Private Equity Analyst">  # e su cui lo Scout cerca (NON la frase di target_role)
 location: <città o area>
 experience_years: <int>
 has_degree: <true|false>
@@ -105,6 +108,9 @@ candidate:
     - institution: ...
       degree: ...
       year: ...
+  strengths:                  # 2-4 qualità come voci brevi (è il campo "Punti di forza"
+    - <es. "Modellazione DCF">  # della UI). Stessa lista che racconti in strengths.md;
+    - <es. "Analisi del rischio di credito">  # qui in forma di tag, lì in forma narrativa
 
 preferences:                  # CHIAVI ESATTE — il frontend cerca proprio queste
   work_mode: <remoto|ibrido|in sede|flessibile>

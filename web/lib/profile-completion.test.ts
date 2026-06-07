@@ -55,6 +55,15 @@ describe("completionByLevel", () => {
     assert.ok(c.recommended.filled < c.recommended.total);
     assert.ok(c.optional.missing.length > 0);
   });
+  it("job_titles è un requisito recommended tracciato", () => {
+    const missingInBase = completionByLevel(BASE).recommended.missing.map((r) => r.key);
+    assert.ok(missingInBase.includes("job_titles"));
+    const withRoles = completionByLevel({
+      ...BASE,
+      job_titles: ["Investment Analyst"],
+    } as unknown as CandidateProfile);
+    assert.ok(!withRoles.recommended.missing.map((r) => r.key).includes("job_titles"));
+  });
 });
 
 describe("weightedCompletion", () => {
