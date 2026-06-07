@@ -206,9 +206,9 @@ export default function RecentPositionsTable({
                 labels.colCity,
                 labels.colRemote,
                 labels.colScore,
-                labels.colCritic,
                 labels.colSalary,
                 labels.colMonthly,
+                labels.colCritic,
                 labels.colUpdatedBy,
                 labels.colStatus,
               ].map((h) => (
@@ -338,24 +338,6 @@ export default function RecentPositionsTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap tabular-nums text-right">
-                    {p.critic_score != null ? (
-                      <span
-                        className="text-[12px] font-semibold"
-                        style={{
-                          color:
-                            CRITIC_COLORS[p.critic_verdict ?? ""] ??
-                            "var(--color-muted)",
-                        }}
-                      >
-                        {p.critic_score.toFixed(1)}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-dim)] text-[11px]">
-                        —
-                      </span>
-                    )}
-                  </td>
                   <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-right">
                     {formatSalary(
                       p.salary_min,
@@ -372,6 +354,24 @@ export default function RecentPositionsTable({
                       p.salary_currency,
                       displayCurrency,
                       rates,
+                    )}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap tabular-nums text-right">
+                    {p.critic_score != null ? (
+                      <span
+                        className="text-[12px] font-semibold"
+                        style={{
+                          color:
+                            CRITIC_COLORS[p.critic_verdict ?? ""] ??
+                            "var(--color-muted)",
+                        }}
+                      >
+                        {p.critic_score.toFixed(1)}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)] text-[11px]">
+                        —
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
