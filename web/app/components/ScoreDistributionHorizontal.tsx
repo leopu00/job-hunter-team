@@ -40,7 +40,7 @@ const LABEL_FONT = 13;
 
 function colorForFraction(frac: number): string {
   if (frac >= 0.75) return "var(--color-green)";
-  if (frac >= 0.6) return "#7fffb2";
+  if (frac >= 0.6) return "var(--color-ready)";
   if (frac >= 0.45) return "var(--color-yellow)";
   if (frac >= 0.3) return "var(--color-orange)";
   return "var(--color-red)";
