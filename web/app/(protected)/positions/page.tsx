@@ -489,17 +489,17 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     { col: "loc_country", label: tr("col_country"), sortable: true },
                     { col: "loc_city", label: tr("col_city"), sortable: true },
                     { col: "remote", label: tr("col_remote"), sortable: false },
-                    { col: "score", label: tr("col_score"), sortable: true },
+                    { col: "score", label: tr("col_score"), sortable: true, center: true },
                     { col: "salary", label: tr("col_salary"), sortable: false },
                     { col: "monthly", label: tr("col_monthly"), sortable: false },
-                    { col: "last_action_by", label: tr("col_updated_by"), sortable: false },
-                    { col: "critic", label: tr("col_voto"), sortable: true },
+                    { col: "last_action_by", label: tr("col_updated_by"), sortable: false, center: true },
+                    { col: "critic", label: tr("col_voto"), sortable: true, center: true },
                     { col: "status", label: tr("col_status"), sortable: true },
-                  ].map(({ col, label, sortable }) => (
+                  ].map(({ col, label, sortable, center }) => (
                     <th
                       key={col}
                       scope="col"
-                      className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
+                      className={`px-4 py-3 ${center ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
                       style={{
                         color:
                           sortable && sortCol === col
@@ -695,7 +695,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                       </td>
                       {/* Score */}
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center gap-2 justify-center">
                           <span
                             className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
                           >
@@ -736,7 +736,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         )}
                       </td>
                       {/* Aggiornato da */}
-                      <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono">
+                      <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">
                         {p.last_action_actor ? (
                           <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
                             <span aria-hidden="true">
@@ -749,7 +749,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         )}
                       </td>
                       {/* Voto critico */}
-                      <td className="px-4 py-3 whitespace-nowrap tabular-nums text-right">
+                      <td className="px-4 py-3 whitespace-nowrap tabular-nums text-center">
                         {p.critic_score != null ? (
                           <span
                             className="text-[12px] font-semibold"
