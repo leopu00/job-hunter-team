@@ -1,0 +1,71 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+export const dynamic = "force-dynamic";
+
+const BUCKET = "file-transit";
+const DOWNLOAD_TTL_SECONDS = 60;
+
+// GET /api/profile/files/request/:id
+// Browser-side polling. Ritorna lo stato della richiesta di bridge; quando
+// 'ready' minta una signed download URL (TTL corto) per aprire il file e
+// marca la richiesta 'served' (così il purge la elimina). Lettura della riga
+// via sessione utente (RLS own); il signing dello Storage richiede il
+// service-role (bucket privato).
+// Vedi docs/internal/file-bridge-on-demand-2026-06-07.md
+export async function GET(
+  _req: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id } = await context.params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return NextResponse.json({ error: "invalid id" }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "non autenticato" }, { status: 401 });
+  }
+
+  // RLS: l'utente legge solo le proprie richieste.
+  const { data: row, error } = await supabase
+    .from("file_bridge_requests")
+    .select("id, status, storage_path, error")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!row) {
+    return NextResponse.json({ error: "richiesta non trovata" }, { status: 404 });
+  }
+
+  if (row.status !== "ready" || !row.storage_path) {
+    return NextResponse.json({ status: row.status, error: row.error ?? null });
+  }
+
+  // Pronto: minta la signed download URL (service-role, bucket privato).
+  const admin = createAdminClient();
+  const { data: signed, error: signErr } = await admin.storage
+    .from(BUCKET)
+    .createSignedUrl(row.storage_path, DOWNLOAD_TTL_SECONDS);
+  if (signErr || !signed) {
+    return NextResponse.json(
+      { error: `signed url failed: ${signErr?.message || "unknown"}` },
+      { status: 500 },
+    );
+  }
+
+  // Marca 'served' (mantiene expires_at): il purge VPS eliminerà l'oggetto.
+  await admin
+    .from("file_bridge_requests")
+    .update({ status: "served", updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  return NextResponse.json({ status: "ready", url: signed.signedUrl });
+}
