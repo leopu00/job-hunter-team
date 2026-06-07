@@ -289,7 +289,7 @@ export async function getRecentPositions(limit = 15): Promise<(PositionWithScore
 // (default). Per gli altri ordinamenti (score, critic, ecc.) il fetch
 // resta su found_at e poi riordiniamo in memoria — limit 600 in chiamata
 // è gestibile e tiene la logica fuori da PostgREST nested ordering.
-const POSITION_SORT_KEYS = ['id', 'title', 'company', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
+const POSITION_SORT_KEYS = ['id', 'title', 'company', 'role_family', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
 type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
 
 export type PositionFilterOpts = {

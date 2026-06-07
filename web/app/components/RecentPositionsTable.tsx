@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { DashboardPosition } from "@/lib/queries";
 import { formatFoundAt } from "@/lib/format-time";
+import { colorForFamily } from "@/lib/position-classifier";
 import {
   convertCurrency,
   currencySymbol,
@@ -82,6 +83,7 @@ export type TableLabels = {
   colId: string;
   colTitle: string;
   colCompany: string;
+  colCategory: string;
   colCountry: string;
   colCity: string;
   colRemote: string;
@@ -137,6 +139,7 @@ export default function RecentPositionsTable({
                 labels.colId,
                 labels.colTitle,
                 labels.colCompany,
+                labels.colCategory,
                 labels.colCountry,
                 labels.colCity,
                 labels.colRemote,
@@ -161,7 +164,7 @@ export default function RecentPositionsTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={12}
                   className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   {labels.noPositions}
@@ -197,6 +200,23 @@ export default function RecentPositionsTable({
                   </td>
                   <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
                     {p.company}
+                  </td>
+                  <td className="px-4 py-3 text-[11px] whitespace-nowrap">
+                    {p.role_family && p.role_family.trim() ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className="inline-block w-2 h-2 rounded-full shrink-0"
+                          style={{
+                            background: colorForFamily(p.role_family.trim()),
+                          }}
+                        />
+                        <span className="text-[var(--color-base)]">
+                          {p.role_family.trim()}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)]">—</span>
+                    )}
                   </td>
                   {(() => {
                     const country = (p.loc_country ?? "").trim();
