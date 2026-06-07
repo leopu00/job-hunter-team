@@ -10,8 +10,6 @@ import {
 } from "@/lib/exchange-rates";
 import { getServerLocale } from "@/lib/server-locale";
 import type { PositionWithScore } from "@/lib/types";
-import { createClient } from "@/lib/supabase/server";
-import { isLocalOnlyMode } from "@/lib/workspace";
 import CloudSyncStatusBanner from "@/app/components/CloudSyncStatusBanner";
 import PositionsShell from "./PositionsShell";
 import TableScrollSync from "./TableScrollSync";
@@ -114,7 +112,6 @@ const DEFAULT_PAGE_SIZE = 50;
 // Colonne espandibili (testo libero, può eccedere). Per le altre
 // (id, score, voto, rilevata, stato) lo spazio fisso è già adeguato.
 const EXPANDABLE_COLUMNS = new Set([
-  "title",
   "company",
   "role_family",
   "loc_city",
@@ -297,31 +294,6 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // come la tabella del dashboard). Errore rete → fallback già in getExchangeRates.
   const rates = await getExchangeRates();
   const displayCurrency = "EUR";
-
-  // Fetch dei legacy_id già su Supabase per l'utente loggato (set per
-  // lookup O(1) dentro il loop righe). Errori → set vuoto, niente icona
-  // ma la lista funziona comunque.
-  // JHT-LOCAL-NO-API: in local-only mode skippiamo (nessuna nozione di
-  // "synced" quando il cloud è disabilitato).
-  let syncedIds = new Set<number>();
-  if (!isLocalOnlyMode()) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
-        .from("positions")
-        .select("legacy_id")
-        .eq("user_id", user.id)
-        .not("legacy_id", "is", null);
-      syncedIds = new Set(
-        (data ?? [])
-          .map((r: { legacy_id: number | null }) => r.legacy_id)
-          .filter((x: number | null): x is number => typeof x === "number"),
-      );
-    }
-  }
 
   const positions = allPositions;
 
@@ -574,41 +546,19 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     >
                       {/* ID */}
                       <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5">
-                          {p.legacy_id
-                            ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
-                            : p.id.slice(0, 8)}
-                          {p.legacy_id != null &&
-                            syncedIds.has(p.legacy_id) && (
-                              <span
-                                title={tr("synced_cloud")}
-                                aria-label={tr("synced_cloud")}
-                                style={{
-                                  color: "var(--color-green)",
-                                  fontSize: "11px",
-                                  lineHeight: 1,
-                                }}
-                              >
-                                ☁
-                              </span>
-                            )}
-                        </span>
+                        {p.legacy_id
+                          ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
+                          : p.id.slice(0, 8)}
                       </td>
                       {/* Aggiornato (ultima azione, fallback rilevazione) */}
                       <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
                         {formatFoundAt(p.last_action_at || p.found_at)}
                       </td>
-                      {/* Titolo */}
-                      <td
-                        className={`px-4 py-3 font-medium ${
-                          isExpanded("title") ? "" : "max-w-[220px]"
-                        }`}
-                      >
+                      {/* Titolo — una riga sola (si scrolla in orizzontale) */}
+                      <td className="px-4 py-3 font-medium whitespace-nowrap">
                         <Link
                           href={`/positions/${p.id}`}
-                          className={`text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors ${
-                            isExpanded("title") ? "" : "line-clamp-2"
-                          }`}
+                          className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
                         >
                           {p.title}
                         </Link>
