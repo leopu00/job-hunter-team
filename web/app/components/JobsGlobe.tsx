@@ -678,6 +678,7 @@ export default function JobsGlobe({
   selectedCities = [],
   bottomCenterExtra = null,
   focusPosition = null,
+  familyColors = {},
 }: {
   hero?: boolean;
   fullscreen?: boolean;
@@ -697,6 +698,8 @@ export default function JobsGlobe({
   // la mappa zooma sul suo pin e lo seleziona. `tick` ri-triggera lo
   // stesso id. null = nessuna richiesta.
   focusPosition?: { id: string; tick: number } | null;
+  // Mappa tipologia → colore (dalla donut) per il puntino nella vignetta.
+  familyColors?: Record<string, string>;
 } = {}) {
   const { resolvedTheme } = useTheme();
   const locale = useLocale();
@@ -715,7 +718,6 @@ export default function JobsGlobe({
   // Indirizzo reverse-geocodato lazy quando il popup mostra una pos
   // con office_address null. Cache client-side keyed sulla pos id per
   // evitare refetch su re-render.
-  const [reverseAddrs, setReverseAddrs] = useState<Record<string, string>>({});
   const mapWrapRef = useRef<HTMLDivElement | null>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MaplibreMap | null>(null);
@@ -1299,35 +1301,6 @@ export default function JobsGlobe({
     };
   }, [selected]);
 
-  // Lazy reverse-geocoding: se la posizione selezionata non ha un
-  // office_address dal DB, prova a recuperarlo via API server-side
-  // (Nominatim). Cache locale keyed sulla pos id evita refetch su
-  // re-render. Niente fetch per pos id già risolte (anche null).
-  useEffect(() => {
-    if (!selected) return;
-    if (selected.office_address) return;
-    if (selected.id in reverseAddrs) return;
-    let cancel = false;
-    fetch(
-      `/api/positions/reverse-geocode?lat=${selected.lat}&lon=${selected.lon}`,
-    )
-      .then((r) => (r.ok ? r.json() : { address: null }))
-      .then((d: { address: string | null }) => {
-        if (cancel) return;
-        setReverseAddrs((cur) => ({
-          ...cur,
-          [selected.id]: d.address ?? "",
-        }));
-      })
-      .catch(() => {
-        if (!cancel) {
-          setReverseAddrs((cur) => ({ ...cur, [selected.id]: "" }));
-        }
-      });
-    return () => {
-      cancel = true;
-    };
-  }, [selected, reverseAddrs]);
 
   // Auto-zoom sui pin filtrati: ogni volta che cambia displayData
   // (filtri donut/histogram di /map o primo fetch), riadatta la
@@ -1608,33 +1581,23 @@ export default function JobsGlobe({
               </div>
             </div>
 
-            {/* Location */}
+            {/* Location: solo città + paese (niente via). */}
             {(() => {
-              const lazyAddr = reverseAddrs[selected.id];
-              const street = selected.office_address || lazyAddr || null;
-              const fallback = selected.location;
-              const showStreet = street && street.length > 0;
-              const looking =
-                !selected.office_address && lazyAddr === undefined;
-              if (!showStreet && !fallback) return null;
+              const loc =
+                [selected.loc_city, selected.loc_country]
+                  .filter(Boolean)
+                  .join(", ") ||
+                selected.location ||
+                "";
+              if (!loc) return null;
               return (
                 <div
                   className="text-[10px] mt-2 flex items-start gap-1"
                   style={{ color: "var(--color-base)" }}
-                  title={street ?? fallback ?? ""}
+                  title={loc}
                 >
                   <span aria-hidden>📍</span>
-                  <span className="leading-tight">
-                    {showStreet ? street : fallback}
-                    {looking && (
-                      <span
-                        className="ml-1 italic"
-                        style={{ color: "var(--color-dim)" }}
-                      >
-                        {tr("looking_address")}
-                      </span>
-                    )}
-                  </span>
+                  <span className="leading-tight">{loc}</span>
                 </div>
               );
             })()}
@@ -1647,11 +1610,25 @@ export default function JobsGlobe({
                 style={{ borderTop: "1px solid var(--color-border)" }}
               >
                 <span
-                  className="truncate"
+                  className="truncate flex items-center gap-1.5"
                   style={{ color: "var(--color-base)" }}
                   title={selected.role_family ?? ""}
                 >
-                  {selected.role_family ?? ""}
+                  {selected.role_family && (
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background:
+                          familyColors[selected.role_family] ??
+                          "var(--color-muted)",
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                  <span className="truncate">{selected.role_family ?? ""}</span>
                 </span>
                 {formatFoundDate(selected.created_at) && (
                   <span
