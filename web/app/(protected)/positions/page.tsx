@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getPositions, getSourceDistribution } from "@/lib/queries";
+import { colorForFamily } from "@/lib/position-classifier";
+import { getServerLocale } from "@/lib/server-locale";
 import type { PositionWithScore } from "@/lib/types";
 import { createClient } from "@/lib/supabase/server";
 import { isLocalOnlyMode } from "@/lib/workspace";
@@ -13,7 +15,7 @@ const STATUS_COLORS: Record<string, string> = {
   scored: "var(--color-purple)",
   writing: "var(--color-yellow)",
   review: "var(--color-orange)",
-  ready: "#7fffb2",
+  ready: "var(--color-ready)",
   applied: "var(--color-green)",
   response: "#58a6ff",
   excluded: "var(--color-red)",
@@ -66,6 +68,7 @@ interface PageProps {
     city?: string;
     band?: string; // CSV di "lo-hi"
     noscore?: string; // "1" = includi posizioni senza score
+    writereq?: string; // "1" = solo selezionate (write_requested); "0" = solo non
     sort?: string;
     dir?: string;
     expand?: string;
@@ -107,6 +110,7 @@ const SORTABLE_COLUMNS = new Set([
   "id",
   "title",
   "company",
+  "role_family",
   "source",
   "location",
   "score",
@@ -122,7 +126,36 @@ const CRITIC_COLORS: Record<string, string> = {
   REJECT: "var(--color-red)",
 };
 
+// i18n: dict inline 7 lingue (pattern server-component del progetto, vedi
+// architettura i18n). La testata di questa tabella era hardcoded in italiano.
+const T: Record<string, Record<string, string>> = {
+  breadcrumb: { it: "Breadcrumb", en: "Breadcrumb", hu: "Morzsamenü", es: "Migas de pan", de: "Brotkrümelnavigation", fr: "Fil d'Ariane", pt: "Trilha de navegação" },
+  nav_dashboard: { it: "Dashboard", en: "Dashboard", hu: "Irányítópult", es: "Panel", de: "Dashboard", fr: "Tableau de bord", pt: "Painel" },
+  positions: { it: "Posizioni", en: "Positions", hu: "Állások", es: "Posiciones", de: "Stellen", fr: "Postes", pt: "Vagas" },
+  results: { it: "risultati", en: "results", hu: "találat", es: "resultados", de: "Ergebnisse", fr: "résultats", pt: "resultados" },
+  rows_per_page: { it: "Righe per pagina", en: "Rows per page", hu: "Sor oldalanként", es: "Filas por página", de: "Zeilen pro Seite", fr: "Lignes par page", pt: "Linhas por página" },
+  list_positions: { it: "Lista posizioni", en: "Positions list", hu: "Álláslista", es: "Lista de posiciones", de: "Stellenliste", fr: "Liste des postes", pt: "Lista de vagas" },
+  col_detected: { it: "Rilevata", en: "Detected", hu: "Észlelve", es: "Detectada", de: "Erkannt", fr: "Détectée", pt: "Detetada" },
+  col_title: { it: "Titolo", en: "Title", hu: "Cím", es: "Título", de: "Titel", fr: "Titre", pt: "Título" },
+  col_company: { it: "Azienda", en: "Company", hu: "Cég", es: "Empresa", de: "Unternehmen", fr: "Entreprise", pt: "Empresa" },
+  col_category: { it: "Categoria", en: "Category", hu: "Kategória", es: "Categoría", de: "Kategorie", fr: "Catégorie", pt: "Categoria" },
+  col_source: { it: "Fonte", en: "Source", hu: "Forrás", es: "Fuente", de: "Quelle", fr: "Source", pt: "Fonte" },
+  col_location: { it: "Luogo", en: "Location", hu: "Hely", es: "Ubicación", de: "Standort", fr: "Lieu", pt: "Local" },
+  col_status: { it: "Stato", en: "Status", hu: "Állapot", es: "Estado", de: "Status", fr: "Statut", pt: "Estado" },
+  col_critic: { it: "Voto finale", en: "Final score", hu: "Végső pontszám", es: "Nota final", de: "Endnote", fr: "Note finale", pt: "Nota final" },
+  expand_col: { it: "Espandi colonna", en: "Expand column", hu: "Oszlop kibontása", es: "Expandir columna", de: "Spalte erweitern", fr: "Développer la colonne", pt: "Expandir coluna" },
+  collapse_col: { it: "Comprimi colonna", en: "Collapse column", hu: "Oszlop összecsukása", es: "Contraer columna", de: "Spalte einklappen", fr: "Réduire la colonne", pt: "Recolher coluna" },
+  synced_cloud: { it: "Sincronizzato sul cloud", en: "Synced to cloud", hu: "Felhőbe szinkronizálva", es: "Sincronizado en la nube", de: "In die Cloud synchronisiert", fr: "Synchronisé sur le cloud", pt: "Sincronizado na nuvem" },
+  no_positions_filtered: { it: "Nessuna posizione trovata con questi filtri.", en: "No positions found with these filters.", hu: "Nincs állás ezekkel a szűrőkkel.", es: "No se encontraron posiciones con estos filtros.", de: "Keine Stellen mit diesen Filtern gefunden.", fr: "Aucun poste trouvé avec ces filtres.", pt: "Nenhuma vaga encontrada com estes filtros." },
+  prev: { it: "Precedenti", en: "Previous", hu: "Előző", es: "Anteriores", de: "Zurück", fr: "Précédents", pt: "Anteriores" },
+  next: { it: "Successivi", en: "Next", hu: "Következő", es: "Siguientes", de: "Weiter", fr: "Suivants", pt: "Próximos" },
+  of: { it: "di", en: "of", hu: "/", es: "de", de: "von", fr: "sur", pt: "de" },
+  page_label: { it: "pagina", en: "page", hu: "oldal", es: "página", de: "Seite", fr: "page", pt: "página" },
+};
+
 export default async function PositionsPage({ searchParams }: PageProps) {
+  const locale = getServerLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const params = await searchParams;
   const statuses = csv(params.status);
   const remotes = csv(params.remote);
@@ -134,6 +167,9 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   const cities = csv(params.city);
   const scoreBands = parseBands(params.band);
   const unscored = params.noscore === "1";
+  // writereq: "1" = solo selezionate, "0" = solo non selezionate, assente = no filtro
+  const writeRequested =
+    params.writereq === "1" ? true : params.writereq === "0" ? false : undefined;
 
   const sortCol = SORTABLE_COLUMNS.has(params.sort ?? "")
     ? params.sort!
@@ -170,6 +206,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
       cities: cities.length ? cities : undefined,
       scoreBands: scoreBands.length ? scoreBands : undefined,
       unscored: unscored || undefined,
+      writeRequested,
       limit: 2000,
       sort: sortCol,
       dir: sortDir,
@@ -230,6 +267,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     if (scoreBands.length)
       merged.band = scoreBands.map((b) => `${b.lo}-${b.hi}`).join(",");
     if (unscored) merged.noscore = "1";
+    if (writeRequested === true) merged.writereq = "1";
+    else if (writeRequested === false) merged.writereq = "0";
     if (sortCol !== "found_at") merged.sort = sortCol;
     if (sortDir !== "desc") merged.dir = sortDir;
     if (expandedCols.size > 0)
@@ -281,12 +320,12 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     <div style={{ animation: "fade-in 0.35s ease both" }}>
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-        <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
+        <nav aria-label={tr("breadcrumb")} className="flex items-center gap-2 mb-1">
           <Link
             href="/dashboard"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Dashboard
+            {tr("nav_dashboard")}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -295,14 +334,14 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Posizioni
+            {tr("positions")}
           </span>
         </nav>
         <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)] mt-3">
-          Posizioni
+          {tr("positions")}
         </h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">
-          {positions.length} risultati
+          {positions.length} {tr("results")}
         </p>
       </div>
 
@@ -318,7 +357,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             <FiltersWizard availableSources={availableSources} />
             <div className="flex items-center gap-1.5">
               <span className="text-[9.5px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
-                Righe per pagina
+                {tr("rows_per_page")}
               </span>
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <Link
@@ -352,20 +391,21 @@ export default async function PositionsPage({ searchParams }: PageProps) {
             <table
               className="w-full text-[12px]"
               style={{ borderCollapse: "collapse" }}
-              aria-label="Lista posizioni"
+              aria-label={tr("list_positions")}
             >
               <thead>
                 <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
                   {[
-                    { col: "found_at", label: "Rilevata" },
+                    { col: "found_at", label: tr("col_detected") },
                     { col: "id", label: "ID" },
-                    { col: "title", label: "Titolo" },
-                    { col: "company", label: "Azienda" },
-                    { col: "source", label: "Fonte" },
-                    { col: "location", label: "Location" },
+                    { col: "title", label: tr("col_title") },
+                    { col: "company", label: tr("col_company") },
+                    { col: "role_family", label: tr("col_category") },
+                    { col: "source", label: tr("col_source") },
+                    { col: "location", label: tr("col_location") },
                     { col: "score", label: "Score" },
-                    { col: "status", label: "Stato" },
-                    { col: "critic", label: "Voto finale" },
+                    { col: "status", label: tr("col_status") },
+                    { col: "critic", label: tr("col_critic") },
                   ].map(({ col, label }) => (
                     <th
                       key={col}
@@ -392,13 +432,13 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                             href={expandHref(col)}
                             title={
                               isExpanded(col)
-                                ? "Comprimi colonna"
-                                : "Espandi colonna"
+                                ? tr("collapse_col")
+                                : tr("expand_col")
                             }
                             aria-label={
                               isExpanded(col)
-                                ? "Comprimi colonna"
-                                : "Espandi colonna"
+                                ? tr("collapse_col")
+                                : tr("expand_col")
                             }
                             className="no-underline text-[10px] leading-none px-1 rounded hover:bg-[var(--color-card)] hover:text-[var(--color-green)] transition-colors"
                             style={{
@@ -419,10 +459,10 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                 {visiblePositions.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-4 py-12 text-center text-[var(--color-dim)] text-[11px]"
                     >
-                      Nessuna posizione trovata con questi filtri.
+                      {tr("no_positions_filtered")}
                     </td>
                   </tr>
                 ) : (
@@ -450,8 +490,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                           {p.legacy_id != null &&
                             syncedIds.has(p.legacy_id) && (
                               <span
-                                title="Sincronizzato sul cloud"
-                                aria-label="Sincronizzato sul cloud"
+                                title={tr("synced_cloud")}
+                                aria-label={tr("synced_cloud")}
                                 style={{
                                   color: "var(--color-green)",
                                   fontSize: "11px",
@@ -486,6 +526,23 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         title={p.company}
                       >
                         {p.company}
+                      </td>
+                      <td className="px-4 py-3 text-[11px] whitespace-nowrap">
+                        {p.role_family && p.role_family.trim() ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className="inline-block w-2 h-2 rounded-full shrink-0"
+                              style={{
+                                background: colorForFamily(p.role_family.trim()),
+                              }}
+                            />
+                            <span className="text-[var(--color-base)]">
+                              {p.role_family.trim()}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-dim)]">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono">
                         {p.source ?? "—"}
@@ -584,8 +641,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
           <div className="flex flex-wrap items-center justify-between gap-3 mt-4 text-[11px] text-[var(--color-muted)]">
             <div>
               {totalResults === 0
-                ? "0 risultati"
-                : `${startIdx + 1}–${Math.min(startIdx + pageSize, totalResults)} di ${totalResults} · pagina ${page} / ${pageCount}`}
+                ? `0 ${tr("results")}`
+                : `${startIdx + 1}–${Math.min(startIdx + pageSize, totalResults)} ${tr("of")} ${totalResults} · ${tr("page_label")} ${page} / ${pageCount}`}
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-1">
@@ -594,11 +651,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     href={buildHref({ page: String(page - 1) })}
                     className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors no-underline text-[var(--color-base)]"
                   >
-                    ← Precedenti
+                    ← {tr("prev")}
                   </Link>
                 ) : (
                   <span className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] text-[var(--color-dim)] opacity-50">
-                    ← Precedenti
+                    ← {tr("prev")}
                   </span>
                 )}
                 {page < pageCount ? (
@@ -606,11 +663,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     href={buildHref({ page: String(page + 1) })}
                     className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-colors no-underline text-[var(--color-base)]"
                   >
-                    Successivi →
+                    {tr("next")} →
                   </Link>
                 ) : (
                   <span className="px-3 py-1 text-[10px] font-semibold rounded border border-[var(--color-border)] text-[var(--color-dim)] opacity-50">
-                    Successivi →
+                    {tr("next")} →
                   </span>
                 )}
               </div>

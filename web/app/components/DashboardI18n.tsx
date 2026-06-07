@@ -24,6 +24,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
   it: {
     // Navbar
     nav_dashboard: "Dashboard",
+    nav_analisi: "Analisi",
     nav_map: "Map",
     nav_positions: "Posizioni",
     nav_ready: "Pronte",
@@ -35,6 +36,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
 
     // Breadcrumb labels
     bc_dashboard: "Dashboard",
+    bc_analisi: "Analisi",
     bc_agents: "Agenti",
     bc_tasks: "Task",
     bc_assistant: "Assistente",
@@ -201,6 +203,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
   en: {
     // Navbar
     nav_dashboard: "Dashboard",
+    nav_analisi: "Analytics",
     nav_map: "Map",
     nav_positions: "Positions",
     nav_ready: "Ready",
@@ -212,6 +215,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
 
     // Breadcrumb labels
     bc_dashboard: "Dashboard",
+    bc_analisi: "Analytics",
     bc_agents: "Agents",
     bc_tasks: "Tasks",
     bc_assistant: "Assistant",
@@ -378,6 +382,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
   hu: {
     // Navbar
     nav_dashboard: "Irányítópult",
+    nav_analisi: "Elemzés",
     nav_map: "Map",
     nav_positions: "Állások",
     nav_ready: "Kész",
@@ -389,6 +394,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
 
     // Breadcrumb labels
     bc_dashboard: "Irányítópult",
+    bc_analisi: "Elemzés",
     bc_agents: "Ügynökök",
     bc_tasks: "Feladatok",
     bc_assistant: "Asszisztens",
@@ -555,6 +561,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
   es: {
     // Navbar
     nav_dashboard: "Panel",
+    nav_analisi: "Análisis",
     nav_map: "Mapa",
     nav_positions: "Posiciones",
     nav_ready: "Listas",
@@ -566,6 +573,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
 
     // Breadcrumb labels
     bc_dashboard: "Panel",
+    bc_analisi: "Análisis",
     bc_agents: "Agentes",
     bc_tasks: "Tareas",
     bc_assistant: "Asistente",
@@ -732,6 +740,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
   de: {
     // Navbar
     nav_dashboard: "Dashboard",
+    nav_analisi: "Analyse",
     nav_map: "Karte",
     nav_positions: "Stellen",
     nav_ready: "Bereit",
@@ -743,6 +752,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
 
     // Breadcrumb labels
     bc_dashboard: "Dashboard",
+    bc_analisi: "Analyse",
     bc_agents: "Agenten",
     bc_tasks: "Aufgaben",
     bc_assistant: "Assistent",
@@ -909,6 +919,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
   fr: {
     // Navbar
     nav_dashboard: "Tableau de bord",
+    nav_analisi: "Analyse",
     nav_map: "Carte",
     nav_positions: "Postes",
     nav_ready: "Prêtes",
@@ -920,6 +931,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
 
     // Breadcrumb labels
     bc_dashboard: "Tableau de bord",
+    bc_analisi: "Analyse",
     bc_agents: "Agents",
     bc_tasks: "Tâches",
     bc_assistant: "Assistant",
@@ -1086,6 +1098,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
   pt: {
     // Navbar
     nav_dashboard: "Painel",
+    nav_analisi: "Análise",
     nav_map: "Mapa",
     nav_positions: "Vagas",
     nav_ready: "Prontas",
@@ -1097,6 +1110,7 @@ const TRANSLATIONS: Record<DashboardLocale, Record<string, string>> = {
 
     // Breadcrumb labels
     bc_dashboard: "Painel",
+    bc_analisi: "Análise",
     bc_agents: "Agentes",
     bc_tasks: "Tarefas",
     bc_assistant: "Assistente",

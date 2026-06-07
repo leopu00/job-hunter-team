@@ -1,7 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
 import type { RoleFamilyCount } from "@/lib/position-classifier";
+
+// Etichetta colonna "score medio" della legenda (è la media, non lo score di
+// una singola posizione). Compatta per stare nella colonna stretta.
+const AVG_LABEL: Record<string, string> = {
+  it: "media score",
+  en: "avg score",
+  hu: "átl. pont",
+  es: "media score",
+  de: "Ø score",
+  fr: "score moy",
+  pt: "média score",
+};
 
 type Props = {
   data: RoleFamilyCount[];
@@ -71,8 +84,13 @@ export default function PositionTypesPie({
   onToggleType,
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
+  const locale = useLocale();
+  const avgLabel = AVG_LABEL[locale] ?? AVG_LABEL.en;
   const labelFor = (family: string) => labels?.[family] ?? family;
   const total = data.reduce((a, d) => a + d.count, 0);
+  // Per la barra proporzionale di ogni riga (riempie lo spazio orizzontale
+  // della legenda, prima vuoto): larghezza relativa al tipo più numeroso.
+  const maxCount = data.reduce((m, d) => Math.max(m, d.count), 0) || 1;
   const hasSelection = selectedTypes.length > 0;
   // Centro: hover prevale; altrimenti se UNA sola family selezionata la mostro.
   const focusedFamily =
@@ -84,23 +102,49 @@ export default function PositionTypesPie({
   const focusedPct =
     focused && total > 0 ? Math.round((focused.count / total) * 100) : null;
 
+  // Centro del donut: con UNA family in focus (hover o singola selezione)
+  // mostra quella; con PIÙ family selezionate mostra la somma dei selezionati
+  // ("selezionate" + N) invece del totale; senza selezione mostra il totale.
+  const selectedCount = data
+    .filter((d) => selectedTypes.includes(d.family))
+    .reduce((a, d) => a + d.count, 0);
+  const showSelected = !focused && selectedTypes.length > 1;
+  const centerLabel = focused
+    ? labelFor(focused.family)
+    : showSelected
+      ? "selezionate"
+      : "totale";
+  const centerValue = focused
+    ? focused.count
+    : showSelected
+      ? selectedCount
+      : total;
+  const centerPct = focused
+    ? focusedPct
+    : showSelected && total > 0
+      ? Math.round((selectedCount / total) * 100)
+      : null;
+
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
       <div className="flex items-center justify-between mb-4">
         <span className="section-label">{title}</span>
         {total > 0 && (
           <span className="text-[11px] font-semibold text-[var(--color-muted)]">
-            {total}
+            {selectedTypes.length >= 1 ? selectedCount : total}
           </span>
         )}
       </div>
 
       <div className="flex items-center gap-8">
+        <div
+          className="relative shrink-0"
+          style={{ width: size, height: size }}
+        >
         <svg
           width={size}
           height={size}
           viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="shrink-0"
           aria-label={title}
           role="img"
           onMouseLeave={() => setHovered(null)}
@@ -147,58 +191,62 @@ export default function PositionTypesPie({
             });
           })()}
 
-          {/* Center label: mostra la slice hovered (count + pct).
-                Quando nessuna e' hovered, mostra il totale. */}
-          <text
-            x={CX}
-            y={CY - 4}
-            textAnchor="middle"
-            fontSize={focused ? 11 : 9}
-            fill={focused ? focused.color : "var(--color-dim)"}
-            fontWeight={700}
-            style={{ pointerEvents: "none", fontFamily: "inherit" }}
-          >
-            {focused ? labelFor(focused.family) : "totale"}
-          </text>
-          <text
-            x={CX}
-            y={CY + 11}
-            textAnchor="middle"
-            fontSize={13}
-            fill="var(--color-bright)"
-            fontWeight={700}
-            style={{ pointerEvents: "none", fontFamily: "inherit" }}
-          >
-            {focused ? `${focused.count}` : `${total}`}
-          </text>
-          {focusedPct != null && (
-            <text
-              x={CX}
-              y={CY + 22}
-              textAnchor="middle"
-              fontSize={9}
-              fill="var(--color-muted)"
-              style={{ pointerEvents: "none", fontFamily: "inherit" }}
-            >
-              {focusedPct}%
-            </text>
-          )}
         </svg>
 
+        {/* Etichetta centrale come overlay HTML: vincolata alla larghezza del
+            foro del donut (wrapping su 2 righe + ellissi), così i nomi lunghi
+            non escono dal donut. Sfondo scuro del foro = sempre leggibile,
+            anche se il colore family coincide con una fetta. pointer-events
+            disabilitati per non rubare l'hover alle fette sotto. */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-1">
+          <div
+            className="font-bold leading-tight line-clamp-2"
+            style={{
+              maxWidth: ((INNER * 2) / SIZE) * size,
+              fontSize: 14,
+              color: focused ? focused.color : "var(--color-dim)",
+            }}
+            title={centerLabel}
+          >
+            {centerLabel}
+          </div>
+          <div
+            className="font-bold leading-none text-[var(--color-bright)]"
+            style={{ fontSize: 32, marginTop: 4 }}
+          >
+            {centerValue}
+          </div>
+          {centerPct != null && (
+            <div
+              className="text-[var(--color-muted)]"
+              style={{ fontSize: 13, marginTop: 2 }}
+            >
+              {centerPct}%
+            </div>
+          )}
+        </div>
+        </div>
+
         <ul
-          className="space-y-1.5 min-w-0 flex-1"
+          className="space-y-3 min-w-0 flex-1"
           onMouseLeave={() => setHovered(null)}
         >
-          {/* Header: didascalia colonne. Prima colonna flessibile così la
-                tabella riempie la larghezza del card (donut a tutta riga). */}
+          {/* Header: didascalia colonne. Colonna 'tipo' a larghezza limitata +
+                colonna barra flessibile (1fr) che riempie lo spazio prima vuoto. */}
           <li
-            className="grid grid-cols-[1fr_3rem_3rem_3.5rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
             <span>tipo</span>
+            <span />
             <span>n</span>
             <span>%</span>
-            <span title="Score medio (0-100)">score</span>
+            <span
+              className="text-center leading-tight"
+              title="Score medio (0-100)"
+            >
+              {avgLabel}
+            </span>
           </li>
           {data.map((d) => {
             const pct = Math.round((d.count / total) * 100);
@@ -212,7 +260,7 @@ export default function PositionTypesPie({
                 key={d.family}
                 onMouseEnter={() => setHovered(d.family)}
                 onClick={() => onToggleType?.(d.family)}
-                className="grid grid-cols-[1fr_3rem_3rem_3.5rem] gap-3 items-center text-[10.5px] leading-tight rounded px-1 -mx-1 py-0.5"
+                className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
                 style={{
                   cursor: onToggleType ? "pointer" : "default",
                   background: isSelected
@@ -244,6 +292,22 @@ export default function PositionTypesPie({
                     {labelFor(d.family)}
                   </span>
                 </span>
+                {/* Barra proporzionale: riempie lo spazio orizzontale prima
+                    vuoto e dà un colpo d'occhio sulla distribuzione. */}
+                <span
+                  className="block h-2 rounded-full overflow-hidden"
+                  style={{ background: "var(--color-border)" }}
+                  aria-hidden
+                >
+                  <span
+                    className="block h-full rounded-full"
+                    style={{
+                      width: `${(d.count / maxCount) * 100}%`,
+                      background: d.color,
+                      opacity: dimmed ? 0.4 : 0.85,
+                    }}
+                  />
+                </span>
                 <span className="tabular-nums text-[var(--color-bright)] font-semibold">
                   {d.count}
                 </span>
@@ -251,7 +315,7 @@ export default function PositionTypesPie({
                   {pct}%
                 </span>
                 <span
-                  className="tabular-nums"
+                  className="tabular-nums text-center"
                   title="Score medio (0-100, solo posizioni scorate)"
                   style={{
                     color:
