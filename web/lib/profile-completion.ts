@@ -57,11 +57,11 @@ export const PROFILE_REQUIREMENTS: ProfileRequirement[] = [
   { key: "industry", level: "recommended", labelKey: "f_industry", anchor: "info-base", editAnchor: "info-base", check: (p) => !!pos(p).industry },
   { key: "work_authorization", level: "recommended", labelKey: "mf_work_auth", anchor: "info-base", editAnchor: "info-base", check: hasWorkAuth },
   { key: "location_preferences", level: "recommended", labelKey: "mf_location_prefs", anchor: "preferenze-lavoro", editAnchor: "location-preferite", check: (p) => arr(p.location_preferences).length >= 1 },
+  { key: "strengths", level: "recommended", labelKey: "sec_strengths", anchor: "punti-di-forza", editAnchor: "punti-di-forza", check: (p) => arr(pos(p).strengths).length >= 1 },
 
   // 🟢 optional — su misura massima
   { key: "certifications", level: "optional", labelKey: "sec_certifications", anchor: "formazione", editAnchor: "formazione", check: (p) => arr(pos(p).certifications).length >= 1 },
   { key: "projects", level: "optional", labelKey: "sec_projects", anchor: "progetti", editAnchor: "progetti", check: (p) => arr(pos(p).projects).length >= 1 },
-  { key: "strengths", level: "optional", labelKey: "sec_strengths", anchor: "punti-di-forza", editAnchor: "punti-di-forza", check: (p) => arr(pos(p).strengths).length >= 1 },
   { key: "career_goals", level: "optional", labelKey: "sec_career_goals", anchor: "obiettivi-carriera", editAnchor: "obiettivi-carriera", check: (p) => !!(pos(p).career_goals && Object.values(pos(p).career_goals as Record<string, unknown>).some(Boolean)) },
   { key: "salary_target", level: "optional", labelKey: "salary_target", anchor: "preferenze-lavoro", editAnchor: "salary-target", check: (p) => p.salary_target != null },
   { key: "contacts_extra", level: "optional", labelKey: "sec_contacts", anchor: "contatti", editAnchor: "contatti", check: (p) => {
