@@ -39,6 +39,15 @@ const T: Record<string, Record<string, string>> = {
     fr: 'Suggère un poste cible',
     pt: 'Sugere um cargo-alvo',
   },
+  quick_edit: {
+    it: 'Vorrei modificare il mio profilo',
+    en: 'I want to edit my profile',
+    hu: 'Szeretném módosítani a profilomat',
+    es: 'Quiero editar mi perfil',
+    de: 'Ich möchte mein Profil bearbeiten',
+    fr: 'Je veux modifier mon profil',
+    pt: 'Quero editar o meu perfil',
+  },
   fab_close: {
     it: 'Chiudi assistente profilo',
     en: 'Close profile assistant',
@@ -203,13 +212,6 @@ const T: Record<string, Record<string, string>> = {
   },
 }
 
-const QUICK_ACTIONS = [
-  'Vorrei modificare il mio profilo',
-  'Analizza il mio profilo',
-  'Quali skill mi mancano?',
-  'Suggerisci un target ruolo',
-]
-
 export default function ProfileAssistantFab() {
   const locale = useLocale()
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
@@ -224,7 +226,7 @@ export default function ProfileAssistantFab() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const prevCount = useRef(0)
 
-  const quickActions = [tr('quick_analyze'), tr('quick_skills'), tr('quick_target')]
+  const quickActions = [tr('quick_edit'), tr('quick_analyze'), tr('quick_skills'), tr('quick_target')]
 
   // Due portali separati:
   // - bodyContainer: per il bottone FAB cerchio (position:fixed bottom-right,
