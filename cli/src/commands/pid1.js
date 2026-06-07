@@ -424,6 +424,7 @@ async function dispatch() {
   const realtimeCmd = [JHT_ENTRY, 'cloud', 'realtime-listen'];
   const teamStateCmd = [JHT_ENTRY, 'cloud', 'team-state-listen'];
   const userMessagesCmd = [JHT_ENTRY, 'cloud', 'messages-listen'];
+  const fileBridgeCmd = [JHT_ENTRY, 'cloud', 'file-bridge-listen'];
 
   // ── Dashboard: lifetime = container, parte sempre.
   pid1Log(isVps ? 'mode: VPS' : 'mode: local');
@@ -629,10 +630,12 @@ async function dispatch() {
   let realtimeChild = null;
   let teamStateChild = null;
   let userMessagesChild = null;
+  let fileBridgeChild = null;
   let daemonRespawnTimer = null;
   let realtimeRespawnTimer = null;
   let teamStateRespawnTimer = null;
   let userMessagesRespawnTimer = null;
+  let fileBridgeRespawnTimer = null;
 
   const startDaemon = () => {
     if (daemonChild && !daemonChild.killed) return;
@@ -727,6 +730,31 @@ async function dispatch() {
     });
   };
 
+  // file bridge poller: pubblica l'indice dei file e serve le richieste
+  // on-demand del web (upload effimero su Supabase Storage). Crash recovery
+  // debounce 5s come gli altri reader. Vedi
+  // docs/internal/file-bridge-on-demand-2026-06-07.md
+  const startFileBridge = () => {
+    if (fileBridgeChild && !fileBridgeChild.killed) return;
+    pid1Log('starting file-bridge poller (indice + upload on-demand)');
+    fileBridgeChild = spawnLabeled('file-bridge', process.execPath, fileBridgeCmd);
+    fileBridgeChild.on('exit', (code, signal) => {
+      const exitedChild = fileBridgeChild;
+      fileBridgeChild = null;
+      if (shuttingDown) return;
+      pid1Log(`file-bridge poller exited (code=${code} signal=${signal})`);
+      if (fileBridgeRespawnTimer) clearTimeout(fileBridgeRespawnTimer);
+      fileBridgeRespawnTimer = setTimeout(async () => {
+        if (shuttingDown) return;
+        if (await isCloudConfigured()) {
+          pid1Log('file-bridge poller respawn dopo crash');
+          startFileBridge();
+        }
+      }, 5000);
+      void exitedChild;
+    });
+  };
+
   const stopDaemon = (reason) => {
     if (daemonRespawnTimer) {
       clearTimeout(daemonRespawnTimer);
@@ -760,6 +788,14 @@ async function dispatch() {
       pid1Log(`stopping user-messages poller (${reason})`);
       userMessagesChild.kill('SIGTERM');
     }
+    if (fileBridgeRespawnTimer) {
+      clearTimeout(fileBridgeRespawnTimer);
+      fileBridgeRespawnTimer = null;
+    }
+    if (fileBridgeChild && !fileBridgeChild.killed) {
+      pid1Log(`stopping file-bridge poller (${reason})`);
+      fileBridgeChild.kill('SIGTERM');
+    }
   };
 
   // Stato iniziale del cloud: se gia' paired, daemon + realtime + team_state +
@@ -769,6 +805,7 @@ async function dispatch() {
     startRealtime();
     startTeamState();
     startUserMessages();
+    startFileBridge();
   } else if (isVps) {
     pid1Log('cloud sync non ancora configurato: aspetto cloud.json (auto-start dopo pairing)');
   }
@@ -790,11 +827,12 @@ async function dispatch() {
         if (nowConfigured === lastConfigured) return;
         lastConfigured = nowConfigured;
         if (nowConfigured) {
-          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber + team_state reconciler + user-messages poller');
+          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber + team_state reconciler + user-messages poller + file-bridge poller');
           startDaemon();
           startRealtime();
           startTeamState();
           startUserMessages();
+          startFileBridge();
         } else {
           stopDaemon('cloud.json rimosso o disabilitato');
         }
@@ -815,6 +853,7 @@ async function dispatch() {
     if (realtimeChild && !realtimeChild.killed) realtimeChild.kill(sig);
     if (teamStateChild && !teamStateChild.killed) teamStateChild.kill(sig);
     if (userMessagesChild && !userMessagesChild.killed) userMessagesChild.kill(sig);
+    if (fileBridgeChild && !fileBridgeChild.killed) fileBridgeChild.kill(sig);
     if (dashboardChild && !dashboardChild.killed) dashboardChild.kill(sig);
     if (watchdogChild && !watchdogChild.killed) watchdogChild.kill(sig);
     if (watchdogRespawnTimer) clearTimeout(watchdogRespawnTimer);
