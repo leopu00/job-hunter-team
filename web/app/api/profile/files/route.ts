@@ -26,10 +26,15 @@ export async function GET() {
       .select("name, size, updated_at")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false });
-    const files = (data ?? []).map((f) => ({
-      name: f.name as string,
-      size: (f.size as number) ?? 0,
-      modified: f.updated_at ? new Date(f.updated_at as string).getTime() : 0,
+    const rows = (data ?? []) as {
+      name: string;
+      size: number | null;
+      updated_at: string | null;
+    }[];
+    const files = rows.map((f) => ({
+      name: f.name,
+      size: f.size ?? 0,
+      modified: f.updated_at ? new Date(f.updated_at).getTime() : 0,
     }));
     // mode=cloud: il client apre i file via bridge on-demand, non con link diretto.
     return NextResponse.json({ files, mode: "cloud" });
