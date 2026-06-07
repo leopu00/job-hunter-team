@@ -177,32 +177,11 @@ type LocalPositionFilterOpts = {
   statuses?: string[]
   remoteTypes?: string[]
   sources?: string[]
-  tiers?: string[]
   verdicts?: string[]
   limit?: number
   offset?: number
   sort?: string
   dir?: 'asc' | 'desc'
-}
-
-const LOCAL_TIER_RANGES: Record<string, { min?: number; max?: number; noScore?: boolean }> = {
-  seria:       { min: 70 },
-  practice:    { min: 40, max: 69 },
-  riferimento: { min: 1,  max: 39 },
-  noscore:     { noScore: true },
-}
-
-function tierClauses(tiers: string[]): string {
-  const parts: string[] = []
-  for (const t of tiers) {
-    const r = LOCAL_TIER_RANGES[t]; if (!r) continue
-    if (r.noScore) { parts.push('(s.total_score IS NULL OR s.total_score = 0)'); continue }
-    const sub: string[] = []
-    if (r.min != null) sub.push(`s.total_score >= ${r.min}`)
-    if (r.max != null) sub.push(`s.total_score <= ${r.max}`)
-    if (sub.length) parts.push(`(${sub.join(' AND ')})`)
-  }
-  return parts.length ? `(${parts.join(' OR ')})` : ''
 }
 
 export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): PositionWithScore[] {
@@ -225,10 +204,6 @@ export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): P
   if (opts?.verdicts?.length) {
     where.push(`a.critic_verdict IN (${opts.verdicts.map(() => '?').join(',')})`)
     params.push(...opts.verdicts)
-  }
-  if (opts?.tiers?.length) {
-    const tc = tierClauses(opts.tiers)
-    if (tc) where.push(tc)
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
@@ -524,14 +499,17 @@ export function getPositionFacetsLocal(ws: string) {
   const rows = db.prepare(`
     SELECT p.id, p.title, p.company, p.status, p.role_family,
            p.loc_country, p.loc_city,
-           s.total_score as score
+           s.total_score as score,
+           a.critic_score as critic_score
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
+    LEFT JOIN applications a ON a.position_id = p.id
   `).all() as any[]
   return rows.map(r => ({
     id: sid(r.id),
     role_family: (r.role_family as string | null) ?? null,
     score: typeof r.score === 'number' ? r.score : null,
+    critic_score: typeof r.critic_score === 'number' ? r.critic_score : null,
     loc_country: (r.loc_country as string | null) ?? null,
     loc_city: (r.loc_city as string | null) ?? null,
     status: r.status as string,
