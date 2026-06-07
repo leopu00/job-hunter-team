@@ -127,7 +127,11 @@ const SORTABLE_COLUMNS = new Set([
   "location",
   "loc_city",
   "loc_country",
+  "remote",
   "score",
+  "salary",
+  "monthly",
+  "last_action_by",
   "critic",
   "found_at",
   "last_action_at",
@@ -360,7 +364,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
   // default (desc per metriche numeriche e id, asc per testo).
   const sortHref = (col: string) => {
     const isActive = sortCol === col;
-    const NUMERIC = new Set(["id", "score", "critic", "found_at", "last_action_at"]);
+    const NUMERIC = new Set(["id", "score", "critic", "found_at", "last_action_at", "salary", "monthly"]);
     const defaultDir = NUMERIC.has(col) ? "desc" : "asc";
     const nextDir = isActive
       ? sortDir === "asc"
@@ -370,8 +374,10 @@ export default async function PositionsPage({ searchParams }: PageProps) {
     return buildHref({ sort: col, dir: nextDir });
   };
 
+  // Freccetta su OGNI colonna: attiva = ↑/↓, inattiva = ↕ (segnala che è
+  // ordinabile). Lo stile dim/bright lo dà già il colore del th.
   const sortIndicator = (col: string) =>
-    sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+    sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : " ↕";
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
@@ -460,11 +466,11 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     { col: "role_family", label: tr("col_category"), sortable: true },
                     { col: "loc_country", label: tr("col_country"), sortable: true },
                     { col: "loc_city", label: tr("col_city"), sortable: true },
-                    { col: "remote", label: tr("col_remote"), sortable: false },
+                    { col: "remote", label: tr("col_remote"), sortable: true },
                     { col: "score", label: tr("col_score"), sortable: true, center: true },
-                    { col: "salary", label: tr("col_salary"), sortable: false },
-                    { col: "monthly", label: tr("col_monthly"), sortable: false },
-                    { col: "last_action_by", label: tr("col_updated_by"), sortable: false, center: true },
+                    { col: "salary", label: tr("col_salary"), sortable: true },
+                    { col: "monthly", label: tr("col_monthly"), sortable: true },
+                    { col: "last_action_by", label: tr("col_updated_by"), sortable: true, center: true },
                     { col: "critic", label: tr("col_voto"), sortable: true, center: true },
                     { col: "status", label: tr("col_status"), sortable: true },
                   ].map(({ col, label, sortable, center }) => (
