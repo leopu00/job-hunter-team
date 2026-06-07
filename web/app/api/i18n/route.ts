@@ -46,12 +46,19 @@ function loadPrefs(): { locale: Locale } {
   return { locale: "it" };
 }
 
+// Persistenza best-effort: in ambienti con filesystem read-only (Vercel
+// serverless, dove scrivibile è solo /tmp) la scrittura fallisce, ma non deve
+// bloccare il cambio lingua — la fonte primaria è il cookie NEXT_LOCALE.
 function savePrefs(prefs: { locale: Locale }): void {
-  const dir = path.dirname(PREFS_PATH);
-  fs.mkdirSync(dir, { recursive: true });
-  const tmp = PREFS_PATH + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(prefs, null, 2), "utf-8");
-  fs.renameSync(tmp, PREFS_PATH);
+  try {
+    const dir = path.dirname(PREFS_PATH);
+    fs.mkdirSync(dir, { recursive: true });
+    const tmp = PREFS_PATH + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(prefs, null, 2), "utf-8");
+    fs.renameSync(tmp, PREFS_PATH);
+  } catch {
+    /* filesystem read-only (es. Vercel): il cookie basta */
+  }
 }
 
 // GET — locale corrente + lista lingue supportate. Cookie NEXT_LOCALE è la

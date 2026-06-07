@@ -1,6 +1,48 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+// ── i18n ───────────────────────────────────────────────────────────────────
+
+const T: Record<string, Record<string, string>> = {
+  select: {
+    it: "Seleziona…",
+    en: "Select…",
+    hu: "Kiválasztás…",
+    es: "Seleccionar…",
+    de: "Auswählen…",
+    fr: "Sélectionner…",
+    pt: "Selecionar…",
+  },
+  clearSelection: {
+    it: "Cancella selezione",
+    en: "Clear selection",
+    hu: "Kijelölés törlése",
+    es: "Borrar selección",
+    de: "Auswahl löschen",
+    fr: "Effacer la sélection",
+    pt: "Limpar seleção",
+  },
+  search: {
+    it: "Cerca…",
+    en: "Search…",
+    hu: "Keresés…",
+    es: "Buscar…",
+    de: "Suchen…",
+    fr: "Rechercher…",
+    pt: "Pesquisar…",
+  },
+  noResults: {
+    it: "Nessun risultato",
+    en: "No results",
+    hu: "Nincs találat",
+    es: "Sin resultados",
+    de: "Keine Ergebnisse",
+    fr: "Aucun résultat",
+    pt: "Nenhum resultado",
+  },
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -29,13 +71,16 @@ export function Select({
   options,
   value,
   onChange,
-  placeholder = "Seleziona…",
+  placeholder,
   searchable,
   multiple,
   clearable,
   disabled,
   className,
 }: SelectProps) {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const ph = placeholder ?? tr("select");
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [hi, setHi] = useState(-1);
@@ -201,7 +246,7 @@ export function Select({
             className="flex-1 text-[11px]"
             style={{ color: "var(--color-dim)" }}
           >
-            {placeholder}
+            {ph}
           </span>
         )}
 
@@ -210,7 +255,7 @@ export function Select({
           {clearable && hasValue && (
             <button
               onClick={clear}
-              aria-label="Cancella selezione"
+              aria-label={tr("clearSelection")}
               style={{
                 background: "none",
                 border: "none",
@@ -256,7 +301,7 @@ export function Select({
                   setSearch(e.target.value);
                   setHi(-1);
                 }}
-                placeholder="Cerca…"
+                placeholder={tr("search")}
                 className="w-full bg-transparent outline-none px-2 py-1.5 rounded text-[11px]"
                 style={{
                   border: "1px solid var(--color-border)",
@@ -272,7 +317,7 @@ export function Select({
               className="px-3 py-4 text-[10px] text-center"
               style={{ color: "var(--color-dim)" }}
             >
-              Nessun risultato
+              {tr("noResults")}
             </p>
           ) : (
             filtered.map((opt, i) => {

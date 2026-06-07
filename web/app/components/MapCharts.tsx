@@ -1,10 +1,134 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
 import {
   UNCATEGORIZED_LABEL,
   type RoleFamilyCount,
 } from "@/lib/position-classifier";
+
+// Stringhe UI hardcoded localizzate (le label dei tipi arrivano via `labels`).
+const T: Record<string, Record<string, string>> = {
+  no_score: {
+    it: "no score",
+    en: "no score",
+    hu: "nincs pontszám",
+    es: "sin puntuación",
+    de: "kein Score",
+    fr: "sans score",
+    pt: "sem pontuação",
+  },
+  remote: {
+    it: "remote",
+    en: "remote",
+    hu: "távmunka",
+    es: "remoto",
+    de: "Remote",
+    fr: "à distance",
+    pt: "remoto",
+  },
+  remote_title: {
+    it: "Remote",
+    en: "Remote",
+    hu: "Távmunka",
+    es: "Remoto",
+    de: "Remote",
+    fr: "À distance",
+    pt: "Remoto",
+  },
+  not_on_map: {
+    it: "non sulla mappa",
+    en: "not on map",
+    hu: "nincs a térképen",
+    es: "no en el mapa",
+    de: "nicht auf der Karte",
+    fr: "pas sur la carte",
+    pt: "não no mapa",
+  },
+  avg: {
+    it: "avg",
+    en: "avg",
+    hu: "átl.",
+    es: "med.",
+    de: "Ø",
+    fr: "moy.",
+    pt: "méd.",
+  },
+  no_title: {
+    it: "(senza titolo)",
+    en: "(untitled)",
+    hu: "(cím nélkül)",
+    es: "(sin título)",
+    de: "(ohne Titel)",
+    fr: "(sans titre)",
+    pt: "(sem título)",
+  },
+  no_city: {
+    it: "(senza città)",
+    en: "(no city)",
+    hu: "(nincs város)",
+    es: "(sin ciudad)",
+    de: "(ohne Stadt)",
+    fr: "(sans ville)",
+    pt: "(sem cidade)",
+  },
+  clear_all: {
+    it: "rimuovi tutto",
+    en: "clear all",
+    hu: "összes törlése",
+    es: "borrar todo",
+    de: "alle entfernen",
+    fr: "tout effacer",
+    pt: "limpar tudo",
+  },
+  clear_all_title: {
+    it: "Rimuovi tutti i filtri",
+    en: "Clear all filters",
+    hu: "Összes szűrő törlése",
+    es: "Quitar todos los filtros",
+    de: "Alle Filter entfernen",
+    fr: "Supprimer tous les filtres",
+    pt: "Remover todos os filtros",
+  },
+  remove: {
+    it: "Rimuovi",
+    en: "Remove",
+    hu: "Eltávolítás",
+    es: "Quitar",
+    de: "Entfernen",
+    fr: "Supprimer",
+    pt: "Remover",
+  },
+  location: {
+    it: "Location",
+    en: "Location",
+    hu: "Hely",
+    es: "Ubicación",
+    de: "Standort",
+    fr: "Lieu",
+    pt: "Localização",
+  },
+  open: {
+    it: "Apri",
+    en: "Open",
+    hu: "Megnyitás",
+    es: "Abrir",
+    de: "Öffnen",
+    fr: "Ouvrir",
+    pt: "Abrir",
+  },
+  close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+};
+
+type Tr = (k: string) => string;
 import PositionTypesDonut from "@/app/components/PositionTypesDonut";
 import ScoreDistributionHorizontal from "@/app/components/ScoreDistributionHorizontal";
 import JobsGlobeLazy from "@/app/components/JobsGlobeLazy";
@@ -68,6 +192,8 @@ export default function MapCharts({
   emptyLabel,
   scoreTitle,
 }: Props) {
+  const locale = useLocale();
+  const tr: Tr = (k) => T[k]?.[locale] ?? T[k]?.en ?? k;
   // Multi-selezione. Vuoto = nessun filtro (mostra tutto).
   // Tra tipologie diverse: AND. Dentro la stessa tipologia: OR.
   // Post-dev2 refactor 2026-05-23: classificazione è data-driven da
@@ -435,7 +561,7 @@ export default function MapCharts({
           if (unscoredSelected) {
             arr.push({
               key: "unscored",
-              label: "no score",
+              label: tr("no_score"),
               onRemove: () => setUnscoredSelected(false),
             });
           }
@@ -465,6 +591,7 @@ export default function MapCharts({
           setSelectedCities([]);
         }}
         chartReserveRight={24 + 420 + 12}
+        tr={tr}
       />
 
       {/* Card "Remote" — overlay bottom-right. Mostra le posizioni
@@ -511,13 +638,13 @@ export default function MapCharts({
                     className="text-[10px] font-semibold tracking-[0.14em] uppercase"
                     style={{ color: "var(--color-dim)" }}
                   >
-                    Remote
+                    {tr("remote_title")}
                   </div>
                   <div
                     className="text-[9px] mt-0.5"
                     style={{ color: "var(--color-dim)" }}
                   >
-                    non sulla mappa
+                    {tr("not_on_map")}
                   </div>
                 </div>
                 <div className="flex items-baseline gap-3 tabular-nums">
@@ -532,7 +659,9 @@ export default function MapCharts({
                       className="text-[10px]"
                       style={{ color: "var(--color-muted)" }}
                     >
-                      <span style={{ color: "var(--color-dim)" }}>avg</span>{" "}
+                      <span style={{ color: "var(--color-dim)" }}>
+                        {tr("avg")}
+                      </span>{" "}
                       <span
                         style={{
                           color: "var(--color-bright)",
@@ -561,7 +690,7 @@ export default function MapCharts({
                         style={{ color: "var(--color-bright)" }}
                         title={p.title ?? ""}
                       >
-                        {p.title ?? "(senza titolo)"}
+                        {p.title ?? tr("no_title")}
                       </span>
                       {typeof p.score === "number" ? (
                         <span
@@ -575,7 +704,7 @@ export default function MapCharts({
                           className="text-[9px] italic flex-shrink-0"
                           style={{ color: "var(--color-dim)" }}
                         >
-                          no score
+                          {tr("no_score")}
                         </span>
                       )}
                     </div>
@@ -592,7 +721,7 @@ export default function MapCharts({
                             background: "rgba(127,255,178,0.08)",
                           }}
                         >
-                          remote
+                          {tr("remote")}
                         </span>
                       )}
                     </div>
@@ -611,6 +740,7 @@ export default function MapCharts({
       {effectiveLocationTree.length > 0 && (
         <LocationTree
           tree={effectiveLocationTree}
+          tr={tr}
           openCountry={openCountry}
           openCity={openCity}
           selectedCountries={selectedCountries}
@@ -676,10 +806,12 @@ function FilterChipsBar({
   chips,
   clearAll,
   chartReserveRight,
+  tr,
 }: {
   chips: FilterChipDesc[];
   clearAll: () => void;
   chartReserveRight: number;
+  tr: Tr;
 }) {
   const measureRef = useRef<HTMLDivElement>(null);
   const [row1End, setRow1End] = useState(chips.length);
@@ -737,6 +869,7 @@ function FilterChipsBar({
             label={c.label}
             color={c.color}
             onRemove={c.onRemove}
+            tr={tr}
           />
         ))}
       </div>
@@ -769,9 +902,10 @@ function FilterChipsBar({
             label={c.label}
             color={c.color}
             onRemove={c.onRemove}
+            tr={tr}
           />
         ))}
-        {extra.length === 0 && <ClearAllButton onClick={clearAll} />}
+        {extra.length === 0 && <ClearAllButton onClick={clearAll} tr={tr} />}
       </div>
 
       {/* Riga 2+: limitata a sinistra del chart, sotto la riga 1. */}
@@ -797,16 +931,17 @@ function FilterChipsBar({
               label={c.label}
               color={c.color}
               onRemove={c.onRemove}
+              tr={tr}
             />
           ))}
-          <ClearAllButton onClick={clearAll} />
+          <ClearAllButton onClick={clearAll} tr={tr} />
         </div>
       )}
     </>
   );
 }
 
-function ClearAllButton({ onClick }: { onClick: () => void }) {
+function ClearAllButton({ onClick, tr }: { onClick: () => void; tr: Tr }) {
   return (
     <button
       onClick={onClick}
@@ -817,9 +952,9 @@ function ClearAllButton({ onClick }: { onClick: () => void }) {
         border: "none",
         cursor: "pointer",
       }}
-      title="Rimuovi tutti i filtri"
+      title={tr("clear_all_title")}
     >
-      clear all
+      {tr("clear_all")}
     </button>
   );
 }
@@ -828,10 +963,12 @@ function FilterChip({
   label,
   color,
   onRemove,
+  tr,
 }: {
   label: string;
   color?: string;
   onRemove: () => void;
+  tr: Tr;
 }) {
   const c = color ?? "var(--color-bright)";
   return (
@@ -851,8 +988,8 @@ function FilterChip({
       <span title={label}>{label}</span>
       <button
         onClick={onRemove}
-        aria-label={`Rimuovi ${label}`}
-        title={`Rimuovi ${label}`}
+        aria-label={`${tr("remove")} ${label}`}
+        title={`${tr("remove")} ${label}`}
         className="hover:opacity-70 transition-opacity"
         style={{
           display: "inline-block",
@@ -878,6 +1015,7 @@ function FilterChip({
 // essa. Click su una position apre /positions/<id> in nuova tab.
 function LocationTree({
   tree,
+  tr,
   openCountry,
   openCity,
   selectedCountries,
@@ -888,6 +1026,7 @@ function LocationTree({
   onCityCaret,
 }: {
   tree: LocationCountry[];
+  tr: Tr;
   openCountry: string | null;
   openCity: string | null;
   selectedCountries: string[];
@@ -928,7 +1067,7 @@ function LocationTree({
           color: "var(--color-dim)",
         }}
       >
-        <span>Location</span>
+        <span>{tr("location")}</span>
         <span className="tabular-nums" style={{ color: "var(--color-muted)" }}>
           {tree.length} · {total}
         </span>
@@ -968,7 +1107,7 @@ function LocationTree({
                   title={country.country}
                 >
                   <button
-                    aria-label={isOpen ? "Chiudi" : "Apri"}
+                    aria-label={isOpen ? tr("close") : tr("open")}
                     onClick={(e) => {
                       e.stopPropagation();
                       onCountryCaret(country.country);
@@ -1007,7 +1146,7 @@ function LocationTree({
                     const cityKey = `${country.country}|${city.city ?? "(country-only)"}`;
                     const isCityOpen = openCity === cityKey;
                     const isCitySelected = selectedCities.includes(cityKey);
-                    const cityLabel = city.city ?? "(senza città)";
+                    const cityLabel = city.city ?? tr("no_city");
                     return (
                       <li
                         key={cityKey}
@@ -1038,7 +1177,7 @@ function LocationTree({
                             title={cityLabel}
                           >
                             <button
-                              aria-label={isCityOpen ? "Chiudi" : "Apri"}
+                              aria-label={isCityOpen ? tr("close") : tr("open")}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onCityCaret(cityKey);
@@ -1094,7 +1233,7 @@ function LocationTree({
                                       style={{ color: "var(--color-base)" }}
                                       title={p.title ?? ""}
                                     >
-                                      {p.title ?? "(senza titolo)"}
+                                      {p.title ?? tr("no_title")}
                                     </span>
                                     {typeof p.score === "number" && (
                                       <span

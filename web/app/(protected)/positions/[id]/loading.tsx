@@ -1,8 +1,26 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  loading_position: {
+    it: "Caricamento dettaglio posizione",
+    en: "Loading position details",
+    hu: "Pozíció részleteinek betöltése",
+    es: "Cargando detalles de la posición",
+    de: "Stellendetails werden geladen",
+    fr: "Chargement des détails du poste",
+    pt: "Carregando detalhes da vaga",
+  },
+};
+
 export default function PositionDetailLoading() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   return (
     <div
       aria-busy="true"
-      aria-label="Caricamento dettaglio posizione"
+      aria-label={tr("loading_position")}
       style={{ animation: "fade-in 0.2s ease both" }}
     >
       {/* Breadcrumb */}
