@@ -227,6 +227,16 @@ label {
 ::-webkit-scrollbar-thumb { background: var(--color-border-glow); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
 
+/* Barra di scroll orizzontale "in alto" (TableScrollSync): sempre visibile
+   e più spessa, così non sfugge come quella nativa in fondo. L'altezza
+   esplicita è necessaria perché lo spacer interno è alto 1px: senza, la
+   scrollbar verrebbe ritagliata e risulterebbe invisibile. */
+.h-scroll-top { height: 14px; scrollbar-width: thin; scrollbar-color: var(--color-muted) var(--color-panel); }
+.h-scroll-top::-webkit-scrollbar { height: 12px; -webkit-appearance: none; appearance: none; }
+.h-scroll-top::-webkit-scrollbar-track { background: var(--color-panel); border-radius: 6px; }
+.h-scroll-top::-webkit-scrollbar-thumb { background: var(--color-muted); border-radius: 6px; }
+.h-scroll-top::-webkit-scrollbar-thumb:hover { background: var(--color-bright); }
+
 /* ── Landing page ───────────────────────────────────────────────── */
 @keyframes landing-type {
   from { opacity: 0; transform: translateX(-4px); }
