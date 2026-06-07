@@ -105,6 +105,11 @@ export default function PositionTypesDonut({
         display: "flex",
         alignItems: "center",
         gap: 16,
+        // width 100% + minWidth 0: il widget è vincolato alla larghezza
+        // del contenitore (card /map) → la legenda non sfora, le label
+        // lunghe troncano e la % resta dentro al bordo.
+        width: "100%",
+        minWidth: 0,
       }}
       onMouseLeave={() => setHovered(null)}
     >
@@ -197,7 +202,7 @@ export default function PositionTypesDonut({
         Click toggle stessa selezione delle fette; hover evidenzia
         la fetta corrispondente. */}
       <ul
-        className="flex flex-col gap-1 min-w-0"
+        className="flex flex-col gap-1 min-w-0 flex-1"
         style={{ fontSize: 11, lineHeight: 1.2 }}
       >
         {data.map((d) => {
