@@ -128,73 +128,50 @@ export default async function DashboardPage() {
 
   const isEmpty = stats.total === 0;
 
+  // Pipeline a 5 box che segue il flusso reale (2026-06-07):
+  //   Da analizzare → Analizzate → Con lo score → Da scrivere → Scritte
+  // "Con lo score" = scored NON ancora selezionate; "Da scrivere" =
+  // selezionate dall'utente (write_requested) ma CV non ancora pronto
+  // (scored/writing/review). Trovate/Inviate vivono nella pagina Analisi.
   const pipeline = [
     {
-      key: "found",
-      label: t.found,
-      count: stats.total,
-      color: "var(--color-blue)",
-      href: "/positions",
-      basis: stats.total,
-      note:
-        stats.excluded > 0
-          ? `${stats.excluded} ${t.status_excluded.toLowerCase()}`
-          : undefined,
-    },
-    {
-      key: "new",
-      label: t.p_new,
+      key: "to_analyze",
+      label: t.pl_to_analyze,
       count: stats.new,
       color: STATUS_COLORS.new,
       href: "/positions?status=new",
       basis: activeTotal,
     },
     {
-      key: "checked",
-      label: t.p_checked,
+      key: "analyzed",
+      label: t.pl_analyzed,
       count: stats.checked,
       color: STATUS_COLORS.checked,
       href: "/positions?status=checked",
       basis: activeTotal,
     },
     {
-      key: "scored",
-      label: t.p_scored,
-      count: stats.scored,
+      key: "with_score",
+      label: t.pl_with_score,
+      count: stats.scored_open,
       color: STATUS_COLORS.scored,
       href: "/positions?status=scored",
       basis: activeTotal,
     },
     {
-      key: "writing",
-      label: t.p_writing,
-      count: stats.writing,
+      key: "to_write",
+      label: t.pl_to_write,
+      count: stats.to_write,
       color: STATUS_COLORS.writing,
-      href: "/positions?status=writing",
+      href: "/positions",
       basis: activeTotal,
     },
     {
-      key: "review",
-      label: t.p_review,
-      count: stats.review,
-      color: STATUS_COLORS.review,
-      href: "/positions?status=review",
-      basis: activeTotal,
-    },
-    {
-      key: "ready",
-      label: t.p_ready,
+      key: "written",
+      label: t.pl_written,
       count: stats.ready,
       color: STATUS_COLORS.ready,
       href: "/positions?status=ready",
-      basis: activeTotal,
-    },
-    {
-      key: "applied",
-      label: t.p_applied,
-      count: stats.applied,
-      color: STATUS_COLORS.applied,
-      href: "/positions?status=applied",
       basis: activeTotal,
     },
   ];
@@ -240,12 +217,10 @@ export default async function DashboardPage() {
           {/* ── Pipeline ────────────────────────────────────────────── */}
           <div className="section-label mb-4">{t.pipeline}</div>
           <div
-            className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-8"
+            className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mb-8"
             style={{ animation: "fade-in 0.35s ease both" }}
           >
-            {pipeline
-              .filter((step) => step.key !== "found" && step.key !== "applied")
-              .map((step, i) => {
+            {pipeline.map((step, i) => {
               const percent =
                 step.basis > 0
                   ? Math.round((step.count / step.basis) * 100)
@@ -287,7 +262,7 @@ export default async function DashboardPage() {
                     />
                   </div>
                   <div className="text-[9px] text-[var(--color-dim)]">
-                    {step.note ?? `${percent}%`}
+                    {`${percent}%`}
                   </div>
                 </Link>
               );
