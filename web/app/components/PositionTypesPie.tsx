@@ -1,7 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
 import type { RoleFamilyCount } from "@/lib/position-classifier";
+
+// Etichetta colonna "score medio" della legenda (è la media, non lo score di
+// una singola posizione). Compatta per stare nella colonna stretta.
+const AVG_LABEL: Record<string, string> = {
+  it: "media",
+  en: "avg",
+  hu: "átl",
+  es: "media",
+  de: "Ø",
+  fr: "moy",
+  pt: "média",
+};
 
 type Props = {
   data: RoleFamilyCount[];
@@ -71,6 +84,8 @@ export default function PositionTypesPie({
   onToggleType,
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
+  const locale = useLocale();
+  const avgLabel = AVG_LABEL[locale] ?? AVG_LABEL.en;
   const labelFor = (family: string) => labels?.[family] ?? family;
   const total = data.reduce((a, d) => a + d.count, 0);
   // Per la barra proporzionale di ogni riga (riempie lo spazio orizzontale
@@ -219,14 +234,16 @@ export default function PositionTypesPie({
           {/* Header: didascalia colonne. Colonna 'tipo' a larghezza limitata +
                 colonna barra flessibile (1fr) che riempie lo spazio prima vuoto. */}
           <li
-            className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_3rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_3.5rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
             <span>tipo</span>
             <span />
             <span>n</span>
             <span>%</span>
-            <span title="Score medio (0-100)">score</span>
+            <span className="text-center" title="Score medio (0-100)">
+              {avgLabel}
+            </span>
           </li>
           {data.map((d) => {
             const pct = Math.round((d.count / total) * 100);
@@ -240,7 +257,7 @@ export default function PositionTypesPie({
                 key={d.family}
                 onMouseEnter={() => setHovered(d.family)}
                 onClick={() => onToggleType?.(d.family)}
-                className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_3rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
+                className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_3.5rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
                 style={{
                   cursor: onToggleType ? "pointer" : "default",
                   background: isSelected
@@ -295,7 +312,7 @@ export default function PositionTypesPie({
                   {pct}%
                 </span>
                 <span
-                  className="tabular-nums"
+                  className="tabular-nums text-center"
                   title="Score medio (0-100, solo posizioni scorate)"
                   style={{
                     color:
