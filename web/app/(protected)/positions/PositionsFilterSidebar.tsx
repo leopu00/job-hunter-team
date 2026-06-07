@@ -28,16 +28,19 @@ const CRITIC_STEP = 0.5;
 type DirectKey = "status" | "remote" | "source";
 type Option = { val: string; label: string; color?: string };
 
+// Etichette esplicative (stessa terminologia della pipeline del dashboard):
+// chiariscono la fase del workflow invece dello status grezzo. Il `val` resta
+// lo status reale (URL + filtro server), cambia solo la label mostrata.
 const STATUS_OPTIONS: Option[] = [
-  { val: "new", label: "new", color: "var(--color-muted)" },
-  { val: "checked", label: "checked", color: "var(--color-blue)" },
-  { val: "scored", label: "scored", color: "var(--color-purple)" },
-  { val: "writing", label: "writing", color: "var(--color-yellow)" },
-  { val: "review", label: "review", color: "var(--color-orange)" },
-  { val: "ready", label: "ready", color: "#7fffb2" },
-  { val: "applied", label: "applied", color: "var(--color-green)" },
-  { val: "response", label: "response", color: "#58a6ff" },
-  { val: "excluded", label: "excluded", color: "var(--color-red)" },
+  { val: "new", label: "Nuove, da analizzare", color: "var(--color-muted)" },
+  { val: "checked", label: "Analizzate, da valutare", color: "var(--color-blue)" },
+  { val: "scored", label: "Valutate, da scrivere", color: "var(--color-purple)" },
+  { val: "writing", label: "In scrittura", color: "var(--color-yellow)" },
+  { val: "review", label: "In revisione", color: "var(--color-orange)" },
+  { val: "ready", label: "Pronte, da inviare", color: "#7fffb2" },
+  { val: "applied", label: "Candidatura inviata", color: "var(--color-green)" },
+  { val: "response", label: "Con risposta", color: "#58a6ff" },
+  { val: "excluded", label: "Escluse", color: "var(--color-red)" },
 ];
 
 const REMOTE_OPTIONS: Option[] = [
