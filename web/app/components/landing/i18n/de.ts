@@ -6,6 +6,7 @@ export const de: Record<string, string> = {
   nav_download: "Download",
   nav_github: "GitHub",
   nav_project: "Projekt",
+  nav_chronicles: "Chroniken",
   nav_login: "Anmelden",
 
   // Hero
