@@ -111,6 +111,11 @@ body::after {
 
 a { color: var(--color-green); text-decoration: none; }
 a:hover { text-decoration: underline; }
+/* Chronicle index cards: never underline the card on hover (only border + title highlight) */
+a.chronicle-card,
+a.chronicle-card:hover,
+a.chronicle-card *,
+a.chronicle-card:hover * { text-decoration: none !important; }
 
 /* ── Section label ───────────────────────────────────────────────── */
 .section-label {

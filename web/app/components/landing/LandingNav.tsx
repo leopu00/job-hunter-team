@@ -212,9 +212,7 @@ export default function LandingNav() {
       aria-label="Main navigation"
       className="fixed top-0 left-0 right-0 z-50"
       style={{
-        background:
-          "linear-gradient(180deg, var(--color-void) 60%, transparent)",
-        backdropFilter: "blur(12px)",
+        background: "var(--color-void)",
       }}
     >
       <div className="flex items-center justify-between px-5 sm:px-6 py-4">
@@ -248,6 +246,14 @@ export default function LandingNav() {
             style={navLinkStyle("/project")}
           >
             {t("nav_project")}
+          </Link>
+          <Link
+            href="/chronicles"
+            aria-current={currentPage("/chronicles")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/chronicles")}
+          >
+            {t("nav_chronicles")}
           </Link>
           <a
             href="https://github.com/leopu00/job-hunter-team"
@@ -352,6 +358,15 @@ export default function LandingNav() {
             style={navLinkStyle("/project")}
           >
             {t("nav_project")}
+          </Link>
+          <Link
+            href="/chronicles"
+            aria-current={currentPage("/chronicles")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/chronicles")}
+          >
+            {t("nav_chronicles")}
           </Link>
           <a
             href="https://github.com/leopu00/job-hunter-team"
