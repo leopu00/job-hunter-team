@@ -458,7 +458,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
   - `docker-compose.yml` riscritto image-only + production-friendly (no `build:`, no bind sorgenti)
   - `docker-compose.dev.yml` nuovo override per dev workflow (build + bind hot-reload)
   - `scripts/install.sh` Docker-mode da 5 → 4 step: scarica wrapper + compose da raw.github invece di generare wrapper inline + docker pull eager
-  - Aggiornati `docs/guides/quickstart.md`, `docs/guides/cli-install.md`
+  - Aggiornati `docs/guides/QUICKSTART.md`, `docs/guides/CLI-INSTALL.md`
   - Validazione full-flow in WSL Ubuntu 22.04 con immagine GHCR del 27/4: `jht up` → `status` → `--help` → `team list` → `logs` → `down` tutto verde
 - **Still open:** smoke test su VPS reale Hetzner — vedi [JHT-VPS-VALIDATE] sotto. Refactor cleanup di `cli/utils/container-proxy.js` (rimozione completa, oggi e' compat layer) deferito a post-launch — il passthrough basta per il design.
 
@@ -512,7 +512,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - **Subtask:**
   1. ✅ **[JHT-CLI-WIN-WRAPPER]** Port `scripts/jht-wrapper.sh` → `scripts/jht-wrapper.ps1` (commit `33bfae7c`, bugfix splat scalar `81f7efc8`). Dispatcher identico: lifecycle via `docker compose`, tutto il resto via `docker exec jht node /app/cli/bin/jht.js`.
   2. ✅ **[JHT-CLI-WIN-INSTALL]** Port `scripts/install.sh` → `scripts/install.ps1` (commit `d87890f8`, shim CMD fallback su `powershell.exe` se `pwsh` assente `1a705221`, servito da web `a95fb028`). Sync drift guard CI `77e9d6a8` + `scripts/sync-public-installers.sh` (`e930fe63`) per tenere `web/public/install.ps1` allineato.
-  3. ✅ **[JHT-CLI-WIN-DOC]** Aggiornato `docs/guides/quickstart.md` Path 3 + `AI-AGENT-INTEGRATION.md` con `iwr | iex` (commit `de51fc0f`).
+  3. ✅ **[JHT-CLI-WIN-DOC]** Aggiornato `docs/guides/QUICKSTART.md` Path 3 + `AI-AGENT-INTEGRATION.md` con `iwr | iex` (commit `de51fc0f`).
   4. ⬜ **[JHT-CLI-WIN-E2E]** **RIMASTO:** Rifare E2E test con agente AI (Claude Code) su Windows 11 nativo per validare che `iwr -useb https://jobhunterteam.ai/install.ps1 | iex` completi il flow universal AI-agent senza menzione di WSL. Owner: maintainer (richiede macchina Windows fisica — Parallels Win11 ARM non riproduce per `[project_docker_parallels_wall]`).
 - **Discarded alternatives:**
   - `npm publish` del CLI: più semplice ma richiede Node sul host (~50MB) + rompe host-thin design.
@@ -639,7 +639,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - ✅ Build `.dmg` / `.exe` NSIS / `.AppImage` / `.deb` via electron-builder
 - ✅ Release via GitHub Releases
 - ⬜ **Auto-update** via `electron-updater`
-- ⏸️ **Code signing** macOS + Windows — **deferred (post-beta)**. Costs (~€99/yr macOS, ~€200-400/yr Win EV cert) are not justified during beta. Our trust signal in beta is **open source transparency + community review** — users can inspect the code or build from source. We'll document the OS warning workaround in `docs/guides/quickstart.md` (right-click → Open on macOS, "Run anyway" on Windows) and explain the positioning honestly. Schedule code signing once the project graduates from beta.
+- ⏸️ **Code signing** macOS + Windows — **deferred (post-beta)**. Costs (~€99/yr macOS, ~€200-400/yr Win EV cert) are not justified during beta. Our trust signal in beta is **open source transparency + community review** — users can inspect the code or build from source. We'll document the OS warning workaround in `docs/guides/QUICKSTART.md` (right-click → Open on macOS, "Run anyway" on Windows) and explain the positioning honestly. Schedule code signing once the project graduates from beta.
 
 #### 🏠 [JHT-DESKTOP-06] "Dedicated computer" mode
 

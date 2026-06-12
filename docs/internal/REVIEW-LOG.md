@@ -141,11 +141,11 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/guides/quickstart.md](./guides/quickstart.md) | Guida quickstart utente (3 path: desktop, repo, one-liner) | — | 2026-05-06 | ✅ |
-| [docs/guides/cli-install.md](./guides/cli-install.md) | Spec dell'installer one-liner `install.sh` (AS-IS) | — | 2026-05-06 | ✅ |
+| [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | Guida quickstart utente (3 path: desktop, repo, one-liner) | — | 2026-05-06 | ✅ |
+| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Spec dell'installer one-liner `install.sh` (AS-IS) | — | 2026-05-06 | ✅ |
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor) | — | 2026-04-27 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Onboarding beta tester + matrice coverage 10 celle | — | 2026-04-27 | ✅ |
-| [docs/guides/feedback-ticketing.md](./guides/feedback-ticketing.md) | Runbook pagina /feedback + API `/api/feedback` | — | 2026-04-27 | ✅ |
+| [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook pagina /feedback + API `/api/feedback` | — | 2026-04-27 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 
 

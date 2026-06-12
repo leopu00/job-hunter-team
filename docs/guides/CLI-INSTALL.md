@@ -2,7 +2,7 @@
 
 This document describes how the one-liner installer works **today**
 (behaviour AS-IS, before any further hardening). It is the reference
-for **Path 3 (One-liner installer)** in the [Quickstart](quickstart.md):
+for **Path 3 (One-liner installer)** in the [Quickstart](QUICKSTART.md):
 
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
@@ -187,7 +187,7 @@ They do **not** install Docker, Node, or any system dependency — they
 assume the developer already has Python ≥ 3.10, tmux, Node and npm.
 
 If you find yourself reaching for these, you probably want the one-liner
-or `docs/guides/quickstart.md` instead.
+or `docs/guides/QUICKSTART.md` instead.
 
 ---
 
@@ -300,7 +300,7 @@ Tickets to file on `scripts/install.sh` itself (not on this doc):
 
 ## 📚 Related
 
-- 🚀 [`docs/guides/quickstart.md`](quickstart.md) — the human-friendly install guide (4 paths)
+- 🚀 [`docs/guides/QUICKSTART.md`](QUICKSTART.md) — the human-friendly install guide (4 paths)
 - 💳 [`docs/PROVIDERS.md`](../about/PROVIDERS.md) — supported subscriptions matrix
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
 - 📐 [`docs/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram and deployment modes

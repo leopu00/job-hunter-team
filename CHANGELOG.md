@@ -293,7 +293,7 @@ Release focused on friction points that emerged from manual E2E tests on Windows
 
 - `scripts/install.sh --dry-run` prints every command that would be executed without touching the system (useful for debug and pairing).
 - `setup.ps1` aligned with `install.sh` on dependency checks (minimal parity, not a full rewrite).
-- New `docs/guides/cli-install.md` with AS-IS description of the script and a "tested environments" section.
+- New `docs/guides/CLI-INSTALL.md` with AS-IS description of the script and a "tested environments" section.
 
 ### ⚠️ Known issues (not resolved in this release)
 

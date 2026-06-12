@@ -4,7 +4,7 @@ Piano operativo per attivare il primo beta tester esterno su VPS condivisa,
 **preparato a 2026-05-18 in preparazione del kick-off pianificato per i prossimi giorni**.
 
 > Questo doc cattura le decisioni di setup. La guida user-facing per il beta
-> tester resta [`BETA.md`](BETA.md). Questo è il "behind the scenes" lato
+> tester resta [`BETA.md`](../../guides/BETA.md). Questo è il "behind the scenes" lato
 > maintainer.
 
 ---
@@ -278,11 +278,11 @@ Post-kick-off (Day +1):
 
 ## 🔗 Documenti collegati
 
-- [`BETA.md`](BETA.md) — guida pubblica beta tester
-- [`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md) — flow desktop wizard standard (self-service)
-- [`VPS-SETUP.md`](VPS-SETUP.md) — flow tech-only manuale via SSH
-- [`docs/internal/experiments/2026-05-06-agent-prompts-i18n.md`](../internal/experiments/2026-05-06-agent-prompts-i18n.md) — design i18n prompt agenti
-- [`docs/internal/ops/vps.md`](../internal/ops/vps.md) — design VPS providers + 3-tier UX
+- [`BETA.md`](../../guides/BETA.md) — guida pubblica beta tester
+- [`VPS-SETUP-WIZARD.md`](../../guides/VPS-SETUP-WIZARD.md) — flow desktop wizard standard (self-service)
+- [`VPS-SETUP.md`](../../guides/VPS-SETUP.md) — flow tech-only manuale via SSH
+- [`docs/internal/experiments/2026-05-06-agent-prompts-i18n.md`](../experiments/2026-05-06-agent-prompts-i18n.md) — design i18n prompt agenti
+- [`docs/internal/ops/vps.md`](../ops/vps.md) — design VPS providers + 3-tier UX
 
 ---
 
