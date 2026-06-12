@@ -145,4 +145,4 @@ Principio unificante: **il throttle modula la VELOCITÀ, il kill modula la CAPAC
 - Commit: `031035cfe` (cap removal), `f4bc6c183`, `fbae680cc`, `31901c676` (wave pacing weekly).
 - Prompt: `agents/capitano/capitano.md` (C-07, C-09), `agents/sentinella/sentinella.md` (S-06).
 - Codice: `.launcher/pacing-bridge.py`, `.launcher/sentinel-bridge.py`.
-- Precedenti: `docs/internal/2026-05-21-halt-weekly-incident.md`, `docs/internal/2026-05-21-vps1-run-postmortem.md`, `docs/internal/DIAGNOSI-pacing-weekly-2026-06-03.md`, `docs/internal/pacing-migration-plan-2026-06-05.md`.
+- Precedenti: `docs/internal/postmortems/2026-05-21-halt-weekly-incident.md`, `docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md`, `docs/internal/postmortems/DIAGNOSI-pacing-weekly-2026-06-03.md`, `docs/internal/roadmap/pacing-migration-plan-2026-06-05.md`.

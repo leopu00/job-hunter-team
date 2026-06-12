@@ -45,7 +45,7 @@ This is **opt-in for Local PC**, **mandatory for VPS** (the VPS uses cloud stora
 >
 > **Bootstrap automatico**: quando l'utente fa login con lo stesso account su un **container nuovo/vuoto** (es. nuova VPS appena installata, o nuovo PC dopo perdita del vecchio), l'app rileva che il DB locale è vuoto e fa un **pull automatico** dal cloud — DB locale allineato, da lì in poi sync normale. Niente comandi manuali, niente backup/restore Docker volume.
 >
-> **Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard, flag user-driven (`write_requested`, futuro `geocode_requested`), tombstones di righe cancellate. Memoria agenti runtime (tmux, skill state) e CV binari → restano locali. Living doc completa: [`docs/internal/cloud-sync-architecture.md`](cloud-sync-architecture.md).
+> **Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard, flag user-driven (`write_requested`, futuro `geocode_requested`), tombstones di righe cancellate. Memoria agenti runtime (tmux, skill state) e CV binari → restano locali. Living doc completa: [`docs/internal/architecture/cloud-sync-architecture.md`](../architecture/cloud-sync-architecture.md).
 
 ### 👤 Clients — how the user talks to the team
 

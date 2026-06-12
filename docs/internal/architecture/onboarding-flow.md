@@ -174,7 +174,7 @@ Perché funziona:
 
 ## 🔗 Riferimenti
 
-- `docs/internal/bot-telegram.md` — decisione Telegram 3 bot obbligatori (2026-05-13 rev2)
-- `docs/internal/vps.md` — design VPS (provisioning, providers, install UX)
+- `docs/internal/architecture/bot-telegram.md` — decisione Telegram 3 bot obbligatori (2026-05-13 rev2)
+- `docs/internal/ops/vps.md` — design VPS (provisioning, providers, install UX)
 - `docs/guides/AI-AGENT-INTEGRATION.md` § "Setup runbook" — Path 3 eseguibile per AI agent
 - `BACKLOG.md` — `[JHT-DESKTOP-LOGIN]`, `[JHT-DESKTOP-SYNC]`, `[JHT-VPS-FRIENDLY]` (`[JHT-DESKTOP-RECLAIM]` annullato 2026-05-13)

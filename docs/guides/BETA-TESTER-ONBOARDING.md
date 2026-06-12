@@ -281,8 +281,8 @@ Post-kick-off (Day +1):
 - [`BETA.md`](BETA.md) — guida pubblica beta tester
 - [`VPS-SETUP-WIZARD.md`](VPS-SETUP-WIZARD.md) — flow desktop wizard standard (self-service)
 - [`VPS-SETUP.md`](VPS-SETUP.md) — flow tech-only manuale via SSH
-- [`docs/internal/2026-05-06-agent-prompts-i18n.md`](../internal/2026-05-06-agent-prompts-i18n.md) — design i18n prompt agenti
-- [`docs/internal/vps.md`](../internal/vps.md) — design VPS providers + 3-tier UX
+- [`docs/internal/experiments/2026-05-06-agent-prompts-i18n.md`](../internal/experiments/2026-05-06-agent-prompts-i18n.md) — design i18n prompt agenti
+- [`docs/internal/ops/vps.md`](../internal/ops/vps.md) — design VPS providers + 3-tier UX
 
 ---
 

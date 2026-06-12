@@ -100,4 +100,4 @@ If the user complains "I replied 10 seconds ago and you haven't acknowledged," c
 
 - `notify-user` — the other half of the pair. Writes the message to `pending_user_messages`; this skill reads back the reply.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — schema, indici, ciclo di vita di una riga.
-- `docs/internal/bot-telegram.md` § 6 — decisione 2026-05-13 sul pattern fallback.
+- `docs/internal/architecture/bot-telegram.md` § 6 — decisione 2026-05-13 sul pattern fallback.

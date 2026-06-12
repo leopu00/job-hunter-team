@@ -152,10 +152,10 @@ Implicazione per Sentinella: dial sul weekly secondary, non solo sul primary 5h.
 ## 🔗 Riferimenti
 
 - `BACKLOG.md` — `[PACING-WEEKLY-EXHAUSTION]` P0 (la saturazione weekly è coerente con il throughput stimato qui).
-- `docs/internal/2026-05-21-halt-weekly-incident.md` — operazione di stop team da cui derivano questi dati finali.
-- `docs/internal/context-watchdog-spec.md` — spec del watchdog per evitare context bloat (Capitano 168M token).
+- `docs/internal/postmortems/2026-05-21-halt-weekly-incident.md` — operazione di stop team da cui derivano questi dati finali.
+- `docs/internal/architecture/context-watchdog-spec.md` — spec del watchdog per evitare context bloat (Capitano 168M token).
 - `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` — strategy session run Kimi (archiviato).
-- `docs/internal/2026-05-03-rate-kimi-weights.md` — calibrazione rate budget Kimi.
+- `docs/internal/experiments/2026-05-03-rate-kimi-weights.md` — calibrazione rate budget Kimi.
 
 ## 📂 Superseded
 

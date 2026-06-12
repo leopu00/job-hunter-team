@@ -73,10 +73,10 @@ Da fixare quando saremo fuori HALT (preferibilmente prima del prossimo team prod
 3. **Halt deve essere idempotente e marker-based**: un flag file (`.weekly-halt.flag`) sopravvive a respawn, è leggibile dal Capitano al boot, blocca `pipeline-triage` con un singolo if all'inizio del turn. Più affidabile di "ricordare lo stato".
 4. **Bridge daemon hanno costo non zero**: anche con team operativo killato, `pacing-bridge` + `sentinel-bridge` mandano tick ogni 15/10 min al Capitano vivo, che fa ~1 turn ognuno → ~6-9 % primary/h sprecato. In modalità HALT vanno spenti o silenziati. Da considerare per il fix.
 5. **Welcome flag rispetta l'idempotenza**: i flag `*-welcomed.flag` già esistenti hanno evitato spam Telegram al respawn dei 4 agenti — pattern già funzionante.
-6. **`/app/agents/` è image-layer, non bind mount**: edit ai sorgenti `<agent>.md` non arrivano runtime senza respawn (`start-agent.sh` li copia in `/jht_home/agents/<agente>/AGENTS.md`). Per hot-patch va modificato direttamente l'AGENTS.md runtime + respawn dell'agente per applicare. Da documentare in `docs/internal/INFRA.md` se non già presente.
+6. **`/app/agents/` è image-layer, non bind mount**: edit ai sorgenti `<agent>.md` non arrivano runtime senza respawn (`start-agent.sh` li copia in `/jht_home/agents/<agente>/AGENTS.md`). Per hot-patch va modificato direttamente l'AGENTS.md runtime + respawn dell'agente per applicare. Da documentare in `docs/internal/ops/INFRA.md` se non già presente.
 
 ## Riferimenti
 
 - `BACKLOG.md` — entry `[PACING-WEEKLY-EXHAUSTION]` (P0).
 - `docs/internal/2026-05-20-team-idle-gaps-investigation.md` — analisi gap pre-incident.
-- `docs/internal/context-watchdog-spec.md` — PoC restart agenti (pattern usato per FASE 1 del Dottore).
+- `docs/internal/architecture/context-watchdog-spec.md` — PoC restart agenti (pattern usato per FASE 1 del Dottore).

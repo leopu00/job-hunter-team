@@ -153,18 +153,18 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/MAINTAINERS.md](./internal/MAINTAINERS.md) | 🔒 Riferimento maintainer (Supabase, Vercel, OAuth, secret) | — | 2026-04-27 | ✅ |
-| [docs/internal/INFRA.md](./internal/INFRA.md) | Diagramma deployment (container + storage + sync opzionale) | — | 2026-04-27 | ✅ |
-| [docs/internal/release.md](./internal/release.md) | Procedura cut-release (tag vX.Y.Z + GH workflow) | — | 2026-04-27 | ✅ |
-| [docs/internal/2026-05-01-bridge-and-token-monitoring.md](./internal/2026-05-01-bridge-and-token-monitoring.md) | Analisi bridge V6 + token-meter, roadmap V7 | — | 2026-05-02 | ✅ |
+| [docs/internal/ops/MAINTAINERS.md](./internal/ops/MAINTAINERS.md) | 🔒 Riferimento maintainer (Supabase, Vercel, OAuth, secret) | — | 2026-04-27 | ✅ |
+| [docs/internal/ops/INFRA.md](./internal/ops/INFRA.md) | Diagramma deployment (container + storage + sync opzionale) | — | 2026-04-27 | ✅ |
+| [docs/internal/ops/release.md](./internal/ops/release.md) | Procedura cut-release (tag vX.Y.Z + GH workflow) | — | 2026-04-27 | ✅ |
+| [docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md](./internal/architecture/2026-05-01-bridge-and-token-monitoring.md) | Analisi bridge V6 + token-meter, roadmap V7 | — | 2026-05-02 | ✅ |
 | [docs/internal/2026-05-01-team-session-report.md](./internal/2026-05-01-team-session-report.md) | Report sessione team 30 apr/1 mag UTC | — | 2026-05-02 | ✅ |
-| [docs/internal/2026-05-03-rate-kimi-weights.md](./internal/2026-05-03-rate-kimi-weights.md) | Calibrazione empirica pesi rate Kimi K2 | — | 2026-05-03 | ✅ |
+| [docs/internal/experiments/2026-05-03-rate-kimi-weights.md](./internal/experiments/2026-05-03-rate-kimi-weights.md) | Calibrazione empirica pesi rate Kimi K2 | — | 2026-05-03 | ✅ |
 | [docs/internal/2026-05-04-vps-deployment-design.md](./internal/2026-05-04-vps-deployment-design.md) | Design deploy VPS (3 path: SSH manuale / web pairing / launcher) | — | 2026-05-04 | ✅ |
 | [docs/internal/TODO-bridge-v7.md](./internal/TODO-bridge-v7.md) | 📌 Punch list bridge V7 + token monitor (entry point) | — | 2026-05-02 | ✅ |
 | [docs/internal/2026-05-06-host-container-split.md](./internal/2026-05-06-host-container-split.md) | ⚙️ Split host/container — CLI wrapper + dev compose, design e razionale | — | 2026-05-06 | ✅ |
 | [docs/internal/2026-05-06-launch-infra-costs.md](./internal/2026-05-06-launch-infra-costs.md) | 💰 Stima costi infra per public launch (Vercel/Supabase/domain) | — | 2026-05-06 | ✅ |
-| [docs/internal/2026-05-06-prompt-decomposition-skill-vs-manual.md](./internal/2026-05-06-prompt-decomposition-skill-vs-manual.md) | 🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math | — | 2026-05-09 | ✅ |
-| [docs/internal/2026-05-06-agent-prompts-i18n.md](./internal/2026-05-06-agent-prompts-i18n.md) | _(da compilare nel JSON)_ | — | 2026-05-06 | ✅ |
+| [docs/internal/experiments/2026-05-06-prompt-decomposition-skill-vs-manual.md](./internal/experiments/2026-05-06-prompt-decomposition-skill-vs-manual.md) | 🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math | — | 2026-05-09 | ✅ |
+| [docs/internal/experiments/2026-05-06-agent-prompts-i18n.md](./internal/experiments/2026-05-06-agent-prompts-i18n.md) | _(da compilare nel JSON)_ | — | 2026-05-06 | ✅ |
 | [docs/internal/2026-05-06-vps-providers-research.md](./internal/2026-05-06-vps-providers-research.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 | [docs/internal/2026-05-09-experimentation-overview-15d.md](./internal/2026-05-09-experimentation-overview-15d.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 

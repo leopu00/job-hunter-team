@@ -88,7 +88,7 @@ The script:
 3. Downloads `docker-compose.yml` to `~/.jht/runtime/` (Windows: `$env:USERPROFILE\.jht\runtime\`)
 4. Downloads the `jht` wrapper (bash on \*nix, PowerShell `jht-wrapper.ps1` on Windows) to `~/.local/bin/jht` (Windows: `$env:USERPROFILE\.local\bin\jht.ps1` + PATH registration)
 
-The wrapper is a thin host-side dispatcher (~230 lines bash / ~230 lines PowerShell): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/vps.md`](../internal/vps.md) for the design rationale.
+The wrapper is a thin host-side dispatcher (~230 lines bash / ~230 lines PowerShell): lifecycle commands (`up`/`down`/`restart`/`logs`/`status`) call `docker compose` and `docker logs` on the host; everything else is delegated to the CLI Node running inside the long-running `jht` container via `docker exec`. **No Node, Python, or tmux on the host. No Docker socket exposed inside the container.** See [`docs/internal/ops/vps.md`](../internal/ops/vps.md) for the design rationale.
 
 After install:
 
@@ -251,4 +251,4 @@ Full CLI reference: [`docs/cli-install.md`](cli-install.md).
 - 📊 [`docs/MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel test data
 - 🗺️ [`docs/ROADMAP.md`](../about/ROADMAP.md) — what's coming next
 - 🛠️ [`docs/cli-install.md`](cli-install.md) — full CLI reference
-- 🏗️ [`docs/INFRA.md`](../internal/INFRA.md) — infrastructure diagram
+- 🏗️ [`docs/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram

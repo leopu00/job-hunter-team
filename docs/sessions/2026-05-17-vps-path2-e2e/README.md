@@ -252,9 +252,9 @@ In questa sessione:
 
 Doc storici aggiornati con riferimento a questa sessione:
 
-- `docs/internal/2026-05-01-bridge-and-token-monitoring.md` — sezione
+- `docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md` — sezione
   "Update 2026-05-17" che conferma G-spot 90-95% su 2 finestre reali
-- `docs/internal/2026-05-03-rate-kimi-weights.md` — sezione che conferma pesi
+- `docs/internal/experiments/2026-05-03-rate-kimi-weights.md` — sezione che conferma pesi
   calibrati accurati al ±5 punti sul target finestra
 
 ## 💸 Costo del percorso (cose che vanno dette)
