@@ -480,11 +480,57 @@ def compute_tick(ast, tba, rb, now: datetime,
         # proj < 70% = "stiamo sprecando >20% del budget alla chiusura".
         STALL_KT_THRESHOLD = 5.0
         STALL_PROJ_THRESHOLD = 70.0
+        # Weekly hard-floor: sotto questa % di weekly residuo, a coda vuota la
+        # mossa è SEMPRE coast (mai spawn), a prescindere dal target di finestra.
+        WEEKLY_COAST_HARD_PCT = 8.0
         if (
             team_kt < STALL_KT_THRESHOLD
             and isinstance(proj, (int, float))
             and proj < STALL_PROJ_THRESHOLD
         ):
+            # Fix #4 (STALLED weekly-aware, postmortem runaway-scaling 2026-06-07
+            # Buco #1): il branch STALLED faceva return PRIMA di calcolare il
+            # target weekly-aware → tick weekly-blind che diceva "spawna SCOUT"
+            # anche con weekly quasi esaurito. Ora calcoliamo qui il budget
+            # weekly residuo e decidiamo COAST vs riaccensione.
+            h_to_reset_stall = hours_to_reset(
+                sample.get("reset_at"), now, sample.get("reset_at_unix")
+            )
+            weekly_used = sample.get("weekly_usage")
+            weekly_reset_unix = sample.get("weekly_reset_at_unix")
+            ti = _compute_dynamic_target(
+                wht, pcap, now, h_to_reset_stall,
+                weekly_used_pct=weekly_used if isinstance(weekly_used, (int, float)) else None,
+                weekly_reset_at_unix=weekly_reset_unix if isinstance(weekly_reset_unix, (int, float)) else None,
+            )
+            weekly_remaining_pct = ti.get("weekly_remaining_pct")
+            weekly_active_hours = ti.get("weekly_active_hours")
+            window_target_pct = ti.get("current_window_target_pct")
+            sustainable_burn = (
+                weekly_remaining_pct / weekly_active_hours
+                if isinstance(weekly_remaining_pct, (int, float))
+                and isinstance(weekly_active_hours, (int, float))
+                and weekly_active_hours > 0
+                else None
+            )
+            # COAST quando il budget weekly è il vincolo binding: o il target
+            # weekly-aware della finestra è già raggiunto dall'usage corrente
+            # (budget weekly di QUESTA finestra già speso — solo se il target è
+            # davvero weekly-aware, non il fallback band-center), oppure il
+            # weekly residuo è sotto il floor duro. In COAST una coda vuota NON
+            # è undershoot da riempire con spawn: è coast (overspawn 2026-06-07).
+            weekly_coast = bool(
+                (
+                    isinstance(window_target_pct, (int, float))
+                    and isinstance(usage_now, (int, float))
+                    and ti.get("target_source") not in (None, "band_center")
+                    and usage_now >= window_target_pct
+                )
+                or (
+                    isinstance(weekly_remaining_pct, (int, float))
+                    and weekly_remaining_pct <= WEEKLY_COAST_HARD_PCT
+                )
+            )
             return {
                 "ok": False,
                 "now": now,
@@ -493,11 +539,19 @@ def compute_tick(ast, tba, rb, now: datetime,
                 "team_kt": team_kt,
                 "usage_now": usage_now,
                 "proj": proj,
-                "h_to_reset": hours_to_reset(
-                    sample.get("reset_at"), now, sample.get("reset_at_unix")
+                "h_to_reset": h_to_reset_stall,
+                "weekly_remaining_pct": weekly_remaining_pct,
+                "weekly_active_hours": weekly_active_hours,
+                "window_target_pct": window_target_pct,
+                "sustainable_burn_pct_h": sustainable_burn,
+                "weekly_coast": weekly_coast,
+                "hint": (
+                    "PIPELINE STALLED + WEEKLY-BIND → COAST: weekly quasi "
+                    "esaurito, coda vuota = coast, non spawnare."
+                    if weekly_coast else
+                    "PIPELINE STALLED — pochi token consumati e proj sotto "
+                    "target, weekly ha margine. Riaccendere pipeline da monte."
                 ),
-                "hint": "PIPELINE STALLED — pochi token consumati e proj "
-                        "sotto target. Riaccendere pipeline da monte.",
             }
         return {
             "ok": False,
@@ -659,16 +713,41 @@ def format_message(d: dict) -> str:
             proj_str = f"{proj:.0f}%" if isinstance(proj, (int, float)) else str(proj)
             h_to_reset = d.get("h_to_reset")
             h_str = f"{h_to_reset:.2f}h" if isinstance(h_to_reset, (int, float)) else "?"
+            wrem = d.get("weekly_remaining_pct")
+            wrem_str = f"{wrem:.0f}%" if isinstance(wrem, (int, float)) else "?"
+            wah = d.get("weekly_active_hours")
+            wah_str = f"{wah:.0f}h" if isinstance(wah, (int, float)) else "?"
+            sb = d.get("sustainable_burn_pct_h")
+            sb_str = f"{sb:.2f}%/h" if isinstance(sb, (int, float)) else "?"
+            weekly_line = (
+                f"weekly_remaining={wrem_str} weekly_active_hours={wah_str} "
+                f"sustainable_burn={sb_str}"
+            )
+            # Fix #4: a coda vuota con weekly binding la mossa è COAST, non spawn
+            # (overspawn 2026-06-07). Il verbo del nudge cambia in base al weekly.
+            if d.get("weekly_coast"):
+                return (
+                    f"[BRIDGE PACING] PIPELINE STALLED + WEEKLY-BIND → COAST — "
+                    f"usage={usage_now}% proj={proj_str} reset_in={h_str} "
+                    f"team_kt={d.get('team_kt', 0):.1f} {weekly_line}. Coda vuota MA "
+                    f"weekly quasi esaurito: a coda vuota la mossa è COAST, non spawn. "
+                    f"NON spawnare worker per 'riempire la coda' — è esattamente "
+                    f"l'overspawn del 2026-06-07. Lascia scorrere la coda residua col "
+                    f"team attuale, tieni il throttle; se un worker è zombie al dialog "
+                    f"rate-limit fai kill+respawn (C-12), non spawn. Riapri la pipeline "
+                    f"piena solo dopo il reset weekly o quando weekly_remaining risale."
+                )
             return (
                 f"[BRIDGE PACING] PIPELINE STALLED — usage={usage_now}% "
                 f"proj={proj_str} reset_in={h_str} team_kt={d.get('team_kt', 0):.1f} "
-                f"(praticamente zero consumo nei 15m). Applica regola "
-                f"PIPELINE VUOTA + UNDERSHOOT ORA: (1) db_query.py next-for-scrittore "
-                f"per coda residua e promozioni 40-49; (2) spawna SCOUT se range "
-                f"vuoto; (3) ANALISTA per companies non analizzate; (4) SCORER per "
-                f"unscored; (5) SCRITTORE quando coda scored>=50 si riempie. "
-                f"NON aspettare prossimo tick valido — bridge non puo' calcolare "
-                f"ratio senza consumo, e tu non puoi aspettare tick senza pipeline."
+                f"{weekly_line} (praticamente zero consumo nei 15m, weekly ha margine). "
+                f"Applica regola PIPELINE VUOTA + UNDERSHOOT ORA: (1) db_query.py "
+                f"next-for-scrittore per coda residua e promozioni 40-49; (2) spawna "
+                f"SCOUT se range vuoto; (3) ANALISTA per companies non analizzate; "
+                f"(4) SCORER per unscored; (5) SCRITTORE quando coda scored>=50 si "
+                f"riempie. NON aspettare prossimo tick valido — bridge non puo' "
+                f"calcolare ratio senza consumo, e tu non puoi aspettare tick senza "
+                f"pipeline."
             )
         extra = ""
         if "delta_usage" in d:
@@ -715,6 +794,27 @@ def format_message(d: dict) -> str:
         )
     else:
         parts.append("vel_target=N/D")
+
+    # Vincolo WEEKLY parallelo alla finestra 5h (fix #4 — contratto C-09/S-06):
+    # esponi weekly_remaining_pct e weekly_active_hours nel tick così Capitano e
+    # Sentinella possono calcolare il burn sostenibile (%/h ATTIVO) e proj_weekly
+    # senza inventarsi i numeri. Senza questo il primary 5h sembra ok mentre il
+    # weekly brucia silenziosamente (scenario HALT-WEEKLY 2026-05-21 / 2026-06-07).
+    wrem = d.get("weekly_remaining_pct")
+    if isinstance(wrem, (int, float)):
+        wah = d.get("weekly_active_hours")
+        wah_str = f"{wah:.0f}h" if isinstance(wah, (int, float)) else "?"
+        sb = (
+            wrem / wah
+            if isinstance(wah, (int, float)) and wah > 0
+            else None
+        )
+        sb_str = f"{sb:.2f}%/h attivo" if isinstance(sb, (int, float)) else "?"
+        parts.append(
+            f"weekly_remaining={wrem:.0f}% weekly_active_hours={wah_str} "
+            f"(burn sostenibile {sb_str}) — vincolo WEEKLY parallelo, "
+            f"binda anche in Phase 1 (S-06/C-09)"
+        )
 
     parts.append(
         f"ratio={d['ratio']:.1f}kT/% "
