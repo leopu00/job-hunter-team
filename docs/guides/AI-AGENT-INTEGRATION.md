@@ -1,4 +1,4 @@
-# AI Agent Integration
+# 🤖 AI Agent Integration
 
 ## Your AI assistant can run JHT for you
 

@@ -1,4 +1,4 @@
-# VPS setup — JHT on Hetzner Cloud
+# ☁️ VPS setup — JHT on Hetzner Cloud
 
 Step-by-step guide to deploy Job Hunter Team on a Hetzner Cloud VPS
 (Ubuntu 24.04 LTS). Validated end-to-end on **2026-05-06** on the

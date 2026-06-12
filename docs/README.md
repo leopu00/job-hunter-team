@@ -11,9 +11,10 @@ Doc pubblica per chi valuta JHT, in due cluster (vedi [indice](about/README.md))
 - 🔬 **Prove & economia:** `PROVIDERS` · `MONITORING` · `RESULTS`
 
 ## 📘 [`guides/`](guides/) — guide operative
-Setup, uso e onboarding (utente e beta tester).
-`quickstart` · `cli-install` · `CLI-REFERENCE` · `VPS-SETUP(-WIZARD)` ·
-`BETA` · `BETA-TESTER-ONBOARDING` · `AI-AGENT-INTEGRATION` · `feedback-ticketing`
+Setup, uso e operazioni (vedi [indice](guides/README.md)). Tutte in inglese, naming `UPPERCASE-KEBAB`.
+- 🚀 **Start:** `QUICKSTART` · `CLI-INSTALL` · `CLI-REFERENCE` · `AI-AGENT-INTEGRATION`
+- ☁️ **VPS:** `VPS-SETUP-WIZARD` · `VPS-SETUP`
+- 🧪 **Beta:** `BETA` · `FEEDBACK-TICKETING`
 
 ## 🏛️ [`adr/`](adr/) — decisioni architetturali
 Le scelte vincolanti e il loro perché (Architecture Decision Records).

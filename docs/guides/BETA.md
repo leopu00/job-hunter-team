@@ -1,4 +1,4 @@
-# Beta Tester Program
+# 🧪 Beta Tester Program
 
 JHT is in active beta. We're looking for a small group of real job-seekers who are willing to run the team against their actual job search and tell us what breaks.
 

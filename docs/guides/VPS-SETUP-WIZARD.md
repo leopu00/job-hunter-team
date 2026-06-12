@@ -1,4 +1,4 @@
-# VPS setup via desktop wizard — Path 2 (non-tech)
+# 🖥️ VPS setup via desktop wizard — Path 2 (non-tech)
 
 User-facing guide to install Job Hunter Team on a Hetzner VPS using
 **the Electron desktop app** (no terminal, no manual SSH). Validated end-to-end

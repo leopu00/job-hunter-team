@@ -1,4 +1,4 @@
-# Quickstart
+# 🚀 Quickstart
 
 Get the team running in **about 10 minutes**, depending on the path you pick.
 

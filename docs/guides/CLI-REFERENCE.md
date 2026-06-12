@@ -1,4 +1,4 @@
-# CLI Reference — `jht`
+# ⌨️ CLI Reference — `jht`
 
 Systematic reference of every `jht` command. For onboarding flows see
 [`QUICKSTART.md`](QUICKSTART.md) (Local) and [`VPS-SETUP.md`](VPS-SETUP.md)
