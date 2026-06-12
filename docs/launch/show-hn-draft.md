@@ -1,4 +1,4 @@
-# Show HN — draft
+# 📰 Show HN — draft
 
 Working draft for the public launch post on Hacker News. Tone is dev-to-dev:
 no marketing language, no "revolutionary AI", no sales speak. Lead with what
