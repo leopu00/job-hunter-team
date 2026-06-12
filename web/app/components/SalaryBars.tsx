@@ -22,14 +22,14 @@ type Props = {
   accent?: string;
 };
 
-
-
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
   const idx = (sorted.length - 1) * p;
   const lo = Math.floor(idx);
   const hi = Math.ceil(idx);
-  return lo === hi ? sorted[lo] : sorted[lo] + (idx - lo) * (sorted[hi] - sorted[lo]);
+  return lo === hi
+    ? sorted[lo]
+    : sorted[lo] + (idx - lo) * (sorted[hi] - sorted[lo]);
 }
 
 export default function SalaryBars({
@@ -68,8 +68,7 @@ export default function SalaryBars({
   const avg = n > 0 ? sorted.reduce((s, v) => s + v, 0) / n : 0;
   const med = percentile(sorted, 0.5);
   const fmt = (eur: number) => formatMoneyCompact(convert(eur));
-  const bandLabel = (lo: number) =>
-    `${symbol}${fmt(lo)}–${fmt(lo + bandStep)}`;
+  const bandLabel = (lo: number) => `${symbol}${fmt(lo)}–${fmt(lo + bandStep)}`;
 
   return (
     <div className="h-full flex flex-col bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
@@ -96,7 +95,9 @@ export default function SalaryBars({
             </span>
             <span>
               <span className="text-[var(--color-dim)]">n</span>{" "}
-              <span className="font-semibold text-[var(--color-bright)]">{n}</span>
+              <span className="font-semibold text-[var(--color-bright)]">
+                {n}
+              </span>
             </span>
           </div>
         )}

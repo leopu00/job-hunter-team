@@ -210,8 +210,7 @@ export const es: Record<string, string> = {
   faq_title: "Preguntas frecuentes",
   faq_subtitle: "Todo lo que necesitas saber sobre Job Hunter Team.",
   faq_no_answer: "¿No encuentras la respuesta?",
-  faq_no_answer_desc:
-    "Consulta la guía completa o la documentación técnica.",
+  faq_no_answer_desc: "Consulta la guía completa o la documentación técnica.",
   faq_guide_btn: "Guía del usuario",
   faq_docs_btn: "Documentación",
 
@@ -264,7 +263,8 @@ export const es: Record<string, string> = {
   about_how_0: "Cada agente se ejecuta como un worker local aislado",
   about_how_1:
     "El runtime orquesta los pasos y mensajes estructurados entre los módulos",
-  about_how_2: "Pipeline coordinado: Scout → Analista → Scorer → Escritor → Crítico",
+  about_how_2:
+    "Pipeline coordinado: Scout → Analista → Scorer → Escritor → Crítico",
   about_how_3: "Sistema de tareas con estado (pendiente → en curso → hecho)",
   about_how_4: "El Centinela monitorea costes y salud en tiempo real",
   about_vision_label: "visión",
@@ -296,7 +296,8 @@ export const es: Record<string, string> = {
   ob_s3_title: "Elige las competencias",
   ob_s3_desc:
     "Selecciona las tecnologías y competencias que conoces. El Scorer las usará para calcular la coincidencia con cada oferta.",
-  ob_s3_hint: "Haz clic para seleccionar, haz clic de nuevo para deseleccionar.",
+  ob_s3_hint:
+    "Haz clic para seleccionar, haz clic de nuevo para deseleccionar.",
   ob_s4_title: "Conecta un proveedor de IA",
   ob_s4_desc:
     "Los agentes se ejecutan en una de las tres CLI compatibles (Claude Code, Codex, Kimi). Necesitarás iniciar sesión con la suscripción que ya tienes activa con el proveedor; JHT no pide ni almacena claves API.",

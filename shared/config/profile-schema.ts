@@ -53,15 +53,44 @@ const DistributionItem = z.object({
   value: z.number().nonnegative(),
 });
 
-const blockBase = { key: z.string().min(1), title: z.string().min(1), ord: z.number().int().optional(), source: z.enum(["assistant", "web", "import"]).optional() };
+const blockBase = {
+  key: z.string().min(1),
+  title: z.string().min(1),
+  ord: z.number().int().optional(),
+  source: z.enum(["assistant", "web", "import"]).optional(),
+};
 
 export const ProfileBlockSchema = z.discriminatedUnion("kind", [
-  z.object({ ...blockBase, kind: z.literal("key_value"), content: z.array(KeyValueItem) }),
-  z.object({ ...blockBase, kind: z.literal("tag_list"), content: z.array(z.string().min(1)) }),
-  z.object({ ...blockBase, kind: z.literal("timeline"), content: z.array(TimelineItem) }),
-  z.object({ ...blockBase, kind: z.literal("narrative"), content: z.string().max(MAX_TEXT) }),
-  z.object({ ...blockBase, kind: z.literal("key_points"), content: z.array(KeyPointItem) }),
-  z.object({ ...blockBase, kind: z.literal("distribution"), content: z.array(DistributionItem) }),
+  z.object({
+    ...blockBase,
+    kind: z.literal("key_value"),
+    content: z.array(KeyValueItem),
+  }),
+  z.object({
+    ...blockBase,
+    kind: z.literal("tag_list"),
+    content: z.array(z.string().min(1)),
+  }),
+  z.object({
+    ...blockBase,
+    kind: z.literal("timeline"),
+    content: z.array(TimelineItem),
+  }),
+  z.object({
+    ...blockBase,
+    kind: z.literal("narrative"),
+    content: z.string().max(MAX_TEXT),
+  }),
+  z.object({
+    ...blockBase,
+    kind: z.literal("key_points"),
+    content: z.array(KeyPointItem),
+  }),
+  z.object({
+    ...blockBase,
+    kind: z.literal("distribution"),
+    content: z.array(DistributionItem),
+  }),
 ]);
 export type ProfileBlock = z.infer<typeof ProfileBlockSchema>;
 
@@ -149,7 +178,11 @@ export type CandidateProfileCanonical = z.infer<typeof CandidateProfileSchema>;
  * sempre. Non sono obbligatori (a parte il core L1), ma il web li mostra come sezioni
  * standard. Tutto ciò che esce da qui è un blocco L3 custom.
  */
-export const RECOMMENDED_BLOCKS: ReadonlyArray<{ key: string; kind: BlockKind; title: string }> = [
+export const RECOMMENDED_BLOCKS: ReadonlyArray<{
+  key: string;
+  kind: BlockKind;
+  title: string;
+}> = [
   { key: "about", kind: "narrative", title: "Chi sono" },
   { key: "goals", kind: "narrative", title: "Obiettivi" },
   { key: "preferences", kind: "key_points", title: "Preferenze di lavoro" },
@@ -159,10 +192,13 @@ export const RECOMMENDED_BLOCKS: ReadonlyArray<{ key: string; kind: BlockKind; t
 /** Valida e ritorna esito strutturato (per il web / API). */
 export function validateCandidateProfile(data: unknown) {
   const r = CandidateProfileSchema.safeParse(data);
-  if (r.success) return { ok: true as const, value: r.data, errors: [] as string[] };
+  if (r.success)
+    return { ok: true as const, value: r.data, errors: [] as string[] };
   return {
     ok: false as const,
     value: null,
-    errors: r.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`),
+    errors: r.error.issues.map(
+      (i) => `${i.path.join(".") || "(root)"}: ${i.message}`,
+    ),
   };
 }

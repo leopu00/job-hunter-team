@@ -311,10 +311,7 @@ interface SyncStatus {
   in_sync: boolean;
 }
 
-function formatRelativeTime(
-  iso: string,
-  tr: (k: string) => string,
-): string {
+function formatRelativeTime(iso: string, tr: (k: string) => string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   if (diffMs < 0) return tr("in_future");
   const sec = Math.floor(diffMs / 1000);
@@ -324,12 +321,18 @@ function formatRelativeTime(
       : tr("sec_ago").replace("{n}", String(sec));
   const min = Math.floor(sec / 60);
   if (min < 60)
-    return min === 1 ? tr("min_ago_one") : tr("min_ago").replace("{n}", String(min));
+    return min === 1
+      ? tr("min_ago_one")
+      : tr("min_ago").replace("{n}", String(min));
   const hr = Math.floor(min / 60);
   if (hr < 24)
-    return hr === 1 ? tr("hour_ago_one") : tr("hour_ago").replace("{n}", String(hr));
+    return hr === 1
+      ? tr("hour_ago_one")
+      : tr("hour_ago").replace("{n}", String(hr));
   const days = Math.floor(hr / 24);
-  return days === 1 ? tr("day_ago_one") : tr("day_ago").replace("{n}", String(days));
+  return days === 1
+    ? tr("day_ago_one")
+    : tr("day_ago").replace("{n}", String(days));
 }
 
 export default function CloudSyncClient() {
@@ -434,7 +437,9 @@ export default function CloudSyncClient() {
       </header>
 
       {!health && (
-        <div className="text-[11px] text-[var(--color-dim)]">{tr("loading")}</div>
+        <div className="text-[11px] text-[var(--color-dim)]">
+          {tr("loading")}
+        </div>
       )}
 
       {health && !health.local && (

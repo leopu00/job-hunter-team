@@ -12,7 +12,9 @@ function maskValue(value: string): string {
   const visible = 3;
   return value
     .split("")
-    .map((ch, i) => (i >= value.length - visible || ch === " " || ch === "+" ? ch : "•"))
+    .map((ch, i) =>
+      i >= value.length - visible || ch === " " || ch === "+" ? ch : "•",
+    )
     .join("");
 }
 
@@ -66,7 +68,11 @@ export default function RevealableContactRow({
       <a
         href={`${hrefPrefix}${value}`}
         className={`${rowClass} no-underline`}
-        target={hrefPrefix.startsWith("tel:") || hrefPrefix.startsWith("mailto:") ? undefined : "_blank"}
+        target={
+          hrefPrefix.startsWith("tel:") || hrefPrefix.startsWith("mailto:")
+            ? undefined
+            : "_blank"
+        }
         rel="noopener noreferrer"
       >
         {iconSvg}

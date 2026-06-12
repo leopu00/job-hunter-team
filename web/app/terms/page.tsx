@@ -152,7 +152,7 @@ const T = {
       "En utilisant Job Hunter Team (JHT), vous acceptez les conditions générales suivantes.",
     s1_title: "Licence",
     s1_body:
-      'JHT est distribué sous licence MIT. Vous pouvez l\'utiliser, le modifier et le redistribuer librement, à condition d\'inclure la licence originale. Le logiciel est fourni « tel quel », sans garantie d\'aucune sorte.',
+      "JHT est distribué sous licence MIT. Vous pouvez l'utiliser, le modifier et le redistribuer librement, à condition d'inclure la licence originale. Le logiciel est fourni « tel quel », sans garantie d'aucune sorte.",
     s2_title: "Utilisation autorisée",
     s2_body:
       "JHT est conçu pour aider à la recherche d'emploi grâce à des agents IA. L'utilisation du logiciel pour des activités illégales, du spam, de la fraude ou pour violer les conditions d'utilisation de plateformes tierces (LinkedIn, Indeed, etc.) est expressément interdite.",
