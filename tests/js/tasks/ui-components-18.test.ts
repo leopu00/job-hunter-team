@@ -95,8 +95,9 @@ describe("Cropper", () => {
   });
 
   it("UI: Annulla + Ritaglia ✓ + cursor crosshair/grabbing + handles 4 angoli", () => {
-    expect(src).toContain("Annulla");
-    expect(src).toContain("Ritaglia ✓");
+    expect(src).toContain("Annulla"); // dict i18n: cancel.it
+    expect(src).toContain("Ritaglia"); // dict i18n: crop.it
+    expect(src).toContain("{tr('crop')} ✓");
     expect(src).toContain("dragging ? 'grabbing' : 'crosshair'");
     expect(src).toContain("crop.x+crop.w,crop.y+crop.h");
   });

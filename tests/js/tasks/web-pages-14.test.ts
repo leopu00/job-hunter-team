@@ -107,7 +107,7 @@ describe("Badge", () => {
   });
   it("VARIANT + DOT_COLOR + SIZE_CLS sm/md/lg + removable aria-label", () => {
     expect(src).toContain("VARIANT"); expect(src).toContain("DOT_COLOR"); expect(src).toContain("SIZE_CLS");
-    expect(src).toContain("removable"); expect(src).toContain('aria-label="Rimuovi"');
+    expect(src).toContain("removable"); expect(src).toContain("aria-label={tr('remove')}"); expect(src).toContain("Rimuovi"); // dict i18n: remove.it
   });
   it("STATUS_MAP mappa stati → varianti + BadgeGroupProps gap/wrap", () => {
     expect(src).toContain("STATUS_MAP");
