@@ -233,6 +233,13 @@ export default function ActivityCharts({
   const toMs = Date.parse(`${activity.to}T23:59:59Z`);
   const span = Math.max(1, toMs - fromMs);
   const laneH = 30;
+  // Larghezza "zoom" del piano scatter: cresce coi giorni → scrollbar
+  // orizzontale per esplorare la timeline nel dettaglio.
+  const scatterW = Math.max(720, days * 56);
+  const axisStep = Math.max(
+    1,
+    Math.ceil(days / Math.max(1, Math.floor(scatterW / 64))),
+  );
 
   /* ── Tooltip custom (hover su barre/celle) ─────────────────────────
      Gli handler chiamano il layer isolato via ref: NON toccano lo stato di
@@ -643,71 +650,75 @@ export default function ActivityCharts({
                 </div>
               ))}
             </div>
-            {/* Piano scatter */}
-            <div className="flex-1">
-              <svg
-                width="100%"
-                height={roles.length * laneH}
-                viewBox={`0 0 1000 ${roles.length * laneH}`}
-                preserveAspectRatio="none"
-              >
-                {/* baseline corsie */}
-                {roles.map((r, i) => (
-                  <line
-                    key={r}
-                    x1={0}
-                    x2={1000}
-                    y1={i * laneH + laneH / 2}
-                    y2={i * laneH + laneH / 2}
-                    stroke="var(--color-border)"
-                    strokeWidth={1}
-                    opacity={0.5}
-                  />
-                ))}
-                {/* eventi */}
-                {activity.timeline.map((ev, idx) => {
-                  const li = roles.indexOf(ev.role);
-                  if (li < 0) return null;
-                  const t = Date.parse(ev.ts);
-                  const frac = Number.isNaN(t)
-                    ? 0
-                    : Math.max(0, Math.min(1, (t - fromMs) / span));
-                  const meta = ROLE_META[ev.role];
-                  const label = ev.actor === ev.role ? meta.label : ev.actor;
-                  return (
-                    <rect
-                      key={`${idx}-${ev.ts}`}
-                      x={frac * 1000}
-                      y={li * laneH + 6}
-                      width={2}
-                      height={laneH - 12}
-                      rx={1}
-                      fill={meta.color}
-                      opacity={0.55}
-                      className="cursor-default"
-                      onMouseEnter={(e) =>
-                        showTip(e, `${meta.emoji} ${label} · ${dmhm(ev.ts)}`, [
-                          {
-                            color: meta.color,
-                            label: meta.action,
-                            value: ev.pid ? `#${ev.pid}` : "",
-                          },
-                        ])
-                      }
-                      onMouseMove={moveTip}
-                      onMouseLeave={hideTip}
+            {/* Piano scatter — largo e scrollabile orizzontalmente */}
+            <div className="flex-1 overflow-x-auto">
+              <div style={{ width: scatterW }}>
+                <svg
+                  width={scatterW}
+                  height={roles.length * laneH}
+                  viewBox={`0 0 ${scatterW} ${roles.length * laneH}`}
+                >
+                  {/* baseline corsie */}
+                  {roles.map((r, i) => (
+                    <line
+                      key={r}
+                      x1={0}
+                      x2={scatterW}
+                      y1={i * laneH + laneH / 2}
+                      y2={i * laneH + laneH / 2}
+                      stroke="var(--color-border)"
+                      strokeWidth={1}
+                      opacity={0.5}
                     />
-                  );
-                })}
-              </svg>
-              {/* Asse x: da → a */}
-              <div className="flex justify-between mt-1.5">
-                <span className="text-[8px] text-[var(--color-dim)] tabular-nums">
-                  {dm(activity.from)}
-                </span>
-                <span className="text-[8px] text-[var(--color-dim)] tabular-nums">
-                  {dm(activity.to)}
-                </span>
+                  ))}
+                  {/* eventi */}
+                  {activity.timeline.map((ev, idx) => {
+                    const li = roles.indexOf(ev.role);
+                    if (li < 0) return null;
+                    const t = Date.parse(ev.ts);
+                    const frac = Number.isNaN(t)
+                      ? 0
+                      : Math.max(0, Math.min(1, (t - fromMs) / span));
+                    const meta = ROLE_META[ev.role];
+                    const label = ev.actor === ev.role ? meta.label : ev.actor;
+                    return (
+                      <rect
+                        key={`${idx}-${ev.ts}`}
+                        x={frac * scatterW}
+                        y={li * laneH + 6}
+                        width={2}
+                        height={laneH - 12}
+                        rx={1}
+                        fill={meta.color}
+                        opacity={0.55}
+                        className="cursor-default"
+                        onMouseEnter={(e) =>
+                          showTip(e, `${meta.emoji} ${label} · ${dmhm(ev.ts)}`, [
+                            {
+                              color: meta.color,
+                              label: meta.action,
+                              value: ev.pid ? `#${ev.pid}` : "",
+                            },
+                          ])
+                        }
+                        onMouseMove={moveTip}
+                        onMouseLeave={hideTip}
+                      />
+                    );
+                  })}
+                </svg>
+                {/* Asse x: tick per giorno */}
+                <div className="flex mt-1.5" style={{ width: scatterW }}>
+                  {dates.map((date, i) => (
+                    <div
+                      key={date}
+                      className="flex-1 text-center overflow-visible whitespace-nowrap"
+                      style={{ fontSize: 8, color: "var(--color-dim)" }}
+                    >
+                      {i % axisStep === 0 ? dm(date) : ""}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
