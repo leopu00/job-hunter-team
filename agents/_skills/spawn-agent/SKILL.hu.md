@@ -98,6 +98,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 - ❌ Tobb agens inditasa szoros ciklusban 1-tick pacing nelkul — lasd a `pipeline-triage`-t a skalazasi szabalyokhoz (1 spawn Sentinel-tikkenent, ~5 perc kulonbseggel).
 - ❌ Crash utan vakon ujrainditani anelkul, hogy `db_query.py`-t olvasnad az utolso task allapotanak visszaallitasahoz — az uj agens elolrol kezdi es duplikalja a munkat.
 - ❌ Ennek a skillnek hasznalata egy mukodo agens "ujrainditasara", mert lassunk tunik. Lassu ≠ halott. Hosszu korok lathato token kimenettel nem spawn-eset — hanem `liveness-check`-eset (Dottore).
+- ❌ Helyettesítő spawnolása, mert a `jht-tmux-send` nem tudott kézbesíteni. **`exit 4` = a cél TUI turn közben van (`Working … esc to interrupt`) → az ügynök ÉL, csak elfoglalt.** Az üzenet NEM lett szinkron módon kézbesítve: próbáld újra a küldést később, soha ne spawnolj klónt. Csak az `exit 3` (a szöveg soha nem jelent meg ÉS a pane nem elfoglalt → csupasz shell / beragadt modal) lehetséges-halott jel, és még akkor is a verdikt a **Dottore**-é (`liveness-check`), nem egy reflex spawn. Egy elfoglalt ügynökre spawnolni pontosan a 2026-06-07-es overspawn bug (`docs/internal/2026-06-11-overspawn-rootcause.md`): a klón átveszi az irányítást, miközben az eredeti zombie-ként tovább égeti a budgetet.
 - ❌ Critico inditasa. A Scrittore onalloan inditja a sajat `CRITICO-S<N>`-jet — a Capitano soha nem nyul kozvetlenul a Criticohoz.
 
 ## Lasd meg
