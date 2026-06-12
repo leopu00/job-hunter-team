@@ -1,5 +1,6 @@
 import { getDb } from './db'
 import { aggregateRoleFamilies, type RoleFamilyCount } from './position-classifier'
+import { buildTeamActivity, normActor, type TeamActivity, type TeamActivityEvent } from './team-activity'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -930,6 +931,39 @@ export function replyPendingMessageLocal(ws: string, id: string, reply: string):
     WHERE id = ?
   `).run(reply, id)
   return result.changes > 0
+}
+
+// ── Team activity (per-agente nel tempo) ───────────────────────────
+// Stream di eventi di lavoro: ogni timestamp = un'azione di un agente.
+//   scout     → positions.found_at
+//   analista  → positions.last_checked
+//   scorer    → scores.scored_at
+//   scrittore → applications.written_at
+//   critico   → applications.critic_reviewed_at
+// Tutte colonne su tabelle sincronizzate su Supabase, così la vista è
+// identica in locale e in cloud. Bucketing + finestra li gestisce
+// buildTeamActivity (vedi lib/team-activity.ts).
+export function getTeamActivityLocal(ws: string, fromKey: string, toKey: string): TeamActivity {
+  const db = getDb(ws)
+  const events: TeamActivityEvent[] = []
+  // `actor` = id istanza dalla colonna *_by quando disponibile; l'Analista
+  // (last_checked) non lo porta → normActor ricade sul ruolo. Filtriamo per
+  // range su disco (substr(ts,1,10) ∈ [from,to]) per non caricare tutto lo
+  // storico; buildTeamActivity ignora comunque ciò che è fuori range.
+  // idCol = colonna con l'id della posizione (positions.id → 'id';
+  // scores/applications → 'position_id') per il link al dettaglio.
+  const collect = (col: string, actorExpr: string, idCol: string, table: string, role: TeamActivityEvent['role']) => {
+    const sql = `SELECT ${col} AS ts, ${actorExpr} AS actor, ${idCol} AS pid FROM ${table} `
+      + `WHERE ${col} IS NOT NULL AND substr(${col},1,10) BETWEEN ? AND ?`
+    const rows = db.prepare(sql).all(fromKey, toKey) as { ts: string | null; actor: string | null; pid: number | string | null }[]
+    for (const r of rows) if (r.ts) events.push({ role, actor: normActor(role, r.actor), ts: r.ts, pid: r.pid != null ? String(r.pid) : null })
+  }
+  collect('found_at', 'found_by', 'id', 'positions', 'scout')
+  collect('last_checked', 'NULL', 'id', 'positions', 'analista')
+  collect('scored_at', 'scored_by', 'position_id', 'scores', 'scorer')
+  collect('written_at', 'written_by', 'position_id', 'applications', 'scrittore')
+  collect('critic_reviewed_at', 'reviewed_by', 'position_id', 'applications', 'critico')
+  return buildTeamActivity(events, fromKey, toKey)
 }
 
 // ── Application stats ───────────────────────────────────────────────
