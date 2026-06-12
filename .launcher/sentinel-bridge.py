@@ -1100,9 +1100,17 @@ def main():
             # presto (l'under-utilizzo invece non sveglia — lo gestisce il Capitano).
             vel_team_s, vel_target_s = _read_pacing_pace()
             on_pace = _is_on_pace(vel_team_s, vel_target_s, proj, dyn_target)
-            _advance_tick_phase(state, on_pace)
+            # Fix #4 (runaway-scaling 2026-06-07): il vincolo weekly è binding
+            # anche quando il 5h è on-pace. Lo trattiamo come condizione NON
+            # calma → sveglia la Sentinella (ATTENZIONE WEEKLY in Phase 1) e
+            # accelera la cadenza, rispettando comunque il cooldown anti-spam.
+            # Senza questo, a weekly 92% on-pace la Sentinella non veniva MAI
+            # svegliata e il freno non scattava (status SOTTOUTILIZZO decorativo).
+            weekly_binding = bool(entry.get("weekly_binding"))
+            effective_on_pace = on_pace and not weekly_binding
+            _advance_tick_phase(state, effective_on_pace)
             now_ts = time.time()
-            should_notify = _should_notify_sentinella(on_pace, state, now_ts)
+            should_notify = _should_notify_sentinella(effective_on_pace, state, now_ts)
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""
@@ -1141,8 +1149,21 @@ def main():
                     ).astimezone().strftime("%d/%m %H:%M")
                 else:
                     wk_reset = entry.get("weekly_reset_at")
+                # Fix #4: propaga weekly_remaining_pct (calcolato in codice da
+                # compute_metrics) e, quando il weekly è binding, un marcatore
+                # ATTENZIONE-WEEKLY esplicito → la Sentinella (S-06) emette
+                # l'ordine autoritativo verso il Capitano (C-09) senza doverlo
+                # dedurre dal solo primary.
+                wk_remaining = entry.get("weekly_remaining_pct")
+                wk_remaining_field = (
+                    f" weekly_remaining={wk_remaining}%"
+                    if wk_remaining is not None
+                    else ""
+                )
+                weekly_binding_field = " ATTENZIONE-WEEKLY" if weekly_binding else ""
                 weekly_field = (
                     f" weekly={wk_usage}% weekly_reset={wk_reset}"
+                    f"{wk_remaining_field}{weekly_binding_field}"
                     if wk_usage is not None
                     else ""
                 )
