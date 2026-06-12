@@ -12,7 +12,7 @@ JHT exposes the `jht` command on the host. The host wrapper
 (`scripts/jht-wrapper.sh`, ~165 LOC) handles **lifecycle / TTY-bound**
 commands directly; everything else is forwarded to the Node CLI **inside
 the long-running `jht` container** via `docker exec`. The split is
-deliberate — see [`docs/internal/vps.md`](../internal/vps.md):
+deliberate — see [`docs/internal/ops/vps.md`](../internal/ops/vps.md):
 
 | Layer            | Runs on   | Why                                                                |
 |------------------|-----------|--------------------------------------------------------------------|
@@ -47,7 +47,7 @@ setup at the same time — finish one before starting the other. Once
 setup is done, post-hoc edits to **different** config keys from
 different surfaces are fine.
 
-**Hard invariant — one team per user**: see [`docs/internal/onboarding-flow.md`](../internal/onboarding-flow.md).
+**Hard invariant — one team per user**: see [`docs/internal/architecture/onboarding-flow.md`](../internal/architecture/onboarding-flow.md).
 You cannot run Local (CLI on this PC) **and** VPS (Desktop pointing at
 Hetzner) at the same time — it splits the source of truth and breaks
 cloud sync. Pick one location and stick to it for the session; switch
@@ -252,6 +252,6 @@ jht reset full
 
 - `jht <command> --help` — every command supports `--help`.
 - [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — runbook for AI agents driving setup.
-- [`docs/internal/vps.md`](../internal/vps.md) — design rationale for the host/container split.
+- [`docs/internal/ops/vps.md`](../internal/ops/vps.md) — design rationale for the host/container split.
 - [`scripts/jht-wrapper.sh`](../../scripts/jht-wrapper.sh) — source of truth for the host layer.
 - [`cli/src/program.js`](../../cli/src/program.js) — source of truth for the Node layer.

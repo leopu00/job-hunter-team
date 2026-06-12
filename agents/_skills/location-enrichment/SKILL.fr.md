@@ -277,5 +277,5 @@ python3 /app/shared/skills/db_update.py position <ID> --status checked \
 
 ## Références
 
-- `docs/internal/2026-05-23-location-playbook.md` — version longue avec appendice country→continent
-- `docs/internal/2026-05-23-sim-1-location-enrichment-report.md` — anti-patterns et findings sim 1
+- `docs/internal/experiments/2026-05-23-location-playbook.md` — version longue avec appendice country→continent
+- `docs/internal/experiments/2026-05-23-sim-1-location-enrichment-report.md` — anti-patterns et findings sim 1

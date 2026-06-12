@@ -11,7 +11,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### 🌥️ Cloud sync v2: desired-state Kubernetes-style + on-demand UX — 2026-05-22 / 2026-05-31
 
-Dettaglio architettura in [`docs/internal/cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md) (living doc).
+Dettaglio architettura in [`docs/internal/architecture/cloud-sync-architecture.md`](docs/internal/architecture/cloud-sync-architecture.md) (living doc).
 
 **Macro-shift architetturale**: il modello "push-only macro-events" del 2026-05-13 è stato superato. Cloud sync v2 è ora **ibrido push + pull desired-state**: il container resta source-of-truth dei *risultati* (positions/scores/applications, push delta-only ~30s), mentre le **intenzioni utente** che entrano dal web (start/stop team, "scrivi CV", "geocodifica", like/dislike, chat) tornano al container via 2 long-poller HTTP (`team-state-reconciler` + `team-commands-poller`) + endpoint dedicato `pull-desired-state` per i flag per-row. Pattern desired-state Kubernetes-style: il browser scrive `should_run=true`, il reconciler converge.
 
@@ -181,7 +181,7 @@ The 10-day arc was not a clean V1→V5 progression — it was a real-world explo
   - `docs/about/MONITORING.md` — Bridge/Sentinel monitoring stack (architecture + test data)
   - `docs/about/RESULTS.md` — case studies + community template
   - `docs/guides/BETA.md` — beta tester program + coverage matrix (provider × persona, 10 cells, 1/10 done) + status board
-  - `docs/internal/MAINTAINERS.md` — internal operations reference (Supabase, Vercel, OAuth, security)
+  - `docs/internal/ops/MAINTAINERS.md` — internal operations reference (Supabase, Vercel, OAuth, security)
   - `agents/maestro/maestro.md` — planned career-coach agent spec
 - **📐 ADR-0004** added — subscription-only, no API keys (decision rationale)
 - **📚 ROADMAP, INFRA, BETA, MONITORING** updated for consistency (8-agent team, 112 web pages, 📡 Bridge in monitoring stack)
@@ -270,12 +270,12 @@ Release focused on friction points that emerged from manual E2E tests on Windows
 - Release workflow imports cert from `MACOS_CERTIFICATE` + `MACOS_CERTIFICATE_PWD`, passes `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` to `@electron/notarize`.
 - Post-build verification with `codesign -dv --verbose=4` and `spctl --assess` — the mac job fails if Gatekeeper rejects the DMG.
 - Fallback to **unsigned** build when secrets are missing (warning, build doesn't fail → other OSes still publish).
-- Maintainer playbook in `docs/internal/release.md` with all steps: CSR → `.p12` → base64, App-Specific Password, Team ID, certificate rotation.
+- Maintainer playbook in `docs/internal/ops/release.md` with all steps: CSR → `.p12` → base64, App-Specific Password, Team ID, certificate rotation.
 
 ### 🚢 Release pipeline
 
 - New `scripts/check-release-version.sh` as **first CI job**: verifies that git tag (`vX.Y.Z`), root `package.json` and `desktop/package.json` are at the same version. Blocks release with non-zero exit on mismatch — fixes the bug seen in v0.1.8 (tag `v0.1.8` with assets named `0.1.7` because `desktop/package.json` was not bumped).
-- Pre-release checklist for the maintainer in `docs/internal/release.md`.
+- Pre-release checklist for the maintainer in `docs/internal/ops/release.md`.
 
 ### 🪟 Windows
 

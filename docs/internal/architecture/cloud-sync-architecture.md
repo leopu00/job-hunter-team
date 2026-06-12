@@ -286,8 +286,8 @@ Discovered 2026-05-25. Pattern: dare all'utente più controllo + segnali per ori
 - [project_team_location_exclusive] (memory) — un solo writer alla volta
 - [project_fallback_via_cloud_sync] (memory) — notifiche via `pending_user_messages`
 - [project_writer_on_demand_arch] (memory) — JHT-WRITER-ON-DEMAND 2026-05-29
-- `docs/internal/2026-05-20-supabase-perf-backlog.md` — 40+ findings advisor
-- `docs/internal/2026-05-22-vercel-quota-exhaustion.md` — incident parallelo (push troppo aggressivo + dashboard polling)
+- `docs/internal/roadmap/2026-05-20-supabase-perf-backlog.md` — 40+ findings advisor
+- `docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md` — incident parallelo (push troppo aggressivo + dashboard polling)
 - `BACKLOG.md` — entry `[JHT-CLOUDSYNC-01]`, `[JHT-CLOUD-06]`, `[JHT-LOCAL-NO-API]`, `[JHT-WRITER-ON-DEMAND]`
 
 ## 📂 Storia / superseded by

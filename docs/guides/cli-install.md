@@ -90,7 +90,7 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 ### 🐳 Default path — Docker (4 steps)
 
 > Since 2026-05-06 the Docker path follows the **host/container split**
-> design — see [`docs/internal/vps.md`](../internal/vps.md).
+> design — see [`docs/internal/ops/vps.md`](../internal/ops/vps.md).
 > The wrapper does not run an ephemeral `docker run --rm` per command:
 > it dispatches to `docker compose` (lifecycle) or `docker exec` (operativity)
 > against a long-running `jht` container.
@@ -303,7 +303,7 @@ Tickets to file on `scripts/install.sh` itself (not on this doc):
 - 🚀 [`docs/guides/quickstart.md`](quickstart.md) — the human-friendly install guide (4 paths)
 - 💳 [`docs/PROVIDERS.md`](../about/PROVIDERS.md) — supported subscriptions matrix
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
-- 📐 [`docs/INFRA.md`](../internal/INFRA.md) — infrastructure diagram and deployment modes
+- 📐 [`docs/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram and deployment modes
 - 🧪 [`docs/BETA.md`](BETA.md) — beta tester program (report install issues here)
-- 🔒 [`docs/MAINTAINERS.md`](../internal/MAINTAINERS.md) — internal operations reference
+- 🔒 [`docs/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — internal operations reference
 - 📐 [ADR-0004](./adr/0004-subscription-only-no-api-keys.md) — why subscription-only, no API keys

@@ -1,6 +1,6 @@
 # 🔐 Access & Credentials — guida consolidata
 
-> Last updated: 2026-05-26. Owner: `docs/internal/vps.md` ne è il "padre" architetturale; questo file consolida solo la sezione **accesso alla macchina** (Local PC / Dedicated PC / VPS) + **dove vivono le credenziali**.
+> Last updated: 2026-05-26. Owner: `docs/internal/ops/vps.md` ne è il "padre" architetturale; questo file consolida solo la sezione **accesso alla macchina** (Local PC / Dedicated PC / VPS) + **dove vivono le credenziali**.
 
 ## 0. Perché esiste questo doc
 
@@ -226,7 +226,7 @@ Cosa nella doc non è ancora codice — ticket da aprire (o referenziati esisten
 
 ## 7. Doc cross-references
 
-- `docs/internal/vps.md` — architettura completa Mode 3 (VPS), decisioni lockate 2026-05-13
+- `docs/internal/ops/vps.md` — architettura completa Mode 3 (VPS), decisioni lockate 2026-05-13
 - `cli/src/commands/secrets.js` — implementazione `jht secrets` AES-256-GCM
 - `cli/src/commands/keyring.js` — implementazione `jht keyring` per passphrase JHT_CREDENTIALS_KEY
 - `web/lib/hetzner.ts` — client API Hetzner (read-only oggi, opt-in lifecycle)

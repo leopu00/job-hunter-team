@@ -5,7 +5,7 @@
 **Status**: 🟡 WIP — Phase 1 (consolidamento doc esistenti) done. Phase 2 VPS1/Codex (raw VPS data) ✅ done 2026-05-23. Phase 2 Kimi pending (SSH key mismatch da risolvere).
 
 **Provenance fonti**:
-- VPS1/Codex: `docs/internal/2026-05-21-vps1-run-postmortem.md` (consolidato da merge `0b5e5ba7` di 3 file: team-idle-gaps + team-output-analysis + kimi-vs-codex) + `docs/internal/2026-05-21-halt-weekly-incident.md`
+- VPS1/Codex: `docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md` (consolidato da merge `0b5e5ba7` di 3 file: team-idle-gaps + team-output-analysis + kimi-vs-codex) + `docs/internal/postmortems/2026-05-21-halt-weekly-incident.md`
 - Kimi K2: `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` (146KB, misto bug-fix log + numeri run) + `docs/sessions/2026-05-18-fix-effectiveness-review/README.md` + `docs/sessions/2026-05-17-pipeline-snapshot/README.md`
 
 ---

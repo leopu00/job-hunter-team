@@ -101,4 +101,4 @@ Se o usuario reclamar "respondi ha 10 segundos e voce nao confirmou," verifique 
 
 - `notify-user` — a outra metade do par. Escreve a mensagem em `pending_user_messages`; esta skill le a resposta.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — schema, indices, ciclo de vida de uma linha.
-- `docs/internal/bot-telegram.md` § 6 — decisao 2026-05-13 sobre o padrao fallback.
+- `docs/internal/architecture/bot-telegram.md` § 6 — decisao 2026-05-13 sobre o padrao fallback.

@@ -29,7 +29,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
          (today)          (Phase 2)          (Phase 3, ⭐ target)
 ```
 
-> See [`docs/internal/INFRA.md`](../internal/INFRA.md) for the deployment diagram and [`docs/VISION.md`](VISION.md) for the design philosophy.
+> See [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) for the deployment diagram and [`docs/VISION.md`](VISION.md) for the design philosophy.
 
 **Stack decisions:**
 
@@ -190,7 +190,7 @@ For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁�
 > lingua della conversazione dal system prompt e non dalla query utente.
 > Su JHT i 9 prompt agenti sommano migliaia di righe → safeguard via
 > RULE-T14 (runtime) + baseline EN (post-2026-05-19) + overlay locali.
-> Design doc: [`docs/internal/2026-05-06-agent-prompts-i18n.md`](../internal/2026-05-06-agent-prompts-i18n.md).
+> Design doc: [`docs/internal/experiments/2026-05-06-agent-prompts-i18n.md`](../internal/experiments/2026-05-06-agent-prompts-i18n.md).
 ```
 
 For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-internationalization)
@@ -238,7 +238,7 @@ For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-
 ⬜ 🎬 Animated GIFs (BLOCKER) — README above the fold (dashboard, team pipeline, onboarding); video deferred
 ✅ 🛡️ Security review — 31/34 fix, score 30→74%, see docs/security/ (tutti i blocker pre-launch chiusi: SSRF dispatcher integrato a webhooks+gateway, CSP nonce-based in prod via `web/middleware.ts`, resolve-system-bin deferito con razionale Homebrew/Docker macOS; verificato 2026-06-02)
 ✅ 🧪 docs/guides/BETA.md created (con "Coverage we still need" matrix)
-🟡 🐛 GitHub issue triage — templates (bug_report.md, feature_request.md) + .github/labels.yml (25 label) + docs/internal/triage.md SLA 48h/24h DONE; manca `gh label sync` live + project board
+🟡 🐛 GitHub issue triage — templates (bug_report.md, feature_request.md) + .github/labels.yml (25 label) + docs/internal/ops/triage.md SLA 48h/24h DONE; manca `gh label sync` live + project board
 🟡 📰 Show HN draft — docs/launch/show-hn-draft.md (171 righe, 4 title variants, Plan B subreddits); manca GIF embedded (dipende da LAUNCH-03 GIFs)
 🟡 🎬 Demo storyboard — docs/launch/demo-storyboard.md (202 righe, 6-beat shot list); pivot to GIF-first, video deferred
 ⬜ 🧊 Stabilize monitoring architecture (1-2 weeks freeze pre-launch)
@@ -285,7 +285,7 @@ Roadmap successivo — vero "team forum":
 
 **Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard, flag user-driven (`write_requested`), tombstones (mig 025). Memoria agenti runtime e CV binari restano locali.
 
-→ Task di implementazione: `[JHT-CLOUDSYNC-01]`, `[JHT-CLOUD-RESTORE]`, `[JHT-CLOUD-SYNC-PROFILE]`, `[JHT-CLOUD-SYNC-THEME]` in `BACKLOG.md`. Living doc: [`docs/internal/cloud-sync-architecture.md`](../internal/cloud-sync-architecture.md).
+→ Task di implementazione: `[JHT-CLOUDSYNC-01]`, `[JHT-CLOUD-RESTORE]`, `[JHT-CLOUD-SYNC-PROFILE]`, `[JHT-CLOUD-SYNC-THEME]` in `BACKLOG.md`. Living doc: [`docs/internal/architecture/cloud-sync-architecture.md`](../internal/architecture/cloud-sync-architecture.md).
 
 ### 🛠️ Skill discovery — launcher-distributed isolation (priority)
 
@@ -465,7 +465,7 @@ Docker is the **default** in both the CLI installer and the desktop launcher (si
 
 ## 📦 Usage modes (compressed)
 
-For deployment modes (🖥️ Local PC / 🏠 Dedicated computer / ☁️ Self-hosted VPS) and the trade-offs of each → see [`docs/internal/INFRA.md`](../internal/INFRA.md) § "Where the team runs".
+For deployment modes (🖥️ Local PC / 🏠 Dedicated computer / ☁️ Self-hosted VPS) and the trade-offs of each → see [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) § "Where the team runs".
 
 For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Kimi) → see [`docs/PROVIDERS.md`](PROVIDERS.md).
 
@@ -476,9 +476,9 @@ For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Ki
 - 📋 [`BACKLOG.md`](../BACKLOG.md) — tactical, task-by-task work plan
 - 📝 [`CHANGELOG.md`](../CHANGELOG.md) — what's been shipped per release
 - 🎯 [`docs/VISION.md`](VISION.md) — design philosophy
-- 📐 [`docs/internal/INFRA.md`](../internal/INFRA.md) — deployment diagram
+- 📐 [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) — deployment diagram
 - 💳 [`docs/PROVIDERS.md`](PROVIDERS.md) — supported subscriptions
 - 🧪 [`docs/guides/BETA.md`](../guides/BETA.md) — beta program + post-launch open invitation (any role/industry)
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](../guides/AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
-- 🔒 [`docs/MAINTAINERS.md`](../internal/MAINTAINERS.md) — internal operations reference
+- 🔒 [`docs/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — internal operations reference
 - 📐 [`docs/adr/`](./adr/) — architectural decision records

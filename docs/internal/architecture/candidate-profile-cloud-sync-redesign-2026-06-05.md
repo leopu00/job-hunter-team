@@ -336,7 +336,7 @@ Distinta dal modello-schema L1/L2/L3 (struttura dati): qui è *"quali campi serv
 
 ## 🔗 Riferimenti
 
-- `docs/internal/cloud-sync-architecture.md` · `web/app/api/cloud-sync/push/route.ts:150`
+- `docs/internal/architecture/cloud-sync-architecture.md` · `web/app/api/cloud-sync/push/route.ts:150`
 - `web/app/api/profile-assistant/save/route.ts:108` · `agents/_skills/profile-yaml/SKILL.md`
 - `supabase/migrations/001_schema.sql:8` · `web/lib/profile-reader.ts`
 - Profili reali: VPS di produzione (A/B) · progetto Supabase JHT

@@ -326,7 +326,7 @@ Dopo l'analisi JD e PRIMA di marcare la posizione come `checked`:
 
 1. Leggi `location` grezzo e `jd_text`.
 2. Identifica: city, region, country, continent. Se ambiguo (vaga, EMEA,
-   multi-country), segui il playbook `docs/internal/2026-05-23-location-playbook.md`.
+   multi-country), segui il playbook `docs/internal/experiments/2026-05-23-location-playbook.md`.
 3. Determina `work_mode` (onsite|hybrid|remote) dalla JD.
 4. Determina `work_country` (paese contrattuale = chi paga). Usa web
    search se non chiaro dal JD: cerca HQ azienda + entity locali.

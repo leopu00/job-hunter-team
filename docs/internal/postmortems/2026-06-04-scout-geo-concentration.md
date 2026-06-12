@@ -3,7 +3,7 @@
 > Analisi su run beta live (profilo finance, target EU, provider Codex). PII del
 > tester rimossa (nome/indirizzo). Cifre dai dati live: `jobs.db`,
 > `scout_workspace.json`, `messages.jsonl`.
-> Correlato: [`2026-05-23-location-playbook.md`](2026-05-23-location-playbook.md).
+> Correlato: [`2026-05-23-location-playbook.md`](../experiments/2026-05-23-location-playbook.md).
 
 ## 🔎 Fenomeno
 

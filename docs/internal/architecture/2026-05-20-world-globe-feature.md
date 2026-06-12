@@ -121,4 +121,4 @@ Le offerte remote non vanno sul globo (no coordinate fisiche). Soluzione:
 
 - `react-globe.gl`: https://github.com/vasturiano/react-globe.gl
 - Nominatim policy: https://operations.osmfoundation.org/policies/nominatim/
-- Pattern attuale agenti: `docs/internal/2026-05-19-dashboard-routing-cases.md`, `tui/agents/` definitions
+- Pattern attuale agenti: `docs/internal/architecture/2026-05-19-dashboard-routing-cases.md`, `tui/agents/` definitions

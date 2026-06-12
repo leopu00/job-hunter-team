@@ -51,7 +51,7 @@ A single agent working at modest pace burns through this tier well before the wi
 
 ## Known issues
 
-1. **🪟 5h window vs weekly cap** — current calibration optimizes for the 5h reset, but Anthropic's real cap is weekly. Two days of intensive use can exhaust the weekly allowance even when every 5h window stayed under 95%. **Real incident observed** on 2026-05-21 (see `docs/internal/2026-05-21-halt-weekly-incident.md`). **Next milestone**: weekly-window calibration.
+1. **🪟 5h window vs weekly cap** — current calibration optimizes for the 5h reset, but Anthropic's real cap is weekly. Two days of intensive use can exhaust the weekly allowance even when every 5h window stayed under 95%. **Real incident observed** on 2026-05-21 (see `docs/internal/postmortems/2026-05-21-halt-weekly-incident.md`). **Next milestone**: weekly-window calibration.
 
 2. **🛡️ Sentinel itself consumes tokens** — the Sentinel intervenes too often today, and each intervention costs LLM calls. This is *the* reason the €20 base tier is currently unusable. Reducing Sentinel intervention frequency is the highest-leverage optimization left.
 
@@ -117,7 +117,7 @@ Example — Codex Pro (`ratio=14.7%`) + office hours (Mon-Fri 9-18 = 45h/week):
 
 The provider seed values (14.7% Codex Pro, 15% Claude Max) come from the case study and provider docs — accurate for Codex Pro, estimated for the others. A background daemon (`window_ratio_meter.py`) observes the team's actual `Δweekly/Δ5h` ratio and converges via EMA (half-life 7 days). After 3-4 days of real usage `provider_capacity.py` blends the observed value in with weight `min(1, days/4)`, so the sweet spot and target self-correct without user intervention.
 
-→ Detailed design in [`docs/internal/2026-05-25-work-hours-design.md`](../internal/2026-05-25-work-hours-design.md).
+→ Detailed design in [`docs/internal/architecture/2026-05-25-work-hours-design.md`](../internal/architecture/2026-05-25-work-hours-design.md).
 
 ## What we want to publish
 
@@ -133,4 +133,4 @@ These graphs are interesting on their own and will be added to this page (and li
 - [ADR-0004](adr/0004-subscription-only-no-api-keys.md) — why subscription-only
 - `agents/sentinella/sentinella.md` — the Sentinel's prompt and behavior
 - `shared/skills/` — the monitoring skills (`bridge_health`, `sentinel_health`, `usage_record`, `compute_metrics`, `rate_budget`)
-- `docs/internal/context-watchdog-spec.md` — periodic agent restart pattern (long-lived threads burning context cause silent throughput collapse; restart restores 5× pipeline velocity)
+- `docs/internal/architecture/context-watchdog-spec.md` — periodic agent restart pattern (long-lived threads burning context cause silent throughput collapse; restart restores 5× pipeline velocity)

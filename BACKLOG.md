@@ -101,7 +101,7 @@ See also the **launcher-distributed skill discovery** punch list in [`docs/about
 
 ### 🧪 Real-world tests (preliminary, partially documented)
 
-> ✅ **Status 2026-06-02**: 3 run pubblicati come Case Study in `docs/about/RESULTS.md`. 2 ulteriori run **da finalizzare pre-release** (dati raccolti, elaborazione/monitoring incompleti). Staging doc: `docs/internal/2026-05-23-case-study-staging.md`. Strategia test consolidata 2026-06-02 — vedi memorie [[project-pre-release-test-strategy]] e [[project-team-value-chain-shift]].
+> ✅ **Status 2026-06-02**: 3 run pubblicati come Case Study in `docs/about/RESULTS.md`. 2 ulteriori run **da finalizzare pre-release** (dati raccolti, elaborazione/monitoring incompleti). Staging doc: `docs/internal/experiments/2026-05-23-case-study-staging.md`. Strategia test consolidata 2026-06-02 — vedi memorie [[project-pre-release-test-strategy]] e [[project-team-value-chain-shift]].
 
 - ✅ Claude Max x20 × full-stack dev — pipeline tested for weeks, ±5% precision (Case Study #1)
 - ✅ **Codex ProLite × Beta tester 1** (senior multilingual technical) — 34.84h run: 206 pos → 105 ready (51%), critic 6.35, 88.2% PASS, €100/mo (Case Study #2)
@@ -138,7 +138,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 
 ##### ☁️ [JHT-CLOUDSYNC-01] Cloud Sync — completion
 
-> 📐 Architettura & stato implementazione consolidati in [`docs/internal/cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md) (living doc). Voci sotto = riepilogo BACKLOG; per dettagli decisione macro-events e incident RobertHalf vedi il doc.
+> 📐 Architettura & stato implementazione consolidati in [`docs/internal/architecture/cloud-sync-architecture.md`](docs/internal/architecture/cloud-sync-architecture.md) (living doc). Voci sotto = riepilogo BACKLOG; per dettagli decisione macro-events e incident RobertHalf vedi il doc.
 
 **Fondazione (✅)**
 - ✅ `cloud_sync_tokens` schema + RLS (migration 006)
@@ -170,12 +170,12 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - ✅ **Capitano lazy-spawn Scrittore on-demand** (RULE C-10 V6, commit `a9596002`)
 - ✅ **Telegram `/cv` handler + `write_request.py` skill** (commit `5cef55fc`)
 
-**🔴 Pending P0 — correttezza flusso** (vedi [`cloud-sync-architecture.md` § Pending](docs/internal/cloud-sync-architecture.md#-pending-in-ordine-di-priorità))
+**🔴 Pending P0 — correttezza flusso** (vedi [`cloud-sync-architecture.md` § Pending](docs/internal/architecture/cloud-sync-architecture.md#-pending-in-ordine-di-priorità))
 - ✅ **P0 — Pull cloud→SQLite per desired-state al boot container** *(DONE 2026-05-31, commit `af3302bd` + `1a918531`)*. GET `/api/cloud-sync/pull-desired-state?since=<ISO>` (web) + `jht cloud pull-desired-state` (CLI) + wire al boot di `startActionContainer`. Scope MVP: `positions.write_requested` + `write_requested_at`. Cursor separato `.cloud-pull-cursor.json`. Smoke e2e green. **Limite noto chiuso poco dopo**: la route web richiedeva SQLite locale e ritornava 500 in cloud-mode → vedi commit `0ada62ea` sotto.
 - ✅ **P0 — Route write-request supporta cloud-mode senza SQLite locale** *(DONE 2026-05-31, commit `0ada62ea`)*. Discriminazione `hasLocal`: SQLite presente → path locale (immutato); SQLite assente → SELECT+UPDATE solo Supabase con embedded validate. Loop chiuso: utente clicca su Vercel con container offline → flag su cloud → pull al boot applica → Capitano spawn Scrittore.
 - ✅ **P0 — DELETE propagation con tombstone** *(DONE 2026-05-31, commit `6499b3db`)*. Supabase mig 025 (deleted_at TIMESTAMPTZ + index partial) su positions/scores/applications; SQLite V7 (tabella `_tombstones` + 3 trigger BEFORE DELETE in `shared/skills/_db.py::_migrate_v6_to_v7_tombstones`); CLI push include tombstones nel payload con cursor proprio; web receive UPDATE soft con idempotency `WHERE deleted_at IS NULL` + lookup legacy_id→UUID per scores/apps. Scope ridotto a 3 tabelle (companies/highlights non sono pushate oggi). **Follow-up**: (a) 30 query in `web/lib/queries.ts` da aggiornare con `.is('deleted_at', null)` filter — PR dedicato; (b) cron Supabase hard-delete `deleted_at < now()-30d`.
 - ✅ **P0 — Killswitch 401/403** *(DONE 2026-05-31, commit `07d0109a`)*. handlePush ritorna `{ok, authFailed}`; daemon ha counter dedicato `MAX_CONSECUTIVE_AUTH_FAILS=3` (vs 5 generico, perché token revocato non recupera mai). Halt + INSERT `pending_user_messages` con istruzioni "riapri pairing + jht cloud login". Reset solo su push success 200 (un 500 transient non resetta).
-- 🪛 **CI/Tests/Lint minor debt** — declassato 2026-06-02. Stato live: CI/Tests/Security/Docker ✅, Lint Prettier era l'unico rosso → FIXED 2026-06-02 (8 file riformattati). 40 test in `tests/js/tasks/_disabled/` sono debt non-blocker — vedi `docs/internal/MINOR-TRACKER.md` per dettagli (`MINOR-DISABLED-TESTS`, `MINOR-PRECOMMIT-DRIFT`).
+- 🪛 **CI/Tests/Lint minor debt** — declassato 2026-06-02. Stato live: CI/Tests/Security/Docker ✅, Lint Prettier era l'unico rosso → FIXED 2026-06-02 (8 file riformattati). 40 test in `tests/js/tasks/_disabled/` sono debt non-blocker — vedi `docs/internal/roadmap/MINOR-TRACKER.md` per dettagli (`MINOR-DISABLED-TESTS`, `MINOR-PRECOMMIT-DRIFT`).
 - ✅ **P1 — Pull periodico nel daemon** *(DONE 2026-05-31, commit `968ef913`)*. `handleDaemon` invoca `handlePullDesiredState` ad ogni tick dopo il push (cadenza condivisa intervalSec). Pull isolato dal counter consecutiveFails. Log "✓ N applicate" bypassa silent quando N>0. Chiude il caso multi-device "live" (mobile click + team su VPS).
 
 **🟠 Pending P1 — chiusura loop feedback agenti** (bidirezionalità incompleta: schema + RLS + Realtime ✅ done, container NON legge)
@@ -204,7 +204,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 
 ##### ✅ [JHT-LOCAL-NO-API] Local PC mode bypassa Supabase — DONE 2026-05-31
 
-- **Decisione 2026-05-20** ([`cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md)): in Local PC mode (`cloud.json.enabled=false`) il web bypassa Supabase e legge direttamente `jobs.db` via `web/lib/local-queries.ts`.
+- **Decisione 2026-05-20** ([`cloud-sync-architecture.md`](docs/internal/architecture/cloud-sync-architecture.md)): in Local PC mode (`cloud.json.enabled=false`) il web bypassa Supabase e legge direttamente `jobs.db` via `web/lib/local-queries.ts`.
 - **Done 2026-05-31 (commit `193d06fd`):**
   - `web/lib/workspace.ts` espone `isCloudEnabled()` (legge `~/.jht/cloud.json`) e `isLocalOnlyMode()` (workspaceHasDb && !isCloudEnabled).
   - `queries.ts` era già a posto via pattern `if (await ws()) return local.X()`.
@@ -214,7 +214,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 
 ##### 🚦 [INFRA-VERCEL-QUOTA] Vercel quota exhaustion — sostenibilità post-incident 2026-05-22 🟢 quasi tutto done
 
-- **Incident:** `jobhunterteam.ai` offline (HTTP 402) per quota Hobby exhausted: Fast Origin Transfer 305%, Fluid CPU 149%, Function Invocations 120% (vedi [`docs/internal/2026-05-22-vercel-quota-exhaustion.md`](docs/internal/2026-05-22-vercel-quota-exhaustion.md)).
+- **Incident:** `jobhunterteam.ai` offline (HTTP 402) per quota Hobby exhausted: Fast Origin Transfer 305%, Fluid CPU 149%, Function Invocations 120% (vedi [`docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md`](docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md)).
 - **Stato implementazione:**
   - ✅ **Push delta-only** (commit `690534e0`, 2026-05-22) — riduce upload ~95% via cursor `updated_at`
   - ✅ **Dashboard polling adattivo** ([`web/components/AgentInteraction.tsx:87`](web/components/AgentInteraction.tsx)): 1500ms fissi → backoff esponenziale 1.5s→20s + pausa quando `visibilityState !== 'visible'`. Stessa logica in `ProfileAssistantFab.tsx`.
@@ -226,7 +226,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 
 ##### 🗄️ [INFRA-SUPABASE-PERF] Supabase advisor findings — 40+ items (P0 done)
 
-- **Source:** [`docs/internal/2026-05-20-supabase-perf-backlog.md`](docs/internal/2026-05-20-supabase-perf-backlog.md) — 40+ findings da `get_advisors`.
+- **Source:** [`docs/internal/roadmap/2026-05-20-supabase-perf-backlog.md`](docs/internal/roadmap/2026-05-20-supabase-perf-backlog.md) — 40+ findings da `get_advisors`.
 - **Stato implementazione:**
   - ✅ **P0 — `auth_rls_initplan` × 24 occorrenze** (migration `018_rls_init_plan_fix.sql` + commit `2b78fdd9`, 2026-05-22) — 24 policy migrate da `auth.uid()` per-row a `(select auth.uid())`. Chiude advisor critical, impatto plausibile sull'incident del 2026-05-19.
   - ✅ **P1 — `unindexed_foreign_keys` × 9 occorrenze** — DONE 2026-05-31 (migration `024_fk_indexes.sql`, commit `f2908338`). 9 FK indexes emessi con `IF NOT EXISTS`.
@@ -246,7 +246,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 
 ##### 🔐 [JHT-ACCESS-CREDENTIALS-GAPS] Access & credentials — gap doc vs codice (NEW 2026-05-26)
 
-- **Context:** sessione di consolidamento doc 2026-05-26 (`docs/internal/access-and-credentials.md`) ha riallineato la storia "dove vivono le credenziali" e rivelato 6 punti dove la doc promette qualcosa che il codice non implementa ancora.
+- **Context:** sessione di consolidamento doc 2026-05-26 (`docs/internal/ops/access-and-credentials.md`) ha riallineato la storia "dove vivono le credenziali" e rivelato 6 punti dove la doc promette qualcosa che il codice non implementa ancora.
 - **Tickets sotto (priorità bassa, non blockers):**
   1. `[JHT-SSH-PASSPHRASE-KEYRING]` — wizard salva la passphrase della SSH key in OS keyring quando l'utente la setta. Oggi rimane da inserire ad ogni `ssh-add` → blocca automation/LLM-agent path. Fix: `cli/wizard/setup-steps.js` durante key gen, + lib `desktop/vps/ssh-keychain.js` (nuovo).
   2. `[JHT-HETZNER-TOKEN-SECRETS]` — `web/lib/hetzner.ts:49` legge solo `process.env.HCLOUD_TOKEN`. Dovrebbe avere fallback a `jht secrets get HCLOUD_TOKEN` (decifrato con `JHT_CREDENTIALS_KEY` dal keyring). Riallinea doc `vps.md` § "Cosa va nel cloud, cosa resta locale" col comportamento reale.
@@ -272,7 +272,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - **Stato 2026-05-25 (refresh post case study #3 + work-hours design):**
   1. ✅ **Token-meter calibration done** (2026-05-01): empirico `1% rate budget Kimi K2 = 30 kT weighted`, stabile. Per-agent attribution funziona via `state.json.custom_title` regex.
   2. ✅ **Case study #3 reale** (2026-05-23): run 75h, 56 CV ready, €0.71/CV, burn 5.37%/h, 1.61B token aggregati. Dati pubblicati in `docs/about/RESULTS.md` e `web/data/case-studies/seed.sql`. **Internal-only** (maintainer-built profile).
-  3. ⬜ **Variance analysis dentro finestra 5h** — vero blocker per ridurre buffer 85% → 90%. Kimi NON ha weekly cap quindi work-hours design ([`docs/internal/2026-05-25-work-hours-design.md`](docs/internal/2026-05-25-work-hours-design.md)) NON risolve l'oscillazione (risolve solo il problema weekly exhaustion che vale per Claude/Codex).
+  3. ⬜ **Variance analysis dentro finestra 5h** — vero blocker per ridurre buffer 85% → 90%. Kimi NON ha weekly cap quindi work-hours design ([`docs/internal/architecture/2026-05-25-work-hours-design.md`](docs/internal/architecture/2026-05-25-work-hours-design.md)) NON risolve l'oscillazione (risolve solo il problema weekly exhaustion che vale per Claude/Codex).
   4. ✅ **Pacing-bridge per-provider tuning** — DONE 2026-05-31. `.launcher/pacing-bridge.py` ora ha `_PROVIDER_TARGET_BAND` map: Kimi 88%, Codex/Claude/openai 92%. Risoluzione: env `JHT_PACING_TARGET_PCT` > provider lookup > 92 default. Provider attivo letto da `$JHT_HOME/jht.config.json`. Smoke test 5/5 (kimi=88, codex=92, env override=75, provider sconosciuto=92, no config=92).
   5. ⬜ **External beta testers post-launch** — open invitation tramite [`docs/guides/BETA.md`](docs/guides/BETA.md) per validare il "mass-market jackpot" Kimi €40 su profili esterni vari (non più matrix-driven, vedi [[project-pre-release-test-strategy]]). Almeno 1-2 run esterni per consolidare il signal.
   6. ⬜ **Stress test 1 mese** real job-hunting (steady-state, non burst — Case Study #3 era 4 giorni intensivi).
@@ -290,7 +290,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 
 ##### 🌉 [JHT-BRIDGE-V7] Bridge V7 — token-based monitoring + per-agent throttle (NEW 2026-05-01)
 
-- **Background:** session of 2026-05-01 reworked the bridge V5 → V6 (loop fix) and prototyped a token-based monitoring layer reading the local CLI logs (`~/.kimi/sessions/*/wire.jsonl`, `~/.claude/projects/*/*.jsonl`, `~/.codex/sessions/*/rollout-*.jsonl`). Full context and numbers in `docs/internal/2026-05-01-bridge-and-token-monitoring.md`.
+- **Background:** session of 2026-05-01 reworked the bridge V5 → V6 (loop fix) and prototyped a token-based monitoring layer reading the local CLI logs (`~/.kimi/sessions/*/wire.jsonl`, `~/.claude/projects/*/*.jsonl`, `~/.codex/sessions/*/rollout-*.jsonl`). Full context and numbers in `docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md`.
 - **Discovery:** the CLI subscription logs already contain weighted token counts per response, fresher than the provider /usage endpoint. Empirical calibration on Kimi K2 Plan: 1 % rate budget ≈ 30 kT weighted. Per-agent attribution works via `state.json.custom_title` regex (Kimi) or path naming (Claude / Codex).
 - **Observed asymmetry:** in 46 min of work the Scout consumed 1083 kT vs 125 kT for the Capitano (7×). Today the throttle is global ("everyone +30s pause"); the right move is per-agent.
 - **Tier 2 — quick wins (1-2 h, deferred to a quiet moment):** ✅ **DONE 2026-05-13** (commits 924c93bd…da74e3bd on dev3)
@@ -330,7 +330,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
   - LLC anonymous (EE/MT, ~500€) for sponsor money + IP
   - No podcast appearances, no conference talks, only async written communication
 - **Co-maintainer:** identify within 60 days post-launch (can be informal, just someone who triages issues — fratello / amico fidato).
-- **Reasoning:** see `docs/internal/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
+- **Reasoning:** see `docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
 
 ##### 🧪 [JHT-TEST-CAMPAIGN] Documentare run esistenti (NO matrix coverage pre-launch) 🟢 declassato 2026-06-02
 
@@ -350,7 +350,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 ##### 📊 [JHT-CASE-STUDIES-WEB] Pagina pubblica /case-studies — sessione 23-25/05 done, residui pre-launch ⬜ 🟠 HIGH
 
 - **Stato 2026-05-25:** infrastructure completa, pagina navigabile su `localhost:3001/case-studies`. Schema DB (`web/data/case-studies/schema.sql` v2), seed populato (`seed.sql`), API route (`/api/case-studies` via `node:sqlite`), 9 componenti UI in `web/app/case-studies/_components/`. Toolkit estrazione VPS in `tools/case-study-extract/` con snapshot pulito di entrambe le VPS (89.7 MB zip in `~/jht-case-study-data/`). Funnel 5-stage cascade per Codex + Kimi, 2 mini-funnel Pre/Post LinkedIn per Kimi, source breakdown, coverage matrix, CTA. Profili anonimizzati come "Beta tester 1/2".
-- **Documentazione completa di handoff:** [`docs/internal/2026-05-25-case-studies-page-handoff.md`](docs/internal/2026-05-25-case-studies-page-handoff.md) (stato, decisioni viz, todo prioritizzato, file map, workflow iterazione, lesson learned).
+- **Documentazione completa di handoff:** [`docs/internal/experiments/2026-05-25-case-studies-page-handoff.md`](docs/internal/experiments/2026-05-25-case-studies-page-handoff.md) (stato, decisioni viz, todo prioritizzato, file map, workflow iterazione, lesson learned).
 - **🔴 Bloccanti per publish-ready:**
   1. **Migrazione Supabase** del schema + dati (schema gia' SQL-compatible, serve solo convertire AUTOINCREMENT→SERIAL e fix RLS). Migrazione API route da `node:sqlite` a Supabase client.
   2. **Link `/case-studies` nel nav** principale del sito (header + footer).
@@ -452,7 +452,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
   - host-side: wrapper bash sottile (~165 righe) che fa `docker compose` + `docker exec`
   - container-side: il CLI Node attuale, raggiunto via `docker exec -it jht node /app/cli/bin/jht.js <args>`
 - **Done 2026-05-06:**
-  - Design doc completo: `docs/internal/vps.md`
+  - Design doc completo: `docs/internal/ops/vps.md`
   - `scripts/jht-wrapper.sh` (wrapper bash con auto-up, lifecycle, exec proxy)
   - `cli/src/utils/container-proxy.js` con branch IS_CONTAINER=1 (passthrough, retro-compat con il path "from source")
   - `docker-compose.yml` riscritto image-only + production-friendly (no `build:`, no bind sorgenti)
@@ -486,7 +486,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - **Output:** [`docs/guides/VPS-SETUP.md`](docs/guides/VPS-SETUP.md) (nuovo, ~250 righe) con step-by-step + lifecycle (incluso "trappola billing Hetzner" snapshot+delete) + override env + troubleshooting.
 - **Per il merge:** dev-1 → master quando soddisfati. Una volta merged, immagine GHCR `latest` viene rebuildata da CI e gli utenti pubblici hanno tutti i fix.
 - **Bonus:** ✅ aggiunge 1 cell al test campaign matrix (Hetzner CPX22 / Linux Ubuntu 24.04 / Claude Max).
-- **Design rationale:** [`docs/internal/vps.md`](docs/internal/vps.md), implementation: [`docs/internal/vps.md`](docs/internal/vps.md), provider research: [`docs/internal/vps.md`](docs/internal/vps.md).
+- **Design rationale:** [`docs/internal/ops/vps.md`](docs/internal/ops/vps.md), implementation: [`docs/internal/ops/vps.md`](docs/internal/ops/vps.md), provider research: [`docs/internal/ops/vps.md`](docs/internal/ops/vps.md).
 
 ##### 🗺️ [JHT-VPS-COMPARISON-DOC] Honest decision tree: PC locale vs PC dedicato vs VPS
 
@@ -497,7 +497,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
   - "Vuoi zero pensieri / setup?" → Mode 1 (PC locale, ma deve restare on)
 - **Why:** without explicit positioning, non-tech users will try VPS, fail, and think JHT is broken. Honest framing > vague promises.
 - **Linked:** [JHT-VPS-VALIDATE] (output `docs/VPS-SETUP.md`) feeds the "Mode 3 manual" branch; [JHT-VPS-FRIENDLY] feeds the "Mode 3 wizard" branch.
-- **Provider research feeder:** [`docs/internal/vps.md`](docs/internal/vps.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
+- **Provider research feeder:** [`docs/internal/ops/vps.md`](docs/internal/ops/vps.md) (2026-05-06) — comparison Hetzner / Netcup / Contabo / OVHcloud / V6Node con prezzi reali post-rincaro Hetzner del 1 aprile, decision matrix, e razionale "CPU stabile > RAM nominale" per Bridge V6/V7 calibration. Sintesi: Netcup VPS 500 G12 €5.91/mo e' best-balance, Hetzner CPX22 €9.75/mo e' la familiar choice (scelta primo smoke 2026-05-06), Contabo da evitare per CPU oversold.
 
 ##### 🪟 [JHT-CLI-WIN-NATIVE] Windows-native CLI (no WSL required) 🟡 3/4 DONE 2026-05-22 — E2E validation rimasta
 
@@ -650,7 +650,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 #### 🚨 Launcher as primary tool — Phase 2 expansion (NEW 2026-05-04)
 
-> Driven by VPS deployment design ([`docs/internal/vps.md`](../docs/internal/vps.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
+> Driven by VPS deployment design ([`docs/internal/ops/vps.md`](../docs/internal/ops/vps.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
 
 ##### ✅ 🔐 [JHT-DESKTOP-LOGIN] OAuth login flow in launcher — **DONE 2026-05-13**
 
@@ -665,7 +665,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 ##### ☁️ [JHT-DESKTOP-SYNC] Encrypted cloud sync of config + VPS metadata — **CORE DONE 2026-05-13**
 
-- **Stato implementazione (merge `8040a576` dev1 + `14d84633` cloud-sync direction lockata + dev2 commit `61a544aa/a4112d10/bae27059`):** sync push-only `local → cloud` cablato (modello successivamente esteso a bidirezionalità desired-state — vedi [`cloud-sync-architecture.md`](docs/internal/cloud-sync-architecture.md)); endpoint `web/app/api/cloud-sync/{push,device-register,ping,tokens}/route.ts` live; CLI `cli/src/commands/cloud.js` con `enable/pair/status/push/disable`; bootstrap automatico al primo login (decisione lockata, `[JHT-CLOUD-RESTORE]`). **Ancora aperto**: passphrase recovery end-to-end (`[JHT-DESKTOP-RECOVERY]` sotto) e profile/theme sync (`[JHT-CLOUD-SYNC-PROFILE/THEME]`).
+- **Stato implementazione (merge `8040a576` dev1 + `14d84633` cloud-sync direction lockata + dev2 commit `61a544aa/a4112d10/bae27059`):** sync push-only `local → cloud` cablato (modello successivamente esteso a bidirezionalità desired-state — vedi [`cloud-sync-architecture.md`](docs/internal/architecture/cloud-sync-architecture.md)); endpoint `web/app/api/cloud-sync/{push,device-register,ping,tokens}/route.ts` live; CLI `cli/src/commands/cloud.js` con `enable/pair/status/push/disable`; bootstrap automatico al primo login (decisione lockata, `[JHT-CLOUD-RESTORE]`). **Ancora aperto**: passphrase recovery end-to-end (`[JHT-DESKTOP-RECOVERY]` sotto) e profile/theme sync (`[JHT-CLOUD-SYNC-PROFILE/THEME]`).
 - **Why:** without cloud sync of essential metadata, cross-device recovery is impossible. But syncing master credentials (Hetzner token) is too risky — single point of failure if our cloud is breached.
 - **Sync to cloud (Supabase, encrypted user-side with passphrase):**
   - Profile + preferences
@@ -690,7 +690,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 - **Guard rails:**
   - Se container ha già dati e nessun `--force` → fallisce con messaggio chiaro ("container has local data — use --force to overwrite")
   - Se cloud è vuoto (utente non ha mai sincronizzato prima) → no-op silenzioso
-- **Decisione doc:** vedi `docs/internal/INFRA.md` § Bootstrap automatico e memoria `project_cloud_sync_direction`.
+- **Decisione doc:** vedi `docs/internal/ops/INFRA.md` § Bootstrap automatico e memoria `project_cloud_sync_direction`.
 - **Dependency:** [JHT-DESKTOP-SYNC] (sync infrastructure), [JHT-DESKTOP-RECOVERY] (passphrase per decifrare).
 
 ##### 👤 [JHT-CLOUD-SYNC-PROFILE] Aggiungere profilo utente al sync
@@ -726,7 +726,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 ##### 🔄 ~~[JHT-DESKTOP-RECLAIM] "I have an existing VPS, reconnect me"~~ — ❌ ANNULLATA 2026-05-13
 
-**Decisione 2026-05-13 sera**: niente flusso reclaim. Cambio PC = wipe + ricreate. L'utente cancella la vecchia VPS Hetzner manualmente, l'app ne crea una nuova, il cloud sync (obbligatorio in Path 2) re-seeda i dati. Vedi `docs/internal/onboarding-flow.md` § "Reclaim VPS da nuovo PC".
+**Decisione 2026-05-13 sera**: niente flusso reclaim. Cambio PC = wipe + ricreate. L'utente cancella la vecchia VPS Hetzner manualmente, l'app ne crea una nuova, il cloud sync (obbligatorio in Path 2) re-seeda i dati. Vedi `docs/internal/architecture/onboarding-flow.md` § "Reclaim VPS da nuovo PC".
 
 Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt existing server". Lo gestisce il wizard "Crea VPS Hetzner" standard del Path 2 ogni volta.
 
@@ -779,7 +779,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
 #### 🥇 [JHT-VPS-FRIENDLY] Desktop wizard for non-tech VPS deploy — **CORE DONE 2026-05-13**
 
-- **Stato implementazione (merge dev2 `82bf4fc8` + commits `23a140cb/32a51766/43d94016`):** Path B3 (desktop diretto) cablato per beta 0. Componenti live: location picker (Local/VPS) come primo step (`desktop/renderer/modules/wizard-flow.js`); SSH keypair gen IPC vpsApi (`desktop/vps/index.js`); runInstall SSH remoto + log streaming; pairing-token derivato dalla session Supabase passato a `install.sh --pairing-token`. **Decisione lockata 2026-05-13**: niente Hetzner API automation in beta — utente crea la VPS manualmente e paste IP. Tailscale rimandato a v1+ (vedi `docs/internal/vps.md` § decisioni infra). I tre lifecycle button (⏸️/📸/💀) live (merge dev1 `cf09e483`).
+- **Stato implementazione (merge dev2 `82bf4fc8` + commits `23a140cb/32a51766/43d94016`):** Path B3 (desktop diretto) cablato per beta 0. Componenti live: location picker (Local/VPS) come primo step (`desktop/renderer/modules/wizard-flow.js`); SSH keypair gen IPC vpsApi (`desktop/vps/index.js`); runInstall SSH remoto + log streaming; pairing-token derivato dalla session Supabase passato a `install.sh --pairing-token`. **Decisione lockata 2026-05-13**: niente Hetzner API automation in beta — utente crea la VPS manualmente e paste IP. Tailscale rimandato a v1+ (vedi `docs/internal/ops/vps.md` § decisioni infra). I tre lifecycle button (⏸️/📸/💀) live (merge dev1 `cf09e483`).
 - **Depends on:** [JHT-CLOUD-04] Hetzner adapter + [JHT-CLOUD-05] Cloud UI
 - **Goal:** non-tech user provisions a VPS in <5 minutes without ever touching SSH or terminal.
 - **UX:**
@@ -798,7 +798,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
   - Tailscale (zero-config, US company) vs WireGuard self-hosted (more aligned with local-first, more code)
   - Cross-PC migration: if user changes machine, how do they re-claim the VPS? (cloud sync of `vps.json` encrypted user-side? Hetzner API to re-inject SSH key?)
   - Auto-shutdown: button "I got hired, terminate VPS" with backup-first?
-- **Design rationale:** [`docs/internal/vps.md`](../docs/internal/vps.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
+- **Design rationale:** [`docs/internal/ops/vps.md`](../docs/internal/ops/vps.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
 
 #### 🔗 [JHT-UX-CLOUD-PAIRING] Auto-pairing VPS↔account web (no token manuale + 2 comandi CLI)
 
@@ -878,7 +878,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 
   **Problema:** Anthropic doc avverte che system prompt pesanti in lingua ≠ user causano "language drift" (Claude risponde nella lingua del prompt invece che dell'utente). Su JHT i 9 prompt agenti sommano ~2500+ righe in italiano (capitano.md 647) → un nuovo utente con `DEFAULT_LOCALE='en'` che scrive `find me python jobs` rischia risposta italiana.
 
-  **Convenzione scelta:** `agents/<role>/<role>.<locale>.md` siblings con fallback `<role>.md`. Vedi design completo in [`docs/internal/2026-05-06-agent-prompts-i18n.md`](docs/internal/2026-05-06-agent-prompts-i18n.md).
+  **Convenzione scelta:** `agents/<role>/<role>.<locale>.md` siblings con fallback `<role>.md`. Vedi design completo in [`docs/internal/experiments/2026-05-06-agent-prompts-i18n.md`](docs/internal/experiments/2026-05-06-agent-prompts-i18n.md).
 
   **Stato 2026-05-06 — onesto:**
   - ✅ Architettura: hook risoluzione lingua deployed in `.launcher/start-agent.sh` (legge `~/.jht/i18n-prefs.json`, prova `<role>.<locale>.md`, fallback baseline).
@@ -902,7 +902,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
 - **Overlay IT preservato:** `agents/<role>/<role>.it.md` siblings per fallback locale=it (9 file).
 - **Bonus 🇭🇺:** traduzione Hungarian community-contributed shipped contestualmente — `agents/<role>/<role>.hu.md` per 10 ruoli (incluso `mentor.hu.md`). HU sblocca il primo beta tester non-anglofono/non-italianofono.
 - **Architettura risoluzione (gia' deployed 2026-05-06):** `.launcher/start-agent.sh` legge `~/.jht/i18n-prefs.json`, prova `<role>.<locale>.md`, fallback al baseline `<role>.md` (ora EN). Protocol token (`STEADY`, `ATTENZIONE`, `RECOVERY TRACKING`, ecc.) preservati invariati come da spec.
-- **Design doc storico:** [`docs/internal/2026-05-06-agent-prompts-i18n.md`](docs/internal/2026-05-06-agent-prompts-i18n.md).
+- **Design doc storico:** [`docs/internal/experiments/2026-05-06-agent-prompts-i18n.md`](docs/internal/experiments/2026-05-06-agent-prompts-i18n.md).
 
 #### 🌍 [JHT-I18N-03] Future language expansion
 
@@ -1003,7 +1003,7 @@ Goal: get JHT ready for Show HN, Product Hunt, Reddit, awesome-lists.
 
 - ✅ Issue templates expanded with install-path, provider, severity checkbox + log-source hints ([`.github/ISSUE_TEMPLATE/bug_report.md`](.github/ISSUE_TEMPLATE/bug_report.md) + [`feature_request.md`](.github/ISSUE_TEMPLATE/feature_request.md))
 - ✅ Canonical label set declared in [`.github/labels.yml`](.github/labels.yml) — surface (installer/monitoring/desktop/web/cli/container/agents/docs), provider, state (triage/confirmed/in-progress/blocked), severity, type, outcomes, community
-- ✅ Workflow + SLA documented in [`docs/internal/triage.md`](docs/internal/triage.md); `CONTRIBUTING.md` carries the public 48h-triage / 24h-blocker-ack contract
+- ✅ Workflow + SLA documented in [`docs/internal/ops/triage.md`](docs/internal/ops/triage.md); `CONTRIBUTING.md` carries the public 48h-triage / 24h-blocker-ack contract
 - ⬜ Remaining (manual, maintainer-side): run the `gh label create` sync once on the live repo, create the `JHT — Triage` project board with the 5 columns + state-label automation, wire `severity:blocker` notification path
 
 #### 📰 [JHT-LAUNCH-09] Show HN post draft 🟡
@@ -1109,7 +1109,7 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
 - **Sintomo:** sul VPS1 (2026-05-19, primo bring-up beta) tutti gli agenti LLM fallivano al watchdog (`start FAIL rc=1`). Eseguito `start-agent.sh` a mano: `Warning: provider 'codex' non riconosciuto in jht.config.json, fallback a claude. Errore: comando 'claude' non trovato (provider configurato: codex)`. Il container non ha `claude` installato (solo `codex` + `kimi`), exit 1.
 - **Causa:** `start-agent.sh:367` aveva `case "$PROVIDER" in openai)` ma il wizard desktop scrive `active_provider: "codex"` raw → cade nel `*` (fallback claude) → `command -v claude` fallisce. Il CLI Node (`providers.js`) normalizzava `codex → openai` ma non veniva mai invocato dal flow desktop wizard, che bypass.
 - **Fix applicato:** `.launcher/start-agent.sh:367` → `openai|codex)`. Stesso pattern degli altri alias (`anthropic|claude`, `kimi|moonshot`). 1 riga, retro-compatibile.
-- **Validato 2026-05-21:** VPS Hetzner CPX22 vergine, image GHCR `:latest` post-`79f63324`, sed `"openai" → "codex"` raw in `jht.config.json` + `docker restart jht` → 7 agenti partiti senza warning, panes tutti su `gpt-5.5 high · ~/agents/<role>`, **0 occorrenze** di `provider non riconosciuto` / `fallback a claude` in `docker logs`. Doc completa: `docs/internal/2026-05-21-vps-bootstrap-fixes-validated.md`.
+- **Validato 2026-05-21:** VPS Hetzner CPX22 vergine, image GHCR `:latest` post-`79f63324`, sed `"openai" → "codex"` raw in `jht.config.json` + `docker restart jht` → 7 agenti partiti senza warning, panes tutti su `gpt-5.5 high · ~/agents/<role>`, **0 occorrenze** di `provider non riconosciuto` / `fallback a claude` in `docker logs`. Doc completa: `docs/internal/postmortems/2026-05-21-vps-bootstrap-fixes-validated.md`.
 
 ### ✅ [BUG-CODEX-TRUST-PROMPT] Codex CLI blocca al "trust prompt" al primo avvio in ogni nuova dir agente — FIXED 2026-05-21 (commit `79f63324`)
 
@@ -1245,9 +1245,9 @@ e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-1
   - ❌ Rimuovere `.js` solo da `web/lib/ssrf.ts` → propaga il problema un livello più in profondità (shared/net/ssrf.ts e i suoi 3 import).
 - **Memoria correlata:** `feedback_no_heavy_smoke_tests_stacking` (no build+dev consecutivi su Windows).
 
-### 🪛 [BUG-TURBOPACK-MONOREPO-RESOLVE] — spostato in `docs/internal/MINOR-TRACKER.md` (2026-06-02)
+### 🪛 [BUG-TURBOPACK-MONOREPO-RESOLVE] — spostato in `docs/internal/roadmap/MINOR-TRACKER.md` (2026-06-02)
 
-Bug specifico Windows dev mode, non blocker pre-launch (Vercel deploy funziona, macOS/Linux dev probabilmente non vedono). Dettagli completi + fix proposti in [`docs/internal/MINOR-TRACKER.md`](docs/internal/MINOR-TRACKER.md#-bug-turbopack-monorepo-resolve-turbopack-cerca-tailwindcss-dal-monorepo-root-su-windows-dev).
+Bug specifico Windows dev mode, non blocker pre-launch (Vercel deploy funziona, macOS/Linux dev probabilmente non vedono). Dettagli completi + fix proposti in [`docs/internal/roadmap/MINOR-TRACKER.md`](docs/internal/roadmap/MINOR-TRACKER.md#-bug-turbopack-monorepo-resolve-turbopack-cerca-tailwindcss-dal-monorepo-root-su-windows-dev).
 
 ---
 
@@ -1334,4 +1334,4 @@ Bug specifico Windows dev mode, non blocker pre-launch (Vercel deploy funziona, 
 - **Effort:** investigation breakdown ~1h, low-hanging fix ~2-3h, refactor app-payload separato ~1 giorno.
 - **Feedback originale:** beta tester (giro 2026-05-20).
 
-Operational info (Supabase access, Vercel env vars, OAuth setup, security review status, contact) lives in [`docs/internal/MAINTAINERS.md`](docs/internal/MAINTAINERS.md).
+Operational info (Supabase access, Vercel env vars, OAuth setup, security review status, contact) lives in [`docs/internal/ops/MAINTAINERS.md`](docs/internal/ops/MAINTAINERS.md).

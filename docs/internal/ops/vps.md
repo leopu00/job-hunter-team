@@ -268,7 +268,7 @@ L'utente medio non vede mai il termine "SSH".
 
 ---
 
-> 🔗 **Per la vista consolidata "accesso macchina + dove vivono le credenziali" (3 modi × storage × LLM agent path)** → [`docs/internal/access-and-credentials.md`](access-and-credentials.md). Questo file resta la fonte di verità architetturale; quello consolida la sezione credenziali con confronto doc vs codice e punch list.
+> 🔗 **Per la vista consolidata "accesso macchina + dove vivono le credenziali" (3 modi × storage × LLM agent path)** → [`docs/internal/ops/access-and-credentials.md`](access-and-credentials.md). Questo file resta la fonte di verità architetturale; quello consolida la sezione credenziali con confronto doc vs codice e punch list.
 
 ## 🔐 Login launcher + recovery cross-device
 
@@ -539,7 +539,7 @@ Vuoi zero pensieri / setup?             → Mode 1 (PC locale, ma deve restare o
 - `BACKLOG.md` § PHASE 3 `[JHT-CLOUD-01..06]`, `[JHT-VPS-FRIENDLY]`, `[JHT-DESKTOP-*]`
 - `docs/about/VISION.md` — target setup VPS
 - `docs/security/04-threat-model.md` — perché socket-mount è inaccettabile
-- `docs/internal/2026-05-01-bridge-and-token-monitoring.md` — CPU stabile per calibration
+- `docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md` — CPU stabile per calibration
 - `scripts/install.sh`, `cli/utils/container-proxy.js`, `docker-compose.yml`
 
 ### Sources providers (2026-05-06)

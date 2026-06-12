@@ -30,7 +30,7 @@ If a feature requires opening the web dashboard or the Desktop app to be configu
 >
 > When asking, **present the options with pros/cons inline** as listed below. The user is often non-technical and needs the trade-off to choose.
 >
-> See `docs/internal/onboarding-flow.md` for the design rationale (Path 1 / 2 / 3 split, lock decisions).
+> See `docs/internal/architecture/onboarding-flow.md` for the design rationale (Path 1 / 2 / 3 split, lock decisions).
 
 ### 0 — Prerequisites check
 
@@ -117,7 +117,7 @@ jht cloud login
 # After the user confirms, the CLI saves ~/.jht/cloud.json (mode 0600).
 ```
 
-For **VPS**: the recommended path is the desktop pairing-token (see `docs/internal/vps.md` § "Identità unificata"). If the agent is driving without the desktop, fall back to `jht cloud login` from inside the VPS shell.
+For **VPS**: the recommended path is the desktop pairing-token (see `docs/internal/ops/vps.md` § "Identità unificata"). If the agent is driving without the desktop, fall back to `jht cloud login` from inside the VPS shell.
 
 ### 3.5 — **ASK USER**: which LLM provider / subscription?
 
@@ -395,4 +395,4 @@ over SSH with the JHT pubkey installed.
 - [`docs/guides/quickstart.md`](quickstart.md) — the human-friendly version of this guide
 - [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick
 - [`docs/guides/VPS-SETUP.md`](VPS-SETUP.md) — VPS provisioning superset (SSH, Hetzner)
-- [`docs/internal/onboarding-flow.md`](../internal/onboarding-flow.md) — design rationale for the 3 paths
+- [`docs/internal/architecture/onboarding-flow.md`](../internal/architecture/onboarding-flow.md) — design rationale for the 3 paths

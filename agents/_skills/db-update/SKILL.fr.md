@@ -33,7 +33,7 @@ python3 /app/shared/skills/db_update.py position 42 --salary-declared-min 40000 
 # Salaire estimé (glassdoor / levels.fyi / estimation de l'analista)
 python3 /app/shared/skills/db_update.py position 42 --salary-estimated-min 35000 --salary-estimated-max 50000 --salary-estimated-source glassdoor
 
-# Famille de rôle (catégorie sémantique). Voir docs/internal/2026-05-23-position-classifier-llm-roadmap.md
+# Famille de rôle (catégorie sémantique). Voir docs/internal/roadmap/2026-05-23-position-classifier-llm-roadmap.md
 python3 /app/shared/skills/db_update.py position 42 --role-family "Technical Writing"
 
 # Location structurée (Analista). Exemple complet pour "Dublin, Ireland" hybrid :
@@ -45,7 +45,7 @@ python3 /app/shared/skills/db_update.py position 42 \
   --work-country "Ireland" --work-country-code "IE" \
   --is-multi-location false
 
-# Exemples de cas spéciaux (voir docs/internal/2026-05-23-location-playbook.md) :
+# Exemples de cas spéciaux (voir docs/internal/experiments/2026-05-23-location-playbook.md) :
 # A) "Europe Remote" → country=NULL, continent=EU, work_country du HQ de l'entreprise
 python3 /app/shared/skills/db_update.py position 42 \
   --loc-continent "Europe" --work-mode "remote" \

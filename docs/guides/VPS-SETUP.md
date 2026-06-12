@@ -14,8 +14,8 @@ Guida passo-passo per deployare Job Hunter Team su un VPS Hetzner Cloud
 
 ## Riferimenti di design
 
-- `docs/internal/vps.md` — design consolidato VPS (3 tier deployment, split CLI host/container, confronto provider, install UX, lifecycle)
-- `docs/internal/bot-telegram.md` — bot Telegram multi-agente + ingest documenti
+- `docs/internal/ops/vps.md` — design consolidato VPS (3 tier deployment, split CLI host/container, confronto provider, install UX, lifecycle)
+- `docs/internal/architecture/bot-telegram.md` — bot Telegram multi-agente + ingest documenti
 
 ## TL;DR
 
