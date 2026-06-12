@@ -8,6 +8,11 @@
 # testo e' effettivamente apparso nel pane.
 #
 # Schema:
+#   0. capture-pane            se la TUI e' a META' TURNO ("esc to interrupt")
+#                              NON e' morta: e' VIVA e occupata. Aspetta che
+#                              torni idle PRIMA di digitare — non si typea mai
+#                              dentro un composer occupato (codex accoda+non
+#                              eco-a il testo → la verify fallirebbe a vuoto).
 #   1. send -l "$message"      tmux typea il testo carattere per carattere
 #   2. sleep 1                 lascia respirare il render Ink
 #   3. capture-pane            verifica che la signature sia nel pane
@@ -22,7 +27,12 @@
 #   0 → messaggio consegnato e submittato
 #   1 → argomenti mancanti
 #   2 → sessione inesistente
-#   3 → testo mai apparso nel pane dopo 3 retry (TUI irricettiva)
+#   3 → testo mai apparso nel pane E pane NON occupato → TUI irricettiva
+#       (probabile bash nudo post-crash / modal bloccato): unico segnale "morto".
+#   4 → TUI occupata (turno in corso) oltre il budget d'attesa → agente VIVO:
+#       messaggio NON consegnato in sincrono, il chiamante deve RIPROVARE piu'
+#       tardi, MAI spawnare un rimpiazzo. "Busy != morto" (vedi
+#       docs/internal/2026-06-11-overspawn-rootcause.md).
 
 set -euo pipefail
 
@@ -114,8 +124,47 @@ fi
 # su piu' righe, rendendo un match full-string impossibile.
 signature=$(printf '%s' "$message" | head -c 30)
 
+# Busy-detection: codex / claude / kimi mostrano "esc to interrupt" mentre
+# l'agente e' a meta' turno. In quello stato il composer NON eco-a il testo
+# digitato → la signature non comparirebbe mai e concluderemmo a torto che la
+# TUI e' irricettiva (morta). Un pane occupato e' un agente VIVO: aspettiamo
+# che torni idle prima di typeare, MAI typeare dentro un turno in corso.
+# Causa radice dell'overspawn 07/06 (docs/internal/2026-06-11-overspawn-rootcause.md).
+_pane_busy() {
+  case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
+    *"esc to interrupt"*|*"to interrupt"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Quanto attendere che un turno in corso finisca prima di rinunciare (exit 4,
+# VIVO). I turni codex lunghi (parsing, edit grossi) durano minuti: budget alto
+# abbastanza da cavalcare un turno normale, ma bounded per non bloccare il
+# mittente (Capitano) all'infinito. Override via env JHT_TMUX_BUSY_WAIT.
+busy_budget="${JHT_TMUX_BUSY_WAIT:-90}"
+
 attempts=3
 for try in $(seq 1 "$attempts"); do
+  pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+
+  # Se la TUI e' a meta' turno, aspetta l'idle PRIMA di digitare.
+  if _pane_busy "$pane"; then
+    waited=0
+    while [ "$waited" -lt "$busy_budget" ]; do
+      sleep 3
+      waited=$((waited + 3))
+      pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
+      _pane_busy "$pane" || break
+    done
+    if _pane_busy "$pane"; then
+      # Ancora occupato dopo tutto il budget → agente VIVO, solo su un turno
+      # molto lungo. Segnala VIVO-occupato (exit 4), NON morto (exit 3): il
+      # chiamante deve riprovare piu' tardi, mai spawnare un rimpiazzo.
+      echo "jht-tmux-send: $session occupato (turno in corso) dopo ${busy_budget}s — VIVO, riprova piu' tardi" >&2
+      exit 4
+    fi
+  fi
+
   tmux send-keys -t "$session" -l "$message"
   sleep 1
   pane=$(tmux capture-pane -t "$session" -p 2>/dev/null || true)
@@ -139,10 +188,13 @@ for try in $(seq 1 "$attempts"); do
       exit 0
       ;;
   esac
-  # Testo perso. La TUI potrebbe essere ancora in boot o avere un modal
-  # aperto che ha mangiato i keystroke. Pausa e ritenta.
+  # Testo perso. Casi: (a) il typing ha fatto partire un turno → il busy-check
+  # in cima alla prossima iterazione lo cattura e aspetta; (b) la TUI e' in boot
+  # o ha un modal aperto che ha mangiato i keystroke. Pausa e ritenta.
   sleep 1.5
 done
 
-echo "jht-tmux-send: $session non ricettivo dopo $attempts tentativi (testo mai apparso nel pane)" >&2
+# Retry esauriti e pane NON occupato → genuinamente irricettivo (bash nudo
+# post-crash, modal bloccato): unico vero segnale "forse morto" (exit 3).
+echo "jht-tmux-send: $session non ricettivo dopo $attempts tentativi (testo mai apparso, pane non occupato)" >&2
 exit 3
