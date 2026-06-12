@@ -262,6 +262,65 @@ def compute_metrics(parsed, last, history=None):
     else:
         status, throttle = "OK", 0
 
+    # ── Weekly cap binding (fix #4 runaway-scaling 2026-06-07) ──────────────
+    # Codex/subscription tier ha un SECONDO cap settimanale, parallelo al 5h.
+    # Il primary 5h può essere SOTTOUTILIZZO mentre il weekly è quasi esaurito:
+    # senza questo blocco lo status resta verde e il team continua a bruciare —
+    # è l'incidente del 07/06 (weekly 92% con status SOTTOUTILIZZO, weekly
+    # "decorativo"). Qui calcoliamo proj_weekly IN CODICE e, se il weekly è
+    # binding, ESCALIAMO lo status a ATTENZIONE anche in Phase 1 (prima il freno
+    # era delegato solo al prompt S-06, che in regime normale non scattava mai).
+    # proj_binding = max(proj_primary, proj_weekly) → driver per C-09 / S-06.
+    WEEKLY_ATTENZIONE_PCT = 75.0   # da qui in su il weekly inizia a vincolare
+    weekly_usage = parsed.get("weekly_usage")
+    weekly_remaining_pct = None
+    proj_weekly = None
+    weekly_binding = False
+    proj_binding = projection
+    if isinstance(weekly_usage, (int, float)):
+        weekly_remaining_pct = round(max(0.0, 100.0 - weekly_usage), 1)
+        # Velocità weekly: rate lineare sul sample di storia più VECCHIO che
+        # porta il weekly. Il weekly NON si resetta sui confini 5h, quindi
+        # usiamo l'intera finestra di storia disponibile (non il session_id).
+        hours_to_weekly_reset = None
+        wru = parsed.get("weekly_reset_at_unix")
+        if isinstance(wru, (int, float)):
+            hours_to_weekly_reset = (wru - now.timestamp()) / 3600.0
+        wk_vel = 0.0
+        oldest_wk = None
+        for h in (history or []):
+            if isinstance(h.get("weekly_usage"), (int, float)):
+                oldest_wk = h
+                break
+        if oldest_wk is not None:
+            owk_ts = _parse_iso(oldest_wk.get("ts"))
+            if owk_ts:
+                wk_elapsed_h = (now - owk_ts).total_seconds() / 3600.0
+                if wk_elapsed_h > 0.05:
+                    wk_vel = max(
+                        0.0,
+                        (weekly_usage - oldest_wk["weekly_usage"]) / wk_elapsed_h,
+                    )
+        if hours_to_weekly_reset and hours_to_weekly_reset > 0:
+            proj_weekly = round(weekly_usage + wk_vel * hours_to_weekly_reset, 2)
+        # Binding se il weekly è GIÀ alto OPPURE proiettato a esaurirsi prima
+        # del reset. Soglia 75% per vincolare PRESTO: il danno è front-loaded
+        # (a metà settimana al 92% è già troppo tardi — vedi postmortem).
+        weekly_binding = (
+            weekly_usage >= WEEKLY_ATTENZIONE_PCT
+            or (proj_weekly is not None and proj_weekly > 100.0)
+        )
+        if proj_weekly is not None and projection is not None:
+            proj_binding = max(projection, proj_weekly)
+        elif proj_weekly is not None:
+            proj_binding = proj_weekly
+        if weekly_binding and status not in ("RESET", "ATTENZIONE"):
+            # Il weekly vince: porta lo status a ATTENZIONE anche se il primary
+            # 5h è SOTTOUTILIZZO / STEADY / OK. Questo è il segnale autoritativo
+            # che il Capitano (C-09) e la Sentinella (S-06) leggono per frenare /
+            # COAST / non spawnare, invece di guardare solo il primary.
+            status, throttle = "ATTENZIONE", max(throttle, 1)
+
     # ── Bug #24: fase Sentinella/Capitano + scala throttle continua ──
     #
     # Fase 1 (normale): proj < 100% e time-to-reset > 30 min → Sentinella
@@ -273,12 +332,21 @@ def compute_metrics(parsed, last, history=None):
     #                   già attuale).
     #
     # `suggested_throttle_s` è scala continua (vs i 3 valori discreti
-    # {0, 300, 600} del passato). Mappatura dalla doc bug #24:
+    # {0, 300, 600} del passato). Mappatura dalla doc bug #24, estesa fino a
+    # 3600s (runaway-scaling postmortem 2026-06-07, fix #1: il vecchio soffitto
+    # 600s rendeva il throttle un nudge omeopatico su un worker che sforava):
     #   100 < proj ≤ 110 → 120s
     #   110 < proj ≤ 130 → 240s
     #   130 < proj ≤ 150 → 360s
     #   150 < proj ≤ 200 → 600s
-    #   proj > 200       → freeze (-1 sentinel value)
+    #   200 < proj ≤ 300 → 1200s
+    #   300 < proj ≤ 400 → 1800s
+    #   proj > 400       → 3600s (max, = jht-throttle.py MAX_SLEEP)
+    # NB: questo è il throttle PER-WORKER. Il freeze dell'INTERO team resta una
+    # decisione separata della Sentinella (EMERGENZA su proj>200 o >150 per ≥3
+    # tick, regola S-05) via freeze_team.py — non più codificata qui come -1.
+    # Quando un singolo worker resta sopra vel_target dopo un throttle 1800-3600s
+    # per ≥2 tick, la leva giusta è il KILL (C-12), non alzare ancora il throttle.
     if hours_to_reset is not None and hours_to_reset <= 0.5:
         phase = 3
     elif projection is not None and projection > 100:
@@ -289,8 +357,12 @@ def compute_metrics(parsed, last, history=None):
     suggested_throttle_s = 0
     if projection is not None:
         p = projection
-        if p > 200:
-            suggested_throttle_s = -1  # freeze
+        if p > 400:
+            suggested_throttle_s = 3600  # max (= jht-throttle.py MAX_SLEEP)
+        elif p > 300:
+            suggested_throttle_s = 1800
+        elif p > 200:
+            suggested_throttle_s = 1200
         elif p > 150:
             suggested_throttle_s = 600
         elif p > 130:
@@ -333,6 +405,13 @@ def compute_metrics(parsed, last, history=None):
         # grep nei sorgenti del bridge. None se il provider non lo espone.
         "weekly_reset_at": parsed.get("weekly_reset_at"),
         "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
+        # Fix #4 (runaway-scaling 2026-06-07): vincolo weekly calcolato IN
+        # CODICE, non più delegato al solo prompt S-06. Il tick li propaga così
+        # C-09/C-12 (Capitano) e S-06 (Sentinella) leggono campi REALI.
+        "proj_weekly": proj_weekly,
+        "weekly_remaining_pct": weekly_remaining_pct,
+        "weekly_binding": weekly_binding,
+        "proj_binding": round(proj_binding, 2) if proj_binding is not None else None,
     }
 
 
