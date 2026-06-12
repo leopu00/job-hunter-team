@@ -418,9 +418,7 @@ export default function MapCharts({
         if (!passLoc(country, cityKey)) return false;
         return true;
       })
-      .sort((a, b) =>
-        (b.created_at ?? "").localeCompare(a.created_at ?? ""),
-      );
+      .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     allItemsLite,
@@ -481,13 +479,7 @@ export default function MapCharts({
       })
       .sort((a, b) => b.count - a.count);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    allItemsLite,
-    locScopeItems,
-    typeDist,
-    selectedRanges,
-    unscoredSelected,
-  ]);
+  }, [allItemsLite, locScopeItems, typeDist, selectedRanges, unscoredSelected]);
 
   // Score grezzi mostrati nel histogram (subset filtered location +
   // tipi selezionati).
@@ -741,8 +733,7 @@ export default function MapCharts({
               fit
               // Area utile = box meno header e padding → riempie esatto.
               fitAspect={
-                (CARD_W - 2 * BODY_PAD) /
-                (CARD_H - HEADER_H - 2 * BODY_PAD)
+                (CARD_W - 2 * BODY_PAD) / (CARD_H - HEADER_H - 2 * BODY_PAD)
               }
             />
           </div>
@@ -1242,10 +1233,7 @@ function CardHeader({
         {title}
       </span>
       {meta != null && (
-        <span
-          className="tabular-nums"
-          style={{ color: "var(--color-muted)" }}
-        >
+        <span className="tabular-nums" style={{ color: "var(--color-muted)" }}>
           {meta}
         </span>
       )}
@@ -1318,197 +1306,199 @@ function LocationTree({
         tr={tr}
       />
       {!collapsed && (
-      <ul
-        className="divide-y overflow-y-auto"
-        style={{
-          borderColor: "var(--color-border)",
-          flex: 1,
-          minHeight: 0,
-          // Niente scroll-chaining alla pagina (mappa) a fine lista.
-          overscrollBehavior: "contain",
-        }}
-      >
-        {tree.map((country) => {
-          const isOpen = openCountry === country.country;
-          const isSelected = selectedCountries.includes(country.country);
-          return (
-            <li
-              key={country.country}
-              style={{ borderColor: "var(--color-border)" }}
-            >
-              <div
-                onClick={() => onCountryClick(country.country)}
-                className="px-4 py-1.5 text-[11px] flex items-baseline justify-between gap-2 cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
-                style={{
-                  background: isSelected
-                    ? "rgba(0,232,122,0.08)"
-                    : isOpen
-                      ? "rgba(255,255,255,0.04)"
-                      : "transparent",
-                }}
+        <ul
+          className="divide-y overflow-y-auto"
+          style={{
+            borderColor: "var(--color-border)",
+            flex: 1,
+            minHeight: 0,
+            // Niente scroll-chaining alla pagina (mappa) a fine lista.
+            overscrollBehavior: "contain",
+          }}
+        >
+          {tree.map((country) => {
+            const isOpen = openCountry === country.country;
+            const isSelected = selectedCountries.includes(country.country);
+            return (
+              <li
+                key={country.country}
+                style={{ borderColor: "var(--color-border)" }}
               >
-                <span
-                  className="truncate flex items-baseline gap-1.5"
+                <div
+                  onClick={() => onCountryClick(country.country)}
+                  className="px-4 py-1.5 text-[11px] flex items-baseline justify-between gap-2 cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
                   style={{
-                    color:
-                      isSelected || isOpen
-                        ? "var(--color-bright)"
-                        : "var(--color-base)",
-                    fontWeight: isSelected || isOpen ? 600 : 400,
+                    background: isSelected
+                      ? "rgba(0,232,122,0.08)"
+                      : isOpen
+                        ? "rgba(255,255,255,0.04)"
+                        : "transparent",
                   }}
-                  title={country.country}
                 >
-                  <button
-                    aria-label={isOpen ? tr("close") : tr("open")}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCountryCaret(country.country);
-                    }}
+                  <span
+                    className="truncate flex items-baseline gap-1.5"
                     style={{
-                      display: "inline-block",
-                      width: 14,
-                      color: "var(--color-dim)",
-                      fontSize: 9,
-                      background: "transparent",
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      lineHeight: 1,
+                      color:
+                        isSelected || isOpen
+                          ? "var(--color-bright)"
+                          : "var(--color-base)",
+                      fontWeight: isSelected || isOpen ? 600 : 400,
+                    }}
+                    title={country.country}
+                  >
+                    <button
+                      aria-label={isOpen ? tr("close") : tr("open")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onCountryCaret(country.country);
+                      }}
+                      style={{
+                        display: "inline-block",
+                        width: 14,
+                        color: "var(--color-dim)",
+                        fontSize: 9,
+                        background: "transparent",
+                        border: "none",
+                        padding: 0,
+                        cursor: "pointer",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {isOpen ? "▼" : "▶"}
+                    </button>
+                    {country.country}
+                  </span>
+                  <span
+                    className="tabular-nums font-semibold flex-shrink-0"
+                    style={{
+                      color:
+                        isSelected || isOpen
+                          ? "var(--color-bright)"
+                          : "var(--color-muted)",
                     }}
                   >
-                    {isOpen ? "▼" : "▶"}
-                  </button>
-                  {country.country}
-                </span>
-                <span
-                  className="tabular-nums font-semibold flex-shrink-0"
-                  style={{
-                    color:
-                      isSelected || isOpen
-                        ? "var(--color-bright)"
-                        : "var(--color-muted)",
-                  }}
-                >
-                  {country.count}
-                </span>
-              </div>
-              {isOpen && (
-                <ul>
-                  {country.cities.map((city) => {
-                    const cityKey = `${country.country}|${city.city ?? "(country-only)"}`;
-                    const isCityOpen = openCity === cityKey;
-                    const isCitySelected = selectedCities.includes(cityKey);
-                    const cityLabel = city.city ?? tr("no_city");
-                    return (
-                      <li
-                        key={cityKey}
-                        style={{ borderColor: "var(--color-border)" }}
-                      >
-                        <div
-                          onClick={() => onCityClick(cityKey)}
-                          className="px-4 py-1 pl-7 text-[10.5px] flex items-baseline justify-between gap-2 cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
-                          style={{
-                            background: isCitySelected
-                              ? "rgba(0,232,122,0.08)"
-                              : isCityOpen
-                                ? "rgba(255,255,255,0.04)"
-                                : "transparent",
-                          }}
+                    {country.count}
+                  </span>
+                </div>
+                {isOpen && (
+                  <ul>
+                    {country.cities.map((city) => {
+                      const cityKey = `${country.country}|${city.city ?? "(country-only)"}`;
+                      const isCityOpen = openCity === cityKey;
+                      const isCitySelected = selectedCities.includes(cityKey);
+                      const cityLabel = city.city ?? tr("no_city");
+                      return (
+                        <li
+                          key={cityKey}
+                          style={{ borderColor: "var(--color-border)" }}
                         >
-                          <span
-                            className="truncate flex items-baseline gap-1.5"
+                          <div
+                            onClick={() => onCityClick(cityKey)}
+                            className="px-4 py-1 pl-7 text-[10.5px] flex items-baseline justify-between gap-2 cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
                             style={{
-                              color:
-                                isCitySelected || isCityOpen
-                                  ? "var(--color-bright)"
-                                  : "var(--color-muted)",
-                              fontWeight:
-                                isCitySelected || isCityOpen ? 600 : 400,
-                              fontStyle: city.city ? "normal" : "italic",
+                              background: isCitySelected
+                                ? "rgba(0,232,122,0.08)"
+                                : isCityOpen
+                                  ? "rgba(255,255,255,0.04)"
+                                  : "transparent",
                             }}
-                            title={cityLabel}
                           >
-                            <button
-                              aria-label={isCityOpen ? tr("close") : tr("open")}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onCityCaret(cityKey);
-                              }}
+                            <span
+                              className="truncate flex items-baseline gap-1.5"
                               style={{
-                                display: "inline-block",
-                                width: 14,
-                                color: "var(--color-dim)",
-                                fontSize: 9,
-                                background: "transparent",
-                                border: "none",
-                                padding: 0,
-                                cursor: "pointer",
-                                lineHeight: 1,
+                                color:
+                                  isCitySelected || isCityOpen
+                                    ? "var(--color-bright)"
+                                    : "var(--color-muted)",
+                                fontWeight:
+                                  isCitySelected || isCityOpen ? 600 : 400,
+                                fontStyle: city.city ? "normal" : "italic",
+                              }}
+                              title={cityLabel}
+                            >
+                              <button
+                                aria-label={
+                                  isCityOpen ? tr("close") : tr("open")
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onCityCaret(cityKey);
+                                }}
+                                style={{
+                                  display: "inline-block",
+                                  width: 14,
+                                  color: "var(--color-dim)",
+                                  fontSize: 9,
+                                  background: "transparent",
+                                  border: "none",
+                                  padding: 0,
+                                  cursor: "pointer",
+                                  lineHeight: 1,
+                                }}
+                              >
+                                {isCityOpen ? "▼" : "▶"}
+                              </button>
+                              {cityLabel}
+                            </span>
+                            <span
+                              className="tabular-nums flex-shrink-0"
+                              style={{
+                                color:
+                                  isCitySelected || isCityOpen
+                                    ? "var(--color-bright)"
+                                    : "var(--color-dim)",
                               }}
                             >
-                              {isCityOpen ? "▼" : "▶"}
-                            </button>
-                            {cityLabel}
-                          </span>
-                          <span
-                            className="tabular-nums flex-shrink-0"
-                            style={{
-                              color:
-                                isCitySelected || isCityOpen
-                                  ? "var(--color-bright)"
-                                  : "var(--color-dim)",
-                            }}
-                          >
-                            {city.count}
-                          </span>
-                        </div>
-                        {isCityOpen && (
-                          <ul
-                            className="border-t"
-                            style={{ borderColor: "var(--color-border)" }}
-                          >
-                            {city.positions.map((p) => (
-                              <li
-                                key={p.id}
-                                style={{ borderColor: "var(--color-border)" }}
-                              >
-                                <button
-                                  onClick={() => onPositionClick(p.id)}
-                                  className="block w-full text-left px-4 py-1 pl-10 text-[10px] hover:bg-[rgba(255,255,255,0.04)] transition-colors"
-                                  style={{
-                                    background: "transparent",
-                                    border: "none",
-                                    cursor: "pointer",
-                                  }}
+                              {city.count}
+                            </span>
+                          </div>
+                          {isCityOpen && (
+                            <ul
+                              className="border-t"
+                              style={{ borderColor: "var(--color-border)" }}
+                            >
+                              {city.positions.map((p) => (
+                                <li
+                                  key={p.id}
+                                  style={{ borderColor: "var(--color-border)" }}
                                 >
-                                  {/* Solo titolo + azienda (niente score). */}
-                                  <div
-                                    className="truncate"
-                                    style={{ color: "var(--color-base)" }}
-                                    title={p.title ?? ""}
+                                  <button
+                                    onClick={() => onPositionClick(p.id)}
+                                    className="block w-full text-left px-4 py-1 pl-10 text-[10px] hover:bg-[rgba(255,255,255,0.04)] transition-colors"
+                                    style={{
+                                      background: "transparent",
+                                      border: "none",
+                                      cursor: "pointer",
+                                    }}
                                   >
-                                    {p.title ?? tr("no_title")}
-                                  </div>
-                                  <div
-                                    className="text-[9px] truncate"
-                                    style={{ color: "var(--color-dim)" }}
-                                  >
-                                    {p.company ?? "—"}
-                                  </div>
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+                                    {/* Solo titolo + azienda (niente score). */}
+                                    <div
+                                      className="truncate"
+                                      style={{ color: "var(--color-base)" }}
+                                      title={p.title ?? ""}
+                                    >
+                                      {p.title ?? tr("no_title")}
+                                    </div>
+                                    <div
+                                      className="text-[9px] truncate"
+                                      style={{ color: "var(--color-dim)" }}
+                                    >
+                                      {p.company ?? "—"}
+                                    </div>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

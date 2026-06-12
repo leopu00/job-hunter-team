@@ -68,7 +68,8 @@ function formatSalary(
   rates: Rates,
 ): string {
   const sym = currencySymbol(to);
-  const f = (n: number) => formatMoneyCompact(convertCurrency(n, from, to, rates));
+  const f = (n: number) =>
+    formatMoneyCompact(convertCurrency(n, from, to, rates));
   if (min != null && max != null)
     return min === max ? `${sym}${f(min)}` : `${sym}${f(min)}–${f(max)}`;
   if (min != null) return `${sym}≥${f(min)}`;
@@ -176,7 +177,9 @@ export default function RecentPositionsTable({
     <div className="mb-8">
       <div className="flex items-center justify-between mb-4">
         <span className="section-label">
-          {filtered ? `${labels.titleFiltered} · ${totalFiltered}` : labels.title}
+          {filtered
+            ? `${labels.titleFiltered} · ${totalFiltered}`
+            : labels.title}
         </span>
         <Link
           href="/positions"

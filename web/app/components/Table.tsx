@@ -4,8 +4,24 @@ import { useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 
 const T: Record<string, Record<string, string>> = {
-  noData: { it: "Nessun dato", en: "No data", hu: "Nincs adat", es: "Sin datos", de: "Keine Daten", fr: "Aucune donnée", pt: "Nenhum dado" },
-  loading: { it: "Caricamento…", en: "Loading…", hu: "Betöltés…", es: "Cargando…", de: "Wird geladen…", fr: "Chargement…", pt: "Carregando…" },
+  noData: {
+    it: "Nessun dato",
+    en: "No data",
+    hu: "Nincs adat",
+    es: "Sin datos",
+    de: "Keine Daten",
+    fr: "Aucune donnée",
+    pt: "Nenhum dado",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────

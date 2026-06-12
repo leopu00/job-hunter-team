@@ -45,10 +45,15 @@ export async function PATCH(
       { status: 400 },
     );
   }
-  const status = String(body.status || "").trim().toLowerCase();
+  const status = String(body.status || "")
+    .trim()
+    .toLowerCase();
   if (!VALID_STATUS.has(status)) {
     return NextResponse.json(
-      { ok: false, error: `invalid status (allowed: ${[...VALID_STATUS].join(", ")})` },
+      {
+        ok: false,
+        error: `invalid status (allowed: ${[...VALID_STATUS].join(", ")})`,
+      },
       { status: 400 },
     );
   }
@@ -61,10 +66,16 @@ export async function PATCH(
     .eq("user_id", userId)
     .maybeSingle();
   if (readErr) {
-    return NextResponse.json({ ok: false, error: readErr.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: readErr.message },
+      { status: 500 },
+    );
   }
   if (!row) {
-    return NextResponse.json({ ok: false, error: "request not found" }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, error: "request not found" },
+      { status: 404 },
+    );
   }
 
   // ── uploading: claim atomico + signed upload URL ───────────────────
@@ -74,14 +85,21 @@ export async function PATCH(
 
     const { data: claimed, error: claimErr } = await admin
       .from("file_bridge_requests")
-      .update({ status: "uploading", storage_path: storagePath, updated_at: new Date().toISOString() })
+      .update({
+        status: "uploading",
+        storage_path: storagePath,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", id)
       .eq("user_id", userId)
       .eq("status", "pending")
       .select("id")
       .maybeSingle();
     if (claimErr) {
-      return NextResponse.json({ ok: false, error: claimErr.message }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: claimErr.message },
+        { status: 500 },
+      );
     }
     if (!claimed) {
       return NextResponse.json(
@@ -101,7 +119,10 @@ export async function PATCH(
         .eq("id", id)
         .eq("user_id", userId);
       return NextResponse.json(
-        { ok: false, error: `signed upload url failed: ${signErr?.message || "unknown"}` },
+        {
+          ok: false,
+          error: `signed upload url failed: ${signErr?.message || "unknown"}`,
+        },
         { status: 500 },
       );
     }
@@ -114,9 +135,14 @@ export async function PATCH(
   }
 
   // ── ready / error ──────────────────────────────────────────────────
-  const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() };
+  const update: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
   if (status === "ready") {
-    update.expires_at = new Date(Date.now() + TTL_MINUTES * 60 * 1000).toISOString();
+    update.expires_at = new Date(
+      Date.now() + TTL_MINUTES * 60 * 1000,
+    ).toISOString();
     update.error = null;
   } else if (status === "error") {
     update.error = (body.error || "unknown").slice(0, 2000);
@@ -130,10 +156,16 @@ export async function PATCH(
     .select("id, status")
     .maybeSingle();
   if (error) {
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 },
+    );
   }
   if (!data) {
-    return NextResponse.json({ ok: false, error: "request not found" }, { status: 404 });
+    return NextResponse.json(
+      { ok: false, error: "request not found" },
+      { status: 404 },
+    );
   }
   return NextResponse.json({ ok: true, request: data });
 }

@@ -143,8 +143,7 @@ function validateFile(
         ? file.name.toLowerCase().endsWith(a.toLowerCase())
         : file.type === a,
     );
-    if (!ok)
-      return (UNSUPPORTED[locale] ?? UNSUPPORTED.en)(accept.join(", "));
+    if (!ok) return (UNSUPPORTED[locale] ?? UNSUPPORTED.en)(accept.join(", "));
   }
   return null;
 }

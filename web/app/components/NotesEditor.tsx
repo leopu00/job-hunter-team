@@ -14,22 +14,58 @@ const T: Record<string, Record<string, string>> = {
     pt: "Escreva notas… Suporta **negrito**, *itálico*, `código`, # títulos, - listas",
   },
   edit: {
-    it: "Modifica", en: "Edit", hu: "Szerkesztés", es: "Editar", de: "Bearbeiten", fr: "Modifier", pt: "Editar",
+    it: "Modifica",
+    en: "Edit",
+    hu: "Szerkesztés",
+    es: "Editar",
+    de: "Bearbeiten",
+    fr: "Modifier",
+    pt: "Editar",
   },
   preview: {
-    it: "Preview", en: "Preview", hu: "Előnézet", es: "Vista previa", de: "Vorschau", fr: "Aperçu", pt: "Pré-visualização",
+    it: "Preview",
+    en: "Preview",
+    hu: "Előnézet",
+    es: "Vista previa",
+    de: "Vorschau",
+    fr: "Aperçu",
+    pt: "Pré-visualização",
   },
   words_chars: {
-    it: "{w}p · {c}c", en: "{w}w · {c}c", hu: "{w}sz · {c}k", es: "{w}p · {c}c", de: "{w}W · {c}Z", fr: "{w}m · {c}c", pt: "{w}p · {c}c",
+    it: "{w}p · {c}c",
+    en: "{w}w · {c}c",
+    hu: "{w}sz · {c}k",
+    es: "{w}p · {c}c",
+    de: "{w}W · {c}Z",
+    fr: "{w}m · {c}c",
+    pt: "{w}p · {c}c",
   },
   saving: {
-    it: "● salvataggio…", en: "● saving…", hu: "● mentés…", es: "● guardando…", de: "● Speichern…", fr: "● enregistrement…", pt: "● a guardar…",
+    it: "● salvataggio…",
+    en: "● saving…",
+    hu: "● mentés…",
+    es: "● guardando…",
+    de: "● Speichern…",
+    fr: "● enregistrement…",
+    pt: "● a guardar…",
   },
   modified: {
-    it: "● modificato", en: "● modified", hu: "● módosítva", es: "● modificado", de: "● geändert", fr: "● modifié", pt: "● modificado",
+    it: "● modificato",
+    en: "● modified",
+    hu: "● módosítva",
+    es: "● modificado",
+    de: "● geändert",
+    fr: "● modifié",
+    pt: "● modificado",
   },
   no_note: {
-    it: "Nessuna nota", en: "No note", hu: "Nincs jegyzet", es: "Sin notas", de: "Keine Notiz", fr: "Aucune note", pt: "Sem nota",
+    it: "Nessuna nota",
+    en: "No note",
+    hu: "Nincs jegyzet",
+    es: "Sin notas",
+    de: "Keine Notiz",
+    fr: "Aucune note",
+    pt: "Sem nota",
   },
 };
 
@@ -197,7 +233,9 @@ export function NotesEditor({
             className="text-[9px] font-mono"
             style={{ color: "var(--color-dim)" }}
           >
-            {tr("words_chars").replace("{w}", String(words)).replace("{c}", String(chars))}
+            {tr("words_chars")
+              .replace("{w}", String(words))
+              .replace("{c}", String(chars))}
           </span>
           <span
             className="text-[9px]"

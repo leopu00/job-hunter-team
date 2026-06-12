@@ -71,7 +71,14 @@ function FlagPT() {
     <svg aria-hidden="true" width="20" height="14" viewBox="0 0 20 14">
       <rect width="8" height="14" fill="#006600" />
       <rect x="8" width="12" height="14" fill="#FF0000" />
-      <circle cx="8" cy="7" r="2.4" fill="none" stroke="#FFD700" strokeWidth="1" />
+      <circle
+        cx="8"
+        cy="7"
+        r="2.4"
+        fill="none"
+        stroke="#FFD700"
+        strokeWidth="1"
+      />
     </svg>
   );
 }
@@ -185,49 +192,49 @@ export default function LanguageSwitcher({
           {[...locales]
             .sort((a, b) => a.label.localeCompare(b.label))
             .map((l) => {
-            const Flag = FLAGS[l.code] || FlagEN;
-            return (
-              <button
-                key={l.code}
-                role="option"
-                aria-selected={l.code === current}
-                onClick={() => switchLocale(l.code)}
-                className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors cursor-pointer"
-                style={{
-                  background:
-                    l.code === current ? "var(--color-card)" : "transparent",
-                  color:
-                    l.code === current
-                      ? "var(--color-white)"
-                      : "var(--color-muted)",
-                  fontSize: 11,
-                  fontWeight: l.code === current ? 600 : 400,
-                  fontFamily: "var(--font-mono)",
-                }}
-              >
-                <Flag />
-                <span>{l.label}</span>
-                {l.code === current && (
-                  <svg
-                    aria-hidden="true"
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="none"
-                    className="ml-auto"
-                  >
-                    <path
-                      d="M2 5L4 7L8 3"
-                      stroke="var(--color-green)"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </button>
-            );
-          })}
+              const Flag = FLAGS[l.code] || FlagEN;
+              return (
+                <button
+                  key={l.code}
+                  role="option"
+                  aria-selected={l.code === current}
+                  onClick={() => switchLocale(l.code)}
+                  className="flex items-center gap-2.5 w-full px-3 py-2 text-left transition-colors cursor-pointer"
+                  style={{
+                    background:
+                      l.code === current ? "var(--color-card)" : "transparent",
+                    color:
+                      l.code === current
+                        ? "var(--color-white)"
+                        : "var(--color-muted)",
+                    fontSize: 11,
+                    fontWeight: l.code === current ? 600 : 400,
+                    fontFamily: "var(--font-mono)",
+                  }}
+                >
+                  <Flag />
+                  <span>{l.label}</span>
+                  {l.code === current && (
+                    <svg
+                      aria-hidden="true"
+                      width="10"
+                      height="10"
+                      viewBox="0 0 10 10"
+                      fill="none"
+                      className="ml-auto"
+                    >
+                      <path
+                        d="M2 5L4 7L8 3"
+                        stroke="var(--color-green)"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
         </div>
       )}
     </div>

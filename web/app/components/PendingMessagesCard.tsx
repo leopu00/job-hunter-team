@@ -192,10 +192,25 @@ const T: Record<string, Record<string, string>> = {
   },
 };
 
-const AGENT_META: Record<string, { labelKey: string; emoji: string; color: string }> = {
-  capitano: { labelKey: "agent_capitano", emoji: "🎯", color: "var(--color-yellow)" },
-  mentor: { labelKey: "agent_mentor", emoji: "🧙‍♂️", color: "var(--color-purple)" },
-  assistente: { labelKey: "agent_assistente", emoji: "👨‍💼", color: "var(--color-blue)" },
+const AGENT_META: Record<
+  string,
+  { labelKey: string; emoji: string; color: string }
+> = {
+  capitano: {
+    labelKey: "agent_capitano",
+    emoji: "🎯",
+    color: "var(--color-yellow)",
+  },
+  mentor: {
+    labelKey: "agent_mentor",
+    emoji: "🧙‍♂️",
+    color: "var(--color-purple)",
+  },
+  assistente: {
+    labelKey: "agent_assistente",
+    emoji: "👨‍💼",
+    color: "var(--color-blue)",
+  },
 };
 
 const KIND_BORDER: Record<PendingMessageKind, string> = {
@@ -312,7 +327,11 @@ export default function PendingMessagesCard({ initialMessages }: Props) {
         {messages.map((m) => {
           const agentMeta = AGENT_META[m.agent];
           const agentInfo = agentMeta
-            ? { name: tr(agentMeta.labelKey), emoji: agentMeta.emoji, color: agentMeta.color }
+            ? {
+                name: tr(agentMeta.labelKey),
+                emoji: agentMeta.emoji,
+                color: agentMeta.color,
+              }
             : { name: m.agent, emoji: "🤖", color: "var(--color-muted)" };
           const kindBorder = KIND_BORDER[m.kind] ?? "var(--color-border)";
           const isReplying = activeReplyId === m.id;
@@ -346,7 +365,9 @@ export default function PendingMessagesCard({ initialMessages }: Props) {
                         border: `1px solid ${kindBorder}`,
                       }}
                     >
-                      {KIND_LABEL_KEY[m.kind] ? tr(KIND_LABEL_KEY[m.kind]) : m.kind}
+                      {KIND_LABEL_KEY[m.kind]
+                        ? tr(KIND_LABEL_KEY[m.kind])
+                        : m.kind}
                     </span>
                     <span className="text-[10px] text-[var(--color-dim)]">
                       {fmtRelative(m.created_at)}

@@ -198,14 +198,12 @@ export default function DashboardLinkedCharts({
     ...selectedFamilies.map((v) => ({
       id: `fam:${v}`,
       label: v,
-      remove: () =>
-        setSelectedFamilies((c) => c.filter((x) => x !== v)),
+      remove: () => setSelectedFamilies((c) => c.filter((x) => x !== v)),
     })),
     ...selectedCountries.map((v) => ({
       id: `cty:${v}`,
       label: v === UNKNOWN ? tr("no_country") : v,
-      remove: () =>
-        setSelectedCountries((c) => c.filter((x) => x !== v)),
+      remove: () => setSelectedCountries((c) => c.filter((x) => x !== v)),
     })),
     ...selectedCities.map((v) => {
       const [country, city] = v.split("|");
@@ -218,14 +216,12 @@ export default function DashboardLinkedCharts({
     ...selectedScoreBins.map((lo) => ({
       id: `sco:${lo}`,
       label: `Score ${lo}–${lo + SCORE_BIN}`,
-      remove: () =>
-        setSelectedScoreBins((c) => c.filter((x) => x !== lo)),
+      remove: () => setSelectedScoreBins((c) => c.filter((x) => x !== lo)),
     })),
     ...selectedSalaryBins.map((lo) => ({
       id: `sal:${lo}`,
       label: salaryBinLabel(lo),
-      remove: () =>
-        setSelectedSalaryBins((c) => c.filter((x) => x !== lo)),
+      remove: () => setSelectedSalaryBins((c) => c.filter((x) => x !== lo)),
     })),
   ];
 
@@ -237,7 +233,8 @@ export default function DashboardLinkedCharts({
     selectedFamilies.includes(familyKey(p.role_family));
   const passLocation = (p: DashboardPosition) => {
     if (!locationActive) return true;
-    if (selectedCities.includes(cityKey(p.loc_country, p.loc_city))) return true;
+    if (selectedCities.includes(cityKey(p.loc_country, p.loc_city)))
+      return true;
     if (selectedCountries.includes(countryKey(p.loc_country))) return true;
     return false;
   };
@@ -249,7 +246,9 @@ export default function DashboardLinkedCharts({
   const passScore = (score: number | null) => {
     if (selectedScoreBins.length === 0) return true;
     if (score == null || score <= 0) return false;
-    return selectedScoreBins.some((lo) => score >= lo && score < lo + SCORE_BIN);
+    return selectedScoreBins.some(
+      (lo) => score >= lo && score < lo + SCORE_BIN,
+    );
   };
   const passSalary = (p: DashboardPosition) => {
     if (selectedSalaryBins.length === 0) return true;
@@ -264,10 +263,20 @@ export default function DashboardLinkedCharts({
       (p) => passLocation(p) && passScore(p.score) && passSalary(p),
     );
     return aggregateRoleFamilies(
-      pool.map((p) => ({ role_family: p.role_family, score: p.score, critic: null })),
+      pool.map((p) => ({
+        role_family: p.role_family,
+        score: p.score,
+        critic: null,
+      })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedCountries, selectedCities, selectedScoreBins, selectedSalaryBins]);
+  }, [
+    rows,
+    selectedCountries,
+    selectedCities,
+    selectedScoreBins,
+    selectedSalaryBins,
+  ]);
 
   // Paesi: scope per family + score (esclude la dimensione location).
   const countryItems = useMemo(() => {
@@ -317,7 +326,10 @@ export default function DashboardLinkedCharts({
         continue;
       }
       const k = cityKey(p.loc_country, p.loc_city);
-      const cur = byCity.get(k) ?? { count: 0, country: countryKey(p.loc_country) };
+      const cur = byCity.get(k) ?? {
+        count: 0,
+        country: countryKey(p.loc_country),
+      };
       cur.count++;
       byCity.set(k, cur);
     }
@@ -340,7 +352,13 @@ export default function DashboardLinkedCharts({
       });
     return { items, distinct: real.length };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedFamilies, selectedScoreBins, selectedSalaryBins, selectedCountries]);
+  }, [
+    rows,
+    selectedFamilies,
+    selectedScoreBins,
+    selectedSalaryBins,
+    selectedCountries,
+  ]);
 
   // Score: scope per location + family (esclude la propria dimensione).
   const scoreData = useMemo(() => {
@@ -351,7 +369,13 @@ export default function DashboardLinkedCharts({
       .map((p) => p.score)
       .filter((s): s is number => typeof s === "number" && s > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedCountries, selectedCities, selectedFamilies, selectedSalaryBins]);
+  }, [
+    rows,
+    selectedCountries,
+    selectedCities,
+    selectedFamilies,
+    selectedSalaryBins,
+  ]);
 
   // Stipendi: scope per family + location + score (esclude la PROPRIA
   // dimensione, come gli altri grafici-filtro, così selezionare una fascia
@@ -363,7 +387,13 @@ export default function DashboardLinkedCharts({
         .map(salaryValueEur)
         .filter((v): v is number => v != null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, selectedFamilies, selectedCountries, selectedCities, selectedScoreBins],
+    [
+      rows,
+      selectedFamilies,
+      selectedCountries,
+      selectedCities,
+      selectedScoreBins,
+    ],
   );
 
   // Tabella: posizioni che soddisfano TUTTI i filtri attivi, già ordinate

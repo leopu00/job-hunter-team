@@ -33,8 +33,16 @@ type Option = { val: string; label: string; color?: string };
 // lo status reale (URL + filtro server), cambia solo la label mostrata.
 const STATUS_OPTIONS: Option[] = [
   { val: "new", label: "Nuove, da analizzare", color: "var(--color-muted)" },
-  { val: "checked", label: "Analizzate, da valutare", color: "var(--color-blue)" },
-  { val: "scored", label: "Valutate, da scrivere", color: "var(--color-purple)" },
+  {
+    val: "checked",
+    label: "Analizzate, da valutare",
+    color: "var(--color-blue)",
+  },
+  {
+    val: "scored",
+    label: "Valutate, da scrivere",
+    color: "var(--color-purple)",
+  },
   { val: "writing", label: "In scrittura", color: "var(--color-yellow)" },
   { val: "review", label: "In revisione", color: "var(--color-orange)" },
   { val: "ready", label: "Pronte, da inviare", color: "#7fffb2" },
@@ -229,7 +237,9 @@ export default function PositionsFilterSidebar({
   const passScore = (score: number | null) => {
     if (!scoreRange && !unscoredSelected) return true;
     if (score == null || score === 0) return unscoredSelected;
-    return scoreRange ? score >= scoreRange.lo && score <= scoreRange.hi : false;
+    return scoreRange
+      ? score >= scoreRange.lo && score <= scoreRange.hi
+      : false;
   };
   const passCritic = (c: number | null) => {
     if (!criticRange && !criticUnscored) return true;
@@ -284,9 +294,20 @@ export default function PositionsFilterSidebar({
       if (typeof p.score === "number" && p.score > 0) scored.push(p.score);
       else unscored++;
     }
-    return { bins: buildBins(scored, SCORE_STEP), total: pool.length, unscored };
+    return {
+      bins: buildBins(scored, SCORE_STEP),
+      total: pool.length,
+      unscored,
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facets, selectedCountries, selectedCities, selectedFamilies, criticRange, criticUnscored]);
+  }, [
+    facets,
+    selectedCountries,
+    selectedCities,
+    selectedFamilies,
+    criticRange,
+    criticUnscored,
+  ]);
 
   // Voto critico (0-10): istogramma, scope per location + family + score.
   const criticHist = useMemo(() => {
@@ -299,9 +320,20 @@ export default function PositionsFilterSidebar({
       if (typeof p.critic_score === "number") voted.push(p.critic_score);
       else unscored++;
     }
-    return { bins: buildBins(voted, CRITIC_STEP), total: pool.length, unscored };
+    return {
+      bins: buildBins(voted, CRITIC_STEP),
+      total: pool.length,
+      unscored,
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facets, selectedCountries, selectedCities, selectedFamilies, scoreRange, unscoredSelected]);
+  }, [
+    facets,
+    selectedCountries,
+    selectedCities,
+    selectedFamilies,
+    scoreRange,
+    unscoredSelected,
+  ]);
 
   // Location tree: scope per family + score + voto (esclude la propria dim.).
   const locationTree = useMemo(() => {
@@ -339,7 +371,14 @@ export default function PositionsFilterSidebar({
     });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facets, selectedFamilies, scoreRange, unscoredSelected, criticRange, criticUnscored]);
+  }, [
+    facets,
+    selectedFamilies,
+    scoreRange,
+    unscoredSelected,
+    criticRange,
+    criticUnscored,
+  ]);
 
   const treeTotal = locationTree.reduce((s, c) => s + c.count, 0);
 
@@ -406,7 +445,9 @@ export default function PositionsFilterSidebar({
       <Section
         title="Score"
         badge={
-          scoreRange ? `${scoreRange.lo}–${scoreRange.hi}` : `${scoreHist.total}`
+          scoreRange
+            ? `${scoreRange.lo}–${scoreRange.hi}`
+            : `${scoreHist.total}`
         }
       >
         <RangeHistogram
@@ -684,7 +725,9 @@ function ChipSection({
                     ? {
                         color: o.color ?? "var(--color-bright)",
                         borderColor: o.color ?? "var(--color-green)",
-                        background: o.color ? `${o.color}20` : "var(--color-card)",
+                        background: o.color
+                          ? `${o.color}20`
+                          : "var(--color-card)",
                       }
                     : {
                         color: "var(--color-dim)",

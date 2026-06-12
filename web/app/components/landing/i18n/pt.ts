@@ -165,8 +165,7 @@ export const pt: Record<string, string> = {
   dl_step2_desc:
     "Abre o launcher desktop e deixa o bootstrap e o arranque do runtime correr automaticamente",
   dl_step3_title: "Usa",
-  dl_step3_desc:
-    "O navegador abre em localhost com o painel web da equipa",
+  dl_step3_desc: "O navegador abre em localhost com o painel web da equipa",
   dl_setup_title: "Nota de instalação",
   dl_setup_desc:
     "Os pacotes desktop para macOS, Windows e Linux incluem o launcher e o payload web já pronto. A CLI e a TUI oferecem, por sua vez, um acesso mais avançado ao mesmo runtime local. No Linux podem ser necessárias bibliotecas de sistema padrão para o AppImage.",
@@ -210,8 +209,7 @@ export const pt: Record<string, string> = {
   faq_title: "Perguntas frequentes",
   faq_subtitle: "Tudo o que precisas de saber sobre o Job Hunter Team.",
   faq_no_answer: "Não encontras a resposta?",
-  faq_no_answer_desc:
-    "Consulta o guia completo ou a documentação técnica.",
+  faq_no_answer_desc: "Consulta o guia completo ou a documentação técnica.",
   faq_guide_btn: "Guia do utilizador",
   faq_docs_btn: "Documentação",
 
@@ -264,8 +262,10 @@ export const pt: Record<string, string> = {
   about_how_0: "Cada agente corre como um worker local isolado",
   about_how_1:
     "O runtime orquestra as passagens e mensagens estruturadas entre os módulos",
-  about_how_2: "Pipeline coordenado: Scout → Analista → Scorer → Escritor → Crítico",
-  about_how_3: "Sistema de tarefas com estado (pendente → em curso → concluído)",
+  about_how_2:
+    "Pipeline coordenado: Scout → Analista → Scorer → Escritor → Crítico",
+  about_how_3:
+    "Sistema de tarefas com estado (pendente → em curso → concluído)",
   about_how_4: "A Sentinela monitoriza custos e saúde em tempo real",
   about_vision_label: "visão",
   about_vision_title: "O futuro",

@@ -49,10 +49,30 @@ describe("validateCandidateProfile", () => {
       blocks: [
         { key: "a", kind: "narrative", title: "A", content: "testo" },
         { key: "b", kind: "tag_list", title: "B", content: ["x", "y"] },
-        { key: "c", kind: "key_value", title: "C", content: [{ label: "L", value: "V" }] },
-        { key: "d", kind: "key_points", title: "D", content: [{ heading: "H", text: "T" }] },
-        { key: "e", kind: "timeline", title: "E", content: [{ title: "ruolo" }] },
-        { key: "f", kind: "distribution", title: "F", content: [{ label: "x", value: 3 }] },
+        {
+          key: "c",
+          kind: "key_value",
+          title: "C",
+          content: [{ label: "L", value: "V" }],
+        },
+        {
+          key: "d",
+          kind: "key_points",
+          title: "D",
+          content: [{ heading: "H", text: "T" }],
+        },
+        {
+          key: "e",
+          kind: "timeline",
+          title: "E",
+          content: [{ title: "ruolo" }],
+        },
+        {
+          key: "f",
+          kind: "distribution",
+          title: "F",
+          content: [{ label: "x", value: 3 }],
+        },
       ],
     });
     assert.equal(r.ok, true);

@@ -6,7 +6,8 @@ export type Bin = { lo: number; hi: number; count: number };
 export type Range = { lo: number; hi: number };
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
-const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+const clamp = (n: number, lo: number, hi: number) =>
+  Math.min(hi, Math.max(lo, n));
 
 /**
  * Costruisce i bin di un istogramma facendo AUTO-FIT al range realmente
@@ -14,7 +15,9 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
  * stanno tra 4.2 e 9.1 con step 0.5, i bin partono da 4.0 e finiscono a 9.0.
  */
 export function buildBins(values: number[], step: number): Bin[] {
-  const present = values.filter((v) => typeof v === "number" && !Number.isNaN(v));
+  const present = values.filter(
+    (v) => typeof v === "number" && !Number.isNaN(v),
+  );
   if (!present.length) return [];
   const lo = Math.min(...present);
   const hi = Math.max(...present);
@@ -100,11 +103,16 @@ export default function RangeHistogram({
       if (!el) return domainMin;
       const rect = el.getBoundingClientRect();
       const ratio = rect.width ? (clientX - rect.left) / rect.width : 0;
-      return clamp(snap(domainMin + ratio * (domainMax - domainMin)), domainMin, domainMax);
+      return clamp(
+        snap(domainMin + ratio * (domainMax - domainMin)),
+        domainMin,
+        domainMax,
+      );
     };
     const move = (e: PointerEvent) => {
       const v = valueFromX(e.clientX);
-      const base = pendingRef.current ?? value ?? { lo: domainMin, hi: domainMax };
+      const base = pendingRef.current ??
+        value ?? { lo: domainMin, hi: domainMax };
       const next =
         dragThumb === "lo"
           ? { lo: Math.min(v, base.hi), hi: base.hi }
@@ -237,7 +245,10 @@ export default function RangeHistogram({
       </div>
 
       {anchor != null && (
-        <div className="text-[9px] mt-1" style={{ color: "var(--color-green)" }}>
+        <div
+          className="text-[9px] mt-1"
+          style={{ color: "var(--color-green)" }}
+        >
           Clicca un&apos;altra barra per chiudere il range…
         </div>
       )}
@@ -258,8 +269,16 @@ export default function RangeHistogram({
               opacity: display ? 1 : 0.35,
             }}
           />
-          <Thumb posPct={pct(sliderLo)} onPointerDown={startThumb("lo")} label="Limite inferiore" />
-          <Thumb posPct={pct(sliderHi)} onPointerDown={startThumb("hi")} label="Limite superiore" />
+          <Thumb
+            posPct={pct(sliderLo)}
+            onPointerDown={startThumb("lo")}
+            label="Limite inferiore"
+          />
+          <Thumb
+            posPct={pct(sliderHi)}
+            onPointerDown={startThumb("hi")}
+            label="Limite superiore"
+          />
         </div>
       </div>
 
@@ -317,7 +336,9 @@ export default function RangeHistogram({
           onClick={onToggleUnscored}
           className="mt-2 w-full flex items-center justify-between px-2 py-1 rounded cursor-pointer hover:bg-[rgba(255,255,255,0.04)] transition-colors"
           style={{
-            background: unscoredSelected ? "rgba(0,232,122,0.08)" : "transparent",
+            background: unscoredSelected
+              ? "rgba(0,232,122,0.08)"
+              : "transparent",
           }}
           aria-pressed={unscoredSelected}
         >

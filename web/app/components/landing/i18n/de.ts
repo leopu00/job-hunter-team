@@ -264,8 +264,10 @@ export const de: Record<string, string> = {
   about_how_0: "Jeder Agent läuft als isolierter lokaler Worker",
   about_how_1:
     "Die Runtime orchestriert Übergaben und strukturierte Nachrichten zwischen den Modulen",
-  about_how_2: "Koordinierte Pipeline: Scout → Analyst → Scorer → Schreiber → Kritiker",
-  about_how_3: "Aufgabensystem mit Status (ausstehend → in Bearbeitung → erledigt)",
+  about_how_2:
+    "Koordinierte Pipeline: Scout → Analyst → Scorer → Schreiber → Kritiker",
+  about_how_3:
+    "Aufgabensystem mit Status (ausstehend → in Bearbeitung → erledigt)",
   about_how_4: "Der Wächter überwacht Kosten und Gesundheit in Echtzeit",
   about_vision_label: "Vision",
   about_vision_title: "Die Zukunft",
@@ -286,7 +288,8 @@ export const de: Record<string, string> = {
   ob_s1_title: "Willkommen",
   ob_s1_desc:
     "Job Hunter Team ist dein persönliches KI-Agententeam. Es findet Stellen, analysiert sie, schreibt maßgeschneiderte Lebensläufe und Anschreiben — alles automatisch, alles auf deinem Computer.",
-  ob_s1_hint: "Richten wir gemeinsam deinen Arbeitsbereich in 5 schnellen Schritten ein.",
+  ob_s1_hint:
+    "Richten wir gemeinsam deinen Arbeitsbereich in 5 schnellen Schritten ein.",
   ob_s2_title: "Profil einrichten",
   ob_s2_desc:
     "Gib deinen Namen, die gesuchte Rolle und eine kurze Zusammenfassung deiner Erfahrung an. Die Agenten verwenden diese Informationen, um jede Bewerbung zu personalisieren.",

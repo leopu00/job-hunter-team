@@ -526,7 +526,7 @@ function explodeGroups(
       } else {
         const meters = offset * mpp;
         lat = g.lat;
-        lon = g.lon + ((meters / 111000) * lonScale);
+        lon = g.lon + (meters / 111000) * lonScale;
       }
       const singleScores: (number | null)[] = [p.score];
       out.push({
@@ -1301,7 +1301,6 @@ export default function JobsGlobe({
     };
   }, [selected]);
 
-
   // Auto-zoom sui pin filtrati: ogni volta che cambia displayData
   // (filtri donut/histogram di /map o primo fetch), riadatta la
   // vista per inquadrare i pin attualmente mostrati.
@@ -1603,8 +1602,7 @@ export default function JobsGlobe({
             })()}
 
             {/* Divisore + riga meta: tipologia (sx) | data (dx). */}
-            {(selected.role_family ||
-              formatFoundDate(selected.created_at)) && (
+            {(selected.role_family || formatFoundDate(selected.created_at)) && (
               <div
                 className="mt-2 pt-2 flex items-center justify-between gap-2 text-[9px]"
                 style={{ borderTop: "1px solid var(--color-border)" }}
