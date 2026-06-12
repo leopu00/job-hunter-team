@@ -480,44 +480,24 @@ def compute_tick(ast, tba, rb, now: datetime,
         # proj < 70% = "stiamo sprecando >20% del budget alla chiusura".
         STALL_KT_THRESHOLD = 5.0
         STALL_PROJ_THRESHOLD = 70.0
-        # Fix #4 (runaway-scaling 2026-06-07): questo branch era WEEKLY-BLIND.
-        # Emetteva "spawna SCOUT" anche col weekly Codex quasi esaurito → spingeva
-        # ad accelerare proprio quando il team rallentava perché il weekly era
-        # finito (incidente 07/06). Ora leggiamo weekly_usage: se è alto e la
-        # pipeline è idle, una coda vuota NON è undershoot da riempire — è lavoro
-        # finito a budget scarso → COAST (non spawnare, aspetta il reset weekly).
-        WEEKLY_COAST_PCT = 80.0
-        weekly_used = sample.get("weekly_usage")
         if (
             team_kt < STALL_KT_THRESHOLD
             and isinstance(proj, (int, float))
             and proj < STALL_PROJ_THRESHOLD
         ):
-            weekly_high = (
-                isinstance(weekly_used, (int, float))
-                and weekly_used >= WEEKLY_COAST_PCT
-            )
             return {
                 "ok": False,
                 "now": now,
-                "error": "pipeline_coast_weekly" if weekly_high else "pipeline_stalled",
+                "error": "pipeline_stalled",
                 "delta_usage": delta_usage,
                 "team_kt": team_kt,
                 "usage_now": usage_now,
                 "proj": proj,
-                "weekly_usage": weekly_used,
                 "h_to_reset": hours_to_reset(
                     sample.get("reset_at"), now, sample.get("reset_at_unix")
                 ),
-                "hint": (
-                    "PIPELINE IDLE ma WEEKLY ALTO — NON spawnare per riempire la "
-                    "coda: a weekly esaurito una coda vuota è lavoro finito, non "
-                    "undershoot. COAST: throttla/killa i worker idle e aspetta il "
-                    "reset weekly."
-                    if weekly_high else
-                    "PIPELINE STALLED — pochi token consumati e proj "
-                    "sotto target. Riaccendere pipeline da monte."
-                ),
+                "hint": "PIPELINE STALLED — pochi token consumati e proj "
+                        "sotto target. Riaccendere pipeline da monte.",
             }
         return {
             "ok": False,
@@ -673,23 +653,6 @@ def format_message(d: dict) -> str:
         # PIPELINE STALLED: messaggio attivo (non solo "tick saltato") con
         # comando esplicito per il capitano. Triggerato quando team_kt < 5
         # e proj < 70% — vedi compute_projection.
-        # Fix #4: weekly alto + pipeline idle → COAST (NON spawnare). Distinto
-        # dal pipeline_stalled "riaccendi pipeline": qui il freno è il weekly.
-        if why == "pipeline_coast_weekly":
-            usage_now = d.get("usage_now", "?")
-            weekly = d.get("weekly_usage", "?")
-            weekly_str = f"{weekly:.0f}%" if isinstance(weekly, (int, float)) else str(weekly)
-            h_to_reset = d.get("h_to_reset")
-            h_str = f"{h_to_reset:.2f}h" if isinstance(h_to_reset, (int, float)) else "?"
-            return (
-                f"[BRIDGE PACING] WEEKLY COAST — weekly={weekly_str} usage={usage_now}% "
-                f"reset_in={h_str} team_kt={d.get('team_kt', 0):.1f}. Pipeline idle MA "
-                f"weekly quasi esaurito: NON spawnare per riempire la coda (coda vuota "
-                f"a weekly alto = lavoro finito, non undershoot). Applica C-12: throttla "
-                f"alto / KILL i worker a cadenza 0 e COAST fino al reset weekly. Lo spazio "
-                f"di ricerca è probabilmente esaurito — verifica scout-dedup prima di "
-                f"qualsiasi spawn."
-            )
         if why == "pipeline_stalled":
             usage_now = d.get("usage_now", "?")
             proj = d.get("proj", "?")
