@@ -62,6 +62,7 @@ const translations = {
     hu: "Esettanulmányok",
   },
   nav_project: { it: "Il progetto", en: "Project", hu: "Projekt" },
+  nav_chronicles: { it: "Cronache", en: "Chronicles", hu: "Krónikák" },
   nav_demo: { it: "Demo", en: "Demo", hu: "Demó" },
   nav_guide: { it: "Guida", en: "Guide", hu: "Útmutató" },
   nav_faq: { it: "FAQ", en: "FAQ", hu: "GYIK" },
