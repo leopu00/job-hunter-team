@@ -72,6 +72,7 @@ function WeekNobodySawContent() {
           </p>
         </header>
 
+        {/* cover trasparente (box Tesseract): nessuna maschera sfumata */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/chronicles/week-nobody-saw.png"
@@ -79,14 +80,6 @@ function WeekNobodySawContent() {
           width={1672}
           height={941}
           className="w-full h-auto mb-12"
-          style={{
-            WebkitMaskImage:
-              "linear-gradient(to bottom, transparent 0%, #000 14%, #000 82%, transparent 100%), linear-gradient(to right, transparent 0%, #000 9%, #000 91%, transparent 100%)",
-            WebkitMaskComposite: "source-in",
-            maskImage:
-              "linear-gradient(to bottom, transparent 0%, #000 14%, #000 82%, transparent 100%), linear-gradient(to right, transparent 0%, #000 9%, #000 91%, transparent 100%)",
-            maskComposite: "intersect",
-          }}
         />
 
         <div>
