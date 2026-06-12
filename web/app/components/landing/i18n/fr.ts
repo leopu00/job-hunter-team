@@ -92,7 +92,7 @@ export const fr: Record<string, string> = {
     "Saisissez votre nom, vos compétences, votre zone de recherche et le type de travail. Les agents se calibrent sur votre profil pour trouver les bonnes offres.",
   demo_s2_title: "Lancez l'équipe",
   demo_s2_desc:
-    'Depuis la page Équipe, cliquez sur « Tout démarrer ». Chaque agent s\'active dans sa session : le Scout cherche, l\'Analyste évalue, le Scorer classe.',
+    "Depuis la page Équipe, cliquez sur « Tout démarrer ». Chaque agent s'active dans sa session : le Scout cherche, l'Analyste évalue, le Scorer classe.",
   demo_s3_title: "Pipeline en action",
   demo_s3_desc:
     "Le pipeline travaille en autonomie. Le Scout trouve les offres, l'Analyste les examine, le Scorer calcule la correspondance, le Rédacteur prépare les documents.",
@@ -264,7 +264,8 @@ export const fr: Record<string, string> = {
   about_how_0: "Chaque agent tourne comme un worker local isolé",
   about_how_1:
     "Le runtime orchestre les passages et les messages structurés entre les modules",
-  about_how_2: "Pipeline coordonné : Scout → Analyste → Scorer → Rédacteur → Critique",
+  about_how_2:
+    "Pipeline coordonné : Scout → Analyste → Scorer → Rédacteur → Critique",
   about_how_3: "Système de tâches avec état (en attente → en cours → terminé)",
   about_how_4: "La Sentinelle surveille coûts et santé en temps réel",
   about_vision_label: "vision",
@@ -296,7 +297,8 @@ export const fr: Record<string, string> = {
   ob_s3_title: "Choisissez les compétences",
   ob_s3_desc:
     "Sélectionnez les technologies et compétences que vous maîtrisez. Le Scorer les utilisera pour calculer la correspondance avec chaque offre.",
-  ob_s3_hint: "Cliquez pour sélectionner, cliquez à nouveau pour désélectionner.",
+  ob_s3_hint:
+    "Cliquez pour sélectionner, cliquez à nouveau pour désélectionner.",
   ob_s4_title: "Connectez un fournisseur d'IA",
   ob_s4_desc:
     "Les agents tournent sur l'une des trois CLI prises en charge (Claude Code, Codex, Kimi). Vous devrez vous connecter avec l'abonnement que vous avez déjà chez le fournisseur ; JHT ne demande ni ne stocke de clés API.",

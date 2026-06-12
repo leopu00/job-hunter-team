@@ -41,7 +41,8 @@ export async function GET() {
   }
 
   const uploadsDir = JHT_USER_UPLOADS_DIR;
-  if (!fs.existsSync(uploadsDir)) return NextResponse.json({ files: [], mode: "local" });
+  if (!fs.existsSync(uploadsDir))
+    return NextResponse.json({ files: [], mode: "local" });
 
   try {
     const entries = fs.readdirSync(uploadsDir, { withFileTypes: true });

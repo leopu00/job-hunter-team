@@ -106,9 +106,7 @@ export default async function DashboardPage() {
         salary_currency: "EUR",
         found_at: p.found_at ?? null,
         last_action_at:
-          (p as { last_action_at?: string }).last_action_at ??
-          p.found_at ??
-          "",
+          (p as { last_action_at?: string }).last_action_at ?? p.found_at ?? "",
         // Demo: attore plausibile dedotto dallo stato corrente.
         last_action_by: DEMO_ACTOR_BY_STATUS[p.status] ?? "scout",
         last_action_actor: DEMO_ACTOR_BY_STATUS[p.status] ?? "scout",

@@ -100,8 +100,7 @@ const T = {
     s5_body:
       "JHT es completamente de código abierto. Puedes verificar en cualquier momento lo que hace el código examinando el repositorio en GitHub.",
     s6_title: "Contacto",
-    s6_body:
-      "Para cuestiones de privacidad, escribe a info@jobhunterteam.ai.",
+    s6_body: "Para cuestiones de privacidad, escribe a info@jobhunterteam.ai.",
   },
   de: {
     title: "Datenschutzerklärung",
@@ -124,8 +123,7 @@ const T = {
     s5_body:
       "JHT ist vollständig Open Source. Du kannst jederzeit überprüfen, was der Code tut, indem du das Repository auf GitHub untersuchst.",
     s6_title: "Kontakt",
-    s6_body:
-      "Bei Fragen zum Datenschutz schreibe an info@jobhunterteam.ai.",
+    s6_body: "Bei Fragen zum Datenschutz schreibe an info@jobhunterteam.ai.",
   },
   fr: {
     title: "Politique de Confidentialité",

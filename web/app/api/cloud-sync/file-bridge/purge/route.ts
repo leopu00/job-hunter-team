@@ -27,10 +27,15 @@ export async function POST(req: NextRequest) {
     .lt("expires_at", nowIso)
     .limit(200);
   if (readErr) {
-    return NextResponse.json({ ok: false, error: readErr.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: readErr.message },
+      { status: 500 },
+    );
   }
 
-  const paths = (stale || []).map((r) => r.storage_path).filter((p): p is string => !!p);
+  const paths = (stale || [])
+    .map((r) => r.storage_path)
+    .filter((p): p is string => !!p);
   if (paths.length > 0) {
     const { error: rmErr } = await admin.storage.from(BUCKET).remove(paths);
     if (rmErr) {

@@ -96,9 +96,7 @@ export default function PositionTypesPie({
   const focusedFamily =
     hovered ?? (selectedTypes.length === 1 ? selectedTypes[0] : null);
   const focused =
-    focusedFamily != null
-      ? data.find((d) => d.family === focusedFamily)
-      : null;
+    focusedFamily != null ? data.find((d) => d.family === focusedFamily) : null;
   const focusedPct =
     focused && total > 0 ? Math.round((focused.count / total) * 100) : null;
 
@@ -141,90 +139,89 @@ export default function PositionTypesPie({
           className="relative shrink-0"
           style={{ width: size, height: size }}
         >
-        <svg
-          width={size}
-          height={size}
-          viewBox={`0 0 ${SIZE} ${SIZE}`}
-          aria-label={title}
-          role="img"
-          onMouseLeave={() => setHovered(null)}
-        >
-          <circle
-            cx={CX}
-            cy={CY}
-            r={(RADIUS + INNER) / 2}
-            fill="none"
-            stroke="var(--color-border)"
-            strokeWidth={RADIUS - INNER}
-            opacity={total === 0 ? 0.5 : 0}
-          />
-          {(() => {
-            let acc = -Math.PI / 2; // start at top
-            return data.map((d) => {
-              const span = (d.count / total) * 2 * Math.PI;
-              const path = arc(acc, acc + span);
-              acc += span;
-              const isHover = hovered === d.family;
-              const isSelected = selectedTypes.includes(d.family);
-              const active = isHover || isSelected;
-              const dimmed =
-                (hovered != null && !isHover && !isSelected) ||
-                (hovered == null && hasSelection && !isSelected);
-              return (
-                <path
-                  key={d.family}
-                  d={path}
-                  fill={d.color}
-                  opacity={active ? 1 : dimmed ? 0.32 : 0.88}
-                  stroke="var(--color-card)"
-                  strokeWidth={active ? 1.5 : 1}
-                  onMouseEnter={() => setHovered(d.family)}
-                  onClick={() => onToggleType?.(d.family)}
-                  style={{
-                    cursor: onToggleType ? "pointer" : "default",
-                    transition: "opacity 0.15s ease, stroke-width 0.15s ease",
-                  }}
-                >
-                  <title>{`${labelFor(d.family)} — ${d.count} (${Math.round((d.count / total) * 100)}%)`}</title>
-                </path>
-              );
-            });
-          })()}
+          <svg
+            width={size}
+            height={size}
+            viewBox={`0 0 ${SIZE} ${SIZE}`}
+            aria-label={title}
+            role="img"
+            onMouseLeave={() => setHovered(null)}
+          >
+            <circle
+              cx={CX}
+              cy={CY}
+              r={(RADIUS + INNER) / 2}
+              fill="none"
+              stroke="var(--color-border)"
+              strokeWidth={RADIUS - INNER}
+              opacity={total === 0 ? 0.5 : 0}
+            />
+            {(() => {
+              let acc = -Math.PI / 2; // start at top
+              return data.map((d) => {
+                const span = (d.count / total) * 2 * Math.PI;
+                const path = arc(acc, acc + span);
+                acc += span;
+                const isHover = hovered === d.family;
+                const isSelected = selectedTypes.includes(d.family);
+                const active = isHover || isSelected;
+                const dimmed =
+                  (hovered != null && !isHover && !isSelected) ||
+                  (hovered == null && hasSelection && !isSelected);
+                return (
+                  <path
+                    key={d.family}
+                    d={path}
+                    fill={d.color}
+                    opacity={active ? 1 : dimmed ? 0.32 : 0.88}
+                    stroke="var(--color-card)"
+                    strokeWidth={active ? 1.5 : 1}
+                    onMouseEnter={() => setHovered(d.family)}
+                    onClick={() => onToggleType?.(d.family)}
+                    style={{
+                      cursor: onToggleType ? "pointer" : "default",
+                      transition: "opacity 0.15s ease, stroke-width 0.15s ease",
+                    }}
+                  >
+                    <title>{`${labelFor(d.family)} — ${d.count} (${Math.round((d.count / total) * 100)}%)`}</title>
+                  </path>
+                );
+              });
+            })()}
+          </svg>
 
-        </svg>
-
-        {/* Etichetta centrale come overlay HTML: vincolata alla larghezza del
+          {/* Etichetta centrale come overlay HTML: vincolata alla larghezza del
             foro del donut (wrapping su 2 righe + ellissi), così i nomi lunghi
             non escono dal donut. Sfondo scuro del foro = sempre leggibile,
             anche se il colore family coincide con una fetta. pointer-events
             disabilitati per non rubare l'hover alle fette sotto. */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-1">
-          <div
-            className="font-bold leading-tight line-clamp-2"
-            style={{
-              maxWidth: ((INNER * 2) / SIZE) * size,
-              fontSize: 14,
-              color: focused ? focused.color : "var(--color-dim)",
-            }}
-            title={centerLabel}
-          >
-            {centerLabel}
-          </div>
-          <div
-            className="font-bold leading-none text-[var(--color-bright)]"
-            style={{ fontSize: 32, marginTop: 4 }}
-          >
-            {centerValue}
-          </div>
-          {centerPct != null && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-1">
             <div
-              className="text-[var(--color-muted)]"
-              style={{ fontSize: 13, marginTop: 2 }}
+              className="font-bold leading-tight line-clamp-2"
+              style={{
+                maxWidth: ((INNER * 2) / SIZE) * size,
+                fontSize: 14,
+                color: focused ? focused.color : "var(--color-dim)",
+              }}
+              title={centerLabel}
             >
-              {centerPct}%
+              {centerLabel}
             </div>
-          )}
-        </div>
+            <div
+              className="font-bold leading-none text-[var(--color-bright)]"
+              style={{ fontSize: 32, marginTop: 4 }}
+            >
+              {centerValue}
+            </div>
+            {centerPct != null && (
+              <div
+                className="text-[var(--color-muted)]"
+                style={{ fontSize: 13, marginTop: 2 }}
+              >
+                {centerPct}%
+              </div>
+            )}
+          </div>
         </div>
 
         <ul

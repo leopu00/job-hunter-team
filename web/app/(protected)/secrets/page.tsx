@@ -464,7 +464,9 @@ export default function SecretsPage() {
                 <div className="flex gap-1 flex-shrink-0">
                   <button
                     onClick={() => reveal(s)}
-                    aria-label={s.masked ? tr("reveal_show") : tr("reveal_hide")}
+                    aria-label={
+                      s.masked ? tr("reveal_show") : tr("reveal_hide")
+                    }
                     className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors"
                     style={{
                       border: "1px solid var(--color-border)",

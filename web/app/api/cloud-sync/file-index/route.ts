@@ -32,10 +32,16 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, error: "invalid JSON body" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "invalid JSON body" },
+      { status: 400 },
+    );
   }
   if (!Array.isArray(body.files)) {
-    return NextResponse.json({ ok: false, error: "files[] richiesto" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "files[] richiesto" },
+      { status: 400 },
+    );
   }
 
   const now = new Date().toISOString();
@@ -49,7 +55,8 @@ export async function POST(req: NextRequest) {
       sha256: typeof f.sha256 === "string" ? f.sha256 : null,
       size: Number.isFinite(f.size) ? f.size : null,
       mime: typeof f.mime === "string" ? f.mime : null,
-      location_on_vps: typeof f.location_on_vps === "string" ? f.location_on_vps : null,
+      location_on_vps:
+        typeof f.location_on_vps === "string" ? f.location_on_vps : null,
       updated_at: now,
     }));
 
@@ -59,7 +66,10 @@ export async function POST(req: NextRequest) {
       .from("candidate_files")
       .upsert(rows, { onConflict: "user_id,name" });
     if (upErr) {
-      return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: upErr.message },
+        { status: 500 },
+      );
     }
   }
 
@@ -73,7 +83,10 @@ export async function POST(req: NextRequest) {
   }
   const { error: delErr } = await delQuery;
   if (delErr) {
-    return NextResponse.json({ ok: false, error: delErr.message }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: delErr.message },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true, indexed: rows.length });

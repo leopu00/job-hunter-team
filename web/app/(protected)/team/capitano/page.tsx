@@ -704,7 +704,9 @@ export default function CapitanoPage() {
             {status?.output ? (
               status.output
             ) : (
-              <span style={{ color: "var(--color-dim)" }}>{tr("noOutput")}</span>
+              <span style={{ color: "var(--color-dim)" }}>
+                {tr("noOutput")}
+              </span>
             )}
           </div>
         </div>

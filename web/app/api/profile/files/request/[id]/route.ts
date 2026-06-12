@@ -41,7 +41,10 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   if (!row) {
-    return NextResponse.json({ error: "richiesta non trovata" }, { status: 404 });
+    return NextResponse.json(
+      { error: "richiesta non trovata" },
+      { status: 404 },
+    );
   }
 
   if (row.status !== "ready" || !row.storage_path) {

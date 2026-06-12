@@ -9,14 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
-export type DashboardLocale =
-  | "it"
-  | "en"
-  | "hu"
-  | "es"
-  | "de"
-  | "fr"
-  | "pt";
+export type DashboardLocale = "it" | "en" | "hu" | "es" | "de" | "fr" | "pt";
 
 // ── Translations ─────────────────────────────────────────────────────────────
 

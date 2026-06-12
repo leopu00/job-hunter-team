@@ -204,188 +204,188 @@ export default function ScoreDistribution({
           {emptyLabel}
         </div>
       ) : (
-      <svg
-        width="100%"
-        height={H}
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label={title}
-        className="my-auto"
-        style={{ overflow: "visible" }}
-        onMouseLeave={() => setHover(null)}
-      >
-        {/* Griglia orizzontale 4 linee */}
-        {[0.25, 0.5, 0.75, 1].map((t) => (
-          <line
-            key={t}
-            x1={PAD_LEFT}
-            x2={PAD_LEFT + chartW}
-            y1={PAD_TOP + chartH * (1 - t)}
-            y2={PAD_TOP + chartH * (1 - t)}
-            stroke="var(--color-border)"
-            strokeWidth={1}
-            strokeDasharray="2 4"
-            opacity={0.5}
-          />
-        ))}
-
-        {/* Asse X — tick dinamici sul dominio */}
-        {xTicks.map((v) => (
-          <g key={v}>
+        <svg
+          width="100%"
+          height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          role="img"
+          aria-label={title}
+          className="my-auto"
+          style={{ overflow: "visible" }}
+          onMouseLeave={() => setHover(null)}
+        >
+          {/* Griglia orizzontale 4 linee */}
+          {[0.25, 0.5, 0.75, 1].map((t) => (
             <line
-              x1={sx(v)}
-              x2={sx(v)}
-              y1={PAD_TOP + chartH}
-              y2={PAD_TOP + chartH + 3}
-              stroke="var(--color-dim)"
-            />
-            <text
-              x={sx(v)}
-              y={PAD_TOP + chartH + 14}
-              fontSize={9}
-              textAnchor="middle"
-              fill="var(--color-dim)"
-              style={{ fontFamily: "inherit" }}
-            >
-              {fmt(v)}
-            </text>
-          </g>
-        ))}
-
-        {/* Bars */}
-        {stats.bins.map((count, i) => {
-          const x = PAD_LEFT + i * barW;
-          const y = by(count);
-          const h = PAD_TOP + chartH - y;
-          const isHover = hover === i;
-          const binLo = (stats.firstBin + i) * binStep;
-          const isSelected = selectedBins.includes(binLo);
-          const score = binLo + binStep / 2;
-          // Hover prevale; in presenza di selezione, i bin non selezionati
-          // (e non hovered) sono attenuati.
-          const opacity = isHover
-            ? 1
-            : hover != null
-              ? 0.35
-              : hasSelection
-                ? isSelected
-                  ? 1
-                  : 0.28
-                : 0.85;
-          return (
-            <rect
-              key={i}
-              x={x + 0.5}
-              y={y}
-              width={Math.max(1, barW - 1)}
-              height={h}
-              fill={barColor ?? colorForFraction(score / maxScore)}
-              opacity={opacity}
-              stroke={isSelected ? "var(--color-bright)" : "none"}
-              strokeWidth={isSelected ? 1 : 0}
-              onMouseEnter={() => setHover(i)}
-              onClick={() => onToggleBin?.(binLo)}
-              style={{
-                cursor: onToggleBin ? "pointer" : "default",
-                transition: "opacity 0.12s",
-              }}
-            />
-          );
-        })}
-
-        {/* Linea verticale: media */}
-        {stats.n > 0 && (
-          <g>
-            <line
-              x1={sx(stats.avg)}
-              x2={sx(stats.avg)}
-              y1={PAD_TOP}
-              y2={PAD_TOP + chartH}
-              stroke="var(--color-bright)"
-              strokeWidth={1.5}
-              strokeDasharray="3 3"
-            />
-            <text
-              x={sx(stats.avg)}
-              y={PAD_TOP - 2}
-              fontSize={9}
-              textAnchor="middle"
-              fill="var(--color-bright)"
-              fontWeight={700}
-              style={{ fontFamily: "inherit" }}
-            >
-              avg {fmt(stats.avg)}
-            </text>
-          </g>
-        )}
-
-        {/* Linea verticale: soglia ready */}
-        {thresholdReady != null && (
-          <g>
-            <line
-              x1={sx(thresholdReady)}
-              x2={sx(thresholdReady)}
-              y1={PAD_TOP}
-              y2={PAD_TOP + chartH}
-              stroke="var(--color-green)"
+              key={t}
+              x1={PAD_LEFT}
+              x2={PAD_LEFT + chartW}
+              y1={PAD_TOP + chartH * (1 - t)}
+              y2={PAD_TOP + chartH * (1 - t)}
+              stroke="var(--color-border)"
               strokeWidth={1}
-              strokeDasharray="2 5"
-              opacity={0.6}
+              strokeDasharray="2 4"
+              opacity={0.5}
             />
-            <text
-              x={sx(thresholdReady) + 3}
-              y={PAD_TOP + 8}
-              fontSize={8}
-              fill="var(--color-green)"
-              opacity={0.8}
-              style={{ fontFamily: "inherit" }}
-            >
-              {thresholdLabel ?? `ready ≥${thresholdReady}`}
-            </text>
-          </g>
-        )}
+          ))}
 
-        {/* Hover tooltip */}
-        {hoveredBin != null &&
-          hoveredCount > 0 &&
-          (() => {
-            const binX = PAD_LEFT + hoveredBin * barW;
-            const tipX = Math.min(W - 110, Math.max(0, binX - 50));
-            const tipY = Math.max(0, by(hoveredCount) - 38);
+          {/* Asse X — tick dinamici sul dominio */}
+          {xTicks.map((v) => (
+            <g key={v}>
+              <line
+                x1={sx(v)}
+                x2={sx(v)}
+                y1={PAD_TOP + chartH}
+                y2={PAD_TOP + chartH + 3}
+                stroke="var(--color-dim)"
+              />
+              <text
+                x={sx(v)}
+                y={PAD_TOP + chartH + 14}
+                fontSize={9}
+                textAnchor="middle"
+                fill="var(--color-dim)"
+                style={{ fontFamily: "inherit" }}
+              >
+                {fmt(v)}
+              </text>
+            </g>
+          ))}
+
+          {/* Bars */}
+          {stats.bins.map((count, i) => {
+            const x = PAD_LEFT + i * barW;
+            const y = by(count);
+            const h = PAD_TOP + chartH - y;
+            const isHover = hover === i;
+            const binLo = (stats.firstBin + i) * binStep;
+            const isSelected = selectedBins.includes(binLo);
+            const score = binLo + binStep / 2;
+            // Hover prevale; in presenza di selezione, i bin non selezionati
+            // (e non hovered) sono attenuati.
+            const opacity = isHover
+              ? 1
+              : hover != null
+                ? 0.35
+                : hasSelection
+                  ? isSelected
+                    ? 1
+                    : 0.28
+                  : 0.85;
             return (
-              <g style={{ pointerEvents: "none" }}>
-                <rect
-                  x={tipX}
-                  y={tipY}
-                  width={108}
-                  height={32}
-                  rx={4}
-                  fill="var(--color-panel)"
-                  stroke="var(--color-border)"
-                />
-                <text
-                  x={tipX + 8}
-                  y={tipY + 14}
-                  fontSize={10}
-                  fill="var(--color-bright)"
-                  fontWeight={700}
-                  style={{ fontFamily: "inherit" }}
-                >
-                  {hoveredLo}–{hoveredHi}
-                </text>
-                <text
-                  x={tipX + 8}
-                  y={tipY + 27}
-                  fontSize={9}
-                  fill="var(--color-muted)"
-                  style={{ fontFamily: "inherit" }}
-                >
-                  {hoveredCount} · {hoveredPct}%
-                </text>
-              </g>
+              <rect
+                key={i}
+                x={x + 0.5}
+                y={y}
+                width={Math.max(1, barW - 1)}
+                height={h}
+                fill={barColor ?? colorForFraction(score / maxScore)}
+                opacity={opacity}
+                stroke={isSelected ? "var(--color-bright)" : "none"}
+                strokeWidth={isSelected ? 1 : 0}
+                onMouseEnter={() => setHover(i)}
+                onClick={() => onToggleBin?.(binLo)}
+                style={{
+                  cursor: onToggleBin ? "pointer" : "default",
+                  transition: "opacity 0.12s",
+                }}
+              />
             );
-          })()}
-      </svg>
+          })}
+
+          {/* Linea verticale: media */}
+          {stats.n > 0 && (
+            <g>
+              <line
+                x1={sx(stats.avg)}
+                x2={sx(stats.avg)}
+                y1={PAD_TOP}
+                y2={PAD_TOP + chartH}
+                stroke="var(--color-bright)"
+                strokeWidth={1.5}
+                strokeDasharray="3 3"
+              />
+              <text
+                x={sx(stats.avg)}
+                y={PAD_TOP - 2}
+                fontSize={9}
+                textAnchor="middle"
+                fill="var(--color-bright)"
+                fontWeight={700}
+                style={{ fontFamily: "inherit" }}
+              >
+                avg {fmt(stats.avg)}
+              </text>
+            </g>
+          )}
+
+          {/* Linea verticale: soglia ready */}
+          {thresholdReady != null && (
+            <g>
+              <line
+                x1={sx(thresholdReady)}
+                x2={sx(thresholdReady)}
+                y1={PAD_TOP}
+                y2={PAD_TOP + chartH}
+                stroke="var(--color-green)"
+                strokeWidth={1}
+                strokeDasharray="2 5"
+                opacity={0.6}
+              />
+              <text
+                x={sx(thresholdReady) + 3}
+                y={PAD_TOP + 8}
+                fontSize={8}
+                fill="var(--color-green)"
+                opacity={0.8}
+                style={{ fontFamily: "inherit" }}
+              >
+                {thresholdLabel ?? `ready ≥${thresholdReady}`}
+              </text>
+            </g>
+          )}
+
+          {/* Hover tooltip */}
+          {hoveredBin != null &&
+            hoveredCount > 0 &&
+            (() => {
+              const binX = PAD_LEFT + hoveredBin * barW;
+              const tipX = Math.min(W - 110, Math.max(0, binX - 50));
+              const tipY = Math.max(0, by(hoveredCount) - 38);
+              return (
+                <g style={{ pointerEvents: "none" }}>
+                  <rect
+                    x={tipX}
+                    y={tipY}
+                    width={108}
+                    height={32}
+                    rx={4}
+                    fill="var(--color-panel)"
+                    stroke="var(--color-border)"
+                  />
+                  <text
+                    x={tipX + 8}
+                    y={tipY + 14}
+                    fontSize={10}
+                    fill="var(--color-bright)"
+                    fontWeight={700}
+                    style={{ fontFamily: "inherit" }}
+                  >
+                    {hoveredLo}–{hoveredHi}
+                  </text>
+                  <text
+                    x={tipX + 8}
+                    y={tipY + 27}
+                    fontSize={9}
+                    fill="var(--color-muted)"
+                    style={{ fontFamily: "inherit" }}
+                  >
+                    {hoveredCount} · {hoveredPct}%
+                  </text>
+                </g>
+              );
+            })()}
+        </svg>
       )}
     </div>
   );

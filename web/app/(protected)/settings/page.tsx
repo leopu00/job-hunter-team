@@ -646,7 +646,10 @@ export default function SettingsPage() {
 
           {tab === "currencies" && (
             <>
-              <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
+              <p
+                className="text-[11px]"
+                style={{ color: "var(--color-muted)" }}
+              >
                 {tr("cur_intro_a")}
                 <strong> {tr("cur_intro_chart")}</strong>
                 {tr("cur_intro_b")}
@@ -699,7 +702,9 @@ export default function SettingsPage() {
                       <span className="font-semibold tabular-nums">
                         {c.code}
                       </span>
-                      <span style={{ color: "var(--color-dim)" }}>{c.name}</span>
+                      <span style={{ color: "var(--color-dim)" }}>
+                        {c.name}
+                      </span>
                       {isBase && (
                         <span
                           className="text-[8px] uppercase tracking-wider px-1 py-0.5 rounded"

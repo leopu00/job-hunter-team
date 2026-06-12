@@ -18,7 +18,9 @@ describe("cross-check zod ↔ python", () => {
     const py = readFileSync(PY, "utf8");
     const m = py.match(/BLOCK_KINDS\s*=\s*\{([^}]*)\}/);
     assert.ok(m, "BLOCK_KINDS non trovato in validate_profile.py");
-    const pyKinds = Array.from(m![1].matchAll(/"([a-z_]+)"/g)).map((x) => x[1]).sort();
+    const pyKinds = Array.from(m![1].matchAll(/"([a-z_]+)"/g))
+      .map((x) => x[1])
+      .sort();
     const tsKinds = [...BLOCK_KINDS].sort();
     assert.deepEqual(tsKinds, pyKinds);
   });

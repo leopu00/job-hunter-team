@@ -31,7 +31,11 @@ const SKILL_CATEGORY_COLORS = [
  */
 function experienceSortKey(period?: string): number {
   if (!period) return 0;
-  if (/present|in corso|current|ongoing|attuale|adesso|oggi|presente|now/i.test(period))
+  if (
+    /present|in corso|current|ongoing|attuale|adesso|oggi|presente|now/i.test(
+      period,
+    )
+  )
     return 999999;
   const years = (period.match(/\b(?:19|20)\d{2}\b/g) ?? []).map(Number);
   return years.length ? Math.max(...years) : 0;
@@ -94,7 +98,10 @@ export default async function ProfilePage() {
       .select("email,phone,linkedin,github,website,address")
       .eq("user_id", user.id)
       .maybeSingle();
-    cloudContacts = decryptContacts(contactsRow) as Record<string, string | null> | null;
+    cloudContacts = decryptContacts(contactsRow) as Record<
+      string,
+      string | null
+    > | null;
   } else {
     profile = readWorkspaceProfile();
   }
@@ -104,11 +111,15 @@ export default async function ProfilePage() {
   // competenze, lingue, contatti, note libere). I blocchi narrativi/semi-liberi
   // (about, goals, strengths, preferences, positioning_*, interessi…) non hanno
   // una resa fissa equivalente — vanno mostrati qui, altrimenti restano invisibili.
-  const COVERED_BLOCK = /^(experience|education|skills|languages|contacts|free_notes)/;
+  const COVERED_BLOCK =
+    /^(experience|education|skills|languages|contacts|free_notes)/;
   const extraBlocks = blocks.filter((b) => b.key && !COVERED_BLOCK.test(b.key));
 
   const pos = profile?.positioning ?? {};
-  const contacts = (cloudContacts ?? pos.contacts ?? {}) as Record<string, string>;
+  const contacts = (cloudContacts ?? pos.contacts ?? {}) as Record<
+    string,
+    string
+  >;
   const experience = (pos.experience ?? []) as {
     role?: string;
     company?: string;
@@ -196,7 +207,10 @@ export default async function ProfilePage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <ProfileEditButton label={t("edit")} message={t("chat_edit_msg")} />
+              <ProfileEditButton
+                label={t("edit")}
+                message={t("chat_edit_msg")}
+              />
               {profile && (
                 <a
                   href="/api/profile/export"
@@ -683,37 +697,37 @@ export default async function ProfilePage() {
                   title={t("sec_job_prefs")}
                 >
                   <div className="flex flex-wrap gap-2 mb-3">
-                  {profile.location_preferences.map((lp, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)]"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        style={{ color: "var(--color-green)" }}
+                    {profile.location_preferences.map((lp, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)]"
                       >
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                        <circle cx="12" cy="10" r="3" />
-                      </svg>
-                      <div>
-                        <span className="text-[10px] font-semibold text-[var(--color-green)]">
-                          {(lp.type ?? "").replace(/_/g, " ")}
-                        </span>
-                        <span className="text-[10px] text-[var(--color-muted)] ml-1">
-                          {lp.region && lp.region}
-                          {lp.cities && lp.cities.join(", ")}
-                          {lp.max_days != null &&
-                            ` (max ${lp.max_days} ${t("days_per_week")})`}
-                          {lp.note && lp.note}
-                        </span>
+                        <svg
+                          aria-hidden="true"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          style={{ color: "var(--color-green)" }}
+                        >
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                        <div>
+                          <span className="text-[10px] font-semibold text-[var(--color-green)]">
+                            {(lp.type ?? "").replace(/_/g, " ")}
+                          </span>
+                          <span className="text-[10px] text-[var(--color-muted)] ml-1">
+                            {lp.region && lp.region}
+                            {lp.cities && lp.cities.join(", ")}
+                            {lp.max_days != null &&
+                              ` (max ${lp.max_days} ${t("days_per_week")})`}
+                            {lp.note && lp.note}
+                          </span>
+                        </div>
                       </div>
-                    </div>
                     ))}
                   </div>
                   {profile.salary_target &&
