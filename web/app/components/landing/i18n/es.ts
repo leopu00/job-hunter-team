@@ -15,6 +15,7 @@ export const es: Record<string, string> = {
   nav_pricing: "Precios",
   nav_about: "Quiénes somos",
   nav_stats: "Estadísticas",
+  nav_chronicles: "Crónicas",
   nav_login: "Iniciar sesión",
 
   // Hero

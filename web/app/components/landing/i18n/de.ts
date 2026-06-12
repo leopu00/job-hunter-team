@@ -15,6 +15,7 @@ export const de: Record<string, string> = {
   nav_pricing: "Preise",
   nav_about: "Über uns",
   nav_stats: "Statistiken",
+  nav_chronicles: "Chroniken",
   nav_login: "Anmelden",
 
   // Hero
