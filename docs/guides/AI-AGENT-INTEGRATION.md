@@ -391,8 +391,8 @@ over SSH with the JHT pubkey installed.
 ## Related
 
 - [`docs/guides/CLI-REFERENCE.md`](CLI-REFERENCE.md) — systematic reference of every `jht` command (host wrapper + Node CLI)
-- [`docs/guides/cli-install.md`](cli-install.md) — `install.sh` one-liner installer behaviour
-- [`docs/guides/quickstart.md`](quickstart.md) — the human-friendly version of this guide
+- [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md) — `install.sh` one-liner installer behaviour
+- [`docs/guides/QUICKSTART.md`](QUICKSTART.md) — the human-friendly version of this guide
 - [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick
 - [`docs/guides/VPS-SETUP.md`](VPS-SETUP.md) — VPS provisioning superset (SSH, Hetzner)
 - [`docs/internal/architecture/onboarding-flow.md`](../internal/architecture/onboarding-flow.md) — design rationale for the 3 paths

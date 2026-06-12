@@ -7,7 +7,7 @@ post-wizard.
 
 > ℹ️ **Path 2** = "Desktop sul tuo Mac/PC + team che gira su VPS Hetzner remota".
 > Vuoi solo CLI manuale via SSH? → [`VPS-SETUP.md`](VPS-SETUP.md) (path tech).
-> Vuoi tutto in locale sul tuo PC, senza cloud? → [`quickstart.md`](quickstart.md).
+> Vuoi tutto in locale sul tuo PC, senza cloud? → [`QUICKSTART.md`](QUICKSTART.md).
 
 ## TL;DR
 
@@ -335,7 +335,7 @@ Non c'è ancora un comando one-shot. Procedura manuale:
 - [`docs/sessions/2026-05-17-budget-windows/`](../sessions/2026-05-17-budget-windows/README.md)
   — come il team gestisce le finestre budget Kimi (con grafici matplotlib)
 - [`VPS-SETUP.md`](VPS-SETUP.md) — versione tech (CLI manuale via SSH)
-- [`quickstart.md`](quickstart.md) — installazione tutto-in-locale
+- [`QUICKSTART.md`](QUICKSTART.md) — installazione tutto-in-locale
 
 ## 🐛 Bug noti (non bloccanti, validati 2026-05-17)
 

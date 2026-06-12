@@ -147,7 +147,7 @@ jht web open
 jht container logs -f
 ```
 
-See [`docs/cli-install.md`](cli-install.md) for the full CLI reference.
+See [`docs/CLI-INSTALL.md`](CLI-INSTALL.md) for the full CLI reference.
 
 ---
 
@@ -226,7 +226,7 @@ jht providers use claude    # switch active provider
 jht providers update        # update CLI versions
 ```
 
-Full CLI reference: [`docs/cli-install.md`](cli-install.md).
+Full CLI reference: [`docs/CLI-INSTALL.md`](CLI-INSTALL.md).
 
 ---
 
@@ -250,5 +250,5 @@ Full CLI reference: [`docs/cli-install.md`](cli-install.md).
 - 🧪 [`docs/BETA.md`](BETA.md) — join the beta program
 - 📊 [`docs/MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel test data
 - 🗺️ [`docs/ROADMAP.md`](../about/ROADMAP.md) — what's coming next
-- 🛠️ [`docs/cli-install.md`](cli-install.md) — full CLI reference
+- 🛠️ [`docs/CLI-INSTALL.md`](CLI-INSTALL.md) — full CLI reference
 - 🏗️ [`docs/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram

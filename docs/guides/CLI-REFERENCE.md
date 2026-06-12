@@ -1,7 +1,7 @@
 # CLI Reference — `jht`
 
 Systematic reference of every `jht` command. For onboarding flows see
-[`quickstart.md`](quickstart.md) (Local) and [`VPS-SETUP.md`](VPS-SETUP.md)
+[`QUICKSTART.md`](QUICKSTART.md) (Local) and [`VPS-SETUP.md`](VPS-SETUP.md)
 (VPS). AI agents driving setup should follow
 [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md), which references the
 relevant commands inline.

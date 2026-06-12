@@ -23,7 +23,7 @@
   <a href="#install">Install</a> ·
   <a href="docs/about/STORY.md">Story</a> ·
   <a href="docs/about/PROVIDERS.md">Providers</a> ·
-  <a href="docs/guides/quickstart.md">Quickstart</a> ·
+  <a href="docs/guides/QUICKSTART.md">Quickstart</a> ·
   <a href="docs/about/ROADMAP.md">Roadmap</a> ·
   <a href="https://jobhunterteam.ai">Website</a>
 </p>
@@ -111,7 +111,7 @@ curl -fsSL https://jobhunterteam.ai/install.sh | bash
 
 **Desktop launcher** — `.dmg` / `.exe` / `.AppImage` / `.deb` from [`/download`](https://jobhunterteam.ai/download) or GitHub Releases.
 
-Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/quickstart.md`](docs/guides/quickstart.md).
+Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/QUICKSTART.md`](docs/guides/QUICKSTART.md).
 
 ## Interfaces
 
