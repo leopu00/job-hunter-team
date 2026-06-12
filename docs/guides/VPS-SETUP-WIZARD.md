@@ -1,368 +1,368 @@
-# VPS setup via wizard desktop — Path 2 (non-tech)
+# VPS setup via desktop wizard — Path 2 (non-tech)
 
-Guida user-facing per installare Job Hunter Team su una VPS Hetzner usando
-**l'app desktop Electron** (no terminale, no SSH manuale). Validato end-to-end
-il **2026-05-16** in modalità "fresh wipe" con 0 patch manuali necessarie
+User-facing guide to install Job Hunter Team on a Hetzner VPS using
+**the Electron desktop app** (no terminal, no manual SSH). Validated end-to-end
+on **2026-05-16** in "fresh wipe" mode with 0 manual patches needed
 post-wizard.
 
-> ℹ️ **Path 2** = "Desktop sul tuo Mac/PC + team che gira su VPS Hetzner remota".
-> Vuoi solo CLI manuale via SSH? → [`VPS-SETUP.md`](VPS-SETUP.md) (path tech).
-> Vuoi tutto in locale sul tuo PC, senza cloud? → [`QUICKSTART.md`](QUICKSTART.md).
+> ℹ️ **Path 2** = "Desktop on your Mac/PC + team running on a remote Hetzner VPS".
+> Just want manual CLI via SSH? → [`VPS-SETUP.md`](VPS-SETUP.md) (tech path).
+> Want everything local on your PC, no cloud? → [`QUICKSTART.md`](QUICKSTART.md).
 
 ## TL;DR
 
-Apri l'app JHT Desktop → segui il wizard. A fine wizard ricevi **3 messaggi
-di benvenuto su Telegram** (Assistente, Capitano, Mentor). Carichi il CV in
-chat all'Assistente → entro ~30 min il team scrive i primi CV personalizzati
-per posizioni reali.
+Open the JHT Desktop app → follow the wizard. At the end of the wizard you get **3 welcome
+messages on Telegram** (Assistant, Captain, Mentor). You upload your CV in
+chat to the Assistant → within ~30 min the team writes the first personalized CVs
+for real positions.
 
-Nessun comando da terminale lato utente.
+No terminal commands on the user side.
 
-## 🧰 Prerequisiti
+## 🧰 Prerequisites
 
-Ti servono già pronti (5 minuti di preparazione):
+You need these ready in advance (5 minutes of prep):
 
-| Cosa | Dove ottenerlo | Quanto ci vuole |
+| What | Where to get it | How long it takes |
 |---|---|---|
-| **Account Supabase OAuth Google** | si crea col wizard al primo login | istantaneo |
-| **3 token bot Telegram** | [@BotFather](https://t.me/BotFather) → `/newbot` × 3 (Assistente, Capitano, Mentor) | ~3 min |
-| **Account Hetzner Cloud** | [console.hetzner.com](https://console.hetzner.com) — serve carta di credito | ~5 min |
-| **Account provider AI** | Kimi (Moonshot, gratuito) oppure Claude/Codex subscription | dipende |
-| **App JHT Desktop installata** | DMG da [jobhunterteam.ai/download](https://jobhunterteam.ai/download) | ~1 min |
+| **Supabase account via Google OAuth** | created by the wizard at first login | instant |
+| **3 Telegram bot tokens** | [@BotFather](https://t.me/BotFather) → `/newbot` × 3 (Assistant, Captain, Mentor) | ~3 min |
+| **Hetzner Cloud account** | [console.hetzner.com](https://console.hetzner.com) — credit card required | ~5 min |
+| **AI provider account** | Kimi (Moonshot, free) or a Claude/Codex subscription | depends |
+| **JHT Desktop app installed** | DMG from [jobhunterteam.ai/download](https://jobhunterteam.ai/download) | ~1 min |
 
-> 💡 **Tip Telegram**: BotFather chiede a ogni `/newbot` un nome (visibile in
-> chat, es. "Il mio Assistente JHT") e uno username (deve finire in `_bot`,
-> es. `mio_assistente_jht_bot`). Salva i 3 token in un posto sicuro — il wizard
-> te li chiederà copia-incolla.
+> 💡 **Telegram tip**: at each `/newbot` BotFather asks for a name (visible in
+> chat, e.g. "My JHT Assistant") and a username (must end in `_bot`,
+> e.g. `my_assistant_jht_bot`). Save the 3 tokens in a safe place — the wizard
+> will ask you to copy-paste them.
 
-## 🎬 Sequenza del wizard
+## 🎬 Wizard sequence
 
-Apri **JHT Desktop**. Il wizard ti porta attraverso questi step in ordine.
+Open **JHT Desktop**. The wizard takes you through these steps in order.
 
-> 📸 **Screenshot mancanti**: questa guida non ha ancora screenshot dei 6 step.
-> Vedi [§Materiali grafici](#-screenshot-todo) in fondo per i placeholder da
-> riempire e contribuire.
+> 📸 **Missing screenshots**: this guide doesn't have screenshots of the 6 steps yet.
+> See [§Graphic materials](#-screenshot-todo) at the bottom for the placeholders to
+> fill in and contribute.
 
-### 1️⃣ Lingua + location
+### 1️⃣ Language + location
 
-- Lingua: Italiano / English
-- Location: scegli **"VPS"** (≠ Local / ≠ PC dedicato)
+- Language: Italian / English
+- Location: choose **"VPS"** (≠ Local / ≠ dedicated PC)
 
-### 2️⃣ Login Supabase
+### 2️⃣ Supabase login
 
-- Click "Accedi con Google" → si apre il browser → autorizzi
-- Torna nell'app, sei loggato
+- Click "Sign in with Google" → the browser opens → you authorize
+- Return to the app, you're logged in
 
-### 3️⃣ Token Telegram (3)
+### 3️⃣ Telegram tokens (3)
 
-Incolla i 3 token che hai ottenuto da BotFather:
-- **Bot Assistente** → ti aiuta a configurare il profilo, riceve il CV
-- **Bot Capitano** → ti aggiorna sulle decisioni operative del team
-- **Bot Mentor** → ti scrive una volta a settimana con analisi strategiche
+Paste the 3 tokens you got from BotFather:
+- **Assistant bot** → helps you set up the profile, receives the CV
+- **Captain bot** → updates you on the team's operational decisions
+- **Mentor bot** → writes to you once a week with strategic analyses
 
-> ⚠️ Il wizard verifica ogni token chiamando l'API Telegram. Se uno è invalido
-> te lo segnala subito.
+> ⚠️ The wizard verifies each token by calling the Telegram API. If one is invalid
+> it tells you right away.
 
-### 4️⃣ Provisioning VPS Hetzner
+### 4️⃣ Hetzner VPS provisioning
 
-Due opzioni:
+Two options:
 
-- **VPS esistente**: incolla l'IP pubblico di una VPS Hetzner che hai già
-- **Nuova VPS**: crea sul portale Hetzner una `CPX22` (€9.75/mese, 4 GB RAM,
-  Helsinki) con la SSH key che il wizard ti mostrerà, poi incolla l'IP
+- **Existing VPS**: paste the public IP of a Hetzner VPS you already have
+- **New VPS**: create a `CPX22` on the Hetzner portal (€9.75/month, 4 GB RAM,
+  Helsinki) with the SSH key the wizard shows you, then paste the IP
 
-Il wizard fa SSH e gira `install.sh` automaticamente sulla VPS:
-- scrive `host.env` (mode VPS)
-- salva pairing-token in `/root/.jht/`
-- allinea ownership UID 1001 (il container gira come `jht`)
-- pull dell'image Docker GHCR `ghcr.io/leopu00/jht:latest`
-- avvia il container con `docker compose up`
+The wizard SSHes in and runs `install.sh` automatically on the VPS:
+- writes `host.env` (VPS mode)
+- saves the pairing-token in `/root/.jht/`
+- aligns ownership to UID 1001 (the container runs as `jht`)
+- pulls the GHCR Docker image `ghcr.io/leopu00/jht:latest`
+- starts the container with `docker compose up`
 
-**Tempo**: 2-3 minuti la prima volta (pull image), 30s sulle successive.
+**Time**: 2-3 minutes the first time (image pull), 30s on subsequent runs.
 
-### 5️⃣ Provider AI (OAuth)
+### 5️⃣ AI provider (OAuth)
 
-Scegli il provider (Kimi consigliato, gratuito):
-- Si apre un **terminale embedded** nell'app desktop con `kimi --yolo`
-- Ti dà un codice device + link → apri nel browser → autorizzi
-- Torna nell'app: vedi `OAuth completato ✅`
+Choose the provider (Kimi recommended, free):
+- An **embedded terminal** opens in the desktop app with `kimi --yolo`
+- It gives you a device code + link → open it in the browser → authorize
+- Return to the app: you see `OAuth completed ✅`
 
-> ⚠️ **Importante**: aspetta che vedi "OAuth completato" prima di chiudere
-> il terminale embedded. Se chiudi prima, il file `kimi.json` non viene
-> scritto e il primo boot del container salta gli agenti
-> (il watchdog ti recupera dopo 30s, ma è meglio aspettare).
+> ⚠️ **Important**: wait until you see "OAuth completed" before closing
+> the embedded terminal. If you close it earlier, the `kimi.json` file isn't
+> written and the container's first boot skips the agents
+> (the watchdog recovers you after 30s, but it's better to wait).
 
 ### 6️⃣ Continue → bypass-to-home
 
-Il wizard finisce. **Non devi cliccare niente sulla dashboard cloud.**
+The wizard finishes. **You don't need to click anything on the cloud dashboard.**
 
-## 🎉 Cosa succede automaticamente (zero-touch)
+## 🎉 What happens automatically (zero-touch)
 
-Subito dopo che il wizard chiude:
+Right after the wizard closes:
 
 ```
-T+0s    Container Docker già in esecuzione sulla VPS
-T+15s   pid1: vede bot Telegram + active_provider + credentials OAuth
-T+18s   tmux ASSISTENTE + CAPITANO + MENTOR partono in sequenza (kimi loaded)
-T+19s   Telegram: 3 messaggi di benvenuto arrivano nei rispettivi bot
+T+0s    Docker container already running on the VPS
+T+15s   pid1: sees Telegram bots + active_provider + OAuth credentials
+T+18s   tmux ASSISTANT + CAPTAIN + MENTOR start in sequence (kimi loaded)
+T+19s   Telegram: 3 welcome messages arrive in their respective bots
 ```
 
-**Controlla Telegram entro 30 secondi**: devono arrivare 3 messaggi:
-- da `@TuoAssistente`: «Ciao 👋 Sono l'Assistente… mandami il CV»
-- da `@TuoCapitano`: «Sono il Capitano. Coordino il team che si occuperà di te…»
-- da `@TuoMentor`: «Sono il Mentor 🧙‍♂️. Mi occupo del quadro generale…»
+**Check Telegram within 30 seconds**: 3 messages should arrive:
+- from `@TuoAssistente`: «Hi 👋 I'm the Assistant… send me your CV»
+- from `@TuoCapitano`: «I'm the Captain. I coordinate the team that will take care of you…»
+- from `@TuoMentor`: «I'm the Mentor 🧙‍♂️. I handle the big picture…»
 
-## 📄 Il workflow: dal CV ai primi 5 candidati
+## 📄 The workflow: from CV to the first 5 candidates
 
-1. **Tu** → mandi il CV all'@Assistente via Telegram (PDF, DOC, anche foto)
-2. **Assistente** (5-10 min) → estrae dati, scrive `candidate_profile.yml`,
-   ti chiede dettagli mancanti (ruolo, città, stipendio target)
-3. **Tu** → rispondi "ok procedi"
-4. **Assistente** → passa la palla al Capitano
-5. **Capitano** → spawna Scout, Analista, Scorer, Scrittore, Critico
-6. **Pipeline** (~25-30 min per CV) → trova posizioni, le analizza, le scora,
-   scrive CV personalizzato, Critico fa review iterativa (v1/v2/v3 finché
-   non passa)
-7. **CV PDF** generati in `/jht_user/cv/` sulla VPS, visibili anche su
+1. **You** → send the CV to the @Assistant via Telegram (PDF, DOC, even a photo)
+2. **Assistant** (5-10 min) → extracts data, writes `candidate_profile.yml`,
+   asks you for missing details (role, city, target salary)
+3. **You** → reply "ok go ahead"
+4. **Assistant** → passes the ball to the Captain
+5. **Captain** → spawns Scout, Analyst, Scorer, Writer, Critic
+6. **Pipeline** (~25-30 min per CV) → finds positions, analyzes them, scores them,
+   writes a personalized CV, the Critic does an iterative review (v1/v2/v3 until
+   it passes)
+7. **CV PDFs** generated in `/jht_user/cv/` on the VPS, also visible on
    `jobhunterteam.ai/positions`
 
-> ⏱️ **Tempi reali misurati** (sessione 2026-05-16): primo CV scritto dopo
-> ~35 min dall'upload CV. 5° CV dopo ~2 h 16 min. Kimi è il collo di
-> bottiglia (~2-5 min per LLM call), Claude/Codex sono più veloci ma a pagamento.
+> ⏱️ **Real measured times** (session 2026-05-16): first CV written after
+> ~35 min from CV upload. 5th CV after ~2 h 16 min. Kimi is the
+> bottleneck (~2-5 min per LLM call), Claude/Codex are faster but paid.
 
-## 🖥️ Cosa vedi sulla dashboard web
+## 🖥️ What you see on the web dashboard
 
-Apri [jobhunterteam.ai](https://jobhunterteam.ai) (sei già loggato):
+Open [jobhunterteam.ai](https://jobhunterteam.ai) (you're already logged in):
 
-| Pagina | Cosa mostra |
+| Page | What it shows |
 |---|---|
-| `/team` | Stato 9 agenti (running/stopped) — bottone Avvia/Ferma team |
-| `/team/assistente` | Chat con l'Assistente (mirrored da Telegram) |
-| `/team/capitano` | Chat con il Capitano |
-| `/team/sentinella` | Grafico real-time usage Kimi + budget finestra |
-| `/positions` | Posizioni trovate, scored, written, applied |
-| `/candidate` | Tuo profilo estratto dal CV |
+| `/team` | Status of 9 agents (running/stopped) — Start/Stop team button |
+| `/team/assistente` | Chat with the Assistant (mirrored from Telegram) |
+| `/team/capitano` | Chat with the Captain |
+| `/team/sentinella` | Real-time Kimi usage chart + window budget |
+| `/positions` | Positions found, scored, written, applied |
+| `/candidate` | Your profile extracted from the CV |
 
-## 🛟 Troubleshooting comune
+## 🛟 Common troubleshooting
 
-### ❌ "Scarica l'app desktop" sulla dashboard cloud invece del team
+### ❌ "Download the desktop app" on the cloud dashboard instead of the team
 
-Il pair VPS↔Supabase non è andato a buon fine. Sintomo: dashboard vede
+The VPS↔Supabase pairing didn't succeed. Symptom: the dashboard sees
 `user_onboarding_state.vps_setup_completed_at = NULL`.
 
-**Cause possibili**:
-- Hai fatto login Supabase con un account diverso da quello del browser
-- L'install.sh sulla VPS è uscito con errore → controlla il log nell'app
+**Possible causes**:
+- You logged into Supabase with an account different from the one in the browser
+- `install.sh` on the VPS exited with an error → check the log in the app
 
-**Fix**: SSH alla VPS e resetta la configurazione cloud, poi rilancia
-il wizard dall'app desktop:
+**Fix**: SSH into the VPS and reset the cloud configuration, then re-run
+the wizard from the desktop app:
 ```bash
-ssh root@<VPS_IP> 'jht reset creds'   # cancella cloud.json + token, preserva config
-# poi nell'app desktop riapri il wizard
+ssh root@<VPS_IP> 'jht reset creds'   # delete cloud.json + token, preserve config
+# then reopen the wizard in the desktop app
 ```
-Vedi anche [§Manutenzione](#-manutenzione-operazioni-comuni-post-setup) per le opzioni `jht reset config|creds|full`.
+See also [§Maintenance](#-maintenance-common-post-setup-operations) for the `jht reset config|creds|full` options.
 
-### ❌ I 3 welcome Telegram non arrivano
+### ❌ The 3 Telegram welcomes don't arrive
 
-Aspetta 60 secondi (il watchdog ritenta ogni 30s). Se ancora niente:
-- Verifica di aver fatto `/start` ad ognuno dei 3 bot prima del setup
-  (Telegram droppa silenziosamente messaggi a chi non ha mai iniziato la chat)
-- Controlla che i token nei prerequisiti siano corretti
+Wait 60 seconds (the watchdog retries every 30s). If still nothing:
+- Make sure you sent `/start` to each of the 3 bots before setup
+  (Telegram silently drops messages to anyone who never started the chat)
+- Check that the tokens in the prerequisites are correct
 
-### ❌ Bottone "Avvia Assistente" resta in "In coda sulla VPS…" per > 60s
+### ❌ "Start Assistant" button stays on "Queued on the VPS…" for > 60s
 
-Il subscriber realtime sulla VPS non riceve eventi. Verifica:
-- Container `jht` è UP sulla VPS (`ssh root@<IP> docker ps`)
-- Network del bot Telegram funziona (Hetzner Helsinki ha buon throughput)
+The realtime subscriber on the VPS isn't receiving events. Verify:
+- The `jht` container is UP on the VPS (`ssh root@<IP> docker ps`)
+- The Telegram bot's network works (Hetzner Helsinki has good throughput)
 
-### ❌ Capitano risponde ma dice "LLM not set"
+### ❌ The Captain replies but says "LLM not set"
 
-Bug noto kimi-cli (vedi
-[bug strategici](../internal/_archive/2026-05-17-team-strategy-bugs.md) #1).
-Già fixato con `KIMI_SHARE_DIR` export in `start-agent.sh`. Se vedi questo
-errore, l'image GHCR è stale: ricreala con `docker compose pull && docker
+Known kimi-cli bug (see
+[strategic bugs](../internal/_archive/2026-05-17-team-strategy-bugs.md) #1).
+Already fixed with the `KIMI_SHARE_DIR` export in `start-agent.sh`. If you see this
+error, the GHCR image is stale: rebuild it with `docker compose pull && docker
 compose up -d` via SSH.
 
-## 🔐 Sicurezza e privacy
+## 🔐 Security and privacy
 
-- **SSH key**: generata dal wizard, salvata in
-  `~/Library/Application Support/jht-desktop/ssh/jht_ed25519` (Mac) o
-  `%APPDATA%/jht-desktop/ssh/jht_ed25519` (Win). Non condividerla.
-- **Token Telegram**: salvati cifrati in Supabase + replicati su VPS in
-  `/root/.jht/jht.config.json` (mode 0644, leggibile solo da chi ha SSH alla VPS).
-- **CV PDF**: persistiti su `/jht_user/cv/` sulla VPS + sincronizzati su
-  Supabase Storage (RLS attiva, solo tu vedi i tuoi).
-- **OAuth provider AI**: token in `/jht_home/.kimi/credentials/kimi-code.json`
-  (o equivalente Claude/Codex). Mai pushati su Supabase, restano sulla VPS.
+- **SSH key**: generated by the wizard, saved in
+  `~/Library/Application Support/jht-desktop/ssh/jht_ed25519` (Mac) or
+  `%APPDATA%/jht-desktop/ssh/jht_ed25519` (Win). Don't share it.
+- **Telegram tokens**: stored encrypted in Supabase + replicated on the VPS in
+  `/root/.jht/jht.config.json` (mode 0644, readable only by whoever has SSH to the VPS).
+- **CV PDFs**: persisted on `/jht_user/cv/` on the VPS + synced to
+  Supabase Storage (RLS active, only you see yours).
+- **AI provider OAuth**: token in `/jht_home/.kimi/credentials/kimi-code.json`
+  (or the Claude/Codex equivalent). Never pushed to Supabase, they stay on the VPS.
 
-## 💰 Costi mensili
+## 💰 Monthly costs
 
-| Voce | Costo |
+| Item | Cost |
 |---|---|
-| Hetzner CPX22 | €9.75/mese |
-| Supabase Free tier | €0 (sotto soglia 500 MB DB + 1 GB Storage) |
+| Hetzner CPX22 | €9.75/month |
+| Supabase Free tier | €0 (under the 500 MB DB + 1 GB Storage threshold) |
 | Vercel Hobby | €0 (jobhunterteam.ai) |
 | Telegram Bot API | €0 |
-| Kimi (Moonshot) | €0 (con limiti finestra 5h) |
-| Claude / Codex (opzionale) | €17-20/mese subscription |
+| Kimi (Moonshot) | €0 (with 5h window limits) |
+| Claude / Codex (optional) | €17-20/month subscription |
 
-**Totale tipico**: €9.75/mese con Kimi gratuito.
+**Typical total**: €9.75/month with free Kimi.
 
-## 🔜 Cosa succede se chiudi l'app desktop
+## 🔜 What happens if you close the desktop app
 
-Niente di grave. L'app desktop è solo:
-- Il wizard (lo usi una volta)
-- Una shell per la chat locale (opzionale)
-- Un monitor stato VPS
+Nothing serious. The desktop app is only:
+- The wizard (you use it once)
+- A shell for the local chat (optional)
+- A VPS status monitor
 
-**Il team continua a girare sulla VPS Hetzner 24/7**. Tu interagisci col team
-via Telegram (sempre) o via dashboard web jobhunterteam.ai (sempre).
-L'app desktop ti serve solo per il primo setup e per manutenzione occasionale.
+**The team keeps running on the Hetzner VPS 24/7**. You interact with the team
+via Telegram (always) or via the jobhunterteam.ai web dashboard (always).
+The desktop app is only needed for the first setup and for occasional maintenance.
 
-## 🛠️ Manutenzione (operazioni comuni post-setup)
+## 🛠️ Maintenance (common post-setup operations)
 
-> ⚠️ Tutte le operazioni di seguito si fanno via **SSH alla VPS**. La SSH key
-> è in `~/Library/Application Support/jht-desktop/ssh/jht_ed25519` (Mac) o
-> `%APPDATA%\jht-desktop\ssh\jht_ed25519` (Win). Usa:
+> ⚠️ All the operations below are done via **SSH to the VPS**. The SSH key
+> is in `~/Library/Application Support/jht-desktop/ssh/jht_ed25519` (Mac) or
+> `%APPDATA%\jht-desktop\ssh\jht_ed25519` (Win). Use:
 > ```bash
 > ssh -i "<path/jht_ed25519>" root@<VPS_IP>
 > ```
 
-### 📦 Aggiornare l'image del team (release nuove)
+### 📦 Updating the team image (new releases)
 
-L'image GHCR `ghcr.io/leopu00/jht:latest` viene rebuildata ad ogni push su
-master. Per pullare l'update sulla tua VPS:
+The GHCR image `ghcr.io/leopu00/jht:latest` is rebuilt on every push to
+master. To pull the update on your VPS:
 
 ```bash
 ssh root@<VPS_IP> 'cd /root && docker compose pull && jht recreate'
 ```
 
-Nota: `jht recreate` ricrea il container e perde le sessioni tmux attive
-(saranno respawnate da pid1 + watchdog in ~30s). I dati su `/jht_home` e
-`/jht_user` (CV, profilo, configurazioni) sono **bind-mountati e preservati**.
+Note: `jht recreate` recreates the container and loses the active tmux sessions
+(they'll be respawned by pid1 + watchdog in ~30s). The data on `/jht_home` and
+`/jht_user` (CV, profile, configurations) is **bind-mounted and preserved**.
 
-### 💾 Backup dei dati (CV, profilo, candidature)
+### 💾 Backing up the data (CV, profile, applications)
 
-Tutto è dentro `/jht_home` + `/jht_user` sulla VPS, già montati come bind mount.
-Comandi `jht backup`:
+Everything is inside `/jht_home` + `/jht_user` on the VPS, already mounted as bind mounts.
+`jht backup` commands:
 
 ```bash
-ssh root@<VPS_IP> 'jht backup create'   # crea tarball in /jht_home/backups/
-ssh root@<VPS_IP> 'jht backup list'     # lista backup esistenti
+ssh root@<VPS_IP> 'jht backup create'   # create tarball in /jht_home/backups/
+ssh root@<VPS_IP> 'jht backup list'     # list existing backups
 ssh root@<VPS_IP> 'jht backup restore <id>'
 
-# Scarica un backup sul tuo Mac
+# Download a backup to your Mac
 scp -i <ssh-key> root@<VPS_IP>:/jht_home/backups/<file>.tar.gz ~/Downloads/
 ```
 
-I CV PDF stanno in `/jht_user/cv/`, scaricabili anche singolarmente con `scp`.
-Una copia sincronizzata vive anche su Supabase Storage (RLS attiva).
+The CV PDFs are in `/jht_user/cv/`, also downloadable individually with `scp`.
+A synced copy also lives on Supabase Storage (RLS active).
 
-### 🔄 Cambiare provider AI (es. Kimi → Claude)
+### 🔄 Changing AI provider (e.g. Kimi → Claude)
 
 ```bash
 ssh root@<VPS_IP>
-jht providers list             # vedi i provider supportati
-jht providers use claude       # cambia active_provider in jht.config.json
-jht providers update claude    # installa il CLI del nuovo provider
-docker exec -it jht claude     # OAuth interattivo nel container
-jht recreate                   # restart per ricaricare config
+jht providers list             # see the supported providers
+jht providers use claude       # change active_provider in jht.config.json
+jht providers update claude    # install the new provider's CLI
+docker exec -it jht claude     # interactive OAuth in the container
+jht recreate                   # restart to reload config
 ```
 
-Dopo `jht providers use`, i 3 agenti user-facing (assistente/capitano/mentor)
-ripartiranno col nuovo provider al prossimo respawn (max 30s, oppure subito
-con `jht team stop --all && jht team start`).
+After `jht providers use`, the 3 user-facing agents (assistant/captain/mentor)
+will restart with the new provider on the next respawn (max 30s, or immediately
+with `jht team stop --all && jht team start`).
 
-### 🤖 Ruotare i token Telegram
+### 🤖 Rotating the Telegram tokens
 
-Se ti rubano un token o vuoi cambiare bot:
-1. Vai su [@BotFather](https://t.me/BotFather) → seleziona il bot → `/revoke`
-2. Crea il nuovo token con `/newbot` o `/token` su un bot esistente
-3. Aggiorna `jht.config.json` sulla VPS:
+If a token is stolen or you want to change a bot:
+1. Go to [@BotFather](https://t.me/BotFather) → select the bot → `/revoke`
+2. Create the new token with `/newbot` or `/token` on an existing bot
+3. Update `jht.config.json` on the VPS:
    ```bash
    ssh root@<VPS_IP> 'nano /jht_home/jht.config.json'
-   # modifica channels.telegram.bots.<role>.bot_token
+   # edit channels.telegram.bots.<role>.bot_token
    ```
 4. Restart tg-bridge: `ssh root@<VPS_IP> 'jht recreate'`
 
-### 🧹 Reset / destroy completo
+### 🧹 Full reset / destroy
 
-`jht reset` ha 3 modalità (granularità crescente):
+`jht reset` has 3 modes (increasing granularity):
 
-| Modalità | Cosa cancella | Quando usarla |
+| Mode | What it deletes | When to use it |
 |---|---|---|
-| `jht reset config` | jht.config.json (provider, bot, settings) | cambio setup completo |
-| `jht reset creds` | cloud.json + token Supabase + OAuth provider | re-pair con altro account |
-| `jht reset full` | tutto: config + creds + agents + sessions kimi | tabula rasa, "wizard nuovo" |
+| `jht reset config` | jht.config.json (provider, bot, settings) | full setup change |
+| `jht reset creds` | cloud.json + Supabase token + provider OAuth | re-pair with another account |
+| `jht reset full` | everything: config + creds + agents + kimi sessions | clean slate, "fresh wizard" |
 
 ```bash
-ssh root@<VPS_IP> 'jht reset full'   # conferma interattiva richiesta
+ssh root@<VPS_IP> 'jht reset full'   # interactive confirmation required
 ```
 
-Per il **destroy totale** della VPS:
-1. `jht reset full` sulla VPS (per igiene, opzionale)
-2. Dal portale Hetzner → seleziona server → **Delete**
-3. Sul Mac: cancella `~/Library/Application Support/jht-desktop/`
-4. Su Supabase: il tuo `user_id` resta, ma `user_onboarding_state` può essere
-   azzerato dalla dashboard `/settings` web (TODO: feature non ancora esposta)
+For a **total destroy** of the VPS:
+1. `jht reset full` on the VPS (for hygiene, optional)
+2. From the Hetzner portal → select the server → **Delete**
+3. On the Mac: delete `~/Library/Application Support/jht-desktop/`
+4. On Supabase: your `user_id` remains, but `user_onboarding_state` can be
+   reset from the web `/settings` dashboard (TODO: feature not yet exposed)
 
-### 📋 Leggere i log (debug)
+### 📋 Reading the logs (debug)
 
-| Layer | Comando |
+| Layer | Command |
 |---|---|
-| Container completo (pid1 + agenti + daemon) | `ssh root@<VPS_IP> 'jht logs'` |
-| Solo daemon push cloud | `ssh root@<VPS_IP> 'docker exec jht tail -50 /jht_home/logs/cloud-daemon.log'` |
-| Solo tg-bridge (Telegram inbound) | `ssh root@<VPS_IP> 'docker exec jht tail -50 /tmp/tg-bridge-assistente.log'` |
-| App desktop (Mac) | `~/Library/Application Support/jht-desktop/logs/jht-desktop-<ts>.log` |
-| Sessioni Kimi (storico chat) | `ssh root@<VPS_IP> 'docker exec jht ls /jht_home/.kimi/user-history/'` |
+| Full container (pid1 + agents + daemon) | `ssh root@<VPS_IP> 'jht logs'` |
+| Cloud push daemon only | `ssh root@<VPS_IP> 'docker exec jht tail -50 /jht_home/logs/cloud-daemon.log'` |
+| tg-bridge only (Telegram inbound) | `ssh root@<VPS_IP> 'docker exec jht tail -50 /tmp/tg-bridge-assistente.log'` |
+| Desktop app (Mac) | `~/Library/Application Support/jht-desktop/logs/jht-desktop-<ts>.log` |
+| Kimi sessions (chat history) | `ssh root@<VPS_IP> 'docker exec jht ls /jht_home/.kimi/user-history/'` |
 
-### 🌍 Migrare a un'altra VPS / cambio region
+### 🌍 Migrating to another VPS / changing region
 
-Non c'è ancora un comando one-shot. Procedura manuale:
-1. `jht backup create` sulla VPS vecchia
-2. `scp` del tarball sul Mac
-3. Provisioning nuova VPS (rilancia wizard, paste IP nuova)
-4. `scp` del tarball sulla nuova VPS in `/jht_home/backups/`
-5. `jht backup restore <id>` sulla nuova VPS
-6. Cancella vecchia VPS dal portale Hetzner
+There's no one-shot command yet. Manual procedure:
+1. `jht backup create` on the old VPS
+2. `scp` the tarball to the Mac
+3. Provision the new VPS (re-run the wizard, paste the new IP)
+4. `scp` the tarball to the new VPS in `/jht_home/backups/`
+5. `jht backup restore <id>` on the new VPS
+6. Delete the old VPS from the Hetzner portal
 
-## 📚 Approfondimenti
+## 📚 Further reading
 
 - [`docs/sessions/2026-05-17-vps-path2-e2e/`](../sessions/2026-05-17-vps-path2-e2e/README.md)
-  — session report del test end-to-end con 27 fix tracciati
+  — session report of the end-to-end test with 27 fixes tracked
 - [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](../internal/_archive/2026-05-17-team-strategy-bugs.md)
-  — bug strategici noti (Whisper/Vision, Sentinella throttle, gerarchia)
+  — known strategic bugs (Whisper/Vision, Sentinel throttle, hierarchy)
 - [`docs/sessions/2026-05-17-budget-windows/`](../sessions/2026-05-17-budget-windows/README.md)
-  — come il team gestisce le finestre budget Kimi (con grafici matplotlib)
-- [`VPS-SETUP.md`](VPS-SETUP.md) — versione tech (CLI manuale via SSH)
-- [`QUICKSTART.md`](QUICKSTART.md) — installazione tutto-in-locale
+  — how the team manages the Kimi budget windows (with matplotlib charts)
+- [`VPS-SETUP.md`](VPS-SETUP.md) — tech version (manual CLI via SSH)
+- [`QUICKSTART.md`](QUICKSTART.md) — all-in-local installation
 
-## 🐛 Bug noti (non bloccanti, validati 2026-05-17)
+## 🐛 Known bugs (non-blocking, validated 2026-05-17)
 
-| Bug | Impatto | Workaround |
+| Bug | Impact | Workaround |
 |---|---|---|
-| Voice messages Telegram non trascritti | Capitano dice "non posso processare audio" | Scrivi a parole |
-| Photo/screenshot Telegram non interpretati | Capitano dice "non ho OCR" | Descrivi a parole o link a `/positions` |
-| Sentinella freeza team a 30% se proj > 100% (raro) | Pipeline ferma 30-60 min | Scrivi "riparti" al Capitano |
-| Chat history non sincronizzata su web | Risposte agenti visibili solo su Telegram | Apri Telegram direttamente |
+| Telegram voice messages not transcribed | Captain says "I can't process audio" | Write it out in words |
+| Telegram photos/screenshots not interpreted | Captain says "I have no OCR" | Describe in words or link to `/positions` |
+| Sentinel freezes team at 30% if proj > 100% (rare) | Pipeline stalled 30-60 min | Write "restart" to the Captain |
+| Chat history not synced to web | Agent replies visible only on Telegram | Open Telegram directly |
 
-Vedi [bug strategici](../internal/_archive/2026-05-17-team-strategy-bugs.md) per dettagli e priorità fix.
+See [strategic bugs](../internal/_archive/2026-05-17-team-strategy-bugs.md) for details and fix priorities.
 
 ## 📸 Screenshot TODO
 
-Questa guida è user-facing ma **non ha ancora screenshot**. Placeholder per
-contribuzioni future (PR benvenute):
+This guide is user-facing but **has no screenshots yet**. Placeholders for
+future contributions (PRs welcome):
 
-| # | Screenshot atteso | Path target |
+| # | Expected screenshot | Target path |
 |---|---|---|
-| 1 | Splash app + selezione lingua + location VPS | `docs/guides/assets/vps-wizard-01-splash.png` |
-| 2 | Pulsante login Supabase + popup OAuth Google | `docs/guides/assets/vps-wizard-02-supabase.png` |
-| 3 | Form 3 token Telegram con stato verifica | `docs/guides/assets/vps-wizard-03-telegram.png` |
-| 4 | Step provisioning Hetzner (paste IP + SSH key da copiare) | `docs/guides/assets/vps-wizard-04-hetzner.png` |
-| 5 | Terminal embedded con `kimi --yolo` + device code | `docs/guides/assets/vps-wizard-05-oauth.png` |
-| 6 | Schermata "Setup completato" → bypass home | `docs/guides/assets/vps-wizard-06-done.png` |
-| 7 | Dashboard `/team` con 9 agenti running | `docs/guides/assets/vps-dashboard-team.png` |
-| 8 | Grafico `/team/sentinella` (UsageChart Kimi) | `docs/guides/assets/vps-dashboard-sentinella.png` |
+| 1 | App splash + language selection + VPS location | `docs/guides/assets/vps-wizard-01-splash.png` |
+| 2 | Supabase login button + Google OAuth popup | `docs/guides/assets/vps-wizard-02-supabase.png` |
+| 3 | 3-Telegram-token form with verification status | `docs/guides/assets/vps-wizard-03-telegram.png` |
+| 4 | Hetzner provisioning step (paste IP + SSH key to copy) | `docs/guides/assets/vps-wizard-04-hetzner.png` |
+| 5 | Embedded terminal with `kimi --yolo` + device code | `docs/guides/assets/vps-wizard-05-oauth.png` |
+| 6 | "Setup completed" screen → bypass home | `docs/guides/assets/vps-wizard-06-done.png` |
+| 7 | `/team` dashboard with 9 agents running | `docs/guides/assets/vps-dashboard-team.png` |
+| 8 | `/team/sentinella` chart (Kimi UsageChart) | `docs/guides/assets/vps-dashboard-sentinella.png` |
 
-Quando aggiungi le immagini, sostituisci i `> 📸 Screenshot mancanti` con
-embed markdown: `![Step 1](assets/vps-wizard-01-splash.png)`.
+When you add the images, replace the `> 📸 Missing screenshots` with
+markdown embeds: `![Step 1](assets/vps-wizard-01-splash.png)`.
