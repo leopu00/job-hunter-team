@@ -24,7 +24,8 @@ describe("EmojiPicker", () => {
   });
 
   it("search: input Cerca emoji + filtro includes + Nessun risultato fallback", () => {
-    expect(src).toContain('placeholder="Cerca emoji..."');
+    expect(src).toContain("Cerca emoji..."); // dict i18n: search_placeholder.it
+    expect(src).toContain("placeholder={tr('search_placeholder')}");
     expect(src).toContain("e.includes(search)");
     expect(src).toContain("Nessun risultato");
   });

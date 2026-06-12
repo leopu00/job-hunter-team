@@ -91,7 +91,7 @@ describe("AlertBanner", () => {
   });
 
   it("role='alert' + aria-label='Chiudi' + banner-slide-down animation", () => {
-    expect(src).toContain('role="alert"'); expect(src).toContain('aria-label="Chiudi"');
+    expect(src).toContain('role="alert"'); expect(src).toContain("aria-label={tr('close')}"); expect(src).toContain("Chiudi"); // dict i18n: close.it
     expect(src).toContain("banner-slide-down");
     expect(src).toContain("translateY(-100%)"); expect(src).toContain("translateY(0)");
   });
@@ -133,7 +133,7 @@ describe("Badge", () => {
 
   it("dot puro (no label) + dot prefix + removable aria-label='Rimuovi'", () => {
     expect(src).toContain("dot && !label"); expect(src).toContain("removable");
-    expect(src).toContain('aria-label="Rimuovi"'); expect(src).toContain("onRemove?.()");
+    expect(src).toContain("aria-label={tr('remove')}"); expect(src).toContain("Rimuovi"); expect(src).toContain("onRemove?.()"); // dict i18n: remove.it
   });
 
   it("STATUS_MAP: attivo/completato/errore/pending/merged → varianti", () => {
