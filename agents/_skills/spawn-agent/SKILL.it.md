@@ -98,6 +98,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 - ❌ Avviare più agenti in un loop serrato senza pacing di 1 tick — vedi `pipeline-triage` per le regole di scaling (1 spawn per tick del Sentinel, ~5 min di distanza).
 - ❌ Ri-avviare alla cieca dopo un crash senza leggere `db_query.py` per recuperare lo stato dell'ultimo task — il nuovo agente parte da zero e duplica il lavoro.
 - ❌ Usare questa skill per "riavviare" un agente funzionante perché sembra lento. Lento ≠ morto. Turni lunghi con output di token visibile non sono un caso di spawn — sono un caso di `liveness-check` (Dottore).
+- ❌ Avviare un rimpiazzo perché `jht-tmux-send` non è riuscito a consegnare. **`exit 4` = la TUI target è a metà turno (`Working … esc to interrupt`) → l'agente è VIVO, solo busy.** Il messaggio NON è stato consegnato in modo sincrono: ritenta il send più tardi, mai spawnare un clone. Solo `exit 3` (testo mai apparso E pane non busy → shell nuda / modale bloccato) è un segnale di possibile morte, e anche allora il verdetto spetta al **Dottore** (`liveness-check`), non a uno spawn riflesso. Spawnare su un agente busy è esattamente il bug di overspawn del 2026-06-07 (`docs/internal/2026-06-11-overspawn-rootcause.md`): il clone prende il sopravvento mentre l'originale continua a bruciare budget come zombie.
 - ❌ Avviare un Critico. Lo Scrittore avvia il proprio `CRITICO-S<N>` autonomamente — il Capitano non tocca mai il Critico direttamente.
 
 ## Vedi anche
