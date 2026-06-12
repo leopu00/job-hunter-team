@@ -4,6 +4,7 @@ import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/wo
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
 import { aggregateRoleFamilies, UNCATEGORIZED_LABEL, type RoleFamilyCount } from '@/lib/position-classifier'
+import { addDaysKey, buildTeamActivity, normActor, resolveActivityRange, type TeamActivity, type TeamActivityEvent, type TeamActivityRole } from '@/lib/team-activity'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -1173,6 +1174,61 @@ export async function getPendingMessages(limit = 20): Promise<PendingMessage[]> 
     .limit(limit)
   if (error || !data) return []
   return data as PendingMessage[]
+}
+
+// ── Team activity (per-agente nel tempo) ───────────────────────────
+// Local: SQLite (getTeamActivityLocal). Cloud: Supabase, una query per
+// timestamp filtrata sulla finestra (.gte) per restare sotto il cap di 1000
+// righe/richiesta e ridurre il traffico. Stesso buildTeamActivity → numeri
+// identici nelle due modalità. Vedi lib/team-activity.ts per le sorgenti.
+export async function getTeamActivity(opts?: { from?: string; to?: string }): Promise<TeamActivity> {
+  const { from, to } = resolveActivityRange(opts, new Date())
+  const w = await ws()
+  if (w) {
+    try { return local.getTeamActivityLocal(w, from, to) } catch { return buildTeamActivity([], from, to) }
+  }
+  if (!isSupabaseConfigured) return buildTeamActivity([], from, to)
+
+  const supabase = await createClient()
+  // Range [from 00:00 UTC, to+1 00:00 UTC): estremo destro esclusivo così il
+  // giorno `to` è incluso per intero.
+  const fromIso = `${from}T00:00:00.000Z`
+  const untilIso = `${addDaysKey(to, 1)}T00:00:00.000Z`
+
+  // actorCol = colonna con l'id istanza (es. found_by). null per l'Analista,
+  // che su last_checked non lo registra → normActor ricade sul ruolo.
+  const fetchEvents = async (
+    table: string,
+    col: string,
+    actorCol: string | null,
+    idCol: string,
+    role: TeamActivityRole,
+    softDelete: boolean,
+  ): Promise<TeamActivityEvent[]> => {
+    const select = [col, actorCol, idCol].filter(Boolean).join(', ')
+    let q = supabase.from(table).select(select).gte(col, fromIso).lt(col, untilIso)
+    if (softDelete) q = q.is('deleted_at', null)
+    const { data, error } = await q
+    if (error || !data) return []
+    return (data as any[])
+      .filter((r) => !!r[col])
+      .map((r) => ({
+        role,
+        actor: normActor(role, actorCol ? r[actorCol] : null),
+        ts: r[col] as string,
+        pid: r[idCol] != null ? String(r[idCol]) : null,
+      }))
+  }
+
+  const groups = await Promise.all([
+    fetchEvents('positions', 'found_at', 'found_by', 'id', 'scout', true),
+    fetchEvents('positions', 'last_checked', null, 'id', 'analista', true),
+    fetchEvents('scores', 'scored_at', 'scored_by', 'position_id', 'scorer', false),
+    fetchEvents('applications', 'written_at', 'written_by', 'position_id', 'scrittore', true),
+    fetchEvents('applications', 'critic_reviewed_at', 'reviewed_by', 'position_id', 'critico', true),
+  ])
+
+  return buildTeamActivity(groups.flat(), from, to)
 }
 
 // ── Application stats ───────────────────────────────────────────────
