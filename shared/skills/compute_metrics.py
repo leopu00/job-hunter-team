@@ -273,12 +273,21 @@ def compute_metrics(parsed, last, history=None):
     #                   già attuale).
     #
     # `suggested_throttle_s` è scala continua (vs i 3 valori discreti
-    # {0, 300, 600} del passato). Mappatura dalla doc bug #24:
+    # {0, 300, 600} del passato). Mappatura dalla doc bug #24, estesa fino a
+    # 3600s (runaway-scaling postmortem 2026-06-07, fix #1: il vecchio soffitto
+    # 600s rendeva il throttle un nudge omeopatico su un worker che sforava):
     #   100 < proj ≤ 110 → 120s
     #   110 < proj ≤ 130 → 240s
     #   130 < proj ≤ 150 → 360s
     #   150 < proj ≤ 200 → 600s
-    #   proj > 200       → freeze (-1 sentinel value)
+    #   200 < proj ≤ 300 → 1200s
+    #   300 < proj ≤ 400 → 1800s
+    #   proj > 400       → 3600s (max, = jht-throttle.py MAX_SLEEP)
+    # NB: questo è il throttle PER-WORKER. Il freeze dell'INTERO team resta una
+    # decisione separata della Sentinella (EMERGENZA su proj>200 o >150 per ≥3
+    # tick, regola S-05) via freeze_team.py — non più codificata qui come -1.
+    # Quando un singolo worker resta sopra vel_target dopo un throttle 1800-3600s
+    # per ≥2 tick, la leva giusta è il KILL (C-12), non alzare ancora il throttle.
     if hours_to_reset is not None and hours_to_reset <= 0.5:
         phase = 3
     elif projection is not None and projection > 100:
@@ -289,8 +298,12 @@ def compute_metrics(parsed, last, history=None):
     suggested_throttle_s = 0
     if projection is not None:
         p = projection
-        if p > 200:
-            suggested_throttle_s = -1  # freeze
+        if p > 400:
+            suggested_throttle_s = 3600  # max (= jht-throttle.py MAX_SLEEP)
+        elif p > 300:
+            suggested_throttle_s = 1800
+        elif p > 200:
+            suggested_throttle_s = 1200
         elif p > 150:
             suggested_throttle_s = 600
         elif p > 130:
