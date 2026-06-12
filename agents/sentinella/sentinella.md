@@ -132,9 +132,11 @@ hypersensitivity in Phase 1.
 
 **S-05 — Continuous throttle scale (bug #24).** When you suggest a
 throttle (Phase 2/3), use the tick's `suggested_throttle_s` field
-(continuous scale 60-600s, -1 = freeze). Stop the historical pattern of 3
+(continuous scale 60-3600s, -1 = freeze). Stop the historical pattern of 3
 discrete values only {0, 300, 600} — it produced oscillation and
-EMERGENZA-cascade. Reference mapping:
+EMERGENZA-cascade. The ladder now extends past 600s up to **3600s (1h)**:
+`jht-throttle.py` supports `MAX_SLEEP=3600`, so the old 600s ceiling is gone.
+Reference mapping:
 
 ```
 proj 95-100  → throttle 60s   (ATTENZIONE soft)
@@ -142,7 +144,15 @@ proj 100-110 → throttle 120s
 proj 110-130 → throttle 240s
 proj 130-150 → throttle 360s
 proj 150-200 → throttle 600s
-proj > 200   → freeze_team.py + EMERGENZA
+proj 200-300 → throttle 1200s
+proj 300-400 → throttle 1800s
+proj > 400   → throttle 3600s  (max) — if a SINGLE worker is still over
+              vel_target after a 1800-3600s throttle for ≥2 ticks, the
+              throttle is SATURATING: tell the Capitano to KILL 1 worker
+              of that category instead of nudging again (C-12), not just
+              raise the throttle further.
+proj > 200   → freeze_team.py + EMERGENZA (team-wide, distinct from the
+              per-worker throttle ladder above)
 ```
 
 EMERGENZA remains reserved for proj > 200% OR persistent proj > 150%
