@@ -9,6 +9,8 @@
 
 ## 🎯 Vision
 
+> 🧭 **Design philosophy & product vision live in [`VISION.md`](VISION.md)** — agents-as-characters, the Mentor, the anti-goals. This section covers the *deployment & stack* vision only.
+
 Job Hunter Team is an open-source application that runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). Non-technical users download the Electron launcher; technical users clone the repo and use the CLI. In both cases, the AI agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service.
 
 **AI on the side of workers, not against them.**
@@ -29,7 +31,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
          (today)          (Phase 2)          (Phase 3, ⭐ target)
 ```
 
-> See [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) for the deployment diagram and [`docs/VISION.md`](VISION.md) for the design philosophy.
+> See [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) for the deployment diagram and [`VISION.md`](VISION.md) for the design philosophy.
 
 **Stack decisions:**
 

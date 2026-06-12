@@ -1,12 +1,12 @@
-# Vision
+# 🔭 Vision
 
-## What JHT wants to become
+## 🌱 What JHT wants to become
 
 Job Hunter Team is not just a script that fires off applications. It is a **team of AI characters** that the user works *with*, not just runs. The interaction should feel less like configuring a SaaS dashboard and more like meeting a small group of specialists who happen to live inside your laptop.
 
 The job market in the mid-2020s changes every month. Skills age fast. Old advice rots. A static automation tool can't keep up — but a team of agents that talk to you, react to your goals, and adapt their strategy can.
 
-## Design principles
+## 🎨 Design principles
 
 ### 🎮 Gamified, but constructive
 
@@ -51,7 +51,7 @@ The platform is large. The Assistant exists so that no user gets lost. It lives 
 
 The Assistant is what makes the platform usable for non-technical users. Without it, JHT is a developer tool. With it, JHT is a product.
 
-## Anti-goals
+## 🚫 Anti-goals
 
 What JHT will deliberately **not** become:
 
@@ -60,7 +60,7 @@ What JHT will deliberately **not** become:
 - ❌ A SaaS. The team runs locally or on the user's own VPS. The user owns their data, their profile, their pipeline.
 - ❌ An LLM benchmark. JHT picks the providers that work for real users at sustainable cost — not the most powerful one in the leaderboard.
 
-## How this shapes the roadmap
+## 🗺️ How this shapes the roadmap
 
 Every feature decision passes through these questions:
 
