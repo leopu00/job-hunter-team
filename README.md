@@ -83,7 +83,7 @@ Token usage is governed by a two-component monitoring stack: **📡 Bridge** run
 
 Each agent is an autonomous AI session running on one of three supported CLIs: **Claude Code** (configured via `CLAUDE.md`), **Codex**, or **Kimi** (both configured via `AGENTS.md`). A shared SQLite database keeps state in sync across the team.
 
-See [`docs/internal/INFRA.md`](docs/internal/INFRA.md) for the full infrastructure diagram.
+See [`docs/internal/ops/INFRA.md`](docs/internal/ops/INFRA.md) for the full infrastructure diagram.
 
 ## Install
 
@@ -154,6 +154,22 @@ See [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md)
 - ⏭️ **Next** — 🧙‍♂️ Mentor agent (career coach) · Code signing + auto-update for desktop · Full i18n coverage (ES/DE/FR/PT)
 
 Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
+
+## Repository layout
+
+| Path | What | Docs |
+|---|---|---|
+| ⌨️ [`cli/`](cli/) | `jht` CLI (Commander) — primary control surface | [README](cli/README.md) · [CLI reference](docs/guides/CLI-REFERENCE.md) |
+| 🌐 [`web/`](web/) | Dashboard (Next.js · React · Tailwind) | [README](web/README.md) |
+| 🖥️ [`desktop/`](desktop/) | Desktop launcher (Electron) | [README](desktop/README.md) |
+| ⌨️ [`tui/`](tui/) | Terminal UI | [README](tui/README.md) |
+| 💬 [`telegram-bridge/`](telegram-bridge/) | Bidirectional Telegram bridge (grammy) | [README](telegram-bridge/README.md) |
+| 🧩 [`shared/`](shared/) | Shared core lib (config · LLM · monitoring · auth) | [README](shared/README.md) |
+| 🤖 [`agents/`](agents/) | Agent prompts & skills (×7 languages) | [team rules](agents/_team/team-rules.md) |
+| 🐚 [`scripts/`](scripts/) | Setup, install, dev & release tooling | [README](scripts/README.md) |
+| 🧪 [`e2e/`](e2e/) | End-to-end tests (Playwright) | [README](e2e/README.md) |
+| 🗄️ [`supabase/`](supabase/) | DB migrations & SQL | [README](supabase/README.md) |
+| 📚 [`docs/`](docs/) | All project documentation | [docs index](docs/README.md) |
 
 ## Contributing
 
