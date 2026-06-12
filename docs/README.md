@@ -5,9 +5,10 @@ utente-facing alla più interna.
 
 ---
 
-## 🎯 [`about/`](about/) — visione & risultati
-Cos'è il progetto, dove va, cosa ha prodotto.
-`VISION` · `STORY` · `ROADMAP` · `RESULTS` · `PROVIDERS` · `MONITORING`
+## 🎯 [`about/`](about/) — cos'è JHT e se funziona
+Doc pubblica per chi valuta JHT, in due cluster (vedi [indice](about/README.md)):
+- 📖 **Narrativa:** `VISION` · `STORY` · `ROADMAP`
+- 🔬 **Prove & economia:** `PROVIDERS` · `MONITORING` · `RESULTS`
 
 ## 📘 [`guides/`](guides/) — guide operative
 Setup, uso e onboarding (utente e beta tester).
