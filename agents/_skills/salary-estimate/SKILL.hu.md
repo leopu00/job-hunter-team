@@ -133,5 +133,3 @@ alatt.
   side-fix bug #27)
 - `agents/_skills/mentor-output/SKILL.md` — elrejti a "passzív 5"-öt, ha
   a `notes` tartalmazza a `no_data_default` értéket
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §27 — Scorer
-  vita + felhasználói döntés

@@ -107,4 +107,3 @@ Quand l'utilisateur répond via le tableau de bord (remplit `user_reply` sur une
 - `telegram-send` — appelé sous le capot par `jht-notify-user` ; l'utiliser directement uniquement si vous savez déjà que Telegram est le bon canal (ex. réponse à un `[TG]` entrant).
 - `chat-web` (`jht-send`) — pour le fil chat-agent sur le tableau de bord.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — schéma de la file + index.
-- `docs/internal/architecture/bot-telegram.md` § 6 — pattern fallback complet.

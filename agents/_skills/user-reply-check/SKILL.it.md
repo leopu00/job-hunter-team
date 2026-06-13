@@ -101,4 +101,3 @@ Se l'utente si lamenta "ho risposto 10 secondi fa e non hai confermato," control
 
 - `notify-user` — l'altra metà della coppia. Scrive il messaggio in `pending_user_messages`; questa skill legge la risposta.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — schema, indici, ciclo di vita di una riga.
-- `docs/internal/architecture/bot-telegram.md` § 6 — decisione 2026-05-13 sul pattern fallback.
