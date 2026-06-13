@@ -27,6 +27,13 @@ distribuzione oraria: lavoro distribuito ~OGNI ORA dalle 06 alle 17 (9-27/ora) =
 **Prova che l'overspawn era inutile:** scout-1=**138** pos, scout-2=54, scout-3=18, **scout-4/5/6 = 3 pos CIASCUNO**. Gli agenti extra dell'incidente hanno prodotto ~nulla → più agenti ≠ più output (giustifica C-12/COAST). Cavalli da tiro: scout-1, scorer-1 (115)/scorer-2 (75).
 **Modello pre-incidente = valido**: ritmo costante 4 giorni + pause lunghe; l'unico difetto è stato l'overspawn non-fermabile (→ risolto dai Dottori ridisegnati).
 
+### 🚬 Smoking gun (dev3 — 3003 sample sentinel-data 03-13/06)
+```
+trend weekly/giorno: 03/06 3→19 · 04 →31 · 05 31→59 · 06 59→79 · 07 79→100 (LOCKOUT)
+ritmo ~20%/giorno per 4-5gg · sostenibile su 7gg ≈ 14%/giorno → ~1,4× troppo → 100% al GIORNO 5, non al 7
+```
+**LA PROVA del buco-metrica:** distribuzione status storica = **SOTTOUTILIZZO 2688 (89%)**, ATTENZIONE 252 (8%), STEADY 51 (2%). Per **l'89% del tempo lo status diceva "SOTTOUTILIZZO = hai margine, lavora"** *mentre* il weekly saliva verso il 100% e il lockout. Il team reagiva alla **5h** (dove c'era margine), **mai al weekly-rate**. → conferma definitiva: `sustainable_burn` esposto come **INFO**, non come **DRIVER**. È esattamente ciò che il ridisegno Sentinella-analista deve correggere.
+
 ## 🛠️ Fix tecniche (dall'indagine weekly-blindness — già progettate)
 1. **driver weekly** (dev1 design): `vel_weekly = Δweekly/Δt` vs `sustainable = weekly_remaining/weekly_active_hours`, esposto nei tick come *"bruci X%/h vs sost Y%/h (Zx, esaurisci ~N gg)"* → diventa DRIVER, non INFO.
 2. **tick Sentinella** (dev2): portare vel + tabella-temporale-per-agente nel messaggio alla Sentinella (oggi porta solo livelli).
