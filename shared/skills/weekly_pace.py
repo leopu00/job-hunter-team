@@ -14,6 +14,7 @@ Capitano → C-09) sia eventualmente il pacing-bridge, senza duplicare la logica
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 
 
@@ -34,11 +35,7 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
             or not isinstance(weekly_active_hours, (int, float))
             or weekly_active_hours <= 0):
         return None
-    try:
-        path_exists = jsonl_path is not None and __import__("os").path.exists(str(jsonl_path))
-    except Exception:
-        path_exists = False
-    if not path_exists:
+    if jsonl_path is None or not os.path.exists(str(jsonl_path)):
         return None
     since = now_ts - window_h * 3600.0
     oldest = newest = None
