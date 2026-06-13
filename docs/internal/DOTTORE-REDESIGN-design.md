@@ -1,0 +1,70 @@
+# 🩺 Design-doc — Ridisegno ruolo DOTTORE (context-refresh)
+
+> **Stato:** DRAFT — schema/flow da lockare prima di codare (design-doc-first).
+> **Owner:** dev1 (prompt dottore + doctor-watchdog scheduling + skill orchestrazione) · dev2 (analytics-da-log + formato file-sintesi). dev3 = lead/review (in deploy fix#4+Analista in parallelo).
+> **Data:** 2026-06-13. **Ordine utente:** "implementa tutto, fatti aiutare da dev2, procedi".
+
+## 🎯 Obiettivo (dal brainstorm utente)
+Oggi i Dottori **sprecano token e non servono**. Nuovo ruolo = **rigeneratori di contesto**: a inizio/metà giornata fanno la retrospettiva di ogni agente, ne sintetizzano l'attività su un file crescente, poi **rigenerano la sessione** (kill+ricrea+riavvia) passando il contesto, per ripulire il context-window accumulato. NON troppo spesso.
+
+## 🔴 Problema attuale (evidenza, non opinione)
+- `doctor-watchdog.sh` spawna 1 Dottore **ogni 2h**; il Dottore fa `liveness-check` = ping `[HEALTH]` a ogni agente.
+- Pacing-log live 11/06: `dottore=2.88%/h, share 51%, cadenza 0.00/min (0 chk in 11m)` → **#1 consumatore del team (51%)** facendo 0 lavoro reale. Il Capitano gli tirava throttle. = "spreca token".
+- `dottore-actions.jsonl` = 179KB di giri quasi tutti ping liveness.
+
+## 🧱 Stato attuale — RIUSO > reinvento (da analisi codice+VPS)
+ESISTE:
+- `agents/dottore/dottore.md` (+6 locali) — prompt one-shot health-check.
+- `.launcher/doctor-watchdog.sh` — loop ogni 2h, gate working-hours/halt.
+- `.launcher/spawn-doctor.sh` — spawn idempotente (kill DOTTORE*, REPL-check, inietta prompt).
+- `.launcher/start-agent.sh` — kill+ricrea+avvia sessione (multi-provider, i18n, skill, kick-off). **È il meccanismo di refresh.**
+- `#{session_created}` letto in `dashboard_server.py:280-298` → età sessione.
+- `agents/_skills/liveness-check` (capture-pane -S -200 + 10 pattern + respawn atomico), `daily-restart-wave` (restart 1×/giorno con capture→db-query→kill→start-agent→kick-off), `cache-prune`, `py-tools-audit`, `cv-disk-audit`.
+- Log: `dottore-actions.jsonl`, dir `dottore-captures/`, `messages.jsonl`, `throttle-events.jsonl`, `sentinel-data.jsonl`, DB jobs.db.
+- `working_hours.py` (gate ON/OFF, wrap-around mezzanotte).
+
+NON ESISTE (da creare):
+- Scheduling **2×/sessione** (+30min dall'inizio finestra ON, +6h = metà di 12h) — oggi è "ogni 2h" cieco.
+- **Retrospettiva+intervista** per-agente (capture ampio + domande intoppi/learning).
+- **Sintesi densa in APPEND** su file giornaliero crescente, con **analytics dai log** (pos inserite, intoppi, comunicazioni).
+- Logica **"non riattivare parcheggiate / non toccare fresche"** basata su età sessione + stato Capitano.
+
+## 🆕 Design nuovo
+
+### A. Scheduling (dev1 — doctor-watchdog.sh)
+- Non più "ogni 2h". Il watchdog calcola l'inizio della finestra ON corrente (da working_hours) e spawna il Dottore SOLO a:
+  - **T+30min** dall'inizio finestra (calibrazione: dopo mezz'ora il Capitano ha deciso chi lavora).
+  - **T+6h** (metà di una finestra 12h; in generale metà-finestra).
+- Idempotenza: uno stato `doctor-schedule-state.json` con `{window_start, did_t30, did_mid}` per non rispawnare lo stesso slot. Reset a nuova finestra.
+- Gate invariati: OFF → niente spawn; `.team-halted.flag`/`.weekly-halt.flag` → niente.
+- Generalizzazione: gli offset (+30min, +mid) derivati dalla durata finestra, non hardcoded a 12h.
+
+### B. Flusso retrospettiva per-agente (dev1 — skill `session-refresh`)
+Per ogni sessione tmux WORKER + coordinatore (ordine: worker prima, user-facing dopo, come daily-restart-wave):
+1. **Età sessione**: `tmux display-message -p -t <S> '#{session_created}'`. Se **troppo fresca** (< SOGLIA, es. < 90min o < T+30 della finestra) → SKIP (niente da rigenerare).
+2. **Capture-pane ampio**: `capture-pane -p -S -` (tutto lo scroll-back) + capture mirate su momenti salienti.
+3. **Intervista**: `[@dottore -> @<agent>] [RETRO] Intoppi in questa sessione? Imparato qualcosa? Cosa stavi facendo ora?` → leggi risposta.
+4. **Analytics dai log** (dev2 fornisce lo script): per quell'agente → pos inserite/scored (DB), throttle subiti (throttle-events), con chi ha comunicato (messages.jsonl). 
+5. **Sintesi densa in APPEND** su `/jht_home/logs/session-journal.md` (o .jsonl): blocco per (data, agente, sessione, durata, analytics, intervista, intoppi). Più dottori nello stesso giorno → append (mai overwrite).
+6. **Context-refresh** (solo se la sessione NON è parcheggiata, vedi C): capture già fatto → `kill-session` → `start-agent.sh <role> <N>` → kick-off lungo "[RESUME] Eri a metà di X, avevi fatto Y, continua da Z".
+
+### C. Regola PARCHEGGIATE / FRESCHE (dev1 — la più delicata)
+- **Parcheggiata** = sessione viva ma che il Capitano ha deciso di NON far lavorare (es. Scout acceso dalla sessione precedente, non assegnato stamattina). Segnali: nessuna attività token recente + nessuna coda assegnata + il Capitano non la elenca tra gli attivi. → Il Dottore **NON la ricrea per farla ripartire**. Fa la sintesi, e se la rigenera le da' contesto "[RESUME] eri FERMO/in standby, resta in standby finché il Capitano non ti assegna". Mai trasformare un parcheggio in lavoro.
+- **Fresca** = `session_created` recente (< soglia) → SKIP totale (niente retro, niente refresh).
+- Come distinguere "attiva" da "parcheggiata": incrociare token-meter (attività ultimi N min) + se il Capitano la considera attiva (interrogabile via intervista al Capitano nel giro T+30).
+
+### D. Deprecazione del vecchio comportamento
+- Il ping `[HEALTH]` liveness ogni 2h → rimosso/ridotto. La liveness (zombie) resta come check rapido SOLO se serve, non come attività principale. Il nuovo Dottore non "pinga per pingare".
+
+## 🔀 Split per-file (anti-collisione)
+- **dev1**: `agents/dottore/dottore.md`, `.launcher/doctor-watchdog.sh`, nuova skill `agents/_skills/session-refresh/` (orchestrazione + regole parcheggiate/fresche + scheduling helper).
+- **dev2**: script analytics `shared/skills/session_analytics.py` (estrae per-agente: pos inserite da jobs.db, intoppi da throttle-events.jsonl, comunicazioni da messages.jsonl) + formato/append del `session-journal`. 
+- Contratto = output dello script analytics (JSON per-agente) che la skill dottore inserisce nella sintesi.
+- dev3 in deploy fix#4+Analista: file disgiunti (lui pacing/sentinel-bridge, noi doctor-watchdog/dottore).
+
+## ✅ Aperti / da confermare
+- [ ] dev2: analisi indipendente + proposta su split (concordare, non imposto).
+- [ ] Formato file-sintesi: `.md` leggibile vs `.jsonl` queryabile? (proposta: `.jsonl` per analytics + un render `.md`).
+- [ ] Soglia "fresca" (90 min? = non rigenerare prima del giro T+30).
+- [ ] Come il Dottore sa quali sessioni il Capitano considera "attive" (intervista al Capitano nel giro T+30 → lista attivi → le altre = parcheggiate).
+- [ ] Un solo Dottore fa tutto (ordine utente per ora); skill deve gestire N sessioni in un giro senza esaurire il context (capture mirate, non tutto-in-memoria).
