@@ -134,6 +134,18 @@ Writing rules:
 - **Actionable** — suggest concrete alternative sources or queries (derivable from `candidate_profile.yml` and the scout source tier)
 - **Idempotent** — one notification per pattern. If the scout has already changed approach in the next batch, do not insist.
 
+**RULE-12 — DAILY OPEN RECHECK + BACKFILL (2026-06-13).** Beyond analyzing `new` positions, you keep the already-analyzed pool **fresh**: a position open today can be closed tomorrow. Pull the recheck queue:
+```bash
+python3 /app/shared/skills/db_query.py next-for-recheck
+```
+It returns positions still in play (`is_open=1`, status `checked`→`ready`) never rechecked or rechecked >24h ago — and **organically backfills** historical positions missing `expires_at` / office coords / salary. For each:
+1. Re-run the RULE-03 link check. If the link is **dead** → `db_update.py position <ID> --is-open false --last-open-check now`. **Do NOT change `status`**: the user wants expired positions to stay visible in the "Scadute/Archivio" dashboard view, not vanish.
+2. If `expires_at` is set AND `expires_at < today` → `--is-open false` (closed by deadline).
+3. **Backfill** what is missing on that row: `expires_at` (parse, see MAIN LOOP step 5), office coords (step 6), salary (step 7).
+4. **ALWAYS** end with `--last-open-check now` so the 24h cadence advances — even if nothing changed.
+
+A position still open and complete: just `--last-open-check now`. Never write the literal string `"non presente"` into `deadline`/`expires_at` — leave `expires_at` NULL when unknown.
+
 ---
 
 ## MAIN LOOP
@@ -151,10 +163,17 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Fetch complete JD from the link
 3. Analyze: fit with profile, gaps, red flags
 4. Write the 5 structured fields + analysis in the notes
-5. **Companies** (RULE-08): `db-query company "<name>"` → if missing, `db-insert company` with what you extracted from JD/site (sector, hq_country, initial verdict). If present but with incomplete info and you have reliable new data, `db-update company`.
-6. **Highlights** (RULE-08): 1-3 concrete pros/cons → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Only if really notable.
-7. Update status: `checked` (to pass to Scorer) or `excluded`
-8. Move to the next
+5. **Deadline → `expires_at`** (machine-readable). Parse the JD with the existing skill:
+   ```bash
+   python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # prints ISO date or empty
+   ```
+   If it prints an ISO date → `db_update.py position <ID> --expires-at <YYYY-MM-DD>`; if empty → `--expires-at ""` (NULL). **Never** invent a date and **never** write `"non presente"`.
+6. **Office coordinates by default.** If the position is **not remote** (`work_mode`/`remote_type` ≠ `full_remote`/remote), follow the `office-geocoding` skill to populate `office_lat`/`office_lon`/`office_address`. If remote → skip (no office to locate). This is now a DEFAULT step, not on-demand only.
+7. **Salary estimate (ownership moved here from Scorer).** Pre-pass the `salary-estimate` skill (L1 declared → L2 cache → L3 web → L4 default). If it returns a range → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. The Scorer now READS these for `salary_fit` (it no longer estimates them).
+8. **Companies** (RULE-08): `db-query company "<name>"` → if missing, `db-insert company` with what you extracted from JD/site (sector, hq_country, initial verdict). If present but with incomplete info and you have reliable new data, `db-update company`.
+9. **Highlights** (RULE-08): 1-3 concrete pros/cons → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Only if really notable.
+10. Update status: `checked` (to pass to Scorer) or `excluded`. Also set `--expires-at` and `--last-open-check now` if not already written.
+11. Move to the next
 
 ```bash
 # Update status
