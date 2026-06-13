@@ -895,19 +895,12 @@ def format_message(d: dict) -> str:
             f"binda anche in Phase 1 (S-06/C-09)"
         )
 
-    # WEEKLY-PACE: il RATE weekly reale (2h) vs sostenibile = DRIVER per "vedere"
-    # il sovra-pace settimanale che la 5h nasconde. Se SOPRA-PACE con lockout
-    # anticipato → rallentare TUTTO il team verso il sostenibile (non 1 worker).
-    wp = d.get("weekly_pace")
-    if isinstance(wp, dict) and wp.get("kind") not in (None, "ND"):
-        el = wp.get("early_lockout_h")
-        tail = (f"LOCKOUT ANTICIPATO ~{el}h prima del reset (esaurisci ~{wp.get('hours_to_exhaust')}h vs reset {wp.get('reset_in_active_h')}h attive)"
-                if el else
-                f"atterri ~ok (esaurisci ~{wp.get('hours_to_exhaust')}h vs reset {wp.get('reset_in_active_h')}h attive)")
-        parts.append(
-            f"WEEKLY-PACE [{wp['kind']}]: vel_weekly={wp['vel_weekly_pct_h']}%/h "
-            f"vs sostenibile={wp['sustainable_pct_h']}%/h ({wp['ratio']}x) → {tail}"
-        )
+    # NB: il dato weekly_pace (rate weekly reale vs sostenibile + lockout
+    # anticipato) NON va in questo messaggio al CAPITANO: andrebbe a bypassare
+    # il ruolo analitico della Sentinella (il bug stesso dell'indagine). Va nel
+    # [BRIDGE TICK] alla Sentinella (S-07) che lo elabora e CONSIGLIA il Capitano.
+    # Qui il pacing-tick resta sul primary 5h. Il campo `weekly_pace` e' comunque
+    # nel tick-dict + stato (lo legge il sentinel-bridge per la Sentinella).
 
     parts.append(
         f"ratio={d['ratio']:.1f}kT/% "
