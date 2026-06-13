@@ -87,7 +87,14 @@ RUN pip3 install --no-cache-dir -r requirements.txt \
     # Pre-install only the headless shell (used by linkedin_check.py
     # with headless=True). The full Chromium build is intentionally NOT
     # installed — it was 602M of dead weight on top of the 323M shell.
-    && playwright install --only-shell chromium
+    # --with-deps is MANDATORY: the shell binary links libatk-1.0.so.0,
+    # libnss3, libcups, etc. Without the OS deps the binary exists but
+    # exits 127 on launch → linkedin_check.py dies → LinkedIn open-checks
+    # (~68% of sources) silently report new=0 / "queue exhausted" fleet-wide.
+    # install-deps runs its own apt-get update, so the apt lists cleaned
+    # above are repopulated here; we clean them again to keep the layer slim.
+    && playwright install --with-deps --only-shell chromium \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
