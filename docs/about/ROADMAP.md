@@ -2,7 +2,7 @@
 
 > Last updated: 2026-05-31
 >
-> 📋 **For tactical, task-by-task detail → see [`BACKLOG.md`](../BACKLOG.md)**.
+> 📋 **For tactical, task-by-task detail → see [`BACKLOG.md`](../../BACKLOG.md)**.
 > This file is the strategic, visual summary — where we're going, not the day-to-day.
 
 ---
@@ -93,7 +93,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 🟡 Local-PC-no-API mode — local-queries.ts esiste, switch logico pending in queries.ts
 ```
 
-For full task list → [BACKLOG · Phase 1](../BACKLOG.md#1️⃣-phase-1--web-platform-consolidation-current-sprint)
+For full task list → [BACKLOG · Phase 1](../../BACKLOG.md#1️⃣-phase-1--web-platform-consolidation-current-sprint)
 
 ---
 
@@ -129,7 +129,7 @@ For full task list → [BACKLOG · Phase 1](../BACKLOG.md#1️⃣-phase-1--web-p
 ⏸️ Code signing (deferred post-beta — open source + community review = trust signal)
 ```
 
-For full task list → [BACKLOG · Phase 2](../BACKLOG.md#2️⃣-phase-2--🖥️-desktop-launcher)
+For full task list → [BACKLOG · Phase 2](../../BACKLOG.md#2️⃣-phase-2--🖥️-desktop-launcher)
 
 ---
 
@@ -161,7 +161,7 @@ For full task list → [BACKLOG · Phase 2](../BACKLOG.md#2️⃣-phase-2--🖥�
 
 > 🌉 **Bridge to today**: power users can already bring up JHT on a self-hosted VPS through the desktop wizard (manual IP + SSH key, T1-T4 path). PHASE 3 generalises that one-VPS flow into a multi-provider, billing-aware one-click experience.
 
-For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁️-multi-provider-cloud-provisioning-future-post-10)
+For full task list → [BACKLOG · Phase 3](../../BACKLOG.md#3️⃣-phase-3--☁️-multi-provider-cloud-provisioning-future-post-10)
 
 ---
 
@@ -195,7 +195,7 @@ For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁�
 > Design doc: [`docs/internal/experiments/2026-05-06-agent-prompts-i18n.md`](../internal/experiments/2026-05-06-agent-prompts-i18n.md).
 ```
 
-For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-internationalization)
+For full task list → [BACKLOG · Phase 4](../../BACKLOG.md#4️⃣-phase-4--🌍-internationalization)
 
 ---
 
@@ -223,7 +223,7 @@ For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-
 ⬜ SHA256 checksums on download page
 ```
 
-For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-public-website)
+For full task list → [BACKLOG · Phase 5](../../BACKLOG.md#5️⃣-phase-5--🌐-public-website)
 
 ---
 
@@ -249,7 +249,7 @@ For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-
 ⬜ 🎙️ Press kit (logos svg+png, 5+ screenshots, 3 description variants 30/100/300w) — assets/press-kit/ mancante
 ```
 
-For full task list → [BACKLOG · Phase 6](../BACKLOG.md#6️⃣-phase-6--🚢-pre-launch-public-oss-new)
+For full task list → [BACKLOG · Phase 6](../../BACKLOG.md#6️⃣-phase-6--🚢-pre-launch-public-oss-new)
 
 ---
 
@@ -461,7 +461,7 @@ Docker is the **default** in both the CLI installer and the desktop launcher (si
 | Container runtime per OS | ✅ Shipped | Colima (macOS), docker.io (Linux/WSL2), Docker Desktop (Windows — installed via WSL2 wizard) |
 | `isContainer()` gating in TUI/CLI/desktop | ✅ Shipped | v0.1.9 |
 
-> Full implementation history → [`CHANGELOG.md`](../CHANGELOG.md). Architectural rationale (why container, why no host-side `--dangerously-skip-permissions`) → [`docs/adr/0001-colima-not-docker-desktop.md`](./adr/0001-colima-not-docker-desktop.md).
+> Full implementation history → [`CHANGELOG.md`](../../CHANGELOG.md). Architectural rationale (why container, why no host-side `--dangerously-skip-permissions`) → [`docs/adr/0001-colima-not-docker-desktop.md`](../adr/0001-colima-not-docker-desktop.md).
 
 ---
 
@@ -475,12 +475,12 @@ For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Ki
 
 ## 📚 Related
 
-- 📋 [`BACKLOG.md`](../BACKLOG.md) — tactical, task-by-task work plan
-- 📝 [`CHANGELOG.md`](../CHANGELOG.md) — what's been shipped per release
+- 📋 [`BACKLOG.md`](../../BACKLOG.md) — tactical, task-by-task work plan
+- 📝 [`CHANGELOG.md`](../../CHANGELOG.md) — what's been shipped per release
 - 🎯 [`docs/VISION.md`](VISION.md) — design philosophy
 - 📐 [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) — deployment diagram
 - 💳 [`docs/PROVIDERS.md`](PROVIDERS.md) — supported subscriptions
 - 🧪 [`docs/guides/BETA.md`](../guides/BETA.md) — beta program + post-launch open invitation (any role/industry)
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](../guides/AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
 - 🔒 [`docs/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — internal operations reference
-- 📐 [`docs/adr/`](./adr/) — architectural decision records
+- 📐 [`docs/adr/`](../adr/) — architectural decision records

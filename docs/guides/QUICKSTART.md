@@ -118,7 +118,7 @@ You'll end up with two folders:
 
 ## 🛠️ Path 4 — From source (contributors)
 
-For contributors hacking on the repo. See [`.github/CONTRIBUTING.md`](../.github/CONTRIBUTING.md) for the full PR workflow and conventions.
+For contributors hacking on the repo. See [`.github/CONTRIBUTING.md`](../../.github/CONTRIBUTING.md) for the full PR workflow and conventions.
 
 ```bash
 # 1. Clone

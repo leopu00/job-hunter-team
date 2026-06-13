@@ -78,7 +78,7 @@ These graphs are interesting on their own and will be added to this page (and li
 ## 🔗 Related
 
 - [`PROVIDERS.md`](PROVIDERS.md) — which subscription to pick
-- [ADR-0004](adr/0004-subscription-only-no-api-keys.md) — why subscription-only
+- [ADR-0004](../adr/0004-subscription-only-no-api-keys.md) — why subscription-only
 - `agents/sentinella/sentinella.md` — the Sentinel's prompt and behavior
 - `shared/skills/` — the monitoring skills (`bridge_health`, `sentinel_health`, `usage_record`, `compute_metrics`, `rate_budget`)
 - `docs/internal/architecture/context-watchdog-spec.md` — periodic agent restart pattern (long-lived threads burning context cause silent throughput collapse; restart restores 5× pipeline velocity)

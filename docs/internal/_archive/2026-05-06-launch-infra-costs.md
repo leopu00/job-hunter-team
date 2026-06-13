@@ -73,7 +73,7 @@ Stack identico al cloud Supabase: Postgres 🐘 + GoTrue (auth) 🔐 + Storage �
 Realtime ⚡ + Studio 🎨. Tutto in `docker-compose`.
 
 - 🖥️ VPS Hetzner CX22: **~€4.5/mese** (lo stesso "target setup" del progetto —
-  vedi [`INFRA.md`](INFRA.md))
+  vedi [`INFRA.md`](../ops/INFRA.md))
 - 💾 Backup: cron + rclone su Backblaze B2 (~€0.005/GB/mese, trascurabile)
 - 🔒 SSL: gratis con Caddy
 
@@ -83,7 +83,7 @@ Realtime ⚡ + Studio 🎨. Tutto in `docker-compose`.
 - 📈 Monitoring uptime (UptimeRobot free)
 
 #### 🎁 Vantaggi nel contesto JHT
-- 🎯 Coerente con filosofia VPS-first (vedi [`INFRA.md`](INFRA.md), modalità "target setup")
+- 🎯 Coerente con filosofia VPS-first (vedi [`INFRA.md`](../ops/INFRA.md), modalità "target setup")
 - 🛡️ Pieno controllo dati utenti → allineato a OSS-as-trust-signal
 - 🔓 Zero lock-in su provider managed
 - 🚫 Zero rischio policy change improvviso (es. limite MAU abbassato da 50k a 10k)
@@ -160,4 +160,4 @@ Sufficiente per beta + alpha pubblica iniziale.
 **Nessuna.** Il progetto oggi gira su Vercel Hobby + (eventualmente) Supabase
 free, sufficienti per la beta interna in corso. Il piano qui sopra entra in
 gioco al momento del lancio pubblico (Phase 3, target setup VPS — vedi
-[`ROADMAP.md`](../about/ROADMAP.md)).
+[`ROADMAP.md`](../../about/ROADMAP.md)).

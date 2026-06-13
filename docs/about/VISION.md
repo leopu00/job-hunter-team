@@ -43,7 +43,7 @@ The other agents execute a pipeline — find, verify, score, write, review. The 
 
 The Mentor is the only agent that has the right to tell the user *"stop applying for X, go learn Y first"*. It is the meta-layer that keeps the team useful as the world changes.
 
-See [`agents/mentor/mentor.md`](../agents/mentor/mentor.md) for the spec.
+See [`agents/mentor/mentor.md`](../../agents/mentor/mentor.md) for the spec.
 
 ### 👨‍💼 The Assistant — the copilot
 

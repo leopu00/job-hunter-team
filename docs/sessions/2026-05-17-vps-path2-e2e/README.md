@@ -126,7 +126,7 @@ Raggruppati per area, in ordine cronologico:
 > `/jht_home/agents/<role>/` (work_dir diversa da `/app` del wizard OAuth)
 > non risolveva `$HOME/.kimi/credentials/kimi-code.json` e mostrava `LLM not set`.
 > Fix: export esplicito `KIMI_SHARE_DIR=$JHT_HOME/.kimi` nelle tmux session.
-> Documentato in [bug strategici §1](../../internal/2026-05-17-team-strategy-bugs.md).
+> Documentato in [bug strategici §1](../../internal/_archive/2026-05-17-team-strategy-bugs.md).
 
 ### 👋 Welcome 3 bot Telegram (5 fix)
 
@@ -245,7 +245,7 @@ In questa sessione:
 - [`../2026-05-17-budget-windows/README.md`](../2026-05-17-budget-windows/README.md)
   — analisi delle 2 finestre Kimi consecutive (entrambe in target 90-95%) con
   4 grafici matplotlib del Capitano
-- [`../../internal/2026-05-17-team-strategy-bugs.md`](../../internal/2026-05-17-team-strategy-bugs.md)
+- [`../../internal/_archive/2026-05-17-team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md)
   — 7 bug strategici/comportamentali emersi dalla conversazione utente ↔
   Capitano via Telegram (Whisper/Vision mancante, Sentinella freeze totale,
   Capitano gerarchia, sync history su web)
@@ -340,7 +340,7 @@ Supabase migrations applicate: 010, 012, 013
 
 Non bloccanti, ma utili per la prossima sessione:
 
-- **Bug strategici #1-#7** → vedi [`../../internal/2026-05-17-team-strategy-bugs.md`](../../internal/2026-05-17-team-strategy-bugs.md)
+- **Bug strategici #1-#7** → vedi [`../../internal/_archive/2026-05-17-team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md)
 - **Whisper/Vision** per voice/photo Telegram (oggi sono buchi neri)
 - **Sentinella throttle progressivo** con hysteresis invece di freeze binario
 - **Sync chat history su web**: oggi ho dovuto SSH+grep `wire.jsonl` per

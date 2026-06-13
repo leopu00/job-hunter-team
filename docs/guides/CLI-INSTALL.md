@@ -17,7 +17,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 
 | Item | Value |
 |------|-------|
-| Source of truth | [`scripts/install.sh`](../scripts/install.sh) |
+| Source of truth | [`scripts/install.sh`](../../scripts/install.sh) |
 | Served by | Vercel (Next.js project in `web/`) |
 | URL | `https://jobhunterteam.ai/install.sh` |
 | HTTP cache | `public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` |
@@ -33,7 +33,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 There is **no Next.js API route** behind `/install.sh`. The file is shipped
 as a static asset:
 
-1. The repo-root [`vercel.json`](../vercel.json) declares a Next.js build
+1. The repo-root [`vercel.json`](../../vercel.json) declares a Next.js build
    for the `web/` workspace.
 2. Its `buildCommand` runs `cp scripts/install.sh web/public/install.sh`
    **before** `next build`. This guarantees the deployed copy is always
@@ -306,4 +306,4 @@ Tickets to file on `scripts/install.sh` itself (not on this doc):
 - 📐 [`docs/INFRA.md`](../internal/ops/INFRA.md) — infrastructure diagram and deployment modes
 - 🧪 [`docs/BETA.md`](BETA.md) — beta tester program (report install issues here)
 - 🔒 [`docs/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — internal operations reference
-- 📐 [ADR-0004](./adr/0004-subscription-only-no-api-keys.md) — why subscription-only, no API keys
+- 📐 [ADR-0004](../adr/0004-subscription-only-no-api-keys.md) — why subscription-only, no API keys

@@ -52,7 +52,7 @@ Dettaglio architettura in [`docs/internal/architecture/cloud-sync-architecture.m
 ### 🐛 Team strategy bugs sprint — 2026-05-17 / 2026-05-18 (19 commit, 48h)
 
 Dettaglio in
-[`docs/internal/2026-05-17-team-strategy-bugs.md`](docs/internal/2026-05-17-team-strategy-bugs.md)
+[`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md)
 e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-18-fix-effectiveness-review/).
 
 **Effetto cumulativo misurato (pre/post-fix)**:
