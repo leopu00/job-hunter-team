@@ -1,4 +1,4 @@
-# Location enrichment — playbook per gli analisti
+# 📍 Location enrichment — playbook per gli analisti
 
 Data: 2026-05-23
 Stato: bozza per simulazione

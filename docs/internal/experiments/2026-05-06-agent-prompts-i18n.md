@@ -1,4 +1,4 @@
-# Agent prompts i18n — policy lockata 2026-05-13
+# 🌍 Agent prompts i18n — policy lockata 2026-05-13
 
 > Convenzione + infrastruttura di startup per la risoluzione multi-lingua dei file d'identità agenti (`agents/<role>/<role>.md`).
 > Decisione finale: **policy "lingua utente unica" ovunque**, JD content eccezione.

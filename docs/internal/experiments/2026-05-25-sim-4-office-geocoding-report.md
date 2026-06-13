@@ -1,4 +1,4 @@
-# Simulazione 4 — office geocoding precise + 6 analisti
+# 🧪 Simulazione 4 — office geocoding precise + 6 analisti
 
 Data: 2026-05-25 (avvio 22:45 del 2026-05-24, chiusura ~01:50 del 2026-05-25)
 Container: `jht-sim-d2` (reset totale via `sim-reset.sh`)
