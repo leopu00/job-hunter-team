@@ -330,78 +330,6 @@ def _read_window_samples(since_ts: float, now_ts: float):
     return [s for s in samples if s[2] == last_session]
 
 
-def _weekly_pace_assessment(now_ts, weekly_remaining_pct, weekly_active_hours,
-                            window_h=2.0):
-    """RATE weekly REALE (vel_weekly) su ~2h vs sostenibile → assessment che
-    GUIDA (non INFO). Risponde a "perche' non si accorgono del burn weekly":
-    il weekly e' integer-rounded e si muove ~+1%/tick → su 14min e' rumore;
-    serve una finestra lunga (2h) per vedere il ritmo. weekly_usage NON resetta
-    sui confini 5h, quindi usiamo la storia intera (non la session corrente).
-
-    Ritorna dict {vel_weekly_pct_h, sustainable_pct_h, ratio, hours_to_exhaust,
-    reset_in_active_h, early_lockout_h, kind} o None se dati insufficienti.
-    kind: SOPRA-PACE (ratio>1.2) | SOTTO-PACE (<0.8) | ALLINEATO | ND.
-    """
-    if (not isinstance(weekly_remaining_pct, (int, float))
-            or not isinstance(weekly_active_hours, (int, float))
-            or weekly_active_hours <= 0
-            or not SENTINEL_JSONL.exists()):
-        return None
-    since = now_ts - window_h * 3600.0
-    oldest = newest = None
-    try:
-        with SENTINEL_JSONL.open(encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    e = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                w = e.get("weekly_usage")
-                ts_iso = e.get("ts")
-                if not isinstance(w, (int, float)) or not isinstance(ts_iso, str):
-                    continue
-                try:
-                    t = datetime.fromisoformat(
-                        ts_iso.replace("Z", "+00:00")).timestamp()
-                except ValueError:
-                    continue
-                if t < since or t > now_ts:
-                    continue
-                if oldest is None:
-                    oldest = (t, float(w))
-                newest = (t, float(w))
-    except OSError:
-        return None
-    if oldest is None or newest is None:
-        return None
-    dt_h = (newest[0] - oldest[0]) / 3600.0
-    dw = newest[1] - oldest[1]
-    if dt_h < 0.3 or dw < 0:          # finestra troppo corta o reset weekly nel mezzo
-        return None
-    vel_weekly = dw / dt_h            # %/h
-    sustainable = weekly_remaining_pct / weekly_active_hours
-    ratio = (vel_weekly / sustainable) if sustainable > 0 else None
-    hte = (weekly_remaining_pct / vel_weekly) if vel_weekly > 0 else None  # ore attive
-    early = (weekly_active_hours - hte) if hte is not None else None
-    kind = ("ND" if ratio is None
-            else "SOPRA-PACE" if ratio > 1.2
-            else "SOTTO-PACE" if ratio < 0.8
-            else "ALLINEATO")
-    return {
-        "vel_weekly_pct_h": round(vel_weekly, 2),
-        "sustainable_pct_h": round(sustainable, 2),
-        "ratio": round(ratio, 2) if ratio is not None else None,
-        "hours_to_exhaust": round(hte, 1) if hte is not None else None,
-        "reset_in_active_h": round(weekly_active_hours, 1),
-        "early_lockout_h": (round(early, 1)
-                            if early is not None and early > 0 else None),
-        "kind": kind,
-    }
-
-
 def _read_throttle_events(since_ts: float, now_ts: float) -> dict[str, int]:
     """Conta gli eventi `throttle-events.jsonl` per agente nella finestra.
 
@@ -721,16 +649,6 @@ def compute_tick(ast, tba, rb, now: datetime,
         else:
             verdict = {"kind": "ALLINEATO", "delta": delta_abs, "frac_pct": 0.0}
 
-    # 7-bis) Assessment WEEKLY-PACE: rate weekly REALE (su 2h) vs sostenibile.
-    # DRIVER esplicito perche' il Capitano/Sentinella "vedano" il sovra-pace
-    # settimanale, che la finestra 5h nasconde (status SOTTOUTILIZZO mentre il
-    # weekly va a 100% — incidente 2026-06-07).
-    weekly_pace = _weekly_pace_assessment(
-        now.timestamp(),
-        target_info.get("weekly_remaining_pct"),
-        target_info.get("weekly_active_hours"),
-    )
-
     return {
         "ok": True,
         "now": now,
@@ -764,7 +682,6 @@ def compute_tick(ast, tba, rb, now: datetime,
         "active_hours_in_window": target_info.get("active_hours_in_window"),
         "weekly_active_hours": target_info.get("weekly_active_hours"),
         "weekly_remaining_pct": target_info.get("weekly_remaining_pct"),
-        "weekly_pace": weekly_pace,
         "weekly_window_source": target_info.get("weekly_window_source"),
         "window_cap_pct_of_weekly": target_info.get("window_cap_pct_of_weekly"),
         "next_phase_transition_at": target_info.get("next_phase_transition_at"),
