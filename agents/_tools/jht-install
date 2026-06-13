@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# jht-install — UN comando per installare deps nella lane STANDARD giusta,
+# così gli agenti hanno libertà totale MA i deps NON si sparpagliano per
+# cartelle diverse (il "caos deps" del redesign Mantenitore 2026-06-13).
+#
+# Le 4 lane usano i meccanismi GIÀ esistenti nell'immagine (non ne aggiunge
+# di nuovi):
+#   apt      → sudo apt-get (sudoers NOPASSWD, /etc/sudoers.d/jht) — lib/tool di SISTEMA
+#   py       → uv pip install --user  → $JHT_HOME/.local (un solo magazzino)
+#   node     → npm install -g         → $NPM_CONFIG_PREFIX (/jht_home/.npm-global)
+#   browser  → playwright browser + system-deps (ripara il caso libatk)
+# Tutto il resto (binari/lib scaricati a mano) va sotto $JHT_DEPS_PREFIX
+# (/opt/jht-deps, già in PATH+LD_LIBRARY_PATH) — vedi `jht-install prefix`.
+#
+# Uso:
+#   jht-install apt <pkg...>            # es: jht-install apt libatk1.0-0 libnss3
+#   jht-install py  <pkg...>            # es: jht-install py faster-whisper
+#   jht-install node <pkg...>           # es: jht-install node @playwright/test
+#   jht-install browser [chromium]      # ripara/installa il browser + le sue .so
+#   jht-install prefix                  # stampa il prefisso globale per install manuali
+#   jht-install help
+#
+# Filosofia (direttiva utente): libertà > restrizione. Questo wrapper NON
+# limita cosa si installa — standardizza DOVE finisce. Da fonti ufficiali.
+
+set -eu
+
+PREFIX="${JHT_DEPS_PREFIX:-/opt/jht-deps}"
+
+usage() {
+  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+die() { echo "jht-install: $*" >&2; exit 1; }
+
+lane="${1:-help}"
+shift || true
+
+case "$lane" in
+  apt)
+    [ "$#" -gt 0 ] || die "uso: jht-install apt <pkg...>"
+    # apt-get è nella whitelist sudoers; update prima (le liste sono pulite
+    # nell'immagine per snellezza) poi install. -n = non-interattivo.
+    sudo -n apt-get update \
+      && sudo -n apt-get install -y --no-install-recommends "$@" \
+      || die "apt install fallito per: $*"
+    ;;
+  py|python)
+    [ "$#" -gt 0 ] || die "uso: jht-install py <pkg...>"
+    # Standard team-rule: uv pip install --user (mai sudo pip). Fallback a
+    # pip3 --user se uv non è presente.
+    if command -v uv >/dev/null 2>&1; then
+      uv pip install --user "$@" || die "uv pip install fallito per: $*"
+    else
+      pip3 install --user "$@" || die "pip install fallito per: $*"
+    fi
+    ;;
+  node|npm)
+    [ "$#" -gt 0 ] || die "uso: jht-install node <pkg...>"
+    # -g rispetta NPM_CONFIG_PREFIX (/jht_home/.npm-global), su bind-mount.
+    npm install -g "$@" || die "npm install -g fallito per: $*"
+    ;;
+  browser|playwright)
+    target="${1:-chromium}"
+    # Binario nel prefisso baked (jht-owned, no root). Le system-lib (.so)
+    # invece richiedono root → via sudo. È la riparazione del caso libatk.
+    playwright install --only-shell "$target" || die "playwright install (binario) fallito"
+    if sudo -n env "PATH=$PATH" playwright install-deps "$target" 2>/dev/null; then
+      :
+    else
+      # Fallback esplicito sul set noto di .so del browser headless.
+      echo "jht-install: playwright install-deps non disponibile, fallback apt sulle .so note" >&2
+      sudo -n apt-get update \
+        && sudo -n apt-get install -y --no-install-recommends \
+             libatk1.0-0 libatk-bridge2.0-0 libnss3 libnspr4 libgbm1 \
+             libasound2 libcups2 libxkbcommon0 libpango-1.0-0 \
+        || die "fallback apt sulle .so del browser fallito"
+    fi
+    ;;
+  prefix)
+    echo "$PREFIX"
+    echo "  bin/ è in PATH, lib/ è in LD_LIBRARY_PATH — installa qui ciò che non ha una lane (es. ./configure --prefix=$PREFIX)" >&2
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    die "lane sconosciuta: '$lane' (usa: apt|py|node|browser|prefix|help)"
+    ;;
+esac
