@@ -51,20 +51,43 @@ Per ogni sessione tmux WORKER + coordinatore (ordine: worker prima, user-facing 
 ### C. Regola PARCHEGGIATE / FRESCHE (dev1 — la più delicata)
 - **Parcheggiata** = sessione viva ma che il Capitano ha deciso di NON far lavorare (es. Scout acceso dalla sessione precedente, non assegnato stamattina). Segnali: nessuna attività token recente + nessuna coda assegnata + il Capitano non la elenca tra gli attivi. → Il Dottore **NON la ricrea per farla ripartire**. Fa la sintesi, e se la rigenera le da' contesto "[RESUME] eri FERMO/in standby, resta in standby finché il Capitano non ti assegna". Mai trasformare un parcheggio in lavoro.
 - **Fresca** = `session_created` recente (< soglia) → SKIP totale (niente retro, niente refresh).
-- Come distinguere "attiva" da "parcheggiata": incrociare token-meter (attività ultimi N min) + se il Capitano la considera attiva (interrogabile via intervista al Capitano nel giro T+30).
+- Come distinguere "attiva" da "parcheggiata" — RISOLTO data-driven (contratto dev2): `doctor_analytics.py` espone `produced` (count nella finestra) + `last_captain_msg` (ultimo ordine del Capitano a quella sessione, da messages.jsonl). Regola: sessione **vecchia** (non fresca) + `produced==0` nella finestra + nessun `last_captain_msg` recente ⇒ **PARCHEGGIATA** → NON ricreare-per-far-ripartire; sintetizza e (se rigeneri) da' contesto "[RESUME] eri in standby, resta finché il Capitano non ti assegna". Niente intervista-al-Capitano fragile.
 
 ### D. Deprecazione del vecchio comportamento
 - Il ping `[HEALTH]` liveness ogni 2h → rimosso/ridotto. La liveness (zombie) resta come check rapido SOLO se serve, non come attività principale. Il nuovo Dottore non "pinga per pingare".
 
 ## 🔀 Split per-file (anti-collisione)
 - **dev1**: `agents/dottore/dottore.md`, `.launcher/doctor-watchdog.sh`, nuova skill `agents/_skills/session-refresh/` (orchestrazione + regole parcheggiate/fresche + scheduling helper).
-- **dev2**: script analytics `shared/skills/session_analytics.py` (estrae per-agente: pos inserite da jobs.db, intoppi da throttle-events.jsonl, comunicazioni da messages.jsonl) + formato/append del `session-journal`. 
-- Contratto = output dello script analytics (JSON per-agente) che la skill dottore inserisce nella sintesi.
-- dev3 in deploy fix#4+Analista: file disgiunti (lui pacing/sentinel-bridge, noi doctor-watchdog/dottore).
+- **dev2**: `shared/skills/doctor_analytics.py` + writer del file-sintesi. Vedi CONTRATTO sotto (lockato).
+- dev3 in deploy fix#4+Analista: file disgiunti (lui pacing/sentinel-bridge, noi doctor-watchdog/dottore/doctor_analytics).
+
+## 📑 CONTRATTO (lockato — proposto da dev2 + concordato dev1)
+**Script analytics (dev2):** `python3 shared/skills/doctor_analytics.py <SESSION> <since_iso>` → JSON per-agente:
+```
+{session, role, instance, session_created, session_age_h, window:{since,until},
+ produced:{found,analyzed,scored,written},   // jobs.db, count by-<role>+timestamp nella finestra
+ communications:{sent,received,top_peers[]}, // messages.jsonl (from/to)
+ throttles:{events,max_sleep_s},             // throttle log = "intoppi"
+ last_captain_msg,                           // ultimo ordine Capitano a quella sessione (skip-parked)
+ notes:[...]}
+```
+La skill `session-refresh` (dev1) lo chiama e versa i numeri nella sintesi + decide skip-parked/fresh.
+
+**File sintesi (writer dev2):** `/jht_home/logs/doctor-retrospective.jsonl` (append-only, 1 entry per agente-per-round, cresce ogni giorno). Schema:
+```
+{ts, round_id, day, timing:"start+30"|"mid+6h", session, role, session_age_h,
+ analytics:{...da script...},
+ interview:{intoppi, imparato, summary_denso},   // riempito da dev1 dall'intervista
+ action:"recreated"|"skipped_parked"|"skipped_fresh", resume_msg_sent:bool}
+```
+(Opzionale: render `.md` umano giornaliero, dev2 lo aggiunge se l'utente lo vuole.)
+
+**Soglie:** fresca = `session_age` < **40min** (skip totale); parcheggiata = vecchia + `produced==0` nella finestra + nessun `last_captain_msg` recente (skip-recreate-per-ripartire).
 
 ## ✅ Aperti / da confermare
-- [ ] dev2: analisi indipendente + proposta su split (concordare, non imposto).
-- [ ] Formato file-sintesi: `.md` leggibile vs `.jsonl` queryabile? (proposta: `.jsonl` per analytics + un render `.md`).
-- [ ] Soglia "fresca" (90 min? = non rigenerare prima del giro T+30).
-- [ ] Come il Dottore sa quali sessioni il Capitano considera "attive" (intervista al Capitano nel giro T+30 → lista attivi → le altre = parcheggiate).
-- [ ] Un solo Dottore fa tutto (ordine utente per ora); skill deve gestire N sessioni in un giro senza esaurire il context (capture mirate, non tutto-in-memoria).
+- [x] dev2: analisi indipendente + split → CONVERGE, accettato; contratto sopra lockato.
+- [x] Formato file-sintesi → `doctor-retrospective.jsonl` append-only (+ render .md opzionale).
+- [x] Soglia "fresca" → 40min (poco oltre il +30).
+- [x] Parcheggiate → data-driven via `produced==0` + `last_captain_msg` (no intervista-Capitano fragile).
+- [ ] Un solo Dottore fa tutto (ordine utente); la skill gestisce N sessioni/giro con capture MIRATE (non tutto-in-memoria) per non esaurire il context.
+- [ ] dev1: dettaglio "capture saliente" — euristica per i momenti salienti (es. ultime righe + righe con [ERROR]/[RETRO]/throttle/spawn).
