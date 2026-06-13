@@ -48,11 +48,22 @@ recoverable** instead of silent and fatal.
 
 ## Classify before you claim "empty"
 
+Canonical classifier — the shared `tool_health` smoke-test checks the whole critical set in one shot
+(`status` OK|BROKEN|UNKNOWN per tool, exit 1 if any is broken). Run it before reporting "no work":
+
 ```sh
-# Run the tool; capture its exit code. Non-zero / lib-load error = BROKEN, not EMPTY.
+# If a critical tool is BROKEN, you do NOT have an empty queue — you have a repair/escalation.
+if ! python3 /app/shared/skills/tool_health.py >/tmp/tools_health.json 2>&1; then
+  echo "A critical tool is BROKEN -> jht-install + retry -> alternative -> escalate. NOT 'empty'."
+fi
+```
+
+Per-tool inline check (when you only depend on one tool in-loop):
+
+```sh
 out=$(JHT_HOME=/jht_home python3 /app/shared/skills/linkedin_check.py "$JOB_ID" 2>&1); rc=$?
 if [ "$rc" -ne 0 ] || printf '%s' "$out" | grep -qiE 'libatk|shared librar|exitCode 127|cannot open'; then
-  echo "BROKEN -> jht-install + retry, then alternative; escalate to Capitano. NOT 'empty'."
+  echo "BROKEN -> repair + retry + alternative; NOT a genuine EMPTY."
 else
   echo "tool OK -> a zero result here is a genuine EMPTY."
 fi
