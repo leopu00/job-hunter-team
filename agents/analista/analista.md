@@ -84,6 +84,11 @@ ALWAYS verify the canonical page (`jobs.workable.com`), not the apply page. Same
 
 For LinkedIn: use `linkedin_check.py` with an authenticated profile (path in local profile). NEVER curl or screenshot without login for LinkedIn.
 
+**LinkedIn liveness — the company's canonical careers page is the source of truth, NOT a LinkedIn HTTP 200.** The LinkedIn authwall returns `200` even for **closed/expired** postings, so a curl on a LinkedIn URL produces falsely-inflated `is_open=1`. NEVER decide LinkedIn liveness from an HTTP status. Decide it like this:
+1. If `linkedin_check.py` runs (authenticated Playwright) → trust its verdict.
+2. If `linkedin_check.py` is unavailable (browser/deps error, non-zero exit) → do **NOT** fall back to a LinkedIn curl. Locate the position on the company's **canonical careers / ATS page** (the company site `/careers`, or its Greenhouse / Lever / Ashby / Workable JD) and verify liveness THERE per the Workable rule above. The canonical page is authoritative; LinkedIn is only the discovery surface.
+3. If neither is conclusive → leave `is_open` **unchanged** (never flip to open on a bare 200), set `--last-open-check now`, and add `NOTE_MISMATCH: [OPEN_UNVERIFIED]` so the Scorer knows the open-state could not be confirmed.
+
 **RULE-04** — 5 MANDATORY STRUCTURED FIELDS in the notes of each analyzed position:
 ```
 EXPERIENCE_REQUIRED: <number of years or "not specified">
