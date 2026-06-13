@@ -264,14 +264,16 @@ def compute_metrics(parsed, last, history=None):
 
     # ── Weekly cap binding (fix #4 runaway-scaling 2026-06-07) ──────────────
     # Codex/subscription tier ha un SECONDO cap settimanale, parallelo al 5h.
-    # Il primary 5h può essere SOTTOUTILIZZO mentre il weekly è quasi esaurito:
-    # senza questo blocco lo status resta verde e il team continua a bruciare —
-    # è l'incidente del 07/06 (weekly 92% con status SOTTOUTILIZZO, weekly
-    # "decorativo"). Qui calcoliamo proj_weekly IN CODICE e, se il weekly è
-    # binding, ESCALIAMO lo status a ATTENZIONE anche in Phase 1 (prima il freno
-    # era delegato solo al prompt S-06, che in regime normale non scattava mai).
-    # proj_binding = max(proj_primary, proj_weekly) → driver per C-09 / S-06.
-    WEEKLY_ATTENZIONE_PCT = 75.0   # da qui in su il weekly inizia a vincolare
+    # AWARENESS-ONLY (correzione design fix#4, feedback utente 2026-06-13):
+    # esponiamo weekly_remaining_pct / proj_weekly / proj_binding come INFO per
+    # Sentinella/Capitano (via tmux), ma NON forziamo più lo status su una
+    # SOGLIA ASSOLUTA. L'obiettivo è saturare ~100% del weekly ENTRO il reset
+    # (non bruciarlo a metà settimana né sprecarlo): un halt a weekly>=75%
+    # incaglia il budget e contraddice il design documentato
+    # (DIAGNOSI-pacing-weekly L20, migration-plan L84: "atterraggio ~100% al
+    # reset, NESSUN HALT anticipato"). Il freno weekly è UNO solo e time-aware:
+    # vel_team vs vel_target nel pacing-bridge (active-hours-aware). Qui niente
+    # pace-logic, solo campi di awareness.
     weekly_usage = parsed.get("weekly_usage")
     weekly_remaining_pct = None
     proj_weekly = None
@@ -302,24 +304,15 @@ def compute_metrics(parsed, last, history=None):
                         (weekly_usage - oldest_wk["weekly_usage"]) / wk_elapsed_h,
                     )
         if hours_to_weekly_reset and hours_to_weekly_reset > 0:
+            # proj_weekly = awareness grezza (INFO). NON guida lo status: è
+            # calcolato su ore di CALENDARIO (include le notti idle) → su un team
+            # a working-hours sovra-proietta. La proiezione weekly pace-aware
+            # vera è vel_target nel pacing-bridge (active-hours). Un solo calcolo,
+            # nessun doppione (chiude anche il debito omonimia weekly_remaining).
             proj_weekly = round(weekly_usage + wk_vel * hours_to_weekly_reset, 2)
-        # Binding se il weekly è GIÀ alto OPPURE proiettato a esaurirsi prima
-        # del reset. Soglia 75% per vincolare PRESTO: il danno è front-loaded
-        # (a metà settimana al 92% è già troppo tardi — vedi postmortem).
-        weekly_binding = (
-            weekly_usage >= WEEKLY_ATTENZIONE_PCT
-            or (proj_weekly is not None and proj_weekly > 100.0)
-        )
-        if proj_weekly is not None and projection is not None:
-            proj_binding = max(projection, proj_weekly)
-        elif proj_weekly is not None:
-            proj_binding = proj_weekly
-        if weekly_binding and status not in ("RESET", "ATTENZIONE"):
-            # Il weekly vince: porta lo status a ATTENZIONE anche se il primary
-            # 5h è SOTTOUTILIZZO / STEADY / OK. Questo è il segnale autoritativo
-            # che il Capitano (C-09) e la Sentinella (S-06) leggono per frenare /
-            # COAST / non spawnare, invece di guardare solo il primary.
-            status, throttle = "ATTENZIONE", max(throttle, 1)
+        # NESSUN binding su soglia assoluta e NESSUN override di status: il
+        # vincolo weekly passa SOLO per vel_team vs vel_target nel pacing.
+        # weekly_binding resta False e proj_binding = proj primary (init sopra).
 
     # ── Bug #24: fase Sentinella/Capitano + scala throttle continua ──
     #
@@ -405,9 +398,10 @@ def compute_metrics(parsed, last, history=None):
         # grep nei sorgenti del bridge. None se il provider non lo espone.
         "weekly_reset_at": parsed.get("weekly_reset_at"),
         "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
-        # Fix #4 (runaway-scaling 2026-06-07): vincolo weekly calcolato IN
-        # CODICE, non più delegato al solo prompt S-06. Il tick li propaga così
-        # C-09/C-12 (Capitano) e S-06 (Sentinella) leggono campi REALI.
+        # Fix #4 (runaway-scaling 2026-06-07) + correzione design 2026-06-13:
+        # campi weekly esposti come AWARENESS (INFO) per C-09/C-12/S-06, NON
+        # forzano lo status. Il freno weekly è vel_team vs vel_target nel
+        # pacing-bridge. weekly_binding resta sempre False (no soglia assoluta).
         "proj_weekly": proj_weekly,
         "weekly_remaining_pct": weekly_remaining_pct,
         "weekly_binding": weekly_binding,
