@@ -1,4 +1,4 @@
-# Mappamondo interattivo dashboard — design doc
+# 🌍 Mappamondo interattivo dashboard — design doc
 
 **Date**: 2026-05-20
 **Stato**: design lockato, implementazione non ancora iniziata

@@ -1,4 +1,4 @@
-# 2026-05-20 — Agent context saturation + reboot periodico via Dottore
+# 🩺 Agent context saturation + reboot periodico via Dottore
 
 > **Status: MVP SHIPPED 2026-05-31 (`daily-restart-wave`) — PoC validato 2026-05-20.**
 >

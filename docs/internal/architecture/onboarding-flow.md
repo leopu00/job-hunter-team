@@ -1,4 +1,4 @@
-# Onboarding flow JHT
+# 🚪 Onboarding flow JHT
 
 **Data**: 2026-05-13
 **Stato**: design lock — sequenza ufficiale di onboarding utente.

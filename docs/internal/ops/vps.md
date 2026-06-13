@@ -539,7 +539,7 @@ Vuoi zero pensieri / setup?             → Mode 1 (PC locale, ma deve restare o
 - `BACKLOG.md` § PHASE 3 `[JHT-CLOUD-01..06]`, `[JHT-VPS-FRIENDLY]`, `[JHT-DESKTOP-*]`
 - `docs/about/VISION.md` — target setup VPS
 - `docs/security/04-threat-model.md` — perché socket-mount è inaccettabile
-- `docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md` — CPU stabile per calibration
+- `docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md` — CPU stabile per calibration
 - `scripts/install.sh`, `cli/utils/container-proxy.js`, `docker-compose.yml`
 
 ### Sources providers (2026-05-06)

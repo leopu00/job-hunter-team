@@ -30,8 +30,8 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 | File | Topic |
 |---|---|
 | [`cloud-sync-architecture.md`](architecture/cloud-sync-architecture.md) | Sync DB locale ↔ Supabase: cosa va in cloud, macro-event design |
-| [`candidate-profile-cloud-sync-redesign-2026-06-05.md`](architecture/candidate-profile-cloud-sync-redesign-2026-06-05.md) | Redesign sync profilo candidato |
-| [`file-bridge-on-demand-2026-06-07.md`](architecture/file-bridge-on-demand-2026-06-07.md) | Pull-on-demand file via Supabase Storage |
+| [`candidate-profile-cloud-sync-redesign.md`](architecture/candidate-profile-cloud-sync-redesign.md) | Redesign sync profilo candidato |
+| [`file-bridge-on-demand.md`](architecture/file-bridge-on-demand.md) | Pull-on-demand file via Supabase Storage |
 | [`context-watchdog-spec.md`](architecture/context-watchdog-spec.md) | Restart periodico agenti via Dottore (anti context saturation) |
 | [`onboarding-flow.md`](architecture/onboarding-flow.md) | Sequenza canonica onboarding: location → sync → Telegram → provider |
 | [`team-commands-bus.md`](architecture/team-commands-bus.md) | Channel comandi web → VPS via `team_commands` table |
@@ -39,7 +39,6 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 | [`2026-05-25-work-hours-design.md`](architecture/2026-05-25-work-hours-design.md) | Design working hours team |
 | [`2026-05-20-world-globe-feature.md`](architecture/2026-05-20-world-globe-feature.md) | Spec mappamondo dashboard (coordinate ufficio) |
 | [`2026-05-19-dashboard-routing-cases.md`](architecture/2026-05-19-dashboard-routing-cases.md) | Casi routing dashboard Next.js |
-| [`2026-05-01-bridge-and-token-monitoring.md`](architecture/2026-05-01-bridge-and-token-monitoring.md) | Brainstorming bridge + token monitoring |
 
 ## 📉 postmortems/
 
@@ -123,6 +122,7 @@ Note storiche superate o consolidate altrove. Conservate per git-blame e ricerca
 | [`_archive/2026-05-06-launch-infra-costs.md`](_archive/2026-05-06-launch-infra-costs.md) | Stima costi pre-launch superata |
 | [`_archive/2026-05-17-team-strategy-bugs.md`](_archive/2026-05-17-team-strategy-bugs.md) | Bug strategy team, fix applicati |
 | [`_archive/2026-05-18-beta-tester-onboarding.md`](_archive/2026-05-18-beta-tester-onboarding.md) | Piano prep beta kick-off 2026-05-18 (behind-the-scenes maintainer); user guide → `guides/BETA.md` |
+| [`_archive/2026-05-01-bridge-and-token-monitoring.md`](_archive/2026-05-01-bridge-and-token-monitoring.md) | Brainstorming bridge V6 + token-monitoring; idee ora shipped (monitoring stack / work-hours / cloud-sync) |
 | [`_archive/2026-05-20-tour-persistence.md`](_archive/2026-05-20-tour-persistence.md) | Persistenza tour onboarding, implementata |
 | [`_archive/2026-05-20-vps-bootstrap-bugs.md`](_archive/2026-05-20-vps-bootstrap-bugs.md) | Bug bootstrap VPS, fix validati in `postmortems/2026-05-21-vps-bootstrap-fixes-validated.md` |
 | [`_archive/TODO-bridge-v7.md`](_archive/TODO-bridge-v7.md) | TODO bridge v7, completato |

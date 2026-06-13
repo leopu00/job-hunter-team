@@ -109,7 +109,7 @@ Vedi BACKLOG.md → `🐛 KNOWN BUGS` per dettagli.
 ## 📂 File chiave per la prossima sessione
 
 ```
-docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md   roadmap dettagliata
+docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md   roadmap dettagliata
 BACKLOG.md → JHT-BRIDGE-V7 / V8 / LAUNCH-LOW-PROFILE      entry alta livello
 (numeri sessione test 2026-05-01: vedi git log @2026-05-12 — file consolidato)
 

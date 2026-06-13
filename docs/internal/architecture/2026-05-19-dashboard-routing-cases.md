@@ -1,4 +1,4 @@
-# Dashboard routing — casistica completa
+# 🧭 Dashboard routing — casistica completa
 
 **Date**: 2026-05-19
 **File**: `web/app/(protected)/dashboard/page.tsx`
