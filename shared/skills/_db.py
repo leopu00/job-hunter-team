@@ -75,6 +75,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_write_requested(conn)
     _migrate_v6_to_v7_tombstones(conn)
     _migrate_positions_geocode_requested(conn)
+    _migrate_positions_expiry(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -136,6 +137,9 @@ def ensure_schema(conn: sqlite3.Connection):
         office_address TEXT,
         office_geocoded INTEGER DEFAULT 0,
         office_verified INTEGER DEFAULT 0,
+        expires_at DATE,
+        is_open INTEGER DEFAULT 1,
+        last_open_check TIMESTAMP,
         write_requested INTEGER DEFAULT 0,
         write_requested_at TIMESTAMP,
         geocode_requested INTEGER DEFAULT 0,
@@ -887,6 +891,32 @@ def _migrate_positions_office_geocoding(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_office_geocoded "
         "ON positions(office_geocoded) WHERE office_geocoded = 1"
+    )
+
+
+def _migrate_positions_expiry(conn: sqlite3.Connection) -> None:
+    """Aggiunge expires_at / is_open / last_open_check (espansione Analista 2026-06-13).
+
+    Scadenze machine-readable + ciclo aperto/scaduto. L'Analista parsa il JD con
+    `deadline_extract.py` -> `expires_at` (DATE ISO, NULL se sconosciuta); al richeck
+    giornaliero (RULE-12) setta `is_open=0` se link morto o `expires_at` passata.
+    `deadline` TEXT resta (raw, polluto: 164/219 valori ma 3 ISO). Mirror Supabase
+    mig 038. Idempotente: guard PRAGMA table_info, DEFAULT costante (limite SQLite
+    ADD COLUMN). Vedi docs/internal/ANALISTA-EXPANSION-design.md.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('expires_at',      'DATE'),
+        ('is_open',         'INTEGER DEFAULT 1'),
+        ('last_open_check', 'TIMESTAMP'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_open_expiry "
+        "ON positions(expires_at) WHERE is_open = 1"
     )
 
 

@@ -374,6 +374,25 @@ def next_for_role(role):
         """).fetchall()
         label = "Posizioni con geocoding richiesto dall'utente (non ancora geocodate)"
 
+    elif role == 'recheck':
+        # RULE-12 (espansione Analista 2026-06-13): richeck giornaliero apertura.
+        # Posizioni ancora in gioco (is_open=1, gia' analizzate) da ri-verificare:
+        # mai controllate (last_open_check NULL → include il BACKFILL delle storiche
+        # con expires_at/office/salary NULL) oppure controllate >24h fa.
+        # Priorita': mai-controllate prima, poi scadenza nota piu' vicina.
+        rows = conn.execute("""
+            SELECT p.id, p.title, p.company, p.expires_at, p.last_open_check
+            FROM positions p
+            WHERE p.is_open = 1
+              AND p.status IN ('checked','scored','writing','review','ready')
+              AND (p.last_open_check IS NULL
+                   OR p.last_open_check < datetime('now','localtime','-24 hours'))
+            ORDER BY (p.last_open_check IS NULL) DESC,
+                     (p.expires_at IS NULL), p.expires_at ASC,
+                     p.last_open_check ASC
+        """).fetchall()
+        label = "Posizioni da ri-verificare (richeck giornaliero apertura + backfill)"
+
     else:
         print(f"Ruolo sconosciuto: {role}")
         return
@@ -508,6 +527,7 @@ def main():
     sub.add_parser('next-for-scrittore')
     sub.add_parser('next-for-critico')
     sub.add_parser('next-for-geocoding')
+    sub.add_parser('next-for-recheck')
 
     # application (anti-riscrittura check)
     ap = sub.add_parser('application')
