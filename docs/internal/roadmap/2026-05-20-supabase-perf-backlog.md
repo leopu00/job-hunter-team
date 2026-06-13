@@ -1,4 +1,4 @@
-# 2026-05-20 — Supabase performance backlog (40+ advisor findings)
+# 🗄️ 2026-05-20 — Supabase performance backlog (40+ advisor findings)
 
 > **🟢 STATUS UPDATE 2026-05-31**: P0 + P1 + P2 (unused indexes) tutti applicati.
 > Restano solo monitoring tasks su connection pool. Vedi [§ Stato applicazione](#stato-applicazione-2026-05-31).

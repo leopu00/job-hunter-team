@@ -1,4 +1,4 @@
-# Piano sanitizzazione dati personali (PII) — case-studies & docs
+# 🔒 Piano sanitizzazione dati personali (PII) — case-studies & docs
 
 > Stato: **ANALISI + PIANO** (2026-06-04). Nessuna modifica ancora eseguita.
 > Nota: questo file usa riferimenti **astratti** ai dati personali (nessun nome/email reale scritto) per non reintrodurre PII nel repo.
