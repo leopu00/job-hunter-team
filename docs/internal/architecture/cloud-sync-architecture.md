@@ -1,4 +1,4 @@
-# Cloud sync — architecture & status
+# ☁️ Cloud sync — architecture & status
 
 > **Living doc.** Source of truth per la strategia cloud sync JHT. Unifica:
 > incident RobertHalf 2026-05-19, decisione macro-events 2026-05-20,
@@ -48,7 +48,7 @@
 | `positions` (+ `write_requested`, `write_requested_at`) | Delta-only ogni ~30s via `updated_at` cursor | mig 024 aggiunge flag writer-on-demand al push |
 | `scores`, `applications`, `position_highlights` | Event-coalesced con positions | push insieme alla transizione |
 | `companies` | Event-driven | nuova company o metadata user-visible cambiato |
-| `candidate_profiles` (+ tabelle profilo normalizzate, `candidate_blocks`, `candidate_contacts`) | Event-driven | **modello a 3 livelli** dal 2026-06-06 — push completo (no scarto) + `pull-profile` cloud→locale. Vedi `candidate-profile-cloud-sync-redesign-2026-06-05.md` |
+| `candidate_profiles` (+ tabelle profilo normalizzate, `candidate_blocks`, `candidate_contacts`) | Event-driven | **modello a 3 livelli** dal 2026-06-06 — push completo (no scarto) + `pull-profile` cloud→locale. Vedi `candidate-profile-cloud-sync-redesign.md` |
 | `user_onboarding_state`, `encrypted_user_blobs` | Event-driven | invariati |
 | `pending_user_messages` (mig 010) | Full-push (volume piccolo) | canale fallback notifiche agent→user |
 | `sentinel_ticks` (mig 013) | ⛔ **rimosso dal push** (`f68a127d`) | ~720 row/h/utente, solo container ne ha bisogno |

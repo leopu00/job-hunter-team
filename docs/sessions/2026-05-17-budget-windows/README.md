@@ -9,7 +9,7 @@ self-monitoring del budget, allegati qui.
 
 Entrambe le finestre chiuse dentro la **G-spot 90-95 %** (target storico
 del rate-budget Kimi, vedi
-[`2026-05-01-bridge-and-token-monitoring.md`](../../internal/architecture/2026-05-01-bridge-and-token-monitoring.md)):
+[`2026-05-01-bridge-and-token-monitoring.md`](../../internal/_archive/2026-05-01-bridge-and-token-monitoring.md)):
 
 | Finestra | Apertura | Chiusura/proj | Target | Verdict |
 |---|---|---|---|---|
@@ -153,7 +153,7 @@ professionale.
 - [`docs/internal/2026-05-17-team-strategy-bugs.md`](../../internal/2026-05-17-team-strategy-bugs.md)
   — 7 bug strategici emersi nella stessa sessione (Sentinella aggressiva,
   Capitano gerarchia user override, voice/photo Whisper/OCR, ecc.)
-- [`docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md`](../../internal/architecture/2026-05-01-bridge-and-token-monitoring.md)
+- [`docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md`](../../internal/_archive/2026-05-01-bridge-and-token-monitoring.md)
   — definizione G-spot 90-95 % e Bridge V6 (versione attuale)
 - [`docs/internal/experiments/2026-05-03-rate-kimi-weights.md`](../../internal/experiments/2026-05-03-rate-kimi-weights.md)
   — pesi rate-budget Kimi K2 (1 % ≈ 30-40 kT input+output)

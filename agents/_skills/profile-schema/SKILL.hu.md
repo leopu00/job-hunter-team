@@ -149,4 +149,4 @@ A `WARN:`-ok (pl. legacy kulcs) nem blokkoljak, de javitsd ki, amikor azt a szek
 - `profile-summaries` — a narrativ szovegek → `kind: narrative` blokkokka valnak
 - `onboarding-flow` — mikor mit frissits
 - `shared/config/profile-schema.ts` · `shared/skills/validate_profile.py`
-- `docs/internal/architecture/candidate-profile-cloud-sync-redesign-2026-06-05.md`
+- `docs/internal/architecture/candidate-profile-cloud-sync-redesign.md`

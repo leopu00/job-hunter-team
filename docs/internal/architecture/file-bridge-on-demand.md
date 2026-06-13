@@ -1,4 +1,4 @@
-# File bridge on-demand — architettura & stato
+# 📎 File bridge on-demand — architettura & stato
 
 > **Living doc.** Source of truth per il "bridge effimero" dei file (CV, cover
 > letter, allegati) tra container VPS e web pubblico (Vercel). Deciso con

@@ -1,4 +1,4 @@
-# Team Commands Bus — web → VPS command channel
+# 🚌 Team Commands Bus — web → VPS command channel
 
 > ⚠️ **SUPERSEDED (2026-05-23)** — Il modello command-based descritto qui è
 > stato sostituito dal refactor **`team_state` desired-state + event lanes**

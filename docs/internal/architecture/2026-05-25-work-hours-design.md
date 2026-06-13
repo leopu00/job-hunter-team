@@ -1,4 +1,4 @@
-# Work hours UI — design + monitoring settimanale
+# 🗓️ Work hours UI — design + monitoring settimanale
 
 > Sessione di design 2026-05-25. Mette le basi per `[JHT-MONITORING-WORKHOURS]`
 > e completa `[JHT-MONITORING-WEEKLY]`. Mockup HTML interattivo iterato in
@@ -292,7 +292,7 @@ Ordine consigliato (dipendenze):
 ## 🔗 Riferimenti
 
 - `BACKLOG.md` — entries `[JHT-MONITORING-WORKHOURS]`, `[JHT-MONITORING-WEEKLY]`, `[JHT-BRIDGE-V8]`
-- `docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md` — pattern `ema_kt_per_pct` (analogo a `ema_ratio_pct`)
+- `docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md` — pattern `ema_kt_per_pct` (analogo a `ema_ratio_pct`)
 - `web/data/case-studies/seed.sql` — case study Codex Pro con 396.9M token / 34.84h
 - `docs/about/RESULTS.md` — narrative case study pubblica
 - `.launcher/pacing-bridge.py` — bridge V8 (auto-incentive), va esteso work-hours-aware

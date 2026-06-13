@@ -290,7 +290,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 
 ##### 🌉 [JHT-BRIDGE-V7] Bridge V7 — token-based monitoring + per-agent throttle (NEW 2026-05-01)
 
-- **Background:** session of 2026-05-01 reworked the bridge V5 → V6 (loop fix) and prototyped a token-based monitoring layer reading the local CLI logs (`~/.kimi/sessions/*/wire.jsonl`, `~/.claude/projects/*/*.jsonl`, `~/.codex/sessions/*/rollout-*.jsonl`). Full context and numbers in `docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md`.
+- **Background:** session of 2026-05-01 reworked the bridge V5 → V6 (loop fix) and prototyped a token-based monitoring layer reading the local CLI logs (`~/.kimi/sessions/*/wire.jsonl`, `~/.claude/projects/*/*.jsonl`, `~/.codex/sessions/*/rollout-*.jsonl`). Full context and numbers in `docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md`.
 - **Discovery:** the CLI subscription logs already contain weighted token counts per response, fresher than the provider /usage endpoint. Empirical calibration on Kimi K2 Plan: 1 % rate budget ≈ 30 kT weighted. Per-agent attribution works via `state.json.custom_title` regex (Kimi) or path naming (Claude / Codex).
 - **Observed asymmetry:** in 46 min of work the Scout consumed 1083 kT vs 125 kT for the Capitano (7×). Today the throttle is global ("everyone +30s pause"); the right move is per-agent.
 - **Tier 2 — quick wins (1-2 h, deferred to a quiet moment):** ✅ **DONE 2026-05-13** (commits 924c93bd…da74e3bd on dev3)
@@ -330,7 +330,7 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
   - LLC anonymous (EE/MT, ~500€) for sponsor money + IP
   - No podcast appearances, no conference talks, only async written communication
 - **Co-maintainer:** identify within 60 days post-launch (can be informal, just someone who triages issues — fratello / amico fidato).
-- **Reasoning:** see `docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
+- **Reasoning:** see `docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
 
 ##### 🧪 [JHT-TEST-CAMPAIGN] Documentare run esistenti (NO matrix coverage pre-launch) 🟢 declassato 2026-06-02
 

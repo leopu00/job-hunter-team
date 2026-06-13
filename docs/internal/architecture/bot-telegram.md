@@ -1,4 +1,4 @@
-# JHT bot Telegram — design, scelta canale, ingest documenti
+# 💬 JHT bot Telegram — design, scelta canale, ingest documenti
 
 **Doc consolidato il 2026-05-13** unificando:
 - `2026-05-12-document-channels-decision.md` — scelta canale doc (Telegram = Opzione B primaria)
@@ -310,7 +310,7 @@ Ordine post-fix:
 - `docs/internal/ops/vps.md` — design VPS (host/container split, providers, install UX)
 - `docs/internal/ops/vps.md` § "Setup wizard decisions" — decisioni VPS setup desktop wizard lockate il 2026-05-13
 - `docs/internal/ops/INFRA.md` — overview canali utente↔team
-- `docs/internal/architecture/2026-05-01-bridge-and-token-monitoring.md` — bridge attuale
+- `docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md` — bridge attuale
 - `.launcher/tg-bridge.py` — implementazione bridge
 - `.launcher/start-agent.sh` § ruolo `tg-bridge`
 - `agents/_tools/jht-telegram-send` — outbound wrapper
