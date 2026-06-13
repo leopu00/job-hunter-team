@@ -156,7 +156,10 @@ async function hasProviderCredentials() {
     const cfg = JSON.parse(raw);
     const provider = (cfg?.active_provider || '').toString().toLowerCase();
     const markers = {
-      kimi: `${JHT_HOME}/.kimi/kimi.json`,
+      // kimi-cli 1.47+ scrive le creds OAuth in .kimi/credentials/<plan>.json
+      // (es. kimi-code.json per l'abbonamento kimi-for-coding), NON piu' in
+      // .kimi/kimi.json. Allineato a sentinel-bridge.py KIMI_CREDENTIALS.
+      kimi: `${JHT_HOME}/.kimi/credentials/kimi-code.json`,
       claude: `${JHT_HOME}/.claude/.credentials.json`,
       codex: `${JHT_HOME}/.codex/auth.json`,
     };
