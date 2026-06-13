@@ -1,4 +1,4 @@
-# Simulazione 1 — location enrichment con Capitano + 3 analisti
+# 🧪 Simulazione 1 — location enrichment con Capitano + 3 analisti
 
 Data: 2026-05-23
 Container: `jht-sim-d2` (isolato, ~/.jht-sim-d2/)

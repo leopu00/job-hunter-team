@@ -1,4 +1,4 @@
-# Simulazione 3 — location enrichment su profilo Python Developer
+# 🧪 Simulazione 3 — location enrichment su profilo Python Developer
 
 Data: 2026-05-23
 Container: `jht-sim-d2` (reset totale via `sim-reset.sh`)

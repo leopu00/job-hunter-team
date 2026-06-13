@@ -1,4 +1,4 @@
-# Simulazione 2 — location enrichment con i fix applicati
+# 🧪 Simulazione 2 — location enrichment con i fix applicati
 
 Data: 2026-05-23
 Container: `jht-sim-d2` (resettato dopo sim 1, stesso dataset 206 record vergini)

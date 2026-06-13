@@ -1,4 +1,4 @@
-# Simulazione 5 — office geocoding su owner (Marton / Tech Writer)
+# 🧪 Simulazione 5 — office geocoding su owner (Marton / Tech Writer)
 
 Data: 2026-05-25
 Container: `jht-sim-d2` (reset totale, candidate_profile.yml ripristinato su Marton Kovacs)

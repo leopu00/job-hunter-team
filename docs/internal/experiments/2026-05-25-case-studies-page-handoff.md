@@ -1,4 +1,4 @@
-# Case studies page — sessione 2026-05-23 → 2026-05-25 handoff
+# 🤝 Case studies page — sessione 2026-05-23 → 2026-05-25 handoff
 
 Stato di `/case-studies` dopo ~3 giorni di lavoro intenso. Documento di
 riferimento per chi (probabilmente la stessa persona, magari fra qualche

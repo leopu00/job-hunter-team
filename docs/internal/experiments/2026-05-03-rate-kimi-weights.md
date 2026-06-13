@@ -1,4 +1,4 @@
-# 2026-05-03 — Pesi rate-limit Kimi K2: analisi empirica e calibrazione
+# ⚖️ 2026-05-03 — Pesi rate-limit Kimi K2: analisi empirica e calibrazione
 
 ## TL;DR
 
