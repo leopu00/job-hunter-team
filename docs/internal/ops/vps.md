@@ -1,4 +1,4 @@
-# JHT su VPS — design, providers, install UX
+# ☁️ JHT su VPS — design, providers, install UX
 
 **Doc consolidato il 2026-05-13** unificando:
 - `2026-05-04-vps-deployment-design.md` — design UX deployment + lifecycle + login/recovery

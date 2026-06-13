@@ -1,4 +1,4 @@
-# Maintainers Reference
+# 👥 Maintainers Reference
 
 > 🔒 **Internal information for project maintainers.** This file tracks secrets coordination, deployment access, and other operational details that don't belong in public-facing docs but are useful for anyone working on the project's infrastructure.
 
