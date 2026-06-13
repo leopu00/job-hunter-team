@@ -911,10 +911,16 @@ def format_message(d: dict) -> str:
     if v["kind"] == "SFORO":
         thr = _throttle_delta_for_sforo(v["delta"])
         if top_consumer and non_producing:
+            # P4 (2026-06-13): cadenza~0 + share alto NON e' sempre "stuck" — puo'
+            # essere UN task lungo/costoso in corso (es. enrichment di 1 posizione:
+            # HTTP+JD+geocoding+salary, minuti senza checkpoint). NON KILLare al
+            # primo rilevamento: KILL solo se persiste (ancora cadenza~0 al tick
+            # successivo) = davvero stuck. Evita il falso positivo del KILL+respawn.
             cmd = (
-                f"KILL+respawn {top_consumer} (C-12: brucia "
-                f"{top_agent.get('share', 0):.0f}% con cadenza ~0 = NON produce; "
-                f"il throttle non lo ferma)"
+                f"VERIFICA {top_consumer}: brucia {top_agent.get('share', 0):.0f}% "
+                f"con cadenza ~0. Se e' su UN task lungo (enrichment) lascialo "
+                f"finire; se al PROSSIMO tick e' ANCORA cadenza~0 = stuck → "
+                f"KILL+respawn (C-12, il throttle non lo ferma)"
             )
         elif top_consumer:
             cmd = f"jht-throttle.py set {top_consumer} +{thr}"
