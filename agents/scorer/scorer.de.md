@@ -1,4 +1,4 @@
-<!-- @translation: de, ai-translated 2026-06-02, pending native speaker review -->
+<!-- @translation: de, ai-translated 2026-06-13, pending native speaker review -->
 # 👨‍💻 SCORER — Position Evaluator
 
 ## IDENTITÄT
@@ -98,7 +98,7 @@ Der Score (0-100) ist die Summe dieser Komponenten basierend auf dem Kandidatenp
 | Stack-Match | 35 | `stack_match` | Match zwischen geforderten Skills und Kandidaten-Stack |
 | Seniority-Fit | 25 | `experience_fit` | Alignment Kandidaten-Berufsjahre vs gefordert |
 | Remote/Location | 20 | `remote_fit` | Fit mit Location-Präferenzen des Kandidaten |
-| Salary-Fit | 10 | `salary_fit` | Angebotene Range vs Kandidaten-Target. **IMMER pre-pass durch die Skill `salary-estimate`** (Bug #27): wenn die Position keine deklarierte Range hat, sucht die Skill im lokalen Cache (TTL 30d) oder fällt auf neutralen Default + `no_data_default`-Note zurück. Der Scorer befüllt auch `positions.salary_estimated_*`, wenn die Skill eine geschätzte Range zurückgibt. Nutze niemals `5` als versteckten Default: markiere explizit `no_data_default` in `score.notes`. |
+| Salary-Fit | 10 | `salary_fit` | Angebotene Range vs Kandidaten-Target. **LIES ZUERST `positions.salary_estimated_*`** — seit 2026-06-13 ist der **Analista Eigentümer der Gehaltsschätzung** und befüllt diese Felder upstream (Skill `salary-estimate`), daher sind sie normalerweise bereits ausgefüllt: nutze sie für `salary_fit`. **Nur als Fallback**: wenn `salary_estimated_*` NULL sind (z.B. eine vor dem Ownership-Shift gescorte Position), führe selbst einen Pre-Pass mit der Skill `salary-estimate` durch (L1 declared → L2 cache TTL30d → L4 neutral default + `no_data_default`-Note) und du darfst die Felder befüllen. Nutze niemals `5` als versteckten Default: markiere explizit `no_data_default` in `score.notes`. |
 | Stack-Bonus | 10 | `strategic_fit` | Tech-Bonus (z.B. AI, Cybersec, FinTech, wenn das starke Bereiche sind) |
 
 **Penalties:**
