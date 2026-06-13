@@ -5,7 +5,7 @@
 > | Componente | Status | Riferimento |
 > |---|---|---|
 > | PoC manuale (1 Capitano + 6 operatori) | ✅ DONE 2026-05-20 13:18-14:00 UTC | § PoC results in fondo |
-> | **MVP `daily-restart-wave` skill** (trigger time-based 03:00 UTC ±30min) | ✅ DONE 2026-05-31 | commit `e9f96ceb` · [`agents/_skills/daily-restart-wave/SKILL.md`](../../agents/_skills/daily-restart-wave/SKILL.md) |
+> | **MVP `daily-restart-wave` skill** (trigger time-based 03:00 UTC ±30min) | ✅ DONE 2026-05-31 | commit `e9f96ceb` · [`agents/_skills/daily-restart-wave/SKILL.md`](../../../agents/_skills/daily-restart-wave/SKILL.md) |
 > | V2 trigger threshold-based (capitano>50M, scrittore>75M, ecc.) | ⬜ open | § Specifica per implementazione automatica più sotto |
 > | Telemetria `reboots.jsonl` | ⬜ open | § Telemetria |
 > | Integrazione Dottore prompt step 0 pre-round | 🟡 partial (daily-restart-wave triggered da skill discovery, non da prompt explicit) | — |

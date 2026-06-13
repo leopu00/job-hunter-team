@@ -11,7 +11,7 @@ Thanks for considering a contribution. Bug reports, feature ideas, documentation
 
 ## Triage and response time
 
-While JHT is in beta we aim to apply a triage label (surface + severity) to every new issue within **48 hours**. We don't commit to a fix SLA in beta, but `severity:blocker` issues get a maintainer acknowledgement within **24 hours** even if the fix takes longer. The full workflow — labels, kanban columns, close reasons — lives in [`docs/internal/triage.md`](../docs/internal/triage.md). The canonical label set is [`/.github/labels.yml`](labels.yml).
+While JHT is in beta we aim to apply a triage label (surface + severity) to every new issue within **48 hours**. We don't commit to a fix SLA in beta, but `severity:blocker` issues get a maintainer acknowledgement within **24 hours** even if the fix takes longer. The full workflow — labels, kanban columns, close reasons — lives in [`docs/internal/triage.md`](../docs/internal/ops/triage.md). The canonical label set is [`/.github/labels.yml`](labels.yml).
 
 ## Setup
 
@@ -121,7 +121,7 @@ the root `package.json` and `desktop/package.json` before tagging —
 electron-builder names artifacts after the desktop version, so forgetting
 it ships assets labeled with the previous release number. The full
 checklist (including the version-consistency gate and the Windows x64 /
-ARM64 split) lives in [`docs/internal/release.md`](../docs/internal/release.md).
+ARM64 split) lives in [`docs/internal/release.md`](../docs/internal/ops/release.md).
 
 ## Code of conduct
 

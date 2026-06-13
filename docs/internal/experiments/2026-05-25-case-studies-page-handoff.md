@@ -8,7 +8,7 @@ giorno) riprende la pagina.
 
 - URL dev: **http://localhost:3001/case-studies**
 - Tmux session: `jht-cs-3001` (log in `/tmp/jht-cs-3001.log`)
-- Source of truth narrativa: [`docs/about/RESULTS.md`](../about/RESULTS.md)
+- Source of truth narrativa: [`docs/about/RESULTS.md`](../../about/RESULTS.md)
 - Source of truth dati strutturati: SQLite locale `web/data/case-studies/case-studies.db`
   (rebuild: `./web/data/case-studies/init.sh`)
 - Snapshot raw VPSes: `~/jht-case-study-data/full-snapshot-20260524/` (337 MB) +
