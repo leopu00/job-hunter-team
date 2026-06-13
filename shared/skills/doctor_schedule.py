@@ -85,8 +85,10 @@ def check() -> str:
     state = _load_state()
     win_key = start.isoformat()
     if state.get("window_start") != win_key:
-        # Nuova finestra → slot non ancora fatti.
-        state = {"window_start": win_key, "did_t30": False, "did_mid": False}
+        # Nuova finestra → slot Dottore non ancora fatti. Preserva maint_date
+        # (lo slot Mantenitore è giornaliero, non per-finestra).
+        state = {"window_start": win_key, "did_t30": False, "did_mid": False,
+                 "maint_date": state.get("maint_date")}
         _save_state(state)
 
     if elapsed_min >= T30_MIN and not state.get("did_t30"):
@@ -103,11 +105,41 @@ def mark(slot: str) -> None:
     start, _, _ = b
     state = _load_state()
     if state.get("window_start") != start.isoformat():
-        state = {"window_start": start.isoformat(), "did_t30": False, "did_mid": False}
+        state = {"window_start": start.isoformat(), "did_t30": False, "did_mid": False,
+                 "maint_date": state.get("maint_date")}
     if slot == "T30":
         state["did_t30"] = True
     elif slot == "MID":
         state["did_mid"] = True
+    _save_state(state)
+
+
+def _today_local() -> str:
+    """Data locale ISO (YYYY-MM-DD), coerente con i confini finestra."""
+    b = current_window_bounds()
+    tz = b[0].tzinfo if b else None
+    return (datetime.now(tz) if tz else datetime.now()).date().isoformat()
+
+
+def check_maintainer() -> str:
+    """Slot Mantenitore: 1x/GIORNO (non per-finestra). Ritorna:
+    - MAINT  → non ancora fatto oggi ed è ora lavorabile → spawna il Mantenitore;
+    - WAIT   → già fatto oggi;
+    - OFF    → fuori working hours (rimanda a quando il team è attivo).
+    Gemello di check() ma su cadenza giornaliera: l'infra cambia lentamente,
+    uno sweep al giorno basta (a differenza del context-refresh del Dottore).
+    """
+    state = _load_state()
+    if state.get("maint_date") == _today_local():
+        return "WAIT"
+    if not is_within_working_hours():
+        return "OFF"
+    return "MAINT"
+
+
+def mark_maintainer() -> None:
+    state = _load_state()
+    state["maint_date"] = _today_local()
     _save_state(state)
 
 
@@ -122,7 +154,14 @@ def main(argv):
             return 2
         mark(argv[1])
         return 0
-    print("uso: doctor_schedule.py <check|mark T30|mark MID>", file=sys.stderr)
+    if cmd == "check-maintainer":
+        print(check_maintainer())
+        return 0
+    if cmd == "mark-maintainer":
+        mark_maintainer()
+        return 0
+    print("uso: doctor_schedule.py <check|mark T30|mark MID|check-maintainer|mark-maintainer>",
+          file=sys.stderr)
     return 2
 
 
