@@ -105,18 +105,25 @@ def check_playwright_browser():
 
 
 def check_linkedin_check():
-    """Il canary applicativo: linkedin_check.py deve almeno avviarsi (--help / dry).
-    È il tool che è morto col libatk. Se lo script non c'è → UNKNOWN."""
+    """Il canary applicativo: linkedin_check.py deve avviarsi e caricare le sue
+    deps (playwright incluso). NON usiamo `--help`: lo script non ha argparse e
+    tratta argv[1] come URL → con "--help" naviga verso un URL invalido e dà un
+    falso BROKEN (verificato a terra 2026-06-13). Usiamo `--batch` SENZA id:
+    batch vuoto fa importare playwright, parsare gli args ed uscire 0 senza
+    navigare. Il launch REALE del browser (il bug libatk) è già coperto da
+    check_playwright_browser, quindi qui basta che lo script applicativo si
+    avvii e carichi le sue dipendenze."""
     path = os.path.join(APP, "shared", "skills", "linkedin_check.py")
     if not os.path.exists(path):
         return "UNKNOWN", "linkedin_check.py non trovato in %s" % path
-    rc, out = _run([sys.executable, path, "--help"], timeout=15)
-    # --help dovrebbe uscire 0; se importa playwright e fallisce all'import → rc!=0
+    rc, out = _run([sys.executable, path, "--batch"], timeout=20)
+    # batch vuoto → exit 0 ("Verifica batch: 0 posizioni"); se playwright non
+    # importa o manca una .so → rc!=0 con traccia dell'import.
     if rc == 0:
-        return "OK", "linkedin_check importabile/avviabile"
+        return "OK", "linkedin_check avviabile (playwright caricato, batch vuoto ok)"
     if "libatk" in out or "playwright" in out.lower() or rc == 127:
         return "BROKEN", "linkedin_check non parte (dep browser): %s" % out.strip()[:160]
-    return "UNKNOWN", "linkedin_check --help rc=%d: %s" % (rc, out.strip()[:120])
+    return "UNKNOWN", "linkedin_check --batch rc=%d: %s" % (rc, out.strip()[:120])
 
 
 # Registro dei tool critici. Estendibile (domanda aperta del doc: quali altri).
