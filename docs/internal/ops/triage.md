@@ -1,4 +1,4 @@
-# Issue triage workflow
+# 🐛 Issue triage workflow
 
 Internal contract for how we handle incoming issues post-launch. Linked from
 `CONTRIBUTING.md` (public SLA paragraph) and from `BACKLOG.md` (JHT-LAUNCH-08).

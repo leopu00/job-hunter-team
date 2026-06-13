@@ -1,4 +1,4 @@
-# Infrastructure — Job Hunter Team
+# 🏗️ Infrastructure — Job Hunter Team
 
 > 📐 **High-level deployment diagram.** It shows the unit of deployment (the container), the deployment locations (local / dedicated / self-hosted VPS), and the optional sync to managed storage. Not every agent is drawn individually — the full team composition is documented in the [README](../../README.md) and in `agents/`.
 >
