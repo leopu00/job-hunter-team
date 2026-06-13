@@ -108,7 +108,7 @@ Il Capitano ha fatto esattamente questo.
 
 ### Concausa di contesto: pacing weekly a metà migrazione
 
-La Sentinella fa pacing sulla finestra **5h** (`proj` = 5h), trattando il **weekly come riga INFO**. Tenendo il 5h sempre <100% ha lasciato salire il weekly indisturbato. Vedi `pacing-migration-plan-2026-06-05.md` (Phase 0+1 "da validare su VPS nuova", deployato non validato). Questo ha permesso allo zombie-burn di arrivare al 100% senza che nessun guardrail lo fermasse.
+La Sentinella fa pacing sulla finestra **5h** (`proj` = 5h), trattando il **weekly come riga INFO**. Tenendo il 5h sempre <100% ha lasciato salire il weekly indisturbato. Vedi `2026-06-05-pacing-migration-plan.md` (Phase 0+1 "da validare su VPS nuova", deployato non validato). Questo ha permesso allo zombie-burn di arrivare al 100% senza che nessun guardrail lo fermasse.
 
 ---
 
@@ -137,7 +137,7 @@ La Sentinella fa pacing sulla finestra **5h** (`proj` = 5h), trattando il **week
 1. **`jht-tmux-send` deve gestire lo stato busy**: se rileva `Working … esc to interrupt`, **attende** il ritorno al prompt idle (poll) prima di digitare, invece di fallire con exit 3. Distinguere "busy" da "morta".
 2. **Capitano: exit-3 / `Working` = VIVO-occupato**, non trigger di spawn. Delegare al Dottore (`liveness-check`) e alzare la soglia di pazienza da ~18s a minuti. *(Parzialmente coperto dalla regola `ambiguous` del Dottore.)*
 3. **Reaping**: se un rimpiazzo avviene comunque, il vecchio agente va **terminato** (non lasciato zombie). Con 1 e 2 corretti, diventa raro.
-4. **Pacing weekly-aware**: completare/validare la migrazione (`pacing-migration-plan-2026-06-05.md`) così la Sentinella ancora le decisioni al **weekly**, non alla 5h. Guardrail anti-100%.
+4. **Pacing weekly-aware**: completare/validare la migrazione (`2026-06-05-pacing-migration-plan.md`) così la Sentinella ancora le decisioni al **weekly**, non alla 5h. Guardrail anti-100%.
 5. **Cap spawn** come backstop (es. max N SCOUT/ANALISTA finché 1–4 non sono validati sotto carico). Cerotto, non cura.
 
 ---

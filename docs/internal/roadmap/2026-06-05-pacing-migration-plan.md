@@ -1,4 +1,4 @@
-# Piano di migrazione pacing — completare il passaggio al modello weekly-aware
+# ⏱️ Piano di migrazione pacing — completare il passaggio al modello weekly-aware
 
 > Stato: **Phase 0 + Phase 1 IMPLEMENTATE** · 2026-06-05 (su master, da validare con simulazione su VPS nuova prima di considerarle confermate).
 > - ✅ Phase 0: proj→INFO nel messaggio/skill + capitano regola 10 (92→fallback).

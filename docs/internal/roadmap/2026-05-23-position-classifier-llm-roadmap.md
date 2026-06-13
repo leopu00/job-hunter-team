@@ -1,4 +1,4 @@
-# Roadmap: classificatore posizioni → LLM-driven (no hardcoded taxonomy)
+# 🏷️ Roadmap: classificatore posizioni → LLM-driven (no hardcoded taxonomy)
 
 Data: 2026-05-23
 Owner: team backend / data

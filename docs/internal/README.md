@@ -84,8 +84,8 @@ Piani tecnici, backlog, tracker. Aggiornati finché aperti.
 | [`2026-06-06-idle-enrichment-roadmap.md`](roadmap/2026-06-06-idle-enrichment-roadmap.md) | Roadmap arricchimento durante idle |
 | [`2026-05-23-position-classifier-llm-roadmap.md`](roadmap/2026-05-23-position-classifier-llm-roadmap.md) | Roadmap classificatore posizioni LLM |
 | [`2026-05-20-supabase-perf-backlog.md`](roadmap/2026-05-20-supabase-perf-backlog.md) | Backlog performance Supabase |
-| [`pacing-migration-plan-2026-06-05.md`](roadmap/pacing-migration-plan-2026-06-05.md) | Piano migrazione pacing |
-| [`PII-sanitization-plan-2026-06-04.md`](roadmap/PII-sanitization-plan-2026-06-04.md) | Piano sanitizzazione PII storia repo |
+| [`2026-06-05-pacing-migration-plan.md`](roadmap/2026-06-05-pacing-migration-plan.md) | Piano migrazione pacing |
+| [`2026-06-04-pii-sanitization-plan.md`](roadmap/2026-06-04-pii-sanitization-plan.md) | Piano sanitizzazione PII storia repo |
 | [`MINOR-TRACKER.md`](roadmap/MINOR-TRACKER.md) | Tracker mini-fix (Prettier, debt, Windows dev) |
 
 ## ⚙️ ops/

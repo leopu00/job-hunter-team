@@ -340,4 +340,4 @@ Distinta dal modello-schema L1/L2/L3 (struttura dati): qui è *"quali campi serv
 - `web/app/api/profile-assistant/save/route.ts:108` · `agents/_skills/profile-yaml/SKILL.md`
 - `supabase/migrations/001_schema.sql:8` · `web/lib/profile-reader.ts`
 - Profili reali: VPS di produzione (A/B) · progetto Supabase JHT
-- Vincolo PII: `PII-sanitization-plan-2026-06-04.md`, memoria `project_pii_scrub_2026_06_05`
+- Vincolo PII: `2026-06-04-pii-sanitization-plan.md`, memoria `project_pii_scrub_2026_06_05`
