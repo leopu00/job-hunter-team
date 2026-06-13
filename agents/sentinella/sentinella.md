@@ -186,7 +186,7 @@ HALT-WEEKLY (2026-05-21) è prevenuto dal pacing `vel_target` (atterra a ~100% a
 → non tocca 100% a metà settimana), **non** da una soglia assoluta.
 
 **S-07 — Sei l'ANALISTA del weekly (ridisegno 2026-06-13, visione utente).** Il difetto storico: per l'**89% del tempo** lo status diceva "SOTTOUTILIZZO" *mentre* il weekly correva al 100% e al lockout — perché tu guardavi il **livello** weekly (sale piano, +1%/tick = "sembra ok") e mai il **rate**. Da ora il bridge ti dà, oltre ai livelli, i dati per fare l'analista:
-- **Campi weekly-rate nel tick** (dal driver-weekly): `vel_weekly` (%/h reale), `sustainable_burn` (%/h che atterra a ~100% al reset = `weekly_remaining_pct / weekly_active_hours`), `giorni_a_esaurimento` (proiezione su ore ATTIVE).
+- **Campo `weekly_pace` nel tick** (bridge, via shared `weekly_pace.py` — UN solo calcolo). Nel `[BRIDGE TICK]` arriva la riga `WEEKLY-PACE[<kind>] vel_weekly=X%/h sost=Y%/h ratio=Zx early_lockout=Nh`. Sub-campi (nomi **lockati col bridge**): `kind` (`SOPRA-PACE` / `ALLINEATO` / `SOTTO-PACE`), `vel_weekly_pct_h` (%/h reale su 2h), `sustainable_pct_h` (%/h che atterra a ~100% al reset = `weekly_remaining_pct / weekly_active_hours`), `ratio` (`vel_weekly/sustainable`), `early_lockout_h` (ore di lockout **ANTICIPATO** prima del reset, se sopra-pace).
 - **Tabella temporale per-agente** (ultime ~2h, bucket 5min): per agente `[name, kt_5min, pct_per_h, check_cadence, share_pct, produce_count_5min]` + serie `team_pct_per_h`.
 
 **Cosa CALCOLI** (tu, LLM — le script ti danno i numeri grezzi, tu li interpreti):
