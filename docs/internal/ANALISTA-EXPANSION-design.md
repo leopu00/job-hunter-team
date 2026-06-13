@@ -35,11 +35,41 @@ Nuove colonne `positions` (in **Postgres** `supabase/migrations/` **E** SQLite `
 5. **Mappa**: `JobsGlobe.tsx` esiste → estendere per leggere `office_lat/lon` (verificare cosa usa oggi).
 6. **Skill salary-estimate L3** (`agents/_skills/salary-estimate`): implementare L3 web reale + cache TTL30g (riuso `(stack, seniority, country, mode)`).
 
-## ⛓️ Sezioni owner dev1 (DA RIEMPIRE)
-- **Migration** (dual-schema Postgres+SQLite): DDL esatto colonne nuove.
-- **agents/analista**: RULE nuova "richeck giornaliero apertura" (criterio: `last_open_check < now-1g` → re-verifica link + `expires_at`); parsing `deadline`→`expires_at`; invocazione office-geocoding di default (non-remote); ownership salary-estimate.
-- **agents/capitano**: coordina/sostituisce analisti (spawn se uno esce), compiti differenziati. ⚠️ include handoff **C-09** dal fix#4 (ATTENZIONE-WEEKLY → throttle-to-pace, NON freeze-spawn) — da dev3.
-- **Backfill** ~219 posizioni storiche (office-geocoding + expires_at parsing): script una-tantum — owner da decidere.
+## 🔎 Correzione stato attuale (analisi indipendente dev1) — RIUSO > reinvento
+Skill GIÀ esistenti che la tabella sopra non elencava (vanno **riusate**, non ricreate):
+- **`shared/skills/deadline_extract.py`** (F-4 #50): parser robusto JD→ISO (`parse_deadline()`, gestisce ISO / dd-mm-yyyy / "Month dd" EN+IT / "expires in N days"). È IL parser per popolare `expires_at`. Conservativo: ritorna None se non sicuro.
+- **`shared/skills/expiration_alerts.py`** (F-4): trova application `ready` con `deadline` entro 3gg → alert anti-spam. Da **estendere** (oggi solo READY apps, non tutte le posizioni; lavora sul `deadline` TEXT).
+- **Dato LIVE (219 pos):** `deadline` ha 164 valori non-null ma **solo 3 ISO** — il resto è testo spazzatura (`"non presente"` ecc.). ⇒ `deadline` NON è usabile come campo macchina. Conferma: serve `expires_at` PULITO; e l'analista deve smettere di scrivere `"non presente"` in `deadline` (→ `expires_at=NULL`).
+
+## ⛓️ Sezioni owner dev1 (riempite)
+
+### Migration 038 (dual-schema Postgres + SQLite)
+File: `supabase/migrations/038_positions_expiry_tracking.sql` (Postgres). DDL:
+```sql
+ALTER TABLE positions
+  ADD COLUMN IF NOT EXISTS expires_at  DATE,          -- parsata da deadline_extract; NULL = sconosciuta/sempre-aperta
+  ADD COLUMN IF NOT EXISTS is_open     BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS last_open_check TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_positions_open_expiry ON positions (is_open, expires_at);
+```
+SQLite `jobs.db` (container): stesse 3 colonne via il meccanismo migration esistente (`shared/skills/db_migrate*.py` / `db_init.py`), ADD COLUMN idempotente (guard su `PRAGMA table_info`). `deadline` TEXT **resta** (raw, da bonificare in backfill). `last_checked` resta (= ultima ANALISI); `last_open_check` è distinto (= ultimo RICHECK apertura).
+
+### agents/analista (nuovi doveri)
+- **RULE-12 — Richeck giornaliero apertura.** Nuovo dovere + nuova coda `db_query.py next-for-recheck` (criterio `is_open=true AND (last_open_check IS NULL OR last_open_check < now-24h)`). Per ogni posizione: re-esegui RULE-03 (link-check) **e** confronta `expires_at` con oggi → se link morto OPPURE `expires_at < today` ⇒ `is_open=false` (+ nota). Scrivi sempre `last_open_check=now`.
+- **expires_at all'analisi (RULE-04 estesa).** In fase di analisi chiama `deadline_extract.py` sul `jd_text` → scrivi `expires_at` (ISO) o `NULL` (mai `"non presente"`).
+- **Office-geocoding di DEFAULT.** Nel main loop, per ogni posizione **non-remota** (`remote_type`/`work_mode` ≠ remote) invoca la skill `office-geocoding` (già esistente) → popola `office_lat/lon/address`. Skip esplicito se remota.
+- **Salary ownership.** Pre-pass `salary-estimate` in analisi → scrivi `salary_estimated_min/max/currency/source` (prima dello Scorer).
+
+### agents/scorer (read-only salary — risolve checklist)
+VERIFICATO: oggi `scorer.md:100` dice "The Scorer also populates `positions.salary_estimated_*`". Cambio: lo Scorer **LEGGE** i campi (popolati dall'Analista a monte); invoca la skill **solo come fallback** se NULL. Edit lane dev1 (prompt). `salary_fit` invariato.
+
+### agents/capitano (coordinamento Analisti + handoff C-09)
+- Coordina/**sostituisce** analisti: se un Analista esce e ci sono code (`next-for-analista` o `next-for-recheck` non vuote) → re-spawn. Mai lasciare il ruolo scoperto.
+- **Compiti differenziati**: es. ANALISTA-1 = nuove (`next-for-analista`), ANALISTA-2 = richeck+backfill (`next-for-recheck`). Assegna esplicitamente la coda a ciascuno.
+- **Handoff C-09 (da fix#4 dev3)**: su ATTENZIONE-WEEKLY → throttle-to-pace + stop SOLO nuovi spawn finché rientri, **mai** freeze duro.
+
+### Backfill ~219 storiche — RISOLTO: via richeck, non script separato
+Il dovere RULE-12 (richeck) pesca per definizione le posizioni con `expires_at NULL` / `office_lat NULL` / `salary_estimated NULL` e le **backfilla organicamente** (re-parsa `expires_at` dal `jd_text`, bonifica i `deadline="non presente"`, geocoda, stima salario). Il Capitano dedica un Analista alla passata di backfill (compito differenziato). Niente script una-tantum.
 
 ## 🔀 Split per-file (anti-collisione — lezione pacing-bridge 2026-06-13)
 - **dev1**: `supabase/migrations/*`, `jobs.db` schema, `agents/analista/*`, `agents/capitano/*`.
@@ -47,8 +77,10 @@ Nuove colonne `positions` (in **Postgres** `supabase/migrations/` **E** SQLite `
 - Nessuno tocca i file dell'altro. Crossmerge `origin/master` frequente + commit piccoli.
 
 ## ✅ Aperti / da confermare
-- [ ] dev1: DDL migration finale (numero migration: verificare `ls supabase/migrations/` per evitare collisioni).
-- [ ] dev1: verifica RULE Scorer non rompe con ownership salary spostata.
-- [ ] Backfill storiche: owner + se una-tantum o RULE analista che recupera l'arretrato.
+- [x] dev1: DDL migration finale → **038** (037 = ultima su origin/master); DDL nella sezione sopra.
+- [x] dev1: RULE Scorer → VERIFICATO oggi SCRIVE `salary_estimated_*` (scorer.md:100) → passa a READ-ONLY (fallback skill se NULL). Edit `scorer.md` lane dev1.
+- [x] Backfill storiche → RISOLTO: organico via RULE-12 richeck (re-parsa `expires_at` dal `jd_text`, bonifica `deadline="non presente"`), niente script una-tantum.
+- [x] dev3↔dev1 su `capitano.md` → RISOLTO: dev3 NON tocca `capitano.md` (fix#4 implementato su `compute_metrics`/`pacing-bridge`, commit 8962b60c6); **C-09 è handoff a dev1** = unico owner di `capitano.md`, zero collisione.
+- [x] RIUSO: `deadline_extract.py` (parser) + `expiration_alerts.py` (alert) GIÀ esistono → riusare/estendere, non ricreare.
 - [ ] dev2: cosa legge oggi JobsGlobe (city-level? office coords?) prima di estenderla.
-- [ ] dev3 (lead): sequenza vs fix#4 su capitano.md (fix#4 C-09 landa prima, poi dev1 ci basa sopra la parte capitano-analisti).
+- [ ] dev2: estendere `expiration_alerts.py`/web a `expires_at`+`is_open` (oggi lavora su `deadline` TEXT, polluto).
