@@ -38,7 +38,7 @@ In this mode:
 
 ## 🗄️ Required migration
 
-File: [`supabase/migrations/005_feedback_tickets.sql`](../supabase/migrations/005_feedback_tickets.sql)
+File: [`supabase/migrations/005_feedback_tickets.sql`](../../supabase/migrations/005_feedback_tickets.sql)
 
 Creates:
 

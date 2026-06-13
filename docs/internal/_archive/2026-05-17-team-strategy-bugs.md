@@ -17,7 +17,7 @@ sono già stati chiusi nei commit di ieri.
 
 Implementazione completa dei bug strategici nelle 48h 17-18 maggio. Per
 ogni bug, commit SHA + status. Vedi anche
-[`docs/sessions/2026-05-18-fix-effectiveness-review/README.md`](../sessions/2026-05-18-fix-effectiveness-review/README.md)
+[`docs/sessions/2026-05-18-fix-effectiveness-review/README.md`](../../sessions/2026-05-18-fix-effectiveness-review/README.md)
 per il confronto numerico pre/post-fix.
 
 | Bug | Titolo | Stato | Commit | Sessione doc |
@@ -60,7 +60,7 @@ per il confronto numerico pre/post-fix.
 - applications status='ready' visibili: **0 → 19**
 - state_transitions tracciate: **0 → 243**
 
-Dettagli numerici: [`docs/sessions/2026-05-18-fix-effectiveness-review/`](../sessions/2026-05-18-fix-effectiveness-review/).
+Dettagli numerici: [`docs/sessions/2026-05-18-fix-effectiveness-review/`](../../sessions/2026-05-18-fix-effectiveness-review/).
 
 ### Debt residuo
 
@@ -3258,7 +3258,7 @@ non duplicare lo sforzo.
 ottenere il **token**. Da lì in poi tutto è automatico server-side:
 
 1. **Wizard onboarding** (già esistente, vedi
-   [`docs/guides/VPS-SETUP-WIZARD.md`](../guides/VPS-SETUP-WIZARD.md)):
+   [`docs/guides/VPS-SETUP-WIZARD.md`](../../guides/VPS-SETUP-WIZARD.md)):
    - Utente fa `/newbot` su BotFather, ottiene token
    - Incolla token nel wizard JHT
    - JHT salva token in `~/.jht/credentials/telegram_bot.json`
@@ -3382,7 +3382,7 @@ della decisione finale di apply.
 
 **Materiale di lavoro**:
 
-In [`docs/sessions/2026-05-17-budget-windows/`](../sessions/2026-05-17-budget-windows/)
+In [`docs/sessions/2026-05-17-budget-windows/`](../../sessions/2026-05-17-budget-windows/)
 (versionato, vedi README per dettagli):
 - `budget_chart.png` — finestra **corrente** 22:11→03:11 (00:18, 22 KB):
   ✅ al 00:13 usage 43%, **proj 95.0% = esattamente al target**. Linea
