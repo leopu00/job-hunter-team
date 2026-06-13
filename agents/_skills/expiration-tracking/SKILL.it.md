@@ -85,4 +85,3 @@ dei deadline catturati dal JD copre la maggior parte dei casi.
 - `shared/skills/deadline_extract.py` — parser
 - `shared/skills/expiration_alerts.py` — emitter + state di idempotenza
 - `agents/_skills/db-update/SKILL.md` § Positions — flag `--deadline`
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §F-4

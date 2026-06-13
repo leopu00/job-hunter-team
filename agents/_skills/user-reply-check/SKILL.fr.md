@@ -101,4 +101,3 @@ Si l'utilisateur se plaint "j'ai repondu il y a 10 secondes et tu n'as pas confi
 
 - `notify-user` — l'autre moitie de la paire. Ecrit le message dans `pending_user_messages` ; cette skill lit la reponse.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — schema, index, cycle de vie d'une ligne.
-- `docs/internal/architecture/bot-telegram.md` § 6 — decision 2026-05-13 sur le patron fallback.

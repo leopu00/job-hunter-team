@@ -107,4 +107,3 @@ Wenn der Nutzer über das Dashboard antwortet (füllt `user_reply` in einer Zeil
 - `telegram-send` — wird unter der Haube von `jht-notify-user` aufgerufen; verwende es direkt nur wenn du bereits weißt, dass Telegram der richtige Kanal ist (z.B. Antwort auf `[TG]`-Eingang).
 - `chat-web` (`jht-send`) — für den Chat-Agenten-Thread auf dem Dashboard.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — Schema der Warteschlange + Indizes.
-- `docs/internal/architecture/bot-telegram.md` § 6 — vollständiges Fallback-Muster.

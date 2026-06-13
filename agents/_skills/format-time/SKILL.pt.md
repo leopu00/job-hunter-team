@@ -78,5 +78,3 @@ sobrescrever por sessão: variável env `JHT_USER_TZ` (lida pelo helper).
 
 - `shared/skills/format_time.py` — implementação.
 - `candidate_profile.yml.example` — documentação do campo `timezone:`.
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §15 — referência
-  do incidente.

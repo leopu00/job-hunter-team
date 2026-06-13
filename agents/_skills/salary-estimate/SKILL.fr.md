@@ -136,5 +136,3 @@ semaine d'activité.
   side-fix bug #27)
 - `agents/_skills/mentor-output/SKILL.md` — masque le "5 passif" quand
   `notes` contient `no_data_default`
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §27 — discussion
-  Scorer + décision utilisateur

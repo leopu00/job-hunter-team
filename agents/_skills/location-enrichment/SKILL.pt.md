@@ -292,10 +292,3 @@ python3 /app/shared/skills/db_query.py raw \
 python3 /app/shared/skills/db_update.py position <ID> --status checked \
   --notes "ESPERIENZA: ... \\n LINGUA: ... \\n SENIORITY: ..."
 ```
-
-## Referências
-
-- `docs/internal/experiments/2026-05-23-location-playbook.md` — versão longa com
-  apêndice country→continent
-- `docs/internal/experiments/2026-05-23-sim-1-location-enrichment-report.md` —
-  anti-padrões e findings da sim 1

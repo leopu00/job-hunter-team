@@ -291,10 +291,3 @@ python3 /app/shared/skills/db_query.py raw \
 python3 /app/shared/skills/db_update.py position <ID> --status checked \
   --notes "ESPERIENZA: ... \\n LINGUA: ... \\n SENIORITY: ..."
 ```
-
-## Hivatkozások
-
-- `docs/internal/experiments/2026-05-23-location-playbook.md` — hosszú verzió
-  ország→kontinens függelékkel
-- `docs/internal/experiments/2026-05-23-sim-1-location-enrichment-report.md` —
-  anti-minták és megállapítások sim 1-ből

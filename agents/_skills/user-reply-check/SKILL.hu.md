@@ -101,4 +101,3 @@ Ha a felhasznalo panaszkodik, hogy "10 masodperce valaszoltam es meg nem igazolt
 
 - `notify-user` — a par masik fele. Az uzenetet a `pending_user_messages`-be irja; ez a skill olvassa vissza a valaszt.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — schema, indexek, egy sor eletciklusa.
-- `docs/internal/architecture/bot-telegram.md` § 6 — dontes 2026-05-13 a fallback mintarol.
