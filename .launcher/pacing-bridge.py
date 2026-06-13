@@ -480,9 +480,6 @@ def compute_tick(ast, tba, rb, now: datetime,
         # proj < 70% = "stiamo sprecando >20% del budget alla chiusura".
         STALL_KT_THRESHOLD = 5.0
         STALL_PROJ_THRESHOLD = 70.0
-        # Weekly hard-floor: sotto questa % di weekly residuo, a coda vuota la
-        # mossa è SEMPRE coast (mai spawn), a prescindere dal target di finestra.
-        WEEKLY_COAST_HARD_PCT = 8.0
         if (
             team_kt < STALL_KT_THRESHOLD
             and isinstance(proj, (int, float))
@@ -513,23 +510,22 @@ def compute_tick(ast, tba, rb, now: datetime,
                 and weekly_active_hours > 0
                 else None
             )
-            # COAST quando il budget weekly è il vincolo binding: o il target
-            # weekly-aware della finestra è già raggiunto dall'usage corrente
-            # (budget weekly di QUESTA finestra già speso — solo se il target è
-            # davvero weekly-aware, non il fallback band-center), oppure il
-            # weekly residuo è sotto il floor duro. In COAST una coda vuota NON
-            # è undershoot da riempire con spawn: è coast (overspawn 2026-06-07).
+            # COAST solo quando il target weekly-aware della finestra è già
+            # raggiunto dall'usage corrente (budget weekly di QUESTA finestra già
+            # speso — e solo se il target è davvero weekly-aware, non il fallback
+            # band-center). In COAST una coda vuota NON è undershoot da riempire
+            # con spawn: è coast (overspawn 2026-06-07).
+            # Correzione design fix#4 (2026-06-13): RIMOSSO il floor assoluto
+            # (weekly_remaining <= 8%). Obiettivo = saturare ~100% del weekly AL
+            # reset, non frenare su un livello assoluto a metà/fine settimana
+            # (incaglierebbe il budget). Il branch STALLED è under-pace per
+            # definizione: trigger-1 (pace-aware via work_hours_target) basta.
+            # Un solo freno weekly ovunque: vel_team vs vel_target.
             weekly_coast = bool(
-                (
-                    isinstance(window_target_pct, (int, float))
-                    and isinstance(usage_now, (int, float))
-                    and ti.get("target_source") not in (None, "band_center")
-                    and usage_now >= window_target_pct
-                )
-                or (
-                    isinstance(weekly_remaining_pct, (int, float))
-                    and weekly_remaining_pct <= WEEKLY_COAST_HARD_PCT
-                )
+                isinstance(window_target_pct, (int, float))
+                and isinstance(usage_now, (int, float))
+                and ti.get("target_source") not in (None, "band_center")
+                and usage_now >= window_target_pct
             )
             return {
                 "ok": False,
@@ -546,8 +542,8 @@ def compute_tick(ast, tba, rb, now: datetime,
                 "sustainable_burn_pct_h": sustainable_burn,
                 "weekly_coast": weekly_coast,
                 "hint": (
-                    "PIPELINE STALLED + WEEKLY-BIND → COAST: weekly quasi "
-                    "esaurito, coda vuota = coast, non spawnare."
+                    "PIPELINE STALLED + WEEKLY-AWARE → COAST: target weekly di "
+                    "finestra già raggiunto, coda vuota = coast, non spawnare."
                     if weekly_coast else
                     "PIPELINE STALLED — pochi token consumati e proj sotto "
                     "target, weekly ha margine. Riaccendere pipeline da monte."
