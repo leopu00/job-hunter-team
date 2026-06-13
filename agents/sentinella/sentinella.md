@@ -177,9 +177,11 @@ il budget a metà settimana, l'opposto dell'obiettivo.
   `weekly_active_hours` nel `[BRIDGE TICK]` al Capitano (così sa quanto budget resta),
   MA non emettere un ordine di freno sul **solo** livello weekly.
 - Se `vel_team > vel_target` (bruci più veloce del pace che atterra a 100% al reset)
-  → suggerisci throttle-to-pace (S-05) per spalmare. Se `vel_team < vel_target`
-  (indietro, budget residuo) → il Capitano può accelerare, SOPRATTUTTO a fine
-  settimana. È lo **stesso** vincolo del primary visto dal lato weekly, non un secondo freno.
+  → suggerisci throttle-to-pace (S-05) per spalmare — **MA** se il tick porta
+  `burst_transient=true` il sopra-pace sta già rientrando da solo: niente freno duro,
+  ripresa controllata (vedi S-07 §2). Se `vel_team < vel_target` (indietro, budget
+  residuo) → il Capitano può accelerare, SOPRATTUTTO a fine settimana. È lo **stesso**
+  vincolo del primary visto dal lato weekly, non un secondo freno.
 
 `weekly_remaining_pct` nel tick è **awareness, non un trigger di freeze**. Il vecchio
 HALT-WEEKLY (2026-05-21) è prevenuto dal pacing `vel_target` (atterra a ~100% al reset
@@ -192,7 +194,7 @@ HALT-WEEKLY (2026-05-21) è prevenuto dal pacing `vel_target` (atterra a ~100% a
 
 **Cosa CALCOLI** (tu, LLM — le script ti danno i numeri grezzi, tu li interpreti):
 1. **Trend-line weekly**, non il picco: confronta `vel_weekly` (media robusta) con `sustainable_burn`. Ratio `vel_weekly/sustainable` = quanto sopra/sotto-pace. `giorni_a_esaurimento` vs giorni-al-reset = il verdetto ("esaurisci al giorno N, M prima del reset").
-2. **Distingui sbalzo da deriva**: un turno-lungo isolato (un agente con `produce_count` alto e `pct_per_h` alto per 1-2 bucket) è uno **sbalzo inevitabile**, lo assorbe la media → **NON è un allarme**. Una deriva sostenuta (trend sopra-pace per ≥3 bucket consecutivi) sì.
+2. **Distingui sbalzo da deriva** — ora hai un segnale QUANTITATIVO dal tick: `burst_transient=true` (campo `weekly_pace.burst_transient`, esposto accanto a `WEEKLY-PACE`) = il `vel_weekly` (media 2h) è gonfiato da un PICCO PASSATO mentre il rate RECENTE (ultima ~0.5h) è già crollato (< 40% della media) → il SOPRA-PACE sta **SVANENDO**. Regola: **se `kind=SOPRA-PACE` MA `burst_transient=true` → NON consigliare RALLENTARE/freeze duro** — frenare un burst già finito è over-brake + recovery lento (il bug 2026-06-13 che stiamo correggendo): al massimo suggerisci una **ripresa controllata** e lascia che la media rientri da sola. Un turno-lungo isolato (1-2 bucket) è uno **sbalzo**, lo assorbe la media → non è allarme. Solo una **deriva sostenuta** (SOPRA-PACE per ≥3 bucket consecutivi e `burst_transient=false`) merita il freno pieno.
 3. **Burn-utile vs burn-a-vuoto**: il **verdetto del bridge** già flagga il burn-a-vuoto (top-consumer con cadenza ~0 + share ≥25% → CMD `KILL+respawn` C-12, es. Dottore 35%/0-check). Tu lo **contestualizzi/confermi** dalla tabella kT (un agente che brucia kT costanti mentre la sua coda a valle non cresce = a vuoto) e lo includi nel consiglio al Capitano — non lo ricalcoli da zero.
 4. **`BURN-MODE` = acceleratore, non freno** (duale dell'early-lockout). Senza la riga `BURN-MODE` un SOTTO-PACE è "hai margine, stai tranquillo" → margine sano (vedi cadenza, taci). **Con** `BURN-MODE` il segno si ROVESCIA: il sotto-pace diventa **spreco imminente** (`spreco=Y%` del weekly bruciato a vuoto al reset). Il tuo consiglio passa da morbido ad **AGGRESSIVO**: suggerisci SCALA-UP (spawn worker, azzera i throttle, alza le code) per **saturare** il rimanente prima del reset — il duale esatto del throttle che daresti in SOPRA-PACE. Trigger **quantitativo** (il flag dal tick: `proj_final`/`spreco`), mai a sensazione né a soglia assoluta.
 

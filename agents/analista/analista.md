@@ -68,26 +68,17 @@ You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-
 
 **RULE-02** — ALWAYS 2 SEPARATE Bash commands for tmux send-keys.
 
-**RULE-03** — TWO-LEVEL LINK VERIFICATION:
+**RULE-03** — LINK / OPEN-STATE VERIFICATION via the `recheck-liveness` skill (NEVER ad-hoc curl).
+A bare `curl` sees only the RAW HTML → it misses the JS-rendered expiry (Ashby/Workday/Greenhouse render the status client-side) and the LinkedIn authwall (returns `200` even for closed jobs) → falsely-inflated `is_open=1`. ALWAYS use the shared skill: it is TIERED (fast curl-marker → escalates to the REAL browser for ATS-JS hosts and LinkedIn) and never reports a false-open.
 ```bash
-# Level 1 — curl for non-LinkedIn sites
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
+python3 /app/shared/skills/recheck_liveness.py '<URL>' '[title]'
 ```
-If match → `excluded` immediately.
+It prints JSON `{state: OPEN|CLOSED|OPEN_UNVERIFIED, method, http, evidence}` — exit `0`=OPEN, `1`=CLOSED, `2`=OPEN_UNVERIFIED. Decide STRICTLY from `state` (never from a bare HTTP code):
+- `OPEN` → position live: keep `is_open=1` (`--last-open-check now`).
+- `CLOSED` → expired/closed: `db_update.py position <ID> --is-open false --last-open-check now`, and `excluded` only if also dead per RULE-06. **Do NOT change `status`** otherwise: the user wants expired positions to stay visible in the "Scadute/Archivio" dashboard view.
+- `OPEN_UNVERIFIED` → inconclusive: leave `is_open` **unchanged** (never flip to open), `--last-open-check now`, add `NOTE_MISMATCH: [OPEN_UNVERIFIED]` so the Scorer knows the open-state could not be confirmed.
 
-**Always `-L` to follow redirects.** A 302 without `-L` is not a dead link: it is just a redirect. Verify the final state, not the initial one.
-
-**Workable — distinguish the two URLs**:
-- `apply.workable.com/...` → apply form: returns 302 when the job is closed (may mislead you as [DEAD_LINK]).
-- `jobs.workable.com/...` → canonical JD page: HTTP 200 + valid JSON-LD if the position is live.
-ALWAYS verify the canonical page (`jobs.workable.com`), not the apply page. Same principle for Greenhouse, Lever, Ashby: use the public JD URL, not the form one.
-
-For LinkedIn: use `linkedin_check.py` with an authenticated profile (path in local profile). NEVER curl or screenshot without login for LinkedIn.
-
-**LinkedIn liveness — the company's canonical careers page is the source of truth, NOT a LinkedIn HTTP 200.** The LinkedIn authwall returns `200` even for **closed/expired** postings, so a curl on a LinkedIn URL produces falsely-inflated `is_open=1`. NEVER decide LinkedIn liveness from an HTTP status. Decide it like this:
-1. If `linkedin_check.py` runs (authenticated Playwright) → trust its verdict.
-2. If `linkedin_check.py` is unavailable (browser/deps error, non-zero exit) → do **NOT** fall back to a LinkedIn curl. Locate the position on the company's **canonical careers / ATS page** (the company site `/careers`, or its Greenhouse / Lever / Ashby / Workable JD) and verify liveness THERE per the Workable rule above. The canonical page is authoritative; LinkedIn is only the discovery surface.
-3. If neither is conclusive → leave `is_open` **unchanged** (never flip to open on a bare 200), set `--last-open-check now`, and add `NOTE_MISMATCH: [OPEN_UNVERIFIED]` so the Scorer knows the open-state could not be confirmed.
+**FORBIDDEN**: ad-hoc `curl`/`grep` on the JD or on LinkedIn to decide liveness, or flipping `is_open` from a bare HTTP 200. The canonical-careers/ATS logic, the Workable `jobs.` vs `apply.` distinction and the authenticated LinkedIn handling all live INSIDE `recheck-liveness` now — do not reimplement them by hand.
 
 **RULE-04** — 5 MANDATORY STRUCTURED FIELDS in the notes of each analyzed position:
 ```
@@ -144,7 +135,7 @@ Writing rules:
 python3 /app/shared/skills/db_query.py next-for-recheck
 ```
 It returns positions still in play (`is_open=1`, status `checked`→`ready`) never rechecked or rechecked >24h ago — and **organically backfills** historical positions missing `expires_at` / office coords / salary. For each:
-1. Re-run the RULE-03 link check. If the link is **dead** → `db_update.py position <ID> --is-open false --last-open-check now`. **Do NOT change `status`**: the user wants expired positions to stay visible in the "Scadute/Archivio" dashboard view, not vanish.
+1. Re-run the RULE-03 liveness check (the `recheck-liveness` skill, never ad-hoc curl). If `state==CLOSED` → `db_update.py position <ID> --is-open false --last-open-check now`; if `state==OPEN_UNVERIFIED` → leave `is_open` unchanged + `NOTE_MISMATCH: [OPEN_UNVERIFIED]`. **Do NOT change `status`**: the user wants expired positions to stay visible in the "Scadute/Archivio" dashboard view, not vanish.
 2. If `expires_at` is set AND `expires_at < today` → `--is-open false` (closed by deadline).
 3. **Backfill** what is missing on that row: `expires_at` (parse, see MAIN LOOP step 5), office coords (step 6), salary (step 7).
 4. **ALWAYS** end with `--last-open-check now` so the 24h cadence advances — even if nothing changed.
