@@ -58,6 +58,10 @@ STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
 # tmux send fallisce con rc=3 (capitano in turno lungo, input non
 # accettato). Vedi shared/skills/bridge_mailbox.py per il drain.
 MAILBOX_FILE = LOGS_DIR / "bridge-mailbox.jsonl"
+# Tabella temporale per-agente (consumo kT per bucket 5min, ultime 2h) che la
+# Sentinella (S-07) legge per vedere i PATTERN (chi brucia, sbalzo vs deriva).
+# Scritta a ogni tick dal pacing-bridge (ha gia' tba). Redesign 2026-06-13.
+AGENT_TABLE_FILE = LOGS_DIR / "agent-usage-table.json"
 
 # Sotto questo numero di minuti effettivi nella finestra (dopo aver
 # isolato l'ultima session_id) il calcolo è troppo rumoroso. Salta tick.
@@ -119,6 +123,21 @@ MIN_PCT_H = float(os.environ.get("JHT_PACING_MIN_PCT_H", "0.20"))
 
 # Soglia in %/h sotto la quale "ALLINEATO" — evita oscillazioni stupide.
 ALIGN_TOL = 0.20
+
+
+def _throttle_delta_for_sforo(delta_pct_h):
+    """Increment di throttle (secondi) SCALATO con lo sforo %/h — sostituisce il
+    +10 fisso (redesign usage-monitoring 2026-06-13): piu' sfori, piu' frena, cosi'
+    un picco grosso si appiattisce in 1 mossa invece di tanti +10 omeopatici.
+    Increment per-tick; il ladder C-07 governa il throttle TOTALE (fino a 3600s)."""
+    d = abs(delta_pct_h or 0.0)
+    if d <= 2:
+        return 15
+    if d <= 5:
+        return 30
+    if d <= 10:
+        return 60
+    return 120
 
 
 def _path_import(p: Path, name: str):
@@ -812,6 +831,13 @@ def format_message(d: dict) -> str:
             f"binda anche in Phase 1 (S-06/C-09)"
         )
 
+    # NB: il dato weekly_pace (rate weekly reale vs sostenibile + lockout
+    # anticipato) NON va in questo messaggio al CAPITANO: andrebbe a bypassare
+    # il ruolo analitico della Sentinella (il bug stesso dell'indagine). Va nel
+    # [BRIDGE TICK] alla Sentinella (S-07) che lo elabora e CONSIGLIA il Capitano.
+    # Qui il pacing-tick resta sul primary 5h. Il campo `weekly_pace` e' comunque
+    # nel tick-dict + stato (lo legge il sentinel-bridge per la Sentinella).
+
     parts.append(
         f"ratio={d['ratio']:.1f}kT/% "
         f"(team {d['team_kt']:.2f}kT / Δusage {d['delta_usage']:.2f}%)"
@@ -860,6 +886,7 @@ def format_message(d: dict) -> str:
         "sentinella", "sentinella-worker", "capitano", "mentor", "?unknown",
     }
     top_consumer = None
+    top_agent = None
     if d.get("agents"):
         productive = [a for a in d["agents"] if a.get("name") not in NON_PRODUCTIVE]
         # Se NON ci sono agenti produttivi, top_consumer resta None — il
@@ -870,23 +897,39 @@ def format_message(d: dict) -> str:
             sorted_agents = sorted(
                 productive, key=lambda a: a.get("share", 0) or 0, reverse=True,
             )
-            top_consumer = sorted_agents[0].get("name")
+            top_agent = sorted_agents[0]
+            top_consumer = top_agent.get("name")
     top_hint = f" (top consumer: {top_consumer})" if top_consumer else ""
+    # Burner NON produttivo: cadenza ~0 + share alto = brucia senza check utili
+    # (es. Dottore one-shot liveness — 35%/0-check nell'incidente; scout a vuoto).
+    # Throttllarlo NON serve (e' one-shot/non-loop): meglio kill+respawn (C-12).
+    non_producing = (
+        top_agent is not None
+        and (top_agent.get("cadence_per_min") or 0) < 0.02
+        and (top_agent.get("share") or 0) >= 25
+    )
     if v["kind"] == "SFORO":
-        cmd = (
-            f"jht-throttle.py set {top_consumer} +10"
-            if top_consumer else
-            "jht-throttle.py set <top-consumer-produttivo> +10"
-        )
+        thr = _throttle_delta_for_sforo(v["delta"])
+        if top_consumer and non_producing:
+            cmd = (
+                f"KILL+respawn {top_consumer} (C-12: brucia "
+                f"{top_agent.get('share', 0):.0f}% con cadenza ~0 = NON produce; "
+                f"il throttle non lo ferma)"
+            )
+        elif top_consumer:
+            cmd = f"jht-throttle.py set {top_consumer} +{thr}"
+        else:
+            cmd = f"jht-throttle.py set <top-consumer-produttivo> +{thr}"
         parts.append(
             f"VERDETTO: SFORO +{v['delta']:.2f}%/h → -{cap_pct:.0f}%"
             f"{top_hint} | CMD: {cmd} | NO global reset, NO throttle a tutti"
         )
     elif v["kind"] == "MARGINE":
+        thr = _throttle_delta_for_sforo(v["delta"])
         cmd = (
-            f"jht-throttle.py set {top_consumer} -10"
+            f"jht-throttle.py set {top_consumer} -{thr}"
             if top_consumer else
-            "jht-throttle.py set <top-consumer-produttivo> -10"
+            "jht-throttle.py set <top-consumer-produttivo> -X"
         )
         parts.append(
             f"VERDETTO: MARGINE -{v['delta']:.2f}%/h → +{cap_pct:.0f}%"
@@ -1194,6 +1237,8 @@ def loop():
             # consegnato e il prossimo countdown già aggiornato.
             write_state(d, next_quarter(now + timedelta(seconds=1)), msg,
                         wht=wht, pcap=pcap)
+            # Tabella temporale per-agente (2h/5min) per la Sentinella (S-07).
+            write_agent_usage_table(tba, now)
         except Exception as e:
             # Non vogliamo che un errore di un tick affossi il loop.
             print(f"[pacing-bridge] errore tick {now.isoformat()}: {e}",
@@ -1219,6 +1264,42 @@ def once(do_send: bool):
     kind = "stalled" if (d and d.get("error") == "pipeline_stalled") \
            else ("skip" if (d and not d.get("ok")) else "tick")
     append_to_mailbox(msg, delivered_via_tmux=delivered, kind=kind)
+
+
+def write_agent_usage_table(tba, now):
+    """Scrive AGENT_TABLE_FILE: consumo kT per-agente per bucket 5min nelle ultime
+    2h (DELTA per bucket, non cumulativo → la Sentinella vede direttamente chi
+    brucia in ogni finestra: sbalzo isolato vs deriva). Parte 3/3 redesign
+    usage-monitoring: dato grezzo che la Sentinella (S-07) elabora per i pattern,
+    prima di consigliare il Capitano. Failsafe: un errore non affossa il tick."""
+    try:
+        now_ts = now.timestamp()
+        since_ts = now_ts - 2 * 3600.0
+        bucket = 300  # 5 min
+        by_agent = tba.collect_events(since_ts)
+        agents, series = tba.build_series(by_agent, since_ts, now_ts, bucket)
+        deltas = []
+        prev = {a: 0.0 for a in agents}
+        for row in series:
+            drow = {"ts": row.get("ts")}
+            for a in agents:
+                cur = row.get(a, 0.0) or 0.0
+                drow[a] = round(cur - prev.get(a, 0.0), 1)
+                prev[a] = cur
+            deltas.append(drow)
+        payload = {
+            "generated_at": now.isoformat(),
+            "bucket_sec": bucket,
+            "window_h": 2,
+            "agents": agents,
+            "series_kt_per_bucket": deltas,
+        }
+        tmp = AGENT_TABLE_FILE.with_name(AGENT_TABLE_FILE.name + ".tmp")
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        tmp.replace(AGENT_TABLE_FILE)
+    except Exception as e:
+        print(f"[pacing-bridge] WARN agent-usage-table: {e}",
+              file=sys.stderr, flush=True)
 
 
 def main():

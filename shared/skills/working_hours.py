@@ -135,6 +135,56 @@ def is_within_working_hours(now: datetime | None = None, config: dict | None = N
     return False
 
 
+def current_window_bounds(now: datetime | None = None, config: dict | None = None):
+    """Ritorna (start_dt, end_dt) tz-aware della finestra di lavoro ATTIVA che
+    contiene `now`, o None se fuori finestra / 24-7 (nessuna finestra delimitata).
+
+    Gestisce il wrap-around notturno: con finestra 20:00→08:00, se `now` e' alle
+    02:00 la finestra e' iniziata IERI alle 20:00 (start_dt = ieri 20:00,
+    end_dt = oggi 08:00). Usato dal doctor-scheduler per gli slot +30min / meta'.
+    """
+    cfg = config if config is not None else _load_config()
+    wh = (cfg.get("team") or {}).get("working_hours") if isinstance(cfg, dict) else None
+    if not wh or not isinstance(wh, dict):
+        return None
+    windows = wh.get("windows") or []
+    if not isinstance(windows, list) or not windows:
+        return None
+
+    tz_name = (wh.get("timezone") or "UTC").strip() or "UTC"
+    try:
+        tz = ZoneInfo(tz_name) if ZoneInfo else None
+    except Exception:
+        tz = None
+    local_now = (now or datetime.now()).astimezone(tz) if tz else (now or datetime.now())
+
+    for w in windows:
+        if not isinstance(w, dict):
+            continue
+        try:
+            start = _parse_hhmm(str(w["start"]))
+            end = _parse_hhmm(str(w["end"]))
+            days = w.get("days") or []
+        except Exception:
+            continue
+        if not _window_contains(local_now, days, start, end):
+            continue
+        t = local_now.time()
+        if start <= end:
+            start_dt = local_now.replace(hour=start.hour, minute=start.minute, second=0, microsecond=0)
+            end_dt = local_now.replace(hour=end.hour, minute=end.minute, second=0, microsecond=0)
+        elif t >= start:
+            # Sera: finestra iniziata oggi, finisce domani.
+            start_dt = local_now.replace(hour=start.hour, minute=start.minute, second=0, microsecond=0)
+            end_dt = (local_now + timedelta(days=1)).replace(hour=end.hour, minute=end.minute, second=0, microsecond=0)
+        else:
+            # Coda mattutina: finestra iniziata ieri sera.
+            start_dt = (local_now - timedelta(days=1)).replace(hour=start.hour, minute=start.minute, second=0, microsecond=0)
+            end_dt = local_now.replace(hour=end.hour, minute=end.minute, second=0, microsecond=0)
+        return (start_dt, end_dt)
+    return None
+
+
 def describe_status(now: datetime | None = None) -> str:
     """Stringa diagnostica utile per i log di pacing-bridge / notify-user."""
     cfg = _load_config()
