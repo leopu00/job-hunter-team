@@ -701,6 +701,16 @@ def fetch_kimi_api():
     # rolling weekly. Se Moonshot in futuro lo rinomina (es. resets_at), la
     # get-with-fallback resta safe (None se assente).
     weekly_reset_iso = weekly.get("resetTime") or weekly.get("resets_at")
+    # P5 (2026-06-13): totalQuota = tetto MENSILE del pacchetto Kimi (condiviso con
+    # la membership). NON resetta come 5h/weekly: a esaurimento CONGELA Kimi Code
+    # finche' non si ricarica/upgrade. Oggi monitoriamo solo 5h + weekly e siamo
+    # ciechi a questo. Lo esponiamo come monthly_remaining_pct (None se assente).
+    total_q = data.get("totalQuota") or {}
+    try:
+        monthly_remaining = (int(total_q.get("remaining"))
+                             if total_q.get("remaining") is not None else None)
+    except (TypeError, ValueError):
+        monthly_remaining = None
     return {
         "usage": usage_5h,
         "reset_at": _iso_to_hhmm(five_h.get("resetTime")),
@@ -708,6 +718,7 @@ def fetch_kimi_api():
         "weekly_usage": weekly_used,
         "weekly_reset_at": _iso_to_hhmm(weekly_reset_iso),
         "weekly_reset_at_unix": _iso_to_unix(weekly_reset_iso),
+        "monthly_remaining_pct": monthly_remaining,
     }
 
 
@@ -1224,6 +1235,14 @@ def main():
                         f" ratio={weekly_pace['ratio']}x"
                         + (f" early_lockout={el}h" if el else "")
                     )
+                    # burn_mode (duale di early_lockout): SOTTO-PACE + vicino al
+                    # reset + spreco alto → la Sentinella deve consigliare di
+                    # SATURARE, non spalmare. Espone proiezione + spreco previsto.
+                    if weekly_pace.get("burn_mode"):
+                        weekly_pace_field += (
+                            f" BURN-MODE proj_final={weekly_pace['projected_final_pct']}%"
+                            f" spreco={weekly_pace['wasted_pct']}%"
+                        )
                 # TOOLS-HEALTH (dev2): segnale strutturato sui tool mission-critical.
                 # Il maintainer-sweep scrive logs/tools-health.json (output di
                 # tool_health.py); qui lo LEGGIAMO e segnaliamo SOLO se qualcosa è
