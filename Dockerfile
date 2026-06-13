@@ -78,6 +78,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # lo installa on-demand via `uv pip install faster-whisper` alla prima
       # voice note (vedi RULE-T15 self-extension principle).
       ffmpeg tesseract-ocr \
+      # Librerie di sistema runtime di Chromium (headless shell). `playwright
+      # install --with-deps` più sotto DOVREBBE installarle, ma sul runner CI
+      # il browser risultava BROKEN (libatk-1.0/libnss3/libgbm/libasound
+      # mancanti) → il build-time GATE (tool_health.py) andava rosso. Le
+      # ancoriamo qui esplicitamente così sono garantite a prescindere da
+      # --with-deps: il binario chromium-headless-shell le linka a runtime.
+      libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 \
+      libnss3 libnspr4 libcups2 libdrm2 libgbm1 libasound2 \
+      libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+      libpango-1.0-0 libcairo2 libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
