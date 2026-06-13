@@ -1,4 +1,4 @@
-<!-- @translation: fr, ai-translated 2026-06-06 -->
+<!-- @translation: fr, ai-translated 2026-06-13 -->
 ---
 name: spawn-agent
 description: "Lance un agent de l'equipe JHT (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) via le launcher, puis envoie le message de kick-off qui demarre effectivement sa boucle principale. Capitano uniquement — le Capitano est le seul responsable du scaling de l'equipe. Utilisez TOUJOURS cette skill : contourner `start-agent.sh` avec `tmux new-session` + `send-keys \"kimi ...\"` brut produit des sessions ou la CLI ne demarre jamais (`command not found`), le Capitano voit une session \"active\" qui est en realite morte, et l'equipe sous-performe silencieusement."
@@ -21,6 +21,13 @@ bash /app/.launcher/start-agent.sh scout 2       # SCOUT-2
 bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
 bash /app/.launcher/start-agent.sh critico       # CRITICO (singleton, sans numero)
 ```
+
+**Numero d'instance — lance le de (workers scalables, 2026-06-13).** Pour `scout` / `analista` / `scorer` / `scrittore`, ne choisis **PAS** le numero de maniere sequentielle : le travail s'est toujours accumule sur `-1`/`-2` pendant que `-4` ne faisait presque rien. Tire d'abord un numero aleatoire libre, puis passe-le :
+```bash
+N=$(python3 /app/shared/skills/roll_worker_number.py scout) && \
+  bash /app/.launcher/start-agent.sh scout "$N"
+```
+`roll_worker_number.py` lance un **d6 en excluant les numeros deja utilises** (sessions `SCOUT-N` existantes) → jamais de collision, et la charge de travail se repartit sur les numeros d'instance au lieu de toujours tomber sur `-1`. S'applique aux **NOUVEAUX spawns uniquement** ; les singletons (Critico / Sentinella / Dottore / Assistente / Mentor) ne gardent aucun numero, et le session-refresh du Dottore recree le **meme** numero (il ne tire pas le de).
 
 Le launcher effectue, de maniere atomique :
 - cree la session tmux avec le nom canonique (`SCOUT-2`, `ANALISTA-1`, …)
