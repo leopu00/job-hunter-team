@@ -1224,11 +1224,25 @@ def main():
                         f" ratio={weekly_pace['ratio']}x"
                         + (f" early_lockout={el}h" if el else "")
                     )
+                # TOOLS-HEALTH (dev2): segnale strutturato sui tool mission-critical.
+                # Il maintainer-sweep scrive logs/tools-health.json (output di
+                # tool_health.py); qui lo LEGGIAMO e segnaliamo SOLO se qualcosa è
+                # rotto → la Sentinella vede SUBITO un tool giù (es. browser/LinkedIn)
+                # invece di scoprirlo a valle dai report analisti (bug libatk).
+                tools_health_field = ""
+                try:
+                    th_path = DATA_JSONL.parent / "tools-health.json"
+                    if th_path.exists():
+                        th = json.loads(th_path.read_text(encoding="utf-8"))
+                        if th.get("any_broken") and th.get("broken"):
+                            tools_health_field = " TOOLS-HEALTH[BROKEN:" + ",".join(th["broken"]) + "]"
+                except (OSError, ValueError):
+                    pass
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
                     f"status={status} reset={reset}{tgt_field}{phase_field}"
-                    f"{weekly_field}{weekly_pace_field} src=bridge."
+                    f"{weekly_field}{weekly_pace_field}{tools_health_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
 
