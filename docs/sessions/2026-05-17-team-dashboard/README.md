@@ -1,4 +1,4 @@
-# 2026-05-17 — Team dashboard & 5-window timeline (Capitano on-demand v3)
+# 🖥️ 2026-05-17 — Team dashboard & 5-window timeline (Capitano on-demand v3)
 
 Terza sessione di grafici on-demand del Capitano (post-reset finestra Kimi
 13:11 UTC). Salto qualitativo importante rispetto alle sessioni precedenti:

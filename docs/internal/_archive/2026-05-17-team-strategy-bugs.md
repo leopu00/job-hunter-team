@@ -1317,7 +1317,7 @@ Dopo restart container:
   inconsapevole che il watchdog esistesse già)
 - Git commit `d4bb2ca2` 2026-05-08 (introduzione)
 - Git commit `f6c7f759` (fix timing Codex)
-- Session reports `docs/sessions/codex-12h-2026-05-08-pm/` (evidenza
+- Session reports `docs/sessions/2026-05-08-codex-12h-pm/` (evidenza
   funzionamento)
 
 ---
