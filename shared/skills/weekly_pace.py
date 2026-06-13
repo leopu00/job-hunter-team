@@ -17,6 +17,13 @@ import json
 import os
 from datetime import datetime
 
+# burn_mode (duale di early_lockout_h): in SOTTO-PACE e VICINO al reset, segnala di
+# ACCELERARE per non sprecare il weekly (Kimi non fa carryover). Il gate sulle ore
+# ATTIVE al reset distingue il caso urgente (Kimi ~26h) da reset lontani (Codex ~5gg,
+# che hanno tempo di recuperare e NON devono correre).
+WASTE_TOL_PCT = 15.0          # spreco minimo previsto per attivare burn_mode
+NEAR_RESET_ACTIVE_H = 36.0    # "vicino al reset" in ore ATTIVE
+
 
 def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
                            weekly_active_hours, window_h=2.0):
@@ -28,8 +35,11 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
     corrente) di `jsonl_path` (sentinel-data.jsonl).
 
     Ritorna dict {vel_weekly_pct_h, sustainable_pct_h, ratio, hours_to_exhaust,
-    reset_in_active_h, early_lockout_h, kind} oppure None se dati insufficienti.
+    reset_in_active_h, early_lockout_h, kind, projected_final_pct, wasted_pct,
+    burn_mode} oppure None se dati insufficienti.
     kind: SOPRA-PACE (ratio>1.2) | SOTTO-PACE (<0.8) | ALLINEATO | ND.
+    burn_mode: True se SOTTO-PACE + spreco previsto >= WASTE_TOL_PCT + reset vicino
+    (ore attive <= NEAR_RESET_ACTIVE_H) → il team deve ACCELERARE/saturare.
     """
     if (not isinstance(weekly_remaining_pct, (int, float))
             or not isinstance(weekly_active_hours, (int, float))
@@ -80,6 +90,15 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
             else "SOPRA-PACE" if ratio > 1.2
             else "SOTTO-PACE" if ratio < 0.8
             else "ALLINEATO")
+    # burn_mode: proietta dove atterri al reset al ritmo attuale e quanto weekly
+    # sprecheresti. Duale di early_lockout (li' freni perche' bruci troppo; qui
+    # acceleri perche' lasceresti budget sul tavolo poco prima del reset).
+    weekly_used_pct = 100.0 - weekly_remaining_pct
+    projected_final = weekly_used_pct + vel_weekly * weekly_active_hours
+    wasted_pct = max(0.0, 100.0 - projected_final)
+    burn_mode = bool(kind == "SOTTO-PACE"
+                     and wasted_pct >= WASTE_TOL_PCT
+                     and weekly_active_hours <= NEAR_RESET_ACTIVE_H)
     return {
         "vel_weekly_pct_h": round(vel_weekly, 2),
         "sustainable_pct_h": round(sustainable, 2),
@@ -89,4 +108,7 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
         "early_lockout_h": (round(early, 1)
                             if early is not None and early > 0 else None),
         "kind": kind,
+        "projected_final_pct": round(projected_final),
+        "wasted_pct": round(wasted_pct, 1),
+        "burn_mode": burn_mode,
     }
