@@ -27,12 +27,28 @@ distribuzione oraria: lavoro distribuito ~OGNI ORA dalle 06 alle 17 (9-27/ora) =
 **Prova che l'overspawn era inutile:** scout-1=**138** pos, scout-2=54, scout-3=18, **scout-4/5/6 = 3 pos CIASCUNO**. Gli agenti extra dell'incidente hanno prodotto ~nulla → più agenti ≠ più output (giustifica C-12/COAST). Cavalli da tiro: scout-1, scorer-1 (115)/scorer-2 (75).
 **Modello pre-incidente = valido**: ritmo costante 4 giorni + pause lunghe; l'unico difetto è stato l'overspawn non-fermabile (→ risolto dai Dottori ridisegnati).
 
-### 🚬 Smoking gun (dev3 — 3003 sample sentinel-data 03-13/06)
+## 📉 Smoking gun — lo status MENTE sul weekly (dev3, sentinel-data 3003 sample 03-13/06)
+La prova a-terra di *perché* Capitano/Sentinella non si accorgono del burn weekly:
+
+**Trend weekly/giorno** (consistente ma sopra-pace):
 ```
-trend weekly/giorno: 03/06 3→19 · 04 →31 · 05 31→59 · 06 59→79 · 07 79→100 (LOCKOUT)
-ritmo ~20%/giorno per 4-5gg · sostenibile su 7gg ≈ 14%/giorno → ~1,4× troppo → 100% al GIORNO 5, non al 7
+03/06 3→19 · 04/06 →31 · 05/06 31→59 · 06/06 59→79 · 07/06 79→100 ⛔ lockout (giorno 5)
 ```
-**LA PROVA del buco-metrica:** distribuzione status storica = **SOTTOUTILIZZO 2688 (89%)**, ATTENZIONE 252 (8%), STEADY 51 (2%). Per **l'89% del tempo lo status diceva "SOTTOUTILIZZO = hai margine, lavora"** *mentre* il weekly saliva verso il 100% e il lockout. Il team reagiva alla **5h** (dove c'era margine), **mai al weekly-rate**. → conferma definitiva: `sustainable_burn` esposto come **INFO**, non come **DRIVER**. È esattamente ciò che il ridisegno Sentinella-analista deve correggere.
+Ritmo ~**20%/giorno** (trend-line pulita, costante — ciò che ha impressionato l'utente) ma sostenibile su 7gg ≈ **14%/giorno** → ~**1,4× troppo** → tocca 100% al **giorno 5**, non al 7.
+
+**Il paradosso (distribuzione status storica):**
+```
+SOTTOUTILIZZO  2688  (89%)   ← "hai margine, lavora"
+ATTENZIONE      252  ( 8%)
+STEADY           51  ( 2%)
+```
+**Per l'89% del tempo lo status diceva SOTTOUTILIZZO mentre il weekly saliva fino a 100% e andava in lockout.** Lo status guarda la **finestra 5h** (che aveva margine); il **weekly-rate non è mai un driver**. → conferma definitiva del buco-metrica: `sustainable_burn` è calcolato ma resta **INFO**, non guida il verdetto (che usa `vel_team vs vel_target` sulla 5h).
+
+## 🛰️ Sentinella-analista — dettaglio operativo (dev3)
+Cosa deve **calcolare** (dai dati grezzi + tabella temporale per-agente) ed **emettere** al Capitano:
+- **Trend-line weekly**: `vel_weekly` reale (media sulla storia weekly, robusta agli sbalzi) vs `sustainable_burn` → "a ritmo X esaurisci ~giorno N (M prima del reset)".
+- **Cadenza intelligente, NON bipolare**: notifica il Capitano SOLO su cambio di regime (trend devia dal sostenibile per ≥K tick), non a ogni picco. Un turno-lungo isolato (sbalzo inevitabile) ≠ allarme: lo assorbe la media.
+- **Consiglio ANALITICO, non decisionale**: es. *"weekly 1,4× sopra-pace da 30min, top-consumer dottore(35%, 0 check) + scout improduttivo → suggerisco: kill/throttle dottore, hold spawn. Tu decidi."* Il Capitano interpreta e agisce.
 
 ## 🛠️ Fix tecniche (dall'indagine weekly-blindness — già progettate)
 1. **driver weekly** (dev1 design): `vel_weekly = Δweekly/Δt` vs `sustainable = weekly_remaining/weekly_active_hours`, esposto nei tick come *"bruci X%/h vs sost Y%/h (Zx, esaurisci ~N gg)"* → diventa DRIVER, non INFO.
