@@ -1,4 +1,4 @@
-# 2026-05-21 — VPS bootstrap bugs FIXED & VALIDATED su VPS fresh
+# ✅ 2026-05-21 — VPS bootstrap bugs FIXED & VALIDATED su VPS fresh
 
 ## TL;DR
 

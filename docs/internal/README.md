@@ -49,9 +49,9 @@ Note datate su incidenti specifici, diagnosi, snapshot. **Non aggiornate dopo la
 | 2026-06-11 | [`2026-06-11-overspawn-rootcause.md`](postmortems/2026-06-11-overspawn-rootcause.md) | Root cause over-spawn istanze |
 | 2026-06-07 | [`2026-06-07-capitano-runaway-scaling-postmortem.md`](postmortems/2026-06-07-capitano-runaway-scaling-postmortem.md) | Runaway scaling Capitano (5 Scout / 4 Analisti) |
 | 2026-06-04 | [`2026-06-04-scout-geo-concentration.md`](postmortems/2026-06-04-scout-geo-concentration.md) | Over-concentrazione geografica Scout |
-| 2026-06-04 | [`P7-weekly-reset-non-rilevato-2026-06-04.md`](postmortems/P7-weekly-reset-non-rilevato-2026-06-04.md) | Weekly reset non rilevato (P7) |
+| 2026-06-04 | [`2026-06-04-p7-weekly-reset-non-rilevato.md`](postmortems/2026-06-04-p7-weekly-reset-non-rilevato.md) | Weekly reset non rilevato (P7) |
 | 2026-06-03 | [`2026-06-03-beta-vps-session-corrections.md`](postmortems/2026-06-03-beta-vps-session-corrections.md) | Correzioni sessione beta VPS |
-| 2026-06-03 | [`DIAGNOSI-pacing-weekly-2026-06-03.md`](postmortems/DIAGNOSI-pacing-weekly-2026-06-03.md) | Diagnosi pacing weekly-blind |
+| 2026-06-03 | [`2026-06-03-diagnosi-pacing-weekly.md`](postmortems/2026-06-03-diagnosi-pacing-weekly.md) | Diagnosi pacing weekly-blind |
 | 2026-05-22 | [`2026-05-22-vercel-quota-exhaustion.md`](postmortems/2026-05-22-vercel-quota-exhaustion.md) | Vercel HTTP 402 / quota account |
 | 2026-05-21 | [`2026-05-21-halt-weekly-incident.md`](postmortems/2026-05-21-halt-weekly-incident.md) | Halt VPS1 per saturazione weekly cap Codex |
 | 2026-05-21 | [`2026-05-21-vps1-run-postmortem.md`](postmortems/2026-05-21-vps1-run-postmortem.md) | Postmortem consolidato VPS1 run 35h |

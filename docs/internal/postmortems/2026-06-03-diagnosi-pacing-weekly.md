@@ -1,4 +1,4 @@
-# DIAGNOSI COLLABORATIVA — pacing weekly (2026-06-03/04) — CASO CHIUSO
+# 🔬 DIAGNOSI COLLABORATIVA — pacing weekly (2026-06-03/04) — CASO CHIUSO
 
 > Diagnosi condivisa multi-agente (master + dev1 + dev2 + dev3). **Consenso 4/4** raggiunto 2026-06-04.
 > Ogni finding verificato indipendentemente sui dati live del VPS (non per fiducia).
