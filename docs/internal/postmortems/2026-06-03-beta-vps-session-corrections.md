@@ -1,4 +1,4 @@
-# Correzioni — sessione beta tester VPS (2026-06-03)
+# 🔧 Correzioni — sessione beta tester VPS (2026-06-03)
 
 > Findings raccolti durante il primo avvio del team su VPS Hetzner di un beta
 > tester reale (host/IP/profilo/località anonimizzati per privacy).
@@ -92,7 +92,7 @@ Legenda stato: ✅ già fixato in questa sessione · 🔲 da fare · 🟡 fix te
 - **Fix**: una sola fonte-di-verità per il ratio (~17-19% misurato), propagata a C-09 + seed + meter. Mitigante: `residual_to_reset` auto-corregge dal `weekly_used` reale ad ogni tick. (Lega con #8 g_spot + con i pezzi P4/P5 della DIAGNOSI.)
 
 ### 16. (contesto, non bug) Distribuzione weekly con orari lavorativi — verificata OK
-- Orari `Europe/Rome 08-20` = 06-18 UTC = 12h attive/die. Il bridge distribuisce il weekly sulle ore ON (`residual_to_reset`), non 24/7. Pace sostenibile per chiudere a 100% al reset. Vedi `DIAGNOSI-pacing-weekly-2026-06-03.md` per il modello completo.
+- Orari `Europe/Rome 08-20` = 06-18 UTC = 12h attive/die. Il bridge distribuisce il weekly sulle ore ON (`residual_to_reset`), non 24/7. Pace sostenibile per chiudere a 100% al reset. Vedi `2026-06-03-diagnosi-pacing-weekly.md` per il modello completo.
 
 ---
 

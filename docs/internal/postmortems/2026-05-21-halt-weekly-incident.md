@@ -1,4 +1,4 @@
-# HALT-WEEKLY incident — 2026-05-21
+# 🛑 HALT-WEEKLY incident — 2026-05-21
 
 Manovra di emergenza sulla VPS1 (`203.0.113.20`, Hetzner CPX22) per evitare la saturazione del weekly cap Codex ProLite osservato al **96% alle 06:57 UTC** con burn rate sostenuto a **~2.7 %/h** (proiezione esaurimento entro 90 min). Reset weekly previsto al 26/05 20:16 UTC (mancavano ~133 h).
 

@@ -1,7 +1,7 @@
-# P7 — Reset settimanale non rilevato dagli agenti (2026-06-04)
+# ⏰ P7 — Reset settimanale non rilevato dagli agenti (2026-06-04)
 
 > Finding emerso **dopo** la chiusura della diagnosi P1-P6
-> (`DIAGNOSI-pacing-weekly-2026-06-03.md`). Verificato sui dati live della VPS
+> (`2026-06-03-diagnosi-pacing-weekly.md`). Verificato sui dati live della VPS
 > beta. È la causa per cui il team **distribuisce il weekly sull'orizzonte
 > sbagliato**.
 
@@ -90,7 +90,7 @@ reset 5h — **non** quello settimanale.
   il danno è limitato dal target che frena; ma in autonomia Phase 1 (C-07) gli
   agenti modulano col **loro** modello, che resta agganciato all'orizzonte vecchio.
 - **Collegamenti**: estende il Pezzo 2 (awareness agenti) della diagnosi
-  `DIAGNOSI-pacing-weekly-2026-06-03.md`. Va implementato insieme.
+  `2026-06-03-diagnosi-pacing-weekly.md`. Va implementato insieme.
 
 ## 🔁 Riproducibilità
 ```bash

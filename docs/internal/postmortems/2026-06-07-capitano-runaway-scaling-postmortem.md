@@ -1,10 +1,10 @@
-# Capitano runaway-scaling — postmortem 2026-06-07
+# 📈 Capitano runaway-scaling — postmortem 2026-06-07
 
 Sulla VPS beta di betaA (`203.0.113.10`, `ubuntu-2gb-hil-1-betaC`, profilo `betaA@example.com`) il Capitano ha scalato il team a **14 agenti** (5 Scout, 4 Analisti, 2 Scorer + Capitano/Assistente/Mentor) mentre il **weekly cap Codex era al 92%** a metà ciclo e la produzione era in **calo** (spazio di ricerca esaurito). Senza intervento il team avrebbe consumato l'8% residuo di weekly in poche ore, finendo **bloccato ~3 giorni** fino al reset (11/06 00:34 UTC), proprio quando il lavoro utile scarseggiava.
 
 La causa non è un bug isolato ma una **combinazione strutturale**: abbiamo rimosso di proposito il cap fisso sugli spawn (commit `031035cfe`) delegando la moderazione a una "guardia budget"; ma quella guardia ha **due buchi weekly-blind nel regime "team idle"**, entrambi a livello di codice nei bridge. Cap rimosso + guardia bucata = niente ferma meccanicamente lo scaling.
 
-Nessun fix è stato applicato: questo documento serve a fissare diagnosi ed evidenze per decidere il rimedio strutturale. Lega con [PACING-WEEKLY-EXHAUSTION] in `BACKLOG.md` e con i precedenti `2026-05-21-halt-weekly-incident.md`, `2026-05-21-vps1-run-postmortem.md`, `DIAGNOSI-pacing-weekly-2026-06-03.md`, `pacing-migration-plan-2026-06-05.md`.
+Nessun fix è stato applicato: questo documento serve a fissare diagnosi ed evidenze per decidere il rimedio strutturale. Lega con [PACING-WEEKLY-EXHAUSTION] in `BACKLOG.md` e con i precedenti `2026-05-21-halt-weekly-incident.md`, `2026-05-21-vps1-run-postmortem.md`, `2026-06-03-diagnosi-pacing-weekly.md`, `pacing-migration-plan-2026-06-05.md`.
 
 ---
 
@@ -145,4 +145,4 @@ Principio unificante: **il throttle modula la VELOCITÀ, il kill modula la CAPAC
 - Commit: `031035cfe` (cap removal), `f4bc6c183`, `fbae680cc`, `31901c676` (wave pacing weekly).
 - Prompt: `agents/capitano/capitano.md` (C-07, C-09), `agents/sentinella/sentinella.md` (S-06).
 - Codice: `.launcher/pacing-bridge.py`, `.launcher/sentinel-bridge.py`.
-- Precedenti: `docs/internal/postmortems/2026-05-21-halt-weekly-incident.md`, `docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md`, `docs/internal/postmortems/DIAGNOSI-pacing-weekly-2026-06-03.md`, `docs/internal/roadmap/pacing-migration-plan-2026-06-05.md`.
+- Precedenti: `docs/internal/postmortems/2026-05-21-halt-weekly-incident.md`, `docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md`, `docs/internal/postmortems/2026-06-03-diagnosi-pacing-weekly.md`, `docs/internal/roadmap/pacing-migration-plan-2026-06-05.md`.

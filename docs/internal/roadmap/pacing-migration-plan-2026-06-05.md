@@ -86,4 +86,4 @@ Riordinare il tick che il Capitano legge: **primari** `target`, `vel_team`, `vel
 ## ⚠️ Note
 - È il cuore del pacing del **beta live (betaC)** → ogni fase via PR + CI + verifica VPS, mai push diretto.
 - Le Fasi 0 sono già le "due a rischio-zero" proposte: si possono fare subito e indipendentemente.
-- Lega con: DIAGNOSI-pacing-weekly-2026-06-03, finding #8 (banda dinamica), #10 (standalone), #15 (ratio).
+- Lega con: 2026-06-03-diagnosi-pacing-weekly, finding #8 (banda dinamica), #10 (standalone), #15 (ratio).

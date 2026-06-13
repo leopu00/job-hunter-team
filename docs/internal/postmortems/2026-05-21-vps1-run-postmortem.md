@@ -1,4 +1,4 @@
-# 2026-05-21 — VPS1 first run (35h) postmortem
+# 📉 2026-05-21 — VPS1 first run (35h) postmortem
 
 > Consolida 3 inchieste sullo stesso run VPS1 (2026-05-19 20:29 → 2026-05-21 07:20 UTC, ≈ 35h):
 > output stats, idle gaps investigation, Kimi vs Codex comparison.
