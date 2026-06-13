@@ -185,6 +185,28 @@ def update_position(args):
         params.append(1 if args.office_verified == 'true' else 0)
         changed.append(f"office_verified={args.office_verified}")
 
+    # Expiry tracking (espansione Analista — RULE-12 richeck giornaliero).
+    # expires_at: ISO YYYY-MM-DD da deadline_extract; "" => NULL (sconosciuta).
+    if args.expires_at is not None:
+        if args.expires_at == "":
+            updates.append("expires_at = NULL")
+            changed.append("expires_at=NULL")
+        else:
+            updates.append("expires_at = ?")
+            params.append(args.expires_at)
+            changed.append(f"expires_at={args.expires_at}")
+    if args.is_open is not None:
+        updates.append("is_open = ?")
+        params.append(1 if args.is_open == 'true' else 0)
+        changed.append(f"is_open={args.is_open}")
+    if args.last_open_check:
+        if args.last_open_check == 'now':
+            updates.append("last_open_check = datetime('now', 'localtime')")
+        else:
+            updates.append("last_open_check = ?")
+            params.append(args.last_open_check)
+        changed.append(f"last_open_check={args.last_open_check}")
+
     if not updates:
         print("Nessun campo da aggiornare.")
         return
@@ -434,6 +456,9 @@ def main():
     p.add_argument('--salary-estimated-source', help='Fonte stima: glassdoor, levels.fyi, manual')
     p.add_argument('--source')
     p.add_argument('--last-checked', help='Data/ora ultima verifica link (YYYY-MM-DD HH:MM o "now")')
+    p.add_argument('--expires-at', help='Scadenza candidature ISO YYYY-MM-DD (da deadline_extract); "" => NULL')
+    p.add_argument('--is-open', choices=['true', 'false'], help='Posizione ancora aperta (RULE-12 richeck): false se link morto o expires_at passata')
+    p.add_argument('--last-open-check', help='Data/ora ultimo richeck apertura (YYYY-MM-DD HH:MM o "now")')
     # Role family (categoria semantica del ruolo)
     p.add_argument('--role-family', help='Categoria semantica popolata dall\'analista (es. "Technical Writing", "CAD / CNC"). Vedi docs/internal/2026-05-23-location-playbook.md')
     # Location strutturata (popolata dall'analista). Vedi playbook 2026-05-23.
