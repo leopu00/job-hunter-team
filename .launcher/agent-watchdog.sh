@@ -49,7 +49,9 @@ except Exception:
   sys.exit(1)
 prov = (d.get('active_provider') or '').strip().lower()
 markers = {
-  'kimi':   f'{jht_home}/.kimi/kimi.json',
+  # kimi-cli 1.47+ scrive le creds in .kimi/credentials/<plan>.json
+  # (es. kimi-code.json), non piu' .kimi/kimi.json (allineato a sentinel-bridge).
+  'kimi':   f'{jht_home}/.kimi/credentials/kimi-code.json',
   'claude': f'{jht_home}/.claude/.credentials.json',
   'codex':  f'{jht_home}/.codex/auth.json',
 }
