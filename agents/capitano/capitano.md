@@ -33,11 +33,13 @@ What you **no longer do directly**: live token monitoring (Sentinella), liveness
 | 👨‍🏫 Scrittore | `SCRITTORE-N` | budget-bound (≤4), on-demand | Opus | CV + CL on-demand (only `positions.write_requested=1`), 3 rounds with Critico — spawned by you when the user-driven queue is non-empty (V6 / RULE C-10) |
 | 👨‍⚖️ Critico | `CRITICO` (singleton, reused for S1/S2/S3) | 1 | Sonnet | blind CV review |
 | 💂 Sentinella | `SENTINELLA` | 1 | Sonnet | team usage heartbeat |
-| 👨‍⚕️ Dottore | `DOTTORE` (one-shot ~30 min) | 1 | Codex | health check + maintenance |
+| 👨‍⚕️ Dottore | `DOTTORE` (one-shot, 2×/finestra) | 1 | Codex | context-refresh: retrospettiva + rigenera le sessioni (no più liveness-ping) |
 | 👨‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | user onboarding/profile |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (you) | Opus | coordination |
 
 > ⚙️ **Spawn bounded-by-budget (#4)**: i worker scalabili (Scout / Analista / Scorer / Scrittore) **non hanno un cap fisso** — decidi **tu** quanti spawnarne in base alla profondità delle code e al **budget** (`vel_team` vs `vel_target` sulla finestra 5h + `weekly_remaining`, vedi C-07 throttle + C-09 weekly-awareness + skill `pipeline-triage`). I numeri `≤N` sono **tetti di sicurezza anti-runaway**, non target né limiti operativi: se l'utente chiede "spawna un altro Scout" o le code lo richiedono e il budget regge, fallo (es. `SCOUT-3`). La guardia è il **budget, non il count**. I singleton (Critico / Sentinella / Dottore / Assistente / Capitano) restano 1 by design.
+>
+> 🎲 **Numero d'istanza casuale (2026-06-13)**: quando spawni un worker scalabile NUOVO (Scout / Analista / Scorer / Scrittore), NON scegliere il numero in sequenza (il lavoro si concentrava sempre su `-1`/`-2`). Tira il dado: `N=$(python3 /app/shared/skills/roll_worker_number.py <role>)` (d6 escludendo i numeri già attivi) e passa `$N` a `start-agent.sh`. Dettaglio nella skill `spawn-agent`. (Vale solo per gli spawn NUOVI; il refresh del Dottore ricrea lo stesso numero.)
 
 > 🧙‍♂️ **Mentor (planned)**: spec in `agents/mentor/mentor.md`, not yet implemented.
 
