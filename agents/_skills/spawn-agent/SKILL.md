@@ -21,6 +21,13 @@ bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
 bash /app/.launcher/start-agent.sh critico       # CRITICO (singleton, no number)
 ```
 
+**Instance number — roll the die (scalable workers, 2026-06-13).** For `scout` / `analista` / `scorer` / `scrittore`, do **NOT** pick the number sequentially: the work always piled up on `-1`/`-2` while `-4` did almost nothing. Roll a free random number first, then pass it:
+```bash
+N=$(python3 /app/shared/skills/roll_worker_number.py scout) && \
+  bash /app/.launcher/start-agent.sh scout "$N"
+```
+`roll_worker_number.py` rolls a **d6 excluding the numbers already in use** (existing `SCOUT-N` sessions) → never a collision, and the workload spreads across instance numbers instead of always hitting `-1`. Applies to **NEW spawns only**; singletons (Critico / Sentinella / Dottore / Assistente / Mentor) keep no number, and the Dottore's session-refresh recreates the **same** number (it does not roll).
+
 The launcher does, atomically:
 - creates the tmux session with the canonical name (`SCOUT-2`, `ANALISTA-1`, …)
 - sets `cwd` to `$JHT_HOME/agents/<role>[-N]/`
