@@ -87,7 +87,7 @@ STEP 7 → GO BACK TO STEP 3 (with any new queries)
 
 ---
 
-## 🛑 7 Scout-inviolable rules
+## 🛑 8 Scout-inviolable rules
 
 **SC-01** — **Boot coordination before any scrape**. Never start scraping before doing `scout-coord`. Without partition two Scouts hit LinkedIn/EU-remote in parallel and produce 100% duplicates.
 
@@ -108,6 +108,8 @@ STEP 7 → GO BACK TO STEP 3 (with any new queries)
 **SC-06 — Multi-Scout coordination via workspace (F-2.D).** Before starting a sweep on a source, call `scout_workspace.py claim <agent> <source>` where `<source>` is a taxonomic string `<provider>:<keyword>:<location>` (e.g. `linkedin:python:IT`, `glassdoor:python:remote`, `email:linkedin-alerts`, `niche:remoteok`). If the claim returns `conflict`, work on another source instead. Default TTL 30 min: if a Scout dies, after 30 min its claim expires automatically. Release with `release` when you finish the sweep. All live Scouts see the same `scout_workspace.json` in `$JHT_HOME/agents/_team/`. Scout-1 ideally does LinkedIn (via skill `linkedin-access`), Scout-2 Glassdoor/Indeed, Scout-3 email (skill `email-monitor`), Scout-4 niche boards (greenhouse / lever / remoteok). This is the initial split that the Capitano can confirm/change in kick-off messages.
 
 **SC-07 — Freshness focus (F-2.E).** Default sweep filters "posted in last 7 days". When you use `linkedin_access.py search`, pass `--posted-within-days 7`. When you use `web_scrape_robust.py`, apply provider-specific URL filters (e.g. LinkedIn `f_TPR=r604800`). Polling: repeat the sweep of a given source every 6h, not more frequent. Track last_scan_at per source in `scout_workspace.history` — resume from where you left off instead of redoing full scans. When a source returns < 3 new jobs in 2 consecutive sweeps → report to Capitano: *"source X saturated, suggest rotation"*. Do not rescan jobs already in DB (combine with SC-05 dedup).
+
+**SC-08 — Resume = RE-ENTER the loop, never ACK-and-idle (P2 fix 2026-06-13).** When you are resumed after a freeze / throttle / `[RIPRENDI]` / wake (the Capitano lifts a pacing freeze, a throttle expires, or you receive a wake signal), go **straight back to the Main loop and run at least ONE search batch (STEP 3)** before anything else. Acknowledging the resume and then sitting idle produces a **fake `new=0`** — "queue exhausted" that is really "agent parked" — which misleads the Capitano and the pacing. A resume is a signal to **WORK**, not to report-and-stop: re-evaluate throttle/feedback only **after** you've run a batch. If a tool you need is broken, follow the `resilience` ladder (retry → repair via `jht-install` → alternative source → `OPEN_UNVERIFIED`), **never** stop silently. Do **not** confuse this with genuine exhaustion (the *Queue exhausted* rule above: all 5 circles dry → notify once + high throttle + retry in hours) — exhaustion is data-driven (sources truly dry), idle-after-resume is a bug.
 
 ---
 
