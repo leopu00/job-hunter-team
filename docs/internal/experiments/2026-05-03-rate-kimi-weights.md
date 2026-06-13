@@ -131,7 +131,7 @@ Watchdog implementato in:
 Sessione operativa di 2 finestre consecutive (17:11→22:11 e 22:11→03:11)
 con pipeline completa (5 user-facing + 5 worker). I pesi attuali hanno
 prodotto le proiezioni descritte in
-[`2026-05-17-budget-windows/README.md`](../sessions/2026-05-17-budget-windows/README.md)
+[`2026-05-17-budget-windows/README.md`](../../sessions/2026-05-17-budget-windows/README.md)
 con scostamento finale entro ±5 punti dal target 95 %.
 
 Nessuna ri-calibrazione necessaria. Le formule `1 % ≈ 30-40 kT input+output`

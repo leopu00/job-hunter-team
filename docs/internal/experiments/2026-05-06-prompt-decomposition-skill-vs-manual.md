@@ -1,6 +1,6 @@
 # 🧩 Prompt decomposition — CLAUDE.md vs Skill vs Manual
 
-> 📅 **2026-05-06** — analisi originata dal refactor di [`agents/capitano/capitano.md`](../../agents/capitano/capitano.md) (564 righe, ~14k token).
+> 📅 **2026-05-06** — analisi originata dal refactor di [`agents/capitano/capitano.md`](../../../agents/capitano/capitano.md) (564 righe, ~14k token).
 > Documento di riferimento per le prossime sessioni di refactor degli altri 8 agent prompt.
 
 ## 🎯 TL;DR
@@ -268,5 +268,5 @@ Il CLAUDE.md è la **costituzione**: la conosci a memoria.
 
 ## 🔗 Linked tasks
 
-- [JHT-AGENT-PROMPTS-V2] in [`BACKLOG.md`](../../BACKLOG.md) — deep validation 9 agent prompts. Questo doc è la guida architetturale per quel refactor.
+- [JHT-AGENT-PROMPTS-V2] in [`BACKLOG.md`](../../../BACKLOG.md) — deep validation 9 agent prompts. Questo doc è la guida architetturale per quel refactor.
 - [JHT-CAPITANO-DECOMPOSE] (da aprire) — primo refactor di applicazione, capitano.md 564 → ~180 righe + 8 skill.

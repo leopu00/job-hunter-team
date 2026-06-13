@@ -66,7 +66,7 @@ rebuilt from scratch.
 
 ## Labels — see `.github/labels.yml`
 
-Canonical list lives in [`.github/labels.yml`](../../.github/labels.yml).
+Canonical list lives in [`.github/labels.yml`](../../../.github/labels.yml).
 Buckets:
 
 - **Surface** (`installer`, `monitoring`, `desktop`, `web`, `cli`,

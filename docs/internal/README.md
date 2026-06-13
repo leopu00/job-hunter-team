@@ -19,7 +19,7 @@ Organizzate per **categoria** in sotto-cartelle.
 | [`qa-reports/`](qa-reports/) | Report E2E/QA storici (run agenti) |
 | [`_archive/`](_archive/) | Note superate, conservate per git-blame |
 
-File di root: [`chronicles-canon.md`](chronicles-canon.md) (canon narrativo) · [`REVIEW-LOG.md`](REVIEW-LOG.md) (log review).
+File di root: [`chronicles-canon.md`](chronicles-canon.md) (canon narrativo). Il log review è in [`../REVIEW-LOG.md`](../REVIEW-LOG.md).
 
 ---
 

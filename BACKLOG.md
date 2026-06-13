@@ -650,7 +650,7 @@ Found while mapping the runtime filesystem of the JHT container. Schema is sane;
 
 #### 🚨 Launcher as primary tool — Phase 2 expansion (NEW 2026-05-04)
 
-> Driven by VPS deployment design ([`docs/internal/ops/vps.md`](../docs/internal/ops/vps.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
+> Driven by VPS deployment design ([`docs/internal/ops/vps.md`](docs/internal/ops/vps.md)). When VPS becomes the recommended setup for non-tech users, the desktop launcher stops being a "first-run wizard" and becomes the **primary daily tool**. These tasks close the gap between today's launcher (anonymous, single-PC, guest-mode-only) and what's needed for cross-device VPS operation.
 
 ##### ✅ 🔐 [JHT-DESKTOP-LOGIN] OAuth login flow in launcher — **DONE 2026-05-13**
 
@@ -798,7 +798,7 @@ Niente "Reconnect existing team", niente detection orphan VPS, niente "Adopt exi
   - Tailscale (zero-config, US company) vs WireGuard self-hosted (more aligned with local-first, more code)
   - Cross-PC migration: if user changes machine, how do they re-claim the VPS? (cloud sync of `vps.json` encrypted user-side? Hetzner API to re-inject SSH key?)
   - Auto-shutdown: button "I got hired, terminate VPS" with backup-first?
-- **Design rationale:** [`docs/internal/ops/vps.md`](../docs/internal/ops/vps.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
+- **Design rationale:** [`docs/internal/ops/vps.md`](docs/internal/ops/vps.md) — full brainstorm with comparative analysis of all 3 deployment paths (manual SSH / web pairing / desktop launcher).
 
 #### 🔗 [JHT-UX-CLOUD-PAIRING] Auto-pairing VPS↔account web (no token manuale + 2 comandi CLI)
 
