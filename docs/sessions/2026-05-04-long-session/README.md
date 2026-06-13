@@ -1,4 +1,4 @@
-# Long Session 2026-05-04 — Report
+# ⏱️ Long Session 2026-05-04 — Report
 
 Sessione team durata oltre 10 ore, prima volta che il termostato (pacing-bridge)
 ha permesso al team di lavorare attraverso più finestre Claude da 5h consecutive
@@ -19,7 +19,7 @@ Panoramica grafica + narrativa della long session:
 ## 📁 Struttura cartella
 
 ```
-docs/sessions/long-session-2026-05-04/
+docs/sessions/2026-05-04-long-session/
 ├── README.md                  # questo file (briefing team)
 ├── index.html                 # entry point report, shell + nav
 ├── usage.html                 # sezione usage / token consumption (dev1)
@@ -136,9 +136,9 @@ Master coordina. Si continua finché il report è validato visivamente da tutti.
 
 ## 🧪 Test visivo
 
-Aprire localmente: `open docs/sessions/long-session-2026-05-04/index.html`
+Aprire localmente: `open docs/sessions/2026-05-04-long-session/index.html`
 (funziona via `file://` se i fetch dei jsonl sono async + relativi; altrimenti
-servire con `python3 -m http.server -d docs/sessions/long-session-2026-05-04/`).
+servire con `python3 -m http.server -d docs/sessions/2026-05-04-long-session/`).
 
 ## ✅ Criterio di completezza
 
@@ -152,6 +152,6 @@ servire con `python3 -m http.server -d docs/sessions/long-session-2026-05-04/`).
 
 ## 📌 Decisioni master
 
-- Path scelto: `docs/sessions/long-session-2026-05-04/` (data della sessione, non di scrittura).
+- Path scelto: `docs/sessions/2026-05-04-long-session/` (data della sessione, non di scrittura).
 - Struttura: cartella con multipli HTML interlinkati (un file per area + index nav).
 - Dati committati nella cartella: dimensione ragionevole (~1.7 MB), self-contained.

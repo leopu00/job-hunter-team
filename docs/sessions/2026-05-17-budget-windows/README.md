@@ -1,4 +1,4 @@
-# 2026-05-17 — Budget windows Kimi: 2 finestre consecutive, entrambe in target
+# 💰 2026-05-17 — Budget windows Kimi: 2 finestre consecutive, entrambe in target
 
 Sessione operativa: il team Job Hunter Team ha lavorato per **2 finestre Kimi
 consecutive** (5 h ciascuna, reset 22:11 e 03:11 UTC) generando 5+ CV

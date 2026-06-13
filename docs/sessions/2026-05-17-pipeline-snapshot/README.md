@@ -1,4 +1,4 @@
-# 2026-05-17 — Pipeline snapshot charts (Capitano on-demand)
+# 📈 2026-05-17 — Pipeline snapshot charts (Capitano on-demand)
 
 Seconda sessione di grafici on-demand del Capitano (post chiusura finestra
 Kimi 22:11→03:11 UTC). Tema: **visualizzazione stato pipeline**, non più

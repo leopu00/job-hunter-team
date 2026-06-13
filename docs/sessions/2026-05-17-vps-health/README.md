@@ -1,4 +1,4 @@
-# 2026-05-17 — Health audit VPS + container (snapshot 14:09 UTC)
+# 🩺 2026-05-17 — Health audit VPS + container (snapshot 14:09 UTC)
 
 Audit operativo richiesto durante la sessione test e2e Path 2. Verifica:
 ordine agenti, aderenza istruzioni, gestione dipendenze, salute VPS,
