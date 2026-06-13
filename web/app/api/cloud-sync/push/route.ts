@@ -23,6 +23,10 @@ interface PositionIn {
   found_at?: string | null;
   deadline?: string | null;
   last_checked?: string | null;
+  // Istanza dell'ultimo agente che ha agito (es. analista-4). Il team la scrive
+  // in SQLite positions.last_actor; senza questo campo l'Analista resta generico
+  // sul cloud. Mig Supabase 039.
+  last_actor?: string | null;
   salary_declared_min?: number | null;
   salary_declared_max?: number | null;
   salary_declared_currency?: string | null;
@@ -316,6 +320,7 @@ export async function POST(req: NextRequest) {
         found_at: p.found_at ?? null,
         deadline: p.deadline ?? null,
         last_checked: p.last_checked ?? null,
+        last_actor: p.last_actor ?? null,
         salary_declared_min: p.salary_declared_min ?? null,
         salary_declared_max: p.salary_declared_max ?? null,
         salary_declared_currency: p.salary_declared_currency ?? null,
