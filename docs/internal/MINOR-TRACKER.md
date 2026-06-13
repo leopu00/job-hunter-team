@@ -130,6 +130,21 @@ ROADMAP aggiornato 2026-06-02.
 
 ---
 
+## 🌉 Bridge / fix#4 weekly — 2026-06-13
+
+### ⏸️ Due `weekly_remaining_pct` omonimi (consolidare a regime) — debt M
+**Origine:** discussione post-deploy VPS Andras 2026-06-13 (dev1+dev2+dev3).
+Il fix#4 espone `weekly_remaining_pct` in DUE percorsi distinti con stessa chiave:
+1. `sentinel-data.jsonl` (via `compute_metrics.py`) — **driver canonico** dello status binding / ATTENZIONE-WEEKLY (live, es. 91.0).
+2. `pacing-bridge-state.json` (via `_compute_dynamic_target` in `pacing-bridge.py`) — input al verdetto COAST lato pacing (`None` in fallback post-boot).
+**Rischio:** a regime i due possono divergere (arrotondamenti / finestra usata) → confonde chi legge. Binding NON è rotto (la fonte 1 è quella che conta).
+**Fix concordato (non scope incidente):** consolidare su fonte unica — il pacing legge `weekly_remaining_pct` dal sample di `compute_metrics` invece di ricalcolarlo. dev1 espone il campo "pacing-friendly" lato sua lane, dev2 adegua `pacing-bridge.py`. Da fare insieme all'unit-test COAST.
+
+### ⏸️ `work_phase=None` cosmetico nel `pacing-bridge-state.json` post-boot — debt S
+Subito dopo il recreate il pacing è in fallback (`effective_window_too_short`) → `work_phase`/`current_window_target_pct`/`weekly_remaining_pct` a `None` nel pacing-state. **Nessun impatto funzionale:** il gate working-hours reale è nel launcher/watchdog (verificato `inside=True`), indipendente da questo campo. Si popola da sé a regime (≥2 sample). **Da ri-verificare** che `work_phase`→`ON` a regime (~30-45min post-boot).
+
+---
+
 ## 📜 Come usare questo file
 
 1. **Quando aggiungere qui:** mini-fix < 2h, debt non blocker, note osservative, bug specifici a un ambiente, da-verificare.
