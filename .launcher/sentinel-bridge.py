@@ -825,6 +825,47 @@ def _compute_metrics_via_skill(parsed, last, history):
     return cm.compute_metrics(parsed, last, history=history)
 
 
+def _weekly_pace_via_skill(entry, now_dt, now_ts):
+    """weekly_pace (rate weekly REALE 2h vs sostenibile + lockout anticipato) via
+    la pure-function condivisa shared/skills/weekly_pace.py. weekly_active_hours
+    da work_hours_target (ore ON da now al weekly_reset). Ritorna dict o None.
+
+    Parte 2/3 redesign usage-monitoring (2026-06-13): il dato grezzo va nel
+    [BRIDGE TICK] alla Sentinella → S-07 lo elabora e CONSIGLIA il Capitano (C-09),
+    invece di farlo arrivare al Capitano che bypasserebbe l'analisi (= il bug
+    dell'indagine: status SOTTOUTILIZZO 89% mentre il weekly andava a 100%).
+    UN solo calcolo del pace (lezione fix#4): la stessa funzione shared."""
+    try:
+        wrem = entry.get("weekly_remaining_pct")
+        wreset_unix = entry.get("weekly_reset_at_unix")
+        if (not isinstance(wrem, (int, float))
+                or not isinstance(wreset_unix, (int, float))):
+            return None
+
+        def _imp(name):
+            p = Path("/app/shared/skills") / f"{name}.py"
+            if not p.exists():
+                p = (Path(__file__).resolve().parent.parent
+                     / "shared" / "skills" / f"{name}.py")
+            spec = importlib.util.spec_from_file_location(name, p)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+
+        wht = _imp("work_hours_target")
+        wp = _imp("weekly_pace")
+        try:
+            with CONFIG_PATH.open(encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            cfg = None
+        wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
+        wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)
+        return wp.weekly_pace_assessment(str(DATA_JSONL), now_ts, wrem, wah)
+    except Exception:
+        return None
+
+
 # ── Claude TUI parser (libreria importata da check_usage) ──────────────
 
 WORKER_SESSION = "SENTINELLA-WORKER"
@@ -1167,10 +1208,27 @@ def main():
                     if wk_usage is not None
                     else ""
                 )
+                # WEEKLY-PACE: dato grezzo per la Sentinella (S-07) — rate weekly
+                # REALE (2h) vs sostenibile + lockout anticipato. La Sentinella lo
+                # ELABORA e consiglia il Capitano; NON arriva al Capitano diretto.
+                weekly_pace = _weekly_pace_via_skill(
+                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                weekly_pace_field = ""
+                if (isinstance(weekly_pace, dict)
+                        and weekly_pace.get("kind") not in (None, "ND")):
+                    el = weekly_pace.get("early_lockout_h")
+                    weekly_pace_field = (
+                        f" WEEKLY-PACE[{weekly_pace['kind']}]"
+                        f" vel_weekly={weekly_pace['vel_weekly_pct_h']}%/h"
+                        f" sost={weekly_pace['sustainable_pct_h']}%/h"
+                        f" ratio={weekly_pace['ratio']}x"
+                        + (f" early_lockout={el}h" if el else "")
+                    )
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
-                    f"status={status} reset={reset}{tgt_field}{phase_field}{weekly_field} src=bridge."
+                    f"status={status} reset={reset}{tgt_field}{phase_field}"
+                    f"{weekly_field}{weekly_pace_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
 
