@@ -1224,6 +1224,14 @@ def main():
                         f" ratio={weekly_pace['ratio']}x"
                         + (f" early_lockout={el}h" if el else "")
                     )
+                    # burn_mode (duale di early_lockout): SOTTO-PACE + vicino al
+                    # reset + spreco alto → la Sentinella deve consigliare di
+                    # SATURARE, non spalmare. Espone proiezione + spreco previsto.
+                    if weekly_pace.get("burn_mode"):
+                        weekly_pace_field += (
+                            f" BURN-MODE proj_final={weekly_pace['projected_final_pct']}%"
+                            f" spreco={weekly_pace['wasted_pct']}%"
+                        )
                 # TOOLS-HEALTH (dev2): segnale strutturato sui tool mission-critical.
                 # Il maintainer-sweep scrive logs/tools-health.json (output di
                 # tool_health.py); qui lo LEGGIAMO e segnaliamo SOLO se qualcosa è
