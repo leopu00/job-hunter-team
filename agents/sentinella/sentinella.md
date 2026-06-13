@@ -158,37 +158,32 @@ proj > 200   → freeze_team.py + EMERGENZA (team-wide, distinct from the
 EMERGENZA remains reserved for proj > 200% OR persistent proj > 150%
 for ≥3 consecutive ticks (no more "EMERGENZA at first spike").
 
-**S-06 — Weekly cap as parallel constraint (Codex / subscription tier), GATE-WEIGHTED.** Su
-provider con weekly cap (Codex 168h), il tick include `weekly` + `weekly_reset`
-(oltre a `weekly_active_hours`/`weekly_remaining_pct` dal bridge). **Calcola
-weekly proj parallelamente al primary proj** e prendi il MASSIMO dei due come
-driver del throttle. Il team lavora a ORARI (gate working-hours, default 08-20
-× 7gg = **84h attive/sett**), NON 24/7: la proj weekly va sulle ore ATTIVE.
+**S-06 — Weekly cap = vincolo PARALLELO, AWARENESS (Codex / subscription tier).** Su
+provider con weekly cap (Codex 168h) il tick include `weekly_usage` +
+`weekly_remaining_pct` + `weekly_active_hours` + il pace weekly-anchored
+(`vel_target` già spalmato sulle ore ATTIVE fino al reset, calcolato dal bridge —
+**UNA sola fonte, NON ricalcolarlo a mano**).
 
-```
-# NON il vecchio modello 24/7 (vps1-run-postmortem): quei numeri assumevano 168h.
-ratio finestra→weekly ≈ 17%  (fonte unica provider_capacity, non il vecchio 3%)
-burn sostenibile = weekly_remaining_pct / weekly_active_hours  (%/h ATTIVO, dal bridge)
-                   NON 0.14%/h (= 100/168h, 24/7)
-hours_to_weekly_reset = ore tra now e weekly_reset DEL TICK (mai assunto; vedi 4b)
-proj_weekly = weekly + (smoothed_vel_weekly_pct_h * hours_to_weekly_reset)
-```
+**OBIETTIVO weekly** (lockato utente 2026-06-04, corretto 2026-06-13): atterrare a
+**~100% del weekly AL RESET** — saturare il sub, non bruciarlo prima né sprecarlo.
+**Nessun HALT su un livello assoluto** (tipo "frena a weekly 75/92%"): incaglierebbe
+il budget a metà settimana, l'opposto dell'obiettivo.
 
-Algoritmo (pseudo):
-```
-# hours_to_weekly_reset SEMPRE dal weekly_reset del TICK CORRENTE (now -> weekly_reset),
-# mai un valore assunto/memorizzato: il reset weekly puo' cambiare a ciclo rinnovato
-# (vedi WEEKLY RESET DETECTED). Se la regola 4b scatta, ricalcola da capo su quello nuovo.
-hours_to_weekly_reset = ore tra now e weekly_reset (dal tick)
-proj_weekly = weekly_usage + (smoothed_vel_weekly_pct_h * hours_to_weekly_reset)
-proj_binding = max(proj_primary, proj_weekly)
-use proj_binding nei threshold S-05 (95/100/110/130/150/200)
-```
+- Il freno weekly è **UNO**: `vel_team` vs `vel_target` (già weekly-anchored, sulle
+  ore attive). **NON** calcolare un tuo `proj_weekly`/`proj_binding` né iniettarlo nei
+  threshold S-05: **S-05 throttla sul `proj` PRIMARY 5h**; il pace weekly è già dentro
+  `vel_target` del bridge (no doppione, no calendar-vs-active mismatch).
+- Il tuo compito weekly = **AWARENESS**: porta `weekly_remaining_pct` /
+  `weekly_active_hours` nel `[BRIDGE TICK]` al Capitano (così sa quanto budget resta),
+  MA non emettere un ordine di freno sul **solo** livello weekly.
+- Se `vel_team > vel_target` (bruci più veloce del pace che atterra a 100% al reset)
+  → suggerisci throttle-to-pace (S-05) per spalmare. Se `vel_team < vel_target`
+  (indietro, budget residuo) → il Capitano può accelerare, SOPRATTUTTO a fine
+  settimana. È lo **stesso** vincolo del primary visto dal lato weekly, non un secondo freno.
 
-Quando il weekly e' binding (anche se primary MARGINE), emetti **ATTENZIONE
-WEEKLY** verso il Capitano (formato in skill `order-formats`) cosi' lui sa
-applicare C-09. Senza S-06 il team brucia weekly silenziosamente in Phase 1
-perche' il primary sembra ok — esattamente lo scenario HALT-WEEKLY 2026-05-21.
+`weekly_remaining_pct` nel tick è **awareness, non un trigger di freeze**. Il vecchio
+HALT-WEEKLY (2026-05-21) è prevenuto dal pacing `vel_target` (atterra a ~100% al reset
+→ non tocca 100% a metà settimana), **non** da una soglia assoluta.
 
 ---
 
