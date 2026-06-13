@@ -42,11 +42,21 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # which lives on a bind-mount so installs persist across container
     # recreation. See ADR 0004 + the desktop provider-install step.
     NPM_CONFIG_PREFIX=/jht_home/.npm-global \
+    # /opt/jht-deps — prefisso GLOBALE scrivibile dagli agenti per gli extra
+    # che non rientrano nelle lane standard (apt→sistema, uv→python user,
+    # npm→node): binari in bin/, librerie in lib/. Baked nell'immagine con
+    # ownership jht così TUTTI gli agenti installano nello STESSO posto
+    # (niente più deps sparpagliati per cartelle diverse). È la "freedom
+    # standardizzata" del redesign Mantenitore: il wrapper `jht-install`
+    # instrada qui ciò che non ha una lane dedicata. LD_LIBRARY_PATH copre
+    # le .so installate qui senza toccare il sistema.
+    JHT_DEPS_PREFIX=/opt/jht-deps \
+    LD_LIBRARY_PATH=/opt/jht-deps/lib \
     # /app/agents/_tools contiene wrapper come `jht-send` che gli agenti
     # usano per scrivere in chat.jsonl. Va nel PATH del container (non solo
     # nel tmux pane) così anche i sub-shell spawnati da Codex/Kimi --yolo
     # lo trovano senza dipendere dall'export re-inviato via send-keys.
-    PATH=/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
+    PATH=/app/agents/_tools:/opt/jht-deps/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip \
@@ -98,6 +108,16 @@ RUN pip3 install --no-cache-dir -r requirements.txt \
 
 COPY . .
 
+# Build-time GATE (redesign tool-health 2026-06-13). The libatk regression
+# shipped a browser that exists but exits 127 on launch, and stayed invisible
+# in prod for hours (surfaced only as analyst "new=0" reports). This step
+# launches chromium headless FOR REAL via the exact path linkedin_check.py
+# uses (Python playwright, headless, --only-shell baked above): if a system
+# .so is missing, the BUILD goes red here instead of prod. tool_health.py
+# exits 1 on any BROKEN tool. "Never again a silent libatk."
+RUN python3 shared/skills/tool_health.py --only playwright_browser \
+    || { echo "BUILD GATE FAILED: chromium headless cannot launch — missing system libs (libatk/nss/gbm/asound)? See shared/skills/tool_health.py" >&2; exit 1; }
+
 RUN npm run build --prefix tui \
     && for pkg in shared/*/package.json; do \
          [ -f "$pkg" ] || continue; \
@@ -115,7 +135,10 @@ RUN npm run build --prefix tui \
 
 RUN useradd --create-home --shell /bin/bash jht \
     && mkdir -p /jht_home /jht_user \
-    && chown -R jht:jht /jht_home /jht_user /app /opt/playwright \
+    # /opt/jht-deps (bin+lib): prefisso globale scrivibile per gli extra,
+    # ownership jht così gli agenti ci installano senza root (vedi ENV).
+    && mkdir -p /opt/jht-deps/bin /opt/jht-deps/lib \
+    && chown -R jht:jht /jht_home /jht_user /app /opt/playwright /opt/jht-deps \
     # Espone i tool degli agenti (es. jht-send) in /usr/local/bin così
     # sono trovati anche dalle sub-shell login che Codex/Kimi --yolo
     # spawnano con PATH ripulito da /etc/login.defs. Senza questo,

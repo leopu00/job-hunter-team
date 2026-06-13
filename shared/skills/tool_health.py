@@ -70,23 +70,29 @@ def check_chromium_libs():
 def check_playwright_browser():
     """Smoke-test reale: lancia chromium headless e basta. È il check che il gate
     build-time deve fare (se manca una .so qui FALLISCE). Graduale: prima le lib,
-    poi il launch vero se node/playwright sono disponibili."""
+    poi il launch vero.
+
+    Playwright in questo repo è PYTHON-only (`requirements.txt`; linkedin_check.py
+    usa `from playwright.sync_api`). NON c'è un node playwright installato, quindi
+    il launch DEVE passare per Python: testare il path reale del tool, non un node
+    require che fallirebbe per "module not found" segnalando BROKEN a vuoto."""
     lib_status, lib_ev = check_chromium_libs()
     if lib_status == "BROKEN":
         return "BROKEN", lib_ev  # inutile tentare il launch, manca la .so
-    # launch reale via node playwright (headless, chiude subito)
-    node = shutil.which("node")
-    if not node:
-        return lib_status, "node assente; verifico solo le lib (%s)" % lib_ev
+    # launch reale via Python playwright headless (chiude subito) — identico al
+    # path di linkedin_check.py (headless=True + only-shell baked nell'immagine).
     snippet = (
-        "const {chromium}=require('playwright');"
-        "(async()=>{try{const b=await chromium.launch({headless:true});"
-        "await b.close();console.log('LAUNCH_OK');process.exit(0);}"
-        "catch(e){console.error('LAUNCH_FAIL '+e.message);process.exit(2);}})();"
+        "from playwright.sync_api import sync_playwright\n"
+        "try:\n"
+        "    with sync_playwright() as p:\n"
+        "        b = p.chromium.launch(headless=True); b.close()\n"
+        "    print('LAUNCH_OK')\n"
+        "except Exception as e:\n"
+        "    import sys; print('LAUNCH_FAIL %s' % e, file=sys.stderr); sys.exit(2)\n"
     )
-    rc, out = _run([node, "-e", snippet])
+    rc, out = _run([sys.executable, "-c", snippet])
     if rc == 0 and "LAUNCH_OK" in out:
-        return "OK", "chromium headless launch ok"
+        return "OK", "chromium headless launch ok (python)"
     return "BROKEN", "launch fallito (rc=%d): %s" % (rc, out.strip()[:200])
 
 
