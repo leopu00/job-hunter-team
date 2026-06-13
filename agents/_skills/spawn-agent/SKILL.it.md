@@ -1,4 +1,4 @@
-<!-- @translation: it, ai-translated 2026-06-06 -->
+<!-- @translation: it, ai-translated 2026-06-13 -->
 ---
 name: spawn-agent
 description: "Avvia un agente del team JHT (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) tramite il launcher, poi invia il messaggio di kick-off che effettivamente avvia il suo loop principale. Solo Capitano — il Capitano è l'unico proprietario dello scaling del team. Usa SEMPRE questa skill: bypassare `start-agent.sh` con `tmux new-session` + `send-keys \"kimi ...\"` crudo produce sessioni in cui la CLI non parte (`command not found`), il Capitano vede una sessione \"attiva\" che in realtà è morta, e il team sotto-performa silenziosamente."
@@ -21,6 +21,13 @@ bash /app/.launcher/start-agent.sh scout 2       # SCOUT-2
 bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
 bash /app/.launcher/start-agent.sh critico       # CRITICO (singleton, senza numero)
 ```
+
+**Numero di istanza — tira il dado (worker scalabili, 2026-06-13).** Per `scout` / `analista` / `scorer` / `scrittore`, **NON** scegliere il numero in modo sequenziale: il lavoro si accumulava sempre su `-1`/`-2` mentre `-4` faceva quasi nulla. Tira prima un numero casuale libero, poi passalo:
+```bash
+N=$(python3 /app/shared/skills/roll_worker_number.py scout) && \
+  bash /app/.launcher/start-agent.sh scout "$N"
+```
+`roll_worker_number.py` tira un **d6 escludendo i numeri già in uso** (le sessioni `SCOUT-N` esistenti) → mai una collisione, e il carico di lavoro si distribuisce tra i numeri di istanza invece di colpire sempre `-1`. Vale **solo per i NUOVI spawn**; i singleton (Critico / Sentinella / Dottore / Assistente / Mentor) restano senza numero, e il session-refresh del Dottore ricrea lo **stesso** numero (non tira il dado).
 
 Il launcher esegue, atomicamente:
 - crea la sessione tmux con il nome canonico (`SCOUT-2`, `ANALISTA-1`, …)
