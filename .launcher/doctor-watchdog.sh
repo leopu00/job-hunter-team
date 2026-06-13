@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# doctor-watchdog.sh — loop infinito che spawna un Dottore ogni 30 min.
-# Pensato per girare in una sessione tmux dedicata `DOCTOR-WATCHDOG`.
+# doctor-watchdog.sh — loop che spawna il Dottore (2×/finestra) e il
+# Mantenitore (🦺 1x/giorno). Gira in una sessione tmux dedicata `DOCTOR-WATCHDOG`.
 #
 # Avvio (una volta sola):
 #   tmux new-session -d -s DOCTOR-WATCHDOG \
@@ -27,6 +27,7 @@ POLL_SEC="${DOCTOR_WATCHDOG_POLL:-300}"               # ricontrolla ogni 5 min
 OFF_RECHECK_SEC="${DOCTOR_WATCHDOG_OFF_RECHECK:-900}" # fuori finestra ogni 15 min
 FALLBACK_SEC="${DOCTOR_WATCHDOG_FALLBACK:-21600}"     # 24/7 senza finestra: ~ogni 6h
 SPAWNER="/app/.launcher/spawn-doctor.sh"
+MAINT_SPAWNER="/app/.launcher/spawn-maintainer.sh"   # 🦺 Mantenitore (1x/giorno)
 SCHED="/app/shared/skills/doctor_schedule.py"
 # On-demand: i coordinatori (Capitano/Assistente/Sentinella/Mentor) hanno la
 # skill `spawn-doctor` per invocare lo spawner fuori dagli slot programmati.
@@ -42,7 +43,7 @@ WEEKLY_HALT_FLAG="$JHT_HOME/.weekly-halt.flag"
 halt_log_tick=0
 offhours_log_tick=0
 
-log "watchdog starting · scheduling 2×/finestra (+30min, metà) · poll=${POLL_SEC}s · sched=$SCHED"
+log "watchdog starting · Dottore 2×/finestra (+30min, metà) + Mantenitore 1x/giorno · poll=${POLL_SEC}s · sched=$SCHED"
 
 last_fallback=0
 while true; do
@@ -59,6 +60,25 @@ while true; do
   if [ "$halt_log_tick" -gt 0 ]; then
     log "halt flag rimosso — riprendo scheduling dottore"
     halt_log_tick=0
+  fi
+
+  # 🦺 Slot MANTENITORE — cadenza GIORNALIERA indipendente dal Dottore (redesign
+  # 2026-06-13). check-maintainer ritorna MAINT solo 1x/giorno ed entro working
+  # hours (gestisce lui il gate); marchiamo solo su spawn riuscito → ritenta al
+  # prossimo poll se fallisce. Stesso halt-gate del Dottore (sopra).
+  mslot=$(python3 "$SCHED" check-maintainer 2>/dev/null) || mslot=WAIT
+  if [ "$mslot" = "MAINT" ]; then
+    if [ ! -f "$MAINT_SPAWNER" ]; then
+      log "ERROR: spawner mantenitore non trovato a $MAINT_SPAWNER"
+    else
+      mout=$(bash "$MAINT_SPAWNER" 2>&1) && mrc=0 || mrc=$?
+      if [ "$mrc" -eq 0 ]; then
+        log "spawn mantenitore ok: $mout"
+        python3 "$SCHED" mark-maintainer 2>/dev/null || true
+      else
+        log "spawn mantenitore FAILED rc=$mrc: $mout"
+      fi
+    fi
   fi
 
   # Decisione di scheduling: doctor_schedule.py gestisce GIA' il gate
