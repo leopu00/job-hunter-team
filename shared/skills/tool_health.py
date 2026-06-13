@@ -58,9 +58,17 @@ def check_chromium_libs():
     richiede root. Assenza di libatk → il browser NON parte (exit 127)."""
     if not shutil.which("ldconfig"):
         return "UNKNOWN", "ldconfig assente, impossibile verificare le lib"
-    rc, out = _run(["ldconfig", "-p"], timeout=10)
-    if rc != 0:
-        return "UNKNOWN", "ldconfig rc=%d" % rc
+    # NB: NON passare per _run() — tronca agli ultimi 600 char e `ldconfig -p`
+    # elenca centinaia di lib ordinate: libatk/libnss3/libgbm/libasound stanno
+    # in testa all'alfabeto e venivano tagliate via → falsi "mancanti" anche a
+    # lib installate. Qui leggiamo l'output COMPLETO.
+    try:
+        p = subprocess.run(["ldconfig", "-p"], capture_output=True, text=True, timeout=10)
+    except (subprocess.TimeoutExpired, OSError, ValueError) as e:
+        return "UNKNOWN", "ldconfig non eseguibile: %s" % e
+    if p.returncode != 0:
+        return "UNKNOWN", "ldconfig rc=%d" % p.returncode
+    out = p.stdout + p.stderr
     missing = [lib for lib in ("libatk-1.0", "libnss3", "libgbm", "libasound") if lib not in out]
     if missing:
         return "BROKEN", "lib di sistema mancanti: %s (browser non parte)" % ", ".join(missing)
