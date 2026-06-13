@@ -1243,6 +1243,12 @@ def main():
                             f" BURN-MODE proj_final={weekly_pace['projected_final_pct']}%"
                             f" spreco={weekly_pace['wasted_pct']}%"
                         )
+                    # burst_transient (P3 fix-batch): SOPRA-PACE che sta SVANENDO
+                    # (rate recente << media 2h). Esposto perche' la Sentinella
+                    # (S-07) NON deve frenare duro su un burst gia' finito →
+                    # ripresa controllata invece di freeze.
+                    if weekly_pace.get("burst_transient"):
+                        weekly_pace_field += " burst_transient=true"
                 # TOOLS-HEALTH (dev2): segnale strutturato sui tool mission-critical.
                 # Il maintainer-sweep scrive logs/tools-health.json (output di
                 # tool_health.py); qui lo LEGGIAMO e segnaliamo SOLO se qualcosa è
@@ -1257,11 +1263,21 @@ def main():
                             tools_health_field = " TOOLS-HEALTH[BROKEN:" + ",".join(th["broken"]) + "]"
                 except (OSError, ValueError):
                     pass
+                # MONTHLY-QUOTA (P5 fix-batch, dev2): tetto MENSILE Kimi (totalQuota)
+                # dal sample. Kimi-only (None su Codex) → mostrato solo se presente;
+                # alert sotto 15% perche' a esaurimento CONGELA Kimi Code finche' non
+                # si ricarica (oggi vediamo solo 5h+weekly, ciechi al mensile).
+                monthly_quota_field = ""
+                _mrp = parsed.get("monthly_remaining_pct")
+                if isinstance(_mrp, (int, float)):
+                    monthly_quota_field = f" MONTHLY-QUOTA rem={_mrp}%"
+                    if _mrp < 15:
+                        monthly_quota_field += " [ALERT<15%]"
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
                     f"status={status} reset={reset}{tgt_field}{phase_field}"
-                    f"{weekly_field}{weekly_pace_field}{tools_health_field} src=bridge."
+                    f"{weekly_field}{weekly_pace_field}{tools_health_field}{monthly_quota_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
 
