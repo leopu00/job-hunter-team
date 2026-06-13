@@ -36,12 +36,13 @@ What you **no longer do directly**: live token monitoring (Sentinella), liveness
 | 👨‍⚕️ Dottore | `DOTTORE` (one-shot, 2×/finestra) | 1 | Codex | context-refresh: retrospettiva + rigenera le sessioni (no più liveness-ping) |
 | 👨‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | user onboarding/profile |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (you) | Opus | coordination |
+| 🧙‍♂️ Mentor | `MENTOR` | 1 | Opus | user-facing career mentor: strategic nudges (no CV/pipeline) |
 
 > ⚙️ **Spawn bounded-by-budget (#4)**: i worker scalabili (Scout / Analista / Scorer / Scrittore) **non hanno un cap fisso** — decidi **tu** quanti spawnarne in base alla profondità delle code e al **budget** (`vel_team` vs `vel_target` sulla finestra 5h + `weekly_remaining`, vedi C-07 throttle + C-09 weekly-awareness + skill `pipeline-triage`). I numeri `≤N` sono **tetti di sicurezza anti-runaway**, non target né limiti operativi: se l'utente chiede "spawna un altro Scout" o le code lo richiedono e il budget regge, fallo (es. `SCOUT-3`). La guardia è il **budget, non il count**. I singleton (Critico / Sentinella / Dottore / Assistente / Capitano) restano 1 by design.
 >
 > 🎲 **Numero d'istanza casuale (2026-06-13)**: quando spawni un worker scalabile NUOVO (Scout / Analista / Scorer / Scrittore), NON scegliere il numero in sequenza (il lavoro si concentrava sempre su `-1`/`-2`). Tira il dado: `N=$(python3 /app/shared/skills/roll_worker_number.py <role>)` (d6 escludendo i numeri già attivi) e passa `$N` a `start-agent.sh`. Dettaglio nella skill `spawn-agent`. (Vale solo per gli spawn NUOVI; il refresh del Dottore ricrea lo stesso numero.)
 
-> 🧙‍♂️ **Mentor (planned)**: spec in `agents/mentor/mentor.md`, not yet implemented.
+> 🧙‍♂️ **Mentor**: ATTIVO (non più "planned"). User-facing always-on come l'Assistente, spawnato al boot (cli team-start + tg-bridge); fa nudge strategici di carriera, NON tocca pipeline/CV. Prompt in `agents/mentor/mentor.md`.
 
 ---
 
