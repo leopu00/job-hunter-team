@@ -80,10 +80,25 @@ Esiste anche `mantenitore-actions.jsonl` (log azioni, gemello di `dottore-action
    idle `skipped_parked`, nuovi `skipped_fresh`) **combacia con la spec** → NON è un gap, è il
    comportamento corretto. Il refresh è SELETTIVO (rinfresca solo i long-running che accumulano context),
    non "tutte le sessioni".
-2. **Path relativo fragile → BACKLOG (è uno sweep, non solo Sentinella).** La riga
-   `[..](../_team/team-rules.md)` è in TUTTI i prompt agente (eredità team-rules), non solo nella
-   Sentinella. Fix: `relative → assoluto` `/app/agents/_team/team-rules.md` in tutti i `.md`. Minore, non
-   a caldo.
+2. **Path relativo `../_team/team-rules.md` → BACKLOG, discrepanza VERA e fleet-wide (indagata a terra 2026-06-14).**
+   - **Confermato fleet-wide:** il link `[\`agents/_team/team-rules.md\`](../_team/team-rules.md)` con
+     istruzione *"Read them at boot"* è in TUTTI i prompt agente (analista, sentinella, …) e in TUTTE le
+     7 lingue (`.md/.it/.es/.fr/.de/.pt/.hu`). Stesso problema per `../_team/architettura.md` (in `_manual/`).
+   - **Causa-radice:** gli agenti girano in `/jht_home/agents/<role>/`; da lì `../_team/team-rules.md` →
+     `/jht_home/agents/_team/team-rules.md`. La dir `/jht_home/agents/_team/` ESISTE ma contiene **solo
+     `scout_workspace.json`** — `team-rules.md` NON è lì. `start-agent.sh` copia nella workdir runtime solo
+     *identity* (L645) e *skills* (L673-679), **non** `agents/_team/*.md`. Il file vive solo in
+     `/app/agents/_team/team-rules.md` (immagine). → il link relativo è **rotto a runtime per ogni agente**.
+   - **Impatto:** ad ogni boot/refresh ogni agente ha il link alle team-rules (T01..T13, regole fondamentali)
+     rotto. Gli LLM capaci auto-correggono al path assoluto `/app/agents/_team/team-rules.md` (come la
+     Sentinella), ma è fragile: un agente potrebbe non leggere affatto le regole.
+   - **Fix consigliato — preferire la radice (A) allo sweep (B):**
+     - **(A) launcher:** `start-agent.sh` copia anche `agents/_team/*.md` in `/jht_home/agents/_team/` →
+       UN punto, fa risolvere il path relativo per tutti gli agenti, tutte le lingue, e per ogni link `_team`
+       (incl. `architettura.md`). Preferito.
+     - **(B) sweep prompt:** `relative → assoluto` `/app/agents/_team/team-rules.md` in tutti i `.md` —
+       molti file × 7 lingue, fragile (un nuovo agente va ricordato). Fallback.
+   Minore, non a caldo (regola ferrea).
 3. **exit-4 sugli ACK al TUI busy → BACKLOG (tuning).** Il busy-aware funziona (no respawn); resta da
    valutare un retry/backoff sulla consegna verso un worker busy.
 
