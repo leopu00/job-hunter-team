@@ -21,7 +21,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
                                  ▼
                        ┌──────────────────┐
                        │ 🐳 JHT Container │
-                       │  (8 agents +     │
+                       │  (agent team +   │
                        │   📡 Bridge)     │
                        └──────────────────┘
                                  │

@@ -136,7 +136,7 @@ Open [jobhunterteam.ai](https://jobhunterteam.ai) (you're already logged in):
 
 | Page | What it shows |
 |---|---|
-| `/team` | Status of 9 agents (running/stopped) — Start/Stop team button |
+| `/team` | Status of the running agents (running/stopped) — Start/Stop team button |
 | `/team/assistente` | Chat with the Assistant (mirrored from Telegram) |
 | `/team/capitano` | Chat with the Captain |
 | `/team/sentinella` | Real-time Kimi usage chart + window budget |
@@ -361,7 +361,7 @@ future contributions (PRs welcome):
 | 4 | Hetzner provisioning step (paste IP + SSH key to copy) | `docs/guides/assets/vps-wizard-04-hetzner.png` |
 | 5 | Embedded terminal with `kimi --yolo` + device code | `docs/guides/assets/vps-wizard-05-oauth.png` |
 | 6 | "Setup completed" screen → bypass home | `docs/guides/assets/vps-wizard-06-done.png` |
-| 7 | `/team` dashboard with 9 agents running | `docs/guides/assets/vps-dashboard-team.png` |
+| 7 | `/team` dashboard with the team running | `docs/guides/assets/vps-dashboard-team.png` |
 | 8 | `/team/sentinella` chart (Kimi UsageChart) | `docs/guides/assets/vps-dashboard-sentinella.png` |
 
 When you add the images, replace the `> 📸 Missing screenshots` with

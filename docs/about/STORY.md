@@ -30,7 +30,7 @@ Two reasons, in this order:
 
 Going from "works for one person" to "works for anyone" is a different project entirely. The current public JHT has:
 
-- 🤖 **10 specialized agents** (Captain, Sentinel, Scout, Analyst, Scorer, Writer, Critic, Assistant, Dottore, Mentor) — each with its own prompt, skills, and on-demand tools
+- 🤖 **A team of specialized agents** — an always-on core (Captain, Sentinel, Assistant, Mentor), a dynamic worker pool the Captain scales 1..N (Scout, Analyst, Scorer, Writer, Critic), and scheduled one-shot agents (Dottore for agent-health, Mantenitore for infra-health) — each with its own prompt, skills, and on-demand tools
 - 🛡️ **A Bridge + Sentinel monitoring layer** that calibrates token usage to within 5–15% of the subscription window, so the team doesn't burn through your quota
 - 🌐 **A web dashboard, a Telegram bot, a CLI, and a desktop launcher** — pick the interface that fits how you work
 - 💳 **Subscription-only model** (Claude Max x20, Kimi €40, Codex ~€100) so you know the cost upfront, no per-token surprises — see [`docs/PROVIDERS.md`](PROVIDERS.md)

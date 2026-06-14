@@ -73,7 +73,7 @@ Present these 3 options with the trade-offs:
 
 | Mode | Cost | Always on | PC noise / RAM | Setup time |
 |---|---|---|---|---|
-| 🖥️ **Local PC** (this machine) | free | only when PC is on | 8 agents = ~3-4 GB RAM, fans audible | < 5 min |
+| 🖥️ **Local PC** (this machine) | free | only when PC is on | ~8 agents in parallel = ~3-4 GB RAM, fans audible | < 5 min |
 | 🏠 **Dedicated PC at home** | hardware already owned | yes (24/7) | none for you | < 5 min (same as Local) |
 | ☁️ **VPS** (Hetzner CPX22 €9.75/mo) | ~€10/mo while job-hunting | yes (24/7) | zero — runs on cloud | 15-30 min (SSH key + provisioning) |
 

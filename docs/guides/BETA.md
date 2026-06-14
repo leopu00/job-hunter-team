@@ -68,7 +68,7 @@ We will reply within a few days.
 
 Before signing up, set expectations:
 
-- ✅ The 8-agent team runs end-to-end (pipeline + Assistant)
+- ✅ The agent team runs end-to-end (pipeline + Assistant)
 - ✅ Web dashboard, CLI, Telegram, Desktop launcher all work
 - ✅ Claude Max x20 is rock-solid
 - ✅ macOS installer is signed + notarized (no Gatekeeper warning)

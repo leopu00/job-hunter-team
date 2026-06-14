@@ -44,18 +44,35 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 
 ## The Team
 
+The team has **no fixed headcount**: a stable core of always-on agents plus a **dynamic worker pool** the Captain scales from 1 to N per role based on flow rate and budget.
+
+**Always-on core**
+
 | | Agent | Role |
 |---|-------|------|
 | 👨‍✈️ | **Captain** | Coordinates the pipeline and handles anti-collision between agents |
 | 💂 | **Sentinel** | Event-driven watcher — intervenes on the Captain when usage drifts toward the window limit |
+| 👨‍💼 | **Assistant** | Platform copilot — helps the user navigate every interface |
+| 🧙‍♂️ | **Mentor** | Career coach — analyzes goals, gaps, market signals to keep your strategy aligned |
+
+**Dynamic worker pool** — the Captain spins up 1..N of each, scaling with load:
+
+| | Agent | Role |
+|---|-------|------|
 | 🕵️ | **Scout** | Searches EU and remote job boards |
 | 👨‍🔬 | **Analyst** | Verifies job descriptions, companies, and culture |
 | 👨‍💻 | **Scorer** | Assigns a 0–100 score against your profile |
 | 👨‍🏫 | **Writer** | Generates CVs and cover letters tailored to each position |
-| 👨‍⚖️ | **Critic** | Blind review in 3 mandatory rounds before submission |
-| 👨‍💼 | **Assistant** | Platform copilot — helps the user navigate every interface |
-| 🩺 | **Dottore** | One-shot health-check — auto-respawned every ~30 min, detects stuck agents and restarts them with context |
-| 🧙‍♂️ | **Mentor** | Career coach — analyzes goals, gaps, market signals to keep your strategy aligned |
+| 👨‍⚖️ | **Critic** | Blind review in 3 mandatory rounds — spawned fresh per round |
+
+**Scheduled one-shot** — self-spawn on a daily slot, run a sweep, then self-destruct:
+
+| | Agent | Role |
+|---|-------|------|
+| 🩺 | **Dottore** | Agent health — detects stuck agents and restarts them with fresh context |
+| 🦺 | **Mantenitore** | Infra health — container, VPS, dependencies, disk/RAM, mission-critical tools |
+
+> 📡 The **Bridge** (usage clock) is a process, not an AI agent — see Architecture below.
 
 ## Architecture
 
@@ -65,9 +82,9 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
                        ▼                 ▼                 ▼
                🧙‍♂️ Mentor       👨‍💼 Assistant      👨‍✈️ Captain ◀··intervene·· 💂 Sentinel ◀──notify── 📡 Bridge
                (career coach)    (platform copilot)        │       (event-driven)         (usage clock)
-                [planned]                                  │
-                                                           │              🩺 Dottore ··health-check·· ▲
-                                                           │              (one-shot, ~30 min loop)    │
+                                                           │      🩺 Dottore ····agent-health··· ▲
+                                                           │      🦺 Mantenitore ··infra-health·· │
+                                                           │      (one-shot, daily sweep)         │
                                                            ▼
                                        ┌──────┬──────┬──────┐
                                        ▼      ▼      ▼      ▼
@@ -77,7 +94,7 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
                                                                    (3 blind rounds)
 ```
 
-The user has three entry points: **🧙‍♂️ Mentor** for career advice (planned), **👨‍💼 Assistant** as a copilot to navigate the platform, and **👨‍✈️ Captain** to drive the actual job-hunting pipeline. The Captain dispatches orders to the four pipeline agents (Scout, Analyst, Scorer, Writer) and tracks state. Data flows left-to-right: Scout finds positions, Analyst verifies them, Scorer ranks them, Writer produces CV + cover letter. Writer bounces with Critic through 3 blind review rounds; Critic isn't commanded by the Captain — it's a peer reviewer triggered only by Writer, by design, to keep the review independent. Once approved, Writer emits the application as "Ready to submit".
+The user has three entry points: **🧙‍♂️ Mentor** for career advice, **👨‍💼 Assistant** as a copilot to navigate the platform, and **👨‍✈️ Captain** to drive the actual job-hunting pipeline. The Captain dispatches orders to the dynamic worker pool (Scout, Analyst, Scorer, Writer — 1..N instances each, scaled to load) and tracks state. Data flows left-to-right: Scout finds positions, Analyst verifies them, Scorer ranks them, Writer produces CV + cover letter. Writer bounces with Critic through 3 blind review rounds; Critic isn't commanded by the Captain — it's a peer reviewer triggered only by Writer, by design, to keep the review independent. Once approved, Writer emits the application as "Ready to submit".
 
 Token usage is governed by a two-component monitoring stack: **📡 Bridge** runs on a fixed clock, fetches usage samples from the provider, and notifies the **💂 Sentinel**; the Sentinel stays event-driven and intervenes on the Captain only when the projection drifts toward the window limit. See [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
 
@@ -149,9 +166,9 @@ See [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md)
 
 ## Status
 
-- ✅ **Done** — 10-agent team (Captain + Sentinel + 4-stage pipeline + Critic + Assistant + Dottore + Mentor), monitored by 📡 Bridge; CLI (34 commands) + TUI + web dashboard (115 pages wired to real Supabase data); desktop installers (`.dmg` / `.exe` / `.AppImage` / `.deb`); i18n base (it/en); 150+ test files; tested end-to-end on Claude Max x20, Kimi €40 (75h + 10-day beta), and Codex ~€100
+- ✅ **Done** — agent team (always-on core: Captain · Sentinel · Assistant · Mentor + dynamic worker pool: Scout · Analyst · Scorer · Writer · Critic + one-shot: Dottore · Mantenitore), monitored by 📡 Bridge; CLI (37 commands) + TUI + web dashboard (44 pages + 135 API routes wired to real Supabase data); desktop installers (`.dmg` / `.exe` / `.AppImage` / `.deb`); i18n base (it/en); 150+ test files; tested end-to-end on Claude Max x20, Kimi €40 (75h + 10-day beta), and Codex ~€100
 - 🔨 **In progress** — Desktop installer onboarding polish · Sentinel token-consumption optimization
-- ⏭️ **Next** — 🧙‍♂️ Mentor agent (career coach) · Code signing + auto-update for desktop · Full i18n coverage (ES/DE/FR/PT)
+- ⏭️ **Next** — Code signing + auto-update for desktop · Full i18n coverage (ES/DE/FR/PT)
 
 Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 

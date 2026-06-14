@@ -18,7 +18,7 @@ The user picks **one** location. The choice is **exclusive**: only one container
 
 The same Docker image runs in all three modes — only the host machine changes:
 
-1. **🖥️ Local PC** — on the user's everyday machine. Available today. *Not recommended for daily-use machines* (8 agents in parallel = high resource usage + the PC must stay on). Acceptable for very powerful desktops or for night-only runs.
+1. **🖥️ Local PC** — on the user's everyday machine. Available today. *Not recommended for daily-use machines* (~8 agents in parallel = high resource usage + the PC must stay on). Acceptable for very powerful desktops or for night-only runs.
 2. **🏠 Dedicated computer** — a second PC at home (old laptop, mini-PC, spare desktop), plugged in and left on for weeks/months. Same setup as Local, just different hardware. Planned UX in PHASE 2 (LAN discovery + SSH-based setup).
 3. **☁️ Self-hosted VPS** ⭐ **target setup** — a small server rented from a cloud provider (Hetzner ~€4.5/mo, AWS, GCP). Cheaper than buying a dedicated PC and rented only during the active job-hunt months. The team runs in the user's own VPS — there is no managed JHT service. Planned UX in PHASE 3 (one-click provisioning).
 

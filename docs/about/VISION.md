@@ -26,13 +26,15 @@ The goal is the *opposite* of "enterprise productivity software". Closer to: a D
 | 👨‍🏫 | **Writer** | The craftsman. Cares about the comma. |
 | 👨‍⚖️ | **Critic** | The blind reviewer. Doesn't know who wrote what. |
 | 👨‍💼 | **Assistant** | The copilot. Walks you through the platform. |
-| 🧙‍♂️ | **Mentor** *(future)* | The career coach. Sees the bigger picture. |
+| 🧙‍♂️ | **Mentor** | The career coach. Sees the bigger picture. |
+| 🩺 | **Dottore** | The medic. One-shot rounds — revives stuck agents. |
+| 🦺 | **Mantenitore** | The janitor. Keeps the infra (container, tools, disk) healthy. |
 
 This is not flavor text. The system prompts of each agent are written in voice. The UI reflects that voice. Telegram messages reflect that voice.
 
-### 🧙‍♂️ The Mentor — the missing piece
+### 🧙‍♂️ The Mentor — the meta-layer
 
-Among the planned agents, **the Mentor is the most important one we haven't built yet.**
+For a long time the Mentor was the most important agent we **hadn't** built. It is now **active** — always-on, user-facing, spawned at team boot.
 
 The other agents execute a pipeline — find, verify, score, write, review. The Mentor looks *outside* the pipeline:
 
