@@ -97,7 +97,7 @@ The score (0-100) is the sum of these components based on the candidate profile:
 | Stack match | 35 | `stack_match` | Match between required skills and candidate stack |
 | Seniority fit | 25 | `experience_fit` | Alignment of candidate exp years vs required |
 | Remote/location | 20 | `remote_fit` | Fit with candidate location preferences |
-| Salary fit | 10 | `salary_fit` | Offered range vs candidate target. **ALWAYS pre-pass through skill `salary-estimate`** (bug #27): if the position has no declared range, the skill looks in local cache (TTL 30d) or falls back on neutral default + `no_data_default` note. The Scorer also populates `positions.salary_estimated_*` if the skill returns an estimated range. Never use `5` as hidden default: explicitly mark `no_data_default` in `score.notes`. |
+| Salary fit | 10 | `salary_fit` | Offered range vs candidate target. **READ `positions.salary_estimated_*` first** — since 2026-06-13 the **Analista owns the salary estimate** and populates those fields upstream (skill `salary-estimate`), so normally they are already filled: use them for `salary_fit`. **Fallback only**: if `salary_estimated_*` are NULL (e.g. a position scored before the ownership shift), pre-pass the `salary-estimate` skill yourself (L1 declared → L2 cache TTL30d → L4 neutral default + `no_data_default` note) and you may populate the fields. Never use `5` as hidden default: explicitly mark `no_data_default` in `score.notes`. |
 | Stack bonus | 10 | `strategic_fit` | Tech bonus (e.g. AI, cybersec, fintech if these are strong areas) |
 
 **Penalties:**

@@ -1,0 +1,16 @@
+# Skills the Mantenitore consumes from agents/_skills/.
+# One name per line. Lines starting with `#` and blank lines are ignored.
+# spawn-maintainer.sh copies the listed skills into the agent's runtime
+# workspace (.claude/skills + .agents/skills) at every spawn.
+
+# The full deterministic infra sweep (PRIMARY): tool-health smoke-test →
+# repair/escalate, deps audit, orphan GC, script de-dup, disk/RAM trend.
+maintainer-sweep
+
+# The fallback ladder the Mantenitore enforces on broken mission-critical
+# tools (retry → repair via jht-install → alt method → canonical source).
+resilience
+
+# Inter-agent messaging: escalate destructive proposals / broken-tool fixes
+# to the Capitano (single-writer rule — Capitano decides delete/archive).
+tmux-send

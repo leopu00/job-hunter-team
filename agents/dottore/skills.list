@@ -9,10 +9,14 @@ tmux-send
 # DB access (recover task context before respawning a crashed agent)
 db-query
 
-# Routine round
+# Routine round (PRIMARY, 2026-06-13 redesign): context-refresh per session
+# (age → capture → analytics → parked-check → interview → synthesis → recreate+resume)
+session-refresh
+
+# Zombie rescue (SECONDARY, only when spawned on-demand for a suspected-dead agent)
 liveness-check
 
-# Pre-emptive context freshness (once/24h, narrow time window)
+# Pre-emptive context freshness — superseded by the scheduled session-refresh rounds
 daily-restart-wave
 
 # Maintenance (end-of-round only, conditional)
