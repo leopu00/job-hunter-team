@@ -150,12 +150,14 @@ A position still open and complete: just `--last-open-check now`. Never write th
 These feed the dashboard **category chart + map + salary view** (which ALREADY exist — we feed them, we don't build them). A `checked` position missing them = incomplete analysis (like a missing RULE-04 field). Produced in the **pipeline pass** (cheap), NOT on-demand. The EXPENSIVE precise variants (office geocoding, precise salary) are on-demand (RULE-14).
 
 **RULE-14 — TASK-TYPE QUEUES + day-start priority (2026-06-14).** Beyond the `new` pipeline (RULE-13 baseline), you serve request-driven work via per-task flags on `positions` (pattern of `write_requested`/`geocode_requested`, populated by the scheduler or the user):
-- **`next-for-recheck`** (`recheck_requested` / stale `last_open_check`) → re-verify liveness (RULE-12 + `recheck-liveness`).
-- **`next-for-categorize`** (`categorize_requested` / `role_family IS NULL` backlog) → assign `role_family` from the taxonomy. Skip rows already `Other`-reviewed (no infinite re-queue).
-- **`next-for-salary-precise`** (`salary_precise_requested`, **user-driven**) → the PRECISE pass: deep company research + market data + **country taxes → NET**; write the richer salary fields. Expensive → only on request.
-- **`geocode_requested`** → office `lat/lon` (on-demand, MAIN LOOP step 6).
+- **`next-for-recheck`** (NATURAL query: stale `last_open_check`) → re-verify liveness (RULE-12 + `recheck-liveness`). **Done** = `--last-open-check now` (advances the cadence, leaves the queue).
+- **`next-for-categorize`** (NATURAL query: `role_family IS NULL` backlog) → assign `role_family` from the taxonomy. **Done** = setting `role_family` (even `Other`) → the row is no longer NULL so it **auto-exits** the queue (loop-guard free, no re-queue; no separate flag).
+- **`next-for-salary-precise`** (FLAG `salary_precise_requested=1`, **user-driven**, syncs cloud↔VPS) → the PRECISE pass: deep company research + market data + **country taxes → NET**; write the result into `salary_precise` and clear the request flag. Expensive → only on request.
+- **`geocode_requested=1`** (FLAG) → office `lat/lon` (on-demand, MAIN LOOP step 6).
 
-**Day-start priority** (a team that already worked): **(1)** recheck expired positions, then **(2)** categorize the uncategorized backlog — then the on-demand queues. **Specialization**: the Capitano may assign each Analista a task-type (one rechecks, one categorizes, one does salary-precise) — serve your assigned queue; the RULE-13 baseline on `new` is what EVERY Analista does. Mark done when finished so the queue drains.
+NB only `salary_precise_requested` + `geocode_requested` are real flag columns (user-driven, synced); recheck/categorize are derived queries (no flag) — "done" is implicit in writing the field.
+
+**Day-start priority** (a team that already worked): **(1)** recheck expired positions, then **(2)** categorize the uncategorized backlog — then the on-demand queues. **Specialization**: the Capitano may assign each Analista a task-type (one rechecks, one categorizes, one does salary-precise) — serve your assigned queue; the RULE-13 baseline on `new` is what EVERY Analista does.
 
 ---
 
