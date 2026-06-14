@@ -808,6 +808,9 @@ async function handlePush(options) {
         'work_mode', 'work_country', 'work_country_code',
         'location_notes', 'is_multi_location',
         'office_lat', 'office_lon', 'office_address', 'office_geocoded', 'office_verified',
+        // Expiry/lifecycle (mig 038): recheck-liveness scrive is_open/expires_at/
+        // last_open_check → dashboard "Scadute/Archivio". Colonne cloud presenti (mig038 applicata 2026-06-14).
+        'expires_at', 'is_open', 'last_open_check',
       ], cursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
         'position_id', 'total_score', 'experience_fit', 'salary_fit',
