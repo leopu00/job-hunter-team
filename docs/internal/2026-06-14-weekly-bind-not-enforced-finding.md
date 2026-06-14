@@ -3,7 +3,7 @@
 **Data:** 2026-06-14 (notte) · **Trovato osservando:** betaB (Kimi) post-fix, pipeline piena · **Confermato design:** dev1 · **Lane fix:** pacing-bridge (dev3) + S-06 (dev2) + C-09 (dev1) · **Regola:** OSSERVAZIONE, NON corretto a caldo.
 
 ## TL;DR
-Il redesign usage-monitoring ha sistemato la **visibilità** del burn weekly (la metrica `weekly_pace` vede SOPRA-PACE + `early_lockout`), ma **NON il controllo**: il `vel_target` operativo del pacing-bridge resta ancorato all'**arco 5h** (~20%/h), e il **weekly sostenibile** (~1.41%/h) è solo *mostrato*, non BINDA mai il target. Risultato: throttle sano ma verso il **setpoint sbagliato** → il team burna il weekly a ~6%/h e va in **early-lockout ~12h prima del reset**. È il **pezzo di CONTROLLO dello smoking-gun originale** rimasto indietro.
+Il redesign usage-monitoring ha sistemato la **visibilità** del burn weekly (la metrica `weekly_pace` vede SOPRA-PACE + `early_lockout`). Il **controllo** è parziale: il `vel_target` del pacing-bridge usa il weekly sostenibile come target **quando il weekly è il vincolo dominante** (5h-arc freddo) — vedi Aggiornamento #22 — **ma quando il 5h-arc è CALDO e il weekly è anche stretto, prioritizza il 5h-arc** (~20%/h, più largo) invece del `min(5h, weekly)`. Risultato in quel caso-conflitto: throttle sano ma verso il **setpoint sbagliato** → over-burn weekly. È il **pezzo di CONTROLLO dello smoking-gun originale**: non un'assenza totale di weekly-binding, ma una **risoluzione del conflitto** sbagliata fra i due vincoli quando entrambi sono attivi.
 
 ## Evidenza (betaB, 01:39 Rome)
 - Trend weekly misurato: **71→77% in ~1h = ~6%/h sostenuto** (non un burst; pipeline SCOUT-4+ANALISTA-4+SCORER-2 attiva).
@@ -33,6 +33,12 @@ La previsione iniziale ("lockout ~05:25-08:00 a ~6%/h costante") era **troppo ag
 - **L'architettura del finding TIENE** (il `vel_target` mira al 5h-arc, il weekly-bind non è enforced; il fix 3-pezzi resta valido e prioritario) **ma la severità è molto più bassa**: lockout realistico semmai ~12:00+ Rome, o forse nullo prima del reset 17:11. Il sistema ha **backstop indiretti**; il fix migliora la *smoothness/ottimalità* (atterrare al reset), non previene una catastrofe imminente.
 - Nota collaterale: l'oscillazione bang-bang (throttle pesante → idle trough) è coerente coi finding di *coarseness* del controllo (lag 2h, step di throttle discreti) — stesso impianto di [P3 burst_transient](2026-06-14-burst-transient-dead-letter-finding.md).
 - **P4 win osservato:** al tick 00:15 il bridge ha flaggato il Mantenitore (27% burn, cadenza~0) con la logica nuova `VERIFICA → se ancora stuck KILL (C-12)` — comportamento voluto.
+
+## Aggiornamento osservativo #22 (~10:21 Rome) — il bridge USA il weekly quando domina
+Osservato a weekly 94% con 5h-arc freddo (idle): il `[BRIDGE PACING]` riporta `MARGINE -22%/h, burn ANALISTA-4 0.36%/h sotto sustainable 0.67%/h → riduco throttle a 180s per avvicinarmi al target weekly senza sprecare`. Quindi:
+- Il bridge **NON è cieco al weekly**: quando il weekly è il vincolo dominante (5h-arc freddo), il `vel_target`/MARGINE è calcolato sul **weekly sostenibile** (qui 0.67%/h) e il bridge nudga il burn *verso* quel target (use-it-or-lose-it: non sprecare il residuo).
+- Il finding va **riformulato**: non "il weekly non binda mai", ma "**la risoluzione del conflitto** fra 5h-arc e weekly è sbagliata quando ENTRAMBI sono attivi (5h-arc caldo + weekly stretto, caso #16): vince il 5h-arc (più largo) invece del `min`".
+- **Severità ancora più bassa**: appena il 5h-arc si raffredda (#19→22) il bridge passa a targettare il weekly → **convergenza/soft-landing** spontanea (weekly fermo a 94%, atterraggio morbido verso il reset, forse senza lockout). Il fix `min(5h, weekly)` serve a rendere robusto il caso-conflitto, non a introdurre un binding che a tratti già esiste.
 
 ## Relazione con gli altri finding pacing
 - [P3 burst_transient dead-letter](2026-06-14-burst-transient-dead-letter-finding.md): lato SOTTO/recovery, finestra di detection.
