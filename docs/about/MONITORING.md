@@ -47,7 +47,7 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 
 ### 🟣 Claude Pro €20 — not viable
 
-A single agent working at modest pace burns through this tier well before the window resets. Not enough headroom for an 8-agent team. Re-test deferred until Sentinel token consumption drops.
+A single agent working at modest pace burns through this tier well before the window resets. Not enough headroom for the full team running in parallel. Re-test deferred until Sentinel token consumption drops.
 
 ## ⚠️ Known issues
 

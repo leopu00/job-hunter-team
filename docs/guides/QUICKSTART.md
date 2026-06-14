@@ -8,7 +8,7 @@ Get the team running in **about 10 minutes**, depending on the path you pick.
 
 ## ⚠️ Before you start
 
-JHT runs ~**400M tokens/month** (10 agents working in parallel, around the clock). To make this affordable, **JHT runs on LLM subscriptions, not pay-per-use API keys** — see [`docs/PROVIDERS.md`](../about/PROVIDERS.md) and [ADR-0004](../adr/0004-subscription-only-no-api-keys.md).
+JHT runs ~**400M tokens/month** (many agents working in parallel, around the clock). To make this affordable, **JHT runs on LLM subscriptions, not pay-per-use API keys** — see [`docs/PROVIDERS.md`](../about/PROVIDERS.md) and [ADR-0004](../adr/0004-subscription-only-no-api-keys.md).
 
 You need an active subscription to **one** of:
 
@@ -164,7 +164,7 @@ Whichever path you took:
 
 ---
 
-## 🤖 The team (8 agents + monitoring)
+## 🤖 The team (fixed core + dynamic worker pool)
 
 | | Agent | Role |
 |---|---|---|
