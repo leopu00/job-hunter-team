@@ -48,6 +48,11 @@ interface PositionIn {
   is_multi_location?: number | boolean | null;
   office_geocoded?: number | boolean | null;
   office_verified?: number | boolean | null;
+  // Expiry/lifecycle (mig 038): is_open BOOLEAN (SQLite 0|1, default TRUE),
+  // expires_at DATE, last_open_check TIMESTAMPTZ. Alimenta "Scadute/Archivio".
+  expires_at?: string | null;
+  is_open?: number | boolean | null;
+  last_open_check?: string | null;
   salary_declared_min?: number | null;
   salary_declared_max?: number | null;
   salary_declared_currency?: string | null;
@@ -376,6 +381,15 @@ export async function POST(req: NextRequest) {
             : typeof p.office_verified === "boolean"
               ? p.office_verified
               : p.office_verified === 1,
+        // Expiry/lifecycle (mig 038). is_open default TRUE (NOT NULL DEFAULT TRUE).
+        expires_at: p.expires_at ?? null,
+        is_open:
+          p.is_open == null
+            ? true
+            : typeof p.is_open === "boolean"
+              ? p.is_open
+              : p.is_open === 1,
+        last_open_check: p.last_open_check ?? null,
         salary_declared_min: p.salary_declared_min ?? null,
         salary_declared_max: p.salary_declared_max ?? null,
         salary_declared_currency: p.salary_declared_currency ?? null,
