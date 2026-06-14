@@ -646,6 +646,29 @@ if [ -f "$TEMPLATE" ] && { [ ! -f "$IDENTITY_DEST" ] || ! cmp -s "$TEMPLATE" "$I
   echo "  → $IDENTITY_FILE sincronizzato da template ($(basename "$TEMPLATE"))"
 fi
 
+# ── Team docs (team-rules, architettura) — fix-radice-A 2026-06-14 ───────────
+# I prompt agente linkano [..](../_team/team-rules.md): path RELATIVO alla
+# workdir runtime ($JHT_AGENTS_DIR/<role>/). Senza copiare i doc team-wide
+# accanto alle workdir quel link è rotto a runtime (il file vive solo in
+# /app/agents/_team/). Copiandoli in $JHT_AGENTS_DIR/_team/ il "../_team/..."
+# risolve per OGNI agente, e la tassonomia role_family team-wide diventa
+# raggiungibile. Locale-aware come le skill (variante <name>.<locale>.md → <name>.md).
+TEAM_SRC="$REPO_ROOT/agents/_team"
+TEAM_DEST="$JHT_AGENTS_DIR/_team"
+if [ -d "$TEAM_SRC" ]; then
+  mkdir -p "$TEAM_DEST"
+  for f in "$TEAM_SRC"/*.md; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    case "$base" in *.??.md) continue;; esac   # salta le varianti localizzate
+    cp "$f" "$TEAM_DEST/$base"
+    localized="$TEAM_SRC/${base%.md}.$USER_LOCALE.md"
+    if [ "$USER_LOCALE" != "en" ] && [ -f "$localized" ]; then
+      cp "$localized" "$TEAM_DEST/$base"
+    fi
+  done
+fi
+
 # ── Skill distribution ──────────────────────────────────────────────────────
 # Per-agent skill discovery: each agent only sees the skills it actually
 # uses. The shared library lives at agents/_skills/; the manifest at
