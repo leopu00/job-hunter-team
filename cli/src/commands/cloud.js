@@ -788,7 +788,7 @@ async function handlePush(options) {
       positions = readSqliteTableDelta(db, 'positions', [
         'id', 'title', 'company', 'url', 'location', 'remote_type', 'status',
         'notes', 'source', 'jd_text', 'requirements', 'found_by', 'found_at',
-        'deadline', 'last_checked',
+        'deadline', 'last_checked', 'last_actor',
         'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
         'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
         'salary_estimated_source',
@@ -799,6 +799,21 @@ async function handlePush(options) {
         // l'utente seleziona via UI quali posizioni geocodare con
         // precisione ufficio; il flag viaggia a cloud per UI cross-device.
         'geocode_requested', 'geocode_requested_at',
+        // Salary-precise on-demand (V9/mig040, dse3): flag user-driven
+        // (cross-device: push qui + pull desired-state) + risultato testuale.
+        'salary_precise_requested', 'salary_precise_requested_at', 'salary_precise',
+        // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
+        // dall'analista, alimentano i grafici categoria/mappa della dashboard
+        // (che ESISTE gia' — va solo alimentata). Erano OMESSI dal push →
+        // restavano stranded sulla VPS, con le colonne cloud gia' presenti.
+        'role_family',
+        'loc_city', 'loc_region', 'loc_country', 'loc_country_code', 'loc_continent',
+        'work_mode', 'work_country', 'work_country_code',
+        'location_notes', 'is_multi_location',
+        'office_lat', 'office_lon', 'office_address', 'office_geocoded', 'office_verified',
+        // Expiry/lifecycle (mig 038): recheck-liveness scrive is_open/expires_at/
+        // last_open_check → dashboard "Scadute/Archivio". Colonne cloud presenti (mig038 applicata 2026-06-14).
+        'expires_at', 'is_open', 'last_open_check',
       ], cursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
         'position_id', 'total_score', 'experience_fit', 'salary_fit',
@@ -1307,7 +1322,9 @@ async function handlePullDesiredState(options = {}) {
          SET write_requested = ?,
              write_requested_at = ?,
              geocode_requested = ?,
-             geocode_requested_at = ?
+             geocode_requested_at = ?,
+             salary_precise_requested = ?,
+             salary_precise_requested_at = ?
        WHERE id = ?
     `);
     const checkStmt = db.prepare('SELECT 1 FROM positions WHERE id = ?');
@@ -1320,7 +1337,9 @@ async function handlePullDesiredState(options = {}) {
       const writeAt = p.write_requested_at || null;
       const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
       const geoAt = p.geocode_requested_at || null;
-      stmt.run(writeFlag, writeAt, geoFlag, geoAt, legacyId);
+      const spFlag = p.salary_precise_requested === true || p.salary_precise_requested === 1 ? 1 : 0;
+      const spAt = p.salary_precise_requested_at || null;
+      stmt.run(writeFlag, writeAt, geoFlag, geoAt, spFlag, spAt, legacyId);
       updated++;
     }
     db.close();
