@@ -788,7 +788,7 @@ async function handlePush(options) {
       positions = readSqliteTableDelta(db, 'positions', [
         'id', 'title', 'company', 'url', 'location', 'remote_type', 'status',
         'notes', 'source', 'jd_text', 'requirements', 'found_by', 'found_at',
-        'deadline', 'last_checked',
+        'deadline', 'last_checked', 'last_actor',
         'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
         'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
         'salary_estimated_source',
