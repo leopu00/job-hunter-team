@@ -1,4 +1,4 @@
-# Fix-batch 2026-06-13 — recheck quality · scout-resume · pacing · non_producing · totalQuota
+# 🔧 Fix-batch 2026-06-13 — recheck quality · scout-resume · pacing · non_producing · totalQuota
 
 **Stato:** approvato dall'utente ("implementa tutto"), distribuito a 3. Design-doc condiviso;
 ognuno implementa la propria fetta sul proprio branch, si cross-mergia, l'utente fa il merge in

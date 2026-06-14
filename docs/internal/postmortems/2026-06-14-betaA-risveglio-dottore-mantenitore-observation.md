@@ -1,4 +1,4 @@
-# Osservazione — Risveglio betaA 2026-06-14 (Dottore + Mantenitore in azione)
+# 👀 Osservazione — Risveglio betaA 2026-06-14 (Dottore + Mantenitore in azione)
 
 **Tipo:** osservazione read-only (regola ferrea: si annota, non si corregge a caldo).
 **Contesto:** primo risveglio mattutino di betaA (VPS Codex `jht-vps`) DOPO il redeploy del fix-batch

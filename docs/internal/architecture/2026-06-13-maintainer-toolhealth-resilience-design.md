@@ -1,10 +1,10 @@
-# Mantenitore 🦺 + Tool-Health + Resilience — Design unificato
+# 🦺 Mantenitore 🦺 + Tool-Health + Resilience — Design unificato
 
 **Data:** 2026-06-13 · **Autori:** dev1, dev2, dev3 (panel) · **Stato:** approvato dall'utente, in implementazione
 
 > Design-doc condiviso. Ognuno riempie/espande la propria sezione di implementazione sul proprio
 > branch dev-N; il consolidamento in master lo fa l'utente. Gemello, per struttura, del
-> `USAGE-MONITORING-REDESIGN-design.md`.
+> `usage-monitoring-redesign-design.md`.
 
 ## 1. Contesto e trigger
 
@@ -93,5 +93,5 @@ Sibling del Dottore, scope **INFRA**:
 ## 7. Riferimenti
 - `project_linkedin_libatk_image_bug.md` (la scoperta)
 - Fix LinkedIn: dev1@9db78625d (Dockerfile `--with-deps`) + dev1@1fd41d0a6 (prompt RULE-03 careers canonica)
-- `USAGE-MONITORING-REDESIGN-design.md` (template + single-writer rule)
+- `usage-monitoring-redesign-design.md` (template + single-writer rule)
 - Chat coordinamento `coordination/chat.jsonl` (panel 2026-06-13)
