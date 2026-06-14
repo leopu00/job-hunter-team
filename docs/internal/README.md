@@ -39,6 +39,11 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 | [`2026-05-25-work-hours-design.md`](architecture/2026-05-25-work-hours-design.md) | Design working hours team |
 | [`2026-05-20-world-globe-feature.md`](architecture/2026-05-20-world-globe-feature.md) | Spec mappamondo dashboard (coordinate ufficio) |
 | [`2026-05-19-dashboard-routing-cases.md`](architecture/2026-05-19-dashboard-routing-cases.md) | Casi routing dashboard Next.js |
+| [`2026-06-13-maintainer-toolhealth-resilience-design.md`](architecture/2026-06-13-maintainer-toolhealth-resilience-design.md) | Mantenitore + tool-health + resilience (design unificato) |
+| [`2026-06-13-fix-batch-recheck-pacing-design.md`](architecture/2026-06-13-fix-batch-recheck-pacing-design.md) | Fix-batch: recheck quality, scout-resume, pacing, totalQuota |
+| [`analista-expansion-design.md`](architecture/analista-expansion-design.md) | Espansione ruolo Analista |
+| [`dottore-redesign-design.md`](architecture/dottore-redesign-design.md) | Ridisegno ruolo Dottore (context-refresh) |
+| [`usage-monitoring-redesign-design.md`](architecture/usage-monitoring-redesign-design.md) | Ridisegno monitoraggio usage (Sentinella ↔ Capitano) |
 
 ## 📉 postmortems/
 
@@ -46,6 +51,11 @@ Note datate su incidenti specifici, diagnosi, snapshot. **Non aggiornate dopo la
 
 | Data | File | Topic |
 |---|---|---|
+| 2026-06-14 | [`2026-06-14-betaA-risveglio-dottore-mantenitore-observation.md`](postmortems/2026-06-14-betaA-risveglio-dottore-mantenitore-observation.md) | Osservazione risveglio betaA (Dottore + Mantenitore in azione) |
+| 2026-06-14 | [`2026-06-14-betaB-team-panoramica.md`](postmortems/2026-06-14-betaB-team-panoramica.md) | Panoramica team betaB (Kimi) |
+| 2026-06-14 | [`2026-06-14-weekly-bind-not-enforced-finding.md`](postmortems/2026-06-14-weekly-bind-not-enforced-finding.md) | Weekly-bind non enforced: pacing su arco-5h, mai weekly |
+| 2026-06-14 | [`2026-06-14-burst-transient-dead-letter-finding.md`](postmortems/2026-06-14-burst-transient-dead-letter-finding.md) | burst_transient ridimensionato (NON dead-letter) |
+| 2026-06-13 | [`2026-06-13-osservazione-no-intervento.md`](postmortems/2026-06-13-osservazione-no-intervento.md) | Regola ferrea: mai intervenire in team in osservazione |
 | 2026-06-11 | [`2026-06-11-overspawn-rootcause.md`](postmortems/2026-06-11-overspawn-rootcause.md) | Root cause over-spawn istanze |
 | 2026-06-07 | [`2026-06-07-capitano-runaway-scaling-postmortem.md`](postmortems/2026-06-07-capitano-runaway-scaling-postmortem.md) | Runaway scaling Capitano (5 Scout / 4 Analisti) |
 | 2026-06-04 | [`2026-06-04-scout-geo-concentration.md`](postmortems/2026-06-04-scout-geo-concentration.md) | Over-concentrazione geografica Scout |
@@ -63,6 +73,7 @@ Simulazioni, studi comparativi, playbook e case study.
 
 | Data | File | Topic |
 |---|---|---|
+| 2026-06-13 | [`2026-06-13-kimi-quota-tiers-discovery.md`](experiments/2026-06-13-kimi-quota-tiers-discovery.md) | Kimi: i 3 tier di quota + il buco `totalQuota` |
 | 2026-05-25 | [`2026-05-25-sim-5-office-geocoding-mario-rossi-report.md`](experiments/2026-05-25-sim-5-office-geocoding-mario-rossi-report.md) | Sim 5 — office geocoding (profilo Mario Rossi) |
 | 2026-05-25 | [`2026-05-25-sim-4-office-geocoding-report.md`](experiments/2026-05-25-sim-4-office-geocoding-report.md) | Sim 4 — office geocoding |
 | 2026-05-25 | [`2026-05-25-case-studies-page-handoff.md`](experiments/2026-05-25-case-studies-page-handoff.md) | Handoff pagina case studies |
@@ -81,6 +92,7 @@ Piani tecnici, backlog, tracker. Aggiornati finché aperti.
 
 | File | Topic |
 |---|---|
+| [`2026-06-14-piano-dse3-parteB.md`](roadmap/2026-06-14-piano-dse3-parteB.md) | Piano dse3 Parte B (pacing + request-tables + recheck) |
 | [`2026-06-06-idle-enrichment-roadmap.md`](roadmap/2026-06-06-idle-enrichment-roadmap.md) | Roadmap arricchimento durante idle |
 | [`2026-05-23-position-classifier-llm-roadmap.md`](roadmap/2026-05-23-position-classifier-llm-roadmap.md) | Roadmap classificatore posizioni LLM |
 | [`2026-05-20-supabase-perf-backlog.md`](roadmap/2026-05-20-supabase-perf-backlog.md) | Backlog performance Supabase |

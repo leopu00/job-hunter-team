@@ -1,4 +1,4 @@
-# Kimi Code — i tre tier di quota e il buco `totalQuota` (scoperta 2026-06-13)
+# 🔍 Kimi Code — i tre tier di quota e il buco `totalQuota` (scoperta 2026-06-13)
 
 **Contesto:** deploy del team su VPS betaB (Kimi, `203.0.113.20`) con l'immagine
 del redesign usage-monitoring. Indagando perché il driver WEEKLY-PACE non sembrava
