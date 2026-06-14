@@ -27,8 +27,11 @@ Scheletro DB che fa agire gli analisti in base a tabelle di richiesta, sul model
 Rendere SISTEMATICO il recheck di liveness delle posizioni scadute (oggi ad-hoc), priorità inizio-giornata.
 
 - `recheck_liveness.py` (già fatto, tiered curl→browser→OPEN_UNVERIFIED) **cablato** al flusso `recheck_requested`.
-- **Scheduler** che popola `recheck_requested` per posizioni con `last_open_check` stale (> N giorni) → l'analista esegue `recheck_liveness` → aggiorna `is_open`/`status`.
+- **Scheduler/populator** (mia infra) che riempie le code automaticamente:
+  - `recheck_requested` per posizioni con `last_open_check` stale (> N giorni) → l'analista esegue `recheck_liveness` → aggiorna `is_open`/`status`;
+  - `categorize_requested` per posizioni con `role_family IS NULL` (backlog non-categorizzato) → così la specializzazione di dev1 ha sempre lavoro in coda senza intervento manuale.
 - Così il recheck-scadute è guidato dalle tabelle, non improvvisato; il Capitano può alzarne la priorità a inizio giornata (B5).
+- **Sinergia col Blocco-2 di dev1** (metadati mandatori sui `new`): ogni nuova posizione prende `role_family` inline → `categorize_requested` è essenzialmente **backfill** degli esistenti + rete di sicurezza; il backlog si esaurisce e poi la coda resta per lo più vuota (comportamento voluto).
 - NB metodo: su betaB non ho potuto confermare l'esecuzione `recheck_liveness` dai log (TUI Kimi non grep-abile); la verifica del metodo passa per betaA (dev2) — il cablaggio request-table rende comunque tracciabile il recheck (riga `done` + result).
 
 ## Dipendenze & sequencing
