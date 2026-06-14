@@ -1121,6 +1121,19 @@ def main():
             usage = entry.get("usage")
             proj = entry.get("projection")
             status = entry.get("status")
+            # A2 lockout-resilience (2026-06-14): quando il weekly è ESAURITO
+            # (remaining<=0) il team è hard-locked (403 access_terminated). Lo status
+            # calcolato sull'arco-5h resta SOTTOUTILIZZO ("lavora di più") → il Capitano
+            # continua a spawnare worker → 403-spam multi-agente. Forziamo status=LOCKED
+            # così la Sentinella/Capitano FERMANO gli spawn = spenta la SORGENTE dei 403.
+            # Resta il check-cardine "weekly<100%" (sotto, fuori da ogni gate) per il
+            # risveglio automatico al reset: LOCKED non significa MAI congelare il polling.
+            wk_remaining_now = entry.get("weekly_remaining_pct")
+            weekly_locked = (
+                isinstance(wk_remaining_now, (int, float)) and wk_remaining_now <= 0
+            )
+            if weekly_locked:
+                status = "LOCKED"
             # Reset 5h: come per il weekly, preferiamo DATA+ORARIO da reset_at_unix
             # (HH:MM nudo è ambiguo a cavallo di mezzanotte); fallback all'HH:MM.
             reset_unix = entry.get("reset_at_unix")
@@ -1159,10 +1172,20 @@ def main():
             # Senza questo, a weekly 92% on-pace la Sentinella non veniva MAI
             # svegliata e il freno non scattava (status SOTTOUTILIZZO decorativo).
             weekly_binding = bool(entry.get("weekly_binding"))
-            effective_on_pace = on_pace and not weekly_binding
-            _advance_tick_phase(state, effective_on_pace)
             now_ts = time.time()
-            should_notify = _should_notify_sentinella(effective_on_pace, state, now_ts)
+            if weekly_locked:
+                # A2 lockout-resilience: a weekly esaurito NON ha senso pacare-veloce
+                # né spammare la Sentinella. Cadenza CALMA (effective_on_pace=True) + UN
+                # solo avviso sulla TRANSIZIONE a LOCKED (layer-2: 1 notice, poi silenzio).
+                # Il polling continua comunque (calm, mai stop) → il check weekly<100% al
+                # prossimo tick fa ripartire il team da solo al reset (resurrection-check).
+                effective_on_pace = True
+                _advance_tick_phase(state, effective_on_pace)
+                should_notify = state.get("last_status") != "LOCKED"
+            else:
+                effective_on_pace = on_pace and not weekly_binding
+                _advance_tick_phase(state, effective_on_pace)
+                should_notify = _should_notify_sentinella(effective_on_pace, state, now_ts)
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""
