@@ -40,6 +40,16 @@ Osservato a weekly 94% con 5h-arc freddo (idle): il `[BRIDGE PACING]` riporta `M
 - Il finding va **riformulato**: non "il weekly non binda mai", ma "**la risoluzione del conflitto** fra 5h-arc e weekly è sbagliata quando ENTRAMBI sono attivi (5h-arc caldo + weekly stretto, caso #16): vince il 5h-arc (più largo) invece del `min`".
 - **Severità ancora più bassa**: appena il 5h-arc si raffredda (#19→22) il bridge passa a targettare il weekly → **convergenza/soft-landing** spontanea (weekly fermo a 94%, atterraggio morbido verso il reset, forse senza lockout). Il fix `min(5h, weekly)` serve a rendere robusto il caso-conflitto, non a introdurre un binding che a tratti già esiste.
 
+## Aggiornamento #26 (~12:51 Rome) — il LOCKOUT si materializza + duale difensivo mancante
+Contro la previsione di soft-landing: il team ha ripreso l'enrichment (geocoding companies) e ha bruciato l'ultimo 5% → **weekly=100% alle ~12:22 Rome**, **early-lockout ~5h prima del reset 17:11**. Osservato AL lockout:
+- **403-spam multi-agente:** CAPITANO ~6, SENTINELLA ~4, ANALISTA-4 ~2, SCORER-2 ~2 righe `403 access_terminated "You've reached your usage limit for this billing cycle"`. Nessun back-off: gli agenti continuano a chiamare l'API e a incassare 403, presumibilmente fino al reset 17:11 (~5h di churn).
+- **Status CIECO al lockout (smoking-gun nella forma più pura):** `[BRIDGE TICK] usage=39% proj=43% status=SOTTOUTILIZZO ... weekly=100% weekly_remaining=0.0%`. Il bridge LEGGE `weekly=100%/remaining=0%` ma il campo `status` resta **SOTTOUTILIZZO** perché calcolato sull'arco-5h (39%) → segnale "lavora di più" mentre il team è hard-locked. Nessun watchdog che mappi `weekly_remaining=0% → hard-sleep fino al reset`.
+
+**Duale difensivo del finding:** oltre al preventivo (target = `min(5h, weekly)` per non arrivare al 100% troppo presto), serve anche il **difensivo**:
+1. quando `weekly_remaining==0%` (o si vedono 403 `access_terminated`), il `status` deve diventare **LOCKED/ESAURITO**, non SOTTOUTILIZZO;
+2. la Sentinella/watchdog deve mettere il team in **hard-sleep fino al `weekly_reset`** (stop chiamate API) invece di lasciarlo spammare 403.
+Stesso root dei punti sopra: status/controllo guidati dall'arco-5h, ciechi al weekly esausto. Anche questo è backlog (NON corretto a caldo): il team recupera da solo al reset.
+
 ## Relazione con gli altri finding pacing
 - [P3 burst_transient dead-letter](2026-06-14-burst-transient-dead-letter-finding.md): lato SOTTO/recovery, finestra di detection.
 - coordinator-burn-no-op: il bridge non sa frenare quando il top-consumer è un coordinatore.
