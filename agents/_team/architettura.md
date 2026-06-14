@@ -388,11 +388,28 @@ Out of the pipeline. Runs continuously alongside it.
             ▼             ▼             ▼
        👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
-       copilot                       (planned)
+       copilot                       (always-on)
 ```
 
 - **👨‍💼 Assistant** — `tier: smart`. Translates non-technical user requests into orders for the Captain. Hides implementation details from the user-facing chat.
-- **🧙‍♂️ Mentor** — `tier: expert`, planned. Future career coach: analyzes profile/results gap, produces an action plan. Folder: `agents/mentor/`.
+- **🧙‍♂️ Mentor** — `tier: expert`, **active** (basics shipped, optimization ongoing). Career coach: analyzes the profile/results gap, produces an action plan, strategic check-ins. User-facing always-on, spawned at boot. Folder: `agents/mentor/`.
+
+---
+
+## 🩺 Side-channel — Health & maintenance
+
+Out of the pipeline. **One-shot scheduled** agents: the watchdog spawns each on its daily slot; they run a sweep, report to the Captain, then self-destruct.
+
+```
+   ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
+   │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
+   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   └────────────┘              └──────────────┘          └────────────┘
+                                  one-shot → self-destruct
+```
+
+- **🩺 Dottore** — **agent health**. Periodic context-refresh + retrospective: detects stuck/zombie agent sessions and restarts them with fresh context (long-lived threads burning context cause silent throughput collapse). Folder: `agents/dottore/`.
+- **🦺 Mantenitore** — **infra health**. Daily maintenance sweep on the container/VPS: mission-critical tool smoke-test (browser/Playwright canary), dependency standardization (`jht-install`), disk/RAM trend, orphan GC. A broken crucial tool is a P1. Folder: `agents/mantenitore/`.
 
 ---
 

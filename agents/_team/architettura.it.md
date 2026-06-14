@@ -389,11 +389,28 @@ Fuori dalla pipeline. Gira in continuazione parallelamente ad essa.
             ▼             ▼             ▼
        👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
-       copilot                       (planned)
+       copilot                       (always-on)
 ```
 
 - **👨‍💼 Assistant** — `tier: smart`. Traduce le richieste non tecniche dell'utente in ordini per il Captain. Nasconde i dettagli implementativi dalla chat rivolta all'utente.
-- **🧙‍♂️ Mentor** — `tier: expert`, pianificato. Futuro career coach: analizza il gap profilo/risultati, produce un piano d'azione. Cartella: `agents/mentor/`.
+- **🧙‍♂️ Mentor** — `tier: expert`, **attivo** (basi implementate, ottimizzazione in corso). Career coach: analizza il gap profilo/risultati, produce un piano d'azione, check-in strategici. User-facing always-on, spawnato al boot. Cartella: `agents/mentor/`.
+
+---
+
+## 🩺 Side-channel — Salute & manutenzione
+
+Fuori dalla pipeline. Agenti **one-shot schedulati**: il watchdog ne crea uno per ogni slot giornaliero; eseguono una sweep, riportano al Captain, poi si auto-distruggono.
+
+```
+   ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
+   │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
+   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   └────────────┘              └──────────────┘          └────────────┘
+                                  one-shot → self-destruct
+```
+
+- **🩺 Dottore** — **salute degli agenti**. Refresh periodico del contesto + retrospettiva: rileva sessioni di agenti bloccate/zombie e le riavvia con contesto fresco (thread di lunga durata che bruciano contesto causano un collasso silenzioso del throughput). Cartella: `agents/dottore/`.
+- **🦺 Mantenitore** — **salute dell'infrastruttura**. Sweep di manutenzione giornaliera sul container/VPS: smoke-test dei tool mission-critical (canary browser/Playwright), standardizzazione delle dipendenze (`jht-install`), trend disco/RAM, GC degli orfani. Un tool cruciale rotto è un P1. Cartella: `agents/mantenitore/`.
 
 ---
 

@@ -176,7 +176,9 @@ Whichever path you took:
 | 👨‍🏫 | **Writer** | Generates CVs and cover letters tailored to each position |
 | 👨‍⚖️ | **Critic** | 3-round blind review before submission |
 | 👨‍💼 | **Assistant** | Platform copilot — helps you navigate every interface |
-| 🧙‍♂️ | **Mentor** *(planned)* | Career coach — analyzes goals/gaps/market signals |
+| 🧙‍♂️ | **Mentor** | Career coach — analyzes goals/gaps/market signals |
+| 🩺 | **Dottore** *(one-shot)* | Agent-health — restarts stuck agents with fresh context |
+| 🦺 | **Mantenitore** *(one-shot)* | Infra-health — container, deps, disk, mission-critical tools |
 | 📡 | **Bridge** *(infrastructure, not LLM)* | Polls provider usage on a fixed clock, notifies the Sentinel |
 
 For the full architecture diagram → see the README.
