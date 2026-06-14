@@ -27,6 +27,27 @@ interface PositionIn {
   // in SQLite positions.last_actor; senza questo campo l'Analista resta generico
   // sul cloud. Mig Supabase 039.
   last_actor?: string | null;
+  // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
+  // dall'analista, alimentano i grafici categoria/mappa della dashboard
+  // (che esiste già). Colonne cloud già presenti — nessuna migration.
+  role_family?: string | null;
+  loc_city?: string | null;
+  loc_region?: string | null;
+  loc_country?: string | null;
+  loc_country_code?: string | null;
+  loc_continent?: string | null;
+  work_mode?: string | null;
+  work_country?: string | null;
+  work_country_code?: string | null;
+  location_notes?: string | null;
+  office_address?: string | null;
+  office_lat?: number | null;
+  office_lon?: number | null;
+  // SQLite invia 0|1 integer; Supabase ha BOOLEAN — coerce sul payload
+  // (stesso pattern di write_requested/geocode_requested).
+  is_multi_location?: number | boolean | null;
+  office_geocoded?: number | boolean | null;
+  office_verified?: number | boolean | null;
   salary_declared_min?: number | null;
   salary_declared_max?: number | null;
   salary_declared_currency?: string | null;
@@ -321,6 +342,40 @@ export async function POST(req: NextRequest) {
         deadline: p.deadline ?? null,
         last_checked: p.last_checked ?? null,
         last_actor: p.last_actor ?? null,
+        // Metadati location/categoria (Parte B sync) — alimentano i grafici
+        // categoria/mappa della dashboard. Text/numeric: passthrough.
+        role_family: p.role_family ?? null,
+        loc_city: p.loc_city ?? null,
+        loc_region: p.loc_region ?? null,
+        loc_country: p.loc_country ?? null,
+        loc_country_code: p.loc_country_code ?? null,
+        loc_continent: p.loc_continent ?? null,
+        work_mode: p.work_mode ?? null,
+        work_country: p.work_country ?? null,
+        work_country_code: p.work_country_code ?? null,
+        location_notes: p.location_notes ?? null,
+        office_address: p.office_address ?? null,
+        office_lat: p.office_lat ?? null,
+        office_lon: p.office_lon ?? null,
+        // boolean: SQLite 0|1 → BOOLEAN (default false se assente), come write_requested.
+        is_multi_location:
+          p.is_multi_location == null
+            ? false
+            : typeof p.is_multi_location === "boolean"
+              ? p.is_multi_location
+              : p.is_multi_location === 1,
+        office_geocoded:
+          p.office_geocoded == null
+            ? false
+            : typeof p.office_geocoded === "boolean"
+              ? p.office_geocoded
+              : p.office_geocoded === 1,
+        office_verified:
+          p.office_verified == null
+            ? false
+            : typeof p.office_verified === "boolean"
+              ? p.office_verified
+              : p.office_verified === 1,
         salary_declared_min: p.salary_declared_min ?? null,
         salary_declared_max: p.salary_declared_max ?? null,
         salary_declared_currency: p.salary_declared_currency ?? null,
