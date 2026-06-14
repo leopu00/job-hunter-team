@@ -72,20 +72,30 @@ Esiste anche `mantenitore-actions.jsonl` (log azioni, gemello di `dottore-action
   osservato ieri (#4/#11). `BURN-MODE` flag reale = 0 (caso-controllo Codex tenuto). weekly 37%/63%,
   reset 18/06 (intatto dopo la notte di pausa).
 
-## ⚠️ Finding / decisioni aperte
+## ⚠️ Finding — esiti (verdetti dev1, verificati a terra)
 
-1. **Dottore: refresh selettivo vs "tutte le sessioni".** Oggi il Dottore ricrea solo i long-running con
-   context (Capitano+Sentinella), salta i fresh, parcheggia i singleton idle (Assistente, Mentor restano
-   della sessione di ieri sera). L'interview è solo sui `recreated`. **Da allineare col design voluto:**
-   se l'intenzione è interview+capture+restart per *tutti* gli agenti, manca per fresh/parked; se invece
-   il refresh selettivo è quello giusto (più efficiente, rinfresca solo chi accumula context), il
-   comportamento è corretto e va solo documentato come tale.
-2. **Path relativo fragile.** `../_team/team-rules.md` era irraggiungibile al boot della Sentinella
-   (corretto a runtime in `/app/agents/_team/team-rules.md`). Vale un fix nel prompt/skill verso il path
-   assoluto, per evitare il ri-presentarsi ad ogni boot/refresh.
-3. **exit-4 sugli ACK al TUI busy.** Il busy-aware funziona (no respawn), ma il Capitano riporta "molti
-   ACK exit 4": da osservare se i messaggi persi verso un worker busy creano inefficienza di
-   coordinamento (eventuale retry/backoff sulla consegna).
+1. **Dottore: refresh selettivo → CHIUSO, working as designed.** La skill `session-refresh` lo specifica:
+   skip `<40min` (`skipped_fresh`), skip PARKED, user-facing per ultimi e con cura, mai gestito da
+   Dottore/watchdog. Quanto osservato (Capitano+Sentinella refreshati con interview, Assistente/Mentor
+   idle `skipped_parked`, nuovi `skipped_fresh`) **combacia con la spec** → NON è un gap, è il
+   comportamento corretto. Il refresh è SELETTIVO (rinfresca solo i long-running che accumulano context),
+   non "tutte le sessioni".
+2. **Path relativo fragile → BACKLOG (è uno sweep, non solo Sentinella).** La riga
+   `[..](../_team/team-rules.md)` è in TUTTI i prompt agente (eredità team-rules), non solo nella
+   Sentinella. Fix: `relative → assoluto` `/app/agents/_team/team-rules.md` in tutti i `.md`. Minore, non
+   a caldo.
+3. **exit-4 sugli ACK al TUI busy → BACKLOG (tuning).** Il busy-aware funziona (no respawn); resta da
+   valutare un retry/backoff sulla consegna verso un worker busy.
+
+### Backlog tuning consolidato (da dev1, schedulazione all'utente — niente a runtime, regola ferrea)
+
+| Prio | Voce |
+|---|---|
+| **ALTA** | weekly-bind preventiva `min(5h, weekly)` + difensiva LOCKED-status / hard-sleep |
+| — | P3-v2: `burst_transient` ancorato al flat-segment (finestra 0.5h troppo larga) |
+| — | coordinator-burn no-op (top-burn = Capitano → throttle inerte) |
+| — | sweep path-assoluto `team-rules.md` in tutti i prompt (finding #2) |
+| — | exit-4 retry/backoff consegna ACK (finding #3) |
 
 ## Fonti (sulla VPS, read-only)
 
