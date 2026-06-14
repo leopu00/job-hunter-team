@@ -68,7 +68,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 🟢 Status: IN PROGRESS — ~88%
 ━━━━━━━━━━━━━━━━━━━░░ 
 
-✅ Next.js 16 app, ~76 page.tsx routes (App Router)
+✅ Next.js 16 app, ~44 page.tsx routes + 135 API route.ts (App Router)
 ✅ Google + GitHub OAuth
 ✅ DB schema (migrations 001–011, RLS, onboarding-state)
 ✅ Vercel CI/CD pipeline + jobhunterteam.ai live
