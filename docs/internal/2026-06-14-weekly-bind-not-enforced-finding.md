@@ -45,9 +45,13 @@ Contro la previsione di soft-landing: il team ha ripreso l'enrichment (geocoding
 - **403-spam multi-agente:** CAPITANO ~6, SENTINELLA ~4, ANALISTA-4 ~2, SCORER-2 ~2 righe `403 access_terminated "You've reached your usage limit for this billing cycle"`. Nessun back-off: gli agenti continuano a chiamare l'API e a incassare 403, presumibilmente fino al reset 17:11 (~5h di churn).
 - **Status CIECO al lockout (smoking-gun nella forma più pura):** `[BRIDGE TICK] usage=39% proj=43% status=SOTTOUTILIZZO ... weekly=100% weekly_remaining=0.0%`. Il bridge LEGGE `weekly=100%/remaining=0%` ma il campo `status` resta **SOTTOUTILIZZO** perché calcolato sull'arco-5h (39%) → segnale "lavora di più" mentre il team è hard-locked. Nessun watchdog che mappi `weekly_remaining=0% → hard-sleep fino al reset`.
 
-**Duale difensivo del finding:** oltre al preventivo (target = `min(5h, weekly)` per non arrivare al 100% troppo presto), serve anche il **difensivo**:
-1. quando `weekly_remaining==0%` (o si vedono 403 `access_terminated`), il `status` deve diventare **LOCKED/ESAURITO**, non SOTTOUTILIZZO;
-2. la Sentinella/watchdog deve mettere il team in **hard-sleep fino al `weekly_reset`** (stop chiamate API) invece di lasciarlo spammare 403.
+**Duale difensivo del finding:** oltre al preventivo (target = `min(5h, weekly)` per non arrivare al 100% troppo presto), serve anche il **difensivo**. Linea decisa dall'utente (14/06): **RALLENTARE, mai CONGELARE** (una pausa totale rischia il non-risveglio al reset = danno grave). Tre punti:
+1. **Radice:** quando `weekly_remaining==0%` (o 403 `access_terminated`), il `status` deve diventare **LOCKED/ESAURITO**, non SOTTOUTILIZZO → il Capitano smette di spawnare worker = si spegne la SORGENTE dei 403 (non solo il sintomo).
+2. **Strato-1 (chiamate usage):** a weekly=100% → RALLENTA il polling, ma mantieni un **heartbeat ancorato al `weekly_reset` noto** → risveglio garantito. Mai stop cieco.
+3. **Strato-2 (notifiche a Sentinella/Capitano):** a 100% → UN solo avviso "LOCKED fino a HH:MM" + un check garantito vicino al reset; non azzerare (se il check-100% si rompe, il team rischia di non svegliarsi mai). Orari come riferimento dinamico, non hard-coded.
+
+> Nota: una prima bozza di questo doc proponeva "hard-sleep fino al reset" — **corretto**: l'utente ha giustamente escluso la pausa totale per il rischio non-risveglio.
+
 Stesso root dei punti sopra: status/controllo guidati dall'arco-5h, ciechi al weekly esausto. Anche questo è backlog (NON corretto a caldo): il team recupera da solo al reset.
 
 ## Relazione con gli altri finding pacing
