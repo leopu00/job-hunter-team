@@ -174,7 +174,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [docs/security/README.md](./security/README.md) | Indice security review pre-launch | — | 2026-04-28 | ✅ |
-| [docs/security/01-pre-launch-review.md](./security/01-pre-launch-review.md) | Review pre-launch (33/35 task chiusi) | — | 2026-04-30 | ✅ |
+| [docs/security/01-pre-launch-review.md](./security/01-pre-launch-review.md) | Review pre-launch (31/34 task chiusi) | — | 2026-04-30 | ✅ |
 | [docs/security/02-openclaw-comparison.md](./security/02-openclaw-comparison.md) | Confronto sicurezza con OpenClaw | — | 2026-04-30 | ✅ |
 | [docs/security/03-implementation-tradeoffs.md](./security/03-implementation-tradeoffs.md) | Tradeoff implementativi delle mitigation | — | 2026-04-30 | ✅ |
 | [docs/security/04-threat-model.md](./security/04-threat-model.md) | Threat model completo del progetto | — | 2026-04-30 | ✅ |

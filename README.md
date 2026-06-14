@@ -115,7 +115,7 @@ Three subscriptions cover the ~400M tokens/month requirement:
 | | Provider | Plan | Cost/mo | Status |
 |---|---|---|---|---|
 | 🟠 | **Claude** | Max x20 | ~€200 | ✅ Production-ready, best precision |
-| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Tested — 131 positions in 48h beta run |
+| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Tested — 206 positions in a 35h beta run |
 | 🌙 | **Kimi** | Pro | ~€40 | ✅ Tested — mass-market tier (75h + 10-day runs) |
 
 ---
