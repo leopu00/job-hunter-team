@@ -1,9 +1,15 @@
-# 🔬 burst_transient (P3) è un dead-letter — finding + redesign (backlog, prio BASSA)
+# 🔬 burst_transient (P3) — finding RIDIMENSIONATO: scatta tardi, NON è un dead-letter (backlog prio BASSA)
 
-**Data:** 2026-06-14 · **Trovato osservando:** barto (Kimi) post-deploy fix-batch, confermato cross-VPS su Andras (Codex) · **Owner fetta:** `shared/skills/weekly_pace.py` (dev3) · **Consumer prompt:** Sentinella S-07 / Capitano C-09 (invariati) · **Regola:** finding annotato in OSSERVAZIONE, NON corretto a caldo.
+**Data:** 2026-06-14 · **Trovato osservando:** barto (Kimi) post-deploy fix-batch · **Owner fetta:** `shared/skills/weekly_pace.py` (dev3) · **Consumer prompt:** Sentinella S-07 / Capitano C-09 (invariati) · **Regola:** finding annotato in OSSERVAZIONE, NON corretto a caldo.
 
-## TL;DR
-Il flag `burst_transient` introdotto col fix-batch (P3) **non scatta mai** nella pratica. Su Andras: **0 occorrenze su 22 tick SOPRA-PACE** (dev2), nonostante oscillazioni ampie (1.5x↔2.77x). Su barto: non scatta nemmeno nello scenario-target (burst appena finito + team flat). La causa è **strutturale**, non una soglia da ritoccare. Il redesign converge (dev3+dev1) su un **flat-segment detector**.
+## ⚠️ CORREZIONE 14/06 16:00 — il "dead-letter" era SBAGLIATO
+La tesi originale ("non scatta MAI / dead-letter") è stata **falsificata dai dati di dev2**: su Andras `burst_transient` è scattato **6 volte oggi** (pattern batch-then-idle: produzione ferma da ~34min, media 2h ancora gonfia → rate recente ~0 → flag ON, che segnala il residuo e **impedisce l'over-brake** — quindi FUNZIONA). Riconciliazione:
+- La mia osservazione barto (`False` al #13) era un **momento di transizione**: team flat solo ~20min, la coda del burst (68→70) ancora DENTRO la finestra recent 0.5h → `vel_recent` alto → non scattava. Il vecchio "0/22 tick" era campionamento durante **produzione attiva**, non flat-post-burst.
+- **Finding corretto:** `burst_transient` NON è un dead-letter, FUNZIONA nel pattern batch-then-idle. Il residuo reale è solo che **scatta TARDI**: resta `False` per i primi ~30min di flat post-burst (la finestra 0.5h cattura ancora la coda), proprio l'istante di transizione in cui servirebbe di più.
+- **Severità: da "difetto strutturale" a "tuning di timing minore".** Il flat-segment redesign sotto avrebbe valore solo per ANTICIPARE il timing (farlo scattare al transizione, non dopo >0.5h flat), NON per "farlo scattare" — già scatta. Da valutare se vale la pena.
+
+## TL;DR (storico, vedi correzione sopra)
+La tesi iniziale era che il flag `burst_transient` (P3) **non scattasse mai** (barto `False` allo scenario-target; "0/22 tick" su Andras). **Si è rivelato un over-claim**: scatta quando il team è flat >0.5h post-burst (6× su Andras 14/06). Resta valido solo il sotto-problema di *timing* (non scatta nel primo ~30min di transizione), per cui il flat-segment detector sotto è un miglioramento opzionale, non un fix necessario.
 
 ## Cosa doveva fare P3
 Il `vel_weekly` è una media a finestra 2h: un picco PASSATO la tiene gonfia per ~2h anche se il rate ora è ~0 → Capitano/Sentinella **over-brake** (freeze/no-spawn) su un segnale stale = idle-tail. `burst_transient` doveva segnalare "il burst sta svanendo, recupero rapido OK" per evitare il freno duro.
