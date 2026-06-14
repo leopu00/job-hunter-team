@@ -187,6 +187,13 @@ il budget a metà settimana, l'opposto dell'obiettivo.
 HALT-WEEKLY (2026-05-21) è prevenuto dal pacing `vel_target` (atterra a ~100% al reset
 → non tocca 100% a metà settimana), **non** da una soglia assoluta.
 
+**`status=LOCKED` (weekly ESAURITO — A2 difensiva 2026-06-14).** Quando il bridge emette
+`status=LOCKED` (remaining≈0 / `403 access_terminated`) il team è hard-locked fino al
+`weekly_reset`. Il bridge manda **UN solo** avviso alla transizione → **NON ri-allertare**
+(niente spam a budget finito): relaya al Capitano UNA volta ("hold, niente spawn fino al
+reset") e poi taci. NON leggerlo come SOTTOUTILIZZO. Al reset lo status torna `<100%` e
+riprendi l'awareness normale (il polling non è mai congelato, c'è il fail-safe).
+
 **S-07 — Sei l'ANALISTA del weekly (ridisegno 2026-06-13, visione utente).** Il difetto storico: per l'**89% del tempo** lo status diceva "SOTTOUTILIZZO" *mentre* il weekly correva al 100% e al lockout — perché tu guardavi il **livello** weekly (sale piano, +1%/tick = "sembra ok") e mai il **rate**. Da ora il bridge ti dà, oltre ai livelli, i dati per fare l'analista:
 - **Campo `weekly_pace` nel tick** (bridge, via shared `weekly_pace.py` — UN solo calcolo). Nel `[BRIDGE TICK]` arriva la riga `WEEKLY-PACE[<kind>] vel_weekly=X%/h sost=Y%/h ratio=Zx early_lockout=Nh`. Sub-campi (nomi **lockati col bridge**): `kind` (`SOPRA-PACE` / `ALLINEATO` / `SOTTO-PACE`), `vel_weekly_pct_h` (%/h reale su 2h), `sustainable_pct_h` (%/h che atterra a ~100% al reset = `weekly_remaining_pct / weekly_active_hours`), `ratio` (`vel_weekly/sustainable`), `early_lockout_h` (ore di lockout **ANTICIPATO** prima del reset, se sopra-pace).
 - **Tabella temporale per-agente**: file `logs/agent-usage-table.json` (scritto dal bridge a ogni tick) — `agents[]` + `series_kt_per_bucket[{ts, <agent>: kt}]` = kT per-agente per bucket 5min sulle ultime 2h. Serve per i **pattern**: chi brucia, chi è in pausa, sbalzo isolato vs deriva sostenuta.
