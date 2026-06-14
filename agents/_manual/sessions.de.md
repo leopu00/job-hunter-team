@@ -30,13 +30,15 @@ Das JHT-Team laeuft als eine Reihe von tmux-Sitzungen innerhalb des Containers. 
 | `CRITICO` | Eigenstaendiger Kritiker | Legacy — in V5 wird der Kritiker dynamisch von den Schreibern erzeugt (siehe unten) |
 | `SENTINELLA` | Verbrauchs-Watchdog | Edge-triggered, kommuniziert nur mit `CAPITANO` |
 | `ASSISTENTE` | Benutzer-Copilot | Uebersetzt Benutzeranfragen in Befehle |
-| `MENTOR` | Career-Coach-Agent | Geplant, derzeit ein Placeholder |
+| `MENTOR` | Career-Coach-Agent | Aktiv — benutzerorientiert always-on, beim Boot erzeugt (Grundlagen ausgeliefert, Optimierung laufend) |
 
 ### Dynamische Sitzungen
 
 | Sitzung | Erzeugt von | Lebensdauer |
 |---|---|---|
 | `CRITICO-S<N>` | `SCRITTORE-<N>` (ein neuer Kritiker pro Reviewrunde) | Eine Reviewanfrage → eine Sitzung, vom Schreiber sofort danach beendet |
+| `DOTTORE` | watchdog (taeglicher Slot) | Einmalig — Agenten-Gesundheits-Sweep, meldet an `CAPITANO`, zerstoert sich dann selbst |
+| `MANTENITORE` | watchdog (taeglicher Slot) | Einmalig — Infra-Gesundheits-Sweep, meldet an `CAPITANO`, zerstoert sich dann selbst |
 
 Der Schreiber erstellt `CRITICO-S<N>` mit derselben Nummer (`SCRITTORE-1` → `CRITICO-S1`), fuehrt das Review durch und dann `tmux kill-session`. Fuer **jede** der 3 Reviewrunden wird eine neue Kritiker-Instanz erzeugt — niemals wiederverwendet.
 
