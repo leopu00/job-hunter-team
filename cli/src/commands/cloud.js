@@ -799,6 +799,9 @@ async function handlePush(options) {
         // l'utente seleziona via UI quali posizioni geocodare con
         // precisione ufficio; il flag viaggia a cloud per UI cross-device.
         'geocode_requested', 'geocode_requested_at',
+        // Salary-precise on-demand (V9/mig040, dse3): flag user-driven
+        // (cross-device: push qui + pull desired-state) + risultato testuale.
+        'salary_precise_requested', 'salary_precise_requested_at', 'salary_precise',
         // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
         // dall'analista, alimentano i grafici categoria/mappa della dashboard
         // (che ESISTE gia' — va solo alimentata). Erano OMESSI dal push →
@@ -1319,7 +1322,9 @@ async function handlePullDesiredState(options = {}) {
          SET write_requested = ?,
              write_requested_at = ?,
              geocode_requested = ?,
-             geocode_requested_at = ?
+             geocode_requested_at = ?,
+             salary_precise_requested = ?,
+             salary_precise_requested_at = ?
        WHERE id = ?
     `);
     const checkStmt = db.prepare('SELECT 1 FROM positions WHERE id = ?');
@@ -1332,7 +1337,9 @@ async function handlePullDesiredState(options = {}) {
       const writeAt = p.write_requested_at || null;
       const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
       const geoAt = p.geocode_requested_at || null;
-      stmt.run(writeFlag, writeAt, geoFlag, geoAt, legacyId);
+      const spFlag = p.salary_precise_requested === true || p.salary_precise_requested === 1 ? 1 : 0;
+      const spAt = p.salary_precise_requested_at || null;
+      stmt.run(writeFlag, writeAt, geoFlag, geoAt, spFlag, spAt, legacyId);
       updated++;
     }
     db.close();
