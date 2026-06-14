@@ -13,6 +13,9 @@ Uso:
   python3 db_query.py next-for-scrittore    # posizioni scored >= 50 senza application
   python3 db_query.py next-for-critico      # application in review senza verdict
   python3 db_query.py next-for-geocoding    # posizioni con geocoding richiesto dall'utente
+  python3 db_query.py next-for-recheck      # posizioni da ri-verificare liveness (scadute)
+  python3 db_query.py next-for-categorize   # posizioni senza role_family (backlog categoria)
+  python3 db_query.py next-for-salary-precise # posizioni con salary preciso richiesto dall'utente
   python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
                                             # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
@@ -393,6 +396,35 @@ def next_for_role(role):
         """).fetchall()
         label = "Posizioni da ri-verificare (richeck giornaliero apertura + backfill)"
 
+    elif role == 'categorize':
+        # Parte B (2026-06-14): coda SISTEMATICA di categorizzazione. Posizioni
+        # gia' analizzate ma SENZA role_family (backlog non-categorizzato): l'analista
+        # mappa la JD a UNA role_family della tassonomia chiusa (_team/role-taxonomy.md).
+        # Query naturale = loop-guard gratis: appena categorizzata (anche a 'other'),
+        # role_family IS NOT NULL → esce dalla coda da sola, niente re-accodo infinito.
+        rows = conn.execute("""
+            SELECT p.id, p.title, p.company, p.location
+            FROM positions p
+            WHERE p.role_family IS NULL
+              AND p.status IN ('checked','scored','writing','review','ready')
+            ORDER BY p.created_at ASC
+        """).fetchall()
+        label = "Posizioni da categorizzare (role_family mancante)"
+
+    elif role == 'salary-precise':
+        # Parte B (2026-06-14): coda ON-DEMAND USER-DRIVEN. L'utente seleziona dal
+        # dashboard/Telegram → salary_precise_requested = 1 (viaggia nel sync). L'analista
+        # produce il breakdown preciso (azienda + media web + tasse + NETTO) in
+        # salary_precise. Processa SOLO i flaggati non ancora prodotti.
+        rows = conn.execute("""
+            SELECT p.id, p.title, p.company, p.salary_precise_requested_at
+            FROM positions p
+            WHERE p.salary_precise_requested = 1
+              AND (p.salary_precise IS NULL OR TRIM(p.salary_precise) = '')
+            ORDER BY p.salary_precise_requested_at ASC
+        """).fetchall()
+        label = "Posizioni con stima salary precisa richiesta dall'utente"
+
     else:
         print(f"Ruolo sconosciuto: {role}")
         return
@@ -528,6 +560,8 @@ def main():
     sub.add_parser('next-for-critico')
     sub.add_parser('next-for-geocoding')
     sub.add_parser('next-for-recheck')
+    sub.add_parser('next-for-categorize')
+    sub.add_parser('next-for-salary-precise')
 
     # application (anti-riscrittura check)
     ap = sub.add_parser('application')

@@ -142,6 +142,23 @@ It returns positions still in play (`is_open=1`, status `checked`→`ready`) nev
 
 A position still open and complete: just `--last-open-check now`. Never write the literal string `"non presente"` into `deadline`/`expires_at` — leave `expires_at` NULL when unknown.
 
+**RULE-13 — MANDATORY METADATA (2026-06-14, dashboard-feeding).** Every position you set to `checked` MUST carry, beyond the RULE-04 5 fields:
+- **(a) `role_family`** mapped to the CLOSED vocabulary `agents/_team/role-taxonomy.md` — exactly ONE canonical value, **never free text** (free text fragmented barto into 48 variants → chart noise). Nothing fits → `Other` + `[TAXONOMY-PROPOSAL]`.
+- **(b) `loc_city` + `loc_country` + `loc_country_code` + `work_mode`** parsed from the JD (`loc_city` unless `full_remote`).
+- **(c) `salary_estimated_*`** rough estimate.
+
+These feed the dashboard **category chart + map + salary view** (which ALREADY exist — we feed them, we don't build them). A `checked` position missing them = incomplete analysis (like a missing RULE-04 field). Produced in the **pipeline pass** (cheap), NOT on-demand. The EXPENSIVE precise variants (office geocoding, precise salary) are on-demand (RULE-14).
+
+**RULE-14 — TASK-TYPE QUEUES + day-start priority (2026-06-14).** Beyond the `new` pipeline (RULE-13 baseline), you serve request-driven work via per-task flags on `positions` (pattern of `write_requested`/`geocode_requested`, populated by the scheduler or the user):
+- **`next-for-recheck`** (NATURAL query: stale `last_open_check`) → re-verify liveness (RULE-12 + `recheck-liveness`). **Done** = `--last-open-check now` (advances the cadence, leaves the queue).
+- **`next-for-categorize`** (NATURAL query: `role_family IS NULL` backlog) → assign `role_family` from the taxonomy. **Done** = setting `role_family` (even `Other`) → the row is no longer NULL so it **auto-exits** the queue (loop-guard free, no re-queue; no separate flag).
+- **`next-for-salary-precise`** (FLAG `salary_precise_requested=1`, **user-driven**, syncs cloud↔VPS) → the PRECISE pass: deep company research + market data + **country taxes → NET**; write the result into `salary_precise` and clear the request flag. Expensive → only on request.
+- **`geocode_requested=1`** (FLAG) → office `lat/lon` (on-demand, MAIN LOOP step 6).
+
+NB only `salary_precise_requested` + `geocode_requested` are real flag columns (user-driven, synced); recheck/categorize are derived queries (no flag) — "done" is implicit in writing the field.
+
+**Day-start priority** (a team that already worked): **(1)** recheck expired positions, then **(2)** categorize the uncategorized backlog — then the on-demand queues. **Specialization**: the Capitano may assign each Analista a task-type (one rechecks, one categorizes, one does salary-precise) — serve your assigned queue; the RULE-13 baseline on `new` is what EVERY Analista does.
+
 ---
 
 ## MAIN LOOP
@@ -164,12 +181,13 @@ python3 /app/shared/skills/db_query.py position <ID>
    python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # prints ISO date or empty
    ```
    If it prints an ISO date → `db_update.py position <ID> --expires-at <YYYY-MM-DD>`; if empty → `--expires-at ""` (NULL). **Never** invent a date and **never** write `"non presente"`.
-6. **Office coordinates by default.** If the position is **not remote** (`work_mode`/`remote_type` ≠ `full_remote`/remote), follow the `office-geocoding` skill to populate `office_lat`/`office_lon`/`office_address`. If remote → skip (no office to locate). This is now a DEFAULT step, not on-demand only.
-7. **Salary estimate (ownership moved here from Scorer).** Pre-pass the `salary-estimate` skill (L1 declared → L2 cache → L3 web → L4 default). If it returns a range → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. The Scorer now READS these for `salary_fit` (it no longer estimates them).
-8. **Companies** (RULE-08): `db-query company "<name>"` → if missing, `db-insert company` with what you extracted from JD/site (sector, hq_country, initial verdict). If present but with incomplete info and you have reliable new data, `db-update company`.
-9. **Highlights** (RULE-08): 1-3 concrete pros/cons → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Only if really notable.
-10. Update status: `checked` (to pass to Scorer) or `excluded`. Also set `--expires-at` and `--last-open-check now` if not already written.
-11. Move to the next
+6. **City + country (MANDATORY) — geocoding ON-DEMAND.** Parse `loc_city`, `loc_country`, `loc_country_code`, `work_mode` from the JD (cheap, no API) per the `location-enrichment` skill → set them with `db_update.py position <ID> --loc-city ... --loc-country ... --work-mode ...`. These are **MANDATORY** (the map + dashboard place offers by city; `loc_city` unless `full_remote`). The precise **office geocoding** (`office_lat`/`office_lon`/`office_address`, an API call = tokens) is **NOT done here anymore — it is ON-DEMAND**: geocode only for positions with `geocode_requested=1` (the user asked it from the dashboard). City is enough to place a pin; exact coordinates are user-triggered. (RULE-13 mandatory-metadata + RULE-14 on-demand queues.)
+7. **Salary estimate — ROUGH is MANDATORY, PRECISE is on-demand.** In the pipeline pass do the **rough** estimate: `salary-estimate` skill (L1 declared → L2 cache → L3 light web → L4 default) → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. This rough estimate is **mandatory** (the Scorer READS it for `salary_fit`). The **precise** estimate (deep company research + market data + country taxes → NET) is **ON-DEMAND** only, consumed from the `salary_precise_requested` queue (RULE-14) — do NOT do the expensive precise pass in the pipeline.
+8. **Category → `role_family` (MANDATORY).** Map the JD to **exactly ONE** canonical value from the controlled vocabulary `agents/_team/role-taxonomy.md` (do NOT invent free text). `db_update.py position <ID> --role-family "<Canonical>"`. If nothing fits → `Other` + emit a `[TAXONOMY-PROPOSAL]` to the Capitano (see the taxonomy file's Growth section). This populates the dashboard category chart — without it the chart is empty.
+9. **Companies** (RULE-08): `db-query company "<name>"` → if missing, `db-insert company` with what you extracted from JD/site (sector, hq_country, initial verdict). If present but with incomplete info and you have reliable new data, `db-update company`.
+10. **Highlights** (RULE-08): 1-3 concrete pros/cons → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Only if really notable.
+11. Update status: `checked` (to pass to Scorer) or `excluded`. Also set `--expires-at` and `--last-open-check now` if not already written.
+12. Move to the next
 
 ```bash
 # Update status
