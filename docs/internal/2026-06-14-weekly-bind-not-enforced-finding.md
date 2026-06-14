@@ -26,6 +26,14 @@ Su una config a **orari normali** (es. Andras 08-20) è peggio ancora: lockout a
 ## Priorità
 **La più alta del backlog pacing** (è il CONTROL del bug originale), sopra P3-v2 (burst_transient flat-segment) e coordinator-burn-no-op. **NON urgente stanotte** (barto usa comunque il budget; Andras in pausa fino 08:00). Si decide con l'utente; nessuno tocca il runtime.
 
+## Aggiornamento osservativo (monitor #18, ~02:48 Rome) — severità ridimensionata
+La previsione iniziale ("lockout ~05:25-08:00 a ~6%/h costante") era **troppo aggressiva**. Osservando oltre:
+- il weekly è andato in **PLATEAU a 80%** (non marcia a 100%): è il **trough di un'oscillazione throttle** — over-pace 5h → Capitano throttla pesante (analista-4 435s, scout-4 330s) → overshoot a `vel_team=4.19%/h` → `VERDETTO MARGINE -8.70%` → rilascio throttle. Bang-bang attorno al target 5h.
+- **3 moderatori indiretti** del burn weekly che mitigano il lockout: (1) il **cap 5h per-finestra** (88%) rende il weekly a stair-step, non continuo; (2) l'**oscillazione throttle** abbassa il burn medio; (3) il **backlog in svuotamento** (342 tot, 105 ready, scorer coda vuota) = meno lavoro = meno burn naturale.
+- **L'architettura del finding TIENE** (il `vel_target` mira al 5h-arc, il weekly-bind non è enforced; il fix 3-pezzi resta valido e prioritario) **ma la severità è molto più bassa**: lockout realistico semmai ~12:00+ Rome, o forse nullo prima del reset 17:11. Il sistema ha **backstop indiretti**; il fix migliora la *smoothness/ottimalità* (atterrare al reset), non previene una catastrofe imminente.
+- Nota collaterale: l'oscillazione bang-bang (throttle pesante → idle trough) è coerente coi finding di *coarseness* del controllo (lag 2h, step di throttle discreti) — stesso impianto di [P3 burst_transient](2026-06-14-burst-transient-dead-letter-finding.md).
+- **P4 win osservato:** al tick 00:15 il bridge ha flaggato il Mantenitore (27% burn, cadenza~0) con la logica nuova `VERIFICA → se ancora stuck KILL (C-12)` — comportamento voluto.
+
 ## Relazione con gli altri finding pacing
 - [P3 burst_transient dead-letter](2026-06-14-burst-transient-dead-letter-finding.md): lato SOTTO/recovery, finestra di detection.
 - coordinator-burn-no-op: il bridge non sa frenare quando il top-consumer è un coordinatore.
