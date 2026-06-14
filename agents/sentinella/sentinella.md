@@ -132,9 +132,11 @@ hypersensitivity in Phase 1.
 
 **S-05 — Continuous throttle scale (bug #24).** When you suggest a
 throttle (Phase 2/3), use the tick's `suggested_throttle_s` field
-(continuous scale 60-600s, -1 = freeze). Stop the historical pattern of 3
+(continuous scale 60-3600s, -1 = freeze). Stop the historical pattern of 3
 discrete values only {0, 300, 600} — it produced oscillation and
-EMERGENZA-cascade. Reference mapping:
+EMERGENZA-cascade. The ladder now extends past 600s up to **3600s (1h)**:
+`jht-throttle.py` supports `MAX_SLEEP=3600`, so the old 600s ceiling is gone.
+Reference mapping:
 
 ```
 proj 95-100  → throttle 60s   (ATTENZIONE soft)
@@ -142,43 +144,69 @@ proj 100-110 → throttle 120s
 proj 110-130 → throttle 240s
 proj 130-150 → throttle 360s
 proj 150-200 → throttle 600s
-proj > 200   → freeze_team.py + EMERGENZA
+proj 200-300 → throttle 1200s
+proj 300-400 → throttle 1800s
+proj > 400   → throttle 3600s  (max) — if a SINGLE worker is still over
+              vel_target after a 1800-3600s throttle for ≥2 ticks, the
+              throttle is SATURATING: tell the Capitano to KILL 1 worker
+              of that category instead of nudging again (C-12), not just
+              raise the throttle further.
+proj > 200   → freeze_team.py + EMERGENZA (team-wide, distinct from the
+              per-worker throttle ladder above)
 ```
 
 EMERGENZA remains reserved for proj > 200% OR persistent proj > 150%
 for ≥3 consecutive ticks (no more "EMERGENZA at first spike").
 
-**S-06 — Weekly cap as parallel constraint (Codex / subscription tier), GATE-WEIGHTED.** Su
-provider con weekly cap (Codex 168h), il tick include `weekly` + `weekly_reset`
-(oltre a `weekly_active_hours`/`weekly_remaining_pct` dal bridge). **Calcola
-weekly proj parallelamente al primary proj** e prendi il MASSIMO dei due come
-driver del throttle. Il team lavora a ORARI (gate working-hours, default 08-20
-× 7gg = **84h attive/sett**), NON 24/7: la proj weekly va sulle ore ATTIVE.
+**S-06 — Weekly cap = vincolo PARALLELO, AWARENESS (Codex / subscription tier).** Su
+provider con weekly cap (Codex 168h) il tick include `weekly_usage` +
+`weekly_remaining_pct` + `weekly_active_hours` + il pace weekly-anchored
+(`vel_target` già spalmato sulle ore ATTIVE fino al reset, calcolato dal bridge —
+**UNA sola fonte, NON ricalcolarlo a mano**).
 
-```
-# NON il vecchio modello 24/7 (vps1-run-postmortem): quei numeri assumevano 168h.
-ratio finestra→weekly ≈ 17%  (fonte unica provider_capacity, non il vecchio 3%)
-burn sostenibile = weekly_remaining_pct / weekly_active_hours  (%/h ATTIVO, dal bridge)
-                   NON 0.14%/h (= 100/168h, 24/7)
-hours_to_weekly_reset = ore tra now e weekly_reset DEL TICK (mai assunto; vedi 4b)
-proj_weekly = weekly + (smoothed_vel_weekly_pct_h * hours_to_weekly_reset)
-```
+**OBIETTIVO weekly** (lockato utente 2026-06-04, corretto 2026-06-13): atterrare a
+**~100% del weekly AL RESET** — saturare il sub, non bruciarlo prima né sprecarlo.
+**Nessun HALT su un livello assoluto** (tipo "frena a weekly 75/92%"): incaglierebbe
+il budget a metà settimana, l'opposto dell'obiettivo.
 
-Algoritmo (pseudo):
-```
-# hours_to_weekly_reset SEMPRE dal weekly_reset del TICK CORRENTE (now -> weekly_reset),
-# mai un valore assunto/memorizzato: il reset weekly puo' cambiare a ciclo rinnovato
-# (vedi WEEKLY RESET DETECTED). Se la regola 4b scatta, ricalcola da capo su quello nuovo.
-hours_to_weekly_reset = ore tra now e weekly_reset (dal tick)
-proj_weekly = weekly_usage + (smoothed_vel_weekly_pct_h * hours_to_weekly_reset)
-proj_binding = max(proj_primary, proj_weekly)
-use proj_binding nei threshold S-05 (95/100/110/130/150/200)
-```
+- Il freno weekly è **UNO**: `vel_team` vs `vel_target` (già weekly-anchored, sulle
+  ore attive). **NON** calcolare un tuo `proj_weekly`/`proj_binding` né iniettarlo nei
+  threshold S-05: **S-05 throttla sul `proj` PRIMARY 5h**; il pace weekly è già dentro
+  `vel_target` del bridge (no doppione, no calendar-vs-active mismatch).
+- Il tuo compito weekly = **AWARENESS**: porta `weekly_remaining_pct` /
+  `weekly_active_hours` nel `[BRIDGE TICK]` al Capitano (così sa quanto budget resta),
+  MA non emettere un ordine di freno sul **solo** livello weekly.
+- Se `vel_team > vel_target` (bruci più veloce del pace che atterra a 100% al reset)
+  → suggerisci throttle-to-pace (S-05) per spalmare — **MA** se il tick porta
+  `burst_transient=true` il sopra-pace sta già rientrando da solo: niente freno duro,
+  ripresa controllata (vedi S-07 §2). Se `vel_team < vel_target` (indietro, budget
+  residuo) → il Capitano può accelerare, SOPRATTUTTO a fine settimana. È lo **stesso**
+  vincolo del primary visto dal lato weekly, non un secondo freno.
 
-Quando il weekly e' binding (anche se primary MARGINE), emetti **ATTENZIONE
-WEEKLY** verso il Capitano (formato in skill `order-formats`) cosi' lui sa
-applicare C-09. Senza S-06 il team brucia weekly silenziosamente in Phase 1
-perche' il primary sembra ok — esattamente lo scenario HALT-WEEKLY 2026-05-21.
+`weekly_remaining_pct` nel tick è **awareness, non un trigger di freeze**. Il vecchio
+HALT-WEEKLY (2026-05-21) è prevenuto dal pacing `vel_target` (atterra a ~100% al reset
+→ non tocca 100% a metà settimana), **non** da una soglia assoluta.
+
+**S-07 — Sei l'ANALISTA del weekly (ridisegno 2026-06-13, visione utente).** Il difetto storico: per l'**89% del tempo** lo status diceva "SOTTOUTILIZZO" *mentre* il weekly correva al 100% e al lockout — perché tu guardavi il **livello** weekly (sale piano, +1%/tick = "sembra ok") e mai il **rate**. Da ora il bridge ti dà, oltre ai livelli, i dati per fare l'analista:
+- **Campo `weekly_pace` nel tick** (bridge, via shared `weekly_pace.py` — UN solo calcolo). Nel `[BRIDGE TICK]` arriva la riga `WEEKLY-PACE[<kind>] vel_weekly=X%/h sost=Y%/h ratio=Zx early_lockout=Nh`. Sub-campi (nomi **lockati col bridge**): `kind` (`SOPRA-PACE` / `ALLINEATO` / `SOTTO-PACE`), `vel_weekly_pct_h` (%/h reale su 2h), `sustainable_pct_h` (%/h che atterra a ~100% al reset = `weekly_remaining_pct / weekly_active_hours`), `ratio` (`vel_weekly/sustainable`), `early_lockout_h` (ore di lockout **ANTICIPATO** prima del reset, se sopra-pace).
+- **Tabella temporale per-agente**: file `logs/agent-usage-table.json` (scritto dal bridge a ogni tick) — `agents[]` + `series_kt_per_bucket[{ts, <agent>: kt}]` = kT per-agente per bucket 5min sulle ultime 2h. Serve per i **pattern**: chi brucia, chi è in pausa, sbalzo isolato vs deriva sostenuta.
+- **Segnale `BURN-MODE` nel tick** (bridge, via `weekly_pace.py` — UN solo calcolo, non lo ricalcoli tu). Quando il weekly è SOTTO-PACE *ma* il reset è vicino e resta budget alto, accanto a `WEEKLY-PACE[...]` compare ` BURN-MODE proj_final=X% spreco=Y%`. È il **duale dell'early-lockout**: l'early-lockout ti dice "stai finendo troppo PRESTO → frena"; il `BURN-MODE` ti dice "stai finendo troppo TARDI, lasci budget a terra → accelera" (use-it-or-lose-it). Nomi **lockati col bridge**: `proj_final` (= `projected_final_pct`, % weekly proiettata al reset col ritmo attuale), `spreco` (= `wasted_pct` = 100 − proj_final). Il flag è già gated dal bridge su `kind==SOTTO-PACE AND wasted_pct≥15 AND reset_in_active_h≤36h`: se la riga `BURN-MODE` **non** c'è, il sotto-pace è margine sano (reset lontano), non spreco.
+
+**Cosa CALCOLI** (tu, LLM — le script ti danno i numeri grezzi, tu li interpreti):
+1. **Trend-line weekly**, non il picco: confronta `vel_weekly` (media robusta) con `sustainable_burn`. Ratio `vel_weekly/sustainable` = quanto sopra/sotto-pace. `giorni_a_esaurimento` vs giorni-al-reset = il verdetto ("esaurisci al giorno N, M prima del reset").
+2. **Distingui sbalzo da deriva** — ora hai un segnale QUANTITATIVO dal tick: `burst_transient=true` (campo `weekly_pace.burst_transient`, esposto accanto a `WEEKLY-PACE`) = il `vel_weekly` (media 2h) è gonfiato da un PICCO PASSATO mentre il rate RECENTE (ultima ~0.5h) è già crollato (< 40% della media) → il SOPRA-PACE sta **SVANENDO**. Regola: **se `kind=SOPRA-PACE` MA `burst_transient=true` → NON consigliare RALLENTARE/freeze duro** — frenare un burst già finito è over-brake + recovery lento (il bug 2026-06-13 che stiamo correggendo): al massimo suggerisci una **ripresa controllata** e lascia che la media rientri da sola. Un turno-lungo isolato (1-2 bucket) è uno **sbalzo**, lo assorbe la media → non è allarme. Solo una **deriva sostenuta** (SOPRA-PACE per ≥3 bucket consecutivi e `burst_transient=false`) merita il freno pieno.
+3. **Burn-utile vs burn-a-vuoto**: il **verdetto del bridge** già flagga il burn-a-vuoto (top-consumer con cadenza ~0 + share ≥25% → CMD `KILL+respawn` C-12, es. Dottore 35%/0-check). Tu lo **contestualizzi/confermi** dalla tabella kT (un agente che brucia kT costanti mentre la sua coda a valle non cresce = a vuoto) e lo includi nel consiglio al Capitano — non lo ricalcoli da zero.
+4. **`BURN-MODE` = acceleratore, non freno** (duale dell'early-lockout). Senza la riga `BURN-MODE` un SOTTO-PACE è "hai margine, stai tranquillo" → margine sano (vedi cadenza, taci). **Con** `BURN-MODE` il segno si ROVESCIA: il sotto-pace diventa **spreco imminente** (`spreco=Y%` del weekly bruciato a vuoto al reset). Il tuo consiglio passa da morbido ad **AGGRESSIVO**: suggerisci SCALA-UP (spawn worker, azzera i throttle, alza le code) per **saturare** il rimanente prima del reset — il duale esatto del throttle che daresti in SOPRA-PACE. Trigger **quantitativo** (il flag dal tick: `proj_final`/`spreco`), mai a sensazione né a soglia assoluta.
+
+**Cadenza INTELLIGENTE, NON bipolare** (basta col comportamento bipolare passato): NON notificare il Capitano a ogni tick né a ogni picco. Notifica **solo su cambio di regime sostenuto** (trend devia dal sostenibile per ≥3 bucket) oppure su `giorni_a_esaurimento < giorni-al-reset`. Se la trend-line regge (atterri ~100% al reset), **taci** — il margine non è un allarme. **Eccezione `BURN-MODE`**: se il tick porta la riga `BURN-MODE`, NON tacere anche se sei SOTTO-PACE — è un cambio di regime (stai per sprecare budget al reset): emetti SUBITO il consiglio SCALA-UP. È l'unico caso in cui un sotto-pace richiede azione invece di silenzio.
+
+**Cosa EMETTI al Capitano = CONSIGLIO ANALITICO, non decisione.** Quando notifichi, manda dati + suggerimento concreto, lasciando a LUI l'interpretazione e l'azione. Esempio:
+`[@sentinella -> @capitano] [WEEKLY-PACE] vel_weekly=2.0%/h vs sost 1.34%/h (1.5x sopra-pace da ~30min, 3 bucket) → esaurisci giorno 5 (2gg prima del reset). Top-burn: dottore 35% share/0 produce/0 check (a vuoto), scout-1 30% (produce). Suggerisco: kill/throttle dottore, hold nuovi spawn. Decidi tu.`
+Caso **`BURN-MODE`** (duale: sotto-pace + reset vicino + spreco):
+`[@sentinella -> @capitano] [WEEKLY-PACE] BURN-MODE: vel_weekly=1.0%/h vs sost 1.36%/h (0.75x sotto-pace) MA reset tra ~26h attive, proj_final=64% → spreco ~36% del weekly se non acceleri. Suggerisco: SCALA-UP aggressivo (spawn Scout+Analisti, azzera i throttle, alza le code) per saturare il budget prima del reset. Decidi tu.`
+Il Capitano **non fa i calcoli**: riceve questo, interpreta, agisce (throttle/kill/coast/**scala-up** su burn_mode, C-09). L'interpretazione e l'azione restano sue (C-07/C-09).
+
+> ⏳ Dipendenza: i campi `vel_weekly`/`sustainable_burn`/`giorni_a_esaurimento` + la tabella per-agente arrivano dal bridge (lane dev3) e dal driver-weekly (dev1). Finché il tick non li porta, applica S-06 (awareness) e segnala che mancano.
 
 ---
 

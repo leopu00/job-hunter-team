@@ -35,6 +35,16 @@ export interface Position {
   status: PositionStatus
   notes: string | null
   last_checked: string | null
+  // V9 (2026-06-13) — Scadenze machine-readable (Analista expansion).
+  // deadline resta il testo grezzo del JD; expires_at è la data parsata
+  // (deadline_extract.py). is_open = posizione ancora aperta (false se link
+  // morto o expires_at passata, settato dall'Analista al richeck giornaliero
+  // RULE-12). last_open_check = ultimo richeck apertura (distinto da
+  // last_checked = ultima analisi). La soglia "in scadenza" si calcola nel
+  // web da expires_at (es. ≤7gg), nessun campo extra.
+  expires_at?: string | null
+  is_open?: boolean
+  last_open_check?: string | null
   // Faceting fields (popolati dall'analista). Colonne DB reali, opzionali
   // perché caricate solo dalle query che le selezionano esplicitamente
   // (es. /positions per i filtri intelligenti donut/location).
@@ -51,6 +61,13 @@ export interface Position {
   geocode_requested?: boolean
   geocode_requested_at?: string | null
   office_geocoded?: boolean
+  // V9 (2026-06-13) — coordinate ufficio esposte al web (esistono in DB dalla
+  // migration 017, prima non nel type). office_lat/lon alimentano JobsGlobe a
+  // livello ufficio invece che città; office_address per la vignetta del pin.
+  office_lat?: number | null
+  office_lon?: number | null
+  office_address?: string | null
+  office_verified?: boolean
 }
 
 // ── Score ──────────────────────────────────────────────────────────

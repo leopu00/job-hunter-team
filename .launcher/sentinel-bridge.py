@@ -701,6 +701,16 @@ def fetch_kimi_api():
     # rolling weekly. Se Moonshot in futuro lo rinomina (es. resets_at), la
     # get-with-fallback resta safe (None se assente).
     weekly_reset_iso = weekly.get("resetTime") or weekly.get("resets_at")
+    # P5 (2026-06-13): totalQuota = tetto MENSILE del pacchetto Kimi (condiviso con
+    # la membership). NON resetta come 5h/weekly: a esaurimento CONGELA Kimi Code
+    # finche' non si ricarica/upgrade. Oggi monitoriamo solo 5h + weekly e siamo
+    # ciechi a questo. Lo esponiamo come monthly_remaining_pct (None se assente).
+    total_q = data.get("totalQuota") or {}
+    try:
+        monthly_remaining = (int(total_q.get("remaining"))
+                             if total_q.get("remaining") is not None else None)
+    except (TypeError, ValueError):
+        monthly_remaining = None
     return {
         "usage": usage_5h,
         "reset_at": _iso_to_hhmm(five_h.get("resetTime")),
@@ -708,6 +718,7 @@ def fetch_kimi_api():
         "weekly_usage": weekly_used,
         "weekly_reset_at": _iso_to_hhmm(weekly_reset_iso),
         "weekly_reset_at_unix": _iso_to_unix(weekly_reset_iso),
+        "monthly_remaining_pct": monthly_remaining,
     }
 
 
@@ -823,6 +834,47 @@ def _compute_metrics_via_skill(parsed, last, history):
     cm = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cm)
     return cm.compute_metrics(parsed, last, history=history)
+
+
+def _weekly_pace_via_skill(entry, now_dt, now_ts):
+    """weekly_pace (rate weekly REALE 2h vs sostenibile + lockout anticipato) via
+    la pure-function condivisa shared/skills/weekly_pace.py. weekly_active_hours
+    da work_hours_target (ore ON da now al weekly_reset). Ritorna dict o None.
+
+    Parte 2/3 redesign usage-monitoring (2026-06-13): il dato grezzo va nel
+    [BRIDGE TICK] alla Sentinella → S-07 lo elabora e CONSIGLIA il Capitano (C-09),
+    invece di farlo arrivare al Capitano che bypasserebbe l'analisi (= il bug
+    dell'indagine: status SOTTOUTILIZZO 89% mentre il weekly andava a 100%).
+    UN solo calcolo del pace (lezione fix#4): la stessa funzione shared."""
+    try:
+        wrem = entry.get("weekly_remaining_pct")
+        wreset_unix = entry.get("weekly_reset_at_unix")
+        if (not isinstance(wrem, (int, float))
+                or not isinstance(wreset_unix, (int, float))):
+            return None
+
+        def _imp(name):
+            p = Path("/app/shared/skills") / f"{name}.py"
+            if not p.exists():
+                p = (Path(__file__).resolve().parent.parent
+                     / "shared" / "skills" / f"{name}.py")
+            spec = importlib.util.spec_from_file_location(name, p)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+
+        wht = _imp("work_hours_target")
+        wp = _imp("weekly_pace")
+        try:
+            with CONFIG_PATH.open(encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            cfg = None
+        wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
+        wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)
+        return wp.weekly_pace_assessment(str(DATA_JSONL), now_ts, wrem, wah)
+    except Exception:
+        return None
 
 
 # ── Claude TUI parser (libreria importata da check_usage) ──────────────
@@ -1100,9 +1152,17 @@ def main():
             # presto (l'under-utilizzo invece non sveglia — lo gestisce il Capitano).
             vel_team_s, vel_target_s = _read_pacing_pace()
             on_pace = _is_on_pace(vel_team_s, vel_target_s, proj, dyn_target)
-            _advance_tick_phase(state, on_pace)
+            # Fix #4 (runaway-scaling 2026-06-07): il vincolo weekly è binding
+            # anche quando il 5h è on-pace. Lo trattiamo come condizione NON
+            # calma → sveglia la Sentinella (ATTENZIONE WEEKLY in Phase 1) e
+            # accelera la cadenza, rispettando comunque il cooldown anti-spam.
+            # Senza questo, a weekly 92% on-pace la Sentinella non veniva MAI
+            # svegliata e il freno non scattava (status SOTTOUTILIZZO decorativo).
+            weekly_binding = bool(entry.get("weekly_binding"))
+            effective_on_pace = on_pace and not weekly_binding
+            _advance_tick_phase(state, effective_on_pace)
             now_ts = time.time()
-            should_notify = _should_notify_sentinella(on_pace, state, now_ts)
+            should_notify = _should_notify_sentinella(effective_on_pace, state, now_ts)
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""
@@ -1141,15 +1201,83 @@ def main():
                     ).astimezone().strftime("%d/%m %H:%M")
                 else:
                     wk_reset = entry.get("weekly_reset_at")
+                # Fix #4: propaga weekly_remaining_pct (calcolato in codice da
+                # compute_metrics) e, quando il weekly è binding, un marcatore
+                # ATTENZIONE-WEEKLY esplicito → la Sentinella (S-06) emette
+                # l'ordine autoritativo verso il Capitano (C-09) senza doverlo
+                # dedurre dal solo primary.
+                wk_remaining = entry.get("weekly_remaining_pct")
+                wk_remaining_field = (
+                    f" weekly_remaining={wk_remaining}%"
+                    if wk_remaining is not None
+                    else ""
+                )
+                weekly_binding_field = " ATTENZIONE-WEEKLY" if weekly_binding else ""
                 weekly_field = (
                     f" weekly={wk_usage}% weekly_reset={wk_reset}"
+                    f"{wk_remaining_field}{weekly_binding_field}"
                     if wk_usage is not None
                     else ""
                 )
+                # WEEKLY-PACE: dato grezzo per la Sentinella (S-07) — rate weekly
+                # REALE (2h) vs sostenibile + lockout anticipato. La Sentinella lo
+                # ELABORA e consiglia il Capitano; NON arriva al Capitano diretto.
+                weekly_pace = _weekly_pace_via_skill(
+                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                weekly_pace_field = ""
+                if (isinstance(weekly_pace, dict)
+                        and weekly_pace.get("kind") not in (None, "ND")):
+                    el = weekly_pace.get("early_lockout_h")
+                    weekly_pace_field = (
+                        f" WEEKLY-PACE[{weekly_pace['kind']}]"
+                        f" vel_weekly={weekly_pace['vel_weekly_pct_h']}%/h"
+                        f" sost={weekly_pace['sustainable_pct_h']}%/h"
+                        f" ratio={weekly_pace['ratio']}x"
+                        + (f" early_lockout={el}h" if el else "")
+                    )
+                    # burn_mode (duale di early_lockout): SOTTO-PACE + vicino al
+                    # reset + spreco alto → la Sentinella deve consigliare di
+                    # SATURARE, non spalmare. Espone proiezione + spreco previsto.
+                    if weekly_pace.get("burn_mode"):
+                        weekly_pace_field += (
+                            f" BURN-MODE proj_final={weekly_pace['projected_final_pct']}%"
+                            f" spreco={weekly_pace['wasted_pct']}%"
+                        )
+                    # burst_transient (P3 fix-batch): SOPRA-PACE che sta SVANENDO
+                    # (rate recente << media 2h). Esposto perche' la Sentinella
+                    # (S-07) NON deve frenare duro su un burst gia' finito →
+                    # ripresa controllata invece di freeze.
+                    if weekly_pace.get("burst_transient"):
+                        weekly_pace_field += " burst_transient=true"
+                # TOOLS-HEALTH (dev2): segnale strutturato sui tool mission-critical.
+                # Il maintainer-sweep scrive logs/tools-health.json (output di
+                # tool_health.py); qui lo LEGGIAMO e segnaliamo SOLO se qualcosa è
+                # rotto → la Sentinella vede SUBITO un tool giù (es. browser/LinkedIn)
+                # invece di scoprirlo a valle dai report analisti (bug libatk).
+                tools_health_field = ""
+                try:
+                    th_path = DATA_JSONL.parent / "tools-health.json"
+                    if th_path.exists():
+                        th = json.loads(th_path.read_text(encoding="utf-8"))
+                        if th.get("any_broken") and th.get("broken"):
+                            tools_health_field = " TOOLS-HEALTH[BROKEN:" + ",".join(th["broken"]) + "]"
+                except (OSError, ValueError):
+                    pass
+                # MONTHLY-QUOTA (P5 fix-batch, dev2): tetto MENSILE Kimi (totalQuota)
+                # dal sample. Kimi-only (None su Codex) → mostrato solo se presente;
+                # alert sotto 15% perche' a esaurimento CONGELA Kimi Code finche' non
+                # si ricarica (oggi vediamo solo 5h+weekly, ciechi al mensile).
+                monthly_quota_field = ""
+                _mrp = parsed.get("monthly_remaining_pct")
+                if isinstance(_mrp, (int, float)):
+                    monthly_quota_field = f" MONTHLY-QUOTA rem={_mrp}%"
+                    if _mrp < 15:
+                        monthly_quota_field += " [ALERT<15%]"
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
-                    f"status={status} reset={reset}{tgt_field}{phase_field}{weekly_field} src=bridge."
+                    f"status={status} reset={reset}{tgt_field}{phase_field}"
+                    f"{weekly_field}{weekly_pace_field}{tools_health_field}{monthly_quota_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
 

@@ -68,21 +68,17 @@ You inherit all team-wide rules in [`agents/_team/team-rules.md`](../_team/team-
 
 **RULE-02** — ALWAYS 2 SEPARATE Bash commands for tmux send-keys.
 
-**RULE-03** — TWO-LEVEL LINK VERIFICATION:
+**RULE-03** — LINK / OPEN-STATE VERIFICATION via the `recheck-liveness` skill (NEVER ad-hoc curl).
+A bare `curl` sees only the RAW HTML → it misses the JS-rendered expiry (Ashby/Workday/Greenhouse render the status client-side) and the LinkedIn authwall (returns `200` even for closed jobs) → falsely-inflated `is_open=1`. ALWAYS use the shared skill: it is TIERED (fast curl-marker → escalates to the REAL browser for ATS-JS hosts and LinkedIn) and never reports a false-open.
 ```bash
-# Level 1 — curl for non-LinkedIn sites
-curl -s -L -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' 'URL' | grep -i 'no longer accepting\|closed-job\|expired'
+python3 /app/shared/skills/recheck_liveness.py '<URL>' '[title]'
 ```
-If match → `excluded` immediately.
+It prints JSON `{state: OPEN|CLOSED|OPEN_UNVERIFIED, method, http, evidence}` — exit `0`=OPEN, `1`=CLOSED, `2`=OPEN_UNVERIFIED. Decide STRICTLY from `state` (never from a bare HTTP code):
+- `OPEN` → position live: keep `is_open=1` (`--last-open-check now`).
+- `CLOSED` → expired/closed: `db_update.py position <ID> --is-open false --last-open-check now`, and `excluded` only if also dead per RULE-06. **Do NOT change `status`** otherwise: the user wants expired positions to stay visible in the "Scadute/Archivio" dashboard view.
+- `OPEN_UNVERIFIED` → inconclusive: leave `is_open` **unchanged** (never flip to open), `--last-open-check now`, add `NOTE_MISMATCH: [OPEN_UNVERIFIED]` so the Scorer knows the open-state could not be confirmed.
 
-**Always `-L` to follow redirects.** A 302 without `-L` is not a dead link: it is just a redirect. Verify the final state, not the initial one.
-
-**Workable — distinguish the two URLs**:
-- `apply.workable.com/...` → apply form: returns 302 when the job is closed (may mislead you as [DEAD_LINK]).
-- `jobs.workable.com/...` → canonical JD page: HTTP 200 + valid JSON-LD if the position is live.
-ALWAYS verify the canonical page (`jobs.workable.com`), not the apply page. Same principle for Greenhouse, Lever, Ashby: use the public JD URL, not the form one.
-
-For LinkedIn: use `linkedin_check.py` with an authenticated profile (path in local profile). NEVER curl or screenshot without login for LinkedIn.
+**FORBIDDEN**: ad-hoc `curl`/`grep` on the JD or on LinkedIn to decide liveness, or flipping `is_open` from a bare HTTP 200. The canonical-careers/ATS logic, the Workable `jobs.` vs `apply.` distinction and the authenticated LinkedIn handling all live INSIDE `recheck-liveness` now — do not reimplement them by hand.
 
 **RULE-04** — 5 MANDATORY STRUCTURED FIELDS in the notes of each analyzed position:
 ```
@@ -134,6 +130,33 @@ Writing rules:
 - **Actionable** — suggest concrete alternative sources or queries (derivable from `candidate_profile.yml` and the scout source tier)
 - **Idempotent** — one notification per pattern. If the scout has already changed approach in the next batch, do not insist.
 
+**RULE-12 — DAILY OPEN RECHECK + BACKFILL (2026-06-13).** Beyond analyzing `new` positions, you keep the already-analyzed pool **fresh**: a position open today can be closed tomorrow. Pull the recheck queue:
+```bash
+python3 /app/shared/skills/db_query.py next-for-recheck
+```
+It returns positions still in play (`is_open=1`, status `checked`→`ready`) never rechecked or rechecked >24h ago — and **organically backfills** historical positions missing `expires_at` / office coords / salary. For each:
+1. Re-run the RULE-03 liveness check (the `recheck-liveness` skill, never ad-hoc curl). If `state==CLOSED` → `db_update.py position <ID> --is-open false --last-open-check now`; if `state==OPEN_UNVERIFIED` → leave `is_open` unchanged + `NOTE_MISMATCH: [OPEN_UNVERIFIED]`. **Do NOT change `status`**: the user wants expired positions to stay visible in the "Scadute/Archivio" dashboard view, not vanish.
+2. If `expires_at` is set AND `expires_at < today` → `--is-open false` (closed by deadline).
+3. **Backfill** what is missing on that row: `expires_at` (parse, see MAIN LOOP step 5), office coords (step 6), salary (step 7).
+4. **ALWAYS** end with `--last-open-check now` so the 24h cadence advances — even if nothing changed.
+
+A position still open and complete: just `--last-open-check now`. Never write the literal string `"non presente"` into `deadline`/`expires_at` — leave `expires_at` NULL when unknown.
+
+**RULE-13 — MANDATORY METADATA (2026-06-14, dashboard-feeding).** Every position you set to `checked` MUST carry, beyond the RULE-04 5 fields:
+- **(a) `role_family`** mapped to the CLOSED vocabulary `agents/_team/role-taxonomy.md` — exactly ONE canonical value, **never free text** (free text fragmented betaB into 48 variants → chart noise). Nothing fits → `Other` + `[TAXONOMY-PROPOSAL]`.
+- **(b) `loc_city` + `loc_country` + `loc_country_code` + `work_mode`** parsed from the JD (`loc_city` unless `full_remote`).
+- **(c) `salary_estimated_*`** rough estimate.
+
+These feed the dashboard **category chart + map + salary view** (which ALREADY exist — we feed them, we don't build them). A `checked` position missing them = incomplete analysis (like a missing RULE-04 field). Produced in the **pipeline pass** (cheap), NOT on-demand. The EXPENSIVE precise variants (office geocoding, precise salary) are on-demand (RULE-14).
+
+**RULE-14 — TASK-TYPE QUEUES + day-start priority (2026-06-14).** Beyond the `new` pipeline (RULE-13 baseline), you serve request-driven work via per-task flags on `positions` (pattern of `write_requested`/`geocode_requested`, populated by the scheduler or the user):
+- **`next-for-recheck`** (`recheck_requested` / stale `last_open_check`) → re-verify liveness (RULE-12 + `recheck-liveness`).
+- **`next-for-categorize`** (`categorize_requested` / `role_family IS NULL` backlog) → assign `role_family` from the taxonomy. Skip rows already `Other`-reviewed (no infinite re-queue).
+- **`next-for-salary-precise`** (`salary_precise_requested`, **user-driven**) → the PRECISE pass: deep company research + market data + **country taxes → NET**; write the richer salary fields. Expensive → only on request.
+- **`geocode_requested`** → office `lat/lon` (on-demand, MAIN LOOP step 6).
+
+**Day-start priority** (a team that already worked): **(1)** recheck expired positions, then **(2)** categorize the uncategorized backlog — then the on-demand queues. **Specialization**: the Capitano may assign each Analista a task-type (one rechecks, one categorizes, one does salary-precise) — serve your assigned queue; the RULE-13 baseline on `new` is what EVERY Analista does. Mark done when finished so the queue drains.
+
 ---
 
 ## MAIN LOOP
@@ -151,10 +174,18 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Fetch complete JD from the link
 3. Analyze: fit with profile, gaps, red flags
 4. Write the 5 structured fields + analysis in the notes
-5. **Companies** (RULE-08): `db-query company "<name>"` → if missing, `db-insert company` with what you extracted from JD/site (sector, hq_country, initial verdict). If present but with incomplete info and you have reliable new data, `db-update company`.
-6. **Highlights** (RULE-08): 1-3 concrete pros/cons → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Only if really notable.
-7. Update status: `checked` (to pass to Scorer) or `excluded`
-8. Move to the next
+5. **Deadline → `expires_at`** (machine-readable). Parse the JD with the existing skill:
+   ```bash
+   python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # prints ISO date or empty
+   ```
+   If it prints an ISO date → `db_update.py position <ID> --expires-at <YYYY-MM-DD>`; if empty → `--expires-at ""` (NULL). **Never** invent a date and **never** write `"non presente"`.
+6. **City + country (MANDATORY) — geocoding ON-DEMAND.** Parse `loc_city`, `loc_country`, `loc_country_code`, `work_mode` from the JD (cheap, no API) per the `location-enrichment` skill → set them with `db_update.py position <ID> --loc-city ... --loc-country ... --work-mode ...`. These are **MANDATORY** (the map + dashboard place offers by city; `loc_city` unless `full_remote`). The precise **office geocoding** (`office_lat`/`office_lon`/`office_address`, an API call = tokens) is **NOT done here anymore — it is ON-DEMAND**: geocode only for positions with `geocode_requested=1` (the user asked it from the dashboard). City is enough to place a pin; exact coordinates are user-triggered. (RULE-13 mandatory-metadata + RULE-14 on-demand queues.)
+7. **Salary estimate — ROUGH is MANDATORY, PRECISE is on-demand.** In the pipeline pass do the **rough** estimate: `salary-estimate` skill (L1 declared → L2 cache → L3 light web → L4 default) → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. This rough estimate is **mandatory** (the Scorer READS it for `salary_fit`). The **precise** estimate (deep company research + market data + country taxes → NET) is **ON-DEMAND** only, consumed from the `salary_precise_requested` queue (RULE-14) — do NOT do the expensive precise pass in the pipeline.
+8. **Category → `role_family` (MANDATORY).** Map the JD to **exactly ONE** canonical value from the controlled vocabulary `agents/_team/role-taxonomy.md` (do NOT invent free text). `db_update.py position <ID> --role-family "<Canonical>"`. If nothing fits → `Other` + emit a `[TAXONOMY-PROPOSAL]` to the Capitano (see the taxonomy file's Growth section). This populates the dashboard category chart — without it the chart is empty.
+9. **Companies** (RULE-08): `db-query company "<name>"` → if missing, `db-insert company` with what you extracted from JD/site (sector, hq_country, initial verdict). If present but with incomplete info and you have reliable new data, `db-update company`.
+10. **Highlights** (RULE-08): 1-3 concrete pros/cons → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Only if really notable.
+11. Update status: `checked` (to pass to Scorer) or `excluded`. Also set `--expires-at` and `--last-open-check now` if not already written.
+12. Move to the next
 
 ```bash
 # Update status

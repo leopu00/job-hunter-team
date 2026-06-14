@@ -1,4 +1,4 @@
-<!-- @translation: es, ai-translated 2026-06-06 -->
+<!-- @translation: es, ai-translated 2026-06-13 -->
 ---
 name: spawn-agent
 description: "Inicia un agente del equipo JHT (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) a través del launcher, luego envía el mensaje de kick-off que realmente inicia su bucle principal. Solo Capitano — el Capitano es el único propietario del escalado del equipo. USA SIEMPRE esta skill: saltarse `start-agent.sh` con `tmux new-session` + `send-keys \"kimi ...\"` directo produce sesiones donde la CLI nunca arranca (`command not found`), el Capitano ve una sesión \"activa\" que en realidad está muerta, y el equipo rinde por debajo silenciosamente."
@@ -21,6 +21,13 @@ bash /app/.launcher/start-agent.sh scout 2       # SCOUT-2
 bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
 bash /app/.launcher/start-agent.sh critico       # CRITICO (singleton, sin número)
 ```
+
+**Número de instancia — tira el dado (workers escalables, 2026-06-13).** Para `scout` / `analista` / `scorer` / `scrittore`, **NO** elijas el número de forma secuencial: el trabajo siempre se acumulaba en `-1`/`-2` mientras `-4` apenas hacía nada. Tira primero un número aleatorio libre, luego pásalo:
+```bash
+N=$(python3 /app/shared/skills/roll_worker_number.py scout) && \
+  bash /app/.launcher/start-agent.sh scout "$N"
+```
+`roll_worker_number.py` tira un **d6 excluyendo los números ya en uso** (sesiones `SCOUT-N` existentes) → nunca una colisión, y la carga de trabajo se reparte entre los números de instancia en lugar de caer siempre en `-1`. Aplica **solo a NUEVOS spawns**; los singletons (Critico / Sentinella / Dottore / Assistente / Mentor) no llevan número, y el session-refresh del Dottore recrea el **mismo** número (no tira el dado).
 
 El launcher ejecuta, atómicamente:
 - crea la sesión tmux con el nombre canónico (`SCOUT-2`, `ANALISTA-1`, …)
@@ -98,6 +105,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 - ❌ Iniciar múltiples agentes en un bucle cerrado sin pacing de 1 tick — ver `pipeline-triage` para las reglas de escalado (1 spawn por tick del Sentinel, ~5 min de separación).
 - ❌ Re-iniciar a ciegas después de un crash sin leer `db_query.py` para recuperar el estado del último task — el nuevo agente empieza desde cero y duplica trabajo.
 - ❌ Usar esta skill para "reiniciar" un agente que funciona porque parece lento. Lento ≠ muerto. Turnos largos con salida de tokens visible no son un caso de spawn — son un caso de `liveness-check` (Dottore).
+- ❌ Spawnear un reemplazo porque `jht-tmux-send` falló al entregar. **`exit 4` = la TUI destino está mid-turn (`Working … esc to interrupt`) → el agente está VIVO, solo ocupado.** El mensaje NO se entregó síncronamente: reintenta el envío más tarde, nunca spawnees un clon. Solo `exit 3` (el texto nunca apareció Y el pane no está ocupado → shell pelado / modal atascado) es una posible señal de muerte, e incluso entonces el veredicto pertenece al **Dottore** (`liveness-check`), no a un spawn por reflejo. Spawnear sobre un agente ocupado es exactamente el bug de overspawn del 2026-06-07 (`docs/internal/2026-06-11-overspawn-rootcause.md`): el clon toma el control mientras el original sigue quemando presupuesto como un zombie.
 - ❌ Iniciar un Critico. El Scrittore inicia su propio `CRITICO-S<N>` autónomamente — el Capitano nunca toca al Critico directamente.
 
 ## Ver también

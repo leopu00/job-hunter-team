@@ -1,4 +1,4 @@
-<!-- @translation: de, ai-translated 2026-06-06 -->
+<!-- @translation: de, ai-translated 2026-06-13 -->
 ---
 name: spawn-agent
 description: "Startet einen JHT-Team-Agenten (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) ueber den Launcher und sendet dann die Kick-off-Nachricht, die tatsaechlich seine Hauptschleife startet. Nur Capitano — der Capitano ist der alleinige Eigentuemer des Team-Scalings. Verwende IMMER diese Skill: `start-agent.sh` mit `tmux new-session` + rohem `send-keys \"kimi ...\"` zu umgehen erzeugt Sitzungen, in denen die CLI nie startet (`command not found`), der Capitano sieht eine \"aktive\" Sitzung, die tatsaechlich tot ist, und das Team arbeitet still unter seiner Leistung."
@@ -21,6 +21,13 @@ bash /app/.launcher/start-agent.sh scout 2       # SCOUT-2
 bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
 bash /app/.launcher/start-agent.sh critico       # CRITICO (Singleton, ohne Nummer)
 ```
+
+**Instanznummer — wuerfle sie aus (skalierbare Worker, 2026-06-13).** Fuer `scout` / `analista` / `scorer` / `scrittore` waehle die Nummer **NICHT** sequenziell: die Arbeit haeufte sich immer auf `-1`/`-2` an, waehrend `-4` fast nichts tat. Wuerfle zuerst eine freie Zufallsnummer, dann uebergib sie:
+```bash
+N=$(python3 /app/shared/skills/roll_worker_number.py scout) && \
+  bash /app/.launcher/start-agent.sh scout "$N"
+```
+`roll_worker_number.py` wuerfelt einen **W6 unter Ausschluss der bereits verwendeten Nummern** (bestehende `SCOUT-N`-Sitzungen) → niemals eine Kollision, und die Arbeitslast verteilt sich ueber die Instanznummern, statt immer auf `-1` zu treffen. Gilt **nur fuer NEUE Spawns**; Singletons (Critico / Sentinella / Dottore / Assistente / Mentor) behalten keine Nummer, und der session-refresh des Dottore stellt **dieselbe** Nummer wieder her (er wuerfelt nicht).
 
 Der Launcher fuehrt atomar aus:
 - erstellt die tmux-Sitzung mit dem kanonischen Namen (`SCOUT-2`, `ANALISTA-1`, …)
@@ -98,6 +105,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 - ❌ Mehrere Agenten in einer engen Schleife starten ohne 1-Tick-Pacing — siehe `pipeline-triage` fuer die Skalierungsregeln (1 Spawn pro Sentinel-Tick, ~5 Min. Abstand).
 - ❌ Nach einem Crash blind neu starten, ohne `db_query.py` zu lesen, um den letzten Task-Zustand wiederherzustellen — der neue Agent beginnt von vorne und dupliziert Arbeit.
 - ❌ Diese Skill verwenden, um einen funktionierenden Agenten "neu zu starten", weil er langsam erscheint. Langsam ≠ tot. Lange Zuege mit sichtbarer Token-Ausgabe sind kein Spawn-Fall — sie sind ein `liveness-check`-Fall (Dottore).
+- ❌ Einen Ersatz starten, weil `jht-tmux-send` die Zustellung nicht geschafft hat. **`exit 4` = die Ziel-TUI ist mitten im Turn (`Working … esc to interrupt`) → der Agent ist AM LEBEN, nur beschaeftigt.** Die Nachricht wurde NICHT synchron zugestellt: wiederhole das Senden spaeter, spawne niemals einen Klon. Nur `exit 3` (Text nie erschienen UND das Pane ist nicht beschaeftigt → nackte Shell / haengendes Modal) ist ein moeglicherweise-tot-Signal, und selbst dann liegt das Urteil beim **Dottore** (`liveness-check`), nicht bei einem Reflex-Spawn. Auf einem beschaeftigten Agent zu spawnen ist genau der Overspawn-Bug vom 2026-06-07 (`docs/internal/2026-06-11-overspawn-rootcause.md`): der Klon uebernimmt, waehrend das Original als Zombie weiter Budget verbrennt.
 - ❌ Einen Critico starten. Der Scrittore startet seinen eigenen `CRITICO-S<N>` autonom — der Capitano beruehrt den Critico nie direkt.
 
 ## Siehe auch

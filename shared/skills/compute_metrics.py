@@ -262,6 +262,58 @@ def compute_metrics(parsed, last, history=None):
     else:
         status, throttle = "OK", 0
 
+    # ── Weekly cap binding (fix #4 runaway-scaling 2026-06-07) ──────────────
+    # Codex/subscription tier ha un SECONDO cap settimanale, parallelo al 5h.
+    # AWARENESS-ONLY (correzione design fix#4, feedback utente 2026-06-13):
+    # esponiamo weekly_remaining_pct / proj_weekly / proj_binding come INFO per
+    # Sentinella/Capitano (via tmux), ma NON forziamo più lo status su una
+    # SOGLIA ASSOLUTA. L'obiettivo è saturare ~100% del weekly ENTRO il reset
+    # (non bruciarlo a metà settimana né sprecarlo): un halt a weekly>=75%
+    # incaglia il budget e contraddice il design documentato
+    # (DIAGNOSI-pacing-weekly L20, migration-plan L84: "atterraggio ~100% al
+    # reset, NESSUN HALT anticipato"). Il freno weekly è UNO solo e time-aware:
+    # vel_team vs vel_target nel pacing-bridge (active-hours-aware). Qui niente
+    # pace-logic, solo campi di awareness.
+    weekly_usage = parsed.get("weekly_usage")
+    weekly_remaining_pct = None
+    proj_weekly = None
+    weekly_binding = False
+    proj_binding = projection
+    if isinstance(weekly_usage, (int, float)):
+        weekly_remaining_pct = round(max(0.0, 100.0 - weekly_usage), 1)
+        # Velocità weekly: rate lineare sul sample di storia più VECCHIO che
+        # porta il weekly. Il weekly NON si resetta sui confini 5h, quindi
+        # usiamo l'intera finestra di storia disponibile (non il session_id).
+        hours_to_weekly_reset = None
+        wru = parsed.get("weekly_reset_at_unix")
+        if isinstance(wru, (int, float)):
+            hours_to_weekly_reset = (wru - now.timestamp()) / 3600.0
+        wk_vel = 0.0
+        oldest_wk = None
+        for h in (history or []):
+            if isinstance(h.get("weekly_usage"), (int, float)):
+                oldest_wk = h
+                break
+        if oldest_wk is not None:
+            owk_ts = _parse_iso(oldest_wk.get("ts"))
+            if owk_ts:
+                wk_elapsed_h = (now - owk_ts).total_seconds() / 3600.0
+                if wk_elapsed_h > 0.05:
+                    wk_vel = max(
+                        0.0,
+                        (weekly_usage - oldest_wk["weekly_usage"]) / wk_elapsed_h,
+                    )
+        if hours_to_weekly_reset and hours_to_weekly_reset > 0:
+            # proj_weekly = awareness grezza (INFO). NON guida lo status: è
+            # calcolato su ore di CALENDARIO (include le notti idle) → su un team
+            # a working-hours sovra-proietta. La proiezione weekly pace-aware
+            # vera è vel_target nel pacing-bridge (active-hours). Un solo calcolo,
+            # nessun doppione (chiude anche il debito omonimia weekly_remaining).
+            proj_weekly = round(weekly_usage + wk_vel * hours_to_weekly_reset, 2)
+        # NESSUN binding su soglia assoluta e NESSUN override di status: il
+        # vincolo weekly passa SOLO per vel_team vs vel_target nel pacing.
+        # weekly_binding resta False e proj_binding = proj primary (init sopra).
+
     # ── Bug #24: fase Sentinella/Capitano + scala throttle continua ──
     #
     # Fase 1 (normale): proj < 100% e time-to-reset > 30 min → Sentinella
@@ -273,12 +325,21 @@ def compute_metrics(parsed, last, history=None):
     #                   già attuale).
     #
     # `suggested_throttle_s` è scala continua (vs i 3 valori discreti
-    # {0, 300, 600} del passato). Mappatura dalla doc bug #24:
+    # {0, 300, 600} del passato). Mappatura dalla doc bug #24, estesa fino a
+    # 3600s (runaway-scaling postmortem 2026-06-07, fix #1: il vecchio soffitto
+    # 600s rendeva il throttle un nudge omeopatico su un worker che sforava):
     #   100 < proj ≤ 110 → 120s
     #   110 < proj ≤ 130 → 240s
     #   130 < proj ≤ 150 → 360s
     #   150 < proj ≤ 200 → 600s
-    #   proj > 200       → freeze (-1 sentinel value)
+    #   200 < proj ≤ 300 → 1200s
+    #   300 < proj ≤ 400 → 1800s
+    #   proj > 400       → 3600s (max, = jht-throttle.py MAX_SLEEP)
+    # NB: questo è il throttle PER-WORKER. Il freeze dell'INTERO team resta una
+    # decisione separata della Sentinella (EMERGENZA su proj>200 o >150 per ≥3
+    # tick, regola S-05) via freeze_team.py — non più codificata qui come -1.
+    # Quando un singolo worker resta sopra vel_target dopo un throttle 1800-3600s
+    # per ≥2 tick, la leva giusta è il KILL (C-12), non alzare ancora il throttle.
     if hours_to_reset is not None and hours_to_reset <= 0.5:
         phase = 3
     elif projection is not None and projection > 100:
@@ -289,8 +350,12 @@ def compute_metrics(parsed, last, history=None):
     suggested_throttle_s = 0
     if projection is not None:
         p = projection
-        if p > 200:
-            suggested_throttle_s = -1  # freeze
+        if p > 400:
+            suggested_throttle_s = 3600  # max (= jht-throttle.py MAX_SLEEP)
+        elif p > 300:
+            suggested_throttle_s = 1800
+        elif p > 200:
+            suggested_throttle_s = 1200
         elif p > 150:
             suggested_throttle_s = 600
         elif p > 130:
@@ -333,6 +398,14 @@ def compute_metrics(parsed, last, history=None):
         # grep nei sorgenti del bridge. None se il provider non lo espone.
         "weekly_reset_at": parsed.get("weekly_reset_at"),
         "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
+        # Fix #4 (runaway-scaling 2026-06-07) + correzione design 2026-06-13:
+        # campi weekly esposti come AWARENESS (INFO) per C-09/C-12/S-06, NON
+        # forzano lo status. Il freno weekly è vel_team vs vel_target nel
+        # pacing-bridge. weekly_binding resta sempre False (no soglia assoluta).
+        "proj_weekly": proj_weekly,
+        "weekly_remaining_pct": weekly_remaining_pct,
+        "weekly_binding": weekly_binding,
+        "proj_binding": round(proj_binding, 2) if proj_binding is not None else None,
     }
 
 
