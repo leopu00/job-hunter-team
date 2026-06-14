@@ -76,6 +76,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_v6_to_v7_tombstones(conn)
     _migrate_positions_geocode_requested(conn)
     _migrate_positions_expiry(conn)
+    _migrate_positions_salary_precise(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,6 +145,9 @@ def ensure_schema(conn: sqlite3.Connection):
         write_requested_at TIMESTAMP,
         geocode_requested INTEGER DEFAULT 0,
         geocode_requested_at TIMESTAMP,
+        salary_precise_requested INTEGER DEFAULT 0,
+        salary_precise_requested_at TIMESTAMP,
+        salary_precise TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         -- Length guardrails: mirror dei CHECK constraint Postgres (mig 015).
@@ -238,6 +242,7 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
     CREATE INDEX IF NOT EXISTS idx_positions_write_requested ON positions(write_requested) WHERE write_requested = 1;
     CREATE INDEX IF NOT EXISTS idx_positions_geocode_requested ON positions(geocode_requested) WHERE geocode_requested = 1;
+    CREATE INDEX IF NOT EXISTS idx_positions_salary_precise_requested ON positions(salary_precise_requested) WHERE salary_precise_requested = 1;
     CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
     CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
@@ -971,6 +976,35 @@ def _migrate_positions_geocode_requested(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_geocode_requested "
         "ON positions(geocode_requested) WHERE geocode_requested = 1"
+    )
+
+
+def _migrate_positions_salary_precise(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.salary_precise_requested` + `_at` + `salary_precise` (V9).
+
+    Flag USER-DRIVEN per Salary-precise on-demand: l'analista produce sempre la
+    stima rough (`salary_estimated_*`) nel passaggio pipeline; la versione PRECISA
+    (ricerca azienda + media web + tasse + NETTO) e' costosa → l'utente la richiede
+    dal dashboard/Telegram, il flag viaggia nel sync (push+pull, cross-device) e
+    l'analista la produce solo quando acceso, scrivendo il breakdown in
+    `salary_precise`. Replica del pattern Writer/Geocoding-on-demand (mig 024/027).
+
+    recheck/categorize NON hanno colonna: sono code SISTEMATICHE via query naturale
+    (last_open_check stale / role_family IS NULL), loop-guard gratis.
+
+    Idempotente: guard via _column_exists, ALTER ADD COLUMN solo se mancante.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'salary_precise_requested'):
+        conn.execute("ALTER TABLE positions ADD COLUMN salary_precise_requested INTEGER DEFAULT 0")
+    if not _column_exists(conn, 'positions', 'salary_precise_requested_at'):
+        conn.execute("ALTER TABLE positions ADD COLUMN salary_precise_requested_at TIMESTAMP")
+    if not _column_exists(conn, 'positions', 'salary_precise'):
+        conn.execute("ALTER TABLE positions ADD COLUMN salary_precise TEXT")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_salary_precise_requested "
+        "ON positions(salary_precise_requested) WHERE salary_precise_requested = 1"
     )
 
 
