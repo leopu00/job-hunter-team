@@ -42,6 +42,14 @@ export interface TeamActivityEvent {
   pid: string | null // id della posizione gestita (positions.id) → link al dettaglio
 }
 
+// Evento del feed "Attività recente", arricchito col contesto della posizione
+// (titolo/azienda/id leggibile) tramite una query mirata sui soli pid recenti.
+export interface RecentActivityEvent extends TeamActivityEvent {
+  title?: string | null
+  company?: string | null
+  legacyId?: number | null
+}
+
 // Normalizza l'id istanza: trim + lowercase; vuoto/null → nome del ruolo.
 // Il lowercase unifica varianti di casing reali (es. 'critico-s1' / 'CRITICO-S1').
 export function normActor(
@@ -76,7 +84,7 @@ export interface TeamActivity {
   roleDaily: TeamActivityRoleDay[] // somma per ruolo/giorno (per la timeline)
   roleTotals: Record<TeamActivityRole, number>
   totalAll: number
-  recent: TeamActivityEvent[] // ultimi eventi nel range, ts desc (max RECENT_LIMIT)
+  recent: RecentActivityEvent[] // ultimi eventi nel range, ts desc (max RECENT_LIMIT), arricchiti
   timeline: TeamActivityEvent[] // eventi nel range per lo scatter temporale (cap TIMELINE_LIMIT)
 }
 

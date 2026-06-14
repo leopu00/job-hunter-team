@@ -1,6 +1,6 @@
 import { getDb } from './db'
 import { aggregateRoleFamilies, type RoleFamilyCount } from './position-classifier'
-import { buildTeamActivity, normActor, type TeamActivity, type TeamActivityEvent } from './team-activity'
+import { buildTeamActivity, normActor, type TeamActivity, type TeamActivityEvent, type RecentActivityEvent } from './team-activity'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -963,7 +963,58 @@ export function getTeamActivityLocal(ws: string, fromKey: string, toKey: string)
   collect('scored_at', 'scored_by', 'position_id', 'scores', 'scorer')
   collect('written_at', 'written_by', 'position_id', 'applications', 'scrittore')
   collect('critic_reviewed_at', 'reviewed_by', 'position_id', 'applications', 'critico')
-  return buildTeamActivity(events, fromKey, toKey)
+  const act = buildTeamActivity(events, fromKey, toKey)
+
+  // Arricchisce SOLO il feed recente (≤40) con titolo/azienda/id leggibile.
+  const pids = [...new Set(act.recent.map((r) => r.pid).filter((p): p is string => !!p))]
+  if (pids.length) {
+    const rows = db.prepare(
+      `SELECT id, legacy_id, title, company FROM positions WHERE id IN (${pids.map(() => '?').join(',')})`,
+    ).all(...pids) as { id: number | string; legacy_id: number | null; title: string | null; company: string | null }[]
+    const meta = new Map(rows.map((r) => [String(r.id), r]))
+    for (const ev of act.recent) {
+      const m = ev.pid ? meta.get(ev.pid) : undefined
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id }
+    }
+  }
+  return act
+}
+
+// ── Activity log (TUTTE le azioni, per la pagina dedicata) ──────────
+// UNION delle 5 sorgenti di eventi, arricchito con titolo/azienda/id leggibile
+// via JOIN su positions, ordinato dal più recente. Per l'analista usiamo
+// last_actor SE è un'istanza analista (posizione ancora in checked/excluded),
+// altrimenti ricade su 'analista' (il cloud non ha proprio l'istanza analista).
+export function getTeamActivityLogLocal(ws: string): RecentActivityEvent[] {
+  const db = getDb(ws)
+  let rows: any[]
+  const SQL = (analistaActor: string) => `
+    SELECT role, actor, ts, pid, title, company, legacy_id FROM (
+      SELECT 'scout' role, found_by actor, found_at ts, id pid, title, company, legacy_id FROM positions WHERE found_at IS NOT NULL
+      UNION ALL
+      SELECT 'analista', ${analistaActor}, last_checked, id, title, company, legacy_id FROM positions WHERE last_checked IS NOT NULL
+      UNION ALL
+      SELECT 'scorer', s.scored_by, s.scored_at, p.id, p.title, p.company, p.legacy_id FROM scores s JOIN positions p ON p.id=s.position_id WHERE s.scored_at IS NOT NULL
+      UNION ALL
+      SELECT 'scrittore', a.written_by, a.written_at, p.id, p.title, p.company, p.legacy_id FROM applications a JOIN positions p ON p.id=a.position_id WHERE a.written_at IS NOT NULL
+      UNION ALL
+      SELECT 'critico', a.reviewed_by, a.critic_reviewed_at, p.id, p.title, p.company, p.legacy_id FROM applications a JOIN positions p ON p.id=a.position_id WHERE a.critic_reviewed_at IS NOT NULL
+    ) ORDER BY ts DESC`
+  try {
+    rows = db.prepare(SQL("CASE WHEN last_actor LIKE 'analista%' THEN last_actor ELSE NULL END")).all() as any[]
+  } catch {
+    // workspace senza colonna last_actor → analista aggregato
+    rows = db.prepare(SQL('NULL')).all() as any[]
+  }
+  return rows.map((r) => ({
+    role: r.role,
+    actor: normActor(r.role, r.actor),
+    ts: r.ts,
+    pid: r.pid != null ? String(r.pid) : null,
+    title: r.title ?? null,
+    company: r.company ?? null,
+    legacyId: r.legacy_id ?? null,
+  }))
 }
 
 // ── Application stats ───────────────────────────────────────────────
