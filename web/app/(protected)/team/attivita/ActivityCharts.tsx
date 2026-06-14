@@ -8,50 +8,13 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import Link from "next/link";
 import type {
   TeamActivity,
   TeamActivityActor,
   TeamActivityRole,
 } from "@/lib/team-activity";
-
-/* ── Metadati ruoli (colori allineati alla pagina /team) ──────────── */
-const ROLE_META: Record<
-  TeamActivityRole,
-  { label: string; emoji: string; color: string; verb: string; action: string }
-> = {
-  scout: { label: "Scout", emoji: "🔍", color: "#2196f3", verb: "posizioni trovate", action: "ha trovato una posizione" },
-  analista: { label: "Analista", emoji: "🏢", color: "#00e676", verb: "posizioni analizzate", action: "ha analizzato una posizione" },
-  scorer: { label: "Scorer", emoji: "🎯", color: "#b388ff", verb: "score assegnati", action: "ha assegnato uno score" },
-  scrittore: { label: "Scrittore", emoji: "✍️", color: "#ffd600", verb: "CV scritti", action: "ha scritto un CV" },
-  critico: { label: "Critico", emoji: "🧐", color: "#ff6ac1", verb: "review completate", action: "ha completato una review" },
-};
-
-// ISO → 'DD/MM HH:MM' (ora locale).
-function dmhm(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso.slice(0, 16).replace("T", " ");
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-/* ── Helpers ──────────────────────────────────────────────────────── */
-function timeAgo(iso: string | null): string {
-  if (!iso) return "—";
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return "—";
-  const diff = Date.now() - then;
-  if (diff < 0) return "ora";
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "ora";
-  if (min < 60) return `${min}m fa`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h fa`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}g fa`;
-  const mo = Math.floor(d / 30);
-  return `${mo} mes${mo === 1 ? "e" : "i"} fa`;
-}
+import { ROLE_META, timeAgo, dmhm } from "@/lib/team-activity-meta";
+import RecentActivityFeed from "@/app/components/RecentActivityFeed";
 
 // 'YYYY-MM-DD' → 'DD/MM'
 function dm(date: string): string {
@@ -153,6 +116,417 @@ const TooltipLayer = forwardRef<TooltipHandle>(function TooltipLayer(_props, ref
   );
 });
 
+/* ── Scatter temporale isolato (con zoom) ──────────────────────────
+   Stato `zoom` interno: lo zoom espande la larghezza del piano (px/giorno)
+   → la scrollbar orizzontale serve proprio a esplorare la timeline zoomata,
+   separando i giorni e, a zoom alto, i singoli eventi (minuti). Isolato in un
+   componente a parte così lo zoom NON ri-renderizza gli altri grafici. */
+function TemporalScatter({
+  roles,
+  timeline,
+  fromMs,
+  span,
+  dates,
+  onShow,
+  onMove,
+  onHide,
+}: {
+  roles: TeamActivityRole[];
+  timeline: { role: TeamActivityRole; actor: string; ts: string; pid: string | null }[];
+  fromMs: number;
+  span: number;
+  dates: string[];
+  onShow: (e: React.MouseEvent, title: string, rows: TipRow[]) => void;
+  onMove: (e: React.MouseEvent) => void;
+  onHide: () => void;
+}) {
+  const ZOOMS = [1, 2, 4, 8, 16, 32];
+  const [zoom, setZoom] = useState(1);
+  const days = dates.length;
+  const laneH = 30;
+  const baseDayPx = 24;
+  const scatterW = Math.max(600, Math.round(days * baseDayPx * zoom));
+  const axisStep = Math.max(
+    1,
+    Math.ceil(days / Math.max(1, Math.floor(scatterW / 70))),
+  );
+  const H = roles.length * laneH;
+  const zi = ZOOMS.indexOf(zoom);
+
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="section-label">🗓️ Quando, chi e cosa</div>
+        {/* Controllo zoom */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => setZoom(ZOOMS[Math.max(0, zi - 1)])}
+            disabled={zi <= 0}
+            className="w-6 h-6 rounded-md text-[12px] font-bold leading-none transition-colors disabled:opacity-30"
+            style={{
+              background: "transparent",
+              color: "var(--color-muted)",
+              border: "1px solid var(--color-border)",
+            }}
+            title="Zoom indietro"
+          >
+            −
+          </button>
+          <span className="text-[10px] text-[var(--color-dim)] w-8 text-center tabular-nums">
+            {zoom}×
+          </span>
+          <button
+            onClick={() => setZoom(ZOOMS[Math.min(ZOOMS.length - 1, zi + 1)])}
+            disabled={zi >= ZOOMS.length - 1}
+            className="w-6 h-6 rounded-md text-[12px] font-bold leading-none transition-colors disabled:opacity-30"
+            style={{
+              background: "transparent",
+              color: "var(--color-muted)",
+              border: "1px solid var(--color-border)",
+            }}
+            title="Zoom avanti"
+          >
+            +
+          </button>
+        </div>
+      </div>
+      <p className="text-[10px] text-[var(--color-dim)] mb-4">
+        Ogni segno è un&apos;azione all&apos;ora esatta · una corsia per ruolo.
+        Zooma per separare giorni e minuti, poi scorri orizzontalmente.
+      </p>
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+        <div className="flex">
+          {/* Corsie (label ruolo, fisse) */}
+          <div className="shrink-0" style={{ width: 96 }}>
+            {roles.map((r) => (
+              <div
+                key={r}
+                className="flex items-center gap-1.5"
+                style={{ height: laneH }}
+              >
+                <span className="text-[12px] leading-none">
+                  {ROLE_META[r].emoji}
+                </span>
+                <span
+                  className="text-[10px] font-semibold"
+                  style={{ color: ROLE_META[r].color }}
+                >
+                  {ROLE_META[r].label}
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* Piano scatter — scrollabile */}
+          <div className="flex-1 overflow-x-auto">
+            <div style={{ width: scatterW }}>
+              <svg width={scatterW} height={H} viewBox={`0 0 ${scatterW} ${H}`}>
+                {roles.map((r, i) => (
+                  <line
+                    key={r}
+                    x1={0}
+                    x2={scatterW}
+                    y1={i * laneH + laneH / 2}
+                    y2={i * laneH + laneH / 2}
+                    stroke="var(--color-border)"
+                    strokeWidth={1}
+                    opacity={0.5}
+                  />
+                ))}
+                {timeline.map((ev, idx) => {
+                  const li = roles.indexOf(ev.role);
+                  if (li < 0) return null;
+                  const t = Date.parse(ev.ts);
+                  const frac = Number.isNaN(t)
+                    ? 0
+                    : Math.max(0, Math.min(1, (t - fromMs) / span));
+                  const meta = ROLE_META[ev.role];
+                  const label = ev.actor === ev.role ? meta.label : ev.actor;
+                  return (
+                    <rect
+                      key={`${idx}-${ev.ts}`}
+                      x={frac * scatterW}
+                      y={li * laneH + 6}
+                      width={2}
+                      height={laneH - 12}
+                      rx={1}
+                      fill={meta.color}
+                      opacity={0.6}
+                      className="cursor-default"
+                      onMouseEnter={(e) =>
+                        onShow(e, `${meta.emoji} ${label} · ${dmhm(ev.ts)}`, [
+                          {
+                            color: meta.color,
+                            label: meta.action,
+                            value: ev.pid ? `#${ev.pid}` : "",
+                          },
+                        ])
+                      }
+                      onMouseMove={onMove}
+                      onMouseLeave={onHide}
+                    />
+                  );
+                })}
+              </svg>
+              {/* Asse x: tick per giorno (più fitti a zoom alto) */}
+              <div className="flex mt-1.5" style={{ width: scatterW }}>
+                {dates.map((date, i) => (
+                  <div
+                    key={date}
+                    className="flex-1 text-center overflow-visible whitespace-nowrap"
+                    style={{ fontSize: 8, color: "var(--color-dim)" }}
+                  >
+                    {i % axisStep === 0 ? dm(date) : ""}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── Donut interattivo (drill-down ruoli → istanze) ───────────────
+   Vista per ruoli; cliccando un ruolo con istanze il donut si "apre" sulle
+   sue istanze (scout-1, scout-2…) come spicchi a tonalità decrescenti, con
+   legenda dettagliata e back. Stato interno → non ri-renderizza il resto. */
+function WorkDonut({
+  roles,
+  roleTotals,
+  actors,
+  totalAll,
+  onShow,
+  onMove,
+  onHide,
+}: {
+  roles: TeamActivityRole[];
+  roleTotals: Record<TeamActivityRole, number>;
+  actors: TeamActivityActor[];
+  totalAll: number;
+  onShow: (e: React.MouseEvent, title: string, rows: TipRow[]) => void;
+  onMove: (e: React.MouseEvent) => void;
+  onHide: () => void;
+}) {
+  const [sel, setSel] = useState<TeamActivityRole | null>(null);
+  const roleHasInstances = (r: TeamActivityRole) =>
+    actors.some((a) => a.role === r && a.actor !== a.role && a.total > 0);
+
+  type Slice = {
+    key: string;
+    label: string;
+    emoji: string;
+    color: string;
+    opacity: number;
+    value: number;
+    pct: number;
+    clickable: boolean;
+    role?: TeamActivityRole;
+    last?: string | null;
+    tipTitle: string;
+  };
+
+  let slices: Slice[];
+  let centerMain: number;
+  let centerSub: string;
+
+  if (sel) {
+    const meta = ROLE_META[sel];
+    const items = actors
+      .filter((a) => a.role === sel && a.total > 0)
+      .sort((a, b) => b.total - a.total || a.actor.localeCompare(b.actor));
+    const hasNamed = items.some((a) => a.actor !== a.role);
+    const sum = items.reduce((s, x) => s + x.total, 0) || 1;
+    slices = items.map((a, k) => {
+      const lbl = actorLabel(a, meta.label, hasNamed);
+      return {
+        key: a.actor,
+        label: lbl,
+        emoji: meta.emoji,
+        color: meta.color,
+        opacity: Math.max(0.32, 1 - k * 0.16),
+        value: a.total,
+        pct: Math.round((a.total / sum) * 100),
+        clickable: false,
+        last: a.lastActiveAt,
+        tipTitle: `${meta.emoji} ${lbl}`,
+      };
+    });
+    centerMain = roleTotals[sel];
+    centerSub = meta.label.toUpperCase();
+  } else {
+    const rs = roles
+      .filter((r) => roleTotals[r] > 0)
+      .map((r) => ({ r, value: roleTotals[r] }))
+      .sort((a, b) => b.value - a.value);
+    const sum = rs.reduce((s, x) => s + x.value, 0) || 1;
+    slices = rs.map(({ r, value }) => ({
+      key: r,
+      label: ROLE_META[r].label,
+      emoji: ROLE_META[r].emoji,
+      color: ROLE_META[r].color,
+      opacity: 0.9,
+      value,
+      pct: Math.round((value / sum) * 100),
+      clickable: roleHasInstances(r),
+      role: r,
+      tipTitle: `${ROLE_META[r].emoji} ${ROLE_META[r].label}`,
+    }));
+    centerMain = totalAll;
+    centerSub = "AZIONI";
+  }
+
+  const sliceSum = slices.reduce((t, x) => t + x.value, 0) || 1;
+  let acc = 0;
+  const arcs = slices.map((s) => {
+    const frac = s.value / sliceSum;
+    const start = acc;
+    acc += frac;
+    return { ...s, frac, start };
+  });
+
+  const R = 60;
+  const C = 2 * Math.PI * R;
+
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="section-label">🍩 Distribuzione del lavoro</div>
+        {sel && (
+          <button
+            onClick={() => setSel(null)}
+            className="text-[10px] font-semibold rounded-md px-2 py-1 border border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-blue)] hover:text-[var(--color-blue)] transition-colors"
+          >
+            ← tutti i ruoli
+          </button>
+        )}
+      </div>
+      <p className="text-[10px] text-[var(--color-dim)] mb-4">
+        {sel
+          ? `Dettaglio istanze di ${ROLE_META[sel].label}, in quota sul totale del ruolo.`
+          : "Quota di lavoro per ruolo · clicca un ruolo per vederne le istanze."}
+      </p>
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 flex flex-col sm:flex-row items-center gap-6">
+        {/* Donut SVG */}
+        <div className="relative shrink-0" style={{ width: 168, height: 168 }}>
+          <svg viewBox="0 0 168 168" width={168} height={168}>
+            <g transform="rotate(-90 84 84)">
+              {arcs.map((s) => (
+                <circle
+                  key={s.key}
+                  cx={84}
+                  cy={84}
+                  r={R}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth={22}
+                  strokeDasharray={`${s.frac * C} ${C - s.frac * C}`}
+                  strokeDashoffset={-s.start * C}
+                  className={s.clickable ? "cursor-pointer" : "cursor-default"}
+                  style={{ opacity: s.opacity }}
+                  onClick={s.clickable && s.role ? () => setSel(s.role!) : undefined}
+                  onMouseEnter={(e) =>
+                    onShow(e, s.tipTitle, [
+                      {
+                        color: s.color,
+                        label: `${s.pct}% · azioni`,
+                        value: String(s.value),
+                      },
+                    ])
+                  }
+                  onMouseMove={onMove}
+                  onMouseLeave={onHide}
+                />
+              ))}
+            </g>
+            <text
+              x={84}
+              y={80}
+              textAnchor="middle"
+              className="fill-[var(--color-white)]"
+              style={{ fontSize: 22, fontWeight: 700 }}
+            >
+              {centerMain}
+            </text>
+            <text
+              x={84}
+              y={98}
+              textAnchor="middle"
+              className="fill-[var(--color-dim)]"
+              style={{ fontSize: 9, letterSpacing: 1 }}
+            >
+              {centerSub}
+            </text>
+          </svg>
+        </div>
+        {/* Legenda */}
+        <div className="flex-1 w-full space-y-2">
+          {arcs.map((s) => (
+            <div
+              key={s.key}
+              className={`flex items-center gap-3 rounded-md px-2 py-1 -mx-2 ${
+                s.clickable
+                  ? "cursor-pointer hover:bg-[var(--color-bg)]"
+                  : ""
+              }`}
+              onClick={s.clickable && s.role ? () => setSel(s.role!) : undefined}
+            >
+              <span
+                className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                style={{ background: s.color, opacity: s.opacity }}
+              />
+              {!sel && (
+                <span className="text-[11px] leading-none">{s.emoji}</span>
+              )}
+              <span
+                className="text-[11px] font-semibold shrink-0 truncate"
+                style={{ color: sel ? "var(--color-muted)" : s.color, width: sel ? 96 : 80 }}
+                title={s.label}
+              >
+                {s.label}
+              </span>
+              <div
+                className="flex-1 h-1.5 rounded-full overflow-hidden"
+                style={{ background: "var(--color-border)" }}
+              >
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${s.frac * 100}%`,
+                    background: s.color,
+                    opacity: Math.max(0.55, s.opacity),
+                  }}
+                />
+              </div>
+              <span className="text-[11px] font-bold w-10 text-right shrink-0 tabular-nums">
+                {s.pct}%
+              </span>
+              <span className="text-[10px] text-[var(--color-dim)] w-12 text-right shrink-0 tabular-nums">
+                {s.value}
+              </span>
+              {sel ? (
+                <span className="text-[9px] text-[var(--color-dim)] w-20 text-right shrink-0 tabular-nums whitespace-nowrap">
+                  ultimo {timeAgo(s.last ?? null)}
+                </span>
+              ) : (
+                <span
+                  className="text-[10px] w-4 text-right shrink-0"
+                  style={{
+                    color: "var(--color-dim)",
+                    visibility: s.clickable ? "visible" : "hidden",
+                  }}
+                >
+                  ▶
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /* ── Componente principale ────────────────────────────────────────── */
 export default function ActivityCharts({
   activity,
@@ -162,13 +536,21 @@ export default function ActivityCharts({
   const { dates, roles, actors, roleDaily, roleTotals, totalAll, days, recent } =
     activity;
 
+  // Regola UI: nascondiamo agenti/categorie a 0 → mostriamo solo chi ha
+  // almeno un dato nel periodo.
+  const activeRoles = useMemo(
+    () => roles.filter((r) => roleTotals[r] > 0),
+    [roles, roleTotals],
+  );
+
   // Leaderboard: raggruppa le istanze per ruolo; ruoli ordinati per azioni nel
   // range, istanze ordinate per azioni nel range.
   const groups = useMemo(() => {
     return roles
       .map((role) => {
+        // Solo istanze con almeno un dato nel periodo.
         const items = actors
-          .filter((a) => a.role === role)
+          .filter((a) => a.role === role && a.total > 0)
           .sort((a, b) => b.total - a.total || a.actor.localeCompare(b.actor));
         const last = items.reduce<string | null>((acc, a) => {
           if (a.lastActiveAt && (!acc || a.lastActiveAt > acc)) return a.lastActiveAt;
@@ -178,6 +560,7 @@ export default function ActivityCharts({
         const hasNamed = items.some((a) => a.actor !== a.role);
         return { role, items, total: roleTotals[role], last, maxInstance, hasNamed };
       })
+      .filter((g) => g.total > 0) // niente ruoli a 0
       .sort((a, b) => b.total - a.total);
   }, [roles, actors, roleTotals]);
 
@@ -194,7 +577,7 @@ export default function ActivityCharts({
     const out: { actor: TeamActivityActor; max: number; label: string; aggregated: boolean }[] = [];
     for (const role of roles) {
       const items = actors
-        .filter((a) => a.role === role)
+        .filter((a) => a.role === role && a.total > 0)
         .sort((a, b) => b.total - a.total || a.actor.localeCompare(b.actor));
       const hasNamed = items.some((a) => a.actor !== a.role);
       for (const a of items) {
@@ -213,33 +596,10 @@ export default function ActivityCharts({
   const tick = Math.max(1, Math.ceil(days / 8));
 
   // Donut: distribuzione del lavoro per ruolo (quota sul totale).
-  const donut = useMemo(() => {
-    const slices = roles
-      .filter((r) => roleTotals[r] > 0)
-      .map((r) => ({ role: r, value: roleTotals[r] }))
-      .sort((a, b) => b.value - a.value);
-    const sum = slices.reduce((s, x) => s + x.value, 0) || 1;
-    let acc = 0;
-    return slices.map((s) => {
-      const frac = s.value / sum;
-      const start = acc;
-      acc += frac;
-      return { ...s, frac, start, pct: Math.round(frac * 100) };
-    });
-  }, [roles, roleTotals]);
-
   // Scatter temporale: posizione x = quota del range, lane per ruolo.
   const fromMs = Date.parse(`${activity.from}T00:00:00Z`);
   const toMs = Date.parse(`${activity.to}T23:59:59Z`);
   const span = Math.max(1, toMs - fromMs);
-  const laneH = 30;
-  // Larghezza "zoom" del piano scatter: cresce coi giorni → scrollbar
-  // orizzontale per esplorare la timeline nel dettaglio.
-  const scatterW = Math.max(720, days * 56);
-  const axisStep = Math.max(
-    1,
-    Math.ceil(days / Math.max(1, Math.floor(scatterW / 64))),
-  );
 
   /* ── Tooltip custom (hover su barre/celle) ─────────────────────────
      Gli handler chiamano il layer isolato via ref: NON toccano lo stato di
@@ -250,6 +610,17 @@ export default function ActivityCharts({
   const moveTip = (e: React.MouseEvent) =>
     tipRef.current?.move(e.clientX, e.clientY);
   const hideTip = () => tipRef.current?.hide();
+
+  // Leaderboard: dettaglio istanze collassato di default (vediamo i ruoli uno
+  // sotto l'altro); click sull'header per espandere.
+  const [expanded, setExpanded] = useState<Set<TeamActivityRole>>(new Set());
+  const toggleRole = (r: TeamActivityRole) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(r)) next.delete(r);
+      else next.add(r);
+      return next;
+    });
 
   if (totalAll === 0) {
     return (
@@ -270,55 +641,7 @@ export default function ActivityCharts({
   return (
     <div className="space-y-10" style={{ animation: "fade-in 0.35s ease both" }}>
       {/* ── 0. Attività recente (chi ha fatto le ultime azioni) ──── */}
-      <section>
-        <div className="section-label mb-1">🕐 Attività recente</div>
-        <p className="text-[10px] text-[var(--color-dim)] mb-4">
-          Le ultime azioni del team, dalla più recente — con l&apos;istanza che
-          l&apos;ha fatta.
-        </p>
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)] max-h-[340px] overflow-y-auto">
-          {recent.map((ev, i) => {
-            const meta = ROLE_META[ev.role];
-            const label = ev.actor === ev.role ? meta.label : ev.actor;
-            return (
-              <div
-                key={`${ev.role}-${ev.actor}-${ev.ts}-${i}`}
-                className="flex items-center gap-3 px-4 py-2 hover:bg-[var(--color-bg)] transition-colors"
-              >
-                <span className="text-[10px] text-[var(--color-dim)] w-14 shrink-0 tabular-nums">
-                  {timeAgo(ev.ts)}
-                </span>
-                <span className="text-[13px] leading-none shrink-0">
-                  {meta.emoji}
-                </span>
-                <span
-                  className="text-[11px] font-bold w-24 shrink-0 truncate tabular-nums"
-                  style={{ color: meta.color }}
-                  title={ev.actor}
-                >
-                  {label}
-                </span>
-                <span className="text-[11px] text-[var(--color-muted)] flex-1 min-w-0 truncate">
-                  {meta.action}
-                </span>
-                {ev.pid && (
-                  <Link
-                    href={`/positions/${ev.pid}`}
-                    className="text-[10px] font-semibold shrink-0 tabular-nums no-underline rounded px-1.5 py-0.5 border border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-blue)] hover:text-[var(--color-blue)] transition-colors"
-                    title={`Apri la posizione #${ev.pid}`}
-                  >
-                    #{ev.pid}
-                  </Link>
-                )}
-                <span className="text-[10px] text-[var(--color-dim)] shrink-0 tabular-nums hidden sm:block w-24 text-right">
-                  {dmhm(ev.ts)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
+      <RecentActivityFeed recent={recent} viewAllHref="/team/attivita/log" />
       {/* ── 1. Leaderboard nel periodo (per istanza) ─────────────── */}
       <section>
         <div className="section-label mb-1">🏅 Leaderboard · nel periodo</div>
@@ -331,15 +654,32 @@ export default function ActivityCharts({
             const showInstances =
               g.items.length > 1 ||
               (g.items.length === 1 && g.items[0].actor !== g.role);
+            const isExpanded = expanded.has(g.role);
             return (
               <div
                 key={g.role}
                 className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors"
                 style={{ animation: `fade-in 0.4s ease ${i * 0.06}s both` }}
               >
-                {/* Header ruolo */}
-                <div className="flex items-center justify-between mb-3">
+                {/* Header ruolo (cliccabile per espandere le istanze) */}
+                <div
+                  className={`flex items-center justify-between mb-3 ${showInstances ? "cursor-pointer select-none" : ""}`}
+                  onClick={showInstances ? () => toggleRole(g.role) : undefined}
+                  role={showInstances ? "button" : undefined}
+                  aria-expanded={showInstances ? isExpanded : undefined}
+                >
                   <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className="text-[9px] w-3 shrink-0 transition-transform"
+                      style={{
+                        color: "var(--color-dim)",
+                        visibility: showInstances ? "visible" : "hidden",
+                        transform: isExpanded ? "rotate(90deg)" : "none",
+                      }}
+                      aria-hidden="true"
+                    >
+                      ▶
+                    </span>
                     <span className="text-[15px] leading-none">{meta.emoji}</span>
                     <span
                       className="text-[13px] font-bold"
@@ -375,13 +715,13 @@ export default function ActivityCharts({
                       }}
                     />
                   </div>
-                  <span className="text-[10px] text-[var(--color-dim)] w-20 text-right shrink-0">
+                  <span className="text-[10px] text-[var(--color-dim)] w-20 text-right shrink-0 whitespace-nowrap">
                     ultimo {timeAgo(g.last)}
                   </span>
                 </div>
 
-                {/* Dettaglio per istanza */}
-                {showInstances && (
+                {/* Dettaglio per istanza (visibile solo se espanso) */}
+                {showInstances && isExpanded && (
                   <div className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-2">
                     {g.items.map((a) => {
                       const isAgg = a.actor === a.role && g.hasNamed;
@@ -413,7 +753,7 @@ export default function ActivityCharts({
                         >
                           {a.total}
                         </span>
-                        <span className="text-[9px] text-[var(--color-dim)] w-16 text-right shrink-0 tabular-nums">
+                        <span className="text-[9px] text-[var(--color-dim)] w-20 text-right shrink-0 tabular-nums whitespace-nowrap">
                           ultimo {timeAgo(a.lastActiveAt)}
                         </span>
                       </div>
@@ -427,114 +767,16 @@ export default function ActivityCharts({
         </div>
       </section>
 
-      {/* ── 2. Donut: distribuzione del lavoro ───────────────────── */}
-      <section>
-        <div className="section-label mb-1">🍩 Distribuzione del lavoro</div>
-        <p className="text-[10px] text-[var(--color-dim)] mb-4">
-          Quanto ha fatto ciascun ruolo, in quota sul totale del periodo.
-        </p>
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 flex flex-col sm:flex-row items-center gap-6">
-          {/* Donut SVG */}
-          <div className="relative shrink-0" style={{ width: 168, height: 168 }}>
-            <svg viewBox="0 0 168 168" width={168} height={168}>
-              <g transform="rotate(-90 84 84)">
-                {(() => {
-                  const R = 60;
-                  const C = 2 * Math.PI * R;
-                  return donut.map((s) => {
-                    const meta = ROLE_META[s.role];
-                    return (
-                      <circle
-                        key={s.role}
-                        cx={84}
-                        cy={84}
-                        r={R}
-                        fill="none"
-                        stroke={meta.color}
-                        strokeWidth={22}
-                        strokeDasharray={`${s.frac * C} ${C - s.frac * C}`}
-                        strokeDashoffset={-s.start * C}
-                        className="cursor-default transition-[stroke-width]"
-                        style={{ opacity: 0.9 }}
-                        onMouseEnter={(e) =>
-                          showTip(e, `${meta.emoji} ${meta.label}`, [
-                            {
-                              color: meta.color,
-                              label: `${s.pct}% · azioni`,
-                              value: String(s.value),
-                            },
-                          ])
-                        }
-                        onMouseMove={moveTip}
-                        onMouseLeave={hideTip}
-                      />
-                    );
-                  });
-                })()}
-              </g>
-              <text
-                x={84}
-                y={80}
-                textAnchor="middle"
-                className="fill-[var(--color-white)]"
-                style={{ fontSize: 22, fontWeight: 700 }}
-              >
-                {totalAll}
-              </text>
-              <text
-                x={84}
-                y={98}
-                textAnchor="middle"
-                className="fill-[var(--color-dim)]"
-                style={{ fontSize: 9, letterSpacing: 1 }}
-              >
-                AZIONI
-              </text>
-            </svg>
-          </div>
-          {/* Legenda */}
-          <div className="flex-1 w-full space-y-2">
-            {donut.map((s) => {
-              const meta = ROLE_META[s.role];
-              return (
-                <div key={s.role} className="flex items-center gap-3">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
-                    style={{ background: meta.color }}
-                  />
-                  <span className="text-[11px] leading-none">{meta.emoji}</span>
-                  <span
-                    className="text-[11px] font-semibold w-20 shrink-0"
-                    style={{ color: meta.color }}
-                  >
-                    {meta.label}
-                  </span>
-                  <div
-                    className="flex-1 h-1.5 rounded-full overflow-hidden"
-                    style={{ background: "var(--color-border)" }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${s.frac * 100}%`,
-                        background: meta.color,
-                        opacity: 0.85,
-                      }}
-                    />
-                  </div>
-                  <span className="text-[11px] font-bold w-10 text-right shrink-0 tabular-nums">
-                    {s.pct}%
-                  </span>
-                  <span className="text-[10px] text-[var(--color-dim)] w-12 text-right shrink-0 tabular-nums">
-                    {s.value}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
+      {/* ── 2. Donut interattivo: distribuzione + drill-down ─────── */}
+      <WorkDonut
+        roles={roles}
+        roleTotals={roleTotals}
+        actors={actors}
+        totalAll={totalAll}
+        onShow={showTip}
+        onMove={moveTip}
+        onHide={hideTip}
+      />
       {/* ── 3. Timeline impilata (per ruolo) ─────────────────────── */}
       <section>
         <div className="section-label mb-1">📈 Volume di lavoro nel tempo</div>
@@ -542,9 +784,9 @@ export default function ActivityCharts({
           Azioni totali al giorno, scomposte per ruolo · {days} giorni.
         </p>
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
-          {/* Legenda */}
+          {/* Legenda (solo ruoli con dati) */}
           <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-4">
-            {roles.map((r) => (
+            {activeRoles.map((r) => (
               <span key={r} className="flex items-center gap-1.5">
                 <span
                   className="inline-block w-2.5 h-2.5 rounded-sm"
@@ -619,112 +861,16 @@ export default function ActivityCharts({
       </section>
 
       {/* ── 4. Scatter temporale: chi, quando, cosa ──────────────── */}
-      <section>
-        <div className="section-label mb-1">🗓️ Quando, chi e cosa</div>
-        <p className="text-[10px] text-[var(--color-dim)] mb-4">
-          Ogni segno è un&apos;azione, posizionata all&apos;ora esatta. Una
-          corsia per ruolo · passa il mouse per i dettagli.
-          {recent.length > 0 && activity.timeline.length >= 2500
-            ? " (mostrati gli ultimi 2500 eventi)"
-            : ""}
-        </p>
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
-          <div className="flex">
-            {/* Corsie (label ruolo) */}
-            <div className="shrink-0" style={{ width: 96 }}>
-              {roles.map((r) => (
-                <div
-                  key={r}
-                  className="flex items-center gap-1.5"
-                  style={{ height: laneH }}
-                >
-                  <span className="text-[12px] leading-none">
-                    {ROLE_META[r].emoji}
-                  </span>
-                  <span
-                    className="text-[10px] font-semibold"
-                    style={{ color: ROLE_META[r].color }}
-                  >
-                    {ROLE_META[r].label}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {/* Piano scatter — largo e scrollabile orizzontalmente */}
-            <div className="flex-1 overflow-x-auto">
-              <div style={{ width: scatterW }}>
-                <svg
-                  width={scatterW}
-                  height={roles.length * laneH}
-                  viewBox={`0 0 ${scatterW} ${roles.length * laneH}`}
-                >
-                  {/* baseline corsie */}
-                  {roles.map((r, i) => (
-                    <line
-                      key={r}
-                      x1={0}
-                      x2={scatterW}
-                      y1={i * laneH + laneH / 2}
-                      y2={i * laneH + laneH / 2}
-                      stroke="var(--color-border)"
-                      strokeWidth={1}
-                      opacity={0.5}
-                    />
-                  ))}
-                  {/* eventi */}
-                  {activity.timeline.map((ev, idx) => {
-                    const li = roles.indexOf(ev.role);
-                    if (li < 0) return null;
-                    const t = Date.parse(ev.ts);
-                    const frac = Number.isNaN(t)
-                      ? 0
-                      : Math.max(0, Math.min(1, (t - fromMs) / span));
-                    const meta = ROLE_META[ev.role];
-                    const label = ev.actor === ev.role ? meta.label : ev.actor;
-                    return (
-                      <rect
-                        key={`${idx}-${ev.ts}`}
-                        x={frac * scatterW}
-                        y={li * laneH + 6}
-                        width={2}
-                        height={laneH - 12}
-                        rx={1}
-                        fill={meta.color}
-                        opacity={0.55}
-                        className="cursor-default"
-                        onMouseEnter={(e) =>
-                          showTip(e, `${meta.emoji} ${label} · ${dmhm(ev.ts)}`, [
-                            {
-                              color: meta.color,
-                              label: meta.action,
-                              value: ev.pid ? `#${ev.pid}` : "",
-                            },
-                          ])
-                        }
-                        onMouseMove={moveTip}
-                        onMouseLeave={hideTip}
-                      />
-                    );
-                  })}
-                </svg>
-                {/* Asse x: tick per giorno */}
-                <div className="flex mt-1.5" style={{ width: scatterW }}>
-                  {dates.map((date, i) => (
-                    <div
-                      key={date}
-                      className="flex-1 text-center overflow-visible whitespace-nowrap"
-                      style={{ fontSize: 8, color: "var(--color-dim)" }}
-                    >
-                      {i % axisStep === 0 ? dm(date) : ""}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
+      <TemporalScatter
+        roles={activeRoles}
+        timeline={activity.timeline}
+        fromMs={fromMs}
+        span={span}
+        dates={dates}
+        onShow={showTip}
+        onMove={moveTip}
+        onHide={hideTip}
+      />
       {/* ── 5. Heatmap istanza × giorno ──────────────────────────── */}
       <section>
         <div className="section-label mb-1">📅 Heatmap attività</div>
