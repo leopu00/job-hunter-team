@@ -799,6 +799,15 @@ async function handlePush(options) {
         // l'utente seleziona via UI quali posizioni geocodare con
         // precisione ufficio; il flag viaggia a cloud per UI cross-device.
         'geocode_requested', 'geocode_requested_at',
+        // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
+        // dall'analista, alimentano i grafici categoria/mappa della dashboard
+        // (che ESISTE gia' — va solo alimentata). Erano OMESSI dal push →
+        // restavano stranded sulla VPS, con le colonne cloud gia' presenti.
+        'role_family',
+        'loc_city', 'loc_region', 'loc_country', 'loc_country_code', 'loc_continent',
+        'work_mode', 'work_country', 'work_country_code',
+        'location_notes', 'is_multi_location',
+        'office_lat', 'office_lon', 'office_address', 'office_geocoded', 'office_verified',
       ], cursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
         'position_id', 'total_score', 'experience_fit', 'salary_fit',
