@@ -4,7 +4,7 @@ import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/wo
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
 import { aggregateRoleFamilies, UNCATEGORIZED_LABEL, type RoleFamilyCount } from '@/lib/position-classifier'
-import { addDaysKey, buildTeamActivity, normActor, resolveActivityRange, type TeamActivity, type TeamActivityEvent, type TeamActivityRole } from '@/lib/team-activity'
+import { addDaysKey, buildTeamActivity, normActor, resolveActivityRange, type TeamActivity, type TeamActivityEvent, type TeamActivityRole, type RecentActivityEvent } from '@/lib/team-activity'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -1228,7 +1228,80 @@ export async function getTeamActivity(opts?: { from?: string; to?: string }): Pr
     fetchEvents('applications', 'critic_reviewed_at', 'reviewed_by', 'position_id', 'critico', true),
   ])
 
-  return buildTeamActivity(groups.flat(), from, to)
+  const act = buildTeamActivity(groups.flat(), from, to)
+
+  // Arricchisce SOLO il feed recente (≤40) con titolo/azienda/id leggibile.
+  const pids = [...new Set(act.recent.map((r) => r.pid).filter((p): p is string => !!p))]
+  if (pids.length) {
+    type PosMeta = { id: string | number; legacy_id: number | null; title: string | null; company: string | null }
+    const { data } = await supabase
+      .from('positions')
+      .select('id, legacy_id, title, company')
+      .in('id', pids)
+    const meta = new Map<string, PosMeta>(((data ?? []) as unknown as PosMeta[]).map((r) => [String(r.id), r]))
+    for (const ev of act.recent) {
+      const m = ev.pid ? meta.get(ev.pid) : undefined
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id }
+    }
+  }
+  return act
+}
+
+// ── Activity log: TUTTE le azioni (per la pagina dedicata) ──────────
+// Local: SQLite (UNION). Cloud: una fetch per sorgente (senza finestra),
+// ordinata e arricchita con titolo/azienda/id. NB cap Supabase ~1000 righe
+// per query: ok per gli account attuali (<1000 posizioni/score).
+export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
+  const w = await ws()
+  if (w) {
+    try { return local.getTeamActivityLogLocal(w) } catch { return [] }
+  }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const fetchAll = async (
+    table: string, col: string, actorCol: string | null, idCol: string,
+    role: TeamActivityRole, softDelete: boolean,
+  ): Promise<RecentActivityEvent[]> => {
+    const select = [col, actorCol, idCol].filter(Boolean).join(', ')
+    let q = supabase.from(table).select(select).not(col, 'is', null)
+    if (softDelete) q = q.is('deleted_at', null)
+    const { data, error } = await q
+    if (error || !data) return []
+    return (data as any[]).map((r) => ({
+      role,
+      actor: normActor(role, actorCol ? r[actorCol] : null),
+      ts: r[col] as string,
+      pid: r[idCol] != null ? String(r[idCol]) : null,
+    }))
+  }
+
+  const groups = await Promise.all([
+    fetchAll('positions', 'found_at', 'found_by', 'id', 'scout', true),
+    fetchAll('positions', 'last_checked', null, 'id', 'analista', true),
+    fetchAll('scores', 'scored_at', 'scored_by', 'position_id', 'scorer', false),
+    fetchAll('applications', 'written_at', 'written_by', 'position_id', 'scrittore', true),
+    fetchAll('applications', 'critic_reviewed_at', 'reviewed_by', 'position_id', 'critico', true),
+  ])
+  const events = groups.flat()
+  events.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0))
+
+  const pids = [...new Set(events.map((e) => e.pid).filter((p): p is string => !!p))]
+  if (pids.length) {
+    type PosMeta = { id: string | number; legacy_id: number | null; title: string | null; company: string | null }
+    const meta = new Map<string, PosMeta>()
+    // Batch dell'.in() per non sforare la lunghezza dell'URL con tanti UUID.
+    for (let i = 0; i < pids.length; i += 150) {
+      const chunk = pids.slice(i, i + 150)
+      const { data } = await supabase.from('positions').select('id, legacy_id, title, company').in('id', chunk)
+      for (const r of ((data ?? []) as unknown as PosMeta[])) meta.set(String(r.id), r)
+    }
+    for (const ev of events) {
+      const m = ev.pid ? meta.get(ev.pid) : undefined
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id }
+    }
+  }
+  return events
 }
 
 // ── Application stats ───────────────────────────────────────────────
