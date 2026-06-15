@@ -79,14 +79,25 @@ i18n** (e.g. "Altro" in Italian) — the localization is a UI concern, the store
 All components (write-guard, promotion pass, this model) compare against the **same** string `'Other'`.
 Everything in `'Other'` carries a `role_family_proposed` and is feedstock for the promotion pass.
 
-## ❄️ Cold-start (a known, accepted property — not a bug)
+## ❄️ Cold-start — two cases (a known, accepted property — not a bug)
 
-With an empty registry, a brand-new candidate's first analyses **all land in `'Other'`** until the
-first clusters cross the threshold. So early on the chart is mostly one `'Other'` bucket, then
-categories emerge over the following days. This is the **accepted cost of zero-hardcoding** (chosen
-over the convenience of a seed). A future opt-in *warm-start from the candidate's profile* could
-pre-populate likely categories — but those too would be **team-generated, never hardcoded by us**
-(user's later call, not part of v1).
+**(a) Brand-new candidate (no data).** With an empty registry the first analyses **all land in
+`'Other'`** until the first clusters cross the threshold; early on the chart is mostly one `'Other'`
+bucket, then categories emerge over the following days. This is the **accepted cost of
+zero-hardcoding** (chosen over the convenience of a seed).
+
+**(b) Existing candidate at DEPLOY (has legacy `role_family` values).** Naively, an empty registry +
+`next-for-categorize` re-queuing every non-`'Other'` legacy row would trigger a **one-time
+re-analysis storm** of the whole backlog (hundreds of positions through the LLM analyst). Avoid it
+with a **bootstrap**: the promotion pass clusters the **candidate's EXISTING `role_family` values**
+(deterministic, via `normalize_key`) and promotes the common ones into the registry **immediately**,
+so they are already active and **not** re-queued — only genuine drift is reconciled. This is **not
+hardcoding**: it clusters the **candidate's own data**, never our names (it's a *warm-start from the
+candidate's data*, the legitimate cousin of the rejected *seed of our 15 names*). (Bootstrap lives in
+the promotion pass — dev2's lane.)
+
+A future opt-in *warm-start from the candidate's profile* could also pre-populate likely categories —
+again **team/data-generated, never hardcoded by us** (user's later call, not part of v1).
 
 ---
 
