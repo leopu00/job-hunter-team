@@ -93,13 +93,22 @@ ri-conferme, "sei vivo?/a che punto sei?".
    si guarda la pane. (Snapshot racy + non gratis → SOLO per "cosa fa ora?", non per lo *stato*.)
 3. **Messaggio = eccezione** (la barra sopra).
 
-**DB claim/lease (rischio collisione):** se gli Analisti pescano dalle code in pull rischiano la
-**stessa riga**. Va verificato cosa oggi è coordinato a voce; se serve, una colonna leggera
-`claimed_by` / `claimed_at` (lease con scadenza) così il pull non genera doppioni. **Lane DB = dev2.**
+**DB claim/lease (rischio collisione) — DIFFERITO (YAGNI, deciso 2026-06-15).** I claim già
+esistono per-record (`anti-collision.md`: Scout pre-INSERT dedup, Analista/Scorer watermark
+`last_checked`, Writer flip `status=writing`). Verificato (dse3, betaB): 3 worker 1/ruolo → nessuna
+coda condivisa, nessun race; `next-for-*` fa solo SELECT e con 1/ruolo basta. Il race è **latente**
+solo col futuro multi-worker sullo **stesso** task-type (RULE-14). → **NON si costruisce ora**; TODO,
+owner **dse3** (è nelle sue `next-for-*`), si attiva quando il multi-per-tipo è davvero deployato.
 
-**Osservabilità:** i broadcast di status davano la narrazione leggibile del team. Sostituirli con un
-**event-log strutturato** (gli agenti scrivono le decisioni in un log, non in chat) → si tiene la
-visibilità senza il burn incrociato. **Lane = dev3.**
+**Osservabilità — RIUSO `position_state_transitions` (deciso 2026-06-15, ZERO tabella nuova).** Esiste
+già una tabella strutturata e interrogabile degli eventi-pipeline (`id, position_id, from_state→to_state,
+ts, by_agent, notes`, indici su ts/to_state). Sostituisce i broadcast "ho scorato #X" → si **QUERYa**
+la tabella. Eventi NON-pipeline (lifecycle/errori) → capture-pane (pull). Lane dse3: helper `db_query
+recent-activity` + skill `observe-via-capture-pane` + wiring di questa tabella come substrato. **Lane = dse3.**
+
+**WS1 ↔ A2 (nota):** il bridge (WS1, mia lane) deve includere la transizione `status=LOCKED` fra gli
+edge azionabili — è il segnale A2 già in `sentinel-bridge.py` (fb8be23ee). La logica A2 LOCKED resta;
+l'edge-wake ci si costruisce sopra. dse3 NON tocca `sentinel-bridge.py` (rispetto split).
 
 ---
 
@@ -137,16 +146,16 @@ visibilità senza il burn incrociato. **Lane = dev3.**
 - `agents/capitano/capitano.md` (ramo agente-in-loop, comms lean)
 - skill emergenza Capitano (`agent-emergency` o estensione `pipeline-triage`)
 
-**dev2 — worker-side metà A + DB substrate:**
+**dev2 — worker-side metà A + tmux-send:**
 - pointer comms-lean in: `agents/analista/analista.md`, `agents/scout/scout.md`
-- DB claim/lease se necessario: migration + `shared/skills/db_query.py`/`db_update.py`
 - skill `tmux-send` (la barra "quando inviare")
+- (claim/lease DIFFERITO — non in questo giro; se servirà è lane dse3)
 
 **dev3 — worker-side metà B + osservabilità + pattern pull:**
 - pointer comms-lean in: `agents/scorer/scorer.md`, `agents/scrittore/scrittore.md`,
   `agents/critico/critico.md`, `agents/assistente/assistente.md`, `agents/mentor/mentor.md`
-- skill/pattern "coordinate-via-db" + "observe-via-capture-pane" (nuove o estensione)
-- event-log strutturato (sostituisce i broadcast di status)
+- skill `coordinate-via-db` + `observe-via-capture-pane`
+- osservabilità: RIUSO `position_state_transitions` + helper `db_query recent-activity` (zero tabella nuova)
 
 > I pointer per-prompt sono **brevi** (rimando a `communication-rules.md` + taglio istruzioni
 > chiacchierone) → edit leggeri, collisione minima. Il grosso è centralizzato in dev1.
