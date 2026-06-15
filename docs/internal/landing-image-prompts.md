@@ -119,19 +119,19 @@ scenico del ruolo.** Niente testo leggibile.
 
 ## Pagina `/pricing`
 
-### `pricing.hero` — testa agente a raggi X sul cervello (sfondo trasparente)
+### `pricing.hero` — testa agente di PROFILO a raggi X (sfondo trasparente)
 Concetto: la struttura del team è gratis, **il "cervello" (il provider AI) lo
-paghi** → testa di un agente con il cervello visibile a raggi X.
-> Comic-book / graphic-novel illustration, hand-drawn inked outlines, flat cel
-> shading, muted palette with subtle green accents; not 3D, not photorealistic. A
-> head-and-shoulders portrait of one of the agents — elegant, wearing the iconic
-> small oval dark Matrix-style sunglasses — facing the viewer. The upper part of
-> the head (the cranium) is drawn as a subtle **X-ray / see-through cutaway
-> revealing the BRAIN inside**, glowing faintly — a slightly futuristic scan look
-> but still clearly comic-style, NOT hi-tech sci-fi. The brain is the visual
-> focus, lit with subtle green accents (it's the "engine" you pay for). No
-> readable text, no logos. Isolated on a plain transparent background, no scene.
-> Transparent PNG. 4:3 or square.
+paghi** → testa di un agente, vista come una radiografia (cervello + cranio).
+> Comic-book / graphic-novel linework crossed with a medical X-ray scan — mostly
+> a **see-through radiograph look, NOT a fully shaded realistic portrait**. **Side
+> PROFILE of an agent's head, facing RIGHT** (we do NOT see the face front-on).
+> The whole head is rendered as an **X-ray / scan**: the **BRAIN glows and is
+> highlighted in a distinct accent colour (green)**, and the **skull bones are
+> visible** in cooler X-ray tones. We can still tell it's one of the agents
+> because the silhouette shows the iconic small oval dark Matrix-style sunglasses.
+> Keep it scan-like and graphic, muted palette, subtle glow. No readable text, no
+> logos. Isolated on a plain transparent background, no scene. Transparent PNG.
+> 4:3 or square.
 
 ---
 
