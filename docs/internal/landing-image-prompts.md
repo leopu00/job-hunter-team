@@ -40,13 +40,20 @@ File attuale: `web/public/landing-hero.png`. Prompt finale usato:
 
 ## Landing — thumbnail di sezione (16:9)
 
-### `landing.team`
-> [STYLE] A small cluster of 3–4 of the agents at work in the elegant office —
-> mixed roles, varied elegant outfits, all with the identical Matrix sunglasses —
-> half-turned toward the viewer. Warm, friendly, competent. Modern glass city
-> softly out of focus behind. [REGOLA OCCHIALI]. 16:9.
+### `landing.team` ✅ FATTO
+File: `web/public/landing-team.png` (sfondo trasparente). Prompt usato:
+> [STYLE] Three Job Hunter Team agents standing, full body, side by side, **on a
+> plain transparent background — no scene, no setting**, just the figures. Left to
+> right: a **Scout** (sleuth in a trench coat and detective hat, with a magnifying
+> glass), an **Analyst** (white lab coat), a **Writer** (smart attire, holding a
+> quill pen and writing on a sheet). All standing, none seated. [REGOLA OCCHIALI].
+> Leave room for creativity in poses and outfit details. Transparent PNG.
 
-### `landing.dashboard`
+### `landing.dashboard` ✅ FATTO IN CODICE
+Realizzato come componente SVG/CSS, **non** immagine generata:
+`web/app/components/landing/DashboardMockup.tsx` (donut chart + card flottanti
+in prospettiva 3D, sfondo trasparente). Se non convince, qui sotto il prompt di
+riserva per generarla invece:
 > [STYLE] Over-the-shoulder view of a person at a sleek laptop, the screen showing
 > a clean abstract dashboard: a world map dotted with glowing markers, simple bar
 > and donut charts, a list of cards — all abstract, NO readable text. Calm,
