@@ -95,6 +95,12 @@ GSPOT_CALM_TICK_MIN = 10.0
 # sopra restano per il solo state-file UI (tick_phase informativo).
 ANCHOR_TICK_MIN = 5.0
 
+# Pass di promozione tassonomia emergente (role_registry.run_pass, lane dev2): il bridge
+# è il TRIGGER deterministico/periodico mancante (gap 2026-06-15: schema+pass+write-guard
+# +prompt c'erano, ma NESSUNO schedulava il pass → registro vuoto → tutto 'Other').
+# Bootstrap al boot (prima dei worker) + poi ogni N tick (~1h a 5min/tick).
+PROMOTION_PASS_EVERY_N_TICKS = 12
+
 GSPOT_LOWER = 80.0    # proj < 80% → sotto g-spot (sottoutilizzo)
 GSPOT_UPPER = 105.0   # proj > 105% → sopra g-spot (critico)
 GSPOT_PROMOTION_TICKS = 3  # tick consecutivi nel g-spot per promuovere stato
@@ -1098,6 +1104,27 @@ def _do_fetch(provider):
     return None, f"unsupported:{provider}"
 
 
+def _run_promotion_pass(reason=""):
+    """Invoca il pass di promozione della tassonomia emergente (role_registry.run_pass,
+    lane dev2). È il TRIGGER mancante (gap 2026-06-15: schema+pass+write-guard+prompt
+    c'erano, ma NESSUNO schedulava il pass → registro vuoto → tutto 'Other' → degrado).
+    Il bridge (deterministico, periodico, no-LLM) è l'host. **Error-isolated**: un errore
+    del pass NON deve MAI rompere il monitoraggio usage del bridge."""
+    try:
+        skills_dir = Path("/app/shared/skills")
+        if not skills_dir.exists():
+            skills_dir = Path(__file__).resolve().parent.parent / "shared" / "skills"
+        if str(skills_dir) not in sys.path:
+            sys.path.insert(0, str(skills_dir))
+        import role_registry          # importa _db internamente (ora su sys.path)
+        from _db import get_db
+        res = role_registry.run_pass(get_db(), apply=True)
+        promoted = res.get("promoted") if isinstance(res, dict) else None
+        print(f"[bridge V7] promotion-pass ({reason}) OK: promoted={promoted}")
+    except Exception as e:
+        print(f"[bridge V7] WARN promotion-pass ({reason}) saltato (ignorato): {e}", file=sys.stderr)
+
+
 def main():
     """Bridge V5: fetch usage + invia a Sentinella.
 
@@ -1141,6 +1168,13 @@ def main():
         "gspot_consecutive": 0,
         "last_sent_ts": None,
     }
+
+    # Trigger pass di promozione (gap-fix 2026-06-15) — BOOTSTRAP al boot, PRIMA che i
+    # worker ri-categorizzino: clusterizza i role_family ESISTENTI nel registro così
+    # l'analista trova subito le attive (niente wipe a 'Other'). Gira anche off-hours
+    # (il loop bridge non è gateato dall'orario, solo le notifiche LLM lo sono).
+    _run_promotion_pass("boot-bootstrap")
+    promotion_tick = 0
 
     while True:
         now_h = datetime.now().strftime("%H:%M:%S")
@@ -1447,6 +1481,12 @@ def main():
                 state, last_tick_iso, next_tick_iso, next_tick_min,
                 last_provider=provider,
             )
+
+        # Pass di promozione tassonomia: periodico ogni N tick (~1h). Deterministico,
+        # idempotente (re-run a vuoto = 0 promote), error-isolated → non blocca il bridge.
+        promotion_tick += 1
+        if promotion_tick % PROMOTION_PASS_EVERY_N_TICKS == 0:
+            _run_promotion_pass("periodic")
 
         time.sleep(sleep_sec)
 
