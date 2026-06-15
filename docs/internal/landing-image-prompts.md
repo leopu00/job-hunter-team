@@ -69,14 +69,19 @@ riserva per generarla invece:
 
 ### `landing.setup` — Mac + cono di luce + cubo col team (sfondo trasparente)
 > Comic-book / graphic-novel illustration, hand-drawn inked outlines, flat cel
-> shading, muted palette; not 3D, not photorealistic. A modern Mac (laptop) seen
-> at a three-quarter angle. From its screen a soft glowing BLUE cone of light
-> (Tesseract blue, soft — NOT Marvel-bright) projects outward: the sharp tip
-> touches the screen and the cone widens as it goes out. At the wide end floats a
-> glass sci-fi cube (Tesseract-style, soft blue glowing edges) containing a tiny
-> office/loft with the team of agents at work inside, seen from outside like a
-> miniature world. Subtle green accents. **Isolated on a plain transparent
-> background — no scene, no setting.** Transparent PNG. 16:9.
+> shading, muted palette; not 3D, not photorealistic. A modern laptop
+> (MacBook-like) seen at a three-quarter angle — plain, blank/abstract screen. A
+> soft glowing BLUE cone of light (Tesseract blue, soft — not Marvel-bright)
+> **emerges broadly from the computer itself (from around the screen and keyboard,
+> diffuse — NOT from a single pinpoint on the screen)** and widens outward. At the
+> wide end floats a glass sci-fi cube (Tesseract-style, soft blue glowing edges)
+> containing a tiny office/loft with the team of agents at work inside, seen from
+> outside like a miniature world. Subtle green accents. **Isolated on a plain
+> transparent background — no scene, no setting.** Transparent PNG. 16:9.
+>
+> **AVOID:** any readable text or words (no "Tesseract", no labels/UI text), any
+> logo or emblem (NO Apple logo, NO eagle/shield crest, no brand marks),
+> watermarks.
 >
 > Riferimento stile cubo: `web/public/chronicles/the-box.png` (Tesseract della
 > pagina Cronache).
