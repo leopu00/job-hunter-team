@@ -568,7 +568,8 @@ def main():
     # e dal prompt analista (match-best-active-or-Altro). Nessuna lista
     # hardcoded: legge role_family_registry.
     ac = sub.add_parser('active-categories')
-    ac.add_argument('user_id')
+    ac.add_argument('user_id', nargs='?', default=None,
+                    help='omesso → candidato locale (default VPS single-candidate)')
     ac.add_argument('--json', action='store_true', help='output JSON array')
 
     # application (anti-riscrittura check)
