@@ -57,6 +57,18 @@ RULES = [
         "manufacturing", "packaging"), "Engineering (Other)"),
     (_e("product management"), "Product & Project Mgmt"),
     (_p("finance", "supply chain"), "Business & Operations"),
+    # Dominio DEV (gap segnalato da dev1: il drift tech-writer di barto non copriva i
+    # ruoli dev). Data Engineering PRIMA di Data Science così "data engineer" non
+    # finisce in Data Science. Substring word-ish (niente "swe" nudo: troppo greedy).
+    (_c("data engineer", "etl", "data pipeline", "data platform", "bi engineer"),
+        "Data Engineering"),
+    (_c("data scien", "machine learning", "ml engineer", "ai engineer", "ai/ml",
+        "data analy", "deep learning", "mlops"), "Data Science & AI"),
+    (_c("devops", "sre", "site reliability", "platform engineer",
+        "infrastructure engineer", "cloud engineer"), "DevOps / SRE / Platform"),
+    (_c("software engineer", "backend", "frontend", "front end", "full stack",
+        "full-stack", "fullstack", "embedded", "firmware", "mobile developer",
+        "web developer"), "Software Engineering"),
     (_c("/ technical writing"), "Technical Writing"),  # catch-all suffisso, ULTIMO
 ]
 
