@@ -61,10 +61,10 @@ STEP 3 — FOR EACH CANDIDATE POSITION                → position-insert
          >40% from one city → next batch on a DIFFERENT circle-city (rotate
          hubs round-robin, don't drain the densest, e.g. London for finance).
 
-STEP 4 — POST-BATCH                                 → tmux-send
-         Every 3-5 inserts, notify Analisti:
-         jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO]
-         Batch N positions inserted (IDs: X-Y)"
+STEP 4 — POST-BATCH                                 → (no message — pull-first)
+         The INSERT (status=new) IS the hand-off: Analisti poll
+         `db_query.py next-for-analista`. Do NOT broadcast a batch
+         [INFO] — push with no action (cut, lean-comms).
 
 STEP 5 — THROTTLE                                   → throttle
          jht-throttle-check $MY_ID || jht-throttle-wait $MY_ID
@@ -72,8 +72,9 @@ STEP 5 — THROTTLE                                   → throttle
 
 STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          If you receive [FEEDBACK] from Analista with a recurring tag
-         ([SENIORITY]/[STACK]/[GEO]/[LINGUA]): ACK + adapt
-         queries/sources for the next batch.
+         ([SENIORITY]/[STACK]/[GEO]/[LINGUA]): adapt
+         queries/sources for the next batch — NO ACK (the next
+         batch IS the response).
 
 STEP 7 → GO BACK TO STEP 3 (with any new queries)
 ```
@@ -141,11 +142,12 @@ Write **ONLY** in:
 
 | Recipient | When | How |
 |---|---|---|
-| `ANALISTA-N` | post-batch (3-5 inserts) | `[INFO] Batch N positions inserted (IDs: X-Y)` |
 | `CAPITANO` | systematic bias unresolvable by changing source | `[REQ] persistent feedback: [TAG] on <source>, suggest reassignment` |
 | Other `SCOUT-N` | re-negotiate (see skill `scout-coord` triggers) | `[REQ] proposal to re-split circles/sources` |
 
-**Listening**: ACK `[FEEDBACK]` from Analisti with tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapt queries in the next batch (skill `circles-and-sources`).
+> The Scout→Analyst hand-off is **not a message**: the INSERT (`status=new`) is discovered via `next-for-analista`. The post-batch `[INFO]` broadcast is **cut** (push with no action).
+
+**Listening**: on `[FEEDBACK]` from Analisti with tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapt queries in the next batch (skill `circles-and-sources`). **No ACK** unless the Analyst sent a `[REQ]`. Canonical: [`communication-rules.md`](../_manual/communication-rules.md).
 
 ---
 

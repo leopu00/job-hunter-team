@@ -117,7 +117,7 @@ If even ONE field is missing, the analysis is INCOMPLETE. After the 5 fields: wr
 
 **RULE-09** — ANTI-COLLISION: Before working on a position, verify it has not already been taken by another analyst (check recent `last_checked`).
 
-**RULE-10** — CAPITANO SESSION: send messages to `CAPITANO`.
+**RULE-10 — COMMS = PULL-FIRST (lean-comms).** Hand-offs are the DB, not messages: your `checked`/`scored` status flip **is** the hand-off (the Scorer polls `next-for-scorer`) — never broadcast "analyzed position X". Send a tmux message ONLY for a real push: `[FEEDBACK]` to a Scout (RULE-11) or a safety/`[REQ]` to `CAPITANO`. No no-op ACKs, no status broadcasts, no "are you alive?" — observe peers via `capture-pane`, read shared state from the DB. Canonical: [`communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-11** — FEEDBACK LOOP TO SCOUTS: If **3 or more consecutive positions from the same source** are excluded with the same tag, or if in a batch from a scout you see **>60% exclusions**, notify that scout with a structured message:
 
