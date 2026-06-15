@@ -28,7 +28,23 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema
-import role_taxonomy
+
+# Categorie ATTIVE del registro emergente (lane registro dev2). Usa la funzione
+# canonica di _db (active_categories: user_id=None → local_user_id) appena è
+# disponibile; fallback single-tenant tollerante finché il cross-merge non la
+# porta su questo branch (così il branch resta self-contained e testabile).
+try:
+    from _db import active_categories as _read_active_categories
+except ImportError:  # pragma: no cover - ponte pre-cross-merge
+    def _read_active_categories(conn, *a, **k):
+        try:
+            rows = conn.execute(
+                "SELECT name FROM role_family_registry "
+                "WHERE status='active' ORDER BY support_count DESC"
+            ).fetchall()
+        except Exception:
+            return []
+        return [(r[0] if not hasattr(r, "keys") else r["name"]) for r in rows]
 
 
 def format_salary_v2(row):
@@ -431,26 +447,33 @@ def next_for_role(role):
         label = "Posizioni da ri-verificare (richeck giornaliero apertura + backfill)"
 
     elif role == 'categorize':
-        # Parte B + SELF-HEALING (2026-06-15, feedback utente): coda di (ri)categorizzazione.
-        # Posizioni gia' analizzate da sistemare = role_family NULL (mai categorizzata)
-        # OPPURE NON-CANONICA (drift/storico non in tassonomia). L'analista mappa alla
-        # tassonomia chiusa; normalize-at-write (db_update) rende canonico → il TEAM
-        # ri-mappa da solo lo storico, NESSUN UPDATE esterno (max azione = immagine, mai
-        # i dati VPS). Loop-guard: appena diventa canonica (anche 'Other') esce dalla coda.
-        # 'Other' e' canonico (NOT IN lo esclude gia'), ma teniamo anche il `<> 'Other'`
-        # esplicito = contratto team + difesa: gli 'Other' revisionati (Growth: nessun
-        # canonico calza) NON si ri-accodano mai. Solo NULL + DRIFT vero in coda.
-        canon = role_taxonomy.CANONICAL
-        ph = ",".join("?" * len(canon))
+        # Tassonomia EMERGENTE + SELF-HEALING (2026-06-15, GO utente): coda di
+        # (ri)categorizzazione. Si ri-accoda chi NON è ancora incanalato dalla
+        # tassonomia emergente = role_family NULL (mai categorizzata) OPPURE un
+        # valore che NON è una categoria ATTIVA del registro e non è la sentinella
+        # 'Other' (= drift legacy / categoria sparita). L'analista lo rivaluta →
+        # match a un'attiva o 'Other' + proposta; il pass di promozione fa emergere
+        # le categorie dai dati. Loop-guard: 'Other' (residuo già incanalato) e le
+        # attive NON si ri-accodano mai. Il fix è nel codice + nel ciclo del team
+        # (mai UPDATE esterni sui dati VPS). A registro VUOTO (cold-start) tutto il
+        # non-'Other' è drift da rivalutare → bootstrap dell'emergenza (costo
+        # accettato una-tantum: lo storico viene riproposto e poi clusterizzato).
+        active = _read_active_categories(conn)
+        if active:
+            ph = ",".join("?" * len(active))
+            drift_clause = f"OR (p.role_family NOT IN ({ph}) AND p.role_family <> 'Other')"
+            qparams = list(active)
+        else:
+            drift_clause = "OR (p.role_family <> 'Other')"
+            qparams = []
         rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.location, p.role_family
             FROM positions p
-            WHERE (p.role_family IS NULL
-                   OR (p.role_family NOT IN ({ph}) AND p.role_family <> 'Other'))
+            WHERE (p.role_family IS NULL {drift_clause})
               AND p.status IN ('checked','scored','writing','review','ready')
             ORDER BY (p.role_family IS NOT NULL), p.created_at ASC
-        """, canon).fetchall()
-        label = "Posizioni da (ri)categorizzare (mancante o non-canonica → tassonomia chiusa)"
+        """, qparams).fetchall()
+        label = "Posizioni da (ri)categorizzare (mancante o drift → registro emergente)"
 
     elif role == 'salary-precise':
         # Parte B (2026-06-14): coda ON-DEMAND USER-DRIVEN. L'utente seleziona dal
