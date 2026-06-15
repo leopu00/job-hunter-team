@@ -190,8 +190,20 @@ function Sections() {
       <Block
         copy={c.setup}
         href="/run"
-        promptId="landing.setup"
-        label={L === "it" ? "Tre modi per far girare il team" : "Three ways to run the team"}
+        visual={
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/landing-setup.png"
+            alt={
+              L === "it"
+                ? "Un laptop da cui esce un cono di luce blu che si apre fino a un cubo di vetro luminoso: dentro c'è l'ufficio del team al lavoro."
+                : "A laptop emitting a blue cone of light that opens into a glowing glass cube: inside is the team's office at work."
+            }
+            width={1672}
+            height={941}
+            className="w-full h-auto"
+          />
+        }
       />
       <Block
         copy={c.pricing}
