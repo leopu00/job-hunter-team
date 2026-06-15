@@ -86,39 +86,17 @@ class TestMissingRoutesCritical:
 # ---------------------------------------------------------------------------
 
 class TestMissingRoutesHigh:
-    """Route/feature di gravità alta dal legacy."""
+    """Route/feature di gravità alta dal legacy.
 
-    def test_analytics_not_needed(self):
-        """/analytics non era una route separata nel legacy — analytics integrati in /crescita (PR #33)."""
-        # Gli analytics (tier breakdown, fonti, score medio) sono in /crescita.
-        # Verifichiamo che /crescita risponda correttamente invece di /analytics.
-        status = http_status("/crescita")
-        assert status not in (404, 500), f"/crescita (analytics) → {status}"
-
-    def test_positions_tier_filter(self):
-        """/positions?tier=seria deve rispondere — filtro TIER implementato in PR #33."""
-        status = http_status("/positions?tier=seria")
-        assert status not in (404, 500)
-
-    def test_positions_tier_practice(self):
-        """/positions?tier=practice deve rispondere (Tier2: score 40-69)."""
-        status = http_status("/positions?tier=practice")
-        assert status not in (404, 500)
-
-    def test_positions_tier_riferimento(self):
-        """/positions?tier=riferimento deve rispondere (Tier3: score <40)."""
-        status = http_status("/positions?tier=riferimento")
-        assert status not in (404, 500)
+    NB: i filtri `?tier=seria|practice|riferimento` di PR #33 e il relativo "tier
+    breakdown" sono stati DISMESSI — /positions filtra ora per range numerico di
+    score (`band`) scelto dall'utente. Niente più categorizzazione practice/seria:
+    il team dà lo score, l'utente decide. I relativi test sono stati rimossi."""
 
     def test_positions_salary_filter(self):
         """/positions?salary_min=40000 deve rispondere."""
         status = http_status("/positions?salary_min=40000")
         assert status not in (404, 500)
-
-    def test_crescita_has_analytics(self):
-        """/crescita deve esistere e non crashare — ora contiene analytics tier/fonti/score (PR #33)."""
-        status = http_status("/crescita")
-        assert status not in (404, 500), f"/crescita → {status} dopo PR #33"
 
 
 # ---------------------------------------------------------------------------
