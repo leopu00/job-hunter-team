@@ -57,18 +57,24 @@ RULES = [
         "manufacturing", "packaging"), "Engineering (Other)"),
     (_e("product management"), "Product & Project Mgmt"),
     (_p("finance", "supply chain"), "Business & Operations"),
-    # Dominio DEV (gap segnalato da dev1: il drift tech-writer di barto non copriva i
-    # ruoli dev). Data Engineering PRIMA di Data Science così "data engineer" non
-    # finisce in Data Science. Substring word-ish (niente "swe" nudo: troppo greedy).
-    (_c("data engineer", "etl", "data pipeline", "data platform", "bi engineer"),
-        "Data Engineering"),
-    (_c("data scien", "machine learning", "ml engineer", "ai engineer", "ai/ml",
-        "data analy", "deep learning", "mlops"), "Data Science & AI"),
-    (_c("devops", "sre", "site reliability", "platform engineer",
-        "infrastructure engineer", "cloud engineer"), "DevOps / SRE / Platform"),
-    (_c("software engineer", "backend", "frontend", "front end", "full stack",
-        "full-stack", "fullstack", "embedded", "firmware", "mobile developer",
-        "web developer"), "Software Engineering"),
+    # --- dominio DEV (gap 2026-06-15, conf. alta-prio su Andras) — mapping
+    #     AUTORITATIVO dev1. Substring multi-char (niente "ai"/"swe" nudo). Data
+    #     Engineering PRIMA di Data Science. Tweak dse3: aggiunto "data analy"
+    #     (scope doc) e "etl " oltre a " etl" (cattura "ETL Developer" a inizio str). ---
+    (_c("backend", "frontend", "front-end", "full stack", "full-stack", "fullstack",
+        "software eng", "software develop", "web develop", "embedded", "firmware",
+        "mobile develop", "ios develop", "android develop"), "Software Engineering"),
+    (_c("data engineer", "data platform", " etl", "etl ", "data pipeline",
+        "bi engineer"), "Data Engineering"),
+    (_c("machine learning", "ml engineer", "ai engineer", "ai / ml", "ai/ml",
+        "data scien", "data analy", "mlops", "computer vision", "nlp engineer"),
+        "Data Science & AI"),
+    (_c("devops", "sre", "site reliability", "platform eng", "infrastructure eng",
+        "cloud eng", "release eng"), "DevOps / SRE / Platform"),
+    (_c("ux design", "ui design", "product design", "graphic design",
+        "visual design"), "Design"),
+    (_c("project manage", "program manage", "product owner", "scrum master",
+        "delivery manage"), "Product & Project Mgmt"),
     (_c("/ technical writing"), "Technical Writing"),  # catch-all suffisso, ULTIMO
 ]
 
