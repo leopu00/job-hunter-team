@@ -29,6 +29,23 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema
 
+# Categorie ATTIVE del registro emergente (lane registro dev2). Usa la funzione
+# canonica di _db (active_categories: user_id=None → local_user_id) appena è
+# disponibile; fallback single-tenant tollerante finché il cross-merge non la
+# porta su questo branch (così il branch resta self-contained e testabile).
+try:
+    from _db import active_categories as _read_active_categories
+except ImportError:  # pragma: no cover - ponte pre-cross-merge
+    def _read_active_categories(conn, *a, **k):
+        try:
+            rows = conn.execute(
+                "SELECT name FROM role_family_registry "
+                "WHERE status='active' ORDER BY support_count DESC"
+            ).fetchall()
+        except Exception:
+            return []
+        return [(r[0] if not hasattr(r, "keys") else r["name"]) for r in rows]
+
 
 def format_salary_v2(row):
     """Formatta stipendio dichiarato e/o stimato."""
@@ -312,6 +329,39 @@ def stats():
     conn.close()
 
 
+def recent_activity(minutes=30, limit=40):
+    """Event-log OSSERVABILITÀ (lean-comms redesign): chi ha mosso quali posizioni,
+    quando. Sostituisce i broadcast 'status' inter-agente — invece di narrare in chat
+    'ho scorato #X / coda vuota', si QUERYa qui (pull, non push). Sorgente già
+    esistente: position_state_transitions (by_agent, from→to, ts, notes). Tempi in UTC
+    (CURRENT_TIMESTAMP). Vedi agents/_manual/communication-rules.md (Tier-1 DB)."""
+    conn = get_db()
+    ensure_schema(conn)
+    rows = conn.execute(
+        "SELECT ts, by_agent, position_id, from_state, to_state, notes "
+        "FROM position_state_transitions "
+        "WHERE ts >= datetime('now', ?) "
+        "ORDER BY ts DESC LIMIT ?",
+        (f'-{int(minutes)} minutes', int(limit))
+    ).fetchall()
+    if not rows:
+        print(f"\nNessuna attività pipeline negli ultimi {minutes} min (UTC).")
+        conn.close()
+        return
+    by_agent = {}
+    for r in rows:
+        by_agent[r['by_agent']] = by_agent.get(r['by_agent'], 0) + 1
+    print(f"\nAttività pipeline ultimi {minutes} min ({len(rows)} transizioni, UTC):")
+    print("  per-agente: " + ", ".join(
+        f"{a}={n}" for a, n in sorted(by_agent.items(), key=lambda x: -x[1])))
+    for r in rows:
+        frm = r['from_state'] or '∅'
+        note = f" — {r['notes'][:40]}" if r['notes'] else ""
+        print(f"  {str(r['ts'])[11:19]} {str(r['by_agent'])[:14]:<14} "
+              f"#{r['position_id']} {frm}→{r['to_state']}{note}")
+    conn.close()
+
+
 def next_for_role(role):
     conn = get_db()
     ensure_schema(conn)
@@ -397,19 +447,33 @@ def next_for_role(role):
         label = "Posizioni da ri-verificare (richeck giornaliero apertura + backfill)"
 
     elif role == 'categorize':
-        # Parte B (2026-06-14): coda SISTEMATICA di categorizzazione. Posizioni
-        # gia' analizzate ma SENZA role_family (backlog non-categorizzato): l'analista
-        # mappa la JD a UNA role_family della tassonomia chiusa (_team/role-taxonomy.md).
-        # Query naturale = loop-guard gratis: appena categorizzata (anche a 'other'),
-        # role_family IS NOT NULL → esce dalla coda da sola, niente re-accodo infinito.
-        rows = conn.execute("""
-            SELECT p.id, p.title, p.company, p.location
+        # Tassonomia EMERGENTE + SELF-HEALING (2026-06-15, GO utente): coda di
+        # (ri)categorizzazione. Si ri-accoda chi NON è ancora incanalato dalla
+        # tassonomia emergente = role_family NULL (mai categorizzata) OPPURE un
+        # valore che NON è una categoria ATTIVA del registro e non è la sentinella
+        # 'Other' (= drift legacy / categoria sparita). L'analista lo rivaluta →
+        # match a un'attiva o 'Other' + proposta; il pass di promozione fa emergere
+        # le categorie dai dati. Loop-guard: 'Other' (residuo già incanalato) e le
+        # attive NON si ri-accodano mai. Il fix è nel codice + nel ciclo del team
+        # (mai UPDATE esterni sui dati VPS). A registro VUOTO (cold-start) tutto il
+        # non-'Other' è drift da rivalutare → bootstrap dell'emergenza (costo
+        # accettato una-tantum: lo storico viene riproposto e poi clusterizzato).
+        active = _read_active_categories(conn)
+        if active:
+            ph = ",".join("?" * len(active))
+            drift_clause = f"OR (p.role_family NOT IN ({ph}) AND p.role_family <> 'Other')"
+            qparams = list(active)
+        else:
+            drift_clause = "OR (p.role_family <> 'Other')"
+            qparams = []
+        rows = conn.execute(f"""
+            SELECT p.id, p.title, p.company, p.location, p.role_family
             FROM positions p
-            WHERE p.role_family IS NULL
+            WHERE (p.role_family IS NULL {drift_clause})
               AND p.status IN ('checked','scored','writing','review','ready')
-            ORDER BY p.created_at ASC
-        """).fetchall()
-        label = "Posizioni da categorizzare (role_family mancante)"
+            ORDER BY (p.role_family IS NOT NULL), p.created_at ASC
+        """, qparams).fetchall()
+        label = "Posizioni da (ri)categorizzare (mancante o drift → registro emergente)"
 
     elif role == 'salary-precise':
         # Parte B (2026-06-14): coda ON-DEMAND USER-DRIVEN. L'utente seleziona dal
@@ -552,6 +616,10 @@ def main():
     # dashboard + stats
     sub.add_parser('dashboard')
     sub.add_parser('stats')
+    # recent-activity: event-log osservabilità (lean-comms) — sostituisce i broadcast status
+    ra = sub.add_parser('recent-activity')
+    ra.add_argument('--minutes', type=int, default=30)
+    ra.add_argument('--limit', type=int, default=40)
 
     # next-for-*
     sub.add_parser('next-for-analista')
@@ -601,6 +669,8 @@ def main():
         dashboard()
     elif args.cmd == 'stats':
         stats()
+    elif args.cmd == 'recent-activity':
+        recent_activity(args.minutes, args.limit)
     elif args.cmd == 'application':
         return query_application(args.position_id)
     elif args.cmd == 'check-url':
