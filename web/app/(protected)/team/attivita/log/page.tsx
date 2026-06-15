@@ -35,9 +35,9 @@ export default async function ActivityLogPage() {
             azioni totali
           </p>
           <p className="text-[var(--color-dim)] text-[10px] mt-1">
-            Nota: l&apos;istanza dell&apos;Analista non è registrata nei dati
-            sincronizzati (a differenza di scout-N / scorer-N / scrittore-N /
-            critico-N) → appare come «Analista».
+            Ogni azione è attribuita all&apos;istanza reale che l&apos;ha
+            eseguita (scout-N, analista-N, scorer-N), dall&apos;event-log
+            sincronizzato delle transizioni di stato.
           </p>
         </div>
       </div>
