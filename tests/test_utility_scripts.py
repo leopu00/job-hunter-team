@@ -3,7 +3,7 @@ Test per check_links.py, generate_dashboard.py, personal_mail.py — Job Hunter 
 
 Gap coverage:
 - check_links: EXPIRED_PATTERNS matching logic
-- generate_dashboard: funzioni pure (esc, tier_info, status_badge, verdict_badge,
+- generate_dashboard: funzioni pure (esc, score_color, status_badge, verdict_badge,
   source_label, pdf_link) + get_stats con DB temp
 - personal_mail: decode_hdr, get_body_text (parsing email, zero IMAP)
 
@@ -133,45 +133,35 @@ class TestDashboardPureFunctions:
     def test_esc_plain_text_unchanged(self, mod):
         assert mod.esc("hello world") == "hello world"
 
-    # tier_info()
-    def test_tier_info_seria(self, mod):
-        tier, _, label = mod.tier_info(70)
-        assert tier == "seria"
-        assert "SERIA" in label
+    # score_color() — solo gradiente-colore per leggibilità, NESSUNA categoria
+    # practice/seria (il team dà lo score, l'utente decide cosa farne)
+    def test_score_color_high(self, mod):
+        assert mod.score_color(70) == "score-high"
 
-    def test_tier_info_practice(self, mod):
-        tier, _, label = mod.tier_info(50)
-        assert tier == "practice"
-        assert "PRACTICE" in label
+    def test_score_color_mid(self, mod):
+        assert mod.score_color(50) == "score-mid"
 
-    def test_tier_info_riferimento(self, mod):
-        tier, _, label = mod.tier_info(30)
-        assert tier == "riferimento"
-        assert "RIFERIMENTO" in label
+    def test_score_color_low(self, mod):
+        assert mod.score_color(30) == "score-low"
 
-    def test_tier_info_none(self, mod):
-        tier, _, label = mod.tier_info(None)
-        assert tier == "non-scored"
+    def test_score_color_none(self, mod):
+        assert mod.score_color(None) == "non-scored"
 
-    def test_tier_info_boundary_70(self, mod):
-        """Score = 70 deve essere 'seria' (>= 70)."""
-        tier, _, _ = mod.tier_info(70)
-        assert tier == "seria"
+    def test_score_color_boundary_70(self, mod):
+        """Score = 70 → 'score-high' (>= 70)."""
+        assert mod.score_color(70) == "score-high"
 
-    def test_tier_info_boundary_69(self, mod):
-        """Score = 69 deve essere 'practice' (< 70)."""
-        tier, _, _ = mod.tier_info(69)
-        assert tier == "practice"
+    def test_score_color_boundary_69(self, mod):
+        """Score = 69 → 'score-mid' (< 70)."""
+        assert mod.score_color(69) == "score-mid"
 
-    def test_tier_info_boundary_40(self, mod):
-        """Score = 40 deve essere 'practice' (>= 40)."""
-        tier, _, _ = mod.tier_info(40)
-        assert tier == "practice"
+    def test_score_color_boundary_40(self, mod):
+        """Score = 40 → 'score-mid' (>= 40)."""
+        assert mod.score_color(40) == "score-mid"
 
-    def test_tier_info_boundary_39(self, mod):
-        """Score = 39 deve essere 'riferimento' (< 40)."""
-        tier, _, _ = mod.tier_info(39)
-        assert tier == "riferimento"
+    def test_score_color_boundary_39(self, mod):
+        """Score = 39 → 'score-low' (< 40)."""
+        assert mod.score_color(39) == "score-low"
 
     # status_badge()
     def test_status_badge_returns_html(self, mod):
