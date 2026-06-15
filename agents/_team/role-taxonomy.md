@@ -58,9 +58,15 @@ hardcoded names or synonym dictionary:
    the analyst, seeing `"PE"`, first **matches** it against the active categories and reuses the
    existing one — semantic judgement, not a dictionary. So the abbreviation never becomes a separate
    proposal.
-3. **Threshold + merge-near-dup (promotion)** — a one-off never promotes (needs ≥N). And a cluster
-   about to be born that is a near-duplicate of an existing active category is **merged into it**, not
-   created in parallel (backstop against `"PE"` and `"Private Equity"` both becoming categories).
+3. **Threshold (promotion)** — a one-off never promotes (needs ≥N support). On near-dups: **surface**
+   near-dups never reach promotion — the write-guard already matches them to the active via
+   `normalize_key` at write, so they never land in `'Other'` (a promoting cluster therefore cannot
+   share an active's key). **Semantic** near-dups (`"PE"` vs `"Private Equity"`) are prevented by
+   match-first once the active exists; only at **cold-start** (no actives yet) can two close labels
+   briefly co-emerge — an **accepted residual** (no deterministic fix without a synonym map, which we
+   reject; a future LLM-assisted merge could reconcile, not v1). An explicit "merge-near-dup" step
+   would be a no-op and is intentionally omitted; the registry's `merged` status exists only for such
+   a future manual/LLM reconciliation.
 
 ---
 
