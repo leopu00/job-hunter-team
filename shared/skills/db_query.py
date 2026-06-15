@@ -28,6 +28,7 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema
+import role_taxonomy
 
 
 def format_salary_v2(row):
@@ -430,19 +431,22 @@ def next_for_role(role):
         label = "Posizioni da ri-verificare (richeck giornaliero apertura + backfill)"
 
     elif role == 'categorize':
-        # Parte B (2026-06-14): coda SISTEMATICA di categorizzazione. Posizioni
-        # gia' analizzate ma SENZA role_family (backlog non-categorizzato): l'analista
-        # mappa la JD a UNA role_family della tassonomia chiusa (_team/role-taxonomy.md).
-        # Query naturale = loop-guard gratis: appena categorizzata (anche a 'other'),
-        # role_family IS NOT NULL → esce dalla coda da sola, niente re-accodo infinito.
-        rows = conn.execute("""
-            SELECT p.id, p.title, p.company, p.location
+        # Parte B + SELF-HEALING (2026-06-15, feedback utente): coda di (ri)categorizzazione.
+        # Posizioni gia' analizzate da sistemare = role_family NULL (mai categorizzata)
+        # OPPURE NON-CANONICA (drift/storico non in tassonomia). L'analista mappa alla
+        # tassonomia chiusa; normalize-at-write (db_update) rende canonico → il TEAM
+        # ri-mappa da solo lo storico, NESSUN UPDATE esterno (max azione = immagine, mai
+        # i dati VPS). Loop-guard: appena diventa canonica (anche 'Other') esce dalla coda.
+        canon = role_taxonomy.CANONICAL
+        ph = ",".join("?" * len(canon))
+        rows = conn.execute(f"""
+            SELECT p.id, p.title, p.company, p.location, p.role_family
             FROM positions p
-            WHERE p.role_family IS NULL
+            WHERE (p.role_family IS NULL OR p.role_family NOT IN ({ph}))
               AND p.status IN ('checked','scored','writing','review','ready')
-            ORDER BY p.created_at ASC
-        """).fetchall()
-        label = "Posizioni da categorizzare (role_family mancante)"
+            ORDER BY (p.role_family IS NOT NULL), p.created_at ASC
+        """, canon).fetchall()
+        label = "Posizioni da (ri)categorizzare (mancante o non-canonica → tassonomia chiusa)"
 
     elif role == 'salary-precise':
         # Parte B (2026-06-14): coda ON-DEMAND USER-DRIVEN. L'utente seleziona dal
