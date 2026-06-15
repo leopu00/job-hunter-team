@@ -35,8 +35,14 @@ from _db import get_db, ensure_schema, local_user_id, active_categories
 # la mostra 'Altro'). Guard (db_update) e questo pass usano LA STESSA stringa.
 SENTINEL = "Other"
 
-DEFAULT_THRESHOLD = 5   # offerte simili perché una categoria "nasca" (knob utente)
-DEFAULT_CAP = 20        # max categorie attive per-utente (backstop)
+# PALETTO DIREZIONALE, non regola ferrea (feedback utente 2026-06-15). Il numero
+# IDEALE di categorie (~5-8, RELATIVO ai dati) è giudizio degli ANALISTI nel prompt
+# (decidono insieme via il registro condiviso, aggregano le simili, si adattano).
+# Qui la soglia è solo un PAVIMENTO anti-frammentazione (evita che 1 offerta diventi
+# una categoria → il problema dei 43 singleton) e il cap un TETTO di sicurezza —
+# meccanica, non la regola. Knob regolabile (CLI / futuro config).
+DEFAULT_THRESHOLD = 5   # pavimento: min offerte simili perché una categoria abbia senso
+DEFAULT_CAP = 20        # tetto: max categorie attive per-utente (backstop)
 
 
 def recompute_support(conn, user_id):
