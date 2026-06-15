@@ -32,18 +32,27 @@ rimosso, era `shared/skills/backfill_role_family_canon.py`.)
 review → add) aggiorna **ENTRAMBI** i file. Verificato programmaticamente: i 15 canonici nei due file
 coincidono, 0 divergenza.
 
-## 4. 🪤 Legacy drift (righe già scritte) — niente patch VPS
+## 4. 🪤 Legacy drift (righe già scritte) — SELF-HEALING nel codice, niente patch VPS
 
-Le ~340 categorizzazioni PRE-Parte-B restano non-canoniche (barto: 47 distinct, ~98 righe da
-rimappare). NON si toccano sul VPS. Due gestioni complementari:
+**Correzione approccio (feedback utente forte, 2026-06-15):** il fix NON deve essere una mappatura
+cucita sui dati di una VPS né dipendere da essi. Deve essere un **fix GENERALE al comportamento del
+team** che, nel container, tiene le categorie sotto controllo da solo per QUALUNQUE candidato. Azione
+massima = aggiornare l'IMMAGINE, MAI i dati utente.
 
-1. **Naturale via recheck:** quando una riga legacy viene ri-scritta (recheck/ricategorizza), passa
-   dal `normalize()` → si auto-canonicalizza. RULE-14: l'Analista ri-categorizza solo i `role_family
-   IS NULL`/nuovi, NON ri-mappa di proposito l'esistente → la pulizia legacy è lenta/naturale.
-2. **Sync-normalizer JS (lane dev2):** `normalize()` portato in JS nel push del device
-   (`cli/cloud.js`), mirror di `role_taxonomy.py` → il **cloud riceve sempre canonico** anche se il
-   VPS tiene ancora un valore legacy (deterministico, gratis, dato VPS intatto). Da finalizzare DOPO
-   che il dev-domain (sotto) è stabile, per non creare un mirror divergente.
+1. **Self-healing re-categorize (il pezzo generale):** oggi `next-for-categorize` prende solo
+   `role_family IS NULL` → le righe legacy non-canoniche non si ripuliscono mai. Si **estende la coda
+   categorize** a includere anche gli ESISTENTI **non-canonici** (drift), così col nuovo container
+   l'Analista ri-normalizza da sé lo storico — nessun `UPDATE` nostro sul VPS. (Lane: db_query
+   re-categorize + analista.md pointer = dev2.)
+   - ⚠️ **DEVE escludere gli `Other` già revisionati** (regola Growth di `role-taxonomy.md`):
+     `role_family NOT IN (<15+canonici>) AND role_family <> 'Other'`. Altrimenti gli `Other`
+     legittimi (nessun canonico calza) verrebbero ri-accodati all'infinito = spreco di token.
+   - Combinato con `normalize()` alla scrittura (§3) → going-forward 0 drift, e lo storico si pulisce
+     da solo via recheck/categorize.
+2. **~~Sync-normalizer JS~~ RITIRATO.** L'idea di normalizzare nel push del device come *leva sui
+   dati* è stata ritirata: la fonte di verità resta il **comportamento del team** (normalize-at-write
+   + self-healing re-categorize). Il sync porta semplicemente ciò che il team ha **già** reso
+   canonico nel DB locale — nessuna logica di mapping nel layer di sync.
 
 ## 5. 🧩 Gap dev-domain — CHIUSO (commit 14c8ccef0)
 
@@ -92,10 +101,15 @@ Operations` + `Other`** → **segnale finance perso**.
 - **(B) Accettare `Business & Operations` come catch-all** finance — zero lavoro, ma grafico povero
   per i candidati finance.
 
-> NON implementato unilateralmente: l'allargamento della lista è **deliberato** (cresce solo dopo
-> review/decisione, regola Growth in `role-taxonomy.md`). Raccomandazione dev1: **opzione A** con un
-> cluster finance piccolo (3-4 famiglie) — finance è un verticale candidato primario e il
-> catch-all B&O perde troppo segnale. In attesa della scelta dell'utente.
+> **DECISIONE (2026-06-15): opzione A.** L'utente ha scelto di aggiungere un cluster finance. Le
+> famiglie sono definite da **VERTICALI STANDARD di dominio** (NON ricavate leggendo i 63 valori di
+> Andras — feedback utente: niente fitting sui dati di una VPS, il fix è generale per qualunque
+> candidato). 6 famiglie proposte (dev2): `Investment Banking & Advisory`, `Private Markets & PE/VC`,
+> `Credit & Risk`, `Asset & Investment Management`, `Quant & Trading`, `Corporate Finance & Treasury`.
+> 6 + 15 esistenti = 21 canoniche; per un profilo finance danno ~8 distinte (sotto il tetto utente
+> ~20/candidato); per un non-finance restano dormienti. Split: dev2 = regole ordinate; dev1 =
+> appendice `role-taxonomy.md`; dse3 = RULES in `role_taxonomy.py`. **In attesa solo della conferma
+> utente sulla granularità** (6 famiglie ok o più aggregato) prima di scrivere doc+codice.
 
 ## 🔁 Sequenza di rilascio (per memoria)
 
