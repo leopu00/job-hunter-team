@@ -1,5 +1,13 @@
 # 🗂️ Tassonomia role_family — fix a monte (drift impossibile) + gap di dominio
 
+> ⚠️ **SUPERATO (2026-06-15, decisione utente).** L'approccio a **lista chiusa** (15 canoniche +
+> RULES drift→canon + cluster finance fisso) descritto qui è stato **abbandonato**: l'utente ha
+> imposto **ZERO categorie hardcoded** e una **tassonomia EMERGENTE** (registro vuoto per-utente,
+> categorie che nascono dai dati per soglia). Il modello valido è in `agents/_team/role-taxonomy.md`
+> (riscritto come MODELLO, zero nomi). Questo file resta come **record storico** del percorso
+> (closed → upstream-fix → emergent). Il `normalize()` generico è l'unico pezzo sopravvissuto;
+> CANONICAL/RULES rimossi.
+
 **Data:** 2026-06-15 · **Lane:** dev1 (tassonomia, owner lista) + dev3 (enforcement codice) + dev2
 (sync normalizer). · **Doc sorgente:** `agents/_team/role-taxonomy.md`.
 
