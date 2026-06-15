@@ -224,6 +224,22 @@ export default function LandingNav() {
 
         <div className="hidden md:flex items-center gap-6">
           <Link
+            href="/agents"
+            aria-current={currentPage("/agents")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/agents")}
+          >
+            {t("nav_team")}
+          </Link>
+          <Link
+            href="/pricing"
+            aria-current={currentPage("/pricing")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/pricing")}
+          >
+            {t("nav_pricing")}
+          </Link>
+          <Link
             href="/case-studies"
             aria-current={currentPage("/case-studies")}
             className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
@@ -332,6 +348,24 @@ export default function LandingNav() {
             animation: "fade-in 0.15s ease both",
           }}
         >
+          <Link
+            href="/agents"
+            aria-current={currentPage("/agents")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/agents")}
+          >
+            {t("nav_team")}
+          </Link>
+          <Link
+            href="/pricing"
+            aria-current={currentPage("/pricing")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/pricing")}
+          >
+            {t("nav_pricing")}
+          </Link>
           <Link
             href="/case-studies"
             aria-current={currentPage("/case-studies")}
