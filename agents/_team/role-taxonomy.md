@@ -86,3 +86,38 @@ Real drift → canonical, so analysts see the mapping in action:
 
 → **48 free-text values collapse to ~11 canonical** for this profile. The chart goes from noise to
 signal.
+
+---
+
+## 📎 Appendix — dev-domain mapping (software/data/devops profiles)
+
+For **software-engineering candidates** (the largest profile by volume) the analyst emits dev titles.
+These map deterministically (enforced upstream in `shared/skills/role_taxonomy.py`, after the
+writer/localization/QA rules, before the `/ technical writing` catch-all):
+
+- `backend`, `frontend`/`front-end`, `full stack`/`full-stack`, `software eng`, `software/web
+  develop`, `embedded`/`firmware`, `mobile`/`ios`/`android develop` → **`Software Engineering`**
+- `data engineer`, `data platform`, `etl`, `data pipeline`, `bi engineer` → **`Data Engineering`**
+- `machine learning`, `ml engineer`, `ai engineer`, `ai/ml`, `data scien`(tist/ce), `data analy`(sis),
+  `mlops`, `computer vision`, `nlp engineer` → **`Data Science & AI`**
+- `devops`, `sre`/`site reliability`, `platform eng`, `infrastructure eng`, `cloud eng`, `release eng`
+  → **`DevOps / SRE / Platform`**
+- `ux/ui/product/graphic/visual design` → **`Design`** (NOT UX *writing* → `Content & UX Writing`)
+- `project/program manage`, `product owner`, `scrum master`, `delivery manage` →
+  **`Product & Project Mgmt`**
+
+## 📎 Appendix — ⚠️ FINANCE domain GAP (open product decision)
+
+The closed list has **no finance representation**. Finance candidates (e.g. Investment Banking,
+Private Equity, Venture Capital, Corporate/Structured/Private Credit, Macro Trading, Real Assets,
+Hedge Fund Research, Credit/Risk Analyst) all collapse to `Business & Operations` or `Other` → the
+category chart loses the finance signal entirely.
+
+**Decision pending (taxonomy lane + user product choice):**
+- **(A)** add a small finance cluster (e.g. `Investment Banking & Advisory`, `Investment Management &
+  Markets`, `Credit & Risk`, `Quant & Trading`) — recommended, finance is a primary candidate
+  vertical; or
+- **(B)** accept `Business & Operations` as the finance catch-all (no work, poor chart).
+
+Not added unilaterally — list growth is **deliberate** (TAXONOMY-PROPOSAL → review → add, see Growth).
+See `docs/internal/2026-06-15-taxonomy-upstream-fix-e-domain-gaps.md`.
