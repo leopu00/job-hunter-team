@@ -437,12 +437,16 @@ def next_for_role(role):
         # tassonomia chiusa; normalize-at-write (db_update) rende canonico → il TEAM
         # ri-mappa da solo lo storico, NESSUN UPDATE esterno (max azione = immagine, mai
         # i dati VPS). Loop-guard: appena diventa canonica (anche 'Other') esce dalla coda.
+        # 'Other' e' canonico (NOT IN lo esclude gia'), ma teniamo anche il `<> 'Other'`
+        # esplicito = contratto team + difesa: gli 'Other' revisionati (Growth: nessun
+        # canonico calza) NON si ri-accodano mai. Solo NULL + DRIFT vero in coda.
         canon = role_taxonomy.CANONICAL
         ph = ",".join("?" * len(canon))
         rows = conn.execute(f"""
             SELECT p.id, p.title, p.company, p.location, p.role_family
             FROM positions p
-            WHERE (p.role_family IS NULL OR p.role_family NOT IN ({ph}))
+            WHERE (p.role_family IS NULL
+                   OR (p.role_family NOT IN ({ph}) AND p.role_family <> 'Other'))
               AND p.status IN ('checked','scored','writing','review','ready')
             ORDER BY (p.role_family IS NOT NULL), p.created_at ASC
         """, canon).fetchall()
