@@ -42,6 +42,12 @@ new offer ─▶ [analyst] match to the most similar ACTIVE category?
 4. **Bounded & stable.** A per-candidate cap (~20 active) keeps the chart legible; beyond it the
    least-supported fall back to `'Other'`. Promotion/demotion use **hysteresis** (promote at ≥N,
    demote only below N−margin) so categories don't flap on the chart.
+   **Directional aim (a guardrail, NOT a rule):** the team aims for **few significant families —
+   ~5-8, but relative to the data** (fewer for a narrow profile; more only if the data truly
+   justifies it). This lives in the analysts' **judgement** (they decide together via the registry —
+   aggregate small-similar, surface a swelling `'Other'`), expressed in `analista.md`. The promotion
+   threshold (a floor against fragmentation) and the ~20 cap (a ceiling against explosion) are
+   **mechanical safety nets**, not the target.
 
 ---
 
