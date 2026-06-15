@@ -23,6 +23,7 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from _db import get_db, ensure_schema, resolve_company_id
+import role_taxonomy
 
 
 def update_position(args):
@@ -146,6 +147,16 @@ def update_position(args):
     )
     for arg_name, col in _loc_fields:
         v = getattr(args, arg_name, None)
+        if v is not None and arg_name == 'role_family' and str(v).strip() != "":
+            # ENFORCEMENT tassonomia chiusa A MONTE (2026-06-15, feedback utente):
+            # vincola role_family ai 15 canonici ALLA SCRITTURA → il DB non puo'
+            # contenere drift, qualunque variante l'LLM produca. Il fix e' nel codice,
+            # non un patch sui dati delle VPS. Sconosciuto → "Other" (drift-proof);
+            # la crescita deliberata avviene via TAXONOMY-PROPOSAL.
+            nv = role_taxonomy.normalize(v)
+            if nv is not None and nv != v:
+                changed.append(f"role_family-norm({str(v)[:24]}→{nv})")
+            v = nv if nv is not None else ""
         if v is not None:
             if v == "":
                 updates.append(f"{col} = NULL")
