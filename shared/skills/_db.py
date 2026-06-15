@@ -1067,7 +1067,21 @@ def _migrate_role_family_registry(conn: sqlite3.Connection) -> None:
     )
 
 
-def active_categories(conn: sqlite3.Connection, user_id, with_support: bool = False):
+def local_user_id() -> str:
+    """User_id del candidato LOCALE (DB single-candidate sul VPS).
+
+    Il prompt analista e il write-guard non conoscono lo user_id → risolviamo
+    qui un default stabile, così la firma per-utente (`active_categories`,
+    registro) resta valida per il cloud multi-tenant ma localmente non serve
+    passare l'id. Fonte: env `JHT_SUPABASE_USER_ID` (impostata al boot del
+    container, già usata da db_to_supabase); fallback costante 'local' se
+    assente. La sync (cli/cloud.js) mappa il valore locale allo user_id reale
+    nel push verso il cloud.
+    """
+    return os.environ.get("JHT_SUPABASE_USER_ID") or "local"
+
+
+def active_categories(conn: sqlite3.Connection, user_id=None, with_support: bool = False):
     """Categorie `role_family` ATTIVE per `user_id` dal registro emergente.
 
     Ritorna i soli `name` con `status='active'` (dormant/merged ESCLUSE),
@@ -1079,7 +1093,10 @@ def active_categories(conn: sqlite3.Connection, user_id, with_support: bool = Fa
       match-best-active-or-Altro.
     Tabella assente / utente senza attive → lista vuota (cold-start: tutto va
     nella sentinella finché il pass non promuove il primo cluster).
+    `user_id=None` → risolto a `local_user_id()` (default candidato locale).
     """
+    if user_id is None:
+        user_id = local_user_id()
     try:
         rows = conn.execute(
             "SELECT name, support_count FROM role_family_registry "
