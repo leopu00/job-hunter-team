@@ -22,7 +22,63 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _db import get_db, ensure_schema, resolve_company_id
+from _db import get_db, ensure_schema, resolve_company_id, _column_exists
+import role_taxonomy
+
+# Lettore delle categorie ATTIVE del registro emergente. Usa la funzione
+# canonica di _db (active_categories, lane registro dev2: user_id=None →
+# local_user_id, stesso default del pass di promozione) appena è disponibile;
+# fallback single-tenant tollerante finché il cross-merge non la porta su questo
+# branch (così il branch resta self-contained e testabile).
+try:
+    from _db import active_categories as _read_active_categories
+except ImportError:  # pragma: no cover - ponte pre-cross-merge
+    def _read_active_categories(conn, *a, **k):
+        """Fallback: nomi attivi del registro (single-tenant locale, tollerante)."""
+        try:
+            rows = conn.execute(
+                "SELECT name FROM role_family_registry "
+                "WHERE status='active' ORDER BY support_count DESC"
+            ).fetchall()
+        except Exception:
+            return []
+        return [(r[0] if not hasattr(r, "keys") else r["name"]) for r in rows]
+
+
+# --- Tassonomia EMERGENTE: enforcement alla scrittura (write-guard) -----------
+# Sentinella catch-all: valore DB stabile (la UI i18n la mostra 'Altro'). Le
+# righe legacy 'Other' sono già sentinelle corrette. UNICO literal ammesso — è
+# MECCANICA (residuo), NON un nome di categoria di dominio.
+_SENTINEL = "Other"
+
+
+def _guard_role_family(conn, raw, _active=None):
+    """Enforcement EMERGENTE alla scrittura. Ritorna (role_family, proposed).
+
+    MODELLO B (enforcement in UN punto; l'analista scrive solo --role-family
+    <best label> e non può bypassare):
+      • etichetta == sentinella → (sentinella, "")  [residuo esplicito, no proposta]
+      • etichetta ∈ attive (match esatto) → (attiva, "")  [pulisci proposed]
+      • normalize_key(etichetta) == normalize_key(attiva) → (attiva, "")  [variante di superficie]
+      • altrimenti → (sentinella, etichetta_raw)  [catch-all + proposta per il clustering]
+
+    `proposed`: "" ⇒ SET role_family_proposed = NULL; <str> ⇒ scrivi raw.
+    `_active`: iniettabile per i test (default = lettura dal registro runtime).
+    """
+    v = str(raw).strip()
+    if not v:
+        return None, None
+    if v.lower() == _SENTINEL.lower() or v.lower() == "altro":
+        return _SENTINEL, ""
+    active = _active if _active is not None else _read_active_categories(conn)
+    if v in active:
+        return v, ""
+    key = role_taxonomy.normalize_key(v)
+    if key:
+        for a in active:
+            if role_taxonomy.normalize_key(a) == key:
+                return a, ""
+    return _SENTINEL, v
 
 
 def update_position(args):
@@ -130,10 +186,43 @@ def update_position(args):
             params.append(args.last_checked)
         changed.append(f"last_checked={args.last_checked}")
 
-    # Role family + location strutturata (popolata dall'analista).
+    # Role family: ENFORCEMENT tassonomia EMERGENTE alla scrittura (write-guard).
+    # 2026-06-15 (GO utente): ZERO nomi hardcoded. role_family DEVE essere o una
+    # categoria ATTIVA del registro (decisa/nominata dal team dai dati) o il
+    # sentinella catch-all 'Other'. Un'etichetta fuori-registro (one-off / nuova)
+    # NON entra come categoria: → 'Other' + l'etichetta raw in role_family_proposed
+    # (il pass di promozione la clusterizza; se un cluster supera la soglia NASCE
+    # una categoria, nominata dal team). Drift IMPOSSIBILE alla scrittura,
+    # qualunque cosa produca l'LLM — fix nel codice, mai patch sui dati VPS.
+    rf_in = getattr(args, 'role_family', None)
+    if rf_in is not None:
+        _has_proposed = _column_exists(conn, 'positions', 'role_family_proposed')
+        if str(rf_in).strip() == "":
+            # convenzione esistente: "" => SET NULL (ripulisci categoria + proposta)
+            updates.append("role_family = NULL")
+            changed.append("role_family=NULL")
+            if _has_proposed:
+                updates.append("role_family_proposed = NULL")
+                changed.append("role_family_proposed=NULL")
+        else:
+            guarded, proposed = _guard_role_family(conn, rf_in)
+            if guarded != str(rf_in).strip():
+                changed.append(f"role_family-guard({str(rf_in)[:24]}→{guarded})")
+            updates.append("role_family = ?")
+            params.append(guarded)
+            changed.append(f"role_family={guarded}")
+            if _has_proposed:
+                if proposed == "":
+                    updates.append("role_family_proposed = NULL")
+                    changed.append("role_family_proposed=NULL")
+                elif proposed is not None:
+                    updates.append("role_family_proposed = ?")
+                    params.append(proposed)
+                    changed.append(f"role_family_proposed={proposed[:30]}")
+
+    # Location strutturata (popolata dall'analista). Vedi playbook 2026-05-23.
     # Convenzione: stringa vuota "" => SET NULL (per "ripulire" un campo).
     _loc_fields = (
-        ('role_family',       'role_family'),
         ('loc_city',          'loc_city'),
         ('loc_region',        'loc_region'),
         ('loc_country',       'loc_country'),
@@ -459,8 +548,12 @@ def main():
     p.add_argument('--expires-at', help='Scadenza candidature ISO YYYY-MM-DD (da deadline_extract); "" => NULL')
     p.add_argument('--is-open', choices=['true', 'false'], help='Posizione ancora aperta (RULE-12 richeck): false se link morto o expires_at passata')
     p.add_argument('--last-open-check', help='Data/ora ultimo richeck apertura (YYYY-MM-DD HH:MM o "now")')
-    # Role family (categoria semantica del ruolo)
-    p.add_argument('--role-family', help='Categoria semantica popolata dall\'analista (es. "Technical Writing", "CAD / CNC"). Vedi docs/internal/2026-05-23-location-playbook.md')
+    # Role family (categoria semantica del ruolo) — tassonomia EMERGENTE.
+    # L'analista scrive la categoria ATTIVA che meglio combacia (vedi
+    # `db_query active-categories`) o, se nessuna calza, un'etichetta concisa: il
+    # write-guard accetta il match (anche di superficie) o coerce a 'Other' +
+    # role_family_proposed. Nessuna lista fissa, nessun --role-family-proposed.
+    p.add_argument('--role-family', help='Categoria del ruolo (analista): nome ATTIVO del registro se l\'offerta vi appartiene, altrimenti etichetta concisa → il guard la incanala (match o Other+proposta)')
     # Location strutturata (popolata dall'analista). Vedi playbook 2026-05-23.
     p.add_argument('--loc-city', help='Città di ufficio (es. "Dublin"). NULL se solo paese/continente.')
     p.add_argument('--loc-region', help='Regione/stato (es. "Friuli-Venezia Giulia"). Opzionale.')
