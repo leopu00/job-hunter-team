@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  forwardRef,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useRef, useState } from "react";
 import type {
   TeamActivity,
   TeamActivityActor,
@@ -15,6 +8,11 @@ import type {
 } from "@/lib/team-activity";
 import { ROLE_META, timeAgo, dmhm } from "@/lib/team-activity-meta";
 import RecentActivityFeed from "@/app/components/RecentActivityFeed";
+import {
+  TooltipLayer,
+  type TipRow,
+  type TooltipHandle,
+} from "@/app/components/ChartTooltip";
 
 // 'YYYY-MM-DD' → 'DD/MM'
 function dm(date: string): string {
@@ -49,72 +47,6 @@ function actorLabel(
 
 const AGGREGATO_HINT =
   "Eventi senza id istanza registrato: per l'Analista è l'intera attività (last_checked non salva l'istanza); per gli altri ruoli sono le righe con *_by nullo.";
-
-/* ── Tooltip isolato ──────────────────────────────────────────────
-   Vive in un proprio componente con stato interno e portal su <body>:
-   l'hover aggiorna SOLO questo layer, MAI i grafici → niente re-render
-   delle celle e niente loop scrollbar (la pagina non "trema"). */
-type TipRow = { color: string; label: string; value: string };
-export type TooltipHandle = {
-  show: (x: number, y: number, title: string, rows: TipRow[]) => void;
-  move: (x: number, y: number) => void;
-  hide: () => void;
-};
-
-const TooltipLayer = forwardRef<TooltipHandle>(function TooltipLayer(_props, ref) {
-  const [tip, setTip] = useState<{
-    x: number;
-    y: number;
-    title: string;
-    rows: TipRow[];
-  } | null>(null);
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      show: (x, y, title, rows) => setTip({ x, y, title, rows }),
-      move: (x, y) => setTip((t) => (t ? { ...t, x, y } : t)),
-      hide: () => setTip(null),
-    }),
-    [],
-  );
-
-  if (!tip || typeof document === "undefined") return null;
-
-  // Clamp su entrambi gli assi così il box fixed non genera mai scrollbar.
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const estH = 22 + tip.rows.length * 16;
-  const left = Math.max(8, Math.min(tip.x + 14, vw - 230));
-  const top =
-    tip.y + 14 + estH > vh ? Math.max(8, tip.y - estH - 8) : tip.y + 14;
-
-  return createPortal(
-    <div
-      className="fixed z-[9999] pointer-events-none rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 shadow-lg"
-      style={{ left, top, maxWidth: 220 }}
-    >
-      <div className="text-[10px] font-semibold text-[var(--color-white)] mb-0.5 whitespace-nowrap">
-        {tip.title}
-      </div>
-      {tip.rows.map((r, i) => (
-        <div key={i} className="flex items-center gap-1.5 whitespace-nowrap">
-          <span
-            className="inline-block w-2 h-2 rounded-sm shrink-0"
-            style={{ background: r.color }}
-          />
-          <span className="text-[10px] text-[var(--color-muted)]">{r.label}</span>
-          {r.value !== "" && (
-            <span className="text-[10px] font-bold text-[var(--color-white)] tabular-nums ml-1">
-              {r.value}
-            </span>
-          )}
-        </div>
-      ))}
-    </div>,
-    document.body,
-  );
-});
 
 /* ── Scatter temporale isolato (con zoom) ──────────────────────────
    Stato `zoom` interno: lo zoom espande la larghezza del piano (px/giorno)
@@ -527,11 +459,20 @@ function WorkDonut({
   );
 }
 
-/* ── Componente principale ────────────────────────────────────────── */
+/* ── Componente principale ──────────────────────────────────────────
+   `showRecent`: il feed "Attività recente" linka a rotte protette
+   (/team/attivita/log, /positions/[id]) → su pagine pubbliche (case-studies)
+   va passato false. Default true per la vista protetta. */
 export default function ActivityCharts({
   activity,
+  showRecent = true,
+  showLeaderboard = true,
+  showDonut = true,
 }: {
   activity: TeamActivity;
+  showRecent?: boolean;
+  showLeaderboard?: boolean;
+  showDonut?: boolean;
 }) {
   const { dates, roles, actors, roleDaily, roleTotals, totalAll, days, recent } =
     activity;
@@ -641,8 +582,11 @@ export default function ActivityCharts({
   return (
     <div className="space-y-10" style={{ animation: "fade-in 0.35s ease both" }}>
       {/* ── 0. Attività recente (chi ha fatto le ultime azioni) ──── */}
-      <RecentActivityFeed recent={recent} viewAllHref="/team/attivita/log" />
+      {showRecent && (
+        <RecentActivityFeed recent={recent} viewAllHref="/team/attivita/log" />
+      )}
       {/* ── 1. Leaderboard nel periodo (per istanza) ─────────────── */}
+      {showLeaderboard && (
       <section>
         <div className="section-label mb-1">🏅 Leaderboard · nel periodo</div>
         <p className="text-[10px] text-[var(--color-dim)] mb-4">
@@ -766,8 +710,10 @@ export default function ActivityCharts({
           })}
         </div>
       </section>
+      )}
 
       {/* ── 2. Donut interattivo: distribuzione + drill-down ─────── */}
+      {showDonut && (
       <WorkDonut
         roles={roles}
         roleTotals={roleTotals}
@@ -777,6 +723,7 @@ export default function ActivityCharts({
         onMove={moveTip}
         onHide={hideTip}
       />
+      )}
       {/* ── 3. Timeline impilata (per ruolo) ─────────────────────── */}
       <section>
         <div className="section-label mb-1">📈 Volume di lavoro nel tempo</div>
