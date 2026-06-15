@@ -1,41 +1,100 @@
-# 💬 Inter-Agent Communication Rules
+# 💬 Inter-Agent Communication Rules — lean, pull-default
 
-JHT agents coordinate primarily through the **database**, not through tmux. The DB carries the steady-state pipeline; tmux is reserved for **real-time signals** that can't wait for the next polling cycle.
+JHT agents coordinate **pull-first**. The default is *discover* the state you need, not *ask* for it.
+A tmux message is the **exception**, reserved for things a peer genuinely cannot find on its own.
 
-## 🗄️ DB-driven coordination (the default)
+> **Why lean.** A push-heavy protocol (status broadcasts, routine ACKs, "are you alive?" pings) burns
+> tokens on both sides — the sender writes a turn, the receiver wakes a turn to reply — and distracts
+> agents from real work. Most of that traffic carries no action. Cut it.
 
-Pipeline handoffs flow naturally through the DB — no tmux notification needed:
+## 🪜 The coordination hierarchy — DB → capture-pane → message
+
+Always reach for the **cheapest tier that answers your question**. Go up a tier only when the one
+below genuinely can't.
+
+| Tier | Tool | Use it for | Cost |
+|---|---|---|---|
+| **1. DB** | `db_query.py` (`next-for-*`, status, `last_checked`, flags) | **shared state** — what's queued, what's claimed, what's done, scores, lifecycle | cheapest, deterministic, not racy |
+| **2. capture-pane** | `tmux capture-pane -p -S -N` on the peer's session | **"what is X doing right now?"** — is it working, blocked on a fetch, idle, stuck | cheap (no turn on the peer), but a **racy snapshot** — never trust it as durable state |
+| **3. tmux message** | `jht-tmux-send` | **action the peer can't discover** + **safety events** (see bar below) | expensive — a turn on both sides; the exception |
+
+**Rule of thumb:** if the answer is in the DB, query the DB. If you need to know what a colleague is
+*doing this moment*, look at its pane — **don't message to ask**. Only message when neither works.
+
+## 🚧 The bar for a tmux message (push)
+
+Send a message **only** when one of these is true:
+
+1. **Real hand-off** — the peer must *do* something it cannot discover from its own `next-for-X`
+   loop or the DB. Examples: Writer → Critic to start the CV review loop; Captain → worker to
+   spawn / throttle / kill; Analyst → Scout `FEEDBACK` that must shape the *next* query.
+2. **Safety event** — `LOCKED` / `403`, halt, kill, crash, an imminent rate breach that DB polling
+   is too slow to catch. Sentinel → Captain only.
+3. **User-facing** — a request from / reply to the human (separate channel; see role manuals).
+
+### ✂️ What is CUT (do NOT send)
+
+- **No-op ACKs** — "received, context updated", "OK, holding". If the message required no action and
+  the sender doesn't *need* confirmation to proceed, **say nothing**. (See ACK below for the rare case.)
+- **Status broadcasts** — "@all check 10:14, queues empty, all standby". This is observable: the DB
+  has the queues, the panes have the activity. Don't narrate it to everyone. (For human-readable
+  observability, write to the structured event-log, not to peers' panes.)
+- **"Are you alive? / where are you at?"** — use capture-pane (Tier 2). Never burn a peer's turn to
+  ask for a status it would have to stop and write.
+- **Re-confirmations / repeated orders** — if you already sent an order, don't re-send it every tick.
+  The bridge / mailbox delivers once.
+
+## 🗄️ Tier 1 — DB-driven coordination (the default)
+
+Pipeline hand-offs flow through the DB — **no tmux needed**:
 
 | Handoff | Mechanism |
 |---|---|
-| 🕵️ Scout → 👨‍🔬 Analyst | Analyst polls `next-for-analista` continuously; sees fresh `status = new` rows immediately |
+| 🕵️ Scout → 👨‍🔬 Analyst | Analyst polls `next-for-analista`; sees fresh `status = new` rows |
 | 👨‍🔬 Analyst → 👨‍💻 Scorer | Scorer polls `next-for-scorer`; picks `status = checked` rows |
-| 👨‍💻 Scorer → 👨‍🏫 Writer | Writer polls `next-for-scrittore` ordered by `score DESC`; picks `status = scored` rows ≥ 50 |
-| 👨‍🏫 Writer → 👤 User | Position lands at `status = ready` + `applications.critic_verdict = PASS`; Captain dashboard surfaces it |
+| 👨‍💻 Scorer → 👨‍🏫 Writer | Writer polls `next-for-scrittore` (`score DESC`); picks `status = scored` ≥ 50 |
+| 👨‍🏫 Writer → 👤 User | Position → `status = ready` + `applications.critic_verdict = PASS`; surfaces on dashboard |
 
-**Rule of thumb**: if the next agent in the pipeline can see the new state by running its standard `next-for-X` query, **do not send a tmux message**. tmux on every batch creates noise and risks lost messages on busy panes.
+**Claiming a record without messaging** — peers avoid the same row via the locks in
+[`anti-collision.md`](anti-collision.md): Scout pre-INSERT dedup + circles/sources partition;
+Analyst/Scorer `last_checked` watermark; Writer `status = writing` flip. **First write wins.** You do
+not announce "I'm taking ID 42" — the claim *is* the lock; a peer reads it from the DB.
 
-## 📡 tmux is for real-time signals only
+## 👀 Tier 2 — capture-pane (observe, don't ask)
 
-Send a tmux message only when the receiver needs to act *now* and can't wait for the next DB poll:
+To understand what a colleague is doing **without disturbing it**:
 
-| Type | When to use | Real-time required because… |
-|---|---|---|
-| `URG` | Captain → workers (FREEZE / throttle / kill) on Sentinel signal | Rate-limit overshoot is imminent — DB polling is too slow |
-| `URG` | Sentinel → Captain on real state change (spike, breach, crash) | Same |
-| `FEEDBACK` | Analyst → Scout on rejection patterns (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`) | Scout must adapt the **next** query, not after a polling cycle |
-| `REQ` / `RES` | Interactive request between agents (rare) | Synchronous answer expected |
-| `ACK` | Reply confirming an `URG` was received and applied | Captain needs to know throttle/freeze took effect |
+```bash
+tmux capture-pane -t <PEER_SESSION> -p -S -40
+```
 
-## 📨 Message envelope
+Look for: the spinner / `esc to interrupt` (alive, mid-turn), a bare shell prompt (idle / possibly
+stuck), a blocked fetch. This replaces "are you alive? / what's your status?" messages entirely.
 
-Every inter-agent message uses a tagged single-line envelope:
+⚠️ **It is a snapshot, not state.** You may catch a turn mid-render. Use it for *liveness / activity*,
+**never** as the source of truth for shared state — that is always the DB (Tier 1). Verdicts on a
+*possibly-dead* peer belong to the Doctor (`liveness-check`), not to a reflex read.
+
+## 📨 Tier 3 — message envelope & types
+
+Tagged single-line envelope:
 
 ```
 [@from -> @to] [TYPE] payload
 ```
 
-`TYPE` is one of `URG · FEEDBACK · REQ · RES · ACK · INFO · REPORT` — but in V5 only the first 5 are routinely used (see table above).
+Reduced type set (use the narrowest that fits):
+
+| Type | When |
+|---|---|
+| `URG` | Safety / act-now: Captain → worker (throttle / freeze / kill); Sentinel → Captain (breach, crash, LOCKED) |
+| `FEEDBACK` | Analyst → Scout rejection patterns (`[SENIORITY] · [STACK] · [GEO] · [LINGUA]`) that must shape the next query |
+| `REQ` / `RES` | A genuine synchronous request expecting an answer (rare) — a real hand-off, not a status ask |
+
+`ACK` — **only** when the sender explicitly needs to know the action took effect to proceed safely
+(e.g. Captain must confirm a `FREEZE` was applied before scaling). It is **not** a routine reply. If
+an order needs no confirmation to be safe, the receiver applies it silently. `INFO` / `REPORT` are
+deprecated for peer traffic — route narration to the event-log, not to panes.
 
 ## 🛠️ Sending: `jht-tmux-send`
 
@@ -43,65 +102,66 @@ Every inter-agent message uses a tagged single-line envelope:
 jht-tmux-send <PEER_SESSION> "[@me -> @peer] [URG] FREEZE"
 ```
 
-⚠️ **Never use raw `tmux send-keys` for inter-agent messages.** Codex and Kimi TUIs lose the Enter character if it arrives in the same `send-keys` call as the text body, causing silent deadlocks. The wrapper handles text + Enter atomically with a render pause. Skill at `agents/_tools/jht-tmux-send`.
+⚠️ **Never raw `tmux send-keys` for inter-agent messages.** Codex/Kimi TUIs lose the Enter character
+when it arrives with the body, causing silent deadlocks. The wrapper handles text + Enter atomically.
+It is **busy-aware**: it waits for the peer's turn to finish then delivers (`exit 0`); `exit 4` = peer
+alive but still busy past the budget → **retry later, do not spawn / do not re-reason**; `exit 3` =
+possibly-dead → Doctor verdict, not a reflex. Skill: `agents/_skills/tmux-send/jht-tmux-send`.
 
-## ⏰ Per-role required signals
+**On a failed / busy send:** queue it (the bridge `bridge_mailbox` the Captain drains), do **not**
+open a fresh reasoning turn to "think about" the failure. Retry is mechanical, not cognitive.
 
-What each role MUST send via tmux (anything else is DB-driven):
+## ⏰ Per-role required signals (everything else is pull)
 
 ### 🕵️ Scout
-- Receives `FEEDBACK` from Analysts → adapt queries; reply `ACK`
+- Receives `FEEDBACK` from Analysts → adapt the next query. **No ACK** unless the Analyst asked a `REQ`.
 
 ### 👨‍🔬 Analyst
-- Sends `FEEDBACK` to a Scout when:
-  - 3 consecutive exclusions from the same source with the same tag, OR
-  - >60% exclusion rate in a single Scout's batch
+- Sends `FEEDBACK` to a Scout only on a real pattern: 3 consecutive same-tag exclusions from one
+  source, OR > 60 % exclusion rate in one Scout's batch. Otherwise silent (DB carries the hand-off).
 
 ### 👨‍💻 Scorer
-- *(no tmux — pipeline handoffs are DB-driven; score distribution insights surface on the Captain's dashboard)*
+- No tmux. Pipeline is DB-driven; score insights surface on the dashboard / event-log.
 
 ### 👨‍🏫 Writer
-- Receives `URG FREEZE` from Captain → finish current Critic round (never abandon mid-review), then `ACK` and sleep until throttle returns to T0/T1
+- On `URG FREEZE` from Captain: finish the current Critic round (never abandon mid-review), then
+  throttle. ACK only — it's the rare confirm-to-proceed case.
 
 ### 💂 Sentinel
-- Edge-triggered: only speaks when state actually changes (usage spike, projection breach, agent crash). Sends `URG` to the Captain with the proposed action (throttle / freeze / kill). Never broadcasts to workers directly — Captain is the gateway.
+- Edge-triggered, **inside working hours only**. Speaks **only** on a real state change (spike,
+  breach, crash, `LOCKED`). One message per edge — never re-emit. Never broadcasts to workers
+  (Captain is the gateway). Steady state → silent.
 
 ### 👨‍✈️ Captain
-- Sends `URG` orders to workers (FREEZE, throttle level, kill) on Sentinel signal
-- Sends `REQ` for interactive coordination (rare)
-- Forwards user feedback from Phase 5 to the relevant role
-- Reads pipeline state from the DB, not from worker panes — never second-guesses an agent by attaching to its tmux
+- `URG` to workers (throttle / freeze / kill / spawn) on Sentinel signal or observed pipeline need.
+- Reads pipeline state from the **DB**, agent activity from **capture-pane** — never narrates status
+  to peers, never re-sends standing orders.
 
 ## 📥 Reading peer messages
 
-You don't need to scan tmux before *every* action — most coordination flows through the DB. Instead:
-
-- **Between work units** (after finishing a position, before claiming the next), do a quick `tmux capture-pane -p -S -20` on your own session.
-- **Prioritize `URG` and `FEEDBACK`**: act on them before picking up new work.
-- An incoming message arriving while you're mid-task will already be in your context (the wrapper writes it to your pane); you don't need to poll, just notice it before starting the next iteration.
+You don't scan tmux before every action — most coordination is in the DB.
+- **Between work units** (after a position, before claiming the next): a quick
+  `tmux capture-pane -p -S -20` on **your own** session to notice an incoming `URG` / `FEEDBACK`.
+- Prioritize `URG` / `FEEDBACK`; act before picking up new work.
+- A message arriving mid-task is already in your context (the wrapper wrote it to your pane) — just
+  notice it before the next iteration.
 
 ## ⏸️ Throttle: tracked pauses
 
-Whenever you want to slow down your loop to respect the rate budget
-(cooldown after a batch, post-`URG` freeze, "wait for upstream", …),
-**use the `throttle` skill, never plain `sleep`**:
+To slow your loop (cooldown, post-`URG`, wait-for-upstream), use the `throttle` skill, **never plain
+`sleep`**:
 
 ```bash
 jht-throttle <seconds> --agent <your-name> [--reason "..."]
 ```
 
-Every call appends an event to `$JHT_HOME/logs/throttle-events.jsonl`,
-so the Captain and the dashboard can see who is pausing and for how
-long. Plain `sleep` is allowed only for very short waits (≤ 5 s)
-between retries, where logging would be noise.
-
-Captain: when you order a worker to slow down, name the skill explicitly,
-e.g. `[URG] Throttle: jht-throttle 180 --agent scout-1 --reason "rate budget"`.
-Don't say "sleep 3 minutes" — that bypasses the logging.
+Every call logs to `$JHT_HOME/logs/throttle-events.jsonl` so the Captain and dashboard see who pauses
+and for how long. Plain `sleep` only for ≤ 5 s retry gaps. Captain: name the skill explicitly in the
+order (`[URG] jht-throttle 180 --agent scout-1 --reason "rate budget"`), never "sleep 3 minutes".
 
 See: [`../_skills/throttle/SKILL.md`](../_skills/throttle/SKILL.md).
 
 ## 🔗 Related
 
-- 🛡️ [`anti-collision.md`](anti-collision.md) — lock mechanisms (claim before work)
+- 🛡️ [`anti-collision.md`](anti-collision.md) — claim-before-work locks (how to coordinate via the DB)
 - 🧭 [`../_team/architettura.md`](../_team/architettura.md) — pipeline overview (who feeds whom)
