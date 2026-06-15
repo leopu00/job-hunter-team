@@ -196,7 +196,12 @@ def run_pass(conn, user_id=None, threshold=DEFAULT_THRESHOLD, cap=DEFAULT_CAP,
 
     ``user_id=None`` → candidato locale. Ritorna un dict riassuntivo.
     ``apply=False`` (dry-run) → calcola e ritorna senza scrivere/committare.
+
+    Auto-sicuro a DB cold: ``ensure_schema`` garantisce tabella+colonna prima di
+    qualunque query → chiamabile dal bridge anche al primo tick post-boot senza
+    pre-condizioni (idempotente, a vuoto ritorna promote/demote vuoti).
     """
+    ensure_schema(conn)
     if user_id is None:
         user_id = local_user_id()
     promoted = promote(conn, user_id, threshold, apply=apply)
