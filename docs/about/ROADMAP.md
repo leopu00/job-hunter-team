@@ -31,6 +31,19 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 
 > See [`docs/internal/INFRA.md`](../internal/INFRA.md) for the deployment diagram and [`docs/VISION.md`](VISION.md) for the design philosophy.
 
+---
+
+> ### 🔀 Direction shift — Interaction planes (2026-06-15)
+>
+> A beta-test learning reframes *where* the user interacts with the team. Two clean planes replace the "make the cloud web interactive" effort:
+>
+> - **📊 Data plane (one-way, read-only everywhere):** container → Supabase → **web dashboard**. The public site at `jobhunterteam.ai` becomes **view-only** (positions, scores, map, case-studies) — usable from a phone or a work PC. No team control, no chat.
+> - **🎛️ Interaction plane (two-way, always co-located with the team):** chat, file upload, start/stop, feedback live in the **desktop app**. For a **local** team that's a browser window to `localhost`; for a **VPS** team it's the *same* stack reached over an **SSH tunnel**, so the remote team feels local. **Telegram** is the optional async channel for when you're away from the desktop (recommended, not mandatory).
+>
+> This **retires the cloud desired-state *interactive* path** (web→cloud→VPS control/chat), keeping only the one-way data mirror. Full rationale, gap analysis and phased plan → [`docs/internal/2026-06-15-interaction-planes-redesign-design.md`](../internal/2026-06-15-interaction-planes-redesign-design.md). Items below predating this note may be **superseded** by it.
+
+---
+
 **Stack decisions:**
 
 | Component | Technology | Rationale |
@@ -259,7 +272,9 @@ These don't belong to a single phase — they ship progressively across multiple
 
 > _"A bot per role today; a per-agent chat + team forum tomorrow."_
 
-**Shipped (decisione 2026-05-13 rev2, commits `f23df913` → `579d91e6`):** onboarding wizard configures **three mandatory bots** — Assistente, Capitano, Mentor — with `tg-bridge` routing per role and `jht-telegram-send` skill on all three. Notifiche batch ogni N ready. Mentor sempre user-facing.
+**Shipped (decisione 2026-05-13 rev2, commits `f23df913` → `579d91e6`):** onboarding wizard configures three bots — Assistente, Capitano, Mentor — with `tg-bridge` routing per role and `jht-telegram-send` skill on all three. Notifiche batch ogni N ready. Mentor sempre user-facing.
+
+> **🔀 Aggiornamento 2026-06-15 (direction shift):** Telegram diventa **opzionale (consigliato, non obbligatorio)**. Con l'interazione spostata sul desktop, Telegram è il canale *async* per quando l'utente è lontano dal desktop — non un gate di setup. I 3 bot restano *consigliati* nel wizard ma **skippabili**; oggi il gate "mandatory" vive solo nel path VPS del wizard (`cli/wizard/setup.js:258`, `desktop/renderer/modules/wizard-flow.js:775`), mentre boot e runtime già tollerano l'assenza. → `[JHT-TELEGRAM-OPTIONAL]` in BACKLOG.
 
 ```
 ✅ Setup 3 bot obbligatori in onboarding (Assistente / Capitano / Mentor)
@@ -280,6 +295,8 @@ Roadmap successivo — vero "team forum":
 ### 🔄 Cloud sync direction (aggiornato 2026-05-31)
 
 **Modello**: ibrido **push macro-events + bidirezionalità a "desired-state"** (Kubernetes-style). Il container è source-of-truth dei *risultati* (positions/scores/applications); Supabase è il mirror. Le **intenzioni utente** dal web (start/stop team, scrivi CV, chat, like/dislike) viaggiano cloud → container tramite long-poller HTTP + endpoint `/api/cloud-sync/pull-desired-state`. La formula "push-only" della decisione 2026-05-13 è stata superata dal refactor `team_state` (2026-05-23, mig 019-023) e dal writer-on-demand (2026-05-29, mig 024) + pull-desired-state (2026-05-31).
+
+> **🔀 Aggiornamento 2026-06-15 (direction shift):** la **bidirezionalità "desired-state" cloud→container** (start/stop, chat, like/dislike, scrivi-CV via web cloud) è **superata** dallo spostamento dell'interazione sul desktop (diretta in locale, via **tunnel SSH** per la VPS). Resta solo il **push dati one-way** (positions/scores/applications → Supabase → dashboard read-only). Il path interattivo cloud (`team_state` control, `user_to_agent_messages`, `position_feedback`, flag `*_requested` come roundtrip cloud, `team_commands`) è candidato a **freeze/ritiro** — scope esatto in [`docs/internal/2026-06-15-interaction-planes-redesign-design.md`](../internal/2026-06-15-interaction-planes-redesign-design.md) § "Cosa si ritira".
 
 **Bootstrap automatico**: quando l'utente fa login con lo stesso account su un container nuovo/vuoto (es. nuova VPS, nuovo PC), l'app rileva il DB locale vuoto e fa un pull automatico — DB allineato, sync normale da lì in poi. Niente comandi manuali.
 
