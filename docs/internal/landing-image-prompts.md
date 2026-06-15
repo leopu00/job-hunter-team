@@ -128,19 +128,34 @@ scenico del ruolo.** Niente testo leggibile.
 
 ## Pagina `/setup`
 
-### `setup.local`
-> [STYLE] A person at home at a desk with a laptop running the team locally — a
-> small Docker-whale motif subtly present. Cozy, private, in control. [REGOLA
-> OCCHIALI]. 4:3.
+### `setup.local` — laptop "ThinkPad" (sfondo trasparente)
+> Comic-book / graphic-novel illustration, hand-drawn inked outlines, flat cel
+> shading, muted palette with subtle green accents; not 3D, not photorealistic.
+> A classic boxy matte-black business laptop, open, seen at a three-quarter
+> angle — with the iconic small **RED pointing-nub in the middle of the keyboard**
+> and a discreet status light (clearly a rugged business notebook, but **WITHOUT
+> any brand name or logo**). Isolated on a plain transparent background, no scene.
+> Transparent PNG. 4:3.
 
-### `setup.dedicated`
-> [STYLE] A small always-on mini-PC tucked on a shelf, glowing softly, working
-> through the night while the home is quiet. Warm, reassuring. 4:3.
+### `setup.dedicated` — mini-desktop "Mac mini" (sfondo trasparente)
+> Comic-book / graphic-novel illustration, same style. A small compact square
+> aluminium **mini-desktop** — a low, flat silver box with rounded corners, a
+> single round power light on the front and a few ports on the back (Mac-mini
+> form factor), sitting on a surface. **NO brand logo** (or a tiny invented
+> neutral mark only if unavoidable). Isolated on a plain transparent background,
+> no scene. Transparent PNG. 4:3.
 
-### `setup.vps`
-> [STYLE] A clean depiction of a remote cloud server working 24/7 for the user,
-> connected by a subtle green line to a laptop where the user checks in. Modern,
-> lean. No readable text. 4:3.
+### `setup.vps` — server in primo piano + nuvola OneDrive dietro (sfondo trasparente)
+> Comic-book / graphic-novel illustration, hand-drawn inked outlines, flat cel
+> shading, muted palette with subtle green accents; not 3D, not photorealistic.
+> **In the foreground, the clear and dominant main subject: a server tower / small
+> rack** — stacked server units with rows of tiny green status lights. **Behind
+> it, as a subtle flat backdrop, a simple OneDrive-style cloud ICON** — a clean
+> flat cloud SHAPE/outline, NOT a fluffy 3D sky-cloud, NO face/eyes — understated
+> and secondary, just enough to read as "cloud". The server is in front and
+> dominant; the cloud is a quiet silhouette behind. No readable text, no brand
+> logos. Isolated on a plain transparent background, no scene. Transparent PNG.
+> 4:3.
 
 ### `setup.app`
 > [STYLE] A stylized view of the desktop app window: a big green START button, a
