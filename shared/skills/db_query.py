@@ -27,7 +27,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _db import get_db, ensure_schema
+from _db import get_db, ensure_schema, active_categories
 
 
 def format_salary_v2(row):
@@ -563,6 +563,14 @@ def main():
     sub.add_parser('next-for-categorize')
     sub.add_parser('next-for-salary-precise')
 
+    # active-categories <user_id> (tassonomia emergente): nomi role_family
+    # ATTIVI del registro per l'utente. Consumato dal write-guard (db_update)
+    # e dal prompt analista (match-best-active-or-Altro). Nessuna lista
+    # hardcoded: legge role_family_registry.
+    ac = sub.add_parser('active-categories')
+    ac.add_argument('user_id')
+    ac.add_argument('--json', action='store_true', help='output JSON array')
+
     # application (anti-riscrittura check)
     ap = sub.add_parser('application')
     ap.add_argument('position_id', type=int)
@@ -615,6 +623,17 @@ def main():
             "WHERE cv_pdf_path IS NOT NULL AND TRIM(cv_pdf_path) != ''"
         ):
             print(r['cv_pdf_path'])
+    elif args.cmd == 'active-categories':
+        conn = get_db()
+        ensure_schema(conn)
+        names = active_categories(conn, args.user_id)
+        if args.json:
+            import json as _json
+            print(_json.dumps(names, ensure_ascii=False))
+        else:
+            for n in names:
+                print(n)
+        conn.close()
     elif args.cmd.startswith('next-for-'):
         role = args.cmd.replace('next-for-', '')
         next_for_role(role)
