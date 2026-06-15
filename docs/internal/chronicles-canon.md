@@ -100,6 +100,20 @@ errori anatomici (teste ruotate di 180°, colli storti, arti in più), bancone
 unico lungo, fila di scrivanie identiche, grande corridoio vuoto, piante a caso,
 personaggi che guardano la camera.
 
+**REGOLA UNIVERSALE — occhiali da sole.** Ogni agente, in qualsiasi scena e con
+qualsiasi vestito, indossa **occhiali da sole scuri identici**: lenti nere
+classiche **stile Matrix** (piccole, rettangolari, lenti opache nere), **lo
+stesso identico modello per tutti** — niente montature diverse tra una figura e
+l'altra (occhiali scompagnati fanno sembrare che siano ciechi). È il tratto
+identitario condiviso dell'intera squadra: per il resto sembrano persone reali e
+diverse tra loro (eleganti, casual, varie) — **NON** tutti in completo nero stile
+Agent Smith.
+Il completo si usa solo quando lo richiede la scena (es. gli agenti in ufficio) o
+il personaggio specifico. Gli occhiali vanno **sempre descritti a parole** nel
+prompt, su **ogni** figura (il rendering può ometterli). *(Le cover Cronache già
+pubblicate sono precedenti a questa regola: andranno ridisegnate più avanti — non
+ora.)*
+
 **Personaggi = emoji ufficiale.** Il personaggio principale riprende l'emoji
 dell'agente, stilizzata a fumetto, e va **sempre descritta anche a parole**
 (il rendering può tradirla). Le emoji ufficiali sono prese dall'header di
