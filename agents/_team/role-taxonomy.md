@@ -1,88 +1,120 @@
-# 🗂️ role_family — Controlled Vocabulary (single source of truth)
+# 🗂️ role_family — emergent taxonomy MODEL (no hardcoded categories)
 
-**Purpose.** `positions.role_family` is the **semantic category** of a job offer. It powers the
-dashboard category chart and the user's "what kind of roles am I seeing" view. Free text drifts:
-on a real team (betaB, 2026-06-14) 211 categorized positions produced **48 distinct values** —
-`Technical Writing` vs `Technical Writing / Knowledge Management` vs `Technical Editing` vs
-`Knowledge Management / Technical Writing`, `QA / Testing` vs `Quality / QC` vs `Quality Assurance
-/ Regulatory` … the same family written 5 ways → the chart fragments into noise.
+**What `role_family` is.** The semantic category of a job offer — it powers the dashboard category
+chart and the "what kind of roles am I seeing" view for the candidate.
 
-**Rule.** The Analista does **NOT invent** a category. It **MAPS** the JD to **exactly ONE** value
-from the **closed list below**. One family per position, no compound `A / B` strings.
+**The rule that governs everything here:** there is **NO predefined list of categories** anywhere —
+not in this doc, not in code. The taxonomy is **emergent and per-candidate**: the team **discovers
+and names** the categories by reading the candidate's real offers. Code holds only the *mechanics*
+(matching, the registry, normalization, the promotion pass, the threshold) — **never the names**.
 
----
-
-## ✅ Canonical list (closed)
-
-Pick the SINGLE best fit. The scope note is the disambiguator.
-
-| role_family | Scope (maps here) |
-|---|---|
-| `Technical Writing` | technical docs, API/SDK docs, manuals, user guides, technical editing, documentation, document control, technical publications |
-| `Content & UX Writing` | content writing, copywriting, UX writing, content design, e-learning/instructional content, digital/web content |
-| `Localization & Translation` | translation, localization, localization QA, interpretation, transcreation |
-| `Knowledge Management` | knowledge base, knowledge architecture, documentation governance, enablement content |
-| `Software Engineering` | backend, frontend, full-stack, general SWE, embedded/firmware |
-| `Data Engineering` | data pipelines, ETL, data platform, BI engineering |
-| `Data Science & AI` | data analysis, ML/AI engineering, data/AI operations, AI enablement, research |
-| `DevOps / SRE / Platform` | devops, SRE, platform, infra, cloud, release |
-| `QA & Testing` | QA, software testing, QC, test automation, regulatory/quality assurance |
-| `Product & Project Mgmt` | product management, program/project management, product ownership |
-| `Design` | UX/UI design, product design, graphic/visual (NOT UX *writing* → Content & UX Writing) |
-| `Customer & Technical Support` | customer support, technical support, customer operations, developer relations |
-| `Engineering (Other)` | civil, mechanical, electrical, production, field, manufacturing, packaging engineering |
-| `Business & Operations` | finance, controlling, supply chain, consulting, sales/marketing ops, general operations |
-| `Other` | **fallback** — no canonical fits. Set `role_family='Other'` AND flag for review (see Growth). |
+> Why. A fixed list (however reasonable) is fitting: it's right for one profile and wrong for the
+> next (a finance candidate, a nurse, a lawyer). Free-text instead drifts (the same family written 5
+> ways → the chart fragments — betaB produced 48 distinct values from 211 offers; betaA 63). The
+> emergent model avoids BOTH: categories are not invented per-offer (no drift) and not hardcoded by
+> us (no fitting). They **grow from the data, per candidate**.
 
 ---
 
-## 🧭 Mapping rules
+## 🌱 The lifecycle of a category
 
-1. **One value, from the list.** Never a compound (`Technical Writing / Localization` → choose the
-   PRIMARY: if the core deliverable is docs → `Technical Writing`; if it's translating/localizing →
-   `Localization & Translation`).
-2. **Map to the nearest scope**, don't widen the list. A "Documentation Specialist" → `Technical
-   Writing`. A "QA Engineer (regulatory)" → `QA & Testing`. A "Localization QA" → `Localization &
-   Translation` (localization is the domain; QA is the activity).
-3. **Doubt between two?** Pick the one matching the **main deliverable / day-to-day**, not a
-   secondary skill. Record the nuance in the position notes, not in `role_family`.
-4. **Never** leave `role_family` as free text outside this list. If nothing fits → `Other`.
+```
+new offer ─▶ [analyst] match to the most similar ACTIVE category?
+                 │ yes ─▶ role_family = that active category
+                 │ no  ─▶ role_family = 'Other' (residue)  +  role_family_proposed = raw label
+                                          │
+                       [promotion pass, periodic] cluster the 'Other' proposals by normalize(label);
+                       a cluster with support ≥ N  ─▶ a NEW category is BORN, named from the data,
+                                                       its rows re-tagged. Below N → stays in 'Other'.
+```
 
-## 🌱 Growth (the list is closed, but it grows DELIBERATELY)
-The list is intentionally short. If a position genuinely doesn't fit any canonical (not just a
-naming variant of one), set `role_family='Other'` and emit a proposal to the Capitano:
-`[@analista-N -> @capitano] [TAXONOMY-PROPOSAL] new role_family "<name>" — N positions, scope: <...>`.
-A new canonical is added to THIS file only after review (Capitano + Analisti agree). This prevents
-runtime drift: analysts converge on the shared list instead of negotiating names per-position.
-Until a proposal is accepted, those positions stay `Other` — they are NOT re-queued forever
-(the categorize populator skips `Other` already reviewed; see analista.md).
+1. **Empty start.** The active-category registry starts **empty for each candidate**. No seed, no
+   universal list. The first offers all land in `'Other'` with a proposed label — this is expected
+   (see Cold-start).
+2. **At write (analyst).** Before tagging an offer the analyst **reads the candidate's ACTIVE
+   categories** (the registry, read at runtime — see `analista.md`) and assigns the **most similar
+   one**. If none genuinely fits → `'Other'` + the raw label in `role_family_proposed`. **Never
+   create a category for a one-off** (this is what kills the singleton explosion at the root).
+3. **Birth by support (promotion).** A periodic, deterministic pass groups the `'Other'` proposals by
+   their *normalized* label; when a group reaches **support ≥ N** (threshold, a user knob) it is
+   **promoted** to an active category — **named from the data** (the most frequent raw label in the
+   group) — and its rows are re-tagged. The team, not us, names it.
+4. **Bounded & stable.** A per-candidate cap (~20 active) keeps the chart legible; beyond it the
+   least-supported fall back to `'Other'`. Promotion/demotion use **hysteresis** (promote at ≥N,
+   demote only below N−margin) so categories don't flap on the chart.
+   **Directional aim (a guardrail, NOT a rule):** the team aims for **few significant families —
+   ~5-8, but relative to the data** (fewer for a narrow profile; more only if the data truly
+   justifies it). This lives in the analysts' **judgement** (they decide together via the registry —
+   aggregate small-similar, surface a swelling `'Other'`), expressed in `analista.md`. The promotion
+   threshold (a floor against fragmentation) and the ~20 cap (a ceiling against explosion) are
+   **mechanical safety nets**, not the target.
 
 ---
 
-## 📎 Appendix — the betaB-48 consolidated (worked example)
+## 🛡️ The anti-drift chain (how it converges without a synonym list)
 
-Real drift → canonical, so analysts see the mapping in action:
+Emergence fails if done naively (the drift just moves *inside* `'Other'`). Three generic layers, no
+hardcoded names or synonym dictionary:
 
-- `Technical Writing`, `Technical Editing`, `Technical Writing / *`, `* / Technical Writing`,
-  `Documentation / *`, `Document Control*`, `Technical Information / Document Control`,
-  `Technical Content Development / Enablement` → **`Technical Writing`**
-- `Content Writing / E-Learning`, `Digital Content / Web Operations`, `UX Writing / Content Design`,
-  `UX Writing`, `Customer Operations / Writing` → **`Content & UX Writing`**
-- `Translation / Localization`, `Localization QA`, `Localization / AI Enablement`,
-  `Localization / Content Operations`, `Interpretation / Telephone` → **`Localization & Translation`**
-- `Knowledge Management`, `Knowledge Architecture / Knowledge Management`,
-  `Knowledge Management / Technical Writing` → **`Knowledge Management`**
-- `Quality Assurance`, `QA / Testing`, `Quality / QC`, `Quality / Documentation`,
-  `Quality Assurance / Engineering`, `Quality Assurance / Regulatory`, `Software Testing / Aerospace`
-  → **`QA & Testing`**
-- `Data / AI Operations`, `Data Analysis / Consulting` → **`Data Science & AI`**
-- `Customer Support`, `Technical Support`, `Technical Support / Developer Relations`,
-  `Technical Support / Field Engineering` → **`Customer & Technical Support`**
-- `Civil Engineering / Construction`, `Field Engineering / Maintenance`, `Production Engineering`,
-  `Manufacturing / Production`, `Packaging / Production Engineering`,
-  `Production / Technical Office` → **`Engineering (Other)`**
-- `Product Management` → **`Product & Project Mgmt`**
-- `Finance / Controlling`, `Supply Chain / Operations` → **`Business & Operations`**
+1. **Generic normalization** (mechanics, shared) — lowercase, trim, token-sort, collapse connectors
+   (`/ & -`). Collapses **surface** variants (`"Equity / VC"` = `"VC / Equity"`). It is the cluster
+   key for promotion and an assist for matching. It carries **no domain names**.
+2. **Match-first, semantic (analyst)** — abbreviations/synonyms (`"PE"` ↔ `"Private Equity"`) are
+   **not** solved by string normalization (a synonym map would be hardcoding). They collapse because
+   the analyst, seeing `"PE"`, first **matches** it against the active categories and reuses the
+   existing one — semantic judgement, not a dictionary. So the abbreviation never becomes a separate
+   proposal.
+3. **Threshold (promotion)** — a one-off never promotes (needs ≥N support). On near-dups: **surface**
+   near-dups never reach promotion — the write-guard already matches them to the active via
+   `normalize_key` at write, so they never land in `'Other'` (a promoting cluster therefore cannot
+   share an active's key). **Semantic** near-dups (`"PE"` vs `"Private Equity"`) are prevented by
+   match-first once the active exists; only at **cold-start** (no actives yet) can two close labels
+   briefly co-emerge — an **accepted residual** (no deterministic fix without a synonym map, which we
+   reject; a future LLM-assisted merge could reconcile, not v1). An explicit "merge-near-dup" step
+   would be a no-op and is intentionally omitted; the registry's `merged` status exists only for such
+   a future manual/LLM reconciliation.
 
-→ **48 free-text values collapse to ~11 canonical** for this profile. The chart goes from noise to
-signal.
+---
+
+## 🔖 `'Other'` is a sentinel, not a category
+
+`'Other'` (the residue marker) is the **one literal the mechanics needs**: it means *"no active
+category matched"*. It is not a domain category and not "hardcoding a category" — it's the absence of
+one. The **DB value is `'Other'`** (stable, language-neutral); the dashboard shows it **localized via
+i18n** (e.g. "Altro" in Italian) — the localization is a UI concern, the stored value stays `'Other'`.
+All components (write-guard, promotion pass, this model) compare against the **same** string `'Other'`.
+Everything in `'Other'` carries a `role_family_proposed` and is feedstock for the promotion pass.
+
+## ❄️ Cold-start — two cases (a known, accepted property — not a bug)
+
+**(a) Brand-new candidate (no data).** With an empty registry the first analyses **all land in
+`'Other'`** until the first clusters cross the threshold; early on the chart is mostly one `'Other'`
+bucket, then categories emerge over the following days. This is the **accepted cost of
+zero-hardcoding** (chosen over the convenience of a seed).
+
+**(b) Existing candidate at DEPLOY (has legacy `role_family` values).** Naively, an empty registry +
+`next-for-categorize` re-queuing every non-`'Other'` legacy row would trigger a **one-time
+re-analysis storm** of the whole backlog (hundreds of positions through the LLM analyst). Avoid it
+with a **bootstrap**: the promotion pass clusters the **candidate's EXISTING `role_family` values**
+(deterministic, via `normalize_key`) and promotes the common ones into the registry **immediately**,
+so they are already active and **not** re-queued — only genuine drift is reconciled. This is **not
+hardcoding**: it clusters the **candidate's own data**, never our names (it's a *warm-start from the
+candidate's data*, the legitimate cousin of the rejected *seed of our 15 names*). (Bootstrap lives in
+the promotion pass — dev2's lane.)
+
+A future opt-in *warm-start from the candidate's profile* could also pre-populate likely categories —
+again **team/data-generated, never hardcoded by us** (user's later call, not part of v1).
+
+---
+
+## 🧩 Ownership of the mechanics (who builds what — names live nowhere)
+
+| Piece | Owner | Holds names? |
+|---|---|---|
+| This MODEL doc + the analyst behavior (`analista.md`: read-active → match-best-or-`Altro`, never invent) | dev1 | ❌ |
+| Generic `normalize()` + write-guard (validate role_family ∈ active-registry else `'Other'`) + `next-for-categorize` (re-queue rows not in the active set) | dse3 | ❌ |
+| The registry (per-user state table) + the promotion pass (cluster → support ≥N → born, hysteresis, merge-near-dup, cap) + sync to dashboard | dev2 | ❌ |
+
+The registry is read the **same way** by all three through **one shared interface** (a runtime
+read of "active categories for this user"). No component embeds a category name; the names exist only
+as **data**, born from the candidate's offers.
