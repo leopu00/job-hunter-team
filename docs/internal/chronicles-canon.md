@@ -101,10 +101,12 @@ unico lungo, fila di scrivanie identiche, grande corridoio vuoto, piante a caso,
 personaggi che guardano la camera.
 
 **REGOLA UNIVERSALE — occhiali da sole.** Ogni agente, in qualsiasi scena e con
-qualsiasi vestito, indossa **occhiali da sole scuri identici**: lenti nere
-classiche **stile Matrix** (piccole, rettangolari, lenti opache nere), **lo
-stesso identico modello per tutti** — niente montature diverse tra una figura e
-l'altra (occhiali scompagnati fanno sembrare che siano ciechi). È il tratto
+qualsiasi vestito, indossa **occhiali da sole scuri identici**: piccole lenti
+**ovali** opache scure con **montatura sottile in metallo (canna di fucile /
+argento)** — lo **stile iconico degli Agenti di Matrix** (referenza:
+`prima-release/reference-images/00-agent-base.png`). **Lo stesso identico modello
+per tutti** — niente montature diverse tra una figura e l'altra (occhiali
+scompagnati fanno sembrare che siano ciechi). È il tratto
 identitario condiviso dell'intera squadra: per il resto sembrano persone reali e
 diverse tra loro (eleganti, casual, varie) — **NON** tutti in completo nero stile
 Agent Smith.
