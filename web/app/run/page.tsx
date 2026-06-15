@@ -51,6 +51,7 @@ const MODES: Mode[] = [
   },
   {
     promptId: "setup.vps",
+    img: "/run-vps.png",
     badge: { it: "Consigliato", en: "Recommended" },
     it: {
       title: "Su una VPS",

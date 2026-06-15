@@ -145,17 +145,17 @@ scenico del ruolo.** Niente testo leggibile.
 > neutral mark only if unavoidable). Isolated on a plain transparent background,
 > no scene. Transparent PNG. 4:3.
 
-### `setup.vps` — server in primo piano + nuvola OneDrive dietro (sfondo trasparente)
+### `setup.vps` — server davanti + grande nuvola OneDrive completa (sfondo trasparente)
 > Comic-book / graphic-novel illustration, hand-drawn inked outlines, flat cel
 > shading, muted palette with subtle green accents; not 3D, not photorealistic.
-> **In the foreground, the clear and dominant main subject: a server tower / small
-> rack** — stacked server units with rows of tiny green status lights. **Behind
-> it, as a subtle flat backdrop, a simple OneDrive-style cloud ICON** — a clean
-> flat cloud SHAPE/outline, NOT a fluffy 3D sky-cloud, NO face/eyes — understated
-> and secondary, just enough to read as "cloud". The server is in front and
-> dominant; the cloud is a quiet silhouette behind. No readable text, no brand
-> logos. Isolated on a plain transparent background, no scene. Transparent PNG.
-> 4:3.
+> A **large, COMPLETE OneDrive-style flat cloud** (clean simple cloud
+> SHAPE/outline, NOT a fluffy 3D sky-cloud, NO face) — **fully visible and clearly
+> readable as a cloud, big enough to frame the whole scene**. **In front of it, a
+> server tower / small rack** (stacked units, tiny green status lights), placed so
+> it does NOT cover or hide the cloud's outline — the entire cloud shape stays
+> visible all around and behind the server. The server is clear and prominent, the
+> cloud is unmistakably a cloud. No readable text, no brand logos. Isolated on a
+> plain transparent background, no scene. Transparent PNG. 4:3.
 
 ### `setup.app`
 > [STYLE] A stylized view of the desktop app window: a big green START button, a
