@@ -61,6 +61,21 @@ Standard types (see `agents/_manual/communication-rules.md` for full taxonomy an
 
 > 💬 `[CHAT]` is reserved for **user → agent** messages from the web UI (see Captain's prompt protocol). Don't use it for inter-agent traffic.
 
+## 🚧 The bar — send a message ONLY when it passes
+
+A tmux message is a **push**: it burns the peer's turn. Send one ONLY if it passes the bar:
+
+- **(a) real hand-off** the peer cannot discover from the DB — e.g. Analyst → Scout `[FEEDBACK]` shaping the next query; Captain → worker spawn / throttle / kill; Writer ↔ Critic CV loop.
+- **(b) safety event** — lockout, halt, kill, user request.
+
+Everything else is **pull**: DB (Tier 1) → `capture-pane` (Tier 2) → message (Tier 3). What is **CUT**:
+
+- **No-op ACKs** ("received", "OK holding") — stay silent unless the sender needs confirm-to-proceed.
+- **Status broadcasts** ("batch inserted", "@all queues empty") — observable via the DB / `recent-activity`.
+- **"Are you alive? / where are you at?"** — use `tmux capture-pane`, never burn a peer's turn.
+
+Pipeline hand-offs (Scout→Analyst→Scorer→Writer) are **status flips**, not messages. Full rules: [`agents/_manual/communication-rules.md`](../../_manual/communication-rules.md).
+
 ## Exit codes
 
 - `0` — message delivered
