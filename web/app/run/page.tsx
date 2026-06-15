@@ -12,6 +12,7 @@ import ImagePlaceholder from "../components/landing/ImagePlaceholder";
 
 type Mode = {
   promptId: string;
+  img?: string;
   badge: { it: string; en: string };
   it: { title: string; body: string; req: string };
   en: { title: string; body: string; req: string };
@@ -20,6 +21,7 @@ type Mode = {
 const MODES: Mode[] = [
   {
     promptId: "setup.local",
+    img: "/run-local.png",
     badge: { it: "Più semplice", en: "Simplest" },
     it: {
       title: "Sul tuo PC",
@@ -34,6 +36,7 @@ const MODES: Mode[] = [
   },
   {
     promptId: "setup.dedicated",
+    img: "/run-dedicated.png",
     badge: { it: "Consigliato", en: "Recommended" },
     it: {
       title: "Su un PC dedicato",
@@ -148,11 +151,24 @@ function SetupContent() {
               className="flex flex-col border border-[var(--color-border)] overflow-hidden"
               style={{ background: "var(--color-panel)" }}
             >
-              <ImagePlaceholder
-                label={m[L].title}
-                promptId={m.promptId}
-                aspect="4 / 3"
-              />
+              {m.img ? (
+                <div className="aspect-[4/3] flex items-center justify-center p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={m.img}
+                    alt={m[L].title}
+                    width={1448}
+                    height={1086}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <ImagePlaceholder
+                  label={m[L].title}
+                  promptId={m.promptId}
+                  aspect="4 / 3"
+                />
+              )}
               <div className="p-6 flex flex-col flex-1">
                 <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] mb-2">
                   {m.badge[L]}
