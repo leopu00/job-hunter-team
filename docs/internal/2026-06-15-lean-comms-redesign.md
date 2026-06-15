@@ -154,8 +154,10 @@ l'edge-wake ci si costruisce sopra. dse3 NON tocca `sentinel-bridge.py` (rispett
 **dev3 — worker-side metà B + osservabilità + pattern pull:**
 - pointer comms-lean in: `agents/scorer/scorer.md`, `agents/scrittore/scrittore.md`,
   `agents/critico/critico.md`, `agents/assistente/assistente.md`, `agents/mentor/mentor.md`
-- skill `coordinate-via-db` + `observe-via-capture-pane`
 - osservabilità: RIUSO `position_state_transitions` + helper `db_query recent-activity` (zero tabella nuova)
+- ~~skill `coordinate-via-db` / `observe-via-capture-pane`~~ → **NON creata** (deciso 2026-06-15):
+  i pattern sono già nel canonico `communication-rules.md` (Tier-1 DB / Tier-2 capture-pane) + i
+  pointer per-prompt lo referenziano + `recent-activity` è il tool concreto. Una skill duplicherebbe (lean).
 
 > I pointer per-prompt sono **brevi** (rimando a `communication-rules.md` + taglio istruzioni
 > chiacchierone) → edit leggeri, collisione minima. Il grosso è centralizzato in dev1.
