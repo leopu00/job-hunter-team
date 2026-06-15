@@ -312,6 +312,39 @@ def stats():
     conn.close()
 
 
+def recent_activity(minutes=30, limit=40):
+    """Event-log OSSERVABILITÀ (lean-comms redesign): chi ha mosso quali posizioni,
+    quando. Sostituisce i broadcast 'status' inter-agente — invece di narrare in chat
+    'ho scorato #X / coda vuota', si QUERYa qui (pull, non push). Sorgente già
+    esistente: position_state_transitions (by_agent, from→to, ts, notes). Tempi in UTC
+    (CURRENT_TIMESTAMP). Vedi agents/_manual/communication-rules.md (Tier-1 DB)."""
+    conn = get_db()
+    ensure_schema(conn)
+    rows = conn.execute(
+        "SELECT ts, by_agent, position_id, from_state, to_state, notes "
+        "FROM position_state_transitions "
+        "WHERE ts >= datetime('now', ?) "
+        "ORDER BY ts DESC LIMIT ?",
+        (f'-{int(minutes)} minutes', int(limit))
+    ).fetchall()
+    if not rows:
+        print(f"\nNessuna attività pipeline negli ultimi {minutes} min (UTC).")
+        conn.close()
+        return
+    by_agent = {}
+    for r in rows:
+        by_agent[r['by_agent']] = by_agent.get(r['by_agent'], 0) + 1
+    print(f"\nAttività pipeline ultimi {minutes} min ({len(rows)} transizioni, UTC):")
+    print("  per-agente: " + ", ".join(
+        f"{a}={n}" for a, n in sorted(by_agent.items(), key=lambda x: -x[1])))
+    for r in rows:
+        frm = r['from_state'] or '∅'
+        note = f" — {r['notes'][:40]}" if r['notes'] else ""
+        print(f"  {str(r['ts'])[11:19]} {str(r['by_agent'])[:14]:<14} "
+              f"#{r['position_id']} {frm}→{r['to_state']}{note}")
+    conn.close()
+
+
 def next_for_role(role):
     conn = get_db()
     ensure_schema(conn)
@@ -552,6 +585,10 @@ def main():
     # dashboard + stats
     sub.add_parser('dashboard')
     sub.add_parser('stats')
+    # recent-activity: event-log osservabilità (lean-comms) — sostituisce i broadcast status
+    ra = sub.add_parser('recent-activity')
+    ra.add_argument('--minutes', type=int, default=30)
+    ra.add_argument('--limit', type=int, default=40)
 
     # next-for-*
     sub.add_parser('next-for-analista')
@@ -601,6 +638,8 @@ def main():
         dashboard()
     elif args.cmd == 'stats':
         stats()
+    elif args.cmd == 'recent-activity':
+        recent_activity(args.minutes, args.limit)
     elif args.cmd == 'application':
         return query_application(args.position_id)
     elif args.cmd == 'check-url':
