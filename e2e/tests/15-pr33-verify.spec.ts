@@ -4,15 +4,17 @@ import * as path from 'path';
 import { ensureSeededWorkspace, loginToSeededWorkspace } from './_helpers/workspace';
 
 /**
- * VERIFICA PR #33 — Filtro TIER, Analytics, Job Description
- * Da eseguire dopo deploy PR #33.
+ * VERIFICA /positions — smoke, no-leak, job description.
  *
- * (1) /positions — filtro TIER (Seria/Practice/Riferimento/Non scored)
- * (2) /crescita — analytics con tier breakdown + fonti + score medio
- * (3) /positions/[id] — job description visibile
+ * (1) /positions — route risponde + nessun leak di contenuto interno
+ * (2) /positions/[id] — job description + link annuncio visibili
  *
- * Le route sono protette: i test senza auth verificano struttura e redirect.
- * I test con .skip richiedono storageState autenticato.
+ * NB: il filtro TIER (Seria/Practice/Riferimento) e la route /crescita
+ * (tier breakdown) di PR #33 sono stati DISMESSI — /positions filtra ora per
+ * range numerico di score scelto dall'utente. I relativi test sono stati
+ * rimossi: niente più categorizzazione practice/seria, il team dà solo lo score.
+ *
+ * Le route sono protette: i test verificano struttura, redirect e contenuto.
  */
 
 const REPORT_DIR = path.join(__dirname, '../../reports/visual');
@@ -39,12 +41,6 @@ test.describe('PR #33 — verifica post-deploy', () => {
     await page.screenshot({ path: path.join(REPORT_DIR, 'pr33-positions.png'), fullPage: true });
   });
 
-  test('/crescita — route risponde senza 500', async ({ page }) => {
-    const r = await page.goto('/crescita');
-    expect(r?.status()).toBeLessThan(500);
-    await page.screenshot({ path: path.join(REPORT_DIR, 'pr33-crescita.png'), fullPage: true });
-  });
-
   test('/positions non espone contenuto interno dev team', async ({ page }) => {
     await page.goto('/positions');
     const bodyText = await page.locator('body').innerText();
@@ -56,35 +52,6 @@ test.describe('PR #33 — verifica post-deploy', () => {
   });
 
   // ── AUTENTICATI: verifica contenuto reale (richiede storageState autenticato) ──
-
-  test('/positions — mostra filtro TIER', async ({ page }) => {
-    await page.goto('/positions');
-    await expect(page.getByText(/seria/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/practice/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/riferimento/i)).toBeVisible({ timeout: 10_000 });
-
-    const tier1Tab = page.getByRole('link', { name: /seria/i });
-    await tier1Tab.click();
-    await expect(page).toHaveURL(/tier=seria/);
-    await expect(page.getByText(/2 risultati · seria/i)).toBeVisible();
-    const rows = page.locator('table[aria-label="Lista posizioni"] tbody tr');
-    await expect(rows).toHaveCount(2);
-    await expect(page.getByRole('link', { name: /frontend engineer/i })).toBeVisible();
-    await expect(page.getByRole('link', { name: /platform engineer/i })).toBeVisible();
-
-    await page.screenshot({ path: path.join(REPORT_DIR, 'pr33-positions-tier-auth.png'), fullPage: true });
-  });
-
-  test('/crescita — mostra analytics tier breakdown', async ({ page }) => {
-    await page.goto('/crescita');
-    await expect(page.getByText(/seria|tier1/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/linkedin|careerpages|fonte/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/score medio|punteggio medio/i)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/crescita & analytics/i)).toBeVisible();
-    await expect(page.getByText(/posizioni trovate/i)).toBeVisible();
-
-    await page.screenshot({ path: path.join(REPORT_DIR, 'pr33-crescita-analytics-auth.png'), fullPage: true });
-  });
 
   test('/positions/[id] — mostra job description e link annuncio', async ({ page }) => {
     await page.goto('/positions');

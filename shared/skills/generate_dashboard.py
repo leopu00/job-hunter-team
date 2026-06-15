@@ -113,14 +113,17 @@ def esc(text):
     return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
 
-def tier_info(score):
+def score_color(score):
+    """Classe CSS per il colore del cerchietto/bordo — SOLO leggibilità (gradiente
+    sullo score), NON una categoria. Niente etichette practice/seria: il team dà lo
+    score, l'utente decide cosa farne."""
     if score is None:
-        return 'non-scored', '&#11044;', 'Non valutata'
+        return 'non-scored'
     if score >= 70:
-        return 'seria', '&#11044;', 'SERIA'
+        return 'score-high'
     if score >= 40:
-        return 'practice', '&#11044;', 'PRACTICE'
-    return 'riferimento', '&#11044;', 'RIFERIMENTO'
+        return 'score-mid'
+    return 'score-low'
 
 
 def status_badge(status):
@@ -246,7 +249,7 @@ def country_flag(country):
 
 def render_position_card(pos, highlights):
     score = pos['total_score']
-    tier_class, tier_dot, tier_label = tier_info(score)
+    score_class = score_color(score)
     is_rejected = pos['response'] == 'rejected' if pos['response'] else False
 
     # HQ azienda (pin) — da companies via FK
@@ -281,7 +284,7 @@ def render_position_card(pos, highlights):
     if pos['deadline'] and pos['deadline'] != 'non presente':
         deadline = f'<span class="tag deadline">&#9200; {esc(pos["deadline"])}</span>'
 
-    score_display = f'<div class="score-circle {tier_class}">{score}</div>' if score is not None else '<div class="score-circle non-scored">-</div>'
+    score_display = f'<div class="score-circle {score_class}">{score}</div>' if score is not None else '<div class="score-circle non-scored">-</div>'
 
     # Source link
     src_link = source_label(pos['source'], pos['url'])
@@ -318,7 +321,7 @@ def render_position_card(pos, highlights):
     rejected_banner = '<div class="rejected-banner">&#10060; REJECTED</div>' if is_rejected else ''
 
     return f'''
-    <div class="card {tier_class}{rejected_class}">
+    <div class="card {score_class}{rejected_class}">
         {rejected_banner}
         <div class="card-header">
             {score_display}
@@ -326,7 +329,6 @@ def render_position_card(pos, highlights):
                 <h3>{esc(pos['title'])}</h3>
                 <div class="card-company">{esc(pos['company'])} {company_verdict}</div>
             </div>
-            <div class="card-tier">{tier_label}</div>
         </div>
         <div class="card-tags">
             {hq_display} {work_display} {salary} {deadline}
@@ -377,20 +379,19 @@ def render_team_status(team):
 def generate_html(positions, stats, company_stats, highlights, team=None):
     now = datetime.now().strftime('%d/%m/%Y %H:%M')
     total = sum(v for k, v in stats.items() if k != 'excluded')
-    seria_count = sum(1 for p in positions if (p['total_score'] or 0) >= 70)
-    practice_count = sum(1 for p in positions if p['total_score'] and 40 <= p['total_score'] < 70)
     applied_count = stats.get('applied', 0)
     app_count = sum(1 for p in positions if p['app_status'])
     excluded_count = stats.get('excluded', 0)
 
-    seria = [p for p in positions if (p['total_score'] or 0) >= 70]
-    practice = [p for p in positions if p['total_score'] and 40 <= p['total_score'] < 70]
-    riferimento = [p for p in positions if p['total_score'] is not None and p['total_score'] < 40]
+    # Nessuna categorizzazione practice/seria: una sola lista ordinata per score
+    # (le posizioni arrivano già ordinate per total_score DESC da get_all_positions),
+    # più le non-ancora-valutate a parte. Il team dà lo score, l'utente decide.
+    scored = [p for p in positions if p['total_score'] is not None]
     non_scored = [p for p in positions if p['total_score'] is None]
+    scored_count = len(scored)
+    avg_score = round(sum(p['total_score'] for p in scored) / scored_count) if scored_count else 0
 
-    seria_cards = '\n'.join(render_position_card(p, highlights) for p in seria)
-    practice_cards = '\n'.join(render_position_card(p, highlights) for p in practice)
-    riferimento_cards = '\n'.join(render_position_card(p, highlights) for p in riferimento)
+    scored_cards = '\n'.join(render_position_card(p, highlights) for p in scored)
     non_scored_cards = '\n'.join(render_position_card(p, highlights) for p in non_scored)
 
     return f'''<!DOCTYPE html>
@@ -467,9 +468,9 @@ def generate_html(positions, stats, company_stats, highlights, team=None):
     border-radius: 10px; padding: 14px; transition: border-color 0.2s;
   }}
   .card:hover {{ border-color: var(--text-dim); }}
-  .card.seria {{ border-left: 3px solid var(--green); }}
-  .card.practice {{ border-left: 3px solid var(--yellow); }}
-  .card.riferimento {{ border-left: 3px solid var(--blue); }}
+  .card.score-high {{ border-left: 3px solid var(--green); }}
+  .card.score-mid {{ border-left: 3px solid var(--yellow); }}
+  .card.score-low {{ border-left: 3px solid var(--blue); }}
   .card.non-scored {{ border-left: 3px solid var(--text-dim); }}
   .card.rejected {{
     opacity: 0.45; border-left: 3px solid var(--red) !important;
@@ -486,16 +487,15 @@ def generate_html(positions, stats, company_stats, highlights, team=None):
   .card-title {{ flex: 1; }}
   .card-title h3 {{ font-size: 0.95em; line-height: 1.3; }}
   .card-company {{ color: var(--text-dim); font-size: 0.8em; }}
-  .card-tier {{ font-size: 0.7em; white-space: nowrap; font-weight: 600; }}
 
   .score-circle {{
     width: 44px; height: 44px; border-radius: 50%; display: flex;
     align-items: center; justify-content: center; font-weight: 700;
     font-size: 1em; flex-shrink: 0;
   }}
-  .score-circle.seria {{ background: #3fb95020; color: var(--green); border: 2px solid var(--green); }}
-  .score-circle.practice {{ background: #d2992220; color: var(--yellow); border: 2px solid var(--yellow); }}
-  .score-circle.riferimento {{ background: #58a6ff20; color: var(--blue); border: 2px solid var(--blue); }}
+  .score-circle.score-high {{ background: #3fb95020; color: var(--green); border: 2px solid var(--green); }}
+  .score-circle.score-mid {{ background: #d2992220; color: var(--yellow); border: 2px solid var(--yellow); }}
+  .score-circle.score-low {{ background: #58a6ff20; color: var(--blue); border: 2px solid var(--blue); }}
   .score-circle.non-scored {{ background: #8b949e20; color: var(--text-dim); border: 2px solid var(--text-dim); }}
 
   .card-tags {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }}
@@ -613,8 +613,8 @@ def generate_html(positions, stats, company_stats, highlights, team=None):
 
 <div class="stats">
   <div class="stat-card"><div class="number stat-blue">{total}</div><div class="label">Posizioni attive</div></div>
-  <div class="stat-card"><div class="number stat-green">{seria_count}</div><div class="label">Serie (&#8805;70)</div></div>
-  <div class="stat-card"><div class="number stat-yellow">{practice_count}</div><div class="label">Practice (40-69)</div></div>
+  <div class="stat-card"><div class="number stat-green">{scored_count}</div><div class="label">Valutate</div></div>
+  <div class="stat-card"><div class="number stat-yellow">{avg_score}</div><div class="label">Score medio</div></div>
   <div class="stat-card"><div class="number stat-purple">{app_count}</div><div class="label">CV scritti</div></div>
   <div class="stat-card"><div class="number stat-cyan">{applied_count}</div><div class="label">Inviate</div></div>
   <div class="stat-card"><div class="number stat-red">{excluded_count}</div><div class="label">Escluse</div></div>
@@ -634,13 +634,8 @@ def generate_html(positions, stats, company_stats, highlights, team=None):
   <div class="pipe-step"><div class="pipe-count" style="color:var(--green)">{stats.get('applied', 0)}</div><div class="pipe-label">Applied</div></div>
 </div>
 
-<div class="section-title">&#128994; Candidature Serie (score &#8805; 70) — {len(seria)}</div>
-<div class="cards">{seria_cards}</div>
-
-<div class="section-title">&#128993; Practice Interview (score 40-69) — {len(practice)}</div>
-<div class="cards">{practice_cards}</div>
-
-{"" if not riferimento else f'<div class="section-title collapsible" onclick="toggle(this)">&#128309; Riferimento (score &lt; 40) — {len(riferimento)} &#9654;</div><div class="collapsible-content"><div class="cards">{riferimento_cards}</div></div>'}
+<div class="section-title">&#128202; Posizioni valutate (per score) — {len(scored)}</div>
+<div class="cards">{scored_cards}</div>
 
 {"" if not non_scored else f'<div class="section-title collapsible" onclick="toggle(this)">&#11044; Non ancora valutate — {len(non_scored)} &#9654;</div><div class="collapsible-content"><div class="cards">{non_scored_cards}</div></div>'}
 
@@ -692,7 +687,7 @@ def main():
         f.write(html)
 
     print(f"Dashboard generata: {output}")
-    print(f"Posizioni: {len(positions)} | Serie: {sum(1 for p in positions if (p['total_score'] or 0) >= 70)}")
+    print(f"Posizioni: {len(positions)} | Valutate: {sum(1 for p in positions if p['total_score'] is not None)}")
 
     if args.version:
         save_version(output)
