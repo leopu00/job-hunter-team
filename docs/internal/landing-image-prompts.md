@@ -119,10 +119,19 @@ scenico del ruolo.** Niente testo leggibile.
 
 ## Pagina `/pricing`
 
-### `pricing.hero`
-> [STYLE] A confident, generous scene: the team gesturing openly toward the viewer
-> as if to say "it's all yours, free" — open-source spirit. Subtle green accents.
-> No readable text. 16:9.
+### `pricing.hero` — testa agente a raggi X sul cervello (sfondo trasparente)
+Concetto: la struttura del team è gratis, **il "cervello" (il provider AI) lo
+paghi** → testa di un agente con il cervello visibile a raggi X.
+> Comic-book / graphic-novel illustration, hand-drawn inked outlines, flat cel
+> shading, muted palette with subtle green accents; not 3D, not photorealistic. A
+> head-and-shoulders portrait of one of the agents — elegant, wearing the iconic
+> small oval dark Matrix-style sunglasses — facing the viewer. The upper part of
+> the head (the cranium) is drawn as a subtle **X-ray / see-through cutaway
+> revealing the BRAIN inside**, glowing faintly — a slightly futuristic scan look
+> but still clearly comic-style, NOT hi-tech sci-fi. The brain is the visual
+> focus, lit with subtle green accents (it's the "engine" you pay for). No
+> readable text, no logos. Isolated on a plain transparent background, no scene.
+> Transparent PNG. 4:3 or square.
 
 ---
 
