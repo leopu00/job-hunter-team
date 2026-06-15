@@ -65,18 +65,32 @@ jht-tmux-send DOTTORE \
 # Attendi il [RES] del Dottore — niente polling.
 ```
 
-### Rung 2 — Kill + respawn pulito (SOLO se serve)
+### Rung 2 — Kill (+ respawn) — SOLO se serve
 
 Killa **solo se**: il loop **persiste dopo il Dottore**, *oppure* sta **bruciando budget in modo
 serio** (rate alto + 0 produzione per ≥ N tick e non c'è tempo per la diagnosi).
 
-```bash
-tmux kill-session -t <SESSION>                          # rimuovi la sessione in loop
-sleep 5                                                  # backoff: non rientrare subito nel loop
-bash /app/.launcher/start-agent.sh <role> <N>           # respawn PULITO (stato fresco)
-```
+⚠️ **SAFEGUARD anti-doppio-spawn col watchdog.** `agent-watchdog.sh` respawna automaticamente (≤30s)
+**solo i 3 agenti core**: `ASSISTENTE`, `CAPITANO`, `MENTOR`. NON copre i worker. Quindi il respawn
+dipende dal target:
 
-Il backoff + il respawn a stato fresco evitano che riparta esattamente nello stesso ciclo.
+- **Target = agente CORE (ASSISTENTE / MENTOR)** → **SOLO kill**. Il watchdog lo rileva e lo
+  **respawna pulito da solo** (`jht team start <role>`, idempotente, stato fresco). **NON** fare anche
+  tu `start-agent.sh` → sarebbe doppio-spawn (la race segnalata). Il "backoff" è di fatto l'intervallo
+  del watchdog (~30s). (Il CAPITANO sei tu: non è mai il target — non ti killi da solo.)
+  ```bash
+  tmux kill-session -t <SESSION>     # STOP qui: il watchdog respawna clean in ≤30s
+  ```
+- **Target = WORKER (Scout / Analista / Scorer / Scrittore / Critico)** → il watchdog NON li copre,
+  quindi **kill + backoff + respawn tu** (nessuna race):
+  ```bash
+  tmux kill-session -t <SESSION>
+  sleep 5                                                 # backoff: non rientrare subito nel loop
+  bash /app/.launcher/start-agent.sh <role> <N>          # respawn PULITO (stato fresco)
+  ```
+
+Il backoff + il respawn a stato fresco evitano che riparta esattamente nello stesso ciclo; il
+non-respawn-sui-core evita la corsa col watchdog.
 
 ## Regole
 
