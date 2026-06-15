@@ -40,8 +40,16 @@ File attuale: `web/public/landing-hero.png`. Prompt finale usato:
 
 ## Landing — thumbnail di sezione (16:9)
 
-### `landing.team` ✅ FATTO
-File: `web/public/landing-team.png` (sfondo trasparente). Prompt usato:
+### `landing.team` ✅ FATTO · ⚠️ DA RIFINIRE
+File: `web/public/landing-team.png` (sfondo trasparente, ritaglio `rembg -m
+isnet-anime`).
+> ⚠️ **TODO**: restano dei **puntini bianchi** (residui di matte) attorno alla
+> crocchia dell'Analista e nel gap tra le gambe. Tentati: u2net → camice sporco;
+> isnet-anime → meglio ma residui; post-process alpha (soglia 28% + erode 1px) →
+> NON risolto. Prossimo tentativo: modello **`birefnet-general`** (matte di
+> qualità superiore) oppure ritocco manuale puntuale.
+
+Prompt usato:
 > [STYLE] Three Job Hunter Team agents standing, full body, side by side, **on a
 > plain transparent background — no scene, no setting**, just the figures. Left to
 > right: a **Scout** (sleuth in a trench coat and detective hat, with a magnifying
@@ -59,11 +67,19 @@ riserva per generarla invece:
 > and donut charts, a list of cards — all abstract, NO readable text. Calm,
 > modern, premium. The person wears the identical Matrix sunglasses. 16:9.
 
-### `landing.setup`
-> [STYLE] A tidy triptych vibe in one frame: a laptop on a desk, a small
-> always-on mini-PC, and a server/cloud icon — connected by subtle green lines,
-> suggesting three ways to run the team. Clean, technical-but-warm, no readable
-> text. 16:9.
+### `landing.setup` — Mac + cono di luce + cubo col team (sfondo trasparente)
+> Comic-book / graphic-novel illustration, hand-drawn inked outlines, flat cel
+> shading, muted palette; not 3D, not photorealistic. A modern Mac (laptop) seen
+> at a three-quarter angle. From its screen a soft glowing BLUE cone of light
+> (Tesseract blue, soft — NOT Marvel-bright) projects outward: the sharp tip
+> touches the screen and the cone widens as it goes out. At the wide end floats a
+> glass sci-fi cube (Tesseract-style, soft blue glowing edges) containing a tiny
+> office/loft with the team of agents at work inside, seen from outside like a
+> miniature world. Subtle green accents. **Isolated on a plain transparent
+> background — no scene, no setting.** Transparent PNG. 16:9.
+>
+> Riferimento stile cubo: `web/public/chronicles/the-box.png` (Tesseract della
+> pagina Cronache).
 
 ### `landing.pricing`
 > [STYLE] An open, airy composition: an open-source padlock/key motif and a few
