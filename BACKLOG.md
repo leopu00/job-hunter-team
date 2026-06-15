@@ -20,12 +20,12 @@ Job Hunter Team is an open-source application that runs **locally** in a contain
 
 **Stack decisions:**
 
-- 🖥️ Desktop = **launcher only** (config, lifecycle, browser opener) — not the interaction interface
-- 🌐 Web dashboard = Next.js 16 on Vercel (`jobhunterteam.ai`)
+- 🖥️ Desktop = launcher + **interaction cockpit** (chat, file upload, team control — local via browser-to-`localhost`, VPS via SSH tunnel) — *aggiornato 2026-06-15 (direction shift), vedi `[JHT-INTERACTION-PLANES]`; prima: "launcher only, not the interaction interface"*
+- 🌐 Web dashboard = Next.js 16 on Vercel (`jobhunterteam.ai`) — **read-only** (l'interazione si sposta sul desktop, 2026-06-15)
 - 💾 Cloud data backend (read-only metadata sync, optional) = Supabase
 - 🐳 Container runtime = Docker + Docker Compose
 - ⌨️ CLI **driveable by AI agents** (Claude Code, 🦞 OpenClaw, Codex, Cursor) — USP
-- 💬 **Telegram** — 3-bot setup shipped 2026-05-13 (Assistente + Capitano + Mentor, all mandatory in onboarding); roadmap: per-agent 1:1 chat + "team forum" channel where the user can join the whole team's conversation
+- 💬 **Telegram** — 3-bot setup shipped 2026-05-13 (Assistente + Capitano + Mentor); **opzionale/skippabile dal 2026-06-15** (canale async consigliato, non più gate di onboarding — vedi `[JHT-TELEGRAM-OPTIONAL]`); roadmap: per-agent 1:1 chat + "team forum" channel where the user can join the whole team's conversation
 - 🧙‍♂️ **Mentor** career-coach agent (shipped 2026-05-13, runtime `.launcher/start-agent.sh`) — see [`docs/about/VISION.md`](docs/about/VISION.md)
 
 ---
@@ -131,6 +131,23 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 ---
 
 ## 🚀 ROADMAP — From Open Source to Desktop Product
+
+### 🔀 [JHT-INTERACTION-PLANES] Two interaction planes — desktop cockpit + read-only web (NEW 2026-06-15)
+
+> 📐 Design/decision doc: [`docs/internal/2026-06-15-interaction-planes-redesign-design.md`](docs/internal/2026-06-15-interaction-planes-redesign-design.md). Nasce dal beta-test: setup troppo complicato + far interagire il web *cloud* col team = troppo lavoro fragile. Modello: **interazione sempre co-locata col team** (desktop, locale o via tunnel SSH); **dati sempre read-only ovunque** (web dashboard). Supera la bidirezionalità desired-state cloud→container e i puntatori "web come canale primario".
+
+**Pilastri / sub-ticket** (dettaglio + gap analysis nel design doc):
+
+- ⬜ **`[JHT-TELEGRAM-OPTIONAL]` 🟢** — Telegram da obbligatorio a **opzionale/consigliato**. Flip dei 2 gate VPS del wizard: `cli/wizard/setup.js:258` (`if (isVps) promptTelegramRequired`) → confirm + skip; `desktop/renderer/modules/wizard-flow.js:775-841` → bottone "Salta per ora". Boot (`agent-watchdog.sh`) e runtime (`tg-bridge.py`) già tolleranti. *Scorporabile subito.*
+- 🟡 **`[JHT-WEB-READONLY]`** — *parzialmente già fatto.* La **differenziazione dati local-vs-cloud è DONE** (`[JHT-LOCAL-NO-API]`, commit `193d06fd`): dashboard/map/positions + layout leggono SQLite in **local-only** (no login) o Supabase **online**, stessa UI. **Local-only = feature da preservare** (no login forzato sulla piattaforma). **Gap residui:** (a) pagine `team/*` (`team/page.tsx` + capitano/assistente/analista/scorer/critico/sentinella) usano `createBrowserSupabase` diretto → **non local-aware**, si romperebbero in local-only → rendere read-only local-aware la *vista* e spostare l'*interazione* (chat) sul cockpit; (b) `profile/page.tsx` usa `isLocalRequest()` invece di `isLocalOnlyMode()` (incoerente); (c) `web/lib/db.ts` schema template manca 7 colonne (`status_changed_at`, `last_actor`, `office_lat/lon/address/geocoded`, `is_remote`); (d) gating **403 esplicito** delle route di controllo su Vercel (oggi funziona "per assenza host locale", non per scelta).
+- ⬜ **`[JHT-DESKTOP-COCKPIT]` 🟡** — chat locale di **prima classe** nell'app desktop + path **100% senza Telegram** + UX (upload, notifiche native, tray). Base già esistente: desktop apre browser su `localhost:3000`, chat via `HTTP → tmux send-keys` (`web/app/api/capitano/chat/route.ts`), upload `/api/assistente/upload`. Decisione: tenere browser-to-localhost vs UI nativa.
+- ⬜ **`[JHT-VPS-TUNNEL]` 🔴 (il grosso)** — interagire con la VPS **come fosse locale** via **tunnel SSH**: tunnel manager nel desktop (`ssh -L <port>:localhost:3000 root@<ip>` keep-alive), il cockpit punta a `localhost:<port>` → riusa al 100% lo stack locale eseguito sulla VPS; terminale remoto (`ssh -t tmux attach`), upload via tunnel/SCP. Estende `desktop/vps/ssh-exec.js` (oggi one-shot). **Unifica** con il *Dedicated computer mode* (LAN PC via SSH, stesso tunnel). Decisione aperta: SSH `-L` raw vs Tailscale/WireGuard.
+- ⬜ **`[JHT-CLOUD-INTERACTIVE-RETIRE]` 🟡** — freeze/ritiro del **path cloud interattivo** ridondante una volta che l'interazione è desktop+tunnel: bus `team_state` control + reconciler, lane `user_to_agent_messages` + `user-messages-poller`, `position_feedback` roundtrip, flag `*_requested` come roundtrip cloud + `pull-desired-state`, `team_commands` legacy. **Resta** il push dati one-way + `jht cloud restore` + dashboard read-only. ⚠️ *Ribalta codice shippato 23–31 maggio: scelta freeze-vs-delete deliberata, pezzo per pezzo.*
+- ⬜ **`[JHT-SETUP-LOCAL-FIRST]` 🟢** — rielevare il **Local PC** a path di prima classe ("il team è tuo, accendi/spegni quando vuoi"); allinea la copy execution-mode (oggi "not recommended for daily machines"). Si incastra col Dedicated computer mode.
+
+**Sequenza proposta:** I `[TELEGRAM-OPTIONAL]` → II `[WEB-READONLY]` → III `[DESKTOP-COCKPIT]` → IV `[VPS-TUNNEL]` → V `[CLOUD-INTERACTIVE-RETIRE]`. I è scorporabile subito; IV porta il valore "VPS come locale". **Decisioni aperte per l'utente** elencate nel design doc § "Decisioni aperte".
+
+---
 
 ### 1️⃣ PHASE 1 — Web Platform Consolidation (current sprint)
 
