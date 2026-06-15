@@ -86,6 +86,15 @@ GSPOT_FAST_TICK_MIN = 2.0
 GSPOT_STABLE_TICK_MIN = 5.0
 GSPOT_CALM_TICK_MIN = 10.0
 
+# ── Lean-comms (2026-06-15): tick ANCORATO + wake ai quarti ───────────────
+# Il tick non è più adattivo (FAST/CALM): è ANCORATO all'orologio ogni
+# ANCHOR_TICK_MIN minuti (x:00/05/10/...). Prevedibile e phase-locked
+# (sopravvive a restart/istanze multiple senza drift). La Sentinella viene
+# svegliata SOLO ai quarti (x:00/15/30/45) — un sottoinsieme dei tick — e
+# solo su edge azionabile dentro l'orario lavorativo. Le costanti GSPOT_*
+# sopra restano per il solo state-file UI (tick_phase informativo).
+ANCHOR_TICK_MIN = 5.0
+
 GSPOT_LOWER = 80.0    # proj < 80% → sotto g-spot (sottoutilizzo)
 GSPOT_UPPER = 105.0   # proj > 105% → sopra g-spot (critico)
 GSPOT_PROMOTION_TICKS = 3  # tick consecutivi nel g-spot per promuovere stato
@@ -266,32 +275,82 @@ def _advance_tick_phase(state, in_gspot):
         state["gspot_consecutive"] = 0  # nessuna ulteriore promozione, ma resta pulito
 
 
-def _should_notify_sentinella(in_gspot, state, now_ts):
-    """Decide se SVEGLIARE la Sentinella su questo tick.
+def _within_working_hours(work_phase):
+    """Gate orario ASSOLUTO (lean-comms 2026-06-15): fuori dalla finestra
+    lavorativa NESSUNA LLM va svegliata (né Sentinella né Capitano). Il bridge
+    continua a campionare lo stato (Python), ma tace verso le LLM.
 
-    Regola: la Sentinella riceve TICK solo quando la proiezione è fuori dal
-    g-spot (situazione che richiede un'azione). Una volta notificata, il
-    bridge entra in cooldown SENTINELLA_COOLDOWN_MIN: anche se la situazione
-    rimane critica, il bridge tace e la Sentinella+Capitano non consumano
-    token in loop. Dopo il cooldown, se ancora fuori g-spot, rinotifica.
+    `work_phase` arriva dal pacing-bridge (`ON`/`OFF`). None = nessuno schedule
+    configurato → 24/7 (back-compat: si notifica sempre). Fail-safe: se il dato
+    manca trattiamo come ON (meglio una sveglia di troppo che perdere un edge)."""
+    if work_phase is None:
+        return True
+    # Sopprime SOLO su OFF esplicito: qualunque altro valore (ON, o un token
+    # inatteso) → notifica. Fail-safe: andare sempre-muti su un valore imprevisto
+    # perderebbe OGNI edge — peggio di una sveglia di troppo. work_hours_target
+    # produce solo "ON"/"OFF", quindi nei casi reali è equivalente a == "ON".
+    return str(work_phase).strip().upper() != "OFF"
 
-    Quando la proj rientra nel g-spot, il cooldown si resetta — così il
-    prossimo episodio critico viene notificato subito.
+
+def _is_quarter(now_dt):
+    """True ai quarti d'orologio (x:00/15/30/45). Col tick ancorato a
+    ANCHOR_TICK_MIN (5min) i tick cadono su 0/5/10/... → i quarti sono esatti.
+    La Sentinella si sveglia (per condizioni in corso) solo ai quarti."""
+    return now_dt.minute % 15 == 0
+
+
+def _next_tick_sleep_sec(now_dt, override_min=None):
+    """Secondi di sleep fino al PROSSIMO tick.
+
+    - override esplicito (config `sentinella_tick_minutes`) → quel valore
+      (testing/casi speciali), col floor MIN_TICK_SECONDS.
+    - default → ANCORATO al prossimo confine di ANCHOR_TICK_MIN sull'orologio
+      (x:00/05/10/...): cadenza prevedibile e phase-locked (i quarti 0/15/30/45
+      sono un sottoinsieme → wake Sentinella ai quarti). Se il confine è troppo
+      vicino (< floor) salta a quello successivo per non spammare il provider.
+    """
+    if override_min is not None:
+        return max(MIN_TICK_SECONDS, override_min * 60)
+    anchor_s = ANCHOR_TICK_MIN * 60
+    secs_into_hour = now_dt.minute * 60 + now_dt.second + now_dt.microsecond / 1e6
+    to_next = anchor_s - (secs_into_hour % anchor_s)
+    if to_next < MIN_TICK_SECONDS:
+        to_next += anchor_s
+    return to_next
+
+
+def _should_notify_sentinella(on_pace, state, now_ts, is_quarter):
+    """Decide se SVEGLIARE la Sentinella (gate deterministico, edge-driven).
+
+    Lean-comms (2026-06-15): il bridge decide il "silenzio" in codice PRIMA di
+    invocare l'LLM. Regole:
+      • on_pace (calmo) → silenzio, reset del cooldown.
+      • primo tick attuabile dell'episodio (transizione calma→attuabile) →
+        notifica SUBITO (è un edge reale, anche fuori dai quarti).
+      • episodio attuabile IN CORSO → re-conferma SOLO ai quarti (x:00/15/30/45)
+        e non più spesso di SENTINELLA_COOLDOWN_MIN. Elimina il re-wake
+        "HOLD già attivo" ad ogni tick 5min — la causa del coordinator-burn
+        osservato (la Sentinella ragionava verbosamente per ridire "silenzio").
+
+    Il gate orario (fuori finestra → mai svegliare) è applicato a monte dal
+    chiamante (vedi `_within_working_hours`), non qui.
 
     state è un dict con:
-      last_sent_ts            — timestamp Unix dell'ultima notifica critica
-                                (None se mai notificata)
+      last_sent_ts            — timestamp Unix dell'ultima notifica (None se reset)
     """
-    if in_gspot:
-        # In g-spot: nessun bisogno di Sentinella. Reset del cooldown così
-        # il prossimo episodio critico è notificato immediatamente.
+    if on_pace:
+        # Calmo: nessun bisogno di Sentinella. Reset del cooldown così il
+        # prossimo episodio attuabile è notificato immediatamente.
         state["last_sent_ts"] = None
         return False
 
     last_ts = state.get("last_sent_ts")
     if last_ts is None:
-        # Primo tick fuori dal g-spot in questo episodio → notifica.
+        # Transizione calma→attuabile: edge → notifica (anche fuori quarto).
         return True
+    # Episodio attuabile in corso: re-conferma solo ai quarti, col cooldown.
+    if not is_quarter:
+        return False
     elapsed_min = (now_ts - last_ts) / 60.0
     return elapsed_min >= SENTINELLA_COOLDOWN_MIN
 
@@ -1059,16 +1118,16 @@ def main():
     override_min, _ = read_config()
     print(f"[bridge V6] pid={os.getpid()} sentinella={SENTINELLA_SESSION} capitano={CAPITANO_SESSION}")
     if override_min is not None:
-        print(f"[bridge V6] tick interval: {override_min} min (override da config)")
+        print(f"[bridge V7] tick interval: {override_min} min (override da config)")
     else:
         print(
-            f"[bridge V6] tick interval: ADAPTIVE state machine "
-            f"(default={DEFAULT_TICK_MIN}min, g-spot fast={GSPOT_FAST_TICK_MIN}min, "
-            f"stable={GSPOT_STABLE_TICK_MIN}min, calm={GSPOT_CALM_TICK_MIN}min)"
+            f"[bridge V7] tick ANCORATO all'orologio ogni {ANCHOR_TICK_MIN}min "
+            f"(x:00/05/10/...); Sentinella svegliata ai quarti (x:00/15/30/45) "
+            f"solo su edge azionabile + GATE ORARIO (no wake fuori finestra)"
         )
         print(
-            f"[bridge V6] g-spot=[{GSPOT_LOWER}-{GSPOT_UPPER}%], "
-            f"sentinella cooldown={SENTINELLA_COOLDOWN_MIN}min"
+            f"[bridge V7] sentinella cooldown={SENTINELLA_COOLDOWN_MIN}min, "
+            f"edge-driven (lean-comms 2026-06-15)"
         )
 
     fail_streak = 0
@@ -1088,6 +1147,11 @@ def main():
         override_min, provider = read_config()
 
         parsed, fail_reason = _do_fetch(provider)
+
+        # Gate orario assoluto (lean-comms): calcolato qui — copre sia il path
+        # successo sia quello di fallimento. work_phase dal pacing-bridge.
+        dyn_target, work_phase = _read_dynamic_target()
+        within_hours = _within_working_hours(work_phase)
 
         if parsed:
             # ── Path successo: scrivi sample, tick alla Sentinella ────
@@ -1153,7 +1217,7 @@ def main():
             # Target dinamico work-hours-aware (V8): il g-spot si centra
             # sul target scritto dal pacing-bridge invece che sul 92% fisso.
             # Quando schedule + ratio mancano → fallback alla banda storica.
-            dyn_target, work_phase = _read_dynamic_target()
+            # (dyn_target/work_phase ora calcolati a monte, fuori dal branch.)
             # Phase 1 (pacing-migration-plan-2026-06-05): cadenza tick e wake della
             # Sentinella ancorati al segnale STABILE vel_team vs vel_target (dal
             # pacing-bridge), NON a `proj` (volatile, ±400pt tick-to-tick).
@@ -1173,19 +1237,37 @@ def main():
             # svegliata e il freno non scattava (status SOTTOUTILIZZO decorativo).
             weekly_binding = bool(entry.get("weekly_binding"))
             now_ts = time.time()
-            if weekly_locked:
+            now_local = datetime.now().astimezone()
+            is_quarter = _is_quarter(now_local)
+            if not within_hours:
+                # GATE ORARIO ASSOLUTO (lean-comms): fuori finestra NESSUNA LLM
+                # svegliata. Il bridge ha già scritto il sample (monitoring puro)
+                # ma tace. Reset cooldown + last_status così alla ripresa il 1°
+                # tick in-orario ri-valuta da zero (edge/LOCKED ri-notificati 1 volta).
+                effective_on_pace = True
+                _advance_tick_phase(state, effective_on_pace)
+                state["last_sent_ts"] = None
+                state["last_status"] = None
+                should_notify = False
+            elif weekly_locked:
                 # A2 lockout-resilience: a weekly esaurito NON ha senso pacare-veloce
                 # né spammare la Sentinella. Cadenza CALMA (effective_on_pace=True) + UN
                 # solo avviso sulla TRANSIZIONE a LOCKED (layer-2: 1 notice, poi silenzio).
                 # Il polling continua comunque (calm, mai stop) → il check weekly<100% al
                 # prossimo tick fa ripartire il team da solo al reset (resurrection-check).
+                # FIX lean-comms: last_status ora è tracciato in-memory (prima non veniva
+                # MAI settato nel dict → il gate notificava ad OGNI tick, non 1 volta).
                 effective_on_pace = True
                 _advance_tick_phase(state, effective_on_pace)
                 should_notify = state.get("last_status") != "LOCKED"
+                state["last_status"] = status
             else:
                 effective_on_pace = on_pace and not weekly_binding
                 _advance_tick_phase(state, effective_on_pace)
-                should_notify = _should_notify_sentinella(effective_on_pace, state, now_ts)
+                should_notify = _should_notify_sentinella(
+                    effective_on_pace, state, now_ts, is_quarter
+                )
+                state["last_status"] = status
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""
@@ -1304,9 +1386,9 @@ def main():
                 )
                 state["last_sent_ts"] = now_ts
 
-            # Recovery se eravamo in failure streak
+            # Recovery se eravamo in failure streak (gate orario: zitto fuori finestra)
             if fail_streak >= FETCH_FAIL_THRESHOLD or capitano_alerted:
-                if session_exists(CAPITANO_SESSION):
+                if within_hours and session_exists(CAPITANO_SESSION):
                     jht_tmux_send(
                         CAPITANO_SESSION,
                         "[BRIDGE INFO] sorgente usage tornata responsiva, monitoraggio normale."
@@ -1319,17 +1401,17 @@ def main():
             fail_streak += 1
             print(f"[bridge V6] {now_h} FAIL #{fail_streak} reason={fail_reason}")
 
-            # Notifica Sentinella al primo fail dell'episodio
-            if fail_streak == 1 and session_exists(SENTINELLA_SESSION):
+            # Notifica Sentinella al primo fail dell'episodio (gate orario)
+            if fail_streak == 1 and within_hours and session_exists(SENTINELLA_SESSION):
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE FAILURE] ts={now_h} fetch fallito (reason={fail_reason}). Esegui fallback come da prompt."
                 )
 
-            # Alert al Capitano al N° fail consecutivo
+            # Alert al Capitano al N° fail consecutivo (gate orario)
             if fail_streak == FETCH_FAIL_THRESHOLD and not capitano_alerted:
-                if session_exists(CAPITANO_SESSION):
-                    eff_min = _choose_tick_interval(state, override_min)
+                if within_hours and session_exists(CAPITANO_SESSION):
+                    eff_min = ANCHOR_TICK_MIN if override_min is None else override_min
                     jht_tmux_send(
                         CAPITANO_SESSION,
                         f"[BRIDGE ALERT] sorgente usage degraded da {FETCH_FAIL_THRESHOLD} tick "
@@ -1338,9 +1420,13 @@ def main():
                     )
                 capitano_alerted = True
 
-        # Tick interval V6: state machine basata sul g-spot.
-        next_tick_min = _choose_tick_interval(state, override_min)
-        sleep_sec = max(MIN_TICK_SECONDS, next_tick_min * 60)
+        # Tick ANCORATO all'orologio (lean-comms): prossimo confine di
+        # ANCHOR_TICK_MIN (x:00/05/10/...) → cadenza prevedibile e phase-locked
+        # (i quarti 0/15/30/45 sono un sottoinsieme → wake Sentinella ai quarti).
+        # Override esplicito (config) vince. Le fasi adattive FAST/CALM non
+        # guidano più lo sleep (restano solo info per lo state-file UI).
+        sleep_sec = _next_tick_sleep_sec(datetime.now().astimezone(), override_min)
+        next_tick_min = sleep_sec / 60.0
 
         # Pubblica lo stato corrente per la UI web (atomic write).
         # last_tick_at = inizio iterazione corrente; next_tick_at = quando
