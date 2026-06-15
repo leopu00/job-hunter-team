@@ -77,6 +77,8 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_geocode_requested(conn)
     _migrate_positions_expiry(conn)
     _migrate_positions_salary_precise(conn)
+    _migrate_positions_role_family_proposed(conn)
+    _migrate_role_family_registry(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,6 +125,7 @@ def ensure_schema(conn: sqlite3.Connection):
         last_checked TIMESTAMP,
         last_actor TEXT,
         role_family TEXT,
+        role_family_proposed TEXT,
         loc_city TEXT,
         loc_region TEXT,
         loc_country TEXT,
@@ -1006,6 +1009,106 @@ def _migrate_positions_salary_precise(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_positions_salary_precise_requested "
         "ON positions(salary_precise_requested) WHERE salary_precise_requested = 1"
     )
+
+
+def _migrate_positions_role_family_proposed(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.role_family_proposed` (tassonomia EMERGENTE, 2026-06-15).
+
+    Quando l'analista non trova una categoria ATTIVA del registro che calzi, la
+    role_family diventa la sentinella catch-all ('Other') e l'etichetta fine
+    proposta dall'analista (raw, mostrata) va qui. Il pass di promozione
+    (`role_registry`) clusterizza le righe-sentinella per `normalize_key(proposed)`
+    e promuove un cluster a categoria attiva quando supera la soglia di supporto.
+    Niente colonna-chiave-normalizzata: la chiave si calcola al volo (più leggera).
+
+    Idempotente: guard via _column_exists, ALTER ADD COLUMN solo se mancante.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'role_family_proposed'):
+        conn.execute("ALTER TABLE positions ADD COLUMN role_family_proposed TEXT")
+
+
+def _migrate_role_family_registry(conn: sqlite3.Connection) -> None:
+    """Crea `role_family_registry` (tassonomia EMERGENTE, 2026-06-15).
+
+    Registro PER-utente delle categorie `role_family` ATTIVE, decise e nominate
+    dal TEAM a partire dai dati reali — NESSUN nome di categoria predefinito in
+    codice. Parte VUOTO: una categoria nasce solo quando un cluster di proposte
+    (righe-sentinella + `role_family_proposed`) raggiunge la soglia di supporto
+    nel pass di promozione.
+
+    - `status`: 'active' (mostrata/abbinabile) | 'dormant' (sotto-soglia o oltre
+      il cap ~20) | 'merged' (confluita in `merged_into`).
+    - `support_count`: cache ricomputata dal pass dai `positions`.
+    - PK (user_id, name): active + supporto sono PER-utente (un candidato finance
+      non vede attive le categorie di un dev → la tassonomia si adatta al
+      candidato). `user_id` keyed anche per parità col cloud multi-tenant.
+
+    Idempotente: CREATE TABLE/INDEX IF NOT EXISTS.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS role_family_registry (
+            user_id       TEXT NOT NULL,
+            name          TEXT NOT NULL,
+            status        TEXT NOT NULL DEFAULT 'active',
+            support_count INTEGER NOT NULL DEFAULT 0,
+            merged_into   TEXT,
+            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            promoted_at   TIMESTAMP,
+            PRIMARY KEY (user_id, name)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rfr_active "
+        "ON role_family_registry(user_id, status)"
+    )
+
+
+def local_user_id() -> str:
+    """User_id del candidato LOCALE (DB single-candidate sul VPS).
+
+    Il prompt analista e il write-guard non conoscono lo user_id → risolviamo
+    qui un default stabile, così la firma per-utente (`active_categories`,
+    registro) resta valida per il cloud multi-tenant ma localmente non serve
+    passare l'id. Fonte: env `JHT_SUPABASE_USER_ID` (impostata al boot del
+    container, già usata da db_to_supabase); fallback costante 'local' se
+    assente. La sync (cli/cloud.js) mappa il valore locale allo user_id reale
+    nel push verso il cloud.
+    """
+    return os.environ.get("JHT_SUPABASE_USER_ID") or "local"
+
+
+def active_categories(conn: sqlite3.Connection, user_id=None, with_support: bool = False):
+    """Categorie `role_family` ATTIVE per `user_id` dal registro emergente.
+
+    Ritorna i soli `name` con `status='active'` (dormant/merged ESCLUSE),
+    ordinati per supporto desc poi nome. `with_support=True` → list[(name, n)].
+
+    È l'UNICA fonte delle categorie a runtime: niente lista hardcoded. Usata da:
+    - write-guard (db_update): enforce `role_family ∈ active(user) ∪ {sentinella}`;
+    - prompt analista (via CLI `db_query.py active-categories <user_id>`):
+      match-best-active-or-Altro.
+    Tabella assente / utente senza attive → lista vuota (cold-start: tutto va
+    nella sentinella finché il pass non promuove il primo cluster).
+    `user_id=None` → risolto a `local_user_id()` (default candidato locale).
+    """
+    if user_id is None:
+        user_id = local_user_id()
+    try:
+        rows = conn.execute(
+            "SELECT name, support_count FROM role_family_registry "
+            "WHERE user_id = ? AND status = 'active' "
+            "ORDER BY support_count DESC, name ASC",
+            (user_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    if with_support:
+        return [(r[0], r[1]) for r in rows]
+    return [r[0] for r in rows]
 
 
 def _migrate_v6_to_v7_tombstones(conn: sqlite3.Connection) -> None:
