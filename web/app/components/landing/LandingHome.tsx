@@ -5,6 +5,7 @@ import { LandingI18nProvider, useLandingI18n } from "./LandingI18n";
 import { LandingFooter } from "./LandingCTA";
 import LandingNav from "./LandingNav";
 import ImagePlaceholder from "./ImagePlaceholder";
+import DashboardMockup from "./DashboardMockup";
 
 // Landing pubblica — nuova struttura.
 // Header (nav) + hero (titolo + immagine + intro) + sezioni di anteprima
@@ -165,14 +166,25 @@ function Sections() {
       <Block
         copy={c.team}
         href="/agents"
-        promptId="landing.team"
-        label={L === "it" ? "Il team al lavoro nell'ufficio" : "The team at work in the office"}
+        visual={
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/landing-team.png"
+            alt={
+              L === "it"
+                ? "Tre agenti del team a figura intera: lo Scout con la lente, l'Analista in camice, lo Scrittore con la penna d'oca — tutti con gli occhiali da sole."
+                : "Three full-body team agents: the Scout with a magnifying glass, the Analyst in a lab coat, the Writer with a quill pen — all wearing sunglasses."
+            }
+            width={1672}
+            height={941}
+            className="w-full h-auto"
+          />
+        }
       />
       <Block
         copy={c.dashboard}
         href="/?login=true"
-        promptId="landing.dashboard"
-        label={L === "it" ? "Anteprima della dashboard: mappa e grafici" : "Dashboard preview: map and charts"}
+        visual={<DashboardMockup />}
         reverse
       />
       <Block
@@ -197,12 +209,14 @@ function Block({
   href,
   promptId,
   label,
+  visual,
   reverse = false,
 }: {
   copy: SectionCopy;
   href: string;
-  promptId: string;
-  label: string;
+  promptId?: string;
+  label?: string;
+  visual?: React.ReactNode;
   reverse?: boolean;
 }) {
   return (
@@ -212,7 +226,13 @@ function Block({
       }`}
     >
       <div className="w-full md:w-1/2">
-        <ImagePlaceholder label={label} promptId={promptId} aspect="16 / 9" />
+        {visual ?? (
+          <ImagePlaceholder
+            label={label ?? ""}
+            promptId={promptId}
+            aspect="16 / 9"
+          />
+        )}
       </div>
       <div className="w-full md:w-1/2">
         <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)] mb-3">
