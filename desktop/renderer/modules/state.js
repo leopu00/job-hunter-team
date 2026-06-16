@@ -87,6 +87,7 @@ export const dom = {
   tgIntroLink: document.getElementById('tg-intro-link'),
   btnTgIntroBack: document.getElementById('btn-tg-intro-back'),
   btnTgIntroContinue: document.getElementById('btn-tg-intro-continue'),
+  btnTgIntroSkip: document.getElementById('btn-tg-intro-skip'),
   // Telegram tokens step (unified — used to be split create+tokens).
   // Meta rows ("Insert this name / username") are injected by
   // wizard-flow.js into the per-role #tg-meta-<role> slot inside the
