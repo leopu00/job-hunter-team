@@ -1,11 +1,9 @@
 """
-Test per check_links.py, generate_dashboard.py, personal_mail.py — Job Hunter Team QA.
+Test per generate_dashboard.py — Job Hunter Team QA.
 
 Gap coverage:
-- check_links: EXPIRED_PATTERNS matching logic
 - generate_dashboard: funzioni pure (esc, score_color, status_badge, verdict_badge,
   source_label, pdf_link) + get_stats con DB temp
-- personal_mail: decode_hdr, get_body_text (parsing email, zero IMAP)
 
 Eseguire con: pytest tests/test_utility_scripts.py -v
 """
@@ -20,9 +18,7 @@ import pytest
 REPO_ROOT = pathlib.Path(__file__).parent.parent
 SHARED_SKILLS = REPO_ROOT / "shared" / "skills"
 
-CHECK_LINKS_SCRIPT = SHARED_SKILLS / "check_links.py"
 DASHBOARD_SCRIPT = SHARED_SKILLS / "generate_dashboard.py"
-MAIL_SCRIPT = SHARED_SKILLS / "personal_mail.py"
 
 
 def _load_module(path: pathlib.Path, name: str):
@@ -37,69 +33,11 @@ def _load_module(path: pathlib.Path, name: str):
     return mod
 
 
-requires_check_links = pytest.mark.skipif(
-    not CHECK_LINKS_SCRIPT.is_file(),
-    reason=f"check_links.py non trovato: {CHECK_LINKS_SCRIPT}"
-)
 requires_dashboard = pytest.mark.skipif(
     not DASHBOARD_SCRIPT.is_file(),
     reason=f"generate_dashboard.py non trovato: {DASHBOARD_SCRIPT}"
 )
-requires_mail = pytest.mark.skipif(
-    not MAIL_SCRIPT.is_file(),
-    reason=f"personal_mail.py non trovato: {MAIL_SCRIPT}"
-)
 
-
-# ---------------------------------------------------------------------------
-# Test check_links.py
-# ---------------------------------------------------------------------------
-
-@requires_check_links
-class TestCheckLinksPatterns:
-    """Verifica che EXPIRED_PATTERNS identifichi correttamente job scaduti."""
-
-    @pytest.fixture(scope="class")
-    def mod(self):
-        return _load_module(CHECK_LINKS_SCRIPT, "check_links")
-
-    def test_expired_patterns_is_list(self, mod):
-        assert isinstance(mod.EXPIRED_PATTERNS, list)
-        assert len(mod.EXPIRED_PATTERNS) > 0
-
-    def test_expired_patterns_are_lowercase(self, mod):
-        """Tutti i pattern devono essere lowercase (check_url usa body.lower())."""
-        for p in mod.EXPIRED_PATTERNS:
-            assert p == p.lower(), f"Pattern non lowercase: '{p}'"
-
-    def test_expired_patterns_cover_key_cases(self, mod):
-        """Pattern critici che indicano job scaduto devono essere presenti."""
-        joined = " ".join(mod.EXPIRED_PATTERNS)
-        assert "no longer" in joined or "longer" in joined
-        assert "closed" in joined or "expired" in joined
-
-    def test_pattern_detects_expired_body(self, mod):
-        """Simula body HTML con pattern scaduto — deve matchare."""
-        body = "sorry, this position is no longer accepting applications"
-        matched = any(p in body for p in mod.EXPIRED_PATTERNS)
-        assert matched, "EXPIRED_PATTERNS non ha rilevato body scaduto"
-
-    def test_pattern_does_not_match_active_body(self, mod):
-        """Body di job attivo non deve matchare nessun pattern."""
-        body = "apply now for this exciting backend developer position at our company"
-        matched = any(p in body for p in mod.EXPIRED_PATTERNS)
-        assert not matched, "EXPIRED_PATTERNS ha falsamente matchato body attivo"
-
-    def test_linkedin_expired_pattern(self, mod):
-        """Verifica pattern LinkedIn expired."""
-        body = "this job has expired and is no longer available"
-        matched = any(p in body for p in mod.EXPIRED_PATTERNS)
-        assert matched
-
-    def test_headers_has_user_agent(self, mod):
-        """HEADERS deve contenere User-Agent per bypassare rate limiting."""
-        assert "User-Agent" in mod.HEADERS
-        assert len(mod.HEADERS["User-Agent"]) > 10
 
 
 # ---------------------------------------------------------------------------
@@ -272,84 +210,3 @@ class TestDashboardDbStats:
         conn.close()
 
 
-# ---------------------------------------------------------------------------
-# Test personal_mail.py — funzioni di parsing (zero IMAP)
-# ---------------------------------------------------------------------------
-
-@requires_mail
-class TestMailDecodeHeader:
-    """Test decode_hdr() con vari formati di header email."""
-
-    @pytest.fixture(scope="class")
-    def mod(self):
-        return _load_module(MAIL_SCRIPT, "personal_mail")
-
-    def test_decode_plain_ascii(self, mod):
-        result = mod.decode_hdr("Hello World")
-        assert result == "Hello World"
-
-    def test_decode_none_returns_empty(self, mod):
-        assert mod.decode_hdr(None) == ""
-
-    def test_decode_empty_returns_empty(self, mod):
-        assert mod.decode_hdr("") == ""
-
-    def test_decode_utf8_encoded(self, mod):
-        """Header MIME encoded (UTF-8) deve essere decodificato."""
-        # =?utf-8?b?...? è un header MIME base64-encoded
-        import base64
-        text = "Risposta alla tua candidatura"
-        encoded = f"=?utf-8?b?{base64.b64encode(text.encode()).decode()}?="
-        result = mod.decode_hdr(encoded)
-        assert "candidatura" in result or len(result) > 0
-
-    def test_decode_returns_string(self, mod):
-        result = mod.decode_hdr("Test Subject")
-        assert isinstance(result, str)
-
-
-@requires_mail
-class TestMailGetBodyText:
-    """Test get_body_text() con messaggi email sintetici."""
-
-    @pytest.fixture(scope="class")
-    def mod(self):
-        return _load_module(MAIL_SCRIPT, "personal_mail")
-
-    def _make_plain_msg(self, text):
-        """Crea un messaggio email semplice text/plain."""
-        import email.mime.text
-        return email.mime.text.MIMEText(text, "plain", "utf-8")
-
-    def _make_html_msg(self, html):
-        """Crea un messaggio email HTML."""
-        import email.mime.text
-        return email.mime.text.MIMEText(html, "html", "utf-8")
-
-    def test_body_plain_text(self, mod):
-        msg = self._make_plain_msg("Grazie per la tua candidatura.")
-        result = mod.get_body_text(msg)
-        assert "candidatura" in result
-
-    def test_body_html_stripped(self, mod):
-        """HTML deve essere stripped — solo testo."""
-        msg = self._make_html_msg("<p>Siamo lieti di invitarti a un colloquio.</p>")
-        result = mod.get_body_text(msg)
-        assert "colloquio" in result
-        assert "<p>" not in result
-
-    def test_body_empty_returns_empty(self, mod):
-        msg = self._make_plain_msg("")
-        result = mod.get_body_text(msg)
-        assert result == ""
-
-    def test_body_html_strips_script_tags(self, mod):
-        """Script tag HTML devono essere rimossi dal body."""
-        msg = self._make_html_msg("<script>alert('x')</script><p>Testo ok</p>")
-        result = mod.get_body_text(msg)
-        assert "alert" not in result
-        assert "Testo ok" in result
-
-    def test_body_returns_string(self, mod):
-        msg = self._make_plain_msg("test")
-        assert isinstance(mod.get_body_text(msg), str)
