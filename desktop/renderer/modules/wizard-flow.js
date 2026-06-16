@@ -503,6 +503,15 @@ if (dom.btnTgIntroBack) dom.btnTgIntroBack.addEventListener('click', () => enter
 // (telegram-tokens.js calls renderAllTgMeta on its enter to populate
 // the per-row meta slots).
 if (dom.btnTgIntroContinue) dom.btnTgIntroContinue.addEventListener('click', () => enterTelegramTokens())
+// Telegram OPZIONALE (direction shift "interaction planes", 2026-06-16): lo
+// skip salta i 3 bot e va diretto a "ready" (in VPS = home). Il team gira
+// senza Telegram (runtime tollerante); si configura dopo da `jht config` o
+// rilanciando il wizard. Speculare al confirm del wizard CLI
+// (promptTelegramOptional). Chi e' gia' nello step token salta via Back → intro.
+if (dom.btnTgIntroSkip) dom.btnTgIntroSkip.addEventListener('click', () => {
+  log.info('telegram.skipped.intro')
+  enterReady()
+})
 if (dom.tgCreateUsertag) {
   dom.tgCreateUsertag.addEventListener('input', () => {
     ensureTgCreateState()

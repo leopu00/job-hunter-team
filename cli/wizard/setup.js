@@ -18,7 +18,7 @@ import {
   summarizeExistingConfig,
 } from './setup-helpers.js';
 import {
-  promptTelegramRequired,
+  promptTelegramOptional,
   promptSubscription,
   promptWorkingHours,
   assembleAndSaveConfig,
@@ -250,18 +250,24 @@ export async function runSetupWizard(prompter) {
   }
 
   // ────────────────────────────────────────────────────────────────────────
-  // STEP VPS-ONLY: Telegram bot OBBLIGATORIO
-  // Cloud pairing e' gia' stato fatto all'inizio del wizard (VPS-FIRST).
+  // STEP VPS-ONLY: Telegram bot — CONSIGLIATO ma OPZIONALE (2026-06-16)
+  // Direction shift "interaction planes": l'interazione primaria passa al
+  // desktop; Telegram diventa il canale async OPZIONALE. Niente piu' gate —
+  // l'utente puo' saltare e configurarlo dopo con `jht config`. (Il cloud
+  // pairing resta il gate VPS-first, fatto a inizio wizard; Telegram no.)
   // Telegram va dopo providers update perche' richiede solo input utente,
   // non risorse del container.
   // ────────────────────────────────────────────────────────────────────────
   if (isVps) {
-    telegramChannel = await promptTelegramRequired(prompter, baseConfig.channels);
-    // Aggiorno config sul disco con il telegram appena configurato.
-    await assembleAndSaveConfig(prompter, {
-      providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
-      telegramChannel, baseProviders: baseConfig.providers || {}, workingHours,
-    });
+    const tg = await promptTelegramOptional(prompter, baseConfig.channels);
+    if (tg) {
+      telegramChannel = tg;
+      // Aggiorno config sul disco con il telegram appena configurato.
+      await assembleAndSaveConfig(prompter, {
+        providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
+        telegramChannel, baseProviders: baseConfig.providers || {}, workingHours,
+      });
+    }
   }
 
   // ────────────────────────────────────────────────────────────────────────

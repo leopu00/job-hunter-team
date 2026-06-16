@@ -114,6 +114,7 @@ export const TRANSLATIONS = {
       'On the next page we will suggest three bot usernames. Then you will create them inside @BotFather and paste the tokens back here.',
     'telegram.intro.back': 'Back',
     'telegram.intro.continue': 'Got it, continue',
+    'telegram.intro.skip': 'Skip for now',
     'telegram.create.title': 'Create your three bots',
     'telegram.create.lead':
       'Open @BotFather, send /newbot, and use each suggested username when prompted. BotFather will return a token — keep it for the next step.',
@@ -532,6 +533,7 @@ export const TRANSLATIONS = {
       'Nella prossima pagina ti suggeriremo tre username. Poi li creerai dentro @BotFather e incollerai i token qui.',
     'telegram.intro.back': 'Indietro',
     'telegram.intro.continue': 'Ho capito, continua',
+    'telegram.intro.skip': 'Salta per ora',
     'telegram.create.title': 'Crea i tuoi tre bot',
     'telegram.create.lead':
       'Apri @BotFather, invia /newbot, e usa lo username suggerito quando te lo chiede. BotFather ti dar\u00e0 un token — tienilo per il prossimo passo.',
@@ -950,6 +952,7 @@ export const TRANSLATIONS = {
       'A következő oldalon javasolunk három bot-felhasználónevet. Aztán létrehozod őket a @BotFather-ben, és visszamásolod ide a tokeneket.',
     'telegram.intro.back': 'Vissza',
     'telegram.intro.continue': 'Értem, tovább',
+    'telegram.intro.skip': 'Kihagyom egyelőre',
     'telegram.create.title': 'Hozd létre a három botodat',
     'telegram.create.lead':
       'Nyisd meg a @BotFather-t, küldd el a /newbot parancsot, és használd a javasolt felhasználónevet, amikor kéri. A BotFather visszaad egy tokent — őrizd meg a következő lépéshez.',
@@ -1367,6 +1370,7 @@ export const TRANSLATIONS = {
       'En la siguiente página te sugeriremos tres usernames de bot. Después los crearás dentro de @BotFather y pegarás los tokens aquí.',
     'telegram.intro.back': 'Atrás',
     'telegram.intro.continue': 'Entendido, continuar',
+    'telegram.intro.skip': 'Omitir por ahora',
     'telegram.create.title': 'Crea tus tres bots',
     'telegram.create.lead':
       'Abre @BotFather, envía /newbot y usa cada username sugerido cuando lo pida. BotFather te devolverá un token — guárdalo para el siguiente paso.',
@@ -1785,6 +1789,7 @@ export const TRANSLATIONS = {
       'Auf der nächsten Seite schlagen wir drei Bot-Usernames vor. Dann erstellst du sie in @BotFather und fügst die Tokens hier wieder ein.',
     'telegram.intro.back': 'Zurück',
     'telegram.intro.continue': 'Verstanden, weiter',
+    'telegram.intro.skip': 'Vorerst überspringen',
     'telegram.create.title': 'Erstelle deine drei Bots',
     'telegram.create.lead':
       'Öffne @BotFather, sende /newbot und verwende jeden vorgeschlagenen Username, wenn er danach fragt. BotFather gibt dir einen Token zurück — speichere ihn für den nächsten Schritt.',
@@ -2202,6 +2207,7 @@ export const TRANSLATIONS = {
       "À la page suivante, nous te suggérerons trois usernames de bots. Tu les créeras ensuite dans @BotFather et tu colleras les tokens ici.",
     'telegram.intro.back': 'Retour',
     'telegram.intro.continue': 'Compris, continuer',
+    'telegram.intro.skip': 'Passer pour l’instant',
     'telegram.create.title': 'Crée tes trois bots',
     'telegram.create.lead':
       "Ouvre @BotFather, envoie /newbot, et utilise chaque username suggéré quand on te le demande. BotFather te renverra un token — garde-le pour l'étape suivante.",
@@ -2619,6 +2625,7 @@ export const TRANSLATIONS = {
       'Na próxima página vamos sugerir três usernames de bot. Depois você os criará dentro do @BotFather e colará os tokens aqui.',
     'telegram.intro.back': 'Voltar',
     'telegram.intro.continue': 'Entendi, continuar',
+    'telegram.intro.skip': 'Pular por agora',
     'telegram.create.title': 'Crie seus três bots',
     'telegram.create.lead':
       'Abra o @BotFather, envie /newbot e use cada username sugerido quando solicitado. O BotFather retornará um token — guarde-o para a próxima etapa.',
