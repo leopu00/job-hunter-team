@@ -328,7 +328,6 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/positions') ||
       pathname.startsWith('/ready') ||
       pathname.startsWith('/risposte') ||
-      pathname.startsWith('/crescita') ||
       pathname.startsWith('/team') ||
       pathname.startsWith('/scout') ||
       pathname.startsWith('/analista') ||
