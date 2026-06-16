@@ -31,10 +31,17 @@ new offer ─▶ [analyst] match to the most similar ACTIVE category?
 1. **Empty start.** The active-category registry starts **empty for each candidate**. No seed, no
    universal list. The first offers all land in `'Other'` with a proposed label — this is expected
    (see Cold-start).
-2. **At write (analyst).** Before tagging an offer the analyst **reads the candidate's ACTIVE
-   categories** (the registry, read at runtime — see `analista.md`) and assigns the **most similar
-   one**. If none genuinely fits → `'Other'` + the raw label in `role_family_proposed`. **Never
-   create a category for a one-off** (this is what kills the singleton explosion at the root).
+2. **At write (analyst) — JUDGE-FIRST, then reconcile.** The analyst **first names the family the
+   offer genuinely belongs to** (its own semantic call), **then** reads the candidate's ACTIVE
+   categories (the registry, read at runtime — see `analista.md`): if an active is the **same
+   family** → write that exact name (synonyms collapse here); if none is → `'Other'` + the raw label
+   in `role_family_proposed`. **Two symmetric failure modes are banned:** (i) **never create a
+   category for a one-off** (kills the singleton explosion — betaB's 48 variants); (ii) **never dump a
+   distinct role into a broad catch-all** just because the bucket is wide (kills the collapse — betaA
+   into a single "Business & Operations"). A wide bucket is **residue, not a home**: if the only
+   active that "fits" is over-broad, the family hasn't emerged yet → propose the finer label. The
+   directional ~5-8 aim is **bi-directional**: aggregate near-dups when too many, propose finer
+   families when below ~5-8 with only broad actives.
 3. **Birth by support (promotion).** A periodic, deterministic pass groups the `'Other'` proposals by
    their *normalized* label; when a group reaches **support ≥ N** (threshold, a user knob) it is
    **promoted** to an active category — **named from the data** (the most frequent raw label in the
@@ -95,12 +102,27 @@ zero-hardcoding** (chosen over the convenience of a seed).
 **(b) Existing candidate at DEPLOY (has legacy `role_family` values).** Naively, an empty registry +
 `next-for-categorize` re-queuing every non-`'Other'` legacy row would trigger a **one-time
 re-analysis storm** of the whole backlog (hundreds of positions through the LLM analyst). Avoid it
-with a **bootstrap**: the promotion pass clusters the **candidate's EXISTING `role_family` values**
+with a **bootstrap**: the promotion pass clusters the **candidate's EXISTING `role_family` values`**
 (deterministic, via `normalize_key`) and promotes the common ones into the registry **immediately**,
 so they are already active and **not** re-queued — only genuine drift is reconciled. This is **not
 hardcoding**: it clusters the **candidate's own data**, never our names (it's a *warm-start from the
 candidate's data*, the legitimate cousin of the rejected *seed of our 15 names*). (Bootstrap lives in
 the promotion pass — dev2's lane.)
+
+**⚠️ Anti-catch-all guard (2026-06-16, betaA lesson).** The bootstrap is only as good as the legacy:
+if the candidate's legacy was **already collapsed** (an old free-text run that dumped most offers into
+ONE generic bucket, e.g. betaA's `"Business & Operations" ×175` alongside 61 distinct finance labels
+each below threshold), a naïve bootstrap promotes **only** that mega-bucket as the **sole** seed → the
+analyst then defers to a one-item menu and the collapse **self-perpetuates**. So at bootstrap (empty
+registry) the pass **must not seed a lone dominant catch-all**: if the *only* cluster reaching
+threshold dominates the corpus (≥ `CATCHALL_DOMINANCE`) **and** a large diverse sub-threshold tail
+exists (≥ `CATCHALL_TAIL_MIN` distinct labels), that cluster is **suppressed** (left as drift, not
+promoted) → cold-start proceeds, `next-for-categorize` re-queues the backlog, and the **judge-first**
+analyst rebuilds the real families from scratch. The guard is **bootstrap-gated** (fires only on an
+empty registry) and **self-limiting** (once ≥2 real families emerge it never triggers), so it cannot
+disturb a healthy multi-category registry (betaB's 12). Implemented in `role_registry.py` (dev2's
+lane). A candidate **already** collapsed in production (registry already holds the lone catch-all) is
+repaired by a one-time **registry reset** at deploy — see the finding doc runbook.
 
 A future opt-in *warm-start from the candidate's profile* could also pre-populate likely categories —
 again **team/data-generated, never hardcoded by us** (user's later call, not part of v1).
