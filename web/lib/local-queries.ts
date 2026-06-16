@@ -896,6 +896,194 @@ export function getAnalistaActivityLocal(ws: string) {
   }
 }
 
+// ── Scout activity — local mirror di /api/scout/activity ──────────────
+export function getScoutActivityLocal(ws: string) {
+  const db = getDb(ws)
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const todayISO = todayStart.toISOString()
+  const cnt = (where: string, ...a: any[]): number =>
+    (db.prepare(`SELECT COUNT(*) AS c FROM positions WHERE ${where}`).get(...a) as any).c
+  const queue = db
+    .prepare(
+      `SELECT id, title, company, location, remote_type, found_at, found_by
+         FROM positions WHERE status = 'new' ORDER BY found_at DESC LIMIT 10`,
+    )
+    .all()
+  const recent = db
+    .prepare(
+      `SELECT id, title, company, location, remote_type, found_at, found_by, status
+         FROM positions WHERE status <> 'excluded' ORDER BY found_at DESC LIMIT 10`,
+    )
+    .all()
+  const excluded_today = db
+    .prepare(
+      `SELECT id, title, company, location, remote_type, found_at, notes
+         FROM positions WHERE status = 'excluded' AND found_at >= ? ORDER BY found_at DESC LIMIT 10`,
+    )
+    .all(todayISO)
+  return {
+    stats: { found_today: cnt('found_at >= ?', todayISO), total_new: cnt("status = 'new'") },
+    queue,
+    recent,
+    excluded_today,
+  }
+}
+
+// ── Scorer activity — local mirror di /api/scorer/activity ────────────
+export function getScorerActivityLocal(ws: string) {
+  const db = getDb(ws)
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const todayISO = todayStart.toISOString()
+  const queue = db
+    .prepare(
+      `SELECT id, title, company, location, remote_type, found_at AS last_checked,
+              COALESCE(notes, '') AS notes
+         FROM positions WHERE status = 'checked' ORDER BY found_at DESC LIMIT 10`,
+    )
+    .all()
+  const queue_size = (db.prepare(`SELECT COUNT(*) AS c FROM positions WHERE status = 'checked'`).get() as any).c
+  const scoredSelect = `SELECT s.position_id AS id, s.total_score, s.scored_at, s.scored_by,
+                               COALESCE(p.title, '—') AS title, COALESCE(p.company, '—') AS company,
+                               COALESCE(p.location, '') AS location, COALESCE(p.remote_type, '') AS remote_type
+                          FROM scores s LEFT JOIN positions p ON p.id = s.position_id`
+  const recent_scored = db.prepare(`${scoredSelect} WHERE s.total_score >= 40 ORDER BY s.scored_at DESC LIMIT 10`).all()
+  const recent_excluded = db.prepare(`${scoredSelect} WHERE s.total_score < 40 ORDER BY s.scored_at DESC LIMIT 10`).all()
+  const scored_total = (db.prepare(`SELECT COUNT(*) AS c FROM scores`).get() as any).c
+  const todayScores = (db.prepare(`SELECT total_score FROM scores WHERE scored_at >= ?`).all(todayISO) as any[]).map(
+    (r) => r.total_score as number,
+  )
+  const scored_today = todayScores.length
+  const excluded_today = todayScores.filter((s) => s < 40).length
+  const avg_score_today =
+    scored_today > 0 ? +(todayScores.reduce((a, b) => a + b, 0) / scored_today).toFixed(1) : null
+  return {
+    stats: { queue_size, scored_total, scored_today, excluded_today, avg_score_today },
+    queue,
+    recent_scored,
+    recent_excluded,
+  }
+}
+
+// ── Critico activity — local mirror di /api/critico ───────────────────
+// NB: `critic_round` non esiste nello schema SQLite (campo solo-cloud) → null.
+export function getCriticoActivityLocal(ws: string) {
+  const db = getDb(ws)
+  const apps = db
+    .prepare(
+      `SELECT a.id, a.status, a.critic_score, a.critic_verdict, a.critic_reviewed_at,
+              a.written_at, a.written_by, a.reviewed_by,
+              COALESCE(p.title, '—') AS title, COALESCE(p.company, '—') AS company
+         FROM applications a LEFT JOIN positions p ON p.id = a.position_id
+        WHERE a.status = 'review' OR a.critic_verdict IS NOT NULL
+        ORDER BY a.critic_reviewed_at IS NULL, a.critic_reviewed_at DESC`,
+    )
+    .all() as any[]
+  const allReviewed = apps.filter((a) => a.critic_verdict != null)
+  const pass = allReviewed.filter((a) => a.critic_verdict === 'PASS').length
+  const needsWork = allReviewed.filter((a) => a.critic_verdict === 'NEEDS_WORK').length
+  const reject = allReviewed.filter((a) => a.critic_verdict === 'REJECT').length
+  const scores = allReviewed.map((a) => a.critic_score).filter((s: any): s is number => s != null)
+  const avgScore =
+    scores.length > 0 ? +(scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(1) : null
+  const queue = apps
+    .filter((a) => a.status === 'review' && a.critic_score == null)
+    .map((a) => ({ id: a.id, title: a.title, company: a.company, written_by: a.written_by, written_at: a.written_at }))
+  const feed = allReviewed.slice(0, 10).map((a) => ({
+    id: a.id,
+    title: a.title,
+    company: a.company,
+    critic_verdict: a.critic_verdict,
+    critic_score: a.critic_score,
+    critic_round: null,
+    critic_reviewed_at: a.critic_reviewed_at,
+    reviewed_by: a.reviewed_by,
+    written_by: a.written_by,
+  }))
+  const agentMap: Record<string, { total: number; pass: number; needsWork: number; reject: number }> = {}
+  for (const a of allReviewed) {
+    const key = a.reviewed_by ?? 'sconosciuto'
+    if (!agentMap[key]) agentMap[key] = { total: 0, pass: 0, needsWork: 0, reject: 0 }
+    agentMap[key].total++
+    if (a.critic_verdict === 'PASS') agentMap[key].pass++
+    if (a.critic_verdict === 'NEEDS_WORK') agentMap[key].needsWork++
+    if (a.critic_verdict === 'REJECT') agentMap[key].reject++
+  }
+  const byAgent = Object.entries(agentMap)
+    .map(([critico, s]) => ({ critico, ...s }))
+    .sort((a, b) => b.total - a.total)
+  return {
+    stats: { total: allReviewed.length, pending: queue.length, pass, needsWork, reject, avgScore },
+    queue,
+    feed,
+    byAgent,
+  }
+}
+
+// ── Scrittore activity — local mirror di /api/scrittore/activity ──────
+// NB: `critic_round` non esiste nello schema SQLite (campo solo-cloud) → null.
+export function getScrittoreActivityLocal(ws: string) {
+  const db = getDb(ws)
+  const today = new Date().toISOString().slice(0, 10)
+  const queueRaw = db
+    .prepare(
+      `SELECT p.id, p.title, p.company, p.location, p.remote_type, p.notes, p.status,
+              s.total_score AS total_score
+         FROM positions p LEFT JOIN scores s ON s.position_id = p.id
+        WHERE p.status = 'scored' ORDER BY p.id DESC LIMIT 30`,
+    )
+    .all() as any[]
+  const queue = queueRaw
+    .filter((p) => p.total_score != null && p.total_score >= 50)
+    .sort((a, b) => b.total_score - a.total_score)
+    .slice(0, 15)
+  const progRows = db
+    .prepare(
+      `SELECT p.id, p.title, p.company, p.location, p.remote_type, p.status, p.notes,
+              s.total_score AS total_score,
+              a.written_by, a.critic_score, a.critic_verdict, a.written_at, a.critic_reviewed_at
+         FROM positions p
+         LEFT JOIN scores s ON s.position_id = p.id
+         LEFT JOIN applications a ON a.position_id = p.id
+        WHERE p.status IN ('writing', 'review') ORDER BY p.id DESC LIMIT 20`,
+    )
+    .all() as any[]
+  const in_progress = progRows.map((p) => ({
+    ...p,
+    total_score: p.total_score ?? null,
+    critic_round: null,
+    critic_active: p.status === 'review',
+  }))
+  const compRows = db
+    .prepare(
+      `SELECT p.id, p.title, p.company, p.location, p.remote_type, p.status,
+              s.total_score AS total_score,
+              a.written_by, a.critic_score, a.critic_verdict, a.critic_reviewed_at
+         FROM positions p
+         LEFT JOIN scores s ON s.position_id = p.id
+         LEFT JOIN applications a ON a.position_id = p.id
+        WHERE p.status = 'ready' ORDER BY p.last_checked DESC LIMIT 10`,
+    )
+    .all() as any[]
+  const recent_completed = compRows.map((p) => ({ ...p, total_score: p.total_score ?? null, critic_round: null }))
+  const cnt = (sql: string, ...a: any[]): number => (db.prepare(sql).get(...a) as any).c
+  const queue_size = cnt(`SELECT COUNT(*) AS c FROM positions WHERE status = 'scored'`)
+  const writing_today = cnt(`SELECT COUNT(*) AS c FROM applications WHERE written_at >= ?`, today)
+  const completed_today = cnt(
+    `SELECT COUNT(*) AS c FROM applications WHERE critic_score IS NOT NULL AND critic_reviewed_at >= ?`,
+    today,
+  )
+  const avgRows = db
+    .prepare(`SELECT critic_score FROM applications WHERE critic_score IS NOT NULL AND critic_reviewed_at >= ?`)
+    .all(today) as any[]
+  const avg_critic_score =
+    avgRows.length > 0
+      ? Math.round((avgRows.reduce((acc, r) => acc + (r.critic_score ?? 0), 0) / avgRows.length) * 10) / 10
+      : null
+  return { queue, in_progress, recent_completed, queue_size, writing_today, completed_today, avg_critic_score }
+}
+
 // ── Analista stats ──────────────────────────────────────────────────
 export function getAnalistaStatsLocal(ws: string) {
   const db = getDb(ws)
