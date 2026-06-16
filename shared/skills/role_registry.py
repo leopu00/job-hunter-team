@@ -44,6 +44,21 @@ SENTINEL = "Other"
 DEFAULT_THRESHOLD = 5   # pavimento: min offerte simili perché una categoria abbia senso
 DEFAULT_CAP = 20        # tetto: max categorie attive per-utente (backstop)
 
+# GUARD ANTI CATCH-ALL (2026-06-16, lezione betaA). Un legacy GIA' collassato
+# (vecchia run free-text che ha buttato la maggioranza in UN bucket generico, es.
+# 'Business & Operations' ×175 + 61 etichette finance distinte sotto-soglia) farebbe
+# promuovere al bootstrap SOLO quel mega-bucket come seed UNICO → l'analista si fida
+# del menù da una voce e il collasso si auto-perpetua. Al BOOTSTRAP (registro vuoto):
+# se l'UNICO cluster ≥soglia domina il corpus (≥ DOMINANCE) E esiste una coda diversa
+# sotto-soglia (≥ TAIL_MIN etichette distinte) → quel cluster NON è una famiglia, è
+# residuo: viene SOPPRESSO (resta drift, non promosso) → cold-start, l'analista
+# judge-first ricostruisce le famiglie vere. Bootstrap-gated (solo registro vuoto) +
+# auto-limitante (con ≥2 famiglie reali non scatta) → non disturba un registro sano
+# multi-categoria (i 12 di betaB). La coda piccola di un candidato GENUINAMENTE
+# mono-famiglia (1 vera famiglia + 2-3 one-off) NON innesca: discrimina TAIL_MIN.
+CATCHALL_DOMINANCE = 0.35   # frazione del corpus oltre cui un seed unico è "dominante"
+CATCHALL_TAIL_MIN = 8       # # etichette distinte sotto-soglia = diversità soppressa
+
 
 def recompute_support(conn, user_id):
     """Aggiorna ``support_count`` di ogni attiva = #positions con quel role_family."""
@@ -112,12 +127,40 @@ def _retag(conn, ids, name):
     )
 
 
+def _detect_catchall_seed(clusters, active_key_map, threshold,
+                          dominance=CATCHALL_DOMINANCE, tail_min=CATCHALL_TAIL_MIN):
+    """Ritorna la CHIAVE del cluster catch-all da NON promuovere, o ``None``.
+
+    Funzione PURA (niente DB) → unit-testabile. Scatta SOLO al bootstrap (registro
+    vuoto: ``active_key_map`` vuoto) e SOLO nel caso degenere: un UNICO cluster
+    ≥soglia, che domina il corpus (≥ ``dominance``) mentre esiste una coda diversa
+    sotto-soglia (≥ ``tail_min`` etichette distinte). In ogni altro caso ritorna
+    ``None`` (registro già seminato, più cluster promovibili, coda piccola di un
+    candidato genuinamente mono-famiglia) → comportamento invariato.
+    """
+    if active_key_map:                       # non-bootstrap → guard OFF
+        return None
+    promotable = [k for k, m in clusters.items()
+                  if k not in active_key_map and len(m) >= threshold]
+    if len(promotable) != 1:                 # 0 o ≥2 famiglie reali → niente seed unico
+        return None
+    key = promotable[0]
+    total = sum(len(m) for m in clusters.values())
+    tail = [k for k, m in clusters.items() if len(m) < threshold]
+    if total and (len(clusters[key]) / total) >= dominance and len(tail) >= tail_min:
+        return key                           # mega-bucket residuo: sopprimi
+    return None
+
+
 def promote(conn, user_id, threshold, apply=True):
-    """Promuove/folda i cluster. Ritorna list[(name, count, 'new'|'fold')].
+    """Promuove/folda i cluster. Ritorna list[(name, count, 'new'|'fold'|'catchall-skip')].
 
     Per ogni cluster (chiave normalizzata):
     - chiave == una categoria ATTIVA esistente → **fold**: ri-tagga i membri su
       quell'attiva (qualunque dimensione: è una variante di superficie);
+    - chiave == il catch-all degenere del bootstrap (vedi ``_detect_catchall_seed``)
+      → **catchall-skip**: NON promosso (resta drift → l'analista judge-first lo
+      ri-categorizza), così non si semina un menù da una voce sola;
     - altrimenti supporto ≥ ``threshold`` → **promote NEW**: il NOME = l'etichetta
       più frequente del cluster (scelta DAI DATI), crea/riattiva la categoria, ri-tagga;
     - altrimenti → skip (resta: l'analista lo ri-categorizza via next-for-categorize
@@ -126,6 +169,7 @@ def promote(conn, user_id, threshold, apply=True):
     ``apply=False`` → non scrive (dry-run).
     """
     clusters, active_key_map = find_clusters(conn, user_id)
+    catchall_key = _detect_catchall_seed(clusters, active_key_map, threshold)
     out = []
     for key, members in clusters.items():
         ids = [pid for pid, _ in members]
@@ -134,6 +178,10 @@ def promote(conn, user_id, threshold, apply=True):
             out.append((name, len(members), "fold"))
             if apply:
                 _retag(conn, ids, name)
+            continue
+        if key == catchall_key:
+            name = Counter(lbl for _, lbl in members).most_common(1)[0][0]
+            out.append((name, len(members), "catchall-skip"))
             continue
         if len(members) < threshold:
             continue
