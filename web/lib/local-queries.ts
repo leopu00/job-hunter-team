@@ -824,6 +824,78 @@ export function getScrittoreStatsLocal(ws: string) {
   return Object.entries(grouped).map(([scrittore, s]) => ({ scrittore, ...s })).sort((a, b) => b.total - a.total)
 }
 
+// ── Analista activity (feed live) — local mirror di /api/analista/activity ──
+// Categorizza il motivo di esclusione dalle notes (stessa euristica della route
+// Supabase). Esportata perché la route la riusa anche nel ramo cloud (single
+// source of truth, niente duplicazione delle regex).
+export function categorizeExclusion(notes: string | null): string {
+  const n = (notes || '').toLowerCase()
+  const m = n.match(/esclus[ao]:\s*\[(\w+)\]/i)
+  if (m) return m[1].toUpperCase()
+  if (/link scaduto|link morto|404|redirect|lavoro occupato|pagina rimossa|url morto/.test(n)) return 'LINK_MORTO'
+  if (/score < 40|score <40|score basso/.test(n)) return 'SCORE_BASSO'
+  if (/duplicat|già presente|stessa posizione/.test(n)) return 'DUPLICATA'
+  if (/us-only|uk-only|americas|restrizione geografica|work authorization uk|post-brexit/.test(n)) return 'GEO'
+  if (/lingua croata|tedesco obbligat|polacco|ungherese|français|dutch/.test(n)) return 'LINGUA'
+  if (/senior con 5\+|5\+ anni obbligatori|seniority troppo/.test(n)) return 'SENIORITY'
+  if (/senza python|no python|solo java|solo node|stack incomp/.test(n)) return 'STACK'
+  if (/zero sviluppo|mismatch|ruolo non-dev|iam analyst|no coding/.test(n)) return 'RUOLO'
+  if (/scam|fantasma|red flag/.test(n)) return 'SCAM'
+  if (/voto critico|critic/.test(n)) return 'CRITICO'
+  return 'NON_CATEGORIZZATA'
+}
+
+// Stessa shape JSON di GET /api/analista/activity, letta da jobs.db.
+// Le date sono confronti lessicografici su stringhe ISO (YYYY-MM-DD prefix),
+// fedeli al `.gte("last_checked", today)` della route Supabase.
+export function getAnalistaActivityLocal(ws: string) {
+  const db = getDb(ws)
+  const today = new Date().toISOString().slice(0, 10)
+  const recentCols =
+    'id, title, company, location, remote_type, status, source, found_at, last_checked, notes'
+  const queue = db
+    .prepare(
+      `SELECT id, title, company, location, remote_type, source, found_by, found_at, notes
+         FROM positions WHERE status = 'new' ORDER BY id DESC LIMIT 10`,
+    )
+    .all()
+  const recent_processed = db
+    .prepare(
+      `SELECT ${recentCols} FROM positions WHERE status = 'checked' ORDER BY last_checked DESC LIMIT 10`,
+    )
+    .all()
+  const recent_excluded = db
+    .prepare(
+      `SELECT ${recentCols} FROM positions WHERE status = 'excluded' AND last_checked IS NOT NULL ORDER BY last_checked DESC LIMIT 10`,
+    )
+    .all()
+  const countWhere = (where: string, ...args: any[]): number =>
+    (db.prepare(`SELECT COUNT(*) AS c FROM positions WHERE ${where}`).get(...args) as any).c
+  const queue_size = countWhere("status = 'new'")
+  const checked_total = countWhere("status = 'checked'")
+  const analyzed_today = countWhere("status = 'checked' AND last_checked >= ?", today)
+  const excluded_today = countWhere("status = 'excluded' AND last_checked >= ?", today)
+  const excludedRows = db
+    .prepare(`SELECT notes FROM positions WHERE status = 'excluded' AND last_checked >= ?`)
+    .all(today) as any[]
+  const exclusion_categories: Record<string, number> = {}
+  for (const row of excludedRows) {
+    const cat = categorizeExclusion(row.notes)
+    exclusion_categories[cat] = (exclusion_categories[cat] ?? 0) + 1
+  }
+  return {
+    queue,
+    recent_processed,
+    recent_excluded,
+    queue_size,
+    checked_total,
+    analyzed_today,
+    excluded_today,
+    ratio: { checked: analyzed_today, excluded: excluded_today },
+    exclusion_categories,
+  }
+}
+
 // ── Analista stats ──────────────────────────────────────────────────
 export function getAnalistaStatsLocal(ws: string) {
   const db = getDb(ws)
