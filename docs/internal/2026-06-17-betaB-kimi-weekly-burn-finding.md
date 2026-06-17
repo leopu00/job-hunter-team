@@ -54,6 +54,12 @@ role_family, loc_*, salary)** + **code per-task (RULE-14)**. Effetto: gli analis
 l'**intero arretrato di 557 posizioni** in una catch-up una-tantum (mai backfillato prima coi nuovi
 campi). Ogni recheck = **liveness via browser (Playwright) + enrichment + stima salary** = caro.
 
+**Escluso come co-driver (verificato 2026-06-17): la scrittura CV.** I 105 CV "ready" hanno
+`positions.updated_at` raggruppato all'ora del deploy (15/06 14:57) — è un **tocco di massa del
+deploy**, NON CV nuovi: le 122 `applications` hanno `created_at` di **MAGGIO (19-21/05)**, scritte da
+`scrittore-1/2/3`; nessuno Scrittore ha girato da allora (coerente con la policy writer-on-demand). Il
+burn di giugno è recheck/backfill + sourcing, NON CV writing.
+
 Nella notte del burst (Lun 15 22:00 → Mar 16 08:00 UTC), attività concorrente pesante:
 ```
 scout-2    -> new       57     (sourcing nuovo IN PARALLELO al backfill)
