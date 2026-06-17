@@ -64,15 +64,18 @@ scorer-5   -> scored    23  / -> excluded 9
 
 ## 3. ⚠️ Due aggravanti strutturali
 
-1. **betaB lavora su una fascia amplissima, di fatto senza pausa notturna.** Il burn è distribuito su
-   **quasi tutte le ore** (verificato dalla distribuzione oraria di `delta` nella finestra corrente:
-   consumo a **01-03 Rome** E **20-22 Rome** E **06-09 Rome**), e `work_phase=ON` anche alle 23:00
-   Rome. **betaA** invece è `work_phase=OFF` di notte (verificato dal pacing-state) → ~12h/giorno vs
-   la fascia ben più larga di betaB: betaB consuma molte più **ore-attive**, ed è una delle ragioni
-   per cui betaA è al 15% del weekly e betaB al 100%. **⚠️ Caveat:** la config esatta delle working
-   hours NON è stata localizzata su disco; una memoria di 4gg fa indicava `05:00-17:00 Europe/Rome`,
-   ma la distribuzione del burn la **contraddice** (burn pesante a 20-22 e 02 Rome) → o è stata
-   cambiata o era imprecisa. Il punto **solido**: betaB non si ferma di notte, betaA sì.
+1. **betaB front-loada perché non si ferma di notte; betaA spalma perché si ferma.** Il burn di
+   betaB è distribuito su **quasi tutte le ore** (verificato dalla distribuzione oraria di `delta`:
+   consumo a **01-03 Rome** E **20-22 Rome** E **06-09 Rome**), `work_phase=ON` anche alle 23:00 Rome.
+   **betaA** è `work_phase=OFF` di notte (~12h/giorno, verificato dal pacing-state). **NB il confronto
+   corretto NON è "betaA consuma meno":** betaA questa settimana è arrivato al **94% del weekly** —
+   come betaB al 100% — ma lo ha **SPALMATO su ~tutti i 7 giorni** (≈14%/giorno, vicino al sostenibile
+   100/7) grazie alla pausa notturna + assenza di storm, mentre betaB ha consumato lo stesso budget in
+   **2 giorni** (storm front-loadato). Quindi la pausa notturna è un **meccanismo di spread**, non di
+   "uso meno": è la prova che il pacing PUÒ tenere la linea (betaA lo dimostra) — betaB è saltato per
+   lo storm + l'assenza di un rate-cap notturno. **⚠️ Caveat config:** le working hours esatte di betaB
+   non sono state localizzate su disco; una memoria di 4gg fa indicava `05:00-17:00 Europe/Rome`, ma il
+   burn la **contraddice** (consumo pesante a 20-22 e 02 Rome) → cambiata o imprecisa.
 2. **Roster scalato.** 3 analisti + 2 scout attivi nella notte del burst (la settimana precedente,
    durata 6.7gg, aveva roster più leggero).
 
