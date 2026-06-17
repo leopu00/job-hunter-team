@@ -61,6 +61,13 @@ export interface Position {
   geocode_requested?: boolean
   geocode_requested_at?: string | null
   office_geocoded?: boolean
+  // Mig 041 (2026-06-17) — esclusione MANUALE utente. user_excluded_reason
+  // valorizzato = esclusa dall'utente (per distinguere dall'esclusione-agente
+  // che vive nelle notes EXCLUDED:[TAG]). prev_status per l'annullamento.
+  user_excluded_reason?: string | null
+  user_excluded_note?: string | null
+  user_excluded_at?: string | null
+  user_excluded_prev_status?: string | null
   // V9 (2026-06-13) — coordinate ufficio esposte al web (esistono in DB dalla
   // migration 017, prima non nel type). office_lat/lon alimentano JobsGlobe a
   // livello ufficio invece che città; office_address per la vignetta del pin.

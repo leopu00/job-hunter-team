@@ -6,6 +6,7 @@ import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
+import { ExcludeButton } from "./ExcludeButton";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
@@ -769,6 +770,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   />
                 );
               })()}
+            {position.legacy_id != null && (
+              // Esclusione manuale utente (mig 041): l'utente esclude l'offerta
+              // con una causa → status 'excluded', gli agenti smettono di
+              // ri-verificarne la liveness (esce da next-for-recheck).
+              <ExcludeButton
+                legacyId={position.legacy_id}
+                status={position.status}
+                initialReason={position.user_excluded_reason ?? null}
+              />
+            )}
           </div>
         </div>
       </div>
