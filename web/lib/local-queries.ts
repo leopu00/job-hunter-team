@@ -1249,6 +1249,10 @@ function mapPositionFull(r: any): Position {
     geocode_requested: r.geocode_requested === 1 || r.geocode_requested === true,
     geocode_requested_at: r.geocode_requested_at ?? null,
     office_geocoded: r.office_geocoded === 1 || r.office_geocoded === true,
+    user_excluded_reason: r.user_excluded_reason ?? null,
+    user_excluded_note: r.user_excluded_note ?? null,
+    user_excluded_at: r.user_excluded_at ?? null,
+    user_excluded_prev_status: r.user_excluded_prev_status ?? null,
   }
 }
 
