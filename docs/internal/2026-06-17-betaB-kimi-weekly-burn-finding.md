@@ -9,7 +9,8 @@ LETTURA (nessun intervento — [[feedback_no_intervention_in_simulations]]). · 
 > **TL;DR.** La finestra settimanale Kimi è stata bruciata in **2.1 giorni** (vs 6.7 della settimana
 > precedente). Causa: il **deploy di Lun 15/06 ~15:00** ha attivato RULE-12/13/14 (recheck giornaliero
 > + metadati obbligatori) → gli analisti hanno fatto una **catch-up una-tantum dell'intero backlog**
-> (196+164 posizioni ri-processate in 2 giorni), girando **24/7** con roster scalato. Non è un
+> (196+164 posizioni ri-processate in 2 giorni), su fascia oraria amplissima (senza pausa notturna) e
+> con roster scalato. Non è un
 > bug-loop (lavoro reale, non spin); è **over-pace**. Il freno weekly ha *visto* (ATTENZIONE,
 > proj_weekly 900-1110%) ma non ha *tenuto*.
 
@@ -63,11 +64,15 @@ scorer-5   -> scored    23  / -> excluded 9
 
 ## 3. ⚠️ Due aggravanti strutturali
 
-1. **betaB gira 24/7.** `work_phase=ON` anche di notte; `weekly_active_hours=57h` ≈ ore totali
-   trascorse → nessuna pausa notturna. Il burst è alle **02:00–06:00 Rome**. **betaA** invece è
-   `work_phase=OFF` di notte → ~12h/giorno attive vs ~24h di betaB. A parità di tutto il resto betaB
-   consuma **il doppio delle ore-attive**: è la ragione per cui betaA è al 15% del weekly e betaB al
-   100%.
+1. **betaB lavora su una fascia amplissima, di fatto senza pausa notturna.** Il burn è distribuito su
+   **quasi tutte le ore** (verificato dalla distribuzione oraria di `delta` nella finestra corrente:
+   consumo a **01-03 Rome** E **20-22 Rome** E **06-09 Rome**), e `work_phase=ON` anche alle 23:00
+   Rome. **betaA** invece è `work_phase=OFF` di notte (verificato dal pacing-state) → ~12h/giorno vs
+   la fascia ben più larga di betaB: betaB consuma molte più **ore-attive**, ed è una delle ragioni
+   per cui betaA è al 15% del weekly e betaB al 100%. **⚠️ Caveat:** la config esatta delle working
+   hours NON è stata localizzata su disco; una memoria di 4gg fa indicava `05:00-17:00 Europe/Rome`,
+   ma la distribuzione del burn la **contraddice** (burn pesante a 20-22 e 02 Rome) → o è stata
+   cambiata o era imprecisa. Il punto **solido**: betaB non si ferma di notte, betaA sì.
 2. **Roster scalato.** 3 analisti + 2 scout attivi nella notte del burst (la settimana precedente,
    durata 6.7gg, aveva roster più leggero).
 
@@ -94,8 +99,10 @@ stale (molto meno). MA emergono **3 leve reali** (finding per il codice/config, 
    va **spalmato sul budget settimanale** (a rate, su più giorni), non eseguito il più in fretta
    possibile. Oggi `next-for-recheck`/`next-for-categorize` non hanno throttle proporzionale al weekly
    residuo.
-2. **Pausa notturna o de-rate notturno per betaB**: o working-hours come betaA, o il pacing abbassa
-   drasticamente la velocità di notte per tenere la linea settimanale (oggi betaB brucia 24h/giorno).
+2. **Pausa notturna o de-rate notturno per betaB**: o working-hours ristrette come betaA (che di
+   notte è OFF), o il pacing abbassa drasticamente la velocità di notte per tenere la linea
+   settimanale (oggi betaB consuma anche nelle ore notturne — verificato burn a 01-03 Rome). Da
+   verificare anche la config working-hours reale (la memoria `05:00-17:00` è contraddetta dal burn).
 3. **Freno weekly più aggressivo**: quando `proj_weekly` resta >100% per N tick consecutivi, throttle
    forte / scale-down roster — oggi rallenta troppo poco, troppo tardi.
 
