@@ -78,6 +78,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_expiry(conn)
     _migrate_positions_salary_precise(conn)
     _migrate_positions_role_family_proposed(conn)
+    _migrate_positions_user_excluded(conn)
     _migrate_role_family_registry(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
@@ -899,6 +900,33 @@ def _migrate_positions_office_geocoding(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_office_geocoded "
         "ON positions(office_geocoded) WHERE office_geocoded = 1"
+    )
+
+
+def _migrate_positions_user_excluded(conn: sqlite3.Connection) -> None:
+    """Aggiunge le colonne di esclusione MANUALE dell'UTENTE (mirror Supabase mig 041).
+
+    L'utente esclude una job offer dalla pagina dettaglio scegliendo una causa
+    (5 default + 'Altro'). Effetto: status -> 'excluded' → la posizione esce da
+    next-for-recheck / next-for-categorize (che filtrano già lo stato), così gli
+    agenti NON ri-verificano la liveness: lo fa l'utente. Reversibile via
+    user_excluded_prev_status. Idempotente: guard PRAGMA table_info (limite SQLite:
+    no DEFAULT non-costante in ADD COLUMN, qui tutte NULL-able).
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('user_excluded_reason',      'TEXT'),
+        ('user_excluded_note',        'TEXT'),
+        ('user_excluded_at',          'TIMESTAMP'),
+        ('user_excluded_prev_status', 'TEXT'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_user_excluded "
+        "ON positions(user_excluded_at) WHERE user_excluded_at IS NOT NULL"
     )
 
 
