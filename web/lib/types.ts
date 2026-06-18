@@ -61,6 +61,17 @@ export interface Position {
   geocode_requested?: boolean
   geocode_requested_at?: string | null
   office_geocoded?: boolean
+  // Mig 041 (2026-06-17) — esclusione MANUALE utente. user_excluded_reason
+  // valorizzato = esclusa dall'utente (per distinguere dall'esclusione-agente
+  // che vive nelle notes EXCLUDED:[TAG]). prev_status per l'annullamento.
+  user_excluded_reason?: string | null
+  user_excluded_note?: string | null
+  user_excluded_at?: string | null
+  user_excluded_prev_status?: string | null
+  // Mig 042 (2026-06-18) — recheck/liveness ON-DEMAND (non più autonomo):
+  // l'utente lo richiede dalla pagina posizione, l'Analista serve la coda.
+  recheck_requested?: boolean
+  recheck_requested_at?: string | null
   // V9 (2026-06-13) — coordinate ufficio esposte al web (esistono in DB dalla
   // migration 017, prima non nel type). office_lat/lon alimentano JobsGlobe a
   // livello ufficio invece che città; office_address per la vignetta del pin.
@@ -95,6 +106,20 @@ export interface PositionHighlight {
 }
 
 // ── Company ────────────────────────────────────────────────────────
+// Ticket utente→team su una posizione (mig 043). L'utente scrive una richiesta
+// testuale; il Capitano l'assegna; l'agente risolve con response_text.
+export interface PositionTicket {
+  id: string
+  position_id: string
+  request_text: string
+  kind: string
+  status: 'open' | 'assigned' | 'resolved'
+  assigned_agent: string | null
+  response_text: string | null
+  created_at: string | null
+  resolved_at: string | null
+}
+
 export interface Company {
   id: string
   name: string

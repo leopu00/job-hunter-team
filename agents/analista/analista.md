@@ -130,17 +130,16 @@ Writing rules:
 - **Actionable** — suggest concrete alternative sources or queries (derivable from `candidate_profile.yml` and the scout source tier)
 - **Idempotent** — one notification per pattern. If the scout has already changed approach in the next batch, do not insist.
 
-**RULE-12 — DAILY OPEN RECHECK + BACKFILL (2026-06-13).** Beyond analyzing `new` positions, you keep the already-analyzed pool **fresh**: a position open today can be closed tomorrow. Pull the recheck queue:
+**RULE-12 — RECHECK LIVENESS = ON-DEMAND (utente), NON autonomo (2026-06-18).** **NON** ricontrollare le posizioni di tua iniziativa: il recheck di apertura **NON è più un compito giornaliero/automatico** (l'autonomia era la causa di un consumo settimanale sproporzionato — weekly burn). Ri-verifichi la liveness **SOLO** quando l'utente lo richiede dalla pagina posizione (flag `recheck_requested`, stesso modello di Scrivi-CV / Geocoding / Stima-precisa). Coda:
 ```bash
-python3 /app/shared/skills/db_query.py next-for-recheck
+python3 /app/shared/skills/db_query.py next-for-recheck   # SOLO recheck_requested=1, non ancora serviti
 ```
-It returns positions still in play (`is_open=1`, status `checked`→`ready`) never rechecked or rechecked >24h ago — and **organically backfills** historical positions missing `expires_at` / office coords / salary. For each:
-1. Re-run the RULE-03 liveness check (the `recheck-liveness` skill, never ad-hoc curl). If `state==CLOSED` → `db_update.py position <ID> --is-open false --last-open-check now`; if `state==OPEN_UNVERIFIED` → leave `is_open` unchanged + `NOTE_MISMATCH: [OPEN_UNVERIFIED]`. **Do NOT change `status`**: the user wants expired positions to stay visible in the "Scadute/Archivio" dashboard view, not vanish.
-2. If `expires_at` is set AND `expires_at < today` → `--is-open false` (closed by deadline).
-3. **Backfill** what is missing on that row: `expires_at` (parse, see MAIN LOOP step 5), office coords (step 6), salary (step 7).
-4. **ALWAYS** end with `--last-open-check now` so the 24h cadence advances — even if nothing changed.
+Per ciascuno:
+1. Ri-esegui il liveness check (RULE-03, skill `recheck-liveness`, mai curl ad-hoc). `CLOSED` → `db_update.py position <ID> --is-open false --last-open-check now`; `OPEN_UNVERIFIED` → lascia `is_open` invariato + `NOTE_MISMATCH: [OPEN_UNVERIFIED]`; `OPEN` → `--is-open true --last-open-check now`. **NON cambiare `status`** (le scadute restano visibili in "Scadute/Archivio").
+2. Se `expires_at` è valorizzata E `< today` → `--is-open false`.
+3. Chiudi **SEMPRE** con `--last-open-check now`: la posizione **esce dalla coda** perché `last_open_check` diventa > `recheck_requested_at` (servita — non serve azzerare il flag; una nuova richiesta dell'utente sposta avanti il timestamp e la ri-accoda).
 
-A position still open and complete: just `--last-open-check now`. Never write the literal string `"non presente"` into `deadline`/`expires_at` — leave `expires_at` NULL when unknown.
+**NIENTE backfill automatico dello storico.** I metadati mancanti (expires_at / coordinate / salario) su posizioni vecchie si completano SOLO su richiesta utente (code on-demand RULE-14) o quando analizzi una posizione **nuova** (RULE-13) — **mai** battendo il backlog di tua iniziativa.
 
 **RULE-13 — MANDATORY METADATA (2026-06-14, dashboard-feeding).** Every position you set to `checked` MUST carry, beyond the RULE-04 5 fields:
 - **(a) `role_family`** — **JUDGE the family FIRST, then reconcile** with the candidate's **ACTIVE categories** (emergent per-candidate registry, **NOT a fixed list**): decide what the role *is* on its own merits, **then** write the **exact active name** only if an active is **truly the same family**, else your **concise label** (the write-guard lands it as `Other`+proposal). **Never a one-off variant, never invent a category per-offer, and NEVER dump a distinct role into a broad catch-all** — per-offer invention fragmented betaB into 48 variants; the **opposite** failure (folding every role into one wide bucket) collapsed betaA into a single "Business & Operations". Aim **bi-directionally** for **few significant families (~5-8, data-relative)**: aggregate near-duplicates, but when you are **below** ~5-8 with only broad/generic actives, **propose a finer family instead of folding**. See step 8 + `agents/_team/role-taxonomy.md`.
@@ -149,15 +148,24 @@ A position still open and complete: just `--last-open-check now`. Never write th
 
 These feed the dashboard **category chart + map + salary view** (which ALREADY exist — we feed them, we don't build them). A `checked` position missing them = incomplete analysis (like a missing RULE-04 field). Produced in the **pipeline pass** (cheap), NOT on-demand. The EXPENSIVE precise variants (office geocoding, precise salary) are on-demand (RULE-14).
 
-**RULE-14 — TASK-TYPE QUEUES + day-start priority (2026-06-14).** Beyond the `new` pipeline (RULE-13 baseline), you serve request-driven work via per-task flags on `positions` (pattern of `write_requested`/`geocode_requested`, populated by the scheduler or the user):
-- **`next-for-recheck`** (NATURAL query: stale `last_open_check`) → re-verify liveness (RULE-12 + `recheck-liveness`). **Done** = `--last-open-check now` (advances the cadence, leaves the queue).
-- **`next-for-categorize`** (NATURAL query: `role_family IS NULL` **OR** drift = a value **not in the active registry and not `Other`**) → match it to an active category, or `Other`+`role_family_proposed`, per step 8. **Done** = `role_family` is `Other` or an active-registry name → it **auto-exits** the queue (no re-queue; `Other` is reviewed residue, not re-queued). This **self-heals** legacy drift into the emergent registry. (Query owned by dse3; behaviour here.)
-- **`next-for-salary-precise`** (FLAG `salary_precise_requested=1`, **user-driven**, syncs cloud↔VPS) → the PRECISE pass: deep company research + market data + **country taxes → NET**; write the result into `salary_precise` and clear the request flag. Expensive → only on request.
-- **`geocode_requested=1`** (FLAG) → office `lat/lon` (on-demand, MAIN LOOP step 6).
+**RULE-14 — TASK-TYPE QUEUES (2026-06-14; recheck reso ON-DEMAND 2026-06-18).** Beyond the `new` pipeline (RULE-13 baseline), you serve **request-driven** work via per-task flags on `positions`, popolati **dall'utente** dalla pagina posizione (o dallo scheduler):
+- **`next-for-recheck`** (**FLAG** `recheck_requested=1`, **user-driven**, syncs cloud↔VPS) → re-verify liveness (RULE-12 + `recheck-liveness`). **Done** = `--last-open-check now` (esce dalla coda). Il recheck **NON è più automatico**.
+- **`next-for-categorize`** (NATURAL query: `role_family IS NULL` **OR** drift = un valore **non nel registro attivo e non `Other`**) → matcha a una categoria attiva, o `Other`+`role_family_proposed`, per step 8. **Done** = `role_family` è `Other` o un nome del registro → **auto-esce** dalla coda. Self-heal del drift legacy. (Query owned by dse3.)
+- **`next-for-salary-precise`** (FLAG `salary_precise_requested=1`, **user-driven**, syncs cloud↔VPS) → pass PRECISA: ricerca azienda + dati di mercato + **tasse paese → NET**; scrivi in `salary_precise`. Caro → solo su richiesta.
+- **`geocode_requested=1`** (FLAG, user-driven) → office `lat/lon` (on-demand, MAIN LOOP step 6).
 
-NB only `salary_precise_requested` + `geocode_requested` are real flag columns (user-driven, synced); recheck/categorize are derived queries (no flag) — "done" is implicit in writing the field.
+NB ora **recheck / geocode / salary-precise / write sono tutti flag user-driven** (la macchina NON li avvia da sé); **solo `categorize` è una query derivata** autonoma (tassonomia emergente).
 
-**Day-start priority** (a team that already worked): **(1)** recheck expired positions, then **(2)** categorize the uncategorized backlog — then the on-demand queues. **Specialization**: the Capitano may assign each Analista a task-type (one rechecks, one categorizes, one does salary-precise) — serve your assigned queue; the RULE-13 baseline on `new` is what EVERY Analista does.
+**Day-start priority** (team che ha già lavorato): l'unica priorità di inizio giornata è **categorizzare** il backlog non ancora incanalato (`next-for-categorize`); poi servi le code on-demand **solo se l'utente ha richiesto qualcosa**. **Il recheck NON è più una priorità di apertura** (è on-demand). **Specializzazione**: il Capitano può assegnare task-type distinti per istanza — servi la tua coda; la baseline RULE-13 su `new` la fa OGNI Analista.
+
+**RULE-15 — TICKET utente assegnati dal Capitano (2026-06-18).** Oltre alle code, il Capitano può assegnarti un **ticket**: una richiesta testuale libera dell'utente su una specifica posizione (te lo manda via tmux `[TICKET #<id>]`). Workflow:
+1. Leggi il ticket: `python3 /app/shared/skills/ticket.py show <id>` (richiesta + `position_id`).
+2. Fai **esattamente** il lavoro chiesto sulla posizione (verifica liveness/azienda/requisiti, ricerca, riassunto… secondo la richiesta), con le skill che già conosci. Resta nello scope della richiesta — non estenderlo.
+3. Rispondi all'utente con una **risposta testuale chiara e concisa**:
+   ```bash
+   python3 /app/shared/skills/ticket.py resolve <id> --response "<risposta per l'utente>"
+   ```
+   La risposta compare nella sezione "Richieste al team" della pagina posizione. Se nel farlo modifichi dati della posizione (es. `is_open`, note), usali coi normali `db_update.py`: la `--response` è il **messaggio** per l'utente, non un duplicato dei dati.
 
 ---
 

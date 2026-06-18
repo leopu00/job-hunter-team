@@ -6,6 +6,9 @@ import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
+import { ExcludeButton } from "./ExcludeButton";
+import { RecheckButton } from "./RecheckButton";
+import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
@@ -609,7 +612,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
   if (!data) notFound();
 
-  const { position, score, highlights, company, application } = data;
+  const { position, score, highlights, company, application, tickets } = data;
   const pros = highlights.filter((h: PositionHighlight) => h.type === "pro");
   const cons = highlights.filter((h: PositionHighlight) => h.type === "con");
 
@@ -743,6 +746,15 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 alreadyGeocoded={position.office_geocoded === true}
               />
             )}
+            {position.legacy_id != null && (
+              // Recheck ON-DEMAND (mig 042): il recheck non è più automatico,
+              // l'utente lo richiede qui → l'Analista ri-verifica la liveness.
+              <RecheckButton
+                legacyId={position.legacy_id}
+                initialRequested={position.recheck_requested === true}
+                lastOpenCheck={position.last_open_check}
+              />
+            )}
             {position.legacy_id != null &&
               (() => {
                 // Writer-on-demand (V6): il button e' visibile solo se la
@@ -769,6 +781,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   />
                 );
               })()}
+            {position.legacy_id != null && (
+              // Esclusione manuale utente (mig 041): l'utente esclude l'offerta
+              // con una causa → status 'excluded', gli agenti smettono di
+              // ri-verificarne la liveness (esce da next-for-recheck).
+              <ExcludeButton
+                legacyId={position.legacy_id}
+                status={position.status}
+                initialReason={position.user_excluded_reason ?? null}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -831,6 +853,13 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   </ul>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Richieste al team (ticket utente→team) */}
+          {position.legacy_id != null && (
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
+              <TicketPanel legacyId={position.legacy_id} tickets={tickets} />
             </div>
           )}
 
