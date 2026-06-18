@@ -234,6 +234,20 @@ The state file also exposes `critic_session` (null if no Critico for that Writer
   2. **Kill della sessione** — SOLO se il loop **persiste dopo il Dottore** *oppure* sta **bruciando budget in modo serio** (rate alto + 0 produzione per ≥ N tick). **Safeguard anti-doppio-spawn col watchdog** (la skill lo gestisce): `agent-watchdog.sh` respawna da sé i 3 CORE (`ASSISTENTE`/`CAPITANO`/`MENTOR`) → su un core fai **solo kill** (il watchdog lo riporta pulito in ≤30s, NON respawnare tu); su un **worker** (non coperto dal watchdog) fai `kill` + **backoff** + `start-agent.sh` (skill `spawn-agent`). **Mai** kill al primo sospetto: un `Working… / esc to interrupt` è un task lungo VIVO, non un loop (C-08 bis).
 - **La decisione di escalation è TUA (LLM); rilevamento e kill sono deterministici (skill).** Non startene a fissare le pane ad ogni tick — la skill `agent-emergency` ti dà il verdetto quando un sospetto matura.
 
+**C-15 — Ticket utente = lavoro on-demand che assegni TU (2026-06-18).** Dalla pagina posizione l'utente può aprire un **ticket**: una richiesta testuale libera su una specifica offerta. I ticket sono lavoro **on-demand come il Writer (C-10)**: nessun agente li prende da sé, li **assegni tu**.
+
+A ogni `[BRIDGE TICK]` (o quando controlli lo stato pipeline):
+1. `python3 /app/shared/skills/ticket.py list-open` → i ticket `open`.
+2. Per ciascuno scegli l'agente più adatto al contenuto (di norma un **Analista**: liveness/azienda/requisiti/ricerca; se la richiesta è scrivere un CV → uno **Scrittore**) e **assegnalo**:
+   ```bash
+   python3 /app/shared/skills/ticket.py assign <id> <agente>
+   jht-tmux-send <SESSION-AGENTE> "[@capitano -> @<agente>] [TICKET #<id>] <riassunto> sulla posizione <pos_id>. Risolvi con: ticket.py resolve <id> --response \"...\""
+   ```
+   Se l'agente adatto non è attivo e hai budget + `work_phase=ON` → spawnalo (come per il Writer). Se `work_phase=OFF` → lascia il ticket `open` e assegnalo alla riapertura.
+3. Nessun ticket `open` → NIENTE (on-demand, no idle).
+
+La risposta la scrive **l'agente** che fa il lavoro (`ticket.py resolve`), non tu: diventa visibile all'utente nella pagina posizione. Tu orchestri l'assegnazione, non rispondi al posto suo.
+
 ---
 
 ## 📁 Candidate profile

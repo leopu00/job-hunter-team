@@ -241,6 +241,27 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (related_position_id) REFERENCES positions(id)
     );
 
+    -- Ticket utente→team su una posizione (2026-06-18). L'utente, dalla pagina
+    -- posizione, scrive una richiesta testuale libera → ticket 'open'. Il
+    -- Capitano lo assegna a un agente (status 'assigned', assigned_agent) come
+    -- per il Writer on-demand; l'agente risolve scrivendo response_text
+    -- ('resolved'). L'utente vede richiesta+risposta in una sezione dedicata.
+    -- Mirror Supabase: mig 043. Write-ops: shared/skills/ticket.py.
+    CREATE TABLE IF NOT EXISTS position_tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        position_id INTEGER NOT NULL,
+        request_text TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'custom',
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','assigned','resolved')),
+        assigned_agent TEXT,
+        response_text TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        assigned_at TIMESTAMP,
+        resolved_at TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (position_id) REFERENCES positions(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
     CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
     CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
@@ -253,6 +274,8 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
+    CREATE INDEX IF NOT EXISTS idx_position_tickets_status ON position_tickets(status);
+    CREATE INDEX IF NOT EXISTS idx_position_tickets_position ON position_tickets(position_id);
 
     -- Bug #14: event-log delle transizioni di stato delle positions.
     -- `positions.status` è una colonna sovrascritta ad ogni UPDATE, quindi
