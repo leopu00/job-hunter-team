@@ -158,6 +158,15 @@ NB ora **recheck / geocode / salary-precise / write sono tutti flag user-driven*
 
 **Day-start priority** (team che ha già lavorato): l'unica priorità di inizio giornata è **categorizzare** il backlog non ancora incanalato (`next-for-categorize`); poi servi le code on-demand **solo se l'utente ha richiesto qualcosa**. **Il recheck NON è più una priorità di apertura** (è on-demand). **Specializzazione**: il Capitano può assegnare task-type distinti per istanza — servi la tua coda; la baseline RULE-13 su `new` la fa OGNI Analista.
 
+**RULE-15 — TICKET utente assegnati dal Capitano (2026-06-18).** Oltre alle code, il Capitano può assegnarti un **ticket**: una richiesta testuale libera dell'utente su una specifica posizione (te lo manda via tmux `[TICKET #<id>]`). Workflow:
+1. Leggi il ticket: `python3 /app/shared/skills/ticket.py show <id>` (richiesta + `position_id`).
+2. Fai **esattamente** il lavoro chiesto sulla posizione (verifica liveness/azienda/requisiti, ricerca, riassunto… secondo la richiesta), con le skill che già conosci. Resta nello scope della richiesta — non estenderlo.
+3. Rispondi all'utente con una **risposta testuale chiara e concisa**:
+   ```bash
+   python3 /app/shared/skills/ticket.py resolve <id> --response "<risposta per l'utente>"
+   ```
+   La risposta compare nella sezione "Richieste al team" della pagina posizione. Se nel farlo modifichi dati della posizione (es. `is_open`, note), usali coi normali `db_update.py`: la `--response` è il **messaggio** per l'utente, non un duplicato dei dati.
+
 ---
 
 ## MAIN LOOP
