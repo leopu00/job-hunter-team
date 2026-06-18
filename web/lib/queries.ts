@@ -14,6 +14,7 @@ import type {
   ApplicationWithPosition,
   Application,
   PendingMessage,
+  PositionTicket,
 } from '@/lib/types'
 
 // Source of truth = origine della request:
@@ -469,7 +470,7 @@ export async function getPositions(opts?: PositionFilterOpts): Promise<PositionW
 
 // ── Single position with all details ───────────────────────────────
 export async function getPositionById(id: string): Promise<{
-  position: Position; score: Score | null; highlights: PositionHighlight[]; company: Company | null; application: Application | null
+  position: Position; score: Score | null; highlights: PositionHighlight[]; company: Company | null; application: Application | null; tickets: PositionTicket[]
 } | null> {
   const w = await ws()
   if (w) { try { return local.getPositionByIdLocal(w, id) } catch { return null } }
@@ -489,7 +490,22 @@ export async function getPositionById(id: string): Promise<{
     const { data: compData } = await supabase.from('companies').select('*').eq('id', position.company_id).maybeSingle()
     company = compData ?? null
   }
-  return { position, score: scoreRes.data ?? null, highlights: (hlRes.data ?? []) as PositionHighlight[], company, application: appRes.data ?? null }
+  let tickets: PositionTicket[] = []
+  if (position.legacy_id != null) {
+    const { data: tkData } = await supabase
+      .from('position_tickets')
+      .select('*')
+      .eq('position_legacy_id', position.legacy_id)
+      .order('created_at', { ascending: true })
+    tickets = (tkData ?? []).map((t: any) => ({
+      id: String(t.id), position_id: String(position.id),
+      request_text: t.request_text, kind: t.kind ?? 'custom',
+      status: t.status, assigned_agent: t.assigned_agent ?? null,
+      response_text: t.response_text ?? null,
+      created_at: t.created_at ?? null, resolved_at: t.resolved_at ?? null,
+    }))
+  }
+  return { position, score: scoreRes.data ?? null, highlights: (hlRes.data ?? []) as PositionHighlight[], company, application: appRes.data ?? null, tickets }
 }
 
 // ── Applications with position info ────────────────────────────────

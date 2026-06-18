@@ -69,6 +69,9 @@ interface PositionIn {
   // precision. Mig Supabase 027. Stesso pattern di write_requested.
   geocode_requested?: number | boolean | null;
   geocode_requested_at?: string | null;
+  // Recheck on-demand (mig 042). Flag user-driven, default FALSE.
+  recheck_requested?: number | boolean | null;
+  recheck_requested_at?: string | null;
   // Salary-precise on-demand (V9, mig 040): flag user-driven (0|1→bool) +
   // timestamp + risultato testuale. Cross-device (push qui + pull-desired-state).
   salary_precise_requested?: number | boolean | null;
@@ -419,6 +422,14 @@ export async function POST(req: NextRequest) {
               ? p.geocode_requested
               : p.geocode_requested === 1,
         geocode_requested_at: p.geocode_requested_at ?? null,
+        // Recheck on-demand (mig 042). Flag user-driven default FALSE.
+        recheck_requested:
+          p.recheck_requested == null
+            ? false
+            : typeof p.recheck_requested === "boolean"
+              ? p.recheck_requested
+              : p.recheck_requested === 1,
+        recheck_requested_at: p.recheck_requested_at ?? null,
         // Salary-precise on-demand (V9, mig 040). Flag user-driven default FALSE.
         salary_precise_requested:
           p.salary_precise_requested == null
