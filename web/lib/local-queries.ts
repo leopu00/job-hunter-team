@@ -10,6 +10,7 @@ import type {
   ApplicationWithPosition,
   Application,
   PendingMessage,
+  PositionTicket,
 } from './types'
 
 // Helpers per convertire ID integer -> string (compatibilita' con tipi TS)
@@ -317,7 +318,7 @@ export function getPositionsLocal(ws: string, opts?: LocalPositionFilterOpts): P
 // ── Single position with all details ───────────────────────────────
 export function getPositionByIdLocal(ws: string, id: string): {
   position: Position; score: Score | null; highlights: PositionHighlight[]
-  company: Company | null; application: Application | null
+  company: Company | null; application: Application | null; tickets: PositionTicket[]
 } | null {
   const db = getDb(ws)
   const numId = Number(id)
@@ -328,6 +329,14 @@ export function getPositionByIdLocal(ws: string, id: string): {
   const score = db.prepare('SELECT * FROM scores WHERE position_id = ?').get(numId) as any
   const highlights = db.prepare('SELECT * FROM position_highlights WHERE position_id = ? ORDER BY type').all(numId) as any[]
   const app = db.prepare('SELECT * FROM applications WHERE position_id = ?').get(numId) as any
+
+  // Ticket utente→team (tabella position_tickets). Guard: workspace seedati prima
+  // della mig potrebbero non averla → degrada a nessun ticket.
+  let tickets: PositionTicket[] = []
+  try {
+    const tk = db.prepare('SELECT * FROM position_tickets WHERE position_id = ? ORDER BY created_at ASC').all(numId) as any[]
+    tickets = tk.map(mapTicket)
+  } catch { /* tabella assente: nessun ticket */ }
 
   let company: Company | null = null
   if (pos.company_id) {
@@ -341,6 +350,17 @@ export function getPositionByIdLocal(ws: string, id: string): {
     highlights: highlights.map(h => ({ id: sid(h.id), position_id: sid(h.position_id), type: h.type, text: h.text })),
     company,
     application: app ? mapApplication(app) : null,
+    tickets,
+  }
+}
+
+function mapTicket(r: any): PositionTicket {
+  return {
+    id: sid(r.id), position_id: sid(r.position_id),
+    request_text: r.request_text, kind: r.kind ?? 'custom',
+    status: r.status, assigned_agent: r.assigned_agent ?? null,
+    response_text: r.response_text ?? null,
+    created_at: r.created_at ?? null, resolved_at: r.resolved_at ?? null,
   }
 }
 

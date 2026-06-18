@@ -8,6 +8,7 @@ import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
 import { ExcludeButton } from "./ExcludeButton";
 import { RecheckButton } from "./RecheckButton";
+import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
@@ -611,7 +612,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
 
   if (!data) notFound();
 
-  const { position, score, highlights, company, application } = data;
+  const { position, score, highlights, company, application, tickets } = data;
   const pros = highlights.filter((h: PositionHighlight) => h.type === "pro");
   const cons = highlights.filter((h: PositionHighlight) => h.type === "con");
 
@@ -852,6 +853,13 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   </ul>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Richieste al team (ticket utente→team) */}
+          {position.legacy_id != null && (
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
+              <TicketPanel legacyId={position.legacy_id} tickets={tickets} />
             </div>
           )}
 

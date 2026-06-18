@@ -106,6 +106,20 @@ export interface PositionHighlight {
 }
 
 // ── Company ────────────────────────────────────────────────────────
+// Ticket utente→team su una posizione (mig 043). L'utente scrive una richiesta
+// testuale; il Capitano l'assegna; l'agente risolve con response_text.
+export interface PositionTicket {
+  id: string
+  position_id: string
+  request_text: string
+  kind: string
+  status: 'open' | 'assigned' | 'resolved'
+  assigned_agent: string | null
+  response_text: string | null
+  created_at: string | null
+  resolved_at: string | null
+}
+
 export interface Company {
   id: string
   name: string
