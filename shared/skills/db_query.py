@@ -428,23 +428,22 @@ def next_for_role(role):
         label = "Posizioni con geocoding richiesto dall'utente (non ancora geocodate)"
 
     elif role == 'recheck':
-        # RULE-12 (espansione Analista 2026-06-13): richeck giornaliero apertura.
-        # Posizioni ancora in gioco (is_open=1, gia' analizzate) da ri-verificare:
-        # mai controllate (last_open_check NULL → include il BACKFILL delle storiche
-        # con expires_at/office/salary NULL) oppure controllate >24h fa.
-        # Priorita': mai-controllate prima, poi scadenza nota piu' vicina.
+        # RECHECK ON-DEMAND (2026-06-18): NON più autonomo. L'Analista ri-verifica
+        # la liveness SOLO se l'utente l'ha richiesto dalla pagina posizione
+        # (recheck_requested=1, stesso pattern di write/geocode/salary-precise).
+        # NIENTE query "naturale" su last_open_check stale (era la causa del weekly
+        # burn) e NIENTE backfill automatico dello storico. "Servito" =
+        # last_open_check aggiornato DOPO recheck_requested_at → esce dalla coda
+        # senza azzerare il flag (una nuova richiesta sposta avanti il timestamp).
         rows = conn.execute("""
             SELECT p.id, p.title, p.company, p.expires_at, p.last_open_check
             FROM positions p
-            WHERE p.is_open = 1
-              AND p.status IN ('checked','scored','writing','review','ready')
+            WHERE p.recheck_requested = 1
               AND (p.last_open_check IS NULL
-                   OR p.last_open_check < datetime('now','localtime','-24 hours'))
-            ORDER BY (p.last_open_check IS NULL) DESC,
-                     (p.expires_at IS NULL), p.expires_at ASC,
-                     p.last_open_check ASC
+                   OR p.last_open_check < p.recheck_requested_at)
+            ORDER BY p.recheck_requested_at ASC
         """).fetchall()
-        label = "Posizioni da ri-verificare (richeck giornaliero apertura + backfill)"
+        label = "Posizioni con richeck richiesto dall'utente (liveness on-demand)"
 
     elif role == 'categorize':
         # Tassonomia EMERGENTE + SELF-HEALING (2026-06-15, GO utente): coda di
