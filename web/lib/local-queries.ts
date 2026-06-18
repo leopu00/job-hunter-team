@@ -1253,6 +1253,9 @@ function mapPositionFull(r: any): Position {
     user_excluded_note: r.user_excluded_note ?? null,
     user_excluded_at: r.user_excluded_at ?? null,
     user_excluded_prev_status: r.user_excluded_prev_status ?? null,
+    recheck_requested: r.recheck_requested === 1 || r.recheck_requested === true,
+    recheck_requested_at: r.recheck_requested_at ?? null,
+    last_open_check: r.last_open_check ?? null,
   }
 }
 

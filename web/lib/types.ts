@@ -68,6 +68,10 @@ export interface Position {
   user_excluded_note?: string | null
   user_excluded_at?: string | null
   user_excluded_prev_status?: string | null
+  // Mig 042 (2026-06-18) — recheck/liveness ON-DEMAND (non più autonomo):
+  // l'utente lo richiede dalla pagina posizione, l'Analista serve la coda.
+  recheck_requested?: boolean
+  recheck_requested_at?: string | null
   // V9 (2026-06-13) — coordinate ufficio esposte al web (esistono in DB dalla
   // migration 017, prima non nel type). office_lat/lon alimentano JobsGlobe a
   // livello ufficio invece che città; office_address per la vignetta del pin.

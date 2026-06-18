@@ -7,6 +7,7 @@ import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
 import { ExcludeButton } from "./ExcludeButton";
+import { RecheckButton } from "./RecheckButton";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
 
 /* ── i18n inline ─────────────────────────────────────────────────── */
@@ -742,6 +743,15 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 legacyId={position.legacy_id}
                 initialRequested={position.geocode_requested === true}
                 alreadyGeocoded={position.office_geocoded === true}
+              />
+            )}
+            {position.legacy_id != null && (
+              // Recheck ON-DEMAND (mig 042): il recheck non è più automatico,
+              // l'utente lo richiede qui → l'Analista ri-verifica la liveness.
+              <RecheckButton
+                legacyId={position.legacy_id}
+                initialRequested={position.recheck_requested === true}
+                lastOpenCheck={position.last_open_check}
               />
             )}
             {position.legacy_id != null &&
