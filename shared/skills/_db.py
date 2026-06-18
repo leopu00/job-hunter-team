@@ -79,6 +79,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_salary_precise(conn)
     _migrate_positions_role_family_proposed(conn)
     _migrate_positions_user_excluded(conn)
+    _migrate_positions_recheck_requested(conn)
     _migrate_role_family_registry(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
@@ -927,6 +928,30 @@ def _migrate_positions_user_excluded(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_user_excluded "
         "ON positions(user_excluded_at) WHERE user_excluded_at IS NOT NULL"
+    )
+
+
+def _migrate_positions_recheck_requested(conn: sqlite3.Connection) -> None:
+    """Aggiunge `recheck_requested` + `recheck_requested_at` (mirror Supabase mig 042).
+
+    Recheck/liveness ON-DEMAND: il recheck NON è più autonomo (era RULE-12, causa
+    del weekly burn). L'utente lo richiede dalla pagina posizione → flag a 1 →
+    l'Analista serve next-for-recheck (flag-driven). "Servito" = last_open_check
+    aggiornato dopo recheck_requested_at (la posizione esce senza azzerare il
+    flag). Idempotente: guard PRAGMA table_info.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('recheck_requested',    'INTEGER DEFAULT 0'),
+        ('recheck_requested_at', 'TIMESTAMP'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_recheck_requested "
+        "ON positions(recheck_requested) WHERE recheck_requested = 1"
     )
 
 

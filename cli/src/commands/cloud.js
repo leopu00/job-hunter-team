@@ -799,6 +799,9 @@ async function handlePush(options) {
         // l'utente seleziona via UI quali posizioni geocodare con
         // precisione ufficio; il flag viaggia a cloud per UI cross-device.
         'geocode_requested', 'geocode_requested_at',
+        // Recheck on-demand (mig 042): liveness su richiesta utente (il recheck
+        // non è più autonomo); il flag viaggia a cloud per UI cross-device.
+        'recheck_requested', 'recheck_requested_at',
         // Salary-precise on-demand (V9/mig040, dse3): flag user-driven
         // (cross-device: push qui + pull desired-state) + risultato testuale.
         'salary_precise_requested', 'salary_precise_requested_at', 'salary_precise',
@@ -1323,6 +1326,8 @@ async function handlePullDesiredState(options = {}) {
              write_requested_at = ?,
              geocode_requested = ?,
              geocode_requested_at = ?,
+             recheck_requested = ?,
+             recheck_requested_at = ?,
              salary_precise_requested = ?,
              salary_precise_requested_at = ?
        WHERE id = ?
@@ -1337,9 +1342,11 @@ async function handlePullDesiredState(options = {}) {
       const writeAt = p.write_requested_at || null;
       const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
       const geoAt = p.geocode_requested_at || null;
+      const rcFlag = p.recheck_requested === true || p.recheck_requested === 1 ? 1 : 0;
+      const rcAt = p.recheck_requested_at || null;
       const spFlag = p.salary_precise_requested === true || p.salary_precise_requested === 1 ? 1 : 0;
       const spAt = p.salary_precise_requested_at || null;
-      stmt.run(writeFlag, writeAt, geoFlag, geoAt, spFlag, spAt, legacyId);
+      stmt.run(writeFlag, writeAt, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
       updated++;
     }
     db.close();
