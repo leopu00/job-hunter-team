@@ -66,19 +66,69 @@ export const ChannelsSchema = z.object({
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
-export const WorkingHoursWindowSchema = z.object({
-  days: z.array(z.enum(WEEKDAYS)).min(1, "almeno un giorno"),
-  start: z.string().regex(HHMM_RE, "formato HH:MM (24h)"),
-  end: z.string().regex(HHMM_RE, "formato HH:MM (24h)"),
-});
+// Ore minime per blocco di lavoro giornaliero (decisione utente 2026-06-19):
+// gli orari devono essere CONTIGUI (un solo blocco per giorno) e durare
+// almeno MIN_WINDOW_HOURS. Default proposto dalla UI/wizard = 9h (09:00-18:00).
+export const MIN_WINDOW_HOURS = 4;
 
-export const WorkingHoursSchema = z.object({
-  // IANA tz name (es. "Europe/Rome"). Default UTC perche' funziona sempre,
-  // anche se la UI di onboarding dovrebbe proporre la tz locale dell'utente.
-  timezone: z.string().min(1).default("UTC"),
-  // Array vuoto = 24/7. Wrap-around mezzanotte supportato (start > end).
-  windows: z.array(WorkingHoursWindowSchema).default([]),
-});
+// Durata in ore di una finestra HH:MM→HH:MM. Se end <= start la finestra
+// attraversa la mezzanotte (es. 22:00→07:00 = 9h) → aggiungiamo 24h. I refine
+// girano solo dopo che il regex HH:MM ha validato start/end, quindi qui i
+// valori sono sempre ben formati.
+export function windowDurationHours(start: string, end: string): number {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  let d = eh + em / 60 - (sh + sm / 60);
+  if (d <= 0) d += 24; // wrap mezzanotte
+  return d;
+}
+
+export const WorkingHoursWindowSchema = z
+  .object({
+    days: z.array(z.enum(WEEKDAYS)).min(1, "almeno un giorno"),
+    start: z.string().regex(HHMM_RE, "formato HH:MM (24h)"),
+    end: z.string().regex(HHMM_RE, "formato HH:MM (24h)"),
+  })
+  // inizio = fine sarebbe ambiguo (0h o 24h): vietato.
+  .refine((w) => w.start !== w.end, {
+    message: "inizio e fine non possono coincidere",
+    path: ["end"],
+  })
+  // min 4h per blocco (wrap mezzanotte incluso).
+  .refine((w) => windowDurationHours(w.start, w.end) >= MIN_WINDOW_HOURS, {
+    message: `ogni blocco di lavoro deve durare almeno ${MIN_WINDOW_HOURS} ore`,
+    path: ["end"],
+  });
+
+export const WorkingHoursSchema = z
+  .object({
+    // IANA tz name (es. "Europe/Rome"). Default UTC perche' funziona sempre,
+    // anche se la UI di onboarding dovrebbe proporre la tz locale dell'utente.
+    timezone: z.string().min(1).default("UTC"),
+    // Array vuoto = 24/7. Wrap-around mezzanotte supportato (start > end).
+    // Ogni finestra e' UN blocco contiguo; il refine sotto garantisce che ogni
+    // giorno compaia in AL PIU' una finestra → un solo blocco contiguo/giorno.
+    windows: z.array(WorkingHoursWindowSchema).default([]),
+  })
+  // Contiguita': nessun giorno puo' apparire in piu' finestre (= niente blocchi
+  // sparsi sullo stesso giorno, es. 1h pomeriggio + 2h sera).
+  .refine(
+    (wh) => {
+      const seen = new Set<string>();
+      for (const w of wh.windows ?? []) {
+        for (const d of w.days ?? []) {
+          if (seen.has(d)) return false;
+          seen.add(d);
+        }
+      }
+      return true;
+    },
+    {
+      message:
+        "ogni giorno puo' avere UN solo blocco di lavoro contiguo (niente finestre multiple sullo stesso giorno)",
+      path: ["windows"],
+    },
+  );
 
 export const TeamSettingsSchema = z.object({
   working_hours: WorkingHoursSchema.optional(),

@@ -30,6 +30,8 @@ export {
   ChannelsSchema,
   WorkingHoursWindowSchema,
   WorkingHoursSchema,
+  windowDurationHours,
+  MIN_WINDOW_HOURS,
   TeamSettingsSchema,
   SubscriptionSchema,
   validateConfig,
