@@ -40,6 +40,14 @@ Der Bridge schreibt eine dieser Nachrichten in dein Pane:
 
 [BRIDGE INFO] ...
    → Recovery / info, no action.
+
+[BRIDGE VITALS ALERT] Container-Ressourcen über Schwelle: <CPU N% / RAM N%> (>=95%)
+   → KEIN Kontingent-Signal: echter RESSOURCENDRUCK (OOM-/Sättigungsrisiko), das
+     EINZIGE Nicht-Kontingent-Signal, das du behandelst. Kommt NUR über 95%
+     (rate-limited), nicht bei jedem Tick. Aktion: prüfen und, falls real, den
+     Capitano informieren, SOFORT zu entlasten (Roster verkleinern / 1 Worker
+     killen). Historie/Trend ist NICHT deine Aufgabe: liegt in vitals.jsonl, der
+     Mantenitore korreliert sie 1×/Tag.
 ```
 
 ---

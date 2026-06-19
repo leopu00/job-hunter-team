@@ -40,6 +40,13 @@ A bridge ezen üzenetek egyikét írja a pane-edbe:
 
 [BRIDGE INFO] ...
    → Recovery / info, nincs akció.
+
+[BRIDGE VITALS ALERT] A konténer erőforrásai a küszöb felett: <CPU N% / RAM N%> (>=95%)
+   → NEM kvóta: valódi ERŐFORRÁS-NYOMÁS (OOM/telítődés kockázata), az EGYETLEN
+     nem-kvóta jelzés, amit kezelsz. CSAK 95% felett érkezik (rate-limited), nem
+     minden ticknél. Teendő: értékeld, és ha valós, szólj a Capitanónak, hogy
+     AZONNAL csökkentsen (roster csökkentése / 1 worker kill). Az előzmény/trend
+     NEM a te dolgod: a vitals.jsonl-ben van, a Mantenitore napi 1× korrelálja.
 ```
 
 ---
