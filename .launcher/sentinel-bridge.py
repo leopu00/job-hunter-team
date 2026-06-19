@@ -52,6 +52,19 @@ JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
 CONFIG_PATH = JHT_HOME / "jht.config.json"
 LOGS_DIR = JHT_HOME / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── Vitals RAM/CPU (2026-06-18) ─────────────────────────────────────────
+# Il bridge campiona i vitals di sistema a OGNI tick su un FILE DEDICATO
+# (vitals.jsonl), NON nel tick della Sentinella: la Sentinella NON è avvisata
+# del consumo PC nel suo flusso decisionale di quota. Sveglia la Sentinella SOLO
+# se RAM o CPU superano la soglia (emergenza risorse, non quota), rate-limited.
+# Il Mantenitore legge vitals.jsonl 1×/giorno e mette i picchi in croce con la
+# diagnosi infra. Logica di lettura in shared/skills/host_vitals.py.
+VITALS_SKILL = str(Path(__file__).resolve().parent.parent / "shared" / "skills" / "host_vitals.py")
+VITALS_FILE = LOGS_DIR / "vitals.jsonl"
+VITALS_ALERT_PCT = 95.0
+VITALS_ALERT_COOLDOWN_MIN = 30.0
+_LAST_VITALS_ALERT_AT = 0.0
 DATA_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 LOG_TXT = LOGS_DIR / "sentinel-log.txt"
 PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
@@ -414,6 +427,44 @@ def session_exists(s):
 
 def jht_tmux_send(session, text):
     return subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode == 0
+
+
+def _sample_vitals_and_maybe_alert():
+    """Campiona RAM/CPU → vitals.jsonl (file dedicato, NON il tick Sentinella).
+
+    Sveglia la Sentinella SOLO se RAM o CPU >= VITALS_ALERT_PCT (pressione risorse
+    REALE, distinta dalla quota token), con cooldown anti-spam. Isolato: qualsiasi
+    errore qui NON tocca il tick di quota. Il Mantenitore correla vitals.jsonl 1×/dì.
+    """
+    global _LAST_VITALS_ALERT_AT
+    try:
+        r = subprocess.run([sys.executable, VITALS_SKILL, "sample"],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0 or not r.stdout.strip():
+            return
+        v = json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception:
+        return
+    cpu = (v.get("cpu") or {}).get("pct")
+    mem = (v.get("mem") or {}).get("pct")
+    over = []
+    if isinstance(cpu, (int, float)) and cpu >= VITALS_ALERT_PCT:
+        over.append(f"CPU {cpu}%")
+    if isinstance(mem, (int, float)) and mem >= VITALS_ALERT_PCT:
+        over.append(f"RAM {mem}%")
+    if not over:
+        return
+    now = time.time()
+    if now - _LAST_VITALS_ALERT_AT < VITALS_ALERT_COOLDOWN_MIN * 60:
+        return
+    _LAST_VITALS_ALERT_AT = now
+    jht_tmux_send(
+        SENTINELLA_SESSION,
+        f"[BRIDGE VITALS ALERT] Risorse container sopra soglia: {', '.join(over)} "
+        f"(>={VITALS_ALERT_PCT:.0f}%). Pressione risorse REALE (rischio OOM/saturazione), "
+        f"distinta dalla quota token. Valuta escalation al Capitano: ridurre roster / "
+        f"kill 1 worker. Storico per la diagnosi: {VITALS_FILE} (Mantenitore 1×/giorno).",
+    )
 
 
 # ── Codex: lettura rollout JSONL ────────────────────────────────────────
@@ -1215,6 +1266,12 @@ def main():
             entry["source"] = "bridge"
             write_jsonl(entry)
             write_log(entry)
+
+            # Vitals RAM/CPU (2026-06-18): campiona a OGNI tick su vitals.jsonl
+            # (file dedicato — NON nel tick Sentinella, che resta sul flusso quota).
+            # Sveglia la Sentinella SOLO se RAM/CPU >95% (rate-limited). FUORI dal
+            # gate orario sotto: una pressione risorse è emergenza infra, non quota.
+            _sample_vitals_and_maybe_alert()
 
             usage = entry.get("usage")
             proj = entry.get("projection")

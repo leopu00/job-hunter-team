@@ -64,6 +64,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential pkg-config \
       libsqlite3-0 \
       tini \
+      # procps = ps/free/top/vmstat. Senza, `free(1)` manca: il Mantenitore lo
+      # reinstallava a OGNI sweep e host_vitals.py perdeva il fallback RAM da
+      # /proc. Baked qui = niente reinstall quotidiana.
+      procps \
       # Toolbox "agent-friendly": gli agenti Codex/Kimi/Claude vedono
       # spesso PDF (CV, lettere), pagine web, JSON complessi. Senza questi
       # tool scrivevano parser PDF in Python puro impiegando minuti invece

@@ -1,7 +1,7 @@
 ---
 name: maintainer-sweep
 description: "Lo sweep di manutenzione INFRA del Mantenitore 🦺 (gemello del Dottore, scope infrastruttura non agenti). Una passata giornaliera one-shot: smoke-test dei tool mission-critical (browser/LinkedIn) via tool_health.py, audit/consolidamento deps fuori standard, GC di script e tmp orfani, de-dup di script ricorrenti, freschezza deps, trend disco/RAM. Single-writer: il Mantenitore è l'UNICO che ripara l'infra; le azioni DISTRUTTIVE (delete/archive) le PROPONE, il Capitano decide. Esito in append su mantenitore-logbook.jsonl."
-allowed-tools: Bash(python3 /app/shared/skills/tool_health.py *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
+allowed-tools: Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
 ---
 
 # maintainer-sweep — tenere sana l'INFRA, in silenzio e a-prova-di-regressione
@@ -36,8 +36,13 @@ Script quasi-identici ripetuti da più agenti → **proponi** una skill canonica
 ### 5. 📅 Freschezza deps
 Librerie/strumenti deprecati o versioni rotte / tool cruciali irraggiungibili → segnala al Capitano (no auto-upgrade rischioso).
 
-### 6. 💾 Disco / RAM + trend
-`df`, `du` sui path grossi, `free`. Confronta col **trend dell'ultimo logbook**: se cresce verso una soglia → discuti col Capitano cosa archiviare/cancellare (lui decide). Log i numeri + il delta.
+### 6. 💾 Disco / RAM + trend + VITALS in croce
+`df`, `du` sui path grossi, `free` (snapshot istantaneo). Confronta col **trend dell'ultimo logbook**: se cresce verso una soglia → discuti col Capitano cosa archiviare/cancellare (lui decide). Log i numeri + il delta.
+**Poi METTI IN CROCE il time-series dei vitals** (il bridge campiona RAM+CPU del container ogni pochi minuti su `vitals.jsonl`):
+```bash
+python3 /app/shared/skills/host_vitals.py summary --hours 24
+```
+Ti dà **picco/media RAM+CPU + l'ORA del picco** delle ultime 24h. **Correla i picchi col *quando*** (es. RAM 92% alle 03:00 con 3 analisti attivi; CPU al massimo durante uno script pesante): è il dato che affina la diagnosi più del solo snapshot istantaneo. Se un picco è anomalo → segnalalo al Capitano. Log `vitals_24h` (picco RAM/CPU + ora) nell'entry. NB la Sentinella riceve l'allarme SOLO se RAM/CPU >95% live; la lettura storica e la correlazione sono **compito TUO**.
 
 ## Logbook (append-only)
 Ogni sweep scrive UNA entry densa in `/jht_home/logs/mantenitore-logbook.jsonl` (gemello del logbook Dottore), così il prossimo Mantenitore vede il trend:
