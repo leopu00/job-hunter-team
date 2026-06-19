@@ -39,6 +39,13 @@ The bridge writes one of these messages to your pane:
 
 [BRIDGE INFO] ...
    → Recovery / info, no action.
+
+[BRIDGE VITALS ALERT] Risorse container sopra soglia: <CPU N% / RAM N%> (>=95%)
+   → NON è quota: è PRESSIONE RISORSE reale del container (rischio OOM/saturazione),
+     l'UNICO segnale non-quota che gestisci. Arriva SOLO oltre il 95% (rate-limited),
+     non a ogni tick. Azione: valuta e, se reale, notifica il Capitano di alleggerire
+     SUBITO (ridurre roster / kill 1 worker) per scaricare la pressione. Lo storico/
+     trend NON è compito tuo: è in vitals.jsonl e lo correla il Mantenitore 1×/giorno.
 ```
 
 ---
