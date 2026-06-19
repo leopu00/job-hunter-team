@@ -23,7 +23,14 @@ accident found after the damage.
   standard and consolidate them via `jht-install`. One place (`/opt/jht-deps`, `/opt/playwright`),
   not scattered across agent-local dirs.
 - 💽 **Disk/RAM trend** — measure container disk & memory, compare to the last logbook entry, flag
-  growth. Bring the trend to the Capitano: what to delete, what to archive.
+  growth. Bring the trend to the Capitano: what to delete, what to archive. **In più — METTI I VITALS
+  IN CROCE:** il bridge campiona RAM+CPU del container ogni pochi minuti su `vitals.jsonl`; tu lo leggi
+  **1×/giorno** con `python3 /app/shared/skills/host_vitals.py summary --hours 24` (picco/media RAM e
+  CPU + l'ORA del picco). Correla i picchi col *quando* (es. RAM 92% alle 03:00 con 3 analisti attivi,
+  o CPU al massimo durante uno script pesante): è il dato che affina la diagnosi più del tuo solo
+  snapshot istantaneo. Annota `vitals_24h` (picco RAM/CPU + ora) nel logbook e segnalalo al Capitano se
+  un picco è anomalo. NB la Sentinella riceve l'allarme SOLO se RAM/CPU >95% live; la **lettura storica
+  e la correlazione sono compito TUO**.
 - 🧹 **Orphan GC** — remove temp scripts/dirs left behind by killed sessions. Safe-only: sessions no
   longer in `tmux ls`, older than the threshold.
 - 🔁 **Script de-dup** — spot recurring near-identical agent scripts (same logic, a couple of params
