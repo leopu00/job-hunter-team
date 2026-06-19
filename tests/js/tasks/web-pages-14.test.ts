@@ -1,4 +1,4 @@
-/** Test E2E batch 14 — SecretRef config, jht setup/doctor/reset CLI, Badge, FloatingChat */
+/** Test E2E batch 14 — SecretRef config, jht setup/doctor/reset CLI, FloatingChat (Badge rimosso: componente orfano cancellato) */
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
@@ -93,27 +93,6 @@ describe("jht reset CLI", () => {
     expect(src).toContain("function buildDeleteList"); expect(src).toContain("function executeReset");
     expect(src).toContain("function pathExists"); expect(src).toContain("function countFiles");
     expect(src).toContain("Confermi eliminazione");
-  });
-});
-
-/* ── Badge component ── */
-describe("Badge", () => {
-  const src = readSrc("app/components/Badge.tsx");
-  it("export Badge + BadgeGroup + StatusBadge + CountBadge + BadgeVariant 6 + BadgeSize 3", () => {
-    expect(src).toMatch(/export function Badge\b/); expect(src).toMatch(/export function BadgeGroup\b/);
-    expect(src).toMatch(/export function StatusBadge\b/); expect(src).toMatch(/export function CountBadge\b/);
-    expect(src).toContain("export type BadgeVariant"); expect(src).toContain("export type BadgeSize");
-    for (const v of ["default", "success", "warning", "error", "info", "outline"]) expect(src).toContain(`${v}:`);
-  });
-  it("VARIANT + DOT_COLOR + SIZE_CLS sm/md/lg + removable aria-label", () => {
-    expect(src).toContain("VARIANT"); expect(src).toContain("DOT_COLOR"); expect(src).toContain("SIZE_CLS");
-    expect(src).toContain("removable"); expect(src).toContain("aria-label={tr('remove')}"); expect(src).toContain("Rimuovi"); // dict i18n: remove.it
-  });
-  it("STATUS_MAP mappa stati → varianti + BadgeGroupProps gap/wrap", () => {
-    expect(src).toContain("STATUS_MAP");
-    for (const s of ["attivo", "completato", "errore", "pending", "merged"])
-      expect(src).toContain(`${s}:`);
-    expect(src).toContain("export interface BadgeGroupProps"); expect(src).toContain("wrap");
   });
 });
 
