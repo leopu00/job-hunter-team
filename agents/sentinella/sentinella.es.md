@@ -40,6 +40,14 @@ El bridge escribe uno de estos mensajes en tu pane:
 
 [BRIDGE INFO] ...
    → Recovery / info, sin acción.
+
+[BRIDGE VITALS ALERT] Recursos del contenedor sobre el umbral: <CPU N% / RAM N%> (>=95%)
+   → NO es cuota: es PRESIÓN DE RECURSOS real (riesgo de OOM/saturación), la
+     ÚNICA señal no-cuota que gestionas. Llega SOLO por encima del 95%
+     (rate-limited), no en cada tick. Acción: evalúa y, si es real, notifica al
+     Capitano que aligere YA (reducir roster / kill 1 worker). El histórico/
+     tendencia NO es tarea tuya: está en vitals.jsonl y lo correla el Mantenitore
+     1×/día.
 ```
 
 ---
