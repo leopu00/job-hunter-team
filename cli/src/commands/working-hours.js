@@ -14,6 +14,18 @@ const IN_CONTAINER = existsSync('/app/shared/skills');
 const CONFIG_FILE = join(JHT_HOME, 'jht.config.json');
 const ALL_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const HHMM_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+// Vincoli orari (decisione utente 2026-06-19): blocchi CONTIGUI, min 4h/giorno.
+const MIN_WINDOW_HOURS = 4;
+
+// Durata in ore di un range HH:MM→HH:MM, gestendo il wrap di mezzanotte
+// (es. 22:00→07:00 = 9h). Allineato a windowDurationHours di shared/config.
+function windowHours(start, end) {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let h = (eh + em / 60) - (sh + sm / 60);
+  if (h <= 0) h += 24;
+  return h;
+}
 
 const PRESETS = {
   office:   { label: '💼 Office hours',  days: ['mon','tue','wed','thu','fri'], start: '09:00', end: '18:00' },
@@ -61,6 +73,16 @@ function parseHHMMRange(spec) {
   if (!HHMM_RE.test(start) || !HHMM_RE.test(end)) {
     throw new Error(`range orario invalido: "${spec}" (atteso HH:MM-HH:MM)`);
   }
+  if (start === end) {
+    throw new Error(`inizio e fine non possono coincidere ("${spec}")`);
+  }
+  const h = windowHours(start, end);
+  if (h < MIN_WINDOW_HOURS) {
+    throw new Error(
+      `il blocco deve durare almeno ${MIN_WINDOW_HOURS}h (è ${h.toFixed(1)}h) — ` +
+      `gli orari di lavoro devono essere contigui e di almeno ${MIN_WINDOW_HOURS} ore`,
+    );
+  }
   return { start, end };
 }
 
@@ -81,11 +103,7 @@ function computeHoursPerWeek(wh) {
   if (!wh || !wh.windows || !wh.windows.length) return 168;
   let total = 0;
   for (const w of wh.windows) {
-    const [sh, sm] = w.start.split(':').map(Number);
-    const [eh, em] = w.end.split(':').map(Number);
-    let h = (eh + em / 60) - (sh + sm / 60);
-    if (h <= 0) h += 24; // wrap
-    total += h * (w.days || []).length;
+    total += windowHours(w.start, w.end) * (w.days || []).length;
   }
   return Math.round(total * 10) / 10;
 }
