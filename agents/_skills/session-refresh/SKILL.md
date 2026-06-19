@@ -92,6 +92,7 @@ Set `resume_msg_sent=True` in the journal entry. Then move to the next session (
 
 ## Rules
 - **One Doctor does all sessions this round** (user order: single Doctor for now). Use the file-based capture + grep so you never blow your own context window.
-- **Never** recreate `CAPITANO`/`SENTINELLA` lightly — they are the orchestration/heartbeat; only refresh them if their context is clearly bloated and after a heads-up, last in the order.
+- **CAPITANO**: never recreate it lightly — it's the coordinator with in-flight state; refresh only if its context is clearly bloated, after a heads-up, last in the order.
+- **SENTINELLA**: its context-refresh is now handled **deterministically by the `agent-watchdog`** (age-based recreate past `JHT_SENTINELLA_MAX_CTX_AGE_H`, default 24h — it is near-stateless, its working state lives in the bridge/config, not in its chat). **Skip it here** (`action=skipped_managed_by_watchdog`) — do not race the watchdog by recreating it yourself.
 - **Never** `tmux new-session` by hand — always `start-agent.sh` (see `spawn-agent`).
 - Log every action in the journal (`recreated`/`skipped_parked`/`skipped_fresh`) — the journal is the audit trail and grows every day.

@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
-# agent-watchdog.sh — controlla che le 3 sessioni tmux user-facing
-# (ASSISTENTE, CAPITANO, MENTOR) siano sempre attive. Se una manca,
-# la rilancia via `jht team start <role>`.
+# agent-watchdog.sh — controlla che le 4 sessioni tmux core
+# (ASSISTENTE, CAPITANO, MENTOR, SENTINELLA) siano sempre attive. Se una
+# manca, la rilancia via `jht team start <role>`.
 #
 # Pensato come daemon spawnato da pid1 al boot del container. NON
-# sostituisce il dottore (LLM ogni 30min, analisi alto livello), copre
-# solo il caso "session tmux morta o non partita".
+# sostituisce il dottore (context-refresh LLM degli agenti CON stato),
+# copre il caso "session tmux morta o non partita".
+#
+# La SENTINELLA ha in più un refresh-per-ETÀ deterministico (vedi
+# maybe_refresh_sentinella): è near-stateless — il suo stato operativo vive
+# nel bridge/config, non nella sua chat — quindi dopo molte ore il suo
+# context window si gonfia e ne degrada il giudizio di pace, e va ricreata
+# fresca oltre una soglia. È age-based, NON health-based: non re-introduce
+# il restart-loop del vecchio sentinel_health (V4 bug). Gli altri core hanno
+# stato e li rinfresca il Dottore (refresh ricco con resume).
 #
 # Loop interval: 30s (configurable via env JHT_AGENT_WATCHDOG_INTERVAL).
 # Idempotente: `jht team start` skippa session già attive.
@@ -24,7 +32,10 @@ CONFIG="$JHT_HOME/jht.config.json"
 JHT_BIN="/app/cli/bin/jht.js"
 INTERVAL_SEC="${JHT_AGENT_WATCHDOG_INTERVAL:-30}"
 LOG="$JHT_HOME/logs/agent-watchdog.log"
-AGENTS=(assistente capitano mentor)
+AGENTS=(assistente capitano mentor sentinella)
+# Soglia (ore) oltre cui la sessione SENTINELLA viene ricreata per ripulire
+# il context window accumulato. Refresh deterministico, near-stateless.
+SENTINELLA_MAX_CTX_AGE_H="${JHT_SENTINELLA_MAX_CTX_AGE_H:-24}"
 
 mkdir -p "$(dirname "$LOG")"
 
@@ -102,7 +113,35 @@ ensure_agent() {
   fi
 }
 
-log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]}"
+session_age_h() {
+  # Età della sessione tmux in ore intere (now - session_created).
+  local session="$1" created now
+  created=$(tmux display-message -p -t "$session" '#{session_created}' 2>/dev/null) || return 1
+  [ -z "$created" ] && return 1
+  now=$(date -u +%s)
+  echo $(( (now - created) / 3600 ))
+}
+
+maybe_refresh_sentinella() {
+  # Refresh-per-ETÀ della SENTINELLA: near-stateless (stato nel bridge/config,
+  # non nella chat) → un context window vecchio di ore le fa "sbagliare" il
+  # giudizio di pace. Oltre la soglia la si ricrea fresca. age-based (NON
+  # health-based) → niente restart-loop V4. Killa qui: ensure_agent la ricrea
+  # nello stesso tick (subito sotto nel loop). Gli ALTRI core li rinfresca il
+  # Dottore (refresh ricco). Qui solo lei.
+  is_session_alive SENTINELLA || return 0   # se non viva, la (ri)crea ensure_agent
+  # Niente refresh fuori orario lavorativo: ricreare ora sprecherebbe un
+  # kick-off LLM di notte (allineato alla regola "no LLM fuori finestra").
+  python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skills.working_hours import is_within_working_hours as f; sys.exit(0 if f() else 1)" 2>/dev/null || return 0
+  local age
+  age=$(session_age_h SENTINELLA) || return 0
+  if [ "$age" -ge "$SENTINELLA_MAX_CTX_AGE_H" ]; then
+    log "sentinella: context age ${age}h ≥ ${SENTINELLA_MAX_CTX_AGE_H}h — refresh (kill+recreate) per ripulire il contesto"
+    tmux kill-session -t SENTINELLA 2>/dev/null || true
+  fi
+}
+
+log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h"
 
 # Loop principale: gate sulla config (può non essere ancora pronta al
 # primo boot del container — il wizard la scrive post-pairing). Sleep
@@ -137,6 +176,9 @@ while true; do
   fi
 
   if config_ready; then
+    # Refresh-per-età della Sentinella PRIMA del giro di ensure: se è troppo
+    # vecchia la killa, poi ensure_agent la ricrea fresca nello stesso tick.
+    maybe_refresh_sentinella
     for role in "${AGENTS[@]}"; do
       ensure_agent "$role"
     done
