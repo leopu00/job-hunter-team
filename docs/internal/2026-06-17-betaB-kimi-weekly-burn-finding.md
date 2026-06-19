@@ -9,8 +9,8 @@ LETTURA (nessun intervento — [[feedback_no_intervention_in_simulations]]). · 
 > **TL;DR.** La finestra settimanale Kimi è stata bruciata in **2.1 giorni** (vs 6.7 della settimana
 > precedente). Causa: il **deploy di Lun 15/06 ~15:00** ha attivato RULE-12/13/14 (recheck giornaliero
 > + metadati obbligatori) → gli analisti hanno fatto una **catch-up una-tantum dell'intero backlog**
-> (196+164 posizioni ri-processate in 2 giorni), su fascia oraria amplissima (senza pausa notturna) e
-> con roster scalato. Non è un
+> (196+164 posizioni ri-processate in 2 giorni), durante i turni notturni (betaB lavora 20:00→08:00,
+> verificato) con roster scalato. Non è un
 > bug-loop (lavoro reale, non spin); è **over-pace**. Il freno weekly ha *visto* (ATTENZIONE,
 > proj_weekly 900-1110%) ma non ha *tenuto*.
 
@@ -70,18 +70,18 @@ scorer-5   -> scored    23  / -> excluded 9
 
 ## 3. ⚠️ Due aggravanti strutturali
 
-1. **betaB front-loada perché non si ferma di notte; betaA spalma perché si ferma.** Il burn di
-   betaB è distribuito su **quasi tutte le ore** (verificato dalla distribuzione oraria di `delta`:
-   consumo a **01-03 Rome** E **20-22 Rome** E **06-09 Rome**), `work_phase=ON` anche alle 23:00 Rome.
-   **betaA** è `work_phase=OFF` di notte (~12h/giorno, verificato dal pacing-state). **NB il confronto
-   corretto NON è "betaA consuma meno":** betaA questa settimana è arrivato al **94% del weekly** —
-   come betaB al 100% — ma lo ha **SPALMATO su ~tutti i 7 giorni** (≈14%/giorno, vicino al sostenibile
-   100/7) grazie alla pausa notturna + assenza di storm, mentre betaB ha consumato lo stesso budget in
-   **2 giorni** (storm front-loadato). Quindi la pausa notturna è un **meccanismo di spread**, non di
-   "uso meno": è la prova che il pacing PUÒ tenere la linea (betaA lo dimostra) — betaB è saltato per
-   lo storm + l'assenza di un rate-cap notturno. **⚠️ Caveat config:** le working hours esatte di betaB
-   non sono state localizzate su disco; una memoria di 4gg fa indicava `05:00-17:00 Europe/Rome`, ma il
-   burn la **contraddice** (consumo pesante a 20-22 e 02 Rome) → cambiata o imprecisa.
+1. **CORREZIONE (2026-06-18): betaB NON gira 24/7 — fa un turno NOTTURNO 20:00→08:00.** Verificato il
+   config reale: `jht.config.json` → `team.working_hours = {timezone: Europe/Rome, windows:
+   [20:00→08:00, tutti i giorni]}` (intatto, mtime 15/06). betaA = `08:00→20:00` (giorno). **Entrambi
+   12h/giorno.** Il mio "24/7" iniziale era un ERRORE: la finestra notturna 20→08 copre sera + notte
+   fonda + mattino (20:00, 02:00, 06:00 Rome) e l'ho letta come round-the-clock; in più avevo cercato
+   il config nella dir sbagliata (`/root/.jht/config/` invece di `jht.config.json`). Il `work_phase=ON`
+   di betaB alle 23:00 Rome è CORRETTO (è dentro la sua finestra notturna), non prova di 24/7. La
+   distribuzione oraria del burn è infatti concentrata nella finestra notturna + un baseline minore di
+   *coordinator-burn* (Sentinella/Capitano tick ~24/7) durante le ore OFF. **→ Quindi la pausa notturna
+   NON è la differenza betaB/betaA** (entrambi 12h): la differenza betaB-2gg vs betaA-7gg è lo
+   **storm di backfill** (§2) + il provider (Kimi vs Codex). betaA ha chiuso il weekly al ~94-99%
+   spalmato su ~7 giorni perché NON ha avuto lo storm, non perché lavori meno ore.
 2. **Roster scalato.** 3 analisti + 2 scout attivi nella notte del burst (la settimana precedente,
    durata 6.7gg, aveva roster più leggero).
 
@@ -108,10 +108,10 @@ stale (molto meno). MA emergono **3 leve reali** (finding per il codice/config, 
    va **spalmato sul budget settimanale** (a rate, su più giorni), non eseguito il più in fretta
    possibile. Oggi `next-for-recheck`/`next-for-categorize` non hanno throttle proporzionale al weekly
    residuo.
-2. **Pausa notturna o de-rate notturno per betaB**: o working-hours ristrette come betaA (che di
-   notte è OFF), o il pacing abbassa drasticamente la velocità di notte per tenere la linea
-   settimanale (oggi betaB consuma anche nelle ore notturne — verificato burn a 01-03 Rome). Da
-   verificare anche la config working-hours reale (la memoria `05:00-17:00` è contraddetta dal burn).
+2. **~~Pausa notturna~~ → SUPERATA dalla correzione (2026-06-18):** betaB HA già una finestra (turno
+   notturno 20:00→08:00, 12h). La leva non è "aggiungere una pausa", ma un **rate-cap dentro la
+   finestra** quando un'operazione massiva (lo storm di backfill) la satura: anche 12h di lavoro pieno
+   a velocità da storm bruciano il weekly. La leva reale resta la #1 (backfill weekly-budget-aware).
 3. **Freno weekly più aggressivo**: quando `proj_weekly` resta >100% per N tick consecutivi, throttle
    forte / scale-down roster — oggi rallenta troppo poco, troppo tardi.
 

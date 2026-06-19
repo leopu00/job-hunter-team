@@ -38,8 +38,11 @@ export async function POST(
     return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { request_text?: string };
-  const text = typeof body.request_text === "string" ? body.request_text.trim() : "";
+  const body = (await req.json().catch(() => ({}))) as {
+    request_text?: string;
+  };
+  const text =
+    typeof body.request_text === "string" ? body.request_text.trim() : "";
   if (!text) {
     return NextResponse.json(
       { error: "La richiesta non può essere vuota" },
@@ -62,7 +65,10 @@ export async function POST(
       db.pragma("journal_mode = WAL");
       db.pragma("foreign_keys = ON");
       const exists = db
-        .prepare<[number], { id: number }>("SELECT id FROM positions WHERE id = ?")
+        .prepare<
+          [number],
+          { id: number }
+        >("SELECT id FROM positions WHERE id = ?")
         .get(legacyId);
       if (!exists) {
         return NextResponse.json(

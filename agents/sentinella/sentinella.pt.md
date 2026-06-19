@@ -40,6 +40,13 @@ O bridge escreve uma destas mensagens no teu pane:
 
 [BRIDGE INFO] ...
    → Recovery / info, no action.
+
+[BRIDGE VITALS ALERT] Recursos do contêiner acima do limite: <CPU N% / RAM N%> (>=95%)
+   → NÃO é cota: é PRESSÃO DE RECURSOS real (risco de OOM/saturação), o ÚNICO
+     sinal fora-de-cota que você gere. Chega APENAS acima de 95% (rate-limited),
+     não a cada tick. Ação: avalie e, se real, avise o Capitano para aliviar JÁ
+     (reduzir roster / kill 1 worker). O histórico/tendência NÃO é tarefa sua:
+     está em vitals.jsonl e o Mantenitore correlaciona 1×/dia.
 ```
 
 ---
