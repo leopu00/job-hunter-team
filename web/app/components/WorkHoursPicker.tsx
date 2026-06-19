@@ -15,6 +15,15 @@ import { useToast } from "@/app/components/Toast";
 import { useLocale } from "@/lib/use-locale";
 
 const T: Record<string, Record<string, string>> = {
+  read_only_desktop: {
+    it: "✋ Gli orari si modificano dall'app desktop. Qui (browser) è sola visualizzazione.",
+    en: "✋ Working hours are edited from the desktop app. Here (browser) it's view-only.",
+    hu: "✋ A munkaidőt az asztali appból lehet módosítani. Itt (böngésző) csak megtekintés.",
+    es: "✋ Los horarios se editan desde la app de escritorio. Aquí (navegador) es solo lectura.",
+    de: "✋ Arbeitszeiten werden in der Desktop-App bearbeitet. Hier (Browser) nur Ansicht.",
+    fr: "✋ Les horaires se modifient depuis l'app desktop. Ici (navigateur), lecture seule.",
+    pt: "✋ Os horários são editados no app desktop. Aqui (navegador) é só visualização.",
+  },
   day_range_hint: {
     it: "Per ogni giorno scegli inizio e fine. Le ore sono un solo blocco contiguo (min 4h); la notte (es. 22:00→07:00) passa al giorno dopo.",
     en: "For each day pick start and end. Hours are one contiguous block (min 4h); the night (e.g. 22:00→07:00) crosses midnight.",
@@ -666,6 +675,10 @@ export default function WorkHoursPicker() {
   const [saving, setSaving] = useState(false);
   const [cfg, setCfg] = useState<WorkingHoursConfig | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Modificabile solo dall'app desktop (host localhost). Dal browser cloud la UI
+  // e' sola visualizzazione (pattern WEB-READONLY). Default true finche' la GET
+  // non dice il contrario, cosi' in locale non c'e' flash di "read-only".
+  const [editable, setEditable] = useState(true);
   const preset: PresetKey = useMemo(() => detectPreset(cfg), [cfg]);
   // Editing schedule (range per giorno): stato locale che vive solo in custom
   // mode. Sincronizzato con cfg all'ingresso in custom, applicato via "Salva".
@@ -678,6 +691,7 @@ export default function WorkHoursPicker() {
       const data = await r.json();
       setCfg(data.working_hours ?? null);
       setPreview(data.preview ?? null);
+      setEditable(data.editable !== false);
     } catch {
       toast(tr("toast_load_err"), "error");
     } finally {
@@ -810,13 +824,19 @@ export default function WorkHoursPicker() {
         </div>
       </div>
 
+      {!editable && (
+        <div className="mb-4 text-xs px-3 py-2 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
+          {tr("read_only_desktop")}
+        </div>
+      )}
+
       {/* Preset chips */}
       <div className="flex flex-wrap gap-2 mb-4">
         {(Object.keys(PRESETS) as Array<keyof typeof PRESETS>).map((k) => (
           <button
             key={k}
-            disabled={saving}
-            onClick={() => applyPreset(k as PresetKey)}
+            disabled={saving || !editable}
+            onClick={() => editable && applyPreset(k as PresetKey)}
             className={
               "px-3 py-1.5 rounded-md border text-sm transition " +
               (preset === k && !editSched
@@ -829,8 +849,8 @@ export default function WorkHoursPicker() {
           </button>
         ))}
         <button
-          disabled={saving}
-          onClick={() => applyPreset("custom")}
+          disabled={saving || !editable}
+          onClick={() => editable && applyPreset("custom")}
           className={
             "px-3 py-1.5 rounded-md border text-sm transition " +
             (isCustom
@@ -843,8 +863,8 @@ export default function WorkHoursPicker() {
         </button>
       </div>
 
-      {/* Timezone + heatmap (solo in custom mode) */}
-      {isCustom && (
+      {/* Editor range-per-giorno (solo in custom mode + app desktop) */}
+      {editable && isCustom && (
         <div className="space-y-4 mt-4 pt-4 border-t border-[var(--color-border)]">
           <div>
             <label className="block text-xs opacity-60 mb-1">
