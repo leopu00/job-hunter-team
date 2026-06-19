@@ -44,7 +44,10 @@ async function handleToggle(
     try {
       db.pragma("journal_mode = WAL");
       const row = db
-        .prepare<[number], { id: number }>("SELECT id FROM positions WHERE id = ?")
+        .prepare<
+          [number],
+          { id: number }
+        >("SELECT id FROM positions WHERE id = ?")
         .get(legacyId);
       if (!row) {
         return NextResponse.json(
@@ -68,7 +71,9 @@ async function handleToggle(
         .from("positions")
         .update({
           recheck_requested: requested,
-          ...(requested ? { recheck_requested_at: new Date().toISOString() } : {}),
+          ...(requested
+            ? { recheck_requested_at: new Date().toISOString() }
+            : {}),
         })
         .eq("user_id", userId)
         .eq("legacy_id", legacyId);

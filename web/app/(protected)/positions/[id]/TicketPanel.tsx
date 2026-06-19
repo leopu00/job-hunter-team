@@ -68,7 +68,10 @@ export function TicketPanel({
           type="button"
           onClick={() => setOpen((o) => !o)}
           className="px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors hover:bg-[var(--color-row)]"
-          style={{ borderColor: "var(--color-purple)", color: "var(--color-purple)" }}
+          style={{
+            borderColor: "var(--color-purple)",
+            color: "var(--color-purple)",
+          }}
         >
           {open ? "Chiudi" : "+ Nuova richiesta"}
         </button>
@@ -77,7 +80,10 @@ export function TicketPanel({
       {open && (
         <div
           className="mb-4 p-3 rounded-lg border flex flex-col gap-2"
-          style={{ borderColor: "var(--color-border)", background: "var(--color-row)" }}
+          style={{
+            borderColor: "var(--color-border)",
+            background: "var(--color-row)",
+          }}
         >
           <textarea
             value={text}
@@ -110,7 +116,10 @@ export function TicketPanel({
               onClick={submit}
               disabled={busy || isPending}
               className="px-4 py-1.5 rounded-lg border text-[11px] font-semibold disabled:opacity-60 disabled:cursor-wait"
-              style={{ borderColor: "var(--color-purple)", color: "var(--color-purple)" }}
+              style={{
+                borderColor: "var(--color-purple)",
+                color: "var(--color-purple)",
+              }}
             >
               {busy ? "Invio…" : "Invia richiesta"}
             </button>
@@ -125,8 +134,8 @@ export function TicketPanel({
 
       {tickets.length === 0 ? (
         <p className="text-[12px]" style={{ color: "var(--color-dim)" }}>
-          Nessuna richiesta. Usa “Nuova richiesta” per chiedere al team qualcosa su
-          questa offerta.
+          Nessuna richiesta. Usa “Nuova richiesta” per chiedere al team qualcosa
+          su questa offerta.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
@@ -139,16 +148,26 @@ export function TicketPanel({
               <div className="flex items-center justify-between">
                 <span
                   className="text-[10px] uppercase font-semibold tracking-wide"
-                  style={{ color: STATUS_COLOR[t.status] ?? "var(--color-dim)" }}
+                  style={{
+                    color: STATUS_COLOR[t.status] ?? "var(--color-dim)",
+                  }}
                 >
                   {STATUS_LABEL[t.status] ?? t.status}
                   {t.assigned_agent ? ` · ${t.assigned_agent}` : ""}
                 </span>
-                <span className="text-[10px]" style={{ color: "var(--color-dim)" }}>
-                  {t.created_at ? t.created_at.slice(0, 16).replace("T", " ") : ""}
+                <span
+                  className="text-[10px]"
+                  style={{ color: "var(--color-dim)" }}
+                >
+                  {t.created_at
+                    ? t.created_at.slice(0, 16).replace("T", " ")
+                    : ""}
                 </span>
               </div>
-              <p className="text-[13px] mt-1" style={{ color: "var(--color-text)" }}>
+              <p
+                className="text-[13px] mt-1"
+                style={{ color: "var(--color-text)" }}
+              >
                 {t.request_text}
               </p>
               {t.response_text && (
@@ -162,7 +181,10 @@ export function TicketPanel({
                   >
                     Risposta del team
                   </span>
-                  <p className="text-[13px]" style={{ color: "var(--color-text)" }}>
+                  <p
+                    className="text-[13px]"
+                    style={{ color: "var(--color-text)" }}
+                  >
                     {t.response_text}
                   </p>
                 </div>
