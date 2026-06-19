@@ -59,13 +59,21 @@ function applyLocal(
     const row = db
       .prepare<
         [number],
-        { id: number; status: string | null; user_excluded_prev_status: string | null }
+        {
+          id: number;
+          status: string | null;
+          user_excluded_prev_status: string | null;
+        }
       >(
         "SELECT id, status, user_excluded_prev_status FROM positions WHERE id = ?",
       )
       .get(legacyId);
     if (!row) {
-      return { ok: false, status: 404, body: { error: `Posizione #${legacyId} non trovata` } };
+      return {
+        ok: false,
+        status: 404,
+        body: { error: `Posizione #${legacyId} non trovata` },
+      };
     }
 
     if (action === "exclude") {
@@ -98,9 +106,10 @@ function applyLocal(
     }
 
     const updated = db
-      .prepare<[number], { status: string | null; user_excluded_reason: string | null }>(
-        "SELECT status, user_excluded_reason FROM positions WHERE id = ?",
-      )
+      .prepare<
+        [number],
+        { status: string | null; user_excluded_reason: string | null }
+      >("SELECT status, user_excluded_reason FROM positions WHERE id = ?")
       .get(legacyId)!;
 
     return {
@@ -134,19 +143,32 @@ async function applyCloud(
     .eq("legacy_id", legacyId)
     .maybeSingle();
   if (error) {
-    return { ok: false, status: 500, body: { error: `Supabase query failed: ${error.message}` } };
+    return {
+      ok: false,
+      status: 500,
+      body: { error: `Supabase query failed: ${error.message}` },
+    };
   }
   if (!row) {
-    return { ok: false, status: 404, body: { error: `Posizione #${legacyId} non trovata` } };
+    return {
+      ok: false,
+      status: 404,
+      body: { error: `Posizione #${legacyId} non trovata` },
+    };
   }
-  const r = row as { status: string | null; user_excluded_prev_status: string | null };
+  const r = row as {
+    status: string | null;
+    user_excluded_prev_status: string | null;
+  };
 
   let update: Record<string, unknown>;
   let nextStatus: string | null;
   let nextReason: string | null;
   if (action === "exclude") {
     const prev =
-      r.status === "excluded" ? (r.user_excluded_prev_status ?? "scored") : r.status;
+      r.status === "excluded"
+        ? (r.user_excluded_prev_status ?? "scored")
+        : r.status;
     nextStatus = "excluded";
     nextReason = reason ?? null;
     update = {
@@ -174,7 +196,11 @@ async function applyCloud(
     .eq("user_id", userId)
     .eq("legacy_id", legacyId);
   if (upErr) {
-    return { ok: false, status: 500, body: { error: `Supabase update failed: ${upErr.message}` } };
+    return {
+      ok: false,
+      status: 500,
+      body: { error: `Supabase update failed: ${upErr.message}` },
+    };
   }
   return {
     ok: true,
@@ -216,7 +242,10 @@ async function handle(
       note?: string;
     };
     reason = body.reason;
-    note = typeof body.note === "string" ? body.note.trim().slice(0, 500) : undefined;
+    note =
+      typeof body.note === "string"
+        ? body.note.trim().slice(0, 500)
+        : undefined;
     if (!reason || !VALID_REASONS.has(reason)) {
       return NextResponse.json(
         { error: `Causa non valida: '${reason ?? ""}'` },
@@ -235,7 +264,8 @@ async function handle(
 
   if (hasLocal) {
     const local = applyLocal(legacyId, action, reason, note);
-    if (!local.ok) return NextResponse.json(local.body, { status: local.status });
+    if (!local.ok)
+      return NextResponse.json(local.body, { status: local.status });
     // Best-effort cloud write (single source-of-truth in-process = SQLite).
     let cloudOk: boolean | null = null;
     try {
@@ -268,7 +298,14 @@ async function handle(
     return NextResponse.json({ ...local.outcome, cloud_synced: cloudOk });
   }
 
-  const cloud = await applyCloud(supabase, userId, legacyId, action, reason, note);
+  const cloud = await applyCloud(
+    supabase,
+    userId,
+    legacyId,
+    action,
+    reason,
+    note,
+  );
   if (!cloud.ok) return NextResponse.json(cloud.body, { status: cloud.status });
   return NextResponse.json(cloud.outcome);
 }
