@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireLocalWrite } from "@/lib/auth";
 import { runBash } from "@/lib/shell";
 import { JHT_USER_CV_DIR, getAgentDir } from "@/lib/jht-paths";
 import fs from "fs";
@@ -9,6 +10,8 @@ export const dynamic = "force-dynamic";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 export async function POST(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let formData: FormData;
   try {
     formData = await req.formData();
