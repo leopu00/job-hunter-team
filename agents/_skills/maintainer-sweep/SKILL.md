@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /
 
 # maintainer-sweep — tenere sana l'INFRA, in silenzio e a-prova-di-regressione
 
-Il Mantenitore è il gemello del Dottore: **Dottore = salute degli AGENTI** (sessioni, token, context-refresh); **Mantenitore = salute dell'INFRA** (tool, deps, disco, script). One-shot: boot → sweep → logbook → self-terminate. Budget ~10 min. Confine netto, zero overlap col Dottore.
+Il Mantenitore è il gemello del Dottore: **Dottore = salute degli AGENTI** (sessioni, token, context-refresh); **Mantenitore = salute dell'INFRA** (tool, deps, disco, script). One-shot per day: boot → sweep → logbook → STANDBY (stay idle, no self-terminate; the next spawn replaces you, kill-then-create). Budget ~10 min. Confine netto, zero overlap col Dottore.
 
 > **Perché esiste:** il bug `libatk` (browser morto, LinkedIn non verificabile) è rimasto invisibile per ore perché *nessuno smoke-testava i tool e nessuno teneva l'infra*. Lo sweep rende STRUTTURALE quella vigilanza.
 
@@ -37,7 +37,11 @@ Script quasi-identici ripetuti da più agenti → **proponi** una skill canonica
 Librerie/strumenti deprecati o versioni rotte / tool cruciali irraggiungibili → segnala al Capitano (no auto-upgrade rischioso).
 
 ### 6. 💾 Disco / RAM + trend + VITALS in croce
-`df`, `du` sui path grossi, `free` (snapshot istantaneo). Confronta col **trend dell'ultimo logbook**: se cresce verso una soglia → discuti col Capitano cosa archiviare/cancellare (lui decide). Log i numeri + il delta.
+`du` sui path grossi, `free` per la RAM. Per **`disk.used_pct` usa SEMPRE `df`** — comando canonico:
+```bash
+df -P /jht_home | awk 'NR==2 {gsub("%","",$5); print $5}'   # es. 30  (percentuale come la riporta df)
+```
+**MAI** ricavarlo da `statvfs`/`os.statvfs` (`f_bavail`/`f_blocks`): i reserved-block lo gonfiano ~3× → falsi allarmi (es. 88% riportato contro 30% reale). Confronta col **trend dell'ultimo logbook**: se cresce verso una soglia → discuti col Capitano cosa archiviare/cancellare (lui decide). Log i numeri + il delta.
 **Poi METTI IN CROCE il time-series dei vitals** (il bridge campiona RAM+CPU del container ogni pochi minuti su `vitals.jsonl`):
 ```bash
 python3 /app/shared/skills/host_vitals.py summary --hours 24
