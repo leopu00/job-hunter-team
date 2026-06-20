@@ -138,6 +138,88 @@ function syncJhtConfig() {
   return true
 }
 
+// -------- Email del team (casella job-alert dedicata) --------
+// Le credenziali della casella che il team legge vivono in
+// ~/.jht/credentials/email_monitor.json (bind-mount nel container) e le legge
+// shared/skills/email_monitor.py. Mai sul cloud: scrittura SOLO locale.
+function getEmailCredsPath() {
+  return path.join(getBindHomeDir(), 'credentials', 'email_monitor.json')
+}
+
+// IMAP host dal dominio dell'email per i provider comuni; fallback imap.<dominio>
+// così funziona anche con domini custom senza chiedere l'host all'utente.
+function deriveImapHost(email) {
+  const domain = (String(email).split('@')[1] || '').toLowerCase()
+  const KNOWN = {
+    'gmail.com': 'imap.gmail.com',
+    'googlemail.com': 'imap.gmail.com',
+    'outlook.com': 'outlook.office365.com',
+    'hotmail.com': 'outlook.office365.com',
+    'live.com': 'outlook.office365.com',
+    'yahoo.com': 'imap.mail.yahoo.com',
+    'icloud.com': 'imap.mail.me.com',
+    'me.com': 'imap.mail.me.com',
+  }
+  if (KNOWN[domain]) return KNOWN[domain]
+  return domain ? `imap.${domain}` : 'imap.gmail.com'
+}
+
+function readEmailStatus() {
+  const fs = require('node:fs')
+  try {
+    const raw = JSON.parse(fs.readFileSync(getEmailCredsPath(), 'utf8'))
+    return {
+      configured: !!raw.user,
+      email: raw.user || null,
+      host: raw.imap_host || null,
+      anyPlatform: !Array.isArray(raw.from_filters) || raw.from_filters.length === 0,
+      savedAt: raw.savedAt || null,
+    }
+  } catch {
+    return { configured: false, email: null, host: null, anyPlatform: true, savedAt: null }
+  }
+}
+
+function saveEmailConfig({ email, password } = {}) {
+  const fs = require('node:fs')
+  const addr = String(email || '').trim()
+  // Le app-password Google sono mostrate a gruppi di 4 con spazi: rimuovili.
+  const pw = String(password || '').replace(/\s+/g, '')
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) return { ok: false, error: 'invalid-email' }
+  if (pw.length < 8) return { ok: false, error: 'invalid-password' }
+  const creds = {
+    imap_host: deriveImapHost(addr),
+    imap_port: 993,
+    user: addr,
+    password: pw,
+    folder: 'INBOX',
+    from_filters: [],
+    savedAt: Date.now(),
+  }
+  const target = getEmailCredsPath()
+  const tmp = `${target}.tmp`
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true })
+    fs.writeFileSync(tmp, JSON.stringify(creds, null, 2), { mode: 0o600 })
+    fs.renameSync(tmp, target)
+    return { ok: true, email: addr, host: creds.imap_host }
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) }
+  }
+}
+
+function deleteEmailConfig() {
+  const fs = require('node:fs')
+  const target = getEmailCredsPath()
+  try {
+    if (!fs.existsSync(target)) return { ok: false, error: 'not-configured' }
+    fs.unlinkSync(target)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err.message || String(err) }
+  }
+}
+
 let mainWindow = null
 let runtime = null
 let payloadDir = null
@@ -799,6 +881,11 @@ app.whenReady().then(() => {
   ipcMain.handle('provider:save-to-vps', (_event, args = {}) =>
     telegram.saveProviderToVps(args.vpsIp, args.provider, args.authMethod),
   )
+
+  // -------- Email del team (casella job-alert dedicata, locale) ---------
+  ipcMain.handle('email:get-status', () => readEmailStatus())
+  ipcMain.handle('email:save-config', (_event, args = {}) => saveEmailConfig(args))
+  ipcMain.handle('email:delete-config', () => deleteEmailConfig())
 
   // -------- vps:write-config (T1: generic config writer remoto) ---------
   // Scrive un file di config sul container remoto via SshExec.writeFile.

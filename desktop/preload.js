@@ -202,6 +202,14 @@ contextBridge.exposeInMainWorld('providerApi', {
   saveToVps: (args) => ipcRenderer.invoke('provider:save-to-vps', args),
 })
 
+// Email del team: casella job-alert dedicata. Le credenziali si salvano in
+// locale (~/.jht/credentials/email_monitor.json), mai sul cloud.
+contextBridge.exposeInMainWorld('emailApi', {
+  getStatus: () => ipcRenderer.invoke('email:get-status'),
+  saveConfig: (args) => ipcRenderer.invoke('email:save-config', args),
+  deleteConfig: () => ipcRenderer.invoke('email:delete-config'),
+})
+
 contextBridge.exposeInMainWorld('syncApi', {
   getStatus: () => ipcRenderer.invoke('sync:get-status'),
   setup: (args) => ipcRenderer.invoke('sync:setup', args),
