@@ -475,10 +475,10 @@ Docker is the **default** in both the CLI installer and the desktop launcher (si
 | GHCR image: `ghcr.io/leopu00/jht:latest` | ✅ Shipped | v0.1.9 |
 | `install.sh` Docker-by-default + `--no-docker` opt-out | ✅ Shipped | v0.1.9 |
 | Desktop launcher: lazy install of Colima/Docker | ✅ Shipped | v0.1.10–0.1.12 |
-| Container runtime per OS | ✅ Shipped | Colima (macOS), docker.io (Linux/WSL2), Docker Desktop (Windows — installed via WSL2 wizard) |
+| Container runtime per OS | ✅ Shipped | macOS: Colima *or* Docker Desktop (user choice, detect-first — ADR-0006), docker.io (Linux/WSL2), Docker Desktop (Windows — installed via WSL2 wizard) |
 | `isContainer()` gating in TUI/CLI/desktop | ✅ Shipped | v0.1.9 |
 
-> Full implementation history → [`CHANGELOG.md`](../../CHANGELOG.md). Architectural rationale (why container, why no host-side `--dangerously-skip-permissions`) → [`docs/adr/0001-colima-not-docker-desktop.md`](../adr/0001-colima-not-docker-desktop.md).
+> Full implementation history → [`CHANGELOG.md`](../../CHANGELOG.md). Architectural rationale (why container, why no host-side `--dangerously-skip-permissions`) → [`docs/adr/0001-colima-not-docker-desktop.md`](../adr/0001-colima-not-docker-desktop.md); macOS runtime choice (Colima or Docker Desktop) → [`docs/adr/0006-user-choice-container-runtime-macos.md`](../adr/0006-user-choice-container-runtime-macos.md).
 
 ---
 

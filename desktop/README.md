@@ -16,7 +16,7 @@ container*.js         Docker container prep & lifecycle
 deps*.js / dependencies.js   dependency install (in-app, no CLI)
 disk-space.js        preflight checks
 provider-*.js        provider auth / install / store
-docker-installer/    bundled Docker setup (Colima on macOS)
+docker-installer/    bundled Docker setup (macOS: Colima or Docker Desktop, user choice)
 auth/                OAuth flows
 assets/ · build/     icons & packaging resources
 *.test.js            unit tests (run with npm test)
@@ -32,5 +32,5 @@ npm run dist:mac     # build signed .dmg  (also dist:win / dist:linux)
 
 ## See also
 
-- Container policy (Colima, not Docker Desktop): [`docs/adr/0001-colima-not-docker-desktop.md`](../docs/adr/0001-colima-not-docker-desktop.md)
+- Container runtime policy (macOS: Colima or Docker Desktop, user choice): [`docs/adr/0006-user-choice-container-runtime-macos.md`](../docs/adr/0006-user-choice-container-runtime-macos.md) (supersedes [`0001`](../docs/adr/0001-colima-not-docker-desktop.md))
 - VPS / host split: [`docs/internal/ops/vps.md`](../docs/internal/ops/vps.md)
