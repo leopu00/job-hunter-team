@@ -73,7 +73,9 @@ export default function RecentActivityFeed({
                   {ev.title || ev.company ? (
                     <>
                       {ev.title && (
-                        <span className="text-[var(--color-white)]">{ev.title}</span>
+                        <span className="text-[var(--color-white)]">
+                          {ev.title}
+                        </span>
                       )}
                       {ev.company && (
                         <span className="text-[var(--color-dim)]">

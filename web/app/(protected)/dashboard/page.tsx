@@ -119,21 +119,22 @@ export default async function DashboardPage() {
           (p as { critic_verdict?: string | null }).critic_verdict ?? null,
       }))
     : [];
-  const [stats, dashPositions, pendingMessages, rates, recentActivity] = demoData
-    ? [
-        demoData.stats,
-        demoDashPositions,
-        demoData.pendingMessages,
-        { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
-        [] as RecentActivityEvent[],
-      ]
-    : await Promise.all([
-        getDashboardStats(),
-        getDashboardPositions(),
-        getPendingMessages(20),
-        getExchangeRates(),
-        getTeamActivity().then((a) => a.recent),
-      ]);
+  const [stats, dashPositions, pendingMessages, rates, recentActivity] =
+    demoData
+      ? [
+          demoData.stats,
+          demoDashPositions,
+          demoData.pendingMessages,
+          { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
+          [] as RecentActivityEvent[],
+        ]
+      : await Promise.all([
+          getDashboardStats(),
+          getDashboardPositions(),
+          getPendingMessages(20),
+          getExchangeRates(),
+          getTeamActivity().then((a) => a.recent),
+        ]);
 
   const activeTotal = stats.total - stats.excluded;
 
