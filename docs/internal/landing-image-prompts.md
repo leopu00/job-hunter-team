@@ -119,19 +119,30 @@ scenico del ruolo.** Niente testo leggibile.
 
 ## Pagina `/pricing`
 
-### `pricing.hero` — testa agente di PROFILO a raggi X (sfondo trasparente)
+### `pricing.hero` — testa agente di PROFILO a raggi X, cervello AI (sfondo trasparente)
 Concetto: la struttura del team è gratis, **il "cervello" (il provider AI) lo
-paghi** → testa di un agente, vista come una radiografia (cervello + cranio).
+paghi** → testa di un agente, vista come radiografia, ma dentro il cranio NON c'è
+un cervello umano biologico: c'è un **cervello AI = rete neurale / LLM**.
+
+> _Revisione 2026-06-21: il "cervello" è ora una RETE NEURALE / LLM, non un cervello
+> umano biologico._
+
 > Comic-book / graphic-novel linework crossed with a medical X-ray scan — mostly
 > a **see-through radiograph look, NOT a fully shaded realistic portrait**. **Side
 > PROFILE of an agent's head, facing RIGHT** (we do NOT see the face front-on).
-> The whole head is rendered as an **X-ray / scan**: the **BRAIN glows and is
-> highlighted in a distinct accent colour (green)**, and the **skull bones are
-> visible** in cooler X-ray tones. We can still tell it's one of the agents
-> because the silhouette shows the iconic small oval dark Matrix-style sunglasses.
-> Keep it scan-like and graphic, muted palette, subtle glow. No readable text, no
-> logos. Isolated on a plain transparent background, no scene. Transparent PNG.
-> 4:3 or square.
+> The whole head is rendered as an **X-ray / scan** with the **skull bones visible**
+> in cooler X-ray tones. BUT inside the skull, **in place of a biological human
+> brain, there is an ARTIFICIAL / AI BRAIN**: a glowing green **NEURAL NETWORK in
+> the shape of a brain** — a dense mesh of **interconnected nodes and synaptic
+> links**, with a **layered deep-network structure (input / hidden / output style
+> layers)** and subtle circuit/graph traces, evoking an **LLM / deep neural net**.
+> **NO biological gyri or brain folds** — clearly a digital network, not organic
+> tissue. The network **glows and is highlighted in a distinct green accent**, with
+> light pulsing along the connections between nodes. We can still tell it's one of
+> the agents because the silhouette shows the iconic small oval dark Matrix-style
+> sunglasses. Keep it scan-like and graphic, muted palette, subtle glow. No
+> readable text, no logos. Isolated on a plain transparent background, no scene.
+> Transparent PNG. 4:3 or square.
 
 ---
 
