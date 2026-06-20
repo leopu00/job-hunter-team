@@ -61,20 +61,24 @@ verifica link attivo → fetch JD → 4 filtri Scout → INSERT in `positions`
 `email:<domain>`): è ciò che rende **misurabile l'accuratezza per sorgente** sulla
 dashboard. JD obbligatoria (SC-02): se non riesci a recuperarla, non inventarla.
 
-## Bilanciamento (riassunto, il decisore è il Capitano)
+## Bilanciamento (giudizio del Capitano, C-16)
 
-- Volume ragionevole → ingerisci tutto (più segnale è meglio).
-- Flood → solo le **salienti** (rilevanza sul target / più fresche / mittenti ad
-  alto valore); il resto resta in inbox per la finestra dopo (non è perso).
-- Il **backpressure** è qui, allo step create: non creare più posizioni di quante
-  Analista+Scorer riescano a portare allo score **dentro il budget**.
+Leggere è gratis (`poll`/`count`), **elaborare** fino allo score costa. Il
+decisore è il Capitano, non una formula:
+- Volume ragionevole → elaborale tutte (più segnale è meglio).
+- Flood → porta avanti solo le **salienti**, con due criteri dai soli metadati
+  (gratis): **(1) match col profilo/target** dell'utente (ruolo/keyword nel
+  `subject`/titolo) e **(2) freschezza** (`received_at` più recente). Le altre si
+  riprendono nelle finestre successive.
+- Obiettivo: le posizioni **arrivano a uno score**, non si accumulano non
+  valutate. Niente soglie fisse — il Capitano decide quante in base al budget.
 
 ## Anti-pattern
 
 - ❌ Pollare più spesso di ~30 min (rate-limit IMAP, nessun nuovo alert).
 - ❌ INSERT senza JD completa (SC-02) o senza il tag `source`.
-- ❌ Creare a valanga su flood ignorando il cap del Capitano (C-16): si gonfia la
-  coda di posizioni che non arriveranno mai a uno score.
+- ❌ Creare a valanga su flood ignorando il giudizio del Capitano (C-16): si gonfia
+  la coda di posizioni che non arriveranno mai a uno score.
 - ❌ Bypassare il dedup (SC-05): gli stessi alert si ripetono ogni giorno.
 
 ## See also
