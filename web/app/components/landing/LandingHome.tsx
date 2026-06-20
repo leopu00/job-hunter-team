@@ -209,7 +209,11 @@ function Sections() {
         copy={c.pricing}
         href="/pricing"
         promptId="landing.pricing"
-        label={L === "it" ? "Open source: la piattaforma è gratis" : "Open source: the platform is free"}
+        label={
+          L === "it"
+            ? "Open source: la piattaforma è gratis"
+            : "Open source: the platform is free"
+        }
         reverse
       />
     </div>

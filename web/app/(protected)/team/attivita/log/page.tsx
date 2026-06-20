@@ -12,19 +12,39 @@ export default async function ActivityLogPage() {
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="mb-6 pb-6 border-b border-[var(--color-border)]">
         <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
-          <Link href="/dashboard" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">
+          <Link
+            href="/dashboard"
+            className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
+          >
             Dashboard
           </Link>
-          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <Link href="/team" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">
+          <span className="text-[var(--color-border)]" aria-hidden="true">
+            /
+          </span>
+          <Link
+            href="/team"
+            className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
+          >
             Team
           </Link>
-          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <Link href="/team/attivita" className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors">
+          <span className="text-[var(--color-border)]" aria-hidden="true">
+            /
+          </span>
+          <Link
+            href="/team/attivita"
+            className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
+          >
             Attività
           </Link>
-          <span className="text-[var(--color-border)]" aria-hidden="true">/</span>
-          <span className="text-[10px] text-[var(--color-muted)]" aria-current="page">Registro</span>
+          <span className="text-[var(--color-border)]" aria-hidden="true">
+            /
+          </span>
+          <span
+            className="text-[10px] text-[var(--color-muted)]"
+            aria-current="page"
+          >
+            Registro
+          </span>
         </nav>
         <div className="mt-3">
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">

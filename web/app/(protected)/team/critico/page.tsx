@@ -527,10 +527,7 @@ export default function CriticoPage() {
     verdictTotal > 0 ? Math.round((stats!.pass / verdictTotal) * 100) : 0;
   const verdictRejectPct =
     verdictTotal > 0 ? Math.round((stats!.reject / verdictTotal) * 100) : 0;
-  const verdictNeedsPct = Math.max(
-    0,
-    100 - verdictPassPct - verdictRejectPct,
-  );
+  const verdictNeedsPct = Math.max(0, 100 - verdictPassPct - verdictRejectPct);
 
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>

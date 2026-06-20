@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import type { RecentActivityEvent, TeamActivityRole } from "@/lib/team-activity";
+import type {
+  RecentActivityEvent,
+  TeamActivityRole,
+} from "@/lib/team-activity";
 import { ROLE_META, timeAgo, dmhm } from "@/lib/team-activity-meta";
 
 const ROLES: TeamActivityRole[] = [
@@ -61,7 +64,10 @@ export default function ActivityLogTable({
       {/* ── Filtri ──────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <button
-          onClick={() => { setRole("all"); reset(); }}
+          onClick={() => {
+            setRole("all");
+            reset();
+          }}
           className="px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wide transition-colors"
           style={{
             background: role === "all" ? "var(--color-white)" : "transparent",
@@ -77,7 +83,10 @@ export default function ActivityLogTable({
           return (
             <button
               key={r}
-              onClick={() => { setRole(r); reset(); }}
+              onClick={() => {
+                setRole(r);
+                reset();
+              }}
               disabled={!counts[r]}
               className="px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wide transition-colors disabled:opacity-30"
               style={{
@@ -93,7 +102,10 @@ export default function ActivityLogTable({
         })}
         <input
           value={q}
-          onChange={(e) => { setQ(e.target.value); reset(); }}
+          onChange={(e) => {
+            setQ(e.target.value);
+            reset();
+          }}
           placeholder="Cerca istanza, titolo, azienda, #id…"
           className="ml-auto bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-3 py-1.5 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors w-64 max-w-full"
           style={{ fontFamily: "inherit" }}
@@ -106,22 +118,30 @@ export default function ActivityLogTable({
           <table className="w-full text-left border-collapse min-w-[760px]">
             <thead>
               <tr className="border-b border-[var(--color-border)]">
-                {["Quando", "Agente", "Azione", "Posizione", "#", "Data/ora"].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="px-4 py-2.5 text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] whitespace-nowrap"
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  "Quando",
+                  "Agente",
+                  "Azione",
+                  "Posizione",
+                  "#",
+                  "Data/ora",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-2.5 text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] whitespace-nowrap"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-[11px] text-[var(--color-dim)]">
+                  <td
+                    colSpan={6}
+                    className="px-4 py-10 text-center text-[11px] text-[var(--color-dim)]"
+                  >
                     Nessuna azione per i filtri selezionati.
                   </td>
                 </tr>
@@ -154,7 +174,9 @@ export default function ActivityLogTable({
                         {ev.title || ev.company ? (
                           <>
                             {ev.title && (
-                              <span className="text-[var(--color-white)]">{ev.title}</span>
+                              <span className="text-[var(--color-white)]">
+                                {ev.title}
+                              </span>
                             )}
                             {ev.company && (
                               <span className="text-[var(--color-dim)]">
@@ -198,16 +220,24 @@ export default function ActivityLogTable({
           <span>Righe per pagina</span>
           <select
             value={pageSize}
-            onChange={(e) => { setPageSize(Number(e.target.value)); reset(); }}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              reset();
+            }}
             className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[10px] text-[var(--color-white)] outline-none"
             style={{ fontFamily: "inherit", colorScheme: "dark" }}
           >
             {PAGE_SIZES.map((s) => (
-              <option key={s} value={s}>{s}</option>
+              <option key={s} value={s}>
+                {s}
+              </option>
             ))}
           </select>
           <span className="ml-2 tabular-nums">
-            {total === 0 ? "0" : `${start + 1}–${Math.min(start + pageSize, total)}`} di {total}
+            {total === 0
+              ? "0"
+              : `${start + 1}–${Math.min(start + pageSize, total)}`}{" "}
+            di {total}
           </span>
         </div>
         <div className="flex items-center gap-1.5">

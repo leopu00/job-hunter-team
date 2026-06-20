@@ -44,8 +44,10 @@ export default function CaseStudiesIndexPage() {
             Job Hunter è un team di agenti AI che cerca lavoro al posto tuo:
             trova posizioni, le analizza, le valuta sul tuo profilo e prepara le
             candidature. Qui mostriamo cosa ha prodotto su{" "}
-            <strong className="text-[var(--color-white)]">profili candidato reali</strong> —
-            dati aggregati e anonimi, nessuna informazione personale.
+            <strong className="text-[var(--color-white)]">
+              profili candidato reali
+            </strong>{" "}
+            — dati aggregati e anonimi, nessuna informazione personale.
           </p>
           <p className="mt-2 max-w-2xl text-[12px] leading-relaxed text-[var(--color-dim)]">
             È una pagina viva: cresce a ogni nuovo team monitorato. Scegli un
@@ -65,31 +67,62 @@ export default function CaseStudiesIndexPage() {
                 <div className="flex items-center gap-3 mb-4">
                   <span
                     className="inline-flex items-center justify-center w-11 h-11 rounded-xl text-[14px] font-extrabold shrink-0"
-                    style={{ background: "color-mix(in srgb, var(--color-blue) 18%, transparent)", color: "var(--color-blue)" }}
+                    style={{
+                      background:
+                        "color-mix(in srgb, var(--color-blue) 18%, transparent)",
+                      color: "var(--color-blue)",
+                    }}
                   >
                     {cs.profile.badge}
                   </span>
                   <div className="min-w-0">
-                    <div className="text-[14px] font-bold text-[var(--color-white)]">{cs.label}</div>
-                    <div className="text-[11px] text-[var(--color-dim)] truncate">{cs.tagline}</div>
+                    <div className="text-[14px] font-bold text-[var(--color-white)]">
+                      {cs.label}
+                    </div>
+                    <div className="text-[11px] text-[var(--color-dim)] truncate">
+                      {cs.tagline}
+                    </div>
                   </div>
-                  <span className="ml-auto text-[var(--color-dim)] group-hover:text-[var(--color-blue)] transition-colors">→</span>
+                  <span className="ml-auto text-[var(--color-dim)] group-hover:text-[var(--color-blue)] transition-colors">
+                    →
+                  </span>
                 </div>
                 <p className="text-[12px] text-[var(--color-muted)] leading-relaxed line-clamp-2 mb-4">
                   {cs.profile.headline} · {cs.profile.summary}
                 </p>
                 <div className="grid grid-cols-3 gap-2 border-t border-[var(--color-border)] pt-3">
                   <div>
-                    <div className="text-[18px] font-extrabold tabular-nums" style={{ color: "var(--color-blue)" }}>{nf(cs.run.totals.positions)}</div>
-                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">posizioni</div>
+                    <div
+                      className="text-[18px] font-extrabold tabular-nums"
+                      style={{ color: "var(--color-blue)" }}
+                    >
+                      {nf(cs.run.totals.positions)}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                      posizioni
+                    </div>
                   </div>
                   <div>
-                    <div className="text-[18px] font-extrabold tabular-nums" style={{ color: "#00e676" }}>{Math.round(cs.run.match.avg)}</div>
-                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">match medio</div>
+                    <div
+                      className="text-[18px] font-extrabold tabular-nums"
+                      style={{ color: "#00e676" }}
+                    >
+                      {Math.round(cs.run.match.avg)}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                      match medio
+                    </div>
                   </div>
                   <div>
-                    <div className="text-[18px] font-extrabold tabular-nums" style={{ color: "#00e676" }}>{nf(cs.run.match.strong70)}</div>
-                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">match forti</div>
+                    <div
+                      className="text-[18px] font-extrabold tabular-nums"
+                      style={{ color: "#00e676" }}
+                    >
+                      {nf(cs.run.match.strong70)}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                      match forti
+                    </div>
                   </div>
                 </div>
               </Link>
@@ -99,8 +132,12 @@ export default function CaseStudiesIndexPage() {
             <div className="rounded-2xl border border-dashed border-[var(--color-border)] p-5 flex items-center justify-center text-center opacity-70">
               <div>
                 <div className="text-2xl mb-1">➕</div>
-                <div className="text-[12px] text-[var(--color-muted)] font-semibold">Altri case study in arrivo</div>
-                <div className="text-[11px] text-[var(--color-dim)] mt-1">il tuo potrebbe essere il prossimo</div>
+                <div className="text-[12px] text-[var(--color-muted)] font-semibold">
+                  Altri case study in arrivo
+                </div>
+                <div className="text-[11px] text-[var(--color-dim)] mt-1">
+                  il tuo potrebbe essere il prossimo
+                </div>
               </div>
             </div>
           </div>
@@ -108,7 +145,9 @@ export default function CaseStudiesIndexPage() {
 
         {/* ── Contribuisci ──────────────────────────────────────── */}
         <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 sm:p-8">
-          <h2 className="text-xl font-bold tracking-tight">📥 Contribuisci con i tuoi dati</h2>
+          <h2 className="text-xl font-bold tracking-tight">
+            📥 Contribuisci con i tuoi dati
+          </h2>
           <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[var(--color-muted)]">
             Più profili reali raccogliamo, più questa pagina diventa utile a chi
             cerca lavoro. Fai girare Job Hunter sulla tua ricerca e condividi i
@@ -123,12 +162,17 @@ export default function CaseStudiesIndexPage() {
             >
               <div className="text-[13px] font-bold text-[var(--color-white)]">
                 🧪 Diventa beta tester{" "}
-                <span className="inline-block transition-transform group-hover:translate-x-0.5" style={{ color: "#00e676" }}>→</span>
+                <span
+                  className="inline-block transition-transform group-hover:translate-x-0.5"
+                  style={{ color: "#00e676" }}
+                >
+                  →
+                </span>
               </div>
               <p className="mt-1.5 text-[12px] text-[var(--color-muted)] leading-relaxed">
                 Fai girare il team per qualche settimana sulla tua ricerca e
-                condividi i risultati: ti aiutiamo col setup. Guida e modello dati
-                su GitHub.
+                condividi i risultati: ti aiutiamo col setup. Guida e modello
+                dati su GitHub.
               </p>
             </a>
             <a
@@ -139,7 +183,9 @@ export default function CaseStudiesIndexPage() {
             >
               <div className="text-[13px] font-bold text-[var(--color-white)]">
                 🛠️ Self-host & contribuisci{" "}
-                <span className="inline-block transition-transform group-hover:translate-x-0.5 text-[var(--color-blue)]">→</span>
+                <span className="inline-block transition-transform group-hover:translate-x-0.5 text-[var(--color-blue)]">
+                  →
+                </span>
               </div>
               <p className="mt-1.5 text-[12px] text-[var(--color-muted)] leading-relaxed">
                 Installa Job Hunter in locale o sul tuo VPS, usalo sulla tua
@@ -149,7 +195,12 @@ export default function CaseStudiesIndexPage() {
           </div>
           <div className="mt-5 text-[11px] text-[var(--color-dim)]">
             Repository:{" "}
-            <a href={CONTRIBUTE_LINKS.repo} target="_blank" rel="noopener noreferrer" className="text-[var(--color-muted)] underline hover:text-[var(--color-white)]">
+            <a
+              href={CONTRIBUTE_LINKS.repo}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--color-muted)] underline hover:text-[var(--color-white)]"
+            >
               github.com/leopu00/job-hunter-team
             </a>
           </div>
