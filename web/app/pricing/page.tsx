@@ -120,42 +120,40 @@ function PricingContent() {
           className="mb-14 rounded-xl border border-[var(--color-border)] p-8 md:p-10"
           style={{ background: "var(--color-panel)" }}
         >
-          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-10">
-            <div className="md:w-1/2 text-center md:text-left">
-              <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)] mb-3">
-                Open source · MIT
-              </div>
-              <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-4">
-                {p.freeTitle}
-              </h2>
-              <p className="text-[13px] md:text-[14px] text-[var(--color-bright)] leading-relaxed">
-                {p.freeBody}
-              </p>
+          <div className="text-center md:text-left max-w-3xl">
+            <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)] mb-3">
+              Open source · MIT
             </div>
-            <div className="md:w-1/2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/pricing-brain.png"
-                alt={
-                  L === "it"
-                    ? "Radiografia di profilo della testa di un agente con il cervello illuminato in verde: il «cervello» rappresenta il provider AI, l'unica cosa a pagamento."
-                    : "Side X-ray of an agent's head with the brain glowing green: the “brain” represents the AI provider, the only paid part."
-                }
-                width={1448}
-                height={1086}
-                className="w-full h-auto"
-              />
-              <p className="mt-2 text-center text-[11px] text-[var(--color-muted)] leading-relaxed">
-                {L === "it"
-                  ? "La struttura è gratis. Il «cervello» — il provider AI — è l'unica cosa che paghi."
-                  : "The structure is free. The “brain” — the AI provider — is the only thing you pay for."}
-              </p>
-            </div>
+            <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-4">
+              {p.freeTitle}
+            </h2>
+            <p className="text-[13px] md:text-[14px] text-[var(--color-bright)] leading-relaxed">
+              {p.freeBody}
+            </p>
           </div>
         </section>
 
         {/* Provider */}
         <section className="mb-14">
+          <div className="max-w-md mx-auto mb-6">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/pricing-brain.png"
+              alt={
+                L === "it"
+                  ? "Radiografia di profilo della testa di un agente: al posto del cervello una rete neurale AI illuminata in verde — il «cervello» è il provider AI, l'unica cosa a pagamento."
+                  : "Side X-ray of an agent's head with an AI neural network glowing green in place of the brain: the “brain” is the AI provider, the only paid part."
+              }
+              width={1448}
+              height={1086}
+              className="w-full h-auto"
+            />
+            <p className="mt-2 text-center text-[11px] text-[var(--color-muted)] leading-relaxed">
+              {L === "it"
+                ? "Il «cervello» — il provider AI — è l'unica cosa che paghi."
+                : "The “brain” — the AI provider — is the only thing you pay for."}
+            </p>
+          </div>
           <h2 className="text-lg md:text-xl font-bold text-[var(--color-white)] tracking-tight mb-2 text-center">
             {p.providersTitle}
           </h2>
