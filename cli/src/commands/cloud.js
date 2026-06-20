@@ -777,6 +777,7 @@ async function handlePush(options) {
   let applications = [];
   let pendingMessages = [];
   let tombstones = [];
+  let transitions = [];
   // Cursor delta-sync: ad ogni tick leggiamo solo righe con updated_at >
   // ultimo pushato per quella tabella. Prima volta (cursor vuoto): full
   // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
@@ -864,6 +865,30 @@ async function handlePush(options) {
         // tombstones nel payload (compat con vecchi DB).
         if (!/no such table/i.test(err.message)) throw err;
       }
+      // Event-log per-istanza (position_state_transitions → cloud
+      // position_transitions, mig 044): append-only, NO updated_at → cursor su
+      // `ts` (monotono) con `>` stretto, come i tombstones. A riposo (nessuna
+      // nuova transizione) non contribuisce al payload → niente push inutili.
+      // Mappiamo position_id locale → position_legacy_id cloud (stesso int).
+      // Idempotente lato server (UNIQUE) → un re-push non duplica. Chiude
+      // l'event-log fossile ("Attività recente" ferma all'ultimo backfill).
+      try {
+        const tCols =
+          'position_id AS position_legacy_id, from_state, to_state, ts, by_agent, notes';
+        if (cursor.transitions) {
+          transitions = db.prepare(
+            `SELECT ${tCols} FROM position_state_transitions
+             WHERE ts > ? ORDER BY ts ASC`
+          ).all(cursor.transitions);
+        } else {
+          transitions = db.prepare(
+            `SELECT ${tCols} FROM position_state_transitions ORDER BY ts ASC`
+          ).all();
+        }
+      } catch (err) {
+        // DB senza la tabella (schema vecchio): no-op silenzioso.
+        if (!/no such table/i.test(err.message)) throw err;
+      }
       db.close();
     } catch (err) {
       console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
@@ -881,11 +906,14 @@ async function handlePush(options) {
   const tombstoneChunks = tombstones.length > 0
     ? `, ${tombstones.length} tombstones`
     : '';
+  const transitionChunks = transitions.length > 0
+    ? `, ${transitions.length} transitions`
+    : '';
   const isFirstPush = !cursor.positions && !cursor.scores && !cursor.applications;
   const deltaMode = isFirstPush ? 'first-push (full)' : 'delta';
   console.log(
     pc.dim(
-      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${tombstoneChunks}${profileChunks}`
+      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${tombstoneChunks}${transitionChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
@@ -895,7 +923,7 @@ async function handlePush(options) {
   if (
     positions.length === 0 && scores.length === 0 &&
     applications.length === 0 && pendingMessages.length === 0 &&
-    tombstones.length === 0 && !profilePayload
+    tombstones.length === 0 && transitions.length === 0 && !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
     return;
@@ -914,6 +942,7 @@ async function handlePush(options) {
         positions, scores, applications,
         pending_user_messages: pendingMessages,
         tombstones,
+        position_transitions: transitions,
         ...(profilePayload ? { profile: profilePayload } : {}),
       }),
     });
@@ -963,6 +992,9 @@ async function handlePush(options) {
   if (tombstones.length > 0 || body.tombstones?.applied) {
     console.log(pc.dim(`  tombstones:       ${body.tombstones?.applied ?? 0} applied`));
   }
+  if (transitions.length > 0 || body.position_transitions?.upserted) {
+    console.log(pc.dim(`  transitions:      ${body.position_transitions?.upserted ?? 0} new`));
+  }
 
   // Aggiorna cursor delta-sync solo dopo HTTP 200: il prossimo tick
   // selezionera' solo righe con updated_at > cursor. Se una qualsiasi
@@ -985,6 +1017,13 @@ async function handlePush(options) {
     }
   }
   if (tombMax) newCursor.tombstones = tombMax;
+  // Cursor transitions: MAX(ts) tra le righe inviate (campo `ts`, non
+  // updated_at). `>` stretto al prossimo tick → no re-push a riposo.
+  let transMax = null;
+  for (const t of transitions) {
+    if (t?.ts && (transMax === null || t.ts > transMax)) transMax = t.ts;
+  }
+  if (transMax) newCursor.transitions = transMax;
   // Salviamo anche se nulla e' cambiato: la prima volta crea il file e
   // disabilita la modalita' "first-push" al prossimo tick. La 2a volta
   // in poi e' no-op a livello di contenuto.
