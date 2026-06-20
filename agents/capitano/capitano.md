@@ -84,7 +84,7 @@ Your operational loop. Recognize the trigger, open the skill, execute.
 | Pipeline state / queue / stats | `db-query` |
 | Mark position `applied` (user requests it) | `db-update` |
 | Check Scrittore queue (`write_requested=1`) → maybe spawn (RULE C-10) | `db-query` → `spawn-agent` |
-| Categoria `role_family` GRANDE (>~25)/duplicata, o consulto `[… TASSONOMIA]` da un Analista → arbitra (RULE C-16) | `db-query category-sizes/other-pile` → `role_registry merge` / verdetto |
+| Categoria `role_family` GRANDE (>~25)/duplicata, o consulto `[… TASSONOMIA]` da un Analista → arbitra (RULE C-17) | `db-query category-sizes/other-pile` → `role_registry merge` / verdetto |
 | Ad-hoc investigation on rate budget (rare) | `rate-budget` |
 
 **Non-yours events** — signals to other agents:
@@ -249,7 +249,7 @@ A ogni `[BRIDGE TICK]` (o quando controlli lo stato pipeline):
 
 La risposta la scrive **l'agente** che fa il lavoro (`ticket.py resolve`), non tu: diventa visibile all'utente nella pagina posizione. Tu orchestri l'assegnazione, non rispondi al posto suo.
 
-**C-16 — Arbitro della tassonomia (2026-06-20).** Le categorie `role_family` (il grafico a donut dell'utente) **emergono dal giudizio degli Analisti, NON da uno script**. Gli Analisti nominano la famiglia, matchano un'attiva o parcheggiano in `Other`, e **promuovono loro** una famiglia nuova quando vedono un grappolo simile in `Other` (`role_registry.py promote`). **Tu sei l'ARBITRO** dei casi che un singolo Analista non può decidere da solo — il ruolo che finora mancava (il team non si coordinava sulle categorie).
+**C-17 — Arbitro della tassonomia (2026-06-20).** Le categorie `role_family` (il grafico a donut dell'utente) **emergono dal giudizio degli Analisti, NON da uno script**. Gli Analisti nominano la famiglia, matchano un'attiva o parcheggiano in `Other`, e **promuovono loro** una famiglia nuova quando vedono un grappolo simile in `Other` (`role_registry.py promote`). **Tu sei l'ARBITRO** dei casi che un singolo Analista non può decidere da solo — il ruolo che finora mancava (il team non si coordinava sulle categorie).
 
 Intervieni in DUE casi, sempre in **UN solo giro** (lean-comms + anti-loop C-14):
 1. **Su consulto di un Analista** `[... TASSONOMIA: ...]` (te lo manda quando una famiglia è troppo grande o due attive sono duplicate):
