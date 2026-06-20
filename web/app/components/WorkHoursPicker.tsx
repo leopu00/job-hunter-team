@@ -15,6 +15,69 @@ import { useToast } from "@/app/components/Toast";
 import { useLocale } from "@/lib/use-locale";
 
 const T: Record<string, Record<string, string>> = {
+  read_only_desktop: {
+    it: "✋ Gli orari si modificano dall'app desktop. Qui (browser) è sola visualizzazione.",
+    en: "✋ Working hours are edited from the desktop app. Here (browser) it's view-only.",
+    hu: "✋ A munkaidőt az asztali appból lehet módosítani. Itt (böngésző) csak megtekintés.",
+    es: "✋ Los horarios se editan desde la app de escritorio. Aquí (navegador) es solo lectura.",
+    de: "✋ Arbeitszeiten werden in der Desktop-App bearbeitet. Hier (Browser) nur Ansicht.",
+    fr: "✋ Les horaires se modifient depuis l'app desktop. Ici (navigateur), lecture seule.",
+    pt: "✋ Os horários são editados no app desktop. Aqui (navegador) é só visualização.",
+  },
+  day_range_hint: {
+    it: "Per ogni giorno scegli inizio e fine. Le ore sono un solo blocco contiguo (min 4h); la notte (es. 22:00→07:00) passa al giorno dopo.",
+    en: "For each day pick start and end. Hours are one contiguous block (min 4h); the night (e.g. 22:00→07:00) crosses midnight.",
+    hu: "Minden naphoz adj meg kezdést és véget. Egy összefüggő blokk (min 4h); az éjszaka (pl. 22:00→07:00) átnyúlik.",
+    es: "Para cada día elige inicio y fin. Un único bloque contiguo (mín 4h); la noche (p.ej. 22:00→07:00) cruza medianoche.",
+    de: "Für jeden Tag Start und Ende wählen. Ein zusammenhängender Block (min 4h); die Nacht (z.B. 22:00→07:00) überschreitet Mitternacht.",
+    fr: "Pour chaque jour, choisis début et fin. Un seul bloc continu (min 4h) ; la nuit (ex. 22:00→07:00) passe au lendemain.",
+    pt: "Para cada dia escolha início e fim. Um único bloco contíguo (mín 4h); a noite (ex. 22:00→07:00) cruza a meia-noite.",
+  },
+  day_off: {
+    it: "riposo",
+    en: "off",
+    hu: "pihenő",
+    es: "descanso",
+    de: "frei",
+    fr: "repos",
+    pt: "folga",
+  },
+  night_label: {
+    it: "notte",
+    en: "night",
+    hu: "éjszaka",
+    es: "noche",
+    de: "Nacht",
+    fr: "nuit",
+    pt: "noite",
+  },
+  min_hours_err: {
+    it: "min {n}h",
+    en: "min {n}h",
+    hu: "min {n}h",
+    es: "mín {n}h",
+    de: "min {n}h",
+    fr: "min {n}h",
+    pt: "mín {n}h",
+  },
+  need_one_day: {
+    it: "Attiva almeno un giorno",
+    en: "Enable at least one day",
+    hu: "Engedélyezz legalább egy napot",
+    es: "Activa al menos un día",
+    de: "Mindestens einen Tag aktivieren",
+    fr: "Active au moins un jour",
+    pt: "Ative pelo menos um dia",
+  },
+  fix_blocks: {
+    it: "Ogni blocco attivo deve durare almeno 4h",
+    en: "Each active block must last at least 4h",
+    hu: "Minden aktív blokk legalább 4 óra",
+    es: "Cada bloque activo debe durar al menos 4h",
+    de: "Jeder aktive Block muss mind. 4h dauern",
+    fr: "Chaque bloc actif doit durer au moins 4h",
+    pt: "Cada bloco ativo deve durar pelo menos 4h",
+  },
   preset_office: {
     it: "Office (Lun-Ven 9-18)",
     en: "Office (Mon-Fri 9-18)",
@@ -472,92 +535,91 @@ function detectLocalTz(): string {
   }
 }
 
-/* ─── Heatmap helpers ───────────────────────────────────────────────── */
+/* ─── Range-per-giorno helpers ──────────────────────────────────────── */
+// Vincoli (decisione utente 2026-06-19): UN solo blocco CONTIGUO per giorno,
+// minimo MIN_DAY_HOURS, default 9h. La notte (start > end, es. 22:00→07:00)
+// e' un blocco contiguo che attraversa la mezzanotte, gestito nativamente da
+// questo modello e dall'algoritmo Python a runtime.
 
-type CellGrid = boolean[][]; // [day_idx 0..6][hour 0..23]
+const MIN_DAY_HOURS = 4;
+const DEFAULT_START = "09:00";
+const DEFAULT_END = "18:00";
+const HOUR_OPTIONS = HOURS.map((h) => `${String(h).padStart(2, "0")}:00`);
 
-function gridFromConfig(cfg: WorkingHoursConfig | null): CellGrid {
-  const grid: CellGrid = Array.from({ length: 7 }, () =>
-    new Array(24).fill(false),
-  );
-  if (!cfg || !cfg.windows?.length) {
-    return grid.map((row) => row.map(() => true)); // 24/7 = tutto ON
-  }
-  for (const w of cfg.windows) {
-    const [sh, sm] = w.start.split(":").map(Number);
-    const [eh, em] = w.end.split(":").map(Number);
-    const startMin = sh * 60 + sm;
-    const endMin = eh * 60 + em;
-    const wraps = endMin <= startMin;
-    for (const d of w.days) {
-      const di = ALL_DAYS.indexOf(d);
-      if (di < 0) continue;
-      for (let h = 0; h < 24; h++) {
-        const hMin = h * 60;
-        const inside = wraps
-          ? hMin >= startMin || hMin < endMin
-          : hMin >= startMin && hMin < endMin;
-        if (inside) grid[di][h] = true;
-      }
-    }
-  }
-  return grid;
+// Schedule editabile di un giorno: acceso/spento + un solo blocco start→end.
+type DaySched = { on: boolean; start: string; end: string };
+
+// Durata in ore di un blocco HH:MM→HH:MM, con wrap di mezzanotte
+// (es. 22:00→07:00 = 9h). Allineata a windowDurationHours di shared/config.
+function blockHours(start: string, end: string): number {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  let h = eh + em / 60 - (sh + sm / 60);
+  if (h <= 0) h += 24;
+  return h;
 }
 
-/** Converte una grid 7×24 in una lista di WorkingHoursWindow minimali.
- *  Pattern: per ogni giorno trova run consecutivi di celle ON, crea una
- *  window per run. Poi raggruppa windows con stesso start/end e merge
- *  i loro days. Risultato: schema compatto e valido. */
-function configFromGrid(grid: CellGrid, timezone: string): WorkingHoursConfig {
-  // 1) Per ogni giorno → lista di (start_hour, end_hour) chiuso aperto
-  const perDay: Array<Array<{ start: number; end: number }>> = grid.map(
-    (row) => {
-      const runs: Array<{ start: number; end: number }> = [];
-      let i = 0;
-      while (i < 24) {
-        if (!row[i]) {
-          i++;
-          continue;
-        }
-        const s = i;
-        while (i < 24 && row[i]) i++;
-        runs.push({ start: s, end: i });
-      }
-      return runs;
-    },
-  );
+function isWrap(start: string, end: string): boolean {
+  return start !== "" && end !== "" && blockHours(start, end) > 0 && end <= start;
+}
 
-  // 2) Raggruppa run-by-run per chiave (start,end) → days
+// cfg → 7 schedule (uno per giorno). null/vuoto (24/7) → base daytime 9h
+// modificabile: in custom mode si parte da un orario sensato, non da 24h.
+function schedFromConfig(cfg: WorkingHoursConfig | null): DaySched[] {
+  if (!cfg || !cfg.windows?.length) {
+    return ALL_DAYS.map(() => ({ on: true, start: DEFAULT_START, end: DEFAULT_END }));
+  }
+  const out: DaySched[] = ALL_DAYS.map(() => ({
+    on: false,
+    start: DEFAULT_START,
+    end: DEFAULT_END,
+  }));
+  for (const w of cfg.windows) {
+    for (const d of w.days) {
+      const di = ALL_DAYS.indexOf(d);
+      if (di >= 0) out[di] = { on: true, start: w.start, end: w.end };
+    }
+  }
+  return out;
+}
+
+// 7 schedule → config: raggruppa i giorni ON per (start,end) → una window
+// per orario distinto (ogni giorno compare in al piu' una window → valido
+// per lo schema, contiguita' garantita).
+function configFromSched(
+  sched: DaySched[],
+  timezone: string,
+): WorkingHoursConfig {
   const byKey = new Map<
     string,
-    { start: number; end: number; days: Weekday[] }
+    { start: string; end: string; days: Weekday[] }
   >();
-  perDay.forEach((runs, di) => {
-    for (const r of runs) {
-      const key = `${r.start}-${r.end}`;
-      if (!byKey.has(key)) {
-        byKey.set(key, { start: r.start, end: r.end, days: [] });
-      }
-      byKey.get(key)!.days.push(ALL_DAYS[di]);
-    }
+  sched.forEach((s, di) => {
+    if (!s.on) return;
+    const key = `${s.start}-${s.end}`;
+    if (!byKey.has(key)) byKey.set(key, { start: s.start, end: s.end, days: [] });
+    byKey.get(key)!.days.push(ALL_DAYS[di]);
   });
-
   const windows: WorkingHoursWindow[] = Array.from(byKey.values()).map((w) => ({
     days: w.days,
-    start: `${String(w.start).padStart(2, "0")}:00`,
-    end: w.end === 24 ? "00:00" : `${String(w.end).padStart(2, "0")}:00`,
+    start: w.start,
+    end: w.end,
   }));
   return { timezone: timezone || detectLocalTz(), windows };
 }
 
-function isAllOn(grid: CellGrid): boolean {
-  return grid.every((row) => row.every((cell) => cell));
+// Giorni ON che violano i vincoli (durata < min, oppure start == end).
+function invalidDays(sched: DaySched[]): number[] {
+  const bad: number[] = [];
+  sched.forEach((s, di) => {
+    if (!s.on) return;
+    if (s.start === s.end || blockHours(s.start, s.end) < MIN_DAY_HOURS) bad.push(di);
+  });
+  return bad;
 }
 
-/* ─── Bar chart per-giorno ──────────────────────────────────────────── */
-
-function hoursPerDay(grid: CellGrid): number[] {
-  return grid.map((row) => row.filter(Boolean).length);
+function schedHoursPerDay(sched: DaySched[]): number[] {
+  return sched.map((s) => (s.on ? blockHours(s.start, s.end) : 0));
 }
 
 /* ─── Preset detection ──────────────────────────────────────────────── */
@@ -596,10 +658,11 @@ function fmtTransition(iso: string | null | undefined): string {
 
 function computeWeeklyHours(cfg: WorkingHoursConfig | null): number {
   if (!cfg || !cfg.windows?.length) return 168;
-  return gridFromConfig(cfg).reduce(
-    (acc, row) => acc + row.filter(Boolean).length,
-    0,
-  );
+  let total = 0;
+  for (const w of cfg.windows) {
+    total += blockHours(w.start, w.end) * (w.days?.length ?? 0);
+  }
+  return Math.round(total * 10) / 10;
 }
 
 /* ─── Component ─────────────────────────────────────────────────────── */
@@ -612,10 +675,14 @@ export default function WorkHoursPicker() {
   const [saving, setSaving] = useState(false);
   const [cfg, setCfg] = useState<WorkingHoursConfig | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Modificabile solo dall'app desktop (host localhost). Dal browser cloud la UI
+  // e' sola visualizzazione (pattern WEB-READONLY). Default true finche' la GET
+  // non dice il contrario, cosi' in locale non c'e' flash di "read-only".
+  const [editable, setEditable] = useState(true);
   const preset: PresetKey = useMemo(() => detectPreset(cfg), [cfg]);
-  // Editing grid: stato locale che vive solo in custom mode. Sincronizzata
-  // con cfg quando preset cambia, e applicata via "Salva" per persistere.
-  const [editGrid, setEditGrid] = useState<CellGrid | null>(null);
+  // Editing schedule (range per giorno): stato locale che vive solo in custom
+  // mode. Sincronizzato con cfg all'ingresso in custom, applicato via "Salva".
+  const [editSched, setEditSched] = useState<DaySched[] | null>(null);
 
   const loadState = useCallback(async () => {
     setLoading(true);
@@ -624,6 +691,7 @@ export default function WorkHoursPicker() {
       const data = await r.json();
       setCfg(data.working_hours ?? null);
       setPreview(data.preview ?? null);
+      setEditable(data.editable !== false);
     } catch {
       toast(tr("toast_load_err"), "error");
     } finally {
@@ -649,7 +717,7 @@ export default function WorkHoursPicker() {
         if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
         setCfg(data.working_hours ?? null);
         setPreview(data.preview ?? null);
-        setEditGrid(null);
+        setEditSched(null);
         toast(
           next === null ? tr("toast_removed") : tr("toast_saved"),
           "success",
@@ -667,11 +735,11 @@ export default function WorkHoursPicker() {
   const applyPreset = useCallback(
     (key: PresetKey) => {
       if (key === "custom") {
-        // Entra in custom: clona il config corrente nella editGrid.
-        setEditGrid(gridFromConfig(cfg));
+        // Entra in custom: deriva lo schedule per-giorno dal config corrente.
+        setEditSched(schedFromConfig(cfg));
         return;
       }
-      setEditGrid(null);
+      setEditSched(null);
       const p = PRESETS[key];
       if (!p.cfg) {
         save(null);
@@ -682,30 +750,16 @@ export default function WorkHoursPicker() {
     [cfg, save],
   );
 
-  const toggleCell = (di: number, hr: number) => {
-    if (!editGrid) return;
-    const next = editGrid.map((row, i) =>
-      i === di ? row.map((c, h) => (h === hr ? !c : c)) : row,
-    );
-    setEditGrid(next);
+  const toggleDay = (di: number) => {
+    if (!editSched) return;
+    setEditSched(editSched.map((s, i) => (i === di ? { ...s, on: !s.on } : s)));
   };
 
-  const toggleDayRow = (di: number) => {
-    if (!editGrid) return;
-    const allOn = editGrid[di].every(Boolean);
-    const next = editGrid.map((row, i) =>
-      i === di ? row.map(() => !allOn) : row,
+  const setDayField = (di: number, field: "start" | "end", value: string) => {
+    if (!editSched) return;
+    setEditSched(
+      editSched.map((s, i) => (i === di ? { ...s, [field]: value } : s)),
     );
-    setEditGrid(next);
-  };
-
-  const toggleHourCol = (hr: number) => {
-    if (!editGrid) return;
-    const allOn = editGrid.every((row) => row[hr]);
-    const next = editGrid.map((row) =>
-      row.map((c, h) => (h === hr ? !allOn : c)),
-    );
-    setEditGrid(next);
   };
 
   if (loading) {
@@ -717,12 +771,23 @@ export default function WorkHoursPicker() {
     );
   }
 
-  const isCustom = preset === "custom" || editGrid !== null;
-  const grid = editGrid ?? gridFromConfig(cfg);
+  const isCustom = preset === "custom" || editSched !== null;
+  const sched = editSched ?? schedFromConfig(cfg);
+  const badDays = invalidDays(sched);
+  const noDayOn = sched.every((s) => !s.on);
+  // perDayHours: in custom dallo schedule editato; in non-custom dal cfg reale
+  // (24/7 = 24h/giorno, altrimenti la durata del blocco di quel giorno).
+  const perDayHours: number[] = isCustom
+    ? schedHoursPerDay(sched)
+    : !cfg || !cfg.windows?.length
+      ? ALL_DAYS.map(() => 24)
+      : ALL_DAYS.map((d) => {
+          const w = (cfg.windows ?? []).find((x) => x.days.includes(d));
+          return w ? blockHours(w.start, w.end) : 0;
+        });
   const weeklyHours = isCustom
-    ? grid.reduce((a, r) => a + r.filter(Boolean).length, 0)
+    ? Math.round(perDayHours.reduce((a, h) => a + h, 0) * 10) / 10
     : computeWeeklyHours(cfg);
-  const perDayHours = hoursPerDay(grid);
   const maxDayHours = Math.max(...perDayHours, 1);
 
   const provInfo = preview?.provider;
@@ -759,16 +824,22 @@ export default function WorkHoursPicker() {
         </div>
       </div>
 
+      {!editable && (
+        <div className="mb-4 text-xs px-3 py-2 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
+          {tr("read_only_desktop")}
+        </div>
+      )}
+
       {/* Preset chips */}
       <div className="flex flex-wrap gap-2 mb-4">
         {(Object.keys(PRESETS) as Array<keyof typeof PRESETS>).map((k) => (
           <button
             key={k}
-            disabled={saving}
-            onClick={() => applyPreset(k as PresetKey)}
+            disabled={saving || !editable}
+            onClick={() => editable && applyPreset(k as PresetKey)}
             className={
               "px-3 py-1.5 rounded-md border text-sm transition " +
-              (preset === k && !editGrid
+              (preset === k && !editSched
                 ? "border-orange-500 bg-orange-500/10 text-orange-300"
                 : "border-[var(--color-border)] hover:border-orange-500/50")
             }
@@ -778,8 +849,8 @@ export default function WorkHoursPicker() {
           </button>
         ))}
         <button
-          disabled={saving}
-          onClick={() => applyPreset("custom")}
+          disabled={saving || !editable}
+          onClick={() => editable && applyPreset("custom")}
           className={
             "px-3 py-1.5 rounded-md border text-sm transition " +
             (isCustom
@@ -792,8 +863,8 @@ export default function WorkHoursPicker() {
         </button>
       </div>
 
-      {/* Timezone + heatmap (solo in custom mode) */}
-      {isCustom && (
+      {/* Editor range-per-giorno (solo in custom mode + app desktop) */}
+      {editable && isCustom && (
         <div className="space-y-4 mt-4 pt-4 border-t border-[var(--color-border)]">
           <div>
             <label className="block text-xs opacity-60 mb-1">
@@ -825,77 +896,110 @@ export default function WorkHoursPicker() {
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <p className="text-xs opacity-60 mb-2">{tr("heatmap_hint")}</p>
-            <table className="border-separate" style={{ borderSpacing: "1px" }}>
-              <thead>
-                <tr>
-                  <th></th>
-                  {HOURS.map((h) => (
-                    <th
-                      key={h}
-                      onClick={() => toggleHourCol(h)}
-                      className="text-[10px] font-normal opacity-50 hover:opacity-100 cursor-pointer w-5 text-center"
-                    >
-                      {h % 3 === 0 ? h : ""}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ALL_DAYS.map((d, di) => (
-                  <tr key={d}>
-                    <td
-                      onClick={() => toggleDayRow(di)}
-                      className="text-xs pr-2 cursor-pointer opacity-70 hover:opacity-100 select-none"
+          <div>
+            <p className="text-xs opacity-60 mb-3">{tr("day_range_hint")}</p>
+            <div className="space-y-1.5">
+              {ALL_DAYS.map((d, di) => {
+                const s = sched[di];
+                const bad = badDays.includes(di);
+                const dur = s.on ? blockHours(s.start, s.end) : 0;
+                const wrap = s.on && isWrap(s.start, s.end);
+                return (
+                  <div key={d} className="flex items-center gap-3 text-sm py-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleDay(di)}
+                      className={
+                        "w-14 text-left px-2 py-1 rounded border transition select-none " +
+                        (s.on
+                          ? "border-orange-500/60 bg-orange-500/10 text-orange-300"
+                          : "border-[var(--color-border)] opacity-50 hover:opacity-80")
+                      }
                     >
                       {tr(DAY_TKEY[d])}
-                    </td>
-                    {HOURS.map((h) => (
-                      <td
-                        key={h}
-                        onClick={() => toggleCell(di, h)}
-                        className={
-                          "w-5 h-5 rounded cursor-pointer transition " +
-                          (grid[di][h]
-                            ? "bg-orange-500 hover:bg-orange-400"
-                            : "bg-white/5 hover:bg-white/10")
-                        }
-                        title={`${tr(DAY_TKEY[d])} ${String(h).padStart(2, "0")}:00`}
-                      />
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </button>
+                    {s.on ? (
+                      <>
+                        <select
+                          value={s.start}
+                          onChange={(e) =>
+                            setDayField(di, "start", e.target.value)
+                          }
+                          className="px-2 py-1 rounded bg-transparent border border-[var(--color-border)] font-mono text-sm"
+                        >
+                          {HOUR_OPTIONS.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="opacity-50">→</span>
+                        <select
+                          value={s.end}
+                          onChange={(e) =>
+                            setDayField(di, "end", e.target.value)
+                          }
+                          className="px-2 py-1 rounded bg-transparent border border-[var(--color-border)] font-mono text-sm"
+                        >
+                          {HOUR_OPTIONS.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </select>
+                        <span
+                          className={
+                            "font-mono text-xs " +
+                            (bad ? "text-red-400" : "opacity-60")
+                          }
+                        >
+                          {dur}h{wrap ? ` · 🌙 ${tr("night_label")}` : ""}
+                          {bad
+                            ? ` · ${tr("min_hours_err").replace("{n}", String(MIN_DAY_HOURS))}`
+                            : ""}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="opacity-40 text-xs">{tr("day_off")}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          <button
-            onClick={() => {
-              if (!editGrid) return;
-              if (isAllOn(editGrid)) {
-                save(null); // tutto ON = 24/7 = nessun config
-              } else {
+          <div className="mt-2">
+            <button
+              onClick={() => {
+                if (!editSched) return;
                 save(
-                  configFromGrid(editGrid, cfg?.timezone || detectLocalTz()),
+                  configFromSched(
+                    editSched,
+                    cfg?.timezone || detectLocalTz(),
+                  ),
                 );
-              }
-            }}
-            disabled={saving || weeklyHours === 0}
-            className="px-4 py-1.5 rounded-md bg-orange-600 hover:bg-orange-500 text-sm disabled:opacity-40"
-          >
-            {saving ? tr("saving") : `💾 ${tr("save_custom")}`}
-          </button>
-          <button
-            onClick={() => {
-              setEditGrid(null);
-              loadState();
-            }}
-            disabled={saving}
-            className="ml-2 px-4 py-1.5 rounded-md border border-[var(--color-border)] hover:border-white/30 text-sm"
-          >
-            {tr("cancel")}
-          </button>
+              }}
+              disabled={saving || badDays.length > 0 || noDayOn}
+              className="px-4 py-1.5 rounded-md bg-orange-600 hover:bg-orange-500 text-sm disabled:opacity-40"
+            >
+              {saving ? tr("saving") : `💾 ${tr("save_custom")}`}
+            </button>
+            <button
+              onClick={() => {
+                setEditSched(null);
+                loadState();
+              }}
+              disabled={saving}
+              className="ml-2 px-4 py-1.5 rounded-md border border-[var(--color-border)] hover:border-white/30 text-sm"
+            >
+              {tr("cancel")}
+            </button>
+            {(badDays.length > 0 || noDayOn) && (
+              <span className="ml-3 text-xs text-red-400">
+                {noDayOn ? tr("need_one_day") : tr("fix_blocks")}
+              </span>
+            )}
+          </div>
         </div>
       )}
 

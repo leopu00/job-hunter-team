@@ -18,7 +18,7 @@ import fs from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { z } from "zod";
 import { JHT_CONFIG_PATH, JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, isLocalRequest, requireLocalWrite } from "@/lib/auth";
 import { WorkingHoursSchema } from "../../../../../shared/config/schema";
 
 export const dynamic = "force-dynamic";
@@ -99,12 +99,19 @@ export async function GET() {
   const cfg = await readConfig();
   const wh = cfg?.team?.working_hours ?? null;
   const preview = await simulateTarget();
-  return NextResponse.json({ working_hours: wh, preview });
+  // Le modifiche agli orari si fanno solo dall'app desktop (host localhost);
+  // dal browser cloud la UI e' sola visualizzazione (pattern WEB-READONLY).
+  const editable = await isLocalRequest();
+  return NextResponse.json({ working_hours: wh, preview, editable });
 }
 
 export async function PUT(req: NextRequest) {
   const auth = await requireAuth();
   if (auth) return auth;
+
+  // Write-guard WEB-READONLY: modifiche solo dall'app desktop (host localhost).
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
 
   let body: unknown;
   try {

@@ -4,7 +4,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { randomUUID } from "node:crypto";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +72,8 @@ export async function GET() {
 
 /** POST — crea nuovo secret */
 export async function POST(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const denied = await requireAuth();
   if (denied) return denied;
   let body: { name?: string; type?: SecretType; value?: string } = {};
@@ -108,6 +110,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — rimuove secret per ID */
 export async function DELETE(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const denied = await requireAuth();
   if (denied) return denied;
   const id = req.nextUrl.searchParams.get("id");

@@ -352,7 +352,9 @@ export async function promptWorkingHours(prompter, currentWorkingHours) {
     night:   { days: ALL_DAYS,                        start: '22:00', end: '07:00' },
   };
   function detectCurrentPreset() {
-    if (!currentWorkingHours?.windows?.length) return 'always';
+    // Default proposto = 9h daytime 7/7 (decisione utente 2026-06-19), non piu'
+    // 24/7. Chi vuole il team sempre attivo sceglie esplicitamente 'always'.
+    if (!currentWorkingHours?.windows?.length) return 'daytime';
     if (currentWorkingHours.windows.length !== 1) return 'custom_later';
     const w = currentWorkingHours.windows[0];
     for (const [key, p] of Object.entries(PRESETS)) {
