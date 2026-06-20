@@ -16,7 +16,33 @@ export interface DocSection {
 
 export const DOCS_NAV: DocSection[] = [
   {
-    group: "Guides",
+    group: "Getting started",
+    items: [
+      {
+        title: "Getting Started",
+        href: "/docs/guides/getting-started",
+        emoji: "🚀",
+        description:
+          "Three ways to install, your first run, and the team in 10 minutes.",
+      },
+      {
+        title: "Connect your AI provider",
+        href: "/docs/guides/connect-ai-provider",
+        emoji: "🧠",
+        description:
+          "Choose and sign into Kimi, Codex or Claude — the team's brain.",
+      },
+      {
+        title: "Run 24/7 on a VPS",
+        href: "/docs/guides/run-on-a-vps",
+        emoji: "☁️",
+        description:
+          "Keep the team hunting around the clock on a small cloud server.",
+      },
+    ],
+  },
+  {
+    group: "Using the team",
     items: [
       {
         title: "Email Forwarding",
@@ -24,6 +50,20 @@ export const DOCS_NAV: DocSection[] = [
         emoji: "📧",
         description:
           "Give the team a dedicated inbox and auto-forward your job alerts.",
+      },
+      {
+        title: "Your dashboard & results",
+        href: "/docs/guides/dashboard-and-results",
+        emoji: "📊",
+        description:
+          "Read positions, scores and applications — login optional, local-only possible.",
+      },
+      {
+        title: "CLI — the jht command",
+        href: "/docs/guides/cli",
+        emoji: "⌨️",
+        description:
+          "The essential jht commands to drive the team from a terminal.",
       },
     ],
   },
