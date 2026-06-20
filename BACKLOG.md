@@ -261,6 +261,12 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
   2. ⬜ Test su sessione settimanale completa Claude Max — il seed `15%` è stima, serve case study reale per riportare confidence high.
   3. ⬜ Backfill EMA convergence verification — dopo 1 settimana di run reale verificare che `observed_ratio_pct` converga al seed `±5%`.
 
+##### 📐 [PACING-PROJ-VOLATILE] Decisioni gatate su `proj` volatile — da rifinire 🟡 (NEW 2026-06-20)
+
+- **Problema:** il bridge gatea alcune decisioni su `proj` (proiezione), un **dato volatile** (oscilla ±400pt tick-to-tick). I prompt dicono già di **ignorare proj** e usare `vel_team`/`vel_target`, ma il bridge ci si basa ancora (g-spot wake `sentinel-bridge.py:117-118`, scala throttle `compute_metrics.py:319-334`, coast `pacing-bridge.py:505`). In più i messaggi `[BRIDGE TICK]`/`[BRIDGE PACING]` mostrano `proj=X%` (5h) + annotazione "ignoralo" = rumore nel contesto LLM. NB `proj_weekly` (il 168% su betaA) è **INFO log-only, NON team-facing** → non disturba, è diagnostico.
+- **Opzioni** (analizzate in `docs/internal/2026-06-20-proj-volatile-pacing-todo.md`): A) togliere proj dai messaggi+prompt tenendo i gate (zero cambi comportamento); B) show-on-demand; C) **fix vero** = spostare i gate da proj a segnali velocity-based.
+- **Stato:** 🟡 **DEFERRED di proposito** (utente 2026-06-20). Parte delicata, esperimenti live, sta funzionando — NON toccare ora. **Osservazione collegata:** Kimi/betaB dal reset **Dom 21/06 19:11** (primo ciclo intero post recheck-on-demand; caso peggiore = budget basso + modello debole). Se Kimi va male → prioritizza opzione C.
+
 ##### 🔐 [JHT-ACCESS-CREDENTIALS-GAPS] Access & credentials — gap doc vs codice (NEW 2026-05-26)
 
 - **Context:** sessione di consolidamento doc 2026-05-26 (`docs/internal/access-and-credentials.md`) ha riallineato la storia "dove vivono le credenziali" e rivelato 6 punti dove la doc promette qualcosa che il codice non implementa ancora.
