@@ -24,7 +24,7 @@ CLI::
 
     python3 role_registry.py promote --name "Investment Banking / M&A" --ids 358,364,377
     python3 role_registry.py merge --into "Credit" --sources "Private Credit" "Corporate Credit"
-    python3 role_registry.py pass --dry-run     # [legacy] solo per diagnosi
+    python3 role_registry.py pass               # [legacy] diagnosi (dry-run; --apply per applicare)
 """
 
 import argparse
