@@ -18,7 +18,7 @@ import fs from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { z } from "zod";
 import { JHT_CONFIG_PATH, JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth, isLocalRequest } from "@/lib/auth";
+import { requireAuth, isLocalRequest, requireLocalWrite } from "@/lib/auth";
 import { WorkingHoursSchema } from "../../../../../shared/config/schema";
 
 export const dynamic = "force-dynamic";
@@ -109,17 +109,9 @@ export async function PUT(req: NextRequest) {
   const auth = await requireAuth();
   if (auth) return auth;
 
-  // Write-guard: gli orari si modificano SOLO dall'app desktop (host localhost).
-  // Dal cloud la UI e' read-only; qui lo imponiamo anche lato server.
-  if (!(await isLocalRequest())) {
-    return NextResponse.json(
-      {
-        error: "read_only",
-        message: "Le modifiche agli orari si fanno dall'app desktop.",
-      },
-      { status: 403 },
-    );
-  }
+  // Write-guard WEB-READONLY: modifiche solo dall'app desktop (host localhost).
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
 
   let body: unknown;
   try {
