@@ -133,6 +133,35 @@ export async function requireAuth(): Promise<NextResponse | null> {
   return null
 }
 
+/**
+ * Write-guard WEB-READONLY: le AZIONI DI MODIFICA si fanno solo dall'app
+ * desktop (host localhost). Dal browser cloud sono sola visualizzazione →
+ * 403 `read_only`. È ANCHE sicurezza: i segreti che servirebbero per quelle
+ * azioni (token Hetzner che accede a tutte le macchine, chiavi SSH, dati
+ * personali) restano local-only, mai sincronizzati sul web.
+ *
+ * Uso nelle route che mutano stato, SUBITO dopo requireAuth:
+ *   const auth = await requireAuth(); if (auth) return auth;
+ *   const ro = await requireLocalWrite(); if (ro) return ro;
+ *
+ * NON usare (restano cloud-accessibili, per scelta 2026-06-20):
+ *   - auth (login/logout) e sync-infra token-based (cloud-sync/*)
+ *   - azioni-posizione "leggere": feedback like/dislike, ticket, write/geocode/
+ *     recheck-request, user-exclude — intenzioni che viaggiano via cloud-sync
+ *     verso la VPS (l'utente le vuole anche da telefono).
+ */
+export async function requireLocalWrite(): Promise<NextResponse | null> {
+  if (await isLocalRequest()) return null
+  return NextResponse.json(
+    {
+      error: 'read_only',
+      message:
+        "Questa azione si fa dall'app desktop. Dal browser è sola visualizzazione.",
+    },
+    { status: 403 },
+  )
+}
+
 /** Regex per path sicuri: alfanumerici, slash, underscore, trattino, punto, tilde, spazi, due punti */
 const SAFE_PATH_RE = /^[a-zA-Z0-9\/_\-.~ :]+$/
 

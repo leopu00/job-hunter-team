@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JHT_USER_UPLOADS_DIR } from "@/lib/jht-paths";
 import { isSupabaseConfigured } from "@/lib/workspace";
-import { isLocalRequest } from "@/lib/auth";
+import { isLocalRequest, requireLocalWrite } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import fs from "fs";
 import path from "path";
@@ -60,6 +60,8 @@ export async function GET() {
 }
 
 export async function DELETE(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const { name } = await req.json();
   if (!name || typeof name !== "string") {
     return NextResponse.json({ error: "nome file richiesto" }, { status: 400 });

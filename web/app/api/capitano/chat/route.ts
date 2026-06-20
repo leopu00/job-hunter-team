@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
 import { getAgentDir } from "@/lib/jht-paths";
 import { parseJsonl } from "@/lib/agent-chat";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 
@@ -31,6 +31,8 @@ export async function GET(req: NextRequest) {
 
 /** DELETE — pulisci la chat */
 export async function DELETE() {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const authError = await requireAuth();
   if (authError) return authError;
   const chatFile = getChatFile();
@@ -42,6 +44,8 @@ export async function DELETE() {
 
 /** POST — invia messaggio utente */
 export async function POST(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const authError = await requireAuth();
   if (authError) return authError;
   const { text } = await req.json();

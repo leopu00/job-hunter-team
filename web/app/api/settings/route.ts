@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireLocalWrite } from "@/lib/auth";
 import fs from "fs";
 import path from "path";
 import { JHT_CONFIG_PATH, JHT_HOME, JHT_USER_DIR } from "@/lib/jht-paths";
@@ -42,6 +43,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -89,6 +92,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: Record<string, unknown>;
   try {
     body = await req.json();
