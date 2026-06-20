@@ -150,7 +150,7 @@ setsid sh -c "
   sleep 6 && tmux send-keys -t '$SESSION' Enter
   sleep 3 && tmux send-keys -t '$SESSION' Enter
   sleep 3 && tmux send-keys -t '$SESSION' Enter
-  sleep 4 && tmux send-keys -t '$SESSION' 'Leggi AGENTS.md ed esegui il maintainer-sweep come da procedura. Se sei fuori working hours, logga e autodistruggiti subito. Quando hai finito, autodistruggiti come da sezione self-destruct.'
+  sleep 4 && tmux send-keys -t '$SESSION' 'Leggi AGENTS.md ed esegui il maintainer-sweep come da procedura. Se sei fuori working hours, logga e resta in standby. Quando hai finito, scrivi il log finale e RESTA in standby disponibile — NON autodistruggerti (al prossimo spawn vieni sostituito, kill-then-create). Se i coordinatori ti scrivono, rispondi al loro bisogno.'
   sleep 1 && tmux send-keys -t '$SESSION' Enter
   sleep 2 && tmux send-keys -t '$SESSION' Enter
 " >/dev/null 2>&1 < /dev/null &

@@ -143,7 +143,7 @@ setsid sh -c "
   sleep 6 && tmux send-keys -t '$SESSION' Enter
   sleep 3 && tmux send-keys -t '$SESSION' Enter
   sleep 3 && tmux send-keys -t '$SESSION' Enter
-  sleep 4 && tmux send-keys -t '$SESSION' 'Leggi AGENTS.md ed esegui il giro di health-check come da procedura. Quando hai finito, autodistruggiti come da sezione Self-destruct.'
+  sleep 4 && tmux send-keys -t '$SESSION' 'Leggi AGENTS.md ed esegui il giro di health-check come da procedura. Quando hai finito, scrivi il log finale e RESTA in standby disponibile — NON autodistruggerti (al prossimo spawn vieni sostituito, kill-then-create). Se i coordinatori ti scrivono, rispondi al loro bisogno.'
   sleep 1 && tmux send-keys -t '$SESSION' Enter
   sleep 2 && tmux send-keys -t '$SESSION' Enter
 " >/dev/null 2>&1 < /dev/null &
