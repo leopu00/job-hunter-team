@@ -1227,7 +1227,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                                 {mm.tag}
                               </span>
                             )}
-                            <span className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+                            <span className="text-[11px] text-[var(--color-muted)] leading-relaxed min-w-0 break-words">
                               {mm.text}
                             </span>
                           </li>
