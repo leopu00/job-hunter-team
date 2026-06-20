@@ -20,6 +20,10 @@ const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
 // il container era offline. Separato dal push cursor: due direzioni di
 // flusso indipendenti (vedi docs/internal/cloud-sync-architecture.md).
 const CLOUD_PULL_CURSOR_FILE = join(JHT_HOME, '.cloud-pull-cursor.json');
+// Cursor sync ticket (round-trip cloud↔VPS, [JHT-DATA-SYNC] fase 2):
+// { pull_since } = ultimo created_at importato dal cloud (ticket 'open' utente);
+// { push_since } = ultimo updated_at pushato in cloud (risoluzioni del team).
+const CLOUD_TICKETS_CURSOR_FILE = join(JHT_HOME, '.cloud-tickets-cursor.json');
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -726,6 +730,32 @@ async function savePullCursor(cursor) {
 }
 
 /**
+ * Cursor sync ticket. Ritorna { pull_since, push_since } (ISO|null).
+ * Missing/corrupt = entrambi null → pull fa lookback 7gg server-side, push
+ * manda tutto (idempotente: gli UPDATE per cloud_id e gli INSERT linkano).
+ */
+function loadTicketsCursor() {
+  if (!existsSync(CLOUD_TICKETS_CURSOR_FILE)) return { pull_since: null, push_since: null };
+  try {
+    const p = JSON.parse(readFileSync(CLOUD_TICKETS_CURSOR_FILE, 'utf-8'));
+    return {
+      pull_since: typeof p?.pull_since === 'string' ? p.pull_since : null,
+      push_since: typeof p?.push_since === 'string' ? p.push_since : null,
+    };
+  } catch {
+    return { pull_since: null, push_since: null };
+  }
+}
+
+async function saveTicketsCursor(cursor) {
+  try {
+    await writeFile(CLOUD_TICKETS_CURSOR_FILE, JSON.stringify(cursor, null, 2));
+  } catch (err) {
+    console.error(pc.yellow(`  warn: tickets cursor save failed (${err.message})`));
+  }
+}
+
+/**
  * Dato un array di righe con campo updated_at, ritorna il MAX(updated_at)
  * come stringa ISO. Null se l'array e' vuoto o nessuna riga ha il campo.
  */
@@ -1415,6 +1445,170 @@ async function handlePullDesiredState(options = {}) {
 }
 
 /**
+ * Sync bidirezionale dei ticket cloud↔VPS ([JHT-DATA-SYNC] fase 2). Chiude
+ * il follow-up dichiarato in mig 043. Una sola sessione SQLite RW:
+ *
+ *   PULL  cloud → locale : importa i ticket 'open' creati dall'utente sul web
+ *         (INSERT in position_tickets con cloud_id valorizzato; il Capitano li
+ *         vede via C-15). Skip se già importati (cloud_id) o se la posizione
+ *         non è ancora locale (arriverà col push dati).
+ *   PUSH  locale → cloud : manda gli aggiornamenti del team (assigned/resolved
+ *         + response_text) sui ticket con cloud_id, e INSERT dei ticket nati
+ *         in locale (cloud_id NULL) — l'endpoint ritorna l'id che scriviamo in
+ *         cloud_id per chiudere la correlazione.
+ *
+ * Endpoint: GET/POST /api/cloud-sync/tickets. Best-effort: non blocca il boot
+ * né il daemon su errore di rete. Idempotente: cloud `id` canonico, UPDATE per
+ * id + filtro user_id lato server, UNIQUE non necessario (UPDATE/INSERT espliciti).
+ *
+ * options: --db <path>, --full (ignora cursor), --silent (boot/daemon).
+ */
+async function handleTicketSync(options = {}) {
+  const silent = options.silent === true;
+  const log = (msg) => { if (!silent) console.log(msg); };
+
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) {
+    if (!silent) {
+      console.error(pc.red('Cloud sync non abilitato.'));
+      console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud login'));
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const dbPath = options.db || JHT_DB_PATH;
+  const dbExists = await stat(dbPath).then(() => true).catch(() => false);
+  if (!dbExists) {
+    log(pc.dim(`  ticket-sync skip: SQLite locale non trovato (${dbPath}).`));
+    return;
+  }
+
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const cursor = options.full
+    ? { pull_since: null, push_since: null }
+    : loadTicketsCursor();
+
+  let imported = 0;
+  let pushedUpdates = 0;
+  let pushedInserts = 0;
+  let db;
+  try {
+    db = new DatabaseSync(dbPath);
+    db.exec('PRAGMA foreign_keys = ON');
+
+    // ---- PULL: ticket 'open' dal cloud → locale ----
+    const pullParams = new URLSearchParams();
+    if (cursor.pull_since) pullParams.set('since', cursor.pull_since);
+    try {
+      const res = await fetch(
+        `${baseUrl}/api/cloud-sync/tickets?${pullParams.toString()}`,
+        { headers: { Authorization: `Bearer ${config.token}` } },
+      );
+      const pb = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error(pc.yellow(`  ticket pull warn: HTTP ${res.status} ${pb.error || ''}`));
+      } else if (Array.isArray(pb.tickets)) {
+        const findByCloud = db.prepare('SELECT id FROM position_tickets WHERE cloud_id = ?');
+        const posExists = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+        const ins = db.prepare(
+          `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
+           VALUES (?, ?, ?, 'open', ?, ?)`
+        );
+        for (const ct of pb.tickets) {
+          const cloudId = Number(ct.id);
+          const posId = Number(ct.position_legacy_id);
+          if (!Number.isInteger(cloudId) || !Number.isInteger(posId)) continue;
+          if (findByCloud.get(cloudId)) continue;       // già importato
+          if (!posExists.get(posId)) continue;          // posizione non ancora locale → arriverà
+          ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
+          imported++;
+        }
+        if (pb.cursor) cursor.pull_since = pb.cursor;
+      }
+    } catch (err) {
+      console.error(pc.yellow(`  ticket pull warn: ${err.message}`));
+    }
+
+    // ---- PUSH: aggiornamenti team + INSERT locali → cloud ----
+    const selCols =
+      `id AS local_id, cloud_id, position_id AS position_legacy_id,
+       request_text, kind, status, assigned_agent, response_text,
+       created_at, assigned_at, resolved_at, updated_at`;
+    const rows = cursor.push_since
+      ? db.prepare(
+          `SELECT ${selCols} FROM position_tickets
+           WHERE cloud_id IS NULL OR updated_at > ?`
+        ).all(cursor.push_since)
+      : db.prepare(`SELECT ${selCols} FROM position_tickets`).all();
+
+    if (rows.length > 0) {
+      try {
+        const res = await fetch(`${baseUrl}/api/cloud-sync/tickets`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ tickets: rows }),
+        });
+        const pb = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error(pc.yellow(`  ticket push warn: HTTP ${res.status} ${pb.error || ''}`));
+        } else {
+          pushedUpdates = pb.updated || 0;
+          pushedInserts = pb.inserted || 0;
+          // write-back dei cloud_id sugli INSERT → chiude la correlazione.
+          if (pb.id_map && typeof pb.id_map === 'object') {
+            const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
+            for (const [localId, cloudId] of Object.entries(pb.id_map)) {
+              const ci = Number(cloudId);
+              const li = Number(localId);
+              if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
+            }
+          }
+          // avanza push cursor = MAX(updated_at) tra le righe inviate.
+          let maxU = cursor.push_since || null;
+          for (const r of rows) {
+            if (r.updated_at && (maxU === null || r.updated_at > maxU)) maxU = r.updated_at;
+          }
+          if (maxU) cursor.push_since = maxU;
+        }
+      } catch (err) {
+        console.error(pc.yellow(`  ticket push warn: ${err.message}`));
+      }
+    }
+
+    db.close();
+  } catch (err) {
+    try { if (db) db.close(); } catch { /* già chiuso */ }
+    console.error(pc.red(`Errore ticket-sync SQLite: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  await saveTicketsCursor(cursor);
+
+  const total = imported + pushedUpdates + pushedInserts;
+  if (total > 0 || !silent) {
+    console.log(
+      pc.green(
+        `✓ Ticket sync: ${imported} importati↓, ${pushedUpdates} aggiornati↑, ${pushedInserts} nuovi↑`
+      )
+    );
+  }
+}
+
+/**
  * Inserisce un messaggio in pending_user_messages locale. Best-effort:
  * usato dal killswitch del daemon per notificare l'utente quando il token
  * è revocato. Il push delta-only normalmente propaga questa tabella in
@@ -1558,6 +1752,18 @@ async function handleDaemon(options) {
         console.error(pc.yellow(`  daemon pull-desired-state error: ${err.message}`));
       }
 
+      // Ticket sync (round-trip cloud↔VPS): importa i ticket 'open' creati dal
+      // web e pusha le risoluzioni del team. Stessa cadenza/policy del pull
+      // desired-state: best-effort, errori loggati ma fuori dal counter del push.
+      try {
+        const prevTk = process.exitCode;
+        process.exitCode = 0;
+        await handleTicketSync({ silent: true });
+        process.exitCode = prevTk;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon ticket-sync error: ${err.message}`));
+      }
+
       if (authFailedThisTick) {
         consecutiveAuthFails += 1;
       } else if (!tickFailed) {
@@ -1634,7 +1840,7 @@ async function handleDaemon(options) {
 // per recuperare write_requested cliccato via web mentre container era
 // offline). Best-effort: il caller invoca con { silent: true } e ignora
 // process.exitCode così il boot prosegue anche se cloud è giù.
-export { handlePullDesiredState };
+export { handlePullDesiredState, handleTicketSync };
 
 /**
  * pull-profile — scarica il profilo dal cloud e ricostruisce
@@ -1744,6 +1950,14 @@ export function registerCloudCommand(program) {
     .option('--limit <n>', 'Max righe per chiamata (default 500, max 2000)')
     .option('--dry-run', 'Mostra cosa verrebbe applicato senza UPDATE')
     .action(handlePullDesiredState);
+
+  cloud
+    .command('sync-tickets')
+    .description('Round-trip ticket cloud<->VPS: importa i ticket utente, pusha le risoluzioni del team')
+    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
+    .option('--full', 'Ignora i cursor (pull lookback 7gg, push tutto)')
+    .option('--silent', 'Output minimo (per il boot)')
+    .action(handleTicketSync);
 
   cloud
     .command('pull-profile')

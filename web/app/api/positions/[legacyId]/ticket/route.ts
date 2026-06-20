@@ -86,24 +86,15 @@ export async function POST(
     } finally {
       db.close();
     }
-    // Best-effort cloud (per la visibilità cross-device; il team legge SQLite).
-    let cloudOk: boolean | null = null;
-    try {
-      const { error } = await supabase.from("position_tickets").insert({
-        user_id: userId,
-        position_legacy_id: legacyId,
-        request_text: text,
-        kind: "custom",
-        status: "open",
-      });
-      cloudOk = !error;
-    } catch {
-      cloudOk = false;
-    }
+    // NB: il mirror sul cloud lo fa il daemon `jht cloud sync-tickets` con
+    // correlazione `cloud_id` (round-trip [JHT-DATA-SYNC] fase 2). NON facciamo
+    // più l'insert best-effort qui: creava una riga cloud scollegata che il
+    // pull avrebbe poi ri-importato come ticket duplicato. cloud_synced è
+    // quindi differito al prossimo tick del daemon.
     return NextResponse.json({
       id: String(ticketId),
       status: "open",
-      cloud_synced: cloudOk,
+      cloud_synced: false,
       source: "local",
     });
   }
