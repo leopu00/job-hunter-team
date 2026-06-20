@@ -107,4 +107,3 @@ Quando l'utente risponde via dashboard (compila `user_reply` su una riga con `de
 - `telegram-send` — chiamato sotto il cofano da `jht-notify-user`; usalo direttamente solo se sai già che Telegram è il canale giusto (es. reply a `[TG]` inbound).
 - `chat-web` (`jht-send`) — per il thread chat-agente sulla dashboard.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — schema della coda + indici.
-- `docs/internal/bot-telegram.md` § 6 — pattern fallback completo.

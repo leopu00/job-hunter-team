@@ -389,11 +389,28 @@ Hors de la pipeline. Tourne en continu en parallele.
             ▼             ▼             ▼
        👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
-       copilot                       (planned)
+       copilot                       (always-on)
 ```
 
 - **👨‍💼 Assistant** — `tier: smart`. Traduit les demandes non techniques de l'utilisateur en ordres pour le Captain. Cache les details d'implementation du chat oriente utilisateur.
-- **🧙‍♂️ Mentor** — `tier: expert`, planifie. Futur career coach : analyse l'ecart profil/resultats, produit un plan d'action. Dossier : `agents/mentor/`.
+- **🧙‍♂️ Mentor** — `tier: expert`, **actif** (bases livrees, optimisation en cours). Career coach : analyse l'ecart profil/resultats, produit un plan d'action, points strategiques reguliers. Oriente utilisateur, toujours actif, cree au boot. Dossier : `agents/mentor/`.
+
+---
+
+## 🩺 Side-channel — Sante & maintenance
+
+Hors de la pipeline. Agents **planifies one-shot** : le watchdog en cree un sur son creneau quotidien ; ils executent un balayage, font leur rapport au Captain, puis s'autodetruisent.
+
+```
+   ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
+   │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
+   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   └────────────┘              └──────────────┘          └────────────┘
+                                  one-shot → self-destruct
+```
+
+- **🩺 Dottore** — **sante des agents**. Rafraichissement periodique du contexte + retrospective : detecte les sessions d'agents bloquees/zombies et les redemarre avec un contexte neuf (les threads longue duree qui brulent du contexte provoquent un effondrement silencieux du debit). Dossier : `agents/dottore/`.
+- **🦺 Mantenitore** — **sante de l'infra**. Balayage de maintenance quotidien sur le conteneur/VPS : smoke-test des outils mission-critical (canary navigateur/Playwright), standardisation des dependances (`jht-install`), tendance disque/RAM, GC des orphelins. Un outil crucial casse est un P1. Dossier : `agents/mantenitore/`.
 
 ---
 

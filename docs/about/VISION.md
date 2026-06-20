@@ -1,12 +1,12 @@
-# Vision
+# 🔭 Vision
 
-## What JHT wants to become
+## 🌱 What JHT wants to become
 
 Job Hunter Team is not just a script that fires off applications. It is a **team of AI characters** that the user works *with*, not just runs. The interaction should feel less like configuring a SaaS dashboard and more like meeting a small group of specialists who happen to live inside your laptop.
 
 The job market in the mid-2020s changes every month. Skills age fast. Old advice rots. A static automation tool can't keep up — but a team of agents that talk to you, react to your goals, and adapt their strategy can.
 
-## Design principles
+## 🎨 Design principles
 
 ### 🎮 Gamified, but constructive
 
@@ -26,13 +26,15 @@ The goal is the *opposite* of "enterprise productivity software". Closer to: a D
 | 👨‍🏫 | **Writer** | The craftsman. Cares about the comma. |
 | 👨‍⚖️ | **Critic** | The blind reviewer. Doesn't know who wrote what. |
 | 👨‍💼 | **Assistant** | The copilot. Walks you through the platform. |
-| 🧙‍♂️ | **Mentor** *(future)* | The career coach. Sees the bigger picture. |
+| 🧙‍♂️ | **Mentor** | The career coach. Sees the bigger picture. |
+| 🩺 | **Dottore** | The medic. One-shot rounds — revives stuck agents. |
+| 🦺 | **Mantenitore** | The janitor. Keeps the infra (container, tools, disk) healthy. |
 
 This is not flavor text. The system prompts of each agent are written in voice. The UI reflects that voice. Telegram messages reflect that voice.
 
-### 🧙‍♂️ The Mentor — the missing piece
+### 🧙‍♂️ The Mentor — the meta-layer
 
-Among the planned agents, **the Mentor is the most important one we haven't built yet.**
+For a long time the Mentor was the most important agent we **hadn't** built. It is now **active** — always-on, user-facing, spawned at team boot.
 
 The other agents execute a pipeline — find, verify, score, write, review. The Mentor looks *outside* the pipeline:
 
@@ -43,7 +45,7 @@ The other agents execute a pipeline — find, verify, score, write, review. The 
 
 The Mentor is the only agent that has the right to tell the user *"stop applying for X, go learn Y first"*. It is the meta-layer that keeps the team useful as the world changes.
 
-See [`agents/mentor/mentor.md`](../agents/mentor/mentor.md) for the spec.
+See [`agents/mentor/mentor.md`](../../agents/mentor/mentor.md) for the spec.
 
 ### 👨‍💼 The Assistant — the copilot
 
@@ -51,7 +53,7 @@ The platform is large. The Assistant exists so that no user gets lost. It lives 
 
 The Assistant is what makes the platform usable for non-technical users. Without it, JHT is a developer tool. With it, JHT is a product.
 
-## Anti-goals
+## 🚫 Anti-goals
 
 What JHT will deliberately **not** become:
 
@@ -60,7 +62,7 @@ What JHT will deliberately **not** become:
 - ❌ A SaaS. The team runs locally or on the user's own VPS. The user owns their data, their profile, their pipeline.
 - ❌ An LLM benchmark. JHT picks the providers that work for real users at sustainable cost — not the most powerful one in the leaderboard.
 
-## How this shapes the roadmap
+## 🗺️ How this shapes the roadmap
 
 Every feature decision passes through these questions:
 

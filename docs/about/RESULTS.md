@@ -1,8 +1,8 @@
-# Results
+# 📊 Results
 
 This page collects what JHT has actually produced for real users — not benchmarks, not synthetic tests.
 
-## Case study #1 — The maintainer (legacy team, early 2026)
+## 🧪 Case study #1 — The maintainer (legacy team, early 2026)
 
 The original private version of JHT, hardcoded for a single profile run by the project maintainer.
 
@@ -47,18 +47,18 @@ Full origin story in [`STORY.md`](STORY.md).
 | ⏱️ Avg time-to-ready (found → CV ready) | **7.4h** (min 12 min, max 18.9h) |
 | 🧠 Hours of user time | <1h setup + occasional monitoring (autonomous) |
 
-### What worked
+### ✅ What worked
 - **Niche match excellence** — the candidate's secondary technical/manufacturing skill set surfaced a small group of rare-but-perfect matches that averaged **87.3/100**, the highest score domain of the run. The primary multilingual lane scored steadily lower (avg 73.4) but produced higher volume.
 - **Critic loop holds quality** — 88.2% PASS rate confirms the 3-round Critic protocol is *provider-independent*; the LLM is interchangeable as long as the rubric stays consistent.
 - **Fast end-to-end pipeline** — average 7.4 hours from discovery to ready CV+cover letter; bottom decile in 30 minutes.
 - **Curated source > volume** — the curated scout lane (Ashby/Greenhouse-style) produced 22% high-score positions vs the volume scout lane (LinkedIn-heavy) at 14%.
 
-### What didn't
+### ❌ What didn't
 - **Codex Pro weekly cap is a hard ceiling** — the weekly token budget was consumed in ~2.3 days at a 2.7%/h burn rate. Codex ProLite is **not sustainable for 7-day full-throughput hunts**. Users on this plan need to pace via the bridge or schedule the run.
 - **Company verdict rubric is too lenient** — 0 NO_GO out of 179 companies. Hard requirements (degree, geography lock-in) leaked downstream and were filtered late by the Writer instead of upfront by the Analyst.
 - **Writer attribution is broken** — only 8 out of 119 `written_by` fields populated (93% null). Pipeline still works but we lose per-Writer quality breakdown.
 
-### Tweaks made to the default config
+### 🔧 Tweaks made to the default config
 - Mid-run the user activated **NO CV mode** (search-only) at 2026-05-20 07:42 UTC — Writers went idle by design while Scout/Analyst kept curating.
 
 > **Note on "0 submitted"**: JHT does not auto-submit applications. The user reviews the ready stack (105 CVs in this run) and clicks send when they want. This is the same intentional behavior as case study #1.
@@ -95,20 +95,20 @@ Raw data: SQLite snapshot, Sentinel logs, deliverables (PDF CVs, critic reviews)
 | ⚡ Bridge velocity | 5.37%/h (2× faster than Codex 2.7%/h) |
 | 🧠 Hours of user time | <1h setup + occasional monitoring (autonomous) |
 
-### What worked
+### ✅ What worked
 - **Token-based provider sustains long runs** — Kimi has no weekly cap; the team ran 4 calendar days without saturation (vs Codex Pro hitting 96% weekly in 2.3 days).
 - **High scout volume** — 251 positions discovered in the run, peak of 145 on day 2. Scout-1 (volume lane) found 29 high-score positions on 187 total.
 - **Mass-market price point validated** — €40/mo subscription delivered a working pipeline on a junior profile in a saturated metro. **Cost per ready CV: €0.71** (taking the full month's subscription / 56 CVs from this run alone). At pay-per-use rates the same run would have cost ~€78 (input $5 + output $17 + 1.57B cached input $63) — the subscription paid for itself in <4 days.
 - **Aggressive prompt caching pays off** — 1.57B cached input reads vs 33.9M new input tokens means the team re-uses context heavily (job descriptions, agent instructions, candidate profile). Caching represents 97% of input volume but cost only ~74% of input billing.
 - **Bug-fix loop during the run** — 13 bugs + 4 features closed in a 24-hour mid-run sprint (the maintainer is also a developer; this is not the default user experience but proves the pipeline is debuggable from inside).
 
-### What didn't
+### ❌ What didn't
 - **Pipeline conversion dropped to 22%** vs case study #2's 51%. **Two confounders**: a junior software developer in a saturated capital city is a brutally competitive market (high baseline rejection), and the Critic pass rate also dropped (51% vs 88%). Cannot isolate provider quality from candidate profile difficulty.
 - **Critic average 5.05/10** vs case study #2's 6.35/10 — outputs scored lower. Could be Kimi K2 producing weaker CV text, or the junior profile mapping poorly to senior-skewed job descriptions, or both.
 - **Scout-2 underperformed on this profile** — 0 high-score positions out of 64 (vs Scout-1's 29/187). The curated-lane strategy that worked on the multilingual senior profile (case #2) did not transfer.
 - **Same company-verdict rubric bug** — 0 NO_GO out of 178 (158 GO / 20 CAUTIOUS). Cross-run confirmation that the Analyst rubric is too permissive.
 
-### Tweaks made to the default config
+### 🔧 Tweaks made to the default config
 - None planned upfront. Mid-run bug fixes (the 13 closed during the run) are documented in the project changelog.
 
 > **Note on token aggregation**: `token-meter.csv` (the rolling telemetry file the bridge consumes) was reset when the container restarted, so the live CSV no longer holds historical data. The numbers above are **back-calculated from the durable Kimi session logs** (`wire.jsonl` files, 175MB across 15 sessions) — every `StatusUpdate` event the Kimi CLI emits carries an exact `token_usage` block. Aggregating 16,700 such events gives a precise picture. We tracked a follow-up to make `token-meter.csv` restart-durable so future runs don't need this fallback.
@@ -121,12 +121,12 @@ Raw data: SQLite snapshot, Sentinel logs (3052 ticks), Kimi session logs (16,700
 
 ---
 
-## Case study template
+## 📝 Case study template
 
 If you use JHT and want to share your results, here's the template. PRs welcome — drop a new section in this file.
 
 ```markdown
-## Case study #N — [Your name or handle]
+## 🧪 Case study #N — [Your name or handle]
 
 | Metric | Value |
 |---|---|
@@ -140,17 +140,17 @@ If you use JHT and want to share your results, here's the template. PRs welcome 
 | 💰 Total LLM cost |
 | ⏱️ Hours of your time spent |
 
-### What worked
+### ✅ What worked
 - ...
 
-### What didn't
+### ❌ What didn't
 - ...
 
-### Tweaks you made to the default config
+### 🔧 Tweaks you made to the default config
 - ...
 ```
 
-## What we want to learn
+## 🔍 What we want to learn
 
 The case studies above (and the ones we hope you'll add) are how we understand:
 
@@ -161,7 +161,7 @@ The case studies above (and the ones we hope you'll add) are how we understand:
 
 We will publish aggregate results in this file periodically (anonymized, with consent).
 
-## Related
+## 🔗 Related
 
 - [`STORY.md`](STORY.md) — why this project exists
 - [`PROVIDERS.md`](PROVIDERS.md) — which subscription to pick

@@ -57,7 +57,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | [agents/scrittore/scrittore.md](../agents/scrittore/scrittore.md) | ✍️ Scrittore — genera CV + cover letter per posizione | — | 2026-05-10 | ✅ |
 | [agents/critico/critico.md](../agents/critico/critico.md) | 🧐 Critico — review qualità CV/cover prima dell'invio | — | 2026-05-03 | ✅ |
 | [agents/assistente/assistente.md](../agents/assistente/assistente.md) | 🤝 Assistente — config profilo utente, supporto setup | — | 2026-05-10 | ✅ |
-| [agents/maestro/maestro.md](../agents/maestro/maestro.md) | 🧙‍♂️ Maestro — career-coach pattern-detector (planned, voce Gandalf) | — | 2026-05-02 | ✅ |
+| [agents/mentor/mentor.md](../agents/mentor/mentor.md) | 🧙‍♂️ Maestro — career-coach pattern-detector (planned, voce Gandalf) | — | 2026-05-02 | ✅ |
 | [agents/capitano/missions/thermostat-test.md](../agents/capitano/missions/thermostat-test.md) | 🌡️ Missione opt-in test termostato senza Sentinella | — | 2026-05-05 | ✅ |
 | [agents/dottore/dottore.md](../agents/dottore/dottore.md) | 👨‍⚕️ Dottore — health-check + manutenzione one-shot (~30 min, watchdog) | — | 2026-05-10 | ✅ |
 
@@ -141,11 +141,11 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/guides/quickstart.md](./guides/quickstart.md) | Guida quickstart utente (3 path: desktop, repo, one-liner) | — | 2026-05-06 | ✅ |
-| [docs/guides/cli-install.md](./guides/cli-install.md) | Spec dell'installer one-liner `install.sh` (AS-IS) | — | 2026-05-06 | ✅ |
+| [docs/guides/QUICKSTART.md](./guides/QUICKSTART.md) | Guida quickstart utente (3 path: desktop, repo, one-liner) | — | 2026-05-06 | ✅ |
+| [docs/guides/CLI-INSTALL.md](./guides/CLI-INSTALL.md) | Spec dell'installer one-liner `install.sh` (AS-IS) | — | 2026-05-06 | ✅ |
 | [docs/guides/AI-AGENT-INTEGRATION.md](./guides/AI-AGENT-INTEGRATION.md) | Integrazione AI CLI esterne (Claude Code, OpenClaw, Cursor) | — | 2026-04-27 | ✅ |
 | [docs/guides/BETA.md](./guides/BETA.md) | Onboarding beta tester + matrice coverage 10 celle | — | 2026-04-27 | ✅ |
-| [docs/guides/feedback-ticketing.md](./guides/feedback-ticketing.md) | Runbook pagina /feedback + API `/api/feedback` | — | 2026-04-27 | ✅ |
+| [docs/guides/FEEDBACK-TICKETING.md](./guides/FEEDBACK-TICKETING.md) | Runbook pagina /feedback + API `/api/feedback` | — | 2026-04-27 | ✅ |
 | [docs/guides/VPS-SETUP.md](./guides/VPS-SETUP.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 
 
@@ -153,20 +153,20 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/internal/MAINTAINERS.md](./internal/MAINTAINERS.md) | 🔒 Riferimento maintainer (Supabase, Vercel, OAuth, secret) | — | 2026-04-27 | ✅ |
-| [docs/internal/INFRA.md](./internal/INFRA.md) | Diagramma deployment (container + storage + sync opzionale) | — | 2026-04-27 | ✅ |
-| [docs/internal/release.md](./internal/release.md) | Procedura cut-release (tag vX.Y.Z + GH workflow) | — | 2026-04-27 | ✅ |
-| [docs/internal/2026-05-01-bridge-and-token-monitoring.md](./internal/2026-05-01-bridge-and-token-monitoring.md) | Analisi bridge V6 + token-meter, roadmap V7 | — | 2026-05-02 | ✅ |
-| [docs/internal/2026-05-01-team-session-report.md](./internal/2026-05-01-team-session-report.md) | Report sessione team 30 apr/1 mag UTC | — | 2026-05-02 | ✅ |
-| [docs/internal/2026-05-03-rate-kimi-weights.md](./internal/2026-05-03-rate-kimi-weights.md) | Calibrazione empirica pesi rate Kimi K2 | — | 2026-05-03 | ✅ |
-| [docs/internal/2026-05-04-vps-deployment-design.md](./internal/2026-05-04-vps-deployment-design.md) | Design deploy VPS (3 path: SSH manuale / web pairing / launcher) | — | 2026-05-04 | ✅ |
-| [docs/internal/TODO-bridge-v7.md](./internal/TODO-bridge-v7.md) | 📌 Punch list bridge V7 + token monitor (entry point) | — | 2026-05-02 | ✅ |
-| [docs/internal/2026-05-06-host-container-split.md](./internal/2026-05-06-host-container-split.md) | ⚙️ Split host/container — CLI wrapper + dev compose, design e razionale | — | 2026-05-06 | ✅ |
-| [docs/internal/2026-05-06-launch-infra-costs.md](./internal/2026-05-06-launch-infra-costs.md) | 💰 Stima costi infra per public launch (Vercel/Supabase/domain) | — | 2026-05-06 | ✅ |
-| [docs/internal/2026-05-06-prompt-decomposition-skill-vs-manual.md](./internal/2026-05-06-prompt-decomposition-skill-vs-manual.md) | 🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math | — | 2026-05-09 | ✅ |
-| [docs/internal/2026-05-06-agent-prompts-i18n.md](./internal/2026-05-06-agent-prompts-i18n.md) | _(da compilare nel JSON)_ | — | 2026-05-06 | ✅ |
-| [docs/internal/2026-05-06-vps-providers-research.md](./internal/2026-05-06-vps-providers-research.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
-| [docs/internal/2026-05-09-experimentation-overview-15d.md](./internal/2026-05-09-experimentation-overview-15d.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/internal/ops/MAINTAINERS.md](./internal/ops/MAINTAINERS.md) | 🔒 Riferimento maintainer (Supabase, Vercel, OAuth, secret) | — | 2026-04-27 | ✅ |
+| [docs/internal/ops/INFRA.md](./internal/ops/INFRA.md) | Diagramma deployment (container + storage + sync opzionale) | — | 2026-04-27 | ✅ |
+| [docs/internal/ops/release.md](./internal/ops/release.md) | Procedura cut-release (tag vX.Y.Z + GH workflow) | — | 2026-04-27 | ✅ |
+| [docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md](./internal/_archive/2026-05-01-bridge-and-token-monitoring.md) | Analisi bridge V6 + token-meter, roadmap V7 | — | 2026-05-02 | ✅ |
+| `docs/internal/2026-05-01-team-session-report.md` | Report sessione team 30 apr/1 mag UTC | — | 2026-05-02 | ✅ |
+| [docs/internal/experiments/2026-05-03-rate-kimi-weights.md](./internal/experiments/2026-05-03-rate-kimi-weights.md) | Calibrazione empirica pesi rate Kimi K2 | — | 2026-05-03 | ✅ |
+| `docs/internal/2026-05-04-vps-deployment-design.md` | Design deploy VPS (3 path: SSH manuale / web pairing / launcher) | — | 2026-05-04 | ✅ |
+| [docs/internal/TODO-bridge-v7.md](./internal/_archive/TODO-bridge-v7.md) | 📌 Punch list bridge V7 + token monitor (entry point) | — | 2026-05-02 | ✅ |
+| `docs/internal/2026-05-06-host-container-split.md` | ⚙️ Split host/container — CLI wrapper + dev compose, design e razionale | — | 2026-05-06 | ✅ |
+| [docs/internal/2026-05-06-launch-infra-costs.md](./internal/_archive/2026-05-06-launch-infra-costs.md) | 💰 Stima costi infra per public launch (Vercel/Supabase/domain) | — | 2026-05-06 | ✅ |
+| [docs/internal/experiments/2026-05-06-prompt-decomposition-skill-vs-manual.md](./internal/experiments/2026-05-06-prompt-decomposition-skill-vs-manual.md) | 🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math | — | 2026-05-09 | ✅ |
+| [docs/internal/experiments/2026-05-06-agent-prompts-i18n.md](./internal/experiments/2026-05-06-agent-prompts-i18n.md) | _(da compilare nel JSON)_ | — | 2026-05-06 | ✅ |
+| `docs/internal/2026-05-06-vps-providers-research.md` | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| `docs/internal/2026-05-09-experimentation-overview-15d.md` | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 
 
 ## 🔒 docs/security
@@ -174,7 +174,7 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
 | [docs/security/README.md](./security/README.md) | Indice security review pre-launch | — | 2026-04-28 | ✅ |
-| [docs/security/01-pre-launch-review.md](./security/01-pre-launch-review.md) | Review pre-launch (33/35 task chiusi) | — | 2026-04-30 | ✅ |
+| [docs/security/01-pre-launch-review.md](./security/01-pre-launch-review.md) | Review pre-launch (31/34 task chiusi) | — | 2026-04-30 | ✅ |
 | [docs/security/02-openclaw-comparison.md](./security/02-openclaw-comparison.md) | Confronto sicurezza con OpenClaw | — | 2026-04-30 | ✅ |
 | [docs/security/03-implementation-tradeoffs.md](./security/03-implementation-tradeoffs.md) | Tradeoff implementativi delle mitigation | — | 2026-04-30 | ✅ |
 | [docs/security/04-threat-model.md](./security/04-threat-model.md) | Threat model completo del progetto | — | 2026-04-30 | ✅ |
@@ -186,12 +186,12 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/sessions/long-session-2026-05-04/README.md](./sessions/long-session-2026-05-04/README.md) | Report sessione 10h+ con 2 finestre Claude back-to-back | — | 2026-05-04 | ✅ |
+| [docs/sessions/2026-05-04-long-session/README.md](./sessions/2026-05-04-long-session/README.md) | Report sessione 10h+ con 2 finestre Claude back-to-back | — | 2026-05-04 | ✅ |
 | [docs/sessions/README.md](./sessions/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
-| [docs/sessions/codex-10h-2026-05-08/README.md](./sessions/codex-10h-2026-05-08/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
-| [docs/sessions/codex-12h-2026-05-08-pm/README.md](./sessions/codex-12h-2026-05-08-pm/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
-| [docs/sessions/codex-12h-2026-05-09-am/README.md](./sessions/codex-12h-2026-05-09-am/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
-| [docs/sessions/experimentation-overview-2026-04-25-to-2026-05-09/README.md](./sessions/experimentation-overview-2026-04-25-to-2026-05-09/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/sessions/2026-05-08-codex-10h/README.md](./sessions/2026-05-08-codex-10h/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/sessions/2026-05-08-codex-12h-pm/README.md](./sessions/2026-05-08-codex-12h-pm/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/sessions/2026-05-09-codex-12h-am/README.md](./sessions/2026-05-09-codex-12h-am/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
+| [docs/sessions/2026-04-25-experimentation-overview-to-2026-05-09/README.md](./sessions/2026-04-25-experimentation-overview-to-2026-05-09/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 
 
 ## 🗄️ supabase

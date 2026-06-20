@@ -65,4 +65,3 @@ Extensión futura de la skill `liveness-check`: cada 6h, re-fetch URL de las pos
 - `shared/skills/deadline_extract.py` — parser
 - `shared/skills/expiration_alerts.py` — emisor + estado de idempotencia
 - `agents/_skills/db-update/SKILL.md` § Positions — flag `--deadline`
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §F-4

@@ -389,11 +389,28 @@ Fuera de la pipeline. Corre continuamente en paralelo.
             ▼             ▼             ▼
        👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
-       copilot                       (planned)
+       copilot                       (siempre activo)
 ```
 
 - **👨‍💼 Assistant** — `tier: smart`. Traduce las solicitudes no tecnicas del usuario en ordenes para el Captain. Oculta los detalles de implementacion del chat orientado al usuario.
-- **🧙‍♂️ Mentor** — `tier: expert`, planificado. Futuro career coach: analiza la brecha perfil/resultados, produce un plan de accion. Carpeta: `agents/mentor/`.
+- **🧙‍♂️ Mentor** — `tier: expert`, **activo** (lo basico ya esta implementado, optimizacion en curso). Career coach: analiza la brecha perfil/resultados, produce un plan de accion, check-ins estrategicos. Orientado al usuario, siempre activo, creado al boot. Carpeta: `agents/mentor/`.
+
+---
+
+## 🩺 Side-channel — Salud y mantenimiento
+
+Fuera de la pipeline. Agentes **one-shot programados**: el watchdog crea cada uno en su slot diario; ejecutan un barrido, reportan al Captain y luego se autodestruyen.
+
+```
+   ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
+   │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
+   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   └────────────┘              └──────────────┘          └────────────┘
+                                  one-shot → self-destruct
+```
+
+- **🩺 Dottore** — **salud de los agentes**. Refresco de contexto periodico + retrospectiva: detecta sesiones de agente bloqueadas/zombie y las reinicia con contexto fresco (los threads de larga vida que queman contexto provocan un colapso silencioso del throughput). Carpeta: `agents/dottore/`.
+- **🦺 Mantenitore** — **salud de la infra**. Barrido de mantenimiento diario sobre el contenedor/VPS: smoke-test de herramientas criticas para la mision (canary de browser/Playwright), estandarizacion de dependencias (`jht-install`), tendencia de disco/RAM, GC de huerfanos. Una herramienta crucial rota es un P1. Carpeta: `agents/mantenitore/`.
 
 ---
 

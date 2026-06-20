@@ -13,11 +13,11 @@ zoom solo via bottoni `➕➖⟲`, click in legenda per filtrare.
 
 | Data | Cartella | Cosa contiene |
 |---|---|---|
-| 2026-05-03 → 04 | [`long-session-2026-05-04/`](./long-session-2026-05-04/) | 🌙 Long session 10h+ Kimi K2, primo run con termostato pacing-bridge che attraversa 2 finestre 5h consecutive. **Il report più completo** (9 pagine: usage, throttle, agents, timeline, tokens, database, crashes, windows, retro). |
-| 2026-05-08 (mattina) | [`codex-10h-2026-05-08/`](./codex-10h-2026-05-08/) | 🔵 Snapshot 10h Codex: usage curve + per-agent token cumulativi. Genesi: dopo deploy dei fix Codex (token-by-agent, team-tokens-by-type, pacing-bridge top-consumer filter). |
-| 2026-05-08 PM | [`codex-12h-2026-05-08-pm/`](./codex-12h-2026-05-08-pm/) | 🔵 12h Codex con prima vista del 👨‍⚕️ Dottore (health-check ogni 30min). Include `doctor-actions.jsonl.txt`. |
-| 2026-05-09 AM | [`codex-12h-2026-05-09-am/`](./codex-12h-2026-05-09-am/) | 🔵 12h Codex con bridge-mailbox attivo. Include sezione delivery (`✓tmux` vs `✗ → mailbox`). |
-| 2026-05-09 (overview) | [`experimentation-overview-2026-04-25-to-2026-05-09/`](./experimentation-overview-2026-04-25-to-2026-05-09/) | 🧪 **Panoramica 15 giorni** (25 apr → 9 mag): tre provider testati fino all'esaurimento weekly, 58 finestre, 379 positions, 244 applications. KPI + funnel pipeline + lessons learned. |
+| 2026-05-03 → 04 | [`2026-05-04-long-session/`](./2026-05-04-long-session/) | 🌙 Long session 10h+ Kimi K2, primo run con termostato pacing-bridge che attraversa 2 finestre 5h consecutive. **Il report più completo** (9 pagine: usage, throttle, agents, timeline, tokens, database, crashes, windows, retro). |
+| 2026-05-08 (mattina) | [`2026-05-08-codex-10h/`](./2026-05-08-codex-10h/) | 🔵 Snapshot 10h Codex: usage curve + per-agent token cumulativi. Genesi: dopo deploy dei fix Codex (token-by-agent, team-tokens-by-type, pacing-bridge top-consumer filter). |
+| 2026-05-08 PM | [`2026-05-08-codex-12h-pm/`](./2026-05-08-codex-12h-pm/) | 🔵 12h Codex con prima vista del 👨‍⚕️ Dottore (health-check ogni 30min). Include `doctor-actions.jsonl.txt`. |
+| 2026-05-09 AM | [`2026-05-09-codex-12h-am/`](./2026-05-09-codex-12h-am/) | 🔵 12h Codex con bridge-mailbox attivo. Include sezione delivery (`✓tmux` vs `✗ → mailbox`). |
+| 2026-05-09 (overview) | [`2026-04-25-experimentation-overview-to-2026-05-09/`](./2026-04-25-experimentation-overview-to-2026-05-09/) | 🧪 **Panoramica 15 giorni** (25 apr → 9 mag): tre provider testati fino all'esaurimento weekly, 58 finestre, 379 positions, 244 applications. KPI + funnel pipeline + lessons learned. |
 
 ## 🧱 Convenzioni
 
@@ -51,5 +51,5 @@ JHT_HOME=~/.jht python3 shared/skills/token-by-agent-series.py \
 ```
 
 Il pattern per generare nuovi report e' visibile in
-[`experimentation-overview-2026-04-25-to-2026-05-09/`](./experimentation-overview-2026-04-25-to-2026-05-09/) — quel report ha 5 JSON
+[`2026-04-25-experimentation-overview-to-2026-05-09/`](./2026-04-25-experimentation-overview-to-2026-05-09/) — quel report ha 5 JSON
 diversi prodotti dai vari script.

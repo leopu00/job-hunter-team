@@ -1,4 +1,4 @@
-# AI Agent Integration
+# 🤖 AI Agent Integration
 
 ## Your AI assistant can run JHT for you
 
@@ -30,7 +30,7 @@ If a feature requires opening the web dashboard or the Desktop app to be configu
 >
 > When asking, **present the options with pros/cons inline** as listed below. The user is often non-technical and needs the trade-off to choose.
 >
-> See `docs/internal/onboarding-flow.md` for the design rationale (Path 1 / 2 / 3 split, lock decisions).
+> See `docs/internal/architecture/onboarding-flow.md` for the design rationale (Path 1 / 2 / 3 split, lock decisions).
 
 ### 0 — Prerequisites check
 
@@ -73,7 +73,7 @@ Present these 3 options with the trade-offs:
 
 | Mode | Cost | Always on | PC noise / RAM | Setup time |
 |---|---|---|---|---|
-| 🖥️ **Local PC** (this machine) | free | only when PC is on | 8 agents = ~3-4 GB RAM, fans audible | < 5 min |
+| 🖥️ **Local PC** (this machine) | free | only when PC is on | ~8 agents in parallel = ~3-4 GB RAM, fans audible | < 5 min |
 | 🏠 **Dedicated PC at home** | hardware already owned | yes (24/7) | none for you | < 5 min (same as Local) |
 | ☁️ **VPS** (Hetzner CPX22 €9.75/mo) | ~€10/mo while job-hunting | yes (24/7) | zero — runs on cloud | 15-30 min (SSH key + provisioning) |
 
@@ -117,7 +117,7 @@ jht cloud login
 # After the user confirms, the CLI saves ~/.jht/cloud.json (mode 0600).
 ```
 
-For **VPS**: the recommended path is the desktop pairing-token (see `docs/internal/vps.md` § "Identità unificata"). If the agent is driving without the desktop, fall back to `jht cloud login` from inside the VPS shell.
+For **VPS**: the recommended path is the desktop pairing-token (see `docs/internal/ops/vps.md` § "Identità unificata"). If the agent is driving without the desktop, fall back to `jht cloud login` from inside the VPS shell.
 
 ### 3.5 — **ASK USER**: which LLM provider / subscription?
 
@@ -391,8 +391,8 @@ over SSH with the JHT pubkey installed.
 ## Related
 
 - [`docs/guides/CLI-REFERENCE.md`](CLI-REFERENCE.md) — systematic reference of every `jht` command (host wrapper + Node CLI)
-- [`docs/guides/cli-install.md`](cli-install.md) — `install.sh` one-liner installer behaviour
-- [`docs/guides/quickstart.md`](quickstart.md) — the human-friendly version of this guide
+- [`docs/guides/CLI-INSTALL.md`](CLI-INSTALL.md) — `install.sh` one-liner installer behaviour
+- [`docs/guides/QUICKSTART.md`](QUICKSTART.md) — the human-friendly version of this guide
 - [`docs/about/PROVIDERS.md`](../about/PROVIDERS.md) — which subscription to pick
 - [`docs/guides/VPS-SETUP.md`](VPS-SETUP.md) — VPS provisioning superset (SSH, Hetzner)
-- [`docs/internal/onboarding-flow.md`](../internal/onboarding-flow.md) — design rationale for the 3 paths
+- [`docs/internal/architecture/onboarding-flow.md`](../internal/architecture/onboarding-flow.md) — design rationale for the 3 paths

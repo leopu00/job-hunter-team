@@ -79,5 +79,3 @@ Standard `Europe/Rome` wenn fehlend — deckt ~95% der Beta-Nutzer ab. Zum
 
 - `shared/skills/format_time.py` — Implementierung.
 - `candidate_profile.yml.example` — Dokumentation des `timezone:`-Felds.
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §15 — Vorfall-
-  Referenz.
