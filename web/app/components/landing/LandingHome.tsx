@@ -54,30 +54,41 @@ function Hero() {
         </div>
       </div>
 
-      {/* Immagine hero — fumetto del team con occhiali da sole. Stessa
-          maschera sfumata (gradiente verticale × orizzontale intersecati)
-          delle cover Cronache, così l'immagine si fonde nello sfondo scuro. */}
+      {/* Immagine hero — fumetto del team con occhiali da sole. Resa come
+          "pannello / viewport" coerente con lo stile matrix-grid + comics:
+          bordo netto (linea della griglia, adattivo al tema) e brackets HUD
+          verdi ai 4 angoli, stile vignetta da fumetto / mirino da terminale.
+          Niente dissolvenza. */}
       <div
-        className="w-full max-w-6xl mx-auto mt-12"
+        className="relative w-full max-w-6xl mx-auto mt-12"
         style={{ animation: "fade-in 0.8s ease 0.15s both" }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/landing-hero.png"
-          alt={heroAlt}
-          width={1672}
-          height={941}
-          fetchPriority="high"
-          className="w-full h-auto"
-          style={{
-            WebkitMaskImage:
-              "linear-gradient(to bottom, transparent 0%, #000 14%, #000 82%, transparent 100%), linear-gradient(to right, transparent 0%, #000 9%, #000 91%, transparent 100%)",
-            WebkitMaskComposite: "source-in",
-            maskImage:
-              "linear-gradient(to bottom, transparent 0%, #000 14%, #000 82%, transparent 100%), linear-gradient(to right, transparent 0%, #000 9%, #000 91%, transparent 100%)",
-            maskComposite: "intersect",
-          }}
-        />
+        <div className="relative border border-[var(--color-border)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/landing-hero.png"
+            alt={heroAlt}
+            width={1672}
+            height={941}
+            fetchPriority="high"
+            className="block w-full h-auto"
+          />
+          {/* Brackets HUD ai 4 angoli (L formate da due bordi), sporgenti un
+              filo oltre il pannello per un look da mirino/terminale. */}
+          {[
+            "top-0 left-0 border-t-2 border-l-2",
+            "top-0 right-0 border-t-2 border-r-2",
+            "bottom-0 left-0 border-b-2 border-l-2",
+            "bottom-0 right-0 border-b-2 border-r-2",
+          ].map((pos, i) => (
+            <span
+              key={i}
+              aria-hidden="true"
+              className={`pointer-events-none absolute ${pos} w-6 h-6`}
+              style={{ borderColor: "var(--color-green)", margin: "-2px" }}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Paragrafo introduttivo — descrive la piattaforma, sotto l'hero. */}
