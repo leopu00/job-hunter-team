@@ -138,8 +138,8 @@ function PricingContent() {
                 src="/pricing-brain.png"
                 alt={
                   L === "it"
-                    ? "Radiografia di profilo della testa di un agente con il cervello illuminato in verde: il «cervello» rappresenta il provider AI, l'unica cosa a pagamento."
-                    : "Side X-ray of an agent's head with the brain glowing green: the “brain” represents the AI provider, the only paid part."
+                    ? "Radiografia di profilo della testa di un agente: al posto del cervello una rete neurale AI illuminata in verde — il «cervello» è il provider AI, l'unica cosa a pagamento."
+                    : "Side X-ray of an agent's head with an AI neural network glowing green in place of the brain: the “brain” is the AI provider, the only paid part."
                 }
                 width={1448}
                 height={1086}
