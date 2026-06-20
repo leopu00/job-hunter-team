@@ -139,6 +139,7 @@ function syncJhtConfig() {
 }
 
 let mainWindow = null
+let dashboardWindow = null
 let runtime = null
 let payloadDir = null
 
@@ -249,6 +250,60 @@ async function waitForWarmUpDone(maxWaitMs = 75000) {
   return runtime.getStatus()
 }
 
+// [JHT-DASHBOARD-SPLIT] La dashboard LOCALE vive DENTRO l'app desktop: una
+// BrowserWindow dedicata puntata alla view locale (localhost:port), NON più
+// `localhost:3000` aperto in un browser di sistema. Così "una data istanza è
+// una modalità sola, sempre" → sparisce l'ambiguità "quali dati / dove scrivo".
+// (La modalità VPS resta su openExternal verso la dashboard cloud finché non
+// arriva [JHT-VPS-TUNNEL]; questo path è invocato solo dal ramo locale.)
+//
+// Niente preload qui: la dashboard è una normale web-app, non deve toccare
+// le API privilegiate del launcher (contextIsolation on, nodeIntegration off).
+// La sessione di default è condivisa con il launcher (cookie/localStorage).
+function openDashboardWindow(url) {
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    if (dashboardWindow.isMinimized()) dashboardWindow.restore()
+    dashboardWindow.focus()
+    return dashboardWindow
+  }
+  dashboardWindow = new BrowserWindow({
+    width: 1320,
+    height: 880,
+    minWidth: 960,
+    minHeight: 640,
+    autoHideMenuBar: true,
+    title: 'Job Hunter Team',
+    backgroundColor: '#0d1411',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  // Popup / link target=_blank (es. annunci di lavoro, link esterni) →
+  // browser di sistema, mai una finestra Electron annidata. Le navigazioni
+  // top-level (SPA interna + eventuale redirect OAuth) restano IN finestra:
+  // non intercettiamo `will-navigate` apposta, così il login web — se mai
+  // servisse in local cloud-paired — completa il giro dentro la finestra.
+  dashboardWindow.webContents.setWindowOpenHandler(({ url: openUrl }) => {
+    if (/^https?:\/\//i.test(openUrl)) {
+      shell.openExternal(openUrl).catch(() => {})
+    }
+    return { action: 'deny' }
+  })
+
+  dashboardWindow.on('closed', () => {
+    dashboardWindow = null
+  })
+
+  if (!app.isPackaged) {
+    dashboardWindow.webContents.openDevTools({ mode: 'detach' })
+  }
+
+  dashboardWindow.loadURL(url)
+  return dashboardWindow
+}
+
 async function openRuntimeInBrowser() {
   let status = await runtime.getStatus()
   if (status.mode !== 'running' && status.mode !== 'external') {
@@ -262,7 +317,15 @@ async function openRuntimeInBrowser() {
   }
 
   if (status.running && (status.mode === 'running' || status.mode === 'external')) {
-    await shell.openExternal(status.url)
+    // [JHT-DASHBOARD-SPLIT] In-app window invece del browser di sistema.
+    // Fallback robusto: se la creazione/caricamento della finestra fallisce,
+    // ricadiamo su openExternal così l'utente non resta mai senza dashboard.
+    try {
+      openDashboardWindow(status.url)
+    } catch (err) {
+      log.warn('dashboard-window.failed', { err: err && (err.message || String(err)) })
+      await shell.openExternal(status.url)
+    }
   }
 
   return status
@@ -411,7 +474,14 @@ app.whenReady().then(() => {
     const status = await runtime.startRuntime(options)
     return status
   })
-  ipcMain.handle('launcher:stop', () => runtime.stopRuntime())
+  ipcMain.handle('launcher:stop', () => {
+    // [JHT-DASHBOARD-SPLIT] Stop team = il server localhost cade → chiudi la
+    // finestra dashboard per non lasciare un "connessione rifiutata" appeso.
+    if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+      dashboardWindow.close()
+    }
+    return runtime.stopRuntime()
+  })
 
   // Probe: il pulsante dev mode e' abilitato solo se il renderer vede
   // app.isPackaged=false (Electron in dev dalla sorgente). In prod
