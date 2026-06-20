@@ -67,6 +67,21 @@
 
 (Sezione per osservazioni che non sono ancora task ma vale la pena tracciare.)
 
+### ⬜ `[MINOR-TAXONOMY-I18N]` Allineare le 6 traduzioni di analista/capitano al redesign brain-driven
+
+- **Origine:** redesign tassonomia 2026-06-20 (`docs/internal/2026-06-20-taxonomy-brain-driven-redesign.md`).
+- **Cosa serve:** lo step 8 (categorizzazione brain-driven: `other-pile` → `promote`) di `agents/analista/analista.<lang>.md` e la regola **C-17** (arbitro tassonomia) di `agents/capitano/capitano.<lang>.md` esistono solo nel **base EN**. Le 6 varianti `.it/.de/.es/.fr/.hu/.pt` sono stale (descrivono ancora il vecchio modello a string-pass).
+- **Impatto:** NESSUNO su betaA+betaB (entrambi `locale=en` → caricano il base EN). Riguarda solo eventuali utenti in altre lingue.
+- **Effort:** M (2 file × 6 lingue, traduzione fedele).
+
+### 🔭 `[NOTE-TAXONOMY-OBSERVE]` Osservare i primi cicli post-deploy brain-driven (dal 2026-06-21)
+
+- **Origine:** deploy 2026-06-20, vedi doc redesign.
+- **betaB** (riparte 20:00 Rome): il nuovo **C-17** splitta da solo `Engineering (Other)` 104 (semi-catch-all: Document Control + ingegneria off-profile)? Sì = arbitro OK; no entro un giorno → nudge/reset di quel solo bucket. `Technical Writing` 220 deve restare "keep" (famiglia vera multilingue).
+- **betaA** (riparte 08:00 Rome, registro resettato): le ~224 "da categorizzare" convergono a ~7-9 famiglie reali (IB/M&A, Credit, Infra, VC, PE, Corp Finance, Public Markets)?
+- **Principio:** osservazione, non intervento (betaB sano). Backup reset betaA: `/jht_home/logs/taxonomy-reset-betaA-backup.json`.
+- **Effort:** S (check via SSH read-only).
+
 ### ⬜ `[NOTE-NODE-20-DEPRECATION]` GitHub Actions Node.js 20 deprecato dal 2026-09-16
 
 - **Origine:** warning ricorrente in CI logs 2026-06-02.
