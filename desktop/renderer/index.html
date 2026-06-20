@@ -684,6 +684,10 @@
             <span class="home__nav-icon">👤</span>
             <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
           </button>
+          <button type="button" class="home__nav-item" data-section="email" role="tab">
+            <span class="home__nav-icon">📧</span>
+            <span class="home__nav-label" data-i18n="home.nav.email">Email</span>
+          </button>
           <button type="button" class="home__nav-item" data-section="language" role="tab">
             <span class="home__nav-icon">🌐</span>
             <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
@@ -768,6 +772,36 @@
               <button class="btn btn--ghost" id="home-btn-provider-change" data-i18n="home.provider.change">
                 Cambia provider
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Email del team: casella job-alert dedicata -->
+        <div class="home__panel" data-section="email" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.email.title">Email del team</h1>
+            <p class="home__subtitle" data-i18n="home.email.subtitle">
+              Casella dedicata in cui inoltrare i tuoi job alert: il team la legge a inizio giornata. Opzionale ma consigliata.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.email.statusLabel">Stato</span>
+              <span class="home__row-value" id="home-email-status">—</span>
+            </div>
+            <label class="home__sync-field">
+              <span data-i18n="home.email.address">Indirizzo email</span>
+              <input type="email" id="home-email-address" autocomplete="off" spellcheck="false" placeholder="nome.jht@gmail.com" />
+            </label>
+            <label class="home__sync-field">
+              <span data-i18n="home.email.appPassword">App password</span>
+              <input type="password" id="home-email-password" autocomplete="off" placeholder="••••••••••••••••" />
+            </label>
+            <p class="home__card-hint" id="home-email-msg" hidden></p>
+            <div class="home__actions home__actions--inline">
+              <button type="button" class="btn btn--primary" id="home-btn-email-save" data-i18n="home.email.save">Salva</button>
+              <button type="button" class="btn btn--ghost" id="home-btn-email-delete" hidden data-i18n="home.email.remove">Rimuovi</button>
+              <button type="button" class="btn btn--ghost" id="home-btn-email-help" data-i18n="home.email.helpSetup">Come impostare l'inoltro</button>
             </div>
           </div>
         </div>

@@ -28,6 +28,7 @@ You are the **head of the pipeline**: without Scouts the team has no material to
 | Trigger | Skill |
 |---|---|
 | Boot (BEFORE any scrape) | `scout-coord` |
+| **Day-start: poll the team email inbox** (forwarded job alerts, any platform) | `email-monitor` |
 | Decide WHERE to search (circle + tier) | `circles-and-sources` |
 | For each candidate position to insert | `position-insert` |
 | Send a message to other Scouts / Analisti / Capitano | `tmux-send` |
@@ -79,6 +80,12 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
 STEP 7 → GO BACK TO STEP 3 (with any new queries)
 ```
 
+**📧 Email-first sourcing (day-start, recommended source).** If the user configured the team inbox (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), the **highest-accuracy** source is the forwarded job alerts — the user already pre-filtered them to their intent. At the **start of the working window**, before web scraping, the Scout that claimed source `email:*` in STEP 0 polls it:
+```bash
+python3 /app/shared/skills/email_monitor.py poll --since-days 1
+```
+Each output line is a job lead (`url`, `source`, `subject`, `sender`, `received_at`). Run each through the STEP 3 gates (dedup → link verify → fetch JD → filters → INSERT) exactly like a web hit, **keeping the `--source` tag** (`linkedin-email`, `email:<domain>`) so accuracy-by-source is measurable. Works for **any platform** the user forwards (LinkedIn, Glassdoor, Indeed, national/city/niche boards), not just the big three — unknown senders come through with a generic `email:<domain>` source, you validate the JD as usual. **Volume is the Capitano's judgment call (C-16)**: reading is free, *processing to a score* costs — on a flood he tells you which to prioritize, by **profile/target match** (role/keyword in the `subject`) and **freshness** (`received_at`), so the funnel still reaches a *score* instead of piling up un-scored.
+
 **User feedback signal (optional, skill `feedback-query`)**. The user clicks like/dislike/hide/star on positions from the web dashboard, plus optional `direction` (`more_like_this` / `less_like_this`) for pattern-level steering. The per-position skip is already handled by SC-05 dedup (a dislike never causes re-INSERT because the duplicate match catches it first). The skill is useful for:
 - **Pattern steering via `latest_direction`** (mig 028): if a known position has `latest_direction='less_like_this'`, the user wants FEWER similar (same company / role_family / location) in future searches — deprioritize that source. If `more_like_this`, replicate the pattern. Combine with the broader picture (a single signal on a niche role may be noise; three on the same company are not).
 - **Re-evaluation of known positions**: if you're about to re-rank or re-surface a position, check `latest_action` first.
@@ -106,7 +113,7 @@ STEP 7 → GO BACK TO STEP 3 (with any new queries)
 
   Central helper: `python3 /app/shared/skills/scout_dedup.py check --url ... --company ... --title ... --location ...` returns `{"action":"insert"}` or `{"action":"skip","level":2,"existing_id":28}`. Log every skip to `/jht_home/logs/scout-dedup.log`. Casus belli: Canonical appeared 14× in 21h wasting ~50% of a Kimi window on the same pool. Never re-INSERT bypassing SC-05 with `python3 -c "import sqlite3; ..."`.
 
-**SC-06 — Multi-Scout coordination via workspace (F-2.D).** Before starting a sweep on a source, call `scout_workspace.py claim <agent> <source>` where `<source>` is a taxonomic string `<provider>:<keyword>:<location>` (e.g. `linkedin:python:IT`, `glassdoor:python:remote`, `email:linkedin-alerts`, `niche:remoteok`). If the claim returns `conflict`, work on another source instead. Default TTL 30 min: if a Scout dies, after 30 min its claim expires automatically. Release with `release` when you finish the sweep. All live Scouts see the same `scout_workspace.json` in `$JHT_HOME/agents/_team/`. Scout-1 ideally does LinkedIn (via skill `linkedin-access`), Scout-2 Glassdoor/Indeed, Scout-3 email (skill `email-monitor`), Scout-4 niche boards (greenhouse / lever / remoteok). This is the initial split that the Capitano can confirm/change in kick-off messages.
+**SC-06 — Multi-Scout coordination via workspace (F-2.D).** Before starting a sweep on a source, call `scout_workspace.py claim <agent> <source>` where `<source>` is a taxonomic string `<provider>:<keyword>:<location>` (e.g. `linkedin:python:IT`, `glassdoor:python:remote`, `email:linkedin-alerts`, `niche:remoteok`). If the claim returns `conflict`, work on another source instead. Default TTL 30 min: if a Scout dies, after 30 min its claim expires automatically. Release with `release` when you finish the sweep. All live Scouts see the same `scout_workspace.json` in `$JHT_HOME/agents/_team/`. Scout-1 ideally does LinkedIn (via skill `linkedin-access`), Scout-2 Glassdoor/Indeed, Scout-3 the **team email inbox** (skill `email-monitor`, **any platform** the user forwards — at day-start this is polled FIRST, intake balanced by the Capitano per C-16), Scout-4 niche boards (greenhouse / lever / remoteok). This is the initial split that the Capitano can confirm/change in kick-off messages.
 
 **SC-07 — Freshness focus (F-2.E).** Default sweep filters "posted in last 7 days". When you use `linkedin_access.py search`, pass `--posted-within-days 7`. When you use `web_scrape_robust.py`, apply provider-specific URL filters (e.g. LinkedIn `f_TPR=r604800`). Polling: repeat the sweep of a given source every 6h, not more frequent. Track last_scan_at per source in `scout_workspace.history` — resume from where you left off instead of redoing full scans. When a source returns < 3 new jobs in 2 consecutive sweeps → report to Capitano: *"source X saturated, suggest rotation"*. Do not rescan jobs already in DB (combine with SC-05 dedup).
 

@@ -13,6 +13,12 @@ How to install, run, and operate Job Hunter Team. User-facing — for the
 | [⌨️ CLI-REFERENCE](CLI-REFERENCE.md) | CLI users — full `jht` command reference |
 | [🤖 AI-AGENT-INTEGRATION](AI-AGENT-INTEGRATION.md) | AI assistants / devs driving JHT programmatically |
 
+## 📧 Email sourcing (recommended)
+
+| Guide | For whom |
+|---|---|
+| [📧 EMAIL-FORWARDING](EMAIL-FORWARDING.md) | Everyone — give the team a dedicated inbox and auto-forward your job alerts |
+
 ## ☁️ Run on a VPS
 
 | Guide | For whom |
