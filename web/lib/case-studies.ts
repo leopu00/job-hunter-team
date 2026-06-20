@@ -38,6 +38,10 @@ export interface CaseStudyMeta {
   id: string;
   label: string; // "Beta tester 1"
   tagline: string; // riga sotto il nome nel menu
+  /** dimensioni "vetrina" usate dalla sidebar: ciò che distingue il tester */
+  category: string; // settore/ruolo, es. "Finance"
+  geos: string[]; // aree geografiche, es. ["Italia", "Europa"]
+  model: string; // modello LLM usato dal team, es. "Codex"
   profile: CaseStudyProfile;
   run: CaseStudyRun;
 }
@@ -47,6 +51,9 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
     id: "beta-1",
     label: "Beta tester 1",
     tagline: "Finance · early-career · Europa",
+    category: "Finance",
+    geos: ["Italia", "Europa"],
+    model: "Codex",
     profile: {
       badge: "B1",
       headline: "Professionista finance, inizio carriera",

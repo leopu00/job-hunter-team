@@ -9,6 +9,9 @@ import Link from "next/link";
 import { LandingI18nProvider } from "../components/landing/LandingI18n";
 import LandingNav from "../components/landing/LandingNav";
 import { CASE_STUDIES, CONTRIBUTE_LINKS } from "@/lib/case-studies";
+import CaseStudiesShell, {
+  type CaseStudyTeaser,
+} from "./CaseStudiesShell";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +26,15 @@ function nf(n: number): string {
 }
 
 export default function CaseStudiesIndexPage() {
+  const testers: CaseStudyTeaser[] = CASE_STUDIES.map((cs) => ({
+    id: cs.id,
+    label: cs.label,
+    badge: cs.profile.badge,
+    category: cs.category,
+    geos: cs.geos,
+    model: cs.model,
+  }));
+
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
       <LandingI18nProvider>
@@ -30,17 +42,18 @@ export default function CaseStudiesIndexPage() {
       </LandingI18nProvider>
       <div aria-hidden="true" className="h-14" />
 
-      <div className="mx-auto max-w-5xl px-6 py-12">
+      <div className="mx-auto max-w-6xl px-6 py-12">
+       <CaseStudiesShell testers={testers}>
         {/* ── Hero / cos'è ──────────────────────────────────────── */}
         <header className="mb-12">
           <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[var(--color-dim)]">
             Case studies · dati di campo reali e anonimi
           </span>
-          <h1 className="mt-2 text-3xl sm:text-5xl font-bold tracking-tight leading-[1.05]">
-            Cosa fa <span style={{ color: "#00e676" }}>davvero</span> un team
-            Job&nbsp;Hunter
+          <h1 className="mt-3 text-3xl sm:text-5xl font-bold tracking-tight leading-[1.05]">
+            Cosa fa <span style={{ color: "#00e676" }}>davvero</span>{" "}
+            un team Job&nbsp;Hunter
           </h1>
-          <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-[var(--color-muted)]">
+          <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-[var(--color-muted)]">
             Job Hunter è un team di agenti AI che cerca lavoro al posto tuo:
             trova posizioni, le analizza, le valuta sul tuo profilo e prepara le
             candidature. Qui mostriamo cosa ha prodotto su{" "}
@@ -205,6 +218,7 @@ export default function CaseStudiesIndexPage() {
             </a>
           </div>
         </section>
+       </CaseStudiesShell>
       </div>
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
