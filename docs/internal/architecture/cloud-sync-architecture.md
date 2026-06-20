@@ -4,6 +4,8 @@
 > incident RobertHalf 2026-05-19, decisione macro-events 2026-05-20,
 > refactor team_state 2026-05-23 (bidirezionalità a desired-state) + writer-on-demand
 > 2026-05-29, stato implementazione a oggi. Aggiornare a ogni shift architetturale.
+>
+> 🔄 **Shift 2026-06-20** — direzione target rivista in [`2026-06-20-data-sync-and-dashboard-split-design.md`](2026-06-20-data-sync-and-dashboard-split-design.md): **sync dati on-access + pulsante "Sync now", niente polling continuo** (unico poller = la VPS, adattivo); **`position_transitions` da aggiungere al push** (mig 044 esiste, mai cablata → event-log fossile); **corsia richieste async** (ticket+azioni-posizione) mantenuta sul cloud e **pullata** dalla VPS; **bus real-time di controllo** (`team_state`/reconciler, chat poller, `team_commands`) candidato a ritiro. Le sezioni "desired-state bidirezionale" qui sotto descrivono lo stato *attuale*, in parte superato da quel design.
 
 ## 🧭 TL;DR oggi (2026-05-31)
 
