@@ -1,0 +1,8 @@
+{
+  "imap_host": "imap.gmail.com",
+  "imap_port": 993,
+  "user": "yourname.jht@gmail.com",
+  "password": "<app-specific-password>",
+  "folder": "INBOX",
+  "from_filters": []
+}
