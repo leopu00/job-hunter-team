@@ -1196,7 +1196,7 @@ export async function getPendingMessages(limit = 20): Promise<PendingMessage[]> 
 // Prefissi di ruolo validi per mappare by_agent (es. 'analista-2' → 'analista').
 const ROLE_PREFIX_SET = new Set<string>(TEAM_ACTIVITY_ROLES)
 
-type PosMeta = { id: string | number; legacy_id: number | null; title: string | null; company: string | null }
+type PosMeta = { id: string | number; legacy_id: number | null; title: string | null; company: string | null; source: string | null }
 const isLegacyPid = (p: string) => /^\d+$/.test(p)
 
 // Sorgente accurata per-istanza: l'event-log sincronizzato position_transitions
@@ -1210,15 +1210,27 @@ async function fetchTransitionEvents(
   fromIso?: string,
   untilIso?: string,
 ): Promise<TeamActivityEvent[]> {
-  let q = supabase
-    .from('position_transitions')
-    .select('position_legacy_id, by_agent, ts')
-    .not('by_agent', 'is', null)
-  if (fromIso) q = q.gte('ts', fromIso)
-  if (untilIso) q = q.lt('ts', untilIso)
-  const { data, error } = await q
-  if (error || !data) return []
-  return (data as any[]).flatMap((r) => {
+  // PostgREST taglia a ~1000 righe/richiesta: con event-log oltre 1000
+  // transizioni una query secca perderebbe (senza order) le più recenti in
+  // ordine fisico → il feed si fermerebbe a giorni indietro. Pagina per `ts`
+  // DESC con .range() finché la pagina è piena, così la copertura è completa.
+  const PAGE = 1000
+  const rows: any[] = []
+  for (let offset = 0; ; offset += PAGE) {
+    let q = supabase
+      .from('position_transitions')
+      .select('position_legacy_id, by_agent, ts')
+      .not('by_agent', 'is', null)
+      .order('ts', { ascending: false })
+      .range(offset, offset + PAGE - 1)
+    if (fromIso) q = q.gte('ts', fromIso)
+    if (untilIso) q = q.lt('ts', untilIso)
+    const { data, error } = await q
+    if (error || !data) break
+    rows.push(...data)
+    if (data.length < PAGE) break
+  }
+  return rows.flatMap((r) => {
     const role = String(r.by_agent ?? '').split('-')[0] as TeamActivityRole
     if (!ROLE_PREFIX_SET.has(role)) return []
     return [{
@@ -1245,23 +1257,40 @@ async function enrichRecent(
   const byUuid = new Map<string, PosMeta>()
   for (let i = 0; i < legacyIds.length; i += 150) {
     const chunk = legacyIds.slice(i, i + 150)
-    const { data } = await supabase.from('positions').select('id, legacy_id, title, company').in('legacy_id', chunk)
+    const { data } = await supabase.from('positions').select('id, legacy_id, title, company, source').in('legacy_id', chunk)
     for (const r of ((data ?? []) as unknown as PosMeta[])) if (r.legacy_id != null) byLegacy.set(r.legacy_id, r)
   }
   for (let i = 0; i < uuids.length; i += 150) {
     const chunk = uuids.slice(i, i + 150)
-    const { data } = await supabase.from('positions').select('id, legacy_id, title, company').in('id', chunk)
+    const { data } = await supabase.from('positions').select('id, legacy_id, title, company, source').in('id', chunk)
     for (const r of ((data ?? []) as unknown as PosMeta[])) byUuid.set(String(r.id), r)
   }
   for (const ev of events) {
     if (!ev.pid) continue
     if (isLegacyPid(ev.pid)) {
       const m = byLegacy.get(Number(ev.pid))
-      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id; ev.pid = String(m.id) }
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id; ev.source = m.source; ev.pid = String(m.id) }
     } else {
       const m = byUuid.get(ev.pid)
-      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id }
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id; ev.source = m.source }
     }
+  }
+
+  // Score assegnato (eventi scorer): lookup mirata su `scores` per i soli pid
+  // scorer, ormai risolti a uuid sopra. Una riga per posizione → mappa pid→score.
+  const scorerPids = [...new Set(
+    events.filter((e) => e.role === 'scorer' && e.pid && !isLegacyPid(e.pid)).map((e) => e.pid as string),
+  )]
+  if (scorerPids.length) {
+    const byScore = new Map<string, number>()
+    for (let i = 0; i < scorerPids.length; i += 150) {
+      const chunk = scorerPids.slice(i, i + 150)
+      const { data } = await supabase.from('scores').select('position_id, total_score').in('position_id', chunk)
+      for (const r of ((data ?? []) as { position_id: string; total_score: number | null }[]))
+        if (r.total_score != null) byScore.set(String(r.position_id), r.total_score)
+    }
+    for (const ev of events)
+      if (ev.role === 'scorer' && ev.pid && byScore.has(ev.pid)) ev.score = byScore.get(ev.pid)!
   }
 }
 
