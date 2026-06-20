@@ -1,43 +1,51 @@
 #!/usr/bin/env python3
-"""email_monitor — poll inbox IMAP, estrae link job da alert email (F-2.C).
+"""email_monitor — poll inbox IMAP, estrae link job dagli alert email (F-2.C).
 
-Strategia utente (decisione 2026-05-17): l'utente crea un'email dedicata
-(es. jobs+jht@gmail.com) + setta forward rules sul client primario per
-inoltrare lì LinkedIn Jobs / Glassdoor / Indeed alerts. Lo Scout monta
-questa skill ogni 30 min: legge nuove email, estrae i link job, push in
-`positions` via db_insert.
+Strategia utente (decisione 2026-05-17, generalizzata 2026-06-20): l'utente crea
+un'email DEDICATA (es. nome.jht@gmail.com) + setta forward rules sul client
+primario per inoltrarci gli alert di lavoro — non solo LinkedIn/Glassdoor/Indeed
+ma QUALSIASI piattaforma che notifica via mail (board nazionali, portali di
+città, community di nicchia). Lo Scout monta questa skill a inizio giornata:
+legge le nuove email, estrae i link job, push in `positions` via db_insert.
 
 Vantaggi:
-- Aggira il cookie wall di LinkedIn (bug #2 della doc F-2): l'email
-  è già "pre-filtrata sul target" dall'utente.
+- Aggira il cookie wall di LinkedIn (bug #2 della doc F-2): l'email è già
+  "pre-filtrata sul target" dall'utente.
 - Sorgente passiva: i job arrivano, lo Scout non deve indovinare keyword.
 - Cross-provider: funziona uguale su Claude/Codex/Kimi (zero Playwright).
+- Any-platform: la casella è dedicata → di default processiamo TUTTI i mittenti
+  (non solo i 3 noti). Estrazione precisa per i provider conosciuti, generica
+  (filtrata + cappata) per gli sconosciuti — lo Scout, intelligente, valida.
 
 Config (`$JHT_HOME/credentials/email_monitor.json`):
 {
   "imap_host": "imap.gmail.com",
   "imap_port": 993,
-  "user": "jobs+jht@gmail.com",
-  "password": "<app-password-google>",
+  "user": "nome.jht@gmail.com",
+  "password": "<app-password>",
   "folder": "INBOX",
-  "from_filters": ["jobs-listings@linkedin.com",
-                   "jobalerts-noreply@glassdoor.com",
-                   "alerts@indeed.com"]
+  "from_filters": []   # OPZIONALE: vuoto/assente = processa TUTTA la casella
+                       # (inbox dedicata). Valorizzato = allow-list di mittenti.
 }
 
-State idempotency in `$JHT_HOME/state/email_monitor_seen.json` con set
-di Message-ID già processati — re-run safe ogni 30 min senza duplicati.
+State idempotency in `$JHT_HOME/state/email_monitor_seen.json` con set di
+Message-ID già processati — re-run safe ogni 30 min senza duplicati.
 
 CLI:
     python3 /app/shared/skills/email_monitor.py poll
     → stdout JSONL: 1 riga per nuovo job link estratto
-      {"url": "...", "title": "...", "company": "...", "source": "linkedin-email"}
+      {"url": "...", "source": "linkedin-email|email:<domain>", "subject": "...",
+       "sender": "...", "received_at": "..."}
 
     python3 /app/shared/skills/email_monitor.py poll --since-days 1
     → restringe ricerca a email degli ultimi N giorni
 
+    python3 /app/shared/skills/email_monitor.py count
+    → conta le nuove email per mittente SENZA scaricarne il body (aiuta il
+      Capitano a stimare il VOLUME e bilanciare quante elaborarne)
+
     python3 /app/shared/skills/email_monitor.py status
-    → conta email già processate, frequenza sender, ecc.
+    → mostra config + quante email già processate
 """
 from __future__ import annotations
 
@@ -49,13 +57,18 @@ import json
 import os
 import re
 import sys
+from collections import Counter
 from datetime import datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime
+from email.utils import parsedate_to_datetime, parseaddr
 from pathlib import Path
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", "/jht_home"))
 CREDS_PATH = JHT_HOME / "credentials" / "email_monitor.json"
 STATE_PATH = JHT_HOME / "state" / "email_monitor_seen.json"
+
+# Cap di link estratti da una singola email (una digest può contenerne molti):
+# evita che un solo messaggio gonfi la coda con decine di candidati.
+MAX_LINKS_PER_EMAIL = 25
 
 
 def _load_creds() -> dict:
@@ -86,9 +99,9 @@ def _save_state(state: dict) -> None:
     tmp.replace(STATE_PATH)
 
 
-# ── Pattern estrazione link per provider ───────────────────────────────
-# Ogni alert ha formato suo. Pattern conservativi — meglio nessun link
-# che link sbagliato. Lo Scout pulisce i query-string di tracking dopo.
+# ── Pattern estrazione link per provider NOTO ──────────────────────────────
+# Ogni alert ha formato suo. Pattern conservativi — meglio nessun link che link
+# sbagliato. Lo Scout pulisce i query-string di tracking dopo.
 LINKEDIN_JOB_RE = re.compile(
     r"https?://(?:www\.)?linkedin\.com/(?:comm/)?jobs/view/(\d+)",
     re.I,
@@ -102,10 +115,54 @@ INDEED_JOB_RE = re.compile(
     re.I,
 )
 
+# ── Estrazione GENERICA per qualsiasi altra piattaforma ────────────────────
+# Tutti gli href dell'email; poi teniamo solo quelli che "sembrano" un annuncio
+# e scartiamo il rumore tipico delle newsletter. Multilingua di proposito
+# (board nazionali): IT/EN/DE/FR/ES/PT.
+ANY_URL_RE = re.compile(r"""https?://[^\s"'<>)\]]+""", re.I)
+
+# Hint che un link sia un annuncio/posizione (path o query).
+JOB_HINT_RE = re.compile(
+    r"(?:"
+    r"job|jobs|career|careers|vacanc|position|posting|opening|hiring|apply|"
+    r"offerta|offerte|lavoro|annunci|posizione|"          # IT
+    r"stelle|stellenangebot|bewerb|"                       # DE
+    r"emploi|offre|poste|carriere|"                        # FR
+    r"empleo|oferta|vacante|trabajo|"                      # ES/PT
+    r"emprego|vaga|"                                        # PT
+    r"gh_jid|greenhouse\.io|lever\.co|myworkdayjobs|workable|smartrecruiters|"
+    r"recruitee|personio|ashbyhq|teamtailor|jobvite|icims|breezy"
+    r")",
+    re.I,
+)
+
+# Rumore da scartare sempre (footer newsletter, asset, social, tracking).
+JUNK_RE = re.compile(
+    r"(?:"
+    r"unsubscribe|opt[-_]?out|email[-_]?prefs|preferences|notification[-_]?settings|"
+    r"privacy|terms|/help|/support|/about|/legal|cookie|"
+    r"\.(?:png|jpe?g|gif|svg|css|js|woff2?)(?:\?|$)|"
+    r"facebook\.com|twitter\.com|x\.com/|instagram\.com|youtube\.com|"
+    r"play\.google\.com|apps\.apple\.com|itunes\.apple\.com|"
+    r"/account|/settings|/unsubscribe"
+    r")",
+    re.I,
+)
+
+
+def _sender_domain(sender: str) -> str:
+    """morgan@jobs-listings.linkedin.com -> linkedin.com (best-effort)."""
+    addr = parseaddr(sender or "")[1]
+    dom = addr.split("@")[-1].lower() if "@" in addr else ""
+    parts = [p for p in dom.split(".") if p]
+    if len(parts) >= 2:
+        return ".".join(parts[-2:])
+    return dom
+
 
 def _extract_email_body(msg: email.message.Message) -> str:
-    """Concatena tutti i body text/html in un singolo blob — sufficiente
-    per la regex extraction (non serve render)."""
+    """Concatena tutti i body text/html in un singolo blob — sufficiente per la
+    regex extraction (non serve render)."""
     parts = []
     for part in msg.walk():
         ctype = part.get_content_type()
@@ -121,33 +178,86 @@ def _extract_email_body(msg: email.message.Message) -> str:
     return "\n".join(parts)
 
 
-def _extract_jobs(body: str, sender: str) -> list[dict]:
-    """Best-effort: identifica provider dal sender, applica regex."""
-    sender_lc = (sender or "").lower()
-    jobs = []
-    seen_urls = set()
+def _extract_generic(body: str, domain: str) -> list[dict]:
+    """Per mittenti SCONOSCIUTI: tutti gli href che sembrano un annuncio, meno il
+    rumore. Source = email:<domain>. Conservativo + cappato; lo Scout valida."""
+    jobs: list[dict] = []
+    seen_urls: set[str] = set()
+    for m in ANY_URL_RE.finditer(body):
+        url = m.group(0).rstrip(".,);'\"")
+        if url in seen_urls:
+            continue
+        if JUNK_RE.search(url):
+            continue
+        if not JOB_HINT_RE.search(url):
+            continue
+        seen_urls.add(url)
+        jobs.append({"url": url, "source": f"email:{domain}" if domain else "email"})
+        if len(jobs) >= MAX_LINKS_PER_EMAIL:
+            break
+    return jobs
 
+
+def _extract_jobs(body: str, sender: str) -> list[dict]:
+    """Identifica il provider dal sender: estrazione PRECISA per i noti, GENERICA
+    per gli altri (any-platform)."""
+    sender_lc = (sender or "").lower()
+    jobs: list[dict] = []
+    seen_urls: set[str] = set()
+
+    def _add(url: str, source: str, **extra):
+        if url in seen_urls:
+            return
+        seen_urls.add(url)
+        rec = {"url": url, "source": source}
+        rec.update(extra)
+        jobs.append(rec)
+
+    known = False
     if "linkedin" in sender_lc:
+        known = True
         for m in LINKEDIN_JOB_RE.finditer(body):
             jid = m.group(1)
-            url = f"https://www.linkedin.com/jobs/view/{jid}"
-            if url not in seen_urls:
-                seen_urls.add(url)
-                jobs.append({"url": url, "job_id": jid, "source": "linkedin-email"})
+            _add(f"https://www.linkedin.com/jobs/view/{jid}", "linkedin-email", job_id=jid)
     if "glassdoor" in sender_lc:
+        known = True
         for m in GLASSDOOR_JOB_RE.finditer(body):
-            url = m.group(0).rstrip(".,);")
-            if url not in seen_urls:
-                seen_urls.add(url)
-                jobs.append({"url": url, "source": "glassdoor-email"})
+            _add(m.group(0).rstrip(".,);"), "glassdoor-email")
     if "indeed" in sender_lc:
+        known = True
         for m in INDEED_JOB_RE.finditer(body):
-            url = m.group(0).rstrip(".,);")
-            if url not in seen_urls:
-                seen_urls.add(url)
-                jobs.append({"url": url, "source": "indeed-email"})
+            _add(m.group(0).rstrip(".,);"), "indeed-email")
 
-    return jobs
+    # Mittente sconosciuto → estrazione generica (any-platform).
+    if not known:
+        for j in _extract_generic(body, _sender_domain(sender)):
+            _add(j["url"], j["source"])
+
+    return jobs[:MAX_LINKS_PER_EMAIL]
+
+
+def _imap_connect(creds: dict):
+    host = creds.get("imap_host", "imap.gmail.com")
+    port = int(creds.get("imap_port", 993))
+    M = imaplib.IMAP4_SSL(host, port)
+    M.login(creds["user"], creds.get("password", ""))
+    return M
+
+
+def _search_uids(M, from_filters: list[str], since_imap: str) -> list[bytes]:
+    """from_filters non vuoto = allow-list per mittente; vuoto = TUTTA la casella
+    (inbox dedicata, any-platform)."""
+    uids: list[bytes] = []
+    if from_filters:
+        for from_addr in from_filters:
+            typ, data = M.search(None, "(FROM", f'"{from_addr}"', "SINCE", since_imap + ")")
+            if typ == "OK" and data and data[0]:
+                uids.extend(data[0].split())
+    else:
+        typ, data = M.search(None, "(SINCE", since_imap + ")")
+        if typ == "OK" and data and data[0]:
+            uids.extend(data[0].split())
+    return sorted(set(uids))
 
 
 def poll(since_days: int = 3) -> list[dict]:
@@ -160,33 +270,16 @@ def poll(since_days: int = 3) -> list[dict]:
     new_jobs: list[dict] = []
     new_seen_msgids: list[str] = []
 
-    host = creds.get("imap_host", "imap.gmail.com")
-    port = int(creds.get("imap_port", 993))
-    user = creds["user"]
-    password = creds.get("password", "")
     folder = creds.get("folder", "INBOX")
-    from_filters = creds.get("from_filters") or [
-        "jobs-listings@linkedin.com",
-        "jobalerts-noreply@glassdoor.com",
-        "alerts@indeed.com",
-    ]
+    from_filters = creds.get("from_filters") or []
 
     since_dt = datetime.now(timezone.utc) - timedelta(days=since_days)
     since_imap = since_dt.strftime("%d-%b-%Y")
 
-    M = imaplib.IMAP4_SSL(host, port)
+    M = _imap_connect(creds)
     try:
-        M.login(user, password)
         M.select(folder, readonly=True)
-        # FROM ... OR encadeniati. Singola query per filtro per semplicità,
-        # accumuliamo i risultati.
-        all_uids: list[bytes] = []
-        for from_addr in from_filters:
-            typ, data = M.search(None, "(FROM", f'"{from_addr}"', "SINCE", since_imap + ")")
-            if typ == "OK" and data and data[0]:
-                all_uids.extend(data[0].split())
-        # Dedup UIDs
-        all_uids = sorted(set(all_uids))
+        all_uids = _search_uids(M, from_filters, since_imap)
         for uid in all_uids:
             typ, msg_data = M.fetch(uid, "(RFC822)")
             if typ != "OK" or not msg_data or not msg_data[0]:
@@ -197,13 +290,17 @@ def poll(since_days: int = 3) -> list[dict]:
             if not mid or mid in seen:
                 continue
             sender = msg.get("From", "")
+            subject = (msg.get("Subject", "") or "").strip()
             body = _extract_email_body(msg)
             jobs = _extract_jobs(body, sender)
+            received_at = (
+                parsedate_to_datetime(msg.get("Date", "")).isoformat()
+                if msg.get("Date") else datetime.now(timezone.utc).isoformat()
+            )
             for j in jobs:
-                j["received_at"] = (
-                    parsedate_to_datetime(msg.get("Date", "")).isoformat()
-                    if msg.get("Date") else datetime.now(timezone.utc).isoformat()
-                )
+                j["subject"] = subject
+                j["sender"] = parseaddr(sender)[1] or sender
+                j["received_at"] = received_at
                 new_jobs.append(j)
             new_seen_msgids.append(mid)
     finally:
@@ -222,6 +319,52 @@ def poll(since_days: int = 3) -> list[dict]:
     return new_jobs
 
 
+def count(since_days: int = 1) -> dict:
+    """Conta le NUOVE email (non ancora processate) per mittente SENZA scaricarne
+    il body. Serve al Capitano per stimare il volume e bilanciare il carico."""
+    creds = _load_creds()
+    if not creds.get("user"):
+        return {"configured": False, "new_total": 0, "by_sender": {}}
+
+    state = _load_state()
+    seen = set(state.get("seen_message_ids", []))
+    folder = creds.get("folder", "INBOX")
+    from_filters = creds.get("from_filters") or []
+    since_dt = datetime.now(timezone.utc) - timedelta(days=since_days)
+    since_imap = since_dt.strftime("%d-%b-%Y")
+
+    by_sender: Counter = Counter()
+    new_total = 0
+    M = _imap_connect(creds)
+    try:
+        M.select(folder, readonly=True)
+        all_uids = _search_uids(M, from_filters, since_imap)
+        for uid in all_uids:
+            # Solo header: From + Message-ID, niente body (economico).
+            typ, msg_data = M.fetch(uid, "(BODY.PEEK[HEADER.FIELDS (FROM MESSAGE-ID)])")
+            if typ != "OK" or not msg_data or not msg_data[0]:
+                continue
+            raw = msg_data[0][1]
+            msg = email.message_from_bytes(raw, policy=email.policy.default)
+            mid = (msg.get("Message-ID", "") or "").strip()
+            if not mid or mid in seen:
+                continue
+            new_total += 1
+            by_sender[_sender_domain(msg.get("From", ""))] += 1
+    finally:
+        try:
+            M.logout()
+        except Exception:
+            pass
+
+    return {
+        "configured": True,
+        "since_days": since_days,
+        "new_total": new_total,
+        "by_sender": dict(by_sender.most_common()),
+    }
+
+
 def status() -> dict:
     creds = _load_creds()
     state = _load_state()
@@ -230,6 +373,7 @@ def status() -> dict:
         "user": creds.get("user", ""),
         "host": creds.get("imap_host", ""),
         "from_filters": creds.get("from_filters", []),
+        "any_platform": not bool(creds.get("from_filters")),
         "seen_count": len(state.get("seen_message_ids", [])),
         "state_path": str(STATE_PATH),
         "creds_path": str(CREDS_PATH),
@@ -244,6 +388,9 @@ def main(argv):
     pp = sub.add_parser("poll")
     pp.add_argument("--since-days", type=int, default=3)
 
+    cp = sub.add_parser("count")
+    cp.add_argument("--since-days", type=int, default=1)
+
     sub.add_parser("status")
 
     args = p.parse_args(argv)
@@ -252,6 +399,10 @@ def main(argv):
         jobs = poll(args.since_days)
         for j in jobs:
             print(json.dumps(j))
+        return 0
+
+    if args.cmd == "count":
+        print(json.dumps(count(args.since_days), indent=2))
         return 0
 
     if args.cmd == "status":
