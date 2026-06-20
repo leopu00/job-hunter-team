@@ -7,6 +7,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### 🐳 macOS container runtime: user choice (Colima or Docker Desktop) — 2026-06-20
+
+Supera l'ADR-0001 (Colima-only su macOS) con [ADR-0006](docs/adr/0006-user-choice-container-runtime-macos.md). Su **macOS** l'utente sceglie il runtime:
+
+- **Detect-first ovunque**: se un daemon Docker risponde già (Docker Desktop, una Colima esistente, OrbStack…) viene riusato — niente seconda VM installata sopra (risolve il clash a due VM).
+- **Wizard desktop**: card a due opzioni nella schermata setup — 🟢 Colima (consigliato, headless, gestito da noi) vs 🔵 Docker Desktop (il tuo, lo avvii tu). Preferenza persistita host-side in `userData/preferences.json` (mai sul container/cloud), commutabile anche a daemon attivo.
+- **CLI**: `install.sh --runtime=colima|docker-desktop` (non interattivo → flag, non prompt) + `install_docker_desktop_macos` (`open -a Docker`, mai silent-install). Guardrail daemon-down specifici per mac (`colima start` / `open -a Docker`).
+- Windows (Docker Desktop) e Linux (Engine nativo) invariati. Decisione confinata a macOS (Colima non esiste su Windows; su Linux il motore è già nativo).
+
 > 289 commits and 10 days of intensive work since v0.1.12 — desktop launcher rewritten with one-click install on macOS (Colima via Homebrew/osascript) and Windows (WSL2 + Docker Desktop + Git in a single UAC flow), monitoring stack pivoted multiple times (Sentinel eliminated then reintroduced as event-driven watchdog, Bridge promoted to separate clock-only daemon), web team page redesigned with live inter-agent message animations and embedded terminal per agent, web platform restructured around the subscription model, complete pre-launch documentation suite (10 new docs), Kimi (Moonshot) provider support added, **pre-launch security hardening sprint** (31/34 fix, score 30% → 74%, audit suite in `docs/security/`).
 
 ### 🌥️ Cloud sync v2: desired-state Kubernetes-style + on-demand UX — 2026-05-22 / 2026-05-31

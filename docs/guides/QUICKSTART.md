@@ -55,7 +55,7 @@ The launcher handles everything through a graphical interface — no terminal re
    - Linux: `.AppImage` or `.deb`
 2. Open the app and walk through the setup wizard:
    - Pick your language (en/it/hu)
-   - **"Install everything"** button installs Docker (Colima on macOS / Docker Desktop on Windows / docker.io on Linux) + Git in a single guided flow
+   - **"Install everything"** button installs Docker (macOS: Colima by default or your own Docker Desktop — you choose in the setup card / Docker Desktop on Windows / docker.io on Linux) + Git in a single guided flow
    - Pick your provider (🟠 Claude / 🔵 Codex / 🌙 Kimi) and sign in via embedded terminal
 3. Click **Start** — the team boots in the background and your default browser opens on the dashboard.
 
@@ -84,7 +84,7 @@ iwr -useb https://jobhunterteam.ai/install.ps1 | iex
 The script:
 
 1. Detects your OS (macOS / Linux apt+dnf+pacman / WSL2 / Windows PowerShell)
-2. Installs the **Docker runtime** (Colima on macOS via Homebrew, `docker.io` on Linux/WSL2). On Windows: verifies Docker Desktop is running.
+2. Installs the **Docker runtime** (macOS: Colima by default or your Docker Desktop via `--runtime`; reuses any Docker already running. `docker.io` on Linux/WSL2). On Windows: verifies Docker Desktop is running.
 3. Downloads `docker-compose.yml` to `~/.jht/runtime/` (Windows: `$env:USERPROFILE\.jht\runtime\`)
 4. Downloads the `jht` wrapper (bash on \*nix, PowerShell `jht-wrapper.ps1` on Windows) to `~/.local/bin/jht` (Windows: `$env:USERPROFILE\.local\bin\jht.ps1` + PATH registration)
 
