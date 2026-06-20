@@ -25,3 +25,6 @@ feedback-query
 scout-coord
 circles-and-sources
 position-insert
+
+# Email sourcing (day-start): poll the dedicated team inbox, any platform
+email-monitor
