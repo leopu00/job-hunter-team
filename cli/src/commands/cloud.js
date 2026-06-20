@@ -1609,6 +1609,66 @@ async function handleTicketSync(options = {}) {
 }
 
 /**
+ * Rendezvous "Sync now" ([JHT-DATA-SYNC] fase 3): chiude il refresh on-demand
+ * senza polling continuo dei browser. Il browser (apertura dashboard o pulsante
+ * "Sync now") scrive `team_state.sync_requested_at`; qui il daemon lo rileva,
+ * fa un push fresco e marca `sync_completed_at` → il browser fa UN refetch.
+ *
+ * Pending = sync_requested_at presente e > sync_completed_at (o completed NULL).
+ * Best-effort: 1 GET /api/team-state per tick (lettura singola riga per user,
+ * economica); push + PATCH ack solo quando c'è davvero una richiesta.
+ */
+async function handleSyncRendezvous(options = {}) {
+  const silent = options.silent === true;
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) return;
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+
+  let state = null;
+  try {
+    const res = await fetch(`${baseUrl}/api/team-state`, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
+    if (!res.ok) return;
+    const body = await res.json().catch(() => ({}));
+    state = body.state || null;
+  } catch (err) {
+    if (!silent) console.error(pc.yellow(`  sync-rendezvous warn: ${err.message}`));
+    return;
+  }
+  if (!state) return;
+
+  const reqAt = state.sync_requested_at || null;
+  const doneAt = state.sync_completed_at || null;
+  // Timestamp ISO (UTC, suffisso Z dal cloud) → confronto lessicografico =
+  // cronologico. Pending se richiesto e non ancora completato dopo la richiesta.
+  const pending = reqAt && (!doneAt || reqAt > doneAt);
+  if (!pending) return;
+
+  // Push fresco ORA (condizionale: se non c'è delta esce subito, i dati sono
+  // già a cloud). Isolato dal counter del daemon.
+  const prev = process.exitCode;
+  process.exitCode = 0;
+  await handlePush({});
+  process.exitCode = prev;
+
+  // Ack: il browser sta facendo polling bounded di sync_completed_at.
+  try {
+    await fetch(`${baseUrl}/api/team-state`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sync_completed_at: new Date().toISOString() }),
+    });
+    if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack'));
+  } catch (err) {
+    if (!silent) console.error(pc.yellow(`  sync-rendezvous ack warn: ${err.message}`));
+  }
+}
+
+/**
  * Inserisce un messaggio in pending_user_messages locale. Best-effort:
  * usato dal killswitch del daemon per notificare l'utente quando il token
  * è revocato. Il push delta-only normalmente propaga questa tabella in
@@ -1762,6 +1822,17 @@ async function handleDaemon(options) {
         process.exitCode = prevTk;
       } catch (err) {
         console.error(pc.yellow(`  daemon ticket-sync error: ${err.message}`));
+      }
+
+      // Rendezvous "Sync now": se il browser ha chiesto un refresh on-demand
+      // (sync_requested_at), push fresco + ack. Best-effort, fuori dal counter.
+      try {
+        const prevSr = process.exitCode;
+        process.exitCode = 0;
+        await handleSyncRendezvous({ silent: true });
+        process.exitCode = prevSr;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon sync-rendezvous error: ${err.message}`));
       }
 
       if (authFailedThisTick) {
