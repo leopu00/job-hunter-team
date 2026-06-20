@@ -1,4 +1,4 @@
-import { state, dom } from './state.js'
+import { state, dom, appendLog } from './state.js'
 import { t, platformFromHintKey } from './i18n.js'
 
 export function clearChildren(node) {
@@ -27,7 +27,9 @@ function paintStepsFromStatus(status) {
   // because the .install-steps stylesheet rule has `display: flex`
   // which overrides the user-agent default for `[hidden]` (no
   // `.install-steps[hidden]` rule in the CSS to pull it back).
-  if (platform !== 'darwin') {
+  // The Homebrew/Colima/daemon checklist is Colima-specific. Hide it on
+  // non-darwin and when the user picked Docker Desktop (their own app).
+  if (platform !== 'darwin' || effectiveRuntimeChoice() === 'docker-desktop') {
     if (dom.dockerSteps) {
       dom.dockerSteps.hidden = true
       dom.dockerSteps.style.display = 'none'
@@ -89,6 +91,123 @@ export function applyPlatformSkeleton(platform) {
   showIf(dom.winInstallActions, isWin)
 }
 
+const DOCKER_DESKTOP_URL = 'https://www.docker.com/products/docker-desktop/'
+
+// macOS container-runtime choice (ADR-0006). 'auto'/'colima' both surface as
+// "Colima" visually (auto prefers Colima, our default); only an explicit
+// 'docker-desktop' flips the card to the Docker-Desktop flow.
+function effectiveRuntimeChoice() {
+  const c = state.containerRuntime && state.containerRuntime.choice
+  return c === 'docker-desktop' ? 'docker-desktop' : 'colima'
+}
+
+export async function loadContainerRuntime() {
+  if (!window.setupApi || !window.setupApi.getContainerRuntime) return
+  try {
+    state.containerRuntime = await window.setupApi.getContainerRuntime()
+  } catch {
+    state.containerRuntime = null
+  }
+}
+
+async function onSelectRuntime(choice) {
+  if (!window.setupApi || !window.setupApi.setContainerRuntime) return
+  try {
+    await window.setupApi.setContainerRuntime(choice)
+  } catch {
+    // best-effort: if the write fails we still reflect the intent locally
+  }
+  await loadContainerRuntime()
+  await refreshDockerStatus()
+}
+
+// Two-option chooser shown only on macOS: Colima (recommended) vs the user's
+// own Docker Desktop. Lives at the top of the docker card so it also doubles
+// as the "switch later" control whenever the setup card is on screen.
+function renderRuntimeChooser(platform) {
+  const host = dom.runtimeChooser
+  if (!host) return
+  if (platform !== 'darwin') {
+    host.hidden = true
+    host.style.display = 'none'
+    clearChildren(host)
+    return
+  }
+  host.hidden = false
+  host.style.display = ''
+  clearChildren(host)
+
+  const selected = effectiveRuntimeChoice()
+  const title = document.createElement('p')
+  title.className = 'runtime-chooser__title'
+  title.textContent = t('docker.runtime.title')
+  host.appendChild(title)
+
+  const options = document.createElement('div')
+  options.className = 'runtime-chooser__options'
+  host.appendChild(options)
+
+  const make = (value, labelKey, hintKey, recommended) => {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'runtime-option' + (selected === value ? ' runtime-option--active' : '')
+    btn.setAttribute('aria-pressed', selected === value ? 'true' : 'false')
+
+    const head = document.createElement('span')
+    head.className = 'runtime-option__label'
+    head.textContent = t(labelKey)
+    if (recommended) {
+      const tag = document.createElement('span')
+      tag.className = 'runtime-option__tag'
+      tag.textContent = t('docker.runtime.recommended')
+      head.appendChild(tag)
+    }
+    btn.appendChild(head)
+
+    const hint = document.createElement('span')
+    hint.className = 'runtime-option__hint'
+    hint.textContent = t(hintKey)
+    btn.appendChild(hint)
+
+    btn.addEventListener('click', () => onSelectRuntime(value))
+    return btn
+  }
+
+  options.appendChild(
+    make('colima', 'docker.runtime.colima.label', 'docker.runtime.colima.hint', true),
+  )
+  options.appendChild(
+    make('docker-desktop', 'docker.runtime.dockerDesktop.label', 'docker.runtime.dockerDesktop.hint', false),
+  )
+}
+
+// macOS: start the user's Docker Desktop, then poll status until the daemon
+// answers (cold start is 20-60s) so the card flips to green on its own.
+let macDockerPollTimer = null
+export async function onStartDockerDesktopMac() {
+  setBusy(true)
+  try {
+    const result = await window.setupApi.startDockerDesktop()
+    if (!result?.ok) appendLog(`startDockerDesktop: ${result?.error || 'failed'}`)
+  } finally {
+    setBusy(false)
+  }
+  if (macDockerPollTimer) return
+  let tries = 0
+  const MAX_TRIES = 30 // 30 × 3s = 90s
+  macDockerPollTimer = setInterval(async () => {
+    tries += 1
+    try {
+      await refreshDockerStatus()
+      const ok = state.docker && state.docker.check && state.docker.check.state === 'ok'
+      if (ok || tries >= MAX_TRIES) {
+        clearInterval(macDockerPollTimer)
+        macDockerPollTimer = null
+      }
+    } catch (_) { /* keep polling */ }
+  }, 3000)
+}
+
 export function renderDockerCard(status) {
   const check = status.check
   const card = dom.dockerCard
@@ -105,6 +224,10 @@ export function renderDockerCard(status) {
   if (platform && dom.setupLead) {
     dom.setupLead.innerHTML = t(`setup.lead.${platform}`)
   }
+
+  // Render the macOS runtime chooser before the early `ok` return so the
+  // user can still switch runtime when everything is already green.
+  renderRuntimeChooser(platform)
 
   if (check.state === 'ok') {
     dom.dockerBadge.textContent = t('docker.state.ok')
@@ -155,12 +278,32 @@ export function renderDockerCard(status) {
   if (check.state === 'ok') return
 
   if (platform === 'darwin') {
-    // "Not-running" = Homebrew + Colima are already installed, the
-    // daemon is just stopped. Labelling this "Installa tutto" (Install
-    // everything) is misleading — nothing is actually being installed,
-    // we just need to fire `colima start`. Use "Avvia runtime" instead.
-    // The handler is the same install.js pipeline, which is idempotent
-    // and turns into a pure `colima start` when the binaries are there.
+    // Docker Desktop path: it is the user's own app — we never silent-install
+    // it. Offer "Start" if it's installed, else "Download". No checklist.
+    if (effectiveRuntimeChoice() === 'docker-desktop') {
+      const installed = !!(
+        state.containerRuntime &&
+        state.containerRuntime.detected &&
+        state.containerRuntime.detected.dockerDesktopInstalled
+      )
+      const btn = document.createElement('button')
+      btn.className = 'btn btn--primary'
+      if (installed) {
+        btn.textContent = t('docker.action.startDockerDesktop')
+        btn.addEventListener('click', onStartDockerDesktopMac)
+      } else {
+        btn.textContent = t('docker.action.downloadDockerDesktop')
+        btn.addEventListener('click', onDownloadDockerDesktop)
+      }
+      dom.dockerActions.appendChild(btn)
+      return
+    }
+    // Colima path (default). "Not-running" = Homebrew + Colima are already
+    // installed, the daemon is just stopped. Labelling this "Installa tutto"
+    // (Install everything) is misleading — nothing is actually being
+    // installed, we just need to fire `colima start`. Use "Avvia runtime".
+    // The handler is the same install.js pipeline, which is idempotent and
+    // turns into a pure `colima start` when the binaries are there.
     const install = document.createElement('button')
     install.className = 'btn btn--primary'
     install.textContent = check.state === 'not-running'
@@ -263,6 +406,9 @@ export async function refreshDockerStatus() {
     if (platform === 'win32') {
       renderWindowsRequirements(status, extra)
     } else {
+      // macOS: load the runtime choice (Colima / Docker Desktop) before the
+      // card renders so the chooser and action buttons reflect the pick.
+      if (platform === 'darwin') await loadContainerRuntime()
       renderDockerCard(status)
       renderExtraDeps(extra)
     }
@@ -338,6 +484,19 @@ export async function onOpenDownloadPage() {
   setBusy(true)
   try {
     await window.setupApi.openDockerDownloadPage()
+  } finally {
+    setBusy(false)
+  }
+}
+
+// macOS Docker Desktop choice: open the official download page (their app,
+// installed manually — EULA + admin, same friction we accept on Windows).
+export async function onDownloadDockerDesktop() {
+  setBusy(true)
+  try {
+    if (window.launcherApi && window.launcherApi.openExternal) {
+      await window.launcherApi.openExternal(DOCKER_DESKTOP_URL)
+    }
   } finally {
     setBusy(false)
   }
