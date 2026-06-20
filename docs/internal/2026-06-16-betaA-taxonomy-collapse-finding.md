@@ -1,5 +1,14 @@
 # 🕳️ Tassonomia emergente — collasso a 1 categoria su betaA (finding)
 
+> ⚠️ **AGGIORNAMENTO 2026-06-20 — leggere PRIMA `2026-06-20-taxonomy-brain-driven-redesign.md`.**
+> Il fix judge-first qui descritto (Mosse 1+2) ha fermato il collasso ma le offerte finivano poi in
+> massa in `Other` perché il **pass di promozione a stringhe non promuoveva mai** (rootcause vera).
+> Una perlustrazione del 20/06 ha **SMENTITO il §5 di questo doc**: betaB NON aveva "legacy pulito" —
+> le sue 12 categorie nascono tutte in un istante = un **bulk-recategorize MANUALE** una-tantum (stesso
+> legacy frammentato di betaA). La tassonomia è stata resa **brain-driven** (analista promuove dai
+> grappoli + Capitano arbitro C-17, auto-pass RIMOSSO), deployata, e betaA è stato resettato. Dettagli
+> nel doc del 20/06.
+
 **Data:** 2026-06-16 · **VPS:** betaA (`203.0.113.10`, provider codex/gpt-5.5, user_id `9996e20c`) ·
 **Lane fix:** dev1 (prompt analista) + dev2 (`role_registry.py` / bootstrap). · **Modalità:** SOLA
 LETTURA (nessun intervento sul team — [[feedback_no_intervention_in_simulations]]). ·
