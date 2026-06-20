@@ -71,7 +71,11 @@ require_docker() {
     exit 127
   fi
   if ! docker info >/dev/null 2>&1; then
-    err "Docker daemon non risponde. Avvialo (colima start / systemctl start docker / Docker Desktop)."
+    if [ "$(uname)" = "Darwin" ]; then
+      err "Docker daemon non risponde. Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
+    else
+      err "Docker daemon non risponde. Avvialo (systemctl start docker / Docker Desktop)."
+    fi
     exit 1
   fi
 }
