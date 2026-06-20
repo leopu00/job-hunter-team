@@ -21,7 +21,7 @@ For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps
 | Served by | Vercel (Next.js project in `web/`) |
 | URL | `https://jobhunterteam.ai/install.sh` |
 | HTTP cache | `public, max-age=300, s-maxage=3600, stale-while-revalidate=86400` |
-| Default mode | Docker (Colima on macOS, native Docker on Linux/WSL2) |
+| Default mode | Docker (macOS: Colima by default or your Docker Desktop via `--runtime`; native Docker on Linux/WSL2) |
 | Expert mode | `--no-docker` (clone + build from source) |
 | OS support | macOS · Linux (apt/dnf/pacman) · WSL2 |
 | Windows native | Not supported by this script — Windows users go via desktop launcher |
@@ -97,9 +97,13 @@ The script is `set -euo pipefail`, idempotent, and prints a step counter
 
 1. **Detect system** — `uname -s` → macOS / Linux / WSL (`grep microsoft
    /proc/version`); on Linux/WSL also picks `apt` / `dnf` / `pacman`.
-2. **Install container runtime** —
-   - macOS: install Homebrew if missing → `brew install colima docker` →
-     `colima start` (Colima is Apache-2.0, no Docker Desktop).
+2. **Install container runtime** — *detect-first: if a Docker daemon already
+   responds (Docker Desktop, an existing Colima, OrbStack, …) it is reused and
+   nothing is installed.*
+   - macOS: `--runtime=colima` (default) installs Homebrew if missing →
+     `brew install colima docker` → `colima start`. `--runtime=docker-desktop`
+     uses your own Docker Desktop (`open -a Docker`; never silent-installed).
+     See [ADR-0006](../adr/0006-user-choice-container-runtime-macos.md).
    - Linux/WSL: `apt-get install docker.io` (or dnf/pacman equivalent),
      `systemctl enable --now docker` if available, `service docker start`
      on WSL, and `usermod -aG docker $USER` so subsequent runs don't need
