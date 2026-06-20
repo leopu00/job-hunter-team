@@ -1,13 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import {
-  LandingI18nProvider,
-  useLandingI18n,
-} from "../../../components/landing/LandingI18n";
-import LandingNav from "../../../components/landing/LandingNav";
-import { LandingFooter } from "../../../components/landing/LandingCTA";
-import ScrollToTop from "../../../components/landing/ScrollToTop";
 
 const TITLE_CLS =
   "text-[15px] font-bold text-[var(--color-white)] mt-10 mb-3 flex items-center gap-2";
@@ -26,16 +19,10 @@ function Callout({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ForwardingContent() {
-  // Keep the i18n provider for chrome (nav/footer), but the guide body is
-  // English-only, like the other site guides.
-  useLandingI18n();
-
+export default function EmailForwardingGuidePage() {
   return (
-    <main style={{ position: "relative", zIndex: 1 }}>
-      <LandingNav />
-      <div className="max-w-3xl mx-auto px-5 pt-32 pb-20">
-        <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
+    <div>
+      <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2 mb-3">
             <Link
               href="/"
@@ -44,7 +31,12 @@ function ForwardingContent() {
               Home
             </Link>
             <span className="text-[var(--color-border)]">/</span>
-            <span className="text-[10px] text-[var(--color-dim)]">Docs</span>
+            <Link
+              href="/docs"
+              className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
+            >
+              Docs
+            </Link>
             <span className="text-[var(--color-border)]">/</span>
             <span className="text-[10px] text-[var(--color-muted)]">
               Email Forwarding
@@ -494,10 +486,10 @@ function ForwardingContent() {
 
         <div className="mt-12 pt-6 border-t border-[var(--color-border)] flex items-center justify-between">
           <Link
-            href="/"
+            href="/docs"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline"
           >
-            &larr; Home
+            &larr; All docs
           </Link>
           <Link
             href="/privacy"
@@ -507,16 +499,5 @@ function ForwardingContent() {
           </Link>
         </div>
       </div>
-      <LandingFooter />
-      <ScrollToTop />
-    </main>
-  );
-}
-
-export default function EmailForwardingGuidePage() {
-  return (
-    <LandingI18nProvider>
-      <ForwardingContent />
-    </LandingI18nProvider>
   );
 }
