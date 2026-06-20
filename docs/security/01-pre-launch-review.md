@@ -1,4 +1,4 @@
-# Security Review — Pre-Launch Open Source
+# 🛡️ Security Review — Pre-Launch Open Source
 
 **Audit date:** 2026-04-27
 **Branch:** dev-1 @ 65f2ec4a

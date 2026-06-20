@@ -67,4 +67,3 @@ En **chat Telegram simple** al usuario, `fmt_user` solo es usualmente suficiente
 
 - `shared/skills/format_time.py` — implementación.
 - `candidate_profile.yml.example` — documentación del campo `timezone:`.
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §15 — referencia del incidente.

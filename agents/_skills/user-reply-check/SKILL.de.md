@@ -101,4 +101,3 @@ Wenn der Benutzer sich beschwert "Ich habe vor 10 Sekunden geantwortet und du ha
 
 - `notify-user` — die andere Haelfte des Paares. Schreibt die Nachricht in `pending_user_messages`; diese Skill liest die Antwort zurueck.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — Schema, Indizes, Lebenszyklus einer Zeile.
-- `docs/internal/bot-telegram.md` § 6 — Entscheidung 2026-05-13 zum Fallback-Muster.

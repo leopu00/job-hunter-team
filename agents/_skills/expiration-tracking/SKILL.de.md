@@ -85,4 +85,3 @@ Deadlines, die aus der JD erfasst werden, decken die meisten Fälle ab.
 - `shared/skills/deadline_extract.py` — Parser
 - `shared/skills/expiration_alerts.py` — Emitter + Idempotenz-State
 - `agents/_skills/db-update/SKILL.md` § Positions — `--deadline`-Flag
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §F-4

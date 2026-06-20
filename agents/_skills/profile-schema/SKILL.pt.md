@@ -149,4 +149,3 @@ Os `WARN:` (ex. chave legacy) não bloqueiam mas devem ser corrigidos quando toc
 - `profile-summaries` — os textos narrativos → tornam-se blocos `kind: narrative`
 - `onboarding-flow` — quando atualizar o quê
 - `shared/config/profile-schema.ts` · `shared/skills/validate_profile.py`
-- `docs/internal/candidate-profile-cloud-sync-redesign-2026-06-05.md`
