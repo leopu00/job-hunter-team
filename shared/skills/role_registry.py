@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
-"""role_registry.py — pass di PROMOZIONE della tassonomia EMERGENTE.
+"""role_registry.py — registro della tassonomia EMERGENTE (storage + primitive).
 
-Lane dev2 (DB substrate + behavior). Trasforma la coda della sentinella catch-all
-in categorie ATTIVE **senza alcun nome hardcoded**: raggruppa le righe-sentinella
-per ``normalize_key(role_family_proposed)`` e, quando un cluster raggiunge la
-soglia di supporto, **promuove** una categoria il cui NOME è scelto DAI DATI
-(l'etichetta proposta più frequente del cluster), ri-taggando le sue posizioni.
-Backstop: max ~20 categorie attive per-utente (le meno supportate tornano
-dormienti).
+Modello **BRAIN-DRIVEN** (2026-06-20). La decisione su QUALI famiglie esistono e
+quali offerte ci vanno è del GIUDIZIO degli agenti (analista + arbitrato Capitano),
+NON di un conteggio di stringhe. Questo modulo è solo il substrato che ESEGUE:
 
-Confine netto:
-- i NOMI delle categorie li decide il team/i dati, mai questo codice;
-- la sola meccanica condivisa è ``normalize_key`` (superficie: case/spazi/
-  punteggiatura/connettori/token-sort+dedup), importata da ``role_taxonomy``
-  (fonte unica, lane dse3) — nessun mirror.
+- ``promote_family(name, ids)`` — l'analista, visto un grappolo di offerte simili in
+  ``Other``, decide la famiglia e i membri → qui si crea l'attiva e si ri-taggano;
+- ``merge_families(sources, into)`` — verdetto MERGE del Capitano sui near-duplicate;
+- ``recompute_support`` / ``enforce_cap`` — meccanica di supporto (conteggi, tetto).
+
+Confine netto: i NOMI delle categorie e l'appartenenza li decidono gli agenti, mai
+questo codice. NIENTE liste hardcoded.
+
+LEGACY (NON nel percorso decisionale): ``promote()``/``run_pass()`` erano il vecchio
+pass a ``normalize_key`` + soglia che raggruppava per stringa identica. Frammentava
+("VC Investing" vs "VC / Growth Investing" = 2 cluster) → 0 promozioni, tutto fermo in
+``Other`` (rootcause betaA 2026-06-20). NON è più auto-schedulato dal bridge; resta
+solo come diagnostica manuale (``pass --apply``). ``normalize_key`` resta usato solo
+dal write-guard per il fold di varianti di superficie su un'attiva ESISTENTE.
 
 CLI::
 
-    python3 role_registry.py                 # pass sul candidato locale (commit)
-    python3 role_registry.py --dry-run       # mostra cosa farebbe, niente commit
-    python3 role_registry.py --threshold 8 --cap 15
+    python3 role_registry.py promote --name "Investment Banking / M&A" --ids 358,364,377
+    python3 role_registry.py merge --into "Credit" --sources "Private Credit" "Corporate Credit"
+    python3 role_registry.py pass --dry-run     # [legacy] solo per diagnosi
 """
 
 import argparse
@@ -238,6 +243,82 @@ def enforce_cap(conn, user_id, cap, apply=True):
     return demoted
 
 
+def promote_family(conn, user_id, name, ids, apply=True):
+    """Promozione **BRAIN-DRIVEN** (2026-06-20): il NOME e i MEMBRI li decide il
+    GIUDIZIO dell'agente, non un conteggio di stringhe. Questo codice ESEGUE soltanto.
+
+    L'analista, visto un grappolo di offerte simili in ``Other`` (o sparse in
+    micro-varianti), decide la famiglia e i suoi membri e chiama qui:
+    - upsert di ``name`` come categoria ATTIVA nel registro (idempotente);
+    - ri-tagga le ``ids`` con ``role_family = name`` e azzera ``role_family_proposed``.
+
+    NIENTE soglia, NIENTE ``normalize_key``: la famiglia nasce dal cervello, non dal
+    fatto che N stringhe siano identiche (era IL difetto che lasciava tutto in Other).
+    Ritorna ``(name, n_membri)``. ``apply=False`` → dry-run.
+    """
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("nome categoria vuoto")
+    if name == SENTINEL:
+        raise ValueError(f"'{SENTINEL}' è il parcheggio, non una famiglia: scegli un nome reale")
+    ids = [int(i) for i in ids]
+    if not ids:
+        raise ValueError("nessun id membro: una famiglia nasce da un grappolo, non dal nulla")
+    if apply:
+        conn.execute(
+            "INSERT INTO role_family_registry "
+            "  (user_id, name, status, support_count, promoted_at, created_at) "
+            "VALUES (?, ?, 'active', ?, datetime('now','localtime'), datetime('now','localtime')) "
+            "ON CONFLICT(user_id, name) DO UPDATE SET status = 'active', "
+            "  promoted_at = COALESCE(role_family_registry.promoted_at, excluded.promoted_at)",
+            (user_id, name, len(ids)),
+        )
+        ph = ",".join("?" * len(ids))
+        conn.execute(
+            f"UPDATE positions SET role_family = ?, role_family_proposed = NULL "
+            f"WHERE id IN ({ph})",
+            (name, *ids),
+        )
+        recompute_support(conn, user_id)
+        conn.commit()
+    return (name, len(ids))
+
+
+def merge_families(conn, user_id, sources, into, apply=True):
+    """Verdetto **MERGE** del Capitano (2026-06-20): fonde ``sources`` in ``into`` a
+    GIUDIZIO (near-duplicate di superficie, es. "IB / M&A Advisory" + "Transaction
+    Advisory / M&A" → "Investment Banking / M&A"). Tutte le posizioni delle sources
+    passano a ``into``; le sources diventano dormienti con ``merged_into = into``.
+    ``into`` può essere una attiva esistente o un nome nuovo. Ritorna ``(into, sources)``.
+    """
+    into = (into or "").strip()
+    if not into:
+        raise ValueError("merge: destinazione 'into' vuota")
+    sources = [s.strip() for s in sources if s and s.strip() and s.strip() != into]
+    if not sources:
+        raise ValueError("merge: serve almeno una source diversa da 'into'")
+    if apply:
+        conn.execute(
+            "INSERT INTO role_family_registry "
+            "  (user_id, name, status, support_count, promoted_at, created_at) "
+            "VALUES (?, ?, 'active', 0, datetime('now','localtime'), datetime('now','localtime')) "
+            "ON CONFLICT(user_id, name) DO UPDATE SET status = 'active'",
+            (user_id, into),
+        )
+        for src in sources:
+            conn.execute(
+                "UPDATE positions SET role_family = ? WHERE role_family = ?", (into, src)
+            )
+            conn.execute(
+                "UPDATE role_family_registry SET status = 'dormant', merged_into = ? "
+                "WHERE user_id = ? AND name = ?",
+                (into, user_id, src),
+            )
+        recompute_support(conn, user_id)
+        conn.commit()
+    return (into, sources)
+
+
 def run_pass(conn, user_id=None, threshold=DEFAULT_THRESHOLD, cap=DEFAULT_CAP,
              apply=True):
     """Esegue il pass completo: promote → recompute → cap → recompute.
@@ -267,26 +348,71 @@ def run_pass(conn, user_id=None, threshold=DEFAULT_THRESHOLD, cap=DEFAULT_CAP,
     }
 
 
+def _parse_ids(raw):
+    out = []
+    for tok in (raw or "").replace(",", " ").split():
+        tok = tok.strip()
+        if tok:
+            out.append(int(tok))
+    return out
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Pass di promozione tassonomia emergente")
+    ap = argparse.ArgumentParser(
+        description="Tassonomia emergente — promozione/merge BRAIN-DRIVEN (l'agente "
+                    "decide nome e membri; il codice esegue).")
     ap.add_argument("--user-id", default=None,
                     help="omesso → candidato locale (default VPS single-candidate)")
-    ap.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD,
-                    help=f"supporto minimo per promuovere (default {DEFAULT_THRESHOLD})")
-    ap.add_argument("--cap", type=int, default=DEFAULT_CAP,
-                    help=f"max categorie attive per-utente (default {DEFAULT_CAP})")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="mostra cosa farebbe, nessuna scrittura")
-    args = ap.parse_args()
+    ap.add_argument("--dry-run", action="store_true", help="non scrive, mostra l'effetto")
+    sub = ap.add_subparsers(dest="cmd")
 
+    # promote: crea/attiva una famiglia decisa dall'agente e tagga i membri SCELTI da lui
+    p_promote = sub.add_parser("promote",
+        help="crea/attiva una categoria (NOME a tua scelta) e tagga le posizioni che TU "
+             "hai giudicato appartenervi (un grappolo da Other / micro-varianti).")
+    p_promote.add_argument("--name", required=True, help="nome famiglia (giudizio dell'agente)")
+    p_promote.add_argument("--ids", required=True,
+                           help="id posizioni membri, separati da virgola/spazio")
+
+    # merge: verdetto del Capitano per fondere near-duplicate
+    p_merge = sub.add_parser("merge",
+        help="fonde categorie near-duplicate in una sola (verdetto Capitano).")
+    p_merge.add_argument("--into", required=True, help="categoria destinazione")
+    p_merge.add_argument("--sources", required=True, nargs="+",
+                         help="una o più categorie da fondere in --into")
+
+    # pass: LEGACY string-clustering — SOLO diagnostica manuale, NON più auto-schedulato
+    p_pass = sub.add_parser("pass",
+        help="[LEGACY/diagnostica] vecchio pass a stringhe (normalize_key+soglia). "
+             "NON è più nel percorso decisionale: usa promote/merge. Default --dry-run.")
+    p_pass.add_argument("--threshold", type=int, default=DEFAULT_THRESHOLD)
+    p_pass.add_argument("--cap", type=int, default=DEFAULT_CAP)
+    p_pass.add_argument("--apply", action="store_true",
+                        help="applica davvero (default: solo dry-run, è legacy)")
+
+    args = ap.parse_args()
     conn = get_db()
     ensure_schema(conn)
-    res = run_pass(conn, args.user_id, args.threshold, args.cap, apply=not args.dry_run)
-    tag = "[DRY-RUN] " if args.dry_run else ""
-    print(f"{tag}user_id={res['user_id']} soglia={args.threshold} cap={args.cap}")
-    print(f"{tag}promosse: {res['promoted'] or 'nessuna'}")
-    print(f"{tag}demote:   {res['demoted'] or 'nessuna'}")
-    print(f"{tag}attive ({len(res['active'])}): {res['active']}")
+    uid = args.user_id or local_user_id()
+    apply = not args.dry_run
+    tag = "[DRY-RUN] " if not apply else ""
+
+    if args.cmd == "promote":
+        name, n = promote_family(conn, uid, args.name, _parse_ids(args.ids), apply=apply)
+        print(f"{tag}promote '{name}' ← {n} posizioni")
+        print(f"attive: {active_categories(conn, uid, with_support=True)}")
+    elif args.cmd == "merge":
+        into, srcs = merge_families(conn, uid, args.sources, args.into, apply=apply)
+        print(f"{tag}merge {srcs} → '{into}'")
+        print(f"attive: {active_categories(conn, uid, with_support=True)}")
+    elif args.cmd == "pass":
+        res = run_pass(conn, uid, args.threshold, args.cap, apply=args.apply)
+        ptag = "" if args.apply else "[DRY-RUN] "
+        print(f"{ptag}[LEGACY] promosse: {res['promoted'] or 'nessuna'}")
+        print(f"{ptag}[LEGACY] demote:   {res['demoted'] or 'nessuna'}")
+        print(f"{ptag}attive ({len(res['active'])}): {res['active']}")
+    else:
+        ap.print_help()
     conn.close()
 
 
