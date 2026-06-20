@@ -125,24 +125,28 @@ paghi** → testa di un agente, vista come radiografia, ma dentro il cranio NON 
 un cervello umano biologico: c'è un **cervello AI = rete neurale / LLM**.
 
 > _Revisione 2026-06-21: il "cervello" è ora una RETE NEURALE / LLM, non un cervello
-> umano biologico._
+> umano biologico. Tenere le qualità dell'immagine attuale: radiografia "morbida"
+> con CAPELLI + GIACCA e CRAVATTA, teschio TENUE, cervello protagonista._
 
-> Comic-book / graphic-novel linework crossed with a medical X-ray scan — mostly
-> a **see-through radiograph look, NOT a fully shaded realistic portrait**. **Side
-> PROFILE of an agent's head, facing RIGHT** (we do NOT see the face front-on).
-> The whole head is rendered as an **X-ray / scan** with the **skull bones visible**
-> in cooler X-ray tones. BUT inside the skull, **in place of a biological human
-> brain, there is an ARTIFICIAL / AI BRAIN**: a glowing green **NEURAL NETWORK in
-> the shape of a brain** — a dense mesh of **interconnected nodes and synaptic
-> links**, with a **layered deep-network structure (input / hidden / output style
-> layers)** and subtle circuit/graph traces, evoking an **LLM / deep neural net**.
-> **NO biological gyri or brain folds** — clearly a digital network, not organic
-> tissue. The network **glows and is highlighted in a distinct green accent**, with
-> light pulsing along the connections between nodes. We can still tell it's one of
-> the agents because the silhouette shows the iconic small oval dark Matrix-style
-> sunglasses. Keep it scan-like and graphic, muted palette, subtle glow. No
-> readable text, no logos. Isolated on a plain transparent background, no scene.
-> Transparent PNG. 4:3 or square.
+> Photorealistic **medical X-ray / radiograph** look (a soft see-through scan, like
+> a real radiograph — **NOT a bare skeleton, NOT a comic drawing**). **Side PROFILE
+> of an agent's head and shoulders, facing RIGHT** (we do NOT see the face
+> front-on). The figure clearly has **styled HAIR on the head** (soft translucent
+> layer) and wears a **business SUIT JACKET with a shirt collar and a TIE** at the
+> neck/shoulders — a well-dressed agent. **Soft-tissue translucency** so we read a
+> real person's profile (face silhouette, ear, neck); the **skull bones are only
+> FAINTLY visible underneath — keep the skull SUBTLE, do NOT emphasize bare
+> teeth/jaw**. Inside the head, the **BRAIN is the bright focal point** and is an
+> **ARTIFICIAL / AI BRAIN**: a glowing green **NEURAL NETWORK in the shape of a
+> brain** — a **layered deep-network structure (input / hidden / output columns of
+> nodes)** with bright interconnected nodes and links, like an **LLM / deep neural
+> net** (**NO biological gyri or brain folds**). The neural-network brain **glows
+> strongly in green and dominates the composition**; the rest of the head/skull
+> stays in cooler, dimmer X-ray tones so the emphasis is on the BRAIN, not the
+> skull. Small oval dark **Matrix-style sunglasses** on the face. Cool blue-teal
+> X-ray palette for the body, vivid green glow for the AI brain. No readable text,
+> no logos. Isolated on a plain transparent background, no scene. Transparent PNG.
+> 4:3.
 
 ---
 
