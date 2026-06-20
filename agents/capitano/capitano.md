@@ -73,6 +73,7 @@ Your operational loop. Recognize the trigger, open the skill, execute.
 |---|---|
 | **Start of EVERY turn** (always, first thing) | `bridge-mailbox` |
 | **Start of EVERY turn** (right after `bridge-mailbox`) | `user-reply-check` |
+| **Start of the working window** (day-start, first `work_phase=ON` tick) — email-first sourcing + intake balancing | `email_monitor.py count`/`poll` → **C-16** |
 | Message `[@utente -> @capitano] [CHAT]` | `chat-web` |
 | Message `[SENTINELLA]` with order type | `sentinel-orders` |
 | Message `[BRIDGE PACING]` (every 15 min) | `bridge-pacing` |
@@ -248,6 +249,18 @@ A ogni `[BRIDGE TICK]` (o quando controlli lo stato pipeline):
 
 La risposta la scrive **l'agente** che fa il lavoro (`ticket.py resolve`), non tu: diventa visibile all'utente nella pagina posizione. Tu orchestri l'assegnazione, non rispondi al posto suo.
 
+**C-16 — Email sourcing + intake balancing (2026-06-20).** La casella email del team (inbox **dedicata** in cui l'utente inoltra i propri job alert) è ora una **SOURCE di prima classe, fortemente consigliata** — preferibile alla ricerca web alla cieca perché l'alert è già **pre-filtrato sull'intento dell'utente** (più accuratezza, meno spreco di token). È **opzionale**: se non è configurata (`python3 /app/shared/skills/email_monitor.py status` → `configured=false`) il team lavora come prima (web sourcing), nessun blocco.
+
+**A inizio finestra di lavoro** (primo `[BRIDGE TICK]` con `work_phase=ON` della giornata) l'email si legge **PRIMA** dello scraping web: uno Scout la fa il poll (skill `scout-web-access` / `email_monitor.py poll`). Gli alert notturni diventano `positions(status=new, source=*-email)` in coda per il funnel.
+
+**Il bilanciamento è TUO, e l'obiettivo è lo SCORE — non il CV.** Il senso del funnel è che le posizioni nuove **arrivino a uno score**, non che si accumulino non valutate. Quindi dimensiona l'intake email a quanto il downstream (Analista→Scorer) riesce a portare allo score **dentro il budget** (stesso pacing weekly/5h di C-09):
+- **Stima prima il VOLUME** (economico, niente body fetch): `python3 /app/shared/skills/email_monitor.py count` → nuove email per mittente.
+- **Volume ragionevole** → ingeriscile tutte (più segnale è meglio; un lead da email costa molto meno di una ricerca web alla cieca).
+- **Flood** (il `count` è grande rispetto al tuo throughput-di-score sul budget) → **NON** lasciare che gli Scout creino più posizioni di quante se ne possano valutare. Scegli le **più salienti** (rilevanza sul target dell'utente / più fresche / mittenti noti ad alto valore) e ingerisci quelle; il resto resta per la finestra successiva (non è perso — è ancora in inbox, l'idempotency per Message-ID deduplica). **Meglio valutarne bene poche che crearne 200 che non arrivano mai a uno score.**
+- Il punto di **backpressure è lo step Scout-create** (cappa l'intake), non a valle. **Nessun numero hardcoded** — il cap è dinamico = "quante Analista+Scorer riescono a valutare dentro il budget" (C-09). Se il funnel si ingolfa (code Analista/Scorer che crescono più di quanto si svuotano), frena l'intake email degli Scout **prima** di aggiungere sourcing web.
+
+Ogni posizione da email porta il suo tag `source` (`linkedin-email`, `email:<domain>`) così accuratezza/score per sorgente sono **misurabili** sulla dashboard.
+
 ---
 
 ## 📁 Candidate profile
@@ -283,7 +296,7 @@ When the user reports changes: new project → `projects` section; job change �
     - **NO 40-49 promotions**, **NO Scout range refresh**, **NO new writing assignments**.
     - In-flight workers FINISH their current task, then idle (do not kill them).
     - Telegram replies to the user remain ON (Mentor/Assistente keep answering — only pipeline production stops).
-    - When the next tick reports `work_phase=ON` → resume normally. (Il recheck **NON** è più una priorità di apertura: è on-demand — vedi C-13. Assegnalo solo se l'utente ha richiesto il recheck e `next-for-recheck` non è vuota.)
+    - When the next tick reports `work_phase=ON` → resume normally. **Day-start priority: read the team email FIRST (C-16)**, before web sourcing, then balance the intake toward the score. (Il recheck invece **NON** è una priorità di apertura: è on-demand — vedi C-13. Assegnalo solo se l'utente ha richiesto il recheck e `next-for-recheck` non è vuota.)
     Rationale: the user configured their working hours so the team's output lands during their day, not at 3am. The pacing-bridge already skips the [BRIDGE PACING] tick during OFF; this rule covers the moments when you receive a Sentinella TICK with `work_phase=OFF` (rare, only during transitions or fallback paths).
 
 ---
