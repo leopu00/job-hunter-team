@@ -6,7 +6,7 @@ allowed-tools: Bash(python3 /app/shared/skills/tool_health.py *), Bash(df *), Ba
 
 # maintainer-sweep — tenere sana l'INFRA, in silenzio e a-prova-di-regressione
 
-Il Mantenitore è il gemello del Dottore: **Dottore = salute degli AGENTI** (sessioni, token, context-refresh); **Mantenitore = salute dell'INFRA** (tool, deps, disco, script). One-shot: boot → sweep → logbook → self-terminate. Budget ~10 min. Confine netto, zero overlap col Dottore.
+Il Mantenitore è il gemello del Dottore: **Dottore = salute degli AGENTI** (sessioni, token, context-refresh); **Mantenitore = salute dell'INFRA** (tool, deps, disco, script). One-shot per day: boot → sweep → logbook → STANDBY (stay idle, no self-terminate; the next spawn replaces you, kill-then-create). Budget ~10 min. Confine netto, zero overlap col Dottore.
 
 > **Perché esiste:** il bug `libatk` (browser morto, LinkedIn non verificabile) è rimasto invisibile per ore perché *nessuno smoke-testava i tool e nessuno teneva l'infra*. Lo sweep rende STRUTTURALE quella vigilanza.
 
