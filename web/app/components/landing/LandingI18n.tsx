@@ -68,7 +68,6 @@ const translations = {
   nav_demo: { it: "Demo", en: "Demo", hu: "Demó" },
   nav_guide: { it: "Guida", en: "Guide", hu: "Útmutató" },
   nav_faq: { it: "FAQ", en: "FAQ", hu: "GYIK" },
-  nav_pricing: { it: "Pricing", en: "Pricing", hu: "Árak" },
   nav_about: { it: "Chi siamo", en: "About", hu: "Rólunk" },
   nav_stats: { it: "Stats", en: "Stats", hu: "Statisztikák" },
   nav_login: { it: "Accedi", en: "Sign in", hu: "Bejelentkezés" },
