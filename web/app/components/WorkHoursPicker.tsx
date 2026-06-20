@@ -560,14 +560,20 @@ function blockHours(start: string, end: string): number {
 }
 
 function isWrap(start: string, end: string): boolean {
-  return start !== "" && end !== "" && blockHours(start, end) > 0 && end <= start;
+  return (
+    start !== "" && end !== "" && blockHours(start, end) > 0 && end <= start
+  );
 }
 
 // cfg → 7 schedule (uno per giorno). null/vuoto (24/7) → base daytime 9h
 // modificabile: in custom mode si parte da un orario sensato, non da 24h.
 function schedFromConfig(cfg: WorkingHoursConfig | null): DaySched[] {
   if (!cfg || !cfg.windows?.length) {
-    return ALL_DAYS.map(() => ({ on: true, start: DEFAULT_START, end: DEFAULT_END }));
+    return ALL_DAYS.map(() => ({
+      on: true,
+      start: DEFAULT_START,
+      end: DEFAULT_END,
+    }));
   }
   const out: DaySched[] = ALL_DAYS.map(() => ({
     on: false,
@@ -597,7 +603,8 @@ function configFromSched(
   sched.forEach((s, di) => {
     if (!s.on) return;
     const key = `${s.start}-${s.end}`;
-    if (!byKey.has(key)) byKey.set(key, { start: s.start, end: s.end, days: [] });
+    if (!byKey.has(key))
+      byKey.set(key, { start: s.start, end: s.end, days: [] });
     byKey.get(key)!.days.push(ALL_DAYS[di]);
   });
   const windows: WorkingHoursWindow[] = Array.from(byKey.values()).map((w) => ({
@@ -613,7 +620,8 @@ function invalidDays(sched: DaySched[]): number[] {
   const bad: number[] = [];
   sched.forEach((s, di) => {
     if (!s.on) return;
-    if (s.start === s.end || blockHours(s.start, s.end) < MIN_DAY_HOURS) bad.push(di);
+    if (s.start === s.end || blockHours(s.start, s.end) < MIN_DAY_HOURS)
+      bad.push(di);
   });
   return bad;
 }
@@ -960,7 +968,9 @@ export default function WorkHoursPicker() {
                         </span>
                       </>
                     ) : (
-                      <span className="opacity-40 text-xs">{tr("day_off")}</span>
+                      <span className="opacity-40 text-xs">
+                        {tr("day_off")}
+                      </span>
                     )}
                   </div>
                 );
@@ -973,10 +983,7 @@ export default function WorkHoursPicker() {
               onClick={() => {
                 if (!editSched) return;
                 save(
-                  configFromSched(
-                    editSched,
-                    cfg?.timezone || detectLocalTz(),
-                  ),
+                  configFromSched(editSched, cfg?.timezone || detectLocalTz()),
                 );
               }}
               disabled={saving || badDays.length > 0 || noDayOn}
