@@ -1,5 +1,6 @@
 import { getDb } from './db'
 import { aggregateRoleFamilies, type RoleFamilyCount } from './position-classifier'
+import { buildTeamActivity, normActor, type TeamActivity, type TeamActivityEvent, type RecentActivityEvent } from './team-activity'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -1210,6 +1211,90 @@ export function replyPendingMessageLocal(ws: string, id: string, reply: string):
     WHERE id = ?
   `).run(reply, id)
   return result.changes > 0
+}
+
+// ── Team activity (per-agente nel tempo) ───────────────────────────
+// Stream di eventi di lavoro: ogni timestamp = un'azione di un agente.
+//   scout     → positions.found_at
+//   analista  → positions.last_checked
+//   scorer    → scores.scored_at
+//   scrittore → applications.written_at
+//   critico   → applications.critic_reviewed_at
+// Tutte colonne su tabelle sincronizzate su Supabase, così la vista è
+// identica in locale e in cloud. Bucketing + finestra li gestisce
+// buildTeamActivity (vedi lib/team-activity.ts).
+export function getTeamActivityLocal(ws: string, fromKey: string, toKey: string): TeamActivity {
+  const db = getDb(ws)
+  const events: TeamActivityEvent[] = []
+  // `actor` = id istanza dalla colonna *_by quando disponibile; l'Analista
+  // (last_checked) non lo porta → normActor ricade sul ruolo. Filtriamo per
+  // range su disco (substr(ts,1,10) ∈ [from,to]) per non caricare tutto lo
+  // storico; buildTeamActivity ignora comunque ciò che è fuori range.
+  // idCol = colonna con l'id della posizione (positions.id → 'id';
+  // scores/applications → 'position_id') per il link al dettaglio.
+  const collect = (col: string, actorExpr: string, idCol: string, table: string, role: TeamActivityEvent['role']) => {
+    const sql = `SELECT ${col} AS ts, ${actorExpr} AS actor, ${idCol} AS pid FROM ${table} `
+      + `WHERE ${col} IS NOT NULL AND substr(${col},1,10) BETWEEN ? AND ?`
+    const rows = db.prepare(sql).all(fromKey, toKey) as { ts: string | null; actor: string | null; pid: number | string | null }[]
+    for (const r of rows) if (r.ts) events.push({ role, actor: normActor(role, r.actor), ts: r.ts, pid: r.pid != null ? String(r.pid) : null })
+  }
+  collect('found_at', 'found_by', 'id', 'positions', 'scout')
+  collect('last_checked', 'NULL', 'id', 'positions', 'analista')
+  collect('scored_at', 'scored_by', 'position_id', 'scores', 'scorer')
+  collect('written_at', 'written_by', 'position_id', 'applications', 'scrittore')
+  collect('critic_reviewed_at', 'reviewed_by', 'position_id', 'applications', 'critico')
+  const act = buildTeamActivity(events, fromKey, toKey)
+
+  // Arricchisce SOLO il feed recente (≤40) con titolo/azienda/id leggibile.
+  const pids = [...new Set(act.recent.map((r) => r.pid).filter((p): p is string => !!p))]
+  if (pids.length) {
+    const rows = db.prepare(
+      `SELECT id, legacy_id, title, company FROM positions WHERE id IN (${pids.map(() => '?').join(',')})`,
+    ).all(...pids) as { id: number | string; legacy_id: number | null; title: string | null; company: string | null }[]
+    const meta = new Map(rows.map((r) => [String(r.id), r]))
+    for (const ev of act.recent) {
+      const m = ev.pid ? meta.get(ev.pid) : undefined
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id }
+    }
+  }
+  return act
+}
+
+// ── Activity log (TUTTE le azioni, per la pagina dedicata) ──────────
+// UNION delle 5 sorgenti di eventi, arricchito con titolo/azienda/id leggibile
+// via JOIN su positions, ordinato dal più recente. Per l'analista usiamo
+// last_actor SE è un'istanza analista (posizione ancora in checked/excluded),
+// altrimenti ricade su 'analista' (il cloud non ha proprio l'istanza analista).
+export function getTeamActivityLogLocal(ws: string): RecentActivityEvent[] {
+  const db = getDb(ws)
+  let rows: any[]
+  const SQL = (analistaActor: string) => `
+    SELECT role, actor, ts, pid, title, company, legacy_id FROM (
+      SELECT 'scout' role, found_by actor, found_at ts, id pid, title, company, legacy_id FROM positions WHERE found_at IS NOT NULL
+      UNION ALL
+      SELECT 'analista', ${analistaActor}, last_checked, id, title, company, legacy_id FROM positions WHERE last_checked IS NOT NULL
+      UNION ALL
+      SELECT 'scorer', s.scored_by, s.scored_at, p.id, p.title, p.company, p.legacy_id FROM scores s JOIN positions p ON p.id=s.position_id WHERE s.scored_at IS NOT NULL
+      UNION ALL
+      SELECT 'scrittore', a.written_by, a.written_at, p.id, p.title, p.company, p.legacy_id FROM applications a JOIN positions p ON p.id=a.position_id WHERE a.written_at IS NOT NULL
+      UNION ALL
+      SELECT 'critico', a.reviewed_by, a.critic_reviewed_at, p.id, p.title, p.company, p.legacy_id FROM applications a JOIN positions p ON p.id=a.position_id WHERE a.critic_reviewed_at IS NOT NULL
+    ) ORDER BY ts DESC`
+  try {
+    rows = db.prepare(SQL("CASE WHEN last_actor LIKE 'analista%' THEN last_actor ELSE NULL END")).all() as any[]
+  } catch {
+    // workspace senza colonna last_actor → analista aggregato
+    rows = db.prepare(SQL('NULL')).all() as any[]
+  }
+  return rows.map((r) => ({
+    role: r.role,
+    actor: normActor(r.role, r.actor),
+    ts: r.ts,
+    pid: r.pid != null ? String(r.pid) : null,
+    title: r.title ?? null,
+    company: r.company ?? null,
+    legacyId: r.legacy_id ?? null,
+  }))
 }
 
 // ── Application stats ───────────────────────────────────────────────

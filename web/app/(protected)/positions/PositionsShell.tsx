@@ -25,7 +25,7 @@ export default function PositionsShell({
   rowsControl: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   return (
     <div className="flex gap-6 items-start">

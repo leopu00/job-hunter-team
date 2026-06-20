@@ -367,6 +367,19 @@ export default function TeamPage() {
           </div>
           <div className="flex items-center gap-2">
             <Link
+              href="/team/attivita"
+              className="px-2.5 py-1.5 rounded-md text-[10px] tracking-wide no-underline transition-colors"
+              style={{
+                background: "transparent",
+                color: "var(--color-muted)",
+                border: "1px solid var(--color-border)",
+                fontFamily: "inherit",
+              }}
+              title="Grafici di attività del team (chi ha lavorato ultimamente)"
+            >
+              📊 Attività
+            </Link>
+            <Link
               href="/team/v2"
               className="px-2.5 py-1.5 rounded-md text-[10px] tracking-wide no-underline transition-colors"
               style={{
