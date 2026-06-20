@@ -13,8 +13,19 @@ import { useEffect, useState } from "react";
 // Una sola fetch condivisa a livello di modulo (cache + inflight dedup): anche
 // se 20 componenti chiamano l'hook, /api/local/sync/status viene colpito una
 // volta sola. Fonte = lo stesso campo `remote` usato da CloudSyncStatusBanner.
+//
+// [JHT-DASHBOARD-SPLIT] Quando il deploy-mode è FISSATO a build via
+// NEXT_PUBLIC_JHT_DEPLOY (cloud su Vercel, local nel container), quella è la
+// fonte di verità deterministica → ZERO round-trip: `cached` parte già valorizzato
+// e il fetch non viene mai eseguito. Se l'env è assente (oggi, finché Vercel non
+// è configurato) si ricade sul vecchio comportamento via /api/local/sync/status,
+// quindi nessuna regressione. Vedi web/lib/deploy-mode.ts.
 
-let cached: boolean | null = null;
+const ENV_MODE = process.env.NEXT_PUBLIC_JHT_DEPLOY?.trim().toLowerCase();
+const ENV_IS_CLOUD: boolean | null =
+  ENV_MODE === "cloud" ? true : ENV_MODE === "local" ? false : null;
+
+let cached: boolean | null = ENV_IS_CLOUD;
 let inflight: Promise<boolean> | null = null;
 
 function fetchIsCloud(): Promise<boolean> {
