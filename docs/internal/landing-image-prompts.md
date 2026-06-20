@@ -125,28 +125,28 @@ paghi** → testa di un agente, vista come radiografia, ma dentro il cranio NON 
 un cervello umano biologico: c'è un **cervello AI = rete neurale / LLM**.
 
 > _Revisione 2026-06-21: il "cervello" è ora una RETE NEURALE / LLM, non un cervello
-> umano biologico. Tenere le qualità dell'immagine attuale: radiografia "morbida"
-> con CAPELLI + GIACCA e CRAVATTA, teschio TENUE, cervello protagonista._
+> umano biologico. Tenere ESATTAMENTE il look dell'immagine attuale: radiografia
+> TRASLUCIDA (NON ritratto realistico), completo e faccia solo accennati, teschio
+> tenue, cervello protagonista. Modo migliore = editare l'immagine esistente
+> sostituendo SOLO il cervello; sotto il prompt completo da zero come fallback._
 
-> Photorealistic **medical X-ray / radiograph** look (a soft see-through scan, like
-> a real radiograph — **NOT a bare skeleton, NOT a comic drawing**). **Side PROFILE
-> of an agent's head and shoulders, facing RIGHT** (we do NOT see the face
-> front-on). The figure clearly has **styled HAIR on the head** (soft translucent
-> layer) and wears a **business SUIT JACKET with a shirt collar and a TIE** at the
-> neck/shoulders — a well-dressed agent. **Soft-tissue translucency** so we read a
-> real person's profile (face silhouette, ear, neck); the **skull bones are only
-> FAINTLY visible underneath — keep the skull SUBTLE, do NOT emphasize bare
-> teeth/jaw**. Inside the head, the **BRAIN is the bright focal point** and is an
-> **ARTIFICIAL / AI BRAIN**: a glowing green **NEURAL NETWORK in the shape of a
-> brain** — a **layered deep-network structure (input / hidden / output columns of
-> nodes)** with bright interconnected nodes and links, like an **LLM / deep neural
-> net** (**NO biological gyri or brain folds**). The neural-network brain **glows
-> strongly in green and dominates the composition**; the rest of the head/skull
-> stays in cooler, dimmer X-ray tones so the emphasis is on the BRAIN, not the
-> skull. Small oval dark **Matrix-style sunglasses** on the face. Cool blue-teal
-> X-ray palette for the body, vivid green glow for the AI brain. No readable text,
-> no logos. Isolated on a plain transparent background, no scene. Transparent PNG.
-> 4:3.
+> **Translucent medical X-ray / radiograph scan** (see-through, blue-teal tones) —
+> **NOT a realistic shaded portrait, NOT a photo of a face**. **Side PROFILE of a
+> man's head and shoulders, facing RIGHT.** See-through X-ray look: **hair visible**
+> as fine translucent strands, small round dark **Matrix-style sunglasses**, and the
+> **skull, jaw, teeth and cervical spine only FAINTLY visible** underneath. He wears
+> a **suit jacket and shirt collar, but only subtly suggested** at the shoulders —
+> **do NOT emphasize the suit or the face**. The clear **focal point is the BRAIN**,
+> glowing bright green: it is an **artificial AI brain** in the shape of a brain — a
+> **neural network / LLM made of layered columns of bright nodes (input → hidden →
+> output) connected by thin lines**, **no biological folds or gyri**. The green AI
+> brain glows strongly and dominates; everything else stays dim and translucent.
+> No readable text, no logos. **Isolated on a plain transparent background**, no
+> scene. Transparent PNG, 4:3.
+>
+> Edit-only (consigliato, sull'immagine esistente): _Replace only the brain with a
+> green AI neural network (layered nodes + connections, no biological folds). Keep
+> same shape, position, glow. Change nothing else._
 
 ---
 
