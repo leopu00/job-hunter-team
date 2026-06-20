@@ -37,7 +37,11 @@ Script quasi-identici ripetuti da più agenti → **proponi** una skill canonica
 Librerie/strumenti deprecati o versioni rotte / tool cruciali irraggiungibili → segnala al Capitano (no auto-upgrade rischioso).
 
 ### 6. 💾 Disco / RAM + trend
-`df`, `du` sui path grossi, `free`. Confronta col **trend dell'ultimo logbook**: se cresce verso una soglia → discuti col Capitano cosa archiviare/cancellare (lui decide). Log i numeri + il delta.
+`du` sui path grossi, `free` per la RAM. Per **`disk.used_pct` usa SEMPRE `df`** — comando canonico:
+```bash
+df -P /jht_home | awk 'NR==2 {gsub("%","",$5); print $5}'   # es. 30  (percentuale come la riporta df)
+```
+**MAI** ricavarlo da `statvfs`/`os.statvfs` (`f_bavail`/`f_blocks`): i reserved-block lo gonfiano ~3× → falsi allarmi (es. 88% riportato contro 30% reale). Confronta col **trend dell'ultimo logbook**: se cresce verso una soglia → discuti col Capitano cosa archiviare/cancellare (lui decide). Log i numeri + il delta.
 
 ## Logbook (append-only)
 Ogni sweep scrive UNA entry densa in `/jht_home/logs/mantenitore-logbook.jsonl` (gemello del logbook Dottore), così il prossimo Mantenitore vede il trend:
