@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { getDashboardStats, getCriticVerdictTotals } from "@/lib/queries";
+import { getDashboardStats } from "@/lib/queries";
 import PipelineFlow from "@/app/components/PipelineFlow";
 import { getServerLocale } from "@/lib/server-locale";
 import { getDashboardT } from "@/lib/dashboard-i18n";
@@ -189,9 +189,7 @@ export default async function AnalisiPage() {
   const demoMode = isDashboardDemoMode(hdrs.get("x-search"));
   const demoData = demoMode ? getDemoDashboardData() : null;
 
-  const [stats, criticTotals] = demoData
-    ? [demoData.stats, { pass: 0, needs_work: 0, reject: 0, total: 0 }]
-    : await Promise.all([getDashboardStats(), getCriticVerdictTotals()]);
+  const stats = demoData ? demoData.stats : await getDashboardStats();
 
   const activeTotal = stats.total - stats.excluded;
 
@@ -199,15 +197,6 @@ export default async function AnalisiPage() {
   const analystExcludedPct =
     stats.total > 0 ? Math.round((stats.excluded / stats.total) * 100) : 0;
   const analystKeptPct = 100 - analystExcludedPct;
-  const criticRejectPct =
-    criticTotals.total > 0
-      ? Math.round((criticTotals.reject / criticTotals.total) * 100)
-      : 0;
-  const criticPassPct =
-    criticTotals.total > 0
-      ? Math.round((criticTotals.pass / criticTotals.total) * 100)
-      : 0;
-  const criticNeedsPct = Math.max(0, 100 - criticPassPct - criticRejectPct);
 
   // Funnel end-to-end: quante posizioni "uscite vive" dal pipeline
   // (ready/applied/response = hanno passato Analista + Scorer + Critico)
@@ -363,7 +352,7 @@ export default async function AnalisiPage() {
           {/* ── Conversion rate ─────────────────────────────────────── */}
           <div className="section-label mb-4">{tr("conversion_rate")}</div>
           <div
-            className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8"
+            className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8"
             style={{ animation: "fade-in 0.35s ease both" }}
           >
             {/* Filtro Analisti: % escluse al primo check (status='excluded') */}
@@ -412,65 +401,6 @@ export default async function AnalisiPage() {
                 </span>
                 <span style={{ color: "var(--color-red)" }}>
                   {tr("excluded_lc")} · {stats.excluded}
-                </span>
-              </div>
-            </div>
-
-            {/* Verdetto Critici: PASS / NEEDS_WORK / REJECT su totali revisionati */}
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
-              <div className="flex items-center justify-between mb-3">
-                <span className="section-label">{tr("critic_verdict")}</span>
-                <span className="text-[10px] text-[var(--color-dim)]">
-                  {criticTotals.total} {tr("reviewed_lc")}
-                </span>
-              </div>
-              <div className="flex items-baseline gap-3 mb-3">
-                <span
-                  className="text-3xl font-bold tracking-tight"
-                  style={{ color: "var(--color-green)" }}
-                >
-                  {criticPassPct}%
-                </span>
-                <span className="text-[10px] text-[var(--color-muted)]">
-                  pass · {criticRejectPct}% reject · {criticNeedsPct}%{" "}
-                  {tr("needs_work")}
-                </span>
-              </div>
-              <div
-                className="h-2 rounded-full overflow-hidden flex"
-                style={{ background: "var(--color-border)" }}
-              >
-                <div
-                  style={{
-                    width: `${criticPassPct}%`,
-                    background: "var(--color-green)",
-                    opacity: 0.85,
-                  }}
-                />
-                <div
-                  style={{
-                    width: `${criticNeedsPct}%`,
-                    background: "var(--color-yellow)",
-                    opacity: 0.85,
-                  }}
-                />
-                <div
-                  style={{
-                    width: `${criticRejectPct}%`,
-                    background: "var(--color-red)",
-                    opacity: 0.85,
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
-                <span style={{ color: "var(--color-green)" }}>
-                  pass · {criticTotals.pass}
-                </span>
-                <span style={{ color: "var(--color-yellow)" }}>
-                  {tr("needs_lc")} · {criticTotals.needs_work}
-                </span>
-                <span style={{ color: "var(--color-red)" }}>
-                  reject · {criticTotals.reject}
                 </span>
               </div>
             </div>
