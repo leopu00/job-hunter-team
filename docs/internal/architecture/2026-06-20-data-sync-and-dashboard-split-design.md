@@ -148,10 +148,23 @@ Il design 2026-06-15 lasciava aperta (#5): *"da telefono/PC-lavoro l'unico canal
 | **1 — Event-log sync** | cablare `position_transitions` nel push (CLI daemon + route `push` + delta cursor, idempotente). Nessuna migration nuova (tabella già esiste). Chiude il bug dell'event-log fossile. | 🟢 piccola, isolata | gated utente |
 | **2 — Corsia richieste completa** | pull VPS di `position_tickets` (estende `pull-desired-state` o nuovo pull) + cablare il Capitano a `ticket.py list-open`/assign + l'agente risolve. | 🟡 media | gated utente |
 | **3 — Sync on-access + "Sync now" + stop polling** | rendezvous `sync_requested_at`/`completed_at`; bump al mount + bottone cloud; rimuovere il polling client continuo; VPS push trigger-based + heartbeat lento. | 🟡 media | gated utente |
-| **4 — Dashboard split duro** | modalità `local`/`cloud` a build; cloud = scrittura-dati disabilitata (solo corsia richieste); spostare la dashboard locale **dentro l'app desktop** (wrapper) → stop `localhost:3000` nel browser. | 🔴 grande | gated utente |
+| **4 — Dashboard split duro** 🟡 *in corso* | modalità `local`/`cloud` a build; cloud = scrittura-dati disabilitata (solo corsia richieste); spostare la dashboard locale **dentro l'app desktop** (wrapper) → stop `localhost:3000` nel browser. | 🔴 grande | gated utente |
 | **5 — Ritiro bus real-time cloud** | freeze/rimozione `team_state` control + reconciler + chat poller + `team_commands` (NON la corsia richieste). | 🟡 media | dopo 3+4 in prod |
 
 Ordine non rigido. **Fase 1** è scorporabile subito ed è la più sicura (solo piano dati, direzione lettura, idempotente).
+
+### Stato Fase 4 (aggiornato 2026-06-21)
+
+Implementato su `dev4` (deploy gated all'utente, mai sui team in osservazione):
+
+- **Deploy-mode DURO a build** — `web/lib/deploy-mode.ts`: `getDeployMode()` / `isCloudDeploy()` / `isLocalDeploy()`. Sorgente `NEXT_PUBLIC_JHT_DEPLOY` (`cloud` | `local`), client-safe; fallback solo server `VERCEL`→`cloud`; default `local`. La stessa immagine Docker (PC locale **o** VPS via tunnel) è co-locata → `local`; solo il deploy Vercel è `cloud`. Stesso pattern "default sicuro + override env" di `getSupabaseConfig()`.
+- **Cloud = read-only a build** — `requireLocalWrite()` su `isCloudDeploy()` ritorna **sempre** 403 `read_only`, a prescindere dagli header (deterministico, non più solo host-based). La **corsia richieste** (ticket/feedback/user-exclude/`*_requested`) e il rendezvous `team-state` (Sync-now) **non** passano da `requireLocalWrite` → restano cloud, come da modello.
+- **Client senza round-trip** — `useIsCloud` legge il flag di build quando presente (zero fetch); se l'env manca ricade sul vecchio `/api/local/sync/status` → nessuna regressione finché Vercel non è configurato.
+- **Wrapper desktop** — `desktop/main.js`: `openDashboardWindow()` apre la view locale in una `BrowserWindow` Electron dedicata invece di `shell.openExternal(localhost:3000)`. Riuso finestra, popup/`target=_blank`→browser di sistema, navigazioni top-level in-finestra (SPA + eventuale OAuth), fallback a openExternal, chiusura su Stop. Invocato **solo** dal ramo locale (`openRuntimeInBrowser`); la modalità VPS resta su openExternal verso il cloud finché non arriva `[JHT-VPS-TUNNEL]`.
+
+**Azione utente / deploy:** impostare `NEXT_PUBLIC_JHT_DEPLOY=cloud` nelle env del progetto Vercel (il fallback `VERCEL`→cloud copre il server ma il client cadrebbe sul fetch legacy); l'immagine Docker non richiede env (default `local`). Test runtime del wrapper desktop a carico utente (`npm run desktop:dev` o build packaged).
+
+**Residuo (slice successiva):** affordance **UI read-only** sul cloud (d3 di `[JHT-WEB-READONLY]`) — nascondere/disabilitare i controlli (start/stop, chat, config) sul deploy cloud invece di mostrarli e dare 403 al click; gli hook lato client (`useIsCloud` / `getDeployMode`) sono già pronti.
 
 ---
 
