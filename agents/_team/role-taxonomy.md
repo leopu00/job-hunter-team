@@ -28,7 +28,7 @@ new offer ─▶ [analyst] JUDGE the family, then reconcile with the ACTIVE regi
               included) ─▶ promotes the family himself (role_registry.py promote --ids …):
               a NEW active category is BORN, named by the analyst, its rows re-tagged.
                                           │
-              [Capitano, ARBITER C-16] family too big (>~25, hides finer ones) ─▶ SPLIT;
+              [Capitano, ARBITER C-17] family too big (>~25, hides finer ones) ─▶ SPLIT;
               two actives = same family ─▶ MERGE (role_registry.py merge). One bounded round.
 ```
 
@@ -55,7 +55,7 @@ new offer ─▶ [analyst] JUDGE the family, then reconcile with the ACTIVE regi
    label fragmented near-synonyms and promoted nothing → everything stuck in `'Other'` (betaA
    rootcause 2026-06-20). A single offer never births a family (needs a cluster). The team — the
    analyst's brain — names it.
-4. **Arbitrated & bounded (Capitano, C-16).** The **Capitano is the arbiter** the team previously
+4. **Arbitrated & bounded (Capitano, C-17).** The **Capitano is the arbiter** the team previously
    lacked: a family that grows **too big** (>~25) and hides finer families → **split** (the analyst
    promotes the finer subsets); two actives that are the **same family** → **merge**
    (`role_registry.py merge`). Always **one bounded round**, then everyone works on (anti-loop). A
@@ -63,7 +63,7 @@ new offer ─▶ [analyst] JUDGE the family, then reconcile with the ACTIVE regi
    **Directional aim (a guardrail, NOT a rule):** **few significant families — ~5-8, relative to the
    data** (fewer for a narrow profile; more only if the data justifies it). What converges there is the
    analysts' **judgement** + the Capitano's **verdicts**, expressed in `analista.md` step 8 and
-   `capitano.md` C-16 — **not** a threshold.
+   `capitano.md` C-17 — **not** a threshold.
 
 ---
 
@@ -86,7 +86,7 @@ hardcoded names or synonym dictionary:
    **Semantic** near-dups (`"PE"` vs `"Private Equity"`; `"IB / M&A Advisory"` vs `"Transaction
    Advisory / M&A"`) are caught two ways: the analyst **match-first** reuses an existing active once it
    exists, and when two actives still diverge the **Capitano MERGES them** (`role_registry.py merge`,
-   C-16) — this is now an **implemented** step (LLM judgement of the agents), not the deferred
+   C-17) — this is now an **implemented** step (LLM judgement of the agents), not the deferred
    "future LLM no-op" it used to be. The registry's `merged_into` status records the reconciliation.
 
 ---
@@ -125,7 +125,7 @@ bounded, brain-driven, no mass re-analysis triggered by us.
 **A production candidate already collapsed** (registry already holds a lone catch-all, e.g. betaA's
 `"Business & Operations"`) is repaired by a one-time, **user-gated registry reset** at deploy: clear
 the polluted registry → `next-for-categorize` re-queues the backlog → the **judge-first** analysts
-rebuild the real families and promote the clusters (§3), with the **Capitano arbitrating** (C-16). See
+rebuild the real families and promote the clusters (§3), with the **Capitano arbitrating** (C-17). See
 the finding doc runbook.
 
 ---
@@ -134,7 +134,7 @@ the finding doc runbook.
 
 | Piece | Owner | Holds names? |
 |---|---|---|
-| This MODEL doc + analyst behavior (`analista.md` step 8: judge-first → match / park in `'Other'` / **promote a cluster**) + Capitano arbitration (`capitano.md` C-16: split / merge verdicts) | dev1 | ❌ |
+| This MODEL doc + analyst behavior (`analista.md` step 8: judge-first → match / park in `'Other'` / **promote a cluster**) + Capitano arbitration (`capitano.md` C-17: split / merge verdicts) | dev1 | ❌ |
 | Generic `normalize()` + write-guard (validate role_family ∈ active-registry else `'Other'`) + `next-for-categorize` (re-queue rows not in the active set) + `other-pile` / `category-sizes` reads | dse3 | ❌ |
 | The registry (per-user state table) + the **brain-driven primitives** (`promote --ids` / `merge`) the analysts & Capitano invoke + the safety cap + sync to dashboard | dev2 | ❌ |
 
