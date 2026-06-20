@@ -12,6 +12,7 @@
 // codice vanno propagate qui se ha senso.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type Entry = {
   ts: string;
@@ -1202,6 +1203,7 @@ export default function UsageTokensChart() {
   // momento, l'utente sta navigando il passato. Reset a null quando cambia
   // il range — non ha senso restare ancorati a un istante in 10m se passi a 24h.
   const [panRightTs, setPanRightTs] = useState<number | null>(null);
+  const isCloud = useIsCloud();
   useEffect(() => {
     setPanRightTs(null);
   }, [range]);
@@ -1261,18 +1263,24 @@ export default function UsageTokensChart() {
   useEffect(() => {
     loadData();
     loadTokens();
-    // 30s (era 10s): sentinel data cambia ogni ~30s lato bridge.
-    const dataId = setInterval(loadData, 30_000);
-    // Token fetch più lento (30s): payload più pesante, l'aggregazione
-    // server-side gira a ogni richiesta. 30s basta per la correlazione visiva.
-    const tokenId = setInterval(loadTokens, 30_000);
+    // Su CLOUD la sync è on-demand: niente polling-dati continuo (scalerebbe
+    // col numero di tab). In locale resta pieno. L'orologio NON va spento.
+    let dataId: ReturnType<typeof setInterval> | undefined;
+    let tokenId: ReturnType<typeof setInterval> | undefined;
+    if (!isCloud) {
+      // 30s (era 10s): sentinel data cambia ogni ~30s lato bridge.
+      dataId = setInterval(loadData, 30_000);
+      // Token fetch più lento (30s): payload più pesante, l'aggregazione
+      // server-side gira a ogni richiesta. 30s basta per la correlazione visiva.
+      tokenId = setInterval(loadTokens, 30_000);
+    }
     const clockId = setInterval(() => setNowTs(Date.now()), 10_000);
     return () => {
-      clearInterval(dataId);
-      clearInterval(tokenId);
+      if (dataId) clearInterval(dataId);
+      if (tokenId) clearInterval(tokenId);
       clearInterval(clockId);
     };
-  }, [loadData, loadTokens]);
+  }, [loadData, loadTokens, isCloud]);
 
   // Range temporale: tMax = now (ancorato al clock wall-clock), tMin =
   // now - rangeMinutes. Se "tutto", tMin = timestamp del primo sample.
