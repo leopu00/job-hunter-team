@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { DOCS_NAV } from "./docs-nav";
+import { REPO } from "./DocKit";
 
 export default function DocsIndex() {
   return (
@@ -11,8 +12,18 @@ export default function DocsIndex() {
           📚 Documentation
         </h1>
         <p className="text-[var(--color-muted)] text-[12px] mt-3 leading-relaxed">
-          Guides for setting up and running Job Hunter Team.
+          The essentials for setting up and running Job Hunter Team. These pages
+          are short and to the point — for the full technical detail and the
+          code itself, the source is the best reference.
         </p>
+        <a
+          href={REPO}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 mt-4 text-[12px] font-semibold text-[var(--color-green)] no-underline hover:opacity-80 transition-opacity"
+        >
+          Read the source on GitHub ↗
+        </a>
       </div>
 
       {DOCS_NAV.map((section) => (
