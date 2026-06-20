@@ -171,6 +171,10 @@ function createRuntimeManager(config = {}) {
   const spawnFn = config.spawnFn ?? spawn
   const containerMode = config.containerMode === true
   const ensureContainerFn = config.ensureContainerFn ?? containerRuntime.ensureContainerRuntime
+  // Read fresh at each start so a runtime switch (Colima ⇄ Docker Desktop)
+  // from settings takes effect on the next Start without an app restart.
+  const getContainerRuntimeChoice =
+    config.getContainerRuntimeChoice ?? (() => containerRuntime.DEFAULT_RUNTIME)
   const containerSpawnSpecFactory =
     config.containerSpawnSpecFactory ?? containerRuntime.buildDockerSpawnSpec
   const spawnSpecFactory =
@@ -446,7 +450,10 @@ function createRuntimeManager(config = {}) {
 
     if (containerMode) {
       try {
-        ensureContainerFn({ logger: (msg) => writeLogHeader(msg) })
+        ensureContainerFn({
+          logger: (msg) => writeLogHeader(msg),
+          runtime: getContainerRuntimeChoice(),
+        })
       } catch (err) {
         state.mode = 'error'
         state.lastError = err instanceof Error ? err.message : String(err)

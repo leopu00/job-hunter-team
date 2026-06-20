@@ -1,7 +1,13 @@
 # 0001 — Use Colima (not Docker Desktop) for agent isolation on macOS
 
-**Status:** Accepted
+**Status:** Superseded by [0006](./0006-user-choice-container-runtime-macos.md)
 **Date:** 2026-04-16
+
+> ⚠️ **Superseded (2026-06-20).** Colima is no longer mandatory on macOS. The
+> user now chooses between Colima (recommended default) and Docker Desktop, with
+> detect-first reuse of any Docker already present. See
+> [ADR-0006](./0006-user-choice-container-runtime-macos.md). The rationale below
+> is kept for historical context — Colima stays the *default*, not the only path.
 
 ## Context
 

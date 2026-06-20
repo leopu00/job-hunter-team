@@ -6,6 +6,9 @@ export const state = {
   step: STEP_WELCOME,
   docker: null,
   extraDeps: null,
+  // macOS container-runtime choice from setup:get-container-runtime:
+  // { choice: 'auto'|'colima'|'docker-desktop', choices, detected }. null until loaded.
+  containerRuntime: null,
   payloadBusy: false,
   starting: false,
   containerBusy: false,
@@ -120,6 +123,7 @@ export const dom = {
   dockerBadge: document.getElementById('docker-badge'),
   dockerActions: document.getElementById('docker-actions'),
   dockerCard: document.getElementById('docker-card'),
+  runtimeChooser: document.getElementById('runtime-chooser'),
   winRequirements: document.getElementById('win-requirements'),
   winStepDocker: document.getElementById('win-step-docker'),
   winStepDockerAction: document.getElementById('win-step-docker-action'),

@@ -363,6 +363,11 @@ app.whenReady().then(() => {
   runtime = createRuntimeManager({
     containerMode: containerRuntime.shouldUseContainer(),
     payloadDir,
+    // macOS: which container runtime the user picked (Colima / Docker Desktop /
+    // auto). Read fresh at each Start so a switch from settings applies without
+    // an app restart. No-op on Linux/Windows (the runtime ignores it there).
+    getContainerRuntimeChoice: () =>
+      readPref('containerRuntime') || containerRuntime.DEFAULT_RUNTIME,
   })
 
   ipcMain.handle('launcher:get-status', () => runtime.getStatus())
@@ -1350,6 +1355,40 @@ app.whenReady().then(() => {
       const message = error instanceof Error ? error.message : String(error)
       return { ok: false, error: message }
     }
+  })
+
+  // macOS: launch Docker Desktop (the user's own app). `open -a Docker` returns
+  // immediately; the renderer polls docker status to know when it's ready.
+  ipcMain.handle('setup:start-docker-desktop', async () => {
+    try {
+      containerRuntime.startDockerDesktop()
+      return { ok: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false, error: message }
+    }
+  })
+
+  // Container-runtime preference (macOS only). 'auto' | 'colima' | 'docker-desktop'.
+  // Persisted host-side in userData/preferences.json — never synced to the
+  // container or the cloud. Also reports what is detected so the UI can guide
+  // the user (e.g. offer "Start Docker Desktop" only if it is installed).
+  ipcMain.handle('setup:get-container-runtime', async () => {
+    const choice = readPref('containerRuntime') || containerRuntime.DEFAULT_RUNTIME
+    let detected = null
+    try {
+      detected = containerRuntime.detectRuntimeState()
+    } catch {
+      // Detection is best-effort; the UI falls back to the stored choice.
+    }
+    return { choice, choices: containerRuntime.RUNTIME_CHOICES, detected }
+  })
+
+  ipcMain.handle('setup:set-container-runtime', async (_event, { choice } = {}) => {
+    if (!containerRuntime.RUNTIME_CHOICES.includes(choice)) {
+      return { ok: false, error: 'invalid-choice' }
+    }
+    return writePref('containerRuntime', choice)
   })
 
   createWindow()
