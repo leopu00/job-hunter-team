@@ -1380,6 +1380,7 @@ async function handlePullDesiredState(options = {}) {
   // produrrebbe una riga zoppa con NULL su title/company → CHECK fail.
   let updated = 0;
   let missing = 0;
+  let excludeChanges = 0;
   try {
     const db = new DatabaseSync(dbPath);
     db.exec('PRAGMA foreign_keys = ON');
@@ -1401,12 +1402,38 @@ async function handlePullDesiredState(options = {}) {
              salary_precise_requested_at = ?
        WHERE id = ?
     `);
-    const checkStmt = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+    // SELECT lo stato locale corrente: serve sia per il "missing" sia per la
+    // sync NARROW dell'esclusione utente (sotto).
+    const checkStmt = db.prepare(
+      'SELECT status, user_excluded_at, user_excluded_prev_status FROM positions WHERE id = ?'
+    );
+    // Esclusione utente cloud→locale: applichiamo SOLO l'azione-utente
+    // (user_excluded_at valorizzato lato cloud), MAI lo status generico (che
+    // resta autoritativo sulla VPS). last_actor='user' + transizione, come fa
+    // il team su un cambio stato → il team smette di lavorarci e l'event-log
+    // registra CHI. Idempotente: agiamo solo se lo stato user-exclude diverge.
+    const applyExcludeStmt = db.prepare(
+      `UPDATE positions
+          SET status = 'excluded', user_excluded_reason = ?, user_excluded_note = ?,
+              user_excluded_at = ?, user_excluded_prev_status = ?, last_actor = 'user'
+        WHERE id = ?`
+    );
+    const applyUnexcludeStmt = db.prepare(
+      `UPDATE positions
+          SET status = ?, user_excluded_reason = NULL, user_excluded_note = NULL,
+              user_excluded_at = NULL, user_excluded_prev_status = NULL, last_actor = 'user'
+        WHERE id = ?`
+    );
+    const transStmt = db.prepare(
+      `INSERT INTO position_state_transitions
+         (position_id, from_state, to_state, by_agent, notes)
+       VALUES (?, ?, ?, 'user', ?)`
+    );
     for (const p of positions) {
       const legacyId = Number(p.legacy_id);
       if (!Number.isInteger(legacyId) || legacyId <= 0) continue;
-      const exists = checkStmt.get(legacyId);
-      if (!exists) { missing++; continue; }
+      const local = checkStmt.get(legacyId);
+      if (!local) { missing++; continue; }
       const writeFlag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
       const writeAt = p.write_requested_at || null;
       const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
@@ -1417,6 +1444,33 @@ async function handlePullDesiredState(options = {}) {
       const spAt = p.salary_precise_requested_at || null;
       stmt.run(writeFlag, writeAt, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
       updated++;
+
+      // ── Sync NARROW dell'esclusione utente ──
+      const cloudExcluded = !!p.user_excluded_at; // l'utente l'ha esclusa sul cloud
+      const localExcluded = !!local.user_excluded_at; // già esclusa-da-utente in locale
+      if (cloudExcluded && !localExcluded) {
+        // Applica l'esclusione: prev = lo stato locale attuale (se non già 'excluded').
+        const prev = local.status === 'excluded'
+          ? (local.user_excluded_prev_status || 'scored')
+          : local.status;
+        applyExcludeStmt.run(
+          p.user_excluded_reason || null,
+          p.user_excluded_note || null,
+          p.user_excluded_at,
+          prev,
+          legacyId,
+        );
+        if (local.status !== 'excluded') {
+          transStmt.run(legacyId, local.status, 'excluded', p.user_excluded_reason || null);
+        }
+        excludeChanges++;
+      } else if (!cloudExcluded && localExcluded) {
+        // L'utente ha annullato l'esclusione sul cloud → ripristina lo stato.
+        const restore = local.user_excluded_prev_status || 'scored';
+        applyUnexcludeStmt.run(restore, legacyId);
+        transStmt.run(legacyId, 'excluded', restore, null);
+        excludeChanges++;
+      }
     }
     db.close();
   } catch (err) {
@@ -1431,8 +1485,9 @@ async function handlePullDesiredState(options = {}) {
   // riflette il proprio SQLite e farebbe da eco). Quando updated == 0
   // (tipico, no nuovi click) restiamo zitti se silent.
   const successMsg = pc.green(`✓ Pull desired-state applicato: ${updated} positions aggiornate`)
+    + (excludeChanges > 0 ? pc.green(` (${excludeChanges} esclusioni utente sincronizzate)`) : '')
     + (missing > 0 ? pc.dim(` (${missing} legacy_id non presenti localmente, skip)`) : '');
-  if (updated > 0 || !silent) {
+  if (updated > 0 || excludeChanges > 0 || !silent) {
     console.log(successMsg);
   }
 

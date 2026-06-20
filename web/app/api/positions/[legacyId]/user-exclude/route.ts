@@ -83,15 +83,28 @@ function applyLocal(
         row.status === "excluded"
           ? (row.user_excluded_prev_status ?? "scored")
           : row.status;
+      // last_actor='user': attribuzione pulita di CHI ha messo lo stato
+      // (stessa colonna che il team popola via db_update.py).
       db.prepare(
         `UPDATE positions
             SET status = 'excluded',
                 user_excluded_reason = ?,
                 user_excluded_note = ?,
                 user_excluded_at = CURRENT_TIMESTAMP,
-                user_excluded_prev_status = ?
+                user_excluded_prev_status = ?,
+                last_actor = 'user'
           WHERE id = ?`,
       ).run(reason!, note ?? null, prev, legacyId);
+      // Event-log: traccia la transizione → 'excluded' by 'user' (come fa il
+      // team su cambio stato). Solo se lo stato è davvero cambiato. La riga
+      // viaggia poi nel sync position_transitions → feed "Attività recente".
+      if (row.status !== "excluded") {
+        db.prepare(
+          `INSERT INTO position_state_transitions
+             (position_id, from_state, to_state, by_agent, notes)
+           VALUES (?, ?, 'excluded', 'user', ?)`,
+        ).run(legacyId, row.status, reason ?? null);
+      }
     } else {
       const restore = row.user_excluded_prev_status ?? "scored";
       db.prepare(
@@ -100,9 +113,17 @@ function applyLocal(
                 user_excluded_reason = NULL,
                 user_excluded_note = NULL,
                 user_excluded_at = NULL,
-                user_excluded_prev_status = NULL
+                user_excluded_prev_status = NULL,
+                last_actor = 'user'
           WHERE id = ?`,
       ).run(restore, legacyId);
+      if (row.status === "excluded") {
+        db.prepare(
+          `INSERT INTO position_state_transitions
+             (position_id, from_state, to_state, by_agent, notes)
+           VALUES (?, 'excluded', ?, 'user', NULL)`,
+        ).run(legacyId, restore);
+      }
     }
 
     const updated = db
@@ -177,6 +198,7 @@ async function applyCloud(
       user_excluded_note: note ?? null,
       user_excluded_at: new Date().toISOString(),
       user_excluded_prev_status: prev,
+      last_actor: "user",
     };
   } else {
     nextStatus = r.user_excluded_prev_status ?? "scored";
@@ -187,6 +209,7 @@ async function applyCloud(
       user_excluded_note: null,
       user_excluded_at: null,
       user_excluded_prev_status: null,
+      last_actor: "user",
     };
   }
 
@@ -276,6 +299,7 @@ async function handle(
               user_excluded_reason: reason,
               user_excluded_note: note ?? null,
               user_excluded_at: new Date().toISOString(),
+              last_actor: "user",
             }
           : {
               // Allinea anche lo status (= quello ripristinato in locale), così
@@ -285,6 +309,7 @@ async function handle(
               user_excluded_note: null,
               user_excluded_at: null,
               user_excluded_prev_status: null,
+              last_actor: "user",
             };
       const { error } = await supabase
         .from("positions")
