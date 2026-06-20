@@ -22,6 +22,7 @@ export interface CaseStudyTeaser {
   label: string;
   badge: string;
   category: string;
+  seniority: string;
   geos: string[];
   model: string;
 }
@@ -89,7 +90,21 @@ export default function CaseStudiesShell({
                   </span>
                 </div>
 
-                <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+                <div className="mt-3">
+                  <span
+                    className="text-[10px] rounded-full px-2 py-0.5 border text-[var(--color-base)]"
+                    style={{
+                      borderColor:
+                        "color-mix(in srgb, var(--color-blue) 35%, transparent)",
+                      background:
+                        "color-mix(in srgb, var(--color-blue) 10%, transparent)",
+                    }}
+                  >
+                    {t.seniority}
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                   <span aria-hidden className="text-[10px]">
                     📍
                   </span>

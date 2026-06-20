@@ -31,6 +31,7 @@ export default function CaseStudiesIndexPage() {
     label: cs.label,
     badge: cs.profile.badge,
     category: cs.category,
+    seniority: cs.seniority,
     geos: cs.geos,
     model: cs.model,
   }));
