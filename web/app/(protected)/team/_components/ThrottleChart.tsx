@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { colorForAgent as colorFor } from "./agent-colors";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type Series = Record<string, number | string>;
 
@@ -61,6 +62,7 @@ export default function ThrottleChart() {
   const [range, setRange] = useState<RangeId>("3h");
   const [mode, setMode] = useState<Mode>("cumulative");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const isCloud = useIsCloud();
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +98,9 @@ export default function ThrottleChart() {
   }, [range]);
 
   useEffect(() => {
+    // Su cloud niente polling continuo: i dati appaiono all'apertura (fetch
+    // iniziale nell'useEffect su [range]) e si rinfrescano solo on-demand.
+    if (isCloud) return;
     const id = setInterval(() => {
       const minutes = RANGES.find((r) => r.id === range)?.minutes ?? 180;
       const bucketSec = Math.max(1, Math.round((minutes * 60) / 120));
@@ -109,7 +114,7 @@ export default function ThrottleChart() {
         .catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
-  }, [range]);
+  }, [range, isCloud]);
 
   return (
     <div>

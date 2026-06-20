@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { colorForAgent } from "./agent-colors";
 import { useLocale } from "@/lib/use-locale";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 const T: Record<string, Record<string, string>> = {
   noConsumptionAria: {
@@ -232,6 +233,7 @@ export default function TokenBreakdown() {
   const [windowId, setWindowId] = useState<WindowId>("30m");
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const isCloud = useIsCloud();
 
   const minutes = useMemo(
     () => WINDOWS.find((w) => w.id === windowId)?.minutes ?? 30,
@@ -258,9 +260,12 @@ export default function TokenBreakdown() {
   useEffect(() => {
     setLoading(true);
     load();
+    // Su CLOUD la sync è on-demand: niente polling continuo (scalerebbe col
+    // numero di tab). In locale resta pieno (teatro live del team).
+    if (isCloud) return;
     const id = setInterval(load, 15_000);
     return () => clearInterval(id);
-  }, [load]);
+  }, [load, isCloud]);
 
   // Lista agenti attivi nella finestra (events > 0), ordinata per kT decrescente.
   // Calcoliamo media kT/min sull'intera finestra anche per agenti che hanno

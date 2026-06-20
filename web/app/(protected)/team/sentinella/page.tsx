@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type Entry = {
   ts: string;
@@ -314,6 +315,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 // ── Page ───────────────────────────────────────────────────────────
 export default function SentinellaPage() {
+  const isCloud = useIsCloud();
   // Metriche storiche (grafico + cards)
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -374,13 +376,14 @@ export default function SentinellaPage() {
     loadData();
     loadOp();
     loadTickConfig();
+    if (isCloud) return;
     const dataId = setInterval(loadData, 30_000); // tick ogni 10 min, refresh UI ogni 30s
     const opId = setInterval(loadOp, 5_000); // terminale live
     return () => {
       clearInterval(dataId);
       clearInterval(opId);
     };
-  }, [loadData, loadOp, loadTickConfig]);
+  }, [loadData, loadOp, loadTickConfig, isCloud]);
 
   useEffect(() => {
     if (termRef.current)

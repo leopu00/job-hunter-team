@@ -8,6 +8,7 @@
 // Auto-refresh ogni 15s.
 
 import { useEffect, useState } from "react";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type Diagnosis =
   | "alive"
@@ -98,6 +99,7 @@ export default function DoctorPanel() {
   const [data, setData] = useState<Resp | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const isCloud = useIsCloud();
 
   useEffect(() => {
     let alive = true;
@@ -122,12 +124,20 @@ export default function DoctorPanel() {
       }
     };
     load();
+    // Su cloud niente polling continuo: il load() iniziale qui sopra popola i
+    // dati all'apertura, poi si rinfresca solo on-demand (sync). In locale
+    // resta il refresh live ogni 15s.
+    if (isCloud) {
+      return () => {
+        alive = false;
+      };
+    }
     const t = setInterval(load, 15000);
     return () => {
       alive = false;
       clearInterval(t);
     };
-  }, []);
+  }, [isCloud]);
 
   const lastRound = data?.rounds.length
     ? data.rounds[data.rounds.length - 1]

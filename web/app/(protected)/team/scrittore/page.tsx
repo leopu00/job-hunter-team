@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import AgentInteraction from "@/components/AgentInteraction";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type PositionItem = {
   id: number;
@@ -274,6 +275,7 @@ function CompletedItem({ p }: { p: PositionItem }) {
 export default function ScrittorePage() {
   const [data, setData] = useState<ScrittoreActivity | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const isCloud = useIsCloud();
 
   const fetchData = useCallback(async () => {
     try {
@@ -286,9 +288,10 @@ export default function ScrittorePage() {
 
   useEffect(() => {
     fetchData();
+    if (isCloud) return;
     const id = setInterval(fetchData, 8000);
     return () => clearInterval(id);
-  }, [fetchData]);
+  }, [fetchData, isCloud]);
 
   const avgColor =
     data?.avg_critic_score != null

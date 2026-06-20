@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type QueueItem = {
   id: string;
@@ -197,6 +198,7 @@ export default function ScorerLiveSection() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [error, setError] = useState(false);
   const [isAgentActive, setIsAgentActive] = useState(false);
+  const isCloud = useIsCloud();
 
   const fetch_ = useCallback(async () => {
     const [activityResult, statusResult] = await Promise.allSettled([
@@ -229,9 +231,10 @@ export default function ScorerLiveSection() {
 
   useEffect(() => {
     fetch_();
+    if (isCloud) return;
     const id = setInterval(fetch_, 8000);
     return () => clearInterval(id);
-  }, [fetch_]);
+  }, [fetch_, isCloud]);
 
   if (error)
     return (

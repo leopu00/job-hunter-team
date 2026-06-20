@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useDevMode } from "@/components/SettingsMenu";
 import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type Status = { active: boolean; output: string };
 type ChatMsg = { role: "user" | "assistant"; text: string; ts: number };
@@ -48,6 +49,7 @@ function renderMarkdown(text: string) {
 }
 
 export default function AssistentePage() {
+  const isCloud = useIsCloud();
   const [status, setStatus] = useState<Status | null>(null);
   const startCmd = useTeamCommandPoller();
   const stopCmd = useTeamCommandPoller();
@@ -108,13 +110,14 @@ export default function AssistentePage() {
   useEffect(() => {
     fetchStatus();
     fetchChat();
+    if (isCloud) return;
     const statusId = setInterval(fetchStatus, 5000);
     const chatId = setInterval(fetchChat, 3000);
     return () => {
       clearInterval(statusId);
       clearInterval(chatId);
     };
-  }, [fetchStatus, fetchChat]);
+  }, [fetchStatus, fetchChat, isCloud]);
 
   // Scroll chat in fondo solo quando arrivano nuovi messaggi
   const prevMsgCountRef = useRef(0);
