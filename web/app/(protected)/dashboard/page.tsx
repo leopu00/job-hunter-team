@@ -6,8 +6,11 @@ import {
   getDashboardStats,
   getDashboardPositions,
   getPendingMessages,
+  getTeamActivity,
 } from "@/lib/queries";
 import type { DashboardPosition } from "@/lib/queries";
+import type { RecentActivityEvent } from "@/lib/team-activity";
+import RecentActivityFeed from "@/app/components/RecentActivityFeed";
 import { getExchangeRates } from "@/lib/exchange-rates";
 import { getDisplayCurrencies } from "@/lib/dashboard-currencies";
 import DashboardLinkedCharts from "@/app/components/DashboardLinkedCharts";
@@ -116,18 +119,20 @@ export default async function DashboardPage() {
           (p as { critic_verdict?: string | null }).critic_verdict ?? null,
       }))
     : [];
-  const [stats, dashPositions, pendingMessages, rates] = demoData
+  const [stats, dashPositions, pendingMessages, rates, recentActivity] = demoData
     ? [
         demoData.stats,
         demoDashPositions,
         demoData.pendingMessages,
         { EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92 },
+        [] as RecentActivityEvent[],
       ]
     : await Promise.all([
         getDashboardStats(),
         getDashboardPositions(),
         getPendingMessages(20),
         getExchangeRates(),
+        getTeamActivity().then((a) => a.recent),
       ]);
 
   const activeTotal = stats.total - stats.excluded;
@@ -287,6 +292,21 @@ export default async function DashboardPage() {
               );
             })}
           </div>
+
+          {/* ── Attività recente del team (sotto la Pipeline) ──────────── */}
+          {recentActivity.length > 0 && (
+            <div
+              className="mb-8"
+              style={{ animation: "fade-in 0.35s ease both 0.06s" }}
+            >
+              <RecentActivityFeed
+                recent={recentActivity}
+                max={8}
+                viewAllHref="/team/attivita/log"
+                maxHeightClass="max-h-[300px]"
+              />
+            </div>
+          )}
 
           {/* ── Grafici collegati: Types + Score + Paesi + Città ─────────
           Cliccando una sezione di un grafico si filtrano gli altri

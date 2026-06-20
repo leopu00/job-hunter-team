@@ -1,5 +1,6 @@
 import JsonLd from "./components/landing/JsonLd";
 import LandingClient from "./components/landing/LandingClient";
+import LandingHome from "./components/landing/LandingHome";
 
 type SearchParams = Promise<{
   login?: string;
@@ -26,14 +27,26 @@ export default async function LandingPage({
   const authError = sp.error === "auth_failed";
   const returnTo = sanitizeReturnTo(sp.returnTo);
 
+  // Login (/?login=true) → vecchio LandingClient, che gestisce l'OAuth.
+  // Landing pubblica normale → nuova LandingHome (clean slate, in
+  // ricostruzione). Il vecchio sito pubblico resta intatto nei suoi file.
+  if (wantsLogin) {
+    return (
+      <>
+        <JsonLd />
+        <LandingClient
+          wantsLogin={wantsLogin}
+          authError={authError}
+          returnTo={returnTo}
+        />
+      </>
+    );
+  }
+
   return (
     <>
       <JsonLd />
-      <LandingClient
-        wantsLogin={wantsLogin}
-        authError={authError}
-        returnTo={returnTo}
-      />
+      <LandingHome />
     </>
   );
 }
