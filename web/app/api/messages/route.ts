@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
+import { requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -7,6 +8,13 @@ const VALID_STATUS = ["pending", "delivered", "replied", "expired"] as const;
 type Status = (typeof VALID_STATUS)[number];
 
 export async function POST(req: NextRequest) {
+  // [JHT-WEB-READONLY] d2 — la chat web→agente è solo-desktop: sul cloud (o da
+  // browser non-localhost) è 403, il messaggio all'agente si invia dall'app
+  // desktop / tunnel SSH. GET (lettura) e PATCH (source=token: il container
+  // marca delivered/replied, percorso usato anche dal flusso bridge) restano
+  // intatti → nessun impatto sul bridge Telegram (gira sulla VPS, non qui).
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const resolved = await resolveUser(req);
   if (!resolved.ok) return resolved.res;
   if (resolved.user.source !== "session") {
