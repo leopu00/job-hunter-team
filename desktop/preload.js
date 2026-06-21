@@ -47,6 +47,10 @@ contextBridge.exposeInMainWorld('launcherApi', {
   stop: () => ipcRenderer.invoke('launcher:stop'),
   openBrowser: () => ipcRenderer.invoke('launcher:open-browser'),
   openExternal: (url) => ipcRenderer.invoke('launcher:open-external', url),
+  // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH (dashboard in-app, non cloud).
+  openVpsCockpit: (ip) => ipcRenderer.invoke('vps:open-cockpit', { ip }),
+  tunnelStatus: () => ipcRenderer.invoke('tunnel:status'),
+  tunnelClose: () => ipcRenderer.invoke('tunnel:close'),
   devLaunch: () => ipcRenderer.invoke('dev:launch'),
   devIsAvailable: () => ipcRenderer.invoke('dev:is-available'),
   devProbe: () => ipcRenderer.invoke('dev:probe'),
