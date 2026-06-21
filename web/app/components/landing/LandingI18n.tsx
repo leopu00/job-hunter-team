@@ -459,6 +459,21 @@ const translations = {
   dl_detected: { it: "rilevato", en: "detected", hu: "észlelt" },
   dl_mode_desktop_title: { it: "Desktop", en: "Desktop", hu: "Asztali" },
   dl_mode_terminal_title: { it: "CLI", en: "CLI", hu: "CLI" },
+  dl_mode_prompt_title: { it: "Prompt", en: "Prompt" },
+  dl_prompt_intro: {
+    it: "Copia questo prompt e dallo al tuo assistente AI: penserà lui a installare e avviare il team.",
+    en: "Copy this prompt and hand it to your AI assistant: it will install and start the team for you.",
+  },
+  dl_copy_prompt: { it: "Copia prompt", en: "Copy prompt" },
+  dl_prompt_note: {
+    it: "L'assistente AI deve avere accesso al tuo computer — terminale e file (es. Claude Code, Cursor, Codex CLI).",
+    en: "The AI assistant needs access to your computer — terminal and files (e.g. Claude Code, Cursor, Codex CLI).",
+  },
+  dl_help_text: {
+    it: "Non sai dove o come installarlo?",
+    en: "Not sure where or how to install it?",
+  },
+  dl_help_link: { it: "Leggi la guida", en: "Read the guide" },
   dl_instructions: { it: "Istruzioni", en: "Instructions", hu: "Utasítások" },
   dl_close: { it: "Chiudi", en: "Close", hu: "Bezárás" },
   dl_download: { it: "Scarica", en: "Download", hu: "Letöltés" },
