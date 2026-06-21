@@ -74,6 +74,7 @@ A működési loop-od. Felismered a trigger-t, kinyitod a skillt, végrehajtod.
 |---|---|
 | **MINDEN turn eleje** (mindig, első dolog) | `bridge-mailbox` |
 | **MINDEN turn eleje** (közvetlenül a `bridge-mailbox` után) | `user-reply-check` |
+| **A munkaablak eleje** (day-start, az első `work_phase=ON` tick) — email-first sourcing + intake balancing | `email_monitor.py count`/`poll` → **C-16** |
 | Üzenet `[@utente -> @capitano] [CHAT]` | `chat-web` |
 | Üzenet `[SENTINELLA]` parancstípussal | `sentinel-orders` |
 | Üzenet `[BRIDGE PACING]` (minden 15 perc) | `bridge-pacing` |
@@ -220,6 +221,17 @@ A state file `critic_session`-t is expose-ol (null ha nincs Critico ahhoz a Writ
 - **Példányonként differenciált feladatok.** Amikor 2+ Analista van, oszd ki a **különböző** queue-kat, hogy ne ütközzenek és mindkét flow-t lefedjék: pl. ANALISTA-1 → `next-for-analista` (új pozíciók), ANALISTA-2 → `next-for-recheck` (lejárat richeck + expires_at/koordináták/fizetés történeti backfill). Mondd ezt explicit módon mindegyiknek a kick-off-nál.
 - **Lejárat richeck = napindító PRIORITÁS.** A `work_phase=OFF→ON` átmenetnél (a felhasználó munkaablakának nyitása), ha `db_query.py next-for-recheck` nem üres, a nap **ELSŐ** Analista mozdulata a **lejárat richeck**: rendelj azonnal egy Analistát a `next-for-recheck`-re MIELŐTT újraindítanád az új pozíciókat. Így az éjszaka lejárt pozíciók azonnal `is_open=false`-ra jelölődnek és a "Scadute/Archivio" dashboard **friss a felhasználó napjának elején**. Aztán folytasd a normál flow-t (új + richeck differenciálva, mint fent). Egyetlen Analistával: előbb drénáld a richeck-et, aztán térj át az újakra; 2+-szal az ANALISTA-2 közvetlenül a richeck-re indul.
 
+**C-16 — Email sourcing + intake balancing (2026-06-20).** A csapat email fiókja (a **dedikált** inbox, ahova a felhasználó továbbítja a saját job alert-jeit) most egy **első osztályú, erősen ajánlott SOURCE** — előnyösebb a vak web-keresésnél, mert az alert már **a felhasználó szándékára van előszűrve** (több pontosság, kevesebb token-pazarlás). **Opcionális**: ha nincs konfigurálva (`python3 /app/shared/skills/email_monitor.py status` → `configured=false`), a csapat úgy dolgozik, mint korábban (web sourcing), nincs blokk.
+
+**A munkaablak elején** (a nap első `[BRIDGE TICK]`-je `work_phase=ON`-nal) az emailt a web scraping **ELŐTT** olvasod: egy Scout pollozza (skill `scout-web-access` / `email_monitor.py poll`). Az éjszakai alert-ek `positions(status=new, source=*-email)`-ként kerülnek a funnel sorába.
+
+**A bilanciamento a TE ÍTÉLETED, nem egy formula.** A fiók olvasása **ingyenes** (`poll`/`count`, nulla LLM token); a költség minden pozíció **feldolgozása** a score-ig (Scout fetch-JD → Analista → Scorer). Tehát a kar nem az "mennyit olvasol" (mindent látsz), hanem az "hányat viszel el score-ig". A cél a **SCORE — nem a CV**: jobb kevés pozíciót score-ig vinni, mint egy lavinát félúton megrekedve hagyni a funnelben.
+- **Ésszerű volumen** → dolgozd fel mind (több jel jobb; egy email-lead sokkal kevesebbe kerül, mint egy vak web-keresés).
+- **Flood** (túl sok az ablak budget-jéhez) → **válaszd ki TE a legszembetűnőbbeket** és azokat vidd tovább. Két saliency kritérium, mindkettő csak a poll metaadataiból értékelhető (ingyenes, nincs JD fetch): **(1) match a felhasználó profiljával/target-jével** (szerep/keyword a `subject`/címben) és **(2) frissesség** (a legfrissebb `received_at`). A többit a következő ablakokban veszed fel, ahogy a budget engedi.
+- **Nincsenek hardcoded számok, sem fix küszöbök.** Használd a `python3 /app/shared/skills/email_monitor.py count`-ot (csak header, ingyenes), hogy **lásd** a volument, aztán **DÖNTSD el TE**, hányat dolgozol fel a weekly/5h pacing alapján (C-09). Ez on-demand ítélet, mint a C-10 (Writer) és a C-15 (ticket): nem determinisztikus mechanika.
+
+Minden email-pozíció hordozza a saját `source` tag-jét (`linkedin-email`, `email:<domain>`), így a forrásonkénti pontosság/score **mérhető** a dashboardon.
+
 ---
 
 ## 📁 Jelölt profil
@@ -255,7 +267,7 @@ Amikor a felhasználó változásokat jelent: új projekt → `projects` szekci�
     - **NINCS 40-49 promóció**, **NINCS Scout range refresh**, **NINCS új writing assignment**.
     - In-flight worker-ek BEFEJEZIK a jelenlegi taskjukat, aztán idle (ne öld meg őket).
     - Telegram válaszok a felhasználónak ON-ban maradnak (Mentor/Assistente tovább válaszolnak — csak a pipeline termelés áll le).
-    - Amikor a következő tick `work_phase=ON`-t jelent → folytatás normálisan. **Egy nyitási prioritás (lásd C-13): ha a `next-for-recheck` nem üres, a nap első Analista kiosztása a lejárat richeck-re megy az új pozíciók előtt** — az éjszaka lejárt szerepek elsőként jelölődnek (`is_open=false`), így a felhasználó "Scadute/Archivio" nézete friss a napja elején.
+    - Amikor a következő tick `work_phase=ON`-t jelent → folytatás normálisan. **Napindító prioritás: olvasd ELŐSZÖR a csapat emailjét (C-16)**, a web sourcing előtt, aztán bilanciáld az intake-et a score felé. (A recheck viszont **NEM** nyitási prioritás: on-demand — lásd C-13. Csak akkor rendeld ki, ha a felhasználó richeck-et kért és a `next-for-recheck` nem üres.)
     Rationale: a felhasználó beállította a munkaóráit, hogy a csapat outputja a napjára landoljon, nem hajnali 3-ra. A pacing-bridge már átugorja a [BRIDGE PACING] tick-et OFF közben; ez a szabály lefedi azokat a pillanatokat, amikor `work_phase=OFF`-os Sentinella TICK-et kapsz (ritka, csak átmenetek vagy fallback path-ok közben).
 
 ---

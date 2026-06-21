@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/workspace'
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
+import { resolveCityPins } from '@/lib/city-coords'
 import { aggregateRoleFamilies, UNCATEGORIZED_LABEL, type RoleFamilyCount } from '@/lib/position-classifier'
 import { addDaysKey, buildTeamActivity, normActor, resolveActivityRange, TEAM_ACTIVITY_ROLES, type TeamActivity, type TeamActivityEvent, type TeamActivityRole, type RecentActivityEvent } from '@/lib/team-activity'
 import type {
@@ -661,6 +662,7 @@ export type DashboardPosition = {
   role_family: string | null
   loc_country: string | null
   loc_city: string | null
+  source: string | null
   salary_min: number | null
   salary_max: number | null
   salary_currency: string
@@ -705,7 +707,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
+    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, source, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
     .not('status', 'eq', 'excluded')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
@@ -750,6 +752,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       role_family: p.role_family ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
+      source: p.source ?? null,
       salary_min: typeof salary_min === 'number' ? salary_min : null,
       salary_max: typeof salary_max === 'number' ? salary_max : null,
       salary_currency,
@@ -769,32 +772,46 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
+  // Niente più filtro office_lat: prendiamo TUTTE le non-escluse e risolviamo
+  // le coordinate a livello città (ufficio esatto o centro-città).
   const { data, error } = await supabase
     .from('positions')
     .select('id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, is_remote, created_at, scores ( total_score )')
     .not('status', 'eq', 'excluded')
-    .not('office_lat', 'is', null)
     .is('deleted_at', null)
   if (error || !data) return []
-  return data.map((p: any) => {
+  const rows = data as any[]
+  const pins = resolveCityPins(
+    rows.map((p) => ({
+      loc_country: p.loc_country ?? null,
+      loc_city: p.loc_city ?? null,
+      office_lat: p.office_lat,
+      office_lon: p.office_lon,
+    })),
+  )
+  const out: local.PositionCoord[] = []
+  rows.forEach((p, i) => {
+    const c = pins[i]
+    if (!c) return // città non risolvibile → finisce tra i no-coords
     const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
-    return {
+    out.push({
       id: String(p.id),
       title: p.title,
       company: p.company,
       status: p.status,
       role_family: p.role_family ?? null,
       score: typeof score?.total_score === 'number' ? score.total_score : null,
-      lat: p.office_lat,
-      lon: p.office_lon,
+      lat: c.lat,
+      lon: c.lon,
       is_remote: !!p.is_remote,
       location: p.location ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
       office_address: p.office_address ?? null,
       created_at: p.created_at ?? null,
-    }
+    })
   })
+  return out
 }
 
 // ── Tree gerarchico per /map sidebar Location ──────────────────────
@@ -908,6 +925,7 @@ export type PositionNoCoord = {
   role_family: string | null
   score: number | null
   is_remote: boolean
+  remote_type: string | null
   location: string | null
   loc_country: string | null
   loc_city: string | null
@@ -919,16 +937,28 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
   if (!isSupabaseConfigured) return []
 
   const supabase = await createClient()
+  // Tutte le non-escluse; tieni solo quelle la cui città NON è risolvibile a
+  // pin (no città, o città senza alcun sibling geocodificato) → bucket residuo.
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, role_family, office_lat, is_remote, location, loc_country, loc_city, created_at, scores ( total_score )')
+    .select('id, title, company, status, role_family, office_lat, office_lon, is_remote, remote_type, location, loc_country, loc_city, created_at, scores ( total_score )')
     .not('status', 'eq', 'excluded')
-    .is('office_lat', null)
     .is('deleted_at', null)
   if (error || !data) return []
-  return (data as any[]).map((p) => {
+  const rows = data as any[]
+  const pins = resolveCityPins(
+    rows.map((p) => ({
+      loc_country: p.loc_country ?? null,
+      loc_city: p.loc_city ?? null,
+      office_lat: p.office_lat,
+      office_lon: p.office_lon,
+    })),
+  )
+  const out: PositionNoCoord[] = []
+  rows.forEach((p, i) => {
+    if (pins[i]) return // ha un pin città → non è "senza coordinate"
     const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
-    return {
+    out.push({
       id: String(p.id),
       title: p.title,
       company: p.company,
@@ -936,12 +966,14 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
       role_family: p.role_family ?? null,
       score: typeof score?.total_score === 'number' ? score.total_score : null,
       is_remote: !!p.is_remote,
+      remote_type: p.remote_type ?? null,
       location: p.location ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
       created_at: p.created_at ?? null,
-    }
+    })
   })
+  return out
 }
 
 // ── Position state-history (timestamp delle transizioni) ──────────

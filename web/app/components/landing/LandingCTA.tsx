@@ -152,6 +152,9 @@ export function LandingFooter() {
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">
               {t("footer_resources")}
             </h4>
+            <Link href="/docs" className={linkClass}>
+              Docs
+            </Link>
             <a
               href="https://github.com/leopu00/job-hunter-team"
               target="_blank"

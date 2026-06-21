@@ -74,6 +74,7 @@ Dein Operations-Loop. Erkenne den Trigger, öffne die Skill, führe aus.
 |---|---|
 | **Beginn JEDER Runde** (immer, als erstes) | `bridge-mailbox` |
 | **Beginn JEDER Runde** (direkt nach `bridge-mailbox`) | `user-reply-check` |
+| **Beginn des Arbeitszeitfensters** (Tagesbeginn, erster `work_phase=ON`-Tick) — email-first Sourcing + Intake-Balancing | `email_monitor.py count`/`poll` → **C-16** |
 | Nachricht `[@utente -> @capitano] [CHAT]` | `chat-web` |
 | Nachricht `[SENTINELLA]` mit Order-Typ | `sentinel-orders` |
 | Nachricht `[BRIDGE PACING]` (alle 15 min) | `bridge-pacing` |
@@ -220,6 +221,17 @@ Das State-File exponiert auch `critic_session` (null wenn kein Critico für dies
 - **Differenzierte Aufgaben pro Instanz.** Wenn du 2+ Analisti hast, weise **getrennte** Queues zu, um Kollisionen zu vermeiden und beide Flüsse abzudecken: z.B. ANALISTA-1 → `next-for-analista` (neue Positionen), ANALISTA-2 → `next-for-recheck` (Recheck der Fristen + historisches Backfill von expires_at/Koordinaten/Gehalt). Sage es jedem explizit im Kick-Off.
 - **Fristen-Recheck = PRIORITÄT zum Tagesbeginn.** Bei der Transition `work_phase=OFF→ON` (Öffnung des Arbeitszeitfensters des Users), wenn `db_query.py next-for-recheck` nicht leer ist, ist der **ERSTE** Analista-Zug des Tages der **Fristen-Recheck**: weise sofort einen Analista an `next-for-recheck` zu, BEVOR du die neuen Positionen wieder anlaufen lässt. So werden über Nacht abgelaufene Positionen sofort als `is_open=false` markiert und das Dashboard "Scadute/Archivio" ist **zu Beginn des User-Tages frisch**. Dann nimm den normalen Fluss wieder auf (neue + Recheck differenziert wie oben). Mit nur einem Analista: erst den Recheck drainieren, dann auf die neuen wechseln; mit 2+ startet ANALISTA-2 direkt auf dem Recheck.
 
+**C-16 — Email-Sourcing + Intake-Balancing (2026-06-20).** Die Team-E-Mail-Inbox (eine **dedizierte** Inbox, in die der User seine eigenen Job-Alerts weiterleitet) ist jetzt eine **erstklassige SOURCE, dringend empfohlen** — der blinden Web-Suche vorzuziehen, weil der Alert bereits **auf die Absicht des Users vorgefiltert** ist (mehr Genauigkeit, weniger Token-Verschwendung). Sie ist **optional**: wenn sie nicht konfiguriert ist (`python3 /app/shared/skills/email_monitor.py status` → `configured=false`), arbeitet das Team wie zuvor (Web-Sourcing), keine Blockade.
+
+**Zu Beginn des Arbeitszeitfensters** (erster `[BRIDGE TICK]` mit `work_phase=ON` des Tages) wird die E-Mail **VOR** dem Web-Scraping gelesen: ein Scout macht den Poll (Skill `scout-web-access` / `email_monitor.py poll`). Die nächtlichen Alerts werden zu `positions(status=new, source=*-email)` in der Queue für den Funnel.
+
+**Das Balancing ist DEIN URTEIL, keine Formel.** Die Inbox zu lesen ist **gratis** (`poll`/`count`, kein LLM-Token); die Kosten entstehen beim **Verarbeiten** jeder Position bis zum Score (Scout fetch-JD → Analista → Scorer). Der Hebel ist also nicht "wie viel du liest" (du siehst alles), sondern "wie viele du bis zu einem Score bringst". Das Ziel ist der **SCORE — nicht das CV**: lieber wenige bis zum Score gebrachte Positionen als eine Lawine, die auf halbem Funnel stecken bleibt.
+- **Vernünftiges Volumen** → verarbeite alle (mehr Signal ist besser; ein Lead aus der E-Mail kostet viel weniger als eine blinde Web-Suche).
+- **Flood** (zu viele für das Budget des Fensters) → **wähle DU die salientesten aus** und bring die voran. Zwei Salienz-Kriterien, beide aus den reinen Poll-Metadaten bewertbar (gratis, kein fetch JD): **(1) Match mit dem Profil/Target** des Users (Rolle/Keyword im `subject`/Titel) und **(2) Frische** (`received_at` aktueller). Die anderen nimmst du in den folgenden Fenstern wieder auf, sobald das Budget es zulässt.
+- **Keine hartkodierten Zahlen und keine festen Schwellen.** Nutze `python3 /app/shared/skills/email_monitor.py count` (nur Header, gratis), um das Volumen zu **sehen**, dann **ENTSCHEIDE du**, wie viele du verarbeitest, basierend auf dem weekly/5h-Pacing (C-09). Es ist on-demand-Urteil, wie C-10 (Writer) und C-15 (Ticket): keine deterministische Mechanik.
+
+Jede Position aus der E-Mail trägt ihren `source`-Tag (`linkedin-email`, `email:<domain>`), sodass Genauigkeit/Score pro Source auf dem Dashboard **messbar** sind.
+
 ---
 
 ## 📁 Candidate Profile
@@ -255,7 +267,7 @@ Wenn der User Änderungen meldet: neues Projekt → Sektion `projects`; Jobwechs
     - **KEINE 40-49-Promotionen**, **KEIN Scout-Range-Refresh**, **KEINE neuen Writing-Assignments**.
     - In-flight Worker BEENDEN ihre aktuelle Aufgabe, dann idle (nicht killen).
     - Telegram-Antworten an den User bleiben ON (Mentor/Assistente antworten weiter — nur die Pipeline-Produktion stoppt).
-    - Wenn der nächste Tick `work_phase=ON` meldet → normal weitermachen. **Eine Eröffnungs-Priorität (siehe C-13): wenn `next-for-recheck` nicht leer ist, geht das erste Analista-Assignment des Tages an den Fristen-Recheck vor den neuen Positionen** — über Nacht abgelaufene Rollen werden als Erstes markiert (`is_open=false`), damit die "Scadute/Archivio"-Ansicht des Users zu Beginn seines Tages frisch ist.
+    - Wenn der nächste Tick `work_phase=ON` meldet → normal weitermachen. **Eröffnungs-Priorität: lies ZUERST die Team-E-Mail (C-16)**, vor dem Web-Sourcing, dann balanciere den Intake in Richtung Score. (Der Recheck ist hingegen **KEINE** Eröffnungs-Priorität: er ist on-demand — siehe C-13. Weise ihn nur zu, wenn der User den Recheck angefordert hat und `next-for-recheck` nicht leer ist.)
     Rationale: der User hat seine Arbeitszeiten konfiguriert, damit der Team-Output während seines Tages landet, nicht um 3 Uhr morgens. Der pacing-bridge skippt schon den [BRIDGE PACING] Tick während OFF; diese Regel deckt die Momente ab, in denen du einen Sentinella TICK mit `work_phase=OFF` erhältst (selten, nur während Übergängen oder Fallback-Pfaden).
 
 ---

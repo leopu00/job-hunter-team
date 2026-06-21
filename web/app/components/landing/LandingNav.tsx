@@ -224,6 +224,14 @@ export default function LandingNav() {
 
         <div className="hidden md:flex items-center gap-6">
           <Link
+            href="/"
+            aria-current={currentPage("/")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/")}
+          >
+            {t("nav_home")}
+          </Link>
+          <Link
             href="/agents"
             aria-current={currentPage("/agents")}
             className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
@@ -232,12 +240,12 @@ export default function LandingNav() {
             {t("nav_team")}
           </Link>
           <Link
-            href="/pricing"
-            aria-current={currentPage("/pricing")}
+            href="/project"
+            aria-current={currentPage("/project")}
             className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/pricing")}
+            style={navLinkStyle("/project")}
           >
-            {t("nav_pricing")}
+            {t("nav_project")}
           </Link>
           <Link
             href="/case-studies"
@@ -256,18 +264,19 @@ export default function LandingNav() {
             {t("nav_download")}
           </Link>
           <Link
-            href="/project"
-            aria-current={currentPage("/project")}
+            href="/pricing"
+            aria-current={currentPage("/pricing")}
             className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/project")}
+            style={navLinkStyle("/pricing")}
           >
-            {t("nav_project")}
+            {t("nav_pricing")}
           </Link>
           <a
             href="https://github.com/leopu00/job-hunter-team"
             target="_blank"
             rel="noreferrer"
-            className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={{ color: "var(--color-muted)" }}
           >
             {t("nav_github")}
           </a>
@@ -341,6 +350,15 @@ export default function LandingNav() {
           }}
         >
           <Link
+            href="/"
+            aria-current={currentPage("/")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/")}
+          >
+            {t("nav_home")}
+          </Link>
+          <Link
             href="/agents"
             aria-current={currentPage("/agents")}
             onClick={() => setMobileOpen(false)}
@@ -350,13 +368,13 @@ export default function LandingNav() {
             {t("nav_team")}
           </Link>
           <Link
-            href="/pricing"
-            aria-current={currentPage("/pricing")}
+            href="/project"
+            aria-current={currentPage("/project")}
             onClick={() => setMobileOpen(false)}
             className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/pricing")}
+            style={navLinkStyle("/project")}
           >
-            {t("nav_pricing")}
+            {t("nav_project")}
           </Link>
           <Link
             href="/case-studies"
@@ -377,20 +395,21 @@ export default function LandingNav() {
             {t("nav_download")}
           </Link>
           <Link
-            href="/project"
-            aria-current={currentPage("/project")}
+            href="/pricing"
+            aria-current={currentPage("/pricing")}
             onClick={() => setMobileOpen(false)}
             className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/project")}
+            style={navLinkStyle("/pricing")}
           >
-            {t("nav_project")}
+            {t("nav_pricing")}
           </Link>
           <a
             href="https://github.com/leopu00/job-hunter-team"
             target="_blank"
             rel="noreferrer"
             onClick={() => setMobileOpen(false)}
-            className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={{ color: "var(--color-muted)" }}
           >
             {t("nav_github")}
           </a>

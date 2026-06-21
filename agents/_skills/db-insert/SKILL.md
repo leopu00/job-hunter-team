@@ -50,6 +50,8 @@ python3 /app/shared/skills/db_insert.py score \
 
 The 5 sub-scores map to DB columns: `stack_match · remote_fit · salary_fit · experience_fit · strategic_fit`. `--total` is the canonical 0–100 score the Captain reads.
 
+**One score per call — write it immediately.** The Scorer writes the score right after evaluating ONE position, then moves to the next. **Never** evaluate several positions and fire all the `score` inserts together at the end of the round: they would share the same `scored_at` second and look rushed. One position → one evaluation → one immediate insert → next (Scorer RULE-08).
+
 ## Application (Writer)
 
 ```bash

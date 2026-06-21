@@ -1,4 +1,5 @@
 import { getDb } from './db'
+import { resolveCityPins } from './city-coords'
 import { aggregateRoleFamilies, type RoleFamilyCount } from './position-classifier'
 import { buildTeamActivity, normActor, type TeamActivity, type TeamActivityEvent, type RecentActivityEvent } from './team-activity'
 import type {
@@ -465,33 +466,46 @@ export interface PositionCoord {
 }
 export function getPositionsWithCoordsLocal(ws: string): PositionCoord[] {
   const db = getDb(ws)
+  // Tutte le non-escluse; le coordinate vengono risolte a livello città
+  // (ufficio esatto o centro-città dai sibling geocodificati).
   const rows = db.prepare(`
     SELECT p.id, p.title, p.company, p.status, p.role_family, p.location,
            p.loc_country, p.loc_city, p.office_address, p.created_at,
            s.total_score as score,
-           p.office_lat as lat, p.office_lon as lon,
+           p.office_lat, p.office_lon,
            p.is_remote
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     WHERE p.status != 'excluded'
-      AND p.office_lat IS NOT NULL AND p.office_lon IS NOT NULL
   `).all() as any[]
-  return rows.map(r => ({
-    id: sid(r.id),
-    title: r.title,
-    company: r.company,
-    status: r.status,
-    role_family: r.role_family ?? null,
-    score: typeof r.score === 'number' ? r.score : null,
-    lat: r.lat,
-    lon: r.lon,
-    is_remote: !!r.is_remote,
-    location: r.location ?? null,
+  const pins = resolveCityPins(rows.map(r => ({
     loc_country: r.loc_country ?? null,
     loc_city: r.loc_city ?? null,
-    office_address: r.office_address ?? null,
-    created_at: r.created_at ?? null,
-  }))
+    office_lat: r.office_lat ?? null,
+    office_lon: r.office_lon ?? null,
+  })))
+  const out: PositionCoord[] = []
+  rows.forEach((r, i) => {
+    const c = pins[i]
+    if (!c) return
+    out.push({
+      id: sid(r.id),
+      title: r.title,
+      company: r.company,
+      status: r.status,
+      role_family: r.role_family ?? null,
+      score: typeof r.score === 'number' ? r.score : null,
+      lat: c.lat,
+      lon: c.lon,
+      is_remote: !!r.is_remote,
+      location: r.location ?? null,
+      loc_country: r.loc_country ?? null,
+      loc_city: r.loc_city ?? null,
+      office_address: r.office_address ?? null,
+      created_at: r.created_at ?? null,
+    })
+  })
+  return out
 }
 
 // ── Tree gerarchico location (country → cities → positions) ──────
@@ -571,30 +585,43 @@ export function getPositionLocationsLocal(ws: string): LocationCountry[] {
 // ── Positions SENZA coordinate (per /map "remote bucket") ─────────
 export function getPositionsWithoutCoordsLocal(ws: string) {
   const db = getDb(ws)
+  // Tutte le non-escluse; tieni solo quelle senza pin città risolvibile.
   const rows = db.prepare(`
     SELECT p.id, p.title, p.company, p.status, p.location,
            p.loc_country, p.loc_city,
            p.role_family, p.created_at,
            s.total_score as score,
-           p.is_remote
+           p.is_remote, p.remote_type,
+           p.office_lat, p.office_lon
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     WHERE p.status != 'excluded'
-      AND p.office_lat IS NULL
   `).all() as any[]
-  return rows.map(r => ({
-    id: sid(r.id),
-    title: r.title as string | null,
-    company: r.company as string | null,
-    status: r.status as string,
-    role_family: r.role_family as string | null,
-    score: typeof r.score === 'number' ? r.score : null,
-    is_remote: !!r.is_remote,
-    location: (r.location as string | null) ?? null,
-    loc_country: (r.loc_country as string | null) ?? null,
-    loc_city: (r.loc_city as string | null) ?? null,
-    created_at: (r.created_at as string | null) ?? null,
-  }))
+  const pins = resolveCityPins(rows.map(r => ({
+    loc_country: r.loc_country ?? null,
+    loc_city: r.loc_city ?? null,
+    office_lat: r.office_lat ?? null,
+    office_lon: r.office_lon ?? null,
+  })))
+  const out: any[] = []
+  rows.forEach((r, i) => {
+    if (pins[i]) return
+    out.push({
+      id: sid(r.id),
+      title: r.title as string | null,
+      company: r.company as string | null,
+      status: r.status as string,
+      role_family: r.role_family as string | null,
+      score: typeof r.score === 'number' ? r.score : null,
+      is_remote: !!r.is_remote,
+      remote_type: (r.remote_type as string | null) ?? null,
+      location: (r.location as string | null) ?? null,
+      loc_country: (r.loc_country as string | null) ?? null,
+      loc_city: (r.loc_city as string | null) ?? null,
+      created_at: (r.created_at as string | null) ?? null,
+    })
+  })
+  return out
 }
 
 // ── Faceting dataset per la sidebar /positions ────────────────────
@@ -641,7 +668,7 @@ export function getDashboardPositionsLocal(ws: string) {
   const db = getDb(ws)
   const rows = db.prepare(`
     SELECT p.id, p.legacy_id, p.title, p.company, p.location, p.remote_type,
-           p.status, p.role_family, p.loc_country, p.loc_city,
+           p.status, p.role_family, p.loc_country, p.loc_city, p.source,
            p.salary_estimated_min, p.salary_estimated_max, p.salary_estimated_currency,
            p.salary_declared_min, p.salary_declared_max, p.salary_declared_currency,
            p.found_at, p.found_by,
@@ -689,6 +716,7 @@ export function getDashboardPositionsLocal(ws: string) {
     role_family: (r.role_family as string | null) ?? null,
     loc_country: (r.loc_country as string | null) ?? null,
     loc_city: (r.loc_city as string | null) ?? null,
+    source: (r.source as string | null) ?? null,
     salary_min: ((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_min : r.salary_declared_min) as number | null ?? null,
     salary_max: ((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_max : r.salary_declared_max) as number | null ?? null,
     salary_currency: (((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_currency : r.salary_declared_currency) as string | null) ?? 'EUR',

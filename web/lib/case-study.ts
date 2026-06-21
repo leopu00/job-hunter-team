@@ -17,6 +17,7 @@ export interface CaseStudyMatch {
   strong80: number
   buckets: CaseStudyBucket[]
   composition: { key: string; label: string; avg: number }[]
+  scores: number[] // tutti i punteggi grezzi (per l'istogramma)
 }
 
 export interface CaseStudyCity {
@@ -27,15 +28,38 @@ export interface CaseStudyCity {
   count: number
 }
 
+export interface CaseStudyUsageDay {
+  day: string // YYYY-MM-DD
+  pct: number // % del budget settimanale AI consumato quel giorno
+  cum: number // % cumulata del budget settimanale a fine giornata
+  week: string // giovedì di riferimento (settimana di budget)
+}
+
+export interface CaseStudyWorkingHours {
+  timezone: string | null
+  windows: { days: string[]; start: string | null; end: string | null }[]
+}
+
+export interface CaseStudyUsage {
+  provider: string
+  unit: string // es. "weekly_budget_pct"
+  daily: CaseStudyUsageDay[]
+  workingHours?: CaseStudyWorkingHours | null
+}
+
 export interface CaseStudyRun {
   source: string
   tsRange: [string, string]
   totals: { positions: number; scored: number; excluded: number }
   match: CaseStudyMatch
   categories: { name: string; count: number }[]
+  // Fonti da cui sono arrivate le posizioni (top-N + "Altre"). Opzionale:
+  // assente negli snapshot generati prima dell'aggiunta del campo.
+  sources?: { name: string; count: number }[]
   countries: { name: string; code: string; count: number }[]
   cities: CaseStudyCity[]
   salary: { n: number; avgMin: number | null; avgMax: number | null }
   agents: string[]
   events: { ts: string; agent: string; action: string }[]
+  usage?: CaseStudyUsage | null
 }
