@@ -79,9 +79,7 @@ export async function GET(req: NextRequest) {
   // (il container è la source-of-truth della risoluzione). Cursor su created_at.
   const { data, error } = await admin
     .from("position_tickets")
-    .select(
-      "id, position_legacy_id, request_text, kind, status, created_at",
-    )
+    .select("id, position_legacy_id, request_text, kind, status, created_at")
     .eq("user_id", userId)
     .eq("status", "open")
     .gt("created_at", since.toISOString())
@@ -125,9 +123,14 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, error: "body JSON non valido" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "body JSON non valido" },
+      { status: 400 },
+    );
   }
-  const tickets = Array.isArray(body.tickets) ? body.tickets.slice(0, 1000) : [];
+  const tickets = Array.isArray(body.tickets)
+    ? body.tickets.slice(0, 1000)
+    : [];
 
   let updated = 0;
   let inserted = 0;

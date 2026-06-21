@@ -548,37 +548,38 @@ export default function SentinellaPage() {
         {/* Controlli (start/terminale) — solo desktop, nascosti sul cloud read-only */}
         {isCloud !== true && (
           <>
-        {!isActive && (
-          <button
-            onClick={handleStart}
-            disabled={startBusy || op == null}
-            className="px-5 py-2 rounded-lg text-[12px] font-bold tracking-wide transition-all"
-            style={{
-              background:
-                startBusy || op == null ? "var(--color-border)" : "#607d8b",
-              color: startBusy || op == null ? "var(--color-dim)" : "#fff",
-              cursor: startBusy || op == null ? "not-allowed" : "pointer",
-              opacity: startBusy ? 0.7 : 1,
-            }}
-          >
-            {startLabel}
-          </button>
-        )}
+            {!isActive && (
+              <button
+                onClick={handleStart}
+                disabled={startBusy || op == null}
+                className="px-5 py-2 rounded-lg text-[12px] font-bold tracking-wide transition-all"
+                style={{
+                  background:
+                    startBusy || op == null ? "var(--color-border)" : "#607d8b",
+                  color: startBusy || op == null ? "var(--color-dim)" : "#fff",
+                  cursor: startBusy || op == null ? "not-allowed" : "pointer",
+                  opacity: startBusy ? 0.7 : 1,
+                }}
+              >
+                {startLabel}
+              </button>
+            )}
 
-        {isActive && (
-          <button
-            onClick={async () => {
-              await fetch("/api/team/terminal/open?session=SENTINELLA", {
-                method: "POST",
-              });
-            }}
-            className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
-          >
-            {typeof navigator !== "undefined" && /Mac/.test(navigator.platform)
-              ? "apri terminale"
-              : "apri powershell"}
-          </button>
-        )}
+            {isActive && (
+              <button
+                onClick={async () => {
+                  await fetch("/api/team/terminal/open?session=SENTINELLA", {
+                    method: "POST",
+                  });
+                }}
+                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
+              >
+                {typeof navigator !== "undefined" &&
+                /Mac/.test(navigator.platform)
+                  ? "apri terminale"
+                  : "apri powershell"}
+              </button>
+            )}
           </>
         )}
 
@@ -599,54 +600,56 @@ export default function SentinellaPage() {
 
       {/* Intervallo tick — controllo write (config sentinella): solo desktop, nascosto sul cloud */}
       {isCloud !== true && (
-      <div className="mb-6 flex items-center gap-3 flex-wrap bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-4 py-3">
-        <label
-          htmlFor="tick-min"
-          className="text-[10px] uppercase tracking-[0.15em] text-[var(--color-dim)]"
-        >
-          Intervallo tick
-        </label>
-        <input
-          id="tick-min"
-          type="number"
-          min={0.25}
-          max={60}
-          step={0.25}
-          value={tickDraft}
-          onChange={(e) =>
-            setTickDraft(
-              Math.max(0.25, Math.min(60, Number(e.target.value) || 0.25)),
-            )
-          }
-          className="w-20 px-2 py-1 text-[12px] font-mono bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-[var(--color-base)]"
-        />
-        <span className="text-[11px] text-[var(--color-muted)]">
-          min (0.5 = 30s)
-        </span>
-        <button
-          onClick={handleSaveTick}
-          disabled={savingTick || tickDraft === tickMin}
-          className="px-3 py-1 rounded text-[11px] font-semibold tracking-wide transition-all"
-          style={{
-            background:
-              savingTick || tickDraft === tickMin
-                ? "var(--color-border)"
-                : "#607d8b",
-            color:
-              savingTick || tickDraft === tickMin ? "var(--color-dim)" : "#fff",
-            cursor:
-              savingTick || tickDraft === tickMin ? "not-allowed" : "pointer",
-            opacity: savingTick ? 0.7 : 1,
-          }}
-        >
-          {savingTick ? "Salvo…" : "Salva"}
-        </button>
-        {tickMsg && (
+        <div className="mb-6 flex items-center gap-3 flex-wrap bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-4 py-3">
+          <label
+            htmlFor="tick-min"
+            className="text-[10px] uppercase tracking-[0.15em] text-[var(--color-dim)]"
+          >
+            Intervallo tick
+          </label>
+          <input
+            id="tick-min"
+            type="number"
+            min={0.25}
+            max={60}
+            step={0.25}
+            value={tickDraft}
+            onChange={(e) =>
+              setTickDraft(
+                Math.max(0.25, Math.min(60, Number(e.target.value) || 0.25)),
+              )
+            }
+            className="w-20 px-2 py-1 text-[12px] font-mono bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-[var(--color-base)]"
+          />
           <span className="text-[11px] text-[var(--color-muted)]">
-            {tickMsg}
+            min (0.5 = 30s)
           </span>
-        )}
-      </div>
+          <button
+            onClick={handleSaveTick}
+            disabled={savingTick || tickDraft === tickMin}
+            className="px-3 py-1 rounded text-[11px] font-semibold tracking-wide transition-all"
+            style={{
+              background:
+                savingTick || tickDraft === tickMin
+                  ? "var(--color-border)"
+                  : "#607d8b",
+              color:
+                savingTick || tickDraft === tickMin
+                  ? "var(--color-dim)"
+                  : "#fff",
+              cursor:
+                savingTick || tickDraft === tickMin ? "not-allowed" : "pointer",
+              opacity: savingTick ? 0.7 : 1,
+            }}
+          >
+            {savingTick ? "Salvo…" : "Salva"}
+          </button>
+          {tickMsg && (
+            <span className="text-[11px] text-[var(--color-muted)]">
+              {tickMsg}
+            </span>
+          )}
+        </div>
       )}
 
       {/* Errori fetch dati */}
