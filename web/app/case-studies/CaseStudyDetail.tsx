@@ -67,39 +67,6 @@ export default function CaseStudyDetail({
   const fromKey = run.tsRange[0].slice(0, 10);
   const toKey = run.tsRange[1].slice(0, 10);
 
-  const kpis = [
-    {
-      value: nf(run.totals.positions),
-      label: "Posizioni trovate",
-      accent: "var(--color-blue)",
-    },
-    {
-      value: `${Math.round(run.match.avg)}/100`,
-      label: "Match medio",
-      accent: "#00e676",
-    },
-    {
-      value: nf(run.match.strong70),
-      label: "Match forti (≥70)",
-      accent: "#00e676",
-    },
-    {
-      value: nf(run.countries.length),
-      label: "Paesi",
-      accent: "var(--color-blue)",
-    },
-    {
-      value: nf(run.cities.length),
-      label: "Città",
-      accent: "var(--color-blue)",
-    },
-    {
-      value: nf(run.categories.length),
-      label: "Categorie di ruolo",
-      accent: "#b388ff",
-    },
-  ];
-
   return (
     <div className="space-y-12">
       {/* ── Toolbar: breadcrumb + switcher collassabile ───────── */}
@@ -273,24 +240,6 @@ export default function CaseStudyDetail({
           · {activeDays} giorni di lavoro · ogni dato è aggregato e anonimo.
         </p>
 
-        <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {kpis.map((k) => (
-            <div
-              key={k.label}
-              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
-            >
-              <div
-                className="text-[26px] leading-none font-extrabold tabular-nums"
-                style={{ color: k.accent }}
-              >
-                {k.value}
-              </div>
-              <div className="mt-1.5 text-[10px] uppercase tracking-wide text-[var(--color-dim)] leading-tight">
-                {k.label}
-              </div>
-            </div>
-          ))}
-        </div>
       </header>
 
       {/* ── Match · Dove · Categorie ──────────────────────────── */}
