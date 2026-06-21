@@ -25,12 +25,20 @@ sole — lenti ovali scure, discrete — come tratto distintivo condiviso del te
 un dettaglio elegante: **non** devono rendere il personaggio cupo o "Agente Smith",
 resta una persona normale dall'aria serena.
 
-🕶️ **CRUCIALE — le lenti coprono SEMPRE gli occhi.** Gli occhiali sono **indossati
-correttamente, alti sul ponte del naso**, con lenti **completamente opache** che
-**nascondono del tutto gli occhi**. Gli occhi **non si vedono MAI**: NON abbassati,
-NON spinti sulla punta del naso, NON sollevati sulla fronte. Sono **agenti virtuali,
-non hanno occhi** — dietro le lenti c'è solo buio. (Il generatore tende a metterli
-abbassati con gli occhi in vista: vietarlo esplicitamente in ogni prompt.)
+🕶️ **CRUCIALE — forma E copertura, sempre INSIEME.** Due vincoli che il generatore
+fa collidere (correggi uno → rompe l'altro): vanno tenuti **entrambi** in ogni prompt.
+
+1. **Forma (fissa, identica su ogni agente):** occhiali **piccoli, lenti tonde/ovali,
+   montatura sottile in metallo** — come quelli del Coordinatore (`agents-coordinator.png`)
+   e della home. **Mai** grandi, squadrati, wayfarer o aviator.
+2. **Copertura:** le lenti, scure, **coprono completamente gli occhi** — occhi **mai
+   visibili** (agenti virtuali, dietro le lenti solo buio). Indossati **alti sul naso**,
+   NON abbassati né sulla punta del naso.
+
+Formula da incollare nei prompt: *"small round/oval dark sunglasses with thin metal
+frames, identical on every agent — small and discreet, the dark lenses fully hide the
+eyes (no eyes visible). Keep them small and oval, NOT large or square, NOT lowered on
+the nose."*
 
 > ⚠️ **Generiamo da browser (ChatGPT/web): MAI riferimenti a file nei prompt** (no
 > `ref. …png`, no path) — il generatore non vede i nostri file locali. Le immagini in
@@ -172,19 +180,21 @@ vittoriani eleganti, palette terrosa+verde, NO boy-scout). Affinamenti utente: *
 >
 > **Two elegant investigators (the Scouts)** who track down job opportunities — sharp,
 > well-dressed people in smart, slightly vintage tailored clothes (trench coats,
-> waistcoats, pinstripe suits). Both wear small dark sunglasses **worn correctly, high
-> on the bridge of the nose, with fully opaque lenses that completely hide the eyes —
-> the eyes are NEVER visible (they are virtual agents, no eyes; only darkness behind the
-> lenses). The sunglasses are NOT lowered or perched on the tip of the nose.** **Full
-> figure, head to toe — both entirely visible, nothing cropped (character-sheet style).**
+> waistcoats, pinstripe suits). Both wear the SAME **small round/oval dark sunglasses
+> with thin metal frames** (identical on every agent) — small and discreet, the dark
+> lenses **fully hide the eyes** (no eyes visible; they are virtual agents, only darkness
+> behind the lenses), worn properly over the eyes. **Keep the glasses small and
+> round/oval — NOT large, NOT square, NOT wayfarer or aviator, NOT lowered on the nose.**
+> **Full figure, head to toe — both entirely visible, nothing cropped (character-sheet
+> style).**
 > • On the LEFT: one **sitting at a desk, working at a computer** — full body still
 > visible, the desk does not hide the legs.
 > • The other: **standing, examining a sheet of paper with a magnifying glass.**
 > Calm, curious, confident, a touch witty; not gloomy.
 >
 > **Avoid:** boy-scouts or campers, scout uniforms, neckerchiefs / scarves at the neck,
-> safari or explorer outfits, leather satchels. **No visible eyes, no sunglasses pushed
-> down the nose.** No readable text anywhere. Don't over-detail.
+> safari or explorer outfits, leather satchels. **Large or square sunglasses, visible
+> eyes, glasses pushed down the nose.** No readable text anywhere. Don't over-detail.
 
 > Scontorno: `isnet-general-use` (laptop + foglio da preservare).
 
