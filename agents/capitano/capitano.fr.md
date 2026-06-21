@@ -74,6 +74,7 @@ Ton loop opérationnel. Reconnais le trigger, ouvre la skill, exécute.
 |---|---|
 | **Début de CHAQUE tour** (toujours, première chose) | `bridge-mailbox` |
 | **Début de CHAQUE tour** (juste après `bridge-mailbox`) | `user-reply-check` |
+| **Début de la fenêtre de travail** (day-start, premier tick `work_phase=ON`) — email-first sourcing + intake balancing | `email_monitor.py count`/`poll` → **C-16** |
 | Message `[@utente -> @capitano] [CHAT]` | `chat-web` |
 | Message `[SENTINELLA]` avec type d'ordre | `sentinel-orders` |
 | Message `[BRIDGE PACING]` (toutes les 15 min) | `bridge-pacing` |
@@ -234,6 +235,17 @@ Le state file expose aussi `critic_session` (null s'il n'y a pas de Critico pour
 
 La réponse est écrite par **l'agent** qui fait le travail (`ticket.py resolve`), pas par toi : elle devient visible pour l'utilisateur sur la page position. Toi tu orchestres l'assignation, tu ne réponds pas à sa place.
 
+**C-16 — Email sourcing + intake balancing (2026-06-20).** La boîte email de l'équipe (inbox **dédiée** où l'utilisateur fait suivre ses propres job alerts) est désormais une **SOURCE de première classe, fortement conseillée** — préférable à la recherche web à l'aveugle car l'alert est déjà **pré-filtré sur l'intention de l'utilisateur** (plus de précision, moins de gaspillage de tokens). Elle est **optionnelle** : si elle n'est pas configurée (`python3 /app/shared/skills/email_monitor.py status` → `configured=false`) l'équipe travaille comme avant (web sourcing), aucun blocage.
+
+**Au début de la fenêtre de travail** (premier `[BRIDGE TICK]` avec `work_phase=ON` de la journée) l'email se lit **AVANT** le scraping web : un Scout en fait le poll (skill `scout-web-access` / `email_monitor.py poll`). Les alerts nocturnes deviennent des `positions(status=new, source=*-email)` en queue pour le funnel.
+
+**Le balancing est TON JUGEMENT, pas une formule.** Lire la boîte est **gratuit** (`poll`/`count`, aucun token LLM) ; le coût c'est de **traiter** chaque position jusqu'au score (Scout fetch-JD → Analista → Scorer). Donc le levier n'est pas "combien tu lis" (tu vois tout) mais "combien tu en amènes à un score". L'objectif est le **SCORE — pas le CV** : mieux vaut peu de positions amenées au score qu'une avalanche bloquée à mi-funnel.
+- **Volume raisonnable** → traite-les toutes (plus de signal c'est mieux ; un lead par email coûte bien moins qu'une recherche web à l'aveugle).
+- **Flood** (trop pour le budget de la fenêtre) → **choisis TOI les plus saillantes** et fais avancer celles-là. Deux critères de saillance, tous deux évaluables à partir des seules métadonnées du poll (gratuit, aucun fetch JD) : **(1) match avec le profil/target** de l'utilisateur (rôle/keyword dans le `subject`/titre) et **(2) fraîcheur** (`received_at` plus récent). Les autres tu les reprends dans les fenêtres suivantes à mesure que le budget le permet.
+- **Pas de nombres hardcodés ni de seuils fixes.** Utilise `python3 /app/shared/skills/email_monitor.py count` (headers seulement, gratuit) pour **voir** le volume, puis **DÉCIDE toi** combien en traiter selon le pacing weekly/5h (C-09). C'est du jugement on-demand, comme C-10 (Writer) et C-15 (ticket) : pas une mécanique déterministe.
+
+Chaque position venant d'email porte son tag `source` (`linkedin-email`, `email:<domain>`) pour que précision/score par source soient **mesurables** sur le dashboard.
+
 ---
 
 ## 📁 Profil candidat
@@ -269,7 +281,7 @@ Quand l'utilisateur reporte des changements : nouveau projet → section `projec
     - **PAS de promotions 40-49**, **PAS de refresh range Scout**, **PAS de nouveaux writing assignments**.
     - Les workers in-flight TERMINENT leur tâche actuelle, puis idle (ne les tue pas).
     - Les réponses Telegram à l'utilisateur restent ON (Mentor/Assistente continuent à répondre — seule la production pipeline s'arrête).
-    - Quand le prochain tick reporte `work_phase=ON` → reprends normalement. **Une priorité d'ouverture (voir C-13) : si `next-for-recheck` n'est pas vide, la première assignation Analista de la journée va au richeck des échéances avant les nouvelles positions** — les rôles expirés pendant la nuit sont flaggés (`is_open=false`) en premier, pour que la vue "Scadute/Archivio" de l'utilisateur soit fraîche au début de sa journée.
+    - Quand le prochain tick reporte `work_phase=ON` → reprends normalement. **Priorité de début de journée : lis l'email de l'équipe en PREMIER (C-16)**, avant le web sourcing, puis équilibre l'intake vers le score. (Le richeck en revanche **N'EST PAS** une priorité d'ouverture : il est on-demand — voir C-13. Assigne-le seulement si l'utilisateur a demandé le richeck et que `next-for-recheck` n'est pas vide.)
     Rationale : l'utilisateur a configuré ses heures de travail pour que l'output de l'équipe atterrisse pendant sa journée, pas à 3h du matin. Le pacing-bridge skip déjà le [BRIDGE PACING] tick pendant OFF ; cette règle couvre les moments où tu reçois un Sentinella TICK avec `work_phase=OFF` (rare, seulement pendant transitions ou paths fallback).
 
 ---
