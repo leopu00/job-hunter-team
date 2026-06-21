@@ -194,17 +194,17 @@ function scoreNormHeight(score: number | null): number {
   return 0.2 + ((s - 40) / 60) * 0.8; // 0.20..1.00
 }
 
-// Mappa score (0-100) → colore RGB. Stops allineati al design system
-// JHT (red/orange/yellow/mint/green). Lerp lineare in RGB nei tratti.
+// Mappa score (0-100) → colore RGB. SCALA SOLO-VERDE: score basso = verde
+// tenue/smorto (non disturba), score alto = verde vivo e saturo (spicca).
+// Niente più arancio/rosso: l'attenzione va a chi ha lo score più alto.
 function scoreToRgb(score: number | null): [number, number, number] {
-  if (score == null) return [140, 200, 170]; // verde-grigio neutro
+  if (score == null) return [150, 180, 165]; // verde-grigio neutro
   const s = Math.max(0, Math.min(100, score));
   const stops: Array<[number, [number, number, number]]> = [
-    [0, [255, 69, 96]], // --color-red
-    [40, [255, 140, 66]], // --color-orange
-    [55, [245, 197, 24]], // --color-yellow
-    [70, [127, 255, 178]], // mint
-    [100, [0, 232, 122]], // --color-green
+    [0, [184, 214, 196]], // verde pallido/smorto
+    [40, [143, 202, 168]],
+    [70, [52, 201, 127]],
+    [100, [0, 232, 122]], // --color-green vivo
   ];
   for (let i = 0; i < stops.length - 1; i++) {
     const [s0, c0] = stops[i];
@@ -560,50 +560,13 @@ function reclusterByZoom(
   map?: MaplibreMap | null,
 ): GroupedFeature[] {
   if (groups.length === 0) return [];
-  const radiusDeg = clusterRadiusDeg(zoom);
-  if (radiusDeg <= 0) {
-    // Street zoom: esplode i groups in singleton click-target.
+  // I gruppi sono GIÀ per città: NON li fondiamo mai geograficamente (città
+  // diverse restano marker distinti). A zoom street-level esplodiamo la città
+  // nei singoli pin cliccabili; sotto, un marker per città.
+  if (clusterRadiusDeg(zoom) <= 0) {
     return explodeGroups(groups, zoom, map);
   }
-  const buckets = new Map<string, GroupedFeature[]>();
-  for (const g of groups) {
-    const bx = Math.floor(g.lon / radiusDeg);
-    const by = Math.floor(g.lat / radiusDeg);
-    const key = `${bx}|${by}`;
-    const arr = buckets.get(key);
-    if (arr) arr.push(g);
-    else buckets.set(key, [g]);
-  }
-
-  const out: GroupedFeature[] = [];
-  for (const [bkey, arr] of buckets) {
-    if (arr.length === 1) {
-      out.push(arr[0]);
-      continue;
-    }
-    const totalCount = arr.reduce((s, g) => s + g.count, 0);
-    const lat = arr.reduce((s, g) => s + g.lat * g.count, 0) / totalCount;
-    const lon = arr.reduce((s, g) => s + g.lon * g.count, 0) / totalCount;
-    const scores = arr.flatMap((g) => g.scores);
-    const positions = arr.flatMap((g) => g.positions);
-    const topScore = scores.reduce<number | null>((acc, s) => {
-      if (s == null) return acc;
-      if (acc == null) return s;
-      return Math.max(acc, s);
-    }, null);
-    const iconId = iconIdForScores(scores);
-    out.push({
-      groupKey: `cluster|${bkey}`,
-      iconId,
-      lat,
-      lon,
-      count: totalCount,
-      scores,
-      positions,
-      topScore,
-    });
-  }
-  return out;
+  return groups;
 }
 
 // Paint override per allineare il basemap al theme JHT.
@@ -799,7 +762,14 @@ export default function JobsGlobe({
   const grouped = useMemo(() => {
     const groups = new Map<string, PositionCoord[]>();
     for (const p of displayData) {
-      const key = `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
+      // Raggruppa per CITTÀ (paese|città), non per coordinata: ogni città è
+      // un marker unico, mai fusa con città vicine. Fallback alla coord se
+      // manca la città (raro: geocodificata ma senza loc_city).
+      const cityKey = `${(p.loc_country ?? "").trim()}|${(p.loc_city ?? "").trim()}`;
+      const key =
+        (p.loc_city ?? "").trim() !== ""
+          ? cityKey
+          : `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
       const arr = groups.get(key);
       if (arr) arr.push(p);
       else groups.set(key, [p]);
@@ -941,15 +911,13 @@ export default function JobsGlobe({
               ["linear"],
               ["coalesce", ["get", "topScore"], -1],
               -1,
-              "#8cc8a0",
+              "#96b4a5",
               0,
-              "#ff4560",
+              "#b8d6c4",
               40,
-              "#ff8c42",
-              55,
-              "#f5c518",
+              "#8fcaa8",
               70,
-              "#7fffb2",
+              "#34c97f",
               100,
               "#00e87a",
             ],
