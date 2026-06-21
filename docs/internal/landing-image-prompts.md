@@ -149,26 +149,28 @@ emoji o riferimenti a file. **Regola generale per tutti i ruoli:** descrivere il
 carattere + chiedere "un oggetto/prop che rappresenti il ruolo, a scelta del
 generatore", senza imporre quale.
 
-### `team.scout` — lo Scout ⬜ DA GENERARE
+### `team.scout` — gli Scout (gruppo) ⬜ DA GENERARE
 
-Il segugio instancabile che batte il mondo in cerca di offerte. Prompt (formula
-aperta, oggetto a scelta del generatore):
+⚠️ Lo Scout **non è un singolo agente**: è un pool di più istanze che cercano in
+parallelo. Quindi l'immagine mostra **più Scout** (≥2), ciascuno che cerca in modo
+diverso. Qui gli spunti d'attività sono **voluti dall'utente** (per comunicare la
+pluralità), non pilotaggio art-director. Prompt:
 
 > Hand-drawn comic-book / graphic-novel illustration — clean inked outlines, flat
 > colours, warm muted palette with subtle green accents (classic adventure-comic look).
-> Full-figure character on a plain white background, no scene.
+> On a plain white background, no scene — just the figures.
 >
-> **The Scout** — the team's tireless hunter, roaming everywhere to track down job
-> openings: sharp, curious and energetic. A normal, well-dressed person wearing the
-> same small discreet dark sunglasses as the rest of the team. **Give them some prop or
-> object that naturally represents the role of searching and tracking down
-> opportunities — your choice.** Lively, curious expression, a touch witty; elegant,
-> not gloomy, don't over-detail.
+> **The Scouts** — a small team of hunters who search the world for job openings (the
+> Scout is not one person but several working in parallel). Show **two or three** of
+> them: normal, well-dressed people, each wearing the same small discreet dark
+> sunglasses as the rest of the team, each searching in a different way — one **working
+> at a laptop / computer**, one **studying a geographic map**, one **examining a sheet
+> of paper with a magnifying glass**. Curious, energetic, a touch witty; elegant, not
+> gloomy. **No readable text** on screens, maps or papers — only abstract marks. Don't
+> over-detail.
 
-> Nota coerenza: nella card della home (`landing-team.png`) lo Scout è un detective
-> (trench + lente). Col prompt aperto il generatore può scegliere altro — se serve
-> coerenza con la home si può aggiungere "as a detective/sleuth", ma di default si
-> lascia libero.
+> Scontorno: ci sono oggetti (laptop, mappa, foglio) → preservarli con
+> `isnet-general-use` (non `isnet-anime`, che cancella ciò che non è personaggio).
 
 ---
 
