@@ -101,6 +101,17 @@ All components (write-guard, the `promote`/`merge` primitives, this model) compa
 string `'Other'`. Everything in `'Other'` carries a `role_family_proposed` and is the **feedstock the
 analyst promotes from** (`other-pile` → `role_registry.py promote`, §3).
 
+**`NULL` ≠ `'Other'` — and `NULL` is NOT a category.** `role_family IS NULL` means *"never
+categorized yet"* — the **default of every freshly-scouted offer** (the column has no default), a
+**transient** state, never a resting place. A fresh candidate therefore **always** accumulates `NULL`
+rows as the scout inserts faster than the analyst categorizes; left undrained they pile up **ignored**.
+The analyst's job is to take each `NULL` to an active family or to `'Other'` (uncertain → `'Other'`,
+never left `NULL`). The trap: `other-pile` and `category-sizes` only look at `'Other'`/actives, so a
+large `NULL` backlog is **invisible** to them — a registry can read "healthy" while hundreds sit
+uncategorized. `category-sizes` now prints the `NULL` count explicitly, and `next-for-categorize`
+queues `NULL` + drift; the analyst must **drain that backlog as day-start priority** and never infer
+"all categorized" from a view that cannot show the uncategorized (team-rule **RULE-T17**).
+
 ## ❄️ Cold-start — two cases (a known, accepted property — not a bug)
 
 **(a) Brand-new candidate (no data).** With an empty registry the first analyses **all land in

@@ -748,6 +748,13 @@ def main():
             "SELECT COUNT(*) FROM positions WHERE role_family = 'Other'"
         ).fetchone()[0]
         print(f"  {other:>4}  Other (parcheggio — 'other-pile' per i grappoli da promuovere)")
+        # NON categorizzate (role_family IS NULL): NON è una categoria, è il backlog
+        # mai incanalato. Va mostrato qui o il quadro è falso (resta invisibile e ignorato).
+        uncat = conn.execute(
+            "SELECT COUNT(*) FROM positions WHERE role_family IS NULL"
+        ).fetchone()[0]
+        flag = '  ⚠ DA CATEGORIZZARE SUBITO (next-for-categorize) — NULL non è una categoria' if uncat else ''
+        print(f"  {uncat:>4}  NON categorizzate (role_family IS NULL){flag}")
         conn.close()
     elif args.cmd.startswith('next-for-'):
         role = args.cmd.replace('next-for-', '')
