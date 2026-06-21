@@ -51,6 +51,8 @@ python3 /app/shared/skills/db_insert.py score \
 
 As 5 sub-pontuações mapeiam para colunas do DB: `stack_match · remote_fit · salary_fit · experience_fit · strategic_fit`. `--total` é a pontuação canónica 0–100 que o Capitano lê.
 
+**Um score por chamada — escreve-o já.** O Scorer escreve o score logo após avaliar UMA posição e depois passa à próxima. **Nunca** avaliar várias posições e disparar todos os insert `score` juntos no fim da ronda: partilhariam o mesmo segundo `scored_at` e pareceria apressado. Uma posição → uma avaliação → um insert imediato → a próxima (Scorer RULE-08).
+
 ## Application (Scrittore)
 
 ```bash
