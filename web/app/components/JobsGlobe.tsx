@@ -554,19 +554,89 @@ function explodeGroups(
 // singletons con micro-offset radiale: così ogni position diventa
 // cliccabile separatamente (altrimenti N positions sulla stessa
 // coord = 1 solo target di click).
+// Soglia (px) sotto la quale due marker-città si SOVRAPPONGONO a schermo e
+// vanno fusi in un super-cluster. Clustering in PIXEL (non in gradi): è
+// pan-invariante (la distanza relativa fra due punti fissi non cambia col
+// pan, solo con lo zoom) → niente "tremolio" durante lo scroll, e città
+// lontane (Zurigo/Milano) non si fondono mai a zoom medio.
+const CITY_MERGE_PX = 52;
+
+function mergeGroups(arr: GroupedFeature[]): GroupedFeature {
+  const totalCount = arr.reduce((s, g) => s + g.count, 0);
+  const lat = arr.reduce((s, g) => s + g.lat * g.count, 0) / totalCount;
+  const lon = arr.reduce((s, g) => s + g.lon * g.count, 0) / totalCount;
+  const scores = arr.flatMap((g) => g.scores);
+  const positions = arr.flatMap((g) => g.positions);
+  const topScore = scores.reduce<number | null>((acc, s) => {
+    if (s == null) return acc;
+    if (acc == null) return s;
+    return Math.max(acc, s);
+  }, null);
+  return {
+    groupKey: `super|${arr.map((g) => g.groupKey).join(",")}`,
+    iconId: iconIdForScores(scores),
+    lat,
+    lon,
+    count: totalCount,
+    scores,
+    positions,
+    topScore,
+  };
+}
+
+// Fonde i gruppi-città i cui marker si sovrappongono in pixel al zoom corrente.
+// Greedy O(n²) su n = numero città (poche decine) → trascurabile.
+function pixelClusterCities(
+  groups: GroupedFeature[],
+  map: MaplibreMap | null | undefined,
+): GroupedFeature[] {
+  if (!map || groups.length <= 1) return groups;
+  const pts = groups.map((g) => {
+    let px: { x: number; y: number } | null = null;
+    try {
+      px = map.project([g.lon, g.lat]);
+    } catch {
+      px = null;
+    }
+    return { g, px };
+  });
+  const used = new Array(pts.length).fill(false);
+  const out: GroupedFeature[] = [];
+  const thr2 = CITY_MERGE_PX * CITY_MERGE_PX;
+  for (let i = 0; i < pts.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
+    const cluster = [pts[i].g];
+    const pi = pts[i].px;
+    if (pi) {
+      for (let j = i + 1; j < pts.length; j++) {
+        if (used[j] || !pts[j].px) continue;
+        const dx = pi.x - pts[j].px!.x;
+        const dy = pi.y - pts[j].px!.y;
+        if (dx * dx + dy * dy < thr2) {
+          cluster.push(pts[j].g);
+          used[j] = true;
+        }
+      }
+    }
+    out.push(cluster.length === 1 ? cluster[0] : mergeGroups(cluster));
+  }
+  return out;
+}
+
 function reclusterByZoom(
   groups: GroupedFeature[],
   zoom: number,
   map?: MaplibreMap | null,
 ): GroupedFeature[] {
   if (groups.length === 0) return [];
-  // I gruppi sono GIÀ per città: NON li fondiamo mai geograficamente (città
-  // diverse restano marker distinti). A zoom street-level esplodiamo la città
-  // nei singoli pin cliccabili; sotto, un marker per città.
+  // Zoom street-level: esplode la città nei singoli pin cliccabili.
   if (clusterRadiusDeg(zoom) <= 0) {
     return explodeGroups(groups, zoom, map);
   }
-  return groups;
+  // Altrimenti: un marker per città, ma città che si SOVRAPPONGONO a schermo
+  // vengono fuse in un super-cluster (si separano zoomando).
+  return pixelClusterCities(groups, map);
 }
 
 // Paint override per allineare il basemap al theme JHT.
