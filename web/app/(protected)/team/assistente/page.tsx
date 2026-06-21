@@ -299,7 +299,7 @@ export default function AssistentePage() {
         >
           <div className="section-label">Assistente</div>
           <div className="flex items-center gap-3">
-            {isActive && !collapsed.step3 && (
+            {isCloud !== true && isActive && !collapsed.step3 && (
               <>
                 {devMode && (
                   <button
@@ -367,6 +367,9 @@ export default function AssistentePage() {
                       : "inattivo"}
                 </span>
               </div>
+              {/* Controlli team (start/stop) — solo desktop, nascosti sul cloud read-only */}
+              {isCloud !== true && (
+                <>
               {!isActive && (
                 <button
                   onClick={handleStart}
@@ -400,6 +403,8 @@ export default function AssistentePage() {
                 >
                   {stopBusy ? "Fermando…" : "Ferma"}
                 </button>
+              )}
+                </>
               )}
               {startBanner && (
                 <span
@@ -468,7 +473,7 @@ export default function AssistentePage() {
                           </span>
                         </div>
                         <div className="flex items-center gap-3">
-                          {messages.length > 0 && (
+                          {isCloud !== true && messages.length > 0 && (
                             <button
                               onClick={async () => {
                                 await fetch("/api/assistente/chat", {

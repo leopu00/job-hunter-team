@@ -535,7 +535,7 @@ export default function CapitanoPage() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            {messages.length > 0 && (
+            {isCloud !== true && messages.length > 0 && (
               <button
                 onClick={async () => {
                   await fetch("/api/capitano/chat", { method: "DELETE" });
@@ -800,6 +800,9 @@ export default function CapitanoPage() {
           </span>
         </div>
 
+        {/* Controlli team (start/stop/terminale) — solo desktop, nascosti sul cloud read-only */}
+        {isCloud !== true && (
+          <>
         {!isActive && (
           <button
             onClick={handleStart}
@@ -853,6 +856,8 @@ export default function CapitanoPage() {
               ? tr("openTerminal")
               : tr("openPowershell")}
           </button>
+        )}
+          </>
         )}
 
         {startBanner && (

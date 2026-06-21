@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveUser } from "@/lib/team-state/auth";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,18 @@ const DESIRED_FIELDS = [
   // dal cloud anche quando il control bus verrà reso read-only (web-readonly d1).
   "sync_requested_at",
 ] as const;
+
+// [JHT-WEB-READONLY] d1 — sottoinsieme di DESIRED che sono COMANDI al team
+// (avvia/ferma/abilita/riavvia). Sul cloud il bus di controllo desired è
+// read-only: questi campi NON sono scrivibili dal browser (il controllo passa
+// solo da desktop/tunnel SSH). Gli altri DESIRED restano scrivibili dal cloud:
+// `sync_requested_at` (Sync-now, vincolo i) e `last_user_activity_at` (presence,
+// non è controllo). Il ramo token/device (OBSERVED) NON è MAI toccato qui.
+const DESIRED_CONTROL_FIELDS: readonly string[] = [
+  "should_run",
+  "agents_enabled",
+  "restart_token",
+];
 const OBSERVED_FIELDS = [
   "is_running",
   "last_heartbeat_at",
@@ -58,7 +71,17 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "JSON body invalido" }, { status: 400 });
   }
 
-  const allowed = source === "token" ? OBSERVED_FIELDS : DESIRED_FIELDS;
+  let allowed: readonly string[] =
+    source === "token" ? OBSERVED_FIELDS : DESIRED_FIELDS;
+
+  // [JHT-WEB-READONLY] d1 — sul cloud il ramo browser/session NON può scrivere i
+  // comandi al team (should_run/agents_enabled/restart_token): restano i soli
+  // DESIRED non-controllo (sync_requested_at, last_user_activity_at). Il ramo
+  // token (device-sync, OBSERVED) NON è toccato → il push della VPS resta intatto.
+  if (source !== "token" && isCloudDeploy()) {
+    allowed = DESIRED_FIELDS.filter((f) => !DESIRED_CONTROL_FIELDS.includes(f));
+  }
+
   const update: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) update[key as DesiredField | ObservedField] = body[key];
