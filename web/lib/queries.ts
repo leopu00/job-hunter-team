@@ -1196,7 +1196,7 @@ export async function getPendingMessages(limit = 20): Promise<PendingMessage[]> 
 // Prefissi di ruolo validi per mappare by_agent (es. 'analista-2' → 'analista').
 const ROLE_PREFIX_SET = new Set<string>(TEAM_ACTIVITY_ROLES)
 
-type PosMeta = { id: string | number; legacy_id: number | null; title: string | null; company: string | null; source: string | null }
+type PosMeta = { id: string | number; legacy_id: number | null; title: string | null; company: string | null; source: string | null; loc_city: string | null }
 const isLegacyPid = (p: string) => /^\d+$/.test(p)
 
 // Sorgente accurata per-istanza: l'event-log sincronizzato position_transitions
@@ -1257,22 +1257,22 @@ async function enrichRecent(
   const byUuid = new Map<string, PosMeta>()
   for (let i = 0; i < legacyIds.length; i += 150) {
     const chunk = legacyIds.slice(i, i + 150)
-    const { data } = await supabase.from('positions').select('id, legacy_id, title, company, source').in('legacy_id', chunk)
+    const { data } = await supabase.from('positions').select('id, legacy_id, title, company, source, loc_city').in('legacy_id', chunk)
     for (const r of ((data ?? []) as unknown as PosMeta[])) if (r.legacy_id != null) byLegacy.set(r.legacy_id, r)
   }
   for (let i = 0; i < uuids.length; i += 150) {
     const chunk = uuids.slice(i, i + 150)
-    const { data } = await supabase.from('positions').select('id, legacy_id, title, company, source').in('id', chunk)
+    const { data } = await supabase.from('positions').select('id, legacy_id, title, company, source, loc_city').in('id', chunk)
     for (const r of ((data ?? []) as unknown as PosMeta[])) byUuid.set(String(r.id), r)
   }
   for (const ev of events) {
     if (!ev.pid) continue
     if (isLegacyPid(ev.pid)) {
       const m = byLegacy.get(Number(ev.pid))
-      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id; ev.source = m.source; ev.pid = String(m.id) }
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id; ev.source = m.source; ev.city = m.loc_city; ev.pid = String(m.id) }
     } else {
       const m = byUuid.get(ev.pid)
-      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id; ev.source = m.source }
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id; ev.source = m.source; ev.city = m.loc_city }
     }
   }
 
