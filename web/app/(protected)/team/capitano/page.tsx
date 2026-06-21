@@ -646,7 +646,8 @@ export default function CapitanoPage() {
         </div>
       </div>
 
-      {/* Input chat */}
+      {/* Input chat — [JHT-DASHBOARD-SPLIT] composer = controllo, solo desktop */}
+      {isCloud !== true && (
       <form
         aria-label={tr("sendToCaptain")}
         onSubmit={(e) => {
@@ -682,6 +683,7 @@ export default function CapitanoPage() {
           {sending ? "…" : tr("send")}
         </button>
       </form>
+      )}
 
       {/* Terminale (toggle) — nascosto in fullscreen */}
       {showTerminal && !chatFullscreen && (

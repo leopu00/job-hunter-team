@@ -398,8 +398,10 @@ export default function TeamPage() {
               v2 →
             </Link>
             {/* Team running state derivato da team_state (Realtime), con
-                fallback ad activeCount per Local PC mode senza cloud sync */}
-            {(() => {
+                fallback ad activeCount per Local PC mode senza cloud sync.
+                [JHT-DASHBOARD-SPLIT] start/stop = CONTROLLO → solo desktop. Sul
+                cloud la pagina resta (monitoraggio read-only) ma i comandi spariscono. */}
+            {isCloud !== true && (() => {
               const teamRunning =
                 teamState.state?.should_run === true ||
                 teamState.state?.is_running === true ||
@@ -486,7 +488,7 @@ export default function TeamPage() {
                 },
               ]),
             )}
-            onAction={handleAction}
+            onAction={isCloud === true ? undefined : handleAction}
             actionLoading={actionLoading}
           />
         </div>

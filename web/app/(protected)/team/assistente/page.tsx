@@ -642,7 +642,8 @@ export default function AssistentePage() {
                       </div>
                     )}
 
-                    {/* Input chat */}
+                    {/* Input chat — [JHT-DASHBOARD-SPLIT] composer = controllo, solo desktop */}
+                    {isCloud !== true && (
                     <form
                       onSubmit={(e) => {
                         e.preventDefault();
@@ -728,6 +729,7 @@ export default function AssistentePage() {
                         {sending ? "…" : "invia"}
                       </button>
                     </form>
+                    )}
 
                     {/* Terminale (toggle) — nascosto in fullscreen */}
                     {showTerminal && !chatFullscreen && (
