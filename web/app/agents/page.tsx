@@ -14,6 +14,7 @@ type RoleCopy = { title: string; p1: string; p2: string };
 type Role = {
   slug: string;
   promptId: string;
+  img?: string;
   it: RoleCopy;
   en: RoleCopy;
 };
@@ -22,6 +23,7 @@ const ROLES: Role[] = [
   {
     slug: "coordinatore",
     promptId: "team.coordinatore",
+    img: "/agents-coordinator.png",
     it: {
       title: "Il Coordinatore",
       p1: "Il Coordinatore coordina l'intera squadra. Riceve i segnali di tutti gli agenti, decide chi lavora e a che ritmo, e mantiene la ricerca fluida: accelera quando il mercato offre molto, rallenta quando serve, chiama gli scrittori quando glielo chiedi.",
@@ -212,11 +214,24 @@ function TeamContent() {
                 }`}
               >
                 <div className="w-full md:w-1/2">
-                  <ImagePlaceholder
-                    label={c.title}
-                    promptId={role.promptId}
-                    aspect="4 / 3"
-                  />
+                  {role.img ? (
+                    <div className="aspect-[4/3] flex items-center justify-center p-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={role.img}
+                        alt={c.title}
+                        width={1448}
+                        height={1086}
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <ImagePlaceholder
+                      label={c.title}
+                      promptId={role.promptId}
+                      aspect="4 / 3"
+                    />
+                  )}
                 </div>
                 <div className="w-full md:w-1/2 flex flex-col justify-center">
                   <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-4">
