@@ -153,23 +153,30 @@ generatore", senza imporre quale.
 
 ⚠️ Lo Scout **non è un singolo agente**: è un pool di più istanze che cercano in
 parallelo. Quindi l'immagine mostra **più Scout** (≥2), ciascuno che cerca in modo
-diverso. Qui gli spunti d'attività sono **voluti dall'utente** (per comunicare la
-pluralità), non pilotaggio art-director. Prompt:
+diverso, con numero e attività **liberi** (no hardcoding).
 
-> Hand-drawn comic-book / graphic-novel illustration — clean inked outlines, flat
-> colours, warm muted palette with subtle green accents (classic adventure-comic look).
-> On a plain white background, no scene — just the figures.
+⚠️ **Trappola da evitare:** "Scout / hunters / adventure / searching the world" →
+il generatore esce con **boy-scout / esploratori** (fazzoletti al collo, camicie
+safari, borse di cuoio). NO. Il look giusto è quello della home (`landing-team.png`):
+**investigatori vittoriani eleganti** (trench lungo + gilet, completo a righe), palette
+terrosa + verde. Prompt:
+
+> Hand-drawn graphic-novel / comic illustration — clean inked outlines, flat colours,
+> warm earthy muted palette with subtle green accents, in a vintage **detective-story**
+> style. Plain white background, no scene.
 >
-> **The Scouts** — a small team of hunters who search the world for job openings (the
-> Scout is not one person but several working in parallel). Show **two or three** of
-> them: normal, well-dressed people, each wearing the same small discreet dark
-> sunglasses as the rest of the team, each searching in a different way — one **working
-> at a laptop / computer**, one **studying a geographic map**, one **examining a sheet
-> of paper with a magnifying glass**. Curious, energetic, a touch witty; elegant, not
-> gloomy. **No readable text** on screens, maps or papers — only abstract marks. Don't
-> over-detail.
+> A small group of **elegant investigators** (two to four — your choice) who track down
+> job opportunities. Sharp, well-dressed people in smart, slightly vintage tailored
+> clothes — long detective trench coats, waistcoats, pinstripe suits, smart trousers
+> (the classic sleuth look). Each wears the same small discreet dark sunglasses as the
+> rest of the team. Let them search in their own ways. Calm, curious, confident, a touch
+> witty; not gloomy.
+>
+> **Avoid:** boy-scouts or campers, scout uniforms, neckerchiefs / scarves at the neck,
+> safari or explorer shirts, leather satchels, outdoor / forest gear. No readable text
+> anywhere. Don't over-detail.
 
-> Scontorno: ci sono oggetti (laptop, mappa, foglio) → preservarli con
+> Scontorno: se ci sono oggetti (laptop, mappa, foglio) → preservarli con
 > `isnet-general-use` (non `isnet-anime`, che cancella ciò che non è personaggio).
 
 ---
