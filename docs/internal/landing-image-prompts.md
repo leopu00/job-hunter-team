@@ -149,6 +149,27 @@ emoji o riferimenti a file. **Regola generale per tutti i ruoli:** descrivere il
 carattere + chiedere "un oggetto/prop che rappresenti il ruolo, a scelta del
 generatore", senza imporre quale.
 
+### `team.scout` — lo Scout ⬜ DA GENERARE
+
+Il segugio instancabile che batte il mondo in cerca di offerte. Prompt (formula
+aperta, oggetto a scelta del generatore):
+
+> Hand-drawn comic-book / graphic-novel illustration — clean inked outlines, flat
+> colours, warm muted palette with subtle green accents (classic adventure-comic look).
+> Full-figure character on a plain white background, no scene.
+>
+> **The Scout** — the team's tireless hunter, roaming everywhere to track down job
+> openings: sharp, curious and energetic. A normal, well-dressed person wearing the
+> same small discreet dark sunglasses as the rest of the team. **Give them some prop or
+> object that naturally represents the role of searching and tracking down
+> opportunities — your choice.** Lively, curious expression, a touch witty; elegant,
+> not gloomy, don't over-detail.
+
+> Nota coerenza: nella card della home (`landing-team.png`) lo Scout è un detective
+> (trench + lente). Col prompt aperto il generatore può scegliere altro — se serve
+> coerenza con la home si può aggiungere "as a detective/sleuth", ma di default si
+> lascia libero.
+
 ---
 
 ## Pagina `/pricing`
