@@ -13,7 +13,6 @@ import ImagePlaceholder from "../components/landing/ImagePlaceholder";
 type RoleCopy = { title: string; p1: string; p2: string };
 type Role = {
   slug: string;
-  emoji: string;
   promptId: string;
   it: RoleCopy;
   en: RoleCopy;
@@ -21,23 +20,21 @@ type Role = {
 
 const ROLES: Role[] = [
   {
-    slug: "capitano",
-    emoji: "👨‍✈️",
-    promptId: "team.capitano",
+    slug: "coordinatore",
+    promptId: "team.coordinatore",
     it: {
-      title: "Il Capitano",
-      p1: "Il Capitano coordina l'intera squadra. Riceve i segnali di tutti gli agenti, decide chi lavora e a che ritmo, e mantiene la ricerca fluida: accelera quando il mercato offre molto, rallenta quando serve, chiama gli scrittori quando glielo chiedi.",
+      title: "Il Coordinatore",
+      p1: "Il Coordinatore coordina l'intera squadra. Riceve i segnali di tutti gli agenti, decide chi lavora e a che ritmo, e mantiene la ricerca fluida: accelera quando il mercato offre molto, rallenta quando serve, chiama gli scrittori quando glielo chiedi.",
       p2: "Non improvvisa: legge i dati in tempo reale, ascolta gli avvisi della Sentinella sui consumi e bilancia di continuo velocità, budget e qualità. È il regista che trasforma i segnali in decisioni, senza mai bloccarsi.",
     },
     en: {
-      title: "The Captain",
-      p1: "The Captain coordinates the whole team. He reads every agent's signals, decides who works and at what pace, and keeps the search flowing — speeding up when the market is rich, easing off when needed.",
-      p2: "He never improvises: he watches the data live, heeds the Sentinel's warnings on spending, and constantly balances speed, budget and quality. The director who turns signals into decisions.",
+      title: "The Coordinator",
+      p1: "The Coordinator coordinates the whole team. It reads every agent's signals, decides who works and at what pace, and keeps the search flowing — speeding up when the market is rich, easing off when needed.",
+      p2: "It never improvises: it watches the data live, heeds the Sentinel's warnings on spending, and constantly balances speed, budget and quality. The director who turns signals into decisions.",
     },
   },
   {
     slug: "scout",
-    emoji: "🕵️",
     promptId: "team.scout",
     it: {
       title: "Lo Scout",
@@ -52,7 +49,6 @@ const ROLES: Role[] = [
   },
   {
     slug: "analista",
-    emoji: "👨‍🔬",
     promptId: "team.analista",
     it: {
       title: "L'Analista",
@@ -67,7 +63,6 @@ const ROLES: Role[] = [
   },
   {
     slug: "scorer",
-    emoji: "👨‍💻",
     promptId: "team.scorer",
     it: {
       title: "Lo Scorer",
@@ -82,7 +77,6 @@ const ROLES: Role[] = [
   },
   {
     slug: "scrittore",
-    emoji: "👨‍🏫",
     promptId: "team.scrittore",
     it: {
       title: "Lo Scrittore",
@@ -97,7 +91,6 @@ const ROLES: Role[] = [
   },
   {
     slug: "critico",
-    emoji: "👨‍⚖️",
     promptId: "team.critico",
     it: {
       title: "Il Critico",
@@ -112,22 +105,20 @@ const ROLES: Role[] = [
   },
   {
     slug: "sentinella",
-    emoji: "💂",
     promptId: "team.sentinella",
     it: {
       title: "La Sentinella",
       p1: "La Sentinella sorveglia i consumi. Legge in tempo reale quanta energia brucia la squadra, nella finestra breve e nella riserva della settimana, e interviene quando si va troppo veloci.",
-      p2: "Parla poco e solo quando serve: niente opinioni, solo numeri precisi e un ordine al Capitano — quanto rallentare e da quando. È la disciplina che impedisce al sistema di esaurirsi per troppo entusiasmo.",
+      p2: "Parla poco e solo quando serve: niente opinioni, solo numeri precisi e un ordine al Coordinatore — quanto rallentare e da quando. È la disciplina che impedisce al sistema di esaurirsi per troppo entusiasmo.",
     },
     en: {
       title: "The Sentinel",
       p1: "The Sentinel watches the spend. It reads how fast the team burns energy — in the short window and the weekly reserve — and steps in when it runs too hot.",
-      p2: "It speaks rarely and only when needed: no opinions, just precise numbers and one order to the Captain — how much to slow down, and from when. The discipline that keeps the system from burning out.",
+      p2: "It speaks rarely and only when needed: no opinions, just precise numbers and one order to the Coordinator — how much to slow down, and from when. The discipline that keeps the system from burning out.",
     },
   },
   {
     slug: "dottore",
-    emoji: "👨‍⚕️",
     promptId: "team.dottore",
     it: {
       title: "Il Dottore",
@@ -142,7 +133,6 @@ const ROLES: Role[] = [
   },
   {
     slug: "mentor",
-    emoji: "🧙‍♂️",
     promptId: "team.mentor",
     it: {
       title: "Il Mentor",
@@ -157,17 +147,16 @@ const ROLES: Role[] = [
   },
   {
     slug: "assistente",
-    emoji: "👨‍💼",
     promptId: "team.assistente",
     it: {
       title: "L'Assistente",
       p1: "L'Assistente è il ponte tra te e la squadra. È la prima voce che incontri: ti guida nell'onboarding, raccoglie il tuo profilo, legge il CV che carichi e tiene tutto aggiornato quando la tua situazione cambia.",
-      p2: "Ascolta le tue domande e traduce le tue richieste in ordini per il Capitano («metti in pausa», «cerca più a Berlino»). Non decide da solo: raccoglie il contesto, controlla che i dati siano puliti e passa parola.",
+      p2: "Ascolta le tue domande e traduce le tue richieste in ordini per il Coordinatore («metti in pausa», «cerca più a Berlino»). Non decide da solo: raccoglie il contesto, controlla che i dati siano puliti e passa parola.",
     },
     en: {
       title: "The Assistant",
       p1: "The Assistant is the bridge between you and the team. It's the first voice you meet: it guides your onboarding, gathers your profile, reads the CV you upload and keeps it current as your situation changes.",
-      p2: "It listens to your questions and turns your requests into orders for the Captain (“pause”, “search more in Berlin”). It decides nothing alone: it gathers context, checks the data is clean, and passes the word on.",
+      p2: "It listens to your questions and turns your requests into orders for the Coordinator (“pause”, “search more in Berlin”). It decides nothing alone: it gathers context, checks the data is clean, and passes the word on.",
     },
   },
 ];
@@ -224,16 +213,13 @@ function TeamContent() {
               >
                 <div className="w-full md:w-1/2">
                   <ImagePlaceholder
-                    label={`${c.title} — ${role.emoji}`}
+                    label={c.title}
                     promptId={role.promptId}
                     aspect="4 / 3"
                   />
                 </div>
                 <div className="w-full md:w-1/2 flex flex-col justify-center">
-                  <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-4 flex items-center gap-3">
-                    <span aria-hidden="true" className="text-2xl">
-                      {role.emoji}
-                    </span>
+                  <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-4">
                     {c.title}
                   </h2>
                   <p className="text-[13px] md:text-[14px] text-[var(--color-bright)] leading-relaxed mb-3">

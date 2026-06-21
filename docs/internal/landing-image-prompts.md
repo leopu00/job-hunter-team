@@ -101,7 +101,7 @@ scenico del ruolo.** Niente testo leggibile.
 
 | promptId | scena (oltre a STYLE + REGOLA OCCHIALI) |
 |---|---|
-| `team.capitano` | The Captain — navy double-breasted pilot jacket, gold buttons and epaulettes, peaked cap with a winged badge; standing, coordinating the room. |
+| `team.coordinatore` | The Coordinator — elegant composed director/conductor: refined dark structured tailored jacket/suit (quiet authority, **NO naval/captain uniform, NO peaked cap**), mid-gesture as if cueing the team; the one who turns signals into decisions. *(ex `team.capitano` — rebrand Capitano→Coordinatore, vedi BACKLOG `[JHT-RENAME-COORDINATOR]`)* |
 | `team.sentinella` | The Sentinel — tall guard in full dress uniform (bearskin hat, red tunic); stern, watching a wall of vital-sign monitors with a red alert light. |
 | `team.dottore` | The Doctor — white medical coat, stethoscope; checking on a seated colleague, caring and calm. |
 | `team.scout` | The Scout — detective/sleuth: trench coat, deerstalker-ish hat, magnifying glass and notepad; out hunting for clues. |
@@ -114,6 +114,29 @@ scenico del ruolo.** Niente testo leggibile.
 
 > Nota: gli attributi scenici per ruolo sono presi dalla tabella "cast" in
 > `chronicles-canon.md`. Mantenere coerenza con quelle cover.
+>
+> ⚠️ **Rebrand in corso** Capitano→Coordinatore (BACKLOG `[JHT-RENAME-COORDINATOR]`):
+> la pagina è ora `/agents` (non `/team`) e i ruoli **non mostrano più emoji**.
+
+### `team.coordinatore` — il Coordinatore (sfondo trasparente) ⬜ DA GENERARE
+
+Primo ruolo del rebrand. Niente più "capitano di nave": è un **direttore/coordinatore**
+elegante che orchestra. Prompt da usare:
+
+> [STYLE] A single character — **the Coordinator** — full figure, standing, **on a
+> plain transparent background, no scene, no setting, just the figure**. The calm
+> director who turns the team's signals into decisions: an elegant, composed person
+> in a refined **dark structured tailored jacket / suit** (a quiet air of authority
+> — **NOT** a naval or airline captain uniform, **NO** peaked cap, no epaulettes),
+> captured **mid-gesture as if cueing / conducting the team** (one hand raised),
+> poised and in control. A normal, well-dressed person. [REGOLA OCCHIALI Matrix —
+> identici a ogni altro agente]. **No readable text, no logos, no emoji.** Leave
+> room for creativity in pose and outfit. **Transparent PNG. 4:3.**
+
+> Alternativa se l'utente preferisce mantenere l'aria "comandante" classica:
+> sostituire "structured tailored jacket" con una giacca strutturata scura con
+> dettagli da divisa sobri (niente cappello da capitano) — autorità senza il
+> cliché navale.
 
 ---
 
