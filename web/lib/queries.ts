@@ -4,6 +4,7 @@ import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/wo
 import { isLocalRequest } from '@/lib/auth'
 import * as local from '@/lib/local-queries'
 import { aggregateRoleFamilies, UNCATEGORIZED_LABEL, type RoleFamilyCount } from '@/lib/position-classifier'
+import { addDaysKey, buildTeamActivity, normActor, resolveActivityRange, TEAM_ACTIVITY_ROLES, type TeamActivity, type TeamActivityEvent, type TeamActivityRole, type RecentActivityEvent } from '@/lib/team-activity'
 import type {
   DashboardStats,
   PositionWithScore,
@@ -1189,6 +1190,197 @@ export async function getPendingMessages(limit = 20): Promise<PendingMessage[]> 
     .limit(limit)
   if (error || !data) return []
   return data as PendingMessage[]
+}
+
+// ── Team activity (per-agente nel tempo) ───────────────────────────
+// Prefissi di ruolo validi per mappare by_agent (es. 'analista-2' → 'analista').
+const ROLE_PREFIX_SET = new Set<string>(TEAM_ACTIVITY_ROLES)
+
+type PosMeta = { id: string | number; legacy_id: number | null; title: string | null; company: string | null }
+const isLegacyPid = (p: string) => /^\d+$/.test(p)
+
+// Sorgente accurata per-istanza: l'event-log sincronizzato position_transitions
+// (by_agent = istanza reale: scout-1, analista-2, scorer-4…). Copre scout /
+// analista / scorer; scrittore/critico restano sulle applications (le
+// transizioni sono position-centric). pid = position_legacy_id (intero) →
+// risolto a uuid in enrichRecent. RLS già filtra per utente. Vuoto per gli
+// account senza event-log → i chiamanti ricadono sulla derivazione da colonne.
+async function fetchTransitionEvents(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  fromIso?: string,
+  untilIso?: string,
+): Promise<TeamActivityEvent[]> {
+  let q = supabase
+    .from('position_transitions')
+    .select('position_legacy_id, by_agent, ts')
+    .not('by_agent', 'is', null)
+  if (fromIso) q = q.gte('ts', fromIso)
+  if (untilIso) q = q.lt('ts', untilIso)
+  const { data, error } = await q
+  if (error || !data) return []
+  return (data as any[]).flatMap((r) => {
+    const role = String(r.by_agent ?? '').split('-')[0] as TeamActivityRole
+    if (!ROLE_PREFIX_SET.has(role)) return []
+    return [{
+      role,
+      actor: normActor(role, r.by_agent),
+      ts: r.ts as string,
+      pid: r.position_legacy_id != null ? String(r.position_legacy_id) : null,
+    }]
+  })
+}
+
+// Arricchisce il feed/log con titolo·azienda·id leggibile, gestendo entrambe le
+// semantiche di pid: legacy_id (eventi da position_transitions) e uuid (eventi
+// da applications). Per i legacy risolve anche pid→uuid così i link funzionano.
+async function enrichRecent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  events: RecentActivityEvent[],
+): Promise<void> {
+  const pids = [...new Set(events.map((e) => e.pid).filter((p): p is string => !!p))]
+  if (!pids.length) return
+  const legacyIds = [...new Set(pids.filter(isLegacyPid).map(Number))]
+  const uuids = pids.filter((p) => !isLegacyPid(p))
+  const byLegacy = new Map<number, PosMeta>()
+  const byUuid = new Map<string, PosMeta>()
+  for (let i = 0; i < legacyIds.length; i += 150) {
+    const chunk = legacyIds.slice(i, i + 150)
+    const { data } = await supabase.from('positions').select('id, legacy_id, title, company').in('legacy_id', chunk)
+    for (const r of ((data ?? []) as unknown as PosMeta[])) if (r.legacy_id != null) byLegacy.set(r.legacy_id, r)
+  }
+  for (let i = 0; i < uuids.length; i += 150) {
+    const chunk = uuids.slice(i, i + 150)
+    const { data } = await supabase.from('positions').select('id, legacy_id, title, company').in('id', chunk)
+    for (const r of ((data ?? []) as unknown as PosMeta[])) byUuid.set(String(r.id), r)
+  }
+  for (const ev of events) {
+    if (!ev.pid) continue
+    if (isLegacyPid(ev.pid)) {
+      const m = byLegacy.get(Number(ev.pid))
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id; ev.pid = String(m.id) }
+    } else {
+      const m = byUuid.get(ev.pid)
+      if (m) { ev.title = m.title; ev.company = m.company; ev.legacyId = m.legacy_id }
+    }
+  }
+}
+
+// Local: SQLite (getTeamActivityLocal). Cloud: Supabase, una query per
+// timestamp filtrata sulla finestra (.gte) per restare sotto il cap di 1000
+// righe/richiesta e ridurre il traffico. Stesso buildTeamActivity → numeri
+// identici nelle due modalità. Vedi lib/team-activity.ts per le sorgenti.
+export async function getTeamActivity(opts?: { from?: string; to?: string }): Promise<TeamActivity> {
+  const { from, to } = resolveActivityRange(opts, new Date())
+  const w = await ws()
+  if (w) {
+    try { return local.getTeamActivityLocal(w, from, to) } catch { return buildTeamActivity([], from, to) }
+  }
+  if (!isSupabaseConfigured) return buildTeamActivity([], from, to)
+
+  const supabase = await createClient()
+  // Range [from 00:00 UTC, to+1 00:00 UTC): estremo destro esclusivo così il
+  // giorno `to` è incluso per intero.
+  const fromIso = `${from}T00:00:00.000Z`
+  const untilIso = `${addDaysKey(to, 1)}T00:00:00.000Z`
+
+  // actorCol = colonna con l'id istanza (es. found_by). null per l'Analista,
+  // che su last_checked non lo registra → normActor ricade sul ruolo.
+  const fetchEvents = async (
+    table: string,
+    col: string,
+    actorCol: string | null,
+    idCol: string,
+    role: TeamActivityRole,
+    softDelete: boolean,
+  ): Promise<TeamActivityEvent[]> => {
+    const select = [col, actorCol, idCol].filter(Boolean).join(', ')
+    let q = supabase.from(table).select(select).gte(col, fromIso).lt(col, untilIso)
+    if (softDelete) q = q.is('deleted_at', null)
+    const { data, error } = await q
+    if (error || !data) return []
+    return (data as any[])
+      .filter((r) => !!r[col])
+      .map((r) => ({
+        role,
+        actor: normActor(role, actorCol ? r[actorCol] : null),
+        ts: r[col] as string,
+        pid: r[idCol] != null ? String(r[idCol]) : null,
+      }))
+  }
+
+  // Sorgente per-istanza: event-log (position_transitions) se presente,
+  // altrimenti derivazione dalle colonne *_by (account senza event-log).
+  const tx = await fetchTransitionEvents(supabase, fromIso, untilIso)
+  const events: TeamActivityEvent[] = tx.length
+    ? [
+        ...tx,
+        ...(await Promise.all([
+          fetchEvents('applications', 'written_at', 'written_by', 'position_id', 'scrittore', true),
+          fetchEvents('applications', 'critic_reviewed_at', 'reviewed_by', 'position_id', 'critico', true),
+        ])).flat(),
+      ]
+    : (await Promise.all([
+        fetchEvents('positions', 'found_at', 'found_by', 'id', 'scout', true),
+        fetchEvents('positions', 'last_checked', null, 'id', 'analista', true),
+        fetchEvents('scores', 'scored_at', 'scored_by', 'position_id', 'scorer', false),
+        fetchEvents('applications', 'written_at', 'written_by', 'position_id', 'scrittore', true),
+        fetchEvents('applications', 'critic_reviewed_at', 'reviewed_by', 'position_id', 'critico', true),
+      ])).flat()
+
+  const act = buildTeamActivity(events, from, to)
+  await enrichRecent(supabase, act.recent)
+  return act
+}
+
+// ── Activity log: TUTTE le azioni (per la pagina dedicata) ──────────
+// Local: SQLite (UNION). Cloud: una fetch per sorgente (senza finestra),
+// ordinata e arricchita con titolo/azienda/id. NB cap Supabase ~1000 righe
+// per query: ok per gli account attuali (<1000 posizioni/score).
+export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
+  const w = await ws()
+  if (w) {
+    try { return local.getTeamActivityLogLocal(w) } catch { return [] }
+  }
+  if (!isSupabaseConfigured) return []
+
+  const supabase = await createClient()
+  const fetchAll = async (
+    table: string, col: string, actorCol: string | null, idCol: string,
+    role: TeamActivityRole, softDelete: boolean,
+  ): Promise<RecentActivityEvent[]> => {
+    const select = [col, actorCol, idCol].filter(Boolean).join(', ')
+    let q = supabase.from(table).select(select).not(col, 'is', null)
+    if (softDelete) q = q.is('deleted_at', null)
+    const { data, error } = await q
+    if (error || !data) return []
+    return (data as any[]).map((r) => ({
+      role,
+      actor: normActor(role, actorCol ? r[actorCol] : null),
+      ts: r[col] as string,
+      pid: r[idCol] != null ? String(r[idCol]) : null,
+    }))
+  }
+
+  // Event-log per-istanza se presente; altrimenti derivazione da colonne.
+  const tx = await fetchTransitionEvents(supabase)
+  const events: RecentActivityEvent[] = tx.length
+    ? [
+        ...tx,
+        ...(await Promise.all([
+          fetchAll('applications', 'written_at', 'written_by', 'position_id', 'scrittore', true),
+          fetchAll('applications', 'critic_reviewed_at', 'reviewed_by', 'position_id', 'critico', true),
+        ])).flat(),
+      ]
+    : (await Promise.all([
+        fetchAll('positions', 'found_at', 'found_by', 'id', 'scout', true),
+        fetchAll('positions', 'last_checked', null, 'id', 'analista', true),
+        fetchAll('scores', 'scored_at', 'scored_by', 'position_id', 'scorer', false),
+        fetchAll('applications', 'written_at', 'written_by', 'position_id', 'scrittore', true),
+        fetchAll('applications', 'critic_reviewed_at', 'reviewed_by', 'position_id', 'critico', true),
+      ])).flat()
+  events.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0))
+  await enrichRecent(supabase, events)
+  return events
 }
 
 // ── Application stats ───────────────────────────────────────────────

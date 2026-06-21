@@ -2238,3 +2238,71 @@ body { display: flex; flex-direction: column; }
   text-decoration: underline;
   word-break: break-all;
 }
+
+/* ── macOS container-runtime chooser (Colima / Docker Desktop, ADR-0006) ── */
+.runtime-chooser {
+  margin: 4px 0 14px;
+}
+.runtime-chooser[hidden] { display: none; }
+
+.runtime-chooser__title {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+}
+
+.runtime-chooser__options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .runtime-chooser__options { grid-template-columns: 1fr; }
+}
+
+.runtime-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.runtime-option:hover:not(:disabled) { border-color: var(--border-strong); }
+
+.runtime-option--active {
+  border-color: rgba(126, 200, 154, 0.55);
+  background: rgba(126, 200, 154, 0.08);
+}
+
+.runtime-option__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.runtime-option__tag {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--success);
+  border: 1px solid rgba(126, 200, 154, 0.4);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.runtime-option__hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}

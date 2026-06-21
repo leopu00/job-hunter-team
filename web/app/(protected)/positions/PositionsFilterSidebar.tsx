@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { UNCATEGORIZED_LABEL, colorForFamily } from "@/lib/position-classifier";
+import { useLocale } from "@/lib/use-locale";
+import { type Locale } from "@/i18n/config";
 import RangeHistogram, { buildBins, type Range } from "./RangeHistogram";
 
 // Dataset leggero servito da /api/positions/facets.
@@ -27,40 +29,295 @@ const CRITIC_STEP = 0.5;
 // ── Filtri "diretti" (ex-wizard): toggle semplici, niente cross-filtering ──
 type DirectKey = "status" | "remote" | "source";
 type Option = { val: string; label: string; color?: string };
+// Variante interna con chiave di traduzione (risolta a runtime via locale).
+type OptionKey = { val: string; labelKey: string; color?: string };
 
 // Etichette esplicative (stessa terminologia della pipeline del dashboard):
 // chiariscono la fase del workflow invece dello status grezzo. Il `val` resta
-// lo status reale (URL + filtro server), cambia solo la label mostrata.
-const STATUS_OPTIONS: Option[] = [
-  { val: "new", label: "Nuove, da analizzare", color: "var(--color-muted)" },
-  {
-    val: "checked",
-    label: "Analizzate, da valutare",
-    color: "var(--color-blue)",
-  },
-  {
-    val: "scored",
-    label: "Valutate, da scrivere",
-    color: "var(--color-purple)",
-  },
-  { val: "writing", label: "In scrittura", color: "var(--color-yellow)" },
-  { val: "review", label: "In revisione", color: "var(--color-orange)" },
-  { val: "ready", label: "Pronte, da inviare", color: "#7fffb2" },
-  { val: "applied", label: "Candidatura inviata", color: "var(--color-green)" },
-  { val: "response", label: "Con risposta", color: "#58a6ff" },
-  { val: "excluded", label: "Escluse", color: "var(--color-red)" },
+// lo status reale (URL + filtro server), la label è una chiave i18n.
+const STATUS_OPTIONS: OptionKey[] = [
+  { val: "new", labelKey: "st_new", color: "var(--color-muted)" },
+  { val: "checked", labelKey: "st_checked", color: "var(--color-blue)" },
+  { val: "scored", labelKey: "st_scored", color: "var(--color-purple)" },
+  { val: "writing", labelKey: "st_writing", color: "var(--color-yellow)" },
+  { val: "review", labelKey: "st_review", color: "var(--color-orange)" },
+  { val: "ready", labelKey: "st_ready", color: "#7fffb2" },
+  { val: "applied", labelKey: "st_applied", color: "var(--color-green)" },
+  { val: "response", labelKey: "st_response", color: "#58a6ff" },
+  { val: "excluded", labelKey: "st_excluded", color: "var(--color-red)" },
 ];
 
-const REMOTE_OPTIONS: Option[] = [
-  { val: "full_remote", label: "Full remote" },
-  { val: "hybrid", label: "Hybrid" },
-  { val: "onsite", label: "On-site" },
+const REMOTE_OPTIONS: OptionKey[] = [
+  { val: "full_remote", labelKey: "rm_full" },
+  { val: "hybrid", labelKey: "rm_hybrid" },
+  { val: "onsite", labelKey: "rm_onsite" },
 ];
 
-const DIRECT_LABELS: Record<DirectKey, string> = {
-  status: "Status",
-  remote: "Remote",
-  source: "Fonte",
+// Chiave i18n per il titolo di ogni gruppo diretto.
+const DIRECT_LABEL_KEYS: Record<DirectKey, string> = {
+  status: "g_status",
+  remote: "g_mode",
+  source: "g_source",
+};
+
+// ── i18n inline (7 lingue) — stesso pattern di DashboardI18n/useLocale ──
+const T: Record<string, Record<Locale, string>> = {
+  // Titoli sezione
+  category: {
+    it: "Categoria",
+    en: "Category",
+    hu: "Kategória",
+    es: "Categoría",
+    de: "Kategorie",
+    fr: "Catégorie",
+    pt: "Categoria",
+  },
+  score: {
+    it: "Score",
+    en: "Score",
+    hu: "Pontszám",
+    es: "Puntuación",
+    de: "Score",
+    fr: "Score",
+    pt: "Pontuação",
+  },
+  criticVote: {
+    it: "Voto critico",
+    en: "Critic score",
+    hu: "Kritikus pontszám",
+    es: "Nota del crítico",
+    de: "Kritiker-Bewertung",
+    fr: "Note du critique",
+    pt: "Nota do crítico",
+  },
+  location: {
+    it: "Località",
+    en: "Location",
+    hu: "Helyszín",
+    es: "Ubicación",
+    de: "Standort",
+    fr: "Lieu",
+    pt: "Localização",
+  },
+  g_status: {
+    it: "Stato",
+    en: "Status",
+    hu: "Állapot",
+    es: "Estado",
+    de: "Status",
+    fr: "Statut",
+    pt: "Estado",
+  },
+  g_mode: {
+    it: "Modalità",
+    en: "Mode",
+    hu: "Mód",
+    es: "Modalidad",
+    de: "Modus",
+    fr: "Mode",
+    pt: "Modalidade",
+  },
+  g_source: {
+    it: "Fonte",
+    en: "Source",
+    hu: "Forrás",
+    es: "Fuente",
+    de: "Quelle",
+    fr: "Source",
+    pt: "Fonte",
+  },
+  // Status options
+  st_new: {
+    it: "Nuove, da analizzare",
+    en: "New, to analyze",
+    hu: "Új, elemzendő",
+    es: "Nuevas, por analizar",
+    de: "Neu, zu analysieren",
+    fr: "Nouvelles, à analyser",
+    pt: "Novas, a analisar",
+  },
+  st_checked: {
+    it: "Analizzate, da valutare",
+    en: "Analyzed, to score",
+    hu: "Elemezve, értékelendő",
+    es: "Analizadas, por puntuar",
+    de: "Analysiert, zu bewerten",
+    fr: "Analysées, à évaluer",
+    pt: "Analisadas, a avaliar",
+  },
+  st_scored: {
+    it: "Valutate, da scrivere",
+    en: "Scored, to write",
+    hu: "Értékelve, megírandó",
+    es: "Puntuadas, por redactar",
+    de: "Bewertet, zu schreiben",
+    fr: "Évaluées, à rédiger",
+    pt: "Avaliadas, a redigir",
+  },
+  st_writing: {
+    it: "In scrittura",
+    en: "Writing",
+    hu: "Írás alatt",
+    es: "Redactando",
+    de: "Wird geschrieben",
+    fr: "En rédaction",
+    pt: "Em redação",
+  },
+  st_review: {
+    it: "In revisione",
+    en: "In review",
+    hu: "Felülvizsgálat alatt",
+    es: "En revisión",
+    de: "In Prüfung",
+    fr: "En révision",
+    pt: "Em revisão",
+  },
+  st_ready: {
+    it: "Pronte, da inviare",
+    en: "Ready to send",
+    hu: "Kész, elküldhető",
+    es: "Listas para enviar",
+    de: "Bereit zum Senden",
+    fr: "Prêtes à envoyer",
+    pt: "Prontas para enviar",
+  },
+  st_applied: {
+    it: "Candidatura inviata",
+    en: "Application sent",
+    hu: "Jelentkezés elküldve",
+    es: "Candidatura enviada",
+    de: "Bewerbung gesendet",
+    fr: "Candidature envoyée",
+    pt: "Candidatura enviada",
+  },
+  st_response: {
+    it: "Con risposta",
+    en: "With response",
+    hu: "Válasszal",
+    es: "Con respuesta",
+    de: "Mit Antwort",
+    fr: "Avec réponse",
+    pt: "Com resposta",
+  },
+  st_excluded: {
+    it: "Escluse",
+    en: "Excluded",
+    hu: "Kizárva",
+    es: "Excluidas",
+    de: "Ausgeschlossen",
+    fr: "Exclues",
+    pt: "Excluídas",
+  },
+  // Remote (mode) options
+  rm_full: {
+    it: "Full remote",
+    en: "Full remote",
+    hu: "Teljesen távoli",
+    es: "Totalmente remoto",
+    de: "Vollständig remote",
+    fr: "100% télétravail",
+    pt: "Totalmente remoto",
+  },
+  rm_hybrid: {
+    it: "Ibrido",
+    en: "Hybrid",
+    hu: "Hibrid",
+    es: "Híbrido",
+    de: "Hybrid",
+    fr: "Hybride",
+    pt: "Híbrido",
+  },
+  rm_onsite: {
+    it: "In sede",
+    en: "On-site",
+    hu: "Helyszíni",
+    es: "Presencial",
+    de: "Vor Ort",
+    fr: "Sur site",
+    pt: "Presencial",
+  },
+  // UI
+  filters: {
+    it: "Filtri",
+    en: "Filters",
+    hu: "Szűrők",
+    es: "Filtros",
+    de: "Filter",
+    fr: "Filtres",
+    pt: "Filtros",
+  },
+  closeFilters: {
+    it: "Chiudi filtri",
+    en: "Close filters",
+    hu: "Szűrők bezárása",
+    es: "Cerrar filtros",
+    de: "Filter schließen",
+    fr: "Fermer les filtres",
+    pt: "Fechar filtros",
+  },
+  removeAll: {
+    it: "Rimuovi tutti i filtri",
+    en: "Remove all filters",
+    hu: "Összes szűrő törlése",
+    es: "Eliminar todos los filtros",
+    de: "Alle Filter entfernen",
+    fr: "Supprimer tous les filtres",
+    pt: "Remover todos os filtros",
+  },
+  clear: {
+    it: "Pulisci",
+    en: "Clear",
+    hu: "Törlés",
+    es: "Limpiar",
+    de: "Löschen",
+    fr: "Effacer",
+    pt: "Limpar",
+  },
+  noScore: {
+    it: "senza score",
+    en: "no score",
+    hu: "pontszám nélkül",
+    es: "sin puntuación",
+    de: "ohne Score",
+    fr: "sans score",
+    pt: "sem pontuação",
+  },
+  noVote: {
+    it: "senza voto",
+    en: "no vote",
+    hu: "értékelés nélkül",
+    es: "sin nota",
+    de: "ohne Bewertung",
+    fr: "sans note",
+    pt: "sem nota",
+  },
+  expand: {
+    it: "Apri",
+    en: "Expand",
+    hu: "Kinyitás",
+    es: "Abrir",
+    de: "Öffnen",
+    fr: "Ouvrir",
+    pt: "Abrir",
+  },
+  collapse: {
+    it: "Chiudi",
+    en: "Collapse",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+  noData: {
+    it: "Nessun dato",
+    en: "No data",
+    hu: "Nincs adat",
+    es: "Sin datos",
+    de: "Keine Daten",
+    fr: "Aucune donnée",
+    pt: "Sem dados",
+  },
 };
 
 // Chiave city coerente con il server (queries.ts facetCityKey).
@@ -110,6 +367,8 @@ export default function PositionsFilterSidebar({
 }) {
   const router = useRouter();
   const sp = useSearchParams();
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [facets, setFacets] = useState<Facet[]>([]);
   const [openCountry, setOpenCountry] = useState<string | null>(null);
 
@@ -134,16 +393,36 @@ export default function PositionsFilterSidebar({
   );
 
   // Gruppi diretti renderizzati come sezioni a chip (source è dinamico).
+  // Le label degli option vengono risolte dalla locale corrente.
   const directGroups = useMemo(
     () => [
-      { key: "status" as DirectKey, options: STATUS_OPTIONS },
-      { key: "remote" as DirectKey, options: REMOTE_OPTIONS },
+      {
+        key: "status" as DirectKey,
+        options: STATUS_OPTIONS.map(
+          (o): Option => ({
+            val: o.val,
+            label: tr(o.labelKey),
+            color: o.color,
+          }),
+        ),
+      },
+      {
+        key: "remote" as DirectKey,
+        options: REMOTE_OPTIONS.map(
+          (o): Option => ({
+            val: o.val,
+            label: tr(o.labelKey),
+            color: o.color,
+          }),
+        ),
+      },
       {
         key: "source" as DirectKey,
         options: availableSources.map((s) => ({ val: s, label: s })),
       },
     ],
-    [availableSources],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [availableSources, locale],
   );
 
   useEffect(() => {
@@ -391,13 +670,14 @@ export default function PositionsFilterSidebar({
         <button
           type="button"
           onClick={() => onCollapse?.()}
-          title="Chiudi filtri"
-          aria-label="Chiudi filtri"
+          title={tr("closeFilters")}
+          aria-label={tr("closeFilters")}
           className="text-[10px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2 cursor-pointer transition-colors hover:text-[var(--color-base)]"
           style={{ color: "var(--color-dim)" }}
         >
           <span aria-hidden>⚙</span>
-          Filtri{totalActive > 0 ? ` · ${totalActive}` : ""}
+          {tr("filters")}
+          {totalActive > 0 ? ` · ${totalActive}` : ""}
           <span aria-hidden className="text-[12px] leading-none">
             ⟨
           </span>
@@ -408,7 +688,7 @@ export default function PositionsFilterSidebar({
             onClick={resetAll}
             className="text-[9px] font-semibold tracking-[0.1em] uppercase cursor-pointer"
             style={{ color: "var(--color-dim)" }}
-            title="Rimuovi tutti i filtri"
+            title={tr("removeAll")}
           >
             ✕ reset
           </button>
@@ -417,11 +697,11 @@ export default function PositionsFilterSidebar({
 
       {/* Categoria — elenco con conteggi e percentuali */}
       <Section
-        title="Categoria"
+        title={tr("category")}
         badge={`${familyList.rows.length} · ${familyList.total}`}
       >
         {familyList.rows.length === 0 ? (
-          <EmptyRow />
+          <EmptyRow label={tr("noData")} />
         ) : (
           <ul className="flex flex-col">
             {familyList.rows.map((r) => {
@@ -443,7 +723,7 @@ export default function PositionsFilterSidebar({
 
       {/* Score — istogramma con selezione a range + input precisi */}
       <Section
-        title="Score"
+        title={tr("score")}
         badge={
           scoreRange
             ? `${scoreRange.lo}–${scoreRange.hi}`
@@ -458,13 +738,13 @@ export default function PositionsFilterSidebar({
           unscoredCount={scoreHist.unscored}
           unscoredSelected={unscoredSelected}
           onToggleUnscored={() => toggleFlag("noscore", !unscoredSelected)}
-          unscoredLabel="senza score"
+          unscoredLabel={tr("noScore")}
         />
       </Section>
 
       {/* Voto critico (0-10) — istogramma con selezione a range + input */}
       <Section
-        title="Voto critico"
+        title={tr("criticVote")}
         badge={
           criticRange
             ? `${criticRange.lo}–${criticRange.hi}`
@@ -479,18 +759,21 @@ export default function PositionsFilterSidebar({
           unscoredCount={criticHist.unscored}
           unscoredSelected={criticUnscored}
           onToggleUnscored={() => toggleFlag("cnoscore", !criticUnscored)}
-          unscoredLabel="senza voto"
+          unscoredLabel={tr("noVote")}
         />
       </Section>
 
       {/* Albero Location */}
-      <Section title="Location" badge={`${locationTree.length} · ${treeTotal}`}>
+      <Section
+        title={tr("location")}
+        badge={`${locationTree.length} · ${treeTotal}`}
+      >
         {locationTree.length === 0 ? (
           <div
             className="text-[11px] py-3 text-center"
             style={{ color: "var(--color-dim)" }}
           >
-            Nessun dato
+            {tr("noData")}
           </div>
         ) : (
           <ul
@@ -531,7 +814,7 @@ export default function PositionsFilterSidebar({
                       title={country.country}
                     >
                       <button
-                        aria-label={isOpen ? "Chiudi" : "Apri"}
+                        aria-label={isOpen ? tr("collapse") : tr("expand")}
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenCountry(isOpen ? null : country.country);
@@ -620,11 +903,12 @@ export default function PositionsFilterSidebar({
         )}
       </Section>
 
-      {/* Filtri diretti (ex-wizard): Tier / Status / Remote / Fonte / Voto */}
+      {/* Filtri diretti (ex-wizard): Stato / Modalità / Fonte */}
       {directGroups.map((g) => (
         <ChipSection
           key={g.key}
-          title={DIRECT_LABELS[g.key]}
+          title={tr(DIRECT_LABEL_KEYS[g.key])}
+          clearLabel={tr("clear")}
           options={g.options}
           selected={directSelections[g.key]}
           onToggle={(val) => toggleInParam(g.key, val)}
@@ -632,20 +916,16 @@ export default function PositionsFilterSidebar({
         />
       ))}
 
-      {/* Chiusura anche da fondo: non solo dall'header in cima. */}
+      {/* Chiusura anche da fondo: link discreto, non un pulsante pieno. */}
       <button
         type="button"
         onClick={() => onCollapse?.()}
-        className="h-8 flex items-center justify-center gap-2 rounded-lg border cursor-pointer transition-colors text-[9.5px] font-semibold tracking-[0.16em] uppercase hover:text-[var(--color-base)]"
-        style={{
-          borderColor: "var(--color-border)",
-          background: "var(--color-card)",
-          color: "var(--color-dim)",
-        }}
-        title="Chiudi filtri"
-        aria-label="Chiudi filtri"
+        className="self-center mt-1 flex items-center gap-1.5 cursor-pointer transition-colors text-[9px] font-semibold tracking-[0.16em] uppercase hover:text-[var(--color-base)]"
+        style={{ color: "var(--color-dim)" }}
+        title={tr("closeFilters")}
+        aria-label={tr("closeFilters")}
       >
-        <span aria-hidden>⟨</span> Chiudi filtri
+        <span aria-hidden>⟨</span> {tr("closeFilters")}
       </button>
     </aside>
   );
@@ -655,12 +935,14 @@ export default function PositionsFilterSidebar({
 // aperta solo se ha selezioni attive (così la sidebar resta compatta).
 function ChipSection({
   title,
+  clearLabel,
   options,
   selected,
   onToggle,
   onClear,
 }: {
   title: string;
+  clearLabel: string;
   options: Option[];
   selected: string[];
   onToggle: (val: string) => void;
@@ -676,7 +958,9 @@ function ChipSection({
         background: "var(--color-card)",
       }}
     >
-      <div className="flex items-baseline justify-between mb-2 gap-2">
+      <div
+        className={`flex items-baseline justify-between gap-2 ${open ? "mb-2" : ""}`}
+      >
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -691,7 +975,7 @@ function ChipSection({
           </span>
           <span
             className="text-[9.5px] font-semibold tracking-[0.16em] uppercase"
-            style={{ color: "var(--color-dim)" }}
+            style={{ color: "var(--color-white)" }}
           >
             {title}
           </span>
@@ -700,8 +984,8 @@ function ChipSection({
           <button
             type="button"
             onClick={onClear}
-            aria-label={`Pulisci ${title}`}
-            title="Pulisci"
+            aria-label={`${clearLabel} ${title}`}
+            title={clearLabel}
             className="text-[9px] tabular-nums cursor-pointer leading-none flex items-center gap-1"
             style={{ color: "var(--color-green)" }}
           >
@@ -804,13 +1088,13 @@ function FacetRow({
   );
 }
 
-function EmptyRow() {
+function EmptyRow({ label }: { label: string }) {
   return (
     <div
       className="text-[11px] py-3 text-center"
       style={{ color: "var(--color-dim)" }}
     >
-      Nessun dato
+      {label}
     </div>
   );
 }
@@ -852,7 +1136,7 @@ function Section({
           </span>
           <span
             className="text-[9.5px] font-semibold tracking-[0.16em] uppercase"
-            style={{ color: "var(--color-dim)" }}
+            style={{ color: "var(--color-white)" }}
           >
             {title}
           </span>
