@@ -133,6 +133,24 @@ const T: Record<string, Record<string, string>> = {
     fr: "Note moyenne",
     pt: "Nota média",
   },
+  verdictBreakdown: {
+    it: "Verdetto Critico",
+    en: "Critic Verdict",
+    hu: "Kritikus ítélet",
+    es: "Veredicto del crítico",
+    de: "Kritiker-Urteil",
+    fr: "Verdict du critique",
+    pt: "Veredito do crítico",
+  },
+  reviewedLc: {
+    it: "revisionati",
+    en: "reviewed",
+    hu: "felülvizsgált",
+    es: "revisados",
+    de: "geprüft",
+    fr: "examinés",
+    pt: "revisados",
+  },
   reviewQueue: {
     it: "Coda review in attesa",
     en: "Pending review queue",
@@ -503,6 +521,14 @@ export default function CriticoPage() {
   const feed = live?.feed ?? [];
   const byAgent = live?.byAgent ?? [];
 
+  // Verdetto Critico: percentuali pass / needs_work / reject sui revisionati.
+  const verdictTotal = stats ? stats.pass + stats.needsWork + stats.reject : 0;
+  const verdictPassPct =
+    verdictTotal > 0 ? Math.round((stats!.pass / verdictTotal) * 100) : 0;
+  const verdictRejectPct =
+    verdictTotal > 0 ? Math.round((stats!.reject / verdictTotal) * 100) : 0;
+  const verdictNeedsPct = Math.max(0, 100 - verdictPassPct - verdictRejectPct);
+
   return (
     <div style={{ animation: "fade-in 0.35s ease both" }}>
       {/* ── Header ──────────────────────────────────────────────── */}
@@ -628,6 +654,68 @@ export default function CriticoPage() {
           color="var(--color-cyan)"
           sub={stats?.avgScore != null ? "/10" : undefined}
         />
+      </div>
+
+      {/* ── Verdetto Critico: PASS / NEEDS_WORK / REJECT su revisionati ── */}
+      <div
+        className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 mb-10 transition-colors duration-200 hover:border-[var(--color-border-glow)]"
+        style={{ animation: "fade-in 0.35s ease 0.03s both" }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <span className="section-label">{tr("verdictBreakdown")}</span>
+          <span className="text-[10px] text-[var(--color-dim)]">
+            {verdictTotal} {tr("reviewedLc")}
+          </span>
+        </div>
+        <div className="flex items-baseline gap-3 mb-3">
+          <span
+            className="text-3xl font-bold tracking-tight"
+            style={{ color: "var(--color-green)" }}
+          >
+            {verdictPassPct}%
+          </span>
+          <span className="text-[10px] text-[var(--color-muted)]">
+            pass · {verdictRejectPct}% reject · {verdictNeedsPct}%{" "}
+            {tr("needsWork")}
+          </span>
+        </div>
+        <div
+          className="h-2 rounded-full overflow-hidden flex"
+          style={{ background: "var(--color-border)" }}
+        >
+          <div
+            style={{
+              width: `${verdictPassPct}%`,
+              background: "var(--color-green)",
+              opacity: 0.85,
+            }}
+          />
+          <div
+            style={{
+              width: `${verdictNeedsPct}%`,
+              background: "var(--color-yellow)",
+              opacity: 0.85,
+            }}
+          />
+          <div
+            style={{
+              width: `${verdictRejectPct}%`,
+              background: "var(--color-red)",
+              opacity: 0.85,
+            }}
+          />
+        </div>
+        <div className="flex justify-between text-[9px] text-[var(--color-dim)] mt-1">
+          <span style={{ color: "var(--color-green)" }}>
+            pass · {stats?.pass ?? 0}
+          </span>
+          <span style={{ color: "var(--color-yellow)" }}>
+            {tr("needsWork")} · {stats?.needsWork ?? 0}
+          </span>
+          <span style={{ color: "var(--color-red)" }}>
+            reject · {stats?.reject ?? 0}
+          </span>
+        </div>
       </div>
 
       {/* ── Coda review in attesa ─────────────────────────────────── */}

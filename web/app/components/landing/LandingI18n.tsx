@@ -56,6 +56,8 @@ const translations = {
   nav_how: { it: "Come funziona", en: "How it works", hu: "Hogyan működik" },
   nav_github: { it: "GitHub", en: "GitHub", hu: "GitHub" },
   nav_download: { it: "Download", en: "Download", hu: "Letöltés" },
+  nav_team: { it: "Team", en: "Team", hu: "Csapat" },
+  nav_pricing: { it: "Prezzi", en: "Pricing", hu: "Árak" },
   nav_case_studies: {
     it: "Case studies",
     en: "Case studies",
@@ -66,7 +68,6 @@ const translations = {
   nav_demo: { it: "Demo", en: "Demo", hu: "Demó" },
   nav_guide: { it: "Guida", en: "Guide", hu: "Útmutató" },
   nav_faq: { it: "FAQ", en: "FAQ", hu: "GYIK" },
-  nav_pricing: { it: "Pricing", en: "Pricing", hu: "Árak" },
   nav_about: { it: "Chi siamo", en: "About", hu: "Rólunk" },
   nav_stats: { it: "Stats", en: "Stats", hu: "Statisztikák" },
   nav_login: { it: "Accedi", en: "Sign in", hu: "Bejelentkezés" },
@@ -92,6 +93,10 @@ const translations = {
     it: "Un sistema multi-agente che automatizza ogni fase della ricerca: dalla scansione delle offerte alla candidatura personalizzata. Tu decidi la strategia, gli agenti eseguono.",
     en: "A multi-agent system that automates every step of your job search: from scanning listings to personalized applications. You set the strategy, the agents execute.",
     hu: "Egy multi-ügynök rendszer, amely automatizálja az álláskeresés minden lépését: az ajánlatok keresésétől a személyre szabott jelentkezésekig. Te döntesz a stratégiáról, az ügynökök végrehajtják.",
+  },
+  home_intro: {
+    it: "Job Hunter Team è una squadra di agenti AI che conduce per te la ricerca di lavoro. Senza sosta perlustrano il mercato, vagliano ogni offerta, la valutano su ciò che desideri davvero e preparano CV e lettere su misura — lasciando sempre a te l'ultima parola. Tu indichi la rotta, loro fanno il lavoro: gira in modo privato sulla tua macchina e ti consegna una rosa di occasioni che vale il tuo tempo, non una casella piena di rumore.",
+    en: "Job Hunter Team is a team of AI agents that runs your job search for you. Around the clock they scan the market, vet every opening, score it against what you truly want, and draft tailored CVs and cover letters — always leaving the final word to you. You set the direction, they do the legwork: it runs privately on your own machine and hands you a shortlist worth your time, not an inbox full of noise.",
   },
   hero_cta: { it: "Inizia qui", en: "Start here", hu: "Kezdj itt" },
   hero_cta2: {

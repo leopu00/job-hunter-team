@@ -1,143 +1,215 @@
-// Public /case-studies page.
-// Server component: fetches the JSON payload from the local API, then composes
-// the layout from the section components under ./_components.
+// Pagina principale /case-studies — landing della sezione.
 //
-// Data source = SQLite (dev) / Supabase (prod target).
-// Narrative source of truth = docs/about/RESULTS.md.
+// Spiega cos'è (dati reali e anonimi di team in esecuzione su profili veri),
+// elenca i case study disponibili come card (→ /case-studies/[id]) e incentiva
+// gli utenti a contribuire i propri dati, referenziando i doc GitHub.
+// È pensata per crescere: col tempo accoglierà il monitoraggio di più team.
 
-import type { Payload } from "./_components/types";
-import SiteNav from "./_components/SiteNav";
-import { CaseStudyCard } from "./_components/CaseStudyCard";
-import { CaseFunnel } from "./_components/PipelineFunnel";
-import { ContributeCta } from "./_components/ContributeCta";
-import { AgentActivityHero } from "./_components/AgentActivityHero";
-import { FiveHourWindowsTab } from "./_components/FiveHourWindowsTab";
-import { TeamActionsTab } from "./_components/TeamActionsTab";
-import { TokensTab } from "./_components/TokensTab";
-import { CaseStudiesTabs } from "./_components/CaseStudiesTabs";
+import Link from "next/link";
+import { LandingI18nProvider } from "../components/landing/LandingI18n";
+import LandingNav from "../components/landing/LandingNav";
+import { CASE_STUDIES, CONTRIBUTE_LINKS } from "@/lib/case-studies";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Case studies · Job Hunter Team",
   description:
-    "Real field data from Job Hunter Team runs — what the open-source AI agent team has produced on real candidate profiles with real LLM subscriptions.",
+    "Dati reali e anonimi di team di agenti Job Hunter Team in esecuzione su profili veri. Guarda i risultati, e contribuisci con i tuoi dati.",
 };
 
-async function fetchData(): Promise<Payload> {
-  const base = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3001";
-  const r = await fetch(`${base}/api/case-studies`, { cache: "no-store" });
-  if (!r.ok) throw new Error(`API ${r.status}`);
-  return r.json();
+function nf(n: number): string {
+  return n.toLocaleString("it-IT");
 }
 
-export default async function CaseStudiesPage() {
-  let data: Payload;
-  try {
-    data = await fetchData();
-  } catch (e) {
-    return (
-      <main className="mx-auto max-w-3xl p-8 font-mono text-sm">
-        <h1 className="mb-4 text-2xl font-bold">
-          ⚠️ /case-studies — data pipeline error
-        </h1>
-        <pre className="rounded bg-red-50 p-4 text-red-800">{String(e)}</pre>
-        <p className="mt-4">
-          Hint: run{" "}
-          <code className="rounded bg-[var(--color-card)] px-2 py-1">
-            web/data/case-studies/init.sh
-          </code>{" "}
-          to rebuild the local SQLite seed.
-        </p>
-      </main>
-    );
-  }
+export default function CaseStudiesIndexPage() {
+  return (
+    <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
+      <LandingI18nProvider>
+        <LandingNav />
+      </LandingI18nProvider>
+      <div aria-hidden="true" className="h-14" />
 
-  const { caseStudies } = data;
+      <div className="mx-auto max-w-5xl px-6 py-12">
+        {/* ── Hero / cos'è ──────────────────────────────────────── */}
+        <header className="mb-12">
+          <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[var(--color-dim)]">
+            Case studies · dati di campo reali e anonimi
+          </span>
+          <h1 className="mt-2 text-3xl sm:text-5xl font-bold tracking-tight leading-[1.05]">
+            Cosa fa <span style={{ color: "#00e676" }}>davvero</span> un team
+            Job&nbsp;Hunter
+          </h1>
+          <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-[var(--color-muted)]">
+            Job Hunter è un team di agenti AI che cerca lavoro al posto tuo:
+            trova posizioni, le analizza, le valuta sul tuo profilo e prepara le
+            candidature. Qui mostriamo cosa ha prodotto su{" "}
+            <strong className="text-[var(--color-white)]">
+              profili candidato reali
+            </strong>{" "}
+            — dati aggregati e anonimi, nessuna informazione personale.
+          </p>
+          <p className="mt-2 max-w-2xl text-[12px] leading-relaxed text-[var(--color-dim)]">
+            È una pagina viva: cresce a ogni nuovo team monitorato. Scegli un
+            case study qui sotto per vedere tutti i risultati.
+          </p>
+        </header>
 
-  const codex = caseStudies.find((c) =>
-    c.slug.startsWith("beta-tester-1-codex"),
-  );
-  const codexWeekly = codex?.windows?.find((w) => w.kind === "weekly");
+        {/* ── Card dei case study ───────────────────────────────── */}
+        <section className="mb-14">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {CASE_STUDIES.map((cs) => (
+              <Link
+                key={cs.id}
+                href={`/case-studies/${cs.id}`}
+                className="group block rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 transition-colors hover:border-[var(--color-blue)] no-underline"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <span
+                    className="inline-flex items-center justify-center w-11 h-11 rounded-xl text-[14px] font-extrabold shrink-0"
+                    style={{
+                      background:
+                        "color-mix(in srgb, var(--color-blue) 18%, transparent)",
+                      color: "var(--color-blue)",
+                    }}
+                  >
+                    {cs.profile.badge}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-bold text-[var(--color-white)]">
+                      {cs.label}
+                    </div>
+                    <div className="text-[11px] text-[var(--color-dim)] truncate">
+                      {cs.tagline}
+                    </div>
+                  </div>
+                  <span className="ml-auto text-[var(--color-dim)] group-hover:text-[var(--color-blue)] transition-colors">
+                    →
+                  </span>
+                </div>
+                <p className="text-[12px] text-[var(--color-muted)] leading-relaxed line-clamp-2 mb-4">
+                  {cs.profile.headline} · {cs.profile.summary}
+                </p>
+                <div className="grid grid-cols-3 gap-2 border-t border-[var(--color-border)] pt-3">
+                  <div>
+                    <div
+                      className="text-[18px] font-extrabold tabular-nums"
+                      style={{ color: "var(--color-blue)" }}
+                    >
+                      {nf(cs.run.totals.positions)}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                      posizioni
+                    </div>
+                  </div>
+                  <div>
+                    <div
+                      className="text-[18px] font-extrabold tabular-nums"
+                      style={{ color: "#00e676" }}
+                    >
+                      {Math.round(cs.run.match.avg)}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                      match medio
+                    </div>
+                  </div>
+                  <div>
+                    <div
+                      className="text-[18px] font-extrabold tabular-nums"
+                      style={{ color: "#00e676" }}
+                    >
+                      {nf(cs.run.match.strong70)}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                      match forti
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
 
-  const resultsContent = (
-    <>
-      {/* One self-contained block per case study: card + its own conversion
-          funnel, kept fully separate from the next case. */}
-      {caseStudies.map((cs, i) => (
-        <section
-          key={cs.id}
-          className={
-            i % 2 === 0
-              ? "border-b border-[var(--color-border)] py-12"
-              : "border-b border-[var(--color-border)] bg-[var(--color-deep)] py-12"
-          }
-        >
-          <div className="mx-auto max-w-4xl space-y-6 px-6">
-            <CaseStudyCard cs={cs} />
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6">
-              <h3 className="mb-1 text-sm font-bold text-[var(--color-white)]">
-                🌊 Pipeline conversion
-              </h3>
-              <p className="mb-5 text-xs text-[var(--color-muted)]">
-                From positions analyzed by the pipeline to ready applications.
-                Width = absolute volume. Drop-off shows where positions were
-                excluded.
-              </p>
-              <CaseFunnel cs={cs} />
+            {/* placeholder: altri in arrivo */}
+            <div className="rounded-2xl border border-dashed border-[var(--color-border)] p-5 flex items-center justify-center text-center opacity-70">
+              <div>
+                <div className="text-2xl mb-1">➕</div>
+                <div className="text-[12px] text-[var(--color-muted)] font-semibold">
+                  Altri case study in arrivo
+                </div>
+                <div className="text-[11px] text-[var(--color-dim)] mt-1">
+                  il tuo potrebbe essere il prossimo
+                </div>
+              </div>
             </div>
           </div>
         </section>
-      ))}
 
-      {/* CTAs */}
-      <ContributeCta />
-    </>
-  );
+        {/* ── Contribuisci ──────────────────────────────────────── */}
+        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 sm:p-8">
+          <h2 className="text-xl font-bold tracking-tight">
+            📥 Contribuisci con i tuoi dati
+          </h2>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[var(--color-muted)]">
+            Più profili reali raccogliamo, più questa pagina diventa utile a chi
+            cerca lavoro. Fai girare Job Hunter sulla tua ricerca e condividi i
+            risultati (aggregati e anonimi): bastano pochi passi.
+          </p>
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <a
+              href={CONTRIBUTE_LINKS.results}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group rounded-xl border border-[#00e676]/40 bg-[var(--color-bg)] p-5 transition-colors hover:border-[#00e676] no-underline"
+            >
+              <div className="text-[13px] font-bold text-[var(--color-white)]">
+                🧪 Diventa beta tester{" "}
+                <span
+                  className="inline-block transition-transform group-hover:translate-x-0.5"
+                  style={{ color: "#00e676" }}
+                >
+                  →
+                </span>
+              </div>
+              <p className="mt-1.5 text-[12px] text-[var(--color-muted)] leading-relaxed">
+                Fai girare il team per qualche settimana sulla tua ricerca e
+                condividi i risultati: ti aiutiamo col setup. Guida e modello
+                dati su GitHub.
+              </p>
+            </a>
+            <a
+              href={CONTRIBUTE_LINKS.contributing}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 transition-colors hover:border-[var(--color-blue)] no-underline"
+            >
+              <div className="text-[13px] font-bold text-[var(--color-white)]">
+                🛠️ Self-host & contribuisci{" "}
+                <span className="inline-block transition-transform group-hover:translate-x-0.5 text-[var(--color-blue)]">
+                  →
+                </span>
+              </div>
+              <p className="mt-1.5 text-[12px] text-[var(--color-muted)] leading-relaxed">
+                Installa Job Hunter in locale o sul tuo VPS, usalo sulla tua
+                ricerca e apri una PR con i tuoi dati. Tutto open source.
+              </p>
+            </a>
+          </div>
+          <div className="mt-5 text-[11px] text-[var(--color-dim)]">
+            Repository:{" "}
+            <a
+              href={CONTRIBUTE_LINKS.repo}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--color-muted)] underline hover:text-[var(--color-white)]"
+            >
+              github.com/leopu00/job-hunter-team
+            </a>
+          </div>
+        </section>
+      </div>
 
-  const tabs = [
-    { id: "results", label: "📊 Risultati", content: resultsContent },
-  ];
-  if (codex && codexWeekly) {
-    tabs.push({
-      id: "agents",
-      label: "💬 Messaggi e azioni del team",
-      content: <AgentActivityHero caseStudy={codex} weekly={codexWeekly} />,
-    });
-    tabs.push({
-      id: "windows",
-      label: "📈 Finestre 5h",
-      content: <FiveHourWindowsTab caseStudy={codex} weekly={codexWeekly} />,
-    });
-    tabs.push({
-      id: "actions",
-      label: "🔧 Azioni per finestra",
-      content: <TeamActionsTab caseStudy={codex} weekly={codexWeekly} />,
-    });
-    tabs.push({
-      id: "tokens",
-      label: "💰 Token consumati",
-      content: <TokensTab caseStudy={codex} weekly={codexWeekly} />,
-    });
-  }
-
-  return (
-    <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
-      <SiteNav />
-      {/* Spacer per la nav `fixed` (~56px). Le tab interne sono sticky
-          a top-14 così si fermano subito sotto la nav. */}
-      <div aria-hidden="true" className="h-14" />
-      <CaseStudiesTabs tabs={tabs} defaultTab="results" />
-      <footer className="border-t border-[var(--color-border)] py-6 text-center text-xs text-[var(--color-muted)]">
-        <p>
-          Data source: SQLite (dev) → Supabase (prod target) ·{" "}
-          <a
-            href="https://github.com/leopu00/job-hunter-team/blob/master/docs/about/RESULTS.md"
-            className="underline hover:text-[var(--color-bright)]"
-          >
-            narrative source on GitHub
-          </a>
-        </p>
+      <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
+        Dati anonimi da run reali del team · snapshot committati, nessuna
+        informazione personale del candidato.
       </footer>
     </main>
   );

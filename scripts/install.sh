@@ -22,6 +22,10 @@
 # ║                                                                          ║
 # ║  Opzioni (env var / flag):                                               ║
 # ║    --no-docker             Salta il container, installa nativo (expert)  ║
+# ║    --runtime <r>           macOS: runtime container — colima (default,   ║
+# ║                            headless) o docker-desktop (il tuo Docker).   ║
+# ║                            Se un Docker e' gia' attivo viene riusato     ║
+# ║                            (detect-first). Ignorato su Linux. ADR-0006.  ║
 # ║    --dry-run               Mostra solo le azioni che verrebbero eseguite ║
 # ║    --branch <name>         Branch sorgente per wrapper+compose           ║
 # ║                            (equivalente a JHT_BRANCH=<name>, default     ║
@@ -45,7 +49,8 @@
 # ║  Riferimento design:                                                     ║
 # ║    docs/internal/vps.md                      ║
 # ║                                                                          ║
-# ║  Supporta: macOS (via Colima), Linux (Debian/Ubuntu/Fedora/Arch), WSL2.  ║
+# ║  Supporta: macOS (Colima o Docker Desktop), Linux (Debian/Ubuntu/Fedora/  ║
+# ║  Arch), WSL2.                                                             ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 set -euo pipefail
@@ -75,6 +80,10 @@ MIN_NODE_MAJOR=22
 USE_DOCKER=1
 DRY_RUN=0
 PAIRING_TOKEN=""
+# macOS container runtime: '' (= colima default) | 'colima' | 'docker-desktop'.
+# Non interattivo (curl | bash) → la scelta e' un flag, non un prompt; il
+# detect-first riusa comunque un Docker gia' attivo. Ignorato su Linux. (ADR-0006)
+RUNTIME_CHOICE=""
 # Position-based parser: gestisce sia flag standalone (--no-docker) sia
 # coppie key/value (--branch dev-1). Non usiamo `for arg in "$@"` perche'
 # perde il legame tra --branch e il valore successivo.
@@ -82,6 +91,12 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --no-docker) USE_DOCKER=0; shift ;;
     --with-docker) USE_DOCKER=1; shift ;;  # alias retro-compat
+    --runtime)
+      [ -n "${2:-}" ] || { printf "%s richiede un argomento (colima|docker-desktop)\n" "$1" >&2; exit 2; }
+      RUNTIME_CHOICE="$2"
+      shift 2
+      ;;
+    --runtime=*) RUNTIME_CHOICE="${1#*=}"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --branch)
       # Override esplicito della branch, equivalente a JHT_BRANCH=<name>.
@@ -104,7 +119,7 @@ while [ $# -gt 0 ]; do
       ;;
     --pairing-token=*) PAIRING_TOKEN="${1#*=}"; shift ;;
     -h|--help)
-      sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,54p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
@@ -113,6 +128,13 @@ while [ $# -gt 0 ]; do
       ;;
   esac
 done
+
+# Normalizza/valida la scelta runtime: 'auto' (e vuoto) = colima di default.
+case "$RUNTIME_CHOICE" in
+  ""|auto) RUNTIME_CHOICE="" ;;
+  colima|docker-desktop) ;;
+  *) printf "Valore --runtime non valido: %s (usa colima|docker-desktop)\n" "$RUNTIME_CHOICE" >&2; exit 2 ;;
+esac
 
 # RAW_BASE va calcolato DOPO arg parsing perche' `--branch` puo' aver
 # sovrascritto $BRANCH. Senza, lo --branch non avrebbe effetto sui download
@@ -325,10 +347,45 @@ install_docker_linux() {
   ok "docker installato"
 }
 
+install_docker_desktop_macos() {
+  # Docker Desktop e' l'app dell'utente: NON la installiamo in silenzio (EULA +
+  # password admin + GUI alla prima apertura). Il detect-first e' gia' passato,
+  # quindi qui il daemon e' giu'. (ADR-0006)
+  if [ ! -d "/Applications/Docker.app" ]; then
+    fail "Docker Desktop non e' installato. Scaricalo da https://www.docker.com/products/docker-desktop/ e rilancia, oppure usa Colima con --runtime=colima."
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf "  ${DIM}[dry-run]${RESET} would execute: open -a Docker (+ attesa daemon)\n"
+    return 0
+  fi
+  info "Avvio Docker Desktop..."
+  open -a Docker || true
+  info "Attendo il daemon Docker (fino a 120s)..."
+  local i=0
+  while [ "$i" -lt 60 ]; do
+    if docker info &>/dev/null; then ok "Docker Desktop pronto"; return 0; fi
+    sleep 2
+    i=$((i + 1))
+  done
+  fail "Docker Desktop avviato ma il daemon non risponde dopo 120s. Aprilo a mano e rilancia."
+}
+
 install_container_runtime() {
   step 2 "$TOTAL_STEPS_DOCKER" "Container runtime"
+  # Detect-first: se un daemon Docker risponde gia' (Docker Desktop, una Colima
+  # esistente, OrbStack, ...), lo riusiamo — niente seconda installazione/VM
+  # sopra (evita il clash a due VM, ADR-0006).
+  if [ "$DRY_RUN" -ne 1 ] && docker info &>/dev/null; then
+    ok "Docker gia' attivo e raggiungibile — riuso questo runtime (nessuna installazione)"
+    return 0
+  fi
   case "$OS" in
-    macos) install_colima_macos ;;
+    macos)
+      case "$RUNTIME_CHOICE" in
+        docker-desktop) install_docker_desktop_macos ;;
+        *) install_colima_macos ;;
+      esac
+      ;;
     linux|wsl) install_docker_linux ;;
   esac
 }
