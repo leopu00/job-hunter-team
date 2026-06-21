@@ -31,10 +31,13 @@ composition = [
     {"key": "remote",    "label": "Modalita",      "avg": round(comp[3], 1)},
     {"key": "salary",    "label": "Retribuzione",  "avg": round(comp[4], 1)},
 ]
+scores_raw = [r[0] for r in Q(
+    "SELECT total_score FROM scores WHERE total_score IS NOT NULL ORDER BY total_score")]
 match = {
     "scored": n, "avg": round(avg, 1), "min": mn, "max": mx,
     "strong70": s70, "strong80": s80,
     "buckets": buckets, "composition": composition,
+    "scores": scores_raw,
 }
 
 # ── categorie (role_family emerse) ───────────────────────────────────
@@ -42,10 +45,11 @@ categories = [{"name": name, "count": cnt} for name, cnt in Q(
     "SELECT COALESCE(NULLIF(TRIM(role_family),''),'Non categorizzato') rf,COUNT(*) "
     "FROM positions GROUP BY rf ORDER BY 2 DESC, rf")]
 
-# ── paesi ─────────────────────────────────────────────────────────────
+# ── paesi (solo posizioni VERIFICATE, non escluse: es. UK escluse per work-auth) ──
 countries = [{"name": name, "code": code, "count": cnt} for name, code, cnt in Q(
     "SELECT loc_country, MAX(loc_country_code), COUNT(*) "
     "FROM positions WHERE loc_country IS NOT NULL AND TRIM(loc_country)<>'' "
+    "AND status<>'excluded' "
     "GROUP BY loc_country ORDER BY 3 DESC, loc_country")]
 
 # ── città (geocodificate, normalizzate/deduplicate) ──────────────────
@@ -61,7 +65,8 @@ country_keys = {norm(r[0]) for r in Q(
 
 rows = Q("SELECT loc_city, loc_country, office_lat, office_lon FROM positions "
          "WHERE office_lat IS NOT NULL AND office_lon IS NOT NULL "
-         "AND loc_city IS NOT NULL AND TRIM(loc_city)<>''")
+         "AND loc_city IS NOT NULL AND TRIM(loc_city)<>'' "
+         "AND status<>'excluded'")
 agg = {}
 for city, country, lat, lon in rows:
     k = ALIAS.get(norm(city), norm(city))

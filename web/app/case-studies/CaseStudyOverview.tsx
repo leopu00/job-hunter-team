@@ -12,6 +12,7 @@ import {
   type TooltipHandle,
 } from "@/app/components/ChartTooltip";
 import europeOutline from "@/data/case-studies/europe-outline.json";
+import ScoreDistribution from "@/app/components/ScoreDistribution";
 
 const BLUE = "#2196f3";
 const GREEN = "#00e676";
@@ -128,7 +129,6 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
   }, [categories]);
 
   // ── Distribuzione score: max per scalare le barre ──
-  const maxBucket = Math.max(1, ...match.buckets.map((b) => b.n));
   const maxCity = Math.max(1, ...cities.map((c) => c.count));
   const maxCountry = Math.max(1, ...countries.map((c) => c.count));
   const topCountries = countries.slice(0, 8);
@@ -181,11 +181,6 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
     return a;
   });
 
-  // Gauge match medio
-  const gR = 58;
-  const gC = 2 * Math.PI * gR;
-  const gFrac = Math.max(0, Math.min(1, match.avg / 100));
-
   return (
     <div className="flex flex-col gap-12">
       {/* ════════ IL MATCH ═══════════════════════════ (order-2) ═══ */}
@@ -196,136 +191,59 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           candidato. Più alto è il punteggio, più forte è il match.
         </p>
 
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-8 items-center">
-          {/* Gauge medio + callout */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative" style={{ width: 168, height: 168 }}>
-              <svg viewBox="0 0 168 168" width={168} height={168}>
-                <circle
-                  cx={84}
-                  cy={84}
-                  r={gR}
-                  fill="none"
-                  stroke="var(--color-border)"
-                  strokeWidth={14}
-                />
-                <g transform="rotate(-90 84 84)">
-                  <circle
-                    cx={84}
-                    cy={84}
-                    r={gR}
-                    fill="none"
-                    stroke={GREEN}
-                    strokeWidth={14}
-                    strokeLinecap="round"
-                    strokeDasharray={`${gFrac * gC} ${gC - gFrac * gC}`}
-                  />
-                </g>
-                <text
-                  x={84}
-                  y={80}
-                  textAnchor="middle"
-                  className="fill-[var(--color-white)]"
-                  style={{ fontSize: 40, fontWeight: 800 }}
-                >
-                  {Math.round(match.avg)}
-                </text>
-                <text
-                  x={84}
-                  y={104}
-                  textAnchor="middle"
-                  className="fill-[var(--color-dim)]"
-                  style={{ fontSize: 11, letterSpacing: 1 }}
-                >
-                  /100 MEDIO
-                </text>
-              </svg>
+        {/* Callout sintetici */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
+            <div className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none">
+              {Math.round(match.avg)}
+              <span className="text-[var(--color-dim)] text-base font-bold">
+                /100
+              </span>
             </div>
-            <div className="text-center text-[11px] text-[var(--color-muted)]">
-              su{" "}
-              <strong className="text-[var(--color-white)]">
-                {nf(match.scored)}
-              </strong>{" "}
-              posizioni valutate
+            <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-1">
+              match medio · {nf(match.scored)} valutate
             </div>
           </div>
-
-          {/* Distribuzione + callout forti */}
-          <div>
-            <div className="flex flex-wrap gap-3 mb-5">
-              <div className="flex-1 min-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
-                <div
-                  className="text-3xl font-extrabold tabular-nums"
-                  style={{ color: GREEN }}
-                >
-                  {nf(match.strong70)}
-                </div>
-                <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-0.5">
-                  match forti · score ≥ 70
-                </div>
-              </div>
-              <div className="flex-1 min-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
-                <div
-                  className="text-3xl font-extrabold tabular-nums"
-                  style={{ color: GREEN }}
-                >
-                  {nf(match.strong80)}
-                </div>
-                <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-0.5">
-                  eccellenti · score ≥ 80
-                </div>
-              </div>
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
+            <div
+              className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none"
+              style={{ color: GREEN }}
+            >
+              {nf(match.strong70)}
+              <span className="text-[var(--color-dim)] text-base font-bold">
+                {" "}
+                · {Math.round((match.strong70 / Math.max(1, match.scored)) * 100)}%
+              </span>
             </div>
-
-            <div className="text-[10px] text-[var(--color-dim)] mb-2">
-              Distribuzione dei punteggi
+            <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-1">
+              match forti · score ≥ 70
             </div>
-            <div className="flex items-end gap-2" style={{ height: 130 }}>
-              {match.buckets.map((b) => {
-                const strong =
-                  b.label.startsWith("7") || b.label.startsWith("8");
-                const color = strong ? GREEN : DIM;
-                return (
-                  <div
-                    key={b.label}
-                    className="flex-1 flex flex-col items-center justify-end h-full cursor-default"
-                    onMouseEnter={(e) =>
-                      showTip(e, `Score ${b.label}`, [
-                        {
-                          color,
-                          label: b.n === 1 ? "posizione" : "posizioni",
-                          value: nf(b.n),
-                        },
-                      ])
-                    }
-                    onMouseMove={moveTip}
-                    onMouseLeave={hideTip}
-                  >
-                    <div
-                      className="text-[10px] font-bold tabular-nums mb-1"
-                      style={{ color }}
-                    >
-                      {b.n}
-                    </div>
-                    <div
-                      className="w-full rounded-t-sm"
-                      style={{
-                        height: `${(b.n / maxBucket) * 100}%`,
-                        background: color,
-                        opacity: strong ? 0.9 : 0.5,
-                        minHeight: 3,
-                      }}
-                    />
-                    <div className="text-[9px] text-[var(--color-dim)] mt-1.5 tabular-nums">
-                      {b.label}
-                    </div>
-                  </div>
-                );
-              })}
+          </div>
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
+            <div
+              className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none"
+              style={{ color: GREEN }}
+            >
+              {nf(match.strong80)}
+              <span className="text-[var(--color-dim)] text-base font-bold">
+                {" "}
+                · {Math.round((match.strong80 / Math.max(1, match.scored)) * 100)}%
+              </span>
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-1">
+              eccellenti · score ≥ 80
             </div>
           </div>
         </div>
 
+        {/* Istogramma punteggi (stesso grafico della dashboard) */}
+        <ScoreDistribution
+          scores={match.scores}
+          title="Distribuzione dei punteggi"
+          emptyLabel="Nessun punteggio disponibile"
+          thresholdReady={70}
+          thresholdLabel="match forti ≥70"
+        />
       </section>
 
       {/* ════════ DOVE — MAPPA EUROPA ════════════════ (order-1) ═══ */}
@@ -341,7 +259,10 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           <strong className="text-[var(--color-muted)]">
             {cities.length} città
           </strong>
-          . La dimensione del cerchio = numero di posizioni.
+          . La dimensione del cerchio = numero di posizioni. Solo posizioni{" "}
+          <strong className="text-[var(--color-muted)]">verificate e lavorabili</strong>{" "}
+          per il candidato (escluse quelle non compatibili con i requisiti di
+          lavoro, es. cittadinanza/visto).
         </p>
 
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-center">

@@ -17,6 +17,7 @@ export interface CaseStudyMatch {
   strong80: number
   buckets: CaseStudyBucket[]
   composition: { key: string; label: string; avg: number }[]
+  scores: number[] // tutti i punteggi grezzi (per l'istogramma)
 }
 
 export interface CaseStudyCity {
