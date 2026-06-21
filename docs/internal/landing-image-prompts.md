@@ -194,7 +194,25 @@ vittoriani eleganti, palette terrosa+verde, NO boy-scout). Affinamenti utente: *
 > Avoid: anime/manhwa look, boy-scout / safari outfits, neckerchiefs, large or square
 > glasses, visible eyes, readable text.
 
-> Scontorno: `isnet-general-use` (laptop + foglio da preservare).
+> Scontorno: `isnet-general-use` (laptop + foglio da preservare). ✅ FATTO →
+> `web/public/agents-scouts.png` (cablato su /agents).
+
+### `team.analista` — l'Analista ⬜ DA GENERARE
+
+Il verificatore freddo (legge l'offerta, controlla azienda + link, estrae i dati). Nella
+home è in **camice bianco** da laboratorio. Figura singola. Prompt:
+
+> Hand-drawn Western graphic-novel illustration (realistic proportions, NOT anime/manhwa),
+> clean inked outlines, flat colours, warm earthy palette with green accents, vintage
+> style. Plain white background.
+>
+> **The Analyst, full figure head-to-toe — a grown adult, any age (vary naturally).** A
+> cold, meticulous verifier who fact-checks job postings and companies: a white lab coat
+> over smart clothes, inspecting documents. Give them a prop suggesting careful
+> verification (your choice). Wears identical small round/oval dark sunglasses, thin metal
+> frames, lenses fully hiding the eyes (no eyes visible — virtual agent). Calm, precise.
+>
+> Avoid: anime/manhwa look, large or square glasses, visible eyes, readable text.
 
 ---
 
