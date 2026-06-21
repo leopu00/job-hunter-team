@@ -138,7 +138,25 @@ if os.path.exists(SENTINEL):
         pct = end - week_prev.get(wk, 0)
         week_prev[wk] = end
         daily.append({"day": day, "pct": round(max(pct, 0), 1), "week": wk})
-    usage = {"provider": provider, "unit": "weekly_budget_pct", "daily": daily}
+    # orario di lavoro configurato (contesto: su quali ore/giorni si spalma)
+    working_hours = None
+    CONFIG = "/root/.jht/jht.config.json"
+    if os.path.exists(CONFIG):
+        try:
+            wh = json.load(open(CONFIG)).get("team", {}).get("working_hours")
+            if wh:
+                working_hours = {
+                    "timezone": wh.get("timezone"),
+                    "windows": [
+                        {"days": w.get("days", []), "start": w.get("start"),
+                         "end": w.get("end")}
+                        for w in wh.get("windows", [])
+                    ],
+                }
+        except Exception:
+            pass
+    usage = {"provider": provider, "unit": "weekly_budget_pct",
+             "daily": daily, "workingHours": working_hours}
 
 out = {
     "source": "betaC-codex",

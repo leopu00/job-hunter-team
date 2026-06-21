@@ -78,6 +78,26 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
   );
   const dm = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 
+  // ── Orario di lavoro (contesto sulla distribuzione del budget) ──
+  const wh = run.usage?.workingHours;
+  const DOW: Record<string, string> = {
+    mon: "lun", tue: "mar", wed: "mer", thu: "gio",
+    fri: "ven", sat: "sab", sun: "dom",
+  };
+  const fmtDays = (days: string[]) => {
+    const all = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    const s = new Set(days);
+    if (all.every((d) => s.has(d))) return "tutti i giorni";
+    if (["mon", "tue", "wed", "thu", "fri"].every((d) => s.has(d)) &&
+        !s.has("sat") && !s.has("sun")) return "lun–ven";
+    return days.map((d) => DOW[d] ?? d).join(", ");
+  };
+  const whText = wh
+    ? wh.windows
+        .map((w) => `${fmtDays(w.days)} · ${w.start}–${w.end}`)
+        .join(" / ") + (wh.timezone ? ` (${wh.timezone})` : "")
+    : null;
+
   // ── Categorie: top 8 + "Altre" ──
   const catView = useMemo(() => {
     const sorted = [...categories].sort((a, b) => b.count - a.count);
@@ -646,6 +666,21 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           </p>
 
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+            {/* Orario di lavoro: spiega su quali ore/giorni si spalma */}
+            {whText && (
+              <div className="mb-5 flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+                <span aria-hidden className="text-[13px]">
+                  🕗
+                </span>
+                <span className="text-[10px] uppercase tracking-wide text-[var(--color-dim)]">
+                  Orario di lavoro
+                </span>
+                <span className="text-[11px] text-[var(--color-muted)]">
+                  {whText}
+                </span>
+              </div>
+            )}
+
             {/* Callout */}
             <div className="flex flex-wrap gap-3 mb-5">
               <div className="flex-1 min-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
