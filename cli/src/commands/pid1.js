@@ -801,14 +801,30 @@ async function dispatch() {
     }
   };
 
-  // Stato iniziale del cloud: se gia' paired, daemon + realtime + team_state +
-  // user-messages partono.
+  // [JHT-CLOUD-INTERACTIVE-RETIRE] Riduzione dei processi VPS→cloud per tagliare
+  // la quota Vercel per-utente (3 poller × N utenti la dominavano):
+  //   • team-state-reconciler → FUSO nel cloud daemon (reconcileOnce per tick):
+  //     il controllo should_run→`jht team start/stop` resta funzionante con UN
+  //     solo processo. Il poller standalone non parte più.
+  //   • user-messages-poller → RITIRATO: la chat web→agente è solo-desktop (via
+  //     tunnel arriva a tmux in locale); la lane cloud /api/messages è morta.
+  //   • team-commands-poller (realtime) → RESTA (adattivo) finché il suo feeder
+  //     cloud (controlli sentinella sul web, in dismissione lato collega) non
+  //     sparisce; poi si ritira.
+  // Entrambi i poller ritirati sono CONGELATI (non rimossi) e ri-attivabili a
+  // runtime, senza rebuild, con JHT_CLOUD_CONTROL_POLLERS=1 (escape hatch).
+  const controlPollers = process.env.JHT_CLOUD_CONTROL_POLLERS === '1';
+
+  // Stato iniziale del cloud: se gia' paired, daemon (con reconcile) + realtime
+  // + file-bridge partono. I poller di controllo standalone solo se ri-abilitati.
   if (isVps && await isCloudConfigured()) {
     startDaemon();
     startRealtime();
-    startTeamState();
-    startUserMessages();
     startFileBridge();
+    if (controlPollers) {
+      startTeamState();
+      startUserMessages();
+    }
   } else if (isVps) {
     pid1Log('cloud sync non ancora configurato: aspetto cloud.json (auto-start dopo pairing)');
   }
@@ -830,12 +846,20 @@ async function dispatch() {
         if (nowConfigured === lastConfigured) return;
         lastConfigured = nowConfigured;
         if (nowConfigured) {
-          pid1Log('cloud.json rilevato: avvio cloud daemon + realtime subscriber + team_state reconciler + user-messages poller + file-bridge poller');
+          // [JHT-CLOUD-INTERACTIVE-RETIRE] reconcile team_state fuso nel daemon;
+          // team-state/user-messages standalone solo con env override.
+          pid1Log(
+            controlPollers
+              ? 'cloud.json rilevato: avvio cloud daemon (con reconcile) + realtime + file-bridge + poller di controllo standalone (env override)'
+              : 'cloud.json rilevato: avvio cloud daemon (con reconcile team_state) + realtime + file-bridge',
+          );
           startDaemon();
           startRealtime();
-          startTeamState();
-          startUserMessages();
           startFileBridge();
+          if (controlPollers) {
+            startTeamState();
+            startUserMessages();
+          }
         } else {
           stopDaemon('cloud.json rimosso o disabilitato');
         }
