@@ -597,7 +597,8 @@ export default function SentinellaPage() {
         )}
       </div>
 
-      {/* Intervallo tick */}
+      {/* Intervallo tick — controllo write (config sentinella): solo desktop, nascosto sul cloud */}
+      {isCloud !== true && (
       <div className="mb-6 flex items-center gap-3 flex-wrap bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-4 py-3">
         <label
           htmlFor="tick-min"
@@ -646,6 +647,7 @@ export default function SentinellaPage() {
           </span>
         )}
       </div>
+      )}
 
       {/* Errori fetch dati */}
       {err && (
