@@ -149,35 +149,35 @@ emoji o riferimenti a file. **Regola generale per tutti i ruoli:** descrivere il
 carattere + chiedere "un oggetto/prop che rappresenti il ruolo, a scelta del
 generatore", senza imporre quale.
 
-### `team.scout` — gli Scout (gruppo) ⬜ DA GENERARE
+### `team.scout` — gli Scout (2 figure intere) ⬜ DA GENERARE
 
-⚠️ Lo Scout **non è un singolo agente**: è un pool di più istanze che cercano in
-parallelo. Quindi l'immagine mostra **più Scout** (≥2), ciascuno che cerca in modo
-diverso, con numero e attività **liberi** (no hardcoding).
+Lo Scout è un pool → l'immagine ne mostra **più d'uno**. Lo **stile è ok** (investigatori
+vittoriani eleganti, palette terrosa+verde, NO boy-scout). Affinamenti utente: **esattamente
+2 Scout**, **figura intera** come il Coordinatore, pose precise. Titolo ruolo sulla pagina
+→ plurale **"Gli Scout / The Scouts"** (fatto).
 
-⚠️ **Trappola da evitare:** "Scout / hunters / adventure / searching the world" →
-il generatore esce con **boy-scout / esploratori** (fazzoletti al collo, camicie
-safari, borse di cuoio). NO. Il look giusto è quello della home (`landing-team.png`):
-**investigatori vittoriani eleganti** (trench lungo + gilet, completo a righe), palette
-terrosa + verde. Prompt:
+⚠️ Ricorda: "Scout/hunters/adventure" fa uscire boy-scout (fazzoletti, borse, safari). Usa
+"elegant investigators / detective-story" + blocco Avoid. Prompt:
 
 > Hand-drawn graphic-novel / comic illustration — clean inked outlines, flat colours,
-> warm earthy muted palette with subtle green accents, in a vintage **detective-story**
-> style. Plain white background, no scene.
+> warm earthy muted palette with subtle green accents, vintage detective-story style.
+> Plain white background, no scene.
 >
-> A small group of **elegant investigators** (two to four — your choice) who track down
-> job opportunities. Sharp, well-dressed people in smart, slightly vintage tailored
-> clothes — long detective trench coats, waistcoats, pinstripe suits, smart trousers
-> (the classic sleuth look). Each wears the same small discreet dark sunglasses as the
-> rest of the team. Let them search in their own ways. Calm, curious, confident, a touch
-> witty; not gloomy.
+> **Two elegant investigators (the Scouts)** who track down job opportunities — sharp,
+> well-dressed people in smart, slightly vintage tailored clothes (trench coats,
+> waistcoats, pinstripe suits), each wearing the same small discreet dark sunglasses as
+> the rest of the team. **Full figure, head to toe — both entirely visible, nothing
+> cropped (character-sheet style).**
+> • On the LEFT: one **sitting at a desk, working at a computer** — full body still
+> visible, the desk does not hide the legs.
+> • The other: **standing, examining a sheet of paper with a magnifying glass.**
+> Calm, curious, confident, a touch witty; not gloomy.
 >
 > **Avoid:** boy-scouts or campers, scout uniforms, neckerchiefs / scarves at the neck,
-> safari or explorer shirts, leather satchels, outdoor / forest gear. No readable text
-> anywhere. Don't over-detail.
+> safari or explorer outfits, leather satchels. No readable text anywhere. Don't
+> over-detail.
 
-> Scontorno: se ci sono oggetti (laptop, mappa, foglio) → preservarli con
-> `isnet-general-use` (non `isnet-anime`, che cancella ciò che non è personaggio).
+> Scontorno: `isnet-general-use` (laptop + foglio da preservare).
 
 ---
 
