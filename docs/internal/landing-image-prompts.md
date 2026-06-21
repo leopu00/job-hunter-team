@@ -126,33 +126,28 @@ scenico del ruolo.** Niente testo leggibile.
 > ⚠️ **Rebrand in corso** Capitano→Coordinatore (BACKLOG `[JHT-RENAME-COORDINATOR]`):
 > la pagina è ora `/agents` (non `/team`) e i ruoli **non mostrano più emoji**.
 
-### `team.coordinatore` — il Coordinatore ⬜ DA GENERARE
+### `team.coordinatore` — il Coordinatore ✅ v1 IN PAGINA · esplorando v2
 
-Primo ruolo del rebrand. Niente "capitano di nave" e **niente Agente Smith**: è un
-**direttore elegante e cordiale** che coordina, nello stile dei tre agenti della home
-(`landing-team.png`). **Oggetto identificativo** (serviva perché "uomo in cravatta che
-gesticola" non si capiva): una **lavagna tattica da allenatore** con uno schema astratto
-+ **bacchetta/pointer** che la indica → comunica subito "dirige la strategia della
-squadra". Prompt (snello, lascia spazio al generatore):
+v1 (abito beige, cravatta verde, gesto cordiale) è già su `/agents`
+(`web/public/agents-coordinator.png`). Si esplora una v2 con un **oggetto
+rappresentativo** del ruolo — ma **senza dettarlo**: si lascia scegliere al
+generatore (l'utente vuole massima creatività, niente spunti pilotati). Prompt:
 
 > Hand-drawn comic-book / graphic-novel illustration — clean inked outlines, flat
 > colours, warm muted palette with subtle green accents (classic adventure-comic look).
-> On a plain white background, no room or office scene — just the figure and the board.
+> Full-figure character on a plain white background, no scene.
 >
-> **The Coordinator** — an elegant, friendly man who leads the team, like a calm coach
-> / strategist. A normal, well-dressed person in a smart tailored suit with a refined
-> tie (NOT an all-black agent suit), relaxed and confident. He stands beside a **tactical
-> board / blackboard covered with an abstract game-plan** — circles, arrows, lines and
-> connecting nodes, like a football coach's tactics or a strategy diagram — and **points
-> at it with a slim pointer / baton**, explaining the plan to the team. **Nothing
-> readable** on the board, only abstract marks. Calm, approachable expression, a hint of
-> a smile, NOT stern. Like the rest of the team he wears small, discreet dark oval
-> sunglasses. Elegant, a touch witty, not gloomy; don't over-detail.
+> **The Coordinator** — the calm, friendly leader who coordinates the whole team. A
+> normal, well-dressed person in an elegant outfit, relaxed and confident, wearing the
+> same small discreet dark sunglasses as the rest of the team. **Give him some prop or
+> object that naturally represents his role of leading and coordinating a team — your
+> choice.** Calm, approachable expression, not stern. Elegant, a touch witty; leave the
+> creativity to you, don't over-detail.
 
-Note: sfondo bianco/piatto (lo scontorno io dopo con rembg). Niente testo leggibile,
-loghi, emoji o riferimenti a file nel prompt. Varianti oggetto se la lavagna non
-convince: solo **bacchetta da direttore d'orchestra**, oppure lavagna con **grafici**
-astratti invece dello schema tattico.
+Note: sfondo bianco/piatto (lo scontorno io con rembg). Niente testo leggibile, loghi,
+emoji o riferimenti a file. **Regola generale per tutti i ruoli:** descrivere il
+carattere + chiedere "un oggetto/prop che rappresenti il ruolo, a scelta del
+generatore", senza imporre quale.
 
 ---
 
