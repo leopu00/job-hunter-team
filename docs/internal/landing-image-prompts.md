@@ -130,21 +130,29 @@ scenico del ruolo.** Niente testo leggibile.
 
 Primo ruolo del rebrand. Niente "capitano di nave" e **niente Agente Smith**: è un
 **direttore elegante e cordiale** che coordina, nello stile dei tre agenti della home
-(`landing-team.png`). Prompt (snello, lascia spazio al generatore):
+(`landing-team.png`). **Oggetto identificativo** (serviva perché "uomo in cravatta che
+gesticola" non si capiva): una **lavagna tattica da allenatore** con uno schema astratto
++ **bacchetta/pointer** che la indica → comunica subito "dirige la strategia della
+squadra". Prompt (snello, lascia spazio al generatore):
 
 > Hand-drawn comic-book / graphic-novel illustration — clean inked outlines, flat
 > colours, warm muted palette with subtle green accents (classic adventure-comic look).
-> Full-figure character, standing, on a plain white background, no scene.
+> On a plain white background, no room or office scene — just the figure and the board.
 >
-> **The Coordinator** — an elegant, friendly man who leads the team. A normal,
-> well-dressed person in a smart tailored suit with a refined tie (NOT an all-black
-> agent suit), relaxed and confident, **mid-gesture as if calmly directing the team**.
-> Calm, approachable expression — a hint of a smile, NOT stern or angry. Like the rest
-> of the team he wears small, discreet dark oval sunglasses. Keep it elegant and a
-> little witty, not gloomy; leave room for creativity, don't over-detail.
+> **The Coordinator** — an elegant, friendly man who leads the team, like a calm coach
+> / strategist. A normal, well-dressed person in a smart tailored suit with a refined
+> tie (NOT an all-black agent suit), relaxed and confident. He stands beside a **tactical
+> board / blackboard covered with an abstract game-plan** — circles, arrows, lines and
+> connecting nodes, like a football coach's tactics or a strategy diagram — and **points
+> at it with a slim pointer / baton**, explaining the plan to the team. **Nothing
+> readable** on the board, only abstract marks. Calm, approachable expression, a hint of
+> a smile, NOT stern. Like the rest of the team he wears small, discreet dark oval
+> sunglasses. Elegant, a touch witty, not gloomy; don't over-detail.
 
-Note: sfondo bianco/piatto (lo scontorno io dopo con rembg). Niente testo, loghi,
-emoji o riferimenti a file nel prompt.
+Note: sfondo bianco/piatto (lo scontorno io dopo con rembg). Niente testo leggibile,
+loghi, emoji o riferimenti a file nel prompt. Varianti oggetto se la lavagna non
+convince: solo **bacchetta da direttore d'orchestra**, oppure lavagna con **grafici**
+astratti invece dello schema tattico.
 
 ---
 
