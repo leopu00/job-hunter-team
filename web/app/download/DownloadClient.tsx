@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CopyButton } from "../components/CopyButton";
 import {
@@ -51,7 +52,24 @@ export interface DownloadClientProps {
   releaseAvailable: boolean;
 }
 
-type InstallMode = "desktop" | "terminal";
+type InstallMode = "desktop" | "terminal" | "prompt";
+
+type DlKey = Parameters<ReturnType<typeof useLandingI18n>["t"]>[0];
+const MODES: { id: InstallMode; labelKey: DlKey }[] = [
+  { id: "desktop", labelKey: "dl_mode_desktop_title" },
+  { id: "terminal", labelKey: "dl_mode_terminal_title" },
+  { id: "prompt", labelKey: "dl_mode_prompt_title" },
+];
+
+// Prompt che l'utente incolla nel proprio assistente AI (con accesso al
+// computer): è uno spunto conversazionale, NON una procedura. L'agente esplora
+// repo e sito, capisce che l'utente vuole partire, sceglie con lui l'approccio
+// (dashboard desktop oppure solo CLI) e svolge i passaggi tecnici al posto suo.
+const ASSISTANT_PROMPT = `I'd like to start using Job Hunter Team, an AI agent team that searches for jobs for me.
+Repo: https://github.com/leopu00/job-hunter-team
+Website: https://jobhunterteam.ai
+
+Take a look at the repo and its documentation, then help me set it up and get it running on this computer. Figure out the best approach with me and ask whatever you need along the way — including which AI provider subscription I'll use, and whether I'd prefer the desktop dashboard or a CLI-only setup (both are supported and compatible, so pick whatever suits me; I don't have to open the desktop app if I don't want to). Please handle the technical steps for me.`;
 
 function PlatformIcon({ id }: { id: PlatformId }) {
   if (id === "mac") return <AppleIcon />;
@@ -102,51 +120,33 @@ function DownloadContent({
           </div>
 
           <div className="mb-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                onClick={() => setInstallMode("desktop")}
-                className="px-4 py-4 text-left transition-colors"
-                style={{
-                  background:
-                    installMode === "desktop"
-                      ? "var(--color-card)"
-                      : "transparent",
-                  color:
-                    installMode === "desktop"
-                      ? "var(--color-bright)"
-                      : "var(--color-muted)",
-                  border: `1px solid ${installMode === "desktop" ? "var(--color-green)" : "var(--color-border)"}`,
-                  cursor: "pointer",
-                }}
-              >
-                <div className="text-[12px] font-semibold tracking-wide">
-                  {t("dl_mode_desktop_title")}
-                </div>
-              </button>
-              <button
-                onClick={() => setInstallMode("terminal")}
-                className="px-4 py-4 text-left transition-colors"
-                style={{
-                  background:
-                    installMode === "terminal"
-                      ? "var(--color-card)"
-                      : "transparent",
-                  color:
-                    installMode === "terminal"
-                      ? "var(--color-bright)"
-                      : "var(--color-muted)",
-                  border: `1px solid ${installMode === "terminal" ? "var(--color-green)" : "var(--color-border)"}`,
-                  cursor: "pointer",
-                }}
-              >
-                <div className="text-[12px] font-semibold tracking-wide">
-                  {t("dl_mode_terminal_title")}
-                </div>
-              </button>
+            <div className="grid grid-cols-3 gap-3">
+              {MODES.map((m) => {
+                const active = installMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setInstallMode(m.id)}
+                    className="px-4 py-4 text-left transition-colors"
+                    style={{
+                      background: active ? "var(--color-card)" : "transparent",
+                      color: active
+                        ? "var(--color-bright)"
+                        : "var(--color-muted)",
+                      border: `1px solid ${active ? "var(--color-green)" : "var(--color-border)"}`,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div className="text-[12px] font-semibold tracking-wide">
+                      {t(m.labelKey)}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {installMode === "desktop" ? (
+          {installMode === "desktop" && (
             <div className="mb-10">
               <PrimaryCta
                 variant={primary}
@@ -185,7 +185,9 @@ function DownloadContent({
                 </div>
               )}
             </div>
-          ) : (
+          )}
+
+          {installMode === "terminal" && (
             <div className="mb-8">
               <div
                 className="border overflow-hidden"
@@ -215,6 +217,53 @@ function DownloadContent({
               </p>
             </div>
           )}
+
+          {installMode === "prompt" && (
+            <div className="mb-8">
+              <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-3">
+                {t("dl_prompt_intro")}
+              </p>
+              <div
+                className="border overflow-hidden"
+                style={{
+                  borderColor: "var(--color-border)",
+                  background: "var(--color-card)",
+                }}
+              >
+                <div
+                  className="flex items-center justify-end px-3 py-2"
+                  style={{ borderBottom: "1px solid var(--color-border)" }}
+                >
+                  <CopyButton
+                    text={ASSISTANT_PROMPT}
+                    size="sm"
+                    className="rounded-none"
+                  >
+                    {t("dl_copy_prompt")}
+                  </CopyButton>
+                </div>
+                <pre className="px-4 py-4 overflow-x-auto whitespace-pre-wrap text-[11px] leading-relaxed font-mono text-[var(--color-bright)]">
+                  {ASSISTANT_PROMPT}
+                </pre>
+              </div>
+              <p className="text-[10px] text-[var(--color-dim)] mt-3 text-center leading-relaxed">
+                ⚠️ {t("dl_prompt_note")}
+              </p>
+            </div>
+          )}
+
+          {/* Aiuto: dove/come installarlo → guida /run */}
+          <div className="mt-2 border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-center">
+            <span className="text-[12px] text-[var(--color-muted)]">
+              {t("dl_help_text")}{" "}
+            </span>
+            <Link
+              href="/run"
+              className="text-[12px] font-semibold text-[var(--color-green)] no-underline"
+            >
+              {t("dl_help_link")} →
+            </Link>
+          </div>
 
           <div className="mt-8 flex justify-center">
             <BackLink />

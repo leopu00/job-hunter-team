@@ -271,14 +271,6 @@ export default function LandingNav() {
           >
             {t("nav_project")}
           </Link>
-          <Link
-            href="/chronicles"
-            aria-current={currentPage("/chronicles")}
-            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/chronicles")}
-          >
-            {t("nav_chronicles")}
-          </Link>
           <a
             href="https://github.com/leopu00/job-hunter-team"
             target="_blank"
@@ -409,15 +401,6 @@ export default function LandingNav() {
             style={navLinkStyle("/project")}
           >
             {t("nav_project")}
-          </Link>
-          <Link
-            href="/chronicles"
-            aria-current={currentPage("/chronicles")}
-            onClick={() => setMobileOpen(false)}
-            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/chronicles")}
-          >
-            {t("nav_chronicles")}
           </Link>
           <a
             href="https://github.com/leopu00/job-hunter-team"

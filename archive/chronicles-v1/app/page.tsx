@@ -74,14 +74,6 @@ function ChroniclesContent() {
           width={1672}
           height={941}
           className="w-full h-auto mb-10"
-          style={{
-            WebkitMaskImage:
-              "linear-gradient(to bottom, transparent 0%, #000 14%, #000 82%, transparent 100%), linear-gradient(to right, transparent 0%, #000 9%, #000 91%, transparent 100%)",
-            WebkitMaskComposite: "source-in",
-            maskImage:
-              "linear-gradient(to bottom, transparent 0%, #000 14%, #000 82%, transparent 100%), linear-gradient(to right, transparent 0%, #000 9%, #000 91%, transparent 100%)",
-            maskComposite: "intersect",
-          }}
         />
 
         <section className="mb-14">
