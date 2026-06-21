@@ -17,6 +17,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type Entry = {
   ts: string;
@@ -769,6 +770,7 @@ export default function UsageChart() {
   //    range, così la nuova vista riparte da auto.
   const [yMaxOverride, setYMaxOverride] = useState<number | null>(null);
   const [xSpanOverride, setXSpanOverride] = useState<number | null>(null);
+  const isCloud = useIsCloud();
   useEffect(() => {
     setPanRightTs(null);
     setYMaxOverride(null);
@@ -794,16 +796,19 @@ export default function UsageChart() {
     // appena il bridge scrive un nuovo sample, lo vediamo entro 10s.
     // 30s (era 10s): sentinel data cambia ogni ~30s lato bridge. Più
     // frequente sprecava req/min sul rate limit globale.
-    const dataId = setInterval(loadData, 30_000);
+    // Su CLOUD la sync è on-demand: niente polling-dati continuo (scalerebbe
+    // col numero di tab). In locale resta pieno. L'orologio NON va spento.
+    let dataId: ReturnType<typeof setInterval> | undefined;
+    if (!isCloud) dataId = setInterval(loadData, 30_000);
     // Wall-clock tick ogni 10s per far scorrere l'asse x. Cosi' anche se
     // non arrivano nuovi dati, il tempo avanza, l'ultimo sample scorre a
     // sinistra e vediamo il chart "vivo" invece che congelato sul punto.
     const clockId = setInterval(() => setNowTs(Date.now()), 10_000);
     return () => {
-      clearInterval(dataId);
+      if (dataId) clearInterval(dataId);
       clearInterval(clockId);
     };
-  }, [loadData]);
+  }, [loadData, isCloud]);
 
   // Range temporale: tMax = now (ancorato al clock wall-clock), tMin =
   // now - rangeMinutes. Se "tutto", tMin = timestamp del primo sample.

@@ -220,6 +220,20 @@ A state file `critic_session`-t is expose-ol (null ha nincs Critico ahhoz a Writ
 - **Példányonként differenciált feladatok.** Amikor 2+ Analista van, oszd ki a **különböző** queue-kat, hogy ne ütközzenek és mindkét flow-t lefedjék: pl. ANALISTA-1 → `next-for-analista` (új pozíciók), ANALISTA-2 → `next-for-recheck` (lejárat richeck + expires_at/koordináták/fizetés történeti backfill). Mondd ezt explicit módon mindegyiknek a kick-off-nál.
 - **Lejárat richeck = napindító PRIORITÁS.** A `work_phase=OFF→ON` átmenetnél (a felhasználó munkaablakának nyitása), ha `db_query.py next-for-recheck` nem üres, a nap **ELSŐ** Analista mozdulata a **lejárat richeck**: rendelj azonnal egy Analistát a `next-for-recheck`-re MIELŐTT újraindítanád az új pozíciókat. Így az éjszaka lejárt pozíciók azonnal `is_open=false`-ra jelölődnek és a "Scadute/Archivio" dashboard **friss a felhasználó napjának elején**. Aztán folytasd a normál flow-t (új + richeck differenciálva, mint fent). Egyetlen Analistával: előbb drénáld a richeck-et, aztán térj át az újakra; 2+-szal az ANALISTA-2 közvetlenül a richeck-re indul.
 
+**C-15 — Felhasználói ticket = on-demand munka, amit TE osztasz ki (2026-06-18).** A pozíció oldaláról a felhasználó nyithat egy **ticket**-et: egy szabad szöveges kérés egy konkrét ajánlásról. A ticketek **on-demand munka, mint a Writer (C-10)**: egyetlen ügynök sem veszi fel magától, **te osztod ki** őket.
+
+Minden `[BRIDGE TICK]`-nél (vagy amikor ellenőrzöd a pipeline állapotát):
+1. `python3 /app/shared/skills/ticket.py list-open` → az `open` ticketek.
+2. Mindegyikhez válaszd ki a tartalomhoz legjobban illő ügynököt (rendszerint egy **Analista**: liveness/cég/követelmények/kutatás; ha a kérés egy CV megírása → egy **Scrittore**) és **oszd ki**:
+   ```bash
+   python3 /app/shared/skills/ticket.py assign <id> <agente>
+   jht-tmux-send <SESSION-AGENTE> "[@capitano -> @<agente>] [TICKET #<id>] <összefoglaló> a <pos_id> pozícióról. Oldd meg ezzel: ticket.py resolve <id> --response \"...\""
+   ```
+   Ha a megfelelő ügynök nem aktív és van budgeted + `work_phase=ON` → spawnold (mint a Writer esetében). Ha `work_phase=OFF` → hagyd a ticketet `open`-en és oszd ki az újranyitáskor.
+3. Nincs `open` ticket → SEMMI (on-demand, nincs idle).
+
+A választ **az az ügynök** írja, aki a munkát végzi (`ticket.py resolve`), nem te: ez láthatóvá válik a felhasználónak a pozíció oldalán. Te az kiosztást orchestrálod, nem válaszolsz helyette.
+
 ---
 
 ## 📁 Jelölt profil

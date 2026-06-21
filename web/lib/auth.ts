@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { isSupabaseConfigured } from '@/lib/workspace'
+import { isCloudDeploy } from '@/lib/deploy-mode'
 import { headers, cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { LOCAL_TOKEN_COOKIE, isLocalTokenAuthenticated } from '@/lib/local-token'
@@ -151,7 +152,18 @@ export async function requireAuth(): Promise<NextResponse | null> {
  *     verso la VPS (l'utente le vuole anche da telefono).
  */
 export async function requireLocalWrite(): Promise<NextResponse | null> {
+  // [JHT-DASHBOARD-SPLIT] Decisione DURA a build: su un deploy `cloud` la
+  // scrittura di controllo/config/dati è disabilitata SEMPRE, a prescindere
+  // dagli header (che sono client-controllabili). È la stessa conclusione di
+  // isLocalRequest() sul cloud (host = dominio → false), ma resa deterministica
+  // dal flag di build, non dedotta dalla richiesta. La corsia richieste async
+  // (ticket/feedback/azioni-posizione leggere) NON passa di qui → resta cloud.
+  if (isCloudDeploy()) return readOnlyResponse()
   if (await isLocalRequest()) return null
+  return readOnlyResponse()
+}
+
+function readOnlyResponse(): NextResponse {
   return NextResponse.json(
     {
       error: 'read_only',

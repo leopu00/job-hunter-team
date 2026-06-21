@@ -16,6 +16,7 @@
 
 import { useEffect, useState } from "react";
 import { colorForAgent } from "./agent-colors";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type WriterEntry = {
   own_rate_kt_per_min?: number;
@@ -45,6 +46,7 @@ function formatRate(kt: number): string {
 export default function WriterCriticBreakdown() {
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const isCloud = useIsCloud();
 
   useEffect(() => {
     let cancelled = false;
@@ -60,12 +62,20 @@ export default function WriterCriticBreakdown() {
       }
     };
     load();
+    // Su CLOUD la sync è on-demand: niente polling continuo (scalerebbe col
+    // numero di tab). In locale resta pieno (teatro live del team). Il
+    // cancel-guard del load iniziale resta attivo anche su cloud.
+    if (isCloud) {
+      return () => {
+        cancelled = true;
+      };
+    }
     const id = setInterval(load, 15_000);
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, []);
+  }, [isCloud]);
 
   const aggregated = data?.perWriterAggregated ?? {};
   const writers = Object.entries(aggregated)

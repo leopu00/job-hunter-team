@@ -8,6 +8,11 @@ const DESIRED_FIELDS = [
   "agents_enabled",
   "restart_token",
   "last_user_activity_at",
+  // Rendezvous "Sync now" ([JHT-DATA-SYNC] fase 3): il browser (anche cloud)
+  // scrive sync_requested_at per chiedere alla VPS un push fresco on-demand.
+  // NON è un'azione di controllo (non avvia/ferma il team) → resta consentita
+  // dal cloud anche quando il control bus verrà reso read-only (web-readonly d1).
+  "sync_requested_at",
 ] as const;
 const OBSERVED_FIELDS = [
   "is_running",
@@ -17,6 +22,9 @@ const OBSERVED_FIELDS = [
   "last_error_at",
   "last_action",
   "last_action_at",
+  // Il daemon VPS (source=token) marca sync_completed_at dopo aver pushato in
+  // risposta a una sync_requested_at → il browser lo vede e fa UN refetch.
+  "sync_completed_at",
 ] as const;
 
 type DesiredField = (typeof DESIRED_FIELDS)[number];

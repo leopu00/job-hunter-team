@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useDevMode } from "@/components/SettingsMenu";
 import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
 import { useLocale } from "@/lib/use-locale";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 const ACCENT = "#ff9100";
 
@@ -358,6 +359,7 @@ const LOCALE_TAG: Record<string, string> = {
 };
 
 export default function CapitanoPage() {
+  const isCloud = useIsCloud();
   const locale = useLocale();
   const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const localeTag = LOCALE_TAG[locale] ?? "en-GB";
@@ -413,13 +415,14 @@ export default function CapitanoPage() {
   useEffect(() => {
     fetchStatus();
     fetchChat();
+    if (isCloud) return;
     const statusId = setInterval(fetchStatus, 5000);
     const chatId = setInterval(fetchChat, 3000);
     return () => {
       clearInterval(statusId);
       clearInterval(chatId);
     };
-  }, [fetchStatus, fetchChat]);
+  }, [fetchStatus, fetchChat, isCloud]);
 
   // Scroll chat in fondo solo quando arrivano nuovi messaggi
   const prevMsgCountRef = useRef(0);
@@ -643,7 +646,8 @@ export default function CapitanoPage() {
         </div>
       </div>
 
-      {/* Input chat */}
+      {/* Input chat — [JHT-DASHBOARD-SPLIT] composer = controllo, solo desktop */}
+      {isCloud !== true && (
       <form
         aria-label={tr("sendToCaptain")}
         onSubmit={(e) => {
@@ -679,6 +683,7 @@ export default function CapitanoPage() {
           {sending ? "…" : tr("send")}
         </button>
       </form>
+      )}
 
       {/* Terminale (toggle) — nascosto in fullscreen */}
       {showTerminal && !chatFullscreen && (

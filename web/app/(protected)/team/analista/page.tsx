@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import AgentInteraction from "@/components/AgentInteraction";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type Position = {
   id: number;
@@ -252,6 +253,7 @@ function DonutChart({ categories }: { categories: Record<string, number> }) {
 export default function AnalistaPage() {
   const [data, setData] = useState<AnalistaActivity | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const isCloud = useIsCloud();
 
   const fetchData = useCallback(async () => {
     try {
@@ -264,9 +266,10 @@ export default function AnalistaPage() {
 
   useEffect(() => {
     fetchData();
+    if (isCloud) return;
     const id = setInterval(fetchData, 8000);
     return () => clearInterval(id);
-  }, [fetchData]);
+  }, [fetchData, isCloud]);
 
   const ratio = data?.ratio ?? { checked: 0, excluded: 0 };
   const rTotal = ratio.checked + ratio.excluded;

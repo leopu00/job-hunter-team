@@ -5,6 +5,8 @@
 > **Status: PROPOSTA** — ordina la visione utente del 2026-06-15 (post beta-test). Da validare prima di implementare. Ribalta una fetta del refactor cloud "desired-state" shippato fine maggio: **leggere § "Cosa si ritira" con attenzione**.
 >
 > Supersede la memoria `web-first-interaction-roadmap` (2026-05-23) e le voci interactive di `cloud-sync-architecture.md`.
+>
+> 🔄 **Raffinato 2026-06-20** da [`2026-06-20-data-sync-and-dashboard-split-design.md`](architecture/2026-06-20-data-sync-and-dashboard-split-design.md): la **decisione aperta #5 è risolta** (il web cloud NON è Telegram-only — mantiene una **corsia richieste async**, ticket+azioni-posizione, pull-based dalla VPS); inoltre quel doc definisce il meccanismo di **sync dati** (on-access + pulsante, niente polling) e la **separazione dura delle due dashboard** (locale dentro l'app desktop · cloud nel browser).
 
 ---
 
@@ -181,7 +183,7 @@ L'ordine non è rigido: I è scorporabile subito; IV è il pezzo che porta il va
 2. **Tunnel VPS:** **SSH `-L` raw** vs **Tailscale/WireGuard**? (impatta robustezza/NAT/UX).
 3. **Quanto ritirare ORA** del path cloud interattivo: **congelare** e basta, o **rimuovere** i pezzi ridondanti?
 4. **Unificare** "Dedicated computer mode" (LAN) e "VPS" sotto lo **stesso** tunnel SSH? (raccomando sì).
-5. **Away-interaction:** confermi che da telefono/PC-lavoro l'unico canale di *comando* è **Telegram/e-mail** (il web resta solo vista)?
+5. ~~**Away-interaction:** confermi che da telefono/PC-lavoro l'unico canale di *comando* è **Telegram/e-mail** (il web resta solo vista)?~~ → **RISOLTA 2026-06-20: NO.** Il web cloud mantiene una **corsia richieste async** (ticket + azioni-posizione, pull-based dalla VPS); restano fuori dal cloud solo chat/start-stop/config. Vedi [`2026-06-20-data-sync-and-dashboard-split-design.md`](architecture/2026-06-20-data-sync-and-dashboard-split-design.md).
 
 ---
 

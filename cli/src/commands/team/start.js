@@ -115,6 +115,18 @@ async function startActionContainer(agentArg, options = {}) {
       console.log(c.dim(`  ℹ pull desired-state non applicato: ${lastLine}`));
     }
 
+    // Sync ticket cloud↔VPS PRIMA dello spawn: importa i ticket 'open' creati
+    // dal web durante il downtime così il Capitano (C-15) li vede al primo giro,
+    // e pusha eventuali risoluzioni rimaste in sospeso. Best-effort 15s.
+    const ticketRes = execInContainer(
+      'node /app/cli/bin/jht.js cloud sync-tickets --silent',
+      { timeoutMs: 15_000 },
+    );
+    if (ticketRes.code !== 0 && ticketRes.stderr && !/non abilitato/i.test(ticketRes.stderr)) {
+      const lastLine = ticketRes.stderr.trim().split('\n').slice(-1)[0];
+      console.log(c.dim(`  ℹ ticket-sync non applicato: ${lastLine}`));
+    }
+
     // Pull profilo cloud → candidate_profile.yml se il file locale manca
     // (PC nuovo / container ricreato): chiude il cerchio cloud→locale. Only-if
     // -absent (non sovrascrive un profilo locale esistente). Best-effort 15s.

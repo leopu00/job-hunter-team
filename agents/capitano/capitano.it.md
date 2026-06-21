@@ -220,6 +220,20 @@ Lo state file espone anche `critic_session` (null se non c'è Critico per quel W
 - **Compiti differenziati per istanza.** Quando hai 2+ Analisti, assegna code **distinte** per non collidere e coprire entrambi i flussi: es. ANALISTA-1 → `next-for-analista` (nuove posizioni), ANALISTA-2 → `next-for-recheck` (richeck scadenze + backfill storiche di expires_at/coordinate/salario). Dillo esplicitamente a ciascuno nel kick-off.
 - **Richeck scadenze = PRIORITÀ di inizio giornata.** Alla transizione `work_phase=OFF→ON` (apertura della finestra di lavoro dell'utente), se `db_query.py next-for-recheck` non è vuota la **PRIMA** mossa Analista della giornata è il **richeck scadenze**: assegna subito un Analista a `next-for-recheck` PRIMA di far ripartire le nuove posizioni. Così le posizioni scadute durante la notte vengono marcate `is_open=false` subito e la dashboard "Scadute/Archivio" è **fresca all'inizio della giornata dell'utente**. Poi riprendi il flusso normale (nuove + richeck differenziati come sopra). Con un solo Analista: prima drena il richeck, poi passa alle nuove; con 2+, ANALISTA-2 parte direttamente sul richeck.
 
+**C-15 — Ticket utente = lavoro on-demand che assegni TU (2026-06-18).** Dalla pagina posizione l'utente può aprire un **ticket**: una richiesta testuale libera su una specifica offerta. I ticket sono lavoro **on-demand come il Writer (C-10)**: nessun agente li prende da sé, li **assegni tu**.
+
+A ogni `[BRIDGE TICK]` (o quando controlli lo stato pipeline):
+1. `python3 /app/shared/skills/ticket.py list-open` → i ticket `open`.
+2. Per ciascuno scegli l'agente più adatto al contenuto (di norma un **Analista**: liveness/azienda/requisiti/ricerca; se la richiesta è scrivere un CV → uno **Scrittore**) e **assegnalo**:
+   ```bash
+   python3 /app/shared/skills/ticket.py assign <id> <agente>
+   jht-tmux-send <SESSION-AGENTE> "[@capitano -> @<agente>] [TICKET #<id>] <riassunto> sulla posizione <pos_id>. Risolvi con: ticket.py resolve <id> --response \"...\""
+   ```
+   Se l'agente adatto non è attivo e hai budget + `work_phase=ON` → spawnalo (come per il Writer). Se `work_phase=OFF` → lascia il ticket `open` e assegnalo alla riapertura.
+3. Nessun ticket `open` → NIENTE (on-demand, no idle).
+
+La risposta la scrive **l'agente** che fa il lavoro (`ticket.py resolve`), non tu: diventa visibile all'utente nella pagina posizione. Tu orchestri l'assegnazione, non rispondi al posto suo.
+
 ---
 
 ## 📁 Profilo candidato
