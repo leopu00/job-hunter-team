@@ -4,7 +4,7 @@ export const runtime = "edge";
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
-// Wordmark "JHT" (JetBrains Mono Bold, outlines) — "JH" black, "T" green, white bg.
+// Wordmark "JHT" (JetBrains Mono Bold, outlines) — black on white bg.
 export default function AppleIcon() {
   return new ImageResponse(
     (
@@ -25,7 +25,7 @@ export default function AppleIcon() {
           />
           <path
             d="M23.59 21.01V12.42H20.93V10.85H28V12.42H25.34V21.01Z"
-            fill="#00e87a"
+            fill="#060608"
           />
         </svg>
       </div>
