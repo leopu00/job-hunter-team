@@ -445,6 +445,21 @@
       "count": 27
     }
   ],
+  "sources": [
+    { "name": "linkedin", "count": 144 },
+    { "name": "greenhouse", "count": 50 },
+    { "name": "workday", "count": 33 },
+    { "name": "company-careers", "count": 31 },
+    { "name": "ashby", "count": 22 },
+    { "name": "official-careers-direct", "count": 22 },
+    { "name": "lever", "count": 18 },
+    { "name": "efinancialcareers", "count": 10 },
+    { "name": "smartrecruiters", "count": 8 },
+    { "name": "bebee", "count": 5 },
+    { "name": "bnpparibas-careers", "count": 5 },
+    { "name": "venturecapitalcareers", "count": 5 },
+    { "name": "Altre", "count": 45 }
+  ],
   "countries": [
     {
       "name": "Portugal",

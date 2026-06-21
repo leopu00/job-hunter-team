@@ -53,6 +53,9 @@ export interface CaseStudyRun {
   totals: { positions: number; scored: number; excluded: number }
   match: CaseStudyMatch
   categories: { name: string; count: number }[]
+  // Fonti da cui sono arrivate le posizioni (top-N + "Altre"). Opzionale:
+  // assente negli snapshot generati prima dell'aggiunta del campo.
+  sources?: { name: string; count: number }[]
   countries: { name: string; code: string; count: number }[]
   cities: CaseStudyCity[]
   salary: { n: number; avgMin: number | null; avgMax: number | null }
