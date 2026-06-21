@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import TeamOrgChart from "../_components/TeamOrgChart";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type AgentStatus = "running" | "stopped" | "pending";
 
@@ -107,6 +108,7 @@ function formatFoundAt(iso: string): string {
 }
 
 export default function TeamV2Page() {
+  const isCloud = useIsCloud();
   const [info, setInfo] = useState<Record<string, AgentInfo>>({});
   const [recent, setRecent] = useState<RecentPosition[]>([]);
   const [recentLoaded, setRecentLoaded] = useState(false);
@@ -159,17 +161,19 @@ export default function TeamV2Page() {
 
   useEffect(() => {
     fetchStatus();
+    if (isCloud) return;
     const t = setInterval(fetchStatus, 3000);
     return () => clearInterval(t);
-  }, [fetchStatus]);
+  }, [fetchStatus, isCloud]);
 
   useEffect(() => {
     fetchRecent();
+    if (isCloud) return;
     // Le posizioni nuove arrivano dagli Scout — refresh più rilassato
     // dello status agenti, evita di spammare la query DB.
     const t = setInterval(fetchRecent, 10_000);
     return () => clearInterval(t);
-  }, [fetchRecent]);
+  }, [fetchRecent, isCloud]);
 
   // Polling /api/db/recent-writes per individuare quale agente ha
   // appena scritto. Quando un timestamp avanza rispetto all'ultimo
@@ -209,12 +213,17 @@ export default function TeamV2Page() {
     };
 
     poll();
+    if (isCloud) {
+      return () => {
+        cancelled = true;
+      };
+    }
     const t = setInterval(poll, 2000);
     return () => {
       cancelled = true;
       clearInterval(t);
     };
-  }, [fetchRecent]);
+  }, [fetchRecent, isCloud]);
 
   const agentMeta = Object.fromEntries(
     Object.entries(COLORS).map(([id, color]) => [

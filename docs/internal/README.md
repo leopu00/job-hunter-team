@@ -30,6 +30,7 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 | File | Topic |
 |---|---|
 | [`cloud-sync-architecture.md`](architecture/cloud-sync-architecture.md) | Sync DB locale ↔ Supabase: cosa va in cloud, macro-event design |
+| [`2026-06-20-data-sync-and-dashboard-split-design.md`](architecture/2026-06-20-data-sync-and-dashboard-split-design.md) | 🔄 Sync on-access + "Sync now" (no polling), event-log push, corsia richieste async, split dashboard locale/cloud |
 | [`candidate-profile-cloud-sync-redesign.md`](architecture/candidate-profile-cloud-sync-redesign.md) | Redesign sync profilo candidato |
 | [`file-bridge-on-demand.md`](architecture/file-bridge-on-demand.md) | Pull-on-demand file via Supabase Storage |
 | [`context-watchdog-spec.md`](architecture/context-watchdog-spec.md) | Restart periodico agenti via Dottore (anti context saturation) |

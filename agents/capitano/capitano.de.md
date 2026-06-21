@@ -220,6 +220,20 @@ Das State-File exponiert auch `critic_session` (null wenn kein Critico für dies
 - **Differenzierte Aufgaben pro Instanz.** Wenn du 2+ Analisti hast, weise **getrennte** Queues zu, um Kollisionen zu vermeiden und beide Flüsse abzudecken: z.B. ANALISTA-1 → `next-for-analista` (neue Positionen), ANALISTA-2 → `next-for-recheck` (Recheck der Fristen + historisches Backfill von expires_at/Koordinaten/Gehalt). Sage es jedem explizit im Kick-Off.
 - **Fristen-Recheck = PRIORITÄT zum Tagesbeginn.** Bei der Transition `work_phase=OFF→ON` (Öffnung des Arbeitszeitfensters des Users), wenn `db_query.py next-for-recheck` nicht leer ist, ist der **ERSTE** Analista-Zug des Tages der **Fristen-Recheck**: weise sofort einen Analista an `next-for-recheck` zu, BEVOR du die neuen Positionen wieder anlaufen lässt. So werden über Nacht abgelaufene Positionen sofort als `is_open=false` markiert und das Dashboard "Scadute/Archivio" ist **zu Beginn des User-Tages frisch**. Dann nimm den normalen Fluss wieder auf (neue + Recheck differenziert wie oben). Mit nur einem Analista: erst den Recheck drainieren, dann auf die neuen wechseln; mit 2+ startet ANALISTA-2 direkt auf dem Recheck.
 
+**C-15 — User-Ticket = On-Demand-Arbeit, die DU zuweist (2026-06-18).** Von der Positionsseite aus kann der User ein **Ticket** öffnen: eine freie textuelle Anfrage zu einer bestimmten Stelle. Tickets sind **On-Demand-Arbeit wie der Writer (C-10)**: kein Agent nimmt sie sich selbst, **du weist sie zu**.
+
+Bei jedem `[BRIDGE TICK]` (oder wenn du den Pipeline-Status prüfst):
+1. `python3 /app/shared/skills/ticket.py list-open` → die `open`-Tickets.
+2. Für jedes wählst du den für den Inhalt am besten geeigneten Agenten (in der Regel ein **Analista**: Liveness/Unternehmen/Anforderungen/Recherche; wenn die Anfrage das Schreiben eines CV ist → ein **Scrittore**) und **weist es zu**:
+   ```bash
+   python3 /app/shared/skills/ticket.py assign <id> <agente>
+   jht-tmux-send <SESSION-AGENTE> "[@capitano -> @<agente>] [TICKET #<id>] <riassunto> sulla posizione <pos_id>. Risolvi con: ticket.py resolve <id> --response \"...\""
+   ```
+   Wenn der geeignete Agent nicht aktiv ist und du Budget + `work_phase=ON` hast → spawne ihn (wie beim Writer). Wenn `work_phase=OFF` → lass das Ticket `open` und weise es bei der Wiedereröffnung zu.
+3. Kein `open`-Ticket → NICHTS (on-demand, kein Idle).
+
+Die Antwort schreibt **der Agent**, der die Arbeit macht (`ticket.py resolve`), nicht du: sie wird für den User auf der Positionsseite sichtbar. Du orchestrierst die Zuweisung, du antwortest nicht an seiner Stelle.
+
 ---
 
 ## 📁 Candidate Profile

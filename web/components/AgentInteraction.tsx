@@ -3,6 +3,7 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useDevMode } from './SettingsMenu'
+import { useIsCloud } from '@/app/hooks/useIsCloud'
 
 type AgentSession = { session: string; active: boolean }
 type Mode = 'chat' | 'terminal'
@@ -19,6 +20,11 @@ interface Props {
 type LocalMsg = { role: 'user' | 'system'; text: string; ts: number }
 
 export default function AgentInteraction({ sessionPrefix, color, label }: Props) {
+  // [JHT-DASHBOARD-SPLIT] Questa è una superficie di INTERAZIONE (chat +
+  // terminale + invio a tmux): zero dati in lettura. Sul cloud non esiste →
+  // niente widget, niente polling /api/team/{status,terminal}. La pagina-agente
+  // resta (monitoraggio read-only), sparisce solo la sezione "Interazione".
+  const isCloud = useIsCloud()
   const [sessions, setSessions] = useState<AgentSession[]>([])
   const [activeSession, setActiveSession] = useState<string | null>(null)
   const [output, setOutput] = useState('')
@@ -47,6 +53,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
 
   // Fetch sessioni attive per questo agente
   const fetchSessions = useCallback(async () => {
+    if (isCloud === true) { setSessions([]); return }
     try {
       const res = await fetch('/api/team/status')
       const data = await res.json()
@@ -69,11 +76,11 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     } catch {
       setSessions([])
     }
-  }, [sessionPrefix, activeSession])
+  }, [sessionPrefix, activeSession, isCloud])
 
   // Fetch terminal output per la sessione attiva
   const fetchTerminal = useCallback(async () => {
-    if (!activeSession) return
+    if (isCloud === true || !activeSession) return
     try {
       const res = await fetch(`/api/team/terminal?session=${encodeURIComponent(activeSession)}`)
       const data = await res.json()
@@ -81,7 +88,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     } catch {
       setOutput('')
     }
-  }, [activeSession])
+  }, [activeSession, isCloud])
 
   // Poll adattivo: pausa quando tab non e' visibile, backoff esponenziale
   // se l'output non cambia. Pre-fix (2026-05-22): 1500ms fissi senza
@@ -372,6 +379,10 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
       </form>
     </div>
   )
+
+  // [JHT-DASHBOARD-SPLIT] Sul cloud niente sezione interazione (dopo gli hook,
+  // per non violare le regole di React).
+  if (isCloud === true) return null
 
   return (
     <div className="mt-10 pt-8 border-t border-[var(--color-border)]">

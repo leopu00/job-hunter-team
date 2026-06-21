@@ -27,6 +27,7 @@ import {
 import PendingMessagesCard from "@/app/components/PendingMessagesCard";
 import VpsLifecycleCard from "@/app/components/VpsLifecycleCard";
 import OnboardingPopup from "@/app/components/OnboardingPopup";
+import CloudRefreshButton from "@/app/components/CloudRefreshButton";
 
 const OnboardingWizard = dynamic(
   () => import("@/app/components/OnboardingWizard"),
@@ -210,6 +211,9 @@ export default async function DashboardPage() {
         }}
       >
         <div className="max-w-6xl mx-auto px-5 pt-8 pb-8">
+          {/* ── Sync now (solo cloud): refresh dati on-demand, niente polling ─ */}
+          <CloudRefreshButton />
+
           {/* ── Messaggi del team (fallback web quando Telegram down) ─ */}
           <PendingMessagesCard initialMessages={pendingMessages} />
 

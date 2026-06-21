@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useIsCloud } from '@/app/hooks/useIsCloud'
 
 interface UserMenuProps {
   avatarUrl?: string
@@ -16,6 +17,10 @@ export default function UserMenu({ avatarUrl, fullName, email }: UserMenuProps) 
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const router = useRouter()
+  // [JHT-DASHBOARD-SPLIT] Sul cloud le voci di controllo/config sono redirette
+  // dal layout: qui le nascondiamo dal menu per non offrire vicoli ciechi.
+  // (null/false = locale → mostra tutto; true = cloud → nascondi.)
+  const isCloud = useIsCloud()
 
   const initials = fullName
     ? fullName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
@@ -87,14 +92,16 @@ export default function UserMenu({ avatarUrl, fullName, email }: UserMenuProps) 
           >
             Profilo
           </Link>
-          <Link
-            href="/settings"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
-          >
-            Impostazioni
-          </Link>
+          {isCloud !== true && (
+            <Link
+              href="/settings"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
+            >
+              Impostazioni
+            </Link>
+          )}
           <Link
             href="/export"
             role="menuitem"
@@ -103,14 +110,16 @@ export default function UserMenu({ avatarUrl, fullName, email }: UserMenuProps) 
           >
             Esporta dati
           </Link>
-          <Link
-            href="/backup"
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
-          >
-            Backup
-          </Link>
+          {isCloud !== true && (
+            <Link
+              href="/backup"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="block px-4 py-2 text-[11px] text-[var(--color-muted)] hover:bg-[var(--color-card)] transition-colors no-underline"
+            >
+              Backup
+            </Link>
+          )}
           <button
             onClick={handleLogout}
             className="w-full text-left px-4 py-2.5 text-[11px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-red)] hover:bg-[var(--color-card)] transition-colors cursor-pointer border-t border-[var(--color-border)] mt-1"

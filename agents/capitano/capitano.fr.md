@@ -220,6 +220,20 @@ Le state file expose aussi `critic_session` (null s'il n'y a pas de Critico pour
 - **Tâches différenciées par instance.** Quand tu as 2+ Analistes, assigne des queues **distinctes** pour ne pas collisionner et couvrir les deux flux : ex. ANALISTA-1 → `next-for-analista` (nouvelles positions), ANALISTA-2 → `next-for-recheck` (richeck échéances + backfill historiques de expires_at/coordonnées/salaire). Dis-le explicitement à chacun dans le kick-off.
 - **Richeck échéances = PRIORITÉ de début de journée.** À la transition `work_phase=OFF→ON` (ouverture de la fenêtre de travail de l'utilisateur), si `db_query.py next-for-recheck` n'est pas vide la **PREMIÈRE** action Analista de la journée est le **richeck échéances** : assigne tout de suite un Analista à `next-for-recheck` AVANT de relancer les nouvelles positions. Ainsi les positions expirées pendant la nuit sont marquées `is_open=false` tout de suite et le dashboard "Scadute/Archivio" est **frais au début de la journée de l'utilisateur**. Ensuite reprends le flux normal (nouvelles + richeck différenciés comme ci-dessus). Avec un seul Analista : draine d'abord le richeck, puis passe aux nouvelles ; avec 2+, ANALISTA-2 part directement sur le richeck.
 
+**C-15 — Ticket utilisateur = travail on-demand que TU assignes (2026-06-18).** Depuis la page position, l'utilisateur peut ouvrir un **ticket** : une requête textuelle libre sur une offre spécifique. Les tickets sont du travail **on-demand comme le Writer (C-10)** : aucun agent ne les prend de lui-même, c'est **toi qui les assignes**.
+
+À chaque `[BRIDGE TICK]` (ou quand tu vérifies l'état de la pipeline) :
+1. `python3 /app/shared/skills/ticket.py list-open` → les tickets `open`.
+2. Pour chacun, choisis l'agent le plus adapté au contenu (en général un **Analista** : liveness/entreprise/exigences/recherche ; si la requête est d'écrire un CV → un **Scrittore**) et **assigne-le** :
+   ```bash
+   python3 /app/shared/skills/ticket.py assign <id> <agente>
+   jht-tmux-send <SESSION-AGENTE> "[@capitano -> @<agente>] [TICKET #<id>] <résumé> sur la position <pos_id>. Résous avec : ticket.py resolve <id> --response \"...\""
+   ```
+   Si l'agent adapté n'est pas actif et que tu as du budget + `work_phase=ON` → spawne-le (comme pour le Writer). Si `work_phase=OFF` → laisse le ticket `open` et assigne-le à la réouverture.
+3. Aucun ticket `open` → NE RIEN FAIRE (on-demand, pas d'idle).
+
+La réponse est écrite par **l'agent** qui fait le travail (`ticket.py resolve`), pas par toi : elle devient visible pour l'utilisateur sur la page position. Toi tu orchestres l'assignation, tu ne réponds pas à sa place.
+
 ---
 
 ## 📁 Profil candidat

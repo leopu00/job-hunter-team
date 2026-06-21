@@ -60,6 +60,12 @@ services:
       - MOONSHOT_API_KEY=${MOONSHOT_API_KEY:-}
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+      # [JHT-DASHBOARD-SPLIT] Deploy-mode DURO deciso a build/deploy. Il
+      # container (PC locale o VPS via tunnel SSH) è sempre CO-LOCATO col team
+      # → 'local': SQLite source-of-truth, scrittura piena. Solo il deploy
+      # Vercel imposta 'cloud' (sola lettura + corsia richieste). Default
+      # 'local' anche se l'env manca (vedi web/lib/deploy-mode.ts).
+      - NEXT_PUBLIC_JHT_DEPLOY=${NEXT_PUBLIC_JHT_DEPLOY:-local}
       # Inotify su bind-mount Windows+WSL2 non fa sempre propagare gli
       # eventi di modifica: polling generale per Next.js / Turbopack.
       # Innocuo su VPS Linux dove inotify funziona nativo.
