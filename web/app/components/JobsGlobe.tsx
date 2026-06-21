@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
+import { scoreToRgb } from "@/lib/score-color";
 
 // Stringhe UI hardcoded localizzate (chart/empty/aria/popup).
 const T: Record<string, Record<string, string>> = {
@@ -194,32 +195,8 @@ function scoreNormHeight(score: number | null): number {
   return 0.2 + ((s - 40) / 60) * 0.8; // 0.20..1.00
 }
 
-// Mappa score (0-100) → colore RGB. SCALA SOLO-VERDE: score basso = verde
-// tenue/smorto (non disturba), score alto = verde vivo e saturo (spicca).
-// Niente più arancio/rosso: l'attenzione va a chi ha lo score più alto.
-function scoreToRgb(score: number | null): [number, number, number] {
-  if (score == null) return [150, 180, 165]; // verde-grigio neutro
-  const s = Math.max(0, Math.min(100, score));
-  const stops: Array<[number, [number, number, number]]> = [
-    [0, [184, 214, 196]], // verde pallido/smorto
-    [40, [143, 202, 168]],
-    [70, [52, 201, 127]],
-    [100, [0, 232, 122]], // --color-green vivo
-  ];
-  for (let i = 0; i < stops.length - 1; i++) {
-    const [s0, c0] = stops[i];
-    const [s1, c1] = stops[i + 1];
-    if (s >= s0 && s <= s1) {
-      const t = (s - s0) / (s1 - s0);
-      return [
-        Math.round(c0[0] + (c1[0] - c0[0]) * t),
-        Math.round(c0[1] + (c1[1] - c0[1]) * t),
-        Math.round(c0[2] + (c1[2] - c0[2]) * t),
-      ];
-    }
-  }
-  return stops[stops.length - 1][1];
-}
+// Scala colore score (solo-verde) condivisa con la score distribution.
+// Vedi web/lib/score-color.ts (unica fonte di verità).
 
 // Genera l'icona "fascio di raggi" per un gruppo di N offerte
 // nella stessa location. Disegna esattamente N raggi affiancati,
@@ -510,9 +487,14 @@ function explodeGroups(
     const mpp =
       (156543.03392 * Math.cos((g.lat * Math.PI) / 180)) / Math.pow(2, zoom);
     const lonScale = 1 / Math.cos((g.lat * Math.PI) / 180);
-    const stable = [...g.positions].sort((a, b) =>
-      a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
-    );
+    // Fila ordinata per SCORE crescente: score più basso a sinistra, più alto
+    // a destra. Tie-break per id → fila stabile fra refresh/zoom.
+    const stable = [...g.positions].sort((a, b) => {
+      const sa = a.score ?? -1;
+      const sb = b.score ?? -1;
+      if (sa !== sb) return sa - sb;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
     const mid = (g.count - 1) / 2;
     stable.forEach((p, i) => {
       // Offset orizzontale centrato sulla coord del gruppo.
