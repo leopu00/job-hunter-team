@@ -19,6 +19,13 @@ function dm(day: string) {
   return `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 }
 
+// Posizione del giorno dentro l'arco settimanale del budget (reset giovedì):
+// giovedì = 1° giorno … mercoledì = 7° (ultimo) giorno.
+function weekArcDay(day: string): number {
+  const wd = new Date(`${day}T00:00:00Z`).getUTCDay(); // dom=0 … sab=6
+  return ((wd - 4 + 7) % 7) + 1; // giovedì (4) → 1
+}
+
 export default function WorkBudgetChart({
   usage,
   roleDaily,
@@ -236,8 +243,11 @@ export default function WorkBudgetChart({
             minWidth: 150,
           }}
         >
-          <div className="font-bold text-[var(--color-white)] mb-1">
+          <div className="font-bold text-[var(--color-white)]">
             {dm(hd.day)} · {hd.total} azioni
+          </div>
+          <div className="text-[var(--color-dim)] mb-1">
+            {weekArcDay(hd.day)}° giorno della settimana
           </div>
           {roles
             .filter((r) => hd.get(r) > 0)
