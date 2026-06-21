@@ -25,6 +25,13 @@ sole — lenti ovali scure, discrete — come tratto distintivo condiviso del te
 un dettaglio elegante: **non** devono rendere il personaggio cupo o "Agente Smith",
 resta una persona normale dall'aria serena.
 
+🕶️ **CRUCIALE — le lenti coprono SEMPRE gli occhi.** Gli occhiali sono **indossati
+correttamente, alti sul ponte del naso**, con lenti **completamente opache** che
+**nascondono del tutto gli occhi**. Gli occhi **non si vedono MAI**: NON abbassati,
+NON spinti sulla punta del naso, NON sollevati sulla fronte. Sono **agenti virtuali,
+non hanno occhi** — dietro le lenti c'è solo buio. (Il generatore tende a metterli
+abbassati con gli occhi in vista: vietarlo esplicitamente in ogni prompt.)
+
 > ⚠️ **Generiamo da browser (ChatGPT/web): MAI riferimenti a file nei prompt** (no
 > `ref. …png`, no path) — il generatore non vede i nostri file locali. Le immagini in
 > `web/public/` e `prima-release/` sono solo appunti visivi **per noi**.
@@ -165,17 +172,19 @@ vittoriani eleganti, palette terrosa+verde, NO boy-scout). Affinamenti utente: *
 >
 > **Two elegant investigators (the Scouts)** who track down job opportunities — sharp,
 > well-dressed people in smart, slightly vintage tailored clothes (trench coats,
-> waistcoats, pinstripe suits), each wearing the same small discreet dark sunglasses as
-> the rest of the team. **Full figure, head to toe — both entirely visible, nothing
-> cropped (character-sheet style).**
+> waistcoats, pinstripe suits). Both wear small dark sunglasses **worn correctly, high
+> on the bridge of the nose, with fully opaque lenses that completely hide the eyes —
+> the eyes are NEVER visible (they are virtual agents, no eyes; only darkness behind the
+> lenses). The sunglasses are NOT lowered or perched on the tip of the nose.** **Full
+> figure, head to toe — both entirely visible, nothing cropped (character-sheet style).**
 > • On the LEFT: one **sitting at a desk, working at a computer** — full body still
 > visible, the desk does not hide the legs.
 > • The other: **standing, examining a sheet of paper with a magnifying glass.**
 > Calm, curious, confident, a touch witty; not gloomy.
 >
 > **Avoid:** boy-scouts or campers, scout uniforms, neckerchiefs / scarves at the neck,
-> safari or explorer outfits, leather satchels. No readable text anywhere. Don't
-> over-detail.
+> safari or explorer outfits, leather satchels. **No visible eyes, no sunglasses pushed
+> down the nose.** No readable text anywhere. Don't over-detail.
 
 > Scontorno: `isnet-general-use` (laptop + foglio da preservare).
 
