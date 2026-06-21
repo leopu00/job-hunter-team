@@ -545,6 +545,9 @@ export default function SentinellaPage() {
           </span>
         </div>
 
+        {/* Controlli (start/terminale) — solo desktop, nascosti sul cloud read-only */}
+        {isCloud !== true && (
+          <>
         {!isActive && (
           <button
             onClick={handleStart}
@@ -575,6 +578,8 @@ export default function SentinellaPage() {
               ? "apri terminale"
               : "apri powershell"}
           </button>
+        )}
+          </>
         )}
 
         {startMsg && (
