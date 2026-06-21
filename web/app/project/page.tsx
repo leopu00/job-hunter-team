@@ -41,7 +41,7 @@ const it: Copy = {
   title: "Il progetto",
   subtitle:
     "Un team di agenti AI che cerca lavoro per te e ti aiuta a orientarti tra le offerte.",
-  badge: "open source · gratuito",
+  badge: "open source",
   imageAlt:
     "Illustrazione: un cubo di vetro che racchiude un ufficio in miniatura con il team di agenti al lavoro, osservato da fuori da due persone che prendono appunti.",
   imageCaption:
@@ -100,7 +100,7 @@ const en: Copy = {
   title: "The project",
   subtitle:
     "An AI agent team that searches for work on your behalf and helps you navigate the market.",
-  badge: "open source · free",
+  badge: "open source",
   imageAlt:
     "Illustration: a glass cube holding a miniature office with the team of agents at work, watched from outside by two people taking notes.",
   imageCaption:
@@ -186,14 +186,14 @@ function ProjectContent() {
       >
         {/* Hero */}
         <div className="text-center mb-8">
+          <h1 className="text-3xl md:text-5xl font-bold text-[var(--color-white)] tracking-tight leading-[1.05] mb-4">
+            {t.title}
+          </h1>
           <div className="inline-flex items-center gap-2 px-3 py-1.5 border border-[var(--color-border)] mb-5" style={{ background: "var(--color-deep)" }}>
             <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)]">
               {t.badge}
             </span>
           </div>
-          <h1 className="text-3xl md:text-5xl font-bold text-[var(--color-white)] tracking-tight leading-[1.05] mb-4">
-            {t.title}
-          </h1>
           <p className="text-[14px] md:text-[16px] text-[var(--color-muted)] max-w-2xl mx-auto leading-relaxed">
             {t.subtitle}
           </p>
