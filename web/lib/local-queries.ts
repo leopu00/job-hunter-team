@@ -668,7 +668,7 @@ export function getDashboardPositionsLocal(ws: string) {
   const db = getDb(ws)
   const rows = db.prepare(`
     SELECT p.id, p.legacy_id, p.title, p.company, p.location, p.remote_type,
-           p.status, p.role_family, p.loc_country, p.loc_city,
+           p.status, p.role_family, p.loc_country, p.loc_city, p.source,
            p.salary_estimated_min, p.salary_estimated_max, p.salary_estimated_currency,
            p.salary_declared_min, p.salary_declared_max, p.salary_declared_currency,
            p.found_at, p.found_by,
@@ -716,6 +716,7 @@ export function getDashboardPositionsLocal(ws: string) {
     role_family: (r.role_family as string | null) ?? null,
     loc_country: (r.loc_country as string | null) ?? null,
     loc_city: (r.loc_city as string | null) ?? null,
+    source: (r.source as string | null) ?? null,
     salary_min: ((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_min : r.salary_declared_min) as number | null ?? null,
     salary_max: ((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_max : r.salary_declared_max) as number | null ?? null,
     salary_currency: (((r.salary_estimated_min ?? r.salary_estimated_max) != null ? r.salary_estimated_currency : r.salary_declared_currency) as string | null) ?? 'EUR',
