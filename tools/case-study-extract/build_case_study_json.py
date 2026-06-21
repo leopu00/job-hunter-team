@@ -137,7 +137,9 @@ if os.path.exists(SENTINEL):
         wk = _week_key(day)
         pct = end - week_prev.get(wk, 0)
         week_prev[wk] = end
-        daily.append({"day": day, "pct": round(max(pct, 0), 1), "week": wk})
+        # pct = consumo del giorno; cum = totale settimanale a fine giornata
+        daily.append({"day": day, "pct": round(max(pct, 0), 1),
+                      "cum": round(end, 1), "week": wk})
     # orario di lavoro configurato (contesto: su quali ore/giorni si spalma)
     working_hours = None
     CONFIG = "/root/.jht/jht.config.json"

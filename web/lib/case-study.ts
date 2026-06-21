@@ -30,6 +30,7 @@ export interface CaseStudyCity {
 export interface CaseStudyUsageDay {
   day: string // YYYY-MM-DD
   pct: number // % del budget settimanale AI consumato quel giorno
+  cum: number // % cumulata del budget settimanale a fine giornata
   week: string // giovedì di riferimento (settimana di budget)
 }
 

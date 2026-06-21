@@ -63,7 +63,6 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
 
   // ── Usage: % del budget settimanale AI consumato per giorno ──
   const usageDays = run.usage?.daily ?? [];
-  const usageMax = Math.max(1, ...usageDays.map((d) => d.pct));
   const usageWeeks = [...new Set(usageDays.map((d) => d.week))];
   const WEEK_COLORS = [BLUE, GREEN, PURPLE, "#ffd600"];
   const weekColor = (w: string) =>
@@ -76,6 +75,16 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
     (m, d) => (d.pct > m.pct ? d : m),
     { pct: 0, day: "" } as { pct: number; day: string },
   );
+  // Linea cumulata (totale settimanale a fine giornata), spezzata per settimana.
+  // Coordinate in viewBox 0..100: x = centro barra, y = 100 - cum (0% in basso).
+  const usageN = Math.max(1, usageDays.length);
+  const usageSegs: { x: number; y: number }[][] = [];
+  usageDays.forEach((d, i) => {
+    const pt = { x: ((i + 0.5) / usageN) * 100, y: 100 - d.cum };
+    const seg = usageSegs[usageSegs.length - 1];
+    if (seg && usageDays[i - 1] && usageDays[i - 1].week === d.week) seg.push(pt);
+    else usageSegs.push([pt]);
+  });
   const dm = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
 
   // ── Orario di lavoro (contesto sulla distribuzione del budget) ──
@@ -120,7 +129,6 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
 
   // ── Distribuzione score: max per scalare le barre ──
   const maxBucket = Math.max(1, ...match.buckets.map((b) => b.n));
-  const maxComp = Math.max(1, ...match.composition.map((c) => c.avg));
   const maxCity = Math.max(1, ...cities.map((c) => c.count));
   const maxCountry = Math.max(1, ...countries.map((c) => c.count));
   const topCountries = countries.slice(0, 8);
@@ -179,9 +187,9 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
   const gFrac = Math.max(0, Math.min(1, match.avg / 100));
 
   return (
-    <div className="space-y-12">
-      {/* ════════ 1. IL MATCH ════════════════════════════════════ */}
-      <section>
+    <div className="flex flex-col gap-12">
+      {/* ════════ IL MATCH ═══════════════════════════ (order-2) ═══ */}
+      <section className="order-2">
         <div className="section-label mb-1">🎯 Quanto bene ti trova lavoro</div>
         <p className="text-[11px] text-[var(--color-dim)] mb-4">
           Ogni posizione viene valutata 0–100 su quanto calza al profilo del
@@ -318,47 +326,10 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           </div>
         </div>
 
-        {/* Composizione del match */}
-        <div className="mt-4 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5">
-          <div className="text-[11px] font-semibold text-[var(--color-white)] mb-1">
-            Su cosa pesa il match
-          </div>
-          <p className="text-[10px] text-[var(--color-dim)] mb-4">
-            Peso medio di ogni fattore nella valutazione delle posizioni.
-          </p>
-          <div className="space-y-2.5">
-            {match.composition.map((c) => (
-              <div key={c.key} className="flex items-center gap-3">
-                <span className="text-[11px] text-[var(--color-muted)] w-32 shrink-0">
-                  {c.label}
-                </span>
-                <div
-                  className="flex-1 h-2 rounded-full overflow-hidden"
-                  style={{ background: "var(--color-border)" }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${(c.avg / maxComp) * 100}%`,
-                      background: PURPLE,
-                      opacity: 0.85,
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-[11px] font-bold tabular-nums w-8 text-right"
-                  style={{ color: PURPLE }}
-                >
-                  {c.avg}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
-      {/* ════════ 2. DOVE — MAPPA EUROPA ═════════════════════════ */}
-      <section>
+      {/* ════════ DOVE — MAPPA EUROPA ════════════════ (order-1) ═══ */}
+      <section className="order-1">
         <div className="section-label mb-1">🗺️ Dove cerca lavoro · Europa</div>
         <p className="text-[11px] text-[var(--color-dim)] mb-4">
           {nf(cities.reduce((s, c) => s + c.count, 0))} posizioni geolocalizzate
@@ -534,8 +505,8 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
         </div>
       </section>
 
-      {/* ════════ 3. CATEGORIE — DONUT ═══════════════════════════ */}
-      <section>
+      {/* ════════ CATEGORIE — DONUT ══════════════════ (order-3) ═══ */}
+      <section className="order-3">
         <div className="section-label mb-1">🧩 Che tipo di ruoli</div>
         <p className="text-[11px] text-[var(--color-dim)] mb-4">
           {categories.length} categorie di ruolo emerse automaticamente dai
@@ -579,21 +550,20 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
               </g>
               <text
                 x={90}
-                y={86}
+                y={90}
                 textAnchor="middle"
-                className="fill-[var(--color-white)]"
-                style={{ fontSize: 26, fontWeight: 800 }}
+                style={{ fontSize: 38, fontWeight: 800, fill: BLUE }}
               >
                 {nf(run.totals.positions)}
               </text>
               <text
                 x={90}
-                y={104}
+                y={108}
                 textAnchor="middle"
                 className="fill-[var(--color-dim)]"
-                style={{ fontSize: 9, letterSpacing: 1 }}
+                style={{ fontSize: 8, letterSpacing: 0.5 }}
               >
-                POSIZIONI
+                POSIZIONI TROVATE
               </text>
             </svg>
           </div>
@@ -650,9 +620,9 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
         </div>
       </section>
 
-      {/* ════════ 4. USAGE — BUDGET AI NEL TEMPO ═════════════════ */}
+      {/* ════════ USAGE — BUDGET AI NEL TEMPO ════════ (order-4) ═══ */}
       {usageDays.length > 0 && (
-        <section>
+        <section className="order-4">
           <div className="section-label mb-1">
             💸 Quanto budget AI consuma nel tempo
           </div>
@@ -710,38 +680,70 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
               </div>
             </div>
 
-            {/* Barre per giorno */}
-            <div className="flex items-end gap-1.5" style={{ height: 150 }}>
-              {usageDays.map((d) => {
-                const color = weekColor(d.week);
-                return (
-                  <div
-                    key={d.day}
-                    className="flex-1 flex flex-col items-center justify-end h-full cursor-default"
-                    onMouseEnter={(e) =>
-                      showTip(e, dm(d.day), [
-                        {
-                          color,
-                          label: "% budget settimanale",
-                          value: `${Math.round(d.pct)}%`,
-                        },
-                      ])
-                    }
-                    onMouseMove={moveTip}
-                    onMouseLeave={hideTip}
-                  >
+            {/* Barre (consumo giornaliero) + linea cumulata settimanale.
+                Scala condivisa 0–100% del budget settimanale. */}
+            <div className="relative" style={{ height: 170 }}>
+              {/* riferimento 100% */}
+              <div className="absolute left-0 right-0 top-0 border-t border-dashed border-[var(--color-border)]" />
+              <span className="absolute right-0 -top-2 text-[8px] text-[var(--color-dim)] tabular-nums">
+                100%
+              </span>
+              {/* barre */}
+              <div className="absolute inset-0 flex items-end gap-1.5">
+                {usageDays.map((d) => {
+                  const color = weekColor(d.week);
+                  return (
                     <div
-                      className="w-full rounded-t-sm"
-                      style={{
-                        height: `${(d.pct / usageMax) * 100}%`,
-                        background: color,
-                        opacity: 0.85,
-                        minHeight: d.pct > 0 ? 3 : 0,
-                      }}
-                    />
-                  </div>
-                );
-              })}
+                      key={d.day}
+                      className="flex-1 flex flex-col items-center justify-end h-full cursor-default"
+                      onMouseEnter={(e) =>
+                        showTip(e, dm(d.day), [
+                          {
+                            color,
+                            label: "consumato quel giorno",
+                            value: `${Math.round(d.pct)}%`,
+                          },
+                          {
+                            color: "var(--color-white)",
+                            label: "totale settimana",
+                            value: `${Math.round(d.cum)}%`,
+                          },
+                        ])
+                      }
+                      onMouseMove={moveTip}
+                      onMouseLeave={hideTip}
+                    >
+                      <div
+                        className="w-full rounded-t-sm"
+                        style={{
+                          height: `${d.pct}%`,
+                          background: color,
+                          opacity: 0.85,
+                          minHeight: d.pct > 0 ? 3 : 0,
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+              {/* linea cumulata (totale settimanale a fine giornata) */}
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+              >
+                {usageSegs.map((seg, si) => (
+                  <polyline
+                    key={si}
+                    points={seg.map((p) => `${p.x},${p.y}`).join(" ")}
+                    fill="none"
+                    stroke="var(--color-white)"
+                    strokeWidth={1.5}
+                    vectorEffect="non-scaling-stroke"
+                    opacity={0.55}
+                  />
+                ))}
+              </svg>
             </div>
             {/* Asse giorni (etichette sparse) */}
             <div className="flex gap-1.5 mt-1.5">
@@ -755,12 +757,12 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
               ))}
             </div>
 
-            {/* Legenda settimane */}
+            {/* Legenda settimane + linea cumulata */}
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[var(--color-border)] pt-3">
               <span className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
-                Settimana di budget (reset giovedì)
+                Barre = consumo del giorno · settimana di budget (reset giovedì)
               </span>
-              {usageWeeks.map((w, i) => (
+              {usageWeeks.map((w) => (
                 <span key={w} className="flex items-center gap-1.5">
                   <span
                     className="inline-block w-2.5 h-2.5 rounded-sm"
@@ -771,6 +773,15 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
                   </span>
                 </span>
               ))}
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="inline-block w-4 h-0.5"
+                  style={{ background: "var(--color-white)", opacity: 0.6 }}
+                />
+                <span className="text-[10px] text-[var(--color-muted)]">
+                  totale settimanale cumulato
+                </span>
+              </span>
             </div>
           </div>
         </section>
