@@ -2,6 +2,46 @@
 
 import Link from "next/link";
 import { useLandingI18n } from "./LandingI18n";
+import { useTheme, type Theme } from "../../theme-provider";
+
+// Switcher tema compatto per il footer: System / Dark / Light.
+function FooterThemeSwitch() {
+  const { theme, setTheme } = useTheme();
+  const OPTIONS: { value: Theme; icon: string; label: string }[] = [
+    { value: "system", icon: "⊙", label: "System" },
+    { value: "dark", icon: "☾", label: "Dark" },
+    { value: "light", icon: "☀", label: "Light" },
+  ];
+  return (
+    <div
+      className="flex items-center gap-0.5 rounded-md border border-[var(--color-border)] p-0.5"
+      role="radiogroup"
+      aria-label="Theme"
+    >
+      {OPTIONS.map(({ value, icon, label }) => {
+        const active = theme === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTheme(value)}
+            role="radio"
+            aria-checked={active}
+            title={label}
+            aria-label={label}
+            className="w-5 h-5 flex items-center justify-center rounded text-[11px] leading-none cursor-pointer transition-colors"
+            style={{
+              color: active ? "var(--color-green)" : "var(--color-dim)",
+              background: active ? "rgba(0,232,122,0.10)" : "transparent",
+            }}
+          >
+            {icon}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function LandingCTA() {
   const { t } = useLandingI18n();
@@ -153,7 +193,10 @@ export function LandingFooter() {
             &copy; {new Date().getFullYear()} Job Hunter Team &mdash;{" "}
             {t("footer_copyright")}
           </span>
-          <span className="text-[9px] text-[var(--color-dim)]">v0.1.6</span>
+          <div className="flex items-center gap-3">
+            <FooterThemeSwitch />
+            <span className="text-[9px] text-[var(--color-dim)]">v0.1.6</span>
+          </div>
         </div>
       </div>
     </footer>

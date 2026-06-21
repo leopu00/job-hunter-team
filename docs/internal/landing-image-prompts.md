@@ -119,19 +119,34 @@ scenico del ruolo.** Niente testo leggibile.
 
 ## Pagina `/pricing`
 
-### `pricing.hero` — testa agente di PROFILO a raggi X (sfondo trasparente)
+### `pricing.hero` — testa agente di PROFILO a raggi X, cervello AI (sfondo trasparente)
 Concetto: la struttura del team è gratis, **il "cervello" (il provider AI) lo
-paghi** → testa di un agente, vista come una radiografia (cervello + cranio).
-> Comic-book / graphic-novel linework crossed with a medical X-ray scan — mostly
-> a **see-through radiograph look, NOT a fully shaded realistic portrait**. **Side
-> PROFILE of an agent's head, facing RIGHT** (we do NOT see the face front-on).
-> The whole head is rendered as an **X-ray / scan**: the **BRAIN glows and is
-> highlighted in a distinct accent colour (green)**, and the **skull bones are
-> visible** in cooler X-ray tones. We can still tell it's one of the agents
-> because the silhouette shows the iconic small oval dark Matrix-style sunglasses.
-> Keep it scan-like and graphic, muted palette, subtle glow. No readable text, no
-> logos. Isolated on a plain transparent background, no scene. Transparent PNG.
-> 4:3 or square.
+paghi** → testa di un agente, vista come radiografia, ma dentro il cranio NON c'è
+un cervello umano biologico: c'è un **cervello AI = rete neurale / LLM**.
+
+> _Revisione 2026-06-21: il "cervello" è ora una RETE NEURALE / LLM, non un cervello
+> umano biologico. Tenere ESATTAMENTE il look dell'immagine attuale: radiografia
+> TRASLUCIDA (NON ritratto realistico), completo e faccia solo accennati, teschio
+> tenue, cervello protagonista. Modo migliore = editare l'immagine esistente
+> sostituendo SOLO il cervello; sotto il prompt completo da zero come fallback._
+
+> **Translucent medical X-ray / radiograph scan** (see-through, blue-teal tones) —
+> **NOT a realistic shaded portrait, NOT a photo of a face**. **Side PROFILE of a
+> man's head and shoulders, facing RIGHT.** See-through X-ray look: **hair visible**
+> as fine translucent strands, small round dark **Matrix-style sunglasses**, and the
+> **skull, jaw, teeth and cervical spine only FAINTLY visible** underneath. He wears
+> a **suit jacket and shirt collar, but only subtly suggested** at the shoulders —
+> **do NOT emphasize the suit or the face**. The clear **focal point is the BRAIN**,
+> glowing bright green: it is an **artificial AI brain** in the shape of a brain — a
+> **neural network / LLM made of layered columns of bright nodes (input → hidden →
+> output) connected by thin lines**, **no biological folds or gyri**. The green AI
+> brain glows strongly and dominates; everything else stays dim and translucent.
+> No readable text, no logos. **Isolated on a plain transparent background**, no
+> scene. Transparent PNG, 4:3.
+>
+> Edit-only (consigliato, sull'immagine esistente): _Replace only the brain with a
+> green AI neural network (layered nodes + connections, no biological folds). Keep
+> same shape, position, glow. Change nothing else._
 
 ---
 

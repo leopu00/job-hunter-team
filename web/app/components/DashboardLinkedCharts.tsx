@@ -303,8 +303,10 @@ export default function DashboardLinkedCharts({
         muted: true,
       });
     return { items: real, distinct: byCountry.size - (unknown > 0 ? 1 : 0) };
+    // locale: la label "Senza paese" passa da tr() → va ricalcolata al cambio
+    // lingua (useLocale parte da 'it' e flippa dopo il mount).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedFamilies, selectedScoreBins, selectedSalaryBins]);
+  }, [rows, selectedFamilies, selectedScoreBins, selectedSalaryBins, locale]);
 
   // Città: scope per family + score. Il paese resta come sublabel per
   // disambiguare città omonime; le "country-only" confluiscono in una riga
@@ -351,6 +353,7 @@ export default function DashboardLinkedCharts({
         selectable: false,
       });
     return { items, distinct: real.length };
+    // locale: la label "Senza città" passa da tr() → ricalcola al cambio lingua.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     rows,
@@ -358,6 +361,7 @@ export default function DashboardLinkedCharts({
     selectedScoreBins,
     selectedSalaryBins,
     selectedCountries,
+    locale,
   ]);
 
   // Score: scope per location + family (esclude la propria dimensione).

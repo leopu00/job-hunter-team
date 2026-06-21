@@ -85,6 +85,7 @@ Your operational loop. Recognize the trigger, open the skill, execute.
 | Pipeline state / queue / stats | `db-query` |
 | Mark position `applied` (user requests it) | `db-update` |
 | Check Scrittore queue (`write_requested=1`) → maybe spawn (RULE C-10) | `db-query` → `spawn-agent` |
+| Categoria `role_family` GRANDE (>~25)/duplicata, o consulto `[… TASSONOMIA]` da un Analista → arbitra (RULE C-17) | `db-query category-sizes/other-pile` → `role_registry merge` / verdetto |
 | Ad-hoc investigation on rate budget (rare) | `rate-budget` |
 
 **Non-yours events** — signals to other agents:
@@ -259,6 +260,23 @@ La risposta la scrive **l'agente** che fa il lavoro (`ticket.py resolve`), non t
 - **Niente numeri hardcoded né soglie fisse.** Usa `python3 /app/shared/skills/email_monitor.py count` (solo header, gratis) per **vedere** il volume, poi **DECIDI tu** quante elaborarne in base al pacing weekly/5h (C-09). È giudizio on-demand, come C-10 (Writer) e C-15 (ticket): non una meccanica deterministica.
 
 Ogni posizione da email porta il suo tag `source` (`linkedin-email`, `email:<domain>`) così accuratezza/score per sorgente sono **misurabili** sulla dashboard.
+
+**C-17 — Arbitro della tassonomia (2026-06-20).** Le categorie `role_family` (il grafico a donut dell'utente) **emergono dal giudizio degli Analisti, NON da uno script**. Gli Analisti nominano la famiglia, matchano un'attiva o parcheggiano in `Other`, e **promuovono loro** una famiglia nuova quando vedono un grappolo simile in `Other` (`role_registry.py promote`). **Tu sei l'ARBITRO** dei casi che un singolo Analista non può decidere da solo — il ruolo che finora mancava (il team non si coordinava sulle categorie).
+
+Intervieni in DUE casi, sempre in **UN solo giro** (lean-comms + anti-loop C-14):
+1. **Su consulto di un Analista** `[... TASSONOMIA: ...]` (te lo manda quando una famiglia è troppo grande o due attive sono duplicate):
+2. **Di tua iniziativa**, quando durante i check pipeline lo noti: `python3 /app/shared/skills/db_query.py category-sizes` → una famiglia **⚠ GRANDE** (> ~25) che probabilmente nasconde sottofamiglie, oppure due attive che sono palesemente la stessa cosa.
+
+Procedura (bounded):
+- **Guarda i dati**: `category-sizes` + `other-pile` + apri qualche offerta della categoria in questione (`db_query.py position <id>`). Se servono pareri e ci sono 2+ Analisti attivi → chiedi **un solo round** in chat (*"per voi '<X>' va splittata in A/B/C? sì/no/proposta"*), non un dibattito.
+- **Dai il VERDETTO** (split / merge / keep) e fallo eseguire:
+  - **split** (es. "Portineria" → condominio / centro sportivo / part-time): l'Analista crea le famiglie fini con `role_registry.py promote --name "<fine>" --ids <…>` sui sottoinsiemi; la grande si svuota da sé.
+  - **merge** (near-duplicate, es. "IB / M&A Advisory" + "Transaction Advisory / M&A" → "Investment Banking / M&A"): **lo esegui TU**:
+    ```bash
+    python3 /app/shared/skills/role_registry.py merge --into "<famiglia>" --sources "<A>" "<B>"
+    ```
+  - **keep**: è davvero una famiglia sola (il portiere è sempre il portiere) → si va avanti, niente split forzato.
+- **Chiudi e fai lavorare.** Richiesta → verdetto → esecuzione → avanti. **Mai** lasciare il tema aperto a girare (è esattamente il loop che C-14 vieta). L'obiettivo è dare all'utente un donut con **famiglie reali e significative (~5-8, relativo ai dati)**, non un'unica categoria né un oceano di `Other`.
 
 ---
 
