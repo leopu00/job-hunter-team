@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { isLocalRequest } from "@/lib/auth";
 import type { CandidateProfile } from "@/lib/types";
@@ -207,10 +208,14 @@ export default async function ProfilePage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <ProfileEditButton
-                label={t("edit")}
-                message={t("chat_edit_msg")}
-              />
+              {/* [JHT-DASHBOARD-SPLIT] Profilo: vista sul cloud, modifica solo
+                  desktop (l'edit passa dall'assistente). Export dati resta. */}
+              {!isCloudDeploy() && (
+                <ProfileEditButton
+                  label={t("edit")}
+                  message={t("chat_edit_msg")}
+                />
+              )}
               {profile && (
                 <a
                   href="/api/profile/export"
@@ -959,7 +964,7 @@ export default async function ProfilePage() {
           </div>
         )}
       </div>
-      <ProfileAssistantFab />
+      {!isCloudDeploy() && <ProfileAssistantFab />}
     </>
   );
 }

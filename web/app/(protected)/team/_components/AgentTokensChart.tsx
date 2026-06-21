@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { colorForAgent as colorFor } from "./agent-colors";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type Series = Record<string, number | string>;
 
@@ -45,6 +46,7 @@ export default function AgentTokensChart() {
   const [range, setRange] = useState<RangeId>("3h");
   const [mode, setMode] = useState<Mode>("cumulative");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const isCloud = useIsCloud();
 
   useEffect(() => {
     let cancelled = false;
@@ -81,8 +83,11 @@ export default function AgentTokensChart() {
     };
   }, [range]);
 
-  // Polling ogni 30s (rivisita stesso range)
+  // Polling ogni 30s (rivisita stesso range) — disattivato su cloud (sync
+  // on-demand): la fetch iniziale nell'useEffect su [range] popola i dati
+  // all'apertura, poi niente interval.
   useEffect(() => {
+    if (isCloud) return;
     const id = setInterval(() => {
       const minutes = RANGES.find((r) => r.id === range)?.minutes ?? 180;
       const bucketSec = Math.max(1, Math.round((minutes * 60) / 120));
@@ -96,7 +101,7 @@ export default function AgentTokensChart() {
         .catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
-  }, [range]);
+  }, [range, isCloud]);
 
   return (
     <div>

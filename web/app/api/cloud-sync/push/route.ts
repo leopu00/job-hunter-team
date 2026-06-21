@@ -169,6 +169,21 @@ interface TombstoneIn {
   deleted_at: string; // ISO timestamp client-side (preserva il "quando")
 }
 
+// Event-log per-istanza (SQLite position_state_transitions → cloud
+// position_transitions, mig 044). Mostra CHI (scout-1, analista-2…) ha fatto
+// cosa e quando — le colonne *_by su positions/scores tengono solo "ultimo
+// attore" e perdono l'attribuzione intermedia. Append-only lato locale: la
+// chiave verso le posizioni è `position_legacy_id` (l'int stabile == positions.legacy_id),
+// non l'uuid per-account, così le righe sono portabili tra account/mirror.
+interface PositionTransitionIn {
+  position_legacy_id: number;
+  from_state?: string | null;
+  to_state: string;
+  ts: string;
+  by_agent: string;
+  notes?: string | null;
+}
+
 interface PushBody {
   positions?: PositionIn[];
   scores?: ScoreIn[];
@@ -176,6 +191,7 @@ interface PushBody {
   pending_user_messages?: PendingMessageIn[];
   sentinel_ticks?: SentinelTickIn[];
   tombstones?: TombstoneIn[];
+  position_transitions?: PositionTransitionIn[];
   profile?: ProfileIn;
 }
 
@@ -324,6 +340,13 @@ export async function POST(req: NextRequest) {
   const tombstones = Array.isArray(body.tombstones)
     ? body.tombstones.slice(0, 1000)
     : [];
+  // Event-log: cap generoso (20k) come solo guard anti-abuso. Il daemon manda
+  // delta piccoli; il first-push manda l'intero log (centinaia/migliaia di
+  // righe), che per qualsiasi log realistico sta sotto il cap → nessun
+  // troncamento silenzioso.
+  const positionTransitions = Array.isArray(body.position_transitions)
+    ? body.position_transitions.slice(-20000)
+    : [];
 
   let positionsUpserted = 0;
   let scoresUpserted = 0;
@@ -331,6 +354,7 @@ export async function POST(req: NextRequest) {
   let pendingMessagesUpserted = 0;
   let sentinelTicksUpserted = 0;
   let tombstonesApplied = 0;
+  let positionTransitionsUpserted = 0;
   const legacyToUuid = new Map<number, string>();
 
   // 1. Upsert positions via (user_id, legacy_id)
@@ -743,6 +767,50 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 3e. Position transitions (event-log per-istanza → feed "Attività recente").
+  // Append-only: insert-if-new via UNIQUE (user_id, position_legacy_id, ts,
+  // by_agent, to_state). `ignoreDuplicates` = ON CONFLICT DO NOTHING → un
+  // re-push (cursor reset / overlap col backfill manuale) NON duplica, e il
+  // count riflette solo le righe davvero nuove. `position_legacy_id` è l'int
+  // locale stabile: nessun lookup UUID necessario (a differenza di scores/apps).
+  if (positionTransitions.length > 0) {
+    const payload = positionTransitions
+      .filter(
+        (t) =>
+          typeof t.position_legacy_id === "number" &&
+          !!t.to_state &&
+          !!t.ts &&
+          !!t.by_agent,
+      )
+      .map((t) => ({
+        user_id: userId,
+        position_legacy_id: t.position_legacy_id,
+        from_state: t.from_state ?? null,
+        to_state: t.to_state,
+        ts: t.ts,
+        by_agent: t.by_agent,
+        notes: t.notes ?? null,
+      }));
+
+    if (payload.length > 0) {
+      const { data: upserted, error } = await admin
+        .from("position_transitions")
+        .upsert(payload, {
+          onConflict: "user_id,position_legacy_id,ts,by_agent,to_state",
+          ignoreDuplicates: true,
+        })
+        .select("id");
+
+      if (error) {
+        return NextResponse.json(
+          { error: `position_transitions upsert: ${error.message}` },
+          { status: 500 },
+        );
+      }
+      positionTransitionsUpserted = upserted?.length ?? 0;
+    }
+  }
+
   // 4. Profile upsert (opzionale, indipendente da positions/scores/apps)
   let profileUpserted = false;
   let profileError: string | null = null;
@@ -815,6 +883,7 @@ export async function POST(req: NextRequest) {
     pending_user_messages: { upserted: pendingMessagesUpserted },
     sentinel_ticks: { upserted: sentinelTicksUpserted },
     tombstones: { applied: tombstonesApplied },
+    position_transitions: { upserted: positionTransitionsUpserted },
     profile: { upserted: profileUpserted, error: profileError },
   });
 }

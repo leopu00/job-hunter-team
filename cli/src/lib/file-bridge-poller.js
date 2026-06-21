@@ -25,6 +25,7 @@ import { join, basename, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import pc from 'picocolors';
+import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -38,9 +39,9 @@ const FILE_DIRS = [
   { dir: join(JHT_USER_DIR, 'output'), category: 'other' },
 ];
 
-const POLL_INTERVAL_MS_DEFAULT = 5000;
-const POLL_INTERVAL_MAX_MS = 60000;
-const INDEX_EVERY_CYCLES = 12; // ~60s @ 5s
+// Cadenza adattiva (vedi poll-tier.js): 5s solo quando c'è una richiesta file
+// recente, poi ≤30s. L'indice file + purge girano a tempo, ogni ~60s.
+const INDEX_EVERY_MS = 60000;
 
 const MIME = {
   '.pdf': 'application/pdf',
@@ -227,7 +228,8 @@ export async function runFileBridgePoller() {
 
   let shuttingDown = false;
   let consecutiveErrors = 0;
-  let cycle = 0;
+  let lastActivityAt = Date.now();
+  let lastIndexAt = 0;
 
   const shutdown = (signal) => {
     log('info', 'shutdown.received', { signal });
@@ -245,7 +247,7 @@ export async function runFileBridgePoller() {
     if (existsSync(WEEKLY_HALT_FLAG)) {
       if (haltLogTick % 60 === 0) log('info', 'poll.skipped', { reason: 'weekly-halt-flag active' });
       haltLogTick += 1;
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS_DEFAULT));
+      await new Promise((r) => setTimeout(r, POLL_IDLE_MS));
       continue;
     }
     if (haltLogTick > 0) {
@@ -253,20 +255,27 @@ export async function runFileBridgePoller() {
       haltLogTick = 0;
     }
 
-    let backoff = POLL_INTERVAL_MS_DEFAULT;
+    let backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
     try {
-      // 1. Indice (all'avvio e ogni ~60s).
-      if (cycle % INDEX_EVERY_CYCLES === 0) {
+      // 1. Indice + purge a tempo (~60s), indipendenti dal tier di poll.
+      if (Date.now() - lastIndexAt >= INDEX_EVERY_MS) {
+        lastIndexAt = Date.now();
         const files = await buildIndex();
         const r = await apiSend('POST', baseUrl, token, '/api/cloud-sync/file-index', { files });
         log('info', 'index.published', { indexed: r.indexed ?? files.length });
+        await apiSend('POST', baseUrl, token, '/api/cloud-sync/file-bridge/purge')
+          .then((p) => { if (p.purged) log('info', 'purge.done', { purged: p.purged }); })
+          .catch((err) => log('warn', 'purge.failed', { err: err.message }));
       }
 
-      // 2. Richieste pending.
+      // 2. Richieste pending (ogni tick: è la parte reattiva).
       const r = await apiGet(baseUrl, token, '/api/cloud-sync/file-bridge?status=pending&limit=20');
       consecutiveErrors = 0;
       const requests = Array.isArray(r.requests) ? r.requests : [];
       if (requests.length > 0) {
+        // Attività confermata: torna a 5s per servire i file in coda.
+        lastActivityAt = Date.now();
+        backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
         log('info', 'poll.found-pending', { count: requests.length });
         for (const req of requests) {
           if (shuttingDown) break;
@@ -274,16 +283,9 @@ export async function runFileBridgePoller() {
           catch (err) { log('error', 'process.crashed', { id: req.id, err: err.message }); }
         }
       }
-
-      // 3. Purge degli scaduti (best-effort).
-      await apiSend('POST', baseUrl, token, '/api/cloud-sync/file-bridge/purge')
-        .then((p) => { if (p.purged) log('info', 'purge.done', { purged: p.purged }); })
-        .catch((err) => log('warn', 'purge.failed', { err: err.message }));
-
-      cycle += 1;
     } catch (err) {
       consecutiveErrors += 1;
-      backoff = Math.min(POLL_INTERVAL_MAX_MS, POLL_INTERVAL_MS_DEFAULT * 2 ** Math.min(consecutiveErrors, 4));
+      backoff = errorBackoff(tierInterval(lastActivityAt, { allowDeepIdle: false }), consecutiveErrors);
       log('error', 'poll.failed', { err: err.message, consecutiveErrors, nextBackoffMs: backoff });
     }
     if (shuttingDown) break;

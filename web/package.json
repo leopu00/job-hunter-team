@@ -6,7 +6,7 @@
     "dev": "next dev",
     "dev:host": "JHT_SHELL_VIA=docker:jht next dev -p 3001",
     "dev:host:3002": "JHT_SHELL_VIA=docker:jht next dev -p 3002",
-    "dev:cloud:3003": "next dev -p 3003",
+    "dev:cloud:3003": "NEXT_PUBLIC_JHT_DEPLOY=cloud next dev -p 3003",
     "build": "next build",
     "analyze": "ANALYZE=true next build --webpack",
     "start": "next start",

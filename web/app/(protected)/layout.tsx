@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import { readWorkspaceProfile, isProfileComplete } from "@/lib/profile-reader";
 import { isLocalRequestFromHeaders } from "@/lib/auth";
 import { isDashboardDemoMode } from "@/lib/dashboard-demo";
@@ -13,6 +14,32 @@ import MainChrome from "@/components/MainChrome";
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
+
+// [JHT-DASHBOARD-SPLIT] Sezioni di CONTROLLO/CONFIG: vivono solo nell'app
+// desktop (scrittura piena + filesystem ~/.jht). Sul deploy cloud (read-only +
+// corsia richieste) un'intera pagina di questo tipo non ha senso → redirect a
+// /dashboard invece di mostrarla con bottoni che darebbero comunque 403. Guard
+// UNICO e centrale qui (no `if` sparsi nei componenti). Le pagine MISTE (team
+// monitoring, profilo-vista) NON sono in lista: lì è la singola sezione-controllo
+// a sparire, non la pagina. Eccezione: /settings/cloud-sync è gestione token
+// sync-infra → resta cloud (vedi [JHT-WEB-READONLY] 1b, è ANCHE sicurezza).
+const DESKTOP_ONLY_PREFIXES = [
+  "/settings",
+  "/credentials",
+  "/secrets",
+  "/channels",
+  "/providers",
+  "/integrations",
+  "/cron",
+  "/backup",
+  "/setup",
+  "/cli-link",
+];
+
+function isDesktopOnlyPath(p: string): boolean {
+  if (p.startsWith("/settings/cloud-sync")) return false; // sync-infra resta cloud
+  return DESKTOP_ONLY_PREFIXES.some((pre) => p === pre || p.startsWith(pre + "/"));
+}
 
 export default async function ProtectedLayout({
   children,
@@ -31,6 +58,14 @@ export default async function ProtectedLayout({
   // passa dal flusso "onboarding locale" sotto. Su Vercel-side è sempre
   // false (no SQLite locale).
   const localOnly = isLocalOnlyMode();
+
+  // [JHT-DASHBOARD-SPLIT] Sul deploy cloud le sezioni di controllo/config non
+  // esistono: redirect a /dashboard. Deciso a BUILD (isCloudDeploy), non per
+  // richiesta → su locale/desktop è sempre no-op. Prima dell'auth: una pagina
+  // desktop-only sul cloud non va mai resa, loggati o meno.
+  if (isCloudDeploy() && pathname && isDesktopOnlyPath(pathname)) {
+    redirect("/dashboard");
+  }
 
   // Tenta sessione Supabase prima di tutto. Se l'utente è loggato in
   // cloud, prevale sul flusso locale (anche su localhost): mandarlo in

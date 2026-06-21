@@ -20,6 +20,10 @@ const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
 // il container era offline. Separato dal push cursor: due direzioni di
 // flusso indipendenti (vedi docs/internal/cloud-sync-architecture.md).
 const CLOUD_PULL_CURSOR_FILE = join(JHT_HOME, '.cloud-pull-cursor.json');
+// Cursor sync ticket (round-trip cloud↔VPS, [JHT-DATA-SYNC] fase 2):
+// { pull_since } = ultimo created_at importato dal cloud (ticket 'open' utente);
+// { push_since } = ultimo updated_at pushato in cloud (risoluzioni del team).
+const CLOUD_TICKETS_CURSOR_FILE = join(JHT_HOME, '.cloud-tickets-cursor.json');
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -726,6 +730,32 @@ async function savePullCursor(cursor) {
 }
 
 /**
+ * Cursor sync ticket. Ritorna { pull_since, push_since } (ISO|null).
+ * Missing/corrupt = entrambi null → pull fa lookback 7gg server-side, push
+ * manda tutto (idempotente: gli UPDATE per cloud_id e gli INSERT linkano).
+ */
+function loadTicketsCursor() {
+  if (!existsSync(CLOUD_TICKETS_CURSOR_FILE)) return { pull_since: null, push_since: null };
+  try {
+    const p = JSON.parse(readFileSync(CLOUD_TICKETS_CURSOR_FILE, 'utf-8'));
+    return {
+      pull_since: typeof p?.pull_since === 'string' ? p.pull_since : null,
+      push_since: typeof p?.push_since === 'string' ? p.push_since : null,
+    };
+  } catch {
+    return { pull_since: null, push_since: null };
+  }
+}
+
+async function saveTicketsCursor(cursor) {
+  try {
+    await writeFile(CLOUD_TICKETS_CURSOR_FILE, JSON.stringify(cursor, null, 2));
+  } catch (err) {
+    console.error(pc.yellow(`  warn: tickets cursor save failed (${err.message})`));
+  }
+}
+
+/**
  * Dato un array di righe con campo updated_at, ritorna il MAX(updated_at)
  * come stringa ISO. Null se l'array e' vuoto o nessuna riga ha il campo.
  */
@@ -777,6 +807,7 @@ async function handlePush(options) {
   let applications = [];
   let pendingMessages = [];
   let tombstones = [];
+  let transitions = [];
   // Cursor delta-sync: ad ogni tick leggiamo solo righe con updated_at >
   // ultimo pushato per quella tabella. Prima volta (cursor vuoto): full
   // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
@@ -864,6 +895,30 @@ async function handlePush(options) {
         // tombstones nel payload (compat con vecchi DB).
         if (!/no such table/i.test(err.message)) throw err;
       }
+      // Event-log per-istanza (position_state_transitions → cloud
+      // position_transitions, mig 044): append-only, NO updated_at → cursor su
+      // `ts` (monotono) con `>` stretto, come i tombstones. A riposo (nessuna
+      // nuova transizione) non contribuisce al payload → niente push inutili.
+      // Mappiamo position_id locale → position_legacy_id cloud (stesso int).
+      // Idempotente lato server (UNIQUE) → un re-push non duplica. Chiude
+      // l'event-log fossile ("Attività recente" ferma all'ultimo backfill).
+      try {
+        const tCols =
+          'position_id AS position_legacy_id, from_state, to_state, ts, by_agent, notes';
+        if (cursor.transitions) {
+          transitions = db.prepare(
+            `SELECT ${tCols} FROM position_state_transitions
+             WHERE ts > ? ORDER BY ts ASC`
+          ).all(cursor.transitions);
+        } else {
+          transitions = db.prepare(
+            `SELECT ${tCols} FROM position_state_transitions ORDER BY ts ASC`
+          ).all();
+        }
+      } catch (err) {
+        // DB senza la tabella (schema vecchio): no-op silenzioso.
+        if (!/no such table/i.test(err.message)) throw err;
+      }
       db.close();
     } catch (err) {
       console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
@@ -881,11 +936,14 @@ async function handlePush(options) {
   const tombstoneChunks = tombstones.length > 0
     ? `, ${tombstones.length} tombstones`
     : '';
+  const transitionChunks = transitions.length > 0
+    ? `, ${transitions.length} transitions`
+    : '';
   const isFirstPush = !cursor.positions && !cursor.scores && !cursor.applications;
   const deltaMode = isFirstPush ? 'first-push (full)' : 'delta';
   console.log(
     pc.dim(
-      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${tombstoneChunks}${profileChunks}`
+      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${tombstoneChunks}${transitionChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
@@ -895,7 +953,7 @@ async function handlePush(options) {
   if (
     positions.length === 0 && scores.length === 0 &&
     applications.length === 0 && pendingMessages.length === 0 &&
-    tombstones.length === 0 && !profilePayload
+    tombstones.length === 0 && transitions.length === 0 && !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
     return;
@@ -914,6 +972,7 @@ async function handlePush(options) {
         positions, scores, applications,
         pending_user_messages: pendingMessages,
         tombstones,
+        position_transitions: transitions,
         ...(profilePayload ? { profile: profilePayload } : {}),
       }),
     });
@@ -963,6 +1022,9 @@ async function handlePush(options) {
   if (tombstones.length > 0 || body.tombstones?.applied) {
     console.log(pc.dim(`  tombstones:       ${body.tombstones?.applied ?? 0} applied`));
   }
+  if (transitions.length > 0 || body.position_transitions?.upserted) {
+    console.log(pc.dim(`  transitions:      ${body.position_transitions?.upserted ?? 0} new`));
+  }
 
   // Aggiorna cursor delta-sync solo dopo HTTP 200: il prossimo tick
   // selezionera' solo righe con updated_at > cursor. Se una qualsiasi
@@ -985,6 +1047,13 @@ async function handlePush(options) {
     }
   }
   if (tombMax) newCursor.tombstones = tombMax;
+  // Cursor transitions: MAX(ts) tra le righe inviate (campo `ts`, non
+  // updated_at). `>` stretto al prossimo tick → no re-push a riposo.
+  let transMax = null;
+  for (const t of transitions) {
+    if (t?.ts && (transMax === null || t.ts > transMax)) transMax = t.ts;
+  }
+  if (transMax) newCursor.transitions = transMax;
   // Salviamo anche se nulla e' cambiato: la prima volta crea il file e
   // disabilita la modalita' "first-push" al prossimo tick. La 2a volta
   // in poi e' no-op a livello di contenuto.
@@ -1311,6 +1380,7 @@ async function handlePullDesiredState(options = {}) {
   // produrrebbe una riga zoppa con NULL su title/company → CHECK fail.
   let updated = 0;
   let missing = 0;
+  let excludeChanges = 0;
   try {
     const db = new DatabaseSync(dbPath);
     db.exec('PRAGMA foreign_keys = ON');
@@ -1332,12 +1402,38 @@ async function handlePullDesiredState(options = {}) {
              salary_precise_requested_at = ?
        WHERE id = ?
     `);
-    const checkStmt = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+    // SELECT lo stato locale corrente: serve sia per il "missing" sia per la
+    // sync NARROW dell'esclusione utente (sotto).
+    const checkStmt = db.prepare(
+      'SELECT status, user_excluded_at, user_excluded_prev_status FROM positions WHERE id = ?'
+    );
+    // Esclusione utente cloud→locale: applichiamo SOLO l'azione-utente
+    // (user_excluded_at valorizzato lato cloud), MAI lo status generico (che
+    // resta autoritativo sulla VPS). last_actor='user' + transizione, come fa
+    // il team su un cambio stato → il team smette di lavorarci e l'event-log
+    // registra CHI. Idempotente: agiamo solo se lo stato user-exclude diverge.
+    const applyExcludeStmt = db.prepare(
+      `UPDATE positions
+          SET status = 'excluded', user_excluded_reason = ?, user_excluded_note = ?,
+              user_excluded_at = ?, user_excluded_prev_status = ?, last_actor = 'user'
+        WHERE id = ?`
+    );
+    const applyUnexcludeStmt = db.prepare(
+      `UPDATE positions
+          SET status = ?, user_excluded_reason = NULL, user_excluded_note = NULL,
+              user_excluded_at = NULL, user_excluded_prev_status = NULL, last_actor = 'user'
+        WHERE id = ?`
+    );
+    const transStmt = db.prepare(
+      `INSERT INTO position_state_transitions
+         (position_id, from_state, to_state, by_agent, notes)
+       VALUES (?, ?, ?, 'user', ?)`
+    );
     for (const p of positions) {
       const legacyId = Number(p.legacy_id);
       if (!Number.isInteger(legacyId) || legacyId <= 0) continue;
-      const exists = checkStmt.get(legacyId);
-      if (!exists) { missing++; continue; }
+      const local = checkStmt.get(legacyId);
+      if (!local) { missing++; continue; }
       const writeFlag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
       const writeAt = p.write_requested_at || null;
       const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
@@ -1348,6 +1444,33 @@ async function handlePullDesiredState(options = {}) {
       const spAt = p.salary_precise_requested_at || null;
       stmt.run(writeFlag, writeAt, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
       updated++;
+
+      // ── Sync NARROW dell'esclusione utente ──
+      const cloudExcluded = !!p.user_excluded_at; // l'utente l'ha esclusa sul cloud
+      const localExcluded = !!local.user_excluded_at; // già esclusa-da-utente in locale
+      if (cloudExcluded && !localExcluded) {
+        // Applica l'esclusione: prev = lo stato locale attuale (se non già 'excluded').
+        const prev = local.status === 'excluded'
+          ? (local.user_excluded_prev_status || 'scored')
+          : local.status;
+        applyExcludeStmt.run(
+          p.user_excluded_reason || null,
+          p.user_excluded_note || null,
+          p.user_excluded_at,
+          prev,
+          legacyId,
+        );
+        if (local.status !== 'excluded') {
+          transStmt.run(legacyId, local.status, 'excluded', p.user_excluded_reason || null);
+        }
+        excludeChanges++;
+      } else if (!cloudExcluded && localExcluded) {
+        // L'utente ha annullato l'esclusione sul cloud → ripristina lo stato.
+        const restore = local.user_excluded_prev_status || 'scored';
+        applyUnexcludeStmt.run(restore, legacyId);
+        transStmt.run(legacyId, 'excluded', restore, null);
+        excludeChanges++;
+      }
     }
     db.close();
   } catch (err) {
@@ -1362,8 +1485,9 @@ async function handlePullDesiredState(options = {}) {
   // riflette il proprio SQLite e farebbe da eco). Quando updated == 0
   // (tipico, no nuovi click) restiamo zitti se silent.
   const successMsg = pc.green(`✓ Pull desired-state applicato: ${updated} positions aggiornate`)
+    + (excludeChanges > 0 ? pc.green(` (${excludeChanges} esclusioni utente sincronizzate)`) : '')
     + (missing > 0 ? pc.dim(` (${missing} legacy_id non presenti localmente, skip)`) : '');
-  if (updated > 0 || !silent) {
+  if (updated > 0 || excludeChanges > 0 || !silent) {
     console.log(successMsg);
   }
 
@@ -1372,6 +1496,230 @@ async function handlePullDesiredState(options = {}) {
   }
   if (body.has_more) {
     log(pc.dim('  has_more=true: rilancia per recuperare le righe rimanenti'));
+  }
+}
+
+/**
+ * Sync bidirezionale dei ticket cloud↔VPS ([JHT-DATA-SYNC] fase 2). Chiude
+ * il follow-up dichiarato in mig 043. Una sola sessione SQLite RW:
+ *
+ *   PULL  cloud → locale : importa i ticket 'open' creati dall'utente sul web
+ *         (INSERT in position_tickets con cloud_id valorizzato; il Capitano li
+ *         vede via C-15). Skip se già importati (cloud_id) o se la posizione
+ *         non è ancora locale (arriverà col push dati).
+ *   PUSH  locale → cloud : manda gli aggiornamenti del team (assigned/resolved
+ *         + response_text) sui ticket con cloud_id, e INSERT dei ticket nati
+ *         in locale (cloud_id NULL) — l'endpoint ritorna l'id che scriviamo in
+ *         cloud_id per chiudere la correlazione.
+ *
+ * Endpoint: GET/POST /api/cloud-sync/tickets. Best-effort: non blocca il boot
+ * né il daemon su errore di rete. Idempotente: cloud `id` canonico, UPDATE per
+ * id + filtro user_id lato server, UNIQUE non necessario (UPDATE/INSERT espliciti).
+ *
+ * options: --db <path>, --full (ignora cursor), --silent (boot/daemon).
+ */
+async function handleTicketSync(options = {}) {
+  const silent = options.silent === true;
+  const log = (msg) => { if (!silent) console.log(msg); };
+
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) {
+    if (!silent) {
+      console.error(pc.red('Cloud sync non abilitato.'));
+      console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud login'));
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const dbPath = options.db || JHT_DB_PATH;
+  const dbExists = await stat(dbPath).then(() => true).catch(() => false);
+  if (!dbExists) {
+    log(pc.dim(`  ticket-sync skip: SQLite locale non trovato (${dbPath}).`));
+    return;
+  }
+
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const cursor = options.full
+    ? { pull_since: null, push_since: null }
+    : loadTicketsCursor();
+
+  let imported = 0;
+  let pushedUpdates = 0;
+  let pushedInserts = 0;
+  let db;
+  try {
+    db = new DatabaseSync(dbPath);
+    db.exec('PRAGMA foreign_keys = ON');
+
+    // ---- PULL: ticket 'open' dal cloud → locale ----
+    const pullParams = new URLSearchParams();
+    if (cursor.pull_since) pullParams.set('since', cursor.pull_since);
+    try {
+      const res = await fetch(
+        `${baseUrl}/api/cloud-sync/tickets?${pullParams.toString()}`,
+        { headers: { Authorization: `Bearer ${config.token}` } },
+      );
+      const pb = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error(pc.yellow(`  ticket pull warn: HTTP ${res.status} ${pb.error || ''}`));
+      } else if (Array.isArray(pb.tickets)) {
+        const findByCloud = db.prepare('SELECT id FROM position_tickets WHERE cloud_id = ?');
+        const posExists = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+        const ins = db.prepare(
+          `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
+           VALUES (?, ?, ?, 'open', ?, ?)`
+        );
+        for (const ct of pb.tickets) {
+          const cloudId = Number(ct.id);
+          const posId = Number(ct.position_legacy_id);
+          if (!Number.isInteger(cloudId) || !Number.isInteger(posId)) continue;
+          if (findByCloud.get(cloudId)) continue;       // già importato
+          if (!posExists.get(posId)) continue;          // posizione non ancora locale → arriverà
+          ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
+          imported++;
+        }
+        if (pb.cursor) cursor.pull_since = pb.cursor;
+      }
+    } catch (err) {
+      console.error(pc.yellow(`  ticket pull warn: ${err.message}`));
+    }
+
+    // ---- PUSH: aggiornamenti team + INSERT locali → cloud ----
+    const selCols =
+      `id AS local_id, cloud_id, position_id AS position_legacy_id,
+       request_text, kind, status, assigned_agent, response_text,
+       created_at, assigned_at, resolved_at, updated_at`;
+    const rows = cursor.push_since
+      ? db.prepare(
+          `SELECT ${selCols} FROM position_tickets
+           WHERE cloud_id IS NULL OR updated_at > ?`
+        ).all(cursor.push_since)
+      : db.prepare(`SELECT ${selCols} FROM position_tickets`).all();
+
+    if (rows.length > 0) {
+      try {
+        const res = await fetch(`${baseUrl}/api/cloud-sync/tickets`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ tickets: rows }),
+        });
+        const pb = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error(pc.yellow(`  ticket push warn: HTTP ${res.status} ${pb.error || ''}`));
+        } else {
+          pushedUpdates = pb.updated || 0;
+          pushedInserts = pb.inserted || 0;
+          // write-back dei cloud_id sugli INSERT → chiude la correlazione.
+          if (pb.id_map && typeof pb.id_map === 'object') {
+            const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
+            for (const [localId, cloudId] of Object.entries(pb.id_map)) {
+              const ci = Number(cloudId);
+              const li = Number(localId);
+              if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
+            }
+          }
+          // avanza push cursor = MAX(updated_at) tra le righe inviate.
+          let maxU = cursor.push_since || null;
+          for (const r of rows) {
+            if (r.updated_at && (maxU === null || r.updated_at > maxU)) maxU = r.updated_at;
+          }
+          if (maxU) cursor.push_since = maxU;
+        }
+      } catch (err) {
+        console.error(pc.yellow(`  ticket push warn: ${err.message}`));
+      }
+    }
+
+    db.close();
+  } catch (err) {
+    try { if (db) db.close(); } catch { /* già chiuso */ }
+    console.error(pc.red(`Errore ticket-sync SQLite: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  await saveTicketsCursor(cursor);
+
+  const total = imported + pushedUpdates + pushedInserts;
+  if (total > 0 || !silent) {
+    console.log(
+      pc.green(
+        `✓ Ticket sync: ${imported} importati↓, ${pushedUpdates} aggiornati↑, ${pushedInserts} nuovi↑`
+      )
+    );
+  }
+}
+
+/**
+ * Rendezvous "Sync now" ([JHT-DATA-SYNC] fase 3): chiude il refresh on-demand
+ * senza polling continuo dei browser. Il browser (apertura dashboard o pulsante
+ * "Sync now") scrive `team_state.sync_requested_at`; qui il daemon lo rileva,
+ * fa un push fresco e marca `sync_completed_at` → il browser fa UN refetch.
+ *
+ * Pending = sync_requested_at presente e > sync_completed_at (o completed NULL).
+ * Best-effort: 1 GET /api/team-state per tick (lettura singola riga per user,
+ * economica); push + PATCH ack solo quando c'è davvero una richiesta.
+ */
+async function handleSyncRendezvous(options = {}) {
+  const silent = options.silent === true;
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) return;
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+
+  let state = null;
+  try {
+    const res = await fetch(`${baseUrl}/api/team-state`, {
+      headers: { Authorization: `Bearer ${config.token}` },
+    });
+    if (!res.ok) return;
+    const body = await res.json().catch(() => ({}));
+    state = body.state || null;
+  } catch (err) {
+    if (!silent) console.error(pc.yellow(`  sync-rendezvous warn: ${err.message}`));
+    return;
+  }
+  if (!state) return;
+
+  const reqAt = state.sync_requested_at || null;
+  const doneAt = state.sync_completed_at || null;
+  // Timestamp ISO (UTC, suffisso Z dal cloud) → confronto lessicografico =
+  // cronologico. Pending se richiesto e non ancora completato dopo la richiesta.
+  const pending = reqAt && (!doneAt || reqAt > doneAt);
+  if (!pending) return;
+
+  // Push fresco ORA (condizionale: se non c'è delta esce subito, i dati sono
+  // già a cloud). Isolato dal counter del daemon.
+  const prev = process.exitCode;
+  process.exitCode = 0;
+  await handlePush({});
+  process.exitCode = prev;
+
+  // Ack: il browser sta facendo polling bounded di sync_completed_at.
+  try {
+    await fetch(`${baseUrl}/api/team-state`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sync_completed_at: new Date().toISOString() }),
+    });
+    if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack'));
+  } catch (err) {
+    if (!silent) console.error(pc.yellow(`  sync-rendezvous ack warn: ${err.message}`));
   }
 }
 
@@ -1519,6 +1867,29 @@ async function handleDaemon(options) {
         console.error(pc.yellow(`  daemon pull-desired-state error: ${err.message}`));
       }
 
+      // Ticket sync (round-trip cloud↔VPS): importa i ticket 'open' creati dal
+      // web e pusha le risoluzioni del team. Stessa cadenza/policy del pull
+      // desired-state: best-effort, errori loggati ma fuori dal counter del push.
+      try {
+        const prevTk = process.exitCode;
+        process.exitCode = 0;
+        await handleTicketSync({ silent: true });
+        process.exitCode = prevTk;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon ticket-sync error: ${err.message}`));
+      }
+
+      // Rendezvous "Sync now": se il browser ha chiesto un refresh on-demand
+      // (sync_requested_at), push fresco + ack. Best-effort, fuori dal counter.
+      try {
+        const prevSr = process.exitCode;
+        process.exitCode = 0;
+        await handleSyncRendezvous({ silent: true });
+        process.exitCode = prevSr;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon sync-rendezvous error: ${err.message}`));
+      }
+
       if (authFailedThisTick) {
         consecutiveAuthFails += 1;
       } else if (!tickFailed) {
@@ -1595,7 +1966,7 @@ async function handleDaemon(options) {
 // per recuperare write_requested cliccato via web mentre container era
 // offline). Best-effort: il caller invoca con { silent: true } e ignora
 // process.exitCode così il boot prosegue anche se cloud è giù.
-export { handlePullDesiredState };
+export { handlePullDesiredState, handleTicketSync };
 
 /**
  * pull-profile — scarica il profilo dal cloud e ricostruisce
@@ -1705,6 +2076,14 @@ export function registerCloudCommand(program) {
     .option('--limit <n>', 'Max righe per chiamata (default 500, max 2000)')
     .option('--dry-run', 'Mostra cosa verrebbe applicato senza UPDATE')
     .action(handlePullDesiredState);
+
+  cloud
+    .command('sync-tickets')
+    .description('Round-trip ticket cloud<->VPS: importa i ticket utente, pusha le risoluzioni del team')
+    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
+    .option('--full', 'Ignora i cursor (pull lookback 7gg, push tutto)')
+    .option('--silent', 'Output minimo (per il boot)')
+    .action(handleTicketSync);
 
   cloud
     .command('pull-profile')

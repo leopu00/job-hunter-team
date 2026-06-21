@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type AgentStatus = "running" | "stopped" | "pending";
 
@@ -636,6 +637,10 @@ export default function TeamOrgChart({
   hideStopped,
   dbWriteSignal,
 }: Props) {
+  // Su CLOUD (Vercel/Supabase) il polling continuo va SPENTO: i dati appaiono
+  // all'apertura (chiamata iniziale) ma niente setInterval che scala coi tab.
+  // In locale/desktop il polling resta pieno (teatro live del team).
+  const isCloud = useIsCloud();
   const desktopFlowRef = useRef<HTMLDivElement | null>(null);
   const captainNameRef = useRef<HTMLSpanElement | null>(null);
   const captainEmojiRef = useRef<HTMLSpanElement | null>(null);
@@ -812,6 +817,8 @@ export default function TeamOrgChart({
       }
     };
     check();
+    // Su cloud: solo la fetch iniziale, niente polling continuo.
+    if (isCloud) return;
     // 15s (era 3s): bridge/pacing status non cambia frequentemente. Riduce
     // req/min su /api/bridge/status + /api/team/pacing-bridge (40→8 totale).
     const interval = setInterval(check, 15_000);
@@ -819,7 +826,7 @@ export default function TeamOrgChart({
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [isCloud]);
 
   const handleBridgeAction = async (_id: string, action: "start" | "stop") => {
     setBridgePending(true);
@@ -906,6 +913,8 @@ export default function TeamOrgChart({
       }
     };
     check();
+    // Su cloud: solo la fetch iniziale, niente polling continuo.
+    if (isCloud) return;
     // 15s (era 3s): bridge/pacing status non cambia frequentemente. Riduce
     // req/min su /api/bridge/status + /api/team/pacing-bridge (40→8 totale).
     const interval = setInterval(check, 15_000);
@@ -913,7 +922,7 @@ export default function TeamOrgChart({
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [isCloud]);
 
   const isActive = (roleId: string) => {
     if (agents) return agents[roleId]?.status === "running";
@@ -1277,6 +1286,8 @@ export default function TeamOrgChart({
       }
     };
     poll();
+    // Su cloud: solo la fetch iniziale, niente polling continuo.
+    if (isCloud) return;
     // 5000ms (era 1500ms): le animazioni delle frecce restano OK con
     // questa cadenza (un messaggio passa in ~2s sulla freccia comunque).
     // Riduce req/min su /api/team/messages da ~40 a 12 — taglio principale
@@ -1288,6 +1299,7 @@ export default function TeamOrgChart({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    isCloud,
     arrowOverlay.bridgePath,
     arrowOverlay.pacingPath,
     arrowOverlay.sentinelToCaptainPath,
@@ -1332,6 +1344,8 @@ export default function TeamOrgChart({
       }
     };
     poll();
+    // Su cloud: solo la fetch iniziale, niente polling continuo.
+    if (isCloud) return;
     // 10s (era 2.5s): queue state per throttle/pallini queued non richiede
     // alta frequenza. Riduce req/min su /api/team/queue (24→6).
     const interval = setInterval(poll, 10_000);
@@ -1339,7 +1353,7 @@ export default function TeamOrgChart({
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [isCloud]);
 
   // Watcher: quando il throttle di un role scade (l'entry esce da
   // queueState), tutti i pallini queued con destRole = quel role

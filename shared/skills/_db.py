@@ -81,6 +81,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_user_excluded(conn)
     _migrate_positions_recheck_requested(conn)
     _migrate_role_family_registry(conn)
+    _migrate_position_tickets_cloud_id(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -255,6 +256,11 @@ def ensure_schema(conn: sqlite3.Connection):
         status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','assigned','resolved')),
         assigned_agent TEXT,
         response_text TEXT,
+        -- id del ticket gemello su Supabase (mig 043): correlazione per il
+        -- round-trip cloud↔VPS. NULL = ticket creato in locale, non ancora
+        -- pushato sul cloud (il daemon lo INSERT e scrive qui l'id). Vedi
+        -- `jht cloud sync-tickets`.
+        cloud_id INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         assigned_at TIMESTAMP,
         resolved_at TIMESTAMP,
@@ -276,6 +282,7 @@ def ensure_schema(conn: sqlite3.Connection):
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_status ON position_tickets(status);
     CREATE INDEX IF NOT EXISTS idx_position_tickets_position ON position_tickets(position_id);
+    CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL;
 
     -- Bug #14: event-log delle transizioni di stato delle positions.
     -- `positions.status` è una colonna sovrascritta ad ogni UPDATE, quindi
@@ -924,6 +931,28 @@ def _migrate_positions_office_geocoding(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_positions_office_geocoded "
         "ON positions(office_geocoded) WHERE office_geocoded = 1"
+    )
+
+
+def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:
+    """Aggiunge `position_tickets.cloud_id` (int, nullable).
+
+    Correlazione per il round-trip cloud↔VPS dei ticket ([JHT-DATA-SYNC]
+    fase 2): l'id del ticket gemello su Supabase (mig 043). NULL = creato in
+    locale, non ancora pushato (il daemon `jht cloud sync-tickets` lo INSERT
+    sul cloud e scrive qui l'id). Per i ticket creati dal web cloud, il pull
+    li importa in locale già con cloud_id valorizzato. Idempotente: guard
+    `_column_exists`. La tabella può non esistere su DB pre-2026-06-18 → in
+    quel caso il CREATE TABLE IF NOT EXISTS più sotto la crea già con la colonna.
+    """
+    if not _table_exists(conn, 'position_tickets'):
+        return
+    if _column_exists(conn, 'position_tickets', 'cloud_id'):
+        return
+    conn.execute("ALTER TABLE position_tickets ADD COLUMN cloud_id INTEGER")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id "
+        "ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL"
     )
 
 

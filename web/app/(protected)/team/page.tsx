@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "../../components/Toast";
 import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
 import { useTeamState } from "@/app/hooks/useTeamState";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import TeamOrgChart from "./_components/TeamOrgChart";
 import UsageChart from "./_components/UsageChart";
@@ -132,6 +133,7 @@ function Spinner({
 
 export default function TeamPage() {
   const { toast } = useToast();
+  const isCloud = useIsCloud();
   const [statuses, setStatuses] = useState<Record<string, AgentStatus>>(() => {
     const init: Record<string, AgentStatus> = {};
     AGENTS.forEach((a) => {
@@ -204,12 +206,15 @@ export default function TeamPage() {
 
   useEffect(() => {
     fetchStatus();
+    // Su cloud niente polling continuo: una fetch all'apertura basta, il
+    // resto è on-demand. In locale resta il teatro live del team.
+    if (isCloud) return;
     // 15s invece di 5s: orgchart status non cambia spesso, riduce req/min
     // sul rate limit globale. Realtime via useTeamState copre i cambi
     // is_running ad alta frequenza (es. click Start/Stop).
     const interval = setInterval(fetchStatus, 15_000);
     return () => clearInterval(interval);
-  }, [fetchStatus]);
+  }, [fetchStatus, isCloud]);
 
   /* ── Start/Stop ──────────────────────────────────────────────── */
 
@@ -393,8 +398,10 @@ export default function TeamPage() {
               v2 →
             </Link>
             {/* Team running state derivato da team_state (Realtime), con
-                fallback ad activeCount per Local PC mode senza cloud sync */}
-            {(() => {
+                fallback ad activeCount per Local PC mode senza cloud sync.
+                [JHT-DASHBOARD-SPLIT] start/stop = CONTROLLO → solo desktop. Sul
+                cloud la pagina resta (monitoraggio read-only) ma i comandi spariscono. */}
+            {isCloud !== true && (() => {
               const teamRunning =
                 teamState.state?.should_run === true ||
                 teamState.state?.is_running === true ||
@@ -481,7 +488,7 @@ export default function TeamPage() {
                 },
               ]),
             )}
-            onAction={handleAction}
+            onAction={isCloud === true ? undefined : handleAction}
             actionLoading={actionLoading}
           />
         </div>
