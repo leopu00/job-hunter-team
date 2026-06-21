@@ -61,6 +61,23 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
 
   const { match, cities, countries, categories } = run;
 
+  // ── Usage: % del budget settimanale AI consumato per giorno ──
+  const usageDays = run.usage?.daily ?? [];
+  const usageMax = Math.max(1, ...usageDays.map((d) => d.pct));
+  const usageWeeks = [...new Set(usageDays.map((d) => d.week))];
+  const WEEK_COLORS = [BLUE, GREEN, PURPLE, "#ffd600"];
+  const weekColor = (w: string) =>
+    WEEK_COLORS[Math.max(0, usageWeeks.indexOf(w)) % WEEK_COLORS.length];
+  const usageActive = usageDays.filter((d) => d.pct > 0);
+  const usageAvg = usageActive.length
+    ? Math.round(usageActive.reduce((s, d) => s + d.pct, 0) / usageActive.length)
+    : 0;
+  const usagePeak = usageDays.reduce(
+    (m, d) => (d.pct > m.pct ? d : m),
+    { pct: 0, day: "" } as { pct: number; day: string },
+  );
+  const dm = (day: string) => `${day.slice(8, 10)}/${day.slice(5, 7)}`;
+
   // ── Categorie: top 8 + "Altre" ──
   const catView = useMemo(() => {
     const sorted = [...categories].sort((a, b) => b.count - a.count);
@@ -612,6 +629,114 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           </div>
         </div>
       </section>
+
+      {/* ════════ 4. USAGE — BUDGET AI NEL TEMPO ═════════════════ */}
+      {usageDays.length > 0 && (
+        <section>
+          <div className="section-label mb-1">
+            💸 Quanto budget AI consuma nel tempo
+          </div>
+          <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-2xl">
+            Quanta parte del <strong className="text-[var(--color-muted)]">
+            piano AI settimanale</strong> il team consuma ogni giorno (il
+            «cervello» — il provider — è l&apos;unica cosa che paghi). Il budget
+            si azzera ogni settimana: il team impara a{" "}
+            <strong className="text-[var(--color-muted)]">distribuirlo</strong>{" "}
+            sui giorni invece di bruciarlo subito.
+          </p>
+
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+            {/* Callout */}
+            <div className="flex flex-wrap gap-3 mb-5">
+              <div className="flex-1 min-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+                <div
+                  className="text-3xl font-extrabold tabular-nums"
+                  style={{ color: BLUE }}
+                >
+                  {usageAvg}%
+                </div>
+                <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-0.5">
+                  media per giorno attivo
+                </div>
+              </div>
+              <div className="flex-1 min-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
+                <div
+                  className="text-3xl font-extrabold tabular-nums"
+                  style={{ color: PURPLE }}
+                >
+                  {Math.round(usagePeak.pct)}%
+                </div>
+                <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-0.5">
+                  picco{usagePeak.day ? ` · ${dm(usagePeak.day)}` : ""}
+                </div>
+              </div>
+            </div>
+
+            {/* Barre per giorno */}
+            <div className="flex items-end gap-1.5" style={{ height: 150 }}>
+              {usageDays.map((d) => {
+                const color = weekColor(d.week);
+                return (
+                  <div
+                    key={d.day}
+                    className="flex-1 flex flex-col items-center justify-end h-full cursor-default"
+                    onMouseEnter={(e) =>
+                      showTip(e, dm(d.day), [
+                        {
+                          color,
+                          label: "% budget settimanale",
+                          value: `${Math.round(d.pct)}%`,
+                        },
+                      ])
+                    }
+                    onMouseMove={moveTip}
+                    onMouseLeave={hideTip}
+                  >
+                    <div
+                      className="w-full rounded-t-sm"
+                      style={{
+                        height: `${(d.pct / usageMax) * 100}%`,
+                        background: color,
+                        opacity: 0.85,
+                        minHeight: d.pct > 0 ? 3 : 0,
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            {/* Asse giorni (etichette sparse) */}
+            <div className="flex gap-1.5 mt-1.5">
+              {usageDays.map((d, i) => (
+                <div
+                  key={d.day}
+                  className="flex-1 text-center text-[8px] text-[var(--color-dim)] tabular-nums"
+                >
+                  {i % 3 === 0 ? dm(d.day) : ""}
+                </div>
+              ))}
+            </div>
+
+            {/* Legenda settimane */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[var(--color-border)] pt-3">
+              <span className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                Settimana di budget (reset giovedì)
+              </span>
+              {usageWeeks.map((w, i) => (
+                <span key={w} className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm"
+                    style={{ background: weekColor(w) }}
+                  />
+                  <span className="text-[10px] text-[var(--color-muted)]">
+                    dal {dm(w)}
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       <TooltipLayer ref={tipRef} />
     </div>

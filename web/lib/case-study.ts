@@ -27,6 +27,18 @@ export interface CaseStudyCity {
   count: number
 }
 
+export interface CaseStudyUsageDay {
+  day: string // YYYY-MM-DD
+  pct: number // % del budget settimanale AI consumato quel giorno
+  week: string // giovedì di riferimento (settimana di budget)
+}
+
+export interface CaseStudyUsage {
+  provider: string
+  unit: string // es. "weekly_budget_pct"
+  daily: CaseStudyUsageDay[]
+}
+
 export interface CaseStudyRun {
   source: string
   tsRange: [string, string]
@@ -38,4 +50,5 @@ export interface CaseStudyRun {
   salary: { n: number; avgMin: number | null; avgMax: number | null }
   agents: string[]
   events: { ts: string; agent: string; action: string }[]
+  usage?: CaseStudyUsage | null
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Read-only generator: jobs.db -> CaseStudyRun JSON (aggregato e anonimo).
 # Gira SUL VPS; emette solo dati aggregati su stdout (niente PII).
-import sqlite3, json, unicodedata
+import sqlite3, json, unicodedata, datetime, collections, glob, os
 
 c = sqlite3.connect("file:/root/.jht/jobs.db?mode=ro", uri=True)
 cur = c.cursor()
@@ -98,6 +98,48 @@ events = [{"ts": ts.replace(" ", "T") + "Z", "agent": by, "action": to}
 agents = sorted({e["agent"] for e in events})
 ts_min, ts_max = Q("SELECT MIN(ts),MAX(ts) FROM position_state_transitions")[0]
 
+# ── usage giornaliero (% del budget SETTIMANALE AI consumato per giorno) ──
+# Da sentinel-data.jsonl: weekly_usage è cumulativo dentro la settimana (cresce
+# 0→~100) e si azzera al reset (Gio ~06:00 UTC). Consumo del giorno = valore di
+# FINE giornata − fine del giorno precedente nella STESSA settimana (0 se è il
+# primo giorno della settimana). Robusto all'oscillazione intraday; ogni
+# settimana completa somma ~100%.
+def _week_key(day_iso):  # giovedì di riferimento (settimana di budget)
+    d = datetime.date.fromisoformat(day_iso)
+    return (d - datetime.timedelta(days=(d.weekday() - 3) % 7)).isoformat()
+
+SENTINEL = "/root/.jht/logs/sentinel-data.jsonl"
+usage = None
+if os.path.exists(SENTINEL):
+    samples = []  # (ts, weekly_usage)
+    provider = "codex"
+    for line in open(SENTINEL):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            e = json.loads(line)
+        except Exception:
+            continue
+        ts = e.get("ts", "")
+        if not ts or e.get("weekly_usage") is None:
+            continue
+        samples.append((ts, e["weekly_usage"]))
+        if e.get("provider"):
+            provider = e["provider"]
+    samples.sort()
+    day_last = collections.OrderedDict()  # day -> weekly_usage di fine giornata
+    for ts, wu in samples:
+        day_last[ts[:10]] = wu  # l'ultimo sample del giorno sovrascrive
+    daily = []
+    week_prev = {}  # week_key -> fine del giorno precedente (nella settimana)
+    for day, end in day_last.items():
+        wk = _week_key(day)
+        pct = end - week_prev.get(wk, 0)
+        week_prev[wk] = end
+        daily.append({"day": day, "pct": round(max(pct, 0), 1), "week": wk})
+    usage = {"provider": provider, "unit": "weekly_budget_pct", "daily": daily}
+
 out = {
     "source": "betaC-codex",
     "tsRange": [ts_min, ts_max],
@@ -109,5 +151,6 @@ out = {
     "salary": salary,
     "agents": agents,
     "events": events,
+    "usage": usage,
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))
