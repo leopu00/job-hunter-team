@@ -490,11 +490,13 @@ export default function ActivityCharts({
   showRecent = true,
   showLeaderboard = true,
   showDonut = true,
+  showVolume = true,
 }: {
   activity: TeamActivity;
   showRecent?: boolean;
   showLeaderboard?: boolean;
   showDonut?: boolean;
+  showVolume?: boolean;
 }) {
   const {
     dates,
@@ -789,6 +791,7 @@ export default function ActivityCharts({
         />
       )}
       {/* ── 3. Timeline impilata (per ruolo) ─────────────────────── */}
+      {showVolume && (
       <section>
         <div className="section-label mb-1">📈 Volume di lavoro nel tempo</div>
         <p className="text-[10px] text-[var(--color-dim)] mb-4">
@@ -876,6 +879,7 @@ export default function ActivityCharts({
           </div>
         </div>
       </section>
+      )}
 
       {/* ── 4. Scatter temporale: chi, quando, cosa ──────────────── */}
       <TemporalScatter

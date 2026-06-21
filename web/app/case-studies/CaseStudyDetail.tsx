@@ -10,6 +10,7 @@ import type { CaseStudyProfile } from "@/lib/case-studies";
 import type { CaseStudyRun } from "@/lib/case-study";
 import type { TeamActivity } from "@/lib/team-activity";
 import CaseStudyOverview from "./CaseStudyOverview";
+import WorkBudgetChart from "./WorkBudgetChart";
 import ActivityCharts from "../(protected)/team/attivita/ActivityCharts";
 
 export interface PreparedCase {
@@ -67,6 +68,28 @@ export default function CaseStudyDetail({
   ).length;
   const fromKey = run.tsRange[0].slice(0, 10);
   const toKey = run.tsRange[1].slice(0, 10);
+
+  // Ruoli con attività (per il grafico unico lavoro+budget).
+  const activeRoles = activity.roles.filter((r) => activity.roleTotals[r] > 0);
+
+  // Orario di lavoro formattato (contesto sulla distribuzione del budget).
+  const DOW: Record<string, string> = {
+    mon: "lun", tue: "mar", wed: "mer", thu: "gio",
+    fri: "ven", sat: "sab", sun: "dom",
+  };
+  const fmtDays = (days: string[]) => {
+    const all = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    const s = new Set(days);
+    if (all.every((d) => s.has(d))) return "tutti i giorni";
+    if (["mon", "tue", "wed", "thu", "fri"].every((d) => s.has(d)) &&
+        !s.has("sat") && !s.has("sun")) return "lun–ven";
+    return days.map((d) => DOW[d] ?? d).join(", ");
+  };
+  const wh = run.usage?.workingHours;
+  const whText = wh
+    ? wh.windows.map((w) => `${fmtDays(w.days)} · ${w.start}–${w.end}`).join(" / ") +
+      (wh.timezone ? ` (${wh.timezone})` : "")
+    : null;
 
   return (
     <div className="space-y-12">
@@ -167,36 +190,45 @@ export default function CaseStudyDetail({
       {/* ── Profilo ───────────────────────────────────────────── */}
       <header>
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8">
-          <div className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[var(--color-dim)]">
-            {current.label} · profilo anonimo
-          </div>
-          <h1 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
-            {profile.headline}
-          </h1>
-          <p className="mt-3 text-[13px] leading-relaxed text-[var(--color-muted)] max-w-3xl">
-            {profile.summary}
-          </p>
+          {/* Riga alta: testo a sinistra (piena larghezza) + abbonamento a destra */}
+          <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[var(--color-dim)]">
+                {current.label} · profilo anonimo
+              </div>
+              <h1 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
+                {profile.headline}
+              </h1>
+              <p className="mt-3 text-[13px] leading-relaxed text-[var(--color-muted)]">
+                {profile.summary}
+              </p>
+            </div>
 
-          {/* Abbonamento AI usato — l'unica spesa reale, evidenziato */}
-          <div
-            className="mt-5 inline-flex items-center gap-3 rounded-xl px-4 py-2.5"
-            style={{
-              border: "1px solid color-mix(in srgb, #00e676 40%, transparent)",
-              background: "color-mix(in srgb, #00e676 8%, transparent)",
-            }}
-          >
-            <span aria-hidden className="text-[16px]">
-              🧠
-            </span>
-            <div>
-              <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+            {/* Abbonamento AI usato — l'unica spesa reale */}
+            <div
+              className="lg:w-64 shrink-0 rounded-xl px-4 py-4 flex flex-col justify-center"
+              style={{
+                border: "1px solid color-mix(in srgb, #00e676 40%, transparent)",
+                background: "color-mix(in srgb, #00e676 8%, transparent)",
+              }}
+            >
+              <div className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-wide text-[var(--color-dim)]">
+                <span aria-hidden className="text-[14px]">
+                  🧠
+                </span>
                 Abbonamento AI usato
               </div>
-              <div className="text-[13px] font-bold text-[var(--color-white)]">
-                {current.subscription.provider} · {current.subscription.plan}{" "}
-                <span style={{ color: "#00e676" }}>
+              <div className="mt-1.5 text-[15px] font-bold text-[var(--color-white)] leading-snug">
+                {current.subscription.provider}
+              </div>
+              <div className="mt-0.5 text-[12px] text-[var(--color-muted)]">
+                {current.subscription.plan} ·{" "}
+                <span className="font-bold" style={{ color: "#00e676" }}>
                   {current.subscription.price}
                 </span>
+              </div>
+              <div className="mt-2 text-[10px] text-[var(--color-dim)] leading-relaxed">
+                È l&apos;unica spesa: la piattaforma è gratis.
               </div>
             </div>
           </div>
@@ -214,10 +246,13 @@ export default function CaseStudyDetail({
             ))}
           </div>
 
-          <div className="mt-6">
+          <div className="mt-6 border-t border-[var(--color-border)] pt-6">
             <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)] mb-2">
-              Città target
+              Dove cerca lavoro
             </div>
+            <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-3">
+              {profile.locationNote}
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {profile.targetCities.map((city) => (
                 <span
@@ -244,6 +279,31 @@ export default function CaseStudyDetail({
       {/* ── Match · Dove · Categorie ──────────────────────────── */}
       <CaseStudyOverview run={run} />
 
+      {/* ── Lavoro e budget nel tempo (grafico unico, doppio asse) ── */}
+      {run.usage && run.usage.daily.length > 0 && (
+        <section>
+          <div className="section-label mb-1">
+            📈 Lavoro e budget AI nel tempo
+          </div>
+          <p className="text-[11px] text-[var(--color-dim)] mb-4">
+            Le <strong className="text-[var(--color-muted)]">barre</strong> sono
+            le azioni del team al giorno (per ruolo); le{" "}
+            <strong className="text-[var(--color-muted)]">linee</strong> mostrano
+            quanto del piano AI settimanale è stato consumato — quel giorno e
+            cumulato sulla settimana (reset giovedì). Il budget si spalma sui
+            giorni invece di bruciarsi subito.
+          </p>
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+            <WorkBudgetChart
+              usage={run.usage}
+              roleDaily={activity.roleDaily}
+              roles={activeRoles}
+              workingHoursText={whText}
+            />
+          </div>
+        </section>
+      )}
+
       {/* ── Come ha lavorato (attività, trimmed) ──────────────── */}
       <section className="pt-10 border-t border-[var(--color-border)]">
         <div className="section-label mb-1">⚙️ Come ha lavorato il team</div>
@@ -257,6 +317,7 @@ export default function CaseStudyDetail({
           showRecent={false}
           showLeaderboard={false}
           showDonut={false}
+          showVolume={false}
         />
       </section>
     </div>
