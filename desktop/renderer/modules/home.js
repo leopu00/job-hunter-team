@@ -29,7 +29,11 @@ const VPS_DASHBOARD_URL = 'https://jobhunterteam.ai/dashboard'
 
 // -------- Home (post-setup dashboard) --------
 
-const HOME_SECTIONS = ['team', 'provider', 'docker', 'account', 'language', 'advanced']
+const HOME_SECTIONS = ['team', 'provider', 'docker', 'account', 'email', 'language', 'advanced']
+
+// Pagina pubblica che spiega come impostare l'inoltro automatico (pulsante nel
+// pannello Email). Aggiornare se la guida cambia URL.
+const EMAIL_FORWARDING_DOC_URL = 'https://jobhunterteam.ai/docs/guides/email-forwarding'
 
 const homeDom = {
   root: document.getElementById('home'),
@@ -86,6 +90,13 @@ const homeDom = {
   btnAccountSigninGoogle: document.getElementById('home-account-signin-google'),
   btnAccountSigninGithub: document.getElementById('home-account-signin-github'),
   btnAccountSignout: document.getElementById('home-account-signout'),
+  emailStatus: document.getElementById('home-email-status'),
+  emailAddress: document.getElementById('home-email-address'),
+  emailPassword: document.getElementById('home-email-password'),
+  emailMsg: document.getElementById('home-email-msg'),
+  btnEmailSave: document.getElementById('home-btn-email-save'),
+  btnEmailDelete: document.getElementById('home-btn-email-delete'),
+  btnEmailHelp: document.getElementById('home-btn-email-help'),
   syncCard: document.getElementById('home-sync-card'),
   syncSubtitle: document.getElementById('home-sync-subtitle'),
   syncDisabled: document.getElementById('home-sync-disabled'),
@@ -176,6 +187,7 @@ function setHomeSection(name) {
     stopTeamPanelPoll()
     if (name === 'provider') refreshHomeProvider()
     else if (name === 'docker') refreshHomeDocker()
+    else if (name === 'email') refreshHomeEmail()
   }
 }
 
@@ -895,6 +907,79 @@ async function refreshHomeDocker() {
 }
 
 // Wiring home
+// -------- Email del team (casella job-alert dedicata) --------
+
+function setEmailMessage(text, kind) {
+  if (!homeDom.emailMsg) return
+  if (!text) {
+    homeDom.emailMsg.hidden = true
+    homeDom.emailMsg.textContent = ''
+    return
+  }
+  homeDom.emailMsg.hidden = false
+  homeDom.emailMsg.textContent = text
+  homeDom.emailMsg.dataset.kind = kind || 'info'
+}
+
+async function refreshHomeEmail() {
+  if (!homeDom.emailStatus || !window.emailApi?.getStatus) return
+  try {
+    const st = await window.emailApi.getStatus()
+    if (st?.configured) {
+      homeDom.emailStatus.textContent = st.email || t('home.email.statusConfigured')
+      if (homeDom.emailAddress && !homeDom.emailAddress.value) {
+        homeDom.emailAddress.value = st.email || ''
+      }
+      if (homeDom.btnEmailDelete) homeDom.btnEmailDelete.hidden = false
+    } else {
+      homeDom.emailStatus.textContent = t('home.email.statusNone')
+      if (homeDom.btnEmailDelete) homeDom.btnEmailDelete.hidden = true
+    }
+  } catch {
+    homeDom.emailStatus.textContent = t('home.email.statusNone')
+  }
+}
+
+async function onEmailSave() {
+  const email = (homeDom.emailAddress?.value || '').trim()
+  const password = homeDom.emailPassword?.value || ''
+  setEmailMessage('', 'info')
+  if (!window.emailApi?.saveConfig) return
+  const res = await window.emailApi.saveConfig({ email, password })
+  if (res?.ok) {
+    if (homeDom.emailPassword) homeDom.emailPassword.value = ''
+    setEmailMessage(t('home.email.saved'), 'ok')
+    await refreshHomeEmail()
+  } else {
+    const map = {
+      'invalid-email': 'home.email.errEmail',
+      'invalid-password': 'home.email.errPassword',
+    }
+    setEmailMessage(t(map[res?.error] || 'home.email.errGeneric'), 'err')
+  }
+}
+
+async function onEmailDelete() {
+  if (!window.emailApi?.deleteConfig) return
+  const res = await window.emailApi.deleteConfig()
+  if (res?.ok) {
+    if (homeDom.emailAddress) homeDom.emailAddress.value = ''
+    if (homeDom.emailPassword) homeDom.emailPassword.value = ''
+    setEmailMessage(t('home.email.removed'), 'ok')
+    await refreshHomeEmail()
+  } else {
+    setEmailMessage(t('home.email.errGeneric'), 'err')
+  }
+}
+
+if (homeDom.btnEmailSave) homeDom.btnEmailSave.addEventListener('click', onEmailSave)
+if (homeDom.btnEmailDelete) homeDom.btnEmailDelete.addEventListener('click', onEmailDelete)
+if (homeDom.btnEmailHelp) {
+  homeDom.btnEmailHelp.addEventListener('click', () => {
+    window.launcherApi?.openExternal?.(EMAIL_FORWARDING_DOC_URL)
+  })
+}
+
 for (const btn of homeDom.navItems) {
   btn.addEventListener('click', () => setHomeSection(btn.dataset.section))
 }

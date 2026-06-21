@@ -41,9 +41,13 @@ default = {"default": 0}.
 CLI:
   throttle-config get <agent>            # stampa secondi correnti
   throttle-config set <agent> <seconds>  # set atomico
-  throttle-config dump                   # stampa tutto il config
+  throttle-config dump                   # stampa tutto il config (effettivo)
   throttle-config reset                  # tutti a 0
   throttle-config bulk-set <agent>=<sec>... # multi-set in una writelock
+  throttle-config quantize <sec>         # aggancia alla ladder (floor 5min)
+
+Ladder (2026-06-21): ogni throttle >0 è agganciato a {5,10,15,20,25,30,40,50,60}min
+(floor 5min, cap 1h). `0` resta `0`. Set/get/dump restituiscono sempre l'EFFETTIVO.
 """
 import argparse
 import json
@@ -65,6 +69,32 @@ MIN_SLEEP = 0      # 0 = no throttle (fast path)
 # Il subprocess detached non viene killato dal timeout della tool
 # call. Per pause > 1h l'agente deve fare multi-call.
 MAX_SLEEP = 3600
+
+# ── Ladder dei throttle (2026-06-21) ─────────────────────────────────
+# Floor 5min, gradini fino a 1h. Razionale (dallo storico: throttle <5min
+# = 78-86% degli eventi ma correzioni marginali applicate a raffica =
+# "chatter"): col floor il throttle smette di essere una micro-correzione.
+# Per SPENDERE il budget il Capitano non rallenta a raffica pochi agenti,
+# ma PARALLELIZZA (spawna più agenti). `0` resta `0` (nessun throttle,
+# fast path); ogni valore >0 sale ad almeno 5min e si aggancia a un gradino.
+THROTTLE_LADDER = [300, 600, 900, 1200, 1500, 1800, 2400, 3000, 3600]
+
+
+def quantize(seconds) -> int:
+    """Aggancia i secondi alla ladder: 0→0 (off), (0..300]→300 (floor 5min),
+    >=3600→3600 (cap 1h), altrimenti il gradino più vicino. Idempotente.
+    Robusta: input non numerico → 0 (la skill gira in loop dagli agenti)."""
+    try:
+        s = float(seconds)
+    except (TypeError, ValueError):
+        return 0
+    if s <= 0:
+        return 0
+    if s <= THROTTLE_LADDER[0]:
+        return THROTTLE_LADDER[0]
+    if s >= THROTTLE_LADDER[-1]:
+        return THROTTLE_LADDER[-1]
+    return min(THROTTLE_LADDER, key=lambda x: abs(x - s))
 
 
 def load() -> dict:
@@ -120,7 +150,9 @@ def get_agent(agent: str) -> int:
         v = int(v)
     except (TypeError, ValueError):
         v = 0
-    return max(MIN_SLEEP, min(MAX_SLEEP, v))
+    # Effettivo = agganciato alla ladder (floor 5min). Vale anche per i
+    # valori legacy già nel throttle.json (es. 60/120 → 300) senza riscrivere.
+    return quantize(max(MIN_SLEEP, min(MAX_SLEEP, v)))
 
 
 def set_agent(agent: str, seconds: int) -> None:
@@ -129,7 +161,7 @@ def set_agent(agent: str, seconds: int) -> None:
     if seconds < MIN_SLEEP or seconds > MAX_SLEEP:
         raise ValueError(f"seconds must be {MIN_SLEEP}..{MAX_SLEEP}, got {seconds}")
     cfg = load()
-    cfg[agent] = seconds
+    cfg[agent] = quantize(seconds)  # snap alla ladder: ciò che salvi è l'effettivo
     _atomic_write(cfg)
 
 
@@ -156,7 +188,14 @@ def main() -> int:
     p_bulk = sub.add_parser("bulk-set", help="set multipli in 1 write atomico")
     p_bulk.add_argument("pairs", nargs="+", help="agent=seconds ...")
 
+    p_q = sub.add_parser("quantize", help="aggancia secondi alla ladder (floor 5min)")
+    p_q.add_argument("seconds")
+
     args = ap.parse_args()
+
+    if args.cmd == "quantize":
+        print(quantize(args.seconds))
+        return 0
 
     if args.cmd == "get":
         print(get_agent(args.agent))
@@ -168,18 +207,19 @@ def main() -> int:
         except (TypeError, ValueError) as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
-        print(f"{args.agent}={args.seconds}s")
+        eff = quantize(args.seconds)
+        note = "" if eff == args.seconds else f" (richiesto {args.seconds}s → ladder)"
+        print(f"{args.agent}={eff}s{note}")
         return 0
 
     if args.cmd == "dump":
         cfg = load()
         # Output umano-leggibile, ordinato.
-        d = cfg.get("default", 0)
-        print(f"default = {d}s")
+        print(f"default = {quantize(cfg.get('default', 0))}s")
         for k in sorted(cfg.keys()):
             if k == "default":
                 continue
-            print(f"{k:14s} = {cfg[k]}s")
+            print(f"{k:14s} = {quantize(cfg[k])}s")
         return 0
 
     if args.cmd == "reset":
@@ -204,7 +244,7 @@ def main() -> int:
                 print(f"error: '{pair}' out of range {MIN_SLEEP}..{MAX_SLEEP}",
                       file=sys.stderr)
                 return 1
-            cfg[k] = v_int
+            cfg[k] = quantize(v_int)  # snap alla ladder (floor 5min)
         _atomic_write(cfg)
         for pair in args.pairs:
             print(pair)
