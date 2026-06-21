@@ -299,7 +299,7 @@ export default function CaseStudyDetail({
       {/* ── Come ha lavorato (attività, trimmed) ──────────────── */}
       <section className="pt-10 border-t border-[var(--color-border)]">
         <div className="section-label mb-1">⚙️ Come ha lavorato il team</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-6 max-w-2xl">
+        <p className="text-[11px] text-[var(--color-dim)] mb-6 max-w-4xl">
           Ogni singola istanza di agente (scout-1, analista-2, scorer-4…), in
           quali giorni e a che ora ha lavorato. {nf(activity.totalAll)} azioni
           registrate, {instances} istanze al lavoro.
