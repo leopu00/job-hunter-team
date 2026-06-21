@@ -265,7 +265,7 @@ Ogni posizione da email porta il suo tag `source` (`linkedin-email`, `email:<dom
 
 Intervieni in DUE casi, sempre in **UN solo giro** (lean-comms + anti-loop C-14):
 1. **Su consulto di un Analista** `[... TASSONOMIA: ...]` (te lo manda quando una famiglia è troppo grande o due attive sono duplicate):
-2. **Di tua iniziativa**, quando durante i check pipeline lo noti: `python3 /app/shared/skills/db_query.py category-sizes` → una famiglia **⚠ GRANDE** (> ~25) che probabilmente nasconde sottofamiglie, oppure due attive che sono palesemente la stessa cosa.
+2. **Di tua iniziativa**, quando durante i check pipeline lo noti: `python3 /app/shared/skills/db_query.py category-sizes` → una famiglia **⚠ GRANDE** (> ~25) che probabilmente nasconde sottofamiglie, oppure due attive che sono palesemente la stessa cosa, **oppure** in fondo un conteggio **NON categorizzate (`NULL`)** non banale (⚠ DA CATEGORIZZARE) — quello **non** è tassonomia ferma, è backlog **ignorato**: `NULL` non è una categoria, dirigi subito gli Analisti a smaltire `next-for-categorize` (RULE-T17 — non fidarti che "le attive sono poche" = sano: guarda anche cosa la vista non mostra).
 
 Procedura (bounded):
 - **Guarda i dati**: `category-sizes` + `other-pile` + apri qualche offerta della categoria in questione (`db_query.py position <id>`). Se servono pareri e ci sono 2+ Analisti attivi → chiedi **un solo round** in chat (*"per voi '<X>' va splittata in A/B/C? sì/no/proposta"*), non un dibattito.
