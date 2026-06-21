@@ -51,6 +51,8 @@ python3 /app/shared/skills/db_insert.py score \
 
 Az 5 alpontszám DB oszlopoknak felel meg: `stack_match · remote_fit · salary_fit · experience_fit · strategic_fit`. A `--total` a kanonikus 0–100 pontszám, amelyet a Capitano olvas.
 
+**Egy score hívásonként — írd be azonnal.** A Scorer EGY pozíció kiértékelése után rögtön beírja a score-t, majd a következőre lép. **Soha** ne értékelj több pozíciót és lődd ki az összes `score` insertet együtt a kör végén: ugyanazt a `scored_at` másodpercet kapnák és kapkodónak tűnne. Egy pozíció → egy kiértékelés → egy azonnali insert → a következő (Scorer RULE-08).
+
 ## Application (Writer)
 
 ```bash

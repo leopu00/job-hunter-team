@@ -51,6 +51,8 @@ python3 /app/shared/skills/db_insert.py score \
 
 Die 5 Teilscores bilden DB-Spalten ab: `stack_match · remote_fit · salary_fit · experience_fit · strategic_fit`. `--total` ist der kanonische 0-100-Score, den der Captain liest.
 
+**Ein Score pro Aufruf — sofort schreiben.** Der Scorer schreibt den Score direkt nach der Bewertung EINER Position und geht dann zur nächsten. **Niemals** mehrere Positionen bewerten und am Ende der Runde alle `score`-Inserts zusammen abfeuern: sie würden dieselbe `scored_at`-Sekunde teilen und hastig wirken. Eine Position → eine Bewertung → ein sofortiges Insert → die nächste (Scorer RULE-08).
+
 ## Application (Writer)
 
 ```bash
