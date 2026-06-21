@@ -60,9 +60,9 @@ const translations = {
   nav_team: { it: "Team", en: "Team", hu: "Csapat" },
   nav_pricing: { it: "Prezzi", en: "Pricing", hu: "Árak" },
   nav_case_studies: {
-    it: "Case studies",
-    en: "Case studies",
-    hu: "Esettanulmányok",
+    it: "Studies",
+    en: "Studies",
+    hu: "Studies",
   },
   nav_project: { it: "Il progetto", en: "Project", hu: "Projekt" },
   nav_chronicles: { it: "Cronache", en: "Chronicles", hu: "Krónikák" },
