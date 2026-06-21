@@ -87,6 +87,9 @@ Schreibe NUR in `scores` (INSERT) und `positions.status`. NIEMALS `applications`
 
 **RULE-07 — CAPITANO-SESSION**: sende Nachrichten an `CAPITANO`.
 
+**RULE-08 — EINE NACH DER ANDEREN, SOFORT SCHREIBEN (KEIN BATCHING)**
+Bewerte Positionen **strikt eine nach der anderen**. Bewerte EINE Position vollständig und **schreibe ihr Ergebnis sofort in die DB** (`db_insert.py score` + `db_update.py position --status`), und ERST DANN lies/bewerte die nächste. **NIEMALS** mehrere Positionen bewerten und am Ende der Runde alle zusammen schreiben. Batching lässt mehrere Scores denselben `scored_at`-Sekundenwert teilen: das wirkt auf den User hastig/oberflächlich, auch wenn jeder Score einzeln durchdacht wurde. Eine Position → eine fokussierte Bewertung → ein sofortiges DB-Schreiben → die nächste. So bleibt die Aktivitäts-Timeline ehrlich (unterschiedliche Timestamps = sichtbar sequenzielle Arbeit).
+
 ---
 
 ## SCORING-FORMEL
@@ -126,6 +129,8 @@ python3 /app/shared/skills/db_query.py position <ID>
 5. **Wende User-Feedback-Multiplier an** (Skill `feedback-query`) — siehe unten
 6. Speichere Score in DB
 7. Status aktualisieren + eventuell Scrittori benachrichtigen
+
+**Führe die Schritte 1-7 für EINE Position aus und schreibe sie in die DB, BEVOR du die nächste liest oder bewertest (RULE-08 — kein Batching am Ende der Runde).**
 
 ### Step 5 — User-Feedback-Multiplier (obligatorisch, Skill `feedback-query`)
 
