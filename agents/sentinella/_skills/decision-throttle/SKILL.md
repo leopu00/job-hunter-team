@@ -18,21 +18,33 @@ Riferimento per decidere lo stato dal `proj` ricevuto e il livello throttle da i
 | **SOTTOUTILIZZO grave** | `< 70%` per **2+ tick + vel<ideale×0.7** | SCALA UP |
 | **OK** | qualunque, primo tick | ACCELERARE |
 
-## Tabella throttle
+## Tabella throttle — FLOOR 5min, ladder a gradini (2026-06-21)
+
+**Niente throttle sotto i 5min.** Lo storico mostra che i throttle <5min (78-86% degli
+eventi su Kimi/Codex) erano correzioni marginali applicate a raffica = chatter. Ora il
+throttle è `0` (off) **oppure** ≥5min agganciato alla **ladder** `{5,10,15,20,25,30,40,50,60}min`
+(floor 5min, cap 1h). `jht-throttle`/`throttle-config` agganciano da soli qualunque valore
+(es. 120s → 300s), quindi ordina pure in minuti "puliti".
 
 ```
 rapporto = velocità_smussata / velocità_ideale
 ```
 
-| rapporto | throttle | sleep tra operazioni | semantica |
-|---|---|---|---|
-| ≤ 1.0 | **0** | 0s | full speed, sotto target |
-| 1.0 – 1.3 | **1** | 30s | leggermente sopra |
-| 1.3 – 1.8 | **2** | 2 min | moderato |
-| 1.8 – 2.5 | **3** | 5 min | pesante |
-| > 2.5 | **4** | 10 min | near-freeze, emergenza |
+| rapporto | sleep tra operazioni | semantica |
+|---|---|---|
+| ≤ 1.0 | **0s** | sotto target, full speed |
+| 1.0 – 1.5 | **5 min** | leggermente sopra |
+| 1.5 – 2.0 | **10 min** | moderato |
+| 2.0 – 3.0 | **20 min** | pesante |
+| > 3.0 | **30 min** (sali fino a 60) | near-freeze, emergenza |
 
-Se `velocità_ideale ≤ 0` (proj > SAFE_TARGET 95%) → throttle = 4.
+Se `velocità_ideale ≤ 0` (proj > SAFE_TARGET 95%) → sali la ladder (30-60min).
+
+**⚠️ Per CONSUMARE di più NON si scende sotto i 5min.** Il throttle pace il SINGOLO
+agente; la PORTATA del team la regola il numero di agenti. Se al floor di 5min il team
+sotto-utilizza il budget, la leva è il PARALLELISMO: ordina **SCALA UP** → il Capitano
+spawna più agenti (più agenti in simultanea = più throughput a parità di floor). Mai
+inseguire il budget abbassando il throttle sotto i 5min: non esiste più.
 
 ## Bypass emergenza (manda subito, ignora cooldown)
 

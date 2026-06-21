@@ -1328,6 +1328,17 @@ Bug specifico Windows dev mode, non blocker pre-launch (Vercel deploy funziona, 
 
 ---
 
+### 🆕 [CAPITANO-SPAWN-MODES] Strategia di spawn del Capitano — modalità/batch invece di "1 per ruolo" (NEW 2026-06-21)
+
+- **Contesto:** col **floor throttle a 5min** (shipped 2026-06-21 — ladder `{0,5,10,15,20,25,30,40,50,60}min` in `throttle-config.py`/`jht-throttle`, C-07 aggiornata) la leva per spendere il budget non è più il micro-throttle ma il **PARALLELISMO**: più agenti in simultanea. Serve una strategia di spawn più ricca della pipeline lineare attuale.
+- **Stato attuale:** il team gira spesso con **1 istanza per ruolo** (Scout→Analista→Scorer, "passa la sticella"). Funziona ma non è ottimale.
+- **Osservazione utente (sperimentale):** **più agenti = team più efficiente**; e gli agenti dello **stesso ruolo in batch** rendono di più (es. **3 Scout insieme cercano meglio di 1**; poi 2 Analisti smaltiscono il batch trovato; ecc.).
+- **Idea:** istruire il **Capitano a scegliere LUI la modalità di spawn** in base a code/budget — non solo "+1 worker dove serve" ma anche **sessioni a batch per ruolo** (es. fase di solo-Scout ×3 per riempire la coda `new`, poi fase Analisti ×2, poi Scorer). Modalità multiple, il Capitano decide quale (la pipeline 1-per-ruolo resta una modalità valida).
+- **Non bloccante / da progettare:** il floor throttle già spinge in questa direzione via lo scaling esistente (C-07: a throttle 0 e sotto target → spawna). Questo ticket è il passo successivo: **modalità di spawn esplicite** + guida nel prompt del Capitano. Sessione dedicata.
+- **Vincoli da rispettare:** budget-bound (#4, guardia budget non count), busy≠dead (C-08bis), 1 spawn/tick (C-02), numero d'istanza casuale, mai bypassare `start-agent.sh` (C-03).
+
+---
+
 ### 🟡 [PACK-INSTALLER-SIZE] Eseguibili desktop troppo pesanti (90-200 MB) — feedback beta
 
 - **Sintomo:** i beta tester segnalano che il download dell'installer è percepibilmente lento. Asset attuali della release `v0.1.17` (verificato 2026-05-20):
