@@ -11,7 +11,9 @@ import type { CaseStudyUsage } from "@/lib/case-study";
 import type { TeamActivityRole, TeamActivityRoleDay } from "@/lib/team-activity";
 import { ROLE_META } from "@/lib/team-activity-meta";
 
-const BUDGET = "#ffd600"; // ambra: budget (distinto dai colori dei ruoli)
+// Ambra "budget", theme-aware: giallo su dark, scurito in light (vedi
+// --color-budget in globals.css). Distinto dai colori dei ruoli.
+const BUDGET = "var(--color-budget)";
 
 function dm(day: string) {
   return `${day.slice(8, 10)}/${day.slice(5, 7)}`;
