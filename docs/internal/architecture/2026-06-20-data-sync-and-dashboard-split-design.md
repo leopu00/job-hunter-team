@@ -164,7 +164,9 @@ Implementato su `dev4` (deploy gated all'utente, mai sui team in osservazione):
 
 **Azione utente / deploy:** impostare `NEXT_PUBLIC_JHT_DEPLOY=cloud` nelle env del progetto Vercel (il fallback `VERCEL`→cloud copre il server ma il client cadrebbe sul fetch legacy); l'immagine Docker non richiede env (default `local`). Test runtime del wrapper desktop a carico utente (`npm run desktop:dev` o build packaged).
 
-**Residuo (slice successiva):** affordance **UI read-only** sul cloud (d3 di `[JHT-WEB-READONLY]`) — nascondere/disabilitare i controlli (start/stop, chat, config) sul deploy cloud invece di mostrarli e dare 403 al click; gli hook lato client (`useIsCloud` / `getDeployMode`) sono già pronti.
+- **UI read-only sul cloud** (commit `1530430c7` + `32d28df48`) — a livello **pagina/sezione**, non a bottoni sparsi. **(a)** Guard unico in `(protected)/layout.tsx`: su `isCloudDeploy()` le pagine di pura config/controllo (`settings`/`credentials`/`secrets`/`channels`/`providers`/`integrations`/`cron`/`backup`/`setup`/`cli-link`) reindirizzano a `/dashboard` (eccezione `settings/cloud-sync`); `UserMenu` nasconde i relativi link. **(b)** Pagine miste: resta il monitoraggio/vista, sparisce la sola sezione-controllo — `/team` start/stop + azioni per-agente; `AgentInteraction` (chat+terminale condiviso) → `null` su cloud + stop polling; chat composer di capitano/assistente; `/profile` view-only (`ProfileEditButton`+`ProfileAssistantFab` nascosti, export resta). La sicurezza resta a monte (route 403); questa è rifinitura UX (niente vicoli ciechi).
+
+**Residuo minore:** bottoni secondari nelle pagine miste (pulisci-chat, apri/toggle-terminale di capitano/assistente) — innocui sul cloud (agiscono su dati locali assenti), nascondibili con lo stesso pattern se si vuole.
 
 ---
 
