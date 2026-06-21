@@ -48,6 +48,11 @@ export interface RecentActivityEvent extends TeamActivityEvent {
   title?: string | null
   company?: string | null
   legacyId?: number | null
+  // Contesto extra per rendere il feed più parlante:
+  // - score: il punteggio assegnato (eventi scorer) → 0-100
+  // - source: la fonte dove la posizione è stata trovata (eventi scout)
+  score?: number | null
+  source?: string | null
 }
 
 // Normalizza l'id istanza: trim + lowercase; vuoto/null → nome del ruolo.

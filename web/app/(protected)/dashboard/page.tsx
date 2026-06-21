@@ -304,7 +304,7 @@ export default async function DashboardPage() {
                 recent={recentActivity}
                 max={8}
                 viewAllHref="/team/attivita/log"
-                maxHeightClass="max-h-[300px]"
+                scroll={false}
               />
             </div>
           )}
