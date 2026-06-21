@@ -17,6 +17,7 @@ export interface CaseStudyMatch {
   strong80: number
   buckets: CaseStudyBucket[]
   composition: { key: string; label: string; avg: number }[]
+  scores: number[] // tutti i punteggi grezzi (per l'istogramma)
 }
 
 export interface CaseStudyCity {
@@ -25,6 +26,25 @@ export interface CaseStudyCity {
   lat: number
   lon: number
   count: number
+}
+
+export interface CaseStudyUsageDay {
+  day: string // YYYY-MM-DD
+  pct: number // % del budget settimanale AI consumato quel giorno
+  cum: number // % cumulata del budget settimanale a fine giornata
+  week: string // giovedì di riferimento (settimana di budget)
+}
+
+export interface CaseStudyWorkingHours {
+  timezone: string | null
+  windows: { days: string[]; start: string | null; end: string | null }[]
+}
+
+export interface CaseStudyUsage {
+  provider: string
+  unit: string // es. "weekly_budget_pct"
+  daily: CaseStudyUsageDay[]
+  workingHours?: CaseStudyWorkingHours | null
 }
 
 export interface CaseStudyRun {
@@ -38,4 +58,5 @@ export interface CaseStudyRun {
   salary: { n: number; avgMin: number | null; avgMax: number | null }
   agents: string[]
   events: { ts: string; agent: string; action: string }[]
+  usage?: CaseStudyUsage | null
 }

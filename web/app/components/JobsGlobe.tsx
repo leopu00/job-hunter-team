@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useTheme } from "@/app/theme-provider";
 import { useLocale } from "@/lib/use-locale";
 import { UNCATEGORIZED_LABEL } from "@/lib/position-classifier";
+import { scoreToRgb } from "@/lib/score-color";
 
 // Stringhe UI hardcoded localizzate (chart/empty/aria/popup).
 const T: Record<string, Record<string, string>> = {
@@ -194,32 +195,8 @@ function scoreNormHeight(score: number | null): number {
   return 0.2 + ((s - 40) / 60) * 0.8; // 0.20..1.00
 }
 
-// Mappa score (0-100) → colore RGB. Stops allineati al design system
-// JHT (red/orange/yellow/mint/green). Lerp lineare in RGB nei tratti.
-function scoreToRgb(score: number | null): [number, number, number] {
-  if (score == null) return [140, 200, 170]; // verde-grigio neutro
-  const s = Math.max(0, Math.min(100, score));
-  const stops: Array<[number, [number, number, number]]> = [
-    [0, [255, 69, 96]], // --color-red
-    [40, [255, 140, 66]], // --color-orange
-    [55, [245, 197, 24]], // --color-yellow
-    [70, [127, 255, 178]], // mint
-    [100, [0, 232, 122]], // --color-green
-  ];
-  for (let i = 0; i < stops.length - 1; i++) {
-    const [s0, c0] = stops[i];
-    const [s1, c1] = stops[i + 1];
-    if (s >= s0 && s <= s1) {
-      const t = (s - s0) / (s1 - s0);
-      return [
-        Math.round(c0[0] + (c1[0] - c0[0]) * t),
-        Math.round(c0[1] + (c1[1] - c0[1]) * t),
-        Math.round(c0[2] + (c1[2] - c0[2]) * t),
-      ];
-    }
-  }
-  return stops[stops.length - 1][1];
-}
+// Scala colore score (solo-verde) condivisa con la score distribution.
+// Vedi web/lib/score-color.ts (unica fonte di verità).
 
 // Genera l'icona "fascio di raggi" per un gruppo di N offerte
 // nella stessa location. Disegna esattamente N raggi affiancati,
@@ -510,9 +487,14 @@ function explodeGroups(
     const mpp =
       (156543.03392 * Math.cos((g.lat * Math.PI) / 180)) / Math.pow(2, zoom);
     const lonScale = 1 / Math.cos((g.lat * Math.PI) / 180);
-    const stable = [...g.positions].sort((a, b) =>
-      a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
-    );
+    // Fila ordinata per SCORE crescente: score più basso a sinistra, più alto
+    // a destra. Tie-break per id → fila stabile fra refresh/zoom.
+    const stable = [...g.positions].sort((a, b) => {
+      const sa = a.score ?? -1;
+      const sb = b.score ?? -1;
+      if (sa !== sb) return sa - sb;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
     const mid = (g.count - 1) / 2;
     stable.forEach((p, i) => {
       // Offset orizzontale centrato sulla coord del gruppo.
@@ -554,56 +536,89 @@ function explodeGroups(
 // singletons con micro-offset radiale: così ogni position diventa
 // cliccabile separatamente (altrimenti N positions sulla stessa
 // coord = 1 solo target di click).
+// Soglia (px) sotto la quale due marker-città si SOVRAPPONGONO a schermo e
+// vanno fusi in un super-cluster. Clustering in PIXEL (non in gradi): è
+// pan-invariante (la distanza relativa fra due punti fissi non cambia col
+// pan, solo con lo zoom) → niente "tremolio" durante lo scroll, e città
+// lontane (Zurigo/Milano) non si fondono mai a zoom medio.
+const CITY_MERGE_PX = 52;
+
+function mergeGroups(arr: GroupedFeature[]): GroupedFeature {
+  const totalCount = arr.reduce((s, g) => s + g.count, 0);
+  const lat = arr.reduce((s, g) => s + g.lat * g.count, 0) / totalCount;
+  const lon = arr.reduce((s, g) => s + g.lon * g.count, 0) / totalCount;
+  const scores = arr.flatMap((g) => g.scores);
+  const positions = arr.flatMap((g) => g.positions);
+  const topScore = scores.reduce<number | null>((acc, s) => {
+    if (s == null) return acc;
+    if (acc == null) return s;
+    return Math.max(acc, s);
+  }, null);
+  return {
+    groupKey: `super|${arr.map((g) => g.groupKey).join(",")}`,
+    iconId: iconIdForScores(scores),
+    lat,
+    lon,
+    count: totalCount,
+    scores,
+    positions,
+    topScore,
+  };
+}
+
+// Fonde i gruppi-città i cui marker si sovrappongono in pixel al zoom corrente.
+// Greedy O(n²) su n = numero città (poche decine) → trascurabile.
+function pixelClusterCities(
+  groups: GroupedFeature[],
+  map: MaplibreMap | null | undefined,
+): GroupedFeature[] {
+  if (!map || groups.length <= 1) return groups;
+  const pts = groups.map((g) => {
+    let px: { x: number; y: number } | null = null;
+    try {
+      px = map.project([g.lon, g.lat]);
+    } catch {
+      px = null;
+    }
+    return { g, px };
+  });
+  const used = new Array(pts.length).fill(false);
+  const out: GroupedFeature[] = [];
+  const thr2 = CITY_MERGE_PX * CITY_MERGE_PX;
+  for (let i = 0; i < pts.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
+    const cluster = [pts[i].g];
+    const pi = pts[i].px;
+    if (pi) {
+      for (let j = i + 1; j < pts.length; j++) {
+        if (used[j] || !pts[j].px) continue;
+        const dx = pi.x - pts[j].px!.x;
+        const dy = pi.y - pts[j].px!.y;
+        if (dx * dx + dy * dy < thr2) {
+          cluster.push(pts[j].g);
+          used[j] = true;
+        }
+      }
+    }
+    out.push(cluster.length === 1 ? cluster[0] : mergeGroups(cluster));
+  }
+  return out;
+}
+
 function reclusterByZoom(
   groups: GroupedFeature[],
   zoom: number,
   map?: MaplibreMap | null,
 ): GroupedFeature[] {
   if (groups.length === 0) return [];
-  const radiusDeg = clusterRadiusDeg(zoom);
-  if (radiusDeg <= 0) {
-    // Street zoom: esplode i groups in singleton click-target.
+  // Zoom street-level: esplode la città nei singoli pin cliccabili.
+  if (clusterRadiusDeg(zoom) <= 0) {
     return explodeGroups(groups, zoom, map);
   }
-  const buckets = new Map<string, GroupedFeature[]>();
-  for (const g of groups) {
-    const bx = Math.floor(g.lon / radiusDeg);
-    const by = Math.floor(g.lat / radiusDeg);
-    const key = `${bx}|${by}`;
-    const arr = buckets.get(key);
-    if (arr) arr.push(g);
-    else buckets.set(key, [g]);
-  }
-
-  const out: GroupedFeature[] = [];
-  for (const [bkey, arr] of buckets) {
-    if (arr.length === 1) {
-      out.push(arr[0]);
-      continue;
-    }
-    const totalCount = arr.reduce((s, g) => s + g.count, 0);
-    const lat = arr.reduce((s, g) => s + g.lat * g.count, 0) / totalCount;
-    const lon = arr.reduce((s, g) => s + g.lon * g.count, 0) / totalCount;
-    const scores = arr.flatMap((g) => g.scores);
-    const positions = arr.flatMap((g) => g.positions);
-    const topScore = scores.reduce<number | null>((acc, s) => {
-      if (s == null) return acc;
-      if (acc == null) return s;
-      return Math.max(acc, s);
-    }, null);
-    const iconId = iconIdForScores(scores);
-    out.push({
-      groupKey: `cluster|${bkey}`,
-      iconId,
-      lat,
-      lon,
-      count: totalCount,
-      scores,
-      positions,
-      topScore,
-    });
-  }
-  return out;
+  // Altrimenti: un marker per città, ma città che si SOVRAPPONGONO a schermo
+  // vengono fuse in un super-cluster (si separano zoomando).
+  return pixelClusterCities(groups, map);
 }
 
 // Paint override per allineare il basemap al theme JHT.
@@ -727,6 +742,9 @@ export default function JobsGlobe({
   // sul viewport corrente). Letta dentro onStyleLoad che ha una closure
   // vecchia (registrato 1 sola volta in mount).
   const clusteredRef = useRef<GroupedFeature[]>([]);
+  // Focus posizione in attesa: settato quando la città non è ancora esplosa;
+  // si centra sul pin appena il cluster si ricompone (effetto su `clustered`).
+  const pendingFocusRef = useRef<string | null>(null);
   // Registry icone gruppo registrate sulla mappa: iconId -> true. Permette
   // di rimuoverle quando il set di gruppi visibili cambia (filtri/zoom).
   const registeredIconsRef = useRef<Set<string>>(new Set());
@@ -799,7 +817,14 @@ export default function JobsGlobe({
   const grouped = useMemo(() => {
     const groups = new Map<string, PositionCoord[]>();
     for (const p of displayData) {
-      const key = `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
+      // Raggruppa per CITTÀ (paese|città), non per coordinata: ogni città è
+      // un marker unico, mai fusa con città vicine. Fallback alla coord se
+      // manca la città (raro: geocodificata ma senza loc_city).
+      const cityKey = `${(p.loc_country ?? "").trim()}|${(p.loc_city ?? "").trim()}`;
+      const key =
+        (p.loc_city ?? "").trim() !== ""
+          ? cityKey
+          : `${p.lat.toFixed(4)}|${p.lon.toFixed(4)}`;
       const arr = groups.get(key);
       if (arr) arr.push(p);
       else groups.set(key, [p]);
@@ -941,15 +966,13 @@ export default function JobsGlobe({
               ["linear"],
               ["coalesce", ["get", "topScore"], -1],
               -1,
-              "#8cc8a0",
+              "#96b4a5",
               0,
-              "#ff4560",
+              "#b8d6c4",
               40,
-              "#ff8c42",
-              55,
-              "#f5c518",
+              "#8fcaa8",
               70,
-              "#7fffb2",
+              "#34c97f",
               100,
               "#00e87a",
             ],
@@ -1319,23 +1342,56 @@ export default function JobsGlobe({
     });
   }, [displayData]);
 
-  // Focus su una posizione richiesto dalla card Posizioni: zoom sul pin
-  // + selezione (popup). Cerca la posizione fra quelle con coordinate.
+  // Focus su una posizione richiesto da una lista (card Posizioni o drilldown
+  // Location): centra il SUO pin al centro schermo e apre la card. Il pin, a
+  // zoom-esplosione, è in una fila offsettata → centriamo sulla coord
+  // RENDERIZZATA (singleton in clustered), non su quella di città.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !focusPosition) return;
     const pos = data.find((d) => d.id === focusPosition.id);
     if (!pos) return;
-    // Zoom street-level (>=12): il pin non è clusterizzato → singolo e
-    // ben visibile. Poi lo selezioniamo per aprire la vignetta.
+    setSelected(pos);
+    // Se il pin è GIÀ esploso (singleton presente), centra direttamente su di esso.
+    const existing = clusteredRef.current.find(
+      (g) => g.count === 1 && g.positions[0]?.id === pos.id,
+    );
+    if (existing) {
+      pendingFocusRef.current = null;
+      map.easeTo({
+        center: [existing.lon, existing.lat],
+        zoom: Math.max(map.getZoom(), 13),
+        duration: 600,
+      });
+      return;
+    }
+    // Altrimenti: vola sulla città a zoom-esplosione; il re-center sul pin
+    // avviene quando il cluster si ricompone (effetto sotto, su `clustered`).
+    pendingFocusRef.current = pos.id;
     map.flyTo({
       center: [pos.lon, pos.lat],
-      zoom: Math.max(map.getZoom(), 12),
+      zoom: Math.max(map.getZoom(), 13),
       duration: 800,
     });
-    setSelected(pos);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPosition?.tick]);
+
+  // Quando il cluster si ricompone (es. dopo lo zoom del focus la città
+  // esplode), se c'è un focus in attesa centra esattamente sul pin singolo.
+  useEffect(() => {
+    const id = pendingFocusRef.current;
+    if (!id) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const feat = clustered.find(
+      (g) => g.count === 1 && g.positions[0]?.id === id,
+    );
+    if (feat) {
+      pendingFocusRef.current = null;
+      map.easeTo({ center: [feat.lon, feat.lat], duration: 400 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clustered]);
 
   const wrapClass =
     hero || fullscreen

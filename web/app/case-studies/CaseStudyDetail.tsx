@@ -10,12 +10,14 @@ import type { CaseStudyProfile } from "@/lib/case-studies";
 import type { CaseStudyRun } from "@/lib/case-study";
 import type { TeamActivity } from "@/lib/team-activity";
 import CaseStudyOverview from "./CaseStudyOverview";
+import WorkBudgetChart from "./WorkBudgetChart";
 import ActivityCharts from "../(protected)/team/attivita/ActivityCharts";
 
 export interface PreparedCase {
   id: string;
   label: string;
   tagline: string;
+  subscription: { provider: string; plan: string; price: string };
   profile: CaseStudyProfile;
   run: CaseStudyRun; // events alleggeriti
   activity: TeamActivity;
@@ -67,38 +69,27 @@ export default function CaseStudyDetail({
   const fromKey = run.tsRange[0].slice(0, 10);
   const toKey = run.tsRange[1].slice(0, 10);
 
-  const kpis = [
-    {
-      value: nf(run.totals.positions),
-      label: "Posizioni trovate",
-      accent: "var(--color-blue)",
-    },
-    {
-      value: `${Math.round(run.match.avg)}/100`,
-      label: "Match medio",
-      accent: "#00e676",
-    },
-    {
-      value: nf(run.match.strong70),
-      label: "Match forti (≥70)",
-      accent: "#00e676",
-    },
-    {
-      value: nf(run.countries.length),
-      label: "Paesi",
-      accent: "var(--color-blue)",
-    },
-    {
-      value: nf(run.cities.length),
-      label: "Città",
-      accent: "var(--color-blue)",
-    },
-    {
-      value: nf(run.categories.length),
-      label: "Categorie di ruolo",
-      accent: "#b388ff",
-    },
-  ];
+  // Ruoli con attività (per il grafico unico lavoro+budget).
+  const activeRoles = activity.roles.filter((r) => activity.roleTotals[r] > 0);
+
+  // Orario di lavoro formattato (contesto sulla distribuzione del budget).
+  const DOW: Record<string, string> = {
+    mon: "lun", tue: "mar", wed: "mer", thu: "gio",
+    fri: "ven", sat: "sab", sun: "dom",
+  };
+  const fmtDays = (days: string[]) => {
+    const all = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+    const s = new Set(days);
+    if (all.every((d) => s.has(d))) return "tutti i giorni";
+    if (["mon", "tue", "wed", "thu", "fri"].every((d) => s.has(d)) &&
+        !s.has("sat") && !s.has("sun")) return "lun–ven";
+    return days.map((d) => DOW[d] ?? d).join(", ");
+  };
+  const wh = run.usage?.workingHours;
+  const whText = wh
+    ? wh.windows.map((w) => `${fmtDays(w.days)} · ${w.start}–${w.end}`).join(" / ") +
+      (wh.timezone ? ` (${wh.timezone})` : "")
+    : null;
 
   return (
     <div className="space-y-12">
@@ -198,70 +189,80 @@ export default function CaseStudyDetail({
 
       {/* ── Profilo ───────────────────────────────────────────── */}
       <header>
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6">
-          <div className="flex items-start gap-4">
-            <span
-              className="inline-flex items-center justify-center w-14 h-14 rounded-xl text-lg font-extrabold shrink-0"
-              style={{
-                background:
-                  "color-mix(in srgb, var(--color-blue) 18%, transparent)",
-                color: "var(--color-blue)",
-              }}
-            >
-              {profile.badge}
-            </span>
-            <div className="min-w-0">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8">
+          {/* Riga alta: testo a sinistra (piena larghezza) + abbonamento a destra */}
+          <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
+            <div className="flex-1 min-w-0">
               <div className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[var(--color-dim)]">
                 {current.label} · profilo anonimo
               </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
+              <h1 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
                 {profile.headline}
               </h1>
-              <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)] max-w-2xl">
+              <p className="mt-3 text-[13px] leading-relaxed text-[var(--color-muted)]">
                 {profile.summary}
               </p>
             </div>
+
+            {/* Abbonamento AI usato — l'unica spesa reale */}
+            <div
+              className="lg:w-64 shrink-0 rounded-xl px-4 py-4 flex flex-col justify-center"
+              style={{
+                border: "1px solid color-mix(in srgb, #00e676 40%, transparent)",
+                background: "color-mix(in srgb, #00e676 8%, transparent)",
+              }}
+            >
+              <div className="flex items-center gap-2 text-[9px] font-semibold uppercase tracking-wide text-[var(--color-dim)]">
+                <span aria-hidden className="text-[14px]">
+                  🧠
+                </span>
+                Abbonamento AI usato
+              </div>
+              <div className="mt-1.5 text-[15px] font-bold text-[var(--color-white)] leading-snug">
+                {current.subscription.provider}
+              </div>
+              <div className="mt-0.5 text-[12px] text-[var(--color-muted)]">
+                {current.subscription.plan} ·{" "}
+                <span className="font-bold" style={{ color: "#00e676" }}>
+                  {current.subscription.price}
+                </span>
+              </div>
+              <div className="mt-2 text-[10px] text-[var(--color-dim)] leading-relaxed">
+                È l&apos;unica spesa: la piattaforma è gratis.
+              </div>
+            </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 border-t border-[var(--color-border)] pt-5">
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 border-t border-[var(--color-border)] pt-6">
             {profile.facts.map((f) => (
               <div key={f.label}>
                 <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
                   {f.label}
                 </div>
-                <div className="text-[12px] text-[var(--color-white)] mt-0.5">
+                <div className="text-[13px] font-semibold text-[var(--color-white)] mt-1">
                   {f.value}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="mt-4">
+          <div className="mt-6 border-t border-[var(--color-border)] pt-6">
             <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)] mb-2">
-              Città target
+              Dove cerca lavoro
             </div>
+            <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-3">
+              {profile.locationNote}
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {profile.targetCities.map((city) => (
                 <span
                   key={city}
-                  className="text-[10px] rounded-full px-2.5 py-1 border border-[var(--color-border)] text-[var(--color-muted)]"
+                  className="text-[11px] font-medium rounded-full px-2.5 py-1 border border-[var(--color-border)] text-[var(--color-muted)]"
                 >
                   {city}
                 </span>
               ))}
             </div>
-          </div>
-
-          <div className="mt-5 rounded-lg border-l-2 border-[#00e676] bg-[var(--color-bg)] px-4 py-3">
-            <div
-              className="text-[10px] font-semibold uppercase tracking-wide mb-1"
-              style={{ color: "#00e676" }}
-            >
-              💡 Perché questi risultati
-            </div>
-            <p className="text-[12px] leading-relaxed text-[var(--color-muted)]">
-              {profile.why}
-            </p>
           </div>
         </div>
 
@@ -273,33 +274,40 @@ export default function CaseStudyDetail({
           · {activeDays} giorni di lavoro · ogni dato è aggregato e anonimo.
         </p>
 
-        <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {kpis.map((k) => (
-            <div
-              key={k.label}
-              className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
-            >
-              <div
-                className="text-[26px] leading-none font-extrabold tabular-nums"
-                style={{ color: k.accent }}
-              >
-                {k.value}
-              </div>
-              <div className="mt-1.5 text-[10px] uppercase tracking-wide text-[var(--color-dim)] leading-tight">
-                {k.label}
-              </div>
-            </div>
-          ))}
-        </div>
       </header>
 
       {/* ── Match · Dove · Categorie ──────────────────────────── */}
       <CaseStudyOverview run={run} />
 
+      {/* ── Lavoro e budget nel tempo (grafico unico, doppio asse) ── */}
+      {run.usage && run.usage.daily.length > 0 && (
+        <section>
+          <div className="section-label mb-1">
+            📈 Lavoro e budget AI nel tempo
+          </div>
+          <p className="text-[11px] text-[var(--color-dim)] mb-4">
+            Le <strong className="text-[var(--color-muted)]">barre</strong> sono
+            le azioni del team al giorno (per ruolo); le{" "}
+            <strong className="text-[var(--color-muted)]">linee</strong> mostrano
+            quanto del piano AI settimanale è stato consumato — quel giorno e
+            cumulato sulla settimana (reset giovedì). Il budget si spalma sui
+            giorni invece di bruciarsi subito.
+          </p>
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+            <WorkBudgetChart
+              usage={run.usage}
+              roleDaily={activity.roleDaily}
+              roles={activeRoles}
+              workingHoursText={whText}
+            />
+          </div>
+        </section>
+      )}
+
       {/* ── Come ha lavorato (attività, trimmed) ──────────────── */}
       <section className="pt-10 border-t border-[var(--color-border)]">
         <div className="section-label mb-1">⚙️ Come ha lavorato il team</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-6 max-w-2xl">
+        <p className="text-[11px] text-[var(--color-dim)] mb-6">
           Ogni singola istanza di agente (scout-1, analista-2, scorer-4…), in
           quali giorni e a che ora ha lavorato. {nf(activity.totalAll)} azioni
           registrate, {instances} istanze al lavoro.
@@ -309,6 +317,7 @@ export default function CaseStudyDetail({
           showRecent={false}
           showLeaderboard={false}
           showDonut={false}
+          showVolume={false}
         />
       </section>
     </div>

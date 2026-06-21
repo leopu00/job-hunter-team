@@ -12,10 +12,10 @@ import {
   type TooltipHandle,
 } from "@/app/components/ChartTooltip";
 import europeOutline from "@/data/case-studies/europe-outline.json";
+import ScoreDistribution from "@/app/components/ScoreDistribution";
 
 const BLUE = "#2196f3";
 const GREEN = "#00e676";
-const PURPLE = "#b388ff";
 const DIM = "#3a4a5a";
 const CAT_COLORS = [
   "#2196f3",
@@ -82,8 +82,6 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
   }, [categories]);
 
   // ── Distribuzione score: max per scalare le barre ──
-  const maxBucket = Math.max(1, ...match.buckets.map((b) => b.n));
-  const maxComp = Math.max(1, ...match.composition.map((c) => c.avg));
   const maxCity = Math.max(1, ...cities.map((c) => c.count));
   const maxCountry = Math.max(1, ...countries.map((c) => c.count));
   const topCountries = countries.slice(0, 8);
@@ -136,194 +134,75 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
     return a;
   });
 
-  // Gauge match medio
-  const gR = 58;
-  const gC = 2 * Math.PI * gR;
-  const gFrac = Math.max(0, Math.min(1, match.avg / 100));
-
   return (
-    <div className="space-y-12">
-      {/* ════════ 1. IL MATCH ════════════════════════════════════ */}
-      <section>
+    <div className="flex flex-col gap-12">
+      {/* ════════ IL MATCH ═══════════════════════════ (order-2) ═══ */}
+      <section className="order-2">
         <div className="section-label mb-1">🎯 Quanto bene ti trova lavoro</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-2xl">
+        <p className="text-[11px] text-[var(--color-dim)] mb-4">
           Ogni posizione viene valutata 0–100 su quanto calza al profilo del
           candidato. Più alto è il punteggio, più forte è il match.
         </p>
 
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 grid grid-cols-1 lg:grid-cols-[auto_1fr] gap-8 items-center">
-          {/* Gauge medio + callout */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative" style={{ width: 168, height: 168 }}>
-              <svg viewBox="0 0 168 168" width={168} height={168}>
-                <circle
-                  cx={84}
-                  cy={84}
-                  r={gR}
-                  fill="none"
-                  stroke="var(--color-border)"
-                  strokeWidth={14}
-                />
-                <g transform="rotate(-90 84 84)">
-                  <circle
-                    cx={84}
-                    cy={84}
-                    r={gR}
-                    fill="none"
-                    stroke={GREEN}
-                    strokeWidth={14}
-                    strokeLinecap="round"
-                    strokeDasharray={`${gFrac * gC} ${gC - gFrac * gC}`}
-                  />
-                </g>
-                <text
-                  x={84}
-                  y={80}
-                  textAnchor="middle"
-                  className="fill-[var(--color-white)]"
-                  style={{ fontSize: 40, fontWeight: 800 }}
-                >
-                  {Math.round(match.avg)}
-                </text>
-                <text
-                  x={84}
-                  y={104}
-                  textAnchor="middle"
-                  className="fill-[var(--color-dim)]"
-                  style={{ fontSize: 11, letterSpacing: 1 }}
-                >
-                  /100 MEDIO
-                </text>
-              </svg>
+        {/* Callout sintetici */}
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
+            <div className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none">
+              {Math.round(match.avg)}
+              <span className="text-[var(--color-dim)] text-base font-bold">
+                /100
+              </span>
             </div>
-            <div className="text-center text-[11px] text-[var(--color-muted)]">
-              su{" "}
-              <strong className="text-[var(--color-white)]">
-                {nf(match.scored)}
-              </strong>{" "}
-              posizioni valutate
+            <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-1">
+              match medio · {nf(match.scored)} valutate
             </div>
           </div>
-
-          {/* Distribuzione + callout forti */}
-          <div>
-            <div className="flex flex-wrap gap-3 mb-5">
-              <div className="flex-1 min-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
-                <div
-                  className="text-3xl font-extrabold tabular-nums"
-                  style={{ color: GREEN }}
-                >
-                  {nf(match.strong70)}
-                </div>
-                <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-0.5">
-                  match forti · score ≥ 70
-                </div>
-              </div>
-              <div className="flex-1 min-w-[150px] rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-4 py-3">
-                <div
-                  className="text-3xl font-extrabold tabular-nums"
-                  style={{ color: GREEN }}
-                >
-                  {nf(match.strong80)}
-                </div>
-                <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-0.5">
-                  eccellenti · score ≥ 80
-                </div>
-              </div>
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
+            <div
+              className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none"
+              style={{ color: GREEN }}
+            >
+              {nf(match.strong70)}
+              <span className="text-[var(--color-dim)] text-base font-bold">
+                {" "}
+                · {Math.round((match.strong70 / Math.max(1, match.scored)) * 100)}%
+              </span>
             </div>
-
-            <div className="text-[10px] text-[var(--color-dim)] mb-2">
-              Distribuzione dei punteggi
+            <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-1">
+              match forti · score ≥ 70
             </div>
-            <div className="flex items-end gap-2" style={{ height: 130 }}>
-              {match.buckets.map((b) => {
-                const strong =
-                  b.label.startsWith("7") || b.label.startsWith("8");
-                const color = strong ? GREEN : DIM;
-                return (
-                  <div
-                    key={b.label}
-                    className="flex-1 flex flex-col items-center justify-end h-full cursor-default"
-                    onMouseEnter={(e) =>
-                      showTip(e, `Score ${b.label}`, [
-                        {
-                          color,
-                          label: b.n === 1 ? "posizione" : "posizioni",
-                          value: nf(b.n),
-                        },
-                      ])
-                    }
-                    onMouseMove={moveTip}
-                    onMouseLeave={hideTip}
-                  >
-                    <div
-                      className="text-[10px] font-bold tabular-nums mb-1"
-                      style={{ color }}
-                    >
-                      {b.n}
-                    </div>
-                    <div
-                      className="w-full rounded-t-sm"
-                      style={{
-                        height: `${(b.n / maxBucket) * 100}%`,
-                        background: color,
-                        opacity: strong ? 0.9 : 0.5,
-                        minHeight: 3,
-                      }}
-                    />
-                    <div className="text-[9px] text-[var(--color-dim)] mt-1.5 tabular-nums">
-                      {b.label}
-                    </div>
-                  </div>
-                );
-              })}
+          </div>
+          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
+            <div
+              className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none"
+              style={{ color: GREEN }}
+            >
+              {nf(match.strong80)}
+              <span className="text-[var(--color-dim)] text-base font-bold">
+                {" "}
+                · {Math.round((match.strong80 / Math.max(1, match.scored)) * 100)}%
+              </span>
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mt-1">
+              eccellenti · score ≥ 80
             </div>
           </div>
         </div>
 
-        {/* Composizione del match */}
-        <div className="mt-4 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5">
-          <div className="text-[11px] font-semibold text-[var(--color-white)] mb-1">
-            Su cosa pesa il match
-          </div>
-          <p className="text-[10px] text-[var(--color-dim)] mb-4">
-            Peso medio di ogni fattore nella valutazione delle posizioni.
-          </p>
-          <div className="space-y-2.5">
-            {match.composition.map((c) => (
-              <div key={c.key} className="flex items-center gap-3">
-                <span className="text-[11px] text-[var(--color-muted)] w-32 shrink-0">
-                  {c.label}
-                </span>
-                <div
-                  className="flex-1 h-2 rounded-full overflow-hidden"
-                  style={{ background: "var(--color-border)" }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${(c.avg / maxComp) * 100}%`,
-                      background: PURPLE,
-                      opacity: 0.85,
-                    }}
-                  />
-                </div>
-                <span
-                  className="text-[11px] font-bold tabular-nums w-8 text-right"
-                  style={{ color: PURPLE }}
-                >
-                  {c.avg}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Istogramma punteggi (stesso grafico della dashboard) */}
+        <ScoreDistribution
+          scores={match.scores}
+          title="Distribuzione dei punteggi"
+          emptyLabel="Nessun punteggio disponibile"
+          thresholdReady={70}
+          thresholdLabel="match forti ≥70"
+        />
       </section>
 
-      {/* ════════ 2. DOVE — MAPPA EUROPA ═════════════════════════ */}
-      <section>
+      {/* ════════ DOVE — MAPPA EUROPA ════════════════ (order-1) ═══ */}
+      <section className="order-1">
         <div className="section-label mb-1">🗺️ Dove cerca lavoro · Europa</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-2xl">
+        <p className="text-[11px] text-[var(--color-dim)] mb-4">
           {nf(cities.reduce((s, c) => s + c.count, 0))} posizioni geolocalizzate
           in{" "}
           <strong className="text-[var(--color-muted)]">
@@ -333,7 +212,10 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           <strong className="text-[var(--color-muted)]">
             {cities.length} città
           </strong>
-          . La dimensione del cerchio = numero di posizioni.
+          . La dimensione del cerchio = numero di posizioni. Solo posizioni{" "}
+          <strong className="text-[var(--color-muted)]">verificate e lavorabili</strong>{" "}
+          per il candidato (escluse quelle non compatibili con i requisiti di
+          lavoro, es. cittadinanza/visto).
         </p>
 
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-center">
@@ -350,8 +232,8 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
                 <path
                   key={`land${i}`}
                   d={d}
-                  fill="rgba(255,255,255,0.05)"
-                  stroke="rgba(255,255,255,0.16)"
+                  fill="color-mix(in srgb, var(--color-muted) 8%, transparent)"
+                  stroke="color-mix(in srgb, var(--color-muted) 42%, transparent)"
                   strokeWidth={0.7}
                   strokeLinejoin="round"
                 />
@@ -497,10 +379,10 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
         </div>
       </section>
 
-      {/* ════════ 3. CATEGORIE — DONUT ═══════════════════════════ */}
-      <section>
+      {/* ════════ CATEGORIE — DONUT ══════════════════ (order-3) ═══ */}
+      <section className="order-3">
         <div className="section-label mb-1">🧩 Che tipo di ruoli</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-2xl">
+        <p className="text-[11px] text-[var(--color-dim)] mb-4">
           {categories.length} categorie di ruolo emerse automaticamente dai
           dati, senza liste predefinite — il team capisce da solo che tipo di
           lavoro fa per te.
@@ -542,21 +424,20 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
               </g>
               <text
                 x={90}
-                y={86}
+                y={90}
                 textAnchor="middle"
-                className="fill-[var(--color-white)]"
-                style={{ fontSize: 26, fontWeight: 800 }}
+                style={{ fontSize: 38, fontWeight: 800, fill: BLUE }}
               >
                 {nf(run.totals.positions)}
               </text>
               <text
                 x={90}
-                y={104}
+                y={108}
                 textAnchor="middle"
                 className="fill-[var(--color-dim)]"
-                style={{ fontSize: 9, letterSpacing: 1 }}
+                style={{ fontSize: 8, letterSpacing: 0.5 }}
               >
-                POSIZIONI
+                POSIZIONI TROVATE
               </text>
             </svg>
           </div>
@@ -612,6 +493,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           </div>
         </div>
       </section>
+
 
       <TooltipLayer ref={tipRef} />
     </div>
