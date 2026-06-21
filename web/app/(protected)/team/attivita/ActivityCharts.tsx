@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   TeamActivity,
   TeamActivityActor,
@@ -77,12 +77,24 @@ function TemporalScatter({
   onMove: (e: React.MouseEvent) => void;
   onHide: () => void;
 }) {
-  const ZOOMS = [1, 2, 4, 8, 16, 32];
+  const ZOOMS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
   const [zoom, setZoom] = useState(1);
+  // Misura la larghezza del piano: a zoom 1 il grafico riempie tutto il container
+  // (primo giorno a sinistra, ultimo al bordo destro); zoom>1 espande → scroll.
+  const planeRef = useRef<HTMLDivElement>(null);
+  const [planeW, setPlaneW] = useState(0);
+  useEffect(() => {
+    const el = planeRef.current;
+    if (!el) return;
+    const update = () => setPlaneW(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const days = dates.length;
   const laneH = 30;
-  const baseDayPx = 24;
-  const scatterW = Math.max(600, Math.round(days * baseDayPx * zoom));
+  const scatterW = Math.max(1, Math.round((planeW || 600) * zoom));
   const axisStep = Math.max(
     1,
     Math.ceil(days / Math.max(1, Math.floor(scatterW / 70))),
@@ -154,7 +166,7 @@ function TemporalScatter({
             ))}
           </div>
           {/* Piano scatter — scrollabile */}
-          <div className="flex-1 overflow-x-auto">
+          <div ref={planeRef} className="flex-1 overflow-x-auto">
             <div style={{ width: scatterW }}>
               <svg width={scatterW} height={H} viewBox={`0 0 ${scatterW} ${H}`}>
                 {roles.map((r, i) => (
@@ -478,11 +490,13 @@ export default function ActivityCharts({
   showRecent = true,
   showLeaderboard = true,
   showDonut = true,
+  showVolume = true,
 }: {
   activity: TeamActivity;
   showRecent?: boolean;
   showLeaderboard?: boolean;
   showDonut?: boolean;
+  showVolume?: boolean;
 }) {
   const {
     dates,
@@ -777,6 +791,7 @@ export default function ActivityCharts({
         />
       )}
       {/* ── 3. Timeline impilata (per ruolo) ─────────────────────── */}
+      {showVolume && (
       <section>
         <div className="section-label mb-1">📈 Volume di lavoro nel tempo</div>
         <p className="text-[10px] text-[var(--color-dim)] mb-4">
@@ -864,6 +879,7 @@ export default function ActivityCharts({
           </div>
         </div>
       </section>
+      )}
 
       {/* ── 4. Scatter temporale: chi, quando, cosa ──────────────── */}
       <TemporalScatter

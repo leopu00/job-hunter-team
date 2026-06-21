@@ -177,6 +177,7 @@ type NoCoordItem = {
   role_family: string | null;
   score: number | null;
   is_remote: boolean;
+  remote_type: string | null;
   location: string | null;
   loc_country: string | null;
   loc_city: string | null;
@@ -267,7 +268,7 @@ export default function MapCharts({
     score: boolean;
     donut: boolean;
     remote: boolean;
-  }>({ location: false, score: false, donut: false, remote: false });
+  }>({ location: true, score: true, donut: true, remote: true });
   const toggleCollapse = (k: "location" | "score" | "donut" | "remote") =>
     setCollapsed((c) => ({ ...c, [k]: !c[k] }));
   // Richiesta di "focus" su un pin: cliccando una posizione (con
@@ -362,22 +363,30 @@ export default function MapCharts({
         loc_city: p.loc_city,
         created_at: p.created_at,
         remote: false,
+        hasCoords: true,
       })),
-      // Le posizioni senza coordinate (remote) vengono raggruppate sotto
-      // un nodo location sintetico "Remote" (loc_country forzato), così
-      // appaiono nella card Location e sono filtrabili come un paese.
-      ...noCoords.map((p) => ({
-        id: p.id,
-        title: p.title,
-        company: p.company,
-        status: p.status,
-        role_family: p.role_family,
-        score: p.score,
-        loc_country: REMOTE_LABEL,
-        loc_city: null as string | null,
-        created_at: p.created_at,
-        remote: true,
-      })),
+      // Posizioni senza coordinate: NON sono per forza remote (spesso sono
+      // onsite/hybrid solo non geocodificate). Le raggruppiamo sotto "Remote"
+      // SOLO se sono davvero full-remote; altrimenti sotto il loro paese/città
+      // reale (niente pin in mappa, ma categorizzazione corretta).
+      ...noCoords.map((p) => {
+        const isRemote = p.remote_type
+          ? p.remote_type === "full_remote"
+          : p.is_remote;
+        return {
+          id: p.id,
+          title: p.title,
+          company: p.company,
+          status: p.status,
+          role_family: p.role_family,
+          score: p.score,
+          loc_country: isRemote ? REMOTE_LABEL : p.loc_country,
+          loc_city: isRemote ? null : p.loc_city,
+          created_at: p.created_at,
+          remote: isRemote,
+          hasCoords: false,
+        };
+      }),
     ];
   }, [coordItems, noCoords]);
 
@@ -386,7 +395,9 @@ export default function MapCharts({
   // apre il dettaglio in nuova scheda.
   const openPosition = (id: string) => {
     const it = allItemsLite.find((x) => x.id === id);
-    if (it?.remote) {
+    // Senza pin in mappa (posizione non geocodificata) → apri il dettaglio;
+    // con pin → zoom sul pin.
+    if (it && !it.hasCoords) {
       window.open(`/positions/${id}`, "_blank", "noopener,noreferrer");
     } else {
       focusPin(id);

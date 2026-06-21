@@ -148,23 +148,6 @@ const ACTOR_EMOJI: Record<string, string> = {
 
 // Range stipendio annuo compatto in "k", convertito nella valuta scelta
 // (es. "€60–80k", "$≥70k"). null → "—". Stesso formato del dashboard.
-function formatSalary(
-  min: number | null | undefined,
-  max: number | null | undefined,
-  from: string,
-  to: string,
-  rates: Rates,
-): string {
-  const sym = currencySymbol(to);
-  const f = (n: number) =>
-    formatMoneyCompact(convertCurrency(n, from, to, rates));
-  if (min != null && max != null)
-    return min === max ? `${sym}${f(min)}` : `${sym}${f(min)}–${f(max)}`;
-  if (min != null) return `${sym}≥${f(min)}`;
-  if (max != null) return `${sym}≤${f(max)}`;
-  return "—";
-}
-
 // Lordo mensile = lordo annuo / 12, convertito e in "k" (es. "€5.0–6.7k").
 function formatMonthly(
   min: number | null | undefined,
@@ -716,8 +699,8 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     sortable: true,
                     center: true,
                   },
-                  { col: "salary", label: tr("col_salary"), sortable: true },
                   { col: "monthly", label: tr("col_monthly"), sortable: true },
+                  { col: "source", label: tr("col_source"), sortable: true },
                   {
                     col: "last_action_by",
                     label: tr("col_updated_by"),
@@ -895,17 +878,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         </div>
                       </div>
                     </td>
-                    {/* Stipendio */}
-                    <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-right">
-                      {formatSalary(
-                        p.salary_min,
-                        p.salary_max,
-                        p.salary_currency ?? "EUR",
-                        displayCurrency,
-                        rates,
-                      )}
-                    </td>
-                    {/* Mensile */}
+                    {/* Stima lorda mensile */}
                     <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
                       {formatMonthly(
                         p.salary_min,
@@ -913,6 +886,16 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         p.salary_currency ?? "EUR",
                         displayCurrency,
                         rates,
+                      )}
+                    </td>
+                    {/* Fonte */}
+                    <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap">
+                      {p.source ? (
+                        <span className="capitalize">
+                          {p.source.replace(/[-_]/g, " ")}
+                        </span>
+                      ) : (
+                        <span className="text-[var(--color-dim)]">—</span>
                       )}
                     </td>
                     {/* Aggiornato da */}

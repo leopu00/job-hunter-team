@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { scoreGreenCss } from "@/lib/score-color";
 
 type Props = {
   scores: number[];
@@ -46,12 +47,10 @@ const PAD_BOTTOM = 8;
 const ROW_H = 24;
 const LABEL_FONT = 13;
 
+// Stessa scala SOLO-VERDE dei pin sulla mappa (web/lib/score-color.ts):
+// score basso = verde tenue, score alto = verde vivo. frac = score/maxScore.
 function colorForFraction(frac: number): string {
-  if (frac >= 0.75) return "var(--color-green)";
-  if (frac >= 0.6) return "var(--color-ready)";
-  if (frac >= 0.45) return "var(--color-yellow)";
-  if (frac >= 0.3) return "var(--color-orange)";
-  return "var(--color-red)";
+  return scoreGreenCss(frac * 100);
 }
 
 function percentile(sorted: number[], p: number): number {
