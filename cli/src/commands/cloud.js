@@ -1890,6 +1890,22 @@ async function handleDaemon(options) {
         console.error(pc.yellow(`  daemon sync-rendezvous error: ${err.message}`));
       }
 
+      // [JHT-CLOUD-INTERACTIVE-RETIRE] Team-state reconcile FUSO nel daemon: la
+      // dashboard scrive `should_run`; qui convergiamo via `jht team start/stop`
+      // (+ heartbeat) una volta per tick. Sostituisce il poller dedicato a 5s →
+      // un solo daemon VPS→cloud, controllo intatto. Best-effort, fuori dal
+      // counter del push (la quota a rischio è il write-side). Import dinamico
+      // (cache-ato dopo il primo tick).
+      try {
+        const prevRc = process.exitCode;
+        process.exitCode = 0;
+        const { reconcileOnce } = await import('../lib/team-state-reconciler.js');
+        await reconcileOnce();
+        process.exitCode = prevRc;
+      } catch (err) {
+        console.error(pc.yellow(`  daemon team-state reconcile error: ${err.message}`));
+      }
+
       if (authFailedThisTick) {
         consecutiveAuthFails += 1;
       } else if (!tickFailed) {
