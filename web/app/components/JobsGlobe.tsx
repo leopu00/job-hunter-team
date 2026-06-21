@@ -742,6 +742,9 @@ export default function JobsGlobe({
   // sul viewport corrente). Letta dentro onStyleLoad che ha una closure
   // vecchia (registrato 1 sola volta in mount).
   const clusteredRef = useRef<GroupedFeature[]>([]);
+  // Focus posizione in attesa: settato quando la città non è ancora esplosa;
+  // si centra sul pin appena il cluster si ricompone (effetto su `clustered`).
+  const pendingFocusRef = useRef<string | null>(null);
   // Registry icone gruppo registrate sulla mappa: iconId -> true. Permette
   // di rimuoverle quando il set di gruppi visibili cambia (filtri/zoom).
   const registeredIconsRef = useRef<Set<string>>(new Set());
@@ -1339,23 +1342,56 @@ export default function JobsGlobe({
     });
   }, [displayData]);
 
-  // Focus su una posizione richiesto dalla card Posizioni: zoom sul pin
-  // + selezione (popup). Cerca la posizione fra quelle con coordinate.
+  // Focus su una posizione richiesto da una lista (card Posizioni o drilldown
+  // Location): centra il SUO pin al centro schermo e apre la card. Il pin, a
+  // zoom-esplosione, è in una fila offsettata → centriamo sulla coord
+  // RENDERIZZATA (singleton in clustered), non su quella di città.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !focusPosition) return;
     const pos = data.find((d) => d.id === focusPosition.id);
     if (!pos) return;
-    // Zoom street-level (>=12): il pin non è clusterizzato → singolo e
-    // ben visibile. Poi lo selezioniamo per aprire la vignetta.
+    setSelected(pos);
+    // Se il pin è GIÀ esploso (singleton presente), centra direttamente su di esso.
+    const existing = clusteredRef.current.find(
+      (g) => g.count === 1 && g.positions[0]?.id === pos.id,
+    );
+    if (existing) {
+      pendingFocusRef.current = null;
+      map.easeTo({
+        center: [existing.lon, existing.lat],
+        zoom: Math.max(map.getZoom(), 13),
+        duration: 600,
+      });
+      return;
+    }
+    // Altrimenti: vola sulla città a zoom-esplosione; il re-center sul pin
+    // avviene quando il cluster si ricompone (effetto sotto, su `clustered`).
+    pendingFocusRef.current = pos.id;
     map.flyTo({
       center: [pos.lon, pos.lat],
-      zoom: Math.max(map.getZoom(), 12),
+      zoom: Math.max(map.getZoom(), 13),
       duration: 800,
     });
-    setSelected(pos);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPosition?.tick]);
+
+  // Quando il cluster si ricompone (es. dopo lo zoom del focus la città
+  // esplode), se c'è un focus in attesa centra esattamente sul pin singolo.
+  useEffect(() => {
+    const id = pendingFocusRef.current;
+    if (!id) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const feat = clustered.find(
+      (g) => g.count === 1 && g.positions[0]?.id === id,
+    );
+    if (feat) {
+      pendingFocusRef.current = null;
+      map.easeTo({ center: [feat.lon, feat.lat], duration: 400 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clustered]);
 
   const wrapClass =
     hero || fullscreen
