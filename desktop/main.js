@@ -278,6 +278,10 @@ function openDashboardWindow(url) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      // [JHT-VPS-TUNNEL] sandbox esplicito: la finestra carica contenuto web
+      // remoto (dashboard VPS via tunnel) e non ha preload → nessun bisogno di
+      // Node nel renderer. Esplicito > implicito anche se è già il default.
+      sandbox: true,
     },
   })
 
@@ -332,12 +336,29 @@ async function openRuntimeInBrowser() {
   return status
 }
 
+// [JHT-VPS-TUNNEL] Allow-list dell'identità VPS: il desktop apre un tunnel SSH
+// (che dà alla VPS il trattamento "locale" = controllo pieno) SOLO verso la VPS
+// configurata in prefs.vpsIp, mai verso un IP arbitrario passato dal renderer.
+// Difesa in profondità: se il renderer fosse compromesso non può dirottare il
+// tunnel su un host attaccante. Se prefs.vpsIp non è ancora persistita non c'è
+// identità da imporre → si lascia passare (resta la validazione IPv4 in ssh-exec).
+function assertKnownVpsIp(ip) {
+  const known = readPref('vpsIp')
+  if (!known) return { ok: true }
+  if (typeof ip !== 'string' || ip.trim() !== String(known).trim()) {
+    return { ok: false, error: 'ip non corrisponde alla VPS configurata (prefs.vpsIp)' }
+  }
+  return { ok: true }
+}
+
 // [JHT-VPS-TUNNEL] Cockpit su VPS: apre (o riusa) il tunnel SSH verso `ip` e
 // punta la finestra dashboard a localhost:<localPort>. Il container sulla VPS
 // serve lo stesso stack Next "locale"; via tunnel l'Host resta `localhost`,
 // quindi la VPS tratta le richieste come LOCALI → controllo pieno come se il
 // team girasse sul PC. Entra da /onboarding (self-routing, evita bounce auth).
 async function openVpsCockpit(ip) {
+  const allow = assertKnownVpsIp(ip)
+  if (!allow.ok) return { ok: false, error: allow.error }
   const res = await tunnel.openTunnel({ ip })
   if (!res.ok || !res.url) {
     return { ok: false, error: res.error || 'tunnel non disponibile' }
@@ -484,7 +505,11 @@ app.whenReady().then(() => {
   ipcMain.handle('launcher:open-browser', () => openRuntimeInBrowser())
 
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
-  ipcMain.handle('tunnel:open', (_event, { ip } = {}) => tunnel.openTunnel({ ip }))
+  ipcMain.handle('tunnel:open', (_event, { ip } = {}) => {
+    const allow = assertKnownVpsIp(ip)
+    if (!allow.ok) return { ok: false, error: allow.error }
+    return tunnel.openTunnel({ ip })
+  })
   ipcMain.handle('tunnel:close', () => tunnel.closeTunnel())
   ipcMain.handle('tunnel:status', () => tunnel.getStatus())
   ipcMain.handle('vps:open-cockpit', (_event, { ip } = {}) => openVpsCockpit(ip))
