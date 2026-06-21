@@ -53,6 +53,7 @@ const terminal = require('./terminal')
 const auth = require('./auth')
 const sync = require('./sync')
 const vps = require('./vps')
+const tunnel = require('./vps/tunnel')
 const telegram = require('./telegram')
 const { freeBytes, formatBytes } = require('./disk-space')
 
@@ -331,6 +332,25 @@ async function openRuntimeInBrowser() {
   return status
 }
 
+// [JHT-VPS-TUNNEL] Cockpit su VPS: apre (o riusa) il tunnel SSH verso `ip` e
+// punta la finestra dashboard a localhost:<localPort>. Il container sulla VPS
+// serve lo stesso stack Next "locale"; via tunnel l'Host resta `localhost`,
+// quindi la VPS tratta le richieste come LOCALI → controllo pieno come se il
+// team girasse sul PC. Entra da /onboarding (self-routing, evita bounce auth).
+async function openVpsCockpit(ip) {
+  const res = await tunnel.openTunnel({ ip })
+  if (!res.ok || !res.url) {
+    return { ok: false, error: res.error || 'tunnel non disponibile' }
+  }
+  try {
+    openDashboardWindow(`${res.url}/onboarding`)
+  } catch (err) {
+    log.warn('vps-cockpit.window-failed', { err: err && (err.message || String(err)) })
+    return { ok: false, error: err && (err.message || String(err)) }
+  }
+  return { ok: true, ...tunnel.getStatus() }
+}
+
 app.whenReady().then(() => {
   // Inizializza il file logger PRIMA di tutto: cosi' anche gli errori del
   // boot (payload, runtime manager) finiscono su disco. Path:
@@ -462,6 +482,12 @@ app.whenReady().then(() => {
     }
   })
   ipcMain.handle('launcher:open-browser', () => openRuntimeInBrowser())
+
+  // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
+  ipcMain.handle('tunnel:open', (_event, { ip } = {}) => tunnel.openTunnel({ ip }))
+  ipcMain.handle('tunnel:close', () => tunnel.closeTunnel())
+  ipcMain.handle('tunnel:status', () => tunnel.getStatus())
+  ipcMain.handle('vps:open-cockpit', (_event, { ip } = {}) => openVpsCockpit(ip))
   ipcMain.handle('launcher:start', async (_event, options) => {
     try {
       syncJhtConfig()
@@ -1472,6 +1498,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   if (runtime) runtime.stopRuntime().catch(() => {})
+  tunnel.closeTunnel().catch(() => {})
   terminal.killAll()
 })
 
