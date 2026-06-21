@@ -52,7 +52,7 @@ function getSavedLang(): Lang {
 
 const translations = {
   // Nav
-  nav_home: { it: "Home", en: "Home", hu: "Főoldal" },
+  nav_home: { it: "Home", en: "Home", hu: "Home" },
   nav_features: { it: "Features", en: "Features", hu: "Funkciók" },
   nav_how: { it: "Come funziona", en: "How it works", hu: "Hogyan működik" },
   nav_github: { it: "GitHub", en: "GitHub", hu: "GitHub" },
