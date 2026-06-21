@@ -179,6 +179,35 @@ async function reconcile(baseUrl, token, state) {
   return null;
 }
 
+// [JHT-CLOUD-INTERACTIVE-RETIRE] Reconcile "one-shot" per il FOLD nel cloud
+// daemon: invece di un poller dedicato a 5s, il daemon di sync (l'UNICO processo
+// VPS→cloud che vogliamo tenere) lo chiama una volta per tick (~60s). Mantiene
+// il controllo should_run→`jht team start/stop` funzionante senza il poller
+// standalone → meno processi e meno richieste Vercel per-utente, controllo
+// intatto (latenza ≤ tick del daemon). Halt-weekly aware come il loop.
+// NB: niente CLAIM single-team qui (era startup-only del poller). Accettabile:
+// 1 VPS per utente nel caso normale; chi ha più device può ri-attivare il
+// poller standalone con JHT_CLOUD_CONTROL_POLLERS=1.
+export async function reconcileOnce() {
+  const config = await loadCloudConfig();
+  if (!config?.enabled) return { ok: false, skipped: 'cloud-not-enabled' };
+  const baseUrl = (config.base_url || '').replace(/\/+$/, '');
+  const token = config.token;
+  if (!baseUrl || !token) return { ok: false, skipped: 'missing-credentials' };
+  if (existsSync(WEEKLY_HALT_FLAG)) return { ok: true, skipped: 'weekly-halt' };
+
+  const r = await apiCall('GET', baseUrl, token, '/api/team-state');
+  const state = r.state;
+  if (!state) return { ok: true, action: null };
+
+  const action = await reconcile(baseUrl, token, state);
+  // Heartbeat: tiene vivo l'indicatore "VPS online" sulla dashboard.
+  await apiCall('PATCH', baseUrl, token, '/api/team-state', {
+    last_heartbeat_at: new Date().toISOString(),
+  }).catch(() => {});
+  return { ok: true, action };
+}
+
 export async function runTeamStateReconciler() {
   const config = await loadCloudConfig();
   if (!config?.enabled) {
