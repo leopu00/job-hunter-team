@@ -639,6 +639,18 @@ def main():
                     help='omesso → candidato locale (default VPS single-candidate)')
     ac.add_argument('--json', action='store_true', help='output JSON array')
 
+    # other-pile (2026-06-20): posizioni nel parcheggio 'Other' con la proposta
+    # dell'analista. L'analista le LEGGE per individuare a GIUDIZIO i grappoli di
+    # offerte simili e promuoverli a famiglia (role_registry.py promote --ids ...).
+    op = sub.add_parser('other-pile')
+    op.add_argument('--limit', type=int, default=300)
+
+    # category-sizes (2026-06-20): categorie attive con dimensione LIVE → trigger del
+    # consulto/split col Capitano quando una famiglia diventa troppo grande.
+    cs = sub.add_parser('category-sizes')
+    cs.add_argument('user_id', nargs='?', default=None)
+    cs.add_argument('--big', type=int, default=25, help='soglia direzionale "grande" (default 25)')
+
     # application (anti-riscrittura check)
     ap = sub.add_parser('application')
     ap.add_argument('position_id', type=int)
@@ -703,6 +715,39 @@ def main():
         else:
             for n in names:
                 print(n)
+        conn.close()
+    elif args.cmd == 'other-pile':
+        conn = get_db()
+        ensure_schema(conn)
+        rows = conn.execute(
+            "SELECT id, title, company, role_family_proposed FROM positions "
+            "WHERE role_family = 'Other' "
+            "ORDER BY role_family_proposed, id LIMIT ?",
+            (args.limit,),
+        ).fetchall()
+        print(f"# {len(rows)} posizioni in 'Other' — raggruppa i SIMILI a giudizio, "
+              f"poi: role_registry.py promote --name \"<famiglia>\" --ids <id,id,...>")
+        for r in rows:
+            prop = r['role_family_proposed'] or '—'
+            title = (r['title'] or '')[:48]
+            comp = (r['company'] or '')[:22]
+            print(f"  #{r['id']}\t{prop}\t| {title} @ {comp}")
+        conn.close()
+    elif args.cmd == 'category-sizes':
+        conn = get_db()
+        ensure_schema(conn)
+        actives = active_categories(conn, args.user_id)
+        print(f"# categorie attive (dimensione live) — > {args.big} ⇒ valuta consulto/split col Capitano:")
+        for name in actives:
+            n = conn.execute(
+                "SELECT COUNT(*) FROM positions WHERE role_family = ?", (name,)
+            ).fetchone()[0]
+            flag = '  ⚠ GRANDE' if n > args.big else ''
+            print(f"  {n:>4}  {name}{flag}")
+        other = conn.execute(
+            "SELECT COUNT(*) FROM positions WHERE role_family = 'Other'"
+        ).fetchone()[0]
+        print(f"  {other:>4}  Other (parcheggio — 'other-pile' per i grappoli da promuovere)")
         conn.close()
     elif args.cmd.startswith('next-for-'):
         role = args.cmd.replace('next-for-', '')

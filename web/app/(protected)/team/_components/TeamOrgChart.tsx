@@ -1814,7 +1814,7 @@ export default function TeamOrgChart({
                     role: "Bridge",
                   }}
                   loading={bridgePending}
-                  onAction={handleBridgeAction}
+                  onAction={isCloud === true ? undefined : handleBridgeAction}
                   onClose={() => setSelected(null)}
                   placement="below"
                 />
