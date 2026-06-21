@@ -11,7 +11,7 @@ import type { CaseStudyRun } from "@/lib/case-study";
 import type { TeamActivity } from "@/lib/team-activity";
 import CaseStudyOverview from "./CaseStudyOverview";
 import WorkBudgetChart from "./WorkBudgetChart";
-import ActivityCharts from "../(protected)/team/attivita/ActivityCharts";
+import SourcesChart from "./SourcesChart";
 
 export interface PreparedCase {
   id: string;
@@ -62,7 +62,6 @@ export default function CaseStudyDetail({
   const [menuOpen, setMenuOpen] = useState(false);
   const { run, activity, profile } = current;
 
-  const instances = activity.actors.filter((a) => a.total > 0).length;
   const activeDays = activity.roleDaily.filter((d) =>
     Object.values(d.counts).some((n) => n > 0),
   ).length;
@@ -304,22 +303,17 @@ export default function CaseStudyDetail({
         </section>
       )}
 
-      {/* ── Come ha lavorato (attività, trimmed) ──────────────── */}
-      <section className="pt-10 border-t border-[var(--color-border)]">
-        <div className="section-label mb-1">⚙️ Come ha lavorato il team</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-6">
-          Ogni singola istanza di agente (scout-1, analista-2, scorer-4…), in
-          quali giorni e a che ora ha lavorato. {nf(activity.totalAll)} azioni
-          registrate, {instances} istanze al lavoro.
-        </p>
-        <ActivityCharts
-          activity={activity}
-          showRecent={false}
-          showLeaderboard={false}
-          showDonut={false}
-          showVolume={false}
-        />
-      </section>
+      {/* ── Da dove arrivano le posizioni (fonti) ─────────────── */}
+      {run.sources && run.sources.length > 0 && (
+        <section className="pt-10 border-t border-[var(--color-border)]">
+          <div className="section-label mb-1">📥 Da dove arrivano le posizioni</div>
+          <p className="text-[11px] text-[var(--color-dim)] mb-6">
+            Le fonti da cui lo Scout ha trovato le {nf(run.totals.positions)}{" "}
+            posizioni: job board, ATS e pagine carriera aziendali.
+          </p>
+          <SourcesChart sources={run.sources} total={run.totals.positions} />
+        </section>
+      )}
     </div>
   );
 }

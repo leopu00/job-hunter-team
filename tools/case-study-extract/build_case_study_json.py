@@ -45,6 +45,18 @@ categories = [{"name": name, "count": cnt} for name, cnt in Q(
     "SELECT COALESCE(NULLIF(TRIM(role_family),''),'Non categorizzato') rf,COUNT(*) "
     "FROM positions GROUP BY rf ORDER BY 2 DESC, rf")]
 
+# ── fonti (job board / ATS / pagine carriera) ────────────────────────
+# Normalizzate (lower/trim, '_'→'-' per fondere company_careers/company-careers);
+# top-12 individuali, la coda lunga finisce in "Altre".
+src_rows = Q(
+    "SELECT COALESCE(NULLIF(TRIM(REPLACE(LOWER(source),'_','-')),''),'sconosciuta') src,"
+    "COUNT(*) FROM positions GROUP BY 1 ORDER BY 2 DESC, 1")
+SRC_TOP = 12
+sources = [{"name": name, "count": cnt} for name, cnt in src_rows[:SRC_TOP]]
+src_rest = sum(cnt for _, cnt in src_rows[SRC_TOP:])
+if src_rest:
+    sources.append({"name": "Altre", "count": src_rest})
+
 # ── paesi (solo posizioni VERIFICATE, non escluse: es. UK escluse per work-auth) ──
 countries = [{"name": name, "code": code, "count": cnt} for name, code, cnt in Q(
     "SELECT loc_country, MAX(loc_country_code), COUNT(*) "
@@ -171,6 +183,7 @@ out = {
     "totals": {"positions": positions, "scored": scored_status, "excluded": excluded_status},
     "match": match,
     "categories": categories,
+    "sources": sources,
     "countries": countries,
     "cities": cities,
     "salary": salary,
