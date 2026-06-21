@@ -58,25 +58,6 @@ function scoreBg(s?: number | null) {
   return "var(--color-red)";
 }
 
-// Range stipendio compatto in "k", convertito nella valuta scelta
-// (es. "€60–80k", "$≥70k"). null → "—".
-function formatSalary(
-  min: number | null,
-  max: number | null,
-  from: string,
-  to: string,
-  rates: Rates,
-): string {
-  const sym = currencySymbol(to);
-  const f = (n: number) =>
-    formatMoneyCompact(convertCurrency(n, from, to, rates));
-  if (min != null && max != null)
-    return min === max ? `${sym}${f(min)}` : `${sym}${f(min)}–${f(max)}`;
-  if (min != null) return `${sym}≥${f(min)}`;
-  if (max != null) return `${sym}≤${f(max)}`;
-  return "—";
-}
-
 // Lordo mensile = lordo annuo / 12, convertito e in "k" con 1 decimale
 // (es. "€5.0–6.7k"). È una semplice divisione: NON è il netto.
 function formatMonthly(
@@ -114,6 +95,7 @@ export type TableLabels = {
   colCritic: string;
   colSalary: string;
   colMonthly: string;
+  colSource: string;
   colStatus: string;
 };
 
@@ -219,8 +201,8 @@ export default function RecentPositionsTable({
                 labels.colCity,
                 labels.colRemote,
                 labels.colScore,
-                labels.colSalary,
                 labels.colMonthly,
+                labels.colSource,
                 labels.colUpdatedBy,
                 labels.colCritic,
                 labels.colStatus,
@@ -266,13 +248,11 @@ export default function RecentPositionsTable({
                   <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
                     {formatFoundAt(p.last_action_at || p.found_at || "")}
                   </td>
-                  <td
-                    className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
-                    title={p.title ?? undefined}
-                  >
+                  <td className="px-4 py-3 font-medium">
                     <Link
                       href={`/positions/${p.id}`}
-                      className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                      title={p.title ?? undefined}
+                      className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
                     >
                       {p.title}
                     </Link>
@@ -351,15 +331,6 @@ export default function RecentPositionsTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-center">
-                    {formatSalary(
-                      p.salary_min,
-                      p.salary_max,
-                      p.salary_currency,
-                      displayCurrency,
-                      rates,
-                    )}
-                  </td>
                   <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-center">
                     {formatMonthly(
                       p.salary_min,
@@ -367,6 +338,15 @@ export default function RecentPositionsTable({
                       p.salary_currency,
                       displayCurrency,
                       rates,
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap">
+                    {p.source ? (
+                      <span className="capitalize">
+                        {p.source.replace(/[-_]/g, " ")}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)]">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">

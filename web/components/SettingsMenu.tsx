@@ -136,9 +136,6 @@ export default function SettingsMenu() {
             <DarkModeToggle />
           </div>
 
-          <SectionHeader>{tr('team')}</SectionHeader>
-          <MenuLink href="/team-pyramid" onClick={() => setOpen(false)}>{tr('org_chart')}</MenuLink>
-
           {/* Voci placeholder — riabilitare una alla volta dopo validazione.
               <SectionHeader>Notifiche</SectionHeader>
               <MenuLink href="/notifications" onClick={() => setOpen(false)}>Preferenze notifiche</MenuLink>

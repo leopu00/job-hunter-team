@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   TeamActivity,
   TeamActivityActor,
@@ -77,12 +77,24 @@ function TemporalScatter({
   onMove: (e: React.MouseEvent) => void;
   onHide: () => void;
 }) {
-  const ZOOMS = [1, 2, 4, 8, 16, 32];
+  const ZOOMS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
   const [zoom, setZoom] = useState(1);
+  // Misura la larghezza del piano: a zoom 1 il grafico riempie tutto il container
+  // (primo giorno a sinistra, ultimo al bordo destro); zoom>1 espande → scroll.
+  const planeRef = useRef<HTMLDivElement>(null);
+  const [planeW, setPlaneW] = useState(0);
+  useEffect(() => {
+    const el = planeRef.current;
+    if (!el) return;
+    const update = () => setPlaneW(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const days = dates.length;
   const laneH = 30;
-  const baseDayPx = 24;
-  const scatterW = Math.max(600, Math.round(days * baseDayPx * zoom));
+  const scatterW = Math.max(1, Math.round((planeW || 600) * zoom));
   const axisStep = Math.max(
     1,
     Math.ceil(days / Math.max(1, Math.floor(scatterW / 70))),
@@ -154,7 +166,7 @@ function TemporalScatter({
             ))}
           </div>
           {/* Piano scatter — scrollabile */}
-          <div className="flex-1 overflow-x-auto">
+          <div ref={planeRef} className="flex-1 overflow-x-auto">
             <div style={{ width: scatterW }}>
               <svg width={scatterW} height={H} viewBox={`0 0 ${scatterW} ${H}`}>
                 {roles.map((r, i) => (
@@ -478,11 +490,13 @@ export default function ActivityCharts({
   showRecent = true,
   showLeaderboard = true,
   showDonut = true,
+  showVolume = true,
 }: {
   activity: TeamActivity;
   showRecent?: boolean;
   showLeaderboard?: boolean;
   showDonut?: boolean;
+  showVolume?: boolean;
 }) {
   const {
     dates,
@@ -777,93 +791,100 @@ export default function ActivityCharts({
         />
       )}
       {/* ── 3. Timeline impilata (per ruolo) ─────────────────────── */}
-      <section>
-        <div className="section-label mb-1">📈 Volume di lavoro nel tempo</div>
-        <p className="text-[10px] text-[var(--color-dim)] mb-4">
-          Azioni totali al giorno, scomposte per ruolo · {days} giorni.
-        </p>
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
-          {/* Legenda (solo ruoli con dati) */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-4">
-            {activeRoles.map((r) => (
-              <span key={r} className="flex items-center gap-1.5">
-                <span
-                  className="inline-block w-2.5 h-2.5 rounded-sm"
-                  style={{ background: ROLE_META[r].color }}
-                />
-                <span className="text-[10px] text-[var(--color-muted)]">
-                  {ROLE_META[r].emoji} {ROLE_META[r].label}
+      {showVolume && (
+        <section>
+          <div className="section-label mb-1">
+            📈 Volume di lavoro nel tempo
+          </div>
+          <p className="text-[10px] text-[var(--color-dim)] mb-4">
+            Azioni totali al giorno, scomposte per ruolo · {days} giorni.
+          </p>
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
+            {/* Legenda (solo ruoli con dati) */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 mb-4">
+              {activeRoles.map((r) => (
+                <span key={r} className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm"
+                    style={{ background: ROLE_META[r].color }}
+                  />
+                  <span className="text-[10px] text-[var(--color-muted)]">
+                    {ROLE_META[r].emoji} {ROLE_META[r].label}
+                  </span>
                 </span>
-              </span>
-            ))}
-          </div>
-          {/* Barre */}
-          <div className="flex items-end gap-[2px]" style={{ height: 170 }}>
-            {roleDaily.map((d) => {
-              const total = dayTotal(d.counts);
-              const hPct = (total / maxDayTotal) * 100;
-              const rows: TipRow[] =
-                total > 0
-                  ? roles
-                      .filter((r) => d.counts[r] > 0)
-                      .map((r) => ({
-                        color: ROLE_META[r].color,
-                        label: ROLE_META[r].label,
-                        value: String(d.counts[r]),
-                      }))
-                  : [
-                      {
-                        color: "var(--color-dim)",
-                        label: "nessuna attività",
-                        value: "",
-                      },
-                    ];
-              return (
-                <div
-                  key={d.date}
-                  className="flex-1 flex flex-col-reverse min-w-0 cursor-default"
-                  style={{ height: "100%" }}
-                  onMouseEnter={(e) =>
-                    showTip(e, `${dm(d.date)} · ${total} azioni`, rows)
-                  }
-                  onMouseMove={moveTip}
-                  onMouseLeave={hideTip}
-                >
+              ))}
+            </div>
+            {/* Barre */}
+            <div className="flex items-end gap-[2px]" style={{ height: 170 }}>
+              {roleDaily.map((d) => {
+                const total = dayTotal(d.counts);
+                const hPct = (total / maxDayTotal) * 100;
+                const rows: TipRow[] =
+                  total > 0
+                    ? roles
+                        .filter((r) => d.counts[r] > 0)
+                        .map((r) => ({
+                          color: ROLE_META[r].color,
+                          label: ROLE_META[r].label,
+                          value: String(d.counts[r]),
+                        }))
+                    : [
+                        {
+                          color: "var(--color-dim)",
+                          label: "nessuna attività",
+                          value: "",
+                        },
+                      ];
+                return (
                   <div
-                    className="flex flex-col-reverse rounded-sm overflow-hidden"
-                    style={{ height: `${hPct}%`, minHeight: total > 0 ? 2 : 0 }}
+                    key={d.date}
+                    className="flex-1 flex flex-col-reverse min-w-0 cursor-default"
+                    style={{ height: "100%" }}
+                    onMouseEnter={(e) =>
+                      showTip(e, `${dm(d.date)} · ${total} azioni`, rows)
+                    }
+                    onMouseMove={moveTip}
+                    onMouseLeave={hideTip}
                   >
-                    {roles.map((r) =>
-                      d.counts[r] > 0 ? (
-                        <div
-                          key={r}
-                          style={{
-                            height: `${(d.counts[r] / total) * 100}%`,
-                            background: ROLE_META[r].color,
-                            opacity: 0.85,
-                          }}
-                        />
-                      ) : null,
-                    )}
+                    <div
+                      className="flex flex-col-reverse rounded-sm overflow-hidden"
+                      style={{
+                        height: `${hPct}%`,
+                        minHeight: total > 0 ? 2 : 0,
+                      }}
+                    >
+                      {roles.map((r) =>
+                        d.counts[r] > 0 ? (
+                          <div
+                            key={r}
+                            style={{
+                              height: `${(d.counts[r] / total) * 100}%`,
+                              background: ROLE_META[r].color,
+                              opacity: 0.85,
+                            }}
+                          />
+                        ) : null,
+                      )}
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+            {/* Asse x */}
+            <div className="flex gap-[2px] mt-1.5">
+              {dates.map((date, i) => (
+                <div
+                  key={date}
+                  className="flex-1 text-center min-w-0 overflow-visible whitespace-nowrap"
+                  style={{ fontSize: 8, color: "var(--color-dim)" }}
+                >
+                  {i % tick === 0 ? dm(date) : ""}
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-          {/* Asse x */}
-          <div className="flex gap-[2px] mt-1.5">
-            {dates.map((date, i) => (
-              <div
-                key={date}
-                className="flex-1 text-center min-w-0 overflow-visible whitespace-nowrap"
-                style={{ fontSize: 8, color: "var(--color-dim)" }}
-              >
-                {i % tick === 0 ? dm(date) : ""}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ── 4. Scatter temporale: chi, quando, cosa ──────────────── */}
       <TemporalScatter

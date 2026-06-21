@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import type {
   RecentActivityEvent,
   TeamActivityRole,
 } from "@/lib/team-activity";
-import { ROLE_META, timeAgo, dmhm } from "@/lib/team-activity-meta";
+import { ROLE_META } from "@/lib/team-activity-meta";
+import { ActivityRow } from "@/app/components/activity-format";
 
 const ROLES: TeamActivityRole[] = [
   "scout",
@@ -70,9 +70,9 @@ export default function ActivityLogTable({
           }}
           className="px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wide transition-colors"
           style={{
-            background: role === "all" ? "var(--color-white)" : "transparent",
+            background: role === "all" ? "var(--color-green)" : "transparent",
             color: role === "all" ? "#0a0a0a" : "var(--color-muted)",
-            border: `1px solid ${role === "all" ? "var(--color-white)" : "var(--color-border)"}`,
+            border: `1px solid ${role === "all" ? "var(--color-green)" : "var(--color-border)"}`,
           }}
         >
           Tutti <span className="opacity-60 tabular-nums">{counts.all}</span>
@@ -112,120 +112,26 @@ export default function ActivityLogTable({
         />
       </div>
 
-      {/* ── Tabella ─────────────────────────────────────────────── */}
-      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[760px]">
-            <thead>
-              <tr className="border-b border-[var(--color-border)]">
-                {[
-                  "Quando",
-                  "Agente",
-                  "Azione",
-                  "Posizione",
-                  "#",
-                  "Data/ora",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-2.5 text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="px-4 py-10 text-center text-[11px] text-[var(--color-dim)]"
-                  >
-                    Nessuna azione per i filtri selezionati.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((ev, i) => {
-                  const meta = ROLE_META[ev.role];
-                  const label = ev.actor === ev.role ? meta.label : ev.actor;
-                  return (
-                    <tr
-                      key={`${ev.role}-${ev.actor}-${ev.ts}-${start + i}`}
-                      className="border-b border-[var(--color-border)] last:border-0 hover:bg-[var(--color-bg)] transition-colors"
-                    >
-                      <td className="px-4 py-2 text-[10px] text-[var(--color-dim)] whitespace-nowrap tabular-nums">
-                        {timeAgo(ev.ts)}
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        <span className="text-[12px] mr-1.5">{meta.emoji}</span>
-                        <span
-                          className="text-[11px] font-bold tabular-nums"
-                          style={{ color: meta.color }}
-                          title={ev.actor}
-                        >
-                          {label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-[11px] text-[var(--color-muted)] whitespace-nowrap">
-                        {meta.action}
-                      </td>
-                      <td className="px-4 py-2 text-[11px] max-w-[420px] truncate">
-                        {ev.title || ev.company ? (
-                          <>
-                            {ev.title && (
-                              <span className="text-[var(--color-white)]">
-                                {ev.title}
-                              </span>
-                            )}
-                            {ev.company && (
-                              <span className="text-[var(--color-dim)]">
-                                {ev.title ? " · " : ""}
-                                {ev.company}
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-[var(--color-dim)]">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        {ev.pid ? (
-                          <Link
-                            href={`/positions/${ev.pid}`}
-                            className="text-[10px] font-semibold tabular-nums no-underline rounded px-1.5 py-0.5 border border-[var(--color-border)] text-[var(--color-muted)] hover:border-[var(--color-blue)] hover:text-[var(--color-blue)] transition-colors"
-                            title={`Apri la posizione · ${ev.pid}`}
-                          >
-                            #{ev.legacyId ?? ev.pid.slice(0, 8)}
-                          </Link>
-                        ) : (
-                          <span className="text-[var(--color-dim)]">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-[10px] text-[var(--color-dim)] whitespace-nowrap tabular-nums">
-                        {dmhm(ev.ts)}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ── Footer: rows-per-page + paginazione ─────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mt-3">
-        <div className="flex items-center gap-2 text-[10px] text-[var(--color-dim)]">
-          <span>Righe per pagina</span>
+      {/* ── Righe per pagina + paginazione (in cima) ───────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4 text-[10px] text-[var(--color-dim)]">
+        <div className="flex items-center gap-2">
+          <span className="whitespace-nowrap">Righe per pagina</span>
           <select
             value={pageSize}
             onChange={(e) => {
               setPageSize(Number(e.target.value));
               reset();
             }}
-            className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-2 py-1 text-[10px] text-[var(--color-white)] outline-none"
-            style={{ fontFamily: "inherit", colorScheme: "dark" }}
+            className="cursor-pointer"
+            // La regola globale `select { width:100% }` (unlayered) batte le
+            // classi Tailwind: forzo larghezza/padding/font via inline.
+            style={{
+              fontFamily: "inherit",
+              width: "auto",
+              padding: "4px 26px 4px 10px",
+              fontSize: "10px",
+              borderRadius: 6,
+            }}
           >
             {PAGE_SIZES.map((s) => (
               <option key={s} value={s}>
@@ -233,32 +139,48 @@ export default function ActivityLogTable({
               </option>
             ))}
           </select>
-          <span className="ml-2 tabular-nums">
+          <span className="whitespace-nowrap tabular-nums">
             {total === 0
               ? "0"
               : `${start + 1}–${Math.min(start + pageSize, total)}`}{" "}
             di {total}
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => setPage(Math.max(1, safePage - 1))}
             disabled={safePage <= 1}
-            className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-white)] hover:border-[var(--color-muted)] transition-colors disabled:opacity-30"
+            className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-white)] hover:border-[var(--color-muted)] transition-colors disabled:opacity-30 whitespace-nowrap"
           >
             ← Prec
           </button>
-          <span className="text-[10px] text-[var(--color-dim)] tabular-nums px-1">
+          <span className="tabular-nums whitespace-nowrap px-1">
             {safePage} / {pages}
           </span>
           <button
             onClick={() => setPage(Math.min(pages, safePage + 1))}
             disabled={safePage >= pages}
-            className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-white)] hover:border-[var(--color-muted)] transition-colors disabled:opacity-30"
+            className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-white)] hover:border-[var(--color-muted)] transition-colors disabled:opacity-30 whitespace-nowrap"
           >
             Succ →
           </button>
         </div>
+      </div>
+
+      {/* ── Lista a frase (stessa resa del feed dashboard) ──────── */}
+      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)] overflow-x-auto">
+        {rows.length === 0 ? (
+          <div className="px-4 py-10 text-center text-[11px] text-[var(--color-dim)]">
+            Nessuna azione per i filtri selezionati.
+          </div>
+        ) : (
+          rows.map((ev, i) => (
+            <ActivityRow
+              key={`${ev.role}-${ev.actor}-${ev.ts}-${start + i}`}
+              ev={ev}
+            />
+          ))
+        )}
       </div>
     </div>
   );

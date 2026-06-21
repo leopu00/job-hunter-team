@@ -109,7 +109,7 @@ export default function SalaryBars({
         </div>
       ) : (
         <ul
-          className="flex-1 flex flex-col justify-between gap-1.5"
+          className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1.5 pr-1"
           onMouseLeave={() => setHovered(null)}
         >
           {bands.map((b) => {

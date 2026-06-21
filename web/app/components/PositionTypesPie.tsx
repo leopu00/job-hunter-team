@@ -134,14 +134,14 @@ export default function PositionTypesPie({
         )}
       </div>
 
-      <div className="flex items-center gap-8">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
         <div
-          className="relative shrink-0"
-          style={{ width: size, height: size }}
+          className="relative shrink-0 self-center sm:self-auto"
+          style={{ width: size, maxWidth: "100%", aspectRatio: "1 / 1" }}
         >
           <svg
-            width={size}
-            height={size}
+            width="100%"
+            height="100%"
             viewBox={`0 0 ${SIZE} ${SIZE}`}
             aria-label={title}
             role="img"
@@ -199,7 +199,8 @@ export default function PositionTypesPie({
             <div
               className="font-bold leading-tight line-clamp-2"
               style={{
-                maxWidth: ((INNER * 2) / SIZE) * size,
+                // ~diametro del foro relativo al donut (scala col responsive)
+                maxWidth: `${((INNER * 2) / SIZE) * 100}%`,
                 fontSize: 14,
                 color: focused ? focused.color : "var(--color-dim)",
               }}
@@ -231,7 +232,7 @@ export default function PositionTypesPie({
           {/* Header: didascalia colonne. Colonna 'tipo' a larghezza limitata +
                 colonna barra flessibile (1fr) che riempie lo spazio prima vuoto. */}
           <li
-            className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
+            className="grid grid-cols-[minmax(90px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
             <span>tipo</span>
@@ -257,7 +258,7 @@ export default function PositionTypesPie({
                 key={d.family}
                 onMouseEnter={() => setHovered(d.family)}
                 onClick={() => onToggleType?.(d.family)}
-                className="grid grid-cols-[minmax(110px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
+                className="grid grid-cols-[minmax(90px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[11.5px] leading-tight rounded px-1 -mx-1 py-1"
                 style={{
                   cursor: onToggleType ? "pointer" : "default",
                   background: isSelected

@@ -2,6 +2,46 @@
 
 import Link from "next/link";
 import { useLandingI18n } from "./LandingI18n";
+import { useTheme, type Theme } from "../../theme-provider";
+
+// Switcher tema compatto per il footer: sistema / notte / giorno (testo).
+function FooterThemeSwitch() {
+  const { theme, setTheme } = useTheme();
+  const { t } = useLandingI18n();
+  const OPTIONS: { value: Theme; labelKey: string }[] = [
+    { value: "system", labelKey: "theme_system" },
+    { value: "dark", labelKey: "theme_dark" },
+    { value: "light", labelKey: "theme_light" },
+  ];
+  return (
+    <div
+      className="flex items-center gap-2.5"
+      role="radiogroup"
+      aria-label="Theme"
+    >
+      {OPTIONS.map(({ value, labelKey }) => {
+        const active = theme === value;
+        const label = t(labelKey as Parameters<typeof t>[0]);
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTheme(value)}
+            role="radio"
+            aria-checked={active}
+            aria-label={label}
+            className="text-[9px] leading-none cursor-pointer transition-colors bg-transparent border-0 p-0"
+            style={{
+              color: active ? "var(--color-green)" : "var(--color-dim)",
+            }}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function LandingCTA() {
   const { t } = useLandingI18n();
@@ -69,7 +109,7 @@ export function LandingFooter() {
         {/* Columns */}
         <nav
           aria-label="Link footer"
-          className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10"
+          className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-4"
         >
           {/* Brand */}
           <div>
@@ -81,6 +121,9 @@ export function LandingFooter() {
             <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">
               {t("footer_brand_desc")}
             </p>
+            <div className="mt-4">
+              <FooterThemeSwitch />
+            </div>
           </div>
 
           {/* Prodotto */}
@@ -153,7 +196,22 @@ export function LandingFooter() {
             &copy; {new Date().getFullYear()} Job Hunter Team &mdash;{" "}
             {t("footer_copyright")}
           </span>
-          <span className="text-[9px] text-[var(--color-dim)]">v0.1.6</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[9px] text-[var(--color-dim)]">
+              Made with ❤️ by{" "}
+              <a
+                href="https://github.com/leopu00"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[var(--color-muted)] hover:text-[var(--color-green)] no-underline"
+              >
+                leopu00
+              </a>
+            </span>
+            <span className="text-[9px] text-[var(--color-dim)]">
+              v{process.env.NEXT_PUBLIC_APP_VERSION}
+            </span>
+          </div>
         </div>
       </div>
     </footer>

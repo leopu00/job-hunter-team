@@ -165,6 +165,24 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 
 ---
 
+### 🪪 [JHT-RENAME-COORDINATOR] Capitano → Coordinatore — rebrand globale (NEW 2026-06-21)
+
+⬜ **Rinominare il ruolo «Capitano» in «Coordinatore» (EN: «Captain» → «Coordinator») OVUNQUE.** Decisione utente 2026-06-21: il nome del ruolo cambia in tutto il sistema, **incluso il codice del container**. Grande rifattorizzazione, da fare in una sessione dedicata.
+
+**Già fatto (solo web pubblico, estetica):** pagina `/agents` — rimossi gli emoji dai ruoli + rinominato il primo ruolo in «Il Coordinatore / The Coordinator» (titolo + descrizioni + menzioni in Sentinella/Assistente); `slug`/`promptId` → `coordinatore`/`team.coordinatore`; voce immagine in `landing-image-prompts.md` aggiornata.
+
+**Da fare (il grosso — codice, agenti, runtime):**
+- **Prompt agenti** — `agents/capitano/` (cartella + 7 file `capitano.*.md`), riferimenti a «Capitano/Captain» nei prompt degli altri ruoli e in `agents/_team/*` (architettura, team-rules), regole `C-NN` che lo nominano.
+- **Container / runtime** — nomi sessione tmux (`SESSION-CAPITANO`), `start-agent.sh`/`.launcher`, role registry, `agent-watchdog`, eventuali `role == "capitano"` hardcoded in Python/JS.
+- **CLI** — `jht team` (label/known agents), comandi che citano l'agente.
+- **Web app (resto)** — route `web/app/api/capitano/chat`, pagine `(protected)/team`, `DashboardI18n`/`LandingI18n` e i18n 7 lingue, qualsiasi `capitano` nel codice web oltre `/agents`.
+- **Menzioni testuali residue sul sito pubblico** — guide `/docs` (es. getting-started «The Captain dispatches…»), copy landing.
+- **Compat** — decidere se mantenere alias `capitano` (slug DB/sessione) per non rompere team in esecuzione, o migrare con mapping. ⚠️ Tocca team live: pianificare il cutover.
+
+**Approccio suggerito:** un censimento `git grep -i 'capitan\|captain'` → tabella per-area → rinomina a ondate (1 web testo, 2 prompt agenti+i18n, 3 runtime/CLI con alias di compat). Verificare team live non si rompa.
+
+---
+
 ### 1️⃣ PHASE 1 — Web Platform Consolidation (current sprint)
 
 #### 🔴 HIGH PRIORITY

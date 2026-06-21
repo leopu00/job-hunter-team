@@ -52,6 +52,7 @@ function getSavedLang(): Lang {
 
 const translations = {
   // Nav
+  nav_home: { it: "Home", en: "Home", hu: "Home" },
   nav_features: { it: "Features", en: "Features", hu: "Funkciók" },
   nav_how: { it: "Come funziona", en: "How it works", hu: "Hogyan működik" },
   nav_github: { it: "GitHub", en: "GitHub", hu: "GitHub" },
@@ -59,9 +60,9 @@ const translations = {
   nav_team: { it: "Team", en: "Team", hu: "Csapat" },
   nav_pricing: { it: "Prezzi", en: "Pricing", hu: "Árak" },
   nav_case_studies: {
-    it: "Case studies",
-    en: "Case studies",
-    hu: "Esettanulmányok",
+    it: "Studies",
+    en: "Studies",
+    hu: "Studies",
   },
   nav_project: { it: "Il progetto", en: "Project", hu: "Projekt" },
   nav_chronicles: { it: "Cronache", en: "Chronicles", hu: "Krónikák" },
@@ -402,6 +403,9 @@ const translations = {
     en: "Open Source under MIT License",
     hu: "Nyílt forráskód MIT licenc alatt",
   },
+  theme_system: { it: "sistema", en: "system" },
+  theme_dark: { it: "notte", en: "night" },
+  theme_light: { it: "giorno", en: "day" },
 
   // Download page
   dl_desc: {
@@ -459,6 +463,21 @@ const translations = {
   dl_detected: { it: "rilevato", en: "detected", hu: "észlelt" },
   dl_mode_desktop_title: { it: "Desktop", en: "Desktop", hu: "Asztali" },
   dl_mode_terminal_title: { it: "CLI", en: "CLI", hu: "CLI" },
+  dl_mode_prompt_title: { it: "Prompt", en: "Prompt" },
+  dl_prompt_intro: {
+    it: "Copia questo prompt e dallo al tuo assistente AI: penserà lui a installare e avviare il team.",
+    en: "Copy this prompt and hand it to your AI assistant: it will install and start the team for you.",
+  },
+  dl_copy_prompt: { it: "Copia prompt", en: "Copy prompt" },
+  dl_prompt_note: {
+    it: "L'assistente AI deve avere accesso al tuo computer — terminale e file (es. Claude Code, Cursor, Codex CLI).",
+    en: "The AI assistant needs access to your computer — terminal and files (e.g. Claude Code, Cursor, Codex CLI).",
+  },
+  dl_help_text: {
+    it: "Non sai dove o come installarlo?",
+    en: "Not sure where or how to install it?",
+  },
+  dl_help_link: { it: "Leggi la guida", en: "Read the guide" },
   dl_instructions: { it: "Istruzioni", en: "Instructions", hu: "Utasítások" },
   dl_close: { it: "Chiudi", en: "Close", hu: "Bezárás" },
   dl_download: { it: "Scarica", en: "Download", hu: "Letöltés" },
