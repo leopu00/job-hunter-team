@@ -70,16 +70,18 @@ const PAGE = {
   it: {
     title: "Come si avvia",
     subtitle:
-      "Tante modalità, un solo telecomando. Scegli dove far girare la squadra e gestisci tutto dall'app desktop.",
-    appTitle: "L'app desktop «Team locale»",
-    appBody:
-      "È il telecomando della squadra: installa Docker per te, configura il provider AI, avvia e ferma il team, ne mostra lo stato in tempo reale e ti collega anche al team che gira su una VPS. L'interazione vera e propria — vedere le posizioni, leggere i punteggi, chiedere un CV — avviene poi dal web, da Telegram o dalla riga di comando.",
-    appPoints: [
-      "Avviare e fermare il team con un clic",
-      "Configurare il provider AI e l'autenticazione",
-      "Vedere lo stato della squadra e dei consumi",
-      "Collegarti e gestire il team su una VPS",
-    ],
+      "Scegli dove far girare la squadra e gestiscila come preferisci — app desktop, terminale, o entrambi insieme. Non sei legato a un solo strumento.",
+    ctrlTitle: "Come la controlli",
+    ctrlIntro:
+      "Non sei legato a un solo strumento: app desktop, terminale, o entrambi insieme — stesso runtime, stesse funzioni.",
+    ctrlDesktopLabel: "App desktop",
+    ctrlDesktopBody:
+      "Il telecomando con interfaccia grafica: installa Docker, avvia e ferma il team, ne mostra lo stato in tempo reale e collega anche una VPS.",
+    ctrlTerminalLabel: "Terminale (CLI / TUI)",
+    ctrlTerminalBody:
+      "Le stesse cose dalla riga di comando, da alternare all'app desktop quando vuoi.",
+    ctrlAssistant:
+      "E non è un aut-aut: mentre usi la grafica desktop, puoi anche parlare con il tuo assistente AI personale — come Claude Code o OpenClaw — che dal terminale gestisce il team al posto tuo.",
     reqTitle: "Requisiti minimi",
     reqRows: [
       ["Docker", "Obbligatorio — l'unica vera dipendenza"],
@@ -90,23 +92,25 @@ const PAGE = {
     ],
     osTitle: "Sistemi supportati",
     osBody:
-      "macOS (Intel e Apple Silicon), Windows 10/11 e Linux. Due strade per installare: l'app desktop con interfaccia grafica (DMG, EXE, AppImage) oppure un singolo comando da terminale per chi è più tecnico.",
+      "macOS (Intel e Apple Silicon), Windows 10/11 e Linux. Tre strade per installare: l'app desktop con interfaccia grafica (DMG, EXE, AppImage), un singolo comando da terminale, oppure lasciando fare al tuo assistente AI.",
     ctaDownload: "Scarica l'app →",
     back: "← Torna alla home",
   },
   en: {
     title: "How to run it",
     subtitle:
-      "Many ways, one remote control. Choose where the team runs and manage everything from the desktop app.",
-    appTitle: "The “Local Team” desktop app",
-    appBody:
-      "It's the team's remote control: it installs Docker for you, configures the AI provider, starts and stops the team, shows its status in real time, and also connects you to a team running on a VPS. The actual interaction — viewing positions, reading scores, asking for a CV — then happens from the web, Telegram or the command line.",
-    appPoints: [
-      "Start and stop the team with one click",
-      "Configure the AI provider and authentication",
-      "See the team's status and spending",
-      "Connect to and manage the team on a VPS",
-    ],
+      "Choose where the team runs and manage it however you like — desktop app, terminal, or both together. You're never locked into a single tool.",
+    ctrlTitle: "How you control it",
+    ctrlIntro:
+      "You're not tied to one tool: desktop app, terminal, or both together — same runtime, same features.",
+    ctrlDesktopLabel: "Desktop app",
+    ctrlDesktopBody:
+      "The graphical remote control: it installs Docker, starts and stops the team, shows its status in real time, and connects to a VPS too.",
+    ctrlTerminalLabel: "Terminal (CLI / TUI)",
+    ctrlTerminalBody:
+      "The same things from the command line, to switch with the desktop app whenever you like.",
+    ctrlAssistant:
+      "And it's not either/or: while you use the desktop interface, you can also talk to your personal AI assistant — like Claude Code or OpenClaw — which manages the team for you from the terminal.",
     reqTitle: "Minimum requirements",
     reqRows: [
       ["Docker", "Required — the only real dependency"],
@@ -117,7 +121,7 @@ const PAGE = {
     ],
     osTitle: "Supported systems",
     osBody:
-      "macOS (Intel and Apple Silicon), Windows 10/11 and Linux. Two ways to install: the desktop app with a graphical interface (DMG, EXE, AppImage) or a single terminal command for the more technical.",
+      "macOS (Intel and Apple Silicon), Windows 10/11 and Linux. Three ways to install: the desktop app with a graphical interface (DMG, EXE, AppImage), a single terminal command, or letting your AI assistant do it.",
     ctaDownload: "Download the app →",
     back: "← Back to home",
   },
@@ -188,40 +192,35 @@ function SetupContent() {
           ))}
         </section>
 
-        {/* App desktop */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 items-center mb-16">
-          <div>
-            <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-4">
-              {p.appTitle}
-            </h2>
-            <p className="text-[13px] md:text-[14px] text-[var(--color-bright)] leading-relaxed mb-5">
-              {p.appBody}
-            </p>
-            <ul className="flex flex-col gap-2">
-              {p.appPoints.map((pt, i) => (
-                <li
-                  key={i}
-                  className="flex items-start gap-2.5 text-[13px] text-[var(--color-bright)]"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="mt-1.5 inline-block w-1.5 h-1.5 shrink-0"
-                    style={{ background: "var(--color-green)" }}
-                  />
-                  {pt}
-                </li>
-              ))}
-            </ul>
+        {/* Come la controlli — desktop / terminale / assistente AI, unificato */}
+        <section className="border border-[var(--color-border)] p-6 md:p-8 mb-16" style={{ background: "var(--color-panel)" }}>
+          <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-3">
+            {p.ctrlTitle}
+          </h2>
+          <p className="text-[13px] md:text-[14px] text-[var(--color-bright)] leading-relaxed mb-6">
+            {p.ctrlIntro}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-5">
+            <div>
+              <div className="text-[13px] font-bold text-[var(--color-white)] mb-1.5">
+                {p.ctrlDesktopLabel}
+              </div>
+              <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
+                {p.ctrlDesktopBody}
+              </p>
+            </div>
+            <div>
+              <div className="text-[13px] font-bold text-[var(--color-white)] mb-1.5">
+                {p.ctrlTerminalLabel}
+              </div>
+              <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
+                {p.ctrlTerminalBody}
+              </p>
+            </div>
           </div>
-          <ImagePlaceholder
-            label={
-              L === "it"
-                ? "Schermata dell'app desktop: pulsanti Avvia/Ferma, stato del team"
-                : "Desktop app screen: Start/Stop buttons, team status"
-            }
-            promptId="setup.app"
-            aspect="4 / 3"
-          />
+          <p className="text-[12px] md:text-[13px] text-[var(--color-muted)] leading-relaxed border-t border-[var(--color-border)] pt-4">
+            {p.ctrlAssistant}
+          </p>
         </section>
 
         {/* Requisiti */}
