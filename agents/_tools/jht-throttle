@@ -92,6 +92,11 @@ else
   DURATION_SEC=$(python3 "$CFGSCRIPT" get "$AGENT" 2>/dev/null || echo 0)
 fi
 
+# Ladder enforcement (2026-06-21): aggancia a {0,5,10,15,20,25,30,40,50,60}min.
+# Floor 5min: niente throttle <5min (chatter marginale). `0` resta `0`.
+# Copre sia il path config sia quello esplicito (`jht-throttle 120` → 300).
+DURATION_SEC=$(python3 "$CFGSCRIPT" quantize "$DURATION_SEC" 2>/dev/null || echo "$DURATION_SEC")
+
 # Fast path: 0 = "checkpoint" heartbeat. Niente pausa reale, niente
 # state, ma logghiamo un evento `checkpoint` sincrono via throttle.py
 # così il pacing-bridge può calcolare la cadenza per agente — il dato
