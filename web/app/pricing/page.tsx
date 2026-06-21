@@ -23,9 +23,17 @@ const PROVIDERS: Provider[] = [
     name: "Kimi",
     plan: "Moonshot · Pro",
     price: "~€40",
-    url: "https://www.kimi.com",
+    url: "https://www.kimi.com/code",
     it: "Il più economico, validato per l'uso quotidiano: in un test reale ha lavorato giorni interi trovando centinaia di posizioni. Ottimo punto di partenza.",
     en: "The most affordable, validated for everyday use: in a real test it ran for days, finding hundreds of openings. A great starting point.",
+  },
+  {
+    name: "Claude",
+    plan: "Anthropic · Max",
+    price: "~€90",
+    url: "https://www.anthropic.com/pricing",
+    it: "La massima precisione, il migliore per valutare le offerte e scrivere i CV. Per chi vuole il risultato migliore possibile.",
+    en: "The highest precision, best for evaluating jobs and writing CVs. For those who want the very best result.",
   },
   {
     name: "Codex",
@@ -35,36 +43,23 @@ const PROVIDERS: Provider[] = [
     it: "Equilibrio tra qualità e costo. Testato su server: 131 posizioni elaborate in 48 ore.",
     en: "A balance of quality and cost. Tested on a server: 131 openings processed in 48 hours.",
   },
-  {
-    name: "Claude",
-    plan: "Anthropic · Max x20",
-    price: "~€200",
-    url: "https://www.anthropic.com/pricing",
-    it: "La massima precisione, il migliore per valutare le offerte e scrivere i CV. Per chi vuole il risultato migliore possibile.",
-    en: "The highest precision, best for evaluating jobs and writing CVs. For those who want the very best result.",
-  },
 ];
 
 const PAGE = {
   it: {
     title: "Prezzi",
     subtitle:
-      "Job Hunter Team è open source. La piattaforma è gratuita: paghi solo il provider AI che scegli.",
+      "Job Hunter Team è open source. Ecco l'unica cosa che ti costa.",
     freeTitle: "La piattaforma non si paga",
     freeBody:
-      "Il software è open source con licenza MIT: niente abbonamento alla piattaforma, niente costi nascosti, nessun ricavo per noi sul tuo utilizzo. Scarichi, installi e fai girare il team a casa tua. L'unica spesa è l'abbonamento al modello AI che decide la squadra di usare.",
+      "Software open source con licenza MIT: nessun abbonamento alla piattaforma, nessun costo nascosto, nessun ricavo per noi. Lo scarichi e fai girare il team a casa tua; l'unica spesa è l'abbonamento al modello AI.",
     providersTitle: "I provider AI",
     providersIntro:
       "Scegli tu quale intelligenza far lavorare per te. Questi sono i piani testati e i costi indicativi al mese (i prezzi reali sono sulle pagine ufficiali di ogni provider).",
     providerLink: "Prezzi ufficiali →",
+    dedicatedTitle: "Dedica l'abbonamento al team",
     dedicatedNote:
-      "Consiglio: dedica l'abbonamento a Job Hunter Team, separato da quello che usi per l'AI personale, così non esaurite la stessa quota.",
-    localTitle: "E i modelli locali?",
-    localBody:
-      "In futuro potrai far girare il team con modelli AI in locale, sul tuo computer: in quel caso non pagherai alcun provider, ma soltanto l'elettricità. Oggi la qualità dei modelli locali non è ancora all'altezza per questo tipo di lavoro, ma è una direzione su cui lavoriamo.",
-    vpsTitle: "Se usi una VPS",
-    vpsBody:
-      "Far girare il team su una VPS sempre accesa costa circa €6–10 al mese di server, da aggiungere al provider AI. È il modo più economico per averlo attivo 24 ore su 24 senza tenere acceso un computer.",
+      "Un punto importante: serve un abbonamento AI tutto per il team, separato da quello che usi ogni giorno. Il team lo consuma per intero, quindi non condividerlo con il tuo uso personale.",
     approx: "Prezzi indicativi al mese, IVA inclusa. Possono variare.",
     ctaSetup: "Come si avvia →",
     back: "← Torna alla home",
@@ -72,22 +67,17 @@ const PAGE = {
   en: {
     title: "Pricing",
     subtitle:
-      "Job Hunter Team is open source. The platform is free: you only pay the AI provider you choose.",
+      "Job Hunter Team is open source. Here's the only thing it costs you.",
     freeTitle: "The platform is free",
     freeBody:
-      "The software is open source under the MIT license: no platform subscription, no hidden fees, no revenue for us on your usage. You download, install and run the team on your own machine. The only cost is the subscription to the AI model the team uses.",
+      "Open source under the MIT license: no platform subscription, no hidden fees, no revenue for us. You download and run the team on your own machine; the only cost is the AI model's subscription.",
     providersTitle: "The AI providers",
     providersIntro:
       "You choose which intelligence works for you. These are the tested plans and indicative monthly costs (real prices are on each provider's official page).",
     providerLink: "Official pricing →",
+    dedicatedTitle: "Dedicate the subscription to the team",
     dedicatedNote:
-      "Tip: dedicate the subscription to Job Hunter Team, separate from your personal AI, so you don't drain the same quota.",
-    localTitle: "What about local models?",
-    localBody:
-      "In the future you'll be able to run the team with local AI models, on your own computer: then you pay no provider at all — only electricity. Today local models aren't yet good enough for this kind of work, but it's a direction we're pursuing.",
-    vpsTitle: "If you use a VPS",
-    vpsBody:
-      "Running the team on an always-on VPS costs about €6–10 a month for the server, on top of the AI provider. It's the cheapest way to keep it running 24/7 without leaving a computer on.",
+      "One important point: the team needs an AI subscription of its own, separate from the one you use day to day. It consumes the whole allowance, so don't share it with your personal use.",
     approx: "Indicative monthly prices, VAT included. Subject to change.",
     ctaSetup: "How to run it →",
     back: "← Back to home",
@@ -117,10 +107,10 @@ function PricingContent() {
 
         {/* Piattaforma gratuita */}
         <section
-          className="mb-14 rounded-xl border border-[var(--color-border)] p-8 md:p-10"
+          className="mb-14 border border-[var(--color-border)] p-8 md:p-10"
           style={{ background: "var(--color-panel)" }}
         >
-          <div className="text-center md:text-left max-w-3xl">
+          <div className="text-center md:text-left">
             <div className="text-[10px] font-semibold tracking-[0.2em] uppercase text-[var(--color-green)] mb-3">
               Open source · MIT
             </div>
@@ -135,7 +125,14 @@ function PricingContent() {
 
         {/* Provider */}
         <section className="mb-14">
-          <div className="max-w-md mx-auto mb-6">
+          <h2 className="text-lg md:text-xl font-bold text-[var(--color-white)] tracking-tight mb-2 text-center">
+            {p.providersTitle}
+          </h2>
+          <p className="text-[12px] md:text-[13px] text-[var(--color-muted)] max-w-2xl mx-auto leading-relaxed text-center">
+            {p.providersIntro}
+          </p>
+
+          <div className="max-w-md mx-auto my-8">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/pricing-brain.png"
@@ -154,12 +151,6 @@ function PricingContent() {
                 : "The “brain” — the AI provider — is the only thing you pay for."}
             </p>
           </div>
-          <h2 className="text-lg md:text-xl font-bold text-[var(--color-white)] tracking-tight mb-2 text-center">
-            {p.providersTitle}
-          </h2>
-          <p className="text-[12px] md:text-[13px] text-[var(--color-muted)] max-w-2xl mx-auto leading-relaxed text-center mb-8">
-            {p.providersIntro}
-          </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {PROVIDERS.map((prov) => (
@@ -200,27 +191,17 @@ function PricingContent() {
           <p className="mt-4 text-[10px] text-[var(--color-dim)] text-center">
             {p.approx}
           </p>
-          <p className="mt-3 text-[12px] text-[var(--color-muted)] max-w-2xl mx-auto leading-relaxed text-center">
-            {p.dedicatedNote}
-          </p>
-        </section>
 
-        {/* Local + VPS */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-14">
-          <div className="border border-[var(--color-border)] p-6">
-            <h3 className="text-[15px] font-bold text-[var(--color-white)] mb-3">
-              {p.localTitle}
-            </h3>
-            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
-              {p.localBody}
-            </p>
-          </div>
-          <div className="border border-[var(--color-border)] p-6">
-            <h3 className="text-[15px] font-bold text-[var(--color-white)] mb-3">
-              {p.vpsTitle}
-            </h3>
-            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
-              {p.vpsBody}
+          {/* Avviso evidente: abbonamento dedicato al team */}
+          <div
+            className="mt-8 border-l-2 border-[var(--color-green)] p-5 md:p-6 max-w-3xl mx-auto"
+            style={{ background: "var(--color-panel)" }}
+          >
+            <div className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[var(--color-green)] mb-2">
+              {p.dedicatedTitle}
+            </div>
+            <p className="text-[13px] md:text-[14px] text-[var(--color-bright)] leading-relaxed">
+              {p.dedicatedNote}
             </p>
           </div>
         </section>

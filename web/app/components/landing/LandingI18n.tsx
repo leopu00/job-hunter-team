@@ -403,6 +403,9 @@ const translations = {
     en: "Open Source under MIT License",
     hu: "Nyílt forráskód MIT licenc alatt",
   },
+  theme_system: { it: "sistema", en: "system" },
+  theme_dark: { it: "notte", en: "night" },
+  theme_light: { it: "giorno", en: "day" },
 
   // Download page
   dl_desc: {
