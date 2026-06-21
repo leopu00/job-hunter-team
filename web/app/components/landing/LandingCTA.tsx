@@ -4,22 +4,24 @@ import Link from "next/link";
 import { useLandingI18n } from "./LandingI18n";
 import { useTheme, type Theme } from "../../theme-provider";
 
-// Switcher tema compatto per il footer: System / Dark / Light.
+// Switcher tema compatto per il footer: sistema / notte / giorno (testo).
 function FooterThemeSwitch() {
   const { theme, setTheme } = useTheme();
-  const OPTIONS: { value: Theme; icon: string; label: string }[] = [
-    { value: "system", icon: "⊙", label: "System" },
-    { value: "dark", icon: "☾", label: "Dark" },
-    { value: "light", icon: "☀", label: "Light" },
+  const { t } = useLandingI18n();
+  const OPTIONS: { value: Theme; labelKey: string }[] = [
+    { value: "system", labelKey: "theme_system" },
+    { value: "dark", labelKey: "theme_dark" },
+    { value: "light", labelKey: "theme_light" },
   ];
   return (
     <div
-      className="flex items-center gap-0.5 rounded-md border border-[var(--color-border)] p-0.5"
+      className="flex items-center gap-2.5"
       role="radiogroup"
       aria-label="Theme"
     >
-      {OPTIONS.map(({ value, icon, label }) => {
+      {OPTIONS.map(({ value, labelKey }) => {
         const active = theme === value;
+        const label = t(labelKey as Parameters<typeof t>[0]);
         return (
           <button
             key={value}
@@ -27,15 +29,13 @@ function FooterThemeSwitch() {
             onClick={() => setTheme(value)}
             role="radio"
             aria-checked={active}
-            title={label}
             aria-label={label}
-            className="w-5 h-5 flex items-center justify-center rounded text-[11px] leading-none cursor-pointer transition-colors"
+            className="text-[9px] leading-none cursor-pointer transition-colors bg-transparent border-0 p-0"
             style={{
               color: active ? "var(--color-green)" : "var(--color-dim)",
-              background: active ? "rgba(0,232,122,0.10)" : "transparent",
             }}
           >
-            {icon}
+            {label}
           </button>
         );
       })}
@@ -109,7 +109,7 @@ export function LandingFooter() {
         {/* Columns */}
         <nav
           aria-label="Link footer"
-          className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10"
+          className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-4"
         >
           {/* Brand */}
           <div>
@@ -121,6 +121,9 @@ export function LandingFooter() {
             <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">
               {t("footer_brand_desc")}
             </p>
+            <div className="mt-4">
+              <FooterThemeSwitch />
+            </div>
           </div>
 
           {/* Prodotto */}
@@ -191,8 +194,20 @@ export function LandingFooter() {
             {t("footer_copyright")}
           </span>
           <div className="flex items-center gap-3">
-            <FooterThemeSwitch />
-            <span className="text-[9px] text-[var(--color-dim)]">v0.1.6</span>
+            <span className="text-[9px] text-[var(--color-dim)]">
+              Made with ❤️ by{" "}
+              <a
+                href="https://github.com/leopu00"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[var(--color-muted)] hover:text-[var(--color-green)] no-underline"
+              >
+                leopu00
+              </a>
+            </span>
+            <span className="text-[9px] text-[var(--color-dim)]">
+              v{process.env.NEXT_PUBLIC_APP_VERSION}
+            </span>
           </div>
         </div>
       </div>
