@@ -3,6 +3,7 @@
 // Le chiavi array (ta()) non passano dall'overlay: vivono solo nella base.
 export const de: Record<string, string> = {
   // Nav
+  nav_home: "Start",
   nav_features: "Funktionen",
   nav_how: "So funktioniert's",
   nav_github: "GitHub",
