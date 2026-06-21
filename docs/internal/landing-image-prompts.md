@@ -12,14 +12,22 @@ Convenzione `promptId`: `area.nome` (es. `team.analisti`, `hero.main`).
 
 ## 🔁 Blocco STYLE condiviso (copiare in testa a ogni prompt)
 
-> Hand-drawn comic-book / graphic-novel illustration — bold inked black outlines,
-> flat cel shading, limited muted palette with subtle green accents, light
-> halftone / paper-grain texture; not 3D, not photorealistic, not a glossy AI
-> painting. Elegant, a touch witty.
+> Hand-drawn comic-book / graphic-novel illustration — clean inked outlines, flat
+> colours, a **warm muted palette with subtle green accents** (classic adventure-comic
+> look), light halftone / paper-grain texture; not 3D, not photorealistic, not a
+> glossy AI painting. The agents look like **normal, friendly people** — calm,
+> approachable expressions (NOT stern or angry), **varied elegant clothing** (NOT
+> all-black agent suits). Elegant, a touch witty. Riferimento di stile: l'immagine
+> dei tre agenti della home (`web/public/landing-team.png`).
 
-**Regola occhiali (sempre):** ogni agente indossa gli **stessi identici** occhiali
-da sole — piccole lenti ovali scure con montatura sottile in metallo, stile
-Agente di Matrix (ref. `prima-release/reference-images/00-agent-base.png`).
+**Regola occhiali (sempre):** ogni agente indossa gli **stessi** piccoli occhiali da
+sole — lenti ovali scure, discrete — come tratto distintivo condiviso del team. Sono
+un dettaglio elegante: **non** devono rendere il personaggio cupo o "Agente Smith",
+resta una persona normale dall'aria serena.
+
+> ⚠️ **Generiamo da browser (ChatGPT/web): MAI riferimenti a file nei prompt** (no
+> `ref. …png`, no path) — il generatore non vede i nostri file locali. Le immagini in
+> `web/public/` e `prima-release/` sono solo appunti visivi **per noi**.
 
 ---
 
@@ -118,25 +126,25 @@ scenico del ruolo.** Niente testo leggibile.
 > ⚠️ **Rebrand in corso** Capitano→Coordinatore (BACKLOG `[JHT-RENAME-COORDINATOR]`):
 > la pagina è ora `/agents` (non `/team`) e i ruoli **non mostrano più emoji**.
 
-### `team.coordinatore` — il Coordinatore (sfondo trasparente) ⬜ DA GENERARE
+### `team.coordinatore` — il Coordinatore ⬜ DA GENERARE
 
-Primo ruolo del rebrand. Niente più "capitano di nave": è un **direttore/coordinatore**
-elegante che orchestra. Prompt da usare:
+Primo ruolo del rebrand. Niente "capitano di nave" e **niente Agente Smith**: è un
+**direttore elegante e cordiale** che coordina, nello stile dei tre agenti della home
+(`landing-team.png`). Prompt (snello, lascia spazio al generatore):
 
-> [STYLE] A single character — **the Coordinator** — full figure, standing, **on a
-> plain transparent background, no scene, no setting, just the figure**. The calm
-> director who turns the team's signals into decisions: an elegant, composed person
-> in a refined **dark structured tailored jacket / suit** (a quiet air of authority
-> — **NOT** a naval or airline captain uniform, **NO** peaked cap, no epaulettes),
-> captured **mid-gesture as if cueing / conducting the team** (one hand raised),
-> poised and in control. A normal, well-dressed person. [REGOLA OCCHIALI Matrix —
-> identici a ogni altro agente]. **No readable text, no logos, no emoji.** Leave
-> room for creativity in pose and outfit. **Transparent PNG. 4:3.**
+> Hand-drawn comic-book / graphic-novel illustration — clean inked outlines, flat
+> colours, warm muted palette with subtle green accents (classic adventure-comic look).
+> Full-figure character, standing, on a plain white background, no scene.
+>
+> **The Coordinator** — an elegant, friendly man who leads the team. A normal,
+> well-dressed person in a smart tailored suit with a refined tie (NOT an all-black
+> agent suit), relaxed and confident, **mid-gesture as if calmly directing the team**.
+> Calm, approachable expression — a hint of a smile, NOT stern or angry. Like the rest
+> of the team he wears small, discreet dark oval sunglasses. Keep it elegant and a
+> little witty, not gloomy; leave room for creativity, don't over-detail.
 
-> Alternativa se l'utente preferisce mantenere l'aria "comandante" classica:
-> sostituire "structured tailored jacket" con una giacca strutturata scura con
-> dettagli da divisa sobri (niente cappello da capitano) — autorità senza il
-> cliché navale.
+Note: sfondo bianco/piatto (lo scontorno io dopo con rembg). Niente testo, loghi,
+emoji o riferimenti a file nel prompt.
 
 ---
 
