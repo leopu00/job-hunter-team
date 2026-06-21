@@ -662,6 +662,7 @@ export type DashboardPosition = {
   role_family: string | null
   loc_country: string | null
   loc_city: string | null
+  source: string | null
   salary_min: number | null
   salary_max: number | null
   salary_currency: string
@@ -706,7 +707,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
+    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, source, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )')
     .not('status', 'eq', 'excluded')
     .is('deleted_at', null)
     .order('found_at', { ascending: false })
@@ -751,6 +752,7 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       role_family: p.role_family ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
+      source: p.source ?? null,
       salary_min: typeof salary_min === 'number' ? salary_min : null,
       salary_max: typeof salary_max === 'number' ? salary_max : null,
       salary_currency,

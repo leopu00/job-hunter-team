@@ -783,11 +783,12 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
                       {formatFoundAt(p.last_action_at || p.found_at)}
                     </td>
-                    {/* Titolo — una riga sola (si scrolla in orizzontale) */}
-                    <td className="px-4 py-3 font-medium whitespace-nowrap">
+                    {/* Titolo — una riga, troncato con … se troppo lungo */}
+                    <td className="px-4 py-3 font-medium">
                       <Link
                         href={`/positions/${p.id}`}
-                        className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                        title={p.title ?? undefined}
+                        className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
                       >
                         {p.title}
                       </Link>
