@@ -8,7 +8,6 @@ import {
 import LandingNav from "../components/landing/LandingNav";
 import { LandingFooter } from "../components/landing/LandingCTA";
 import ScrollToTop from "../components/landing/ScrollToTop";
-import ImagePlaceholder from "../components/landing/ImagePlaceholder";
 
 type RoleCopy = { title: string; p1: string; p2: string };
 type Role = {
@@ -226,13 +225,7 @@ function TeamContent() {
                         className="max-w-full max-h-full object-contain"
                       />
                     </div>
-                  ) : (
-                    <ImagePlaceholder
-                      label={c.title}
-                      promptId={role.promptId}
-                      aspect="4 / 3"
-                    />
-                  )}
+                  ) : null}
                 </div>
                 <div className="w-full md:w-1/2 flex flex-col justify-center">
                   <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-4">
