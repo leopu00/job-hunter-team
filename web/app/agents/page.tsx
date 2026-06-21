@@ -38,6 +38,7 @@ const ROLES: Role[] = [
   {
     slug: "scout",
     promptId: "team.scout",
+    img: "/agents-scouts.png",
     it: {
       title: "Gli Scout",
       p1: "Gli Scout sono i segugi che battono il mondo in cerca di offerte: job board, pagine carriere, LinkedIn, canali dei recruiter. Ogni posizione che trovano entra nel sistema, pronta per essere verificata.",
