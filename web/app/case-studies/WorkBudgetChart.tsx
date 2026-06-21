@@ -12,8 +12,8 @@ import type { TeamActivityRole, TeamActivityRoleDay } from "@/lib/team-activity"
 import { ROLE_META } from "@/lib/team-activity-meta";
 
 // Ambra "budget", theme-aware: giallo su dark, scurito in light (vedi
-// --color-budget in globals.css). Distinto dai colori dei ruoli.
-const BUDGET = "var(--color-budget)";
+// --budget-line in globals.css). Distinto dai colori dei ruoli.
+const BUDGET = "var(--budget-line)";
 
 function dm(day: string) {
   return `${day.slice(8, 10)}/${day.slice(5, 7)}`;
