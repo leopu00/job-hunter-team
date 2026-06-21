@@ -11,6 +11,7 @@
 //   • futuro: calibrare i 4 pesi via least-squares ai step events del bridge.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 type Series = Array<{
   ts: string;
@@ -235,6 +236,7 @@ export default function TokenTypesChart() {
   const [hidden, setHidden] = useState<Record<string, boolean>>({
     cache_read_kt: true,
   });
+  const isCloud = useIsCloud();
 
   const minutes = useMemo(
     () => RANGES.find((r) => r.id === range)?.minutes ?? 30,
@@ -261,13 +263,16 @@ export default function TokenTypesChart() {
   useEffect(() => {
     setLoading(true);
     load();
-    const id = setInterval(load, 30_000);
+    // Su CLOUD la sync è on-demand: niente polling-dati continuo (scalerebbe
+    // col numero di tab). In locale resta pieno. L'orologio NON va spento.
+    let id: ReturnType<typeof setInterval> | undefined;
+    if (!isCloud) id = setInterval(load, 30_000);
     const clockId = setInterval(() => setNowTs(Date.now()), 10_000);
     return () => {
-      clearInterval(id);
+      if (id) clearInterval(id);
       clearInterval(clockId);
     };
-  }, [load]);
+  }, [load, isCloud]);
 
   const tMax = nowTs;
   const tMin = nowTs - minutes * 60_000;

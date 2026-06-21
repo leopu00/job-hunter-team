@@ -901,10 +901,22 @@ for (const btn of homeDom.navItems) {
 homeDom.btnStart.addEventListener('click', startTeamFromHome)
 homeDom.btnStop.addEventListener('click', stopTeamFromHome)
 homeDom.btnOpen.addEventListener('click', async () => {
-  // In VPS mode "Apri team" punta alla dashboard cloud, non al
-  // localhost:3000 del container desktop (che non esiste). In Local
-  // mode mantiene il comportamento storico (openBrowser → localhost).
+  // [JHT-VPS-TUNNEL] In VPS mode apri il COCKPIT via tunnel SSH: la dashboard
+  // della VPS in una finestra dell'app, controllo pieno come fosse locale
+  // (l'Host resta localhost). Fallback alla dashboard cloud read-only nel
+  // browser se il tunnel non è disponibile (VPS irraggiungibile, ssh assente).
+  // In Local mode resta il comportamento storico (openBrowser → finestra app).
   if (await isVpsMode()) {
+    const vpsIp = (await window.prefsApi?.get('vpsIp').catch(() => null)) || state.vps?.ip || null
+    if (vpsIp && window.launcherApi.openVpsCockpit) {
+      try {
+        const r = await window.launcherApi.openVpsCockpit(vpsIp)
+        if (r && r.ok) return
+        appendLog(`cockpit VPS: ${r?.error || 'tunnel non disponibile'} — fallback cloud`)
+      } catch (e) {
+        appendLog(`cockpit VPS: ${e.message || e} — fallback cloud`)
+      }
+    }
     try { await window.launcherApi.openExternal(VPS_DASHBOARD_URL) }
     catch (e) { appendLog(`btnOpen vps: ${e.message || e}`) }
     return

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import AgentInteraction from "@/components/AgentInteraction";
 import { useLocale } from "@/lib/use-locale";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
 
 const LOCALE_TAG: Record<string, string> = {
   it: "it-IT",
@@ -495,6 +496,7 @@ export default function CriticoPage() {
   const [live, setLive] = useState<LiveData | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isCloud = useIsCloud();
 
   const fetchLive = useCallback(async () => {
     try {
@@ -512,9 +514,10 @@ export default function CriticoPage() {
   // Polling ogni 8s
   useEffect(() => {
     fetchLive();
+    if (isCloud) return;
     const id = setInterval(fetchLive, 8_000);
     return () => clearInterval(id);
-  }, [fetchLive]);
+  }, [fetchLive, isCloud]);
 
   const stats = live?.stats;
   const queue = live?.queue ?? [];
