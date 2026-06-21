@@ -268,7 +268,7 @@ export default function MapCharts({
     score: boolean;
     donut: boolean;
     remote: boolean;
-  }>({ location: false, score: false, donut: false, remote: false });
+  }>({ location: true, score: true, donut: true, remote: true });
   const toggleCollapse = (k: "location" | "score" | "donut" | "remote") =>
     setCollapsed((c) => ({ ...c, [k]: !c[k] }));
   // Richiesta di "focus" su un pin: cliccando una posizione (con
