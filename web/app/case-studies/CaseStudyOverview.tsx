@@ -183,7 +183,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
       {/* ════════ 1. IL MATCH ════════════════════════════════════ */}
       <section>
         <div className="section-label mb-1">🎯 Quanto bene ti trova lavoro</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-2xl">
+        <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-4xl">
           Ogni posizione viene valutata 0–100 su quanto calza al profilo del
           candidato. Più alto è il punteggio, più forte è il match.
         </p>
@@ -360,7 +360,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
       {/* ════════ 2. DOVE — MAPPA EUROPA ═════════════════════════ */}
       <section>
         <div className="section-label mb-1">🗺️ Dove cerca lavoro · Europa</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-2xl">
+        <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-4xl">
           {nf(cities.reduce((s, c) => s + c.count, 0))} posizioni geolocalizzate
           in{" "}
           <strong className="text-[var(--color-muted)]">
@@ -387,8 +387,8 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
                 <path
                   key={`land${i}`}
                   d={d}
-                  fill="rgba(255,255,255,0.05)"
-                  stroke="rgba(255,255,255,0.16)"
+                  fill="color-mix(in srgb, var(--color-muted) 8%, transparent)"
+                  stroke="color-mix(in srgb, var(--color-muted) 42%, transparent)"
                   strokeWidth={0.7}
                   strokeLinejoin="round"
                 />
@@ -537,7 +537,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
       {/* ════════ 3. CATEGORIE — DONUT ═══════════════════════════ */}
       <section>
         <div className="section-label mb-1">🧩 Che tipo di ruoli</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-2xl">
+        <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-4xl">
           {categories.length} categorie di ruolo emerse automaticamente dai
           dati, senza liste predefinite — il team capisce da solo che tipo di
           lavoro fa per te.
@@ -656,7 +656,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           <div className="section-label mb-1">
             💸 Quanto budget AI consuma nel tempo
           </div>
-          <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-2xl">
+          <p className="text-[11px] text-[var(--color-dim)] mb-4 max-w-4xl">
             Quanta parte del <strong className="text-[var(--color-muted)]">
             piano AI settimanale</strong> il team consuma ogni giorno (il
             «cervello» — il provider — è l&apos;unica cosa che paghi). Il budget
