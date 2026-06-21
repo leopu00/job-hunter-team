@@ -174,27 +174,17 @@ vittoriani eleganti, palette terrosa+verde, NO boy-scout). Affinamenti utente: *
 ⚠️ Ricorda: "Scout/hunters/adventure" fa uscire boy-scout (fazzoletti, borse, safari). Usa
 "elegant investigators / detective-story" + blocco Avoid. Prompt:
 
-> Hand-drawn graphic-novel / comic illustration — clean inked outlines, flat colours,
-> warm earthy muted palette with subtle green accents, vintage detective-story style.
-> Plain white background, no scene.
+> Hand-drawn graphic-novel illustration, clean inked outlines, flat colours, warm earthy
+> palette with green accents, vintage detective style. Plain white background.
 >
-> **Two elegant investigators (the Scouts)** who track down job opportunities — sharp,
-> well-dressed people in smart, slightly vintage tailored clothes (trench coats,
-> waistcoats, pinstripe suits). Both wear the SAME **small round/oval dark sunglasses
-> with thin metal frames** (identical on every agent) — small and discreet, the dark
-> lenses **fully hide the eyes** (no eyes visible; they are virtual agents, only darkness
-> behind the lenses), worn properly over the eyes. **Keep the glasses small and
-> round/oval — NOT large, NOT square, NOT wayfarer or aviator, NOT lowered on the nose.**
-> **Full figure, head to toe — both entirely visible, nothing cropped (character-sheet
-> style).**
-> • On the LEFT: one **sitting at a desk, working at a computer** — full body still
-> visible, the desk does not hide the legs.
-> • The other: **standing, examining a sheet of paper with a magnifying glass.**
-> Calm, curious, confident, a touch witty; not gloomy.
+> **Two elegant detective-style investigators (the Scouts), full figure head-to-toe.**
+> Left: one sitting at a desk working at a computer (legs visible). Right: one standing,
+> examining a sheet with a magnifying glass. Both wear identical **small round/oval dark
+> sunglasses, thin metal frames, lenses fully hiding the eyes** (no eyes visible —
+> virtual agents). Trench coats / waistcoats / pinstripe suits; calm and a touch witty.
 >
-> **Avoid:** boy-scouts or campers, scout uniforms, neckerchiefs / scarves at the neck,
-> safari or explorer outfits, leather satchels. **Large or square sunglasses, visible
-> eyes, glasses pushed down the nose.** No readable text anywhere. Don't over-detail.
+> Avoid: boy-scout / safari outfits, neckerchiefs, large or square glasses, visible eyes,
+> readable text.
 
 > Scontorno: `isnet-general-use` (laptop + foglio da preservare).
 
