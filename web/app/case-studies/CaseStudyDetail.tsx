@@ -16,6 +16,7 @@ export interface PreparedCase {
   id: string;
   label: string;
   tagline: string;
+  subscription: { provider: string; plan: string; price: string };
   profile: CaseStudyProfile;
   run: CaseStudyRun; // events alleggeriti
   activity: TeamActivity;
@@ -165,45 +166,55 @@ export default function CaseStudyDetail({
 
       {/* ── Profilo ───────────────────────────────────────────── */}
       <header>
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6">
-          <div className="flex items-start gap-4">
-            <span
-              className="inline-flex items-center justify-center w-14 h-14 rounded-xl text-lg font-extrabold shrink-0"
-              style={{
-                background:
-                  "color-mix(in srgb, var(--color-blue) 18%, transparent)",
-                color: "var(--color-blue)",
-              }}
-            >
-              {profile.badge}
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8">
+          <div className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[var(--color-dim)]">
+            {current.label} · profilo anonimo
+          </div>
+          <h1 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
+            {profile.headline}
+          </h1>
+          <p className="mt-3 text-[13px] leading-relaxed text-[var(--color-muted)] max-w-3xl">
+            {profile.summary}
+          </p>
+
+          {/* Abbonamento AI usato — l'unica spesa reale, evidenziato */}
+          <div
+            className="mt-5 inline-flex items-center gap-3 rounded-xl px-4 py-2.5"
+            style={{
+              border: "1px solid color-mix(in srgb, #00e676 40%, transparent)",
+              background: "color-mix(in srgb, #00e676 8%, transparent)",
+            }}
+          >
+            <span aria-hidden className="text-[16px]">
+              🧠
             </span>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[var(--color-dim)]">
-                {current.label} · profilo anonimo
+            <div>
+              <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                Abbonamento AI usato
               </div>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
-                {profile.headline}
-              </h1>
-              <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
-                {profile.summary}
-              </p>
+              <div className="text-[13px] font-bold text-[var(--color-white)]">
+                {current.subscription.provider} · {current.subscription.plan}{" "}
+                <span style={{ color: "#00e676" }}>
+                  {current.subscription.price}
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 border-t border-[var(--color-border)] pt-5">
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 border-t border-[var(--color-border)] pt-6">
             {profile.facts.map((f) => (
               <div key={f.label}>
                 <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
                   {f.label}
                 </div>
-                <div className="text-[12px] text-[var(--color-white)] mt-0.5">
+                <div className="text-[13px] font-semibold text-[var(--color-white)] mt-1">
                   {f.value}
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="mt-4">
+          <div className="mt-6">
             <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)] mb-2">
               Città target
             </div>
@@ -211,24 +222,12 @@ export default function CaseStudyDetail({
               {profile.targetCities.map((city) => (
                 <span
                   key={city}
-                  className="text-[10px] rounded-full px-2.5 py-1 border border-[var(--color-border)] text-[var(--color-muted)]"
+                  className="text-[11px] font-medium rounded-full px-2.5 py-1 border border-[var(--color-border)] text-[var(--color-muted)]"
                 >
                   {city}
                 </span>
               ))}
             </div>
-          </div>
-
-          <div className="mt-5 rounded-lg border-l-2 border-[#00e676] bg-[var(--color-bg)] px-4 py-3">
-            <div
-              className="text-[10px] font-semibold uppercase tracking-wide mb-1"
-              style={{ color: "#00e676" }}
-            >
-              💡 Perché questi risultati
-            </div>
-            <p className="text-[12px] leading-relaxed text-[var(--color-muted)]">
-              {profile.why}
-            </p>
           </div>
         </div>
 

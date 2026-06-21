@@ -43,6 +43,8 @@ export interface CaseStudyMeta {
   seniority: string; // livello di carriera, es. "Early career"
   geos: string[]; // aree geografiche, es. ["Europa"]
   model: string; // modello LLM usato dal team, es. "Codex"
+  /** abbonamento AI usato per questo run (l'unica spesa reale) */
+  subscription: { provider: string; plan: string; price: string };
   profile: CaseStudyProfile;
   run: CaseStudyRun;
 }
@@ -56,6 +58,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
     seniority: "Early career",
     geos: ["Europa"],
     model: "Codex",
+    subscription: { provider: "OpenAI Codex", plan: "Pro", price: "~€100/mese" },
     profile: {
       badge: "B1",
       headline: "Professionista finance, inizio carriera",
