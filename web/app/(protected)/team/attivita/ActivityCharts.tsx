@@ -77,7 +77,7 @@ function TemporalScatter({
   onMove: (e: React.MouseEvent) => void;
   onHide: () => void;
 }) {
-  const ZOOMS = [1, 2, 4, 8, 16, 32];
+  const ZOOMS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512];
   const [zoom, setZoom] = useState(1);
   // Misura la larghezza del piano: a zoom 1 il grafico riempie tutto il container
   // (primo giorno a sinistra, ultimo al bordo destro); zoom>1 espande → scroll.
