@@ -12,13 +12,19 @@ Convenzione `promptId`: `area.nome` (es. `team.analisti`, `hero.main`).
 
 ## 🔁 Blocco STYLE condiviso (copiare in testa a ogni prompt)
 
-> Hand-drawn comic-book / graphic-novel illustration — clean inked outlines, flat
-> colours, a **warm muted palette with subtle green accents** (classic adventure-comic
-> look), light halftone / paper-grain texture; not 3D, not photorealistic, not a
-> glossy AI painting. The agents look like **normal, friendly people** — calm,
-> approachable expressions (NOT stern or angry), **varied elegant clothing** (NOT
-> all-black agent suits). Elegant, a touch witty. Riferimento di stile: l'immagine
-> dei tre agenti della home (`web/public/landing-team.png`).
+> Hand-drawn **Western graphic-novel / European comic** illustration (realistic adult
+> proportions — **NOT anime / manhwa / webtoon**) — clean inked outlines, flat colours,
+> a **warm muted palette with subtle green accents**, light halftone / paper-grain
+> texture; not 3D, not photorealistic, not a glossy AI painting. The agents are
+> **mature adult professionals (late 30s–40s), experienced and confident — NOT teenagers
+> or twenty-somethings, NOT youthful idealized faces.** Normal, friendly people, calm
+> approachable expressions (NOT stern), varied elegant clothing (NOT all-black agent
+> suits). Elegant, a touch witty. Riferimento di stile: i tre agenti della home
+> (`web/public/landing-team.png`).
+
+> 🧒 **Trappola "pischelli coreani":** "comic / graphic-novel / hand-drawn" senza
+> vincoli porta il generatore verso volti **webtoon/manhwa giovanissimi**. Ancorare
+> SEMPRE: età adulta (35–45) + "Western/European comic style, not anime/manhwa".
 
 **Regola occhiali (sempre):** ogni agente indossa gli **stessi** piccoli occhiali da
 sole — lenti ovali scure, discrete — come tratto distintivo condiviso del team. Sono
@@ -174,17 +180,19 @@ vittoriani eleganti, palette terrosa+verde, NO boy-scout). Affinamenti utente: *
 ⚠️ Ricorda: "Scout/hunters/adventure" fa uscire boy-scout (fazzoletti, borse, safari). Usa
 "elegant investigators / detective-story" + blocco Avoid. Prompt:
 
-> Hand-drawn graphic-novel illustration, clean inked outlines, flat colours, warm earthy
-> palette with green accents, vintage detective style. Plain white background.
+> Hand-drawn Western graphic-novel illustration (realistic proportions, NOT anime/manhwa),
+> clean inked outlines, flat colours, warm earthy palette with green accents, vintage
+> detective style. Plain white background.
 >
-> **Two elegant detective-style investigators (the Scouts), full figure head-to-toe.**
-> Left: one sitting at a desk working at a computer (legs visible). Right: one standing,
-> examining a sheet with a magnifying glass. Both wear identical **small round/oval dark
-> sunglasses, thin metal frames, lenses fully hiding the eyes** (no eyes visible —
-> virtual agents). Trench coats / waistcoats / pinstripe suits; calm and a touch witty.
+> **Two elegant detective-style investigators (the Scouts), full figure head-to-toe —
+> mature adults in their late 30s–40s (NOT teenagers or twenty-somethings).** Left: one
+> sitting at a desk working at a computer (legs visible). Right: one standing, examining a
+> sheet with a magnifying glass. Both wear identical **small round/oval dark sunglasses,
+> thin metal frames, lenses fully hiding the eyes** (no eyes visible — virtual agents).
+> Trench coats / waistcoats / pinstripe suits; calm and a touch witty.
 >
-> Avoid: boy-scout / safari outfits, neckerchiefs, large or square glasses, visible eyes,
-> readable text.
+> Avoid: anime/manhwa youthful faces, teenagers, boy-scout / safari outfits, neckerchiefs,
+> large or square glasses, visible eyes, readable text.
 
 > Scontorno: `isnet-general-use` (laptop + foglio da preservare).
 
