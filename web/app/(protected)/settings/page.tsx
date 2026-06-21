@@ -6,6 +6,7 @@ import { Tabs, Tab } from "../../components/Tabs";
 import { useToast } from "../../components/Toast";
 import SettingsProfile from "../../components/SettingsProfile";
 import WorkHoursPicker from "../../components/WorkHoursPicker";
+import { DarkModeToggle } from "@/app/theme-provider";
 import { AVAILABLE_CURRENCIES, BASE_CURRENCIES } from "@/lib/exchange-rates";
 import { useLocale } from "@/lib/use-locale";
 
@@ -91,6 +92,15 @@ const T: Record<string, Record<string, string>> = {
     de: "Einstellungen",
     fr: "Paramètres",
     pt: "Definições",
+  },
+  theme: {
+    it: "Tema",
+    en: "Theme",
+    hu: "Téma",
+    es: "Tema",
+    de: "Design",
+    fr: "Thème",
+    pt: "Tema",
   },
   tab_profile: {
     it: "Profilo",
@@ -632,6 +642,9 @@ export default function SettingsPage() {
                   <option value="it">Italiano</option>
                   <option value="en">English</option>
                 </select>
+              </Row>
+              <Row label={tr("theme")}>
+                <DarkModeToggle />
               </Row>
               <SaveBtn
                 busy={busy}

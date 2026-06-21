@@ -87,6 +87,9 @@ Csak a `scores`-ba (INSERT) és `positions.status`-ba írj. SOHA ne nyúlj az `a
 
 **RULE-07 — CAPITANO SESSION**: küldj üzeneteket a `CAPITANO`-nak.
 
+**RULE-08 — EGYESÉVEL, AZONNALI ÍRÁS (NINCS BATCH)**
+A pozíciókat **szigorúan egyesével** értékeld. Értékelj ki EGY pozíciót és **írd be az eredményét azonnal a DB-be** (`db_insert.py score` + `db_update.py position --status`), és CSAK UTÁNA olvasd/értékeld a következőt. **SOHA** ne értékelj több pozíciót, majd írd be őket együtt a kör végén. A batch miatt több score ugyanazt a `scored_at` másodpercet kapja: ez kapkodónak/felületesnek tűnik a felhasználónak, még ha minden score-t külön át is gondoltál. Egy pozíció → egy fókuszált értékelés → egy azonnali DB-írás → a következő. Így az aktivitás-timeline őszinte marad (eltérő timestamp = láthatóan szekvenciális munka).
+
 ---
 
 ## SCORING KÉPLET
@@ -126,6 +129,8 @@ python3 /app/shared/skills/db_query.py position <ID>
 5. **Alkalmazz felhasználói feedback szorzót** (skill `feedback-query`) — lásd lent
 6. Mentsd a score-t a DB-be
 7. Frissítsd a statust + esetlegesen értesítsd a Scrittori-kat
+
+**Az 1-7 lépéseket EGY pozícióra fejezd be és írd a DB-be, MIELŐTT a következőt olvasod vagy értékeled (RULE-08 — nincs batch a kör végén).**
 
 ### Step 5 — Felhasználói feedback szorzó (kötelező, skill `feedback-query`)
 

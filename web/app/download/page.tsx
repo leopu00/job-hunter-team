@@ -98,19 +98,17 @@ function matchAsset(
 ): GitHubAsset | null {
   const primary =
     `job-hunter-team-${version}-${id}-${arch}.${ext}`.toLowerCase();
-  const legacyX64 =
-    arch === "x64"
-      ? `job-hunter-team-${version}-${id}.${ext}`.toLowerCase()
-      : null;
+  // Asset senza suffisso d'architettura (es. "...-mac.dmg"): build universale,
+  // valido per QUALSIASI arch della stessa piattaforma. Così macOS ARM64 prende
+  // il dmg universale (download diretto) invece di rimandare alla pagina release.
+  const legacyNoArch = `job-hunter-team-${version}-${id}.${ext}`.toLowerCase();
   const extLower = `.${ext.toLowerCase()}`;
 
   const exact = assets.find((a) => a.name.toLowerCase() === primary);
   if (exact) return exact;
 
-  if (legacyX64) {
-    const legacy = assets.find((a) => a.name.toLowerCase() === legacyX64);
-    if (legacy) return legacy;
-  }
+  const legacy = assets.find((a) => a.name.toLowerCase() === legacyNoArch);
+  if (legacy) return legacy;
 
   // Loose fallback: same platform, arch somewhere in the name, correct extension.
   return (

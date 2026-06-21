@@ -105,6 +105,7 @@ export default async function DashboardPage() {
         role_family: null,
         loc_country: null,
         loc_city: null,
+        source: (p as { source?: string | null }).source ?? null,
         salary_min: p.salary_declared_min ?? null,
         salary_max: p.salary_declared_max ?? null,
         salary_currency: "EUR",
@@ -308,7 +309,7 @@ export default async function DashboardPage() {
                 recent={recentActivity}
                 max={8}
                 viewAllHref="/team/attivita/log"
-                maxHeightClass="max-h-[300px]"
+                scroll={false}
               />
             </div>
           )}
@@ -348,6 +349,7 @@ export default async function DashboardPage() {
                   colCritic: t.col_critic,
                   colSalary: t.col_salary,
                   colMonthly: t.col_monthly,
+                  colSource: t.col_source,
                   colStatus: t.col_status,
                   colUpdated: t.col_updated,
                   colUpdatedBy: t.col_updated_by,

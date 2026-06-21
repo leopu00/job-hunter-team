@@ -7,7 +7,6 @@ export const de: Record<string, string> = {
   nav_how: "So funktioniert's",
   nav_github: "GitHub",
   nav_download: "Download",
-  nav_case_studies: "Fallstudien",
   nav_project: "Projekt",
   nav_demo: "Demo",
   nav_guide: "Anleitung",
