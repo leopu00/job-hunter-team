@@ -576,7 +576,7 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
            p.loc_country, p.loc_city,
            p.role_family, p.created_at,
            s.total_score as score,
-           p.is_remote
+           p.is_remote, p.remote_type
     FROM positions p
     LEFT JOIN scores s ON s.position_id = p.id
     WHERE p.status != 'excluded'
@@ -590,6 +590,7 @@ export function getPositionsWithoutCoordsLocal(ws: string) {
     role_family: r.role_family as string | null,
     score: typeof r.score === 'number' ? r.score : null,
     is_remote: !!r.is_remote,
+    remote_type: (r.remote_type as string | null) ?? null,
     location: (r.location as string | null) ?? null,
     loc_country: (r.loc_country as string | null) ?? null,
     loc_city: (r.loc_city as string | null) ?? null,

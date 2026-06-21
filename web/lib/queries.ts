@@ -908,6 +908,7 @@ export type PositionNoCoord = {
   role_family: string | null
   score: number | null
   is_remote: boolean
+  remote_type: string | null
   location: string | null
   loc_country: string | null
   loc_city: string | null
@@ -921,7 +922,7 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('positions')
-    .select('id, title, company, status, role_family, office_lat, is_remote, location, loc_country, loc_city, created_at, scores ( total_score )')
+    .select('id, title, company, status, role_family, office_lat, is_remote, remote_type, location, loc_country, loc_city, created_at, scores ( total_score )')
     .not('status', 'eq', 'excluded')
     .is('office_lat', null)
     .is('deleted_at', null)
@@ -936,6 +937,7 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
       role_family: p.role_family ?? null,
       score: typeof score?.total_score === 'number' ? score.total_score : null,
       is_remote: !!p.is_remote,
+      remote_type: p.remote_type ?? null,
       location: p.location ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
