@@ -11,7 +11,6 @@ const NAV_KEYS: { href: string; key: string; accent?: string }[] = [
   { href: '/positions',    key: 'nav_positions' },
   { href: '/team',         key: 'nav_team' },
   { href: '/profile',      key: 'nav_profile' },
-  { href: '/credentials',  key: 'nav_settings' },
 ]
 
 export default function NavbarMobile() {
@@ -29,9 +28,9 @@ export default function NavbarMobile() {
         aria-expanded={open}
         aria-controls="app-mobile-nav"
       >
-        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: open ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
-        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: open ? 0 : 1 }} />
-        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: open ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
+        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-bright)', transition: 'all 0.2s', transform: open ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
+        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-bright)', transition: 'all 0.2s', opacity: open ? 0 : 1 }} />
+        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-bright)', transition: 'all 0.2s', transform: open ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
       </button>
 
       {open && (

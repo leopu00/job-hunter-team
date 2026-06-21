@@ -45,7 +45,6 @@ export default function NavLinks() {
   return (
     <div className="flex items-center gap-1">
       <NavLink href="/dashboard" pathname={pathname} tour="dashboard">{t('nav_dashboard')}</NavLink>
-      <NavLink href="/analisi" pathname={pathname}>{t('nav_analisi')}</NavLink>
       <NavLink href="/map" pathname={pathname}>{t('nav_map')}</NavLink>
       <NavLink href="/positions" pathname={pathname} tour="positions">{t('nav_positions')}</NavLink>
       <NavLink href="/team" pathname={pathname} tour="team" badge={pending.team} badgeLabel={tr('setup_pending')}>{t('nav_team')}</NavLink>
