@@ -33,10 +33,16 @@ export interface CaseStudyUsageDay {
   week: string // giovedì di riferimento (settimana di budget)
 }
 
+export interface CaseStudyWorkingHours {
+  timezone: string | null
+  windows: { days: string[]; start: string | null; end: string | null }[]
+}
+
 export interface CaseStudyUsage {
   provider: string
   unit: string // es. "weekly_budget_pct"
   daily: CaseStudyUsageDay[]
+  workingHours?: CaseStudyWorkingHours | null
 }
 
 export interface CaseStudyRun {

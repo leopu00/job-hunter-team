@@ -6567,6 +6567,24 @@
         "pct": 14,
         "week": "2026-06-18"
       }
-    ]
+    ],
+    "workingHours": {
+      "timezone": "Europe/Rome",
+      "windows": [
+        {
+          "days": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "sun"
+          ],
+          "start": "08:00",
+          "end": "20:00"
+        }
+      ]
+    }
   }
 }
