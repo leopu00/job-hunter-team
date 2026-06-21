@@ -2,20 +2,20 @@
   "source": "betaC-codex",
   "tsRange": [
     "2026-06-03 13:43:14",
-    "2026-06-20 16:47:02"
+    "2026-06-21 17:47:46"
   ],
   "totals": {
-    "positions": 377,
-    "scored": 261,
-    "excluded": 116
+    "positions": 398,
+    "scored": 279,
+    "excluded": 119
   },
   "match": {
-    "scored": 321,
-    "avg": 69.9,
+    "scored": 339,
+    "avg": 70.2,
     "min": 34,
     "max": 94,
-    "strong70": 177,
-    "strong80": 93,
+    "strong70": 189,
+    "strong80": 102,
     "buckets": [
       {
         "label": "0-39",
@@ -23,347 +23,473 @@
       },
       {
         "label": "40-59",
-        "n": 64
+        "n": 66
       },
       {
         "label": "60-69",
-        "n": 72
+        "n": 76
       },
       {
         "label": "70-79",
-        "n": 84
+        "n": 87
       },
       {
         "label": "80-100",
-        "n": 93
+        "n": 102
       }
     ],
     "composition": [
       {
         "key": "stack",
         "label": "Competenze",
-        "avg": 19.5
+        "avg": 20.1
       },
       {
         "key": "exp",
         "label": "Esperienza",
-        "avg": 7.5
+        "avg": 7.6
       },
       {
         "key": "strategic",
         "label": "Fit strategico",
-        "avg": 8.0
+        "avg": 8.2
       },
       {
         "key": "remote",
         "label": "Modalita",
-        "avg": 16.1
+        "avg": 16.5
       },
       {
         "key": "salary",
         "label": "Retribuzione",
-        "avg": 7.8
+        "avg": 7.9
       }
+    ],
+    "scores": [
+      34,
+      34,
+      35,
+      36,
+      38,
+      38,
+      38,
+      39,
+      41,
+      41,
+      42,
+      43,
+      43,
+      44,
+      44,
+      45,
+      45,
+      46,
+      46,
+      46,
+      46,
+      46,
+      46,
+      46,
+      47,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      48,
+      49,
+      49,
+      49,
+      49,
+      49,
+      49,
+      51,
+      52,
+      52,
+      54,
+      55,
+      55,
+      55,
+      55,
+      55,
+      56,
+      56,
+      56,
+      56,
+      56,
+      56,
+      57,
+      57,
+      57,
+      57,
+      57,
+      58,
+      58,
+      58,
+      58,
+      58,
+      58,
+      58,
+      58,
+      58,
+      59,
+      59,
+      59,
+      60,
+      60,
+      60,
+      60,
+      61,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      62,
+      63,
+      63,
+      63,
+      63,
+      63,
+      63,
+      63,
+      64,
+      64,
+      64,
+      64,
+      64,
+      64,
+      64,
+      64,
+      65,
+      65,
+      65,
+      65,
+      65,
+      65,
+      65,
+      66,
+      66,
+      66,
+      66,
+      66,
+      66,
+      66,
+      66,
+      66,
+      67,
+      67,
+      67,
+      67,
+      67,
+      67,
+      67,
+      68,
+      68,
+      68,
+      68,
+      68,
+      68,
+      68,
+      68,
+      68,
+      68,
+      68,
+      68,
+      68,
+      69,
+      69,
+      69,
+      69,
+      69,
+      69,
+      69,
+      70,
+      70,
+      70,
+      70,
+      70,
+      70,
+      70,
+      70,
+      70,
+      71,
+      71,
+      71,
+      71,
+      71,
+      71,
+      72,
+      72,
+      72,
+      72,
+      72,
+      72,
+      72,
+      73,
+      73,
+      73,
+      73,
+      73,
+      74,
+      74,
+      74,
+      74,
+      74,
+      74,
+      74,
+      74,
+      74,
+      74,
+      74,
+      74,
+      75,
+      75,
+      75,
+      75,
+      76,
+      76,
+      76,
+      76,
+      76,
+      76,
+      76,
+      76,
+      76,
+      76,
+      76,
+      76,
+      76,
+      77,
+      77,
+      77,
+      77,
+      77,
+      77,
+      77,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      78,
+      79,
+      79,
+      79,
+      79,
+      79,
+      79,
+      79,
+      79,
+      79,
+      80,
+      80,
+      80,
+      80,
+      80,
+      80,
+      80,
+      80,
+      80,
+      80,
+      81,
+      81,
+      81,
+      81,
+      81,
+      81,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      82,
+      83,
+      83,
+      83,
+      83,
+      83,
+      83,
+      83,
+      83,
+      84,
+      84,
+      84,
+      84,
+      84,
+      84,
+      84,
+      84,
+      84,
+      84,
+      84,
+      84,
+      85,
+      85,
+      85,
+      85,
+      85,
+      85,
+      85,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86,
+      86,
+      87,
+      87,
+      87,
+      87,
+      87,
+      87,
+      87,
+      87,
+      87,
+      88,
+      88,
+      88,
+      88,
+      88,
+      88,
+      88,
+      89,
+      89,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      90,
+      92,
+      92,
+      92,
+      92,
+      94,
+      94
     ]
   },
   "categories": [
     {
-      "name": "Business & Operations",
-      "count": 240
-    },
-    {
-      "name": "Non categorizzato",
-      "count": 19
-    },
-    {
-      "name": "Other",
-      "count": 18
-    },
-    {
       "name": "Corporate Finance / FP&A",
-      "count": 12
-    },
-    {
-      "name": "Impact Investing / Private Markets",
-      "count": 4
-    },
-    {
-      "name": "Infrastructure / Real Assets Investment",
-      "count": 4
-    },
-    {
-      "name": "Corporate Credit Analysis",
-      "count": 3
-    },
-    {
-      "name": "Investment Banking / Leveraged Finance",
-      "count": 3
-    },
-    {
-      "name": "Investment Risk Management",
-      "count": 3
-    },
-    {
-      "name": "Macro / Event-Driven Trading Research",
-      "count": 3
-    },
-    {
-      "name": "Private Credit / Direct Lending",
-      "count": 3
-    },
-    {
-      "name": "Private Equity Secondaries",
-      "count": 3
-    },
-    {
-      "name": "Venture Capital / Growth Investing",
-      "count": 3
-    },
-    {
-      "name": "Fundamental Research / Market Intelligence",
-      "count": 2
+      "count": 61
     },
     {
       "name": "Investment Banking / M&A Advisory",
-      "count": 2
+      "count": 56
     },
     {
-      "name": "Middle Office / Fund Operations",
-      "count": 2
+      "name": "Private Equity & Venture Capital",
+      "count": 55
     },
     {
-      "name": "Multi-Asset Investment Management",
-      "count": 2
+      "name": "Credit & Private Debt",
+      "count": 43
     },
     {
-      "name": "Private Capital Research",
-      "count": 2
+      "name": "Public Markets & Investment Research",
+      "count": 42
     },
     {
-      "name": "Quantitative Investment Research",
-      "count": 2
+      "name": "Risk, Compliance & Valuation",
+      "count": 41
     },
     {
-      "name": "Structured Credit / Securitized Products",
-      "count": 2
+      "name": "Investment Operations & Fund Services",
+      "count": 40
     },
     {
-      "name": "Venture Capital Investing",
-      "count": 2
+      "name": "Other",
+      "count": 33
     },
     {
-      "name": "Alternative Data / Equity Research",
-      "count": 1
-    },
-    {
-      "name": "Capital Markets Advisory",
-      "count": 1
-    },
-    {
-      "name": "Climate Tech / Venture & Growth Investing",
-      "count": 1
-    },
-    {
-      "name": "Corporate Credit / Private Credit",
-      "count": 1
-    },
-    {
-      "name": "Credit Research / High Yield",
-      "count": 1
-    },
-    {
-      "name": "Credit Research / Leveraged Finance",
-      "count": 1
-    },
-    {
-      "name": "Credit Risk Data / Automation",
-      "count": 1
-    },
-    {
-      "name": "Energy Transition Investment / Project Finance",
-      "count": 1
-    },
-    {
-      "name": "Event-Driven / Special Situations Investing",
-      "count": 1
-    },
-    {
-      "name": "Financial Communications / Investor Relations Advisory",
-      "count": 1
-    },
-    {
-      "name": "Financial Data / Analytics",
-      "count": 1
-    },
-    {
-      "name": "Financial Planning & Analysis",
-      "count": 1
-    },
-    {
-      "name": "Financial Restructuring / Investment Banking",
-      "count": 1
-    },
-    {
-      "name": "Forensic Due Diligence / Business Intelligence",
-      "count": 1
-    },
-    {
-      "name": "Fund Flow / Quantitative Investment Research",
-      "count": 1
-    },
-    {
-      "name": "Fund Research / Manager Selection",
-      "count": 1
-    },
-    {
-      "name": "Hedge Fund Research / Manager Selection",
-      "count": 1
-    },
-    {
-      "name": "Infrastructure / Real Assets Investing",
-      "count": 1
-    },
-    {
-      "name": "Infrastructure Credit / Private Credit",
-      "count": 1
-    },
-    {
-      "name": "Investment Banking / Energy Transition M&A",
-      "count": 1
-    },
-    {
-      "name": "Investment Banking / Financial Sponsors",
-      "count": 1
-    },
-    {
-      "name": "Investment Banking / Infrastructure M&A",
-      "count": 1
-    },
-    {
-      "name": "Investment Banking / M&A and Capital Markets",
-      "count": 1
-    },
-    {
-      "name": "Investment Banking / Real Estate Advisory",
-      "count": 1
-    },
-    {
-      "name": "Investment Data / Alpha Research Support",
-      "count": 1
-    },
-    {
-      "name": "Long/Short Equity Investing",
-      "count": 1
-    },
-    {
-      "name": "Multi-Asset Fund Selection / Asset Management",
-      "count": 1
-    },
-    {
-      "name": "PE Value Creation / CFO Advisory",
-      "count": 1
-    },
-    {
-      "name": "Portfolio Valuation / Alternative Investments",
-      "count": 1
-    },
-    {
-      "name": "Private Credit / Asset Finance",
-      "count": 1
-    },
-    {
-      "name": "Private Credit / Special Situations",
-      "count": 1
-    },
-    {
-      "name": "Private Equity Diligence / AI Consulting",
-      "count": 1
-    },
-    {
-      "name": "Private Equity Secondaries Investing",
-      "count": 1
-    },
-    {
-      "name": "Private Markets / Investment Analysis",
-      "count": 1
-    },
-    {
-      "name": "Private Markets Distribution / Capital Raising",
-      "count": 1
-    },
-    {
-      "name": "Product & Project Mgmt",
-      "count": 1
-    },
-    {
-      "name": "Public Equities / Long-Only Investment Research",
-      "count": 1
-    },
-    {
-      "name": "Real Estate Debt Origination / Underwriting",
-      "count": 1
-    },
-    {
-      "name": "Renewable Infrastructure M&A / Project Finance",
-      "count": 1
-    },
-    {
-      "name": "Renewable Infrastructure Portfolio Management",
-      "count": 1
-    },
-    {
-      "name": "Structured Finance / Ratings Advisory",
-      "count": 1
-    },
-    {
-      "name": "Transaction Execution / Private Markets Advisory",
-      "count": 1
-    },
-    {
-      "name": "Venture Capital Portfolio Operations",
-      "count": 1
+      "name": "Infrastructure / Real Assets Investment",
+      "count": 27
     }
+  ],
+  "sources": [
+    { "name": "linkedin", "count": 144 },
+    { "name": "greenhouse", "count": 50 },
+    { "name": "workday", "count": 33 },
+    { "name": "company-careers", "count": 31 },
+    { "name": "ashby", "count": 22 },
+    { "name": "official-careers-direct", "count": 22 },
+    { "name": "lever", "count": 18 },
+    { "name": "efinancialcareers", "count": 10 },
+    { "name": "smartrecruiters", "count": 8 },
+    { "name": "bebee", "count": 5 },
+    { "name": "bnpparibas-careers", "count": 5 },
+    { "name": "venturecapitalcareers", "count": 5 },
+    { "name": "Altre", "count": 45 }
   ],
   "countries": [
     {
-      "name": "United Kingdom",
-      "code": "GB",
-      "count": 59
+      "name": "Portugal",
+      "code": "PT",
+      "count": 51
     },
     {
       "name": "Switzerland",
       "code": "CH",
-      "count": 56
-    },
-    {
-      "name": "Portugal",
-      "code": "PT",
-      "count": 52
+      "count": 50
     },
     {
       "name": "Spain",
       "code": "ES",
-      "count": 31
+      "count": 27
     },
     {
       "name": "Ireland",
       "code": "IE",
-      "count": 23
+      "count": 22
     },
     {
       "name": "Italy",
       "code": "IT",
-      "count": 20
+      "count": 19
     },
     {
       "name": "Luxembourg",
       "code": "LU",
-      "count": 20
-    },
-    {
-      "name": "Austria",
-      "code": "AT",
-      "count": 15
+      "count": 18
     },
     {
       "name": "Germany",
@@ -371,24 +497,34 @@
       "count": 15
     },
     {
+      "name": "Austria",
+      "code": "AT",
+      "count": 13
+    },
+    {
       "name": "Netherlands",
       "code": "NL",
-      "count": 12
+      "count": 10
     },
     {
       "name": "France",
       "code": "FR",
-      "count": 10
-    },
-    {
-      "name": "Sweden",
-      "code": "SE",
-      "count": 6
+      "count": 8
     },
     {
       "name": "Hungary",
       "code": "HU",
-      "count": 4
+      "count": 5
+    },
+    {
+      "name": "Sweden",
+      "code": "SE",
+      "count": 5
+    },
+    {
+      "name": "Poland",
+      "code": "PL",
+      "count": 3
     },
     {
       "name": "Belgium",
@@ -396,8 +532,8 @@
       "count": 2
     },
     {
-      "name": "Poland",
-      "code": "PL",
+      "name": "United Kingdom",
+      "code": "GB",
       "count": 2
     },
     {
@@ -411,48 +547,24 @@
       "count": 1
     },
     {
-      "name": "Greece",
-      "code": "GR",
-      "count": 1
-    },
-    {
       "name": "Turkey",
       "code": "TR",
-      "count": 1
-    },
-    {
-      "name": "United States",
-      "code": "US",
       "count": 1
     }
   ],
   "cities": [
     {
-      "city": "London",
-      "country": "United Kingdom",
-      "lat": 51.5129,
-      "lon": -0.1152,
-      "count": 57
-    },
-    {
       "city": "Lisbon",
       "country": "Portugal",
-      "lat": 38.7262,
-      "lon": -9.1593,
-      "count": 27
+      "lat": 38.7254,
+      "lon": -9.1607,
+      "count": 23
     },
     {
       "city": "Zurich",
       "country": "Switzerland",
       "lat": 47.3706,
-      "lon": 8.534,
-      "count": 18
-    },
-    {
-      "city": "Geneva",
-      "country": "Switzerland",
-      "lat": 46.2011,
-      "lon": 6.1427,
+      "lon": 8.5337,
       "count": 17
     },
     {
@@ -463,11 +575,18 @@
       "count": 16
     },
     {
+      "city": "Geneva",
+      "country": "Switzerland",
+      "lat": 46.2007,
+      "lon": 6.1417,
+      "count": 14
+    },
+    {
       "city": "Madrid",
       "country": "Spain",
-      "lat": 40.44,
-      "lon": -3.6892,
-      "count": 14
+      "lat": 40.4427,
+      "lon": -3.6885,
+      "count": 12
     },
     {
       "city": "Milan",
@@ -479,16 +598,9 @@
     {
       "city": "Vienna",
       "country": "Austria",
-      "lat": 48.2079,
-      "lon": 16.3833,
-      "count": 10
-    },
-    {
-      "city": "Barcelona",
-      "country": "Spain",
-      "lat": 41.3906,
-      "lon": 2.168,
-      "count": 7
+      "lat": 48.2107,
+      "lon": 16.3841,
+      "count": 8
     },
     {
       "city": "Amsterdam",
@@ -496,6 +608,13 @@
       "lat": 52.3489,
       "lon": 4.8857,
       "count": 6
+    },
+    {
+      "city": "Barcelona",
+      "country": "Spain",
+      "lat": 41.3835,
+      "lon": 2.1669,
+      "count": 5
     },
     {
       "city": "Stockholm",
@@ -533,11 +652,11 @@
       "count": 3
     },
     {
-      "city": "Athens",
-      "country": "Greece",
-      "lat": 38.0345,
-      "lon": 23.7715,
-      "count": 1
+      "city": "London",
+      "country": "United Kingdom",
+      "lat": 51.5202,
+      "lon": -0.0918,
+      "count": 2
     },
     {
       "city": "Baar",
@@ -674,9 +793,9 @@
     }
   ],
   "salary": {
-    "n": 14,
-    "avgMin": 48219,
-    "avgMax": 66926
+    "n": 17,
+    "avgMin": 43994,
+    "avgMax": 59871
   },
   "agents": [
     "analista-1",
@@ -6406,6 +6525,438 @@
       "ts": "2026-06-20T16:47:02Z",
       "agent": "scorer-3",
       "action": "scored"
+    },
+    {
+      "ts": "2026-06-20T20:53:21Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-20T20:54:51Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-20T20:57:22Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T06:03:25Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T06:04:58Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T06:06:45Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T06:09:22Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T06:11:19Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T06:12:29Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T06:39:40Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T06:39:41Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T06:39:41Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T07:01:51Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T07:03:21Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-21T07:04:54Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-21T07:10:37Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T07:14:20Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T07:18:41Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T07:23:36Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T07:46:50Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T07:47:55Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T07:48:55Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T08:02:37Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T08:02:37Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T08:02:37Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T09:05:51Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T09:05:52Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T09:08:02Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T09:16:34Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T09:18:08Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T09:19:29Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-21T09:22:19Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T09:22:20Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T10:36:28Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T10:36:28Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T10:41:04Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T10:47:02Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T10:47:51Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T10:49:01Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T11:02:35Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T11:02:35Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T11:02:35Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T11:26:22Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T11:26:51Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T11:31:33Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T11:38:22Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T11:43:18Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T11:48:46Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T12:18:52Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T12:18:52Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T12:18:52Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T13:22:26Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T13:33:08Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T13:46:45Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T15:18:46Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T15:31:59Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T16:17:05Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-21T17:18:40Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-21T17:32:03Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-21T17:47:46Z",
+      "agent": "scorer-6",
+      "action": "scored"
     }
-  ]
+  ],
+  "usage": {
+    "provider": "codex",
+    "unit": "weekly_budget_pct",
+    "daily": [
+      {
+        "day": "2026-06-03",
+        "pct": 19,
+        "cum": 19,
+        "week": "2026-05-28"
+      },
+      {
+        "day": "2026-06-04",
+        "pct": 31,
+        "cum": 31,
+        "week": "2026-06-04"
+      },
+      {
+        "day": "2026-06-05",
+        "pct": 28,
+        "cum": 59,
+        "week": "2026-06-04"
+      },
+      {
+        "day": "2026-06-06",
+        "pct": 20,
+        "cum": 79,
+        "week": "2026-06-04"
+      },
+      {
+        "day": "2026-06-07",
+        "pct": 21,
+        "cum": 100,
+        "week": "2026-06-04"
+      },
+      {
+        "day": "2026-06-08",
+        "pct": 0,
+        "cum": 100,
+        "week": "2026-06-04"
+      },
+      {
+        "day": "2026-06-09",
+        "pct": 0,
+        "cum": 100,
+        "week": "2026-06-04"
+      },
+      {
+        "day": "2026-06-11",
+        "pct": 9,
+        "cum": 9,
+        "week": "2026-06-11"
+      },
+      {
+        "day": "2026-06-12",
+        "pct": 2,
+        "cum": 11,
+        "week": "2026-06-11"
+      },
+      {
+        "day": "2026-06-13",
+        "pct": 26,
+        "cum": 37,
+        "week": "2026-06-11"
+      },
+      {
+        "day": "2026-06-14",
+        "pct": 21,
+        "cum": 58,
+        "week": "2026-06-11"
+      },
+      {
+        "day": "2026-06-15",
+        "pct": 18,
+        "cum": 76,
+        "week": "2026-06-11"
+      },
+      {
+        "day": "2026-06-16",
+        "pct": 13,
+        "cum": 89,
+        "week": "2026-06-11"
+      },
+      {
+        "day": "2026-06-17",
+        "pct": 10,
+        "cum": 99,
+        "week": "2026-06-11"
+      },
+      {
+        "day": "2026-06-18",
+        "pct": 13,
+        "cum": 13,
+        "week": "2026-06-18"
+      },
+      {
+        "day": "2026-06-19",
+        "pct": 11,
+        "cum": 24,
+        "week": "2026-06-18"
+      },
+      {
+        "day": "2026-06-20",
+        "pct": 16,
+        "cum": 40,
+        "week": "2026-06-18"
+      },
+      {
+        "day": "2026-06-21",
+        "pct": 16,
+        "cum": 56,
+        "week": "2026-06-18"
+      }
+    ],
+    "workingHours": {
+      "timezone": "Europe/Rome",
+      "windows": [
+        {
+          "days": [
+            "mon",
+            "tue",
+            "wed",
+            "thu",
+            "fri",
+            "sat",
+            "sun"
+          ],
+          "start": "08:00",
+          "end": "20:00"
+        }
+      ]
+    }
+  }
 }

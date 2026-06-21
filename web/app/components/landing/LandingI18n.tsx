@@ -52,6 +52,7 @@ function getSavedLang(): Lang {
 
 const translations = {
   // Nav
+  nav_home: { it: "Home", en: "Home", hu: "Home" },
   nav_features: { it: "Features", en: "Features", hu: "Funkciók" },
   nav_how: { it: "Come funziona", en: "How it works", hu: "Hogyan működik" },
   nav_github: { it: "GitHub", en: "GitHub", hu: "GitHub" },
@@ -59,9 +60,9 @@ const translations = {
   nav_team: { it: "Team", en: "Team", hu: "Csapat" },
   nav_pricing: { it: "Prezzi", en: "Pricing", hu: "Árak" },
   nav_case_studies: {
-    it: "Case studies",
-    en: "Case studies",
-    hu: "Esettanulmányok",
+    it: "Studies",
+    en: "Studies",
+    hu: "Studies",
   },
   nav_project: { it: "Il progetto", en: "Project", hu: "Projekt" },
   nav_chronicles: { it: "Cronache", en: "Chronicles", hu: "Krónikák" },

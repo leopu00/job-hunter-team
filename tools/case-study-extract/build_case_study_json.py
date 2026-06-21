@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Read-only generator: jobs.db -> CaseStudyRun JSON (aggregato e anonimo).
 # Gira SUL VPS; emette solo dati aggregati su stdout (niente PII).
-import sqlite3, json, unicodedata
+import sqlite3, json, unicodedata, datetime, collections, glob, os
 
 c = sqlite3.connect("file:/root/.jht/jobs.db?mode=ro", uri=True)
 cur = c.cursor()
@@ -31,10 +31,13 @@ composition = [
     {"key": "remote",    "label": "Modalita",      "avg": round(comp[3], 1)},
     {"key": "salary",    "label": "Retribuzione",  "avg": round(comp[4], 1)},
 ]
+scores_raw = [r[0] for r in Q(
+    "SELECT total_score FROM scores WHERE total_score IS NOT NULL ORDER BY total_score")]
 match = {
     "scored": n, "avg": round(avg, 1), "min": mn, "max": mx,
     "strong70": s70, "strong80": s80,
     "buckets": buckets, "composition": composition,
+    "scores": scores_raw,
 }
 
 # ── categorie (role_family emerse) ───────────────────────────────────
@@ -42,10 +45,23 @@ categories = [{"name": name, "count": cnt} for name, cnt in Q(
     "SELECT COALESCE(NULLIF(TRIM(role_family),''),'Non categorizzato') rf,COUNT(*) "
     "FROM positions GROUP BY rf ORDER BY 2 DESC, rf")]
 
-# ── paesi ─────────────────────────────────────────────────────────────
+# ── fonti (job board / ATS / pagine carriera) ────────────────────────
+# Normalizzate (lower/trim, '_'→'-' per fondere company_careers/company-careers);
+# top-12 individuali, la coda lunga finisce in "Altre".
+src_rows = Q(
+    "SELECT COALESCE(NULLIF(TRIM(REPLACE(LOWER(source),'_','-')),''),'sconosciuta') src,"
+    "COUNT(*) FROM positions GROUP BY 1 ORDER BY 2 DESC, 1")
+SRC_TOP = 12
+sources = [{"name": name, "count": cnt} for name, cnt in src_rows[:SRC_TOP]]
+src_rest = sum(cnt for _, cnt in src_rows[SRC_TOP:])
+if src_rest:
+    sources.append({"name": "Altre", "count": src_rest})
+
+# ── paesi (solo posizioni VERIFICATE, non escluse: es. UK escluse per work-auth) ──
 countries = [{"name": name, "code": code, "count": cnt} for name, code, cnt in Q(
     "SELECT loc_country, MAX(loc_country_code), COUNT(*) "
     "FROM positions WHERE loc_country IS NOT NULL AND TRIM(loc_country)<>'' "
+    "AND status<>'excluded' "
     "GROUP BY loc_country ORDER BY 3 DESC, loc_country")]
 
 # ── città (geocodificate, normalizzate/deduplicate) ──────────────────
@@ -61,7 +77,8 @@ country_keys = {norm(r[0]) for r in Q(
 
 rows = Q("SELECT loc_city, loc_country, office_lat, office_lon FROM positions "
          "WHERE office_lat IS NOT NULL AND office_lon IS NOT NULL "
-         "AND loc_city IS NOT NULL AND TRIM(loc_city)<>''")
+         "AND loc_city IS NOT NULL AND TRIM(loc_city)<>'' "
+         "AND status<>'excluded'")
 agg = {}
 for city, country, lat, lon in rows:
     k = ALIAS.get(norm(city), norm(city))
@@ -98,16 +115,80 @@ events = [{"ts": ts.replace(" ", "T") + "Z", "agent": by, "action": to}
 agents = sorted({e["agent"] for e in events})
 ts_min, ts_max = Q("SELECT MIN(ts),MAX(ts) FROM position_state_transitions")[0]
 
+# ── usage giornaliero (% del budget SETTIMANALE AI consumato per giorno) ──
+# Da sentinel-data.jsonl: weekly_usage è cumulativo dentro la settimana (cresce
+# 0→~100) e si azzera al reset (Gio ~06:00 UTC). Consumo del giorno = valore di
+# FINE giornata − fine del giorno precedente nella STESSA settimana (0 se è il
+# primo giorno della settimana). Robusto all'oscillazione intraday; ogni
+# settimana completa somma ~100%.
+def _week_key(day_iso):  # giovedì di riferimento (settimana di budget)
+    d = datetime.date.fromisoformat(day_iso)
+    return (d - datetime.timedelta(days=(d.weekday() - 3) % 7)).isoformat()
+
+SENTINEL = "/root/.jht/logs/sentinel-data.jsonl"
+usage = None
+if os.path.exists(SENTINEL):
+    samples = []  # (ts, weekly_usage)
+    provider = "codex"
+    for line in open(SENTINEL):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            e = json.loads(line)
+        except Exception:
+            continue
+        ts = e.get("ts", "")
+        if not ts or e.get("weekly_usage") is None:
+            continue
+        samples.append((ts, e["weekly_usage"]))
+        if e.get("provider"):
+            provider = e["provider"]
+    samples.sort()
+    day_last = collections.OrderedDict()  # day -> weekly_usage di fine giornata
+    for ts, wu in samples:
+        day_last[ts[:10]] = wu  # l'ultimo sample del giorno sovrascrive
+    daily = []
+    week_prev = {}  # week_key -> fine del giorno precedente (nella settimana)
+    for day, end in day_last.items():
+        wk = _week_key(day)
+        pct = end - week_prev.get(wk, 0)
+        week_prev[wk] = end
+        # pct = consumo del giorno; cum = totale settimanale a fine giornata
+        daily.append({"day": day, "pct": round(max(pct, 0), 1),
+                      "cum": round(end, 1), "week": wk})
+    # orario di lavoro configurato (contesto: su quali ore/giorni si spalma)
+    working_hours = None
+    CONFIG = "/root/.jht/jht.config.json"
+    if os.path.exists(CONFIG):
+        try:
+            wh = json.load(open(CONFIG)).get("team", {}).get("working_hours")
+            if wh:
+                working_hours = {
+                    "timezone": wh.get("timezone"),
+                    "windows": [
+                        {"days": w.get("days", []), "start": w.get("start"),
+                         "end": w.get("end")}
+                        for w in wh.get("windows", [])
+                    ],
+                }
+        except Exception:
+            pass
+    usage = {"provider": provider, "unit": "weekly_budget_pct",
+             "daily": daily, "workingHours": working_hours}
+
 out = {
     "source": "betaC-codex",
     "tsRange": [ts_min, ts_max],
     "totals": {"positions": positions, "scored": scored_status, "excluded": excluded_status},
     "match": match,
     "categories": categories,
+    "sources": sources,
     "countries": countries,
     "cities": cities,
     "salary": salary,
     "agents": agents,
     "events": events,
+    "usage": usage,
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))

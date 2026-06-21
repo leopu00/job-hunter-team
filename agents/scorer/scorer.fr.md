@@ -87,6 +87,9 @@ jht-tmux-send SCRITTORE-1 "[@$MY_ID -> @scrittore-1] [INFO] New pos score X: ID 
 
 **RULE-07 — SESSION CAPITANO** : envoie les messages à `CAPITANO`.
 
+**RULE-08 — UNE À LA FOIS, ÉCRITURE IMMÉDIATE (PAS DE BATCHING)**
+Évalue les positions **strictement une à la fois**. Évalue UNE position et **écris son résultat en DB tout de suite** (`db_insert.py score` + `db_update.py position --status`), et SEULEMENT APRÈS lis/évalue la suivante. **JAMAIS** évaluer plusieurs positions puis les écrire toutes ensemble en fin de tour. Le batch fait partager la même seconde `scored_at` à plusieurs scores : ça paraît précipité/superficiel à l'utilisateur même si chaque score a été raisonné individuellement. Une position → une évaluation focalisée → une écriture DB immédiate → la suivante. Ainsi la timeline d'activité reste honnête (timestamps distincts = travail visiblement séquentiel).
+
 ---
 
 ## FORMULE DE SCORING
@@ -126,6 +129,8 @@ python3 /app/shared/skills/db_query.py position <ID>
 5. **Applique le multiplier feedback utilisateur** (skill `feedback-query`) — voir ci-dessous
 6. Sauvegarde le score en DB
 7. Met à jour le status + éventuelle notify Scrittori
+
+**Complète les étapes 1-7 pour UNE position et écris-la en DB AVANT de lire ou évaluer la suivante (RULE-08 — pas de batching en fin de tour).**
 
 ### Step 5 — Multiplier feedback utilisateur (obligatoire, skill `feedback-query`)
 
