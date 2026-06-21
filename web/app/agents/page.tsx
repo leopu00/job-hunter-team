@@ -39,14 +39,14 @@ const ROLES: Role[] = [
     slug: "scout",
     promptId: "team.scout",
     it: {
-      title: "Lo Scout",
-      p1: "Lo Scout è il segugio che batte il mondo in cerca di offerte: job board, pagine carriere, LinkedIn, canali dei recruiter. Ogni posizione che trova entra nel sistema, pronta per essere verificata.",
-      p2: "È un setaccio generoso, pensato per la quantità: cattura tutto ciò che può essere interessante e lascia il giudizio a chi viene dopo. Impara dove cercare e affina la rotta in base ai riscontri degli analisti.",
+      title: "Gli Scout",
+      p1: "Gli Scout sono i segugi che battono il mondo in cerca di offerte: job board, pagine carriere, LinkedIn, canali dei recruiter. Ogni posizione che trovano entra nel sistema, pronta per essere verificata.",
+      p2: "Sono un setaccio generoso, pensato per la quantità: catturano tutto ciò che può essere interessante e lasciano il giudizio a chi viene dopo. Imparano dove cercare e affinano la rotta in base ai riscontri degli analisti.",
     },
     en: {
-      title: "The Scout",
-      p1: "The Scout is the hound that combs the world for openings — job boards, career pages, LinkedIn, recruiter channels. Everything it finds enters the system, ready to be vetted.",
-      p2: "A generous sieve built for volume: it catches anything that might fit and leaves judgment to those downstream, refining its hunt from the analysts' feedback.",
+      title: "The Scouts",
+      p1: "The Scouts are the hounds that comb the world for openings — job boards, career pages, LinkedIn, recruiter channels. Everything they find enters the system, ready to be vetted.",
+      p2: "A generous sieve built for volume: they catch anything that might fit and leave judgment to those downstream, refining their hunt from the analysts' feedback.",
     },
   },
   {
