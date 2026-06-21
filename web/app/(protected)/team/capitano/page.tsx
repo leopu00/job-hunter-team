@@ -648,41 +648,41 @@ export default function CapitanoPage() {
 
       {/* Input chat — [JHT-DASHBOARD-SPLIT] composer = controllo, solo desktop */}
       {isCloud !== true && (
-      <form
-        aria-label={tr("sendToCaptain")}
-        onSubmit={(e) => {
-          e.preventDefault();
-          handleSend();
-        }}
-        className="flex items-center border border-t-0 border-[var(--color-border)] overflow-hidden"
-        style={{
-          background: "#0d1117",
-          borderRadius: chatFullscreen ? "0" : "0 0 12px 12px",
-          margin: chatFullscreen ? "0 16px 16px 16px" : undefined,
-        }}
-      >
-        <input
-          ref={inputRef}
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={tr("inputPlaceholder")}
-          disabled={sending}
-          className="flex-1 px-4 py-3 text-[12px] bg-transparent outline-none"
-          style={{ color: "var(--color-bright)" }}
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() || sending}
-          className="px-5 py-3 text-[11px] font-semibold tracking-widest uppercase transition-colors"
+        <form
+          aria-label={tr("sendToCaptain")}
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend();
+          }}
+          className="flex items-center border border-t-0 border-[var(--color-border)] overflow-hidden"
           style={{
-            color: !input.trim() || sending ? "var(--color-dim)" : ACCENT,
-            cursor: !input.trim() || sending ? "default" : "pointer",
+            background: "#0d1117",
+            borderRadius: chatFullscreen ? "0" : "0 0 12px 12px",
+            margin: chatFullscreen ? "0 16px 16px 16px" : undefined,
           }}
         >
-          {sending ? "…" : tr("send")}
-        </button>
-      </form>
+          <input
+            ref={inputRef}
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={tr("inputPlaceholder")}
+            disabled={sending}
+            className="flex-1 px-4 py-3 text-[12px] bg-transparent outline-none"
+            style={{ color: "var(--color-bright)" }}
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || sending}
+            className="px-5 py-3 text-[11px] font-semibold tracking-widest uppercase transition-colors"
+            style={{
+              color: !input.trim() || sending ? "var(--color-dim)" : ACCENT,
+              cursor: !input.trim() || sending ? "default" : "pointer",
+            }}
+          >
+            {sending ? "…" : tr("send")}
+          </button>
+        </form>
       )}
 
       {/* Terminale (toggle) — nascosto in fullscreen */}
@@ -803,60 +803,65 @@ export default function CapitanoPage() {
         {/* Controlli team (start/stop/terminale) — solo desktop, nascosti sul cloud read-only */}
         {isCloud !== true && (
           <>
-        {!isActive && (
-          <button
-            onClick={handleStart}
-            disabled={startBusy || status == null}
-            className="px-6 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all"
-            style={{
-              background:
-                startBusy || status == null ? "var(--color-border)" : ACCENT,
-              color: startBusy || status == null ? "var(--color-dim)" : "#000",
-              cursor: startBusy || status == null ? "not-allowed" : "pointer",
-              opacity: startBusy ? 0.7 : 1,
-            }}
-          >
-            {startLabel}
-          </button>
-        )}
+            {!isActive && (
+              <button
+                onClick={handleStart}
+                disabled={startBusy || status == null}
+                className="px-6 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all"
+                style={{
+                  background:
+                    startBusy || status == null
+                      ? "var(--color-border)"
+                      : ACCENT,
+                  color:
+                    startBusy || status == null ? "var(--color-dim)" : "#000",
+                  cursor:
+                    startBusy || status == null ? "not-allowed" : "pointer",
+                  opacity: startBusy ? 0.7 : 1,
+                }}
+              >
+                {startLabel}
+              </button>
+            )}
 
-        {/* Bottone Ferma */}
-        {isActive && (
-          <button
-            onClick={handleStop}
-            disabled={stopBusy}
-            className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all border border-[var(--color-red)] hover:bg-[var(--color-red)] hover:text-[#000]"
-            style={{
-              color: "var(--color-red)",
-              cursor: stopBusy ? "not-allowed" : "pointer",
-              opacity: stopBusy ? 0.6 : 1,
-            }}
-          >
-            {stopBusy ? tr("stopping") : tr("stop")}
-          </button>
-        )}
+            {/* Bottone Ferma */}
+            {isActive && (
+              <button
+                onClick={handleStop}
+                disabled={stopBusy}
+                className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all border border-[var(--color-red)] hover:bg-[var(--color-red)] hover:text-[#000]"
+                style={{
+                  color: "var(--color-red)",
+                  cursor: stopBusy ? "not-allowed" : "pointer",
+                  opacity: stopBusy ? 0.6 : 1,
+                }}
+              >
+                {stopBusy ? tr("stopping") : tr("stop")}
+              </button>
+            )}
 
-        {isActive && devMode && (
-          <button
-            onClick={() => setShowTerminal((v) => !v)}
-            className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer"
-          >
-            {showTerminal ? tr("hideTerminal") : tr("showTerminal")}
-          </button>
-        )}
+            {isActive && devMode && (
+              <button
+                onClick={() => setShowTerminal((v) => !v)}
+                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer"
+              >
+                {showTerminal ? tr("hideTerminal") : tr("showTerminal")}
+              </button>
+            )}
 
-        {isActive && (
-          <button
-            onClick={async () => {
-              await fetch("/api/capitano/terminal", { method: "POST" });
-            }}
-            className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
-          >
-            {typeof navigator !== "undefined" && /Mac/.test(navigator.platform)
-              ? tr("openTerminal")
-              : tr("openPowershell")}
-          </button>
-        )}
+            {isActive && (
+              <button
+                onClick={async () => {
+                  await fetch("/api/capitano/terminal", { method: "POST" });
+                }}
+                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
+              >
+                {typeof navigator !== "undefined" &&
+                /Mac/.test(navigator.platform)
+                  ? tr("openTerminal")
+                  : tr("openPowershell")}
+              </button>
+            )}
           </>
         )}
 

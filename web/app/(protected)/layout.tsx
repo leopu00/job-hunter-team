@@ -38,7 +38,9 @@ const DESKTOP_ONLY_PREFIXES = [
 
 function isDesktopOnlyPath(p: string): boolean {
   if (p.startsWith("/settings/cloud-sync")) return false; // sync-infra resta cloud
-  return DESKTOP_ONLY_PREFIXES.some((pre) => p === pre || p.startsWith(pre + "/"));
+  return DESKTOP_ONLY_PREFIXES.some(
+    (pre) => p === pre || p.startsWith(pre + "/"),
+  );
 }
 
 export default async function ProtectedLayout({

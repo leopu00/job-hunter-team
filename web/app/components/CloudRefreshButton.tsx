@@ -137,7 +137,9 @@ export default function CloudRefreshButton() {
         color: "var(--color-muted)",
       }}
     >
-      {lastSync && !syncing && <span>Aggiornato {formatRelativeTime(lastSync)}</span>}
+      {lastSync && !syncing && (
+        <span>Aggiornato {formatRelativeTime(lastSync)}</span>
+      )}
       {error && <span style={{ color: "var(--color-red)" }}>{error}</span>}
       <button
         onClick={() => void requestSync()}
@@ -156,7 +158,9 @@ export default function CloudRefreshButton() {
         }}
         title="Chiedi alla VPS un aggiornamento dei dati ora"
       >
-        <span style={{ display: "inline-block", transformOrigin: "center" }}>↻</span>
+        <span style={{ display: "inline-block", transformOrigin: "center" }}>
+          ↻
+        </span>
         {syncing ? "Sync…" : "Sync now"}
       </button>
     </div>

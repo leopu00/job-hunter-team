@@ -401,74 +401,79 @@ export default function TeamPage() {
                 fallback ad activeCount per Local PC mode senza cloud sync.
                 [JHT-DASHBOARD-SPLIT] start/stop = CONTROLLO → solo desktop. Sul
                 cloud la pagina resta (monitoraggio read-only) ma i comandi spariscono. */}
-            {isCloud !== true && (() => {
-              const teamRunning =
-                teamState.state?.should_run === true ||
-                teamState.state?.is_running === true ||
-                activeCount > 0;
-              return (
-                <>
-                  {!teamRunning && (
-                    <button
-                      onClick={startAll}
-                      disabled={bulkLoading !== null}
-                      className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
-                      style={{
-                        background:
-                          bulkLoading !== null
-                            ? "var(--color-border)"
-                            : "rgba(34,197,94,0.1)",
-                        color:
-                          bulkLoading !== null ? "var(--color-dim)" : "#22c55e",
-                        border: `1px solid ${bulkLoading !== null ? "var(--color-border)" : "rgba(34,197,94,0.25)"}`,
-                        cursor:
-                          bulkLoading !== null ? "not-allowed" : "pointer",
-                        fontFamily: "inherit",
-                        minWidth: 110,
-                      }}
-                    >
-                      {bulkLoading === "start" ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Spinner size={11} color="var(--color-dim)" />{" "}
-                          Starting...
-                        </span>
-                      ) : (
-                        "\u25B6 Start"
-                      )}
-                    </button>
-                  )}
-                  {teamRunning && (
-                    <button
-                      onClick={stopAll}
-                      disabled={bulkLoading !== null}
-                      className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
-                      style={{
-                        background:
-                          bulkLoading !== null
-                            ? "var(--color-border)"
-                            : "rgba(244,67,54,0.08)",
-                        color:
-                          bulkLoading !== null ? "var(--color-dim)" : "#f44336",
-                        border: `1px solid ${bulkLoading !== null ? "var(--color-border)" : "rgba(244,67,54,0.2)"}`,
-                        cursor:
-                          bulkLoading !== null ? "not-allowed" : "pointer",
-                        fontFamily: "inherit",
-                        minWidth: 110,
-                      }}
-                    >
-                      {bulkLoading === "stop" ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <Spinner size={11} color="var(--color-dim)" />{" "}
-                          Stopping...
-                        </span>
-                      ) : (
-                        <>{"\u25A0"} Stop</>
-                      )}
-                    </button>
-                  )}
-                </>
-              );
-            })()}
+            {isCloud !== true &&
+              (() => {
+                const teamRunning =
+                  teamState.state?.should_run === true ||
+                  teamState.state?.is_running === true ||
+                  activeCount > 0;
+                return (
+                  <>
+                    {!teamRunning && (
+                      <button
+                        onClick={startAll}
+                        disabled={bulkLoading !== null}
+                        className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
+                        style={{
+                          background:
+                            bulkLoading !== null
+                              ? "var(--color-border)"
+                              : "rgba(34,197,94,0.1)",
+                          color:
+                            bulkLoading !== null
+                              ? "var(--color-dim)"
+                              : "#22c55e",
+                          border: `1px solid ${bulkLoading !== null ? "var(--color-border)" : "rgba(34,197,94,0.25)"}`,
+                          cursor:
+                            bulkLoading !== null ? "not-allowed" : "pointer",
+                          fontFamily: "inherit",
+                          minWidth: 110,
+                        }}
+                      >
+                        {bulkLoading === "start" ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Spinner size={11} color="var(--color-dim)" />{" "}
+                            Starting...
+                          </span>
+                        ) : (
+                          "\u25B6 Start"
+                        )}
+                      </button>
+                    )}
+                    {teamRunning && (
+                      <button
+                        onClick={stopAll}
+                        disabled={bulkLoading !== null}
+                        className="px-4 py-2 rounded-lg text-[11px] font-semibold tracking-wide transition-all"
+                        style={{
+                          background:
+                            bulkLoading !== null
+                              ? "var(--color-border)"
+                              : "rgba(244,67,54,0.08)",
+                          color:
+                            bulkLoading !== null
+                              ? "var(--color-dim)"
+                              : "#f44336",
+                          border: `1px solid ${bulkLoading !== null ? "var(--color-border)" : "rgba(244,67,54,0.2)"}`,
+                          cursor:
+                            bulkLoading !== null ? "not-allowed" : "pointer",
+                          fontFamily: "inherit",
+                          minWidth: 110,
+                        }}
+                      >
+                        {bulkLoading === "stop" ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Spinner size={11} color="var(--color-dim)" />{" "}
+                            Stopping...
+                          </span>
+                        ) : (
+                          <>{"\u25A0"} Stop</>
+                        )}
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
           </div>
         </div>
       </div>

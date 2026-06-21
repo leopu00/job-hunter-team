@@ -370,40 +370,44 @@ export default function AssistentePage() {
               {/* Controlli team (start/stop) — solo desktop, nascosti sul cloud read-only */}
               {isCloud !== true && (
                 <>
-              {!isActive && (
-                <button
-                  onClick={handleStart}
-                  disabled={startBusy || status == null}
-                  className="px-6 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all"
-                  style={{
-                    background:
-                      startBusy || status == null
-                        ? "var(--color-border)"
-                        : "var(--color-green)",
-                    color:
-                      startBusy || status == null ? "var(--color-dim)" : "#000",
-                    cursor:
-                      startBusy || status == null ? "not-allowed" : "pointer",
-                    opacity: startBusy ? 0.7 : 1,
-                  }}
-                >
-                  {startLabel}
-                </button>
-              )}
-              {isActive && (
-                <button
-                  onClick={handleStop}
-                  disabled={stopBusy}
-                  className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all border border-[var(--color-red)] hover:bg-[var(--color-red)] hover:text-[#000]"
-                  style={{
-                    color: "var(--color-red)",
-                    cursor: stopBusy ? "not-allowed" : "pointer",
-                    opacity: stopBusy ? 0.6 : 1,
-                  }}
-                >
-                  {stopBusy ? "Fermando…" : "Ferma"}
-                </button>
-              )}
+                  {!isActive && (
+                    <button
+                      onClick={handleStart}
+                      disabled={startBusy || status == null}
+                      className="px-6 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all"
+                      style={{
+                        background:
+                          startBusy || status == null
+                            ? "var(--color-border)"
+                            : "var(--color-green)",
+                        color:
+                          startBusy || status == null
+                            ? "var(--color-dim)"
+                            : "#000",
+                        cursor:
+                          startBusy || status == null
+                            ? "not-allowed"
+                            : "pointer",
+                        opacity: startBusy ? 0.7 : 1,
+                      }}
+                    >
+                      {startLabel}
+                    </button>
+                  )}
+                  {isActive && (
+                    <button
+                      onClick={handleStop}
+                      disabled={stopBusy}
+                      className="px-5 py-2.5 rounded-lg text-[12px] font-bold tracking-wide transition-all border border-[var(--color-red)] hover:bg-[var(--color-red)] hover:text-[#000]"
+                      style={{
+                        color: "var(--color-red)",
+                        cursor: stopBusy ? "not-allowed" : "pointer",
+                        opacity: stopBusy ? 0.6 : 1,
+                      }}
+                    >
+                      {stopBusy ? "Fermando…" : "Ferma"}
+                    </button>
+                  )}
                 </>
               )}
               {startBanner && (
@@ -649,91 +653,93 @@ export default function AssistentePage() {
 
                     {/* Input chat — [JHT-DASHBOARD-SPLIT] composer = controllo, solo desktop */}
                     {isCloud !== true && (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        handleSend();
-                      }}
-                      className="flex items-center border border-t-0 border-[var(--color-border)] overflow-hidden"
-                      style={{
-                        background: "#0d1117",
-                        borderRadius: chatFullscreen ? "0" : "0 0 12px 12px",
-                        margin: chatFullscreen ? "0 16px 16px 16px" : undefined,
-                      }}
-                    >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        onChange={handleFileSelect}
-                        className="hidden"
-                        accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.csv,.xlsx,.xls,.json,.yaml,.yml"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={sending}
-                        className="pl-3 pr-1 py-3 transition-colors cursor-pointer"
-                        aria-label="Allega file"
-                        title="Allega file"
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleSend();
+                        }}
+                        className="flex items-center border border-t-0 border-[var(--color-border)] overflow-hidden"
                         style={{
-                          color:
-                            attachedFiles.length > 0
-                              ? "var(--color-green)"
-                              : "var(--color-dim)",
+                          background: "#0d1117",
+                          borderRadius: chatFullscreen ? "0" : "0 0 12px 12px",
+                          margin: chatFullscreen
+                            ? "0 16px 16px 16px"
+                            : undefined,
                         }}
                       >
-                        <svg
-                          aria-hidden="true"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          multiple
+                          onChange={handleFileSelect}
+                          className="hidden"
+                          accept=".pdf,.doc,.docx,.txt,.md,.png,.jpg,.jpeg,.csv,.xlsx,.xls,.json,.yaml,.yml"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={sending}
+                          className="pl-3 pr-1 py-3 transition-colors cursor-pointer"
+                          aria-label="Allega file"
+                          title="Allega file"
+                          style={{
+                            color:
+                              attachedFiles.length > 0
+                                ? "var(--color-green)"
+                                : "var(--color-dim)",
+                          }}
                         >
-                          <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                        </svg>
-                      </button>
-                      <input
-                        ref={inputRef}
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder={
-                          attachedFiles.length > 0
-                            ? `${attachedFiles.length} file allegat${attachedFiles.length === 1 ? "o" : "i"} — scrivi un messaggio...`
-                            : "Scrivi un messaggio..."
-                        }
-                        disabled={sending}
-                        className="flex-1 px-3 py-3 text-[12px] bg-transparent outline-none"
-                        style={{ color: "var(--color-bright)" }}
-                      />
-                      <button
-                        type="submit"
-                        disabled={
-                          (!input.trim() && attachedFiles.length === 0) ||
-                          sending
-                        }
-                        className="px-5 py-3 text-[11px] font-semibold tracking-widest uppercase transition-colors"
-                        style={{
-                          color:
+                          <svg
+                            aria-hidden="true"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                          </svg>
+                        </button>
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={input}
+                          onChange={(e) => setInput(e.target.value)}
+                          placeholder={
+                            attachedFiles.length > 0
+                              ? `${attachedFiles.length} file allegat${attachedFiles.length === 1 ? "o" : "i"} — scrivi un messaggio...`
+                              : "Scrivi un messaggio..."
+                          }
+                          disabled={sending}
+                          className="flex-1 px-3 py-3 text-[12px] bg-transparent outline-none"
+                          style={{ color: "var(--color-bright)" }}
+                        />
+                        <button
+                          type="submit"
+                          disabled={
                             (!input.trim() && attachedFiles.length === 0) ||
                             sending
-                              ? "var(--color-dim)"
-                              : "var(--color-green)",
-                          cursor:
-                            (!input.trim() && attachedFiles.length === 0) ||
-                            sending
-                              ? "default"
-                              : "pointer",
-                        }}
-                      >
-                        {sending ? "…" : "invia"}
-                      </button>
-                    </form>
+                          }
+                          className="px-5 py-3 text-[11px] font-semibold tracking-widest uppercase transition-colors"
+                          style={{
+                            color:
+                              (!input.trim() && attachedFiles.length === 0) ||
+                              sending
+                                ? "var(--color-dim)"
+                                : "var(--color-green)",
+                            cursor:
+                              (!input.trim() && attachedFiles.length === 0) ||
+                              sending
+                                ? "default"
+                                : "pointer",
+                          }}
+                        >
+                          {sending ? "…" : "invia"}
+                        </button>
+                      </form>
                     )}
 
                     {/* Terminale (toggle) — nascosto in fullscreen */}
