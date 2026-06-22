@@ -11,11 +11,12 @@ export const dynamic = "force-dynamic";
 // `jht cloud restore` per ricostruire SQLite locale dopo un wipe (disco
 // pieno, container corrotto, reset onboarding parziale).
 //
-// Scope MVP: 3 tabelle. companies e position_highlights sono escluse —
-// richiederebbero mapping UUID→legacy_id non banale (companies ha solo
-// name come identifier stabile cloud↔locale; highlights ha FK su
-// position_id UUID). L'Analista le ripopola autonomamente nel normal
-// loop dopo il restore. Follow-up tracciato.
+// Scope: 3 tabelle nel RESTORE (download cloud→locale). NB: dal 2026-06-22
+// companies e position_highlights SONO sincronizzate cloud↔locale dal PUSH
+// (mig 046 ha aggiunto loro `legacy_id`, vedi cloud-sync/push/route.ts) — la
+// Company card e i Pro/Contro non sono più vuoti sul cloud. Restano fuori solo
+// QUI nel restore perché ricostruire gli id interi SQLite locali dalle FK UUID
+// è più complesso; l'Analista le ripopola autonomamente dopo un restore.
 //
 // Differenze vs pull-desired-state (mig 024 + 027):
 //   - pull-desired-state ritorna SOLO i flag user-driven (write/geocode_
