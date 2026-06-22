@@ -1,7 +1,7 @@
 import { state, dom, showStep, appendLog } from './state.js'
 import { t } from './i18n.js'
-import { STEP_RUNNING, STEP_READY } from './constants.js'
-import { showHome } from './home.js'
+import { STEP_READY } from './constants.js'
+import { showHome, startTeamFromHome } from './home.js'
 
 export function updateRunningUI(status) {
   if (!status) return
@@ -67,77 +67,30 @@ export async function startTeam() {
     }
   }
   _runningLog.info('startTeam.click', { location: state.location, starting: state.starting })
-  // VPS mode: il team gira sulla VPS, non sul Mac. Il container li' si
-  // e' gia' auto-pairing-ato via pairing token salvato da install.sh.
-  // Il "Start team" sul Mac NON deve scaricare payload + spawn container
-  // locale — apre semplicemente la dashboard cloud che legge dal Supabase
-  // sincronizzato dalla VPS. Vedi docs/internal/onboarding-flow.md § Path 2.
-  if (state.location === 'vps') {
-    const dashboardUrl = 'https://jobhunterteam.ai/dashboard'
-    _runningLog.info('startTeam.vps.openExternal', { url: dashboardUrl })
-    try {
-      await window.launcherApi.openExternal(dashboardUrl)
-      _runningLog.info('startTeam.vps.openExternal.ok')
-    } catch (e) {
-      _runningLog.error('startTeam.vps.openExternal.failed', { err: String(e?.message || e) })
-      // fallback: prova openBrowser anche se non e' il caso d'uso
-      try { await window.launcherApi.openBrowser() } catch { /* ignore */ }
-    }
-    // Transitiona alla Home dell'app desktop (sidebar Team/Provider/...).
-    // L'utente ha appena completato il wizard: dopo il click Start non
-    // deve restare sullo step Ready (one-shot) ma vedere la dashboard
-    // locale del launcher. La dashboard cloud sul browser si gestisce
-    // da sola in parallelo.
-    try {
-      await showHome('team')
-      _runningLog.info('startTeam.vps.showHome.ok')
-    } catch (e) {
-      _runningLog.error('startTeam.vps.showHome.failed', { err: String(e?.message || e) })
-    }
-    return
-  }
-  state.starting = true
-  dom.btnStartTeam.disabled = true
-  dom.btnStartTeam.textContent = t('running.startingBtn')
-  showStep(STEP_RUNNING)
-  dom.runningLead.textContent = t('running.leadPrep')
+  // [JHT-DASHBOARD-SPLIT] Il "Start team" del wizard NON deve più passare dallo
+  // step terminale STEP_RUNNING ("Team running / apri nel browser"): quello
+  // schermo dipendeva dal ritorno di launcherApi.start(), che però BLOCCA per
+  // tutta la durata del warm-up del runtime → la transizione alla Home (che
+  // veniva dopo l'await) non scattava mai e l'utente restava inchiodato lì.
+  //
+  // Soluzione: atterriamo SUBITO sulla Home (menu laterale) e deleghiamo l'avvio
+  // a startTeamFromHome — esattamente lo stesso flusso del bottone Start della
+  // Home. Lì lo stato "starting" è renderizzato NEL pannello Team PRIMA
+  // dell'await bloccante, quindi l'utente vede sempre la Home mentre il runtime
+  // si scalda; il poll del pannello (5s) fa avanzare starting→running e mostra
+  // il bottone Open / apre la dashboard in-app. Vale per local E vps (la
+  // funzione gestisce entrambi i rami).
   try {
-    const payloadInfo = await window.launcherApi.getPayloadDir()
-    if (!payloadInfo?.present) {
-      dom.runningLead.textContent = t('running.leadDownload')
-      const result = await window.launcherApi.ensurePayload({ update: false })
-      if (!result.ok) throw new Error(result.error || 'download failed')
-    }
-    dom.runningLead.textContent = t('running.leadStartRuntime')
-    const status = await window.launcherApi.start({})
-    updateRunningUI(status)
-    // [JHT-DASHBOARD-SPLIT] Appena il runtime è partito — ANCHE se ancora in
-    // 'warming' (running=false) — lasciamo lo step di progresso STEP_RUNNING e
-    // atterriamo sulla Home in-app col menu laterale, simmetrico al ramo VPS.
-    // La Home gestisce da sola la progressione warming→running col suo poll
-    // (dot 'starting'→'running', bottone Open). NON gatare su status.running:
-    // startRuntime ritorna DURANTE il warm-up, quindi quel ramo non scattava
-    // mai e l'utente restava bloccato sulla schermata deprecata "apri nel
-    // browser". STEP_RUNNING resta solo schermo di progresso, mai stato finale.
-    if (status.mode !== 'error') {
-      try {
-        await showHome('team')
-        _runningLog.info('startTeam.local.showHome.ok', { mode: status.mode })
-      } catch (e) {
-        _runningLog.error('startTeam.local.showHome.failed', { err: String(e?.message || e) })
-      }
-      // Apri la dashboard nella finestra in-app (openBrowser → openDashboardWindow).
-      // Non-blocking: openBrowser attende internamente il warm-up (fino a 75s)
-      // prima di mostrare la finestra; non vogliamo ritardare la Home.
-      window.launcherApi.openBrowser().catch(() => {})
-    }
-  } catch (error) {
-    appendLog(`startTeam error: ${error.message || error}`)
-    dom.runningLead.textContent = t('running.errorStart', { msg: error.message || error })
-  } finally {
-    state.starting = false
-    dom.btnStartTeam.disabled = false
-    dom.btnStartTeam.textContent = t('ready.start')
+    await showHome('team')
+    _runningLog.info('startTeam.showHome.ok', { location: state.location })
+  } catch (e) {
+    _runningLog.error('startTeam.showHome.failed', { err: String(e?.message || e) })
+  }
+  try {
+    await startTeamFromHome()
+    _runningLog.info('startTeam.delegated-to-home.ok', { location: state.location })
+  } catch (e) {
+    _runningLog.error('startTeam.delegated-to-home.failed', { err: String(e?.message || e) })
   }
 }
 

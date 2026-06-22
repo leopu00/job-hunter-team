@@ -694,7 +694,7 @@ async function refreshHomeTeam() {
   }
 }
 
-async function startTeamFromHome() {
+export async function startTeamFromHome() {
   if (state.starting) return
   // Carica location dalle prefs se non gia' in state (perso ai restart).
   if (!state.location && window.prefsApi?.get) {
