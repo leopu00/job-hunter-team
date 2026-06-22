@@ -80,7 +80,9 @@ function readLocalToken() {
 // Fetch autenticato verso l'API del runtime locale. Ritorna sempre un oggetto
 // { ok, ...data | error } — mai throw — così il renderer gestisce gli errori
 // senza try/catch e la destrutturazione del data (es. {positions}) resta valida.
-async function dashboardApiFetch(apiPath) {
+// init opzionale: { method, body } per il POST (es. invio chat all'agente).
+// Default GET. Il body viene serializzato JSON con Content-Type adeguato.
+async function dashboardApiFetch(apiPath, init = {}) {
   let status
   try {
     status = await runtime.getStatus()
@@ -92,13 +94,19 @@ async function dashboardApiFetch(apiPath) {
     return { ok: false, error: `runtime-not-ready:${status ? status.mode : 'unknown'}` }
   }
   const token = readLocalToken()
+  const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  const method = init.method || 'GET'
+  const fetchInit = { method, headers, signal: AbortSignal.timeout(15000) }
+  if (init.body !== undefined && method !== 'GET') {
+    headers['Content-Type'] = 'application/json'
+    fetchInit.body = JSON.stringify(init.body)
+  }
   try {
-    const res = await fetch(`http://127.0.0.1:${port}${apiPath}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      signal: AbortSignal.timeout(8000),
-    })
+    const res = await fetch(`http://127.0.0.1:${port}${apiPath}`, fetchInit)
     if (!res.ok) return { ok: false, error: `http-${res.status}`, status: res.status }
-    const data = await res.json()
+    // Alcune route (POST chat) possono rispondere senza JSON: tollera il vuoto.
+    const text = await res.text()
+    const data = text ? JSON.parse(text) : {}
     return { ok: true, data }
   } catch (err) {
     return { ok: false, error: err && (err.message || String(err)) }
@@ -696,6 +704,17 @@ app.whenReady().then(() => {
     }
     const r = await dashboardApiFetch(apiPath)
     return r.ok ? r.data : null
+  })
+  // [JHT-DASHBOARD-NATIVE] POST generico per l'INTERAZIONE (es. chat con gli
+  // agenti: POST /api/capitano/chat → tmux send-keys). Stessa validazione path
+  // + auth Bearer del get(). Ritorna { ok, ...data } | { ok:false, error }.
+  ipcMain.handle('dashboard:post', async (_event, { path: apiPath, body } = {}) => {
+    if (typeof apiPath !== 'string' || !apiPath.startsWith('/api/') ||
+        apiPath.includes('://') || apiPath.includes('..')) {
+      return { ok: false, error: 'invalid-path' }
+    }
+    const r = await dashboardApiFetch(apiPath, { method: 'POST', body: body ?? {} })
+    return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error, status: r.status }
   })
 
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
