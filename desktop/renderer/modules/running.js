@@ -111,19 +111,28 @@ export async function startTeam() {
     dom.runningLead.textContent = t('running.leadStartRuntime')
     const status = await window.launcherApi.start({})
     updateRunningUI(status)
-    if (status.running && status.url) {
-      // [JHT-DASHBOARD-SPLIT] Niente più schermata terminale "apri nel
-      // browser": apriamo la dashboard nella finestra in-app (openBrowser →
-      // openDashboardWindow) e transitiamo alla Home del launcher, simmetrico
-      // al ramo VPS sopra. Lo step STEP_RUNNING resta solo come schermo di
-      // progresso durante download/avvio runtime, mai come stato finale.
+    // [JHT-DASHBOARD-SPLIT] Niente più schermata terminale "apri nel
+    // browser": apriamo la dashboard nella finestra in-app (openBrowser →
+    // openDashboardWindow) e transitiamo alla Home del launcher, simmetrico
+    // al ramo VPS sopra. Lo step STEP_RUNNING resta solo come schermo di
+    // progresso durante download/avvio runtime, mai come stato finale.
+    //
+    // NB: NON gatare su `status.running`. `start()` ritorna appena il
+    // runtime è stato avviato, mentre è ancora in `mode: 'warming'`
+    // (running=false): gatare lì lasciava l'utente bloccato su STEP_RUNNING
+    // a fissare "Team running / apri nel browser". Il pannello Team della
+    // Home rende già warming/starting/running/error, quindi appena start()
+    // ritorna senza eccezioni transitiamo lì e lasciamo che il poll della
+    // Home segua l'evoluzione dello stato. (mode 'error' lo gestisce il
+    // catch sotto, perché start() in quel caso lancia.)
+    if (status?.url) {
       await window.launcherApi.openBrowser().catch(() => {})
-      try {
-        await showHome('team')
-        _runningLog.info('startTeam.local.showHome.ok')
-      } catch (e) {
-        _runningLog.error('startTeam.local.showHome.failed', { err: String(e?.message || e) })
-      }
+    }
+    try {
+      await showHome('team')
+      _runningLog.info('startTeam.local.showHome.ok', { mode: status?.mode || null })
+    } catch (e) {
+      _runningLog.error('startTeam.local.showHome.failed', { err: String(e?.message || e) })
     }
   } catch (error) {
     appendLog(`startTeam error: ${error.message || error}`)
