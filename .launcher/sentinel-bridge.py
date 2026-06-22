@@ -1299,10 +1299,26 @@ def main():
             # accelera la cadenza, rispettando comunque il cooldown anti-spam.
             # Senza questo, a weekly 92% on-pace la Sentinella non veniva MAI
             # svegliata e il freno non scattava (status SOTTOUTILIZZO decorativo).
-            weekly_binding = bool(entry.get("weekly_binding"))
             now_ts = time.time()
             now_local = datetime.now().astimezone()
             is_quarter = _is_quarter(now_local)
+            weekly_binding = bool(entry.get("weekly_binding"))
+            # compute_metrics tiene weekly_binding=False by-design: il proj_weekly
+            # naive sovra-proietta sulle notti idle, quindi non è un trigger
+            # affidabile. Il binding VERO arriva dal pace active-hours-aware
+            # (weekly_pace): se il rate weekly REALE è SOPRA-PACE e proietta lockout
+            # PRIMA del reset (e non è un burst in esaurimento), il weekly È binding
+            # → sveglia la Sentinella anche col 5h on-pace. Chiude il buco storico
+            # "Sentinella cieca al weekly" (status SOTTOUTILIZZO mentre il weekly va
+            # a fuoco = front-load). Un team in pari/sotto-pace NON è binding (no
+            # coast prematuro). Calcolato UNA volta qui e riusato nel tick sotto;
+            # solo in-orario e non-locked (fuori finestra nessuno viene svegliato).
+            weekly_pace = None
+            if within_hours and not weekly_locked:
+                weekly_pace = _weekly_pace_via_skill(
+                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                if isinstance(weekly_pace, dict) and weekly_pace.get("binding"):
+                    weekly_binding = True
             if not within_hours:
                 # GATE ORARIO ASSOLUTO (lean-comms): fuori finestra NESSUNA LLM
                 # svegliata. Il bridge ha già scritto il sample (monitoring puro)
@@ -1391,8 +1407,9 @@ def main():
                 # WEEKLY-PACE: dato grezzo per la Sentinella (S-07) — rate weekly
                 # REALE (2h) vs sostenibile + lockout anticipato. La Sentinella lo
                 # ELABORA e consiglia il Capitano; NON arriva al Capitano diretto.
-                weekly_pace = _weekly_pace_via_skill(
-                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                if weekly_pace is None:  # non già calcolato sopra (es. ramo LOCKED)
+                    weekly_pace = _weekly_pace_via_skill(
+                        entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
                 weekly_pace_field = ""
                 if (isinstance(weekly_pace, dict)
                         and weekly_pace.get("kind") not in (None, "ND")):
