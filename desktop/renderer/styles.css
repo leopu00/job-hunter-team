@@ -2535,3 +2535,6 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 
 .dash-profile__assistant { align-self: flex-start; margin-bottom: 6px; }
 .dash-profile { display: flex; flex-direction: column; gap: 4px; }
+
+.dash-agents { display: flex; flex-direction: column; gap: 18px; }
+.dash-agentgroup { display: flex; flex-direction: column; gap: 8px; }
