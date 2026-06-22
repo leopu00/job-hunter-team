@@ -2523,3 +2523,18 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
   background: var(--panel); color: var(--text); font: inherit; font-size: 13px;
 }
 .dash__count { font-size: 12px; color: var(--text-dim); margin-left: auto; }
+
+/* [JHT-DASHBOARD-NATIVE] Pipeline a barre (Statistiche) */
+.dash-statswrap { display: flex; flex-direction: column; gap: 24px; }
+.dash-pipeline { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.dash-pipeline__row { display: flex; align-items: center; gap: 12px; }
+.dash-pipeline__label { width: 110px; flex-shrink: 0; font-size: 13px; color: var(--text-dim); }
+.dash-pipeline__track { flex: 1; height: 18px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.dash-pipeline__bar { height: 100%; background: linear-gradient(90deg, rgba(0,232,122,0.5), rgba(0,232,122,0.25)); border-radius: 6px; min-width: 2px; }
+.dash-pipeline__num { width: 40px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.dash-profile__assistant { align-self: flex-start; margin-bottom: 6px; }
+.dash-profile { display: flex; flex-direction: column; gap: 4px; }
+
+.dash-agents { display: flex; flex-direction: column; gap: 18px; }
+.dash-agentgroup { display: flex; flex-direction: column; gap: 8px; }
