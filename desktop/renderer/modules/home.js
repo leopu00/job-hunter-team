@@ -559,7 +559,10 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
   homeDom.teamStatus.textContent = t(statusKey)
   homeDom.teamSubtitle.textContent = t(subtitleKey)
   homeDom.btnStart.hidden = running || starting
-  homeDom.btnOpen.hidden = !running
+  // [JHT-DASHBOARD-SPLIT] In LOCAL la dashboard è embedded nel pannello: il
+  // bottone "Apri dashboard" (che apriva la finestra separata) è ridondante,
+  // lo teniamo nascosto. Resta visibile solo nel ramo VPS (cockpit via tunnel).
+  homeDom.btnOpen.hidden = true
   homeDom.btnStop.hidden = !(running || starting)
   // Info rows
   homeDom.teamInfo.innerHTML = ''
@@ -776,15 +779,12 @@ export async function startTeamFromHome() {
     }
     const status = await window.launcherApi.start({})
     renderHomeTeamStatus(status)
-    // [JHT-DASHBOARD-SPLIT] Apri la dashboard nella finestra INTEGRATA dell'app
-    // (openBrowser → openDashboardWindow). NON gatare su status.running: start()
-    // ritorna durante il warm-up (running=false), e openBrowser attende già
-    // internamente il warm-up (waitForWarmUpDone) prima di mostrare la finestra.
-    // Così la dashboard integrata appare da sola appena il runtime è pronto,
-    // senza che l'utente debba cliccare nulla. Non-blocking.
-    if (status?.mode !== 'error') {
-      window.launcherApi.openBrowser().catch(() => {})
-    }
+    // [JHT-DASHBOARD-SPLIT] Per il ramo LOCAL non apriamo più una finestra
+    // separata (openBrowser → openDashboardWindow): la dashboard è EMBEDDED
+    // nel pannello Team (syncTeamDashboard). Appena il poll del pannello vede
+    // mode=running, la <webview> compare inline da sola — niente doppia
+    // dashboard, niente click. La finestra separata resta solo per il VPS
+    // (cockpit via tunnel, gestito dal bottone Open in quel ramo).
   } catch (error) {
     appendLog(`startTeamFromHome: ${error.message || error}`)
     renderHomeTeamStatus({ mode: 'error', lastError: error.message || String(error) })
