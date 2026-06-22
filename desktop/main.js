@@ -239,6 +239,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // [JHT-DASHBOARD-SPLIT] La dashboard locale è EMBEDDED nel pannello Team
+      // come <webview> puntata a localhost:PORT (decisione utente: una sola
+      // finestra, niente più openDashboardWindow per il local). Abilita il tag.
+      webviewTag: true,
     },
   })
 
@@ -281,6 +285,34 @@ function createWindow() {
       event.preventDefault()
       shell.openExternal(url).catch(() => {})
     }
+  })
+
+  // [JHT-DASHBOARD-SPLIT] Hardening della <webview> embedded (dashboard locale
+  // nel pannello Team). La webview carica localhost:PORT servito dal Next nel
+  // container; non deve avere accesso privilegiato né poter aprire finestre
+  // annidate o navigare via verso siti arbitrari.
+  // 1) sanitizza le prefs in fase di attach: nessun preload, no Node, isolata.
+  mainWindow.webContents.on('will-attach-webview', (_event, webPreferences) => {
+    delete webPreferences.preload
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+  })
+  // 2) sul webContents della webview: popup/target=_blank/window.open → browser
+  //    di sistema (mai BrowserWindow annidate); navigazioni top-level verso host
+  //    NON locali → browser di sistema (la dashboard è una SPA su localhost, le
+  //    navigazioni interne restano dentro la webview).
+  mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    guest.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {})
+      return { action: 'deny' }
+    })
+    guest.on('will-navigate', (event, url) => {
+      const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(url)
+      if (!isLocal && /^https?:\/\//i.test(url)) {
+        event.preventDefault()
+        shell.openExternal(url).catch(() => {})
+      }
+    })
   })
 }
 
