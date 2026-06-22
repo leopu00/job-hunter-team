@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
 import { validateTelegramToken, validateChatId } from "./providers";
 import { Card, NavButtons, Field, inputCls } from "./ui";
+import { t } from "./setup-i18n";
 import type { FormState } from "./types";
 
 interface Props {
@@ -13,6 +15,7 @@ interface Props {
 }
 
 export function StepTelegram({ form, set, next, back }: Props) {
+  const locale = useLocale();
   const [tokenErr, setTokenErr] = useState<string>();
   const [chatErr, setChatErr] = useState<string>();
 
@@ -21,15 +24,15 @@ export function StepTelegram({ form, set, next, back }: Props) {
       next();
       return;
     }
-    const te = validateTelegramToken(form.botToken);
-    const ce = validateChatId(form.chatId);
+    const te = validateTelegramToken(form.botToken, locale);
+    const ce = validateChatId(form.chatId, locale);
     setTokenErr(te);
     setChatErr(ce);
     if (!te && !ce) next();
   };
 
   return (
-    <Card title="Telegram" sub="Notifiche via bot Telegram (opzionale)">
+    <Card title={t("tg_title", locale)} sub={t("tg_sub", locale)}>
       {/* Toggle */}
       <div className="flex items-center gap-3">
         <button
@@ -51,7 +54,7 @@ export function StepTelegram({ form, set, next, back }: Props) {
           />
         </button>
         <span className="text-[12px]" style={{ color: "var(--color-base)" }}>
-          Configura bot Telegram
+          {t("tg_toggle", locale)}
         </span>
       </div>
 
@@ -70,7 +73,7 @@ export function StepTelegram({ form, set, next, back }: Props) {
               style={{ color: "var(--color-bright)" }}
             />
           </Field>
-          <Field label="Chat ID (opzionale)" error={chatErr}>
+          <Field label={t("tg_chatid_label", locale)} error={chatErr}>
             <input
               type="text"
               value={form.chatId}
@@ -84,7 +87,7 @@ export function StepTelegram({ form, set, next, back }: Props) {
             />
           </Field>
           <p className="text-[10px]" style={{ color: "var(--color-dim)" }}>
-            Crea un bot con @BotFather su Telegram per ottenere il token.
+            {t("tg_hint", locale)}
           </p>
         </>
       )}

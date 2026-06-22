@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 
 type Priority = "low" | "normal" | "high" | "urgent";
 type NType = "info" | "warning" | "success" | "error";
@@ -18,19 +20,206 @@ type Notif = {
   agentId?: string;
 };
 
-const TYPE_CFG: Record<NType, { label: string; color: string; icon: string }> =
+const T: Record<
+  Locale,
   {
-    info: { label: "info", color: "#61affe", icon: "ℹ" },
-    warning: { label: "avviso", color: "var(--color-yellow)", icon: "⚠" },
-    success: { label: "ok", color: "var(--color-green)", icon: "✓" },
-    error: { label: "errore", color: "var(--color-red)", icon: "✗" },
-  };
+    type: Record<NType, string>;
+    prio: Record<Priority, string>;
+    now: string;
+    minsAgo: (n: number) => string;
+    hoursAgo: (n: number) => string;
+    daysAgo: (n: number) => string;
+    read: string;
+    deleteAria: string;
+    filterAll: string;
+    filterWarnings: string;
+    filterErrors: string;
+    filterUnread: string;
+    filterRead: string;
+    breadcrumb: string;
+    title: string;
+    subtitle: (unread: number, total: number) => string;
+    deleteRead: (n: number) => string;
+    markAllRead: string;
+    empty: string;
+  }
+> = {
+  it: {
+    type: { info: "info", warning: "avviso", success: "ok", error: "errore" },
+    prio: { low: "bassa", normal: "normale", high: "alta", urgent: "urgente" },
+    now: "adesso",
+    minsAgo: (n) => `${n}m fa`,
+    hoursAgo: (n) => `${n}h fa`,
+    daysAgo: (n) => `${n}g fa`,
+    read: "letto",
+    deleteAria: "Elimina notifica",
+    filterAll: "tutte",
+    filterWarnings: "avvisi",
+    filterErrors: "errori",
+    filterUnread: "non lette",
+    filterRead: "lette",
+    breadcrumb: "Notifiche",
+    title: "Notifiche",
+    subtitle: (u, t) => `${u} non lette · ${t} totali`,
+    deleteRead: (n) => `elimina lette (${n})`,
+    markAllRead: "segna tutte lette",
+    empty: "Nessuna notifica trovata.",
+  },
+  en: {
+    type: { info: "info", warning: "warning", success: "ok", error: "error" },
+    prio: { low: "low", normal: "normal", high: "high", urgent: "urgent" },
+    now: "now",
+    minsAgo: (n) => `${n}m ago`,
+    hoursAgo: (n) => `${n}h ago`,
+    daysAgo: (n) => `${n}d ago`,
+    read: "read",
+    deleteAria: "Delete notification",
+    filterAll: "all",
+    filterWarnings: "warnings",
+    filterErrors: "errors",
+    filterUnread: "unread",
+    filterRead: "read",
+    breadcrumb: "Notifications",
+    title: "Notifications",
+    subtitle: (u, t) => `${u} unread · ${t} total`,
+    deleteRead: (n) => `delete read (${n})`,
+    markAllRead: "mark all read",
+    empty: "No notifications found.",
+  },
+  es: {
+    type: { info: "info", warning: "aviso", success: "ok", error: "error" },
+    prio: { low: "baja", normal: "normal", high: "alta", urgent: "urgente" },
+    now: "ahora",
+    minsAgo: (n) => `hace ${n}m`,
+    hoursAgo: (n) => `hace ${n}h`,
+    daysAgo: (n) => `hace ${n}d`,
+    read: "leído",
+    deleteAria: "Eliminar notificación",
+    filterAll: "todas",
+    filterWarnings: "avisos",
+    filterErrors: "errores",
+    filterUnread: "no leídas",
+    filterRead: "leídas",
+    breadcrumb: "Notificaciones",
+    title: "Notificaciones",
+    subtitle: (u, t) => `${u} no leídas · ${t} en total`,
+    deleteRead: (n) => `eliminar leídas (${n})`,
+    markAllRead: "marcar todas leídas",
+    empty: "No se encontraron notificaciones.",
+  },
+  fr: {
+    type: { info: "info", warning: "alerte", success: "ok", error: "erreur" },
+    prio: { low: "basse", normal: "normale", high: "haute", urgent: "urgente" },
+    now: "maintenant",
+    minsAgo: (n) => `il y a ${n}m`,
+    hoursAgo: (n) => `il y a ${n}h`,
+    daysAgo: (n) => `il y a ${n}j`,
+    read: "lu",
+    deleteAria: "Supprimer la notification",
+    filterAll: "toutes",
+    filterWarnings: "alertes",
+    filterErrors: "erreurs",
+    filterUnread: "non lues",
+    filterRead: "lues",
+    breadcrumb: "Notifications",
+    title: "Notifications",
+    subtitle: (u, t) => `${u} non lues · ${t} au total`,
+    deleteRead: (n) => `supprimer les lues (${n})`,
+    markAllRead: "tout marquer comme lu",
+    empty: "Aucune notification trouvée.",
+  },
+  de: {
+    type: {
+      info: "info",
+      warning: "Warnung",
+      success: "ok",
+      error: "Fehler",
+    },
+    prio: {
+      low: "niedrig",
+      normal: "normal",
+      high: "hoch",
+      urgent: "dringend",
+    },
+    now: "jetzt",
+    minsAgo: (n) => `vor ${n}m`,
+    hoursAgo: (n) => `vor ${n}h`,
+    daysAgo: (n) => `vor ${n}T`,
+    read: "gelesen",
+    deleteAria: "Benachrichtigung löschen",
+    filterAll: "alle",
+    filterWarnings: "Warnungen",
+    filterErrors: "Fehler",
+    filterUnread: "ungelesen",
+    filterRead: "gelesen",
+    breadcrumb: "Benachrichtigungen",
+    title: "Benachrichtigungen",
+    subtitle: (u, t) => `${u} ungelesen · ${t} insgesamt`,
+    deleteRead: (n) => `gelesene löschen (${n})`,
+    markAllRead: "alle als gelesen markieren",
+    empty: "Keine Benachrichtigungen gefunden.",
+  },
+  hu: {
+    type: { info: "info", warning: "figyelm.", success: "ok", error: "hiba" },
+    prio: {
+      low: "alacsony",
+      normal: "normál",
+      high: "magas",
+      urgent: "sürgős",
+    },
+    now: "most",
+    minsAgo: (n) => `${n} perce`,
+    hoursAgo: (n) => `${n} órája`,
+    daysAgo: (n) => `${n} napja`,
+    read: "olvasva",
+    deleteAria: "Értesítés törlése",
+    filterAll: "összes",
+    filterWarnings: "figyelmeztetések",
+    filterErrors: "hibák",
+    filterUnread: "olvasatlan",
+    filterRead: "olvasott",
+    breadcrumb: "Értesítések",
+    title: "Értesítések",
+    subtitle: (u, t) => `${u} olvasatlan · ${t} összesen`,
+    deleteRead: (n) => `olvasottak törlése (${n})`,
+    markAllRead: "mind olvasottnak jelöl",
+    empty: "Nincs értesítés.",
+  },
+  pt: {
+    type: { info: "info", warning: "aviso", success: "ok", error: "erro" },
+    prio: { low: "baixa", normal: "normal", high: "alta", urgent: "urgente" },
+    now: "agora",
+    minsAgo: (n) => `há ${n}m`,
+    hoursAgo: (n) => `há ${n}h`,
+    daysAgo: (n) => `há ${n}d`,
+    read: "lido",
+    deleteAria: "Excluir notificação",
+    filterAll: "todas",
+    filterWarnings: "avisos",
+    filterErrors: "erros",
+    filterUnread: "não lidas",
+    filterRead: "lidas",
+    breadcrumb: "Notificações",
+    title: "Notificações",
+    subtitle: (u, t) => `${u} não lidas · ${t} no total`,
+    deleteRead: (n) => `excluir lidas (${n})`,
+    markAllRead: "marcar todas como lidas",
+    empty: "Nenhuma notificação encontrada.",
+  },
+};
 
-const PRIO_CFG: Record<Priority, { label: string; color: string }> = {
-  low: { label: "bassa", color: "var(--color-dim)" },
-  normal: { label: "normale", color: "var(--color-muted)" },
-  high: { label: "alta", color: "var(--color-yellow)" },
-  urgent: { label: "urgente", color: "var(--color-red)" },
+const TYPE_CFG: Record<NType, { color: string; icon: string }> = {
+  info: { color: "#61affe", icon: "ℹ" },
+  warning: { color: "var(--color-yellow)", icon: "⚠" },
+  success: { color: "var(--color-green)", icon: "✓" },
+  error: { color: "var(--color-red)", icon: "✗" },
+};
+
+const PRIO_CFG: Record<Priority, { color: string }> = {
+  low: { color: "var(--color-dim)" },
+  normal: { color: "var(--color-muted)" },
+  high: { color: "var(--color-yellow)" },
+  urgent: { color: "var(--color-red)" },
 };
 
 function NotifRow({
@@ -42,15 +231,16 @@ function NotifRow({
   onRead: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
+  const tr = T[useLocale()];
   const age = Math.floor((Date.now() - n.timestamp) / 60000);
   const ageLabel =
     age < 1
-      ? "adesso"
+      ? tr.now
       : age < 60
-        ? `${age}m fa`
+        ? tr.minsAgo(age)
         : age < 1440
-          ? `${Math.floor(age / 60)}h fa`
-          : `${Math.floor(age / 1440)}g fa`;
+          ? tr.hoursAgo(Math.floor(age / 60))
+          : tr.daysAgo(Math.floor(age / 1440));
   const t = TYPE_CFG[n.type] ?? TYPE_CFG.info;
   return (
     <div
@@ -88,7 +278,7 @@ function NotifRow({
               border: `1px solid ${t.color}30`,
             }}
           >
-            {t.label}
+            {tr.type[n.type]}
           </span>
           <span
             className="text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
@@ -97,7 +287,7 @@ function NotifRow({
               border: `1px solid var(--color-border)`,
             }}
           >
-            {PRIO_CFG[n.priority].label}
+            {tr.prio[n.priority]}
           </span>
         </div>
         <p className="text-[11px] text-[var(--color-muted)] truncate">
@@ -108,7 +298,7 @@ function NotifRow({
         <span className="text-[9px] text-[var(--color-dim)]">{ageLabel}</span>
         {!n.read && (
           <Btn
-            label="letto"
+            label={tr.read}
             color="var(--color-green)"
             onClick={() => onRead(n.id)}
           />
@@ -117,7 +307,7 @@ function NotifRow({
           label="×"
           color="var(--color-red)"
           onClick={() => onDelete(n.id)}
-          ariaLabel="Elimina notifica"
+          ariaLabel={tr.deleteAria}
         />
       </div>
     </div>
@@ -155,6 +345,7 @@ type FilterType = "all" | NType;
 type FilterRead = "all" | "unread" | "read";
 
 export default function NotificationsPage() {
+  const tr = T[useLocale()];
   const [items, setItems] = useState<Notif[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [filterType, setFilterType] = useState<FilterType>("all");
@@ -204,16 +395,16 @@ export default function NotificationsPage() {
     label: string;
     color?: string;
   }> = [
-    { key: "all", label: "tutte" },
-    { key: "info", label: "info", color: TYPE_CFG.info.color },
-    { key: "success", label: "ok", color: TYPE_CFG.success.color },
-    { key: "warning", label: "avvisi", color: TYPE_CFG.warning.color },
-    { key: "error", label: "errori", color: TYPE_CFG.error.color },
+    { key: "all", label: tr.filterAll },
+    { key: "info", label: tr.type.info, color: TYPE_CFG.info.color },
+    { key: "success", label: tr.type.success, color: TYPE_CFG.success.color },
+    { key: "warning", label: tr.filterWarnings, color: TYPE_CFG.warning.color },
+    { key: "error", label: tr.filterErrors, color: TYPE_CFG.error.color },
   ];
   const READ_FILTERS: Array<{ key: FilterRead; label: string }> = [
-    { key: "all", label: "tutte" },
-    { key: "unread", label: "non lette" },
-    { key: "read", label: "lette" },
+    { key: "all", label: tr.filterAll },
+    { key: "unread", label: tr.filterUnread },
+    { key: "read", label: tr.filterRead },
   ];
 
   const readCount = items.filter((n) => n.read).length;
@@ -235,16 +426,16 @@ export default function NotificationsPage() {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Notifiche
+            {tr.breadcrumb}
           </span>
         </nav>
         <div className="mt-3 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-              Notifiche
+              {tr.title}
             </h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
-              {unreadCount} non lette · {items.length} totali
+              {tr.subtitle(unreadCount, items.length)}
             </p>
           </div>
           <div className="flex gap-2">
@@ -258,7 +449,7 @@ export default function NotificationsPage() {
                   background: "transparent",
                 }}
               >
-                elimina lette ({readCount})
+                {tr.deleteRead(readCount)}
               </button>
             )}
             {unreadCount > 0 && (
@@ -271,7 +462,7 @@ export default function NotificationsPage() {
                   border: "none",
                 }}
               >
-                segna tutte lette
+                {tr.markAllRead}
               </button>
             )}
           </div>
@@ -325,7 +516,7 @@ export default function NotificationsPage() {
         {items.length === 0 ? (
           <div className="flex flex-col items-center py-16">
             <p className="text-[var(--color-dim)] text-[12px]">
-              Nessuna notifica trovata.
+              {tr.empty}
             </p>
           </div>
         ) : (

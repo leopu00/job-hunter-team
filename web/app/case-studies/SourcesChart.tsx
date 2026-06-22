@@ -1,8 +1,20 @@
 "use client";
 
 import { useMemo } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 
 const BLUE = "var(--color-blue)";
+
+const T: Record<Locale, { noData: string; other: string }> = {
+  it: { noData: "Dato non disponibile in questo snapshot.", other: "Altre" },
+  en: { noData: "Data not available in this snapshot.", other: "Other" },
+  es: { noData: "Dato no disponible en esta instantánea.", other: "Otras" },
+  fr: { noData: "Donnée non disponible dans cet instantané.", other: "Autres" },
+  de: { noData: "Daten in diesem Snapshot nicht verfügbar.", other: "Andere" },
+  hu: { noData: "Az adat nem érhető el ebben a pillanatképben.", other: "Egyéb" },
+  pt: { noData: "Dado não disponível neste snapshot.", other: "Outras" },
+};
 
 function pct(n: number, total: number): string {
   if (!total) return "0%";
@@ -19,6 +31,8 @@ export default function SourcesChart({
   sources: { name: string; count: number }[];
   total: number;
 }) {
+  const locale = useLocale();
+  const t = T[locale];
   const rows = useMemo(() => {
     const rest = sources
       .filter((s) => s.name !== "Altre")
@@ -32,7 +46,7 @@ export default function SourcesChart({
   if (rows.length === 0) {
     return (
       <p className="text-[11px] text-[var(--color-dim)]">
-        Dato non disponibile in questo snapshot.
+        {t.noData}
       </p>
     );
   }
@@ -50,9 +64,9 @@ export default function SourcesChart({
                 style={{
                   color: isOther ? "var(--color-dim)" : "var(--color-muted)",
                 }}
-                title={s.name}
+                title={isOther ? t.other : s.name}
               >
-                {s.name}
+                {isOther ? t.other : s.name}
               </span>
               <div
                 className="flex-1 h-1.5 rounded-full overflow-hidden"

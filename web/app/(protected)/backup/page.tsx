@@ -2,6 +2,165 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+/* ── i18n inline ─────────────────────────────────────────────────── */
+const T: Record<string, Record<string, string>> = {
+  subtitle: {
+    it: "{n} backup · {size} totali",
+    en: "{n} backups · {size} total",
+    hu: "{n} biztonsági mentés · összesen {size}",
+    es: "{n} copias · {size} en total",
+    de: "{n} Backups · {size} gesamt",
+    fr: "{n} sauvegardes · {size} au total",
+    pt: "{n} backups · {size} no total",
+  },
+  create: {
+    it: "crea backup",
+    en: "create backup",
+    hu: "biztonsági mentés",
+    es: "crear copia",
+    de: "Backup erstellen",
+    fr: "créer une sauvegarde",
+    pt: "criar backup",
+  },
+  creating: {
+    it: "creazione...",
+    en: "creating...",
+    hu: "létrehozás...",
+    es: "creando...",
+    de: "wird erstellt...",
+    fr: "création...",
+    pt: "criando...",
+  },
+  restore: {
+    it: "ripristina",
+    en: "restore",
+    hu: "visszaállítás",
+    es: "restaurar",
+    de: "wiederherstellen",
+    fr: "restaurer",
+    pt: "restaurar",
+  },
+  delete: {
+    it: "elimina",
+    en: "delete",
+    hu: "törlés",
+    es: "eliminar",
+    de: "löschen",
+    fr: "supprimer",
+    pt: "excluir",
+  },
+  manual_backup: {
+    it: "Backup manuale {date}",
+    en: "Manual backup {date}",
+    hu: "Kézi biztonsági mentés {date}",
+    es: "Copia manual {date}",
+    de: "Manuelles Backup {date}",
+    fr: "Sauvegarde manuelle {date}",
+    pt: "Backup manual {date}",
+  },
+  created_ok: {
+    it: "Backup creato con successo",
+    en: "Backup created successfully",
+    hu: "Biztonsági mentés sikeresen létrehozva",
+    es: "Copia creada con éxito",
+    de: "Backup erfolgreich erstellt",
+    fr: "Sauvegarde créée avec succès",
+    pt: "Backup criado com sucesso",
+  },
+  err_create: {
+    it: "Errore creazione backup",
+    en: "Backup creation error",
+    hu: "Hiba a biztonsági mentés létrehozásakor",
+    es: "Error al crear la copia",
+    de: "Fehler beim Erstellen des Backups",
+    fr: "Erreur de création de la sauvegarde",
+    pt: "Erro ao criar backup",
+  },
+  confirm_restore: {
+    it: "Ripristinare il backup {id}…?",
+    en: "Restore backup {id}…?",
+    hu: "Visszaállítja a(z) {id}… biztonsági mentést?",
+    es: "¿Restaurar la copia {id}…?",
+    de: "Backup {id}… wiederherstellen?",
+    fr: "Restaurer la sauvegarde {id}… ?",
+    pt: "Restaurar o backup {id}…?",
+  },
+  restored_ok: {
+    it: "Ripristinato in {dir} ({n} file)",
+    en: "Restored to {dir} ({n} files)",
+    hu: "Visszaállítva ide: {dir} ({n} fájl)",
+    es: "Restaurado en {dir} ({n} archivos)",
+    de: "Wiederhergestellt nach {dir} ({n} Dateien)",
+    fr: "Restauré dans {dir} ({n} fichiers)",
+    pt: "Restaurado em {dir} ({n} arquivos)",
+  },
+  err_restore: {
+    it: "Errore ripristino",
+    en: "Restore error",
+    hu: "Visszaállítási hiba",
+    es: "Error de restauración",
+    de: "Fehler bei der Wiederherstellung",
+    fr: "Erreur de restauration",
+    pt: "Erro de restauração",
+  },
+  confirm_delete: {
+    it: "Eliminare definitivamente il backup {id}…?",
+    en: "Permanently delete backup {id}…?",
+    hu: "Véglegesen törli a(z) {id}… biztonsági mentést?",
+    es: "¿Eliminar definitivamente la copia {id}…?",
+    de: "Backup {id}… endgültig löschen?",
+    fr: "Supprimer définitivement la sauvegarde {id}… ?",
+    pt: "Excluir permanentemente o backup {id}…?",
+  },
+  deleted_ok: {
+    it: "Backup eliminato",
+    en: "Backup deleted",
+    hu: "Biztonsági mentés törölve",
+    es: "Copia eliminada",
+    de: "Backup gelöscht",
+    fr: "Sauvegarde supprimée",
+    pt: "Backup excluído",
+  },
+  err_delete: {
+    it: "Errore eliminazione",
+    en: "Deletion error",
+    hu: "Törlési hiba",
+    es: "Error de eliminación",
+    de: "Fehler beim Löschen",
+    fr: "Erreur de suppression",
+    pt: "Erro de exclusão",
+  },
+  loading: {
+    it: "Caricamento...",
+    en: "Loading...",
+    hu: "Betöltés...",
+    es: "Cargando...",
+    de: "Wird geladen...",
+    fr: "Chargement...",
+    pt: "Carregando...",
+  },
+  empty: {
+    it: "Nessun backup trovato.",
+    en: "No backups found.",
+    hu: "Nem található biztonsági mentés.",
+    es: "No se encontraron copias.",
+    de: "Keine Backups gefunden.",
+    fr: "Aucune sauvegarde trouvée.",
+    pt: "Nenhum backup encontrado.",
+  },
+};
+
+const LOCALE_TAG: Record<string, string> = {
+  it: "it-IT",
+  en: "en-US",
+  hu: "hu-HU",
+  es: "es-ES",
+  de: "de-DE",
+  fr: "fr-FR",
+  pt: "pt-PT",
+};
 
 type Backup = {
   id: string;
@@ -18,8 +177,8 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleString("it-IT", {
+function formatDate(ts: number, locale: string): string {
+  return new Date(ts).toLocaleString(LOCALE_TAG[locale] ?? "en-US", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -32,10 +191,14 @@ function BackupRow({
   b,
   onRestore,
   onDelete,
+  tr,
+  locale,
 }: {
   b: Backup;
   onRestore: (id: string) => void;
   onDelete: (id: string) => void;
+  tr: (k: string) => string;
+  locale: string;
 }) {
   return (
     <div className="flex items-center gap-4 px-5 py-3.5 border-b border-[var(--color-border)] hover:bg-[var(--color-row)] transition-colors">
@@ -65,7 +228,7 @@ function BackupRow({
         {formatSize(b.sizeBytes)}
       </span>
       <span className="text-[10px] text-[var(--color-dim)] flex-shrink-0">
-        {formatDate(b.createdAt)}
+        {formatDate(b.createdAt, locale)}
       </span>
       <div className="flex gap-2 flex-shrink-0">
         <button
@@ -76,7 +239,7 @@ function BackupRow({
             border: "1px solid rgba(59,130,246,0.3)",
           }}
         >
-          ripristina
+          {tr("restore")}
         </button>
         <button
           onClick={() => onDelete(b.id)}
@@ -86,7 +249,7 @@ function BackupRow({
             border: "1px solid rgba(255,69,96,0.3)",
           }}
         >
-          elimina
+          {tr("delete")}
         </button>
       </div>
     </div>
@@ -94,6 +257,8 @@ function BackupRow({
 }
 
 export default function BackupPage() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [backups, setBackups] = useState<Backup[]>([]);
   const [totalSize, setTotalSize] = useState(0);
   const [creating, setCreating] = useState(false);
@@ -123,46 +288,50 @@ export default function BackupPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        description: `Backup manuale ${new Date().toLocaleDateString("it-IT")}`,
+        description: tr("manual_backup").replace(
+          "{date}",
+          new Date().toLocaleDateString(LOCALE_TAG[locale] ?? "en-US"),
+        ),
       }),
     }).catch(() => null);
     setCreating(false);
     if (res?.ok) {
-      setMsg({ text: "Backup creato con successo", ok: true });
+      setMsg({ text: tr("created_ok"), ok: true });
       fetchBackups();
     } else {
       const err = await res?.json().catch(() => ({}));
-      setMsg({ text: err?.error || "Errore creazione backup", ok: false });
+      setMsg({ text: err?.error || tr("err_create"), ok: false });
     }
   };
 
   const restoreBackup = async (id: string) => {
-    if (!confirm(`Ripristinare il backup ${id.slice(0, 20)}…?`)) return;
+    if (!confirm(tr("confirm_restore").replace("{id}", id.slice(0, 20)))) return;
     const res = await fetch(`/api/backup?id=${id}`, { method: "PATCH" }).catch(
       () => null,
     );
     if (res?.ok) {
       const data = await res.json();
       setMsg({
-        text: `Ripristinato in ${data.targetDir} (${data.restored?.length ?? 0} file)`,
+        text: tr("restored_ok")
+          .replace("{dir}", data.targetDir)
+          .replace("{n}", String(data.restored?.length ?? 0)),
         ok: true,
       });
     } else {
-      setMsg({ text: "Errore ripristino", ok: false });
+      setMsg({ text: tr("err_restore"), ok: false });
     }
   };
 
   const deleteBackup = async (id: string) => {
-    if (!confirm(`Eliminare definitivamente il backup ${id.slice(0, 20)}…?`))
-      return;
+    if (!confirm(tr("confirm_delete").replace("{id}", id.slice(0, 20)))) return;
     const res = await fetch(`/api/backup?id=${id}`, { method: "DELETE" }).catch(
       () => null,
     );
     if (res?.ok) {
-      setMsg({ text: "Backup eliminato", ok: true });
+      setMsg({ text: tr("deleted_ok"), ok: true });
       fetchBackups();
     } else {
-      setMsg({ text: "Errore eliminazione", ok: false });
+      setMsg({ text: tr("err_delete"), ok: false });
     }
   };
 
@@ -192,7 +361,9 @@ export default function BackupPage() {
               Backup
             </h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
-              {backups.length} backup · {formatSize(totalSize)} totali
+              {tr("subtitle")
+                .replace("{n}", String(backups.length))
+                .replace("{size}", formatSize(totalSize))}
             </p>
           </div>
           <button
@@ -201,7 +372,7 @@ export default function BackupPage() {
             className="px-4 py-2 rounded-lg text-[11px] font-bold tracking-wide transition-all cursor-pointer disabled:opacity-50"
             style={{ background: "var(--color-green)", color: "#000" }}
           >
-            {creating ? "creazione..." : "crea backup"}
+            {creating ? tr("creating") : tr("create")}
           </button>
         </div>
         {msg && (
@@ -224,15 +395,11 @@ export default function BackupPage() {
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {loading ? (
           <div className="py-16 text-center">
-            <p className="text-[var(--color-dim)] text-[12px]">
-              Caricamento...
-            </p>
+            <p className="text-[var(--color-dim)] text-[12px]">{tr("loading")}</p>
           </div>
         ) : backups.length === 0 ? (
           <div className="flex flex-col items-center py-16 text-center">
-            <p className="text-[var(--color-dim)] text-[12px]">
-              Nessun backup trovato.
-            </p>
+            <p className="text-[var(--color-dim)] text-[12px]">{tr("empty")}</p>
           </div>
         ) : (
           backups.map((b) => (
@@ -241,6 +408,8 @@ export default function BackupPage() {
               b={b}
               onRestore={restoreBackup}
               onDelete={deleteBackup}
+              tr={tr}
+              locale={locale}
             />
           ))
         )}

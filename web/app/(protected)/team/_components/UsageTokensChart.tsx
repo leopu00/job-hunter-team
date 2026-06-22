@@ -13,6 +13,370 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+
+// Dizionario i18n locale (pattern TokenBreakdown.tsx). Risolto via tr(key).
+// Tecnicismi/sigle (kT, MT, ratio, usage, proj, samples, T{n}, %/h, kT/%,
+// MT/%, provider names) restano nelle stringhe dove non sono prosa.
+const T: Record<string, Record<string, string>> = {
+  header: {
+    it: "Rate budget + usage stimato dai token",
+    en: "Rate budget + usage estimated from tokens",
+    es: "Rate budget + usage estimado por los tokens",
+    fr: "Rate budget + usage estimé d'après les tokens",
+    de: "Rate Budget + aus Tokens geschätzter Usage",
+    hu: "Rate budget + tokenekből becsült usage",
+    pt: "Rate budget + usage estimado pelos tokens",
+  },
+  rangeAll: {
+    it: "tutto",
+    en: "all",
+    es: "todo",
+    fr: "tout",
+    de: "alle",
+    hu: "összes",
+    pt: "tudo",
+  },
+  backToNowTitle: {
+    it: "Torna al tempo corrente",
+    en: "Back to current time",
+    es: "Volver al tiempo actual",
+    fr: "Revenir au temps actuel",
+    de: "Zurück zur aktuellen Zeit",
+    hu: "Vissza a jelenlegi időhöz",
+    pt: "Voltar ao tempo atual",
+  },
+  timeRangeAria: {
+    it: "intervallo temporale",
+    en: "time range",
+    es: "intervalo temporal",
+    fr: "plage temporelle",
+    de: "Zeitraum",
+    hu: "időtartomány",
+    pt: "intervalo temporal",
+  },
+  details: {
+    it: "dettagli →",
+    en: "details →",
+    es: "detalles →",
+    fr: "détails →",
+    de: "Details →",
+    hu: "részletek →",
+    pt: "detalhes →",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    es: "Cargando…",
+    fr: "Chargement…",
+    de: "Wird geladen…",
+    hu: "Betöltés…",
+    pt: "Carregando…",
+  },
+  waitingFirstTick: {
+    it: "In attesa del primo tick del bridge…",
+    en: "Waiting for the first bridge tick…",
+    es: "Esperando el primer tick del bridge…",
+    fr: "En attente du premier tick du bridge…",
+    de: "Warte auf den ersten Bridge-Tick…",
+    hu: "Várakozás az első bridge tickre…",
+    pt: "Aguardando o primeiro tick do bridge…",
+  },
+  noSampleInRange: {
+    it: "Nessun sample nell'intervallo selezionato — prova “{all}”.",
+    en: "No sample in the selected range — try “{all}”.",
+    es: "Ningún sample en el intervalo seleccionado — prueba “{all}”.",
+    fr: "Aucun sample dans l'intervalle sélectionné — essaie « {all} ».",
+    de: "Kein Sample im gewählten Bereich — versuche „{all}“.",
+    hu: "Nincs sample a kiválasztott tartományban — próbáld a(z) „{all}”-t.",
+    pt: "Nenhum sample no intervalo selecionado — tente “{all}”.",
+  },
+  // ── Badge ratio ──
+  ratioCalibrating: {
+    it: "ratio: calibrando…",
+    en: "ratio: calibrating…",
+    es: "ratio: calibrando…",
+    fr: "ratio : calibrage…",
+    de: "ratio: kalibriere…",
+    hu: "ratio: kalibrálás…",
+    pt: "ratio: calibrando…",
+  },
+  ratioCalibratingTitle: {
+    it: "Servono ≥2 sample con Δusage > 0 dalla nascita sessione provider",
+    en: "Needs ≥2 samples with Δusage > 0 since the provider session start",
+    es: "Se necesitan ≥2 samples con Δusage > 0 desde el inicio de la sesión del proveedor",
+    fr: "Nécessite ≥2 samples avec Δusage > 0 depuis le début de la session du fournisseur",
+    de: "Benötigt ≥2 Samples mit Δusage > 0 seit Sitzungsbeginn des Anbieters",
+    hu: "≥2 sample kell Δusage > 0 értékkel a szolgáltatói munkamenet kezdete óta",
+    pt: "Precisa de ≥2 samples com Δusage > 0 desde o início da sessão do provedor",
+  },
+  ratioStep: {
+    it: "{n} step",
+    en: "{n} step",
+    es: "{n} step",
+    fr: "{n} step",
+    de: "{n} step",
+    hu: "{n} step",
+    pt: "{n} step",
+  },
+  ratioOutOfRangeTitle: {
+    it: "⚠ ratio {r} kT/% FUORI RANGE atteso {min}-{max} per provider {provider}.\nI pesi token (1, 1, 0, 0) sono hardcoded — possibilmente il provider ha cambiato il rate model, o cambia la composizione del team.\nNON cambiare i pesi automaticamente: rifai l'analisi su una sessione fresca.",
+    en: "⚠ ratio {r} kT/% OUT OF expected RANGE {min}-{max} for provider {provider}.\nThe token weights (1, 1, 0, 0) are hardcoded — the provider may have changed the rate model, or the team composition changed.\nDo NOT change the weights automatically: redo the analysis on a fresh session.",
+    es: "⚠ ratio {r} kT/% FUERA DEL RANGO esperado {min}-{max} para el proveedor {provider}.\nLos pesos de tokens (1, 1, 0, 0) están hardcodeados — posiblemente el proveedor cambió el rate model, o cambió la composición del equipo.\nNO cambies los pesos automáticamente: rehaz el análisis en una sesión fresca.",
+    fr: "⚠ ratio {r} kT/% HORS de la PLAGE attendue {min}-{max} pour le fournisseur {provider}.\nLes poids des tokens (1, 1, 0, 0) sont codés en dur — le fournisseur a peut-être changé le rate model, ou la composition de l'équipe a changé.\nNE change PAS les poids automatiquement : refais l'analyse sur une session fraîche.",
+    de: "⚠ ratio {r} kT/% AUSSERHALB des erwarteten BEREICHS {min}-{max} für Anbieter {provider}.\nDie Token-Gewichte (1, 1, 0, 0) sind hartkodiert — möglicherweise hat der Anbieter das Rate-Model geändert, oder die Teamzusammensetzung hat sich geändert.\nÄndere die Gewichte NICHT automatisch: wiederhole die Analyse auf einer frischen Sitzung.",
+    hu: "⚠ ratio {r} kT/% A VÁRT TARTOMÁNYON KÍVÜL {min}-{max} a(z) {provider} szolgáltatónál.\nA token-súlyok (1, 1, 0, 0) hardkódoltak — lehet, hogy a szolgáltató megváltoztatta a rate modellt, vagy megváltozott a csapat összetétele.\nNE módosítsd a súlyokat automatikusan: ismételd meg az elemzést egy friss munkameneten.",
+    pt: "⚠ ratio {r} kT/% FORA do INTERVALO esperado {min}-{max} para o provedor {provider}.\nOs pesos dos tokens (1, 1, 0, 0) são hardcoded — possivelmente o provedor mudou o rate model, ou mudou a composição da equipe.\nNÃO altere os pesos automaticamente: refaça a análise em uma sessão nova.",
+  },
+  ratioInRangeTitle: {
+    it: "Ratio macro cumulativo dalla nascita sessione ({samples} step). EMA segmenti: {ema} kT/%. Ultimo segmento: {lastRatio} kT/%. In range atteso {min}-{max} kT/% per provider {provider}.",
+    en: "Cumulative macro ratio since session start ({samples} step). Segment EMA: {ema} kT/%. Last segment: {lastRatio} kT/%. Within expected range {min}-{max} kT/% for provider {provider}.",
+    es: "Ratio macro acumulativo desde el inicio de la sesión ({samples} step). EMA de segmentos: {ema} kT/%. Último segmento: {lastRatio} kT/%. Dentro del rango esperado {min}-{max} kT/% para el proveedor {provider}.",
+    fr: "Ratio macro cumulé depuis le début de la session ({samples} step). EMA des segments : {ema} kT/%. Dernier segment : {lastRatio} kT/%. Dans la plage attendue {min}-{max} kT/% pour le fournisseur {provider}.",
+    de: "Kumulativer Makro-Ratio seit Sitzungsbeginn ({samples} step). Segment-EMA: {ema} kT/%. Letztes Segment: {lastRatio} kT/%. Im erwarteten Bereich {min}-{max} kT/% für Anbieter {provider}.",
+    hu: "Kumulatív makró ratio a munkamenet kezdete óta ({samples} step). Szegmens EMA: {ema} kT/%. Utolsó szegmens: {lastRatio} kT/%. A várt tartományon belül {min}-{max} kT/% a(z) {provider} szolgáltatónál.",
+    pt: "Ratio macro cumulativo desde o início da sessão ({samples} step). EMA dos segmentos: {ema} kT/%. Último segmento: {lastRatio} kT/%. Dentro do intervalo esperado {min}-{max} kT/% para o provedor {provider}.",
+  },
+  // ── Legenda ──
+  legUsageEstimated: {
+    it: "usage stimato dai token (piecewise)",
+    en: "usage estimated from tokens (piecewise)",
+    es: "usage estimado por los tokens (piecewise)",
+    fr: "usage estimé d'après les tokens (piecewise)",
+    de: "aus Tokens geschätzter Usage (piecewise)",
+    hu: "tokenekből becsült usage (piecewise)",
+    pt: "usage estimado pelos tokens (piecewise)",
+  },
+  legKtCum: {
+    it: "token kT cumulativo (asse dx)",
+    en: "cumulative kT tokens (right axis)",
+    es: "token kT acumulativo (eje dcho.)",
+    fr: "tokens kT cumulés (axe droit)",
+    de: "kumulative kT-Tokens (rechte Achse)",
+    hu: "kumulatív kT token (jobb tengely)",
+    pt: "tokens kT cumulativo (eixo dir.)",
+  },
+  legRatioAvg: {
+    it: "ratio kT/% media 30m",
+    en: "ratio kT/% 30m avg",
+    es: "ratio kT/% media 30m",
+    fr: "ratio kT/% moyenne 30m",
+    de: "ratio kT/% 30m Mittel",
+    hu: "ratio kT/% 30m átlag",
+    pt: "ratio kT/% média 30m",
+  },
+  legRatioInst: {
+    it: "ratio kT/% istantanea",
+    en: "ratio kT/% instant",
+    es: "ratio kT/% instantánea",
+    fr: "ratio kT/% instantanée",
+    de: "ratio kT/% momentan",
+    hu: "ratio kT/% pillanatnyi",
+    pt: "ratio kT/% instantânea",
+  },
+  legStep: {
+    it: "step (Δusage ≥ 1)",
+    en: "step (Δusage ≥ 1)",
+    es: "step (Δusage ≥ 1)",
+    fr: "step (Δusage ≥ 1)",
+    de: "step (Δusage ≥ 1)",
+    hu: "step (Δusage ≥ 1)",
+    pt: "step (Δusage ≥ 1)",
+  },
+  legClickHide: {
+    it: "Click per nascondere: {label}",
+    en: "Click to hide: {label}",
+    es: "Clic para ocultar: {label}",
+    fr: "Cliquer pour masquer : {label}",
+    de: "Klicken zum Ausblenden: {label}",
+    hu: "Kattints az elrejtéshez: {label}",
+    pt: "Clique para ocultar: {label}",
+  },
+  legClickShow: {
+    it: "Click per mostrare: {label}",
+    en: "Click to show: {label}",
+    es: "Clic para mostrar: {label}",
+    fr: "Cliquer pour afficher : {label}",
+    de: "Klicken zum Anzeigen: {label}",
+    hu: "Kattints a megjelenítéshez: {label}",
+    pt: "Clique para mostrar: {label}",
+  },
+  // ── formatResetDisplay ──
+  resetIn: {
+    it: "reset tra {remaining} ({time})",
+    en: "reset in {remaining} ({time})",
+    es: "reset en {remaining} ({time})",
+    fr: "reset dans {remaining} ({time})",
+    de: "Reset in {remaining} ({time})",
+    hu: "reset {remaining} múlva ({time})",
+    pt: "reset em {remaining} ({time})",
+  },
+  // ── Tooltip ──
+  ttUsage: {
+    it: "usage:",
+    en: "usage:",
+    es: "usage:",
+    fr: "usage :",
+    de: "usage:",
+    hu: "usage:",
+    pt: "usage:",
+  },
+  ttEstimated: {
+    it: "stimato:",
+    en: "estimated:",
+    es: "estimado:",
+    fr: "estimé :",
+    de: "geschätzt:",
+    hu: "becsült:",
+    pt: "estimado:",
+  },
+  ttCumulative: {
+    it: "cumulativo:",
+    en: "cumulative:",
+    es: "acumulativo:",
+    fr: "cumulé :",
+    de: "kumulativ:",
+    hu: "kumulatív:",
+    pt: "cumulativo:",
+  },
+  ttRatio: {
+    it: "ratio:",
+    en: "ratio:",
+    es: "ratio:",
+    fr: "ratio :",
+    de: "ratio:",
+    hu: "ratio:",
+    pt: "ratio:",
+  },
+  ttAvg30m: {
+    it: "media 30m:",
+    en: "30m avg:",
+    es: "media 30m:",
+    fr: "moyenne 30m :",
+    de: "30m Mittel:",
+    hu: "30m átlag:",
+    pt: "média 30m:",
+  },
+  // ── BudgetWidgets ──
+  consumed: {
+    it: "consumati",
+    en: "consumed",
+    es: "consumidos",
+    fr: "consommés",
+    de: "verbraucht",
+    hu: "elfogyasztott",
+    pt: "consumidos",
+  },
+  budgetUsed: {
+    it: "budget · {pct}% usato",
+    en: "budget · {pct}% used",
+    es: "budget · {pct}% usado",
+    fr: "budget · {pct}% utilisé",
+    de: "Budget · {pct}% genutzt",
+    hu: "budget · {pct}% felhasználva",
+    pt: "budget · {pct}% usado",
+  },
+  budget: {
+    it: "budget",
+    en: "budget",
+    es: "budget",
+    fr: "budget",
+    de: "Budget",
+    hu: "budget",
+    pt: "budget",
+  },
+  eta100Verdict: {
+    it: "ETA 100% · {verdict}",
+    en: "ETA 100% · {verdict}",
+    es: "ETA 100% · {verdict}",
+    fr: "ETA 100% · {verdict}",
+    de: "ETA 100% · {verdict}",
+    hu: "ETA 100% · {verdict}",
+    pt: "ETA 100% · {verdict}",
+  },
+  verdictSafe: {
+    it: "safe",
+    en: "safe",
+    es: "seguro",
+    fr: "sûr",
+    de: "sicher",
+    hu: "biztonságos",
+    pt: "seguro",
+  },
+  verdictTight: {
+    it: "stretto",
+    en: "tight",
+    es: "ajustado",
+    fr: "serré",
+    de: "knapp",
+    hu: "szűkös",
+    pt: "apertado",
+  },
+  verdictOverrun: {
+    it: "sfori",
+    en: "overrun",
+    es: "excedido",
+    fr: "dépassement",
+    de: "Überschreitung",
+    hu: "túllépés",
+    pt: "excedido",
+  },
+  consumedTitleBreakdown: {
+    it: "Composizione raw del consumo:\n  input  {in}\n  output {out}\n  cache_read {cr}\n  cache_creation {cc}\n\nWeighted: {weighted} (con i pesi correnti)",
+    en: "Raw composition of consumption:\n  input  {in}\n  output {out}\n  cache_read {cr}\n  cache_creation {cc}\n\nWeighted: {weighted} (with current weights)",
+    es: "Composición raw del consumo:\n  input  {in}\n  output {out}\n  cache_read {cr}\n  cache_creation {cc}\n\nWeighted: {weighted} (con los pesos actuales)",
+    fr: "Composition brute de la consommation :\n  input  {in}\n  output {out}\n  cache_read {cr}\n  cache_creation {cc}\n\nWeighted : {weighted} (avec les poids actuels)",
+    de: "Rohe Zusammensetzung des Verbrauchs:\n  input  {in}\n  output {out}\n  cache_read {cr}\n  cache_creation {cc}\n\nWeighted: {weighted} (mit aktuellen Gewichten)",
+    hu: "A fogyasztás nyers összetétele:\n  input  {in}\n  output {out}\n  cache_read {cr}\n  cache_creation {cc}\n\nWeighted: {weighted} (a jelenlegi súlyokkal)",
+    pt: "Composição raw do consumo:\n  input  {in}\n  output {out}\n  cache_read {cr}\n  cache_creation {cc}\n\nWeighted: {weighted} (com os pesos atuais)",
+  },
+  consumedTitleSimple: {
+    it: "Token consumati dal primo monitoraggio ({time})",
+    en: "Tokens consumed since first monitoring ({time})",
+    es: "Tokens consumidos desde el primer monitoreo ({time})",
+    fr: "Tokens consommés depuis le premier monitoring ({time})",
+    de: "Seit der ersten Überwachung verbrauchte Tokens ({time})",
+    hu: "Az első monitorozás óta elfogyasztott tokenek ({time})",
+    pt: "Tokens consumidos desde o primeiro monitoramento ({time})",
+  },
+  budgetTitle: {
+    it: "Budget = (100% - {usage}%) × {ratio} kT/% = {budget}.\nRimanenti: {remaining}",
+    en: "Budget = (100% - {usage}%) × {ratio} kT/% = {budget}.\nRemaining: {remaining}",
+    es: "Budget = (100% - {usage}%) × {ratio} kT/% = {budget}.\nRestantes: {remaining}",
+    fr: "Budget = (100% - {usage}%) × {ratio} kT/% = {budget}.\nRestants : {remaining}",
+    de: "Budget = (100% - {usage}%) × {ratio} kT/% = {budget}.\nVerbleibend: {remaining}",
+    hu: "Budget = (100% - {usage}%) × {ratio} kT/% = {budget}.\nHátralévő: {remaining}",
+    pt: "Budget = (100% - {usage}%) × {ratio} kT/% = {budget}.\nRestantes: {remaining}",
+  },
+  budgetTitleCalibrating: {
+    it: "Calibrando ratio: budget non ancora calcolabile",
+    en: "Calibrating ratio: budget not yet computable",
+    es: "Calibrando ratio: budget aún no calculable",
+    fr: "Calibrage du ratio : budget pas encore calculable",
+    de: "Ratio wird kalibriert: Budget noch nicht berechenbar",
+    hu: "Ratio kalibrálása: budget még nem számolható",
+    pt: "Calibrando ratio: budget ainda não calculável",
+  },
+  etaTitle: {
+    it: "ETA al 100% (a ritmo attuale): {eta100}\nETA reset: {etaReset}\nVerdetto: {verdict}",
+    en: "ETA to 100% (at current pace): {eta100}\nETA reset: {etaReset}\nVerdict: {verdict}",
+    es: "ETA al 100% (al ritmo actual): {eta100}\nETA reset: {etaReset}\nVeredicto: {verdict}",
+    fr: "ETA à 100% (au rythme actuel) : {eta100}\nETA reset : {etaReset}\nVerdict : {verdict}",
+    de: "ETA bis 100% (bei aktuellem Tempo): {eta100}\nETA Reset: {etaReset}\nUrteil: {verdict}",
+    hu: "ETA 100%-ig (jelenlegi ütemben): {eta100}\nETA reset: {etaReset}\nÍtélet: {verdict}",
+    pt: "ETA até 100% (no ritmo atual): {eta100}\nETA reset: {etaReset}\nVeredito: {verdict}",
+  },
+  // ── Chart step title ──
+  stepTitle: {
+    it: "step {i}: usage={usage}% · kt={kt}",
+    en: "step {i}: usage={usage}% · kt={kt}",
+    es: "step {i}: usage={usage}% · kt={kt}",
+    fr: "step {i}: usage={usage}% · kt={kt}",
+    de: "step {i}: usage={usage}% · kt={kt}",
+    hu: "step {i}: usage={usage}% · kt={kt}",
+    pt: "step {i}: usage={usage}% · kt={kt}",
+  },
+};
 
 type Entry = {
   ts: string;
@@ -98,6 +462,7 @@ function Chart({
   tMax,
   onHover,
   onPan,
+  tr,
 }: {
   entries: Entry[];
   predictedSeries: PredictedPoint[];
@@ -112,6 +477,7 @@ function Chart({
   /** Chiamato durante drag con il delta in millisecondi (positivo = vai avanti
    *  nel tempo, negativo = vai indietro). Il parent applica al panRightTs. */
   onPan?: (deltaMs: number) => void;
+  tr: (k: string) => string;
 }) {
   const W = 1200;
   const H = 540;
@@ -582,7 +948,10 @@ function Chart({
               strokeWidth={1.5}
             >
               <title>
-                step {i}: usage={s.usage}% · kt={fmtKt(s.kt)}
+                {tr("stepTitle")
+                  .replace("{i}", String(i))
+                  .replace("{usage}", String(s.usage))
+                  .replace("{kt}", fmtKt(s.kt))}
               </title>
             </circle>
           );
@@ -655,7 +1024,7 @@ function Chart({
           fill="rgba(255,255,255,0.45)"
           textAnchor="middle"
         >
-          In attesa del primo tick del bridge…
+          {tr("waitingFirstTick")}
         </text>
       )}
     </svg>
@@ -665,9 +1034,11 @@ function Chart({
 function LegendToggle({
   visible,
   onToggle,
+  tr,
 }: {
   visible: SeriesVisibility;
   onToggle: (k: keyof SeriesVisibility) => void;
+  tr: (k: string) => string;
 }) {
   // Ogni voce e' un pulsante: click → toggle. Quando OFF la voce e' opaca
   // e barrata. Lo step events marker non e' togglabile (visivo del bridge,
@@ -694,7 +1065,7 @@ function LegendToggle({
     },
     {
       k: "predicted",
-      label: "usage stimato dai token (piecewise)",
+      label: tr("legUsageEstimated"),
       swatch: (
         <span
           style={{
@@ -708,7 +1079,7 @@ function LegendToggle({
     },
     {
       k: "ktCum",
-      label: "token kT cumulativo (asse dx)",
+      label: tr("legKtCum"),
       swatch: (
         <span
           style={{
@@ -723,7 +1094,7 @@ function LegendToggle({
     },
     {
       k: "ratioAvg",
-      label: "ratio kT/% media 30m",
+      label: tr("legRatioAvg"),
       swatch: (
         <span
           style={{
@@ -737,7 +1108,7 @@ function LegendToggle({
     },
     {
       k: "ratio",
-      label: "ratio kT/% istantanea",
+      label: tr("legRatioInst"),
       swatch: (
         <span
           style={{
@@ -768,8 +1139,8 @@ function LegendToggle({
               }`}
               title={
                 on
-                  ? `Click per nascondere: ${it.label}`
-                  : `Click per mostrare: ${it.label}`
+                  ? tr("legClickHide").replace("{label}", it.label)
+                  : tr("legClickShow").replace("{label}", it.label)
               }
             >
               <span aria-hidden="true">{it.swatch}</span>
@@ -792,7 +1163,7 @@ function LegendToggle({
                 border: "1px solid #0f172a",
               }}
             />
-            step (Δusage ≥ 1)
+            {tr("legStep")}
           </span>
         )}
       </div>
@@ -801,7 +1172,10 @@ function LegendToggle({
 }
 
 /** UTC "HH:MM" → "reset tra 2h 14m (19:30 Europe/Rome)". Se tra <60m, solo minuti. */
-function formatResetDisplay(reset_at?: string | null): string {
+function formatResetDisplay(
+  reset_at: string | null | undefined,
+  tr: (k: string) => string,
+): string {
   if (!reset_at) return "";
   const [hStr, mStr] = reset_at.split(":");
   const h = Number(hStr),
@@ -832,7 +1206,9 @@ function formatResetDisplay(reset_at?: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-  return `reset tra ${remaining} (${localHHMM})`;
+  return tr("resetIn")
+    .replace("{remaining}", remaining)
+    .replace("{time}", localHHMM);
 }
 
 function nearestByTs<T extends { tsMs: number }>(
@@ -859,6 +1235,7 @@ function Tooltip({
   tokenSeries,
   ratioAvgSeries,
   sessionStart,
+  tr,
 }: {
   tsMs: number;
   entries: Entry[];
@@ -866,6 +1243,7 @@ function Tooltip({
   tokenSeries: TokenPoint[];
   ratioAvgSeries: RatioPoint[];
   sessionStart: { usage: number; kt: number } | null;
+  tr: (k: string) => string;
 }) {
   const ts = new Date(tsMs);
   let nearestEntry: Entry | null = null;
@@ -905,7 +1283,7 @@ function Tooltip({
                   marginRight: 6,
                 }}
               />
-              <span className="text-[var(--color-dim)]">usage:</span>
+              <span className="text-[var(--color-dim)]">{tr("ttUsage")}</span>
             </div>
             <div className="text-[var(--color-bright)] font-semibold">
               {nearestEntry.usage}%
@@ -927,7 +1305,9 @@ function Tooltip({
                   marginRight: 6,
                 }}
               />
-              <span className="text-[var(--color-dim)]">stimato:</span>
+              <span className="text-[var(--color-dim)]">
+                {tr("ttEstimated")}
+              </span>
             </div>
             <div style={{ color: "#fb923c" }}>{pred.usage.toFixed(2)}%</div>
           </>
@@ -948,7 +1328,9 @@ function Tooltip({
                   marginRight: 6,
                 }}
               />
-              <span className="text-[var(--color-dim)]">cumulativo:</span>
+              <span className="text-[var(--color-dim)]">
+                {tr("ttCumulative")}
+              </span>
             </div>
             <div style={{ color: "#fde047" }}>{fmtKt(tok.kt)}</div>
           </>
@@ -979,7 +1361,9 @@ function Tooltip({
                       marginRight: 6,
                     }}
                   />
-                  <span className="text-[var(--color-dim)]">ratio:</span>
+                  <span className="text-[var(--color-dim)]">
+                    {tr("ttRatio")}
+                  </span>
                 </div>
                 <div
                   style={{ color: "#ec4899" }}
@@ -1009,7 +1393,7 @@ function Tooltip({
                     marginRight: 6,
                   }}
                 />
-                <span className="text-[var(--color-dim)]">media 30m:</span>
+                <span className="text-[var(--color-dim)]">{tr("ttAvg30m")}</span>
               </div>
               <div style={{ color: "#be185d" }}>{fmtRatio(avg.ratio)}</div>
             </>
@@ -1032,6 +1416,7 @@ function BudgetWidgets({
   breakdown,
   etaResetMs,
   etaTo100Ms,
+  tr,
 }: {
   stats: {
     consumedKt: number;
@@ -1043,6 +1428,7 @@ function BudgetWidgets({
   breakdown: { in: number; out: number; cr: number; cc: number } | null;
   etaResetMs: number | null;
   etaTo100Ms: number | null;
+  tr: (k: string) => string;
 }) {
   const startTime = new Date(stats.sessionStart.ts);
   const usedPct =
@@ -1067,14 +1453,23 @@ function BudgetWidgets({
   let verdict: { color: string; label: string } | null = null;
   if (etaTo100Ms !== null && etaResetMs !== null && etaResetMs > 0) {
     const margin = etaTo100Ms / etaResetMs; // > 1 = reset arriva prima del 100% → safe
-    if (margin > 1.3) verdict = { color: "#4ade80", label: "safe" };
-    else if (margin > 1.05) verdict = { color: "#facc15", label: "stretto" };
-    else verdict = { color: "#f87171", label: "sfori" };
+    if (margin > 1.3) verdict = { color: "#4ade80", label: tr("verdictSafe") };
+    else if (margin > 1.05)
+      verdict = { color: "#facc15", label: tr("verdictTight") };
+    else verdict = { color: "#f87171", label: tr("verdictOverrun") };
   }
 
   const consumedTitle = breakdown
-    ? `Composizione raw del consumo:\n  input  ${fmtKtCompact(breakdown.in)}\n  output ${fmtKtCompact(breakdown.out)}\n  cache_read ${fmtKtCompact(breakdown.cr)}\n  cache_creation ${fmtKtCompact(breakdown.cc)}\n\nWeighted: ${fmtKtCompact(stats.consumedKt)} (con i pesi correnti)`
-    : `Token consumati dal primo monitoraggio (${startTime.toLocaleTimeString()})`;
+    ? tr("consumedTitleBreakdown")
+        .replace("{in}", fmtKtCompact(breakdown.in))
+        .replace("{out}", fmtKtCompact(breakdown.out))
+        .replace("{cr}", fmtKtCompact(breakdown.cr))
+        .replace("{cc}", fmtKtCompact(breakdown.cc))
+        .replace("{weighted}", fmtKtCompact(stats.consumedKt))
+    : tr("consumedTitleSimple").replace(
+        "{time}",
+        startTime.toLocaleTimeString(),
+      );
 
   return (
     <>
@@ -1084,7 +1479,7 @@ function BudgetWidgets({
         title={consumedTitle}
       >
         <span className="text-[var(--color-dim)] uppercase tracking-wide text-[9px]">
-          consumati
+          {tr("consumed")}
         </span>
         <span style={{ color: "#22d3ee", fontWeight: 600 }}>
           {fmtKtCompact(stats.consumedKt)}
@@ -1096,12 +1491,23 @@ function BudgetWidgets({
         style={budgetStyle}
         title={
           stats.budgetKt !== null && ratio !== null
-            ? `Budget = (100% - ${stats.sessionStart.usage}%) × ${ratio.toFixed(1)} kT/% = ${fmtKtCompact(stats.budgetKt)}.\nRimanenti: ${stats.remainingKt !== null ? fmtKtCompact(stats.remainingKt) : "—"}`
-            : "Calibrando ratio: budget non ancora calcolabile"
+            ? tr("budgetTitle")
+                .replace("{usage}", String(stats.sessionStart.usage))
+                .replace("{ratio}", ratio.toFixed(1))
+                .replace("{budget}", fmtKtCompact(stats.budgetKt))
+                .replace(
+                  "{remaining}",
+                  stats.remainingKt !== null
+                    ? fmtKtCompact(stats.remainingKt)
+                    : "—",
+                )
+            : tr("budgetTitleCalibrating")
         }
       >
         <span className="text-[var(--color-dim)] uppercase tracking-wide text-[9px]">
-          budget {usedPct !== null ? `· ${usedPct.toFixed(0)}% usato` : ""}
+          {usedPct !== null
+            ? tr("budgetUsed").replace("{pct}", usedPct.toFixed(0))
+            : tr("budget")}
         </span>
         <span style={{ color: "#4ade80", fontWeight: 600 }}>
           {stats.budgetKt !== null ? fmtKtCompact(stats.budgetKt) : "—"}
@@ -1112,10 +1518,13 @@ function BudgetWidgets({
         <div
           className="flex flex-col px-2 py-1 rounded text-[10px] font-mono leading-tight"
           style={etaStyle(verdict.color)}
-          title={`ETA al 100% (a ritmo attuale): ${fmtDuration(etaTo100Ms)}\nETA reset: ${fmtDuration(etaResetMs)}\nVerdetto: ${verdict.label}`}
+          title={tr("etaTitle")
+            .replace("{eta100}", fmtDuration(etaTo100Ms))
+            .replace("{etaReset}", fmtDuration(etaResetMs))
+            .replace("{verdict}", verdict.label)}
         >
           <span className="text-[var(--color-dim)] uppercase tracking-wide text-[9px]">
-            ETA 100% · {verdict.label}
+            {tr("eta100Verdict").replace("{verdict}", verdict.label)}
           </span>
           <span style={{ color: verdict.color, fontWeight: 600 }}>
             {fmtDuration(etaTo100Ms)}
@@ -1204,6 +1613,8 @@ export default function UsageTokensChart() {
   // il range — non ha senso restare ancorati a un istante in 10m se passi a 24h.
   const [panRightTs, setPanRightTs] = useState<number | null>(null);
   const isCloud = useIsCloud();
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   useEffect(() => {
     setPanRightTs(null);
   }, [range]);
@@ -1716,7 +2127,7 @@ export default function UsageTokensChart() {
       <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
         <div className="flex items-baseline gap-3 flex-wrap">
           <span className="text-[11px] uppercase tracking-wide text-[var(--color-dim)]">
-            Rate budget + usage stimato dai token
+            {tr("header")}
           </span>
           {last && (
             <>
@@ -1733,7 +2144,7 @@ export default function UsageTokensChart() {
               </span>
               {last.reset_at && (
                 <span className="text-[10px] text-[var(--color-dim)]">
-                  {formatResetDisplay(last.reset_at)}
+                  {formatResetDisplay(last.reset_at, tr)}
                 </span>
               )}
             </>
@@ -1751,8 +2162,18 @@ export default function UsageTokensChart() {
                 ? "rgba(250,204,21,0.45)"
                 : "rgba(251,146,60,0.3)";
               const tt = outOfRange
-                ? `⚠ ratio ${r.toFixed(1)} kT/% FUORI RANGE atteso ${range.min}-${range.max} per provider ${last?.provider || "?"}.\nI pesi token (1, 1, 0, 0) sono hardcoded — possibilmente il provider ha cambiato il rate model, o cambia la composizione del team.\nNON cambiare i pesi automaticamente: rifai l'analisi su una sessione fresca.\nVedi docs/internal/2026-05-03-rate-kimi-weights.md`
-                : `Ratio macro cumulativo dalla nascita sessione (${calibration.samples} step). EMA segmenti: ${calibration.emaRatio.toFixed(1)} kT/%. Ultimo segmento: ${calibration.lastRatio.toFixed(1)} kT/%. In range atteso ${range.min}-${range.max} kT/% per provider ${last?.provider || "?"}.`;
+                ? tr("ratioOutOfRangeTitle")
+                    .replace("{r}", r.toFixed(1))
+                    .replace("{min}", String(range.min))
+                    .replace("{max}", String(range.max))
+                    .replace("{provider}", last?.provider || "?")
+                : tr("ratioInRangeTitle")
+                    .replace("{samples}", String(calibration.samples))
+                    .replace("{ema}", calibration.emaRatio.toFixed(1))
+                    .replace("{lastRatio}", calibration.lastRatio.toFixed(1))
+                    .replace("{min}", String(range.min))
+                    .replace("{max}", String(range.max))
+                    .replace("{provider}", last?.provider || "?");
               return (
                 <span
                   className="text-[10px] font-mono px-1.5 py-0.5 rounded"
@@ -1777,7 +2198,7 @@ export default function UsageTokensChart() {
                         : "rgba(251,146,60,0.7)",
                     }}
                   >
-                    {calibration.samples} step
+                    {tr("ratioStep").replace("{n}", String(calibration.samples))}
                   </span>
                 </span>
               );
@@ -1790,9 +2211,9 @@ export default function UsageTokensChart() {
                 color: "var(--color-dim)",
                 border: "1px solid var(--color-border)",
               }}
-              title="Servono ≥2 sample con Δusage > 0 dalla nascita sessione provider"
+              title={tr("ratioCalibratingTitle")}
             >
-              ratio: calibrando…
+              {tr("ratioCalibrating")}
             </span>
           )}
 
@@ -1804,6 +2225,7 @@ export default function UsageTokensChart() {
               breakdown={consumedBreakdown}
               etaResetMs={etaResetMs}
               etaTo100Ms={etaTo100Ms}
+              tr={tr}
             />
           )}
         </div>
@@ -1823,12 +2245,16 @@ export default function UsageTokensChart() {
                 cursor: "pointer",
                 fontFamily: "inherit",
               }}
-              title="Torna al tempo corrente"
+              title={tr("backToNowTitle")}
             >
               ↺ live
             </button>
           )}
-          <div className="flex gap-1" role="radiogroup" aria-label="time range">
+          <div
+            className="flex gap-1"
+            role="radiogroup"
+            aria-label={tr("timeRangeAria")}
+          >
             {RANGES.map((r) => {
               const active = r.id === range;
               return (
@@ -1849,7 +2275,7 @@ export default function UsageTokensChart() {
                     fontFamily: "inherit",
                   }}
                 >
-                  {r.label}
+                  {r.id === "all" ? tr("rangeAll") : r.label}
                 </button>
               );
             })}
@@ -1858,14 +2284,14 @@ export default function UsageTokensChart() {
             href="/team/sentinella"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline"
           >
-            dettagli →
+            {tr("details")}
           </a>
         </div>
       </div>
 
       {loading && filtered.length === 0 ? (
         <div className="text-[11px] text-[var(--color-dim)] py-6 text-center">
-          Caricamento…
+          {tr("loading")}
         </div>
       ) : (
         <div>
@@ -1886,6 +2312,7 @@ export default function UsageTokensChart() {
                 // i tick del clock non spostano più la finestra durante il pan.
                 setPanRightTs((prev) => (prev ?? nowTs) + deltaMs);
               }}
+              tr={tr}
             />
 
             {/* Crosshair + tooltip overlay — posizionati in % sopra l'SVG */}
@@ -1922,20 +2349,20 @@ export default function UsageTokensChart() {
                     tokenSeries={tokenSeries}
                     ratioAvgSeries={ratioAvgSeries}
                     sessionStart={budgetStats?.sessionStart ?? null}
+                    tr={tr}
                   />
                 </div>
               </>
             )}
           </div>
           {/* Legenda sotto il frame del chart */}
-          <LegendToggle visible={visibleSeries} onToggle={toggle} />
+          <LegendToggle visible={visibleSeries} onToggle={toggle} tr={tr} />
         </div>
       )}
 
       {filtered.length === 0 && !loading && entries.length > 0 && (
         <div className="text-[10px] text-[var(--color-dim)] text-center mt-2">
-          Nessun sample nell&apos;intervallo selezionato — prova
-          &quot;tutto&quot;.
+          {tr("noSampleInRange").replace("{all}", tr("rangeAll"))}
         </div>
       )}
     </div>

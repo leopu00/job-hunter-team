@@ -1,6 +1,8 @@
 "use client";
 
+import { useLocale } from "@/lib/use-locale";
 import { Card, NavButtons } from "./ui";
+import { t } from "./setup-i18n";
 import type { FormState } from "./types";
 
 interface Props {
@@ -11,9 +13,10 @@ interface Props {
 }
 
 export function StepModel({ form, set, next, back }: Props) {
+  const locale = useLocale();
   const models = form.provider!.models;
   return (
-    <Card title="Modello" sub="Scegli il modello da usare">
+    <Card title={t("smodel_title", locale)} sub={t("smodel_sub", locale)}>
       <div className="flex flex-col gap-2">
         {models.map((m) => (
           <button
@@ -38,7 +41,7 @@ export function StepModel({ form, set, next, back }: Props) {
                 className="text-[10px]"
                 style={{ color: "var(--color-muted)" }}
               >
-                {m.hint}
+                {t(m.hintKey, locale)}
               </span>
             </div>
           </button>

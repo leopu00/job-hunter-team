@@ -1,8 +1,24 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<Locale, string> = {
+  it: "Caricamento Analista",
+  en: "Loading Analyst",
+  es: "Cargando Analista",
+  fr: "Chargement de l'Analyste",
+  de: "Analyst wird geladen",
+  hu: "Elemző betöltése",
+  pt: "Carregando Analista",
+};
+
 export default function AgentLoading() {
+  const t = T[useLocale()];
   return (
     <div
       aria-busy="true"
-      aria-label="Loading analyst"
+      aria-label={t}
       style={{ animation: "fade-in 0.2s ease both" }}
     >
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">

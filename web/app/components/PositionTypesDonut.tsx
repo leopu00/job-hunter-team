@@ -1,7 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 import type { RoleFamilyCount } from "@/lib/position-classifier";
+
+const T: Record<Locale, { ariaLabel: string; types: (n: number) => string; total: string }> = {
+  it: { ariaLabel: "Tipi di posizione", types: (n) => `${n} tipi`, total: "totale" },
+  en: { ariaLabel: "Position types", types: (n) => `${n} types`, total: "total" },
+  es: { ariaLabel: "Tipos de posición", types: (n) => `${n} tipos`, total: "total" },
+  fr: { ariaLabel: "Types de poste", types: (n) => `${n} types`, total: "total" },
+  de: { ariaLabel: "Stellentypen", types: (n) => `${n} Typen`, total: "Gesamt" },
+  hu: { ariaLabel: "Pozíciótípusok", types: (n) => `${n} típus`, total: "összesen" },
+  pt: { ariaLabel: "Tipos de posição", types: (n) => `${n} tipos`, total: "total" },
+};
 
 type Props = {
   data: RoleFamilyCount[];
@@ -64,6 +76,7 @@ export default function PositionTypesDonut({
   selectedTypes = [],
   onToggleType,
 }: Props) {
+  const t = T[useLocale()];
   const [hovered, setHovered] = useState<string | null>(null);
   const total = data.reduce((a, d) => a + d.count, 0);
   const hasSelection = selectedTypes.length > 0;
@@ -118,7 +131,7 @@ export default function PositionTypesDonut({
         height={size}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         role="img"
-        aria-label="Position types"
+        aria-label={t.ariaLabel}
         style={{ flexShrink: 0 }}
       >
         {(() => {
@@ -170,8 +183,8 @@ export default function PositionTypesDonut({
           {focused
             ? (labels[focused.family] ?? focused.family)
             : aggregatedCount != null
-              ? `${selectedTypes.length} tipi`
-              : "totale"}
+              ? t.types(selectedTypes.length)
+              : t.total}
         </text>
         <text
           x={CX}

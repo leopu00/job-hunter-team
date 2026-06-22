@@ -99,6 +99,15 @@ const T: Record<string, Record<Locale, string>> = {
     fr: "Lieu",
     pt: "Localização",
   },
+  no_city: {
+    it: "(senza città)",
+    en: "(no city)",
+    hu: "(város nélkül)",
+    es: "(sin ciudad)",
+    de: "(ohne Stadt)",
+    fr: "(sans ville)",
+    pt: "(sem cidade)",
+  },
   g_status: {
     it: "Stato",
     en: "Status",
@@ -637,7 +646,7 @@ export default function PositionsFilterSidebar({
           key,
           label:
             key.split("|")[1] === "(country-only)"
-              ? "(senza città)"
+              ? tr("no_city")
               : key.split("|")[1],
           count,
         }))

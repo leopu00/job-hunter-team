@@ -91,7 +91,7 @@ const LANGUAGES: {
 ];
 
 function LangDropdown() {
-  const { lang, setLang } = useLandingI18n();
+  const { lang, setLang, t } = useLandingI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -114,7 +114,7 @@ function LangDropdown() {
         style={{
           cursor: "pointer",
         }}
-        aria-label={`Language: ${current.label}`}
+        aria-label={t("nav_language").replace("{label}", current.label)}
       >
         <current.Flag />
         <svg
@@ -209,7 +209,7 @@ export default function LandingNav() {
 
   return (
     <nav
-      aria-label="Main navigation"
+      aria-label={t("nav_main")}
       className="fixed top-0 left-0 right-0 z-50"
       style={{
         background: "var(--color-void)",
@@ -303,7 +303,7 @@ export default function LandingNav() {
               border: "1px solid var(--color-border)",
               cursor: "pointer",
             }}
-            aria-label="Menu"
+            aria-label={t("nav_menu")}
             aria-expanded={mobileOpen}
             aria-controls="mobile-nav-menu"
           >

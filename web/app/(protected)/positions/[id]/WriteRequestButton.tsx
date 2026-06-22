@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 
 interface Props {
   legacyId: number;
@@ -13,12 +15,82 @@ interface Props {
   disabledReason?: string;
 }
 
+const T: Record<
+  Locale,
+  {
+    writeCv: string;
+    sent: string;
+    cancelling: string;
+    requested: string;
+    unavailable: string;
+    networkError: string;
+  }
+> = {
+  it: {
+    writeCv: "Scrivi CV",
+    sent: "Richiesta inviata…",
+    cancelling: "Annullando…",
+    requested: "CV richiesto · annulla",
+    unavailable: "Non disponibile",
+    networkError: "Errore di rete",
+  },
+  en: {
+    writeCv: "Write CV",
+    sent: "Request sent…",
+    cancelling: "Cancelling…",
+    requested: "CV requested · cancel",
+    unavailable: "Not available",
+    networkError: "Network error",
+  },
+  es: {
+    writeCv: "Escribir CV",
+    sent: "Solicitud enviada…",
+    cancelling: "Cancelando…",
+    requested: "CV solicitado · cancelar",
+    unavailable: "No disponible",
+    networkError: "Error de red",
+  },
+  fr: {
+    writeCv: "Rédiger le CV",
+    sent: "Demande envoyée…",
+    cancelling: "Annulation…",
+    requested: "CV demandé · annuler",
+    unavailable: "Non disponible",
+    networkError: "Erreur réseau",
+  },
+  de: {
+    writeCv: "CV schreiben",
+    sent: "Anfrage gesendet…",
+    cancelling: "Wird abgebrochen…",
+    requested: "CV angefordert · abbrechen",
+    unavailable: "Nicht verfügbar",
+    networkError: "Netzwerkfehler",
+  },
+  hu: {
+    writeCv: "CV írása",
+    sent: "Kérés elküldve…",
+    cancelling: "Megszakítás…",
+    requested: "CV kérve · mégse",
+    unavailable: "Nem elérhető",
+    networkError: "Hálózati hiba",
+  },
+  pt: {
+    writeCv: "Escrever CV",
+    sent: "Pedido enviado…",
+    cancelling: "Cancelando…",
+    requested: "CV solicitado · cancelar",
+    unavailable: "Não disponível",
+    networkError: "Erro de rede",
+  },
+};
+
 export function WriteRequestButton({
   legacyId,
   initialRequested,
   disabled = false,
   disabledReason,
 }: Props) {
+  const t = T[useLocale()];
   const [requested, setRequested] = useState(initialRequested);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +118,7 @@ export function WriteRequestButton({
       startTransition(() => router.refresh());
     } catch (e) {
       setRequested(!next);
-      setError(e instanceof Error ? e.message : "Errore di rete");
+      setError(e instanceof Error ? e.message : t.networkError);
     }
   };
 
@@ -55,25 +127,25 @@ export function WriteRequestButton({
       <button
         type="button"
         disabled
-        title={disabledReason ?? "Non disponibile"}
+        title={disabledReason ?? t.unavailable}
         className="flex items-center gap-1.5 px-4 py-2 rounded-lg border text-[11px] font-semibold opacity-40 cursor-not-allowed"
         style={{
           borderColor: "var(--color-border)",
           color: "var(--color-dim)",
         }}
       >
-        Scrivi CV
+        {t.writeCv}
       </button>
     );
   }
 
   const label = isPending
     ? requested
-      ? "Richiesta inviata…"
-      : "Annullando…"
+      ? t.sent
+      : t.cancelling
     : requested
-      ? "CV richiesto · annulla"
-      : "Scrivi CV";
+      ? t.requested
+      : t.writeCv;
 
   const color = requested ? "var(--color-green)" : "var(--color-purple)";
 

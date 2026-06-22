@@ -196,6 +196,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Postes",
     pt: "Vagas",
   },
+  remote_loc: {
+    it: "Remote",
+    en: "Remote",
+    hu: "Távmunka",
+    es: "Remoto",
+    de: "Remote",
+    fr: "À distance",
+    pt: "Remoto",
+  },
   results: {
     it: "risultati",
     en: "results",
@@ -834,7 +843,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                         </span>
                       ) : p.remote_type === "full_remote" ? (
                         <span className="italic text-[var(--color-dim)]">
-                          Remote
+                          {tr("remote_loc")}
                         </span>
                       ) : (
                         <span className="text-[var(--color-dim)]">—</span>

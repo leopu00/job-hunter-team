@@ -32,6 +32,9 @@ const T = {
       "JHT e completamente open source. Puoi verificare in qualsiasi momento cosa fa il codice esaminando il repository su GitHub.",
     s6_title: "Contatti",
     s6_body: "Per domande sulla privacy, scrivi a info@jobhunterteam.ai.",
+    nav_home: "Home",
+    nav_privacy: "Privacy",
+    nav_terms: "Termini",
   },
   en: {
     title: "Privacy Policy",
@@ -55,6 +58,9 @@ const T = {
       "JHT is fully open source. You can verify what the code does at any time by examining the repository on GitHub.",
     s6_title: "Contact",
     s6_body: "For privacy questions, write to info@jobhunterteam.ai.",
+    nav_home: "Home",
+    nav_privacy: "Privacy",
+    nav_terms: "Terms",
   },
   hu: {
     title: "Adatvédelmi irányelvek",
@@ -78,6 +84,9 @@ const T = {
       "A JHT teljesen nyílt forráskódú. Bármikor ellenőrizheted, hogy mit csinál a kód, a GitHub-on található repository átvizsgálásával.",
     s6_title: "Kapcsolat",
     s6_body: "Adatvédelmi kérdések esetén írj az info@jobhunterteam.ai címre.",
+    nav_home: "Főoldal",
+    nav_privacy: "Adatvédelem",
+    nav_terms: "Feltételek",
   },
   es: {
     title: "Política de Privacidad",
@@ -101,6 +110,9 @@ const T = {
       "JHT es completamente de código abierto. Puedes verificar en cualquier momento lo que hace el código examinando el repositorio en GitHub.",
     s6_title: "Contacto",
     s6_body: "Para cuestiones de privacidad, escribe a info@jobhunterteam.ai.",
+    nav_home: "Inicio",
+    nav_privacy: "Privacidad",
+    nav_terms: "Términos",
   },
   de: {
     title: "Datenschutzerklärung",
@@ -124,6 +136,9 @@ const T = {
       "JHT ist vollständig Open Source. Du kannst jederzeit überprüfen, was der Code tut, indem du das Repository auf GitHub untersuchst.",
     s6_title: "Kontakt",
     s6_body: "Bei Fragen zum Datenschutz schreibe an info@jobhunterteam.ai.",
+    nav_home: "Startseite",
+    nav_privacy: "Datenschutz",
+    nav_terms: "Bedingungen",
   },
   fr: {
     title: "Politique de Confidentialité",
@@ -148,6 +163,9 @@ const T = {
     s6_title: "Contact",
     s6_body:
       "Pour toute question relative à la confidentialité, écrivez à info@jobhunterteam.ai.",
+    nav_home: "Accueil",
+    nav_privacy: "Confidentialité",
+    nav_terms: "Conditions",
   },
   pt: {
     title: "Política de Privacidade",
@@ -172,6 +190,9 @@ const T = {
     s6_title: "Contacto",
     s6_body:
       "Para questões de privacidade, escreva para info@jobhunterteam.ai.",
+    nav_home: "Início",
+    nav_privacy: "Privacidade",
+    nav_terms: "Termos",
   },
 };
 
@@ -220,11 +241,11 @@ function PrivacyContent() {
               href="/"
               className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
             >
-              Home
+              {t("nav_home")}
             </Link>
             <span className="text-[var(--color-border)]">/</span>
             <span className="text-[10px] text-[var(--color-muted)]">
-              Privacy
+              {t("nav_privacy")}
             </span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
@@ -247,13 +268,13 @@ function PrivacyContent() {
             href="/"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline"
           >
-            &larr; Home
+            &larr; {t("nav_home")}
           </Link>
           <Link
             href="/terms"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline"
           >
-            Terms &rarr;
+            {t("nav_terms")} &rarr;
           </Link>
         </div>
       </div>

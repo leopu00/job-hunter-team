@@ -7,6 +7,85 @@ import type {
 } from "@/lib/team-activity";
 import { ROLE_META } from "@/lib/team-activity-meta";
 import { ActivityRow } from "@/app/components/activity-format";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<
+  Locale,
+  {
+    all: string;
+    searchPlaceholder: string;
+    rowsPerPage: string;
+    ofTotal: (total: number) => string;
+    prev: string;
+    next: string;
+    noActions: string;
+  }
+> = {
+  it: {
+    all: "Tutti",
+    searchPlaceholder: "Cerca istanza, titolo, azienda, #id…",
+    rowsPerPage: "Righe per pagina",
+    ofTotal: (total) => `di ${total}`,
+    prev: "← Prec",
+    next: "Succ →",
+    noActions: "Nessuna azione per i filtri selezionati.",
+  },
+  en: {
+    all: "All",
+    searchPlaceholder: "Search instance, title, company, #id…",
+    rowsPerPage: "Rows per page",
+    ofTotal: (total) => `of ${total}`,
+    prev: "← Prev",
+    next: "Next →",
+    noActions: "No actions for the selected filters.",
+  },
+  es: {
+    all: "Todos",
+    searchPlaceholder: "Buscar instancia, título, empresa, #id…",
+    rowsPerPage: "Filas por página",
+    ofTotal: (total) => `de ${total}`,
+    prev: "← Ant",
+    next: "Sig →",
+    noActions: "Sin acciones para los filtros seleccionados.",
+  },
+  fr: {
+    all: "Tous",
+    searchPlaceholder: "Rechercher instance, titre, entreprise, #id…",
+    rowsPerPage: "Lignes par page",
+    ofTotal: (total) => `sur ${total}`,
+    prev: "← Préc",
+    next: "Suiv →",
+    noActions: "Aucune action pour les filtres sélectionnés.",
+  },
+  de: {
+    all: "Alle",
+    searchPlaceholder: "Instanz, Titel, Unternehmen, #id suchen…",
+    rowsPerPage: "Zeilen pro Seite",
+    ofTotal: (total) => `von ${total}`,
+    prev: "← Zurück",
+    next: "Weiter →",
+    noActions: "Keine Aktionen für die ausgewählten Filter.",
+  },
+  hu: {
+    all: "Mind",
+    searchPlaceholder: "Példány, cím, cég, #id keresése…",
+    rowsPerPage: "Sorok oldalanként",
+    ofTotal: (total) => `/ ${total}`,
+    prev: "← Előző",
+    next: "Köv →",
+    noActions: "Nincs művelet a kiválasztott szűrőkhöz.",
+  },
+  pt: {
+    all: "Todos",
+    searchPlaceholder: "Pesquisar instância, título, empresa, #id…",
+    rowsPerPage: "Linhas por página",
+    ofTotal: (total) => `de ${total}`,
+    prev: "← Ant",
+    next: "Próx →",
+    noActions: "Sem ações para os filtros selecionados.",
+  },
+};
 
 const ROLES: TeamActivityRole[] = [
   "scout",
@@ -22,6 +101,7 @@ export default function ActivityLogTable({
 }: {
   events: RecentActivityEvent[];
 }) {
+  const t = T[useLocale()];
   const [role, setRole] = useState<TeamActivityRole | "all">("all");
   const [q, setQ] = useState("");
   const [pageSize, setPageSize] = useState(50);
@@ -75,7 +155,7 @@ export default function ActivityLogTable({
             border: `1px solid ${role === "all" ? "var(--color-green)" : "var(--color-border)"}`,
           }}
         >
-          Tutti <span className="opacity-60 tabular-nums">{counts.all}</span>
+          {t.all} <span className="opacity-60 tabular-nums">{counts.all}</span>
         </button>
         {ROLES.map((r) => {
           const meta = ROLE_META[r];
@@ -106,7 +186,7 @@ export default function ActivityLogTable({
             setQ(e.target.value);
             reset();
           }}
-          placeholder="Cerca istanza, titolo, azienda, #id…"
+          placeholder={t.searchPlaceholder}
           className="ml-auto bg-[var(--color-card)] border border-[var(--color-border)] rounded-md px-3 py-1.5 text-[11px] text-[var(--color-white)] outline-none focus:border-[var(--color-blue)] transition-colors w-64 max-w-full"
           style={{ fontFamily: "inherit" }}
         />
@@ -115,7 +195,7 @@ export default function ActivityLogTable({
       {/* ── Righe per pagina + paginazione (in cima) ───────────── */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4 text-[10px] text-[var(--color-dim)]">
         <div className="flex items-center gap-2">
-          <span className="whitespace-nowrap">Righe per pagina</span>
+          <span className="whitespace-nowrap">{t.rowsPerPage}</span>
           <select
             value={pageSize}
             onChange={(e) => {
@@ -143,7 +223,7 @@ export default function ActivityLogTable({
             {total === 0
               ? "0"
               : `${start + 1}–${Math.min(start + pageSize, total)}`}{" "}
-            di {total}
+            {t.ofTotal(total)}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -152,7 +232,7 @@ export default function ActivityLogTable({
             disabled={safePage <= 1}
             className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-white)] hover:border-[var(--color-muted)] transition-colors disabled:opacity-30 whitespace-nowrap"
           >
-            ← Prec
+            {t.prev}
           </button>
           <span className="tabular-nums whitespace-nowrap px-1">
             {safePage} / {pages}
@@ -162,7 +242,7 @@ export default function ActivityLogTable({
             disabled={safePage >= pages}
             className="px-2.5 py-1 rounded-md text-[10px] font-semibold border border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-white)] hover:border-[var(--color-muted)] transition-colors disabled:opacity-30 whitespace-nowrap"
           >
-            Succ →
+            {t.next}
           </button>
         </div>
       </div>
@@ -171,7 +251,7 @@ export default function ActivityLogTable({
       <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)] overflow-x-auto">
         {rows.length === 0 ? (
           <div className="px-4 py-10 text-center text-[11px] text-[var(--color-dim)]">
-            Nessuna azione per i filtri selezionati.
+            {t.noActions}
           </div>
         ) : (
           rows.map((ev, i) => (

@@ -34,9 +34,7 @@ type Copy = {
   devCta: string;
 };
 
-// Testi completi in IT + EN. Le altre lingue ricadono su EN finché i contenuti
-// non sono approvati (poi si traducono — evita di rifare 5 lingue a ogni
-// revisione della copy).
+// Testi completi in tutte e 7 le lingue (it, en, es, fr, de, pt, hu).
 const it: Copy = {
   title: "Il progetto",
   subtitle:
@@ -155,14 +153,309 @@ const en: Copy = {
   devCta: "Go to the repository →",
 };
 
+const es: Copy = {
+  title: "El proyecto",
+  subtitle:
+    "Un equipo de agentes de IA que busca trabajo por ti y te ayuda a orientarte entre las ofertas.",
+  badge: "open source",
+  imageAlt:
+    "Ilustración: un cubo de cristal que encierra una oficina en miniatura con el equipo de agentes trabajando, observado desde fuera por dos personas que toman notas.",
+  imageCaption:
+    "Tras el cristal, el equipo de agentes trabajando. Fuera, los maintainers del proyecto: observan su comportamiento y afinan el código.",
+  back: "← Atrás",
+  chapters: [
+    {
+      h: "Qué hace",
+      p: [
+        "Job Hunter Team es un equipo de agentes de IA que busca trabajo por ti. En lugar de enviar candidaturas a diestro y siniestro, identifica las ofertas más afines a tu perfil, las evalúa una por una y te indica dónde conviene concentrarte y qué aspectos reforzar.",
+        "Pocas candidaturas, pero certeras. La decisión final — cuándo y a quién enviar — sigue siendo siempre tuya.",
+      ],
+    },
+    {
+      h: "De dónde nace",
+      p: [
+        "El proyecto nace de una necesidad concreta: buscar trabajo en un mercado en el que la mayoría de las candidaturas se queda sin respuesta. Desarrollado inicialmente por un solo desarrollador para uso personal, en el plazo de dos semanas identificó y analizó alrededor de 200 ofertas, preparó una veintena a medida y llevó a cinco entrevistas.",
+        "Los resultados bastaron para justificar su apertura: de herramienta privada se convirtió en un proyecto público y open source, pensado para cualquiera que afronte la misma búsqueda.",
+      ],
+    },
+    {
+      h: "Un mundo del trabajo que cambia",
+      p: [
+        "El mundo del trabajo está cambiando con rapidez y encontrar empleo es cada vez más difícil. Muchas personas tendrán que redefinir su rol y adaptarse a un mercado en constante evolución.",
+        "Una plataforma que se adapta al mercado real responde precisamente a esta necesidad: acerca a las personas a lo que buscan y contribuye a distribuir las oportunidades de forma más justa, en lugar de favorecer solo a quien consigue hacerse notar más.",
+      ],
+    },
+    {
+      h: "El nudo del coste",
+      p: [
+        "El obstáculo principal es el coste de la IA. Con la tarificación por consumo, un equipo de agentes que trabaja en paralelo puede llegar a gastar cientos de euros al día: un umbral inaccesible para la mayoría de las personas.",
+        "El reto técnico más exigente fue hacer funcionar el equipo con una suscripción mensual de coste fijo, donde a igual gasto se dispone de unas diez veces los tokens de la tarificación por consumo. El sistema supervisa de forma autónoma su propio presupuesto y distribuye el trabajo a lo largo del día, manteniendo un ritmo sostenible en lugar de agotar la cuota en pocas horas.",
+      ],
+      note: "Las suscripciones de IA están pensadas para el desarrollo y el uso directo de las personas, no para una actividad autónoma a gran escala: es el equilibrio delicado que mantiene el proyecto a un coste sostenible. Por eso es importante un uso mesurado y responsable, que queda a discreción del usuario.",
+    },
+    {
+      h: "Un proyecto abierto",
+      p: [
+        "Por eso el proyecto es open source. A los desarrolladores les pedimos que contribuyan: cada mejora hace de la IA una herramienta más útil para quien busca trabajo y favorece un mercado más abierto y transparente.",
+        "A quien busca trabajo le pedimos que lo pruebe y comparta su opinión: es de los casos reales de donde la plataforma aprende y mejora.",
+      ],
+    },
+  ],
+  ctaKicker: "Participa",
+  tryTitle: "Pruébalo y deja tu opinión",
+  tryBody:
+    "Descárgalo, ejecútalo en local en tu ordenador y comparte tu experiencia: cada caso real contribuye a mejorarlo. Tus datos siguen siendo siempre tuyos.",
+  tryCta: "Descargar →",
+  devTitle: "Contribuye",
+  devBody:
+    "El proyecto es abierto: arquitectura, agentes y detalles técnicos están documentados en el repositorio. Las pull requests y las propuestas son bienvenidas.",
+  devCta: "Ir al repositorio →",
+};
+
+const fr: Copy = {
+  title: "Le projet",
+  subtitle:
+    "Une équipe d'agents IA qui cherche du travail pour toi et t'aide à t'orienter parmi les offres.",
+  badge: "open source",
+  imageAlt:
+    "Illustration : un cube de verre renfermant un bureau miniature avec l'équipe d'agents au travail, observé de l'extérieur par deux personnes qui prennent des notes.",
+  imageCaption:
+    "Derrière le verre, l'équipe d'agents au travail. Dehors, les mainteneurs du projet : ils observent son comportement et affinent le code.",
+  back: "← Retour",
+  chapters: [
+    {
+      h: "Ce qu'il fait",
+      p: [
+        "Job Hunter Team est une équipe d'agents IA qui cherche du travail pour toi. Plutôt que d'envoyer des candidatures à tout-va, il repère les offres les plus proches de ton profil, les évalue une par une et t'indique où il vaut la peine de te concentrer et quels aspects renforcer.",
+        "Peu de candidatures, mais ciblées. La décision finale — quand et à qui envoyer — reste toujours la tienne.",
+      ],
+    },
+    {
+      h: "D'où il vient",
+      p: [
+        "Le projet est né d'un besoin concret : chercher du travail dans un marché où la plupart des candidatures restent sans réponse. Développé d'abord par un seul développeur pour un usage personnel, en l'espace de deux semaines il a repéré et analysé environ 200 offres, en a préparé une vingtaine sur mesure et a mené à cinq entretiens.",
+        "Les résultats ont suffi à en justifier l'ouverture : d'outil privé, il est devenu un projet public et open source, pensé pour quiconque affronte la même recherche.",
+      ],
+    },
+    {
+      h: "Un monde du travail qui change",
+      p: [
+        "Le monde du travail change rapidement et trouver un emploi devient de plus en plus difficile. Beaucoup de personnes devront redéfinir leur rôle et s'adapter à un marché en évolution constante.",
+        "Une plateforme qui s'adapte au marché réel répond précisément à ce besoin : elle rapproche les personnes de ce qu'elles cherchent et contribue à répartir les opportunités de façon plus équitable, plutôt que de favoriser seulement ceux qui parviennent à se faire le plus remarquer.",
+      ],
+    },
+    {
+      h: "Le nœud du coût",
+      p: [
+        "Le principal obstacle est le coût de l'IA. Avec la tarification à l'usage, une équipe d'agents travaillant en parallèle peut en arriver à dépenser des centaines d'euros par jour : un seuil inaccessible pour la plupart des gens.",
+        "Le défi technique le plus exigeant a été de faire fonctionner l'équipe sur un abonnement mensuel à coût fixe, où à dépense égale on dispose d'environ dix fois les tokens de la tarification à l'usage. Le système surveille lui-même son budget et répartit le travail sur la journée, en maintenant un rythme soutenable plutôt que d'épuiser le quota en quelques heures.",
+      ],
+      note: "Les abonnements IA sont pensés pour le développement et l'usage direct des personnes, non pour une activité autonome à grande échelle : c'est l'équilibre délicat qui maintient le projet à un coût soutenable. C'est pourquoi un usage mesuré et responsable est important — et cela reste à la discrétion de l'utilisateur.",
+    },
+    {
+      h: "Un projet ouvert",
+      p: [
+        "C'est pourquoi le projet est open source. Aux développeurs, nous demandons de contribuer : chaque amélioration fait de l'IA un outil plus utile à ceux qui cherchent du travail et concourt à un marché plus ouvert et transparent.",
+        "À ceux qui cherchent du travail, nous demandons de l'essayer et de partager un retour : c'est des cas réels que la plateforme apprend et s'améliore.",
+      ],
+    },
+  ],
+  ctaKicker: "Participe",
+  tryTitle: "Essaie-le et laisse un retour",
+  tryBody:
+    "Télécharge-le, exécute-le en local sur ton ordinateur et partage ton expérience : chaque cas réel contribue à l'améliorer. Tes données restent toujours les tiennes.",
+  tryCta: "Télécharger →",
+  devTitle: "Contribue",
+  devBody:
+    "Le projet est ouvert : architecture, agents et détails techniques sont documentés dans le dépôt. Les pull requests et les propositions sont les bienvenues.",
+  devCta: "Aller au dépôt →",
+};
+
+const de: Copy = {
+  title: "Das Projekt",
+  subtitle:
+    "Ein Team aus KI-Agenten, das für dich nach Arbeit sucht und dir hilft, dich zwischen den Angeboten zurechtzufinden.",
+  badge: "open source",
+  imageAlt:
+    "Illustration: ein Glaswürfel, der ein Miniaturbüro mit dem arbeitenden Agententeam umschließt, von außen beobachtet von zwei Personen, die sich Notizen machen.",
+  imageCaption:
+    "Hinter dem Glas das arbeitende Agententeam. Draußen die Maintainer des Projekts: Sie beobachten sein Verhalten und verfeinern den Code.",
+  back: "← Zurück",
+  chapters: [
+    {
+      h: "Was es macht",
+      p: [
+        "Job Hunter Team ist ein Team aus KI-Agenten, das für dich nach Arbeit sucht. Statt wahllos Bewerbungen zu verschicken, findet es die Stellen, die am besten zu deinem Profil passen, bewertet jede einzeln und zeigt dir, worauf du dich konzentrieren und welche Aspekte du stärken solltest.",
+        "Wenige Bewerbungen, dafür gezielte. Die endgültige Entscheidung — wann und an wen du sendest — bleibt immer deine.",
+      ],
+    },
+    {
+      h: "Woher es kommt",
+      p: [
+        "Das Projekt entstand aus einem konkreten Bedürfnis: Arbeit zu suchen in einem Markt, in dem die meisten Bewerbungen unbeantwortet bleiben. Zunächst von einem einzelnen Entwickler für den eigenen Gebrauch entwickelt, hatte es innerhalb von zwei Wochen rund 200 Stellen gefunden und analysiert, etwa zwanzig maßgeschneiderte Bewerbungen vorbereitet und zu fünf Vorstellungsgesprächen geführt.",
+        "Die Ergebnisse genügten, um die Öffnung zu rechtfertigen: Aus einem privaten Werkzeug wurde ein öffentliches Open-Source-Projekt, gedacht für alle, die vor derselben Suche stehen.",
+      ],
+    },
+    {
+      h: "Eine sich wandelnde Arbeitswelt",
+      p: [
+        "Die Arbeitswelt verändert sich rasch, und einen Job zu finden wird immer schwieriger. Viele Menschen werden ihre Rolle neu definieren und sich an einen Markt im ständigen Wandel anpassen müssen.",
+        "Eine Plattform, die sich dem realen Markt anpasst, antwortet genau auf dieses Bedürfnis: Sie bringt Menschen näher an das, was sie suchen, und trägt dazu bei, Chancen gerechter zu verteilen, statt nur jene zu begünstigen, die es schaffen, am meisten aufzufallen.",
+      ],
+    },
+    {
+      h: "Der Knoten der Kosten",
+      p: [
+        "Das größte Hindernis sind die Kosten der KI. Bei nutzungsbasierter Abrechnung kann ein Team von Agenten, das parallel arbeitet, Hunderte Euro am Tag ausgeben: eine Schwelle, die für die meisten Menschen unerreichbar ist.",
+        "Die anspruchsvollste technische Herausforderung war es, das Team mit einem monatlichen Abonnement zu festem Preis zu betreiben, bei dem man für denselben Betrag etwa zehnmal so viele Tokens erhält wie bei nutzungsbasierter Abrechnung. Das System überwacht eigenständig sein Budget und verteilt die Arbeit über den Tag, hält ein nachhaltiges Tempo, statt das Kontingent in wenigen Stunden zu erschöpfen.",
+      ],
+      note: "KI-Abonnements sind für die Entwicklung und den direkten Gebrauch durch Menschen gedacht, nicht für eine autonome Aktivität im großen Maßstab: Es ist das heikle Gleichgewicht, das das Projekt bezahlbar hält. Deshalb ist ein maßvoller, verantwortungsvoller Gebrauch wichtig — und der bleibt dem Nutzer überlassen.",
+    },
+    {
+      h: "Ein offenes Projekt",
+      p: [
+        "Deshalb ist das Projekt open source. Die Entwickler bitten wir, beizutragen: Jede Verbesserung macht die KI zu einem nützlicheren Werkzeug für alle, die Arbeit suchen, und trägt zu einem offeneren, transparenteren Markt bei.",
+        "Diejenigen, die Arbeit suchen, bitten wir, es auszuprobieren und Rückmeldung zu geben: Aus realen Fällen lernt und verbessert sich die Plattform.",
+      ],
+    },
+  ],
+  ctaKicker: "Mach mit",
+  tryTitle: "Probiere es aus und gib Rückmeldung",
+  tryBody:
+    "Lade es herunter, führe es lokal auf deinem Rechner aus und teile deine Erfahrung: Jeder reale Fall hilft, es zu verbessern. Deine Daten bleiben immer deine.",
+  tryCta: "Herunterladen →",
+  devTitle: "Trag bei",
+  devBody:
+    "Das Projekt ist offen: Architektur, Agenten und technische Details sind im Repository dokumentiert. Pull Requests und Vorschläge sind willkommen.",
+  devCta: "Zum Repository →",
+};
+
+const pt: Copy = {
+  title: "O projeto",
+  subtitle:
+    "Uma equipe de agentes de IA que procura trabalho por você e ajuda a se orientar entre as ofertas.",
+  badge: "open source",
+  imageAlt:
+    "Ilustração: um cubo de vidro que encerra um escritório em miniatura com a equipe de agentes trabalhando, observado de fora por duas pessoas que tomam notas.",
+  imageCaption:
+    "Atrás do vidro, a equipe de agentes trabalhando. Fora, os mantenedores do projeto: observam o seu comportamento e refinam o código.",
+  back: "← Voltar",
+  chapters: [
+    {
+      h: "O que faz",
+      p: [
+        "Job Hunter Team é uma equipe de agentes de IA que procura trabalho por você. Em vez de enviar candidaturas em massa, identifica as ofertas mais afins ao seu perfil, avalia-as uma a uma e indica onde vale a pena se concentrar e quais aspectos reforçar.",
+        "Poucas candidaturas, mas certeiras. A decisão final — quando e para quem enviar — continua sendo sempre sua.",
+      ],
+    },
+    {
+      h: "De onde nasce",
+      p: [
+        "O projeto nasce de uma necessidade concreta: procurar trabalho em um mercado em que a maioria das candidaturas fica sem resposta. Desenvolvido inicialmente por um único desenvolvedor para uso pessoal, no prazo de duas semanas identificou e analisou cerca de 200 ofertas, preparou umas vinte sob medida e levou a cinco entrevistas.",
+        "Os resultados bastaram para justificar a sua abertura: de ferramenta privada tornou-se um projeto público e open source, pensado para quem quer que enfrente a mesma busca.",
+      ],
+    },
+    {
+      h: "Um mundo do trabalho que muda",
+      p: [
+        "O mundo do trabalho está mudando rapidamente e encontrar emprego é cada vez mais difícil. Muitas pessoas terão de redefinir o seu papel e se adaptar a um mercado em constante evolução.",
+        "Uma plataforma que se adapta ao mercado real responde justamente a essa necessidade: aproxima as pessoas daquilo que procuram e contribui para distribuir as oportunidades de forma mais justa, em vez de favorecer apenas quem consegue se destacar mais.",
+      ],
+    },
+    {
+      h: "O nó do custo",
+      p: [
+        "O obstáculo principal é o custo da IA. Com a tarifação por consumo, uma equipe de agentes que trabalha em paralelo pode chegar a gastar centenas de euros por dia: um limite inacessível para a maioria das pessoas.",
+        "O desafio técnico mais exigente foi fazer a equipe funcionar com uma assinatura mensal de custo fixo, na qual, com o mesmo gasto, dispõe-se de cerca de dez vezes os tokens da tarifação por consumo. O sistema monitora de forma autônoma o seu próprio orçamento e distribui o trabalho ao longo do dia, mantendo um ritmo sustentável em vez de esgotar a cota em poucas horas.",
+      ],
+      note: "As assinaturas de IA são pensadas para o desenvolvimento e o uso direto das pessoas, não para uma atividade autônoma em larga escala: é o equilíbrio delicado que mantém o projeto a um custo sustentável. Por isso é importante um uso comedido e responsável, que fica a critério do usuário.",
+    },
+    {
+      h: "Um projeto aberto",
+      p: [
+        "É por isso que o projeto é open source. Aos desenvolvedores pedimos que contribuam: cada melhoria torna a IA uma ferramenta mais útil para quem procura trabalho e concorre para um mercado mais aberto e transparente.",
+        "A quem procura trabalho pedimos que o experimente e compartilhe um retorno: é dos casos reais que a plataforma aprende e melhora.",
+      ],
+    },
+  ],
+  ctaKicker: "Participe",
+  tryTitle: "Experimente e deixe um retorno",
+  tryBody:
+    "Baixe-o, execute-o localmente no seu computador e compartilhe a sua experiência: cada caso real contribui para melhorá-lo. Os seus dados continuam sempre sendo seus.",
+  tryCta: "Baixar →",
+  devTitle: "Contribua",
+  devBody:
+    "O projeto é aberto: arquitetura, agentes e detalhes técnicos estão documentados no repositório. Pull requests e propostas são bem-vindas.",
+  devCta: "Ir ao repositório →",
+};
+
+const hu: Copy = {
+  title: "A projekt",
+  subtitle:
+    "MI-ügynökök csapata, amely munkát keres helyetted, és segít eligazodni az ajánlatok között.",
+  badge: "open source",
+  imageAlt:
+    "Illusztráció: egy üvegkocka, amely egy miniatűr irodát zár magába a dolgozó ügynökcsapattal, kívülről két jegyzetelő ember figyeli.",
+  imageCaption:
+    "Az üveg mögött a dolgozó ügynökcsapat. Kívül a projekt karbantartói: figyelik a viselkedését, és finomítják a kódot.",
+  back: "← Vissza",
+  chapters: [
+    {
+      h: "Mit csinál",
+      p: [
+        "A Job Hunter Team MI-ügynökök csapata, amely munkát keres helyetted. Ahelyett, hogy válogatás nélkül küldözgetne jelentkezéseket, megtalálja a profilodhoz legjobban illő ajánlatokat, egyenként értékeli őket, és megmutatja, hol érdemes összpontosítanod, és mely szempontokat kell erősítened.",
+        "Kevés jelentkezés, de célzott. A végső döntés — mikor és kinek küldj — mindig a tiéd marad.",
+      ],
+    },
+    {
+      h: "Honnan ered",
+      p: [
+        "A projekt egy konkrét igényből született: munkát keresni egy olyan piacon, ahol a jelentkezések többsége válasz nélkül marad. Eredetileg egyetlen fejlesztő készítette saját használatra, és két hét alatt mintegy 200 ajánlatot talált és elemzett, körülbelül húszat készített elő testre szabva, és öt interjúhoz vezetett.",
+        "Az eredmények elegendőek voltak ahhoz, hogy indokolják a megnyitását: a privát eszközből nyilvános, nyílt forráskódú projekt lett, mindenkinek, aki ugyanezzel a kereséssel néz szembe.",
+      ],
+    },
+    {
+      h: "Egy változó munka világa",
+      p: [
+        "A munka világa gyorsan változik, és egyre nehezebb állást találni. Sok embernek újra kell majd határoznia a szerepét, és alkalmazkodnia kell egy folyamatosan változó piachoz.",
+        "Egy platform, amely a valós piachoz igazodik, éppen erre az igényre válaszol: közelebb hozza az embereket ahhoz, amit keresnek, és hozzájárul ahhoz, hogy a lehetőségek igazságosabban oszoljanak el, ahelyett hogy csak azokat segítené, akiknek a leginkább sikerül kitűnniük.",
+      ],
+    },
+    {
+      h: "A költség csomója",
+      p: [
+        "A fő akadály az MI költsége. A használat alapú díjszabás mellett egy párhuzamosan dolgozó ügynökcsapat naponta akár több száz eurót is elkölthet: a legtöbb ember számára elérhetetlen küszöb.",
+        "A legnagyobb műszaki kihívás az volt, hogy a csapatot fix árú havi előfizetéssel működtessük, ahol azonos költség mellett nagyjából tízszer annyi tokent kapunk, mint a használat alapú díjszabásnál. A rendszer önállóan figyeli a saját költségkeretét, és a nap folyamán osztja el a munkát, fenntartható tempót tartva ahelyett, hogy néhány óra alatt kimerítené a keretet.",
+      ],
+      note: "Az MI-előfizetéseket az emberek fejlesztésére és közvetlen használatára szánták, nem nagy léptékű, önálló tevékenységre: ez a kényes egyensúly tartja a projektet fenntartható költségen. Ezért fontos a mértékletes és felelős használat, amely a felhasználó belátására marad.",
+    },
+    {
+      h: "Egy nyílt projekt",
+      p: [
+        "Ezért nyílt forráskódú a projekt. A fejlesztőktől azt kérjük, járuljanak hozzá: minden fejlesztés hasznosabb eszközzé teszi az MI-t azok számára, akik munkát keresnek, és egy nyíltabb, átláthatóbb piachoz járul hozzá.",
+        "Azoktól, akik munkát keresnek, azt kérjük, próbálják ki, és osszanak meg visszajelzést: a valós esetekből tanul és fejlődik a platform.",
+      ],
+    },
+  ],
+  ctaKicker: "Vegyél részt",
+  tryTitle: "Próbáld ki, és adj visszajelzést",
+  tryBody:
+    "Töltsd le, futtasd helyben a saját gépeden, és oszd meg a tapasztalatodat: minden valós eset segít fejleszteni. Az adataid mindig a tieid maradnak.",
+  tryCta: "Letöltés →",
+  devTitle: "Járulj hozzá",
+  devBody:
+    "A projekt nyílt: az architektúra, az ügynökök és a technikai részletek dokumentálva vannak a tárolóban. A pull requestek és a javaslatok szívesen látottak.",
+  devCta: "Irány a tároló →",
+};
+
 const T: Record<string, Copy> = {
   it,
   en,
-  hu: en,
-  es: en,
-  de: en,
-  fr: en,
-  pt: en,
+  hu,
+  es,
+  de,
+  fr,
+  pt,
 };
 
 function BackLink({ label }: { label: string }) {

@@ -107,6 +107,9 @@ const T: Record<string, Entry> = {
   ps_cv_preparing: { it: "Preparazione…", en: "Preparing…", hu: "Előkészítés…", es: "Preparando…", de: "Wird vorbereitet…", fr: "Préparation…", pt: "A preparar…" },
   ps_cv_retry: { it: "Riprova", en: "Retry", hu: "Újra", es: "Reintentar", de: "Erneut versuchen", fr: "Réessayer", pt: "Tentar de novo" },
   ps_avatar_error: { it: "Errore nel caricamento", en: "Upload error", hu: "Feltöltési hiba", es: "Error de carga", de: "Upload-Fehler", fr: "Erreur de téléchargement", pt: "Erro de upload" },
+  ps_error: { it: "Errore", en: "Error", hu: "Hiba", es: "Error", de: "Fehler", fr: "Erreur", pt: "Erro" },
+  ps_team_unlockable: { it: "✓ team attivabile", en: "✓ team unlockable", hu: "✓ csapat aktiválható", es: "✓ equipo activable", de: "✓ Team aktivierbar", fr: "✓ équipe activable", pt: "✓ equipe ativável" },
+  ps_required_missing: { it: "obbligatori mancanti", en: "required missing", hu: "kötelező hiányzik", es: "obligatorios faltantes", de: "erforderliche fehlen", fr: "obligatoires manquants", pt: "obrigatórios em falta" },
   ps_close: { it: "Chiudi", en: "Close", hu: "Bezárás", es: "Cerrar", de: "Schließen", fr: "Fermer", pt: "Fechar" },
 
   // Campi mancanti
@@ -120,6 +123,12 @@ const T: Record<string, Entry> = {
   f_industry: { it: "Settore", en: "Industry", hu: "Iparág", es: "Sector", de: "Branche", fr: "Secteur", pt: "Setor" },
   mf_work_auth: { it: "Diritto di lavoro", en: "Work authorization", hu: "Munkavállalási jog", es: "Autorización de trabajo", de: "Arbeitserlaubnis", fr: "Autorisation de travail", pt: "Autorização de trabalho" },
   sec_certifications: { it: "Certificazioni", en: "Certifications", hu: "Tanúsítványok", es: "Certificaciones", de: "Zertifizierungen", fr: "Certifications", pt: "Certificações" },
+
+  // ── Pagina profilo: messaggi/aria ────────────────────────────────
+  session_expired: { it: "Sessione scaduta.", en: "Session expired.", hu: "A munkamenet lejárt.", es: "Sesión caducada.", de: "Sitzung abgelaufen.", fr: "Session expirée.", pt: "Sessão expirada." },
+  sign_in_again: { it: "Accedi di nuovo", en: "Sign in again", hu: "Jelentkezz be újra", es: "Inicia sesión de nuevo", de: "Erneut anmelden", fr: "Reconnectez-vous", pt: "Entrar novamente" },
+  aria_breadcrumb: { it: "Breadcrumb", en: "Breadcrumb", hu: "Morzsamenü", es: "Migas de pan", de: "Brotkrümelnavigation", fr: "Fil d'Ariane", pt: "Trilha de navegação" },
+  aria_salary_range: { it: "Fascia retributiva", en: "Salary range", hu: "Fizetési sáv", es: "Rango salarial", de: "Gehaltsspanne", fr: "Fourchette de salaire", pt: "Faixa salarial" },
 };
 
 export type ProfileT = (key: keyof typeof T | string) => string;

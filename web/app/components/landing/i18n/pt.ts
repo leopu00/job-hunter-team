@@ -152,6 +152,14 @@ export const pt: Record<string, string> = {
   dl_detected: "detetado",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "Copia este prompt e entrega-o ao teu assistente de IA: ele instala e inicia a equipa por ti.",
+  dl_copy_prompt: "Copiar prompt",
+  dl_prompt_note:
+    "O assistente de IA precisa de acesso ao teu computador — terminal e ficheiros (p. ex. Claude Code, Cursor, Codex CLI).",
+  dl_help_text: "Não sabes onde ou como instalá-lo?",
+  dl_help_link: "Lê o guia",
   dl_instructions: "Instruções",
   dl_close: "Fechar",
   dl_download: "Descarregar",
@@ -340,4 +348,76 @@ export const pt: Record<string, string> = {
   chat_scorer_top: "Top correspondências encontradas",
   chat_writer_cvs: "A escrever os CV…",
   chat_critic_reviewing: "Revisão…",
+
+  // Login page (LandingClient)
+  login_save_progress: "Entre para guardar o seu progresso",
+  login_auth_failed: "A autenticação falhou.",
+  login_config_missing: "Configuração em falta.",
+  login_with_google: "Entrar com Google",
+  login_with_github: "Entrar com GitHub",
+  back: "Voltar",
+
+  // Relative time (LatestPositionsTable)
+  rel_just_now: "agora mesmo",
+  rel_m_ago: "há {n}min",
+  rel_h_ago: "há {n}h",
+  rel_d_ago: "há {n}d",
+  rel_mo_ago: "há {n}mes",
+  table_cv_written: "CV escrito",
+
+  // Aria-labels
+  dashboard_preview_alt:
+    "Pré-visualização do painel: lista de posições com pontuações, barras, donut e tendência",
+  image_placeholder: "Imagem — marcador de posição",
+  scroll_to_top: "Voltar ao topo",
+  nav_main: "Navegação principal",
+  nav_menu: "Menu",
+  nav_language: "Idioma: {label}",
+  cookie_consent: "Consentimento de cookies",
+
+  // CTA / Footer aria-labels
+  cta_section_aria: "Começar agora",
+  theme_aria: "Tema",
+  footer_aria: "Rodapé do Job Hunter Team",
+  footer_links_aria: "Ligações do rodapé",
+
+  // LandingHome: hero alt + secções
+  home_hero_alt:
+    "Ilustração ao estilo de banda desenhada: uma equipa de agentes de IA — todos a usar os mesmos óculos de sol pretos — sentados à volta de uma longa mesa de reuniões num elegante escritório de arranha-céus, enquanto um agente em pé apresenta gráficos num quadro.",
+  home_team_alt:
+    "Três agentes da equipa de corpo inteiro: o Scout com uma lupa, o Analista de bata, o Escritor com uma pena de ave — todos a usar óculos de sol.",
+  home_setup_alt:
+    "Um portátil que emite um cone de luz azul que se abre num cubo de vidro luminoso: lá dentro está o escritório da equipa a trabalhar.",
+  home_team_kicker: "A equipa",
+  home_team_title: "Uma equipa, não um único bot",
+  home_team_body:
+    "Por trás do Job Hunter Team está uma equipa de agentes de IA especializados: um encontra as ofertas, um verifica-as, um pontua-as, um escreve o seu CV e um critica-o sem piedade. Cada um faz uma coisa, e fá-la bem.",
+  home_team_cta: "Conheça a equipa →",
+  home_dashboard_kicker: "O seu painel",
+  home_dashboard_title: "Tudo sob controlo, a partir da web",
+  home_dashboard_body:
+    "Veja cada oferta encontrada, a sua pontuação de compatibilidade, o mapa de oportunidades por cidade e país, o estado das suas candidaturas. Registe-se para encontrar tudo em qualquer lugar — mas não é obrigatório: pode manter cada dado apenas no seu computador, sem nuvem.",
+  home_dashboard_cta: "Entre ou registe-se →",
+  home_dashboard_note:
+    "Início de sessão opcional · os seus dados podem ficar apenas no seu PC.",
+  home_setup_kicker: "Execute-o",
+  home_setup_title: "Como quiser, onde quiser",
+  home_setup_body:
+    "No seu PC com Docker, num computador dedicado sempre ligado ou numa VPS económica que trabalha para si dia e noite. Tudo é gerido a partir da app de ambiente de trabalho: inicie, pare e fique de olho na equipa com um clique.",
+  home_setup_cta: "Como executá-lo →",
+  home_pricing_kicker: "Preços",
+  home_pricing_title: "Código aberto. A plataforma é gratuita.",
+  home_pricing_body:
+    "O Job Hunter Team não se paga. O único custo é a subscrição do fornecedor de IA que escolher — a partir de cerca de €40 por mês — ou nada, se um dia usar modelos locais e pagar apenas a eletricidade.",
+  home_pricing_cta: "Veja os custos →",
+  home_project_kicker: "O projeto",
+  home_project_title: "O que está por trás, às claras",
+  home_project_body:
+    "Código aberto, os seus dados, sem amarras. Descubra como o Job Hunter Team é construído, a filosofia por trás da equipa de agentes e para onde se dirige.",
+  home_project_cta: "Descubra o projeto →",
+  home_studies_kicker: "Casos de estudo",
+  home_studies_title: "O que faz de verdade, no terreno",
+  home_studies_body:
+    "Não promessas, mas resultados: o que a equipa produziu em perfis de candidatos reais — posições encontradas, analisadas e pontuadas. Dados agregados e anónimos, uma página que cresce a cada nova equipa monitorizada.",
+  home_studies_cta: "Veja os casos de estudo →",
 };

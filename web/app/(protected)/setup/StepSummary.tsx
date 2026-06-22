@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "@/lib/use-locale";
 import { Card, btnPrimary, btnSecondary } from "./ui";
+import { t } from "./setup-i18n";
 import type { FormState } from "./types";
 
 interface Props {
@@ -12,20 +14,26 @@ interface Props {
 
 export function StepSummary({ form, back }: Props) {
   const router = useRouter();
+  const locale = useLocale();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
   const p = form.provider!;
 
   const rows: [string, string][] = [
-    ["Provider", p.label],
-    ["Modello", form.model],
+    [t("sum_row_provider", locale), p.label],
+    [t("sum_row_model", locale), form.model],
     [
-      "Auth",
+      t("sum_row_auth", locale),
       form.authMethod === "api_key"
         ? `API Key (${form.apiKey.slice(0, 8)}••••)`
         : `Subscription (${form.email})`,
     ],
-    ["Telegram", form.useTelegram ? "configurato" : "non configurato"],
+    [
+      t("sum_row_telegram", locale),
+      form.useTelegram
+        ? t("sum_configured", locale)
+        : t("sum_not_configured", locale),
+    ],
   ];
 
   const save = async () => {
@@ -62,19 +70,19 @@ export function StepSummary({ form, back }: Props) {
       });
       const data = await res.json();
       if (!data.ok) {
-        setError(data.error ?? "Errore salvataggio");
+        setError(data.error ?? t("err_save", locale));
         setSaving(false);
         return;
       }
       router.push("/dashboard");
     } catch {
-      setError("Errore di rete");
+      setError(t("err_network", locale));
       setSaving(false);
     }
   };
 
   return (
-    <Card title="Riepilogo" sub="Verifica i dati prima di salvare">
+    <Card title={t("sum_title", locale)} sub={t("sum_sub", locale)}>
       <div className="flex flex-col divide-y divide-[var(--color-border)]">
         {rows.map(([k, v]) => (
           <div key={k} className="flex items-center justify-between py-2.5">
@@ -109,7 +117,7 @@ export function StepSummary({ form, back }: Props) {
           className="flex-1 py-2.5 rounded text-[12px] font-semibold cursor-pointer"
           style={btnSecondary}
         >
-          Modifica
+          {t("sum_edit", locale)}
         </button>
         <button
           onClick={save}
@@ -121,7 +129,7 @@ export function StepSummary({ form, back }: Props) {
               : btnPrimary
           }
         >
-          {saving ? "Salvataggio…" : "Salva e avvia"}
+          {saving ? t("sum_saving", locale) : t("sum_save_start", locale)}
         </button>
       </div>
     </Card>

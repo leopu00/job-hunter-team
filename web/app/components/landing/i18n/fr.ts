@@ -152,6 +152,14 @@ export const fr: Record<string, string> = {
   dl_detected: "détecté",
   dl_mode_desktop_title: "Bureau",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "Copiez ce prompt et confiez-le à votre assistant IA : il installera et démarrera l'équipe pour vous.",
+  dl_copy_prompt: "Copier le prompt",
+  dl_prompt_note:
+    "L'assistant IA doit avoir accès à votre ordinateur — terminal et fichiers (p. ex. Claude Code, Cursor, Codex CLI).",
+  dl_help_text: "Vous ne savez pas où ni comment l'installer ?",
+  dl_help_link: "Lire le guide",
   dl_instructions: "Instructions",
   dl_close: "Fermer",
   dl_download: "Télécharger",
@@ -342,4 +350,76 @@ export const fr: Record<string, string> = {
   chat_scorer_top: "Top correspondances trouvées",
   chat_writer_cvs: "Je rédige les CV…",
   chat_critic_reviewing: "Relecture…",
+
+  // Login page (LandingClient)
+  login_save_progress: "Connectez-vous pour sauvegarder votre progression",
+  login_auth_failed: "L'authentification a échoué.",
+  login_config_missing: "Configuration manquante.",
+  login_with_google: "Se connecter avec Google",
+  login_with_github: "Se connecter avec GitHub",
+  back: "Retour",
+
+  // Relative time (LatestPositionsTable)
+  rel_just_now: "à l'instant",
+  rel_m_ago: "il y a {n}min",
+  rel_h_ago: "il y a {n}h",
+  rel_d_ago: "il y a {n}j",
+  rel_mo_ago: "il y a {n}mois",
+  table_cv_written: "CV rédigé",
+
+  // Aria-labels
+  dashboard_preview_alt:
+    "Aperçu du tableau de bord : liste de positions avec scores, barres, donut et tendance",
+  image_placeholder: "Image — espace réservé",
+  scroll_to_top: "Retour en haut",
+  nav_main: "Navigation principale",
+  nav_menu: "Menu",
+  nav_language: "Langue : {label}",
+  cookie_consent: "Consentement aux cookies",
+
+  // CTA / Footer aria-labels
+  cta_section_aria: "Commencer",
+  theme_aria: "Thème",
+  footer_aria: "Pied de page Job Hunter Team",
+  footer_links_aria: "Liens du pied de page",
+
+  // LandingHome: hero alt + sections
+  home_hero_alt:
+    "Illustration de style BD : une équipe d'agents IA — tous portant les mêmes lunettes de soleil noires — assis autour d'une longue table de réunion dans un élégant bureau de gratte-ciel, tandis qu'un agent debout présente des graphiques sur un tableau.",
+  home_team_alt:
+    "Trois agents de l'équipe en pied : le Scout avec une loupe, l'Analyste en blouse de laboratoire, le Rédacteur avec une plume d'oie — tous portant des lunettes de soleil.",
+  home_setup_alt:
+    "Un ordinateur portable émettant un cône de lumière bleue qui s'ouvre sur un cube de verre lumineux : à l'intérieur se trouve le bureau de l'équipe au travail.",
+  home_team_kicker: "L'équipe",
+  home_team_title: "Une équipe, pas un seul bot",
+  home_team_body:
+    "Derrière Job Hunter Team se trouve une équipe d'agents IA spécialisés : l'un trouve les offres, l'autre les vérifie, l'autre les note, l'autre rédige votre CV et l'autre le critique sans pitié. Chacun fait une chose, et la fait bien.",
+  home_team_cta: "Découvrez l'équipe →",
+  home_dashboard_kicker: "Votre tableau de bord",
+  home_dashboard_title: "Tout sous contrôle, depuis le web",
+  home_dashboard_body:
+    "Voyez chaque offre trouvée, son score de compatibilité, la carte des opportunités par ville et par pays, l'état de vos candidatures. Inscrivez-vous pour tout retrouver partout — mais ce n'est pas obligatoire : vous pouvez garder chaque donnée uniquement sur votre ordinateur, sans cloud.",
+  home_dashboard_cta: "Connectez-vous ou inscrivez-vous →",
+  home_dashboard_note:
+    "Connexion facultative · vos données peuvent rester uniquement sur votre PC.",
+  home_setup_kicker: "Lancez-le",
+  home_setup_title: "Comme vous voulez, où vous voulez",
+  home_setup_body:
+    "Sur votre PC avec Docker, sur un ordinateur dédié toujours allumé ou sur une VPS abordable qui travaille pour vous jour et nuit. Tout se gère depuis l'application de bureau : démarrez, arrêtez et gardez un œil sur l'équipe en un clic.",
+  home_setup_cta: "Comment le lancer →",
+  home_pricing_kicker: "Tarifs",
+  home_pricing_title: "Open source. La plateforme est gratuite.",
+  home_pricing_body:
+    "Job Hunter Team est gratuit. Le seul coût est l'abonnement au fournisseur IA que vous choisissez — à partir d'environ 40 € par mois — ou rien, si un jour vous utilisez des modèles locaux et ne payez que l'électricité.",
+  home_pricing_cta: "Voir les coûts →",
+  home_project_kicker: "Le projet",
+  home_project_title: "Ce qu'il y a derrière, en clair",
+  home_project_body:
+    "Code ouvert, vos données, aucun verrouillage. Découvrez comment Job Hunter Team est conçu, la philosophie derrière l'équipe d'agents et vers où il se dirige.",
+  home_project_cta: "Découvrez le projet →",
+  home_studies_kicker: "Études de cas",
+  home_studies_title: "Ce qu'il fait vraiment, sur le terrain",
+  home_studies_body:
+    "Pas des promesses mais des résultats : ce que l'équipe a produit sur des profils de candidats réels — postes trouvés, analysés et notés. Données agrégées et anonymes, une page qui grandit avec chaque nouvelle équipe surveillée.",
+  home_studies_cta: "Voir les études de cas →",
 };

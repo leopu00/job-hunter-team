@@ -13,6 +13,94 @@ import type {
   TeamActivityRoleDay,
 } from "@/lib/team-activity";
 import { ROLE_META } from "@/lib/team-activity-meta";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<
+  Locale,
+  {
+    workingHours: string;
+    actions: string;
+    weekArcDay: string;
+    budgetTooltip: (day: number, week: number) => string;
+    legendActions: string;
+    legendBudget: string;
+    cumWeek: string;
+    dayConsumption: string;
+  }
+> = {
+  it: {
+    workingHours: "Orario di lavoro",
+    actions: "azioni",
+    weekArcDay: "° giorno della settimana",
+    budgetTooltip: (d, w) => `budget: ${d}% giorno · ${w}% settimana`,
+    legendActions: "Azioni/giorno (asse sx)",
+    legendBudget: "Budget % (asse dx)",
+    cumWeek: "cumulato settimana",
+    dayConsumption: "consumo del giorno",
+  },
+  en: {
+    workingHours: "Working hours",
+    actions: "actions",
+    weekArcDay: "° day of the week",
+    budgetTooltip: (d, w) => `budget: ${d}% day · ${w}% week`,
+    legendActions: "Actions/day (left axis)",
+    legendBudget: "Budget % (right axis)",
+    cumWeek: "cumulative week",
+    dayConsumption: "day consumption",
+  },
+  es: {
+    workingHours: "Horario de trabajo",
+    actions: "acciones",
+    weekArcDay: ".º día de la semana",
+    budgetTooltip: (d, w) => `presupuesto: ${d}% día · ${w}% semana`,
+    legendActions: "Acciones/día (eje izquierdo)",
+    legendBudget: "Presupuesto % (eje derecho)",
+    cumWeek: "acumulado semana",
+    dayConsumption: "consumo del día",
+  },
+  fr: {
+    workingHours: "Horaires de travail",
+    actions: "actions",
+    weekArcDay: "ᵉ jour de la semaine",
+    budgetTooltip: (d, w) => `budget : ${d}% jour · ${w}% semaine`,
+    legendActions: "Actions/jour (axe gauche)",
+    legendBudget: "Budget % (axe droit)",
+    cumWeek: "cumulé semaine",
+    dayConsumption: "consommation du jour",
+  },
+  de: {
+    workingHours: "Arbeitszeit",
+    actions: "Aktionen",
+    weekArcDay: ". Tag der Woche",
+    budgetTooltip: (d, w) => `Budget: ${d}% Tag · ${w}% Woche`,
+    legendActions: "Aktionen/Tag (linke Achse)",
+    legendBudget: "Budget % (rechte Achse)",
+    cumWeek: "kumuliert Woche",
+    dayConsumption: "Tagesverbrauch",
+  },
+  hu: {
+    workingHours: "Munkaidő",
+    actions: "művelet",
+    weekArcDay: ". nap a héten",
+    budgetTooltip: (d, w) =>
+      `költségkeret: ${d}% nap · ${w}% hét`,
+    legendActions: "Műveletek/nap (bal tengely)",
+    legendBudget: "Költségkeret % (jobb tengely)",
+    cumWeek: "halmozott hét",
+    dayConsumption: "napi felhasználás",
+  },
+  pt: {
+    workingHours: "Horário de trabalho",
+    actions: "ações",
+    weekArcDay: "º dia da semana",
+    budgetTooltip: (d, w) => `orçamento: ${d}% dia · ${w}% semana`,
+    legendActions: "Ações/dia (eixo esquerdo)",
+    legendBudget: "Orçamento % (eixo direito)",
+    cumWeek: "acumulado semana",
+    dayConsumption: "consumo do dia",
+  },
+};
 
 // Ambra "budget", theme-aware: giallo su dark, scurito in light (vedi
 // --budget-line in globals.css). Distinto dai colori dei ruoli.
@@ -40,6 +128,8 @@ export default function WorkBudgetChart({
   roles: TeamActivityRole[];
   workingHoursText?: string | null;
 }) {
+  const locale = useLocale();
+  const t = T[locale];
   const wrapRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
@@ -106,7 +196,7 @@ export default function WorkBudgetChart({
             🕗
           </span>
           <span className="text-[10px] uppercase tracking-wide text-[var(--color-dim)]">
-            Orario di lavoro
+            {t.workingHours}
           </span>
           <span className="text-[11px] text-[var(--color-muted)]">
             {workingHoursText}
@@ -252,10 +342,11 @@ export default function WorkBudgetChart({
           }}
         >
           <div className="font-bold text-[var(--color-white)]">
-            {dm(hd.day)} · {hd.total} azioni
+            {dm(hd.day)} · {hd.total} {t.actions}
           </div>
           <div className="text-[var(--color-dim)] mb-1">
-            {weekArcDay(hd.day)}° giorno della settimana
+            {weekArcDay(hd.day)}
+            {t.weekArcDay}
           </div>
           {roles
             .filter((r) => hd.get(r) > 0)
@@ -276,8 +367,7 @@ export default function WorkBudgetChart({
               style={{ background: BUDGET }}
             />
             <span className="text-[var(--color-muted)]">
-              budget: {Math.round(hd.pct)}% giorno · {Math.round(hd.cum)}%
-              settimana
+              {t.budgetTooltip(Math.round(hd.pct), Math.round(hd.cum))}
             </span>
           </div>
         </div>
@@ -286,7 +376,7 @@ export default function WorkBudgetChart({
       {/* legenda */}
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[var(--color-border)] pt-3">
         <span className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
-          Azioni/giorno (asse sx)
+          {t.legendActions}
         </span>
         {roles.map((r) => (
           <span key={r} className="flex items-center gap-1.5">
@@ -300,7 +390,7 @@ export default function WorkBudgetChart({
           </span>
         ))}
         <span className="text-[9px] uppercase tracking-wide text-[var(--color-dim)] ml-2">
-          Budget % (asse dx)
+          {t.legendBudget}
         </span>
         <span className="flex items-center gap-1.5">
           <span
@@ -308,7 +398,7 @@ export default function WorkBudgetChart({
             style={{ background: BUDGET }}
           />
           <span className="text-[10px] text-[var(--color-muted)]">
-            cumulato settimana
+            {t.cumWeek}
           </span>
         </span>
         <span className="flex items-center gap-1.5">
@@ -317,7 +407,7 @@ export default function WorkBudgetChart({
             style={{ borderTop: `2px dashed ${BUDGET}`, opacity: 0.7 }}
           />
           <span className="text-[10px] text-[var(--color-muted)]">
-            consumo del giorno
+            {t.dayConsumption}
           </span>
         </span>
       </div>

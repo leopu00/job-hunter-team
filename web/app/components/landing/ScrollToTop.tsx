@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useLandingI18n } from "./LandingI18n";
 
 export default function ScrollToTop() {
+  const { t } = useLandingI18n();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -16,7 +18,7 @@ export default function ScrollToTop() {
   return (
     <button
       onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-      aria-label="Torna in cima"
+      aria-label={t("scroll_to_top")}
       className="fixed bottom-6 right-6 z-40 w-10 h-10 rounded-full flex items-center justify-center transition-all"
       style={{
         background: "var(--color-panel)",

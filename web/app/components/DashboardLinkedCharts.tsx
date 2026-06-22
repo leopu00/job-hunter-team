@@ -90,6 +90,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Filtres",
     pt: "Filtros",
   },
+  score_prefix: {
+    it: "Score",
+    en: "Score",
+    hu: "Score",
+    es: "Score",
+    de: "Score",
+    fr: "Score",
+    pt: "Score",
+  },
 };
 
 const SCORE_BIN = 5;
@@ -215,7 +224,7 @@ export default function DashboardLinkedCharts({
     }),
     ...selectedScoreBins.map((lo) => ({
       id: `sco:${lo}`,
-      label: `Score ${lo}–${lo + SCORE_BIN}`,
+      label: `${tr("score_prefix")} ${lo}–${lo + SCORE_BIN}`,
       remove: () => setSelectedScoreBins((c) => c.filter((x) => x !== lo)),
     })),
     ...selectedSalaryBins.map((lo) => ({
