@@ -2422,3 +2422,33 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
   color: var(--muted);
   line-height: 1.4;
 }
+
+/* [JHT-DASHBOARD-SPLIT] Statistiche / Candidature / Attività native */
+.dash-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.dash-stat {
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: center;
+}
+.dash-stat__num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dash-stat__label { margin-top: 4px; font-size: 12.5px; color: var(--text-dim); }
+
+.dash-apps__counts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.dash-apps__count {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 10px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+}
+.dash-apps__count-num { font-size: 18px; font-weight: 700; }
+.dash-apps__count-label { font-size: 11.5px; color: var(--text-dim); }
+
+.dash-activity__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+}
+.dash-activity__what { font-size: 13.5px; font-weight: 600; }
