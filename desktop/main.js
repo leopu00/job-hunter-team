@@ -1226,29 +1226,60 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('setup:get-status', async () => {
-    const docker = await dockerInstaller.checkDocker()
-    const extra = await deps.inspectExtraDeps()
-    const image = containerPrep.inspectImage()
-    const saved = providerStore.readProviders(app.getPath('userData'))
-    const { installed } = providerInstall.inspectInstalledProviders()
-    const bindHomeDir = getBindHomeDir()
-    // Auth only matters for providers the user currently picks (saved).
-    // Binaries in the bind-mount from previous runs are ignored — the
-    // user deselected them, they shouldn't resurface at login.
-    const relevant = saved.filter((id) => installed.includes(id))
-    const auth = providerAuth.authStates({ providers: relevant, bindHomeDir })
-    return {
-      docker,
-      extra,
-      image,
-      providers: {
-        saved,
-        installed,
-        pending: saved.filter((id) => !installed.includes(id)),
-        auth,
-        authed: auth.filter((a) => a.authed).map((a) => a.id),
-        unauthed: auth.filter((a) => !a.authed).map((a) => a.id),
-      },
+    // [boot-to-wizard fix] providers.saved è l'UNICA cosa che decide
+    // setup-complete (vedi home.js isSetupComplete). Va calcolato per primo e
+    // in modo indipendente, e l'intero handler NON deve mai rifiutare: se un
+    // inspect lancia (es. docker/container non ancora pronti subito dopo il
+    // boot) boot() cadrebbe nel catch e mostrerebbe il WIZARD anche con un
+    // provider già salvato → la Home "sparisce" al riavvio (bug intermittente).
+    let saved = []
+    try {
+      saved = providerStore.readProviders(app.getPath('userData'))
+    } catch (e) {
+      log.warn('setup-status.read-providers-failed', { err: e && (e.message || String(e)) })
+    }
+    try {
+      const docker = await dockerInstaller.checkDocker()
+      const extra = await deps.inspectExtraDeps()
+      const image = containerPrep.inspectImage()
+      const { installed } = providerInstall.inspectInstalledProviders()
+      const bindHomeDir = getBindHomeDir()
+      // Auth only matters for providers the user currently picks (saved).
+      // Binaries in the bind-mount from previous runs are ignored — the
+      // user deselected them, they shouldn't resurface at login.
+      const relevant = saved.filter((id) => installed.includes(id))
+      const auth = providerAuth.authStates({ providers: relevant, bindHomeDir })
+      return {
+        docker,
+        extra,
+        image,
+        providers: {
+          saved,
+          installed,
+          pending: saved.filter((id) => !installed.includes(id)),
+          auth,
+          authed: auth.filter((a) => a.authed).map((a) => a.id),
+          unauthed: auth.filter((a) => !a.authed).map((a) => a.id),
+        },
+      }
+    } catch (e) {
+      // Degraded ma NON rifiuta: ritorna almeno providers.saved così boot()
+      // instrada alla Home invece che al wizard. Gli inspect (docker/image/
+      // auth) si rileggono al prossimo refresh quando il sistema è pronto.
+      log.warn('setup-status.degraded', { err: e && (e.message || String(e)), saved })
+      return {
+        docker: {},
+        extra: {},
+        image: {},
+        providers: {
+          saved,
+          installed: [],
+          pending: saved,
+          auth: [],
+          authed: [],
+          unauthed: [],
+        },
+      }
     }
   })
 
