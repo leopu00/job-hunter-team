@@ -2467,3 +2467,7 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--muted); padding: 0 12px 6px;
 }
+
+.dash-profile__skills { margin-top: 18px; display: flex; flex-direction: column; gap: 14px; }
+.dash-profile__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.dash-chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); }

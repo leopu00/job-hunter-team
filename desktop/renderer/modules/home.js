@@ -1,6 +1,6 @@
 import { state, showStep, appendLog } from './state.js'
 import { t, getCurrentLang, setLang, initLangDropdown } from './i18n.js'
-import { loadDashboard, loadStats, loadApplications, loadMap, loadActivity, loadAgents } from './dashboard-native.js'
+import { loadDashboard, loadStats, loadApplications, loadMap, loadActivity, loadAgents, loadProfile } from './dashboard-native.js'
 import {
   STEP_WELCOME,
   STEP_READY,
@@ -30,7 +30,7 @@ const VPS_DASHBOARD_URL = 'https://jobhunterteam.ai/dashboard'
 
 // -------- Home (post-setup dashboard) --------
 
-const HOME_SECTIONS = ['team', 'dashboard', 'stats', 'apps', 'map', 'activity', 'agents', 'provider', 'docker', 'account', 'email', 'language', 'advanced']
+const HOME_SECTIONS = ['team', 'dashboard', 'stats', 'apps', 'map', 'activity', 'agents', 'profile', 'provider', 'docker', 'account', 'email', 'language', 'advanced']
 
 // Pagina pubblica che spiega come impostare l'inoltro automatico (pulsante nel
 // pannello Email). Aggiornare se la guida cambia URL.
@@ -192,6 +192,7 @@ function setHomeSection(name) {
     else if (name === 'map') loadMap()
     else if (name === 'activity') loadActivity()
     else if (name === 'agents') loadAgents()
+    else if (name === 'profile') loadProfile()
     else if (name === 'provider') refreshHomeProvider()
     else if (name === 'docker') refreshHomeDocker()
     else if (name === 'email') refreshHomeEmail()

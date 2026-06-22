@@ -269,6 +269,51 @@ export function loadMap() {
   })
 }
 
+// ───────────────────────── Profilo ─────────────────────────
+
+export function loadProfile() {
+  return renderInto('dash-profile', async () => {
+    const res = await apiGet('/api/profile')
+    const p = res?.profile || null
+    if (!p || (!p.name && !p.target_role)) {
+      return emptyBox('Profilo non ancora configurato. Lo costruisci con l’assistente del team.')
+    }
+    const wrap = el('div', 'dash-profile')
+    const head = el('div', 'dash-detail__head')
+    head.appendChild(el('h2', 'dash-detail__title', p.name || '—'))
+    wrap.appendChild(head)
+    if (p.target_role) wrap.appendChild(el('p', 'home__subtitle', p.target_role))
+
+    const rows = el('div', 'dash-detail__rows')
+    const exp = [p.experience_years ? `${p.experience_years} anni` : null, p.experience_months ? `${p.experience_months} mesi` : null].filter(Boolean).join(' ')
+    if (p.email) rows.appendChild(infoRow('Email', p.email))
+    if (p.location) rows.appendChild(infoRow('Luogo', p.location))
+    if (exp) rows.appendChild(infoRow('Esperienza', exp))
+    rows.appendChild(infoRow('Laurea', p.has_degree ? 'Sì' : 'No'))
+    if (Array.isArray(p.job_titles) && p.job_titles.length) rows.appendChild(infoRow('Ruoli', p.job_titles.join(', ')))
+    if (Array.isArray(p.languages) && p.languages.length) {
+      rows.appendChild(infoRow('Lingue', p.languages.map((l) => l.name || l.language || l).join(', ')))
+    }
+    wrap.appendChild(rows)
+
+    // Skills: Record<categoria, string[]> → chip raggruppate
+    if (p.skills && typeof p.skills === 'object') {
+      const skillsWrap = el('div', 'dash-profile__skills')
+      for (const [cat, list] of Object.entries(p.skills)) {
+        if (!Array.isArray(list) || list.length === 0) continue
+        const group = el('div', 'dash-profile__skillgroup')
+        group.appendChild(el('div', 'dash-detail__label', cat))
+        const chips = el('div', 'dash-profile__chips')
+        for (const s of list) chips.appendChild(el('span', 'dash-chip', s))
+        group.appendChild(chips)
+        skillsWrap.appendChild(group)
+      }
+      if (skillsWrap.childElementCount) wrap.appendChild(skillsWrap)
+    }
+    return wrap
+  })
+}
+
 // ───────────────────────── Agenti ─────────────────────────
 
 export function loadAgents() {
