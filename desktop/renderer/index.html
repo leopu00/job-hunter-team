@@ -651,6 +651,10 @@
             <span class="home__nav-icon">🚀</span>
             <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
           </button>
+          <button type="button" class="home__nav-item" data-section="dashboard" role="tab">
+            <span class="home__nav-icon">📊</span>
+            <span class="home__nav-label" data-i18n="home.nav.dashboard">Dashboard</span>
+          </button>
           <button type="button" class="home__nav-item" data-section="provider" role="tab">
             <span class="home__nav-icon">🧠</span>
             <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
@@ -721,12 +725,25 @@
               <pre class="advanced__log" id="home-team-log"></pre>
             </details>
           </div>
-          <!-- [JHT-DASHBOARD-SPLIT] Dashboard locale EMBEDDED: quando il runtime
-               è 'running', renderHomeTeamStatus punta questa <webview> a
-               status.url (http://localhost:PORT servito dal container) → la
-               dashboard vive DENTRO l'app, niente finestra separata né browser.
-               webviewTag è abilitato sulla finestra principale in main.js. -->
+        </div>
+
+        <!-- Dashboard: la view locale del team, embedded a tutta pagina nella
+             sua sezione dedicata della sidebar. -->
+        <div class="home__panel" data-section="dashboard" hidden>
+          <!-- [JHT-DASHBOARD-SPLIT] Dashboard locale EMBEDDED a tutta pagina:
+               renderHomeTeamStatus (syncTeamDashboard) punta questa <webview> a
+               status.url (http://localhost:PORT servito dal container) quando il
+               runtime è 'running'. webviewTag è abilitato sulla finestra
+               principale in main.js. Finché il team non è su, mostriamo un
+               placeholder al posto della webview. -->
           <webview id="home-team-dashboard" class="home__dashboard" hidden></webview>
+          <div class="home__dashboard-empty" id="home-dashboard-empty">
+            <div class="step__emoji" aria-hidden="true">📊</div>
+            <h1 class="home__title" data-i18n="home.dashboard.title">Dashboard</h1>
+            <p class="home__subtitle" data-i18n="home.dashboard.empty">
+              Avvia il team dalla sezione Team per vedere qui la dashboard.
+            </p>
+          </div>
         </div>
 
         <!-- Provider: vendor + plan + login -->

@@ -29,7 +29,7 @@ const VPS_DASHBOARD_URL = 'https://jobhunterteam.ai/dashboard'
 
 // -------- Home (post-setup dashboard) --------
 
-const HOME_SECTIONS = ['team', 'provider', 'docker', 'account', 'email', 'language', 'advanced']
+const HOME_SECTIONS = ['team', 'dashboard', 'provider', 'docker', 'account', 'email', 'language', 'advanced']
 
 // Pagina pubblica che spiega come impostare l'inoltro automatico (pulsante nel
 // pannello Email). Aggiornare se la guida cambia URL.
@@ -47,6 +47,7 @@ const homeDom = {
   teamAdvanced: document.getElementById('home-team-advanced'),
   teamLog: document.getElementById('home-team-log'),
   teamDashboard: document.getElementById('home-team-dashboard'),
+  dashboardEmpty: document.getElementById('home-dashboard-empty'),
   teamDockerWarning: document.getElementById('home-team-docker-warning'),
   teamDockerWarningText: document.getElementById('home-team-docker-warning-text'),
   btnTeamDockerAction: document.getElementById('home-team-docker-action'),
@@ -181,7 +182,10 @@ function setHomeSection(name) {
   for (const panel of homeDom.panels) {
     panel.hidden = panel.dataset.section !== name
   }
-  if (name === 'team') {
+  if (name === 'team' || name === 'dashboard') {
+    // Sia Team che Dashboard dipendono dallo stato del runtime: refresh +
+    // poll così la <webview> della sezione Dashboard si popola/svuota da sé
+    // quando il team passa running↔stopped, anche mentre la si guarda.
     refreshHomeTeam()
     startTeamPanelPoll()
   } else {
@@ -489,12 +493,16 @@ function syncTeamDashboard(url) {
       dash.dataset.loadedUrl = url
     }
     dash.hidden = false
+    if (homeDom.dashboardEmpty) homeDom.dashboardEmpty.hidden = true
   } else {
     if (dash.dataset.loadedUrl) {
       dash.src = 'about:blank'
       delete dash.dataset.loadedUrl
     }
     dash.hidden = true
+    // Placeholder visibile finché il team non è 'running' (la sezione
+    // Dashboard dedicata non resta vuota).
+    if (homeDom.dashboardEmpty) homeDom.dashboardEmpty.hidden = false
   }
 }
 
@@ -1300,5 +1308,5 @@ initLangDropdown(document.getElementById('home-lang-select'), {
 // cadence as the wizard's running-step poller (3s) — not cumulative,
 // the two run in different views.
 setInterval(() => {
-  if (state.view === 'home' && state.homeSection === 'team') refreshHomeTeam()
+  if (state.view === 'home' && (state.homeSection === 'team' || state.homeSection === 'dashboard')) refreshHomeTeam()
 }, 3000)

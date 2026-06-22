@@ -1519,12 +1519,13 @@ body { display: flex; flex-direction: column; }
 /* [JHT-DASHBOARD-SPLIT] Dashboard locale embedded nel pannello Team: la
    <webview> riempie la larghezza del contenuto (non il cap 640px della card)
    e quasi tutta l'altezza, così il team è visibile dentro l'app. */
+/* La dashboard vive nella sua sezione dedicata (sidebar → Dashboard): la
+   <webview> riempie quasi tutta la finestra. */
 .home__dashboard {
   display: block;
   width: 100%;
-  height: calc(100vh - 220px);
+  height: calc(100vh - 140px);
   min-height: 460px;
-  margin-top: 20px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--panel);
@@ -1532,6 +1533,21 @@ body { display: flex; flex-direction: column; }
 }
 
 .home__dashboard[hidden] { display: none; }
+
+/* Placeholder mostrato nella sezione Dashboard finché il team non è running. */
+.home__dashboard-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: calc(100vh - 200px);
+  min-height: 360px;
+  gap: 8px;
+  color: var(--text-dim);
+}
+
+.home__dashboard-empty[hidden] { display: none; }
 
 .home__card-link {
   font-size: 13px;
