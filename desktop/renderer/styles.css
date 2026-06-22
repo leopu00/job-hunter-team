@@ -2548,3 +2548,8 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
   background: var(--panel); color: var(--text); font: inherit; font-size: 13.5px;
 }
 .dash-ticket__input:focus { outline: none; border-color: var(--border-strong); }
+
+.dash-notif { display: flex; gap: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+.dash-notif.is-read { opacity: 0.6; }
+.dash-notif__icon { font-size: 16px; }
+.dash-notif__title { font-size: 13.5px; font-weight: 600; }

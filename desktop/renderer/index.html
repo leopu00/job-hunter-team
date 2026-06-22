@@ -662,6 +662,10 @@
               <span class="home__nav-icon">💬</span>
               <span class="home__nav-label" data-i18n="home.nav.chat">Chat</span>
             </button>
+            <button type="button" class="home__nav-item" data-section="notifs" role="tab">
+              <span class="home__nav-icon">🔔</span>
+              <span class="home__nav-label" data-i18n="home.nav.notifs">Notifiche</span>
+            </button>
           </div>
           <!-- Gruppo Lavoro: i dati della ricerca -->
           <div class="home__nav-group">
@@ -830,6 +834,15 @@
               <button type="button" class="btn btn--primary" id="chat-send" data-i18n="home.chat.send">Invia</button>
             </div>
           </div>
+        </div>
+
+        <!-- Notifiche (nativo) -->
+        <div class="home__panel" data-section="notifs" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.notifs.title">Notifiche</h1>
+            <p class="home__subtitle" data-i18n="home.notifs.subtitle">Avvisi e aggiornamenti del team.</p>
+          </header>
+          <div id="dash-notifs"></div>
         </div>
 
         <!-- Statistiche: conteggi pipeline (nativo) -->
