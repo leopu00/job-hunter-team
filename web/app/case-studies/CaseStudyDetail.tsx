@@ -9,6 +9,8 @@ import Link from "next/link";
 import type { CaseStudyProfile } from "@/lib/case-studies";
 import type { CaseStudyRun } from "@/lib/case-study";
 import type { TeamActivity } from "@/lib/team-activity";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 import CaseStudyOverview from "./CaseStudyOverview";
 import WorkBudgetChart from "./WorkBudgetChart";
 import SourcesChart from "./SourcesChart";
@@ -30,27 +32,248 @@ export interface CaseRef {
   badge: string;
 }
 
-const MONTHS_IT = [
-  "gen",
-  "feb",
-  "mar",
-  "apr",
-  "mag",
-  "giu",
-  "lug",
-  "ago",
-  "set",
-  "ott",
-  "nov",
-  "dic",
-];
-function dayLabel(key: string): string {
+const LOCALE_TAG: Record<Locale, string> = {
+  it: "it-IT",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  hu: "hu-HU",
+  pt: "pt-PT",
+};
+
+// Abbreviazioni dei mesi localizzate (gen…dic) via Intl, con il tag locale.
+function monthShort(locale: Locale, monthIndex0: number): string {
+  // 2021 = anno qualunque; usiamo il giorno 1 di ogni mese.
+  const d = new Date(Date.UTC(2021, monthIndex0, 1));
+  return new Intl.DateTimeFormat(LOCALE_TAG[locale], {
+    month: "short",
+    timeZone: "UTC",
+  }).format(d);
+}
+
+function dayLabel(locale: Locale, key: string): string {
   const [, m, d] = key.split("-");
-  return `${Number(d)} ${MONTHS_IT[Number(m) - 1] ?? ""}`.trim();
+  return `${Number(d)} ${monthShort(locale, Number(m) - 1) ?? ""}`.trim();
 }
-function nf(n: number): string {
-  return n.toLocaleString("it-IT");
+
+function nf(locale: Locale, n: number): string {
+  return n.toLocaleString(LOCALE_TAG[locale]);
 }
+
+// Abbreviazioni dei giorni della settimana localizzate (lun…dom) via Intl.
+// 2021-08-02 era un lunedì → offset 0..6 = lun..dom.
+function dowLabels(locale: Locale): Record<string, string> {
+  const keys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const fmt = new Intl.DateTimeFormat(LOCALE_TAG[locale], {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+  const out: Record<string, string> = {};
+  keys.forEach((k, i) => {
+    out[k] = fmt.format(new Date(Date.UTC(2021, 7, 2 + i)));
+  });
+  return out;
+}
+
+const T: Record<
+  Locale,
+  {
+    caseStudies: string;
+    allCaseStudies: string;
+    backToOverview: string;
+    anonymousProfile: string;
+    aiSubscriptionUsed: string;
+    onlyExpense: string;
+    whereSearches: string;
+    runRealPrefix: string;
+    runRealMiddle: string; // tra finestra e "giorni di lavoro"
+    runRealSuffix: string;
+    everyDay: string;
+    monFri: string;
+    workBudgetTitle: string;
+    workBudgetBars: string;
+    workBudgetLines: string;
+    workBudgetProse1: string; // "sono le azioni del team al giorno (per ruolo); le"
+    workBudgetProse2: string; // "mostrano quanto del piano AI settimanale..."
+    sourcesTitle: string;
+    sourcesProse1: string; // "Le fonti da cui lo Scout ha trovato le"
+    sourcesProse2: string; // "posizioni: job board, ATS e pagine carriera aziendali."
+  }
+> = {
+  it: {
+    caseStudies: "Case studies",
+    allCaseStudies: "Tutti i case study",
+    backToOverview: "Torna alla panoramica",
+    anonymousProfile: "profilo anonimo",
+    aiSubscriptionUsed: "Abbonamento AI usato",
+    onlyExpense: "È l’unica spesa: la piattaforma è gratis.",
+    whereSearches: "Dove cerca lavoro",
+    runRealPrefix: "Run reale del team su questo profilo · finestra",
+    runRealMiddle: "·",
+    runRealSuffix: "giorni di lavoro · ogni dato è aggregato e anonimo.",
+    everyDay: "tutti i giorni",
+    monFri: "lun–ven",
+    workBudgetTitle: "Lavoro e budget AI nel tempo",
+    workBudgetBars: "Barre",
+    workBudgetLines: "linee",
+    workBudgetProse1: "sono le azioni del team al giorno (per ruolo); le",
+    workBudgetProse2:
+      "mostrano quanto del piano AI settimanale è stato consumato — quel giorno e cumulato sulla settimana (reset giovedì). Il budget si spalma sui giorni invece di bruciarsi subito.",
+    sourcesTitle: "Da dove arrivano le posizioni",
+    sourcesProse1: "Le fonti da cui lo Scout ha trovato le",
+    sourcesProse2:
+      "posizioni: job board, ATS e pagine carriera aziendali.",
+  },
+  en: {
+    caseStudies: "Case studies",
+    allCaseStudies: "All case studies",
+    backToOverview: "Back to overview",
+    anonymousProfile: "anonymous profile",
+    aiSubscriptionUsed: "AI subscription used",
+    onlyExpense: "It’s the only expense: the platform is free.",
+    whereSearches: "Where they search for work",
+    runRealPrefix: "Real team run on this profile · window",
+    runRealMiddle: "·",
+    runRealSuffix: "working days · every figure is aggregated and anonymous.",
+    everyDay: "every day",
+    monFri: "Mon–Fri",
+    workBudgetTitle: "Work and AI budget over time",
+    workBudgetBars: "Bars",
+    workBudgetLines: "lines",
+    workBudgetProse1: "are the team’s actions per day (by role); the",
+    workBudgetProse2:
+      "show how much of the weekly AI plan was used — that day and cumulatively over the week (resets on Thursday). The budget spreads across the days instead of burning out at once.",
+    sourcesTitle: "Where the positions come from",
+    sourcesProse1: "The sources where the Scout found the",
+    sourcesProse2: "positions: job boards, ATS and company career pages.",
+  },
+  es: {
+    caseStudies: "Casos de estudio",
+    allCaseStudies: "Todos los casos de estudio",
+    backToOverview: "Volver al resumen",
+    anonymousProfile: "perfil anónimo",
+    aiSubscriptionUsed: "Suscripción de AI usada",
+    onlyExpense: "Es el único gasto: la plataforma es gratis.",
+    whereSearches: "Dónde busca trabajo",
+    runRealPrefix: "Ejecución real del equipo sobre este perfil · ventana",
+    runRealMiddle: "·",
+    runRealSuffix:
+      "días de trabajo · cada dato está agregado y es anónimo.",
+    everyDay: "todos los días",
+    monFri: "lun–vie",
+    workBudgetTitle: "Trabajo y presupuesto de AI a lo largo del tiempo",
+    workBudgetBars: "Barras",
+    workBudgetLines: "líneas",
+    workBudgetProse1: "son las acciones del equipo por día (por rol); las",
+    workBudgetProse2:
+      "muestran cuánto del plan de AI semanal se ha consumido — ese día y acumulado en la semana (se reinicia el jueves). El presupuesto se reparte entre los días en lugar de agotarse de golpe.",
+    sourcesTitle: "De dónde vienen las posiciones",
+    sourcesProse1: "Las fuentes donde el Scout encontró las",
+    sourcesProse2:
+      "posiciones: portales de empleo, ATS y páginas de carrera de las empresas.",
+  },
+  fr: {
+    caseStudies: "Études de cas",
+    allCaseStudies: "Toutes les études de cas",
+    backToOverview: "Retour à la vue d’ensemble",
+    anonymousProfile: "profil anonyme",
+    aiSubscriptionUsed: "Abonnement AI utilisé",
+    onlyExpense: "C’est la seule dépense : la plateforme est gratuite.",
+    whereSearches: "Où il cherche du travail",
+    runRealPrefix: "Exécution réelle de l’équipe sur ce profil · fenêtre",
+    runRealMiddle: "·",
+    runRealSuffix:
+      "jours de travail · chaque donnée est agrégée et anonyme.",
+    everyDay: "tous les jours",
+    monFri: "lun–ven",
+    workBudgetTitle: "Travail et budget AI au fil du temps",
+    workBudgetBars: "Barres",
+    workBudgetLines: "lignes",
+    workBudgetProse1: "sont les actions de l’équipe par jour (par rôle) ; les",
+    workBudgetProse2:
+      "montrent quelle part du plan AI hebdomadaire a été consommée — ce jour-là et cumulée sur la semaine (réinitialisation le jeudi). Le budget s’étale sur les jours au lieu de s’épuiser d’un coup.",
+    sourcesTitle: "D’où viennent les postes",
+    sourcesProse1: "Les sources où le Scout a trouvé les",
+    sourcesProse2:
+      "postes : sites d’emploi, ATS et pages carrières des entreprises.",
+  },
+  de: {
+    caseStudies: "Fallstudien",
+    allCaseStudies: "Alle Fallstudien",
+    backToOverview: "Zurück zur Übersicht",
+    anonymousProfile: "anonymes Profil",
+    aiSubscriptionUsed: "Verwendetes AI-Abo",
+    onlyExpense: "Es ist die einzige Ausgabe: Die Plattform ist kostenlos.",
+    whereSearches: "Wo nach Arbeit gesucht wird",
+    runRealPrefix: "Echter Team-Lauf für dieses Profil · Zeitfenster",
+    runRealMiddle: "·",
+    runRealSuffix:
+      "Arbeitstage · jeder Wert ist aggregiert und anonym.",
+    everyDay: "jeden Tag",
+    monFri: "Mo–Fr",
+    workBudgetTitle: "Arbeit und AI-Budget im Zeitverlauf",
+    workBudgetBars: "Balken",
+    workBudgetLines: "Linien",
+    workBudgetProse1: "sind die Aktionen des Teams pro Tag (nach Rolle); die",
+    workBudgetProse2:
+      "zeigen, wie viel des wöchentlichen AI-Plans verbraucht wurde — an diesem Tag und kumuliert über die Woche (Reset am Donnerstag). Das Budget verteilt sich über die Tage, statt sofort aufgebraucht zu werden.",
+    sourcesTitle: "Woher die Positionen kommen",
+    sourcesProse1: "Die Quellen, in denen der Scout die",
+    sourcesProse2:
+      "Positionen gefunden hat: Jobbörsen, ATS und Karriereseiten von Unternehmen.",
+  },
+  hu: {
+    caseStudies: "Esettanulmányok",
+    allCaseStudies: "Összes esettanulmány",
+    backToOverview: "Vissza az áttekintéshez",
+    anonymousProfile: "névtelen profil",
+    aiSubscriptionUsed: "Használt AI-előfizetés",
+    onlyExpense: "Ez az egyetlen költség: a platform ingyenes.",
+    whereSearches: "Hol keres munkát",
+    runRealPrefix: "Valódi csapatfuttatás ezen a profilon · időablak",
+    runRealMiddle: "·",
+    runRealSuffix:
+      "munkanap · minden adat összesített és névtelen.",
+    everyDay: "minden nap",
+    monFri: "hét–pén",
+    workBudgetTitle: "Munka és AI-keret az idő során",
+    workBudgetBars: "Oszlopok",
+    workBudgetLines: "vonalak",
+    workBudgetProse1: "a csapat napi műveletei (szerepkörönként); a",
+    workBudgetProse2:
+      "azt mutatják, mennyit használtak fel a heti AI-keretből — aznap és a hétre kumulálva (csütörtökön nullázódik). A keret eloszlik a napok között, ahelyett, hogy egyszerre elfogyna.",
+    sourcesTitle: "Honnan érkeznek a pozíciók",
+    sourcesProse1: "A források, ahol a Scout megtalálta a",
+    sourcesProse2:
+      "pozíciókat: állásportálok, ATS és vállalati karrieroldalak.",
+  },
+  pt: {
+    caseStudies: "Estudos de caso",
+    allCaseStudies: "Todos os estudos de caso",
+    backToOverview: "Voltar à visão geral",
+    anonymousProfile: "perfil anónimo",
+    aiSubscriptionUsed: "Subscrição de AI usada",
+    onlyExpense: "É a única despesa: a plataforma é gratuita.",
+    whereSearches: "Onde procura trabalho",
+    runRealPrefix: "Execução real da equipa sobre este perfil · janela",
+    runRealMiddle: "·",
+    runRealSuffix:
+      "dias de trabalho · cada dado é agregado e anónimo.",
+    everyDay: "todos os dias",
+    monFri: "seg–sex",
+    workBudgetTitle: "Trabalho e orçamento de AI ao longo do tempo",
+    workBudgetBars: "Barras",
+    workBudgetLines: "linhas",
+    workBudgetProse1: "são as ações da equipa por dia (por função); as",
+    workBudgetProse2:
+      "mostram quanto do plano de AI semanal foi consumido — nesse dia e acumulado ao longo da semana (reinicia à quinta-feira). O orçamento distribui-se pelos dias em vez de se esgotar de uma vez.",
+    sourcesTitle: "De onde vêm as posições",
+    sourcesProse1: "As fontes onde o Scout encontrou as",
+    sourcesProse2:
+      "posições: portais de emprego, ATS e páginas de carreira das empresas.",
+  },
+};
 
 export default function CaseStudyDetail({
   current,
@@ -59,6 +282,8 @@ export default function CaseStudyDetail({
   current: PreparedCase;
   all: CaseRef[];
 }) {
+  const locale = useLocale();
+  const t = T[locale];
   const [menuOpen, setMenuOpen] = useState(false);
   const { run, activity, profile } = current;
 
@@ -72,25 +297,17 @@ export default function CaseStudyDetail({
   const activeRoles = activity.roles.filter((r) => activity.roleTotals[r] > 0);
 
   // Orario di lavoro formattato (contesto sulla distribuzione del budget).
-  const DOW: Record<string, string> = {
-    mon: "lun",
-    tue: "mar",
-    wed: "mer",
-    thu: "gio",
-    fri: "ven",
-    sat: "sab",
-    sun: "dom",
-  };
+  const DOW = dowLabels(locale);
   const fmtDays = (days: string[]) => {
     const all = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
     const s = new Set(days);
-    if (all.every((d) => s.has(d))) return "tutti i giorni";
+    if (all.every((d) => s.has(d))) return t.everyDay;
     if (
       ["mon", "tue", "wed", "thu", "fri"].every((d) => s.has(d)) &&
       !s.has("sat") &&
       !s.has("sun")
     )
-      return "lun–ven";
+      return t.monFri;
     return days.map((d) => DOW[d] ?? d).join(", ");
   };
   const wh = run.usage?.workingHours;
@@ -112,7 +329,7 @@ export default function CaseStudyDetail({
             href="/case-studies"
             className="text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Case studies
+            {t.caseStudies}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -128,7 +345,7 @@ export default function CaseStudyDetail({
             aria-expanded={menuOpen}
             className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-muted)] hover:border-[var(--color-blue)] hover:text-[var(--color-white)] transition-colors"
           >
-            ☰ Tutti i case study
+            ☰ {t.allCaseStudies}
             <span
               className="text-[8px]"
               style={{ transform: menuOpen ? "rotate(180deg)" : "none" }}
@@ -187,7 +404,7 @@ export default function CaseStudyDetail({
                     onClick={() => setMenuOpen(false)}
                     className="block rounded-lg px-2.5 py-2 text-[11px] text-[var(--color-dim)] hover:text-[var(--color-muted)] hover:bg-[var(--color-bg)] no-underline transition-colors"
                   >
-                    ← Torna alla panoramica
+                    ← {t.backToOverview}
                   </Link>
                 </div>
               </div>
@@ -203,7 +420,7 @@ export default function CaseStudyDetail({
           <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
             <div className="flex-1 min-w-0">
               <div className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[var(--color-dim)]">
-                {current.label} · profilo anonimo
+                {current.label} · {t.anonymousProfile}
               </div>
               <h1 className="mt-2 text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
                 {profile.headline}
@@ -226,7 +443,7 @@ export default function CaseStudyDetail({
                 <span aria-hidden className="text-[14px]">
                   🧠
                 </span>
-                Abbonamento AI usato
+                {t.aiSubscriptionUsed}
               </div>
               <div className="mt-1.5 text-[15px] font-bold text-[var(--color-white)] leading-snug">
                 {current.subscription.provider}
@@ -238,7 +455,7 @@ export default function CaseStudyDetail({
                 </span>
               </div>
               <div className="mt-2 text-[10px] text-[var(--color-dim)] leading-relaxed">
-                È l&apos;unica spesa: la piattaforma è gratis.
+                {t.onlyExpense}
               </div>
             </div>
           </div>
@@ -258,7 +475,7 @@ export default function CaseStudyDetail({
 
           <div className="mt-6 border-t border-[var(--color-border)] pt-6">
             <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)] mb-2">
-              Dove cerca lavoro
+              {t.whereSearches}
             </div>
             <p className="text-[12px] text-[var(--color-muted)] leading-relaxed mb-3">
               {profile.locationNote}
@@ -277,11 +494,11 @@ export default function CaseStudyDetail({
         </div>
 
         <p className="mt-3 text-[11px] text-[var(--color-dim)] px-1">
-          Run reale del team su questo profilo · finestra{" "}
+          {t.runRealPrefix}{" "}
           <strong>
-            {dayLabel(fromKey)} → {dayLabel(toKey)}
+            {dayLabel(locale, fromKey)} → {dayLabel(locale, toKey)}
           </strong>{" "}
-          · {activeDays} giorni di lavoro · ogni dato è aggregato e anonimo.
+          {t.runRealMiddle} {activeDays} {t.runRealSuffix}
         </p>
       </header>
 
@@ -292,15 +509,17 @@ export default function CaseStudyDetail({
       {run.usage && run.usage.daily.length > 0 && (
         <section>
           <div className="section-label mb-1">
-            📈 Lavoro e budget AI nel tempo
+            📈 {t.workBudgetTitle}
           </div>
           <p className="text-[11px] text-[var(--color-dim)] mb-4">
-            Le <strong className="text-[var(--color-muted)]">barre</strong> sono
-            le azioni del team al giorno (per ruolo); le{" "}
-            <strong className="text-[var(--color-muted)]">linee</strong>{" "}
-            mostrano quanto del piano AI settimanale è stato consumato — quel
-            giorno e cumulato sulla settimana (reset giovedì). Il budget si
-            spalma sui giorni invece di bruciarsi subito.
+            <strong className="text-[var(--color-muted)]">
+              {t.workBudgetBars}
+            </strong>{" "}
+            {t.workBudgetProse1}{" "}
+            <strong className="text-[var(--color-muted)]">
+              {t.workBudgetLines}
+            </strong>{" "}
+            {t.workBudgetProse2}
           </p>
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
             <WorkBudgetChart
@@ -317,11 +536,11 @@ export default function CaseStudyDetail({
       {run.sources && run.sources.length > 0 && (
         <section className="pt-10 border-t border-[var(--color-border)]">
           <div className="section-label mb-1">
-            📥 Da dove arrivano le posizioni
+            📥 {t.sourcesTitle}
           </div>
           <p className="text-[11px] text-[var(--color-dim)] mb-6">
-            Le fonti da cui lo Scout ha trovato le {nf(run.totals.positions)}{" "}
-            posizioni: job board, ATS e pagine carriera aziendali.
+            {t.sourcesProse1} {nf(locale, run.totals.positions)}{" "}
+            {t.sourcesProse2}
           </p>
           <SourcesChart sources={run.sources} total={run.totals.positions} />
         </section>
