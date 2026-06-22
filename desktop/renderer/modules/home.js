@@ -1,5 +1,6 @@
 import { state, showStep, appendLog } from './state.js'
 import { t, getCurrentLang, setLang, initLangDropdown } from './i18n.js'
+import { loadDashboard } from './dashboard-native.js'
 import {
   STEP_WELCOME,
   STEP_READY,
@@ -46,8 +47,6 @@ const homeDom = {
   teamInfo: document.getElementById('home-team-info'),
   teamAdvanced: document.getElementById('home-team-advanced'),
   teamLog: document.getElementById('home-team-log'),
-  teamDashboard: document.getElementById('home-team-dashboard'),
-  dashboardEmpty: document.getElementById('home-dashboard-empty'),
   teamDockerWarning: document.getElementById('home-team-docker-warning'),
   teamDockerWarningText: document.getElementById('home-team-docker-warning-text'),
   btnTeamDockerAction: document.getElementById('home-team-docker-action'),
@@ -182,15 +181,13 @@ function setHomeSection(name) {
   for (const panel of homeDom.panels) {
     panel.hidden = panel.dataset.section !== name
   }
-  if (name === 'team' || name === 'dashboard') {
-    // Sia Team che Dashboard dipendono dallo stato del runtime: refresh +
-    // poll così la <webview> della sezione Dashboard si popola/svuota da sé
-    // quando il team passa running↔stopped, anche mentre la si guarda.
+  if (name === 'team') {
     refreshHomeTeam()
     startTeamPanelPoll()
   } else {
     stopTeamPanelPoll()
-    if (name === 'provider') refreshHomeProvider()
+    if (name === 'dashboard') loadDashboard()
+    else if (name === 'provider') refreshHomeProvider()
     else if (name === 'docker') refreshHomeDocker()
     else if (name === 'email') refreshHomeEmail()
   }
@@ -478,34 +475,6 @@ if (homeDom.btnAccountSignout) {
   homeDom.btnAccountSignout.addEventListener('click', () => signOut())
 }
 
-// [JHT-DASHBOARD-SPLIT] Dashboard locale EMBEDDED nel pannello Team.
-// url truthy → punta la <webview> lì e la mostra (guard dataset.loadedUrl
-// contro il reload a ogni poll); falsy → nascondi e scarica (about:blank)
-// così non resta viva una pagina di un runtime ormai fermo. Il ramo VPS
-// NON usa l'embed: il suo cockpit è una finestra a parte via tunnel SSH
-// (openVpsCockpit → openDashboardWindow), quindi lì passiamo null.
-function syncTeamDashboard(url) {
-  const dash = homeDom.teamDashboard
-  if (!dash) return
-  if (url) {
-    if (dash.dataset.loadedUrl !== url) {
-      dash.src = url
-      dash.dataset.loadedUrl = url
-    }
-    dash.hidden = false
-    if (homeDom.dashboardEmpty) homeDom.dashboardEmpty.hidden = true
-  } else {
-    if (dash.dataset.loadedUrl) {
-      dash.src = 'about:blank'
-      delete dash.dataset.loadedUrl
-    }
-    dash.hidden = true
-    // Placeholder visibile finché il team non è 'running' (la sezione
-    // Dashboard dedicata non resta vuota).
-    if (homeDom.dashboardEmpty) homeDom.dashboardEmpty.hidden = false
-  }
-}
-
 function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
   const mode = status?.mode
   // In VPS mode il team gira sulla VPS remota, sempre "running" dal punto
@@ -541,8 +510,6 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
     // Docker warning del Team panel: in VPS mode il Docker e' remoto,
     // niente da segnalare lato launcher.
     if (homeDom.teamDockerWarning) homeDom.teamDockerWarning.hidden = true
-    // VPS: la dashboard è il cockpit via tunnel (finestra separata), non l'embed.
-    syncTeamDashboard(null)
     return
   }
   const running = !!status?.running && (mode === 'running' || mode === 'external')
@@ -600,8 +567,6 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
     homeDom.teamAdvanced.hidden = true
     homeDom.teamLog.textContent = ''
   }
-  // Embed la dashboard locale quando il runtime è up; altrimenti nascondila.
-  syncTeamDashboard(running && status?.url ? status.url : null)
 }
 
 // Polls docker status every 3s after the user clicked the warning's
@@ -787,12 +752,10 @@ export async function startTeamFromHome() {
     }
     const status = await window.launcherApi.start({})
     renderHomeTeamStatus(status)
-    // [JHT-DASHBOARD-SPLIT] Per il ramo LOCAL non apriamo più una finestra
-    // separata (openBrowser → openDashboardWindow): la dashboard è EMBEDDED
-    // nel pannello Team (syncTeamDashboard). Appena il poll del pannello vede
-    // mode=running, la <webview> compare inline da sola — niente doppia
-    // dashboard, niente click. La finestra separata resta solo per il VPS
-    // (cockpit via tunnel, gestito dal bottone Open in quel ramo).
+    // [JHT-DASHBOARD-SPLIT] Avviato il team, niente finestra/browser: la
+    // dashboard è una sezione NATIVA a sé (sidebar → Dashboard) che fetcha le
+    // offerte dal runtime via window.dashboardApi. L'utente la apre da lì
+    // quando vuole; qui ci limitiamo ad avviare il runtime.
   } catch (error) {
     appendLog(`startTeamFromHome: ${error.message || error}`)
     renderHomeTeamStatus({ mode: 'error', lastError: error.message || String(error) })
@@ -1308,5 +1271,5 @@ initLangDropdown(document.getElementById('home-lang-select'), {
 // cadence as the wizard's running-step poller (3s) — not cumulative,
 // the two run in different views.
 setInterval(() => {
-  if (state.view === 'home' && (state.homeSection === 'team' || state.homeSection === 'dashboard')) refreshHomeTeam()
+  if (state.view === 'home' && state.homeSection === 'team') refreshHomeTeam()
 }, 3000)
