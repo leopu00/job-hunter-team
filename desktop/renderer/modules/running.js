@@ -112,7 +112,18 @@ export async function startTeam() {
     const status = await window.launcherApi.start({})
     updateRunningUI(status)
     if (status.running && status.url) {
+      // [JHT-DASHBOARD-SPLIT] Niente più schermata terminale "apri nel
+      // browser": apriamo la dashboard nella finestra in-app (openBrowser →
+      // openDashboardWindow) e transitiamo alla Home del launcher, simmetrico
+      // al ramo VPS sopra. Lo step STEP_RUNNING resta solo come schermo di
+      // progresso durante download/avvio runtime, mai come stato finale.
       await window.launcherApi.openBrowser().catch(() => {})
+      try {
+        await showHome('team')
+        _runningLog.info('startTeam.local.showHome.ok')
+      } catch (e) {
+        _runningLog.error('startTeam.local.showHome.failed', { err: String(e?.message || e) })
+      }
     }
   } catch (error) {
     appendLog(`startTeam error: ${error.message || error}`)
