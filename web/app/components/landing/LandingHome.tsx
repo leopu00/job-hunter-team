@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { LandingI18nProvider, useLandingI18n } from "./LandingI18n";
-import { LandingFooter } from "./LandingCTA";
+import LandingCTA, { LandingFooter } from "./LandingCTA";
 import LandingNav from "./LandingNav";
 import DashboardMockup from "./DashboardMockup";
 
@@ -18,6 +18,7 @@ export default function LandingHome() {
       <main id="main-content">
         <Hero />
         <Sections />
+        <LandingCTA />
       </main>
       <LandingFooter />
     </LandingI18nProvider>
@@ -239,9 +240,25 @@ function Sections() {
           />
         }
       />
-      <Block copy={c.pricing} href="/pricing" />
-      <Block copy={c.project} href="/project" />
-      <Block copy={c.studies} href="/case-studies" />
+      <Block
+        copy={c.pricing}
+        href="/pricing"
+        reverse
+        visual={
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/landing-pricing.png"
+            alt={
+              L === "it"
+                ? "Un lucchetto aperto circondato da poche monete, una verde luminosa: la piattaforma è gratuita e open source, paghi solo il provider AI."
+                : "An open padlock surrounded by a few coins, one glowing green: the platform is free and open source, you only pay the AI provider."
+            }
+            width={1448}
+            height={1086}
+            className="w-full h-auto max-w-xs mx-auto"
+          />
+        }
+      />
     </div>
   );
 }
