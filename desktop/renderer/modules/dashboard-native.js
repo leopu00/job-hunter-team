@@ -84,9 +84,11 @@ function show(which) {
   const e = document.getElementById('dash-empty')
   const l = document.getElementById('dash-list')
   const d = document.getElementById('dash-detail')
+  const f = document.getElementById('dash-filters')
   if (e) e.hidden = which !== 'empty'
   if (l) l.hidden = which !== 'list'
   if (d) d.hidden = which !== 'detail'
+  if (f) f.hidden = which !== 'list'
 }
 function setOffersEmpty(text) {
   const t = document.getElementById('dash-empty-text')
@@ -218,23 +220,56 @@ async function showDetail(id) {
   } catch (e) { _log.error('detail.failed', { id, err: String(e?.message || e) }) }
 }
 
+let _offers = []
+let _filtersWired = false
+
+function renderOffers() {
+  const q = (document.getElementById('dash-search')?.value || '').trim().toLowerCase()
+  const fstatus = document.getElementById('dash-fstatus')?.value || ''
+  const fscore = document.getElementById('dash-fscore')?.value || ''
+  const rows = _offers.filter((p) => {
+    if (q && !(`${p.title || ''} ${p.company || ''}`.toLowerCase().includes(q))) return false
+    if (fstatus && p.status !== fstatus) return false
+    if (fscore === 'unscored') { if (typeof p.score === 'number') return false }
+    else if (fscore) { if (!(typeof p.score === 'number' && p.score >= Number(fscore))) return false }
+    return true
+  })
+  rows.sort((a, b) => {
+    const sa = typeof a.score === 'number' ? a.score : -1
+    const sb = typeof b.score === 'number' ? b.score : -1
+    return sb - sa
+  })
+  const list = document.getElementById('dash-list'); if (!list) return
+  list.innerHTML = ''
+  for (const p of rows) list.appendChild(renderCard(p))
+  const cnt = document.getElementById('dash-count')
+  if (cnt) cnt.textContent = `${rows.length} / ${_offers.length}`
+  show('list')
+}
+
+function wireFilters() {
+  if (_filtersWired) return
+  _filtersWired = true
+  for (const id of ['dash-search', 'dash-fstatus', 'dash-fscore']) {
+    const e2 = document.getElementById(id)
+    if (e2) e2.addEventListener('input', renderOffers)
+  }
+}
+
 export async function loadDashboard() {
   setOffersEmpty('Caricamento…')
   try {
-    const res = await apiGet('/api/positions/recent?limit=50')
-    const positions = Array.isArray(res?.positions) ? res.positions : []
-    if (positions.length === 0) { setOffersEmpty('Nessuna offerta ancora. Avvia il team: appena trova offerte compaiono qui.'); return }
-    positions.sort((a, b) => {
-      const sa = typeof a.score === 'number' ? a.score : -1
-      const sb = typeof b.score === 'number' ? b.score : -1
-      if (sb !== sa) return sb - sa
-      return String(b.found_at || '').localeCompare(String(a.found_at || ''))
-    })
-    const list = document.getElementById('dash-list'); if (!list) return
-    list.innerHTML = ''
-    for (const p of positions) list.appendChild(renderCard(p))
-    show('list')
-    _log.info('offers.ok', { count: positions.length })
+    // facets = lista COMPLETA leggera di tutte le offerte (id/title/company/
+    // role_family/score/loc/status), ideale per lista + filtri client.
+    const res = await apiGet('/api/positions/facets')
+    _offers = Array.isArray(res) ? res : (Array.isArray(res?.facets) ? res.facets : [])
+    if (_offers.length === 0) {
+      setOffersEmpty('Nessuna offerta ancora. Avvia il team: appena trova offerte compaiono qui.')
+      return
+    }
+    wireFilters()
+    renderOffers()
+    _log.info('offers.ok', { count: _offers.length })
   } catch (e) {
     setOffersEmpty(e?.code === 'no-channel'
       ? 'Canale dati non disponibile. Avvia il team o aggiorna l’app.'

@@ -2509,3 +2509,17 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 .dash-detail__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .dash-action { font-size: 12.5px; }
 .dash-action:disabled { opacity: 0.6; }
+
+/* [JHT-DASHBOARD-NATIVE] Filtri lista offerte */
+.dash__filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.dash__filters[hidden] { display: none; }
+.dash__search {
+  flex: 1; min-width: 200px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit; font-size: 13.5px;
+}
+.dash__search:focus { outline: none; border-color: var(--border-strong); }
+.dash__select {
+  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); font: inherit; font-size: 13px;
+}
+.dash__count { font-size: 12px; color: var(--text-dim); margin-left: auto; }
