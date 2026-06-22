@@ -188,6 +188,14 @@ export async function loadDashboard() {
       setEmpty('Nessuna offerta ancora. Avvia il team dalla sezione Team: appena trova offerte compaiono qui.')
       return
     }
+    // Ordina per score decrescente (le offerte migliori in alto); quelle senza
+    // score in fondo. A parità, le più recenti prima.
+    positions.sort((a, b) => {
+      const sa = typeof a.score === 'number' ? a.score : -1
+      const sb = typeof b.score === 'number' ? b.score : -1
+      if (sb !== sa) return sb - sa
+      return String(b.found_at || '').localeCompare(String(a.found_at || ''))
+    })
     renderList(positions)
     _log.info('list.ok', { count: positions.length })
   } catch (e) {
