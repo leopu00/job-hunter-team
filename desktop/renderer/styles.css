@@ -106,6 +106,16 @@ body { display: flex; flex-direction: column; }
   justify-content: center;
 }
 
+/* La step Ready ha DUE .step__actions figli diretti (la riga principale
+   Manage-login/Start + lo shortcut dev-mode): la regola absolute sopra li
+   impila sullo stesso bottom:24px e, essendo width:100%, l'area piena del
+   blocco dev-mode (ultimo nel DOM → in cima) copriva il bottone "Start" e
+   ne mangiava i click (visibile solo in dev mode, dove il blocco è mostrato).
+   Lascia passare i click attraverso l'area vuota del contenitore: solo il
+   suo bottone resta cliccabile. */
+#dev-mode-actions { pointer-events: none; }
+#dev-mode-actions > .btn { pointer-events: auto; }
+
 .step--centered .step__hint {
   max-width: 520px;
   margin-left: auto;
