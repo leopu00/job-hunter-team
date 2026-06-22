@@ -152,6 +152,31 @@ function renderDetail(data) {
     if (cons.length) wrap.appendChild(col('Contro', cons, 'is-con'))
     d.appendChild(wrap)
   }
+  // Azienda (se analizzata): verdetto + settore + rating + red flag
+  const co = data.company
+  if (co && (co.verdict || co.sector || co.glassdoor_rating || co.red_flags)) {
+    const box = el('div', 'dash-detail__rows')
+    box.appendChild(el('div', 'dash-detail__label', 'Azienda'))
+    if (co.verdict) box.appendChild(infoRow('Verdetto', co.verdict))
+    if (co.sector) box.appendChild(infoRow('Settore', co.sector))
+    if (co.size) box.appendChild(infoRow('Dimensione', co.size))
+    if (typeof co.glassdoor_rating === 'number') box.appendChild(infoRow('Glassdoor', `${co.glassdoor_rating}/5`))
+    if (co.red_flags) box.appendChild(infoRow('Red flag', co.red_flags))
+    d.appendChild(box)
+  }
+
+  // Candidatura collegata (se esiste): stato + voto critico + risposta
+  const ap = data.application
+  if (ap && (ap.status || typeof ap.critic_score === 'number' || ap.response)) {
+    const box = el('div', 'dash-detail__rows')
+    box.appendChild(el('div', 'dash-detail__label', 'Candidatura'))
+    if (ap.status) box.appendChild(infoRow('Stato', ap.status))
+    if (ap.critic_verdict) box.appendChild(infoRow('Critico', ap.critic_verdict))
+    if (typeof ap.critic_score === 'number') box.appendChild(infoRow('Voto critico', `${ap.critic_score}/10`))
+    if (ap.response) box.appendChild(infoRow('Risposta', ap.response))
+    d.appendChild(box)
+  }
+
   if (p.jd_text) {
     const desc = el('div', 'dash-detail__desc')
     desc.appendChild(el('div', 'dash-detail__label', 'Descrizione'))
