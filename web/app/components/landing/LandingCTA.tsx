@@ -47,49 +47,24 @@ export default function LandingCTA() {
   const { t } = useLandingI18n();
 
   return (
-    <section aria-label="Inizia ora" id="cta" className="px-6 py-24 relative">
-      <div
-        className="max-w-3xl mx-auto text-center rounded-xl p-10 md:p-16 border border-[var(--color-border)] relative overflow-hidden"
+    <section
+      aria-label="Inizia ora"
+      id="cta"
+      className="px-6 py-20 text-center max-w-2xl mx-auto"
+    >
+      <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-6">
+        {t("cta_title_1")} {t("cta_title_2")}
+      </h2>
+      <Link
+        href="/download"
+        className="inline-block px-8 py-3.5 rounded text-[13px] font-bold tracking-wider no-underline transition-all"
         style={{
-          background: "var(--color-panel)",
-          animation: "fade-in 0.5s ease both",
+          background: "var(--color-green)",
+          color: "#060608",
         }}
       >
-        {/* Background glow */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          aria-hidden="true"
-          style={{
-            background:
-              "radial-gradient(ellipse at center, rgba(0,232,122,0.06) 0%, transparent 70%)",
-          }}
-        />
-
-        <div className="relative z-10">
-          <h2 className="text-2xl md:text-3xl font-bold text-[var(--color-white)] tracking-tight mb-4">
-            {t("cta_title_1")}
-            <br />
-            {t("cta_title_2")}
-          </h2>
-          <p className="text-[12px] text-[var(--color-bright)] leading-relaxed max-w-md mx-auto mb-8">
-            {t("cta_desc")}
-          </p>
-          <Link
-            href="/download"
-            className="inline-block px-8 py-3.5 rounded text-[13px] font-bold tracking-wider no-underline transition-all"
-            style={{
-              background: "var(--color-green)",
-              color: "#060608",
-              boxShadow: "0 0 30px rgba(0,232,122,0.3)",
-            }}
-          >
-            {t("cta_button")}
-          </Link>
-          <p className="mt-4 text-[10px] text-[var(--color-dim)]">
-            {t("cta_note")}
-          </p>
-        </div>
-      </div>
+        {t("cta_button")}
+      </Link>
     </section>
   );
 }

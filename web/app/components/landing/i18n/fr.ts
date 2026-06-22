@@ -111,8 +111,8 @@ export const fr: Record<string, string> = {
   cta_title_1: "Prêt à révolutionner",
   cta_title_2: "votre recherche d'emploi ?",
   cta_desc:
-    "Arrêtez d'envoyer des candidatures génériques. Laissez une équipe d'agents IA travailler pour vous, intelligemment et sur mesure.",
-  cta_button: "Commencez maintenant — c'est gratuit",
+    "Une équipe d'agents IA parcourt tout le marché et trouve les offres qui vous correspondent — vérifiées et classées selon leur adéquation avec votre profil.",
+  cta_button: "Télécharger l'app",
   cta_team: "Rencontrez l'équipe",
   cta_note: "Aucune carte bancaire requise · Bêta publique",
 
