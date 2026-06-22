@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { LOCAL_TOKEN_COOKIE, isLocalTokenAuthenticated } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -230,6 +232,33 @@ async function handleToggle(
   legacyIdParam: string,
   requested: boolean,
 ): Promise<NextResponse> {
+  const legacyId = Number.parseInt(legacyIdParam, 10);
+  if (!Number.isInteger(legacyId) || legacyId <= 0) {
+    return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });
+  }
+
+  // [JHT-DASHBOARD-NATIVE] Desktop nativo: con local-token valido scrivi SOLO
+  // su SQLite locale (riusa toggleViaLocal) e ritorna, senza cloud.
+  if (
+    isLocalTokenAuthenticated(
+      req.headers.get("authorization"),
+      (await cookies()).get(LOCAL_TOKEN_COOKIE)?.value,
+    )
+  ) {
+    if (!fs.existsSync(JHT_DB_PATH)) {
+      return NextResponse.json({ error: "DB locale assente" }, { status: 503 });
+    }
+    const local = toggleViaLocal(legacyId, requested);
+    if (!local.ok) {
+      return NextResponse.json(local.body, { status: local.status });
+    }
+    return NextResponse.json({
+      position: local.outcome.position,
+      cloud_synced: null,
+      source: "local",
+    });
+  }
+
   const resolved = await resolveUser(req);
   if (!resolved.ok) return resolved.res;
   if (resolved.user.source !== "session") {
@@ -241,11 +270,6 @@ async function handleToggle(
     );
   }
   const { userId, supabase } = resolved.user;
-
-  const legacyId = Number.parseInt(legacyIdParam, 10);
-  if (!Number.isInteger(legacyId) || legacyId <= 0) {
-    return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });
-  }
 
   const hasLocal = fs.existsSync(JHT_DB_PATH);
 
