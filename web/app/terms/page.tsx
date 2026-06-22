@@ -36,6 +36,9 @@ const T = {
     s7_title: "Contatti",
     s7_body:
       "Per domande sui termini di servizio, scrivi a info@jobhunterteam.ai.",
+    nav_home: "Home",
+    nav_terms: "Termini",
+    nav_privacyPolicy: "Privacy Policy",
   },
   en: {
     title: "Terms of Service",
@@ -63,6 +66,9 @@ const T = {
     s7_title: "Contact",
     s7_body:
       "For questions about the terms of service, write to info@jobhunterteam.ai.",
+    nav_home: "Home",
+    nav_terms: "Terms",
+    nav_privacyPolicy: "Privacy Policy",
   },
   hu: {
     title: "Szolgáltatási feltételek",
@@ -90,6 +96,9 @@ const T = {
     s7_title: "Kapcsolat",
     s7_body:
       "A szolgáltatási feltételekkel kapcsolatos kérdések esetén írj az info@jobhunterteam.ai címre.",
+    nav_home: "Főoldal",
+    nav_terms: "Feltételek",
+    nav_privacyPolicy: "Adatvédelmi szabályzat",
   },
   es: {
     title: "Términos del Servicio",
@@ -117,6 +126,9 @@ const T = {
     s7_title: "Contacto",
     s7_body:
       "Para preguntas sobre los términos del servicio, escribe a info@jobhunterteam.ai.",
+    nav_home: "Inicio",
+    nav_terms: "Términos",
+    nav_privacyPolicy: "Política de privacidad",
   },
   de: {
     title: "Nutzungsbedingungen",
@@ -144,6 +156,9 @@ const T = {
     s7_title: "Kontakt",
     s7_body:
       "Bei Fragen zu den Nutzungsbedingungen schreibe an info@jobhunterteam.ai.",
+    nav_home: "Startseite",
+    nav_terms: "Bedingungen",
+    nav_privacyPolicy: "Datenschutzrichtlinie",
   },
   fr: {
     title: "Conditions d'Utilisation",
@@ -171,6 +186,9 @@ const T = {
     s7_title: "Contact",
     s7_body:
       "Pour toute question concernant les conditions d'utilisation, écrivez à info@jobhunterteam.ai.",
+    nav_home: "Accueil",
+    nav_terms: "Conditions",
+    nav_privacyPolicy: "Politique de confidentialité",
   },
   pt: {
     title: "Termos de Serviço",
@@ -198,6 +216,9 @@ const T = {
     s7_title: "Contacto",
     s7_body:
       "Para questões sobre os termos de serviço, escreva para info@jobhunterteam.ai.",
+    nav_home: "Início",
+    nav_terms: "Termos",
+    nav_privacyPolicy: "Política de privacidade",
   },
 };
 
@@ -241,10 +262,12 @@ function TermsContent() {
               href="/"
               className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
             >
-              Home
+              {t("nav_home")}
             </Link>
             <span className="text-[var(--color-border)]">/</span>
-            <span className="text-[10px] text-[var(--color-muted)]">Terms</span>
+            <span className="text-[10px] text-[var(--color-muted)]">
+              {t("nav_terms")}
+            </span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
             {t("title")}
@@ -266,13 +289,13 @@ function TermsContent() {
             href="/privacy"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline"
           >
-            &larr; Privacy Policy
+            &larr; {t("nav_privacyPolicy")}
           </Link>
           <Link
             href="/"
             className="text-[11px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors no-underline"
           >
-            Home &rarr;
+            {t("nav_home")} &rarr;
           </Link>
         </div>
       </div>

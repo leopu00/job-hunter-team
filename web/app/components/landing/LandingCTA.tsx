@@ -17,7 +17,7 @@ function FooterThemeSwitch() {
     <div
       className="flex items-center gap-2.5"
       role="radiogroup"
-      aria-label="Theme"
+      aria-label={t("theme_aria")}
     >
       {OPTIONS.map(({ value, labelKey }) => {
         const active = theme === value;
@@ -47,7 +47,11 @@ export default function LandingCTA() {
   const { t } = useLandingI18n();
 
   return (
-    <section aria-label="Inizia ora" id="cta" className="px-6 py-24 relative">
+    <section
+      aria-label={t("cta_section_aria")}
+      id="cta"
+      className="px-6 py-24 relative"
+    >
       <div
         className="max-w-3xl mx-auto text-center rounded-xl p-10 md:p-16 border border-[var(--color-border)] relative overflow-hidden"
         style={{
@@ -102,13 +106,13 @@ export function LandingFooter() {
   return (
     <footer
       role="contentinfo"
-      aria-label="Footer Job Hunter Team"
+      aria-label={t("footer_aria")}
       className="px-6 pt-12 pb-8 border-t border-[var(--color-border)]"
     >
       <div className="max-w-5xl mx-auto">
         {/* Columns */}
         <nav
-          aria-label="Link footer"
+          aria-label={t("footer_links_aria")}
           className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-4"
         >
           {/* Brand */}

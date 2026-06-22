@@ -187,6 +187,7 @@ function LoginPage({
   authError: boolean;
   returnTo: string | null;
 }) {
+  const { t } = useLandingI18n();
   const [configError, setConfigError] = useState(false);
 
   const handleGoogleLogin = async () => {
@@ -232,7 +233,7 @@ function LoginPage({
             Job Hunter <span className="text-[var(--color-green)]">Team</span>
           </h1>
           <p className="text-[var(--color-dim)] text-[11px]">
-            Sign in to save your progress
+            {t("login_save_progress")}
           </p>
         </div>
 
@@ -242,7 +243,7 @@ function LoginPage({
             className="mb-4 px-3 py-2 border border-[var(--color-red)] text-[11px]"
             style={{ color: "var(--color-red)" }}
           >
-            Authentication failed.
+            {t("login_auth_failed")}
           </div>
         )}
         {configError && (
@@ -250,7 +251,7 @@ function LoginPage({
             className="mb-4 px-3 py-2 border border-[var(--color-yellow)] text-[11px]"
             style={{ color: "var(--color-yellow)" }}
           >
-            Configuration missing.
+            {t("login_config_missing")}
           </div>
         )}
 
@@ -261,14 +262,14 @@ function LoginPage({
             className="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-bright)] text-[12px] font-medium hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer"
           >
             <GoogleIcon />
-            Login with Google
+            {t("login_with_google")}
           </button>
           <button
             onClick={handleGitHubLogin}
             className="w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-[var(--color-card)] border border-[var(--color-border)] text-[var(--color-bright)] text-[12px] font-medium hover:border-[var(--color-green)] hover:text-[var(--color-green)] transition-all duration-150 cursor-pointer"
           >
             <GitHubIcon />
-            Login with GitHub
+            {t("login_with_github")}
           </button>
         </div>
 
@@ -282,6 +283,7 @@ function LoginPage({
 }
 
 function BackButton() {
+  const { t } = useLandingI18n();
   const router = useRouter();
 
   const handleBack = () => {
@@ -297,7 +299,7 @@ function BackButton() {
       onClick={handleBack}
       className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
     >
-      Back
+      {t("back")}
     </button>
   );
 }

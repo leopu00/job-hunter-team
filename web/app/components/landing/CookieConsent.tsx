@@ -52,7 +52,7 @@ const T = {
 };
 
 export default function CookieConsent() {
-  const { lang } = useLandingI18n();
+  const { lang, t: tr } = useLandingI18n();
   const t = T[lang as keyof typeof T] || T.en;
   const [visible, setVisible] = useState(false);
 
@@ -86,7 +86,7 @@ export default function CookieConsent() {
     >
       <div
         role="dialog"
-        aria-label="Cookie consent"
+        aria-label={tr("cookie_consent")}
         className="pointer-events-auto w-full max-w-sm rounded-xl px-5 py-4 flex flex-col gap-3"
         style={{
           background: "var(--color-panel)",

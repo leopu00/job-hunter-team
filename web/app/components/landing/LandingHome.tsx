@@ -25,12 +25,9 @@ export default function LandingHome() {
 }
 
 function Hero() {
-  const { t, lang } = useLandingI18n();
+  const { t } = useLandingI18n();
 
-  const heroAlt =
-    lang === "it"
-      ? "Illustrazione a fumetto: un team di agenti AI — tutti con gli stessi occhiali da sole neri — seduto attorno a un lungo tavolo da riunione in un elegante ufficio in grattacielo, mentre un agente in piedi presenta dei grafici su una lavagna."
-      : "Comic-style illustration: a team of AI agents — all wearing the same black sunglasses — seated around a long boardroom table in an elegant high-rise office, while one standing agent presents charts on a whiteboard.";
+  const heroAlt = t("home_hero_alt");
 
   return (
     <section className="flex flex-col items-center px-6 pt-28 pb-12 text-center">
@@ -109,106 +106,57 @@ type SectionCopy = {
   note?: string;
 };
 
-const COPY: Record<"it" | "en", Record<string, SectionCopy>> = {
-  it: {
-    team: {
-      kicker: "Il team",
-      title: "Una squadra, non un singolo bot",
-      body: "Dietro Job Hunter Team c'è una squadra di agenti AI specializzati: chi cerca le offerte, chi le verifica, chi le valuta, chi scrive il tuo CV e chi lo critica senza pietà. Ognuno fa una cosa, e la fa bene.",
-      cta: "Scopri il team →",
-    },
-    dashboard: {
-      kicker: "La tua dashboard",
-      title: "Tutto sotto controllo, dal web",
-      body: "Vedi ogni posizione trovata, il punteggio di compatibilità, la mappa delle opportunità per città e paese, lo stato delle tue candidature. Registrati per ritrovare tutto ovunque — ma non è obbligatorio: puoi tenere ogni dato solo sul tuo computer, senza cloud.",
-      cta: "Accedi o registrati →",
-      note: "Login facoltativo · i tuoi dati possono restare solo sul tuo PC.",
-    },
-    setup: {
-      kicker: "Avvialo",
-      title: "Come vuoi, dove vuoi",
-      body: "Sul tuo PC con Docker, su un computer dedicato sempre acceso o su una VPS economica che lavora per te giorno e notte. Tutto si gestisce dall'app desktop: avvii, fermi e tieni d'occhio la squadra con un clic.",
-      cta: "Come si avvia →",
-    },
-    pricing: {
-      kicker: "Prezzi",
-      title: "Open source. La piattaforma è gratis.",
-      body: "Job Hunter Team non si paga. L'unico costo è l'abbonamento al provider AI che scegli — da circa €40 al mese — oppure nulla, se un domani userai modelli locali e pagherai solo l'elettricità.",
-      cta: "Vedi i costi →",
-    },
-    project: {
-      kicker: "Il progetto",
-      title: "Cosa c'è dietro, in chiaro",
-      body: "Codice aperto, dati tuoi, nessun vincolo. Scopri com'è fatto Job Hunter Team, la filosofia dietro alla squadra di agenti e dove sta andando.",
-      cta: "Scopri il progetto →",
-    },
-    studies: {
-      kicker: "Case studies",
-      title: "Cosa fa davvero, sul campo",
-      body: "Non promesse, ma risultati: cosa ha prodotto il team su profili candidato reali — posizioni trovate, analizzate e valutate. Dati aggregati e anonimi, una pagina che cresce a ogni nuovo team monitorato.",
-      cta: "Vedi i case study →",
-    },
-  },
-  en: {
-    team: {
-      kicker: "The team",
-      title: "A team, not a single bot",
-      body: "Behind Job Hunter Team is a team of specialized AI agents: one finds the openings, one vets them, one scores them, one writes your CV and one critiques it without mercy. Each does one thing, and does it well.",
-      cta: "Meet the team →",
-    },
-    dashboard: {
-      kicker: "Your dashboard",
-      title: "Everything in view, from the web",
-      body: "See every opening found, its match score, the map of opportunities by city and country, the status of your applications. Sign up to find it all anywhere — but it's not required: you can keep every piece of data on your own computer, no cloud.",
-      cta: "Sign in or sign up →",
-      note: "Login optional · your data can stay only on your PC.",
-    },
-    setup: {
-      kicker: "Run it",
-      title: "However and wherever you want",
-      body: "On your PC with Docker, on an always-on dedicated computer, or on an affordable VPS that works for you day and night. It's all managed from the desktop app: start, stop and keep an eye on the team with one click.",
-      cta: "How to run it →",
-    },
-    pricing: {
-      kicker: "Pricing",
-      title: "Open source. The platform is free.",
-      body: "Job Hunter Team is free. The only cost is the subscription to the AI provider you choose — from about €40 a month — or nothing, if one day you use local models and pay only for electricity.",
-      cta: "See the costs →",
-    },
-    project: {
-      kicker: "The project",
-      title: "What's behind it, in the open",
-      body: "Open code, your data, no lock-in. See how Job Hunter Team is built, the philosophy behind the agent team, and where it's headed.",
-      cta: "Discover the project →",
-    },
-    studies: {
-      kicker: "Case studies",
-      title: "What it really does, in the field",
-      body: "Not promises but results: what the team produced on real candidate profiles — positions found, analyzed and scored. Aggregated, anonymous data; a page that grows with every team we monitor.",
-      cta: "See the case studies →",
-    },
-  },
-};
-
 function Sections() {
-  const { lang } = useLandingI18n();
-  const L = lang === "it" ? "it" : "en";
-  const c = COPY[L];
+  const { t } = useLandingI18n();
+
+  const team: SectionCopy = {
+    kicker: t("home_team_kicker"),
+    title: t("home_team_title"),
+    body: t("home_team_body"),
+    cta: t("home_team_cta"),
+  };
+  const dashboard: SectionCopy = {
+    kicker: t("home_dashboard_kicker"),
+    title: t("home_dashboard_title"),
+    body: t("home_dashboard_body"),
+    cta: t("home_dashboard_cta"),
+    note: t("home_dashboard_note"),
+  };
+  const setup: SectionCopy = {
+    kicker: t("home_setup_kicker"),
+    title: t("home_setup_title"),
+    body: t("home_setup_body"),
+    cta: t("home_setup_cta"),
+  };
+  const pricing: SectionCopy = {
+    kicker: t("home_pricing_kicker"),
+    title: t("home_pricing_title"),
+    body: t("home_pricing_body"),
+    cta: t("home_pricing_cta"),
+  };
+  const project: SectionCopy = {
+    kicker: t("home_project_kicker"),
+    title: t("home_project_title"),
+    body: t("home_project_body"),
+    cta: t("home_project_cta"),
+  };
+  const studies: SectionCopy = {
+    kicker: t("home_studies_kicker"),
+    title: t("home_studies_title"),
+    body: t("home_studies_body"),
+    cta: t("home_studies_cta"),
+  };
 
   return (
     <div className="px-6 pb-12 flex flex-col gap-24 md:gap-28 max-w-6xl mx-auto mt-12 md:mt-20">
       <Block
-        copy={c.team}
+        copy={team}
         href="/agents"
         visual={
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src="/landing-team.png"
-            alt={
-              L === "it"
-                ? "Tre agenti del team a figura intera: lo Scout con la lente, l'Analista in camice, lo Scrittore con la penna d'oca — tutti con gli occhiali da sole."
-                : "Three full-body team agents: the Scout with a magnifying glass, the Analyst in a lab coat, the Writer with a quill pen — all wearing sunglasses."
-            }
+            alt={t("home_team_alt")}
             width={1672}
             height={941}
             className="w-full h-auto"
@@ -216,32 +164,28 @@ function Sections() {
         }
       />
       <Block
-        copy={c.dashboard}
+        copy={dashboard}
         href="/?login=true"
         visual={<DashboardMockup />}
         reverse
       />
       <Block
-        copy={c.setup}
+        copy={setup}
         href="/run"
         visual={
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src="/landing-setup.png"
-            alt={
-              L === "it"
-                ? "Un laptop da cui esce un cono di luce blu che si apre fino a un cubo di vetro luminoso: dentro c'è l'ufficio del team al lavoro."
-                : "A laptop emitting a blue cone of light that opens into a glowing glass cube: inside is the team's office at work."
-            }
+            alt={t("home_setup_alt")}
             width={1672}
             height={941}
             className="w-full h-auto"
           />
         }
       />
-      <Block copy={c.pricing} href="/pricing" />
-      <Block copy={c.project} href="/project" />
-      <Block copy={c.studies} href="/case-studies" />
+      <Block copy={pricing} href="/pricing" />
+      <Block copy={project} href="/project" />
+      <Block copy={studies} href="/case-studies" />
     </div>
   );
 }

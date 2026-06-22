@@ -152,6 +152,14 @@ export const de: Record<string, string> = {
   dl_detected: "erkannt",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
+  dl_mode_prompt_title: "Prompt",
+  dl_prompt_intro:
+    "Kopiere diesen Prompt und gib ihn deinem KI-Assistenten: Er installiert und startet das Team für dich.",
+  dl_copy_prompt: "Prompt kopieren",
+  dl_prompt_note:
+    "Der KI-Assistent braucht Zugriff auf deinen Computer — Terminal und Dateien (z. B. Claude Code, Cursor, Codex CLI).",
+  dl_help_text: "Du weißt nicht, wo oder wie du es installieren sollst?",
+  dl_help_link: "Lies die Anleitung",
   dl_instructions: "Anweisungen",
   dl_close: "Schließen",
   dl_download: "Herunterladen",
@@ -343,4 +351,76 @@ export const de: Record<string, string> = {
   chat_scorer_top: "Top-Treffer gefunden",
   chat_writer_cvs: "Ich schreibe die Lebensläufe…",
   chat_critic_reviewing: "Überprüfung…",
+
+  // Login page (LandingClient)
+  login_save_progress: "Melde dich an, um deinen Fortschritt zu speichern",
+  login_auth_failed: "Authentifizierung fehlgeschlagen.",
+  login_config_missing: "Konfiguration fehlt.",
+  login_with_google: "Anmelden mit Google",
+  login_with_github: "Anmelden mit GitHub",
+  back: "Zurück",
+
+  // Relative time (LatestPositionsTable)
+  rel_just_now: "gerade eben",
+  rel_m_ago: "vor {n}Min",
+  rel_h_ago: "vor {n}Std",
+  rel_d_ago: "vor {n}T",
+  rel_mo_ago: "vor {n}Mon",
+  table_cv_written: "Lebenslauf geschrieben",
+
+  // Aria-labels
+  dashboard_preview_alt:
+    "Dashboard-Vorschau: Liste von Positionen mit Punktzahlen, Balken, Donut und Trend",
+  image_placeholder: "Bild — Platzhalter",
+  scroll_to_top: "Nach oben",
+  nav_main: "Hauptnavigation",
+  nav_menu: "Menü",
+  nav_language: "Sprache: {label}",
+  cookie_consent: "Cookie-Zustimmung",
+
+  // CTA / Footer aria-labels
+  cta_section_aria: "Jetzt starten",
+  theme_aria: "Design",
+  footer_aria: "Job Hunter Team Fußzeile",
+  footer_links_aria: "Fußzeilen-Links",
+
+  // LandingHome: hero alt + Abschnitte
+  home_hero_alt:
+    "Comic-Illustration: ein Team von KI-Agenten — alle mit derselben schwarzen Sonnenbrille — sitzt an einem langen Konferenztisch in einem eleganten Hochhausbüro, während ein stehender Agent Diagramme an einer Tafel präsentiert.",
+  home_team_alt:
+    "Drei Team-Agenten in voller Größe: der Scout mit einer Lupe, der Analyst im Laborkittel, der Schreiber mit einer Federkielfeder — alle mit Sonnenbrille.",
+  home_setup_alt:
+    "Ein Laptop, der einen blauen Lichtkegel aussendet, der sich zu einem leuchtenden Glaswürfel öffnet: darin arbeitet das Büro des Teams.",
+  home_team_kicker: "Das Team",
+  home_team_title: "Ein Team, kein einzelner Bot",
+  home_team_body:
+    "Hinter Job Hunter Team steht ein Team spezialisierter KI-Agenten: einer findet die Stellen, einer prüft sie, einer bewertet sie, einer schreibt deinen Lebenslauf und einer kritisiert ihn gnadenlos. Jeder macht eine Sache, und macht sie gut.",
+  home_team_cta: "Lerne das Team kennen →",
+  home_dashboard_kicker: "Dein Dashboard",
+  home_dashboard_title: "Alles im Blick, vom Web aus",
+  home_dashboard_body:
+    "Sieh jede gefundene Stelle, ihre Match-Punktzahl, die Karte der Möglichkeiten nach Stadt und Land, den Status deiner Bewerbungen. Registriere dich, um alles überall wiederzufinden — aber es ist nicht erforderlich: du kannst jede Information nur auf deinem eigenen Computer behalten, ohne Cloud.",
+  home_dashboard_cta: "Anmelden oder registrieren →",
+  home_dashboard_note:
+    "Anmeldung optional · deine Daten können nur auf deinem PC bleiben.",
+  home_setup_kicker: "Starte es",
+  home_setup_title: "Wie du willst, wo du willst",
+  home_setup_body:
+    "Auf deinem PC mit Docker, auf einem dauerhaft eingeschalteten dedizierten Computer oder auf einer günstigen VPS, die Tag und Nacht für dich arbeitet. Alles wird über die Desktop-App verwaltet: starte, stoppe und behalte das Team mit einem Klick im Auge.",
+  home_setup_cta: "Wie man es startet →",
+  home_pricing_kicker: "Preise",
+  home_pricing_title: "Open Source. Die Plattform ist kostenlos.",
+  home_pricing_body:
+    "Job Hunter Team ist kostenlos. Die einzigen Kosten sind das Abonnement des KI-Anbieters, den du wählst — ab etwa 40 € pro Monat — oder nichts, wenn du eines Tages lokale Modelle verwendest und nur den Strom bezahlst.",
+  home_pricing_cta: "Sieh die Kosten →",
+  home_project_kicker: "Das Projekt",
+  home_project_title: "Was dahintersteckt, offen dargelegt",
+  home_project_body:
+    "Offener Code, deine Daten, keine Bindung. Erfahre, wie Job Hunter Team aufgebaut ist, die Philosophie hinter dem Agenten-Team und wohin es sich entwickelt.",
+  home_project_cta: "Entdecke das Projekt →",
+  home_studies_kicker: "Fallstudien",
+  home_studies_title: "Was es wirklich tut, im Feld",
+  home_studies_body:
+    "Keine Versprechen, sondern Ergebnisse: was das Team an echten Kandidatenprofilen produziert hat — gefundene, analysierte und bewertete Positionen. Aggregierte, anonyme Daten; eine Seite, die mit jedem neuen überwachten Team wächst.",
+  home_studies_cta: "Sieh die Fallstudien →",
 };
