@@ -115,37 +115,63 @@ def _seed_for(provider: str) -> Optional[float]:
     return float(val) if val is not None else None
 
 
+def _observed_for(prov: str) -> dict:
+    """window-ratio-state del provider richiesto, o {} se assente/di un altro."""
+    observed = _read_observed_ratio() or {}
+    if (observed.get("provider") or "").lower() != prov:
+        return {}
+    return observed
+
+
+def _weekly_cap_observed(observed: dict) -> bool:
+    """True se il daemon ha MISURATO un weekly cap reale e affidabile.
+
+    Il flag statico `weekly_unlimited` è un DEFAULT day-0, non una verità
+    perenne: un provider può introdurre un weekly cap dopo (caso Kimi/Moonshot
+    2026 — `weekly_usage` esposto e enforced, EMA ratio finestra→weekly misurata
+    da settimane). Quando il `window_ratio_meter` ha ≥1 giorno di storia con un
+    `ema_ratio_pct` valido, quel provider HA di fatto un weekly cap: il dato
+    OSSERVATO vince sul flag. Niente hardcoding "kimi ora ha il cap" — è il dato
+    a deciderlo, così resta corretto se il provider cambia di nuovo.
+    """
+    ema = observed.get("ema_ratio_pct")
+    days = observed.get("days_observed") or 0.0
+    return isinstance(ema, (int, float)) and days >= 1.0
+
+
 def get_window_cap_pct_of_weekly(
     provider: str | None = None,
 ) -> Optional[float]:
     """Ratio in % di una finestra 5h piena rispetto al weekly cap.
 
     Return:
-      float — provider con weekly cap (Codex/Claude), blend seed + EMA
-      None  — provider weekly-unlimited (Kimi) o provider sconosciuto
+      float — provider con weekly cap (Codex/Claude, o un provider il cui cap
+              è stato OSSERVATO dal daemon): blend seed + EMA, o EMA pura
+      None  — provider davvero weekly-unlimited (flag e NESSUNA osservazione
+              contraria) o sconosciuto e mai osservato
 
-    Per provider non in lookup: None (fallback band center nel chiamante).
+    Per provider non in lookup e mai osservato: None (fallback band center nel
+    chiamante).
     """
     prov = (provider or read_active_provider()).lower()
-    seed = _seed_for(prov)
+    observed = _observed_for(prov)
+    cap_observed = _weekly_cap_observed(observed)
 
-    if (prov in _PROVIDER_SEEDS
-            and _PROVIDER_SEEDS[prov].get("weekly_unlimited")):
-        return None  # Kimi & co. — nessun weekly cap, distribuzione N/A
+    info = _PROVIDER_SEEDS.get(prov) or {}
+    if info.get("weekly_unlimited") and not cap_observed:
+        # Davvero weekly-unlimited: il flag dice unlimited e il daemon NON ha
+        # misurato nulla che lo contraddica → fallback band center nel chiamante.
+        return None
 
-    observed = _read_observed_ratio() or {}
-    obs_provider = (observed.get("provider") or "").lower()
-    if obs_provider != prov:
-        observed = {}  # state file di un altro provider → ignoralo
-
+    seed = _seed_for(prov)  # None per provider unlimited (manca il campo nel seed)
     ema = observed.get("ema_ratio_pct")
     days = observed.get("days_observed") or 0.0
-    if seed is None and isinstance(ema, (int, float)):
-        # Provider sconosciuto al seed table ma osservato dal daemon:
-        # usa direttamente l'EMA quando abbiamo qualche giorno di dati.
-        return float(ema) if days >= 1.0 else None
+
     if seed is None:
-        return None
+        # Provider senza seed numerico (unlimited-ma-osservato, oppure
+        # sconosciuto-ma-osservato): usa l'EMA misurata. `cap_observed`
+        # garantisce ema valido e days>=1.
+        return round(float(ema), 3) if cap_observed else None
     if not isinstance(ema, (int, float)):
         return seed
 
@@ -238,12 +264,18 @@ if __name__ == "__main__":
             print(f"  {'OK' if cond else 'FAIL'} {label}")
             if not cond:
                 fails += 1
-        ok("codex seed 14.7", get_window_cap_pct_of_weekly("codex") == 14.7)
-        ok("openai seed 14.7", get_window_cap_pct_of_weekly("openai") == 14.7)
+        ok("codex seed 17.0", get_window_cap_pct_of_weekly("codex") == 17.0)
+        ok("openai seed 17.0", get_window_cap_pct_of_weekly("openai") == 17.0)
         ok("claude seed 15.0", get_window_cap_pct_of_weekly("claude") == 15.0)
-        ok("kimi → None (unlimited)",
+        ok("kimi → None senza osservazione (unlimited)",
            get_window_cap_pct_of_weekly("kimi") is None)
         ok("provider sconosciuto → None",
            get_window_cap_pct_of_weekly("foobar") is None)
+        # Data-driven override: se il daemon ha osservato un weekly cap per un
+        # provider flaggato unlimited, l'EMA vince (non più None).
+        ok("kimi unlimited+osservato → EMA",
+           _weekly_cap_observed({"ema_ratio_pct": 18.5, "days_observed": 34}) is True)
+        ok("kimi unlimited+osservazione acerba (<1g) → resta unlimited",
+           _weekly_cap_observed({"ema_ratio_pct": 18.5, "days_observed": 0.3}) is False)
         sys.exit(0 if fails == 0 else 1)
     print(json.dumps(describe(), indent=2))
