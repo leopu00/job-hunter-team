@@ -296,13 +296,20 @@ function createRuntimeManager(config = {}) {
     })
   }
 
-  // Polling su /api/health fino a 200 (o timeoutMs). A differenza di
-  // waitForPort (TCP only), qui sappiamo davvero se l'app Next ha
-  // finito il boot ed è in grado di servire API.
+  // Polling sulla root `/` fino a una risposta 2xx/3xx (o timeoutMs). A
+  // differenza di waitForPort (TCP only), qui sappiamo davvero se l'app Next
+  // ha finito il boot ed è in grado di servire.
+  //
+  // [runtime-fix] Prima si pollava `/api/health`, ma quella route NON esiste
+  // nell'immagine (Next risponde 404) → waitForHealthy non diventava MAI
+  // healthy → timeout → stopRuntime rimuove il container → mode 'error', il
+  // team restava bloccato su 'Starting' e l'embed (gateato su 'running') non
+  // compariva mai. La dashboard però serviva: `/` è 200. Pollando `/` il
+  // warm-up converge e il runtime raggiunge 'running'.
   async function waitForHealthy(port, timeoutMs = healthTimeoutMs) {
     const started = Date.now()
     while (Date.now() - started < timeoutMs) {
-      const { ok } = await httpGet(port, '/api/health', 2500)
+      const { ok } = await httpGet(port, '/', 2500)
       if (ok) return true
       await new Promise((resolve) => setTimeout(resolve, 600))
     }
@@ -544,7 +551,7 @@ function createRuntimeManager(config = {}) {
     if (!healthy) {
       await stopRuntime()
       state.mode = 'error'
-      state.lastError = `Next non risponde su /api/health entro ${healthTimeoutMs / 1000}s (possibile cache Turbopack corrotta)`
+      state.lastError = `Next non risponde su / entro ${healthTimeoutMs / 1000}s (possibile cache Turbopack corrotta)`
       state.warmingProgress = null
       return buildStatus()
     }
