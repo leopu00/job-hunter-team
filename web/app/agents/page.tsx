@@ -82,6 +82,7 @@ const ROLES: Role[] = [
   {
     slug: "scrittore",
     promptId: "team.scrittore",
+    img: "/agents-writer.png",
     it: {
       title: "Lo Scrittore",
       p1: "Lo Scrittore è l'artigiano del CV. Non scrive per tutte le offerte: aspetta che tu clicchi «Scrivi CV» per una posizione precisa, poi costruisce un curriculum su misura della descrizione e dei tuoi obiettivi.",
