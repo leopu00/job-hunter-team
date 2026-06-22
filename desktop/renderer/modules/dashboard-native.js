@@ -287,9 +287,18 @@ const STAT_CARDS = [
   ['applied', 'Inviate'], ['response', 'Risposte'], ['excluded', 'Escluse'],
 ]
 
+const PIPELINE = [
+  ['new', 'Nuove'], ['checked', 'Verificate'], ['scored', 'Valutate'],
+  ['writing', 'In scrittura'], ['review', 'In revisione'], ['ready', 'Pronte'],
+  ['applied', 'Inviate'], ['response', 'Risposte'],
+]
+
 export function loadStats() {
   return renderInto('dash-stats', async () => {
     const s = await apiGet('/api/dashboard/stats')
+    const wrap = el('div', 'dash-statswrap')
+
+    // Card riepilogo
     const grid = el('div', 'dash-stats__grid')
     for (const [key, label] of STAT_CARDS) {
       const card = el('div', 'dash-stat')
@@ -297,7 +306,26 @@ export function loadStats() {
       card.appendChild(el('div', 'dash-stat__label', label))
       grid.appendChild(card)
     }
-    return grid
+    wrap.appendChild(grid)
+
+    // Pipeline a barre (largezza ∝ conteggio): funnel del flusso di lavoro
+    const counts = PIPELINE.map(([k]) => (typeof s?.[k] === 'number' ? s[k] : 0))
+    const max = Math.max(1, ...counts)
+    const pipe = el('div', 'dash-pipeline')
+    pipe.appendChild(el('div', 'dash-detail__label', 'Pipeline'))
+    PIPELINE.forEach(([key, label], i) => {
+      const row = el('div', 'dash-pipeline__row')
+      row.appendChild(el('span', 'dash-pipeline__label', label))
+      const track = el('div', 'dash-pipeline__track')
+      const bar = el('div', 'dash-pipeline__bar')
+      bar.style.width = `${Math.round((counts[i] / max) * 100)}%`
+      track.appendChild(bar)
+      row.appendChild(track)
+      row.appendChild(el('span', 'dash-pipeline__num', counts[i]))
+      pipe.appendChild(row)
+    })
+    wrap.appendChild(pipe)
+    return wrap
   })
 }
 
