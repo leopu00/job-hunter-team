@@ -134,14 +134,14 @@ function renderDetail(data) {
   const legacyId = p.legacy_id
   if (legacyId != null && window.dashboardApi?.post) {
     const actions = el('div', 'dash-detail__actions')
-    const mkBtn = (label, doneLabel, path, already) => {
+    const mkBtn = (label, doneLabel, path, already, body = { requested: true }) => {
       const b = el('button', 'btn btn--ghost dash-action', already ? doneLabel : label)
       b.type = 'button'
       if (already) b.disabled = true
       b.addEventListener('click', async () => {
         b.disabled = true; const orig = b.textContent; b.textContent = '…'
         try {
-          await window.dashboardApi.post(`/api/positions/${legacyId}/${path}`, { requested: true })
+          await window.dashboardApi.post(`/api/positions/${legacyId}/${path}`, body)
           b.textContent = doneLabel
         } catch (e) {
           b.textContent = orig; b.disabled = false
@@ -153,6 +153,8 @@ function renderDetail(data) {
     actions.appendChild(mkBtn('📝 Richiedi CV', '✓ CV richiesto', 'write-request', !!p.write_requested))
     actions.appendChild(mkBtn('🔄 Ricontrolla', '✓ In ricontrollo', 'recheck-request', !!p.recheck_requested))
     actions.appendChild(mkBtn('📍 Geocodifica', '✓ Geocodifica richiesta', 'geocode-request', !!p.geocode_requested))
+    const excluded = p.status === 'excluded' || !!p.user_excluded_reason
+    actions.appendChild(mkBtn('🚫 Escludi', '✓ Esclusa', 'user-exclude', excluded, { reason: 'other', note: 'Esclusa dalla dashboard' }))
     d.appendChild(actions)
   }
 
