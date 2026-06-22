@@ -519,6 +519,29 @@ export function loadProfile() {
   })
 }
 
+// ───────────────────────── Notifiche ─────────────────────────
+
+const NOTIF_ICON = { info: 'ℹ️', warning: '⚠️', success: '✅', error: '⛔' }
+
+export function loadNotifications() {
+  return renderInto('dash-notifs', async () => {
+    const res = await apiGet('/api/notifications')
+    const items = Array.isArray(res?.notifications) ? res.notifications : (Array.isArray(res) ? res : [])
+    if (items.length === 0) return emptyBox('Nessuna notifica.')
+    const list = el('div', 'dash__list')
+    for (const n of items) {
+      const row = el('div', `dash-notif ${n.read ? 'is-read' : ''}`)
+      row.appendChild(el('span', 'dash-notif__icon', NOTIF_ICON[n.type] || 'ℹ️'))
+      const main = el('div', 'dash-notif__main')
+      main.appendChild(el('div', 'dash-notif__title', n.title || '—'))
+      if (n.body) main.appendChild(el('div', 'dash-card__meta', n.body))
+      row.appendChild(main)
+      list.appendChild(row)
+    }
+    return list
+  })
+}
+
 // ───────────────────────── Orari di lavoro ─────────────────────────
 
 const WH_LABELS = {
