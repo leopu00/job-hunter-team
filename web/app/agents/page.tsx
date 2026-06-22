@@ -52,6 +52,7 @@ const ROLES: Role[] = [
   {
     slug: "analista",
     promptId: "team.analista",
+    img: "/agents-analyst.png",
     it: {
       title: "L'Analista",
       p1: "L'Analista è il verificatore freddo. Legge per intero ogni offerta, controlla che l'azienda sia reale e il link valido, ed estrae i dati che contano: anni richiesti, seniority, lingue, istruzione.",
@@ -66,6 +67,7 @@ const ROLES: Role[] = [
   {
     slug: "scorer",
     promptId: "team.scorer",
+    img: "/agents-scorer.png",
     it: {
       title: "Lo Scorer",
       p1: "Lo Scorer dà un voto a ogni offerta, da 0 a 100: quanto si adatta davvero al tuo profilo, alle competenze, alla seniority, al luogo che preferisci. Una formula che pesa tecnologia, esperienza, geografia e stipendio.",
