@@ -671,6 +671,10 @@
             <span class="home__nav-icon">📜</span>
             <span class="home__nav-label" data-i18n="home.nav.activity">Attività</span>
           </button>
+          <button type="button" class="home__nav-item" data-section="agents" role="tab">
+            <span class="home__nav-icon">🤖</span>
+            <span class="home__nav-label" data-i18n="home.nav.agents">Agenti</span>
+          </button>
           <button type="button" class="home__nav-item" data-section="provider" role="tab">
             <span class="home__nav-icon">🧠</span>
             <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
@@ -797,6 +801,15 @@
             <p class="home__subtitle" data-i18n="home.activity.subtitle">Le ultime azioni del team.</p>
           </header>
           <div id="dash-activity"></div>
+        </div>
+
+        <!-- Agenti: roster + stato live (nativo) -->
+        <div class="home__panel" data-section="agents" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.agents.title">Agenti</h1>
+            <p class="home__subtitle" data-i18n="home.agents.subtitle">Gli agenti del team e il loro stato.</p>
+          </header>
+          <div id="dash-agents"></div>
         </div>
 
         <!-- Provider: vendor + plan + login -->

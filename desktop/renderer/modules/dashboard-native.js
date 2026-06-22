@@ -269,6 +269,28 @@ export function loadMap() {
   })
 }
 
+// ───────────────────────── Agenti ─────────────────────────
+
+export function loadAgents() {
+  return renderInto('dash-agents', async () => {
+    const res = await apiGet('/api/agents')
+    const agents = Array.isArray(res) ? res : (Array.isArray(res?.agents) ? res.agents : [])
+    if (agents.length === 0) return emptyBox('Nessun agente. Avvia il team dalla sezione Team.')
+    const list = el('div', 'dash__list')
+    for (const a of agents) {
+      const running = a.running === true || a.status === 'running' || a.active === true
+      const row = el('div', 'dash-agent')
+      const left = el('div', 'dash-agent__main')
+      const dot = el('span', `home__status-dot`); dot.dataset.state = running ? 'running' : 'stopped'
+      left.append(dot, el('span', 'dash-agent__name', a.name || a.role || a.id || '—'))
+      row.appendChild(left)
+      row.appendChild(el('span', 'dash-card__date', running ? 'attivo' : 'fermo'))
+      list.appendChild(row)
+    }
+    return list
+  })
+}
+
 // ───────────────────────── Attività ─────────────────────────
 
 export function loadActivity() {
