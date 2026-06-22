@@ -2459,3 +2459,11 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 }
 .dash-agent__main { display: flex; align-items: center; gap: 10px; }
 .dash-agent__name { font-size: 13.5px; font-weight: 600; }
+
+/* [JHT-DASHBOARD-SPLIT] Sidebar raggruppata per area (Team / Lavoro / Impostazioni) */
+.home__nav-group { display: flex; flex-direction: column; gap: 2px; }
+.home__nav-group + .home__nav-group { margin-top: 16px; }
+.home__nav-grouptitle {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); padding: 0 12px 6px;
+}
