@@ -259,7 +259,8 @@ jht stats                 # nombres trouvés / notés / postulés`,
     loginP2Strong: "sur votre propre ordinateur",
     loginP2Rest: ", sans aucun cloud :",
     withSignupStrong: "Avec inscription",
-    withSignupRest1: " — les données locales se reflètent dans le cloud ; ouvrez ",
+    withSignupRest1:
+      " — les données locales se reflètent dans le cloud ; ouvrez ",
     withSignupRest2:
       " depuis n'importe quel navigateur, partagez avec un mentor. Vos CV restent en local ; seules les métadonnées se synchronisent.",
     withoutStrong: "Sans inscription",
@@ -272,7 +273,7 @@ jht stats                 # nombres trouvés / notés / postulés`,
     outputH2: "📄 Le résultat sur lequel vous agissez",
     outputRest1:
       "Les candidatures approuvées arrivent sous forme de dossiers prêts à envoyer (CV + lettre de motivation) dans votre dossier de documents ",
-    outputReady: '« Prêt à envoyer »',
+    outputReady: "« Prêt à envoyer »",
     outputRest2:
       ", marqués %READY%. Vous les ouvrez, les relisez et les envoyez vous-même.",
     githubMore: "les docs sur GitHub",
@@ -322,13 +323,14 @@ jht stats                 # Zähler gefunden / bewertet / beworben`,
     withoutRest1: " — vollständig lokal. Das Dashboard liegt unter ",
     withoutRest2: ", nichts Externes wird berührt.",
     readOnlyStrong: "schreibgeschützt",
-    readOnlyRest1: "🌐 Auf der öffentlichen Seite ist das Dashboard zur Sicherheit ",
+    readOnlyRest1:
+      "🌐 Auf der öffentlichen Seite ist das Dashboard zur Sicherheit ",
     readOnlyRest2:
       ". Alles, was dein Team oder deine Daten ändert, geschieht über die Desktop-App oder die CLI, auf deinem Rechner.",
     outputH2: "📄 Das Ergebnis, auf das du reagierst",
     outputRest1:
       "Genehmigte Bewerbungen landen als versandfertige Pakete (Lebenslauf + Anschreiben) in deinem Dokumentenordner ",
-    outputReady: '„Bereit zum Absenden“',
+    outputReady: "„Bereit zum Absenden“",
     outputRest2:
       ", markiert mit %READY%. Du öffnest, prüfst und versendest sie selbst.",
     githubMore: "die Docs auf GitHub",
@@ -349,8 +351,7 @@ jht stats                 # Zähler gefunden / bewertet / beworben`,
 ✍️  Író      személyre szabott önéletrajzot + levelet ír
 ⚖️  Kritikus vakon átnézi (3 kör)          → ready
 👤  Te       átnézed és eldöntöd, mit küldj`,
-    calloutScoreStrong:
-      "A pontszám kompatibilitási becslés, nem ítélet.",
+    calloutScoreStrong: "A pontszám kompatibilitási becslés, nem ítélet.",
     calloutScoreRest:
       "Azt mutatja, mennyire illik egy hirdetés a profilodhoz — te maradsz a bíró afelett, mit érdemes követni. Soha semmit nem küldünk el a nevedben.",
     whereH2: "🖥️ Hol olvasd",
@@ -384,7 +385,7 @@ jht stats                 # talált / pontozott / jelentkezett darabszámok`,
     outputH2: "📄 Az eredmény, amire reagálsz",
     outputRest1:
       "A jóváhagyott jelentkezések küldésre kész csomagokként (önéletrajz + kísérőlevél) érkeznek a ",
-    outputReady: '„Küldésre kész”',
+    outputReady: "„Küldésre kész”",
     outputRest2:
       " dokumentummappádba, %READY% megjelöléssel. Te nyitod meg, nézed át és küldöd el őket.",
     githubMore: "a dokumentáció a GitHubon",

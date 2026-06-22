@@ -122,8 +122,7 @@ const T: Record<
       "mostrano quanto del piano AI settimanale è stato consumato — quel giorno e cumulato sulla settimana (reset giovedì). Il budget si spalma sui giorni invece di bruciarsi subito.",
     sourcesTitle: "Da dove arrivano le posizioni",
     sourcesProse1: "Le fonti da cui lo Scout ha trovato le",
-    sourcesProse2:
-      "posizioni: job board, ATS e pagine carriera aziendali.",
+    sourcesProse2: "posizioni: job board, ATS e pagine carriera aziendali.",
   },
   en: {
     caseStudies: "Case studies",
@@ -158,8 +157,7 @@ const T: Record<
     whereSearches: "Dónde busca trabajo",
     runRealPrefix: "Ejecución real del equipo sobre este perfil · ventana",
     runRealMiddle: "·",
-    runRealSuffix:
-      "días de trabajo · cada dato está agregado y es anónimo.",
+    runRealSuffix: "días de trabajo · cada dato está agregado y es anónimo.",
     everyDay: "todos los días",
     monFri: "lun–vie",
     workBudgetTitle: "Trabajo y presupuesto de AI a lo largo del tiempo",
@@ -183,8 +181,7 @@ const T: Record<
     whereSearches: "Où il cherche du travail",
     runRealPrefix: "Exécution réelle de l’équipe sur ce profil · fenêtre",
     runRealMiddle: "·",
-    runRealSuffix:
-      "jours de travail · chaque donnée est agrégée et anonyme.",
+    runRealSuffix: "jours de travail · chaque donnée est agrégée et anonyme.",
     everyDay: "tous les jours",
     monFri: "lun–ven",
     workBudgetTitle: "Travail et budget AI au fil du temps",
@@ -208,8 +205,7 @@ const T: Record<
     whereSearches: "Wo nach Arbeit gesucht wird",
     runRealPrefix: "Echter Team-Lauf für dieses Profil · Zeitfenster",
     runRealMiddle: "·",
-    runRealSuffix:
-      "Arbeitstage · jeder Wert ist aggregiert und anonym.",
+    runRealSuffix: "Arbeitstage · jeder Wert ist aggregiert und anonym.",
     everyDay: "jeden Tag",
     monFri: "Mo–Fr",
     workBudgetTitle: "Arbeit und AI-Budget im Zeitverlauf",
@@ -233,8 +229,7 @@ const T: Record<
     whereSearches: "Hol keres munkát",
     runRealPrefix: "Valódi csapatfuttatás ezen a profilon · időablak",
     runRealMiddle: "·",
-    runRealSuffix:
-      "munkanap · minden adat összesített és névtelen.",
+    runRealSuffix: "munkanap · minden adat összesített és névtelen.",
     everyDay: "minden nap",
     monFri: "hét–pén",
     workBudgetTitle: "Munka és AI-keret az idő során",
@@ -258,8 +253,7 @@ const T: Record<
     whereSearches: "Onde procura trabalho",
     runRealPrefix: "Execução real da equipa sobre este perfil · janela",
     runRealMiddle: "·",
-    runRealSuffix:
-      "dias de trabalho · cada dado é agregado e anónimo.",
+    runRealSuffix: "dias de trabalho · cada dado é agregado e anónimo.",
     everyDay: "todos os dias",
     monFri: "seg–sex",
     workBudgetTitle: "Trabalho e orçamento de AI ao longo do tempo",
@@ -508,9 +502,7 @@ export default function CaseStudyDetail({
       {/* ── Lavoro e budget nel tempo (grafico unico, doppio asse) ── */}
       {run.usage && run.usage.daily.length > 0 && (
         <section>
-          <div className="section-label mb-1">
-            📈 {t.workBudgetTitle}
-          </div>
+          <div className="section-label mb-1">📈 {t.workBudgetTitle}</div>
           <p className="text-[11px] text-[var(--color-dim)] mb-4">
             <strong className="text-[var(--color-muted)]">
               {t.workBudgetBars}
@@ -535,9 +527,7 @@ export default function CaseStudyDetail({
       {/* ── Da dove arrivano le posizioni (fonti) ─────────────── */}
       {run.sources && run.sources.length > 0 && (
         <section className="pt-10 border-t border-[var(--color-border)]">
-          <div className="section-label mb-1">
-            📥 {t.sourcesTitle}
-          </div>
+          <div className="section-label mb-1">📥 {t.sourcesTitle}</div>
           <p className="text-[11px] text-[var(--color-dim)] mb-6">
             {t.sourcesProse1} {nf(locale, run.totals.positions)}{" "}
             {t.sourcesProse2}

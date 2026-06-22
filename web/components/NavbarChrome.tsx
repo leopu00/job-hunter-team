@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
+import { type Locale } from '@/i18n/config'
 import Navbar from './Navbar'
 
 // Routes where the whole app chrome (top nav + side nav) must disappear:
@@ -12,6 +13,7 @@ const FULLSCREEN_FLOWS = ['/onboarding']
 
 interface Props {
   user: User | null
+  locale: Locale
 }
 
 export default function NavbarChrome(props: Props) {

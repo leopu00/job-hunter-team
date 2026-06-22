@@ -25,8 +25,7 @@ const T: Record<
   it: {
     noValue: "senza valore",
     noData: "Nessun dato",
-    histogramAria:
-      "Istogramma: clicca una barra e poi un'altra per il range",
+    histogramAria: "Istogramma: clicca una barra e poi un'altra per il range",
     clickAnother: "Clicca un'altra barra per chiudere il range…",
     lowerLimit: "Limite inferiore",
     upperLimit: "Limite superiore",
@@ -38,8 +37,7 @@ const T: Record<
   en: {
     noValue: "no value",
     noData: "No data",
-    histogramAria:
-      "Histogram: click a bar and then another to set the range",
+    histogramAria: "Histogram: click a bar and then another to set the range",
     clickAnother: "Click another bar to close the range…",
     lowerLimit: "Lower limit",
     upperLimit: "Upper limit",

@@ -462,7 +462,10 @@ export default function ExportPage() {
       a.download = filename;
       a.click();
       URL.revokeObjectURL(a.href);
-      setResult({ ok: true, msg: tr("downloaded").replace("{file}", filename) });
+      setResult({
+        ok: true,
+        msg: tr("downloaded").replace("{file}", filename),
+      });
     } catch {
       setResult({ ok: false, msg: tr("err_network") });
     } finally {
@@ -643,7 +646,9 @@ export default function ExportPage() {
             </p>
             <div className="space-y-2">
               <div className="flex justify-between text-[11px]">
-                <span className="text-[var(--color-dim)]">{tr("row_source")}</span>
+                <span className="text-[var(--color-dim)]">
+                  {tr("row_source")}
+                </span>
                 <span
                   className="font-semibold"
                   style={{ color: activeSrc.color }}
@@ -652,13 +657,17 @@ export default function ExportPage() {
                 </span>
               </div>
               <div className="flex justify-between text-[11px]">
-                <span className="text-[var(--color-dim)]">{tr("row_format")}</span>
+                <span className="text-[var(--color-dim)]">
+                  {tr("row_format")}
+                </span>
                 <span className="text-[var(--color-muted)] font-mono uppercase">
                   {format}
                 </span>
               </div>
               <div className="flex justify-between text-[11px]">
-                <span className="text-[var(--color-dim)]">{tr("row_period")}</span>
+                <span className="text-[var(--color-dim)]">
+                  {tr("row_period")}
+                </span>
                 <span className="text-[var(--color-muted)] font-mono">
                   {from} → {to}
                 </span>

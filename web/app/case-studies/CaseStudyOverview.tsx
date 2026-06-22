@@ -93,9 +93,7 @@ const T: Record<
     whereIntro: (geo, np, nc) => (
       <>
         {geo} geolocated positions in{" "}
-        <strong className="text-[var(--color-muted)]">
-          {np} countries
-        </strong>{" "}
+        <strong className="text-[var(--color-muted)]">{np} countries</strong>{" "}
         and <strong className="text-[var(--color-muted)]">{nc} cities</strong>.
         The size of the circle = number of positions. Only{" "}
         <strong className="text-[var(--color-muted)]">
@@ -224,11 +222,9 @@ const T: Record<
     whereIntro: (geo, np, nc) => (
       <>
         {geo} földrajzilag bemért állás{" "}
-        <strong className="text-[var(--color-muted)]">
-          {np} országban
-        </strong>{" "}
-        és <strong className="text-[var(--color-muted)]">{nc} városban</strong>.
-        A kör mérete = az állások száma. Csak a jelölt számára{" "}
+        <strong className="text-[var(--color-muted)]">{np} országban</strong> és{" "}
+        <strong className="text-[var(--color-muted)]">{nc} városban</strong>. A
+        kör mérete = az állások száma. Csak a jelölt számára{" "}
         <strong className="text-[var(--color-muted)]">
           ellenőrzött és vállalható
         </strong>{" "}
@@ -606,7 +602,11 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
                   className="flex items-center gap-2.5"
                   onMouseEnter={(e) =>
                     showTip(e, `${flag(c.code)} ${c.name}`, [
-                      { color: BLUE, label: t.positions, value: nf(c.count, tag) },
+                      {
+                        color: BLUE,
+                        label: t.positions,
+                        value: nf(c.count, tag),
+                      },
                     ])
                   }
                   onMouseMove={moveTip}

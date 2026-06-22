@@ -115,7 +115,8 @@ const T: Record<
     step1Title: "1. Crea il server",
     step1Body1Pre: "Nella console cloud (es. Hetzner), crea una macchina",
     step1Ubuntu: "Ubuntu 24.04",
-    step1Body1Mid: ", ~4 GB di RAM, in una regione UE per il GDPR. Carica una chiave SSH",
+    step1Body1Mid:
+      ", ~4 GB di RAM, in una regione UE per il GDPR. Carica una chiave SSH",
     step1Dedicated: "dedicata",
     step1Body1Post: "— non riutilizzare quella personale:",
     step1Note: "Annota l'indirizzo IPv4 del server quando è pronto.",
@@ -146,7 +147,8 @@ const T: Record<
   },
   es: {
     title: "Ejecuta 24/7 en un VPS",
-    tagline: "Un pequeño servidor en la nube para que el equipo trabaje mientras duermes",
+    tagline:
+      "Un pequeño servidor en la nube para que el equipo trabaje mientras duermes",
     intro:
       "Un VPS es la forma más barata de mantener al equipo a la caza las 24 horas — sin ordenador encendido, sin ventiladores, sin interrupciones. Unos €6–10/mes además de tu proveedor. Esta es la configuración recomendada para una búsqueda de empleo real.",
     validatedLabel: "Validado de extremo a extremo",
@@ -160,7 +162,8 @@ const T: Record<
     step1Title: "1. Aprovisiona el servidor",
     step1Body1Pre: "En tu consola cloud (p. ej. Hetzner), crea una máquina",
     step1Ubuntu: "Ubuntu 24.04",
-    step1Body1Mid: ", ~4 GB de RAM, en una región de la UE por el RGPD. Sube una clave SSH",
+    step1Body1Mid:
+      ", ~4 GB de RAM, en una región de la UE por el RGPD. Sube una clave SSH",
     step1Dedicated: "dedicada",
     step1Body1Post: "— no reutilices la personal:",
     step1Note: "Anota la dirección IPv4 del servidor cuando esté listo.",
@@ -179,7 +182,8 @@ const T: Record<
     step4Dashboard: "panel web",
     step4Li1Post: "es tu ventana principal al equipo.",
     step4Li2Pre: "El contenedor se ejecuta con",
-    step4Li2Post: ", así que el equipo sobrevive a los reinicios automáticamente.",
+    step4Li2Post:
+      ", así que el equipo sobrevive a los reinicios automáticamente.",
     calloutDesktopLabel: "¿Prefieres sin terminal?",
     calloutDesktopPre:
       "La app de escritorio puede conectarse y controlar un equipo en ejecución en un VPS — iníciarlo, detenerlo y monitorizarlo como si fuera local. Mira",
@@ -191,7 +195,8 @@ const T: Record<
   },
   fr: {
     title: "Exécuter 24/7 sur un VPS",
-    tagline: "Un petit serveur cloud pour que l'équipe travaille pendant que vous dormez",
+    tagline:
+      "Un petit serveur cloud pour que l'équipe travaille pendant que vous dormez",
     intro:
       "Un VPS est le moyen le moins cher de garder l'équipe à la chasse 24h/24 — aucun ordinateur allumé, aucun ventilateur, aucune interruption. Environ 6–10 €/mois en plus de votre fournisseur. C'est la configuration recommandée pour une vraie recherche d'emploi.",
     validatedLabel: "Validé de bout en bout",
@@ -203,9 +208,11 @@ const T: Record<
       "Du provisionnement aux premières offres notées, il faut environ 15–30 minutes, surtout la configuration de la clé SSH. La séquence complète sur le serveur :",
     stepByStep: "🪜 Étape par étape",
     step1Title: "1. Provisionnez le serveur",
-    step1Body1Pre: "Sur votre console cloud (par ex. Hetzner), créez une machine",
+    step1Body1Pre:
+      "Sur votre console cloud (par ex. Hetzner), créez une machine",
     step1Ubuntu: "Ubuntu 24.04",
-    step1Body1Mid: ", ~4 Go de RAM, dans une région de l'UE pour le RGPD. Téléversez une clé SSH",
+    step1Body1Mid:
+      ", ~4 Go de RAM, dans une région de l'UE pour le RGPD. Téléversez une clé SSH",
     step1Dedicated: "dédiée",
     step1Body1Post: "— ne réutilisez pas votre clé personnelle :",
     step1Note: "Notez l'adresse IPv4 du serveur une fois qu'il est prêt.",
@@ -236,7 +243,8 @@ const T: Record<
   },
   de: {
     title: "Rund um die Uhr auf einem VPS betreiben",
-    tagline: "Ein kleiner Cloud-Server, damit das Team arbeitet, während du schläfst",
+    tagline:
+      "Ein kleiner Cloud-Server, damit das Team arbeitet, während du schläfst",
     intro:
       "Ein VPS ist der günstigste Weg, das Team rund um die Uhr auf der Jagd zu halten — kein Computer bleibt an, keine Lüfter, keine Unterbrechungen. Etwa 6–10 €/Monat zusätzlich zu deinem Anbieter. Das ist die empfohlene Einrichtung für eine echte Jobsuche.",
     validatedLabel: "End-to-end validiert",
@@ -250,10 +258,12 @@ const T: Record<
     step1Title: "1. Server bereitstellen",
     step1Body1Pre: "Erstelle in deiner Cloud-Konsole (z. B. Hetzner) eine",
     step1Ubuntu: "Ubuntu-24.04",
-    step1Body1Mid: "-Maschine, ~4 GB RAM, in einer EU-Region wegen der DSGVO. Lade einen",
+    step1Body1Mid:
+      "-Maschine, ~4 GB RAM, in einer EU-Region wegen der DSGVO. Lade einen",
     step1Dedicated: "dedizierten",
     step1Body1Post: "SSH-Schlüssel hoch — verwende nicht deinen persönlichen:",
-    step1Note: "Notiere dir die IPv4-Adresse des Servers, sobald er bereit ist.",
+    step1Note:
+      "Notiere dir die IPv4-Adresse des Servers, sobald er bereit ist.",
     step2Title: "2. Per SSH einloggen",
     step2TipPre:
       "Tipp: Vergleiche vor der ersten Verbindung den in deiner Konsole angezeigten Host-Fingerprint mit",
@@ -281,7 +291,8 @@ const T: Record<
   },
   hu: {
     title: "Futtatás 24/7-ben egy VPS-en",
-    tagline: "Egy kis felhőszerver, hogy a csapat akkor is dolgozzon, amikor alszol",
+    tagline:
+      "Egy kis felhőszerver, hogy a csapat akkor is dolgozzon, amikor alszol",
     intro:
       "A VPS a legolcsóbb módja annak, hogy a csapatot a nap minden órájában vadászatban tartsd — nem marad bekapcsolva számítógép, nincs ventilátor, nincs megszakítás. Körülbelül havi €6–10 a szolgáltatódon felül. Ez az ajánlott beállítás egy valódi álláskereséshez.",
     validatedLabel: "Végpontok közt validálva",
@@ -295,7 +306,8 @@ const T: Record<
     step1Title: "1. Hozd létre a szervert",
     step1Body1Pre: "A felhőkonzolodon (pl. Hetzner) hozz létre egy",
     step1Ubuntu: "Ubuntu 24.04",
-    step1Body1Mid: "gépet, ~4 GB RAM, egy EU-régióban a GDPR miatt. Tölts fel egy",
+    step1Body1Mid:
+      "gépet, ~4 GB RAM, egy EU-régióban a GDPR miatt. Tölts fel egy",
     step1Dedicated: "dedikált",
     step1Body1Post: "SSH-kulcsot — ne használd újra a személyeset:",
     step1Note: "Jegyezd fel a szerver IPv4-címét, amint kész van.",
@@ -326,7 +338,8 @@ const T: Record<
   },
   pt: {
     title: "Execute 24/7 num VPS",
-    tagline: "Um pequeno servidor na nuvem para a equipa trabalhar enquanto dormes",
+    tagline:
+      "Um pequeno servidor na nuvem para a equipa trabalhar enquanto dormes",
     intro:
       "Um VPS é a forma mais barata de manter a equipa à caça 24 horas por dia — sem computador ligado, sem ventoinhas, sem interrupções. Cerca de €6–10/mês além do teu fornecedor. Esta é a configuração recomendada para uma procura de emprego a sério.",
     validatedLabel: "Validado de ponta a ponta",
@@ -340,7 +353,8 @@ const T: Record<
     step1Title: "1. Provisiona o servidor",
     step1Body1Pre: "Na tua consola cloud (por ex. Hetzner), cria uma máquina",
     step1Ubuntu: "Ubuntu 24.04",
-    step1Body1Mid: ", ~4 GB de RAM, numa região da UE por causa do RGPD. Carrega uma chave SSH",
+    step1Body1Mid:
+      ", ~4 GB de RAM, numa região da UE por causa do RGPD. Carrega uma chave SSH",
     step1Dedicated: "dedicada",
     step1Body1Post: "— não reutilizes a pessoal:",
     step1Note: "Anota o endereço IPv4 do servidor quando estiver pronto.",
@@ -359,7 +373,8 @@ const T: Record<
     step4Dashboard: "painel web",
     step4Li1Post: "é a tua janela principal para a equipa.",
     step4Li2Pre: "O contentor corre com",
-    step4Li2Post: ", por isso a equipa sobrevive automaticamente aos reinícios.",
+    step4Li2Post:
+      ", por isso a equipa sobrevive automaticamente aos reinícios.",
     calloutDesktopLabel: "Preferes sem terminal?",
     calloutDesktopPre:
       "A aplicação de desktop pode ligar-se e controlar uma equipa a correr num VPS — iniciá-la, pará-la e monitorizá-la como se fosse local. Vê",

@@ -12,7 +12,10 @@ const T: Record<Locale, { noData: string; other: string }> = {
   es: { noData: "Dato no disponible en esta instantánea.", other: "Otras" },
   fr: { noData: "Donnée non disponible dans cet instantané.", other: "Autres" },
   de: { noData: "Daten in diesem Snapshot nicht verfügbar.", other: "Andere" },
-  hu: { noData: "Az adat nem érhető el ebben a pillanatképben.", other: "Egyéb" },
+  hu: {
+    noData: "Az adat nem érhető el ebben a pillanatképben.",
+    other: "Egyéb",
+  },
   pt: { noData: "Dado não disponível neste snapshot.", other: "Outras" },
 };
 
@@ -44,11 +47,7 @@ export default function SourcesChart({
   const max = Math.max(1, ...rows.map((r) => r.count));
 
   if (rows.length === 0) {
-    return (
-      <p className="text-[11px] text-[var(--color-dim)]">
-        {t.noData}
-      </p>
-    );
+    return <p className="text-[11px] text-[var(--color-dim)]">{t.noData}</p>;
   }
 
   return (

@@ -102,7 +102,8 @@ export function validateEmail(
 ): string | undefined {
   const v = value.trim();
   if (!v) return t("v_email_empty", locale);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return t("v_email_invalid", locale);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
+    return t("v_email_invalid", locale);
   return undefined;
 }
 

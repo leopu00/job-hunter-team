@@ -202,11 +202,7 @@ export function CopyButton({
         <span>{children}</span>
       ) : (
         <span>
-          {state === "copied"
-            ? t.copied
-            : state === "error"
-              ? t.error
-              : t.copy}
+          {state === "copied" ? t.copied : state === "error" ? t.error : t.copy}
         </span>
       )}
     </button>

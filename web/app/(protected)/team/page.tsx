@@ -125,8 +125,7 @@ const T: Record<
     stopSent: "Comando Stop inoltrato — attendo conferma container…",
     teamStopError: "Errore arresto team",
     agentsActive: (n, total) => `${n}/${total} agenti attivi`,
-    activityTitle:
-      "Grafici di attività del team (chi ha lavorato ultimamente)",
+    activityTitle: "Grafici di attività del team (chi ha lavorato ultimamente)",
     activity: "📊 Attività",
     v2Title: "Vai alla pagina Team v2 (work in progress)",
     starting: "Avvio...",
@@ -187,7 +186,8 @@ const T: Record<
       "Commande Arrêter envoyée — en attente de confirmation du conteneur…",
     teamStopError: "Erreur d'arrêt de l'équipe",
     agentsActive: (n, total) => `${n}/${total} agents actifs`,
-    activityTitle: "Graphiques d'activité de l'équipe (qui a travaillé récemment)",
+    activityTitle:
+      "Graphiques d'activité de l'équipe (qui a travaillé récemment)",
     activity: "📊 Activité",
     v2Title: "Aller à la page Équipe v2 (en cours)",
     starting: "Démarrage...",
@@ -246,7 +246,8 @@ const T: Record<
     stopSent: "Comando Parar enviado — aguardando confirmação do contêiner…",
     teamStopError: "Erro ao parar a equipe",
     agentsActive: (n, total) => `${n}/${total} agentes ativos`,
-    activityTitle: "Gráficos de atividade da equipe (quem trabalhou recentemente)",
+    activityTitle:
+      "Gráficos de atividade da equipe (quem trabalhou recentemente)",
     activity: "📊 Atividade",
     v2Title: "Ir para a página Equipe v2 (em desenvolvimento)",
     starting: "Iniciando...",
@@ -627,7 +628,9 @@ export default function TeamPage() {
                             {t.stopping}
                           </span>
                         ) : (
-                          <>{"\u25A0"} {t.stop}</>
+                          <>
+                            {"\u25A0"} {t.stop}
+                          </>
                         )}
                       </button>
                     )}
@@ -726,9 +729,7 @@ export default function TeamPage() {
 
       {/* Footer hint */}
       <div className="mt-6 pt-4 border-t border-[var(--color-border)] text-center">
-        <p className="text-[10px] text-[var(--color-dim)]">
-          {t.footerHint}
-        </p>
+        <p className="text-[10px] text-[var(--color-dim)]">{t.footerHint}</p>
       </div>
     </div>
   );

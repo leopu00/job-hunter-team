@@ -291,7 +291,11 @@ export default async function ScorerPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                   {[
-                    { label: t("highLabel"), val: s.high, c: "var(--color-green)" },
+                    {
+                      label: t("highLabel"),
+                      val: s.high,
+                      c: "var(--color-green)",
+                    },
                     {
                       label: t("midLabel"),
                       val: s.mid,

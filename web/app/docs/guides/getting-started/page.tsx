@@ -90,7 +90,8 @@ const T: Record<Locale, Dict> = {
     subIntroD: " of three providers:",
     kimi: " (Moonshot Pro, ~€40/mo) — the affordable, mass-market tier. A great place to start.",
     codex: " (OpenAI Plus/Pro, ~€100/mo) — a balance of quality and cost.",
-    claude: " (Anthropic Max x20, ~€200/mo) — the highest precision, best for scoring and writing.",
+    claude:
+      " (Anthropic Max x20, ~€200/mo) — the highest precision, best for scoring and writing.",
     dedicateLabel: "Dedicate the subscription to the team.",
     dedicateBody:
       " Don't reuse the same account you use for personal AI — they share one weekly quota and the team will hit limits unexpectedly. More on the ",
@@ -115,7 +116,8 @@ const T: Record<Locale, Dict> = {
       ", not where you read results. After it starts the team you interact via the web dashboard, Telegram or the CLI.",
     path3Title: "📦 Path 3 — One-liner installer",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, Docker Desktop must already be running):",
+    path3WinIntro:
+      "Windows (PowerShell, Docker Desktop must already be running):",
     path3WizardIntro: "Then bring the team up and run the wizard:",
     dockerReqA: "The one requirement is ",
     dockerReqB:
@@ -125,12 +127,10 @@ const T: Record<Locale, Dict> = {
     fr1A: "Set up your profile.",
     fr1B: " Chat with the Assistant at ",
     fr1C: " — it writes your ",
-    fr2A:
-      "Feed it your job alerts (optional but recommended) — see ",
+    fr2A: "Feed it your job alerts (optional but recommended) — see ",
     emailForwarding: "Email Forwarding",
     fr3A: "Click Start.",
-    fr3B:
-      " The Captain dispatches Scout → Analyst → Scorer → Writer → Critic; the Sentinel keeps everyone within the subscription window.",
+    fr3B: " The Captain dispatches Scout → Analyst → Scorer → Writer → Critic; the Sentinel keeps everyone within the subscription window.",
     fr4A: "Review the output",
     dashboardLink: "dashboard",
     fr4B: ". Nothing is ever submitted automatically — you decide what to send.",
@@ -154,8 +154,10 @@ const T: Record<Locale, Dict> = {
     subEmphOne: "uno",
     subIntroD: " dei tre provider:",
     kimi: " (Moonshot Pro, ~40 €/mese) — la fascia accessibile e di massa. Un ottimo punto di partenza.",
-    codex: " (OpenAI Plus/Pro, ~100 €/mese) — un equilibrio tra qualità e costo.",
-    claude: " (Anthropic Max x20, ~200 €/mese) — la massima precisione, ideale per scoring e scrittura.",
+    codex:
+      " (OpenAI Plus/Pro, ~100 €/mese) — un equilibrio tra qualità e costo.",
+    claude:
+      " (Anthropic Max x20, ~200 €/mese) — la massima precisione, ideale per scoring e scrittura.",
     dedicateLabel: "Dedica l'abbonamento al team.",
     dedicateBody:
       " Non riutilizzare lo stesso account che usi per l'AI personale — condividono un'unica quota settimanale e il team raggiungerà i limiti in modo imprevisto. Maggiori dettagli sulla ",
@@ -170,7 +172,8 @@ const T: Record<Locale, Dict> = {
     path2IntroA: "Scarica il launcher dalla ",
     downloadPage: "pagina di download",
     path2IntroB: ". Aprilo, poi la procedura guidata:",
-    path2Li1: "Sceglie la tua lingua e installa il runtime dei container per te.",
+    path2Li1:
+      "Sceglie la tua lingua e installa il runtime dei container per te.",
     path2Li2: "Ti fa accedere al tuo provider tramite un terminale integrato.",
     path2Li3A: "Clicca ",
     path2Li3B: " — il team si avvia e il browser si apre sulla dashboard.",
@@ -180,7 +183,8 @@ const T: Record<Locale, Dict> = {
       ", non il luogo dove leggi i risultati. Dopo che ha avviato il team interagisci tramite la dashboard web, Telegram o la CLI.",
     path3Title: "📦 Percorso 3 — Installer one-liner",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, Docker Desktop deve essere già in esecuzione):",
+    path3WinIntro:
+      "Windows (PowerShell, Docker Desktop deve essere già in esecuzione):",
     path3WizardIntro: "Poi avvia il team ed esegui la procedura guidata:",
     dockerReqA: "L'unico requisito è ",
     dockerReqB:
@@ -190,17 +194,16 @@ const T: Record<Locale, Dict> = {
     fr1A: "Configura il tuo profilo.",
     fr1B: " Chatta con l'Assistente su ",
     fr1C: " — scriverà il tuo ",
-    fr2A:
-      "Forniscigli i tuoi avvisi di lavoro (opzionale ma consigliato) — vedi ",
+    fr2A: "Forniscigli i tuoi avvisi di lavoro (opzionale ma consigliato) — vedi ",
     emailForwarding: "Inoltro email",
     fr3A: "Clicca Start.",
-    fr3B:
-      " Il Capitano coordina Scout → Analista → Scorer → Scrittore → Critico; la Sentinella mantiene tutti entro la finestra dell'abbonamento.",
+    fr3B: " Il Capitano coordina Scout → Analista → Scorer → Scrittore → Critico; la Sentinella mantiene tutti entro la finestra dell'abbonamento.",
     fr4A: "Esamina i risultati",
     dashboardLink: "dashboard",
     fr4B: ". Nulla viene mai inviato automaticamente — decidi tu cosa inviare.",
     stuckA: "🩹 Bloccato? ",
-    stuckB: " ti dice esattamente cosa manca. Per la configurazione sempre attiva vedi ",
+    stuckB:
+      " ti dice esattamente cosa manca. Per la configurazione sempre attiva vedi ",
     vpsLink: "Esegui 24/7 su un VPS",
   },
   es: {
@@ -219,8 +222,10 @@ const T: Record<Locale, Dict> = {
     subEmphOne: "uno",
     subIntroD: " de tres proveedores:",
     kimi: " (Moonshot Pro, ~40 €/mes) — el nivel asequible y de gran público. Un excelente punto de partida.",
-    codex: " (OpenAI Plus/Pro, ~100 €/mes) — un equilibrio entre calidad y coste.",
-    claude: " (Anthropic Max x20, ~200 €/mes) — la máxima precisión, ideal para puntuar y redactar.",
+    codex:
+      " (OpenAI Plus/Pro, ~100 €/mes) — un equilibrio entre calidad y coste.",
+    claude:
+      " (Anthropic Max x20, ~200 €/mes) — la máxima precisión, ideal para puntuar y redactar.",
     dedicateLabel: "Dedica la suscripción al equipo.",
     dedicateBody:
       " No reutilices la misma cuenta que usas para tu IA personal — comparten una única cuota semanal y el equipo alcanzará los límites de forma inesperada. Más información en la ",
@@ -239,13 +244,15 @@ const T: Record<Locale, Dict> = {
     path2Li2: "Te conecta a tu proveedor mediante un terminal integrado.",
     path2Li3A: "Haz clic en ",
     path2Li3B: " — el equipo arranca y tu navegador se abre en el panel.",
-    desktopLabel: "interruptor de encendido/apagado y asistente de configuración",
+    desktopLabel:
+      "interruptor de encendido/apagado y asistente de configuración",
     desktopBodyA: "💡 La app de escritorio es el ",
     desktopBodyB:
       ", no donde lees los resultados. Una vez que inicia el equipo, interactúas a través del panel web, Telegram o la CLI.",
     path3Title: "📦 Vía 3 — Instalador en una línea",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, Docker Desktop ya debe estar en ejecución):",
+    path3WinIntro:
+      "Windows (PowerShell, Docker Desktop ya debe estar en ejecución):",
     path3WizardIntro: "Luego levanta el equipo y ejecuta el asistente:",
     dockerReqA: "El único requisito es ",
     dockerReqB:
@@ -255,17 +262,16 @@ const T: Record<Locale, Dict> = {
     fr1A: "Configura tu perfil.",
     fr1B: " Chatea con el Asistente en ",
     fr1C: " — escribirá tu ",
-    fr2A:
-      "Aliméntalo con tus alertas de empleo (opcional pero recomendable) — consulta ",
+    fr2A: "Aliméntalo con tus alertas de empleo (opcional pero recomendable) — consulta ",
     emailForwarding: "Reenvío de correo",
     fr3A: "Haz clic en Start.",
-    fr3B:
-      " El Capitán despacha Scout → Analista → Scorer → Redactor → Crítico; el Centinela mantiene a todos dentro de la ventana de la suscripción.",
+    fr3B: " El Capitán despacha Scout → Analista → Scorer → Redactor → Crítico; el Centinela mantiene a todos dentro de la ventana de la suscripción.",
     fr4A: "Revisa los resultados",
     dashboardLink: "panel",
     fr4B: ". Nunca se envía nada automáticamente — tú decides qué enviar.",
     stuckA: "🩹 ¿Atascado? ",
-    stuckB: " te dice exactamente qué falta. Para la configuración siempre activa, consulta ",
+    stuckB:
+      " te dice exactamente qué falta. Para la configuración siempre activa, consulta ",
     vpsLink: "Ejecuta 24/7 en un VPS",
   },
   fr: {
@@ -284,15 +290,18 @@ const T: Record<Locale, Dict> = {
     subEmphOne: "l'un",
     subIntroD: " des trois fournisseurs :",
     kimi: " (Moonshot Pro, ~40 €/mois) — la formule abordable et grand public. Un excellent point de départ.",
-    codex: " (OpenAI Plus/Pro, ~100 €/mois) — un équilibre entre qualité et coût.",
-    claude: " (Anthropic Max x20, ~200 €/mois) — la plus haute précision, idéale pour la notation et la rédaction.",
+    codex:
+      " (OpenAI Plus/Pro, ~100 €/mois) — un équilibre entre qualité et coût.",
+    claude:
+      " (Anthropic Max x20, ~200 €/mois) — la plus haute précision, idéale pour la notation et la rédaction.",
     dedicateLabel: "Dédiez l'abonnement à l'équipe.",
     dedicateBody:
       " Ne réutilisez pas le même compte que pour votre IA personnelle — ils partagent un quota hebdomadaire unique et l'équipe atteindra les limites de façon imprévue. Plus d'informations sur la ",
     pricingPage: "page des tarifs",
     pickTitle: "🛤️ Ensuite, choisissez comment installer",
     path1Title: "🦞 Voie 1 — Laissez faire votre assistant IA",
-    path1Intro: "Si vous utilisez un assistant de codage, dites-lui quelque chose comme :",
+    path1Intro:
+      "Si vous utilisez un assistant de codage, dites-lui quelque chose comme :",
     path1AfterA: "Il lira la documentation, installera la CLI, exécutera ",
     path1AfterB:
       ", corrigera ce qui manque et démarrera l'équipe. C'est un objectif de conception primordial, pas une bidouille.",
@@ -300,17 +309,20 @@ const T: Record<Locale, Dict> = {
     path2IntroA: "Téléchargez le lanceur depuis ",
     downloadPage: "la page de téléchargement",
     path2IntroB: ". Ouvrez-le, puis l'assistant :",
-    path2Li1: "Choisit votre langue et installe le runtime de conteneurs pour vous.",
+    path2Li1:
+      "Choisit votre langue et installe le runtime de conteneurs pour vous.",
     path2Li2: "Vous connecte à votre fournisseur via un terminal intégré.",
     path2Li3A: "Cliquez sur ",
-    path2Li3B: " — l'équipe démarre et votre navigateur s'ouvre sur le tableau de bord.",
+    path2Li3B:
+      " — l'équipe démarre et votre navigateur s'ouvre sur le tableau de bord.",
     desktopLabel: "interrupteur marche/arrêt et assistant de configuration",
     desktopBodyA: "💡 L'application de bureau est l'",
     desktopBodyB:
       ", pas l'endroit où vous lisez les résultats. Une fois qu'elle a démarré l'équipe, vous interagissez via le tableau de bord web, Telegram ou la CLI.",
     path3Title: "📦 Voie 3 — Installateur en une ligne",
     path3Mac: "macOS / Linux / WSL2 :",
-    path3WinIntro: "Windows (PowerShell, Docker Desktop doit déjà être en cours d'exécution) :",
+    path3WinIntro:
+      "Windows (PowerShell, Docker Desktop doit déjà être en cours d'exécution) :",
     path3WizardIntro: "Puis démarrez l'équipe et lancez l'assistant :",
     dockerReqA: "La seule exigence est ",
     dockerReqB:
@@ -320,17 +332,16 @@ const T: Record<Locale, Dict> = {
     fr1A: "Configurez votre profil.",
     fr1B: " Discutez avec l'Assistant sur ",
     fr1C: " — il écrira votre ",
-    fr2A:
-      "Alimentez-le avec vos alertes d'emploi (facultatif mais recommandé) — voir ",
+    fr2A: "Alimentez-le avec vos alertes d'emploi (facultatif mais recommandé) — voir ",
     emailForwarding: "Transfert d'e-mails",
     fr3A: "Cliquez sur Start.",
-    fr3B:
-      " Le Capitaine répartit Scout → Analyste → Scorer → Rédacteur → Critique ; la Sentinelle maintient tout le monde dans la fenêtre de l'abonnement.",
+    fr3B: " Le Capitaine répartit Scout → Analyste → Scorer → Rédacteur → Critique ; la Sentinelle maintient tout le monde dans la fenêtre de l'abonnement.",
     fr4A: "Examinez les résultats",
     dashboardLink: "tableau de bord",
     fr4B: ". Rien n'est jamais soumis automatiquement — c'est vous qui décidez quoi envoyer.",
     stuckA: "🩹 Bloqué ? ",
-    stuckB: " vous indique exactement ce qui manque. Pour la configuration permanente, voir ",
+    stuckB:
+      " vous indique exactement ce qui manque. Pour la configuration permanente, voir ",
     vpsLink: "Exécuter 24/7 sur un VPS",
   },
   de: {
@@ -349,15 +360,18 @@ const T: Record<Locale, Dict> = {
     subEmphOne: "einem",
     subIntroD: " von drei Anbietern:",
     kimi: " (Moonshot Pro, ~40 €/Monat) — die günstige Einstiegsstufe für die breite Masse. Ein großartiger Startpunkt.",
-    codex: " (OpenAI Plus/Pro, ~100 €/Monat) — ein Gleichgewicht aus Qualität und Kosten.",
-    claude: " (Anthropic Max x20, ~200 €/Monat) — die höchste Präzision, ideal für Bewertung und Verfassen.",
+    codex:
+      " (OpenAI Plus/Pro, ~100 €/Monat) — ein Gleichgewicht aus Qualität und Kosten.",
+    claude:
+      " (Anthropic Max x20, ~200 €/Monat) — die höchste Präzision, ideal für Bewertung und Verfassen.",
     dedicateLabel: "Widme das Abonnement dem Team.",
     dedicateBody:
       " Verwende nicht dasselbe Konto wie für deine persönliche KI — sie teilen sich ein einziges wöchentliches Kontingent, und das Team stößt unerwartet an die Grenzen. Mehr dazu auf der ",
     pricingPage: "Preisseite",
     pickTitle: "🛤️ Dann wähle, wie du installierst",
     path1Title: "🦞 Weg 1 — Lass es deinen KI-Assistenten erledigen",
-    path1Intro: "Wenn du einen Coding-Assistenten verwendest, sage ihm etwa Folgendes:",
+    path1Intro:
+      "Wenn du einen Coding-Assistenten verwendest, sage ihm etwa Folgendes:",
     path1AfterA: "Er liest die Dokumentation, installiert die CLI, führt ",
     path1AfterB:
       " aus, behebt, was fehlt, und startet das Team. Das ist ein primäres Designziel, kein Trick.",
@@ -365,8 +379,10 @@ const T: Record<Locale, Dict> = {
     path2IntroA: "Lade den Launcher von ",
     downloadPage: "der Download-Seite",
     path2IntroB: " herunter. Öffne ihn, dann den Assistenten:",
-    path2Li1: "Wählt deine Sprache und installiert die Container-Laufzeitumgebung für dich.",
-    path2Li2: "Meldet dich über ein eingebettetes Terminal bei deinem Anbieter an.",
+    path2Li1:
+      "Wählt deine Sprache und installiert die Container-Laufzeitumgebung für dich.",
+    path2Li2:
+      "Meldet dich über ein eingebettetes Terminal bei deinem Anbieter an.",
     path2Li3A: "Klicke auf ",
     path2Li3B: " — das Team startet und dein Browser öffnet das Dashboard.",
     desktopLabel: "Ein-/Aus-Schalter und Einrichtungsassistent",
@@ -385,17 +401,16 @@ const T: Record<Locale, Dict> = {
     fr1A: "Richte dein Profil ein.",
     fr1B: " Chatte mit dem Assistenten unter ",
     fr1C: " — er schreibt deine ",
-    fr2A:
-      "Füttere es mit deinen Job-Benachrichtigungen (optional, aber empfohlen) — siehe ",
+    fr2A: "Füttere es mit deinen Job-Benachrichtigungen (optional, aber empfohlen) — siehe ",
     emailForwarding: "E-Mail-Weiterleitung",
     fr3A: "Klicke auf Start.",
-    fr3B:
-      " Der Kapitän verteilt Scout → Analyst → Scorer → Schreiber → Kritiker; die Wache hält alle innerhalb des Abonnement-Fensters.",
+    fr3B: " Der Kapitän verteilt Scout → Analyst → Scorer → Schreiber → Kritiker; die Wache hält alle innerhalb des Abonnement-Fensters.",
     fr4A: "Prüfe die Ergebnisse",
     dashboardLink: "Dashboard",
     fr4B: ". Nichts wird jemals automatisch eingereicht — du entscheidest, was gesendet wird.",
     stuckA: "🩹 Festgefahren? ",
-    stuckB: " sagt dir genau, was fehlt. Für die Dauerbetrieb-Einrichtung siehe ",
+    stuckB:
+      " sagt dir genau, was fehlt. Für die Dauerbetrieb-Einrichtung siehe ",
     vpsLink: "Rund um die Uhr auf einem VPS betreiben",
   },
   hu: {
@@ -414,15 +429,18 @@ const T: Record<Locale, Dict> = {
     subEmphOne: "egyikénél",
     subIntroD: ":",
     kimi: " (Moonshot Pro, ~40 €/hó) — a megfizethető, tömegpiaci szint. Remek kiindulópont.",
-    codex: " (OpenAI Plus/Pro, ~100 €/hó) — egyensúly a minőség és a költség között.",
-    claude: " (Anthropic Max x20, ~200 €/hó) — a legnagyobb pontosság, ideális pontozáshoz és íráshoz.",
+    codex:
+      " (OpenAI Plus/Pro, ~100 €/hó) — egyensúly a minőség és a költség között.",
+    claude:
+      " (Anthropic Max x20, ~200 €/hó) — a legnagyobb pontosság, ideális pontozáshoz és íráshoz.",
     dedicateLabel: "Szenteld az előfizetést a csapatnak.",
     dedicateBody:
       " Ne használd újra ugyanazt a fiókot, amit a személyes MI-hez használsz — egyetlen heti kvótán osztoznak, és a csapat váratlanul eléri a korlátokat. Bővebben az ",
     pricingPage: "árazási oldalon",
     pickTitle: "🛤️ Aztán válaszd ki, hogyan telepítesz",
     path1Title: "🦞 1. út — Bízd az MI-asszisztensedre",
-    path1Intro: "Ha kódolási asszisztenst használsz, mondj neki valami ilyesmit:",
+    path1Intro:
+      "Ha kódolási asszisztenst használsz, mondj neki valami ilyesmit:",
     path1AfterA: "Elolvassa a dokumentációt, telepíti a CLI-t, lefuttatja a ",
     path1AfterB:
       " parancsot, kijavítja, ami hiányzik, és elindítja a csapatot. Ez elsődleges tervezési cél, nem trükk.",
@@ -430,10 +448,12 @@ const T: Record<Locale, Dict> = {
     path2IntroA: "Töltsd le az indítót a ",
     downloadPage: "letöltési oldalról",
     path2IntroB: ". Nyisd meg, majd a varázsló:",
-    path2Li1: "Kiválasztja a nyelvedet, és telepíti helyetted a konténer-futtatókörnyezetet.",
+    path2Li1:
+      "Kiválasztja a nyelvedet, és telepíti helyetted a konténer-futtatókörnyezetet.",
     path2Li2: "Beléptet a szolgáltatódhoz egy beágyazott terminálon keresztül.",
     path2Li3A: "Kattints a ",
-    path2Li3B: " gombra — a csapat elindul, és a böngésződ megnyílik az irányítópulton.",
+    path2Li3B:
+      " gombra — a csapat elindul, és a böngésződ megnyílik az irányítópulton.",
     desktopLabel: "be-/kikapcsoló és beállítóvarázsló",
     desktopBodyA: "💡 Az asztali alkalmazás a ",
     desktopBodyB:
@@ -450,17 +470,16 @@ const T: Record<Locale, Dict> = {
     fr1A: "Állítsd be a profilodat.",
     fr1B: " Beszélgess az Asszisztenssel az ",
     fr1C: " oldalon — megírja helyetted a ",
-    fr2A:
-      "Tápláld be az állásértesítéseidet (nem kötelező, de ajánlott) — lásd ",
+    fr2A: "Tápláld be az állásértesítéseidet (nem kötelező, de ajánlott) — lásd ",
     emailForwarding: "E-mail-továbbítás",
     fr3A: "Kattints a Start gombra.",
-    fr3B:
-      " A Kapitány elindítja a Felderítő → Elemző → Pontozó → Író → Kritikus sort; az Őrszem mindenkit az előfizetés ablakán belül tart.",
+    fr3B: " A Kapitány elindítja a Felderítő → Elemző → Pontozó → Író → Kritikus sort; az Őrszem mindenkit az előfizetés ablakán belül tart.",
     fr4A: "Tekintsd át az eredményeket",
     dashboardLink: "irányítópult",
     fr4B: " oldalon. Semmi sem kerül automatikusan beadásra — te döntöd el, mit küldj el.",
     stuckA: "🩹 Elakadtál? ",
-    stuckB: " pontosan megmondja, mi hiányzik. A folyamatos üzemű beállításhoz lásd ",
+    stuckB:
+      " pontosan megmondja, mi hiányzik. A folyamatos üzemű beállításhoz lásd ",
     vpsLink: "Folyamatos futtatás VPS-en",
   },
   pt: {
@@ -479,8 +498,10 @@ const T: Record<Locale, Dict> = {
     subEmphOne: "um",
     subIntroD: " de três fornecedores:",
     kimi: " (Moonshot Pro, ~40 €/mês) — o nível acessível e de grande público. Um excelente ponto de partida.",
-    codex: " (OpenAI Plus/Pro, ~100 €/mês) — um equilíbrio entre qualidade e custo.",
-    claude: " (Anthropic Max x20, ~200 €/mês) — a máxima precisão, ideal para pontuar e escrever.",
+    codex:
+      " (OpenAI Plus/Pro, ~100 €/mês) — um equilíbrio entre qualidade e custo.",
+    claude:
+      " (Anthropic Max x20, ~200 €/mês) — a máxima precisão, ideal para pontuar e escrever.",
     dedicateLabel: "Dedica a subscrição à equipa.",
     dedicateBody:
       " Não reutilizes a mesma conta que usas para a IA pessoal — partilham uma única quota semanal e a equipa atingirá os limites de forma inesperada. Mais informações na ",
@@ -491,12 +512,14 @@ const T: Record<Locale, Dict> = {
     path1AfterA: "Ele lerá a documentação, instalará a CLI, executará ",
     path1AfterB:
       ", corrigirá o que falta e iniciará a equipa. Este é um objetivo de design primordial, não um truque.",
-    path2Title: "🖥️ Caminho 2 — Aplicação de ambiente de trabalho (sem terminal)",
+    path2Title:
+      "🖥️ Caminho 2 — Aplicação de ambiente de trabalho (sem terminal)",
     path2IntroA: "Descarrega o launcher a partir da ",
     downloadPage: "página de transferências",
     path2IntroB: ". Abre-o e, em seguida, o assistente:",
     path2Li1: "Escolhe o teu idioma e instala o runtime de contentores por ti.",
-    path2Li2: "Inicia a tua sessão no fornecedor através de um terminal incorporado.",
+    path2Li2:
+      "Inicia a tua sessão no fornecedor através de um terminal incorporado.",
     path2Li3A: "Clica em ",
     path2Li3B: " — a equipa arranca e o teu navegador abre no painel.",
     desktopLabel: "interruptor de ligar/desligar e assistente de configuração",
@@ -505,7 +528,8 @@ const T: Record<Locale, Dict> = {
       ", não o local onde lês os resultados. Depois de iniciar a equipa, interages através do painel web, do Telegram ou da CLI.",
     path3Title: "📦 Caminho 3 — Instalador numa só linha",
     path3Mac: "macOS / Linux / WSL2:",
-    path3WinIntro: "Windows (PowerShell, o Docker Desktop já tem de estar em execução):",
+    path3WinIntro:
+      "Windows (PowerShell, o Docker Desktop já tem de estar em execução):",
     path3WizardIntro: "Depois levanta a equipa e executa o assistente:",
     dockerReqA: "O único requisito é o ",
     dockerReqB:
@@ -515,17 +539,16 @@ const T: Record<Locale, Dict> = {
     fr1A: "Configura o teu perfil.",
     fr1B: " Conversa com o Assistente em ",
     fr1C: " — ele escreve o teu ",
-    fr2A:
-      "Alimenta-o com os teus alertas de emprego (opcional, mas recomendado) — vê ",
+    fr2A: "Alimenta-o com os teus alertas de emprego (opcional, mas recomendado) — vê ",
     emailForwarding: "Reencaminhamento de e-mail",
     fr3A: "Clica em Start.",
-    fr3B:
-      " O Capitão despacha Scout → Analista → Scorer → Redator → Crítico; a Sentinela mantém todos dentro da janela da subscrição.",
+    fr3B: " O Capitão despacha Scout → Analista → Scorer → Redator → Crítico; a Sentinela mantém todos dentro da janela da subscrição.",
     fr4A: "Revê os resultados",
     dashboardLink: "painel",
     fr4B: ". Nada é submetido automaticamente — és tu que decides o que enviar.",
     stuckA: "🩹 Preso? ",
-    stuckB: " diz-te exatamente o que falta. Para a configuração sempre ativa, vê ",
+    stuckB:
+      " diz-te exatamente o que falta. Para a configuração sempre ativa, vê ",
     vpsLink: "Executar 24/7 num VPS",
   },
 };

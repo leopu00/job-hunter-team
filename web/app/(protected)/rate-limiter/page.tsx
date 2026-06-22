@@ -103,8 +103,7 @@ const T: Record<
     maxDelay: "Max delay",
     breadcrumb: "Rate Limiter",
     title: "Rate Limiter",
-    subtitle: (p, max, w) =>
-      `${p} provedores · janela global: ${max} req/${w}`,
+    subtitle: (p, max, w) => `${p} provedores · janela global: ${max} req/${w}`,
     loading: "Carregando…",
     configNotFound: "jht.config.json não encontrado",
     refresh: "atualizar",

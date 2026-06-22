@@ -46,7 +46,8 @@ type Copy = {
 const T: Record<Locale, Copy> = {
   en: {
     title: "Connect your AI provider",
-    tagline: "The provider is the team's brain — and the only thing you pay for",
+    tagline:
+      "The provider is the team's brain — and the only thing you pay for",
     intro:
       "The platform is free and open source. The intelligence behind the agents comes from an LLM provider you choose and sign into. This page connects it.",
     whichProvider: "🤔 Which provider?",
@@ -54,7 +55,8 @@ const T: Record<Locale, Copy> = {
       "Three are supported and tested. Pick one — you can switch later in a couple of commands.",
     kimi: "(Moonshot Pro, ~€40/mo) — cheapest, validated on multi-day runs. The mass-market starting point.",
     codex: "(OpenAI Plus/Pro, ~€100/mo) — balanced quality and cost.",
-    claude: "(Anthropic Max x20, ~€200/mo) — top precision for scoring and CV writing.",
+    claude:
+      "(Anthropic Max x20, ~€200/mo) — top precision for scoring and CV writing.",
     dedicatedStrong: "Use a dedicated subscription.",
     dedicatedRest:
       "Sharing the account you use for personal AI drains the same weekly quota twice and the team will hit rate limits. See the",
@@ -80,8 +82,7 @@ const T: Record<Locale, Copy> = {
   },
   it: {
     title: "Collega il tuo provider AI",
-    tagline:
-      "Il provider è il cervello del team — e l'unica cosa che paghi",
+    tagline: "Il provider è il cervello del team — e l'unica cosa che paghi",
     intro:
       "La piattaforma è gratuita e open source. L'intelligenza dietro gli agenti viene da un provider LLM che scegli e a cui accedi. Questa pagina lo collega.",
     whichProvider: "🤔 Quale provider?",
@@ -89,7 +90,8 @@ const T: Record<Locale, Copy> = {
       "Tre sono supportati e testati. Scegline uno — potrai cambiarlo più avanti con un paio di comandi.",
     kimi: "(Moonshot Pro, ~40€/mese) — il più economico, validato su run di più giorni. Il punto di partenza per il grande pubblico.",
     codex: "(OpenAI Plus/Pro, ~100€/mese) — equilibrio tra qualità e costo.",
-    claude: "(Anthropic Max x20, ~200€/mese) — massima precisione per scoring e scrittura del CV.",
+    claude:
+      "(Anthropic Max x20, ~200€/mese) — massima precisione per scoring e scrittura del CV.",
     dedicatedStrong: "Usa un abbonamento dedicato.",
     dedicatedRest:
       "Condividere l'account che usi per l'AI personale consuma due volte la stessa quota settimanale e il team raggiungerà i limiti di rate. Consulta la",
@@ -115,8 +117,7 @@ const T: Record<Locale, Copy> = {
   },
   es: {
     title: "Conecta tu proveedor de IA",
-    tagline:
-      "El proveedor es el cerebro del equipo — y lo único que pagas",
+    tagline: "El proveedor es el cerebro del equipo — y lo único que pagas",
     intro:
       "La plataforma es gratuita y de código abierto. La inteligencia detrás de los agentes proviene de un proveedor de LLM que eliges y en el que inicias sesión. Esta página lo conecta.",
     whichProvider: "🤔 ¿Qué proveedor?",
@@ -124,7 +125,8 @@ const T: Record<Locale, Copy> = {
       "Tres están soportados y probados. Elige uno — puedes cambiarlo más adelante con un par de comandos.",
     kimi: "(Moonshot Pro, ~40 €/mes) — el más barato, validado en ejecuciones de varios días. El punto de partida para el gran público.",
     codex: "(OpenAI Plus/Pro, ~100 €/mes) — equilibrio entre calidad y coste.",
-    claude: "(Anthropic Max x20, ~200 €/mes) — máxima precisión para la puntuación y la redacción del CV.",
+    claude:
+      "(Anthropic Max x20, ~200 €/mes) — máxima precisión para la puntuación y la redacción del CV.",
     dedicatedStrong: "Usa una suscripción dedicada.",
     dedicatedRest:
       "Compartir la cuenta que usas para tu IA personal agota la misma cuota semanal dos veces y el equipo alcanzará los límites de tasa. Consulta la",
@@ -133,7 +135,8 @@ const T: Record<Locale, Copy> = {
     connectIt: "🔌 Conéctalo",
     connectP1:
       "El asistente de configuración ya pregunta por tu proveedor y ejecuta el inicio de sesión. Si ejecutaste",
-    connectP2: "probablemente ya está hecho. Para hacerlo (o rehacerlo) a mano:",
+    connectP2:
+      "probablemente ya está hecho. Para hacerlo (o rehacerlo) a mano:",
     step1: "1. Selecciona el proveedor",
     step2: "2. Inicia sesión (OAuth device flow)",
     step2P1Strong: "suscripciones, no claves de API",
@@ -159,7 +162,8 @@ const T: Record<Locale, Copy> = {
       "Trois sont pris en charge et testés. Choisissez-en un — vous pourrez en changer plus tard en quelques commandes.",
     kimi: "(Moonshot Pro, ~40 €/mois) — le moins cher, validé sur des exécutions de plusieurs jours. Le point de départ grand public.",
     codex: "(OpenAI Plus/Pro, ~100 €/mois) — équilibre entre qualité et coût.",
-    claude: "(Anthropic Max x20, ~200 €/mois) — précision maximale pour le scoring et la rédaction du CV.",
+    claude:
+      "(Anthropic Max x20, ~200 €/mois) — précision maximale pour le scoring et la rédaction du CV.",
     dedicatedStrong: "Utilisez un abonnement dédié.",
     dedicatedRest:
       "Partager le compte que vous utilisez pour votre IA personnelle épuise deux fois le même quota hebdomadaire et l'équipe atteindra les limites de débit. Consultez la",
@@ -168,7 +172,8 @@ const T: Record<Locale, Copy> = {
     connectIt: "🔌 Connectez-le",
     connectP1:
       "L'assistant de configuration demande déjà votre fournisseur et exécute la connexion. Si vous avez exécuté",
-    connectP2: "c'est probablement déjà fait. Pour le faire (ou le refaire) à la main :",
+    connectP2:
+      "c'est probablement déjà fait. Pour le faire (ou le refaire) à la main :",
     step1: "1. Sélectionnez le fournisseur",
     step2: "2. Connectez-vous (OAuth device flow)",
     step2P1Strong: "des abonnements, pas des clés d'API",
@@ -193,8 +198,10 @@ const T: Record<Locale, Copy> = {
     whichProviderP:
       "Drei werden unterstützt und sind getestet. Wähle einen — du kannst später mit ein paar Befehlen wechseln.",
     kimi: "(Moonshot Pro, ~40 €/Monat) — der günstigste, validiert über mehrtägige Läufe. Der Einstiegspunkt für den Massenmarkt.",
-    codex: "(OpenAI Plus/Pro, ~100 €/Monat) — ausgewogen in Qualität und Kosten.",
-    claude: "(Anthropic Max x20, ~200 €/Monat) — höchste Präzision für Scoring und Lebenslauf-Erstellung.",
+    codex:
+      "(OpenAI Plus/Pro, ~100 €/Monat) — ausgewogen in Qualität und Kosten.",
+    claude:
+      "(Anthropic Max x20, ~200 €/Monat) — höchste Präzision für Scoring und Lebenslauf-Erstellung.",
     dedicatedStrong: "Verwende ein eigenes Abonnement.",
     dedicatedRest:
       "Das Teilen des Kontos, das du für deine persönliche KI nutzt, verbraucht dasselbe wöchentliche Kontingent doppelt, und das Team läuft in Rate-Limits. Siehe die",
@@ -203,7 +210,8 @@ const T: Record<Locale, Copy> = {
     connectIt: "🔌 Verbinde ihn",
     connectP1:
       "Der Setup-Assistent fragt bereits nach deinem Anbieter und führt die Anmeldung aus. Wenn du",
-    connectP2: "ausgeführt hast, bist du wahrscheinlich fertig. Um es (erneut) von Hand zu tun:",
+    connectP2:
+      "ausgeführt hast, bist du wahrscheinlich fertig. Um es (erneut) von Hand zu tun:",
     step1: "1. Anbieter auswählen",
     step2: "2. Anmelden (OAuth Device Flow)",
     step2P1Strong: "Abonnements, keine API-Keys",
@@ -228,8 +236,10 @@ const T: Record<Locale, Copy> = {
     whichProviderP:
       "Három támogatott és tesztelt. Válassz egyet — később pár paranccsal válthatsz.",
     kimi: "(Moonshot Pro, ~40 €/hó) — a legolcsóbb, többnapos futtatásokon validálva. A tömegpiaci kiindulópont.",
-    codex: "(OpenAI Plus/Pro, ~100 €/hó) — kiegyensúlyozott minőség és költség.",
-    claude: "(Anthropic Max x20, ~200 €/hó) — csúcspontosság a pontozáshoz és az önéletrajz-íráshoz.",
+    codex:
+      "(OpenAI Plus/Pro, ~100 €/hó) — kiegyensúlyozott minőség és költség.",
+    claude:
+      "(Anthropic Max x20, ~200 €/hó) — csúcspontosság a pontozáshoz és az önéletrajz-íráshoz.",
     dedicatedStrong: "Használj dedikált előfizetést.",
     dedicatedRest:
       "Ha a személyes AI-hoz használt fiókot osztod meg, az kétszer meríti ki ugyanazt a heti keretet, és a csapat eléri a sebességkorlátokat. Lásd az",
@@ -238,7 +248,8 @@ const T: Record<Locale, Copy> = {
     connectIt: "🔌 Csatlakoztasd",
     connectP1:
       "A beállítási varázsló már megkérdezi a szolgáltatódat, és lefuttatja a bejelentkezést. Ha lefuttattad a",
-    connectP2: "parancsot, valószínűleg készen vagy. Hogy kézzel megtedd (vagy újra megtedd):",
+    connectP2:
+      "parancsot, valószínűleg készen vagy. Hogy kézzel megtedd (vagy újra megtedd):",
     step1: "1. Válaszd ki a szolgáltatót",
     step2: "2. Jelentkezz be (OAuth device flow)",
     step2P1Strong: "előfizetések, nem API-kulcsok",
@@ -255,16 +266,17 @@ const T: Record<Locale, Copy> = {
   },
   pt: {
     title: "Conecte o seu provedor de IA",
-    tagline:
-      "O provedor é o cérebro da equipe — e a única coisa que você paga",
+    tagline: "O provedor é o cérebro da equipe — e a única coisa que você paga",
     intro:
       "A plataforma é gratuita e de código aberto. A inteligência por trás dos agentes vem de um provedor de LLM que você escolhe e no qual faz login. Esta página o conecta.",
     whichProvider: "🤔 Qual provedor?",
     whichProviderP:
       "Três são suportados e testados. Escolha um — você pode trocar mais tarde com alguns comandos.",
     kimi: "(Moonshot Pro, ~40 €/mês) — o mais barato, validado em execuções de vários dias. O ponto de partida para o grande público.",
-    codex: "(OpenAI Plus/Pro, ~100 €/mês) — equilíbrio entre qualidade e custo.",
-    claude: "(Anthropic Max x20, ~200 €/mês) — precisão máxima para pontuação e redação de CV.",
+    codex:
+      "(OpenAI Plus/Pro, ~100 €/mês) — equilíbrio entre qualidade e custo.",
+    claude:
+      "(Anthropic Max x20, ~200 €/mês) — precisão máxima para pontuação e redação de CV.",
     dedicatedStrong: "Use uma assinatura dedicada.",
     dedicatedRest:
       "Compartilhar a conta que você usa para sua IA pessoal esgota a mesma cota semanal duas vezes e a equipe atingirá os limites de taxa. Veja a",
@@ -273,7 +285,8 @@ const T: Record<Locale, Copy> = {
     connectIt: "🔌 Conecte-o",
     connectP1:
       "O assistente de configuração já pergunta pelo seu provedor e executa o login. Se você executou",
-    connectP2: "provavelmente já terminou. Para fazê-lo (ou refazê-lo) manualmente:",
+    connectP2:
+      "provavelmente já terminou. Para fazê-lo (ou refazê-lo) manualmente:",
     step1: "1. Selecione o provedor",
     step2: "2. Faça login (OAuth device flow)",
     step2P1Strong: "assinaturas, não chaves de API",

@@ -126,7 +126,11 @@ const T: Record<
   },
   fr: {
     remote: "À distance",
-    rt: { now: "maintenant", m: (n) => `il y a ${n} min`, h: (n) => `il y a ${n} h` },
+    rt: {
+      now: "maintenant",
+      m: (n) => `il y a ${n} min`,
+      h: (n) => `il y a ${n} h`,
+    },
     monthShort: "short",
     noRealtime: "Données en temps réel indisponibles.",
     loadingLive: "Chargement des données en direct…",

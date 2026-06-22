@@ -302,10 +302,7 @@ export default function PositionTypesPie({
             <span />
             <span>n</span>
             <span>%</span>
-            <span
-              className="text-center leading-tight"
-              title={t.avgScoreRange}
-            >
+            <span className="text-center leading-tight" title={t.avgScoreRange}>
               {avgLabel}
             </span>
           </li>

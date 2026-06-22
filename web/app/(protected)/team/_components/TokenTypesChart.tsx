@@ -405,9 +405,7 @@ export default function TokenTypesChart() {
             tr={tr}
           />
           <div className="px-1 mt-2 text-[10px] text-[var(--color-muted)] flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <span className="text-[var(--color-dim)]">
-              {tr("clickToggle")}
-            </span>
+            <span className="text-[var(--color-dim)]">{tr("clickToggle")}</span>
             {TYPES.map((tp) => {
               const off = hidden[tp.key];
               return (
