@@ -2540,3 +2540,11 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 .dash-agentgroup { display: flex; flex-direction: column; gap: 8px; }
 
 .dash-hours__status { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 14px; }
+
+.dash-ticket { display: flex; flex-direction: column; gap: 6px; }
+.dash-ticket__row { display: flex; gap: 8px; }
+.dash-ticket__input {
+  flex: 1; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); font: inherit; font-size: 13.5px;
+}
+.dash-ticket__input:focus { outline: none; border-color: var(--border-strong); }
