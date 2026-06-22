@@ -686,6 +686,10 @@
           <!-- Gruppo Impostazioni -->
           <div class="home__nav-group">
             <div class="home__nav-grouptitle" data-i18n="home.navgroup.settings">Impostazioni</div>
+            <button type="button" class="home__nav-item" data-section="profile" role="tab">
+              <span class="home__nav-icon">📝</span>
+              <span class="home__nav-label" data-i18n="home.nav.profile">Profilo</span>
+            </button>
             <button type="button" class="home__nav-item" data-section="provider" role="tab">
               <span class="home__nav-icon">🧠</span>
               <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
@@ -822,6 +826,15 @@
             <p class="home__subtitle" data-i18n="home.agents.subtitle">Gli agenti del team e il loro stato.</p>
           </header>
           <div id="dash-agents"></div>
+        </div>
+
+        <!-- Profilo: vista del profilo candidato (nativo) -->
+        <div class="home__panel" data-section="profile" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.profile.title">Profilo</h1>
+            <p class="home__subtitle" data-i18n="home.profile.subtitle">Il profilo del candidato usato dal team.</p>
+          </header>
+          <div id="dash-profile"></div>
         </div>
 
         <!-- Provider: vendor + plan + login -->
