@@ -72,6 +72,17 @@ contextBridge.exposeInMainWorld('launcherApi', {
   },
 })
 
+// [JHT-DASHBOARD-NATIVE] API dati per le viste native della dashboard (lane
+// renderer dev1). Il main fa il fetch autenticato al runtime locale (no CORS
+// da file://) e ritorna { ok, positions|... , error }. Contratto in
+// coordination/chat.jsonl (23:26/23:31).
+contextBridge.exposeInMainWorld('dashboardApi', {
+  // → { ok, positions: [...], error? } — positions sempre array.
+  listPositions: (opts) => ipcRenderer.invoke('dashboard:list-positions', opts || {}),
+  // → { ok, position, score, highlights, company, application, error? }
+  getPosition: (id) => ipcRenderer.invoke('dashboard:get-position', { id }),
+})
+
 contextBridge.exposeInMainWorld('setupApi', {
   getStatus: () => ipcRenderer.invoke('setup:get-status'),
   getDockerStatus: () => ipcRenderer.invoke('setup:get-docker-status'),
