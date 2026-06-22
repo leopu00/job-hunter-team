@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
 import { validateApiKey, validateEmail } from "./providers";
 import {
   Card,
@@ -10,6 +11,7 @@ import {
   btnPrimary,
   btnSecondary,
 } from "./ui";
+import { t, authSub } from "./setup-i18n";
 import type { FormState } from "./types";
 
 interface Props {
@@ -20,6 +22,7 @@ interface Props {
 }
 
 export function StepAuth({ form, set, next, back }: Props) {
+  const locale = useLocale();
   const p = form.provider!;
   const [err, setErr] = useState<string>();
   const canSub = p.authMethods.includes("subscription");
@@ -27,8 +30,8 @@ export function StepAuth({ form, set, next, back }: Props) {
   const validate = () => {
     const e =
       form.authMethod === "api_key"
-        ? validateApiKey(p, form.apiKey)
-        : validateEmail(form.email);
+        ? validateApiKey(p, form.apiKey, locale)
+        : validateEmail(form.email, locale);
     if (e) {
       setErr(e);
       return;
@@ -38,7 +41,7 @@ export function StepAuth({ form, set, next, back }: Props) {
   };
 
   return (
-    <Card title="Autenticazione" sub={`Configura l'accesso per ${p.label}`}>
+    <Card title={t("auth_title", locale)} sub={authSub(p.label, locale)}>
       {canSub && (
         <div className="flex gap-2">
           {(["api_key", "subscription"] as const).map((m) => (
@@ -78,12 +81,12 @@ export function StepAuth({ form, set, next, back }: Props) {
           />
         </Field>
       ) : (
-        <Field label="Email account" error={err}>
+        <Field label={t("auth_email_label", locale)} error={err}>
           <input
             type="email"
             autoComplete="email"
             value={form.email}
-            placeholder="nome@email.com"
+            placeholder={t("auth_email_placeholder", locale)}
             onChange={(e) => {
               set({ email: e.target.value });
               setErr(undefined);

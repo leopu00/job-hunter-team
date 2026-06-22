@@ -2,11 +2,108 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
 import type { CronJob, CronListResponse } from "./types";
 import { CronJobRow } from "./CronJobRow";
 import { CronForm } from "./CronForm";
 
+/* ── i18n inline ─────────────────────────────────────────────────── */
+const T: Record<string, Record<string, string>> = {
+  err_load: {
+    it: "Errore caricamento",
+    en: "Loading error",
+    hu: "Betöltési hiba",
+    es: "Error de carga",
+    de: "Ladefehler",
+    fr: "Erreur de chargement",
+    pt: "Erro de carregamento",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  subtitle: {
+    it: "{a} attivi · {p} in pausa",
+    en: "{a} active · {p} paused",
+    hu: "{a} aktív · {p} szüneteltetve",
+    es: "{a} activos · {p} en pausa",
+    de: "{a} aktiv · {p} pausiert",
+    fr: "{a} actifs · {p} en pause",
+    pt: "{a} ativos · {p} em pausa",
+  },
+  cancel: {
+    it: "Annulla",
+    en: "Cancel",
+    hu: "Mégse",
+    es: "Cancelar",
+    de: "Abbrechen",
+    fr: "Annuler",
+    pt: "Cancelar",
+  },
+  new_job: {
+    it: "+ Nuovo job",
+    en: "+ New job",
+    hu: "+ Új feladat",
+    es: "+ Nueva tarea",
+    de: "+ Neuer Job",
+    fr: "+ Nouvelle tâche",
+    pt: "+ Nova tarefa",
+  },
+  new_job_title: {
+    it: "Nuovo job",
+    en: "New job",
+    hu: "Új feladat",
+    es: "Nueva tarea",
+    de: "Neuer Job",
+    fr: "Nouvelle tâche",
+    pt: "Nova tarefa",
+  },
+  active_jobs: {
+    it: "Job attivi",
+    en: "Active jobs",
+    hu: "Aktív feladatok",
+    es: "Tareas activas",
+    de: "Aktive Jobs",
+    fr: "Tâches actives",
+    pt: "Tarefas ativas",
+  },
+  refresh_8s: {
+    it: "aggiornamento ogni 8s",
+    en: "refresh every 8s",
+    hu: "frissítés 8 mp-enként",
+    es: "actualización cada 8s",
+    de: "Aktualisierung alle 8 Sek.",
+    fr: "actualisation toutes les 8s",
+    pt: "atualização a cada 8s",
+  },
+  empty: {
+    it: "Nessun job configurato.",
+    en: "No jobs configured.",
+    hu: "Nincs konfigurált feladat.",
+    es: "Ninguna tarea configurada.",
+    de: "Keine Jobs konfiguriert.",
+    fr: "Aucune tâche configurée.",
+    pt: "Nenhuma tarefa configurada.",
+  },
+  empty_hint: {
+    it: 'Usa "+ Nuovo job" per crearne uno.',
+    en: 'Use "+ New job" to create one.',
+    hu: 'Használd a "+ Új feladat" gombot egy létrehozásához.',
+    es: 'Usa "+ Nueva tarea" para crear una.',
+    de: 'Nutze "+ Neuer Job", um einen zu erstellen.',
+    fr: 'Utilisez "+ Nouvelle tâche" pour en créer une.',
+    pt: 'Use "+ Nova tarefa" para criar uma.',
+  },
+};
+
 export default function CronPage() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [jobs, setJobs] = useState<CronJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -18,10 +115,10 @@ export default function CronPage() {
       const data = (await res.json()) as CronListResponse;
       setJobs(data.jobs ?? []);
     } catch {
-      setError("Errore caricamento");
+      setError(T.err_load[locale] ?? T.err_load.en);
     }
     setLoading(false);
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     load();
@@ -98,8 +195,10 @@ export default function CronPage() {
               style={{ color: "var(--color-muted)" }}
             >
               {loading
-                ? "Caricamento…"
-                : `${active} attivi · ${inactive} in pausa`}
+                ? tr("loading")
+                : tr("subtitle")
+                    .replace("{a}", String(active))
+                    .replace("{p}", String(inactive))}
             </p>
           </div>
           <button
@@ -115,7 +214,7 @@ export default function CronPage() {
                 : { background: "var(--color-green)", color: "#000" }
             }
           >
-            {showForm ? "Annulla" : "+ Nuovo job"}
+            {showForm ? tr("cancel") : tr("new_job")}
           </button>
         </div>
 
@@ -143,7 +242,7 @@ export default function CronPage() {
                 className="text-[11px] font-bold tracking-widest uppercase"
                 style={{ color: "var(--color-bright)" }}
               >
-                Nuovo job
+                {tr("new_job_title")}
               </p>
             </div>
             <CronForm
@@ -163,10 +262,10 @@ export default function CronPage() {
               className="text-[11px] font-bold tracking-widest uppercase"
               style={{ color: "var(--color-bright)" }}
             >
-              Job attivi
+              {tr("active_jobs")}
             </p>
             <p className="text-[10px]" style={{ color: "var(--color-dim)" }}>
-              aggiornamento ogni 8s
+              {tr("refresh_8s")}
             </p>
           </div>
           {loading ? (
@@ -176,7 +275,7 @@ export default function CronPage() {
               role="status"
               aria-live="polite"
             >
-              Caricamento…
+              {tr("loading")}
             </div>
           ) : jobs.length === 0 ? (
             <div className="px-6 py-8 text-center">
@@ -184,13 +283,13 @@ export default function CronPage() {
                 className="text-[12px]"
                 style={{ color: "var(--color-muted)" }}
               >
-                Nessun job configurato.
+                {tr("empty")}
               </p>
               <p
                 className="text-[10px] mt-1"
                 style={{ color: "var(--color-dim)" }}
               >
-                Usa &quot;+ Nuovo job&quot; per crearne uno.
+                {tr("empty_hint")}
               </p>
             </div>
           ) : (

@@ -2,6 +2,125 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<
+  Locale,
+  {
+    status_connected: string;
+    status_configured: string;
+    status_disconnected: string;
+    last_change: string;
+    disconnect: string;
+    configure: string;
+    breadcrumb: string;
+    title: string;
+    connected: (n: number) => string;
+    configured: (n: number) => string;
+    absent: (n: number) => string;
+    loading: string;
+  }
+> = {
+  it: {
+    status_connected: "Connessa",
+    status_configured: "Configurata",
+    status_disconnected: "Non configurata",
+    last_change: "Ultima modifica:",
+    disconnect: "Disconnetti",
+    configure: "Configura",
+    breadcrumb: "Integrazioni",
+    title: "Integrazioni",
+    connected: (n) => `${n} connesse`,
+    configured: (n) => `${n} configurate`,
+    absent: (n) => `${n} assenti`,
+    loading: "Caricamento…",
+  },
+  en: {
+    status_connected: "Connected",
+    status_configured: "Configured",
+    status_disconnected: "Not configured",
+    last_change: "Last change:",
+    disconnect: "Disconnect",
+    configure: "Configure",
+    breadcrumb: "Integrations",
+    title: "Integrations",
+    connected: (n) => `${n} connected`,
+    configured: (n) => `${n} configured`,
+    absent: (n) => `${n} absent`,
+    loading: "Loading…",
+  },
+  es: {
+    status_connected: "Conectada",
+    status_configured: "Configurada",
+    status_disconnected: "No configurada",
+    last_change: "Última modificación:",
+    disconnect: "Desconectar",
+    configure: "Configurar",
+    breadcrumb: "Integraciones",
+    title: "Integraciones",
+    connected: (n) => `${n} conectadas`,
+    configured: (n) => `${n} configuradas`,
+    absent: (n) => `${n} ausentes`,
+    loading: "Cargando…",
+  },
+  fr: {
+    status_connected: "Connectée",
+    status_configured: "Configurée",
+    status_disconnected: "Non configurée",
+    last_change: "Dernière modification :",
+    disconnect: "Déconnecter",
+    configure: "Configurer",
+    breadcrumb: "Intégrations",
+    title: "Intégrations",
+    connected: (n) => `${n} connectées`,
+    configured: (n) => `${n} configurées`,
+    absent: (n) => `${n} absentes`,
+    loading: "Chargement…",
+  },
+  de: {
+    status_connected: "Verbunden",
+    status_configured: "Konfiguriert",
+    status_disconnected: "Nicht konfiguriert",
+    last_change: "Letzte Änderung:",
+    disconnect: "Trennen",
+    configure: "Konfigurieren",
+    breadcrumb: "Integrationen",
+    title: "Integrationen",
+    connected: (n) => `${n} verbunden`,
+    configured: (n) => `${n} konfiguriert`,
+    absent: (n) => `${n} fehlend`,
+    loading: "Wird geladen…",
+  },
+  hu: {
+    status_connected: "Csatlakoztatva",
+    status_configured: "Beállítva",
+    status_disconnected: "Nincs beállítva",
+    last_change: "Utolsó módosítás:",
+    disconnect: "Leválasztás",
+    configure: "Beállítás",
+    breadcrumb: "Integrációk",
+    title: "Integrációk",
+    connected: (n) => `${n} csatlakoztatva`,
+    configured: (n) => `${n} beállítva`,
+    absent: (n) => `${n} hiányzik`,
+    loading: "Betöltés…",
+  },
+  pt: {
+    status_connected: "Conectada",
+    status_configured: "Configurada",
+    status_disconnected: "Não configurada",
+    last_change: "Última alteração:",
+    disconnect: "Desconectar",
+    configure: "Configurar",
+    breadcrumb: "Integrações",
+    title: "Integrações",
+    connected: (n) => `${n} conectadas`,
+    configured: (n) => `${n} configuradas`,
+    absent: (n) => `${n} ausentes`,
+    loading: "Carregando…",
+  },
+};
 
 type Status = "connected" | "configured" | "disconnected";
 type Integration = {
@@ -21,27 +140,30 @@ const ICONS: Record<string, string> = {
   vercel: "▲",
 };
 
-const STATUS_CFG: Record<Status, { color: string; bg: string; label: string }> =
-  {
-    connected: {
-      color: "var(--color-green)",
-      bg: "rgba(0,232,122,0.08)",
-      label: "Connessa",
-    },
-    configured: {
-      color: "var(--color-yellow)",
-      bg: "rgba(255,196,0,0.08)",
-      label: "Configurata",
-    },
-    disconnected: {
-      color: "var(--color-dim)",
-      bg: "transparent",
-      label: "Non configurata",
-    },
-  };
+const STATUS_CFG: Record<Status, { color: string; bg: string }> = {
+  connected: {
+    color: "var(--color-green)",
+    bg: "rgba(0,232,122,0.08)",
+  },
+  configured: {
+    color: "var(--color-yellow)",
+    bg: "rgba(255,196,0,0.08)",
+  },
+  disconnected: {
+    color: "var(--color-dim)",
+    bg: "transparent",
+  },
+};
 
 function IntCard({ i }: { i: Integration }) {
-  const { color, bg, label } = STATUS_CFG[i.status];
+  const t = T[useLocale()];
+  const { color, bg } = STATUS_CFG[i.status];
+  const label =
+    i.status === "connected"
+      ? t.status_connected
+      : i.status === "configured"
+        ? t.status_configured
+        : t.status_disconnected;
   return (
     <div
       className="flex flex-col gap-4 p-5 rounded-xl transition-all"
@@ -100,7 +222,7 @@ function IntCard({ i }: { i: Integration }) {
           )}
           {i.last_sync && (
             <p className="text-[9px]" style={{ color: "var(--color-dim)" }}>
-              Ultima modifica: {i.last_sync}
+              {t.last_change} {i.last_sync}
             </p>
           )}
         </div>
@@ -115,13 +237,14 @@ function IntCard({ i }: { i: Integration }) {
           background: "transparent",
         }}
       >
-        {i.status === "connected" ? "Disconnetti" : "Configura"} →
+        {i.status === "connected" ? t.disconnect : t.configure} →
       </Link>
     </div>
   );
 }
 
 export default function IntegrationsPage() {
+  const t = T[useLocale()];
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [summary, setSummary] = useState({
     connected: 0,
@@ -163,7 +286,7 @@ export default function IntegrationsPage() {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Integrazioni
+            {t.breadcrumb}
           </span>
         </nav>
         <div className="flex items-end justify-between flex-wrap gap-3">
@@ -172,19 +295,19 @@ export default function IntegrationsPage() {
               className="text-xl font-bold"
               style={{ color: "var(--color-white)" }}
             >
-              Integrazioni
+              {t.title}
             </h1>
           </div>
           {!loading && (
             <div className="flex gap-3 text-[10px] font-mono">
               <span style={{ color: "var(--color-green)" }}>
-                {summary.connected} connesse
+                {t.connected(summary.connected)}
               </span>
               <span style={{ color: "var(--color-yellow)" }}>
-                {summary.configured} configurate
+                {t.configured(summary.configured)}
               </span>
               <span style={{ color: "var(--color-dim)" }}>
-                {summary.disconnected} assenti
+                {t.absent(summary.disconnected)}
               </span>
             </div>
           )}
@@ -197,7 +320,7 @@ export default function IntegrationsPage() {
             role="status"
             aria-live="polite"
           >
-            Caricamento…
+            {t.loading}
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

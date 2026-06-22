@@ -2,20 +2,179 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 import type { PositionTicket } from "@/lib/types";
 
 // Sezione "Richieste al team" sulla pagina posizione. L'utente scrive una
 // richiesta testuale libera (popup) → ticket 'open'; il Capitano l'assegna a un
 // agente; l'agente risolve con una risposta testuale che compare qui sotto.
-const STATUS_LABEL: Record<string, string> = {
-  open: "In attesa",
-  assigned: "In lavorazione",
-  resolved: "Risolto",
-};
+// I CODICI di status (open/assigned/resolved) sono stabili nel DB; le label sono i18n.
+type TicketStatus = "open" | "assigned" | "resolved";
+
 const STATUS_COLOR: Record<string, string> = {
   open: "var(--color-yellow)",
   assigned: "var(--color-purple)",
   resolved: "var(--color-green)",
+};
+
+const T: Record<
+  Locale,
+  {
+    statusLabel: Record<TicketStatus, string>;
+    sectionTitle: string;
+    newRequest: string;
+    close: string;
+    placeholder: string;
+    cancel: string;
+    sending: string;
+    sendRequest: string;
+    writeRequest: string;
+    networkError: string;
+    emptyState: string;
+    teamResponse: string;
+  }
+> = {
+  it: {
+    statusLabel: {
+      open: "In attesa",
+      assigned: "In lavorazione",
+      resolved: "Risolto",
+    },
+    sectionTitle: "Richieste al team",
+    newRequest: "+ Nuova richiesta",
+    close: "Chiudi",
+    placeholder:
+      "Scrivi cosa vuoi che il team faccia su questa offerta (es. verifica lo stipendio reale, controlla la cultura aziendale, riassumi i requisiti…)",
+    cancel: "Annulla",
+    sending: "Invio…",
+    sendRequest: "Invia richiesta",
+    writeRequest: "Scrivi la richiesta",
+    networkError: "Errore di rete",
+    emptyState:
+      "Nessuna richiesta. Usa “Nuova richiesta” per chiedere al team qualcosa su questa offerta.",
+    teamResponse: "Risposta del team",
+  },
+  en: {
+    statusLabel: {
+      open: "Pending",
+      assigned: "In progress",
+      resolved: "Resolved",
+    },
+    sectionTitle: "Requests to the team",
+    newRequest: "+ New request",
+    close: "Close",
+    placeholder:
+      "Write what you want the team to do on this position (e.g. verify the real salary, check company culture, summarize the requirements…)",
+    cancel: "Cancel",
+    sending: "Sending…",
+    sendRequest: "Send request",
+    writeRequest: "Write the request",
+    networkError: "Network error",
+    emptyState:
+      "No requests. Use “New request” to ask the team something about this position.",
+    teamResponse: "Team response",
+  },
+  es: {
+    statusLabel: {
+      open: "En espera",
+      assigned: "En proceso",
+      resolved: "Resuelto",
+    },
+    sectionTitle: "Solicitudes al equipo",
+    newRequest: "+ Nueva solicitud",
+    close: "Cerrar",
+    placeholder:
+      "Escribe qué quieres que el equipo haga sobre esta posición (p. ej. verifica el salario real, revisa la cultura de la empresa, resume los requisitos…)",
+    cancel: "Cancelar",
+    sending: "Enviando…",
+    sendRequest: "Enviar solicitud",
+    writeRequest: "Escribe la solicitud",
+    networkError: "Error de red",
+    emptyState:
+      "Sin solicitudes. Usa “Nueva solicitud” para pedirle algo al equipo sobre esta posición.",
+    teamResponse: "Respuesta del equipo",
+  },
+  fr: {
+    statusLabel: {
+      open: "En attente",
+      assigned: "En cours",
+      resolved: "Résolu",
+    },
+    sectionTitle: "Demandes à l'équipe",
+    newRequest: "+ Nouvelle demande",
+    close: "Fermer",
+    placeholder:
+      "Écrivez ce que vous voulez que l'équipe fasse sur ce poste (ex. vérifier le salaire réel, contrôler la culture d'entreprise, résumer les exigences…)",
+    cancel: "Annuler",
+    sending: "Envoi…",
+    sendRequest: "Envoyer la demande",
+    writeRequest: "Écrivez la demande",
+    networkError: "Erreur réseau",
+    emptyState:
+      "Aucune demande. Utilisez « Nouvelle demande » pour demander quelque chose à l'équipe sur ce poste.",
+    teamResponse: "Réponse de l'équipe",
+  },
+  de: {
+    statusLabel: {
+      open: "Ausstehend",
+      assigned: "In Bearbeitung",
+      resolved: "Gelöst",
+    },
+    sectionTitle: "Anfragen an das Team",
+    newRequest: "+ Neue Anfrage",
+    close: "Schließen",
+    placeholder:
+      "Schreibe, was das Team bei dieser Stelle tun soll (z. B. das echte Gehalt prüfen, die Unternehmenskultur checken, die Anforderungen zusammenfassen…)",
+    cancel: "Abbrechen",
+    sending: "Wird gesendet…",
+    sendRequest: "Anfrage senden",
+    writeRequest: "Anfrage eingeben",
+    networkError: "Netzwerkfehler",
+    emptyState:
+      "Keine Anfragen. Nutze „Neue Anfrage“, um das Team etwas zu dieser Stelle zu fragen.",
+    teamResponse: "Antwort des Teams",
+  },
+  hu: {
+    statusLabel: {
+      open: "Várakozik",
+      assigned: "Folyamatban",
+      resolved: "Megoldva",
+    },
+    sectionTitle: "Kérések a csapatnak",
+    newRequest: "+ Új kérés",
+    close: "Bezárás",
+    placeholder:
+      "Írd le, mit szeretnél, hogy a csapat tegyen ezzel az állással (pl. ellenőrizze a valós fizetést, nézze meg a céges kultúrát, foglalja össze a követelményeket…)",
+    cancel: "Mégse",
+    sending: "Küldés…",
+    sendRequest: "Kérés küldése",
+    writeRequest: "Írd meg a kérést",
+    networkError: "Hálózati hiba",
+    emptyState:
+      "Nincs kérés. Használd az „Új kérés” gombot, hogy kérj valamit a csapattól ehhez az álláshoz.",
+    teamResponse: "A csapat válasza",
+  },
+  pt: {
+    statusLabel: {
+      open: "Em espera",
+      assigned: "Em andamento",
+      resolved: "Resolvido",
+    },
+    sectionTitle: "Pedidos à equipa",
+    newRequest: "+ Novo pedido",
+    close: "Fechar",
+    placeholder:
+      "Escreve o que queres que a equipa faça nesta vaga (ex. verificar o salário real, analisar a cultura da empresa, resumir os requisitos…)",
+    cancel: "Cancelar",
+    sending: "Enviando…",
+    sendRequest: "Enviar pedido",
+    writeRequest: "Escreve o pedido",
+    networkError: "Erro de rede",
+    emptyState:
+      "Sem pedidos. Usa “Novo pedido” para pedir algo à equipa sobre esta vaga.",
+    teamResponse: "Resposta da equipa",
+  },
 };
 
 export function TicketPanel({
@@ -25,6 +184,7 @@ export function TicketPanel({
   legacyId: number;
   tickets: PositionTicket[];
 }) {
+  const t = T[useLocale()];
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -35,7 +195,7 @@ export function TicketPanel({
   const submit = async () => {
     setError(null);
     if (!text.trim()) {
-      setError("Scrivi la richiesta");
+      setError(t.writeRequest);
       return;
     }
     setBusy(true);
@@ -55,7 +215,7 @@ export function TicketPanel({
       setOpen(false);
       startTransition(() => router.refresh());
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Errore di rete");
+      setError(e instanceof Error ? e.message : t.networkError);
     }
     setBusy(false);
   };
@@ -63,7 +223,7 @@ export function TicketPanel({
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <span className="section-label">Richieste al team</span>
+        <span className="section-label">{t.sectionTitle}</span>
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
@@ -73,7 +233,7 @@ export function TicketPanel({
             color: "var(--color-purple)",
           }}
         >
-          {open ? "Chiudi" : "+ Nuova richiesta"}
+          {open ? t.close : t.newRequest}
         </button>
       </div>
 
@@ -90,7 +250,7 @@ export function TicketPanel({
             onChange={(e) => setText(e.target.value)}
             rows={3}
             maxLength={2000}
-            placeholder="Scrivi cosa vuoi che il team faccia su questa offerta (es. verifica lo stipendio reale, controlla la cultura aziendale, riassumi i requisiti…)"
+            placeholder={t.placeholder}
             className="w-full p-2 rounded-md border text-[13px] resize-y"
             style={{
               borderColor: "var(--color-border)",
@@ -109,7 +269,7 @@ export function TicketPanel({
               className="px-3 py-1.5 rounded-lg text-[11px]"
               style={{ color: "var(--color-dim)" }}
             >
-              Annulla
+              {t.cancel}
             </button>
             <button
               type="button"
@@ -121,7 +281,7 @@ export function TicketPanel({
                 color: "var(--color-purple)",
               }}
             >
-              {busy ? "Invio…" : "Invia richiesta"}
+              {busy ? t.sending : t.sendRequest}
             </button>
           </div>
           {error && (
@@ -134,14 +294,13 @@ export function TicketPanel({
 
       {tickets.length === 0 ? (
         <p className="text-[12px]" style={{ color: "var(--color-dim)" }}>
-          Nessuna richiesta. Usa “Nuova richiesta” per chiedere al team qualcosa
-          su questa offerta.
+          {t.emptyState}
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {tickets.map((t) => (
+          {tickets.map((tk) => (
             <li
-              key={t.id}
+              key={tk.id}
               className="p-3 rounded-lg border"
               style={{ borderColor: "var(--color-border)" }}
             >
@@ -149,18 +308,18 @@ export function TicketPanel({
                 <span
                   className="text-[10px] uppercase font-semibold tracking-wide"
                   style={{
-                    color: STATUS_COLOR[t.status] ?? "var(--color-dim)",
+                    color: STATUS_COLOR[tk.status] ?? "var(--color-dim)",
                   }}
                 >
-                  {STATUS_LABEL[t.status] ?? t.status}
-                  {t.assigned_agent ? ` · ${t.assigned_agent}` : ""}
+                  {t.statusLabel[tk.status as TicketStatus] ?? tk.status}
+                  {tk.assigned_agent ? ` · ${tk.assigned_agent}` : ""}
                 </span>
                 <span
                   className="text-[10px]"
                   style={{ color: "var(--color-dim)" }}
                 >
-                  {t.created_at
-                    ? t.created_at.slice(0, 16).replace("T", " ")
+                  {tk.created_at
+                    ? tk.created_at.slice(0, 16).replace("T", " ")
                     : ""}
                 </span>
               </div>
@@ -168,9 +327,9 @@ export function TicketPanel({
                 className="text-[13px] mt-1"
                 style={{ color: "var(--color-text)" }}
               >
-                {t.request_text}
+                {tk.request_text}
               </p>
-              {t.response_text && (
+              {tk.response_text && (
                 <div
                   className="mt-2 pl-3 border-l-2"
                   style={{ borderColor: "var(--color-green)" }}
@@ -179,13 +338,13 @@ export function TicketPanel({
                     className="text-[10px] uppercase font-semibold"
                     style={{ color: "var(--color-green)" }}
                   >
-                    Risposta del team
+                    {t.teamResponse}
                   </span>
                   <p
                     className="text-[13px]"
                     style={{ color: "var(--color-text)" }}
                   >
-                    {t.response_text}
+                    {tk.response_text}
                   </p>
                 </div>
               )}

@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useLocale } from "@/lib/use-locale";
 import { Card, NavButtons } from "./ui";
+import { t } from "./setup-i18n";
 
 const STEPS = ["prereq", "model", "apikey", "health"] as const;
 type Step = (typeof STEPS)[number];
-const LABELS: Record<Step, string> = {
-  prereq: "Prerequisiti",
-  model: "Modello",
-  apikey: "API Key",
-  health: "Health",
+const STEP_LABEL_KEYS: Record<Step, string> = {
+  prereq: "step_prereq",
+  model: "step_model",
+  apikey: "step_apikey",
+  health: "step_health",
 };
 const PROVIDERS = [
   { v: "claude", l: "Anthropic Claude" },
@@ -23,9 +25,9 @@ const MODELS: Record<string, string[]> = {
 };
 
 interface Check {
-  label: string;
+  labelKey: string;
   ok: boolean;
-  hint?: string;
+  hintKey?: string;
 }
 interface FormState {
   provider: string;
@@ -34,6 +36,7 @@ interface FormState {
 }
 
 export default function SetupPage() {
+  const locale = useLocale();
   const [step, setStep] = useState<Step>("prereq");
   const [form, setForm] = useState<FormState>({
     provider: "claude",
@@ -56,21 +59,21 @@ export default function SetupPage() {
     if (step !== "prereq") return;
     setLoading(true);
     (async () => {
-      const items: Check[] = [{ label: "Browser moderno", ok: true }];
+      const items: Check[] = [{ labelKey: "check_browser", ok: true }];
       try {
         const r = await fetch("/api/setup");
         const d = await r.json();
-        items.push({ label: "API server raggiungibile", ok: r.ok });
+        items.push({ labelKey: "check_api_reachable", ok: r.ok });
         items.push({
-          label: "Config ~/.jht/jht.config.json",
+          labelKey: "check_config",
           ok: d.exists,
-          hint: d.exists ? undefined : "Verrà creata al completamento",
+          hintKey: d.exists ? undefined : "check_config_will_create",
         });
       } catch {
         items.push({
-          label: "API server raggiungibile",
+          labelKey: "check_api_reachable",
           ok: false,
-          hint: "Verifica che Next.js sia avviato",
+          hintKey: "check_api_fail_hint",
         });
       }
       setChecks(items);
@@ -98,14 +101,14 @@ export default function SetupPage() {
       const d = await r.json();
       if (r.ok) {
         setHealth("ok");
-        setHealthMsg("Configurazione salvata.");
+        setHealthMsg(t("health_config_saved", locale));
       } else {
         setHealth("error");
-        setHealthMsg(d.error || "Errore salvataggio");
+        setHealthMsg(d.error || t("err_save", locale));
       }
     } catch {
       setHealth("error");
-      setHealthMsg("Errore di rete");
+      setHealthMsg(t("err_network", locale));
     }
   };
 
@@ -124,7 +127,7 @@ export default function SetupPage() {
               className="text-[9px] font-semibold tracking-[0.2em] uppercase"
               style={{ color: "var(--color-green)" }}
             >
-              setup
+              {t("brand_setup", locale)}
             </span>
           </div>
           <h1
@@ -157,7 +160,7 @@ export default function SetupPage() {
                   color: i === idx ? "var(--color-bright)" : "var(--color-dim)",
                 }}
               >
-                {LABELS[s]}
+                {t(STEP_LABEL_KEYS[s], locale)}
               </span>
               {i < STEPS.length - 1 && (
                 <span className="text-[var(--color-border)] mx-1">›</span>
@@ -167,7 +170,7 @@ export default function SetupPage() {
         </div>
 
         {step === "prereq" && (
-          <Card title="Prerequisiti" sub="Verifica automatica ambiente">
+          <Card title={t("prereq_title", locale)} sub={t("prereq_sub", locale)}>
             {loading ? (
               <p
                 className="text-[11px] text-center py-4"
@@ -175,7 +178,7 @@ export default function SetupPage() {
                 aria-live="polite"
                 style={{ color: "var(--color-muted)" }}
               >
-                Controllo in corso…
+                {t("prereq_checking", locale)}
               </p>
             ) : (
               checks.map((c, i) => (
@@ -193,14 +196,14 @@ export default function SetupPage() {
                       className="text-[12px]"
                       style={{ color: "var(--color-bright)" }}
                     >
-                      {c.label}
+                      {t(c.labelKey, locale)}
                     </p>
-                    {c.hint && (
+                    {c.hintKey && (
                       <p
                         className="text-[10px]"
                         style={{ color: "var(--color-dim)" }}
                       >
-                        {c.hint}
+                        {t(c.hintKey, locale)}
                       </p>
                     )}
                   </div>
@@ -212,18 +215,18 @@ export default function SetupPage() {
         )}
 
         {step === "model" && (
-          <Card title="Modello AI" sub="Provider e modello LLM">
+          <Card title={t("model_title", locale)} sub={t("model_sub", locale)}>
             <div className="flex flex-col gap-1">
               <label
                 className="text-[10px] font-semibold tracking-widest uppercase"
                 style={{ color: "var(--color-muted)" }}
               >
-                Provider
+                {t("lbl_provider", locale)}
               </label>
               <select
                 value={form.provider}
                 onChange={(e) => set({ provider: e.target.value, model: "" })}
-                aria-label="Provider AI"
+                aria-label={t("aria_provider", locale)}
                 className={inp}
                 style={{ color: "var(--color-bright)", cursor: "pointer" }}
               >
@@ -239,16 +242,16 @@ export default function SetupPage() {
                 className="text-[10px] font-semibold tracking-widest uppercase"
                 style={{ color: "var(--color-muted)" }}
               >
-                Modello
+                {t("lbl_model", locale)}
               </label>
               <select
                 value={form.model}
                 onChange={(e) => set({ model: e.target.value })}
-                aria-label="Modello AI"
+                aria-label={t("aria_model", locale)}
                 className={inp}
                 style={{ color: "var(--color-bright)", cursor: "pointer" }}
               >
-                <option value="">— automatico —</option>
+                <option value="">{t("auto_option", locale)}</option>
                 {(MODELS[form.provider] ?? []).map((m) => (
                   <option key={m} value={m}>
                     {m}
@@ -261,14 +264,17 @@ export default function SetupPage() {
         )}
 
         {step === "apikey" && (
-          <Card title="API Key" sub={`Chiave per ${form.provider}`}>
+          <Card
+            title={t("apikey_title", locale)}
+            sub={`${t("apikey_for", locale)} ${form.provider}`}
+          >
             <div className="flex flex-col gap-1">
               <label
                 htmlFor="setup-apikey"
                 className="text-[10px] font-semibold tracking-widest uppercase"
                 style={{ color: "var(--color-muted)" }}
               >
-                Chiave API
+                {t("lbl_api_key", locale)}
               </label>
               <input
                 id="setup-apikey"
@@ -281,7 +287,7 @@ export default function SetupPage() {
                 autoComplete="off"
               />
               <p className="text-[10px]" style={{ color: "var(--color-dim)" }}>
-                Salvata in ~/.jht/jht.config.json
+                {t("apikey_saved_in", locale)}
               </p>
             </div>
             <NavButtons
@@ -291,13 +297,13 @@ export default function SetupPage() {
                 save();
               }}
               disabled={!form.apiKey.trim()}
-              nextLabel="Salva e verifica"
+              nextLabel={t("nav_save_verify", locale)}
             />
           </Card>
         )}
 
         {step === "health" && (
-          <Card title="Health Check" sub="Verifica salvataggio configurazione">
+          <Card title={t("health_title", locale)} sub={t("health_sub", locale)}>
             <div className="flex flex-col items-center gap-3 py-4">
               {health === "loading" && (
                 <>
@@ -313,7 +319,7 @@ export default function SetupPage() {
                     className="text-[11px]"
                     style={{ color: "var(--color-muted)" }}
                   >
-                    Salvataggio in corso…
+                    {t("health_saving", locale)}
                   </p>
                 </>
               )}
@@ -336,7 +342,8 @@ export default function SetupPage() {
                     className="text-[10px]"
                     style={{ color: "var(--color-dim)" }}
                   >
-                    Provider: {form.provider} · ~/.jht
+                    {t("health_provider_line", locale)}: {form.provider} ·
+                    ~/.jht
                   </p>
                 </>
               )}
@@ -355,15 +362,14 @@ export default function SetupPage() {
                     {healthMsg.includes("ENOENT") ||
                     healthMsg.includes("mkdir") ||
                     healthMsg.includes("no such file")
-                      ? "Questa funzione richiede il server locale"
-                      : healthMsg || "Configurazione non salvata"}
+                      ? t("health_needs_local", locale)
+                      : healthMsg || t("health_not_saved", locale)}
                   </p>
                   <p
                     className="text-[10px] leading-relaxed text-center"
                     style={{ color: "var(--color-muted)" }}
                   >
-                    Il salvataggio su disco richiede l&apos;app in esecuzione
-                    sul tuo computer. Puoi comunque proseguire alla dashboard.
+                    {t("health_local_hint", locale)}
                   </p>
                   <button
                     onClick={() => save()}
@@ -373,7 +379,7 @@ export default function SetupPage() {
                       color: "var(--color-bright)",
                     }}
                   >
-                    Riprova
+                    {t("nav_retry", locale)}
                   </button>
                 </>
               )}
@@ -383,7 +389,7 @@ export default function SetupPage() {
               onNext={() => {
                 window.location.href = "/dashboard";
               }}
-              nextLabel="Vai alla dashboard"
+              nextLabel={t("nav_go_dashboard", locale)}
               disabled={health === "loading"}
             />
           </Card>

@@ -2,12 +2,91 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 
-const PRESETS: { label: string; days: number }[] = [
-  { label: "7g", days: 7 },
-  { label: "30g", days: 30 },
-  { label: "90g", days: 90 },
-  { label: "1 anno", days: 365 },
+const T: Record<
+  Locale,
+  {
+    d7: string;
+    d30: string;
+    d90: string;
+    y1: string;
+    from: string;
+    to: string;
+    days: (n: number) => string;
+  }
+> = {
+  it: {
+    d7: "7g",
+    d30: "30g",
+    d90: "90g",
+    y1: "1 anno",
+    from: "dal",
+    to: "al",
+    days: (n) => `${n} giorni`,
+  },
+  en: {
+    d7: "7d",
+    d30: "30d",
+    d90: "90d",
+    y1: "1 year",
+    from: "from",
+    to: "to",
+    days: (n) => `${n} days`,
+  },
+  es: {
+    d7: "7d",
+    d30: "30d",
+    d90: "90d",
+    y1: "1 año",
+    from: "del",
+    to: "al",
+    days: (n) => `${n} días`,
+  },
+  fr: {
+    d7: "7j",
+    d30: "30j",
+    d90: "90j",
+    y1: "1 an",
+    from: "du",
+    to: "au",
+    days: (n) => `${n} jours`,
+  },
+  de: {
+    d7: "7T",
+    d30: "30T",
+    d90: "90T",
+    y1: "1 Jahr",
+    from: "von",
+    to: "bis",
+    days: (n) => `${n} Tage`,
+  },
+  hu: {
+    d7: "7n",
+    d30: "30n",
+    d90: "90n",
+    y1: "1 év",
+    from: "tól",
+    to: "ig",
+    days: (n) => `${n} nap`,
+  },
+  pt: {
+    d7: "7d",
+    d30: "30d",
+    d90: "90d",
+    y1: "1 ano",
+    from: "de",
+    to: "até",
+    days: (n) => `${n} dias`,
+  },
+};
+
+const PRESET_DAYS: { key: "d7" | "d30" | "d90" | "y1"; days: number }[] = [
+  { key: "d7", days: 7 },
+  { key: "d30", days: 30 },
+  { key: "d90", days: 90 },
+  { key: "y1", days: 365 },
 ];
 
 // Oggi in UTC come 'YYYY-MM-DD' (coerente con l'asse server).
@@ -33,6 +112,7 @@ export default function RangePicker({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const t = T[useLocale()];
 
   const apply = useCallback(
     (nextFrom: string, nextTo: string) => {
@@ -55,11 +135,11 @@ export default function RangePicker({
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-8">
       {/* Preset rapidi */}
       <div className="flex items-center gap-1.5">
-        {PRESETS.map((p) => {
+        {PRESET_DAYS.map((p) => {
           const active = days === p.days && to === today;
           return (
             <button
-              key={p.label}
+              key={p.key}
               onClick={() => applyPreset(p.days)}
               className="px-2.5 py-1 rounded-md text-[10px] font-semibold tracking-wide transition-colors"
               style={{
@@ -69,7 +149,7 @@ export default function RangePicker({
                 fontFamily: "inherit",
               }}
             >
-              {p.label}
+              {t[p.key]}
             </button>
           );
         })}
@@ -78,7 +158,7 @@ export default function RangePicker({
       {/* Range custom */}
       <div className="flex items-center gap-2">
         <span className="text-[10px] text-[var(--color-dim)] uppercase tracking-widest">
-          dal
+          {t.from}
         </span>
         <input
           type="date"
@@ -89,7 +169,7 @@ export default function RangePicker({
           style={{ colorScheme: "dark", fontFamily: "inherit" }}
         />
         <span className="text-[10px] text-[var(--color-dim)] uppercase tracking-widest">
-          al
+          {t.to}
         </span>
         <input
           type="date"
@@ -101,7 +181,7 @@ export default function RangePicker({
           style={{ colorScheme: "dark", fontFamily: "inherit" }}
         />
         <span className="text-[10px] text-[var(--color-dim)] tabular-nums">
-          · {days} giorni
+          · {t.days(days)}
         </span>
       </div>
     </div>

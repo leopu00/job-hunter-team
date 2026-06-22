@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale } from "@/lib/use-locale";
 import type { CronJob } from "./types";
 import { scheduleLabel, nextRunLabel } from "./types";
 
@@ -15,7 +16,57 @@ const STATUS_COLOR: Record<string, string> = {
   skipped: "var(--color-yellow)",
 };
 
+const T: Record<string, Record<string, string>> = {
+  pause: {
+    it: "pausa",
+    en: "pause",
+    hu: "szünet",
+    es: "pausar",
+    de: "Pause",
+    fr: "pause",
+    pt: "pausar",
+  },
+  resume: {
+    it: "riprendi",
+    en: "resume",
+    hu: "folytatás",
+    es: "reanudar",
+    de: "fortsetzen",
+    fr: "reprendre",
+    pt: "retomar",
+  },
+  delete: {
+    it: "elimina",
+    en: "delete",
+    hu: "törlés",
+    es: "eliminar",
+    de: "löschen",
+    fr: "supprimer",
+    pt: "excluir",
+  },
+  next: {
+    it: "prossima:",
+    en: "next:",
+    hu: "következő:",
+    es: "próxima:",
+    de: "nächste:",
+    fr: "prochaine :",
+    pt: "próxima:",
+  },
+  last: {
+    it: "ultimo:",
+    en: "last:",
+    hu: "utolsó:",
+    es: "último:",
+    de: "letzter:",
+    fr: "dernier :",
+    pt: "último:",
+  },
+};
+
 export function CronJobRow({ job, onToggle, onDelete }: Props) {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const statusColor = job.state.lastRunStatus
     ? STATUS_COLOR[job.state.lastRunStatus]
     : "var(--color-dim)";
@@ -76,7 +127,7 @@ export function CronJobRow({ job, onToggle, onDelete }: Props) {
                   }
             }
           >
-            {job.enabled ? "pausa" : "riprendi"}
+            {job.enabled ? tr("pause") : tr("resume")}
           </button>
           <button
             onClick={() => onDelete(job.id)}
@@ -87,7 +138,7 @@ export function CronJobRow({ job, onToggle, onDelete }: Props) {
               border: "1px solid rgba(255,69,96,0.25)",
             }}
           >
-            elimina
+            {tr("delete")}
           </button>
         </div>
       </div>
@@ -98,17 +149,17 @@ export function CronJobRow({ job, onToggle, onDelete }: Props) {
           className="text-[10px] font-mono"
           style={{ color: "var(--color-muted)" }}
         >
-          {scheduleLabel(job.schedule)}
+          {scheduleLabel(job.schedule, locale)}
         </span>
         <span className="text-[10px]" style={{ color: "var(--color-dim)" }}>
-          prossima:{" "}
+          {tr("next")}{" "}
           <span style={{ color: "var(--color-base)" }}>
-            {nextRunLabel(job.state.nextRunAtMs)}
+            {nextRunLabel(job.state.nextRunAtMs, locale)}
           </span>
         </span>
         {job.state.lastRunStatus && (
           <span className="text-[10px]" style={{ color: statusColor }}>
-            ultimo: {job.state.lastRunStatus}
+            {tr("last")} {job.state.lastRunStatus}
             {job.state.lastDurationMs ? ` (${job.state.lastDurationMs}ms)` : ""}
           </span>
         )}
