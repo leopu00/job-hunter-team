@@ -658,6 +658,10 @@
               <span class="home__nav-icon">🤖</span>
               <span class="home__nav-label" data-i18n="home.nav.agents">Agenti</span>
             </button>
+            <button type="button" class="home__nav-item" data-section="chat" role="tab">
+              <span class="home__nav-icon">💬</span>
+              <span class="home__nav-label" data-i18n="home.nav.chat">Chat</span>
+            </button>
           </div>
           <!-- Gruppo Lavoro: i dati della ricerca -->
           <div class="home__nav-group">
@@ -781,6 +785,25 @@
           </div>
           <div class="dash__list" id="dash-list" hidden></div>
           <div class="dash__detail" id="dash-detail" hidden></div>
+        </div>
+
+        <!-- Chat agenti: Capitano / Assistente (nativo) -->
+        <div class="home__panel" data-section="chat" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.chat.title">Chat</h1>
+            <p class="home__subtitle" data-i18n="home.chat.subtitle">Parla con il Capitano o l’Assistente del team.</p>
+          </header>
+          <div class="chat">
+            <div class="chat__tabs">
+              <button type="button" class="chat-tab is-active" data-agent="capitano">Capitano</button>
+              <button type="button" class="chat-tab" data-agent="assistente">Assistente</button>
+            </div>
+            <div class="chat__messages" id="chat-messages"></div>
+            <div class="chat__composer">
+              <textarea id="chat-input" rows="2" data-i18n-ph="home.chat.placeholder" placeholder="Scrivi un messaggio…"></textarea>
+              <button type="button" class="btn btn--primary" id="chat-send" data-i18n="home.chat.send">Invia</button>
+            </div>
+          </div>
         </div>
 
         <!-- Statistiche: conteggi pipeline (nativo) -->
