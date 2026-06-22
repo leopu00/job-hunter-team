@@ -14,8 +14,48 @@ import {
   getCaseStudy,
   buildCaseActivity,
 } from "@/lib/case-studies";
+import { getRequestLocale } from "@/lib/request-locale";
+import type { Locale } from "@/i18n/config";
 
 export const dynamic = "force-dynamic";
+
+const T: Record<Locale, { metaSuffix: string; footer: string }> = {
+  it: {
+    metaSuffix: "Case study · Job Hunter Team",
+    footer:
+      "Dati anonimi da un run reale del team · snapshot committato, nessuna informazione personale del candidato.",
+  },
+  en: {
+    metaSuffix: "Case study · Job Hunter Team",
+    footer:
+      "Anonymous data from a real team run · committed snapshot, no personal information about the candidate.",
+  },
+  es: {
+    metaSuffix: "Caso de estudio · Job Hunter Team",
+    footer:
+      "Datos anónimos de una ejecución real del equipo · snapshot versionado, sin información personal del candidato.",
+  },
+  fr: {
+    metaSuffix: "Étude de cas · Job Hunter Team",
+    footer:
+      "Données anonymes issues d'un run réel de l'équipe · snapshot versionné, aucune information personnelle du candidat.",
+  },
+  de: {
+    metaSuffix: "Fallstudie · Job Hunter Team",
+    footer:
+      "Anonyme Daten aus einem echten Team-Run · versionierter Snapshot, keine persönlichen Informationen des Kandidaten.",
+  },
+  hu: {
+    metaSuffix: "Esettanulmány · Job Hunter Team",
+    footer:
+      "Anonim adatok egy valódi csapatfutásból · verziózott pillanatkép, semmilyen személyes információ a jelöltről.",
+  },
+  pt: {
+    metaSuffix: "Estudo de caso · Job Hunter Team",
+    footer:
+      "Dados anónimos de uma execução real da equipa · snapshot versionado, sem informação pessoal do candidato.",
+  },
+};
 
 export async function generateMetadata({
   params,
@@ -24,10 +64,9 @@ export async function generateMetadata({
 }) {
   const { id } = await params;
   const cs = getCaseStudy(id);
+  const t = T[await getRequestLocale()];
   return {
-    title: cs
-      ? `${cs.label} · Case study · Job Hunter Team`
-      : "Case study · Job Hunter Team",
+    title: cs ? `${cs.label} · ${t.metaSuffix}` : t.metaSuffix,
   };
 }
 
@@ -40,6 +79,7 @@ export default async function CaseStudyDetailPage({
   const cs = getCaseStudy(id);
   if (!cs) notFound();
 
+  const t = T[await getRequestLocale()];
   const activity = buildCaseActivity(cs.run);
   const current: PreparedCase = {
     id: cs.id,
@@ -69,8 +109,7 @@ export default async function CaseStudyDetailPage({
       </div>
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
-        Dati anonimi da un run reale del team · snapshot committato, nessuna
-        informazione personale del candidato.
+        {t.footer}
       </footer>
     </main>
   );

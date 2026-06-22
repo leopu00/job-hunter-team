@@ -1,5 +1,18 @@
 "use client";
 
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const ACTIVE: Record<Locale, string> = {
+  it: "attive",
+  en: "active",
+  es: "activas",
+  fr: "actives",
+  de: "aktiv",
+  hu: "aktív",
+  pt: "ativas",
+};
+
 type Step = {
   key: string;
   label: string;
@@ -17,6 +30,7 @@ type Props = {
 // "found" è il totale e "review" è transitorio (verdetto Critico
 // quasi istantaneo), entrambi esclusi dall'asse per leggibilità.
 export default function PipelineFunnel({ steps, title }: Props) {
+  const active = ACTIVE[useLocale()];
   const stages = steps.filter((s) => s.key !== "found" && s.key !== "review");
   const maxCount = Math.max(1, ...stages.map((s) => s.count));
   const totalActive = stages.reduce((a, s) => a + s.count, 0);
@@ -33,7 +47,7 @@ export default function PipelineFunnel({ steps, title }: Props) {
           <span className="text-[var(--color-bright)] font-semibold">
             {totalActive}
           </span>{" "}
-          attive
+          {active}
         </span>
       </div>
 

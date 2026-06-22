@@ -13,6 +13,136 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { colorForAgent as colorFor } from "./agent-colors";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  title: {
+    it: "Attività agenti — rate consumo + throttle",
+    en: "Agent activity — consumption rate + throttle",
+    hu: "Ügynök-tevékenység — fogyasztási rate + throttle",
+    es: "Actividad de agentes — rate de consumo + throttle",
+    de: "Agentenaktivität — Verbrauchs-Rate + Throttle",
+    fr: "Activité des agents — rate de consommation + throttle",
+    pt: "Atividade dos agentes — rate de consumo + throttle",
+  },
+  subtitle: {
+    it: "Linee = kT/min per agente · Barre orizzontali = pause throttle (start↔end). Stessi colori per agente: la barra cade esattamente nel tempo in cui l'agente era in pausa.",
+    en: "Lines = kT/min per agent · Horizontal bars = throttle pauses (start↔end). Same colors per agent: the bar falls exactly when the agent was paused.",
+    hu: "Vonalak = kT/perc ügynökönként · Vízszintes sávok = throttle szünetek (start↔end). Ügynökönként azonos színek: a sáv pontosan oda esik, amikor az ügynök szünetelt.",
+    es: "Líneas = kT/min por agente · Barras horizontales = pausas throttle (start↔end). Mismos colores por agente: la barra cae exactamente cuando el agente estaba en pausa.",
+    de: "Linien = kT/min pro Agent · Horizontale Balken = Throttle-Pausen (start↔end). Gleiche Farben pro Agent: der Balken fällt genau in die Zeit, in der der Agent pausiert war.",
+    fr: "Lignes = kT/min par agent · Barres horizontales = pauses throttle (start↔end). Mêmes couleurs par agent : la barre tombe exactement au moment où l'agent était en pause.",
+    pt: "Linhas = kT/min por agente · Barras horizontais = pausas throttle (start↔end). Mesmas cores por agente: a barra cai exatamente no tempo em que o agente estava em pausa.",
+  },
+  viewAll: {
+    it: "tutto",
+    en: "all",
+    hu: "összes",
+    es: "todo",
+    de: "alle",
+    fr: "tout",
+    pt: "tudo",
+  },
+  viewRate: {
+    it: "solo rate",
+    en: "rate only",
+    hu: "csak rate",
+    es: "solo rate",
+    de: "nur Rate",
+    fr: "rate seul",
+    pt: "só rate",
+  },
+  viewThrottle: {
+    it: "solo pause",
+    en: "pauses only",
+    hu: "csak szünetek",
+    es: "solo pausas",
+    de: "nur Pausen",
+    fr: "pauses seules",
+    pt: "só pausas",
+  },
+  invalidResponse: {
+    it: "Risposta non valida",
+    en: "Invalid response",
+    hu: "Érvénytelen válasz",
+    es: "Respuesta no válida",
+    de: "Ungültige Antwort",
+    fr: "Réponse non valide",
+    pt: "Resposta inválida",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  event: {
+    it: "evento",
+    en: "event",
+    hu: "esemény",
+    es: "evento",
+    de: "Ereignis",
+    fr: "événement",
+    pt: "evento",
+  },
+  orphan: {
+    it: "orfano",
+    en: "orphan",
+    hu: "árva",
+    es: "huérfano",
+    de: "verwaist",
+    fr: "orphelin",
+    pt: "órfão",
+  },
+  interrupted: {
+    it: "interrotto",
+    en: "interrupted",
+    hu: "megszakítva",
+    es: "interrumpido",
+    de: "unterbrochen",
+    fr: "interrompu",
+    pt: "interrompido",
+  },
+  start: {
+    it: "inizio",
+    en: "start",
+    hu: "kezdés",
+    es: "inicio",
+    de: "Start",
+    fr: "début",
+    pt: "início",
+  },
+  end: {
+    it: "fine",
+    en: "end",
+    hu: "vége",
+    es: "fin",
+    de: "Ende",
+    fr: "fin",
+    pt: "fim",
+  },
+  clickHide: {
+    it: "Click per nascondere {a}",
+    en: "Click to hide {a}",
+    hu: "Kattints az elrejtéshez: {a}",
+    es: "Clic para ocultar {a}",
+    de: "Klicken zum Ausblenden von {a}",
+    fr: "Cliquer pour masquer {a}",
+    pt: "Clique para ocultar {a}",
+  },
+  clickShow: {
+    it: "Click per mostrare {a}",
+    en: "Click to show {a}",
+    hu: "Kattints a megjelenítéshez: {a}",
+    es: "Clic para mostrar {a}",
+    de: "Klicken zum Anzeigen von {a}",
+    fr: "Cliquer pour afficher {a}",
+    pt: "Clique para mostrar {a}",
+  },
+};
 
 type Series = Record<string, number | string>;
 
@@ -66,6 +196,8 @@ function formatSec(s: number): string {
 }
 
 export default function AgentActivityChart() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [tokens, setTokens] = useState<TokensPayload | null>(null);
   const [throttle, setThrottle] = useState<ThrottlePayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -98,7 +230,7 @@ export default function AgentActivityChart() {
     fetchAll(minutes, ac.signal)
       .then(([t, th]) => {
         if (!t.ok || !th.ok) {
-          setError("Risposta non valida");
+          setError(tr("invalidResponse"));
           return;
         }
         setTokens(t);
@@ -135,21 +267,19 @@ export default function AgentActivityChart() {
       <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold text-[var(--color-bright)]">
-            Attività agenti — rate consumo + throttle
+            {tr("title")}
           </h2>
           <p className="text-[10px] text-[var(--color-dim)] mt-0.5">
-            Linee = kT/min per agente · Barre orizzontali = pause throttle
-            (start↔end). Stessi colori per agente: la barra cade esattamente nel
-            tempo in cui l&apos;agente era in pausa.
+            {tr("subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {/* Toggle vista: rate / throttle / entrambi */}
           <div className="flex">
             {[
-              { id: "both" as const, label: "tutto" },
-              { id: "rate" as const, label: "solo rate" },
-              { id: "throttle" as const, label: "solo pause" },
+              { id: "both" as const, label: tr("viewAll") },
+              { id: "rate" as const, label: tr("viewRate") },
+              { id: "throttle" as const, label: tr("viewThrottle") },
             ].map((opt, i, arr) => {
               const active = view === opt.id;
               return (
@@ -199,7 +329,7 @@ export default function AgentActivityChart() {
 
       {loading && !tokens && (
         <div className="h-[360px] flex items-center justify-center text-[11px] text-[var(--color-dim)]">
-          loading…
+          {tr("loading")}
         </div>
       )}
       {error && !tokens && (
@@ -208,7 +338,7 @@ export default function AgentActivityChart() {
         </div>
       )}
       {tokens && throttle && (
-        <Chart tokens={tokens} throttle={throttle} view={view} />
+        <Chart tokens={tokens} throttle={throttle} view={view} tr={tr} />
       )}
     </div>
   );
@@ -232,10 +362,12 @@ function Chart({
   tokens,
   throttle,
   view,
+  tr,
 }: {
   tokens: TokensPayload;
   throttle: ThrottlePayload;
   view: "rate" | "throttle" | "both";
+  tr: (k: string) => string;
 }) {
   const showRate = view === "rate" || view === "both";
   const showThrottle = view === "throttle" || view === "both";
@@ -653,10 +785,10 @@ function Chart({
           }}
         >
           <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">
-            evento · {formatSec(hoverBar.sec)}
+            {tr("event")} · {formatSec(hoverBar.sec)}
             {(hoverBar.interrupted || hoverBar.orphan) && (
               <span className="ml-1 opacity-70">
-                · {hoverBar.orphan ? "orfano" : "interrotto"}
+                · {hoverBar.orphan ? tr("orphan") : tr("interrupted")}
               </span>
             )}
           </div>
@@ -673,9 +805,12 @@ function Chart({
             <span className="text-[var(--color-bright)]">{hoverBar.agent}</span>
           </div>
           <div className="mt-1 text-[10px] text-[var(--color-dim)] font-mono">
-            <div>start: {new Date(hoverBar.tsStart).toLocaleTimeString()}</div>
             <div>
-              end:&nbsp;&nbsp; {new Date(hoverBar.tsEnd).toLocaleTimeString()}
+              {tr("start")}: {new Date(hoverBar.tsStart).toLocaleTimeString()}
+            </div>
+            <div>
+              {tr("end")}:&nbsp;&nbsp;{" "}
+              {new Date(hoverBar.tsEnd).toLocaleTimeString()}
             </div>
           </div>
         </div>
@@ -695,8 +830,8 @@ function Chart({
                 onClick={() => toggleAgent(a)}
                 title={
                   visible
-                    ? `Click per nascondere ${a}`
-                    : `Click per mostrare ${a}`
+                    ? tr("clickHide").replace("{a}", a)
+                    : tr("clickShow").replace("{a}", a)
                 }
                 className="flex items-center gap-1.5 px-2 py-1 rounded text-left transition-opacity"
                 style={{

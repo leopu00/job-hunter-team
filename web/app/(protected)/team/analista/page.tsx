@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
 import AgentInteraction from "@/components/AgentInteraction";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 
 type Position = {
   id: number;
@@ -42,18 +44,278 @@ const CAT_COLORS: Record<string, string> = {
   CRITICO: "#ef6c00",
   NON_CATEGORIZZATA: "#616161",
 };
-const CAT_LABELS: Record<string, string> = {
-  LINK_MORTO: "Link morto",
-  SCORE_BASSO: "Score < 40",
-  DUPLICATA: "Duplicata",
-  GEO: "Zona geo",
-  LINGUA: "Lingua",
-  SENIORITY: "Seniority",
-  STACK: "Stack",
-  RUOLO: "Ruolo non-dev",
-  SCAM: "Scam",
-  CRITICO: "Voto critico",
-  NON_CATEGORIZZATA: "Non categorizzata",
+const CAT_LABELS: Record<Locale, Record<string, string>> = {
+  it: {
+    LINK_MORTO: "Link morto",
+    SCORE_BASSO: "Score < 40",
+    DUPLICATA: "Duplicata",
+    GEO: "Zona geo",
+    LINGUA: "Lingua",
+    SENIORITY: "Seniority",
+    STACK: "Stack",
+    RUOLO: "Ruolo non-dev",
+    SCAM: "Scam",
+    CRITICO: "Voto critico",
+    NON_CATEGORIZZATA: "Non categorizzata",
+  },
+  en: {
+    LINK_MORTO: "Dead link",
+    SCORE_BASSO: "Score < 40",
+    DUPLICATA: "Duplicate",
+    GEO: "Geo area",
+    LINGUA: "Language",
+    SENIORITY: "Seniority",
+    STACK: "Stack",
+    RUOLO: "Non-dev role",
+    SCAM: "Scam",
+    CRITICO: "Critic score",
+    NON_CATEGORIZZATA: "Uncategorized",
+  },
+  es: {
+    LINK_MORTO: "Enlace muerto",
+    SCORE_BASSO: "Score < 40",
+    DUPLICATA: "Duplicada",
+    GEO: "Zona geo",
+    LINGUA: "Idioma",
+    SENIORITY: "Seniority",
+    STACK: "Stack",
+    RUOLO: "Rol no-dev",
+    SCAM: "Scam",
+    CRITICO: "Nota del crítico",
+    NON_CATEGORIZZATA: "Sin categorizar",
+  },
+  fr: {
+    LINK_MORTO: "Lien mort",
+    SCORE_BASSO: "Score < 40",
+    DUPLICATA: "Doublon",
+    GEO: "Zone géo",
+    LINGUA: "Langue",
+    SENIORITY: "Séniorité",
+    STACK: "Stack",
+    RUOLO: "Rôle non-dev",
+    SCAM: "Scam",
+    CRITICO: "Note du critique",
+    NON_CATEGORIZZATA: "Non catégorisé",
+  },
+  de: {
+    LINK_MORTO: "Toter Link",
+    SCORE_BASSO: "Score < 40",
+    DUPLICATA: "Duplikat",
+    GEO: "Geo-Zone",
+    LINGUA: "Sprache",
+    SENIORITY: "Seniorität",
+    STACK: "Stack",
+    RUOLO: "Nicht-Dev-Rolle",
+    SCAM: "Scam",
+    CRITICO: "Kritiker-Note",
+    NON_CATEGORIZZATA: "Nicht kategorisiert",
+  },
+  hu: {
+    LINK_MORTO: "Halott link",
+    SCORE_BASSO: "Score < 40",
+    DUPLICATA: "Duplikátum",
+    GEO: "Földrajzi zóna",
+    LINGUA: "Nyelv",
+    SENIORITY: "Szenioritás",
+    STACK: "Stack",
+    RUOLO: "Nem-dev szerep",
+    SCAM: "Scam",
+    CRITICO: "Kritikus pontszám",
+    NON_CATEGORIZZATA: "Kategorizálatlan",
+  },
+  pt: {
+    LINK_MORTO: "Link morto",
+    SCORE_BASSO: "Score < 40",
+    DUPLICATA: "Duplicada",
+    GEO: "Zona geo",
+    LINGUA: "Idioma",
+    SENIORITY: "Senioridade",
+    STACK: "Stack",
+    RUOLO: "Função não-dev",
+    SCAM: "Scam",
+    CRITICO: "Nota do crítico",
+    NON_CATEGORIZZATA: "Não categorizada",
+  },
+};
+
+const LOCALE_TAG: Record<Locale, string> = {
+  it: "it-IT",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  hu: "hu-HU",
+  pt: "pt-PT",
+};
+
+const T: Record<Locale, {
+  dashboard: string;
+  team: string;
+  analyst: string;
+  subtitle: string;
+  remote: string;
+  inAnalisi: string;
+  expiredLinkPrefix: string;
+  queued: string;
+  checkedTot: string;
+  processedToday: string;
+  excludedToday: string;
+  inQueueTitle: string;
+  noQueue: string;
+  lastCheckedTitle: string;
+  noChecked: string;
+  lastExcludedTitle: string;
+  noExclusions: string;
+  exclusionReasons: string;
+  excludedWord: string;
+}> = {
+  it: {
+    dashboard: "Dashboard",
+    team: "Team",
+    analyst: "Analista",
+    subtitle: "Pipeline analisi offerte · polling 8s",
+    remote: "Remote",
+    inAnalisi: "IN ANALISI",
+    expiredLinkPrefix: "Link scaduto: ",
+    queued: "In coda",
+    checkedTot: "Checked tot.",
+    processedToday: "Elaborate oggi",
+    excludedToday: "Escluse oggi",
+    inQueueTitle: "In Coda (prossime 10)",
+    noQueue: "Nessuna posizione in coda",
+    lastCheckedTitle: "Ultime 10 Checked",
+    noChecked: "Nessuna posizione checked",
+    lastExcludedTitle: "Ultime 10 Escluse — Log",
+    noExclusions: "Nessuna esclusione recente",
+    exclusionReasons: "Motivi Esclusione",
+    excludedWord: "escluse",
+  },
+  en: {
+    dashboard: "Dashboard",
+    team: "Team",
+    analyst: "Analyst",
+    subtitle: "Job analysis pipeline · 8s polling",
+    remote: "Remote",
+    inAnalisi: "ANALYZING",
+    expiredLinkPrefix: "Expired link: ",
+    queued: "Queued",
+    checkedTot: "Checked tot.",
+    processedToday: "Processed today",
+    excludedToday: "Excluded today",
+    inQueueTitle: "In Queue (next 10)",
+    noQueue: "No positions in queue",
+    lastCheckedTitle: "Last 10 Checked",
+    noChecked: "No checked positions",
+    lastExcludedTitle: "Last 10 Excluded — Log",
+    noExclusions: "No recent exclusions",
+    exclusionReasons: "Exclusion Reasons",
+    excludedWord: "excluded",
+  },
+  es: {
+    dashboard: "Panel",
+    team: "Equipo",
+    analyst: "Analista",
+    subtitle: "Pipeline de análisis de ofertas · polling 8s",
+    remote: "Remoto",
+    inAnalisi: "EN ANÁLISIS",
+    expiredLinkPrefix: "Enlace caducado: ",
+    queued: "En cola",
+    checkedTot: "Checked tot.",
+    processedToday: "Procesadas hoy",
+    excludedToday: "Excluidas hoy",
+    inQueueTitle: "En Cola (próximas 10)",
+    noQueue: "Ninguna posición en cola",
+    lastCheckedTitle: "Últimas 10 Checked",
+    noChecked: "Ninguna posición checked",
+    lastExcludedTitle: "Últimas 10 Excluidas — Log",
+    noExclusions: "Ninguna exclusión reciente",
+    exclusionReasons: "Motivos de Exclusión",
+    excludedWord: "excluidas",
+  },
+  fr: {
+    dashboard: "Tableau de bord",
+    team: "Équipe",
+    analyst: "Analyste",
+    subtitle: "Pipeline d'analyse des offres · polling 8s",
+    remote: "À distance",
+    inAnalisi: "EN ANALYSE",
+    expiredLinkPrefix: "Lien expiré : ",
+    queued: "En file",
+    checkedTot: "Checked tot.",
+    processedToday: "Traitées aujourd'hui",
+    excludedToday: "Exclues aujourd'hui",
+    inQueueTitle: "En File (10 prochaines)",
+    noQueue: "Aucun poste en file",
+    lastCheckedTitle: "10 dernières Checked",
+    noChecked: "Aucun poste checked",
+    lastExcludedTitle: "10 dernières Exclues — Log",
+    noExclusions: "Aucune exclusion récente",
+    exclusionReasons: "Motifs d'Exclusion",
+    excludedWord: "exclues",
+  },
+  de: {
+    dashboard: "Dashboard",
+    team: "Team",
+    analyst: "Analyst",
+    subtitle: "Analyse-Pipeline der Stellen · 8s Polling",
+    remote: "Remote",
+    inAnalisi: "IN ANALYSE",
+    expiredLinkPrefix: "Abgelaufener Link: ",
+    queued: "In Warteschlange",
+    checkedTot: "Checked ges.",
+    processedToday: "Heute verarbeitet",
+    excludedToday: "Heute ausgeschlossen",
+    inQueueTitle: "In Warteschlange (nächste 10)",
+    noQueue: "Keine Positionen in Warteschlange",
+    lastCheckedTitle: "Letzte 10 Checked",
+    noChecked: "Keine geprüften Positionen",
+    lastExcludedTitle: "Letzte 10 Ausgeschlossen — Log",
+    noExclusions: "Keine kürzlichen Ausschlüsse",
+    exclusionReasons: "Ausschlussgründe",
+    excludedWord: "ausgeschlossen",
+  },
+  hu: {
+    dashboard: "Irányítópult",
+    team: "Csapat",
+    analyst: "Elemző",
+    subtitle: "Ajánlat-elemzési folyamat · 8s polling",
+    remote: "Távmunka",
+    inAnalisi: "ELEMZÉS ALATT",
+    expiredLinkPrefix: "Lejárt link: ",
+    queued: "Sorban",
+    checkedTot: "Checked össz.",
+    processedToday: "Ma feldolgozva",
+    excludedToday: "Ma kizárva",
+    inQueueTitle: "Sorban (következő 10)",
+    noQueue: "Nincs pozíció a sorban",
+    lastCheckedTitle: "Utolsó 10 Checked",
+    noChecked: "Nincs ellenőrzött pozíció",
+    lastExcludedTitle: "Utolsó 10 Kizárt — Log",
+    noExclusions: "Nincs friss kizárás",
+    exclusionReasons: "Kizárási Okok",
+    excludedWord: "kizárva",
+  },
+  pt: {
+    dashboard: "Painel",
+    team: "Equipe",
+    analyst: "Analista",
+    subtitle: "Pipeline de análise de vagas · polling 8s",
+    remote: "Remoto",
+    inAnalisi: "EM ANÁLISE",
+    expiredLinkPrefix: "Link expirado: ",
+    queued: "Na fila",
+    checkedTot: "Checked tot.",
+    processedToday: "Processadas hoje",
+    excludedToday: "Excluídas hoje",
+    inQueueTitle: "Na Fila (próximas 10)",
+    noQueue: "Nenhuma vaga na fila",
+    lastCheckedTitle: "Últimas 10 Checked",
+    noChecked: "Nenhuma vaga checked",
+    lastExcludedTitle: "Últimas 10 Excluídas — Log",
+    noExclusions: "Nenhuma exclusão recente",
+    exclusionReasons: "Motivos de Exclusão",
+    excludedWord: "excluídas",
+  },
 };
 const STATUS_COLORS: Record<string, string> = {
   checked: "var(--color-green)",
@@ -89,10 +351,20 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function FeedItem({ p, showStatus }: { p: Position; showStatus: boolean }) {
+function FeedItem({
+  p,
+  showStatus,
+  remoteLabel,
+  inAnalisiLabel,
+}: {
+  p: Position;
+  showStatus: boolean;
+  remoteLabel: string;
+  inAnalisiLabel: string;
+}) {
   const loc =
     p.remote_type === "full_remote"
-      ? "Remote"
+      ? remoteLabel
       : (p.location ?? "").split(",")[0];
   const inAnalisi = !showStatus && (p.notes ?? "").includes("IN_ANALISI");
   return (
@@ -127,7 +399,7 @@ function FeedItem({ p, showStatus }: { p: Position; showStatus: boolean }) {
                 fontWeight: 700,
               }}
             >
-              IN ANALISI
+              {inAnalisiLabel}
             </span>
           )}
           {showStatus && p.status && <StatusBadge status={p.status} />}
@@ -145,15 +417,23 @@ function FeedItem({ p, showStatus }: { p: Position; showStatus: boolean }) {
   );
 }
 
-function ExcludedItem({ p }: { p: Position }) {
+function ExcludedItem({
+  p,
+  remoteLabel,
+  expiredLinkPrefix,
+}: {
+  p: Position;
+  remoteLabel: string;
+  expiredLinkPrefix: string;
+}) {
   const reason = (p.notes ?? "")
     .replace(/^MOTIVO ESCLUSIONE:\s*/i, "")
-    .replace(/^Link scaduto\s*[-—]\s*/i, "Link scaduto: ")
+    .replace(/^Link scaduto\s*[-—]\s*/i, expiredLinkPrefix)
     .split("\n")[0]
     .slice(0, 80);
   const loc =
     p.remote_type === "full_remote"
-      ? "Remote"
+      ? remoteLabel
       : (p.location ?? "").split(",")[0];
   return (
     <div
@@ -192,7 +472,13 @@ function ExcludedItem({ p }: { p: Position }) {
   );
 }
 
-function DonutChart({ categories }: { categories: Record<string, number> }) {
+function DonutChart({
+  categories,
+  labels,
+}: {
+  categories: Record<string, number>;
+  labels: Record<string, string>;
+}) {
   const entries = Object.entries(categories).sort((a, b) => b[1] - a[1]);
   if (!entries.length) return null;
   const total = entries.reduce((s, e) => s + e[1], 0);
@@ -222,7 +508,7 @@ function DonutChart({ categories }: { categories: Record<string, number> }) {
         {entries.map(([cat, count]) => {
           const pct = Math.round((count / total) * 100);
           const color = CAT_COLORS[cat] ?? "#888";
-          const label = CAT_LABELS[cat] ?? cat;
+          const label = labels[cat] ?? cat;
           return (
             <div
               key={cat}
@@ -251,6 +537,10 @@ function DonutChart({ categories }: { categories: Record<string, number> }) {
 }
 
 export default function AnalistaPage() {
+  const locale = useLocale();
+  const t = T[locale];
+  const localeTag = LOCALE_TAG[locale] ?? "en-US";
+  const catLabels = CAT_LABELS[locale] ?? CAT_LABELS.en;
   const [data, setData] = useState<AnalistaActivity | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const isCloud = useIsCloud();
@@ -284,7 +574,7 @@ export default function AnalistaPage() {
             href="/dashboard"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Dashboard
+            {t.dashboard}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -293,7 +583,7 @@ export default function AnalistaPage() {
             href="/team"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Team
+            {t.team}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -302,21 +592,21 @@ export default function AnalistaPage() {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Analista
+            {t.analyst}
           </span>
         </nav>
         <div className="mt-3 flex items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-              Analista
+              {t.analyst}
             </h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
-              Pipeline analisi offerte · polling 8s
+              {t.subtitle}
             </p>
           </div>
           {lastUpdate && (
             <span className="text-[9px] text-[var(--color-dim)] font-mono shrink-0">
-              {lastUpdate.toLocaleTimeString("it-IT", {
+              {lastUpdate.toLocaleTimeString(localeTag, {
                 hour: "2-digit",
                 minute: "2-digit",
                 second: "2-digit",
@@ -333,22 +623,22 @@ export default function AnalistaPage() {
       >
         {[
           {
-            label: "In coda",
+            label: t.queued,
             val: data?.queue_size ?? "—",
             color: "var(--color-orange)",
           },
           {
-            label: "Checked tot.",
+            label: t.checkedTot,
             val: data?.checked_total ?? "—",
             color: "var(--color-green)",
           },
           {
-            label: "Elaborate oggi",
+            label: t.processedToday,
             val: data?.analyzed_today ?? "—",
             color: "var(--color-blue)",
           },
           {
-            label: "Escluse oggi",
+            label: t.excludedToday,
             val: data?.excluded_today ?? "—",
             color: "var(--color-red)",
           },
@@ -379,16 +669,22 @@ export default function AnalistaPage() {
         {/* Coda */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">
-            In Coda (prossime 10)
+            {t.inQueueTitle}
           </h2>
           {data?.queue.length === 0 || !data ? (
             <p className="text-[var(--color-dim)] text-[11px] px-3">
-              Nessuna posizione in coda
+              {t.noQueue}
             </p>
           ) : (
             <div className="space-y-0.5">
               {data.queue.map((p) => (
-                <FeedItem key={p.id} p={p} showStatus={false} />
+                <FeedItem
+                  key={p.id}
+                  p={p}
+                  showStatus={false}
+                  remoteLabel={t.remote}
+                  inAnalisiLabel={t.inAnalisi}
+                />
               ))}
             </div>
           )}
@@ -397,16 +693,22 @@ export default function AnalistaPage() {
         {/* Ultime checked */}
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
           <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-3">
-            Ultime 10 Checked
+            {t.lastCheckedTitle}
           </h2>
           {data?.recent_processed.length === 0 || !data ? (
             <p className="text-[var(--color-dim)] text-[11px] px-3">
-              Nessuna posizione checked
+              {t.noChecked}
             </p>
           ) : (
             <div className="space-y-0.5">
               {data.recent_processed.map((p) => (
-                <FeedItem key={p.id} p={p} showStatus={true} />
+                <FeedItem
+                  key={p.id}
+                  p={p}
+                  showStatus={true}
+                  remoteLabel={t.remote}
+                  inAnalisiLabel={t.inAnalisi}
+                />
               ))}
             </div>
           )}
@@ -422,16 +724,21 @@ export default function AnalistaPage() {
           className="text-[11px] font-semibold tracking-wider uppercase mb-3"
           style={{ color: "var(--color-red)" }}
         >
-          Ultime 10 Escluse — Log
+          {t.lastExcludedTitle}
         </h2>
         {data?.recent_excluded.length === 0 || !data ? (
           <p className="text-[var(--color-dim)] text-[11px] px-3">
-            Nessuna esclusione recente
+            {t.noExclusions}
           </p>
         ) : (
           <div className="space-y-0.5">
             {data.recent_excluded.map((p) => (
-              <ExcludedItem key={p.id} p={p} />
+              <ExcludedItem
+                key={p.id}
+                p={p}
+                remoteLabel={t.remote}
+                expiredLinkPrefix={t.expiredLinkPrefix}
+              />
             ))}
           </div>
         )}
@@ -444,7 +751,7 @@ export default function AnalistaPage() {
           style={{ animation: "fade-in 0.35s ease 0.15s both" }}
         >
           <h2 className="text-[11px] font-semibold tracking-wider uppercase text-[var(--color-muted)] mb-2">
-            Motivi Esclusione
+            {t.exclusionReasons}
           </h2>
 
           {/* Ratio bar */}
@@ -467,20 +774,23 @@ export default function AnalistaPage() {
                 />
               </div>
               <span style={{ color: "var(--color-red)", fontWeight: 700 }}>
-                {ratio.excluded} escluse
+                {ratio.excluded} {t.excludedWord}
               </span>
               <span className="text-[var(--color-dim)]">({rPct}% pass)</span>
             </div>
           )}
 
-          <DonutChart categories={data.exclusion_categories} />
+          <DonutChart
+            categories={data.exclusion_categories}
+            labels={catLabels}
+          />
         </div>
       )}
 
       <AgentInteraction
         sessionPrefix="ANALISTA"
         color="#00e676"
-        label="Analista"
+        label={t.analyst}
       />
     </div>
   );

@@ -1,6 +1,66 @@
 "use client";
 
 import Link from "next/link";
+import { useLandingI18n } from "../components/landing/LandingI18n";
+
+type DocKitLocale = "it" | "en" | "es" | "fr" | "de" | "hu" | "pt";
+
+// Microcopy condiviso del DocKit (breadcrumb + footer "Going deeper").
+// Slug/href, brand (GitHub, VPS, CLI, AI) e comandi restano invariati.
+const KIT_T: Record<
+  DocKitLocale,
+  { home: string; docs: string; goingDeeper: string; essentials: string }
+> = {
+  it: {
+    home: "Home",
+    docs: "Documenti",
+    goingDeeper: "Approfondimento",
+    essentials:
+      "Questi documenti sono l'essenziale. Per il dettaglio completo, i flag esatti e il codice stesso, leggi il sorgente:",
+  },
+  en: {
+    home: "Home",
+    docs: "Docs",
+    goingDeeper: "Going deeper",
+    essentials:
+      "These docs are the essentials. For the full detail, the exact flags and the code itself, read the source:",
+  },
+  es: {
+    home: "Inicio",
+    docs: "Docs",
+    goingDeeper: "Profundizar",
+    essentials:
+      "Estos documentos son lo esencial. Para el detalle completo, los flags exactos y el código en sí, lee el código fuente:",
+  },
+  fr: {
+    home: "Accueil",
+    docs: "Docs",
+    goingDeeper: "Aller plus loin",
+    essentials:
+      "Ces documents sont l'essentiel. Pour le détail complet, les flags exacts et le code lui-même, lisez le code source :",
+  },
+  de: {
+    home: "Startseite",
+    docs: "Docs",
+    goingDeeper: "Tiefer eintauchen",
+    essentials:
+      "Diese Dokumente sind das Wesentliche. Für die vollständigen Details, die genauen Flags und den Code selbst lies den Quellcode:",
+  },
+  hu: {
+    home: "Főoldal",
+    docs: "Dokumentumok",
+    goingDeeper: "Mélyebben",
+    essentials:
+      "Ezek a dokumentumok a lényeget tartalmazzák. A teljes részletekért, a pontos kapcsolókért és magáért a kódért olvasd el a forráskódot:",
+  },
+  pt: {
+    home: "Início",
+    docs: "Docs",
+    goingDeeper: "Aprofundar",
+    essentials:
+      "Estes documentos são o essencial. Para o detalhe completo, as flags exatas e o próprio código, lê o código-fonte:",
+  },
+};
 
 // Shared building blocks for /docs pages — keeps each guide short and
 // consistent. One place for the type styles, the breadcrumb header, the
@@ -82,6 +142,8 @@ export function DocHeader({
   tagline?: string;
   children?: React.ReactNode;
 }) {
+  const { lang } = useLandingI18n();
+  const t = KIT_T[lang as DocKitLocale] ?? KIT_T.en;
   return (
     <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
       <div className="flex items-center gap-2 mb-3">
@@ -89,14 +151,14 @@ export function DocHeader({
           href="/"
           className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
         >
-          Home
+          {t.home}
         </Link>
         <span className="text-[var(--color-border)]">/</span>
         <Link
           href="/docs"
           className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
         >
-          Docs
+          {t.docs}
         </Link>
         <span className="text-[var(--color-border)]">/</span>
         <span className="text-[10px] text-[var(--color-muted)]">{title}</span>
@@ -124,14 +186,15 @@ export function GitHubMore({
   href: string;
   children: React.ReactNode;
 }) {
+  const { lang } = useLandingI18n();
+  const t = KIT_T[lang as DocKitLocale] ?? KIT_T.en;
   return (
     <div className="mt-12 pt-6 border-t border-[var(--color-border)]">
       <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-dim)] mb-2">
-        Going deeper
+        {t.goingDeeper}
       </div>
       <p className="text-[12px] text-[var(--color-muted)] leading-relaxed">
-        These docs are the essentials. For the full detail, the exact flags and
-        the code itself, read the source:{" "}
+        {t.essentials}{" "}
         <a
           href={href}
           target="_blank"

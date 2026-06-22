@@ -74,9 +74,9 @@ export default async function ProfilePage() {
     if (!user) {
       return (
         <div className="p-12 text-center text-[var(--color-muted)]">
-          Session expired.{" "}
+          {t("session_expired")}{" "}
           <Link href="/" className="text-[var(--color-green)]">
-            Sign in again
+            {t("sign_in_again")}
           </Link>
         </div>
       );
@@ -178,7 +178,10 @@ export default async function ProfilePage() {
       <div style={{ animation: "fade-in 0.35s ease both" }}>
         {/* Header */}
         <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-          <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
+          <nav
+            aria-label={t("aria_breadcrumb")}
+            className="flex items-center gap-2 mb-1"
+          >
             <Link
               href="/dashboard"
               className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
@@ -749,6 +752,7 @@ export default async function ProfilePage() {
                           {profile.salary_target.italy_min != null && (
                             <SalaryRange
                               label={t("salary_italy")}
+                              ariaLabel={t("aria_salary_range")}
                               min={profile.salary_target.italy_min}
                               max={
                                 profile.salary_target.italy_max ??
@@ -760,6 +764,7 @@ export default async function ProfilePage() {
                           {profile.salary_target.remote_eu_min != null && (
                             <SalaryRange
                               label={t("salary_remote_eu")}
+                              ariaLabel={t("aria_salary_range")}
                               min={profile.salary_target.remote_eu_min}
                               max={
                                 profile.salary_target.remote_eu_max ??
@@ -993,11 +998,13 @@ function ProfileSection({
 
 function SalaryRange({
   label,
+  ariaLabel,
   min,
   max,
   color,
 }: {
   label: string;
+  ariaLabel: string;
   min: number;
   max: number;
   color: string;
@@ -1017,7 +1024,7 @@ function SalaryRange({
         aria-valuenow={Math.round(Math.min(100, (max / 120000) * 100))}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label="Salary range"
+        aria-label={ariaLabel}
         className="h-1.5 rounded-full overflow-hidden"
         style={{ background: "var(--color-panel)" }}
       >

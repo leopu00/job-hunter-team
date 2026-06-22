@@ -1,9 +1,120 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 
 export type Bin = { lo: number; hi: number; count: number };
 export type Range = { lo: number; hi: number };
+
+const T: Record<
+  Locale,
+  {
+    noValue: string;
+    noData: string;
+    histogramAria: string;
+    clickAnother: string;
+    lowerLimit: string;
+    upperLimit: string;
+    rangeStart: string;
+    rangeEnd: string;
+    resetRange: string;
+    reset: string;
+  }
+> = {
+  it: {
+    noValue: "senza valore",
+    noData: "Nessun dato",
+    histogramAria:
+      "Istogramma: clicca una barra e poi un'altra per il range",
+    clickAnother: "Clicca un'altra barra per chiudere il range…",
+    lowerLimit: "Limite inferiore",
+    upperLimit: "Limite superiore",
+    rangeStart: "Inizio range",
+    rangeEnd: "Fine range",
+    resetRange: "Azzera range",
+    reset: "Azzera",
+  },
+  en: {
+    noValue: "no value",
+    noData: "No data",
+    histogramAria:
+      "Histogram: click a bar and then another to set the range",
+    clickAnother: "Click another bar to close the range…",
+    lowerLimit: "Lower limit",
+    upperLimit: "Upper limit",
+    rangeStart: "Range start",
+    rangeEnd: "Range end",
+    resetRange: "Reset range",
+    reset: "Reset",
+  },
+  es: {
+    noValue: "sin valor",
+    noData: "Sin datos",
+    histogramAria:
+      "Histograma: haz clic en una barra y luego en otra para el rango",
+    clickAnother: "Haz clic en otra barra para cerrar el rango…",
+    lowerLimit: "Límite inferior",
+    upperLimit: "Límite superior",
+    rangeStart: "Inicio del rango",
+    rangeEnd: "Fin del rango",
+    resetRange: "Restablecer rango",
+    reset: "Restablecer",
+  },
+  fr: {
+    noValue: "sans valeur",
+    noData: "Aucune donnée",
+    histogramAria:
+      "Histogramme : cliquez sur une barre puis sur une autre pour la plage",
+    clickAnother: "Cliquez sur une autre barre pour fermer la plage…",
+    lowerLimit: "Limite inférieure",
+    upperLimit: "Limite supérieure",
+    rangeStart: "Début de la plage",
+    rangeEnd: "Fin de la plage",
+    resetRange: "Réinitialiser la plage",
+    reset: "Réinitialiser",
+  },
+  de: {
+    noValue: "ohne Wert",
+    noData: "Keine Daten",
+    histogramAria:
+      "Histogramm: Klicke auf einen Balken und dann auf einen anderen für den Bereich",
+    clickAnother:
+      "Klicke auf einen anderen Balken, um den Bereich zu schließen…",
+    lowerLimit: "Untere Grenze",
+    upperLimit: "Obere Grenze",
+    rangeStart: "Bereichsanfang",
+    rangeEnd: "Bereichsende",
+    resetRange: "Bereich zurücksetzen",
+    reset: "Zurücksetzen",
+  },
+  hu: {
+    noValue: "érték nélkül",
+    noData: "Nincs adat",
+    histogramAria:
+      "Hisztogram: kattints egy oszlopra, majd egy másikra a tartományhoz",
+    clickAnother: "Kattints egy másik oszlopra a tartomány lezárásához…",
+    lowerLimit: "Alsó határ",
+    upperLimit: "Felső határ",
+    rangeStart: "Tartomány eleje",
+    rangeEnd: "Tartomány vége",
+    resetRange: "Tartomány törlése",
+    reset: "Törlés",
+  },
+  pt: {
+    noValue: "sem valor",
+    noData: "Sem dados",
+    histogramAria:
+      "Histograma: clica numa barra e depois noutra para o intervalo",
+    clickAnother: "Clica noutra barra para fechar o intervalo…",
+    lowerLimit: "Limite inferior",
+    upperLimit: "Limite superior",
+    rangeStart: "Início do intervalo",
+    rangeEnd: "Fim do intervalo",
+    resetRange: "Limpar intervalo",
+    reset: "Limpar",
+  },
+};
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const clamp = (n: number, lo: number, hi: number) =>
@@ -51,7 +162,7 @@ export default function RangeHistogram({
   unscoredCount = 0,
   unscoredSelected = false,
   onToggleUnscored,
-  unscoredLabel = "senza valore",
+  unscoredLabel,
 }: {
   bins: Bin[];
   value: Range | null;
@@ -62,6 +173,7 @@ export default function RangeHistogram({
   onToggleUnscored?: () => void;
   unscoredLabel?: string;
 }) {
+  const t = T[useLocale()];
   const [anchor, setAnchor] = useState<number | null>(null);
   const [loStr, setLoStr] = useState("");
   const [hiStr, setHiStr] = useState("");
@@ -143,7 +255,7 @@ export default function RangeHistogram({
         className="text-[11px] py-3 text-center"
         style={{ color: "var(--color-dim)" }}
       >
-        Nessun dato
+        {t.noData}
       </div>
     );
   }
@@ -214,7 +326,7 @@ export default function RangeHistogram({
         className="flex items-end gap-[2px]"
         style={{ height: H }}
         role="group"
-        aria-label="Istogramma: clicca una barra e poi un'altra per il range"
+        aria-label={t.histogramAria}
       >
         {bins.map((b, i) => {
           const active = inSel(i);
@@ -249,7 +361,7 @@ export default function RangeHistogram({
           className="text-[9px] mt-1"
           style={{ color: "var(--color-green)" }}
         >
-          Clicca un&apos;altra barra per chiudere il range…
+          {t.clickAnother}
         </div>
       )}
 
@@ -272,12 +384,12 @@ export default function RangeHistogram({
           <Thumb
             posPct={pct(sliderLo)}
             onPointerDown={startThumb("lo")}
-            label="Limite inferiore"
+            label={t.lowerLimit}
           />
           <Thumb
             posPct={pct(sliderHi)}
             onPointerDown={startThumb("hi")}
-            label="Limite superiore"
+            label={t.upperLimit}
           />
         </div>
       </div>
@@ -294,7 +406,7 @@ export default function RangeHistogram({
       {/* Input numerici precisi */}
       <div className="flex items-center gap-1.5 mt-2">
         <NumInput
-          ariaLabel="Inizio range"
+          ariaLabel={t.rangeStart}
           placeholder={fmt(domainMin)}
           value={loStr}
           decimals={decimals}
@@ -305,7 +417,7 @@ export default function RangeHistogram({
           –
         </span>
         <NumInput
-          ariaLabel="Fine range"
+          ariaLabel={t.rangeEnd}
           placeholder={fmt(domainMax)}
           value={hiStr}
           decimals={decimals}
@@ -319,8 +431,8 @@ export default function RangeHistogram({
               setAnchor(null);
               onChange(null);
             }}
-            aria-label="Azzera range"
-            title="Azzera"
+            aria-label={t.resetRange}
+            title={t.reset}
             className="ml-auto text-[10px] font-semibold cursor-pointer leading-none"
             style={{ color: "var(--color-green)" }}
           >
@@ -350,7 +462,7 @@ export default function RangeHistogram({
                 : "var(--color-muted)",
             }}
           >
-            {unscoredLabel}
+            {unscoredLabel ?? t.noValue}
           </span>
           <span
             className="text-[10.5px] font-semibold tabular-nums"
