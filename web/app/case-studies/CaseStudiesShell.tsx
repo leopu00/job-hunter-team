@@ -2,6 +2,77 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<
+  Locale,
+  {
+    tester: string;
+    collapse: string;
+    collapseAria: string;
+    model: string;
+    show: string;
+    showAria: string;
+  }
+> = {
+  it: {
+    tester: "Tester",
+    collapse: "Comprimi",
+    collapseAria: "Comprimi la lista tester",
+    model: "modello",
+    show: "Mostra i tester",
+    showAria: "Mostra la lista tester",
+  },
+  en: {
+    tester: "Tester",
+    collapse: "Collapse",
+    collapseAria: "Collapse the tester list",
+    model: "model",
+    show: "Show testers",
+    showAria: "Show the tester list",
+  },
+  es: {
+    tester: "Tester",
+    collapse: "Contraer",
+    collapseAria: "Contraer la lista de testers",
+    model: "modelo",
+    show: "Mostrar los testers",
+    showAria: "Mostrar la lista de testers",
+  },
+  fr: {
+    tester: "Testeur",
+    collapse: "Réduire",
+    collapseAria: "Réduire la liste des testeurs",
+    model: "modèle",
+    show: "Afficher les testeurs",
+    showAria: "Afficher la liste des testeurs",
+  },
+  de: {
+    tester: "Tester",
+    collapse: "Einklappen",
+    collapseAria: "Tester-Liste einklappen",
+    model: "Modell",
+    show: "Tester anzeigen",
+    showAria: "Tester-Liste anzeigen",
+  },
+  hu: {
+    tester: "Tesztelő",
+    collapse: "Összecsukás",
+    collapseAria: "Tesztelők listájának összecsukása",
+    model: "modell",
+    show: "Tesztelők megjelenítése",
+    showAria: "Tesztelők listájának megjelenítése",
+  },
+  pt: {
+    tester: "Testador",
+    collapse: "Recolher",
+    collapseAria: "Recolher a lista de testadores",
+    model: "modelo",
+    show: "Mostrar os testadores",
+    showAria: "Mostrar a lista de testadores",
+  },
+};
 
 /**
  * Layout della pagina /case-studies: sidebar collassabile a sinistra con
@@ -35,6 +106,7 @@ export default function CaseStudiesShell({
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const t = T[useLocale()];
 
   return (
     <div className="flex gap-8 items-start">
@@ -42,13 +114,13 @@ export default function CaseStudiesShell({
         <aside className="w-[260px] shrink-0 sticky top-20">
           <div className="mb-4 h-8 flex items-center justify-between">
             <span className="text-[10px] font-semibold tracking-[0.16em] uppercase text-[var(--color-dim)]">
-              Tester
+              {t.tester}
             </span>
             <button
               type="button"
               onClick={() => setCollapsed(true)}
-              title="Comprimi"
-              aria-label="Comprimi la lista tester"
+              title={t.collapse}
+              aria-label={t.collapseAria}
               className="h-7 w-7 inline-flex items-center justify-center text-[13px] rounded-md border cursor-pointer transition-colors text-[var(--color-dim)] hover:text-[var(--color-white)]"
               style={{
                 borderColor: "var(--color-border)",
@@ -120,7 +192,7 @@ export default function CaseStudiesShell({
 
                 <div className="mt-2 flex items-center gap-1.5">
                   <span className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
-                    modello
+                    {t.model}
                   </span>
                   <span
                     className="text-[10px] font-semibold rounded-md px-2 py-0.5"
@@ -144,8 +216,8 @@ export default function CaseStudiesShell({
           <button
             type="button"
             onClick={() => setCollapsed(false)}
-            title="Mostra i tester"
-            aria-label="Mostra la lista tester"
+            title={t.show}
+            aria-label={t.showAria}
             className="mb-6 h-8 px-3 inline-flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] uppercase rounded-lg border cursor-pointer transition-colors"
             style={{
               borderColor: "var(--color-border)",
@@ -154,7 +226,7 @@ export default function CaseStudiesShell({
             }}
           >
             <span aria-hidden>☰</span>
-            Tester
+            {t.tester}
           </button>
         )}
         {children}
