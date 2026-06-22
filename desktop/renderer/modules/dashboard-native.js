@@ -399,14 +399,32 @@ export function loadMap() {
 
 // ───────────────────────── Profilo ─────────────────────────
 
+function assistantButton(label) {
+  const b = el('button', 'btn btn--primary dash-profile__assistant', label)
+  b.type = 'button'
+  b.addEventListener('click', () => {
+    const nav = document.querySelector('.home__nav-item[data-section="chat"]')
+    if (nav) nav.click()
+    // Seleziona il tab Assistente nella chat appena aperta.
+    setTimeout(() => {
+      const tab = document.querySelector('.chat-tab[data-agent="assistente"]')
+      if (tab) tab.click()
+    }, 60)
+  })
+  return b
+}
+
 export function loadProfile() {
   return renderInto('dash-profile', async () => {
     const res = await apiGet('/api/profile')
     const p = res?.profile || null
     if (!p || (!p.name && !p.target_role)) {
-      return emptyBox('Profilo non ancora configurato. Lo costruisci con l’assistente del team.')
+      const box = emptyBox('Profilo non ancora configurato.')
+      box.appendChild(assistantButton('💬 Costruisci il profilo con l’assistente'))
+      return box
     }
     const wrap = el('div', 'dash-profile')
+    wrap.appendChild(assistantButton('💬 Modifica con l’assistente'))
     const head = el('div', 'dash-detail__head')
     head.appendChild(el('h2', 'dash-detail__title', p.name || '—'))
     wrap.appendChild(head)
