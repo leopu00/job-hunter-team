@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import { LOCAL_TOKEN_COOKIE, isLocalTokenAuthenticated } from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 
 export const dynamic = "force-dynamic";
@@ -22,16 +24,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ legacyId: string }> },
 ): Promise<NextResponse> {
-  const resolved = await resolveUser(req);
-  if (!resolved.ok) return resolved.res;
-  if (resolved.user.source !== "session") {
-    return NextResponse.json(
-      { error: "Solo il browser può creare ticket (no Bearer token)" },
-      { status: 403 },
-    );
-  }
-  const { userId, supabase } = resolved.user;
-
+  // [JHT-DASHBOARD-NATIVE] L'auth cloud (resolveUser) è spostata sotto, al solo
+  // path cloud: la scrittura locale (INSERT su SQLite) vale sia per il browser
+  // sia per il desktop nativo (local-token) e non ha bisogno di un utente cloud.
   const { legacyId: legacyIdParam } = await params;
   const legacyId = Number.parseInt(legacyIdParam, 10);
   if (!Number.isInteger(legacyId) || legacyId <= 0) {
@@ -98,6 +93,27 @@ export async function POST(
       source: "local",
     });
   }
+
+  // [JHT-DASHBOARD-NATIVE] Oltre questo punto = cloud (SQLite assente). Il
+  // desktop nativo col local-token richiede il DB locale: se manca → 503,
+  // non passiamo dal cloud (resolveUser→Supabase, che rifiuterebbe il Bearer).
+  if (
+    isLocalTokenAuthenticated(
+      req.headers.get("authorization"),
+      (await cookies()).get(LOCAL_TOKEN_COOKIE)?.value,
+    )
+  ) {
+    return NextResponse.json({ error: "DB locale assente" }, { status: 503 });
+  }
+  const resolved = await resolveUser(req);
+  if (!resolved.ok) return resolved.res;
+  if (resolved.user.source !== "session") {
+    return NextResponse.json(
+      { error: "Solo il browser può creare ticket (no Bearer token)" },
+      { status: 403 },
+    );
+  }
+  const { userId, supabase } = resolved.user;
 
   // Cloud-mode: il ticket vive su Supabase (il team lo vedrà al sync — follow-up).
   const { data, error } = await supabase
