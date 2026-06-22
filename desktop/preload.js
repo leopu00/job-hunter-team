@@ -77,6 +77,10 @@ contextBridge.exposeInMainWorld('launcherApi', {
 // da file://) e ritorna { ok, positions|... , error }. Contratto in
 // coordination/chat.jsonl (23:26/23:31).
 contextBridge.exposeInMainWorld('dashboardApi', {
+  // [generico] get(path) → JSON del body dell'API runtime, o null se runtime
+  // giù / non-2xx. Copre TUTTE le sezioni native (offerte/candidature/stats/
+  // mappa/attività…). Solo path "/api/..." (validato nel main). Contratto dev1.
+  get: (path) => ipcRenderer.invoke('dashboard:get', path),
   // → { ok, positions: [...], error? } — positions sempre array.
   listPositions: (opts) => ipcRenderer.invoke('dashboard:list-positions', opts || {}),
   // → { ok, position, score, highlights, company, application, error? }

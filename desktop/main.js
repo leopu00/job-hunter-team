@@ -682,6 +682,21 @@ app.whenReady().then(() => {
     const r = await dashboardApiFetch('/api/stats')
     return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error }
   })
+  // [JHT-DASHBOARD-NATIVE] Proxy GENERICO per scalare a MOLTE sezioni native
+  // senza un canale IPC per ognuna (contratto concordato con dev1, 23:38):
+  // window.dashboardApi.get(path) → il main fa GET http://127.0.0.1:PORT+path
+  // autenticato col local-token e ritorna il JSON del body, oppure null se il
+  // runtime è giù / risposta non-2xx / parse fallito (le viste mostrano empty-state).
+  // SICUREZZA: solo path che iniziano per "/api/", nessun "://" o ".." → niente
+  // SSRF verso host arbitrari, resta confinato all'API del runtime locale.
+  ipcMain.handle('dashboard:get', async (_event, apiPath) => {
+    if (typeof apiPath !== 'string' || !apiPath.startsWith('/api/') ||
+        apiPath.includes('://') || apiPath.includes('..')) {
+      return null
+    }
+    const r = await dashboardApiFetch(apiPath)
+    return r.ok ? r.data : null
+  })
 
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
   ipcMain.handle('tunnel:open', (_event, { ip } = {}) => {
