@@ -694,6 +694,10 @@
               <span class="home__nav-icon">📝</span>
               <span class="home__nav-label" data-i18n="home.nav.profile">Profilo</span>
             </button>
+            <button type="button" class="home__nav-item" data-section="hours" role="tab">
+              <span class="home__nav-icon">⏰</span>
+              <span class="home__nav-label" data-i18n="home.nav.hours">Orari</span>
+            </button>
             <button type="button" class="home__nav-item" data-section="provider" role="tab">
               <span class="home__nav-icon">🧠</span>
               <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
@@ -880,6 +884,15 @@
             <p class="home__subtitle" data-i18n="home.profile.subtitle">Il profilo del candidato usato dal team.</p>
           </header>
           <div id="dash-profile"></div>
+        </div>
+
+        <!-- Orari di lavoro del team (nativo) -->
+        <div class="home__panel" data-section="hours" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.hours.title">Orari di lavoro</h1>
+            <p class="home__subtitle" data-i18n="home.hours.subtitle">Quando il team è autorizzato a lavorare.</p>
+          </header>
+          <div id="dash-hours"></div>
         </div>
 
         <!-- Provider: vendor + plan + login -->
