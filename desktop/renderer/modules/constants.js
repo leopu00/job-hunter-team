@@ -18,7 +18,6 @@ export const STEP_PROVIDER_CHOOSE = 'provider-choose'
 export const STEP_PROVIDER_INSTALL = 'provider-install'
 export const STEP_PROVIDER_LOGIN = 'provider-login'
 export const STEP_READY = 'ready'
-export const STEP_RUNNING = 'running'
 
 // User-chosen host where the team will live. Picked at onboarding,
 // drives wizard branching: 'vps' surfaces the Hetzner provisioning

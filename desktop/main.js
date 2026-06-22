@@ -61,6 +61,58 @@ function getBindHomeDir() {
   return path.join(require('node:os').homedir(), '.jht')
 }
 
+// [JHT-DASHBOARD-NATIVE] Le viste native del renderer NON possono fetchare
+// http://localhost:PORT/api da file:// (CORS + niente cookie). Il MAIN fa il
+// fetch (Node, no CORS), autenticando con il local-token che il container
+// vede montato in /jht_home (= ~/.jht/.local-token via getBindHomeDir), e
+// ritorna JSON al renderer via IPC. Contratto concordato con dev1 in
+// coordination/chat.jsonl: dashboard:list-positions / dashboard:get-position.
+function readLocalToken() {
+  try {
+    const tokenPath = path.join(getBindHomeDir(), '.local-token')
+    return require('node:fs').readFileSync(tokenPath, 'utf8').trim()
+  } catch (err) {
+    log.warn('dashboard.local-token-read-failed', { err: err && (err.message || String(err)) })
+    return null
+  }
+}
+
+// Fetch autenticato verso l'API del runtime locale. Ritorna sempre un oggetto
+// { ok, ...data | error } — mai throw — così il renderer gestisce gli errori
+// senza try/catch e la destrutturazione del data (es. {positions}) resta valida.
+// init opzionale: { method, body } per il POST (es. invio chat all'agente).
+// Default GET. Il body viene serializzato JSON con Content-Type adeguato.
+async function dashboardApiFetch(apiPath, init = {}) {
+  let status
+  try {
+    status = await runtime.getStatus()
+  } catch (err) {
+    return { ok: false, error: 'runtime-status-failed' }
+  }
+  const port = status && status.port
+  if (!port || (status.mode !== 'running' && status.mode !== 'external')) {
+    return { ok: false, error: `runtime-not-ready:${status ? status.mode : 'unknown'}` }
+  }
+  const token = readLocalToken()
+  const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  const method = init.method || 'GET'
+  const fetchInit = { method, headers, signal: AbortSignal.timeout(15000) }
+  if (init.body !== undefined && method !== 'GET') {
+    headers['Content-Type'] = 'application/json'
+    fetchInit.body = JSON.stringify(init.body)
+  }
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}${apiPath}`, fetchInit)
+    if (!res.ok) return { ok: false, error: `http-${res.status}`, status: res.status }
+    // Alcune route (POST chat) possono rispondere senza JSON: tollera il vuoto.
+    const text = await res.text()
+    const data = text ? JSON.parse(text) : {}
+    return { ok: true, data }
+  } catch (err) {
+    return { ok: false, error: err && (err.message || String(err)) }
+  }
+}
+
 // Renderer preferences store. Lives in app.getPath('userData') so it
 // survives uninstall/upgrade (see feedback_no_user_data_wipe.md) and
 // does not couple to ~/.jht, which may not exist yet at onboarding
@@ -239,6 +291,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // [JHT-DASHBOARD-SPLIT] La dashboard locale è EMBEDDED nel pannello Team
+      // come <webview> puntata a localhost:PORT (decisione utente: una sola
+      // finestra, niente più openDashboardWindow per il local). Abilita il tag.
+      webviewTag: true,
     },
   })
 
@@ -281,6 +337,34 @@ function createWindow() {
       event.preventDefault()
       shell.openExternal(url).catch(() => {})
     }
+  })
+
+  // [JHT-DASHBOARD-SPLIT] Hardening della <webview> embedded (dashboard locale
+  // nel pannello Team). La webview carica localhost:PORT servito dal Next nel
+  // container; non deve avere accesso privilegiato né poter aprire finestre
+  // annidate o navigare via verso siti arbitrari.
+  // 1) sanitizza le prefs in fase di attach: nessun preload, no Node, isolata.
+  mainWindow.webContents.on('will-attach-webview', (_event, webPreferences) => {
+    delete webPreferences.preload
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+  })
+  // 2) sul webContents della webview: popup/target=_blank/window.open → browser
+  //    di sistema (mai BrowserWindow annidate); navigazioni top-level verso host
+  //    NON locali → browser di sistema (la dashboard è una SPA su localhost, le
+  //    navigazioni interne restano dentro la webview).
+  mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    guest.setWindowOpenHandler(({ url }) => {
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {})
+      return { action: 'deny' }
+    })
+    guest.on('will-navigate', (event, url) => {
+      const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(url)
+      if (!isLocal && /^https?:\/\//i.test(url)) {
+        event.preventDefault()
+        shell.openExternal(url).catch(() => {})
+      }
+    })
   })
 }
 
@@ -585,6 +669,53 @@ app.whenReady().then(() => {
     }
   })
   ipcMain.handle('launcher:open-browser', () => openRuntimeInBrowser())
+
+  // [JHT-DASHBOARD-NATIVE] IPC per le viste native della dashboard (lane dev1
+  // renderer). Il main fa il fetch autenticato al runtime locale e ritorna
+  // { ok, ...data | error }. Vedi readLocalToken/dashboardApiFetch.
+  ipcMain.handle('dashboard:list-positions', async (_event, { limit = 50 } = {}) => {
+    const n = Math.max(1, Math.min(500, Number(limit) || 50))
+    const r = await dashboardApiFetch(`/api/positions/recent?limit=${n}`)
+    // Shape concordata: { ok, positions:[...] , error? }. positions sempre array.
+    return r.ok ? { ok: true, positions: (r.data && r.data.positions) || [] } : { ok: false, error: r.error, positions: [] }
+  })
+  ipcMain.handle('dashboard:get-position', async (_event, { id } = {}) => {
+    if (!id) return { ok: false, error: 'missing-id' }
+    const r = await dashboardApiFetch(`/api/positions/${encodeURIComponent(id)}`)
+    return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error }
+  })
+  // Riepilogo per l'header/empty-state della dashboard nativa (/api/stats → 200
+  // verificato live). Utile anche con 0 offerte. Extra rispetto al contratto base.
+  ipcMain.handle('dashboard:get-stats', async () => {
+    const r = await dashboardApiFetch('/api/stats')
+    return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error }
+  })
+  // [JHT-DASHBOARD-NATIVE] Proxy GENERICO per scalare a MOLTE sezioni native
+  // senza un canale IPC per ognuna (contratto concordato con dev1, 23:38):
+  // window.dashboardApi.get(path) → il main fa GET http://127.0.0.1:PORT+path
+  // autenticato col local-token e ritorna il JSON del body, oppure null se il
+  // runtime è giù / risposta non-2xx / parse fallito (le viste mostrano empty-state).
+  // SICUREZZA: solo path che iniziano per "/api/", nessun "://" o ".." → niente
+  // SSRF verso host arbitrari, resta confinato all'API del runtime locale.
+  ipcMain.handle('dashboard:get', async (_event, apiPath) => {
+    if (typeof apiPath !== 'string' || !apiPath.startsWith('/api/') ||
+        apiPath.includes('://') || apiPath.includes('..')) {
+      return null
+    }
+    const r = await dashboardApiFetch(apiPath)
+    return r.ok ? r.data : null
+  })
+  // [JHT-DASHBOARD-NATIVE] POST generico per l'INTERAZIONE (es. chat con gli
+  // agenti: POST /api/capitano/chat → tmux send-keys). Stessa validazione path
+  // + auth Bearer del get(). Ritorna { ok, ...data } | { ok:false, error }.
+  ipcMain.handle('dashboard:post', async (_event, { path: apiPath, body } = {}) => {
+    if (typeof apiPath !== 'string' || !apiPath.startsWith('/api/') ||
+        apiPath.includes('://') || apiPath.includes('..')) {
+      return { ok: false, error: 'invalid-path' }
+    }
+    const r = await dashboardApiFetch(apiPath, { method: 'POST', body: body ?? {} })
+    return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error, status: r.status }
+  })
 
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
   ipcMain.handle('tunnel:open', (_event, { ip } = {}) => {
@@ -1194,29 +1325,60 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('setup:get-status', async () => {
-    const docker = await dockerInstaller.checkDocker()
-    const extra = await deps.inspectExtraDeps()
-    const image = containerPrep.inspectImage()
-    const saved = providerStore.readProviders(app.getPath('userData'))
-    const { installed } = providerInstall.inspectInstalledProviders()
-    const bindHomeDir = getBindHomeDir()
-    // Auth only matters for providers the user currently picks (saved).
-    // Binaries in the bind-mount from previous runs are ignored — the
-    // user deselected them, they shouldn't resurface at login.
-    const relevant = saved.filter((id) => installed.includes(id))
-    const auth = providerAuth.authStates({ providers: relevant, bindHomeDir })
-    return {
-      docker,
-      extra,
-      image,
-      providers: {
-        saved,
-        installed,
-        pending: saved.filter((id) => !installed.includes(id)),
-        auth,
-        authed: auth.filter((a) => a.authed).map((a) => a.id),
-        unauthed: auth.filter((a) => !a.authed).map((a) => a.id),
-      },
+    // [boot-to-wizard fix] providers.saved è l'UNICA cosa che decide
+    // setup-complete (vedi home.js isSetupComplete). Va calcolato per primo e
+    // in modo indipendente, e l'intero handler NON deve mai rifiutare: se un
+    // inspect lancia (es. docker/container non ancora pronti subito dopo il
+    // boot) boot() cadrebbe nel catch e mostrerebbe il WIZARD anche con un
+    // provider già salvato → la Home "sparisce" al riavvio (bug intermittente).
+    let saved = []
+    try {
+      saved = providerStore.readProviders(app.getPath('userData'))
+    } catch (e) {
+      log.warn('setup-status.read-providers-failed', { err: e && (e.message || String(e)) })
+    }
+    try {
+      const docker = await dockerInstaller.checkDocker()
+      const extra = await deps.inspectExtraDeps()
+      const image = containerPrep.inspectImage()
+      const { installed } = providerInstall.inspectInstalledProviders()
+      const bindHomeDir = getBindHomeDir()
+      // Auth only matters for providers the user currently picks (saved).
+      // Binaries in the bind-mount from previous runs are ignored — the
+      // user deselected them, they shouldn't resurface at login.
+      const relevant = saved.filter((id) => installed.includes(id))
+      const auth = providerAuth.authStates({ providers: relevant, bindHomeDir })
+      return {
+        docker,
+        extra,
+        image,
+        providers: {
+          saved,
+          installed,
+          pending: saved.filter((id) => !installed.includes(id)),
+          auth,
+          authed: auth.filter((a) => a.authed).map((a) => a.id),
+          unauthed: auth.filter((a) => !a.authed).map((a) => a.id),
+        },
+      }
+    } catch (e) {
+      // Degraded ma NON rifiuta: ritorna almeno providers.saved così boot()
+      // instrada alla Home invece che al wizard. Gli inspect (docker/image/
+      // auth) si rileggono al prossimo refresh quando il sistema è pronto.
+      log.warn('setup-status.degraded', { err: e && (e.message || String(e)), saved })
+      return {
+        docker: {},
+        extra: {},
+        image: {},
+        providers: {
+          saved,
+          installed: [],
+          pending: saved,
+          auth: [],
+          authed: [],
+          unauthed: [],
+        },
+      }
     }
   })
 

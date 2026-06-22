@@ -635,27 +635,6 @@
         </div>
       </section>
 
-      <!-- Step 4: running -->
-      <section class="step step--centered" id="step-running" data-step="running" hidden>
-        <div class="step__emoji" aria-hidden="true">🏁</div>
-        <h1 class="step__title" id="running-title" data-i18n="running.title">Team running</h1>
-        <p class="step__lead" id="running-lead" data-i18n="running.leadRunning">
-          The runtime is up. Open the dashboard in your browser to get started.
-        </p>
-        <div class="running-info" id="running-info"></div>
-        <div class="step__actions">
-          <button class="btn btn--primary" id="btn-open-browser" data-i18n="running.openBrowser">
-            Open dashboard
-          </button>
-          <button class="btn btn--ghost" id="btn-stop-team" data-i18n="running.stop">
-            Stop team
-          </button>
-        </div>
-        <details class="advanced">
-          <summary data-i18n="running.advanced">Technical details</summary>
-          <pre class="advanced__log" id="advanced-log"></pre>
-        </details>
-      </section>
     </main>
 
     <!-- Home: post-setup dashboard. Mostrata quando Docker + container image +
@@ -673,34 +652,86 @@
           <span class="home__brand-name">Desktop</span>
         </div>
         <nav class="home__nav" role="tablist">
-          <button type="button" class="home__nav-item is-active" data-section="team" role="tab">
-            <span class="home__nav-icon">🚀</span>
-            <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="provider" role="tab">
-            <span class="home__nav-icon">🧠</span>
-            <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="docker" role="tab">
-            <span class="home__nav-icon">🐳</span>
-            <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="account" role="tab">
-            <span class="home__nav-icon">👤</span>
-            <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="email" role="tab">
-            <span class="home__nav-icon">📧</span>
-            <span class="home__nav-label" data-i18n="home.nav.email">Email</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="language" role="tab">
-            <span class="home__nav-icon">🌐</span>
-            <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="advanced" role="tab">
-            <span class="home__nav-icon">⚙️</span>
-            <span class="home__nav-label" data-i18n="home.nav.advanced">Avanzate</span>
-          </button>
+          <!-- Gruppo Team: controllo e agenti -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.team">Team</div>
+            <button type="button" class="home__nav-item is-active" data-section="team" role="tab">
+              <span class="home__nav-icon">🚀</span>
+              <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="agents" role="tab">
+              <span class="home__nav-icon">🤖</span>
+              <span class="home__nav-label" data-i18n="home.nav.agents">Agenti</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="chat" role="tab">
+              <span class="home__nav-icon">💬</span>
+              <span class="home__nav-label" data-i18n="home.nav.chat">Chat</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="notifs" role="tab">
+              <span class="home__nav-icon">🔔</span>
+              <span class="home__nav-label" data-i18n="home.nav.notifs">Notifiche</span>
+            </button>
+          </div>
+          <!-- Gruppo Lavoro: i dati della ricerca -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.work">Lavoro</div>
+            <button type="button" class="home__nav-item" data-section="dashboard" role="tab">
+              <span class="home__nav-icon">📊</span>
+              <span class="home__nav-label" data-i18n="home.nav.dashboard">Dashboard</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="stats" role="tab">
+              <span class="home__nav-icon">📈</span>
+              <span class="home__nav-label" data-i18n="home.nav.stats">Statistiche</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="apps" role="tab">
+              <span class="home__nav-icon">📨</span>
+              <span class="home__nav-label" data-i18n="home.nav.apps">Candidature</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="map" role="tab">
+              <span class="home__nav-icon">🗺️</span>
+              <span class="home__nav-label" data-i18n="home.nav.map">Mappa</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="activity" role="tab">
+              <span class="home__nav-icon">📜</span>
+              <span class="home__nav-label" data-i18n="home.nav.activity">Attività</span>
+            </button>
+          </div>
+          <!-- Gruppo Impostazioni -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.settings">Impostazioni</div>
+            <button type="button" class="home__nav-item" data-section="profile" role="tab">
+              <span class="home__nav-icon">📝</span>
+              <span class="home__nav-label" data-i18n="home.nav.profile">Profilo</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="hours" role="tab">
+              <span class="home__nav-icon">⏰</span>
+              <span class="home__nav-label" data-i18n="home.nav.hours">Orari</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="provider" role="tab">
+              <span class="home__nav-icon">🧠</span>
+              <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="docker" role="tab">
+              <span class="home__nav-icon">🐳</span>
+              <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="account" role="tab">
+              <span class="home__nav-icon">👤</span>
+              <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="email" role="tab">
+              <span class="home__nav-icon">📧</span>
+              <span class="home__nav-label" data-i18n="home.nav.email">Email</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="language" role="tab">
+              <span class="home__nav-icon">🌐</span>
+              <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="advanced" role="tab">
+              <span class="home__nav-icon">⚙️</span>
+              <span class="home__nav-label" data-i18n="home.nav.advanced">Avanzate</span>
+            </button>
+          </div>
         </nav>
       </aside>
 
@@ -747,6 +778,139 @@
               <pre class="advanced__log" id="home-team-log"></pre>
             </details>
           </div>
+        </div>
+
+        <!-- Dashboard: vista NATIVA delle offerte del team [JHT-DASHBOARD-SPLIT].
+             Niente webview: dashboard-native.js fetcha i dati via window.dashboardApi
+             (IPC → main → runtime locale) e li rende con UI desktop nativa. -->
+        <div class="home__panel" data-section="dashboard" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.dashboard.title">Dashboard</h1>
+            <p class="home__subtitle" id="dash-subtitle" data-i18n="home.dashboard.subtitle">
+              Le offerte trovate dal team, con punteggio.
+            </p>
+          </header>
+          <div class="dash__filters" id="dash-filters" hidden>
+            <input type="text" id="dash-search" class="dash__search" data-i18n-ph="home.dashboard.search" placeholder="Cerca titolo o azienda…" />
+            <select id="dash-fstatus" class="dash__select">
+              <option value="">Tutti gli stati</option>
+              <option value="new">Nuove</option>
+              <option value="checked">Verificate</option>
+              <option value="scored">Valutate</option>
+              <option value="writing">In scrittura</option>
+              <option value="ready">Pronte</option>
+              <option value="applied">Inviate</option>
+              <option value="response">Risposte</option>
+              <option value="excluded">Escluse</option>
+            </select>
+            <select id="dash-fscore" class="dash__select">
+              <option value="">Tutti i punteggi</option>
+              <option value="90">90+</option>
+              <option value="75">75+</option>
+              <option value="50">50+</option>
+              <option value="unscored">Senza punteggio</option>
+            </select>
+            <span id="dash-count" class="dash__count"></span>
+          </div>
+          <div class="dash__empty" id="dash-empty" hidden>
+            <div class="step__emoji" aria-hidden="true">📊</div>
+            <p class="home__subtitle" id="dash-empty-text" data-i18n="home.dashboard.empty">
+              Avvia il team dalla sezione Team per vedere qui le offerte.
+            </p>
+          </div>
+          <div class="dash__list" id="dash-list" hidden></div>
+          <div class="dash__detail" id="dash-detail" hidden></div>
+        </div>
+
+        <!-- Chat agenti: Capitano / Assistente (nativo) -->
+        <div class="home__panel" data-section="chat" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.chat.title">Chat</h1>
+            <p class="home__subtitle" data-i18n="home.chat.subtitle">Parla con il Capitano o l’Assistente del team.</p>
+          </header>
+          <div class="chat">
+            <div class="chat__tabs">
+              <button type="button" class="chat-tab is-active" data-agent="capitano">Capitano</button>
+              <button type="button" class="chat-tab" data-agent="assistente">Assistente</button>
+            </div>
+            <div class="chat__messages" id="chat-messages"></div>
+            <div class="chat__composer">
+              <textarea id="chat-input" rows="2" data-i18n-ph="home.chat.placeholder" placeholder="Scrivi un messaggio…"></textarea>
+              <button type="button" class="btn btn--primary" id="chat-send" data-i18n="home.chat.send">Invia</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notifiche (nativo) -->
+        <div class="home__panel" data-section="notifs" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.notifs.title">Notifiche</h1>
+            <p class="home__subtitle" data-i18n="home.notifs.subtitle">Avvisi e aggiornamenti del team.</p>
+          </header>
+          <div id="dash-notifs"></div>
+        </div>
+
+        <!-- Statistiche: conteggi pipeline (nativo) -->
+        <div class="home__panel" data-section="stats" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.stats.title">Statistiche</h1>
+            <p class="home__subtitle" data-i18n="home.stats.subtitle">La pipeline del team a colpo d’occhio.</p>
+          </header>
+          <div id="dash-stats"></div>
+        </div>
+
+        <!-- Candidature (nativo) -->
+        <div class="home__panel" data-section="apps" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.apps.title">Candidature</h1>
+            <p class="home__subtitle" data-i18n="home.apps.subtitle">Le candidature inviate e il loro stato.</p>
+          </header>
+          <div id="dash-apps"></div>
+        </div>
+
+        <!-- Mappa: offerte per luogo (nativo) -->
+        <div class="home__panel" data-section="map" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.map.title">Mappa</h1>
+            <p class="home__subtitle" data-i18n="home.map.subtitle">Le offerte raggruppate per luogo.</p>
+          </header>
+          <div id="dash-map"></div>
+        </div>
+
+        <!-- Attività: timeline del team (nativo) -->
+        <div class="home__panel" data-section="activity" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.activity.title">Attività</h1>
+            <p class="home__subtitle" data-i18n="home.activity.subtitle">Le ultime azioni del team.</p>
+          </header>
+          <div id="dash-activity"></div>
+        </div>
+
+        <!-- Agenti: roster + stato live (nativo) -->
+        <div class="home__panel" data-section="agents" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.agents.title">Agenti</h1>
+            <p class="home__subtitle" data-i18n="home.agents.subtitle">Gli agenti del team e il loro stato.</p>
+          </header>
+          <div id="dash-agents"></div>
+        </div>
+
+        <!-- Profilo: vista del profilo candidato (nativo) -->
+        <div class="home__panel" data-section="profile" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.profile.title">Profilo</h1>
+            <p class="home__subtitle" data-i18n="home.profile.subtitle">Il profilo del candidato usato dal team.</p>
+          </header>
+          <div id="dash-profile"></div>
+        </div>
+
+        <!-- Orari di lavoro del team (nativo) -->
+        <div class="home__panel" data-section="hours" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.hours.title">Orari di lavoro</h1>
+            <p class="home__subtitle" data-i18n="home.hours.subtitle">Quando il team è autorizzato a lavorare.</p>
+          </header>
+          <div id="dash-hours"></div>
         </div>
 
         <!-- Provider: vendor + plan + login -->

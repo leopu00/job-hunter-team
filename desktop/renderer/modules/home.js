@@ -1,5 +1,7 @@
 import { state, showStep, appendLog } from './state.js'
 import { t, getCurrentLang, setLang, initLangDropdown } from './i18n.js'
+import { loadDashboard, loadStats, loadApplications, loadMap, loadActivity, loadAgents, loadProfile, loadWorkingHours, loadNotifications } from './dashboard-native.js'
+import { loadChat, stopChat } from './dash-chat.js'
 import {
   STEP_WELCOME,
   STEP_READY,
@@ -29,7 +31,7 @@ const VPS_DASHBOARD_URL = 'https://jobhunterteam.ai/dashboard'
 
 // -------- Home (post-setup dashboard) --------
 
-const HOME_SECTIONS = ['team', 'provider', 'docker', 'account', 'email', 'language', 'advanced']
+const HOME_SECTIONS = ['team', 'chat', 'notifs', 'dashboard', 'stats', 'apps', 'map', 'activity', 'agents', 'profile', 'hours', 'provider', 'docker', 'account', 'email', 'language', 'advanced']
 
 // Pagina pubblica che spiega come impostare l'inoltro automatico (pulsante nel
 // pannello Email). Aggiornare se la guida cambia URL.
@@ -170,6 +172,7 @@ function stopTeamPanelPoll() {
 }
 
 function setHomeSection(name) {
+  if (name !== 'chat') stopChat()
   if (!HOME_SECTIONS.includes(name)) name = 'team'
   state.homeSection = name
   for (const btn of homeDom.navItems) {
@@ -185,7 +188,17 @@ function setHomeSection(name) {
     startTeamPanelPoll()
   } else {
     stopTeamPanelPoll()
-    if (name === 'provider') refreshHomeProvider()
+    if (name === 'dashboard') loadDashboard()
+    else if (name === 'stats') loadStats()
+    else if (name === 'apps') loadApplications()
+    else if (name === 'map') loadMap()
+    else if (name === 'activity') loadActivity()
+    else if (name === 'agents') loadAgents()
+    else if (name === 'chat') loadChat()
+    else if (name === 'notifs') loadNotifications()
+    else if (name === 'profile') loadProfile()
+    else if (name === 'hours') loadWorkingHours()
+    else if (name === 'provider') refreshHomeProvider()
     else if (name === 'docker') refreshHomeDocker()
     else if (name === 'email') refreshHomeEmail()
   }
@@ -532,7 +545,10 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
   homeDom.teamStatus.textContent = t(statusKey)
   homeDom.teamSubtitle.textContent = t(subtitleKey)
   homeDom.btnStart.hidden = running || starting
-  homeDom.btnOpen.hidden = !running
+  // [JHT-DASHBOARD-SPLIT] In LOCAL la dashboard è embedded nel pannello: il
+  // bottone "Apri dashboard" (che apriva la finestra separata) è ridondante,
+  // lo teniamo nascosto. Resta visibile solo nel ramo VPS (cockpit via tunnel).
+  homeDom.btnOpen.hidden = true
   homeDom.btnStop.hidden = !(running || starting)
   // Info rows
   homeDom.teamInfo.innerHTML = ''
@@ -549,9 +565,11 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
     row.append(l, v)
     homeDom.teamInfo.appendChild(row)
   }
-  if (status?.url) pushRow(t('running.info.url'), status.url)
-  if (status?.port) pushRow(t('running.info.port'), String(status.port))
-  if (mode) pushRow(t('running.info.mode'), mode)
+  // [JHT-DASHBOARD-SPLIT] NON esporre URL/porta localhost nel pannello: per
+  // design (data-sync-and-dashboard-split, § "separazione delle due dashboard")
+  // la dashboard locale vive DENTRO l'app e l'utente non deve mai pensare a
+  // `localhost:3000`. Il dot + label "Starting/Running" + il bottone Open
+  // comunicano tutto; il URL grezzo era solo plumbing confondente.
   homeDom.teamInfo.hidden = homeDom.teamInfo.childElementCount === 0
   if (status?.lastError) {
     homeDom.teamAdvanced.hidden = false
@@ -694,7 +712,7 @@ async function refreshHomeTeam() {
   }
 }
 
-async function startTeamFromHome() {
+export async function startTeamFromHome() {
   if (state.starting) return
   // Carica location dalle prefs se non gia' in state (perso ai restart).
   if (!state.location && window.prefsApi?.get) {
@@ -745,9 +763,10 @@ async function startTeamFromHome() {
     }
     const status = await window.launcherApi.start({})
     renderHomeTeamStatus(status)
-    if (status?.running && status?.url) {
-      await window.launcherApi.openBrowser().catch(() => {})
-    }
+    // [JHT-DASHBOARD-SPLIT] Avviato il team, niente finestra/browser: la
+    // dashboard è una sezione NATIVA a sé (sidebar → Dashboard) che fetcha le
+    // offerte dal runtime via window.dashboardApi. L'utente la apre da lì
+    // quando vuole; qui ci limitiamo ad avviare il runtime.
   } catch (error) {
     appendLog(`startTeamFromHome: ${error.message || error}`)
     renderHomeTeamStatus({ mode: 'error', lastError: error.message || String(error) })
