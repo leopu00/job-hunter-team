@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useLandingI18n } from "./LandingI18n";
+import { isLocalDeploy } from "@/lib/deploy-mode";
 
 const STORAGE_KEY = "jht:cookie-consent";
 
@@ -57,6 +58,11 @@ export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // [JHT-DASHBOARD-SPLIT] Sul container LOCAL (dashboard embedded nell'app
+    // desktop) il banner cookie non ha senso: nessun analytics/tracking web,
+    // ed è uno degli "orpelli web" che danno la sensazione pagina-in-pagina.
+    // Su cloud (browser) resta.
+    if (isLocalDeploy()) return;
     try {
       if (!localStorage.getItem(STORAGE_KEY)) setVisible(true);
     } catch {
