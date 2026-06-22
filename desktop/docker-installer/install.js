@@ -339,6 +339,15 @@ async function isColimaInstalled({ env } = {}) {
   }
 }
 
+async function isQemuImgPresent({ env } = {}) {
+  try {
+    await execFileAsync('qemu-img', ['--version'], { env: env || brewEnv(), timeout: 3000 })
+    return true
+  } catch {
+    return false
+  }
+}
+
 // Snapshot of the three install steps shown in the UI. Used by the renderer
 // to paint the checklist on open without running any install yet.
 async function inspectInstallSteps({ platform = process.platform } = {}) {
@@ -363,6 +372,7 @@ async function installColimaOnDarwin({
   brewCheck = isBrewPresent,
   dockerCheck = isDockerResponsive,
   brewInstaller = installHomebrew,
+  qemuImgCheck = isQemuImgPresent,
 } = {}) {
   const env = brewEnv()
 
@@ -414,6 +424,16 @@ async function installColimaOnDarwin({
     }
   }
 
+  // `brew install` exits 0 even when it silently SKIPS linking the `docker`
+  // formula — either because a prior partial run already installed it (brew
+  // won't relink an existing keg) or because another keg owns a conflicting
+  // path (e.g. `docker.lima` from the `lima` formula that Colima pulls in).
+  // Without the link, /opt/homebrew/bin/docker never appears, so the next
+  // `colima start` dies with "dependency check failed for docker: docker not
+  // found". Force the link here so the binary is guaranteed on PATH.
+  // Best-effort: if it still fails, the daemon check below surfaces it.
+  await run('brew', ['link', '--overwrite', 'docker'], { onLog, env })
+
   // Homebrew's docker-compose formula doesn't wire the plugin into
   // ~/.docker/cli-plugins on its own (brew just prints a caveat), so
   // `docker compose` still fails after install. Do the symlink now.
@@ -440,11 +460,7 @@ async function installColimaOnDarwin({
     onLog('Colima start with VZ backend failed — falling back to QEMU…')
     // QEMU backend needs the qemu-img binary; install it lazily so real
     // Mac hosts that never hit the fallback don't pay the ~200MB download.
-    let qemuOk = false
-    try {
-      await execFileAsync('qemu-img', ['--version'], { env, timeout: 3000 })
-      qemuOk = true
-    } catch { /* missing */ }
+    const qemuOk = await qemuImgCheck({ env })
     if (!qemuOk) {
       onLog('Installing qemu (required by QEMU backend)…')
       const qemu = await run('brew', ['install', 'qemu'], { onLog, env })
@@ -490,6 +506,7 @@ async function installDocker({
   brewCheck = isBrewPresent,
   dockerCheck = isDockerResponsive,
   brewInstaller = installHomebrew,
+  qemuImgCheck = isQemuImgPresent,
 } = {}) {
   if (platform !== 'darwin') {
     return { ok: false, error: 'unsupported-platform' }
@@ -501,6 +518,7 @@ async function installDocker({
     brewCheck,
     dockerCheck,
     brewInstaller,
+    qemuImgCheck,
   })
 }
 
@@ -512,6 +530,7 @@ module.exports = {
     isBrewPresent,
     isDockerResponsive,
     isColimaInstalled,
+    isQemuImgPresent,
     installHomebrew,
     brewEnv,
     brewPath,
