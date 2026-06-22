@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 
 // "Sync now" lato CLOUD ([JHT-DATA-SYNC] fase 3). Mirror del CloudSyncStatusBanner
 // (che è LOCAL-only): quello pusha SQLite→cloud, questo chiede alla VPS un push
@@ -12,21 +14,131 @@ import { useRouter } from "next/navigation";
 // e a completamento UN solo router.refresh(). All'accesso parte una volta sola.
 // Si mostra SOLO su cloud (status.remote) e loggato: in locale c'è il banner.
 
-function formatRelativeTime(iso: string): string {
+const T: Record<
+  Locale,
+  {
+    now: string;
+    fewSecondsAgo: string;
+    secAgo: (n: number) => string;
+    minAgo: (n: number) => string;
+    hourAgo: (n: number) => string;
+    daysAgo: (n: number) => string;
+    updated: (rel: string) => string;
+    networkError: string;
+    syncing: string;
+    syncNow: string;
+    title: string;
+  }
+> = {
+  it: {
+    now: "ora",
+    fewSecondsAgo: "pochi secondi fa",
+    secAgo: (n) => `${n} sec fa`,
+    minAgo: (n) => (n === 1 ? "1 min fa" : `${n} min fa`),
+    hourAgo: (n) => (n === 1 ? "1 ora fa" : `${n} ore fa`),
+    daysAgo: (n) => (n === 1 ? "1 giorno fa" : `${n} giorni fa`),
+    updated: (rel) => `Aggiornato ${rel}`,
+    networkError: "Errore di rete",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    title: "Chiedi alla VPS un aggiornamento dei dati ora",
+  },
+  en: {
+    now: "now",
+    fewSecondsAgo: "a few seconds ago",
+    secAgo: (n) => `${n} sec ago`,
+    minAgo: (n) => (n === 1 ? "1 min ago" : `${n} min ago`),
+    hourAgo: (n) => (n === 1 ? "1 hour ago" : `${n} hours ago`),
+    daysAgo: (n) => (n === 1 ? "1 day ago" : `${n} days ago`),
+    updated: (rel) => `Updated ${rel}`,
+    networkError: "Network error",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    title: "Ask the VPS for a data refresh now",
+  },
+  es: {
+    now: "ahora",
+    fewSecondsAgo: "hace unos segundos",
+    secAgo: (n) => `hace ${n} s`,
+    minAgo: (n) => (n === 1 ? "hace 1 min" : `hace ${n} min`),
+    hourAgo: (n) => (n === 1 ? "hace 1 hora" : `hace ${n} horas`),
+    daysAgo: (n) => (n === 1 ? "hace 1 día" : `hace ${n} días`),
+    updated: (rel) => `Actualizado ${rel}`,
+    networkError: "Error de red",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    title: "Pedir a la VPS una actualización de datos ahora",
+  },
+  fr: {
+    now: "maintenant",
+    fewSecondsAgo: "il y a quelques secondes",
+    secAgo: (n) => `il y a ${n} s`,
+    minAgo: (n) => (n === 1 ? "il y a 1 min" : `il y a ${n} min`),
+    hourAgo: (n) => (n === 1 ? "il y a 1 heure" : `il y a ${n} heures`),
+    daysAgo: (n) => (n === 1 ? "il y a 1 jour" : `il y a ${n} jours`),
+    updated: (rel) => `Mis à jour ${rel}`,
+    networkError: "Erreur réseau",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    title: "Demander au VPS une actualisation des données maintenant",
+  },
+  de: {
+    now: "jetzt",
+    fewSecondsAgo: "vor wenigen Sekunden",
+    secAgo: (n) => `vor ${n} Sek.`,
+    minAgo: (n) => (n === 1 ? "vor 1 Min." : `vor ${n} Min.`),
+    hourAgo: (n) => (n === 1 ? "vor 1 Stunde" : `vor ${n} Stunden`),
+    daysAgo: (n) => (n === 1 ? "vor 1 Tag" : `vor ${n} Tagen`),
+    updated: (rel) => `Aktualisiert ${rel}`,
+    networkError: "Netzwerkfehler",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    title: "Den VPS jetzt um eine Datenaktualisierung bitten",
+  },
+  hu: {
+    now: "most",
+    fewSecondsAgo: "néhány másodperce",
+    secAgo: (n) => `${n} mp.-e`,
+    minAgo: (n) => `${n} perce`,
+    hourAgo: (n) => (n === 1 ? "1 órája" : `${n} órája`),
+    daysAgo: (n) => (n === 1 ? "1 napja" : `${n} napja`),
+    updated: (rel) => `Frissítve ${rel}`,
+    networkError: "Hálózati hiba",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    title: "Kérj a VPS-től friss adatfrissítést most",
+  },
+  pt: {
+    now: "agora",
+    fewSecondsAgo: "há alguns segundos",
+    secAgo: (n) => `há ${n} s`,
+    minAgo: (n) => (n === 1 ? "há 1 min" : `há ${n} min`),
+    hourAgo: (n) => (n === 1 ? "há 1 hora" : `há ${n} horas`),
+    daysAgo: (n) => (n === 1 ? "há 1 dia" : `há ${n} dias`),
+    updated: (rel) => `Atualizado ${rel}`,
+    networkError: "Erro de rede",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    title: "Pedir ao VPS uma atualização dos dados agora",
+  },
+};
+
+function formatRelativeTime(iso: string, t: (typeof T)[Locale]): string {
   const diffMs = Date.now() - new Date(iso).getTime();
-  if (diffMs < 0) return "ora";
+  if (diffMs < 0) return t.now;
   const sec = Math.floor(diffMs / 1000);
-  if (sec < 60) return sec <= 5 ? "pochi secondi fa" : `${sec} sec fa`;
+  if (sec < 60) return sec <= 5 ? t.fewSecondsAgo : t.secAgo(sec);
   const min = Math.floor(sec / 60);
-  if (min < 60) return min === 1 ? "1 min fa" : `${min} min fa`;
+  if (min < 60) return t.minAgo(min);
   const hr = Math.floor(min / 60);
-  if (hr < 24) return hr === 1 ? "1 ora fa" : `${hr} ore fa`;
+  if (hr < 24) return t.hourAgo(hr);
   const days = Math.floor(hr / 24);
-  return days === 1 ? "1 giorno fa" : `${days} giorni fa`;
+  return t.daysAgo(days);
 }
 
 export default function CloudRefreshButton() {
   const router = useRouter();
+  const t = T[useLocale()];
   const [remote, setRemote] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -79,7 +191,7 @@ export default function CloudRefreshButton() {
       }
     } catch (err) {
       if (mounted.current) {
-        setError(err instanceof Error ? err.message : "Errore di rete");
+        setError(err instanceof Error ? err.message : t.networkError);
         setSyncing(false);
       }
       return;
@@ -138,7 +250,7 @@ export default function CloudRefreshButton() {
       }}
     >
       {lastSync && !syncing && (
-        <span>Aggiornato {formatRelativeTime(lastSync)}</span>
+        <span>{t.updated(formatRelativeTime(lastSync, t))}</span>
       )}
       {error && <span style={{ color: "var(--color-red)" }}>{error}</span>}
       <button
@@ -156,12 +268,12 @@ export default function CloudRefreshButton() {
           cursor: syncing ? "default" : "pointer",
           opacity: syncing ? 0.6 : 1,
         }}
-        title="Chiedi alla VPS un aggiornamento dei dati ora"
+        title={t.title}
       >
         <span style={{ display: "inline-block", transformOrigin: "center" }}>
           ↻
         </span>
-        {syncing ? "Sync…" : "Sync now"}
+        {syncing ? t.syncing : t.syncNow}
       </button>
     </div>
   );

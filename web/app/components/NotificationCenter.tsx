@@ -31,42 +31,49 @@ const I18N: Record<Lang, Record<string, string>> = {
     mark_all: "Segna tutte lette",
     empty: "Nessuna notifica",
     clear: "Cancella tutto",
+    mark_read: "Segna come letta:",
   },
   en: {
     title: "Notifications",
     mark_all: "Mark all read",
     empty: "No notifications",
     clear: "Clear all",
+    mark_read: "Mark as read:",
   },
   es: {
     title: "Notificaciones",
     mark_all: "Marcar todas como leídas",
     empty: "Sin notificaciones",
     clear: "Borrar todo",
+    mark_read: "Marcar como leída:",
   },
   de: {
     title: "Benachrichtigungen",
     mark_all: "Alle als gelesen markieren",
     empty: "Keine Benachrichtigungen",
     clear: "Alle löschen",
+    mark_read: "Als gelesen markieren:",
   },
   fr: {
     title: "Notifications",
     mark_all: "Tout marquer comme lu",
     empty: "Aucune notification",
     clear: "Tout effacer",
+    mark_read: "Marquer comme lu :",
   },
   pt: {
     title: "Notificações",
     mark_all: "Marcar todas como lidas",
     empty: "Sem notificações",
     clear: "Limpar tudo",
+    mark_read: "Marcar como lida:",
   },
   hu: {
     title: "Értesítések",
     mark_all: "Összes olvasottnak jelölése",
     empty: "Nincs értesítés",
     clear: "Összes törlése",
+    mark_read: "Megjelölés olvasottként:",
   },
 };
 
@@ -315,7 +322,7 @@ export function NotificationCenter() {
                     role={n.read ? "listitem" : "button"}
                     tabIndex={0}
                     aria-label={
-                      n.read ? n.title : `Segna come letta: ${n.title}`
+                      n.read ? n.title : `${t.mark_read} ${n.title}`
                     }
                     onClick={() => !n.read && markRead(n.id)}
                     onKeyDown={(e) => {

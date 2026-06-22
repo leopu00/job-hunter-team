@@ -4,6 +4,18 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useDashboardT } from '@/app/components/DashboardI18n'
+import { useLocale } from '@/lib/use-locale'
+import type { Locale } from '@/i18n/config'
+
+const T: Record<Locale, { menuAria: string }> = {
+  it: { menuAria: 'Menu navigazione' },
+  en: { menuAria: 'Navigation menu' },
+  es: { menuAria: 'Menú de navegación' },
+  fr: { menuAria: 'Menu de navigation' },
+  de: { menuAria: 'Navigationsmenü' },
+  hu: { menuAria: 'Navigációs menü' },
+  pt: { menuAria: 'Menu de navegação' },
+}
 
 const NAV_KEYS: { href: string; key: string; accent?: string }[] = [
   { href: '/dashboard',    key: 'nav_dashboard' },
@@ -17,6 +29,7 @@ export default function NavbarMobile() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const { t } = useDashboardT()
+  const tl = T[useLocale()]
 
   return (
     <div className="md:hidden flex items-center">
@@ -24,7 +37,7 @@ export default function NavbarMobile() {
         onClick={() => setOpen(v => !v)}
         className="flex flex-col gap-1 p-1.5 rounded"
         style={{ background: 'none', border: '1px solid var(--color-border)', cursor: 'pointer' }}
-        aria-label="Menu navigazione"
+        aria-label={tl.menuAria}
         aria-expanded={open}
         aria-controls="app-mobile-nav"
       >

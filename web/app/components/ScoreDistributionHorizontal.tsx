@@ -1,7 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 import { scoreGreenCss } from "@/lib/score-color";
+
+const T: Record<Locale, { noScore: string }> = {
+  it: { noScore: "senza score" },
+  en: { noScore: "no score" },
+  es: { noScore: "sin score" },
+  fr: { noScore: "sans score" },
+  de: { noScore: "ohne Score" },
+  hu: { noScore: "nincs score" },
+  pt: { noScore: "sem score" },
+};
 
 type Props = {
   scores: number[];
@@ -79,6 +91,7 @@ export default function ScoreDistributionHorizontal({
   fit = false,
   fitAspect,
 }: Props) {
+  const t = T[useLocale()];
   const hasRangeSelection = selectedRanges.length > 0 || unscoredSelected;
   const [hover, setHover] = useState<number | null>(null);
 
@@ -294,7 +307,7 @@ export default function ScoreDistributionHorizontal({
                     fontStyle="italic"
                     style={{ fontFamily: "inherit" }}
                   >
-                    no score
+                    {t.noScore}
                   </text>
                 </g>
               );
