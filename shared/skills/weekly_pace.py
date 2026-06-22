@@ -119,7 +119,7 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
             if (vel_weekly > sustainable
                     and vel_recent < BURST_TRANSIENT_RATIO * vel_weekly):
                 burst_transient = True
-    return {
+    res = {
         "vel_weekly_pct_h": round(vel_weekly, 2),
         "sustainable_pct_h": round(sustainable, 2),
         "ratio": round(ratio, 2) if ratio is not None else None,
@@ -133,3 +133,27 @@ def weekly_pace_assessment(jsonl_path, now_ts, weekly_remaining_pct,
         "burn_mode": burn_mode,
         "burst_transient": burst_transient,
     }
+    res["binding"] = is_weekly_binding(res)
+    return res
+
+
+def is_weekly_binding(assessment) -> bool:
+    """True quando il weekly è il vincolo che DEVE frenare il team.
+
+    Segnale active-hours-aware (NON il proj_weekly naive di compute_metrics, che
+    sovra-proietta sulle notti idle ed è hard-coded a binding=False by design):
+    il weekly è binding quando il team brucia SOPRA il ritmo sostenibile
+    (kind SOPRA-PACE, ratio>1.2) E al ritmo attuale esaurirebbe il budget PRIMA
+    del reset (early_lockout_h presente) E non è un picco già in esaurimento
+    (burst_transient). Questo è esattamente il front-load: chiude il buco
+    "Sentinella cieca al weekly" (status SOTTOUTILIZZO mentre il weekly va a
+    fuoco) senza introdurre coast prematuro su un provider in pari — un team
+    allineato/sotto-pace o senza lockout anticipato NON è binding.
+    """
+    if not isinstance(assessment, dict):
+        return False
+    return bool(
+        assessment.get("kind") == "SOPRA-PACE"
+        and assessment.get("early_lockout_h") is not None
+        and not assessment.get("burst_transient")
+    )

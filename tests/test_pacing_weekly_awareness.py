@@ -17,6 +17,7 @@ Guard: a QUALUNQUE livello weekly, lo status dipende SOLO dal primary 5h.
 from datetime import datetime, timezone, timedelta
 
 from shared.skills.compute_metrics import compute_metrics
+from shared.skills.weekly_pace import is_weekly_binding
 
 
 def _parsed(usage, weekly_usage):
@@ -62,3 +63,35 @@ def test_campi_weekly_awareness_presenti():
     for k in ("weekly_remaining_pct", "proj_weekly", "weekly_binding", "proj_binding"):
         assert k in res, f"campo awareness mancante: {k}"
     assert res["weekly_remaining_pct"] == 60.0
+
+
+# ── is_weekly_binding: il binding VERO è active-hours-aware, NON il livello ──
+# assoluto né il proj_weekly naive. Vive a valle (sentinel-bridge legge il pace),
+# coerente con fix#4: niente halt su soglia, freno solo quando il pace proietta
+# lockout PRIMA del reset. Chiude "Sentinella cieca al weekly" (front-load Kimi)
+# senza coast prematuro su un team in pari.
+
+def test_binding_su_frontload_conclamato():
+    # SOPRA-PACE + lockout anticipato + non burst → binding (il caso Kimi).
+    assert is_weekly_binding(
+        {"kind": "SOPRA-PACE", "early_lockout_h": 40.0, "burst_transient": False}
+    ) is True
+
+
+def test_no_binding_team_in_pari_o_recuperabile():
+    # Allineato/sotto-pace, o sopra-pace senza lockout anticipato (recuperabile),
+    # o burst in esaurimento → MAI binding (no coast prematuro su Codex sano).
+    assert is_weekly_binding(
+        {"kind": "ALLINEATO", "early_lockout_h": None, "burst_transient": False}) is False
+    assert is_weekly_binding(
+        {"kind": "SOTTO-PACE", "early_lockout_h": None, "burst_transient": False}) is False
+    assert is_weekly_binding(
+        {"kind": "SOPRA-PACE", "early_lockout_h": None, "burst_transient": False}) is False
+    assert is_weekly_binding(
+        {"kind": "SOPRA-PACE", "early_lockout_h": 10.0, "burst_transient": True}) is False
+
+
+def test_binding_degrada_in_sicurezza():
+    # Dato assente/malformato → False (= comportamento attuale, zero rischio).
+    assert is_weekly_binding(None) is False
+    assert is_weekly_binding({}) is False
