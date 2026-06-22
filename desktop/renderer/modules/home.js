@@ -549,9 +549,11 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
     row.append(l, v)
     homeDom.teamInfo.appendChild(row)
   }
-  if (status?.url) pushRow(t('running.info.url'), status.url)
-  if (status?.port) pushRow(t('running.info.port'), String(status.port))
-  if (mode) pushRow(t('running.info.mode'), mode)
+  // [JHT-DASHBOARD-SPLIT] NON esporre URL/porta localhost nel pannello: per
+  // design (data-sync-and-dashboard-split, § "separazione delle due dashboard")
+  // la dashboard locale vive DENTRO l'app e l'utente non deve mai pensare a
+  // `localhost:3000`. Il dot + label "Starting/Running" + il bottone Open
+  // comunicano tutto; il URL grezzo era solo plumbing confondente.
   homeDom.teamInfo.hidden = homeDom.teamInfo.childElementCount === 0
   if (status?.lastError) {
     homeDom.teamAdvanced.hidden = false
@@ -694,7 +696,7 @@ async function refreshHomeTeam() {
   }
 }
 
-async function startTeamFromHome() {
+export async function startTeamFromHome() {
   if (state.starting) return
   // Carica location dalle prefs se non gia' in state (perso ai restart).
   if (!state.location && window.prefsApi?.get) {
@@ -745,8 +747,14 @@ async function startTeamFromHome() {
     }
     const status = await window.launcherApi.start({})
     renderHomeTeamStatus(status)
-    if (status?.running && status?.url) {
-      await window.launcherApi.openBrowser().catch(() => {})
+    // [JHT-DASHBOARD-SPLIT] Apri la dashboard nella finestra INTEGRATA dell'app
+    // (openBrowser → openDashboardWindow). NON gatare su status.running: start()
+    // ritorna durante il warm-up (running=false), e openBrowser attende già
+    // internamente il warm-up (waitForWarmUpDone) prima di mostrare la finestra.
+    // Così la dashboard integrata appare da sola appena il runtime è pronto,
+    // senza che l'utente debba cliccare nulla. Non-blocking.
+    if (status?.mode !== 'error') {
+      window.launcherApi.openBrowser().catch(() => {})
     }
   } catch (error) {
     appendLog(`startTeamFromHome: ${error.message || error}`)
