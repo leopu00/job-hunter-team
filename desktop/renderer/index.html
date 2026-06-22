@@ -655,6 +655,22 @@
             <span class="home__nav-icon">📊</span>
             <span class="home__nav-label" data-i18n="home.nav.dashboard">Dashboard</span>
           </button>
+          <button type="button" class="home__nav-item" data-section="stats" role="tab">
+            <span class="home__nav-icon">📈</span>
+            <span class="home__nav-label" data-i18n="home.nav.stats">Statistiche</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="apps" role="tab">
+            <span class="home__nav-icon">📨</span>
+            <span class="home__nav-label" data-i18n="home.nav.apps">Candidature</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="map" role="tab">
+            <span class="home__nav-icon">🗺️</span>
+            <span class="home__nav-label" data-i18n="home.nav.map">Mappa</span>
+          </button>
+          <button type="button" class="home__nav-item" data-section="activity" role="tab">
+            <span class="home__nav-icon">📜</span>
+            <span class="home__nav-label" data-i18n="home.nav.activity">Attività</span>
+          </button>
           <button type="button" class="home__nav-item" data-section="provider" role="tab">
             <span class="home__nav-icon">🧠</span>
             <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
@@ -745,6 +761,42 @@
           </div>
           <div class="dash__list" id="dash-list" hidden></div>
           <div class="dash__detail" id="dash-detail" hidden></div>
+        </div>
+
+        <!-- Statistiche: conteggi pipeline (nativo) -->
+        <div class="home__panel" data-section="stats" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.stats.title">Statistiche</h1>
+            <p class="home__subtitle" data-i18n="home.stats.subtitle">La pipeline del team a colpo d’occhio.</p>
+          </header>
+          <div id="dash-stats"></div>
+        </div>
+
+        <!-- Candidature (nativo) -->
+        <div class="home__panel" data-section="apps" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.apps.title">Candidature</h1>
+            <p class="home__subtitle" data-i18n="home.apps.subtitle">Le candidature inviate e il loro stato.</p>
+          </header>
+          <div id="dash-apps"></div>
+        </div>
+
+        <!-- Mappa: offerte per luogo (nativo) -->
+        <div class="home__panel" data-section="map" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.map.title">Mappa</h1>
+            <p class="home__subtitle" data-i18n="home.map.subtitle">Le offerte raggruppate per luogo.</p>
+          </header>
+          <div id="dash-map"></div>
+        </div>
+
+        <!-- Attività: timeline del team (nativo) -->
+        <div class="home__panel" data-section="activity" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.activity.title">Attività</h1>
+            <p class="home__subtitle" data-i18n="home.activity.subtitle">Le ultime azioni del team.</p>
+          </header>
+          <div id="dash-activity"></div>
         </div>
 
         <!-- Provider: vendor + plan + login -->
