@@ -1,19 +1,36 @@
 import fs from "fs";
 import { NextResponse } from "next/server";
+import { headers, cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { isProfileComplete, readWorkspaceProfile } from "@/lib/profile-reader";
 import { isLocalRequest } from "@/lib/auth";
+import { LOCAL_TOKEN_COOKIE, isLocalTokenAuthenticated } from "@/lib/local-token";
 import { JHT_PROFILE_READY_FLAG } from "@/lib/jht-paths";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  // [JHT-DASHBOARD-NATIVE] La dashboard nativa desktop chiede questo profilo via
+  // window.dashboardApi.get('/api/profile') col local-token (Authorization:
+  // Bearer). Ma quella richiesta entra nel container attraverso il port-map
+  // Docker → isLocalRequest() risulta false (forwarded headers non-loopback) →
+  // senza accettare il token darebbe 401 e la view Profilo resterebbe vuota.
+  // Trattiamo un local-token valido (Bearer o cookie) come "locale", come fa
+  // requireAuth per /api/positions. Stesso token, stessa fiducia.
+  const hdrs = await headers();
+  const cookieStore = await cookies();
+  const localToken = isLocalTokenAuthenticated(
+    hdrs.get("authorization"),
+    cookieStore.get(LOCAL_TOKEN_COOKIE)?.value,
+  );
+
   // Richieste dal desktop locale (Electron → http://localhost:3000):
   // servi sempre il profilo dal filesystem, anche se Supabase è
   // configurato nell'env. Senza questo bypass la chat /onboarding
   // riceve 401 e la form a sinistra non si popola mai.
-  const useCloudAuth = isSupabaseConfigured && !(await isLocalRequest());
+  const useCloudAuth =
+    isSupabaseConfigured && !(await isLocalRequest()) && !localToken;
 
   if (useCloudAuth) {
     const supabase = await createClient();
