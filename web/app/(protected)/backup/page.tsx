@@ -305,7 +305,8 @@ export default function BackupPage() {
   };
 
   const restoreBackup = async (id: string) => {
-    if (!confirm(tr("confirm_restore").replace("{id}", id.slice(0, 20)))) return;
+    if (!confirm(tr("confirm_restore").replace("{id}", id.slice(0, 20))))
+      return;
     const res = await fetch(`/api/backup?id=${id}`, { method: "PATCH" }).catch(
       () => null,
     );
@@ -395,7 +396,9 @@ export default function BackupPage() {
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {loading ? (
           <div className="py-16 text-center">
-            <p className="text-[var(--color-dim)] text-[12px]">{tr("loading")}</p>
+            <p className="text-[var(--color-dim)] text-[12px]">
+              {tr("loading")}
+            </p>
           </div>
         ) : backups.length === 0 ? (
           <div className="flex flex-col items-center py-16 text-center">

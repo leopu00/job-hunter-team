@@ -190,8 +190,8 @@ const T: Record<Locale, Strings> = {
       <>
         Every position the team creates is tagged with its{" "}
         <strong>source</strong> (e.g.{" "}
-        <code className={CODE_CLS}>linkedin-email</code> vs a web search), so you
-        can see on the dashboard how the email-sourced ones compare.
+        <code className={CODE_CLS}>linkedin-email</code> vs a web search), so
+        you can see on the dashboard how the email-sourced ones compare.
       </>
     ),
     calloutLinkedin: (
@@ -211,8 +211,8 @@ const T: Record<Locale, Strings> = {
     step1Body: (
       <>
         Make a <strong>fresh, separate</strong> email address that the team will
-        read — don&apos;t give it your personal inbox. A free Gmail account works
-        well (the team defaults to{" "}
+        read — don&apos;t give it your personal inbox. A free Gmail account
+        works well (the team defaults to{" "}
         <code className={CODE_CLS}>imap.gmail.com</code>). Keep it dedicated to
         job alerts only: everything that lands there is treated as a potential
         lead.
@@ -220,9 +220,9 @@ const T: Record<Locale, Strings> = {
     ),
     step1Callout: (
       <>
-        🔒 <strong>Why dedicated:</strong> the team reads this inbox over IMAP. A
-        separate address means it never touches your personal mail, and you can
-        revoke access any time by changing one password.
+        🔒 <strong>Why dedicated:</strong> the team reads this inbox over IMAP.
+        A separate address means it never touches your personal mail, and you
+        can revoke access any time by changing one password.
       </>
     ),
     step2Title: "2️⃣ Share the inbox with the team (desktop app)",
@@ -250,8 +250,8 @@ const T: Record<Locale, Strings> = {
     step2Local: (
       <>
         The desktop app saves these <strong>locally</strong> (in the team&apos;s{" "}
-        <code className={CODE_CLS}>credentials/</code> folder on the machine that
-        runs the team) — they are <strong>never</strong> sent to the cloud.
+        <code className={CODE_CLS}>credentials/</code> folder on the machine
+        that runs the team) — they are <strong>never</strong> sent to the cloud.
       </>
     ),
     step2Callout: (
@@ -279,11 +279,13 @@ const T: Record<Locale, Strings> = {
       </>
     ),
     liSubtitle: "🔗 LinkedIn (most recommended)",
-    li1: <>Run the search you care about on LinkedIn (role, location, filters).</>,
+    li1: (
+      <>Run the search you care about on LinkedIn (role, location, filters).</>
+    ),
     li2: (
       <>
-        Save it as a <strong>Job Alert</strong> and set the frequency (daily is a
-        good default).
+        Save it as a <strong>Job Alert</strong> and set the frequency (daily is
+        a good default).
       </>
     ),
     li3: (
@@ -372,7 +374,9 @@ const T: Record<Locale, Strings> = {
     usesCallout: (
       <>
         🎯{" "}
-        <strong>The team&apos;s target is the score, not the cover letter.</strong>{" "}
+        <strong>
+          The team&apos;s target is the score, not the cover letter.
+        </strong>{" "}
         CV/cover-letter writing stays on-demand (you click when you want it).
         Forwarding good alerts means more of the <em>right</em> positions get
         scored within the team&apos;s budget.
@@ -381,10 +385,11 @@ const T: Record<Locale, Strings> = {
     verifyTitle: "✅ Verify it's working",
     verifyBody: (
       <>
-        After you&apos;ve set up forwarding and entered the credentials, the team
-        confirms access at the next start-of-day check. You can also watch your
-        dashboard: within a working window you should start seeing positions
-        whose source is an <code className={CODE_CLS}>*-email</code> tag.
+        After you&apos;ve set up forwarding and entered the credentials, the
+        team confirms access at the next start-of-day check. You can also watch
+        your dashboard: within a working window you should start seeing
+        positions whose source is an <code className={CODE_CLS}>*-email</code>{" "}
+        tag.
       </>
     ),
     verifyIfNothing: "If nothing shows up:",
@@ -497,9 +502,9 @@ const T: Record<Locale, Strings> = {
       <>
         ✅ <strong>Facoltativo, ma fortemente consigliato.</strong> Il team
         funziona anche senza (gli Scout cercano sul web da soli), ma è{" "}
-        <strong>nettamente meno efficiente</strong>. Se configuri l&apos;inoltro,
-        decidi tu cosa arriva al team; se non lo fai, il team deve capirlo da
-        solo.
+        <strong>nettamente meno efficiente</strong>. Se configuri
+        l&apos;inoltro, decidi tu cosa arriva al team; se non lo fai, il team
+        deve capirlo da solo.
       </>
     ),
     calloutScreens: (
@@ -522,8 +527,8 @@ const T: Record<Locale, Strings> = {
     whyAccuracy: (
       <>
         🎯 <strong>Maggiore precisione</strong> — la posizione corrisponde alla
-        tua reale intenzione (i filtri del tuo alert), non al miglior
-        tentativo di uno Scout.
+        tua reale intenzione (i filtri del tuo alert), non al miglior tentativo
+        di uno Scout.
       </>
     ),
     whyTokens: (
@@ -542,8 +547,8 @@ const T: Record<Locale, Strings> = {
     whyAnyPlatform: (
       <>
         🌍 <strong>Qualsiasi piattaforma, non solo LinkedIn</strong> — inoltra
-        gli alert da LinkedIn, Glassdoor, Indeed <strong>e</strong> qualsiasi job
-        board locale/nazionale/cittadino che ti invia email. Se manda una
+        gli alert da LinkedIn, Glassdoor, Indeed <strong>e</strong> qualsiasi
+        job board locale/nazionale/cittadino che ti invia email. Se manda una
         notifica, il team può leggerla.
       </>
     ),
@@ -558,11 +563,12 @@ const T: Record<Locale, Strings> = {
     ),
     calloutLinkedin: (
       <>
-        🔗 <strong>LinkedIn è la singola configurazione di maggior valore.</strong>{" "}
+        🔗{" "}
+        <strong>LinkedIn è la singola configurazione di maggior valore.</strong>{" "}
         Imposta i filtri di ricerca su LinkedIn, salvali come{" "}
-        <strong>Job Alert</strong>, attiva le{" "}
-        <strong>notifiche email</strong>, poi inoltra quelle email al team.
-        Questa sola sorgente rende gli Scout enormemente più efficaci.
+        <strong>Job Alert</strong>, attiva le <strong>notifiche email</strong>,
+        poi inoltra quelle email al team. Questa sola sorgente rende gli Scout
+        enormemente più efficaci.
       </>
     ),
     stepsTitle: "🗺️ I tre passaggi",
@@ -576,7 +582,8 @@ const T: Record<Locale, Strings> = {
         leggerà — non dargli la tua casella personale. Un account Gmail gratuito
         va benissimo (il team usa di default{" "}
         <code className={CODE_CLS}>imap.gmail.com</code>). Tienilo dedicato solo
-        ai job alert: tutto ciò che vi arriva è trattato come un potenziale lead.
+        ai job alert: tutto ciò che vi arriva è trattato come un potenziale
+        lead.
       </>
     ),
     step1Callout: (
@@ -638,15 +645,16 @@ const T: Record<Locale, Strings> = {
     step3Title: "3️⃣ Inoltra automaticamente i tuoi job alert",
     step3Body: (
       <>
-        Questa è la parte che vive nella <strong>tua</strong> casella. Crei delle
-        regole che inoltrano le email dei job alert nella casella dedicata.
-        Configura tutte le sorgenti che vuoi.
+        Questa è la parte che vive nella <strong>tua</strong> casella. Crei
+        delle regole che inoltrano le email dei job alert nella casella
+        dedicata. Configura tutte le sorgenti che vuoi.
       </>
     ),
     liSubtitle: "🔗 LinkedIn (il più consigliato)",
     li1: (
       <>
-        Esegui la ricerca che ti interessa su LinkedIn (ruolo, località, filtri).
+        Esegui la ricerca che ti interessa su LinkedIn (ruolo, località,
+        filtri).
       </>
     ),
     li2: (
@@ -694,11 +702,13 @@ const T: Record<Locale, Strings> = {
     outlookBody: (
       <>
         Usa le <strong>Regole</strong> (Outlook) o l&apos;equivalente del tuo
-        provider: <em>se il mittente contiene il dominio della job board →
-        inoltra a</em> la casella del team.
+        provider:{" "}
+        <em>se il mittente contiene il dominio della job board → inoltra a</em>{" "}
+        la casella del team.
       </>
     ),
-    anySubtitle: "🌍 Qualsiasi altra piattaforma (board locali / nazionali / di nicchia)",
+    anySubtitle:
+      "🌍 Qualsiasi altra piattaforma (board locali / nazionali / di nicchia)",
     anyBody: (
       <>
         Stessa ricetta per <strong>ogni</strong> sito che ti invia notifiche di
@@ -864,9 +874,9 @@ const T: Record<Locale, Strings> = {
     pageSubtitle: "Da al equipo tus alertas de empleo",
     intro: (
       <>
-        Da al equipo una <strong>dirección de correo dedicada</strong> y
-        reenvía automáticamente las notificaciones de tus alertas de empleo. El
-        Capitán y los Scouts leen ese buzón al inicio de cada jornada laboral y
+        Da al equipo una <strong>dirección de correo dedicada</strong> y reenvía
+        automáticamente las notificaciones de tus alertas de empleo. El Capitán
+        y los Scouts leen ese buzón al inicio de cada jornada laboral y
         convierten las alertas en posiciones con puntuación — sin perderse en la
         web abierta.
       </>
@@ -936,7 +946,10 @@ const T: Record<Locale, Strings> = {
     ),
     calloutLinkedin: (
       <>
-        🔗 <strong>LinkedIn es la configuración de mayor valor por sí sola.</strong>{" "}
+        🔗{" "}
+        <strong>
+          LinkedIn es la configuración de mayor valor por sí sola.
+        </strong>{" "}
         Configura tus filtros de búsqueda en LinkedIn, guárdalos como{" "}
         <strong>Job Alert</strong>, activa las{" "}
         <strong>notificaciones por correo</strong> y luego reenvía esos correos
@@ -954,9 +967,9 @@ const T: Record<Locale, Strings> = {
         Crea una dirección de correo <strong>nueva y separada</strong> que el
         equipo leerá — no le des tu buzón personal. Una cuenta gratuita de Gmail
         funciona bien (el equipo usa por defecto{" "}
-        <code className={CODE_CLS}>imap.gmail.com</code>). Mantenla dedicada solo
-        a las alertas de empleo: todo lo que llega ahí se trata como un posible
-        lead.
+        <code className={CODE_CLS}>imap.gmail.com</code>). Mantenla dedicada
+        solo a las alertas de empleo: todo lo que llega ahí se trata como un
+        posible lead.
       </>
     ),
     step1Callout: (
@@ -994,8 +1007,8 @@ const T: Record<Locale, Strings> = {
       <>
         La app de escritorio guarda estos datos <strong>localmente</strong> (en
         la carpeta <code className={CODE_CLS}>credentials/</code> del equipo, en
-        la máquina que ejecuta el equipo) — <strong>nunca</strong> se envían a la
-        nube.
+        la máquina que ejecuta el equipo) — <strong>nunca</strong> se envían a
+        la nube.
       </>
     ),
     step2Callout: (
@@ -1005,9 +1018,9 @@ const T: Record<Locale, Strings> = {
         <em>Contraseña de aplicación</em> (Cuenta de Google → Seguridad →
         Contraseñas de aplicaciones) y pégala. Es un token de 16 caracteres que
         puedes revocar de forma independiente, así el equipo nunca guarda tu
-        contraseña real. Otros proveedores (Outlook, Fastmail, …) tienen el mismo
-        concepto — busca &quot;contraseña de aplicación&quot; o &quot;token de
-        acceso IMAP&quot;.
+        contraseña real. Otros proveedores (Outlook, Fastmail, …) tienen el
+        mismo concepto — busca &quot;contraseña de aplicación&quot; o
+        &quot;token de acceso IMAP&quot;.
       </>
     ),
     step2Button: (
@@ -1075,19 +1088,22 @@ const T: Record<Locale, Strings> = {
     outlookBody: (
       <>
         Usa <strong>Reglas</strong> (Outlook) o el equivalente de tu proveedor:{" "}
-        <em>si el remitente contiene el dominio del portal de empleo → reenviar
-        a</em> el buzón del equipo.
+        <em>
+          si el remitente contiene el dominio del portal de empleo → reenviar a
+        </em>{" "}
+        el buzón del equipo.
       </>
     ),
-    anySubtitle: "🌍 Cualquier otra plataforma (portales locales / nacionales / de nicho)",
+    anySubtitle:
+      "🌍 Cualquier otra plataforma (portales locales / nacionales / de nicho)",
     anyBody: (
       <>
         La misma receta para <strong>cada</strong> sitio que te envíe
         notificaciones de empleo por correo — portales nacionales, portales de
         ciudad, comunidades de nicho. Suscríbete a sus alertas y luego reenvía
-        esos correos al buzón del equipo. El equipo lee{" "}
-        <strong>todo</strong> el buzón dedicado, así que las nuevas plataformas
-        funcionan sin ninguna configuración adicional por parte del equipo.
+        esos correos al buzón del equipo. El equipo lee <strong>todo</strong> el
+        buzón dedicado, así que las nuevas plataformas funcionan sin ninguna
+        configuración adicional por parte del equipo.
       </>
     ),
     anyCallout: (
@@ -1111,8 +1127,9 @@ const T: Record<Locale, Strings> = {
         razonable de alertas, el equipo las lee todas (más señal es mejor). Si
         llega una <em>avalancha</em> (digamos cientos en un día), el Capitán
         elige las <strong>más relevantes</strong> y las impulsa, de modo que el
-        objetivo siempre se cumple: <strong>las nuevas posiciones llegan a una
-        puntuación</strong>, no solo se acumulan sin evaluar.
+        objetivo siempre se cumple:{" "}
+        <strong>las nuevas posiciones llegan a una puntuación</strong>, no solo
+        se acumulan sin evaluar.
       </>
     ),
     usesResult: (
@@ -1128,18 +1145,18 @@ const T: Record<Locale, Strings> = {
           El objetivo del equipo es la puntuación, no la carta de presentación.
         </strong>{" "}
         La redacción de CV/cartas de presentación sigue siendo bajo demanda
-        (haces clic cuando lo quieres). Reenviar buenas alertas significa que más
-        posiciones <em>adecuadas</em> se puntúan dentro del presupuesto del
+        (haces clic cuando lo quieres). Reenviar buenas alertas significa que
+        más posiciones <em>adecuadas</em> se puntúan dentro del presupuesto del
         equipo.
       </>
     ),
     verifyTitle: "✅ Verifica que funciona",
     verifyBody: (
       <>
-        Después de configurar el reenvío e introducir las credenciales, el equipo
-        confirma el acceso en la siguiente comprobación de inicio de jornada.
-        También puedes mirar tu panel: dentro de una ventana laboral deberías
-        empezar a ver posiciones cuya fuente sea una etiqueta{" "}
+        Después de configurar el reenvío e introducir las credenciales, el
+        equipo confirma el acceso en la siguiente comprobación de inicio de
+        jornada. También puedes mirar tu panel: dentro de una ventana laboral
+        deberías empezar a ver posiciones cuya fuente sea una etiqueta{" "}
         <code className={CODE_CLS}>*-email</code>.
       </>
     ),
@@ -1196,9 +1213,8 @@ const T: Record<Locale, Strings> = {
     graphicsTitle: "🖼️ Materiales gráficos",
     graphicsBody: (
       <>
-        Esta guía es para el usuario pero{" "}
-        <strong>aún no tiene capturas</strong>. Marcadores de posición por
-        rellenar:
+        Esta guía es para el usuario pero <strong>aún no tiene capturas</strong>
+        . Marcadores de posición por rellenar:
       </>
     ),
     tblHash: "#",
@@ -1259,14 +1275,14 @@ const T: Record<Locale, Strings> = {
         ✅ <strong>Facultatif, mais fortement recommandé.</strong> L&apos;équipe
         fonctionne sans (les Scouts cherchent sur le web par eux-mêmes), mais
         c&apos;est <strong>nettement moins efficace</strong>. Si vous configurez
-        le transfert, c&apos;est vous qui décidez ce qui arrive à l&apos;équipe ;
-        sinon, l&apos;équipe doit se débrouiller seule.
+        le transfert, c&apos;est vous qui décidez ce qui arrive à l&apos;équipe
+        ; sinon, l&apos;équipe doit se débrouiller seule.
       </>
     ),
     calloutScreens: (
       <>
-        📸 <strong>Captures manquantes :</strong> ce guide n&apos;a pas encore de
-        captures des étapes. Les emplacements sont listés en bas sous{" "}
+        📸 <strong>Captures manquantes :</strong> ce guide n&apos;a pas encore
+        de captures des étapes. Les emplacements sont listés en bas sous{" "}
         <em>Matériaux graphiques</em>.
       </>
     ),
@@ -1297,13 +1313,16 @@ const T: Record<Locale, Strings> = {
     whyTailored: (
       <>
         🧩 <strong>De plus en plus sur mesure avec le temps</strong> — affinez
-        les filtres de votre alerte et l&apos;entrée de l&apos;équipe évolue avec
-        vous.
+        les filtres de votre alerte et l&apos;entrée de l&apos;équipe évolue
+        avec vous.
       </>
     ),
     whyAnyPlatform: (
       <>
-        🌍 <strong>N&apos;importe quelle plateforme, pas seulement LinkedIn</strong>{" "}
+        🌍{" "}
+        <strong>
+          N&apos;importe quelle plateforme, pas seulement LinkedIn
+        </strong>{" "}
         — transférez les alertes de LinkedIn, Glassdoor, Indeed{" "}
         <strong>et</strong> tout site d&apos;emploi local/national/municipal qui
         vous envoie des e-mails. S&apos;il envoie une notification,
@@ -1321,7 +1340,10 @@ const T: Record<Locale, Strings> = {
     ),
     calloutLinkedin: (
       <>
-        🔗 <strong>LinkedIn est à lui seul la configuration la plus précieuse.</strong>{" "}
+        🔗{" "}
+        <strong>
+          LinkedIn est à lui seul la configuration la plus précieuse.
+        </strong>{" "}
         Configurez vos filtres de recherche sur LinkedIn, enregistrez-les comme{" "}
         <strong>Job Alert</strong>, activez les{" "}
         <strong>notifications par e-mail</strong>, puis transférez ces e-mails à
@@ -1337,19 +1359,19 @@ const T: Record<Locale, Strings> = {
     step1Body: (
       <>
         Créez une adresse e-mail <strong>nouvelle et séparée</strong> que
-        l&apos;équipe lira — ne lui donnez pas votre boîte personnelle. Un compte
-        Gmail gratuit convient très bien (l&apos;équipe utilise par défaut{" "}
-        <code className={CODE_CLS}>imap.gmail.com</code>). Gardez-la dédiée
-        uniquement aux alertes emploi : tout ce qui y arrive est traité comme un
-        lead potentiel.
+        l&apos;équipe lira — ne lui donnez pas votre boîte personnelle. Un
+        compte Gmail gratuit convient très bien (l&apos;équipe utilise par
+        défaut <code className={CODE_CLS}>imap.gmail.com</code>). Gardez-la
+        dédiée uniquement aux alertes emploi : tout ce qui y arrive est traité
+        comme un lead potentiel.
       </>
     ),
     step1Callout: (
       <>
         🔒 <strong>Pourquoi dédiée :</strong> l&apos;équipe lit cette boîte via
         IMAP. Une adresse séparée signifie qu&apos;elle ne touche jamais votre
-        courrier personnel, et vous pouvez révoquer l&apos;accès à tout moment en
-        changeant un seul mot de passe.
+        courrier personnel, et vous pouvez révoquer l&apos;accès à tout moment
+        en changeant un seul mot de passe.
       </>
     ),
     step2Title: "2️⃣ Partagez la boîte avec l'équipe (app de bureau)",
@@ -1377,10 +1399,9 @@ const T: Record<Locale, Strings> = {
     ),
     step2Local: (
       <>
-        L&apos;app de bureau enregistre ces données{" "}
-        <strong>localement</strong> (dans le dossier{" "}
-        <code className={CODE_CLS}>credentials/</code> de l&apos;équipe, sur la
-        machine qui exécute l&apos;équipe) — elles ne sont{" "}
+        L&apos;app de bureau enregistre ces données <strong>localement</strong>{" "}
+        (dans le dossier <code className={CODE_CLS}>credentials/</code> de
+        l&apos;équipe, sur la machine qui exécute l&apos;équipe) — elles ne sont{" "}
         <strong>jamais</strong> envoyées dans le cloud.
       </>
     ),
@@ -1388,8 +1409,8 @@ const T: Record<Locale, Strings> = {
       <>
         🔑 <strong>Mot de passe d&apos;application (Gmail) :</strong> activez la
         validation en deux étapes, puis créez un{" "}
-        <em>mot de passe d&apos;application</em> (Compte Google → Sécurité → Mots
-        de passe des applications) et collez-le. C&apos;est un jeton de 16
+        <em>mot de passe d&apos;application</em> (Compte Google → Sécurité →
+        Mots de passe des applications) et collez-le. C&apos;est un jeton de 16
         caractères que vous pouvez révoquer indépendamment, ainsi l&apos;équipe
         ne détient jamais votre vrai mot de passe. D&apos;autres fournisseurs
         (Outlook, Fastmail, …) ont le même concept — cherchez &quot;mot de passe
@@ -1398,17 +1419,16 @@ const T: Record<Locale, Strings> = {
     ),
     step2Button: (
       <>
-        Le bouton{" "}
-        <strong>&quot;Comment configurer le transfert&quot;</strong> dans cette
-        fenêtre vous ramène à ce guide.
+        Le bouton <strong>&quot;Comment configurer le transfert&quot;</strong>{" "}
+        dans cette fenêtre vous ramène à ce guide.
       </>
     ),
     step3Title: "3️⃣ Transférez automatiquement vos alertes emploi",
     step3Body: (
       <>
-        C&apos;est la partie qui vit dans <strong>votre</strong> boîte mail. Vous
-        créez des règles qui transfèrent les e-mails d&apos;alertes emploi vers
-        la boîte dédiée. Configurez autant de sources que vous voulez.
+        C&apos;est la partie qui vit dans <strong>votre</strong> boîte mail.
+        Vous créez des règles qui transfèrent les e-mails d&apos;alertes emploi
+        vers la boîte dédiée. Configurez autant de sources que vous voulez.
       </>
     ),
     liSubtitle: "🔗 LinkedIn (le plus recommandé)",
@@ -1433,8 +1453,8 @@ const T: Record<Locale, Strings> = {
     ),
     li4: (
       <>
-        Dans votre boîte personnelle, ajoutez un{" "}
-        <strong>filtre/règle</strong> : quand l&apos;expéditeur est{" "}
+        Dans votre boîte personnelle, ajoutez un <strong>filtre/règle</strong> :
+        quand l&apos;expéditeur est{" "}
         <code className={CODE_CLS}>jobs-listings@linkedin.com</code> (ou{" "}
         <code className={CODE_CLS}>jobalerts-noreply@linkedin.com</code>),{" "}
         <strong>transférez</strong> vers votre boîte dédiée de l&apos;équipe.
@@ -1463,11 +1483,16 @@ const T: Record<Locale, Strings> = {
     outlookBody: (
       <>
         Utilisez les <strong>Règles</strong> (Outlook) ou l&apos;équivalent de
-        votre fournisseur : <em>si l&apos;expéditeur contient le domaine du site
-        d&apos;emploi → transférer vers</em> la boîte de l&apos;équipe.
+        votre fournisseur :{" "}
+        <em>
+          si l&apos;expéditeur contient le domaine du site d&apos;emploi →
+          transférer vers
+        </em>{" "}
+        la boîte de l&apos;équipe.
       </>
     ),
-    anySubtitle: "🌍 Toute autre plateforme (sites locaux / nationaux / de niche)",
+    anySubtitle:
+      "🌍 Toute autre plateforme (sites locaux / nationaux / de niche)",
     anyBody: (
       <>
         La même recette pour <strong>chaque</strong> site qui vous envoie des
@@ -1497,10 +1522,11 @@ const T: Record<Locale, Strings> = {
     usesBalance: (
       <>
         🧮 <strong>Le Capitaine équilibre la charge</strong> — si un nombre
-        raisonnable d&apos;alertes est arrivé, l&apos;équipe les lit toutes (plus
-        de signal vaut mieux). Si un <em>déluge</em> arrive (disons des centaines
-        en un jour), le Capitaine choisit les <strong>plus pertinentes</strong>{" "}
-        et les fait avancer, de sorte que l&apos;objectif est toujours atteint :{" "}
+        raisonnable d&apos;alertes est arrivé, l&apos;équipe les lit toutes
+        (plus de signal vaut mieux). Si un <em>déluge</em> arrive (disons des
+        centaines en un jour), le Capitaine choisit les{" "}
+        <strong>plus pertinentes</strong> et les fait avancer, de sorte que
+        l&apos;objectif est toujours atteint :{" "}
         <strong>les nouvelles positions obtiennent une note</strong>, au lieu de
         s&apos;accumuler sans évaluation.
       </>
@@ -1518,9 +1544,9 @@ const T: Record<Locale, Strings> = {
           L&apos;objectif de l&apos;équipe est la note, pas la lettre de
           motivation.
         </strong>{" "}
-        La rédaction de CV/lettres de motivation reste à la demande (vous cliquez
-        quand vous le voulez). Transférer de bonnes alertes signifie que plus de
-        positions <em>pertinentes</em> sont notées dans le budget de
+        La rédaction de CV/lettres de motivation reste à la demande (vous
+        cliquez quand vous le voulez). Transférer de bonnes alertes signifie que
+        plus de positions <em>pertinentes</em> sont notées dans le budget de
         l&apos;équipe.
       </>
     ),
@@ -1528,10 +1554,10 @@ const T: Record<Locale, Strings> = {
     verifyBody: (
       <>
         Après avoir configuré le transfert et saisi les identifiants,
-        l&apos;équipe confirme l&apos;accès lors du prochain contrôle de début de
-        journée. Vous pouvez aussi surveiller votre tableau de bord : dans une
-        fenêtre de travail, vous devriez commencer à voir des positions dont la
-        source est une étiquette <code className={CODE_CLS}>*-email</code>.
+        l&apos;équipe confirme l&apos;accès lors du prochain contrôle de début
+        de journée. Vous pouvez aussi surveiller votre tableau de bord : dans
+        une fenêtre de travail, vous devriez commencer à voir des positions dont
+        la source est une étiquette <code className={CODE_CLS}>*-email</code>.
       </>
     ),
     verifyIfNothing: "Si rien n'apparaît :",
@@ -1540,7 +1566,8 @@ const T: Record<Locale, Strings> = {
     tblFix: "Solution",
     v1s: (
       <>
-        Aucune position <code className={CODE_CLS}>*-email</code> n&apos;apparaît
+        Aucune position <code className={CODE_CLS}>*-email</code>{" "}
+        n&apos;apparaît
       </>
     ),
     v1c: "identifiants non enregistrés / erronés",
@@ -1555,8 +1582,8 @@ const T: Record<Locale, Strings> = {
     v2c: "vous utilisez le mot de passe de connexion, pas celui d'application",
     v2f: (
       <>
-        créez un <strong>mot de passe spécifique à l&apos;application</strong> et
-        utilisez-le
+        créez un <strong>mot de passe spécifique à l&apos;application</strong>{" "}
+        et utilisez-le
       </>
     ),
     v3s: <>Les alertes arrivent mais ne sont pas transférées</>,
@@ -1591,8 +1618,8 @@ const T: Record<Locale, Strings> = {
     graphicsBody: (
       <>
         Ce guide est destiné à l&apos;utilisateur mais{" "}
-        <strong>n&apos;a pas encore de captures</strong>. Emplacements à
-        remplir :
+        <strong>n&apos;a pas encore de captures</strong>. Emplacements à remplir
+        :
       </>
     ),
     tblHash: "#",
@@ -1608,8 +1635,8 @@ const T: Record<Locale, Strings> = {
     ),
     g2: (
       <>
-        Écran de création du{" "}
-        <strong>Mot de passe d&apos;application</strong> de Gmail
+        Écran de création du <strong>Mot de passe d&apos;application</strong> de
+        Gmail
       </>
     ),
     g3: (
@@ -1668,12 +1695,12 @@ const T: Record<Locale, Strings> = {
     whyTitle: "💡 Warum es das Team besser macht",
     whyIntro: (
       <>
-        Eine Job-Benachrichtigung, die <em>du</em> konfiguriert hast, ist bereits
-        auf das gefiltert, was du willst: die richtige Rolle, die richtige Stadt,
-        das richtige Senioritätslevel. Wenn diese Benachrichtigung im Postfach
-        des Teams landet, erhalten die Scouts einen{" "}
-        <strong>vorqualifizierten Lead</strong>, statt im offenen Web Keywords zu
-        erraten. Konkret:
+        Eine Job-Benachrichtigung, die <em>du</em> konfiguriert hast, ist
+        bereits auf das gefiltert, was du willst: die richtige Rolle, die
+        richtige Stadt, das richtige Senioritätslevel. Wenn diese
+        Benachrichtigung im Postfach des Teams landet, erhalten die Scouts einen{" "}
+        <strong>vorqualifizierten Lead</strong>, statt im offenen Web Keywords
+        zu erraten. Konkret:
       </>
     ),
     whyAccuracy: (
@@ -1699,10 +1726,10 @@ const T: Record<Locale, Strings> = {
     whyAnyPlatform: (
       <>
         🌍 <strong>Jede Plattform, nicht nur LinkedIn</strong> — leite
-        Benachrichtigungen von LinkedIn, Glassdoor, Indeed{" "}
-        <strong>und</strong> jeder lokalen/landesweiten/stadtbezogenen Jobbörse
-        weiter, die dir E-Mails schickt. Wenn sie eine Benachrichtigung sendet,
-        kann das Team sie lesen.
+        Benachrichtigungen von LinkedIn, Glassdoor, Indeed <strong>und</strong>{" "}
+        jeder lokalen/landesweiten/stadtbezogenen Jobbörse weiter, die dir
+        E-Mails schickt. Wenn sie eine Benachrichtigung sendet, kann das Team
+        sie lesen.
       </>
     ),
     whySource: (
@@ -1720,8 +1747,8 @@ const T: Record<Locale, Strings> = {
         Konfiguriere deine Suchfilter auf LinkedIn, speichere sie als{" "}
         <strong>Job Alert</strong>, aktiviere die{" "}
         <strong>E-Mail-Benachrichtigungen</strong> und leite diese E-Mails dann
-        an das Team weiter. Allein diese eine Quelle macht die Scouts
-        dramatisch effektiver.
+        an das Team weiter. Allein diese eine Quelle macht die Scouts dramatisch
+        effektiver.
       </>
     ),
     stepsTitle: "🗺️ Die drei Schritte",
@@ -1734,9 +1761,9 @@ const T: Record<Locale, Strings> = {
         Lege eine <strong>frische, separate</strong> E-Mail-Adresse an, die das
         Team liest — gib ihm nicht dein persönliches Postfach. Ein kostenloses
         Gmail-Konto eignet sich gut (das Team verwendet standardmäßig{" "}
-        <code className={CODE_CLS}>imap.gmail.com</code>). Halte es ausschließlich
-        für Job-Benachrichtigungen reserviert: alles, was dort landet, wird als
-        potenzieller Lead behandelt.
+        <code className={CODE_CLS}>imap.gmail.com</code>). Halte es
+        ausschließlich für Job-Benachrichtigungen reserviert: alles, was dort
+        landet, wird als potenzieller Lead behandelt.
       </>
     ),
     step1Callout: (
@@ -1774,19 +1801,19 @@ const T: Record<Locale, Strings> = {
       <>
         Die Desktop-App speichert diese <strong>lokal</strong> (im Ordner{" "}
         <code className={CODE_CLS}>credentials/</code> des Teams, auf der
-        Maschine, die das Team ausführt) — sie werden{" "}
-        <strong>nie</strong> in die Cloud gesendet.
+        Maschine, die das Team ausführt) — sie werden <strong>nie</strong> in
+        die Cloud gesendet.
       </>
     ),
     step2Callout: (
       <>
-        🔑 <strong>App-Passwort (Gmail):</strong> aktiviere die
-        Bestätigung in zwei Schritten, erstelle dann ein{" "}
-        <em>App-Passwort</em> (Google-Konto → Sicherheit → App-Passwörter) und
-        füge es ein. Es ist ein 16-stelliges Token, das du unabhängig widerrufen
-        kannst, sodass das Team nie dein echtes Passwort hält. Andere Anbieter
-        (Outlook, Fastmail, …) haben dasselbe Konzept — suche nach
-        &quot;App-Passwort&quot; oder &quot;IMAP-Zugriffstoken&quot;.
+        🔑 <strong>App-Passwort (Gmail):</strong> aktiviere die Bestätigung in
+        zwei Schritten, erstelle dann ein <em>App-Passwort</em> (Google-Konto →
+        Sicherheit → App-Passwörter) und füge es ein. Es ist ein 16-stelliges
+        Token, das du unabhängig widerrufen kannst, sodass das Team nie dein
+        echtes Passwort hält. Andere Anbieter (Outlook, Fastmail, …) haben
+        dasselbe Konzept — suche nach &quot;App-Passwort&quot; oder
+        &quot;IMAP-Zugriffstoken&quot;.
       </>
     ),
     step2Button: (
@@ -1857,11 +1884,15 @@ const T: Record<Locale, Strings> = {
     outlookBody: (
       <>
         Verwende <strong>Regeln</strong> (Outlook) oder das Äquivalent deines
-        Anbieters: <em>wenn der Absender die Jobbörsen-Domain enthält →
-        weiterleiten an</em> das Team-Postfach.
+        Anbieters:{" "}
+        <em>
+          wenn der Absender die Jobbörsen-Domain enthält → weiterleiten an
+        </em>{" "}
+        das Team-Postfach.
       </>
     ),
-    anySubtitle: "🌍 Jede andere Plattform (lokale / landesweite / Nischen-Börsen)",
+    anySubtitle:
+      "🌍 Jede andere Plattform (lokale / landesweite / Nischen-Börsen)",
     anyBody: (
       <>
         Dasselbe Rezept für <strong>jede</strong> Seite, die dir
@@ -1894,8 +1925,9 @@ const T: Record<Locale, Strings> = {
         sie alle (mehr Signal ist besser). Wenn eine <em>Flut</em> eintrifft
         (sagen wir Hunderte an einem Tag), wählt der Kapitän die{" "}
         <strong>relevantesten</strong> aus und treibt diese voran, sodass das
-        Ziel immer erreicht wird: <strong>neue Positionen erhalten eine
-        Bewertung</strong>, statt sich nur unbewertet anzuhäufen.
+        Ziel immer erreicht wird:{" "}
+        <strong>neue Positionen erhalten eine Bewertung</strong>, statt sich nur
+        unbewertet anzuhäufen.
       </>
     ),
     usesResult: (
@@ -1911,9 +1943,9 @@ const T: Record<Locale, Strings> = {
           Das Ziel des Teams ist die Bewertung, nicht das Anschreiben.
         </strong>{" "}
         Das Verfassen von Lebenslauf/Anschreiben bleibt auf Abruf (du klickst,
-        wenn du es willst). Gute Benachrichtigungen weiterzuleiten bedeutet, dass
-        mehr der <em>richtigen</em> Positionen innerhalb des Team-Budgets bewertet
-        werden.
+        wenn du es willst). Gute Benachrichtigungen weiterzuleiten bedeutet,
+        dass mehr der <em>richtigen</em> Positionen innerhalb des Team-Budgets
+        bewertet werden.
       </>
     ),
     verifyTitle: "✅ Prüfen, ob es funktioniert",
@@ -1938,7 +1970,8 @@ const T: Record<Locale, Strings> = {
     v1c: "Zugangsdaten nicht gespeichert / falsch",
     v1f: (
       <>
-        E-Mail + <strong>App-Passwort</strong> in der Desktop-App erneut eingeben
+        E-Mail + <strong>App-Passwort</strong> in der Desktop-App erneut
+        eingeben
       </>
     ),
     v2s: <>&quot;Login failed&quot; in den Team-Logs</>,
@@ -1995,8 +2028,7 @@ const T: Record<Locale, Strings> = {
     ),
     g2: (
       <>
-        Gmail-Bildschirm zur Erstellung des{" "}
-        <strong>App-Passworts</strong>
+        Gmail-Bildschirm zur Erstellung des <strong>App-Passworts</strong>
       </>
     ),
     g3: (
@@ -2029,11 +2061,11 @@ const T: Record<Locale, Strings> = {
     pageSubtitle: "Add át a csapatnak az álláshirdetés-értesítőidet",
     intro: (
       <>
-        Adj a csapatnak egy <strong>dedikált e-mail-címet</strong>, és továbbítsd
-        oda automatikusan az álláshirdetés-értesítőidet. A Kapitány és a Scoutok
-        minden munkanap elején elolvassák ezt a postafiókot, és az értesítőket
-        pontozott pozíciókká alakítják — anélkül, hogy elvesznének a nyílt
-        weben.
+        Adj a csapatnak egy <strong>dedikált e-mail-címet</strong>, és
+        továbbítsd oda automatikusan az álláshirdetés-értesítőidet. A Kapitány
+        és a Scoutok minden munkanap elején elolvassák ezt a postafiókot, és az
+        értesítőket pontozott pozíciókká alakítják — anélkül, hogy elvesznének a
+        nyílt weben.
       </>
     ),
     calloutOptional: (
@@ -2077,16 +2109,17 @@ const T: Record<Locale, Strings> = {
     ),
     whyTailored: (
       <>
-        🧩 <strong>Idővel egyre testreszabottabb</strong> — finomítsd az értesítő
-        szűrőidet, és a csapat bemenete együtt változik veled.
+        🧩 <strong>Idővel egyre testreszabottabb</strong> — finomítsd az
+        értesítő szűrőidet, és a csapat bemenete együtt változik veled.
       </>
     ),
     whyAnyPlatform: (
       <>
         🌍 <strong>Bármelyik platform, nem csak a LinkedIn</strong> — továbbítsd
         az értesítőket a LinkedInről, Glassdoorról, Indeedről{" "}
-        <strong>és</strong> bármilyen helyi/országos/városi álláshirdető oldalról,
-        amely e-mailt küld neked. Ha küld értesítőt, a csapat el tudja olvasni.
+        <strong>és</strong> bármilyen helyi/országos/városi álláshirdető
+        oldalról, amely e-mailt küld neked. Ha küld értesítőt, a csapat el tudja
+        olvasni.
       </>
     ),
     whySource: (
@@ -2118,9 +2151,9 @@ const T: Record<Locale, Strings> = {
         Hozz létre egy <strong>új, külön</strong> e-mail-címet, amelyet a csapat
         fog olvasni — ne add meg a személyes postafiókodat. Egy ingyenes
         Gmail-fiók jól megfelel (a csapat alapértelmezetten az{" "}
-        <code className={CODE_CLS}>imap.gmail.com</code> címet használja). Tartsd
-        kizárólag az álláshirdetés-értesítőkre dedikáltan: minden, ami oda
-        érkezik, potenciális leadnek számít.
+        <code className={CODE_CLS}>imap.gmail.com</code> címet használja).
+        Tartsd kizárólag az álláshirdetés-értesítőkre dedikáltan: minden, ami
+        oda érkezik, potenciális leadnek számít.
       </>
     ),
     step1Callout: (
@@ -2150,8 +2183,8 @@ const T: Record<Locale, Strings> = {
     rowPwLabel: <strong>Alkalmazásjelszó</strong>,
     rowPwValue: (
       <>
-        egy <strong>alkalmazásspecifikus jelszó</strong>, nem a
-        bejelentkezési jelszavad
+        egy <strong>alkalmazásspecifikus jelszó</strong>, nem a bejelentkezési
+        jelszavad
       </>
     ),
     step2Local: (
@@ -2165,10 +2198,10 @@ const T: Record<Locale, Strings> = {
     step2Callout: (
       <>
         🔑 <strong>Alkalmazásjelszó (Gmail):</strong> kapcsold be a kétlépcsős
-        azonosítást, majd hozz létre egy <em>Alkalmazásjelszót</em>{" "}
-        (Google-fiók → Biztonság → Alkalmazásjelszavak), és illeszd be azt. Ez
-        egy 16 karakteres token, amelyet függetlenül visszavonhatsz, így a csapat
-        soha nem tartja nálad a valódi jelszavadat. Más szolgáltatóknak (Outlook,
+        azonosítást, majd hozz létre egy <em>Alkalmazásjelszót</em> (Google-fiók
+        → Biztonság → Alkalmazásjelszavak), és illeszd be azt. Ez egy 16
+        karakteres token, amelyet függetlenül visszavonhatsz, így a csapat soha
+        nem tartja nálad a valódi jelszavadat. Más szolgáltatóknak (Outlook,
         Fastmail, …) ugyanez a koncepciójuk — keresd az
         &quot;alkalmazásjelszó&quot; vagy &quot;IMAP-hozzáférési token&quot;
         kifejezést.
@@ -2198,8 +2231,8 @@ const T: Record<Locale, Strings> = {
     ),
     li2: (
       <>
-        Mentsd el <strong>Job Alertként</strong>, és állítsd be a gyakoriságot (a
-        napi jó alapérték).
+        Mentsd el <strong>Job Alertként</strong>, és állítsd be a gyakoriságot
+        (a napi jó alapérték).
       </>
     ),
     li3: (
@@ -2229,8 +2262,8 @@ const T: Record<Locale, Strings> = {
     ),
     gmail2: (
       <>
-        <strong>Beállítások → Szűrők → Új szűrő létrehozása</strong> →
-        illeszd az értesítők feladóit (pl.{" "}
+        <strong>Beállítások → Szűrők → Új szűrő létrehozása</strong> → illeszd
+        az értesítők feladóit (pl.{" "}
         <code className={CODE_CLS}>
           from:(linkedin.com OR glassdoor.com OR indeed.com)
         </code>
@@ -2241,8 +2274,12 @@ const T: Record<Locale, Strings> = {
     outlookBody: (
       <>
         Használj <strong>Szabályokat</strong> (Outlook) vagy a szolgáltatód
-        megfelelőjét: <em>ha a feladó tartalmazza az álláshirdető oldal
-        domainjét → továbbítás ide</em>: a csapat postafiókja.
+        megfelelőjét:{" "}
+        <em>
+          ha a feladó tartalmazza az álláshirdető oldal domainjét → továbbítás
+          ide
+        </em>
+        : a csapat postafiókja.
       </>
     ),
     anySubtitle: "🌍 Bármely más platform (helyi / országos / niche oldalak)",
@@ -2250,17 +2287,17 @@ const T: Record<Locale, Strings> = {
       <>
         Ugyanaz a recept <strong>minden</strong> oldalhoz, amely
         állásértesítőket küld neked e-mailben — országos oldalak, városi
-        portálok, niche közösségek. Iratkozz fel az értesítőikre, majd továbbítsd
-        ezeket az e-maileket a csapat postafiókjába. A csapat a{" "}
-        <strong>teljes</strong> dedikált postafiókot olvassa, így az új platformok
-        bármilyen további beállítás nélkül működnek a csapat oldalán.
+        portálok, niche közösségek. Iratkozz fel az értesítőikre, majd
+        továbbítsd ezeket az e-maileket a csapat postafiókjába. A csapat a{" "}
+        <strong>teljes</strong> dedikált postafiókot olvassa, így az új
+        platformok bármilyen további beállítás nélkül működnek a csapat oldalán.
       </>
     ),
     anyCallout: (
       <>
-        💡 <strong>Tipp:</strong> mivel a postafiók dedikált,{" "}
-        <em>tágan</em> is továbbíthatsz, és hagyhatod, hogy a csapat válogasson —
-        nincs szükséged tökéletes szűrőre a te oldaladon.
+        💡 <strong>Tipp:</strong> mivel a postafiók dedikált, <em>tágan</em> is
+        továbbíthatsz, és hagyhatod, hogy a csapat válogasson — nincs szükséged
+        tökéletes szűrőre a te oldaladon.
       </>
     ),
     usesTitle: "🤖 Hogyan használja a csapat",
@@ -2276,9 +2313,9 @@ const T: Record<Locale, Strings> = {
         🧮 <strong>A Kapitány kiegyensúlyozza a terhelést</strong> — ha ésszerű
         számú értesítő érkezett, a csapat mindet elolvassa (több jel jobb). Ha{" "}
         <em>áradat</em> érkezik (mondjuk több száz egy nap alatt), a Kapitány a{" "}
-        <strong>legrelevánsabbakat</strong> választja ki, és azokat tolja át, így
-        a cél mindig teljesül: <strong>az új pozíciók pontot kapnak</strong>, nem
-        csak értékelés nélkül halmozódnak.
+        <strong>legrelevánsabbakat</strong> választja ki, és azokat tolja át,
+        így a cél mindig teljesül: <strong>az új pozíciók pontot kapnak</strong>
+        , nem csak értékelés nélkül halmozódnak.
       </>
     ),
     usesResult: (
@@ -2289,10 +2326,7 @@ const T: Record<Locale, Strings> = {
     ),
     usesCallout: (
       <>
-        🎯{" "}
-        <strong>
-          A csapat célja a pontszám, nem a motivációs levél.
-        </strong>{" "}
+        🎯 <strong>A csapat célja a pontszám, nem a motivációs levél.</strong>{" "}
         Az önéletrajz/motivációs levél írása igény szerinti marad (akkor
         kattintasz, amikor szeretnéd). A jó értesítők továbbítása azt jelenti,
         hogy több <em>megfelelő</em> pozíció kap pontot a csapat keretén belül.
@@ -2314,8 +2348,8 @@ const T: Record<Locale, Strings> = {
     tblFix: "Megoldás",
     v1s: (
       <>
-        Nem jelenik meg egyetlen{" "}
-        <code className={CODE_CLS}>*-email</code> pozíció sem
+        Nem jelenik meg egyetlen <code className={CODE_CLS}>*-email</code>{" "}
+        pozíció sem
       </>
     ),
     v1c: "a hitelesítő adatok nincsenek mentve / hibásak",
@@ -2420,9 +2454,9 @@ const T: Record<Locale, Strings> = {
     calloutOptional: (
       <>
         ✅ <strong>Opcional, mas fortemente recomendado.</strong> A equipe
-        funciona bem sem isso (os Scouts pesquisam na web por conta própria), mas
-        é <strong>notavelmente menos eficiente</strong>. Se você configurar o
-        encaminhamento, você decide o que chega à equipe; se não, a equipe tem
+        funciona bem sem isso (os Scouts pesquisam na web por conta própria),
+        mas é <strong>notavelmente menos eficiente</strong>. Se você configurar
+        o encaminhamento, você decide o que chega à equipe; se não, a equipe tem
         que descobrir sozinha.
       </>
     ),
@@ -2436,8 +2470,8 @@ const T: Record<Locale, Strings> = {
     whyTitle: "💡 Por que torna a equipe melhor",
     whyIntro: (
       <>
-        Um alerta de emprego que <em>você</em> configurou já está filtrado para o
-        que você quer: a função certa, a cidade certa, a senioridade certa.
+        Um alerta de emprego que <em>você</em> configurou já está filtrado para
+        o que você quer: a função certa, a cidade certa, a senioridade certa.
         Quando esse alerta chega à caixa de entrada da equipe, os Scouts recebem
         um <strong>lead pré-qualificado</strong> em vez de adivinhar palavras-
         chave na web aberta. Concretamente:
@@ -2458,16 +2492,16 @@ const T: Record<Locale, Strings> = {
     ),
     whyTailored: (
       <>
-        🧩 <strong>Mais sob medida ao longo do tempo</strong> — ajuste os filtros
-        do seu alerta e a entrada da equipe muda com você.
+        🧩 <strong>Mais sob medida ao longo do tempo</strong> — ajuste os
+        filtros do seu alerta e a entrada da equipe muda com você.
       </>
     ),
     whyAnyPlatform: (
       <>
         🌍 <strong>Qualquer plataforma, não só o LinkedIn</strong> — encaminhe
         alertas do LinkedIn, Glassdoor, Indeed <strong>e</strong> qualquer site
-        de empregos local/nacional/da cidade que lhe envie e-mails. Se enviar uma
-        notificação, a equipe consegue lê-la.
+        de empregos local/nacional/da cidade que lhe envie e-mails. Se enviar
+        uma notificação, a equipe consegue lê-la.
       </>
     ),
     whySource: (
@@ -2481,12 +2515,13 @@ const T: Record<Locale, Strings> = {
     ),
     calloutLinkedin: (
       <>
-        🔗 <strong>O LinkedIn é, sozinho, a configuração de maior valor.</strong>{" "}
+        🔗{" "}
+        <strong>O LinkedIn é, sozinho, a configuração de maior valor.</strong>{" "}
         Configure os seus filtros de busca no LinkedIn, salve-os como{" "}
         <strong>Job Alert</strong>, ative as{" "}
-        <strong>notificações por e-mail</strong> e depois encaminhe esses e-mails
-        para a equipe. Só essa fonte já torna os Scouts drasticamente mais
-        eficazes.
+        <strong>notificações por e-mail</strong> e depois encaminhe esses
+        e-mails para a equipe. Só essa fonte já torna os Scouts drasticamente
+        mais eficazes.
       </>
     ),
     stepsTitle: "🗺️ Os três passos",
@@ -2507,12 +2542,13 @@ const T: Record<Locale, Strings> = {
     step1Callout: (
       <>
         🔒 <strong>Por que dedicada:</strong> a equipe lê esta caixa de entrada
-        via IMAP. Um endereço separado significa que ela nunca toca no seu e-mail
-        pessoal, e você pode revogar o acesso a qualquer momento mudando uma
-        única senha.
+        via IMAP. Um endereço separado significa que ela nunca toca no seu
+        e-mail pessoal, e você pode revogar o acesso a qualquer momento mudando
+        uma única senha.
       </>
     ),
-    step2Title: "2️⃣ Compartilhe a caixa de entrada com a equipe (app de desktop)",
+    step2Title:
+      "2️⃣ Compartilhe a caixa de entrada com a equipe (app de desktop)",
     step2Body: (
       <>
         No <strong>app de desktop JHT</strong>, abra{" "}
@@ -2546,18 +2582,17 @@ const T: Record<Locale, Strings> = {
       <>
         🔑 <strong>Senha de app (Gmail):</strong> ative a Verificação em duas
         etapas, depois crie uma <em>Senha de app</em> (Conta do Google →
-        Segurança → Senhas de app) e cole-a. É um token de 16 caracteres que você
-        pode revogar de forma independente, então a equipe nunca guarda a sua
-        senha real. Outros provedores (Outlook, Fastmail, …) têm o mesmo conceito
-        — procure por &quot;senha de app&quot; ou &quot;token de acesso
+        Segurança → Senhas de app) e cole-a. É um token de 16 caracteres que
+        você pode revogar de forma independente, então a equipe nunca guarda a
+        sua senha real. Outros provedores (Outlook, Fastmail, …) têm o mesmo
+        conceito — procure por &quot;senha de app&quot; ou &quot;token de acesso
         IMAP&quot;.
       </>
     ),
     step2Button: (
       <>
-        O botão{" "}
-        <strong>&quot;Como configurar o encaminhamento&quot;</strong> nessa
-        janela traz você de volta a este guia.
+        O botão <strong>&quot;Como configurar o encaminhamento&quot;</strong>{" "}
+        nessa janela traz você de volta a este guia.
       </>
     ),
     step3Title: "3️⃣ Encaminhe automaticamente os seus alertas de emprego",
@@ -2623,11 +2658,15 @@ const T: Record<Locale, Strings> = {
     outlookBody: (
       <>
         Use <strong>Regras</strong> (Outlook) ou o equivalente do seu provedor:{" "}
-        <em>se o remetente contiver o domínio do site de empregos → encaminhar
-        para</em> a caixa de entrada da equipe.
+        <em>
+          se o remetente contiver o domínio do site de empregos → encaminhar
+          para
+        </em>{" "}
+        a caixa de entrada da equipe.
       </>
     ),
-    anySubtitle: "🌍 Qualquer outra plataforma (sites locais / nacionais / de nicho)",
+    anySubtitle:
+      "🌍 Qualquer outra plataforma (sites locais / nacionais / de nicho)",
     anyBody: (
       <>
         A mesma receita para <strong>cada</strong> site que lhe envia
@@ -2641,26 +2680,27 @@ const T: Record<Locale, Strings> = {
     anyCallout: (
       <>
         💡 <strong>Dica:</strong> como a caixa de entrada é dedicada, você pode
-        encaminhar de forma <em>ampla</em> e deixar a equipe organizar — você não
-        precisa de um filtro perfeito do seu lado.
+        encaminhar de forma <em>ampla</em> e deixar a equipe organizar — você
+        não precisa de um filtro perfeito do seu lado.
       </>
     ),
     usesTitle: "🤖 Como a equipe usa",
     usesStartOfDay: (
       <>
         🌅 <strong>Início do dia</strong> — o Capitão e os Scouts verificam a
-        caixa de entrada da equipe logo no começo da janela de trabalho, antes de
-        qualquer busca na web. Os alertas da noite já estão esperando.
+        caixa de entrada da equipe logo no começo da janela de trabalho, antes
+        de qualquer busca na web. Os alertas da noite já estão esperando.
       </>
     ),
     usesBalance: (
       <>
         🧮 <strong>O Capitão equilibra a carga</strong> — se chegou um número
-        razoável de alertas, a equipe lê todos (mais sinal é melhor). Se chega uma{" "}
-        <em>enxurrada</em> (digamos centenas em um dia), o Capitão escolhe os{" "}
-        <strong>mais relevantes</strong> e os empurra adiante, de modo que o
-        objetivo é sempre cumprido: <strong>novas posições chegam a uma
-        pontuação</strong>, em vez de apenas se acumularem sem avaliação.
+        razoável de alertas, a equipe lê todos (mais sinal é melhor). Se chega
+        uma <em>enxurrada</em> (digamos centenas em um dia), o Capitão escolhe
+        os <strong>mais relevantes</strong> e os empurra adiante, de modo que o
+        objetivo é sempre cumprido:{" "}
+        <strong>novas posições chegam a uma pontuação</strong>, em vez de apenas
+        se acumularem sem avaliação.
       </>
     ),
     usesResult: (
@@ -2734,8 +2774,8 @@ const T: Record<Locale, Strings> = {
     privacy2: (
       <>
         Use uma <strong>caixa de entrada dedicada</strong> e uma{" "}
-        <strong>senha específica de app</strong> para que a equipe nunca guarde o
-        seu e-mail pessoal nem o seu login real.
+        <strong>senha específica de app</strong> para que a equipe nunca guarde
+        o seu e-mail pessoal nem o seu login real.
       </>
     ),
     privacy3:
@@ -2753,9 +2793,9 @@ const T: Record<Locale, Strings> = {
     tblPath: "Caminho de destino",
     g1: (
       <>
-        Formulário de desktop{" "}
-        <strong>Configurações → E-mail da equipe</strong> (e-mail + senha de app
-        + botão &quot;Como configurar o encaminhamento&quot;)
+        Formulário de desktop <strong>Configurações → E-mail da equipe</strong>{" "}
+        (e-mail + senha de app + botão &quot;Como configurar o
+        encaminhamento&quot;)
       </>
     ),
     g2: (

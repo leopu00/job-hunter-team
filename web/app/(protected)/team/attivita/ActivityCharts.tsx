@@ -73,7 +73,8 @@ const T: Record<
     nInstances: (n) => `${n} istanze`,
     last: (ago) => `ultimo ${ago}`,
     volume: "📈 Volume di lavoro nel tempo",
-    volumeHint: (days) => `Azioni totali al giorno, scomposte per ruolo · ${days} giorni.`,
+    volumeHint: (days) =>
+      `Azioni totali al giorno, scomposte per ruolo · ${days} giorni.`,
     heatmap: "📅 Heatmap attività",
     heatmapHint:
       "Una riga per istanza. L'intensità è relativa al picco giornaliero di ciascuna istanza.",
@@ -94,8 +95,7 @@ const T: Record<
     unattributed: "unattributed",
     donutInstancesHint: (role) =>
       `Instance breakdown for ${role}, as a share of the role total.`,
-    donutRolesHint:
-      "Work share per role · click a role to see its instances.",
+    donutRolesHint: "Work share per role · click a role to see its instances.",
     aggregatoHint:
       "Events with no recorded instance id: for the Analyst it is the whole activity (last_checked does not store the instance); for other roles they are rows with *_by null.",
     pctActions: (pct) => `${pct}% · actions`,
@@ -108,7 +108,8 @@ const T: Record<
     nInstances: (n) => `${n} instances`,
     last: (ago) => `last ${ago}`,
     volume: "📈 Work volume over time",
-    volumeHint: (days) => `Total actions per day, broken down by role · ${days} days.`,
+    volumeHint: (days) =>
+      `Total actions per day, broken down by role · ${days} days.`,
     heatmap: "📅 Activity heatmap",
     heatmapHint:
       "One row per instance. Intensity is relative to each instance's daily peak.",
@@ -143,7 +144,8 @@ const T: Record<
     nInstances: (n) => `${n} instancias`,
     last: (ago) => `última ${ago}`,
     volume: "📈 Volumen de trabajo en el tiempo",
-    volumeHint: (days) => `Acciones totales por día, desglosadas por rol · ${days} días.`,
+    volumeHint: (days) =>
+      `Acciones totales por día, desglosadas por rol · ${days} días.`,
     heatmap: "📅 Mapa de calor de actividad",
     heatmapHint:
       "Una fila por instancia. La intensidad es relativa al pico diario de cada instancia.",
@@ -178,7 +180,8 @@ const T: Record<
     nInstances: (n) => `${n} instances`,
     last: (ago) => `dernière ${ago}`,
     volume: "📈 Volume de travail dans le temps",
-    volumeHint: (days) => `Actions totales par jour, ventilées par rôle · ${days} jours.`,
+    volumeHint: (days) =>
+      `Actions totales par jour, ventilées par rôle · ${days} jours.`,
     heatmap: "📅 Carte de chaleur d'activité",
     heatmapHint:
       "Une ligne par instance. L'intensité est relative au pic quotidien de chaque instance.",
@@ -213,7 +216,8 @@ const T: Record<
     nInstances: (n) => `${n} Instanzen`,
     last: (ago) => `letzte ${ago}`,
     volume: "📈 Arbeitsvolumen im Zeitverlauf",
-    volumeHint: (days) => `Gesamtaktionen pro Tag, aufgeschlüsselt nach Rolle · ${days} Tage.`,
+    volumeHint: (days) =>
+      `Gesamtaktionen pro Tag, aufgeschlüsselt nach Rolle · ${days} Tage.`,
     heatmap: "📅 Aktivitäts-Heatmap",
     heatmapHint:
       "Eine Zeile pro Instanz. Die Intensität ist relativ zum täglichen Spitzenwert jeder Instanz.",
@@ -248,7 +252,8 @@ const T: Record<
     nInstances: (n) => `${n} példány`,
     last: (ago) => `utolsó ${ago}`,
     volume: "📈 Munkamennyiség az idő során",
-    volumeHint: (days) => `Napi összes művelet, szerepenként bontva · ${days} nap.`,
+    volumeHint: (days) =>
+      `Napi összes művelet, szerepenként bontva · ${days} nap.`,
     heatmap: "📅 Tevékenység-hőtérkép",
     heatmapHint:
       "Soronként egy példány. Az intenzitás az egyes példányok napi csúcsához viszonyított.",
@@ -283,7 +288,8 @@ const T: Record<
     nInstances: (n) => `${n} instâncias`,
     last: (ago) => `última ${ago}`,
     volume: "📈 Volume de trabalho ao longo do tempo",
-    volumeHint: (days) => `Ações totais por dia, divididas por função · ${days} dias.`,
+    volumeHint: (days) =>
+      `Ações totais por dia, divididas por função · ${days} dias.`,
     heatmap: "📅 Mapa de calor de atividade",
     heatmapHint:
       "Uma linha por instância. A intensidade é relativa ao pico diário de cada instância.",
@@ -419,7 +425,9 @@ function TemporalScatter({
           </button>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-dim)] mb-4">{t.scatterHint}</p>
+      <p className="text-[10px] text-[var(--color-dim)] mb-4">
+        {t.scatterHint}
+      </p>
       <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4">
         <div className="flex">
           {/* Corsie (label ruolo, fisse) */}
@@ -1192,7 +1200,9 @@ export default function ActivityCharts({
                     className="flex items-center gap-1.5 shrink-0"
                     style={{ width: 116 }}
                     title={
-                      aggregated ? t.aggregatoHint : `${meta.label} · ${a.actor}`
+                      aggregated
+                        ? t.aggregatoHint
+                        : `${meta.label} · ${a.actor}`
                     }
                   >
                     <span className="text-[12px] leading-none">

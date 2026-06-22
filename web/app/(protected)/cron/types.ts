@@ -133,7 +133,9 @@ const CRON_STRINGS: Record<CronLocale, CronStrings> = {
 };
 
 function cronStrings(locale: string): CronStrings {
-  return CRON_STRINGS[(locale as CronLocale) in CRON_STRINGS ? (locale as CronLocale) : "en"];
+  return CRON_STRINGS[
+    (locale as CronLocale) in CRON_STRINGS ? (locale as CronLocale) : "en"
+  ];
 }
 
 /** Formato leggibile della schedule per la UI */

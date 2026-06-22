@@ -67,8 +67,7 @@ const T: Record<
   en: {
     title: "CLI — the jht command",
     tagline: "The essential commands to drive the team from a terminal",
-    intro1:
-      "Everything the desktop app and the web do, you can do with",
+    intro1: "Everything the desktop app and the web do, you can do with",
     intro2:
       ". It's the single surface humans, power users and AI assistants share — self-sufficient for day-to-day operation. Here are the commands you'll actually use.",
     callout1: "💡 Every command supports",
@@ -120,8 +119,7 @@ const T: Record<
   it: {
     title: "CLI — il comando jht",
     tagline: "I comandi essenziali per guidare il team da terminale",
-    intro1:
-      "Tutto ciò che fanno l'app desktop e il web, lo puoi fare con",
+    intro1: "Tutto ciò che fanno l'app desktop e il web, lo puoi fare con",
     intro2:
       ". È l'unica superficie condivisa da esseri umani, utenti esperti e assistenti AI — autosufficiente per l'uso quotidiano. Ecco i comandi che userai davvero.",
     callout1: "💡 Ogni comando supporta",
@@ -172,7 +170,8 @@ const T: Record<
   },
   es: {
     title: "CLI — el comando jht",
-    tagline: "Los comandos esenciales para dirigir el equipo desde una terminal",
+    tagline:
+      "Los comandos esenciales para dirigir el equipo desde una terminal",
     intro1:
       "Todo lo que hacen la app de escritorio y la web, lo puedes hacer con",
     intro2:
@@ -210,7 +209,8 @@ const T: Record<
     positionsList: "ofertas en la base de datos local",
     positionsShow: "detalle de una posición",
     positionsStats: "recuentos de encontradas / evaluadas / aplicadas",
-    positionsSentinellaStatus: "proyección de consumo (vigilancia de rate-limit)",
+    positionsSentinellaStatus:
+      "proyección de consumo (vigilancia de rate-limit)",
     positionsSentinellaGraph: "consumo a lo largo del tiempo en ASCII",
     h2Cloud: "☁️ Sincronización en la nube",
     cloudLogin:
@@ -227,7 +227,8 @@ const T: Record<
   },
   fr: {
     title: "CLI — la commande jht",
-    tagline: "Les commandes essentielles pour piloter l'équipe depuis un terminal",
+    tagline:
+      "Les commandes essentielles pour piloter l'équipe depuis un terminal",
     intro1:
       "Tout ce que font l'application de bureau et le web, vous pouvez le faire avec",
     intro2:
@@ -265,11 +266,11 @@ const T: Record<
     positionsList: "offres dans la base de données locale",
     positionsShow: "détail d'un poste",
     positionsStats: "comptages trouvées / évaluées / postulées",
-    positionsSentinellaStatus: "projection de consommation (surveillance du rate-limit)",
+    positionsSentinellaStatus:
+      "projection de consommation (surveillance du rate-limit)",
     positionsSentinellaGraph: "consommation dans le temps en ASCII",
     h2Cloud: "☁️ Synchronisation cloud",
-    cloudLogin:
-      "appairage par device-flow du navigateur avec ton compte web",
+    cloudLogin: "appairage par device-flow du navigateur avec ton compte web",
     cloudStatus: "état de la sync + heure du dernier push",
     cloudPush: "envoie maintenant les données locales vers le cloud",
     cloudDisable: "dissocie cette machine (révoque séparément sur le web)",
@@ -282,9 +283,9 @@ const T: Record<
   },
   de: {
     title: "CLI — der Befehl jht",
-    tagline: "Die wesentlichen Befehle, um das Team vom Terminal aus zu steuern",
-    intro1:
-      "Alles, was die Desktop-App und das Web tun, kannst du mit",
+    tagline:
+      "Die wesentlichen Befehle, um das Team vom Terminal aus zu steuern",
+    intro1: "Alles, was die Desktop-App und das Web tun, kannst du mit",
     intro2:
       " erledigen. Es ist die einzige Oberfläche, die Menschen, Power-User und KI-Assistenten teilen — autark für den täglichen Betrieb. Hier sind die Befehle, die du tatsächlich nutzen wirst.",
     callout1: "💡 Jeder Befehl unterstützt",
@@ -313,8 +314,7 @@ const T: Record<
     teamStop: "einen stoppen, oder --all",
     teamChat: "interaktiver Chat mit einem Agenten",
     teamSend: "einmalige Nachricht an einen Agenten",
-    teamReloadPre:
-      "Um das Team nach dem Bearbeiten der Config neu zu laden:",
+    teamReloadPre: "Um das Team nach dem Bearbeiten der Config neu zu laden:",
     teamReloadPost: ".",
     h2Positions: "📊 Positionen & Monitoring",
     positionsList: "Jobs in der lokalen DB",
@@ -323,8 +323,7 @@ const T: Record<
     positionsSentinellaStatus: "Verbrauchsprognose (Rate-Limit-Überwachung)",
     positionsSentinellaGraph: "Verbrauch über die Zeit in ASCII",
     h2Cloud: "☁️ Cloud-Sync",
-    cloudLogin:
-      "Browser-Device-Flow-Kopplung mit deinem Web-Konto",
+    cloudLogin: "Browser-Device-Flow-Kopplung mit deinem Web-Konto",
     cloudStatus: "Sync-Status + Zeit des letzten Push",
     cloudPush: "lokale Daten jetzt in die Cloud pushen",
     cloudDisable: "diese Maschine trennen (separat im Web widerrufen)",
@@ -339,8 +338,7 @@ const T: Record<
     title: "CLI — a jht parancs",
     tagline:
       "A csapat terminálból való irányításához szükséges alapvető parancsok",
-    intro1:
-      "Mindent, amit az asztali alkalmazás és a web csinál, megtehetsz a",
+    intro1: "Mindent, amit az asztali alkalmazás és a web csinál, megtehetsz a",
     intro2:
       " segítségével. Ez az egyetlen felület, amelyet emberek, haladó felhasználók és MI-asszisztensek megosztanak — önellátó a napi használathoz. Íme a parancsok, amelyeket valóban használni fogsz.",
     callout1: "💡 Minden parancs támogatja a",
@@ -369,8 +367,7 @@ const T: Record<
     teamStop: "egy leállítása, vagy --all",
     teamChat: "interaktív csevegés egy ügynökkel",
     teamSend: "egyszeri üzenet egy ügynöknek",
-    teamReloadPre:
-      "A csapat újratöltéséhez a config szerkesztése után:",
+    teamReloadPre: "A csapat újratöltéséhez a config szerkesztése után:",
     teamReloadPost: ".",
     h2Positions: "📊 Pozíciók és monitorozás",
     positionsList: "állások a helyi adatbázisban",
@@ -379,12 +376,10 @@ const T: Record<
     positionsSentinellaStatus: "felhasználás-előrejelzés (rate-limit figyelés)",
     positionsSentinellaGraph: "felhasználás az idő függvényében, ASCII-ban",
     h2Cloud: "☁️ Felhő szinkronizálás",
-    cloudLogin:
-      "böngészős device-flow párosítás a webes fiókoddal",
+    cloudLogin: "böngészős device-flow párosítás a webes fiókoddal",
     cloudStatus: "szinkron állapota + utolsó push ideje",
     cloudPush: "helyi adatok azonnali feltöltése a felhőbe",
-    cloudDisable:
-      "ennek a gépnek a leválasztása (külön vond vissza a weben)",
+    cloudDisable: "ennek a gépnek a leválasztása (külön vond vissza a weben)",
     h2Oneliners: "🔁 Gyakori egysorosok",
     olFresh: "Tiszta beállítás (Local vagy VPS — ugyanaz a parancs)",
     olSwitch: "Provider váltása és újratöltés",
@@ -394,17 +389,16 @@ const T: Record<
   },
   pt: {
     title: "CLI — o comando jht",
-    tagline: "Os comandos essenciais para conduzir a equipe a partir de um terminal",
-    intro1:
-      "Tudo o que a app de desktop e a web fazem, você pode fazer com",
+    tagline:
+      "Os comandos essenciais para conduzir a equipe a partir de um terminal",
+    intro1: "Tudo o que a app de desktop e a web fazem, você pode fazer com",
     intro2:
       ". É a única superfície partilhada por humanos, utilizadores avançados e assistentes de IA — autossuficiente para o uso diário. Aqui estão os comandos que você realmente vai usar.",
     callout1: "💡 Todos os comandos suportam",
     callout2:
       ". A referência completa — cada subcomando, flag e a distinção host-wrapper vs container — está ligada no final.",
     h2Lifecycle: "📦 Ciclo de vida do container",
-    lifecycleUp:
-      "inicia o container (baixa a imagem na primeira execução)",
+    lifecycleUp: "inicia o container (baixa a imagem na primeira execução)",
     lifecycleDown: "para o container (mantém os seus dados)",
     lifecycleRestart: "mesma imagem, processo novo",
     lifecycleUpgrade: "baixa uma imagem mais recente e reinicia",
@@ -426,8 +420,7 @@ const T: Record<
     teamStop: "para um, ou --all",
     teamChat: "chat interativo com um agente",
     teamSend: "mensagem única para um agente",
-    teamReloadPre:
-      "Para recarregar a equipe depois de editar a config:",
+    teamReloadPre: "Para recarregar a equipe depois de editar a config:",
     teamReloadPost: ".",
     h2Positions: "📊 Posições e monitorização",
     positionsList: "vagas na base de dados local",
@@ -440,8 +433,7 @@ const T: Record<
       "emparelhamento por device-flow do navegador com a sua conta web",
     cloudStatus: "estado da sync + hora do último push",
     cloudPush: "envia agora os dados locais para a nuvem",
-    cloudDisable:
-      "desvincula esta máquina (revogue à parte na web)",
+    cloudDisable: "desvincula esta máquina (revogue à parte na web)",
     h2Oneliners: "🔁 One-liners comuns",
     olFresh: "Configuração do zero (Local ou VPS — o mesmo comando)",
     olSwitch: "Troca de provider e recarrega",

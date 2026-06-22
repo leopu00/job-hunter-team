@@ -5,14 +5,45 @@ import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import type { RoleFamilyCount } from "@/lib/position-classifier";
 
-const T: Record<Locale, { ariaLabel: string; types: (n: number) => string; total: string }> = {
-  it: { ariaLabel: "Tipi di posizione", types: (n) => `${n} tipi`, total: "totale" },
-  en: { ariaLabel: "Position types", types: (n) => `${n} types`, total: "total" },
-  es: { ariaLabel: "Tipos de posición", types: (n) => `${n} tipos`, total: "total" },
-  fr: { ariaLabel: "Types de poste", types: (n) => `${n} types`, total: "total" },
-  de: { ariaLabel: "Stellentypen", types: (n) => `${n} Typen`, total: "Gesamt" },
-  hu: { ariaLabel: "Pozíciótípusok", types: (n) => `${n} típus`, total: "összesen" },
-  pt: { ariaLabel: "Tipos de posição", types: (n) => `${n} tipos`, total: "total" },
+const T: Record<
+  Locale,
+  { ariaLabel: string; types: (n: number) => string; total: string }
+> = {
+  it: {
+    ariaLabel: "Tipi di posizione",
+    types: (n) => `${n} tipi`,
+    total: "totale",
+  },
+  en: {
+    ariaLabel: "Position types",
+    types: (n) => `${n} types`,
+    total: "total",
+  },
+  es: {
+    ariaLabel: "Tipos de posición",
+    types: (n) => `${n} tipos`,
+    total: "total",
+  },
+  fr: {
+    ariaLabel: "Types de poste",
+    types: (n) => `${n} types`,
+    total: "total",
+  },
+  de: {
+    ariaLabel: "Stellentypen",
+    types: (n) => `${n} Typen`,
+    total: "Gesamt",
+  },
+  hu: {
+    ariaLabel: "Pozíciótípusok",
+    types: (n) => `${n} típus`,
+    total: "összesen",
+  },
+  pt: {
+    ariaLabel: "Tipos de posição",
+    types: (n) => `${n} tipos`,
+    total: "total",
+  },
 };
 
 type Props = {

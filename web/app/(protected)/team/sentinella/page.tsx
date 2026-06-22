@@ -99,7 +99,8 @@ const T: Record<Locale, Strings> = {
     unknownError: "errore sconosciuto",
     fetchFailed: "fetch failed",
     savedTick: (min) => `Salvato (${min} min). Attivo entro ~15s.`,
-    samplesLine: (n) => `${n} campionamenti dalla sessione corrente (ultimi 500).`,
+    samplesLine: (n) =>
+      `${n} campionamenti dalla sessione corrente (ultimi 500).`,
   },
   en: {
     dashboard: "Dashboard",
@@ -216,7 +217,8 @@ const T: Record<Locale, Strings> = {
     unknownError: "erreur inconnue",
     fetchFailed: "échec de récupération",
     savedTick: (min) => `Enregistré (${min} min). Actif sous ~15 s.`,
-    samplesLine: (n) => `${n} échantillons de la session actuelle (500 derniers).`,
+    samplesLine: (n) =>
+      `${n} échantillons de la session actuelle (500 derniers).`,
   },
   de: {
     dashboard: "Dashboard",
@@ -249,13 +251,15 @@ const T: Record<Locale, Strings> = {
     startQueued: "In Warteschlange auf dem VPS…",
     startStarting: "Wird gestartet…",
     startSentinel: "Wächter starten",
-    startTimeout: "Zeitüberschreitung: Der Subscriber auf dem VPS antwortet nicht.",
+    startTimeout:
+      "Zeitüberschreitung: Der Subscriber auf dem VPS antwortet nicht.",
     saveError: "Speicherfehler",
     networkError: "Netzwerkfehler",
     unknownError: "unbekannter Fehler",
     fetchFailed: "Abruf fehlgeschlagen",
     savedTick: (min) => `Gespeichert (${min} min). Aktiv in ~15 s.`,
-    samplesLine: (n) => `${n} Stichproben aus der aktuellen Sitzung (letzte 500).`,
+    samplesLine: (n) =>
+      `${n} Stichproben aus der aktuellen Sitzung (letzte 500).`,
   },
   hu: {
     dashboard: "Irányítópult",
@@ -534,9 +538,9 @@ function Chart({
             fill="rgba(255,255,255,0.5)"
             textAnchor="end"
           >
-            {new Date(
-              entries[entries.length - 1].ts,
-            ).toLocaleTimeString(localeTag)}
+            {new Date(entries[entries.length - 1].ts).toLocaleTimeString(
+              localeTag,
+            )}
           </text>
         </>
       )}

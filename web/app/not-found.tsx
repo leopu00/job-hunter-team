@@ -32,7 +32,8 @@ const T: Record<Locale, Record<string, string>> = {
   },
   de: {
     not_found: "Seite nicht gefunden",
-    message: "Die angeforderte Ressource existiert nicht oder wurde verschoben.",
+    message:
+      "Die angeforderte Ressource existiert nicht oder wurde verschoben.",
     dashboard: "Dashboard",
     back: "← zurück",
   },

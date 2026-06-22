@@ -274,8 +274,7 @@ export function ExcludeButton({ legacyId, status, initialReason }: Props) {
 
   // Già esclusa da te → mostra la causa + annulla.
   if (isUserExcluded) {
-    const reasonLabel =
-      t.reasons[initialReason as ReasonKey] ?? initialReason;
+    const reasonLabel = t.reasons[initialReason as ReasonKey] ?? initialReason;
     return (
       <div className="flex flex-col items-end gap-1">
         <button

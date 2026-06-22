@@ -83,8 +83,7 @@ const T: Record<
     workingHours: "Munkaidő",
     actions: "művelet",
     weekArcDay: ". nap a héten",
-    budgetTooltip: (d, w) =>
-      `költségkeret: ${d}% nap · ${w}% hét`,
+    budgetTooltip: (d, w) => `költségkeret: ${d}% nap · ${w}% hét`,
     legendActions: "Műveletek/nap (bal tengely)",
     legendBudget: "Költségkeret % (jobb tengely)",
     cumWeek: "halmozott hét",

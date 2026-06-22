@@ -219,7 +219,11 @@ export default async function ScoutPage() {
         style={{ animation: "fade-in 0.35s ease both" }}
       >
         {[
-          { label: t("totalPositions"), val: total, color: "var(--color-blue)" },
+          {
+            label: t("totalPositions"),
+            val: total,
+            color: "var(--color-blue)",
+          },
           {
             label: t("activeScouts"),
             val: stats.length,

@@ -148,27 +148,30 @@ const LOCALE_TAG: Record<Locale, string> = {
   pt: "pt-PT",
 };
 
-const T: Record<Locale, {
-  dashboard: string;
-  team: string;
-  analyst: string;
-  subtitle: string;
-  remote: string;
-  inAnalisi: string;
-  expiredLinkPrefix: string;
-  queued: string;
-  checkedTot: string;
-  processedToday: string;
-  excludedToday: string;
-  inQueueTitle: string;
-  noQueue: string;
-  lastCheckedTitle: string;
-  noChecked: string;
-  lastExcludedTitle: string;
-  noExclusions: string;
-  exclusionReasons: string;
-  excludedWord: string;
-}> = {
+const T: Record<
+  Locale,
+  {
+    dashboard: string;
+    team: string;
+    analyst: string;
+    subtitle: string;
+    remote: string;
+    inAnalisi: string;
+    expiredLinkPrefix: string;
+    queued: string;
+    checkedTot: string;
+    processedToday: string;
+    excludedToday: string;
+    inQueueTitle: string;
+    noQueue: string;
+    lastCheckedTitle: string;
+    noChecked: string;
+    lastExcludedTitle: string;
+    noExclusions: string;
+    exclusionReasons: string;
+    excludedWord: string;
+  }
+> = {
   it: {
     dashboard: "Dashboard",
     team: "Team",

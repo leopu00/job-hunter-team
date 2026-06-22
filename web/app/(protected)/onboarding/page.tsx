@@ -860,7 +860,12 @@ const PLACEHOLDERS: Record<
       ["Enseñanza inclusiva", "Planificación de clases", "Evaluación", "…"],
       ["Liderazgo de equipos", "Presupuestos", "Hablar en público", "…"],
       ["Masajes", "Tratamientos faciales", "Asesoría de producto", "…"],
-      ["Instalaciones domésticas", "Cuadros eléctricos", "Seguridad eléctrica", "…"],
+      [
+        "Instalaciones domésticas",
+        "Cuadros eléctricos",
+        "Seguridad eléctrica",
+        "…",
+      ],
       ["Venta asistida", "Visual merchandising", "Gestión de caja", "…"],
       ["React", "Python", "PostgreSQL", "…"],
     ],
@@ -922,7 +927,12 @@ const PLACEHOLDERS: Record<
       ["Pédagogie inclusive", "Préparation des cours", "Évaluation", "…"],
       ["Management d'équipe", "Budgétisation", "Prise de parole", "…"],
       ["Massages", "Soins du visage", "Conseil produit", "…"],
-      ["Installations domestiques", "Tableaux électriques", "Sécurité électrique", "…"],
+      [
+        "Installations domestiques",
+        "Tableaux électriques",
+        "Sécurité électrique",
+        "…",
+      ],
       ["Vente assistée", "Merchandising visuel", "Tenue de caisse", "…"],
       ["React", "Python", "PostgreSQL", "…"],
     ],
@@ -1046,8 +1056,18 @@ const PLACEHOLDERS: Record<
       ["Inkluzív oktatás", "Óratervezés", "Értékelés", "…"],
       ["Csapatvezetés", "Költségvetés", "Nyilvános beszéd", "…"],
       ["Masszázs", "Arckezelések", "Termék-tanácsadás", "…"],
-      ["Háztartási szerelés", "Kapcsolószekrények", "Elektromos biztonság", "…"],
-      ["Asszisztált értékesítés", "Visual merchandising", "Pénztárkezelés", "…"],
+      [
+        "Háztartási szerelés",
+        "Kapcsolószekrények",
+        "Elektromos biztonság",
+        "…",
+      ],
+      [
+        "Asszisztált értékesítés",
+        "Visual merchandising",
+        "Pénztárkezelés",
+        "…",
+      ],
       ["React", "Python", "PostgreSQL", "…"],
     ],
   },
@@ -1108,7 +1128,12 @@ const PLACEHOLDERS: Record<
       ["Ensino inclusivo", "Planeamento de aulas", "Avaliação", "…"],
       ["Liderança de equipas", "Orçamentação", "Falar em público", "…"],
       ["Massagens", "Tratamentos faciais", "Aconselhamento de produto", "…"],
-      ["Instalações domésticas", "Quadros elétricos", "Segurança elétrica", "…"],
+      [
+        "Instalações domésticas",
+        "Quadros elétricos",
+        "Segurança elétrica",
+        "…",
+      ],
       ["Venda assistida", "Visual merchandising", "Gestão de caixa", "…"],
       ["React", "Python", "PostgreSQL", "…"],
     ],
@@ -1291,7 +1316,9 @@ export default function OnboardingPage() {
     try {
       rec = new SR();
     } catch (err: any) {
-      setSpeechError(tr("speech_init_error", { msg: err?.message ?? String(err) }));
+      setSpeechError(
+        tr("speech_init_error", { msg: err?.message ?? String(err) }),
+      );
       return;
     }
     rec.lang = LOCALE_TAG[locale] ?? "en-US";
@@ -1343,7 +1370,9 @@ export default function OnboardingPage() {
     try {
       rec.start();
     } catch (err: any) {
-      setSpeechError(tr("speech_start_failed", { msg: err?.message ?? String(err) }));
+      setSpeechError(
+        tr("speech_start_failed", { msg: err?.message ?? String(err) }),
+      );
       setIsRecording(false);
       recognitionRef.current = null;
     }
@@ -1933,9 +1962,7 @@ export default function OnboardingPage() {
                     ? "pulse-dot 1.4s ease-in-out infinite"
                     : undefined,
                 }}
-                aria-label={
-                  isRecording ? tr("mic_stop") : tr("mic_start_aria")
-                }
+                aria-label={isRecording ? tr("mic_stop") : tr("mic_start_aria")}
               >
                 <svg
                   aria-hidden="true"

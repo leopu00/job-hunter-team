@@ -98,8 +98,7 @@ const PAGE = {
   },
   es: {
     title: "Precios",
-    subtitle:
-      "Job Hunter Team es open source. Esto es lo único que te cuesta.",
+    subtitle: "Job Hunter Team es open source. Esto es lo único que te cuesta.",
     freeTitle: "La plataforma es gratuita",
     freeBody:
       "Software open source con licencia MIT: ninguna suscripción a la plataforma, ningún coste oculto, ningún ingreso para nosotros. Lo descargas y haces funcionar el equipo en tu propia máquina; el único gasto es la suscripción al modelo de IA.",

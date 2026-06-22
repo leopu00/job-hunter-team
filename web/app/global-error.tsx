@@ -28,8 +28,7 @@ const T: Record<Locale, Record<string, string>> = {
   fr: {
     critical_error: "erreur critique",
     title: "Une erreur s'est produite",
-    fallback:
-      "Erreur inattendue lors du chargement de l'application.",
+    fallback: "Erreur inattendue lors du chargement de l'application.",
     retry: "Réessayer",
     back_home: "Retour à l'accueil",
   },

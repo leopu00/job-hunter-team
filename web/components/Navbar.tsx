@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
-import { cookies } from 'next/headers'
 import type { User } from '@supabase/supabase-js'
-import { locales, defaultLocale, type Locale } from '@/i18n/config'
+import { type Locale } from '@/i18n/config'
 import LoginButton from './LoginButton'
 import NavLinks from './NavLinks'
 import NavbarMobile from './NavbarMobile'
@@ -22,15 +21,10 @@ const T: Record<Locale, { navAria: string }> = {
 
 interface NavbarProps {
   user: User | null
+  locale: Locale
 }
 
-export default async function Navbar({ user }: NavbarProps) {
-  const cookieStore = await cookies()
-  const cookieLocale = cookieStore.get('NEXT_LOCALE')?.value
-  const locale: Locale =
-    cookieLocale && (locales as string[]).includes(cookieLocale)
-      ? (cookieLocale as Locale)
-      : defaultLocale
+export default function Navbar({ user, locale }: NavbarProps) {
   const t = T[locale]
 
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined

@@ -321,9 +321,7 @@ export function NotificationCenter() {
                     key={n.id}
                     role={n.read ? "listitem" : "button"}
                     tabIndex={0}
-                    aria-label={
-                      n.read ? n.title : `${t.mark_read} ${n.title}`
-                    }
+                    aria-label={n.read ? n.title : `${t.mark_read} ${n.title}`}
                     onClick={() => !n.read && markRead(n.id)}
                     onKeyDown={(e) => {
                       if (!n.read && (e.key === "Enter" || e.key === " ")) {

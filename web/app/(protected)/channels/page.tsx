@@ -308,13 +308,19 @@ function ChannelCard({
       <div className="flex gap-1.5 flex-wrap">
         <CapBadge label="markdown" active={ch.capabilities.markdown} />
         <CapBadge label="streaming" active={ch.capabilities.streaming} />
-        <CapBadge label={tr("cap_attachments")} active={ch.capabilities.attachments} />
+        <CapBadge
+          label={tr("cap_attachments")}
+          active={ch.capabilities.attachments}
+        />
         <CapBadge label="push" active={ch.capabilities.push} />
       </div>
 
       <div className="flex justify-between pt-3 border-t border-[var(--color-border)]">
         <StatItem label={tr("stat_sent")} value={ch.stats.messagesSent} />
-        <StatItem label={tr("stat_received")} value={ch.stats.messagesReceived} />
+        <StatItem
+          label={tr("stat_received")}
+          value={ch.stats.messagesReceived}
+        />
         <StatItem label={tr("stat_errors")} value={ch.stats.errors} />
         <StatItem label={tr("stat_last")} value={lastActivity} />
       </div>
@@ -389,10 +395,7 @@ export default function ChannelsPage() {
         <p className="text-[var(--color-muted)] text-[11px] mt-1">
           {tr("subtitle")
             .replace("{c}", String(connectedCount))
-            .replace(
-              "{a}",
-              String(channels.filter((c) => c.enabled).length),
-            )
+            .replace("{a}", String(channels.filter((c) => c.enabled).length))
             .replace("{t}", String(channels.length))}
         </p>
       </div>

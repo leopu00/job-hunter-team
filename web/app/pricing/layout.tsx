@@ -5,7 +5,13 @@ import { getRequestLocale } from "@/lib/request-locale";
 
 const META: Record<
   ServerLocale,
-  { title: string; description: string; ogTitle: string; ogDesc: string; crumb: string }
+  {
+    title: string;
+    description: string;
+    ogTitle: string;
+    ogDesc: string;
+    crumb: string;
+  }
 > = {
   it: {
     title: "Prezzi",

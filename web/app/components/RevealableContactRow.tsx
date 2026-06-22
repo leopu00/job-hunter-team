@@ -4,7 +4,10 @@ import { useState } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 
-const T: Record<Locale, { show: string; showLabel: (label: string) => string }> = {
+const T: Record<
+  Locale,
+  { show: string; showLabel: (label: string) => string }
+> = {
   it: { show: "Mostra", showLabel: (label) => `Mostra ${label}` },
   en: { show: "Show", showLabel: (label) => `Show ${label}` },
   es: { show: "Mostrar", showLabel: (label) => `Mostrar ${label}` },

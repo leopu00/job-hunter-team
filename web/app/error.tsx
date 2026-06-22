@@ -29,8 +29,7 @@ const T: Record<Locale, Record<string, string>> = {
   fr: {
     runtime_error: "erreur d'exécution",
     title: "Une erreur s'est produite",
-    fallback:
-      "Erreur inattendue. Réessayez ou retournez au tableau de bord.",
+    fallback: "Erreur inattendue. Réessayez ou retournez au tableau de bord.",
     retry: "Réessayer",
     dashboard: "Tableau de bord →",
   },

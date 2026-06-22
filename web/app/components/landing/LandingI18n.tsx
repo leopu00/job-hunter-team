@@ -469,7 +469,11 @@ const translations = {
     en: "Copy this prompt and hand it to your AI assistant: it will install and start the team for you.",
     hu: "Másold ki ezt a promptot és add át az AI asszisztensednek: ő telepíti és elindítja helyetted a csapatot.",
   },
-  dl_copy_prompt: { it: "Copia prompt", en: "Copy prompt", hu: "Prompt másolása" },
+  dl_copy_prompt: {
+    it: "Copia prompt",
+    en: "Copy prompt",
+    hu: "Prompt másolása",
+  },
   dl_prompt_note: {
     it: "L'assistente AI deve avere accesso al tuo computer — terminale e file (es. Claude Code, Cursor, Codex CLI).",
     en: "The AI assistant needs access to your computer — terminal and files (e.g. Claude Code, Cursor, Codex CLI).",
@@ -480,7 +484,11 @@ const translations = {
     en: "Not sure where or how to install it?",
     hu: "Nem tudod, hová vagy hogyan telepítsd?",
   },
-  dl_help_link: { it: "Leggi la guida", en: "Read the guide", hu: "Olvasd el az útmutatót" },
+  dl_help_link: {
+    it: "Leggi la guida",
+    en: "Read the guide",
+    hu: "Olvasd el az útmutatót",
+  },
   dl_instructions: { it: "Istruzioni", en: "Instructions", hu: "Utasítások" },
   dl_close: { it: "Chiudi", en: "Close", hu: "Bezárás" },
   dl_download: { it: "Scarica", en: "Download", hu: "Letöltés" },
@@ -1545,7 +1553,11 @@ const translations = {
     en: "See the costs →",
     hu: "Lásd a költségeket →",
   },
-  home_project_kicker: { it: "Il progetto", en: "The project", hu: "A projekt" },
+  home_project_kicker: {
+    it: "Il progetto",
+    en: "The project",
+    hu: "A projekt",
+  },
   home_project_title: {
     it: "Cosa c'è dietro, in chiaro",
     en: "What's behind it, in the open",

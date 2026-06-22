@@ -515,9 +515,7 @@ export default function NotificationsPage() {
       <div className="border border-[var(--color-border)] rounded-lg overflow-hidden bg-[var(--color-panel)]">
         {items.length === 0 ? (
           <div className="flex flex-col items-center py-16">
-            <p className="text-[var(--color-dim)] text-[12px]">
-              {tr.empty}
-            </p>
+            <p className="text-[var(--color-dim)] text-[12px]">{tr.empty}</p>
           </div>
         ) : (
           items.map((n) => (

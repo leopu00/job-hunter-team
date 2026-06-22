@@ -135,8 +135,7 @@ const T: Record<
     heroLeadPre:
       "Job Hunter es un equipo de agentes de IA que busca trabajo por ti: encuentra puestos, los analiza, los evalúa según tu perfil y prepara las candidaturas. Aquí mostramos lo que produjo sobre ",
     heroLeadStrong: "perfiles de candidato reales",
-    heroLeadPost:
-      " — datos agregados y anónimos, sin información personal.",
+    heroLeadPost: " — datos agregados y anónimos, sin información personal.",
     heroSub:
       "Es una página viva: crece con cada nuevo equipo monitorizado. Elige un caso de estudio abajo para ver todos los resultados.",
     positions: "puestos",
@@ -267,8 +266,7 @@ const T: Record<
     heroLeadPre:
       "O Job Hunter é uma equipa de agentes de IA que procura trabalho por ti: encontra posições, analisa-as, avalia-as face ao teu perfil e prepara as candidaturas. Aqui mostramos o que produziu sobre ",
     heroLeadStrong: "perfis de candidato reais",
-    heroLeadPost:
-      " — dados agregados e anónimos, sem informação pessoal.",
+    heroLeadPost: " — dados agregados e anónimos, sem informação pessoal.",
     heroSub:
       "É uma página viva: cresce a cada nova equipa monitorizada. Escolhe um estudo de caso abaixo para ver todos os resultados.",
     positions: "posições",

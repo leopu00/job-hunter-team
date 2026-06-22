@@ -88,7 +88,14 @@ function salaryPercentFor(p: LuxuryPosition): number {
 
 function formatRelative(
   iso: string,
-  t: (key: "rel_just_now" | "rel_m_ago" | "rel_h_ago" | "rel_d_ago" | "rel_mo_ago") => string,
+  t: (
+    key:
+      | "rel_just_now"
+      | "rel_m_ago"
+      | "rel_h_ago"
+      | "rel_d_ago"
+      | "rel_mo_ago",
+  ) => string,
 ): string {
   const ms = Date.parse(iso);
   if (!Number.isFinite(ms)) return "—";

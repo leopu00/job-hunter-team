@@ -1393,7 +1393,9 @@ function Tooltip({
                     marginRight: 6,
                   }}
                 />
-                <span className="text-[var(--color-dim)]">{tr("ttAvg30m")}</span>
+                <span className="text-[var(--color-dim)]">
+                  {tr("ttAvg30m")}
+                </span>
               </div>
               <div style={{ color: "#be185d" }}>{fmtRatio(avg.ratio)}</div>
             </>
@@ -2198,7 +2200,10 @@ export default function UsageTokensChart() {
                         : "rgba(251,146,60,0.7)",
                     }}
                   >
-                    {tr("ratioStep").replace("{n}", String(calibration.samples))}
+                    {tr("ratioStep").replace(
+                      "{n}",
+                      String(calibration.samples),
+                    )}
                   </span>
                 </span>
               );

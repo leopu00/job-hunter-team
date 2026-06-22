@@ -8,6 +8,7 @@ import { isCloudDeploy } from "@/lib/deploy-mode";
 import { readWorkspaceProfile, isProfileComplete } from "@/lib/profile-reader";
 import { isLocalRequestFromHeaders } from "@/lib/auth";
 import { isDashboardDemoMode } from "@/lib/dashboard-demo";
+import { getRequestLocale } from "@/lib/request-locale";
 import Navbar from "@/components/NavbarChrome";
 import MainChrome from "@/components/MainChrome";
 
@@ -108,9 +109,11 @@ export default async function ProtectedLayout({
     redirect("/?login=true");
   }
 
+  const locale = await getRequestLocale();
+
   return (
     <div style={{ position: "relative", zIndex: 1 }}>
-      <Navbar user={cloudUser} />
+      <Navbar user={cloudUser} locale={locale} />
       <div className="flex items-stretch">
         <div className="flex-1 min-w-0">
           <MainChrome>{children}</MainChrome>

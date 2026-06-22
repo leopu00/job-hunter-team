@@ -135,8 +135,7 @@ const T: Record<
     queuedVps: "En cola en el VPS…",
     starting: "Iniciando…",
     startAssistant: "Iniciar Asistente",
-    timeoutSubscriber:
-      "Tiempo agotado: el suscriptor en el VPS no responde.",
+    timeoutSubscriber: "Tiempo agotado: el suscriptor en el VPS no responde.",
     dashboard: "Panel",
     team: "Equipo",
     assistant: "Asistente",
@@ -176,8 +175,7 @@ const T: Record<
     queuedVps: "En file d'attente sur le VPS…",
     starting: "Démarrage en cours…",
     startAssistant: "Démarrer l'Assistant",
-    timeoutSubscriber:
-      "Délai dépassé : l'abonné sur le VPS ne répond pas.",
+    timeoutSubscriber: "Délai dépassé : l'abonné sur le VPS ne répond pas.",
     dashboard: "Tableau de bord",
     team: "Équipe",
     assistant: "Assistant",
@@ -260,8 +258,7 @@ const T: Record<
     queuedVps: "Sorban a VPS-en…",
     starting: "Indítás folyamatban…",
     startAssistant: "Asszisztens indítása",
-    timeoutSubscriber:
-      "Időtúllépés: a VPS-en lévő feliratkozó nem válaszol.",
+    timeoutSubscriber: "Időtúllépés: a VPS-en lévő feliratkozó nem válaszol.",
     dashboard: "Irányítópult",
     team: "Csapat",
     assistant: "Asszisztens",
@@ -292,8 +289,7 @@ const T: Record<
     pressStartSuffix: " a kezdéshez.",
     expandCollapseSection: (c) =>
       `Asszisztens szakasz ${c ? "kibontása" : "összecsukása"}`,
-    filesAttachedPlaceholder: (n) =>
-      `${n} fájl csatolva — írj egy üzenetet...`,
+    filesAttachedPlaceholder: (n) => `${n} fájl csatolva — írj egy üzenetet...`,
     removeFile: (name) => `${name} fájl eltávolítása`,
   },
   pt: {

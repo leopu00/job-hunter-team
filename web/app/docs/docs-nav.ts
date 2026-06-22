@@ -269,8 +269,7 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
   "/docs/guides/cli": {
     it: {
       title: "CLI — il comando jht",
-      description:
-        "I comandi jht essenziali per guidare il team da terminale.",
+      description: "I comandi jht essenziali per guidare il team da terminale.",
     },
     en: {
       title: "CLI — the jht command",
@@ -310,9 +309,9 @@ const DEFAULT_LOCALE: DocLocale = "en";
 /** Restituisce le sezioni dei docs con titoli/descrizioni/gruppi localizzati.
  *  Gli href/slug/emoji restano invariati a prescindere dalla lingua. */
 export function getDocsNav(locale: DocLocale = DEFAULT_LOCALE): DocSection[] {
-  const loc: DocLocale = (DOCS_I18N["/docs/guides/cli"][locale]
-    ? locale
-    : DEFAULT_LOCALE) as DocLocale;
+  const loc: DocLocale = (
+    DOCS_I18N["/docs/guides/cli"][locale] ? locale : DEFAULT_LOCALE
+  ) as DocLocale;
   return NAV_SKELETON.map((section) => ({
     group: GROUP_LABELS[section.groupKey][loc],
     items: section.items.map((item) => {
