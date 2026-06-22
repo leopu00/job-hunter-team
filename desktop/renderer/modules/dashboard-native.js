@@ -128,6 +128,32 @@ function renderDetail(data) {
   const sc = data.score?.total_score ?? p.score
   if (typeof sc === 'number') head.appendChild(el('div', `dash-score ${scoreClass(sc)}`, sc))
   d.appendChild(head)
+  // Azioni per-offerta (write/recheck/geocode): POST flag via dashboardApi.post.
+  const legacyId = p.legacy_id
+  if (legacyId != null && window.dashboardApi?.post) {
+    const actions = el('div', 'dash-detail__actions')
+    const mkBtn = (label, doneLabel, path, already) => {
+      const b = el('button', 'btn btn--ghost dash-action', already ? doneLabel : label)
+      b.type = 'button'
+      if (already) b.disabled = true
+      b.addEventListener('click', async () => {
+        b.disabled = true; const orig = b.textContent; b.textContent = '…'
+        try {
+          await window.dashboardApi.post(`/api/positions/${legacyId}/${path}`, { requested: true })
+          b.textContent = doneLabel
+        } catch (e) {
+          b.textContent = orig; b.disabled = false
+          _log.error('action.failed', { path, err: String(e?.message || e) })
+        }
+      })
+      return b
+    }
+    actions.appendChild(mkBtn('📝 Richiedi CV', '✓ CV richiesto', 'write-request', !!p.write_requested))
+    actions.appendChild(mkBtn('🔄 Ricontrolla', '✓ In ricontrollo', 'recheck-request', !!p.recheck_requested))
+    actions.appendChild(mkBtn('📍 Geocodifica', '✓ Geocodifica richiesta', 'geocode-request', !!p.geocode_requested))
+    d.appendChild(actions)
+  }
+
   const rows = el('div', 'dash-detail__rows')
   if (p.company) rows.appendChild(infoRow('Azienda', p.company))
   const loc = locationLabel(p); if (loc) rows.appendChild(infoRow('Luogo', loc))
