@@ -9,14 +9,14 @@ import LandingNav from "../components/landing/LandingNav";
 import { LandingFooter } from "../components/landing/LandingCTA";
 import ScrollToTop from "../components/landing/ScrollToTop";
 
+type Lang = "it" | "en" | "es" | "fr" | "de" | "pt" | "hu";
+
 type Provider = {
   name: string;
   plan: string;
   price: string;
   url: string;
-  it: string;
-  en: string;
-};
+} & Record<Lang, string>;
 
 const PROVIDERS: Provider[] = [
   {
@@ -26,6 +26,11 @@ const PROVIDERS: Provider[] = [
     url: "https://www.kimi.com/code",
     it: "Il più economico, validato per l'uso quotidiano: in un test reale ha lavorato giorni interi trovando centinaia di posizioni. Ottimo punto di partenza.",
     en: "The most affordable, validated for everyday use: in a real test it ran for days, finding hundreds of openings. A great starting point.",
+    es: "El más económico, validado para el uso diario: en una prueba real trabajó durante días enteros encontrando cientos de posiciones. Un excelente punto de partida.",
+    fr: "Le plus économique, validé pour un usage quotidien : lors d'un test réel, il a travaillé des journées entières en trouvant des centaines d'offres. Un excellent point de départ.",
+    de: "Das günstigste, für den täglichen Einsatz erprobt: In einem echten Test lief es tagelang und fand Hunderte von Stellen. Ein hervorragender Ausgangspunkt.",
+    pt: "O mais económico, validado para o uso diário: num teste real, trabalhou dias inteiros encontrando centenas de posições. Um excelente ponto de partida.",
+    hu: "A legolcsóbb, mindennapi használatra bevált: egy valós tesztben napokon át dolgozott, és több száz pozíciót talált. Kiváló kiindulópont.",
   },
   {
     name: "Claude",
@@ -34,6 +39,11 @@ const PROVIDERS: Provider[] = [
     url: "https://www.anthropic.com/pricing",
     it: "La massima precisione, il migliore per valutare le offerte e scrivere i CV. Per chi vuole il risultato migliore possibile.",
     en: "The highest precision, best for evaluating jobs and writing CVs. For those who want the very best result.",
+    es: "La máxima precisión, el mejor para evaluar las ofertas y escribir los CV. Para quien quiere el mejor resultado posible.",
+    fr: "La précision maximale, le meilleur pour évaluer les offres et rédiger les CV. Pour qui veut le meilleur résultat possible.",
+    de: "Höchste Präzision, am besten geeignet, um Stellen zu bewerten und Lebensläufe zu schreiben. Für alle, die das bestmögliche Ergebnis wollen.",
+    pt: "A máxima precisão, o melhor para avaliar as ofertas e escrever os CV. Para quem quer o melhor resultado possível.",
+    hu: "A legnagyobb pontosság, a legjobb az ajánlatok értékeléséhez és az önéletrajzok megírásához. Azoknak, akik a lehető legjobb eredményt szeretnék.",
   },
   {
     name: "Codex",
@@ -42,6 +52,11 @@ const PROVIDERS: Provider[] = [
     url: "https://openai.com/chatgpt/pricing",
     it: "Equilibrio tra qualità e costo. Testato su server: 131 posizioni elaborate in 48 ore.",
     en: "A balance of quality and cost. Tested on a server: 131 openings processed in 48 hours.",
+    es: "Equilibrio entre calidad y coste. Probado en servidor: 131 posiciones procesadas en 48 horas.",
+    fr: "Un équilibre entre qualité et coût. Testé sur serveur : 131 offres traitées en 48 heures.",
+    de: "Ausgewogenes Verhältnis von Qualität und Kosten. Auf einem Server getestet: 131 Stellen in 48 Stunden verarbeitet.",
+    pt: "Equilíbrio entre qualidade e custo. Testado em servidor: 131 posições processadas em 48 horas.",
+    hu: "Egyensúly a minőség és a költség között. Szerveren tesztelve: 131 pozíció feldolgozva 48 óra alatt.",
   },
 ];
 
@@ -81,11 +96,131 @@ const PAGE = {
     ctaSetup: "How to run it →",
     back: "← Back to home",
   },
+  es: {
+    title: "Precios",
+    subtitle:
+      "Job Hunter Team es open source. Esto es lo único que te cuesta.",
+    freeTitle: "La plataforma es gratuita",
+    freeBody:
+      "Software open source con licencia MIT: ninguna suscripción a la plataforma, ningún coste oculto, ningún ingreso para nosotros. Lo descargas y haces funcionar el equipo en tu propia máquina; el único gasto es la suscripción al modelo de IA.",
+    providersTitle: "Los proveedores de IA",
+    providersIntro:
+      "Tú eliges qué inteligencia trabaja para ti. Estos son los planes probados y los costes indicativos al mes (los precios reales están en las páginas oficiales de cada proveedor).",
+    providerLink: "Precios oficiales →",
+    dedicatedTitle: "Dedica la suscripción al equipo",
+    dedicatedNote:
+      "Un punto importante: hace falta una suscripción de IA propia para el equipo, separada de la que usas a diario. El equipo la consume por completo, así que no la compartas con tu uso personal.",
+    approx: "Precios indicativos al mes, IVA incluido. Pueden variar.",
+    ctaSetup: "Cómo se inicia →",
+    back: "← Volver al inicio",
+  },
+  fr: {
+    title: "Tarifs",
+    subtitle:
+      "Job Hunter Team est open source. Voici la seule chose qui vous coûte.",
+    freeTitle: "La plateforme est gratuite",
+    freeBody:
+      "Logiciel open source sous licence MIT : aucun abonnement à la plateforme, aucun coût caché, aucun revenu pour nous. Vous le téléchargez et faites tourner l'équipe sur votre propre machine ; la seule dépense est l'abonnement au modèle d'IA.",
+    providersTitle: "Les fournisseurs d'IA",
+    providersIntro:
+      "C'est vous qui choisissez quelle intelligence travaille pour vous. Voici les forfaits testés et les coûts indicatifs par mois (les prix réels figurent sur les pages officielles de chaque fournisseur).",
+    providerLink: "Tarifs officiels →",
+    dedicatedTitle: "Dédiez l'abonnement à l'équipe",
+    dedicatedNote:
+      "Un point important : il faut un abonnement d'IA dédié à l'équipe, distinct de celui que vous utilisez au quotidien. L'équipe le consomme entièrement, alors ne le partagez pas avec votre usage personnel.",
+    approx: "Prix indicatifs par mois, TVA incluse. Susceptibles de varier.",
+    ctaSetup: "Comment le lancer →",
+    back: "← Retour à l'accueil",
+  },
+  de: {
+    title: "Preise",
+    subtitle:
+      "Job Hunter Team ist Open Source. Das ist das Einzige, was es dich kostet.",
+    freeTitle: "Die Plattform ist kostenlos",
+    freeBody:
+      "Open-Source-Software unter MIT-Lizenz: kein Plattform-Abonnement, keine versteckten Kosten, keine Einnahmen für uns. Du lädst sie herunter und lässt das Team auf deinem eigenen Rechner laufen; die einzige Ausgabe ist das Abonnement für das KI-Modell.",
+    providersTitle: "Die KI-Anbieter",
+    providersIntro:
+      "Du entscheidest, welche Intelligenz für dich arbeitet. Dies sind die getesteten Tarife und die ungefähren monatlichen Kosten (die echten Preise stehen auf den offiziellen Seiten der jeweiligen Anbieter).",
+    providerLink: "Offizielle Preise →",
+    dedicatedTitle: "Widme das Abonnement dem Team",
+    dedicatedNote:
+      "Ein wichtiger Punkt: Das Team braucht ein eigenes KI-Abonnement, getrennt von dem, das du täglich nutzt. Das Team verbraucht es vollständig, teile es also nicht mit deiner persönlichen Nutzung.",
+    approx: "Ungefähre Monatspreise, inkl. MwSt. Änderungen vorbehalten.",
+    ctaSetup: "So wird es gestartet →",
+    back: "← Zurück zur Startseite",
+  },
+  hu: {
+    title: "Árak",
+    subtitle:
+      "A Job Hunter Team nyílt forráskódú. Ez az egyetlen dolog, ami pénzbe kerül.",
+    freeTitle: "A platform ingyenes",
+    freeBody:
+      "Nyílt forráskódú szoftver MIT licenc alatt: nincs platform-előfizetés, nincsenek rejtett költségek, nincs bevételünk belőle. Letöltöd és a saját gépeden futtatod a csapatot; az egyetlen kiadás az AI-modell előfizetése.",
+    providersTitle: "Az AI-szolgáltatók",
+    providersIntro:
+      "Te döntöd el, melyik intelligencia dolgozzon érted. Ezek a tesztelt csomagok és a havi irányárak (a valós árak az egyes szolgáltatók hivatalos oldalain találhatók).",
+    providerLink: "Hivatalos árak →",
+    dedicatedTitle: "Szentelj egy előfizetést a csapatnak",
+    dedicatedNote:
+      "Egy fontos pont: a csapatnak saját AI-előfizetésre van szüksége, elkülönítve attól, amit naponta használsz. A csapat teljesen felhasználja, ezért ne oszd meg a személyes használatoddal.",
+    approx: "Irányadó havi árak, áfával. Változhatnak.",
+    ctaSetup: "Hogyan indítható →",
+    back: "← Vissza a főoldalra",
+  },
+  pt: {
+    title: "Preços",
+    subtitle:
+      "O Job Hunter Team é open source. Aqui está a única coisa que lhe custa.",
+    freeTitle: "A plataforma é gratuita",
+    freeBody:
+      "Software open source com licença MIT: nenhuma subscrição da plataforma, nenhum custo oculto, nenhuma receita para nós. Transfere-o e põe o equipa a funcionar na sua própria máquina; a única despesa é a subscrição do modelo de IA.",
+    providersTitle: "Os fornecedores de IA",
+    providersIntro:
+      "É você quem escolhe que inteligência trabalha para si. Estes são os planos testados e os custos indicativos por mês (os preços reais estão nas páginas oficiais de cada fornecedor).",
+    providerLink: "Preços oficiais →",
+    dedicatedTitle: "Dedique a subscrição à equipa",
+    dedicatedNote:
+      "Um ponto importante: a equipa precisa de uma subscrição de IA própria, separada da que usa no dia a dia. A equipa consome-a por inteiro, por isso não a partilhe com o seu uso pessoal.",
+    approx: "Preços indicativos por mês, IVA incluído. Sujeitos a alteração.",
+    ctaSetup: "Como se inicia →",
+    back: "← Voltar ao início",
+  },
+};
+
+const BRAIN = {
+  alt: {
+    it: "Radiografia di profilo della testa di un agente: al posto del cervello una rete neurale AI illuminata in verde — il «cervello» è il provider AI, l'unica cosa a pagamento.",
+    en: "Side X-ray of an agent's head with an AI neural network glowing green in place of the brain: the “brain” is the AI provider, the only paid part.",
+    es: "Radiografía de perfil de la cabeza de un agente: en lugar del cerebro, una red neuronal de IA iluminada en verde — el «cerebro» es el proveedor de IA, lo único de pago.",
+    fr: "Radiographie de profil de la tête d'un agent : à la place du cerveau, un réseau de neurones d'IA illuminé en vert — le « cerveau » est le fournisseur d'IA, la seule partie payante.",
+    de: "Seitliches Röntgenbild des Kopfes eines Agenten: anstelle des Gehirns ein grün leuchtendes neuronales KI-Netz — das „Gehirn“ ist der KI-Anbieter, das Einzige, was kostet.",
+    pt: "Radiografia de perfil da cabeça de um agente: no lugar do cérebro, uma rede neuronal de IA iluminada a verde — o «cérebro» é o fornecedor de IA, a única parte paga.",
+    hu: "Egy ügynök fejének oldalsó röntgenfelvétele: az agy helyén egy zölden világító AI neurális hálózat — az „agy” az AI-szolgáltató, az egyetlen fizetős rész.",
+  },
+  caption: {
+    it: "Il «cervello» — il provider AI — è l'unica cosa che paghi.",
+    en: "The “brain” — the AI provider — is the only thing you pay for.",
+    es: "El «cerebro» — el proveedor de IA — es lo único que pagas.",
+    fr: "Le « cerveau » — le fournisseur d'IA — est la seule chose que vous payez.",
+    de: "Das „Gehirn“ — der KI-Anbieter — ist das Einzige, wofür du zahlst.",
+    pt: "O «cérebro» — o fornecedor de IA — é a única coisa que paga.",
+    hu: "Az „agy” — az AI-szolgáltató — az egyetlen dolog, amiért fizetsz.",
+  },
+  per: {
+    it: "mese",
+    en: "month",
+    es: "mes",
+    fr: "mois",
+    de: "Monat",
+    pt: "mês",
+    hu: "hónap",
+  },
 };
 
 function PricingContent() {
   const { lang } = useLandingI18n();
-  const L = lang === "it" ? "it" : "en";
+  const L = (PAGE[lang as Lang] ? lang : "en") as Lang;
   const p = PAGE[L];
 
   return (
@@ -135,19 +270,13 @@ function PricingContent() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/pricing-brain.png"
-              alt={
-                L === "it"
-                  ? "Radiografia di profilo della testa di un agente: al posto del cervello una rete neurale AI illuminata in verde — il «cervello» è il provider AI, l'unica cosa a pagamento."
-                  : "Side X-ray of an agent's head with an AI neural network glowing green in place of the brain: the “brain” is the AI provider, the only paid part."
-              }
+              alt={BRAIN.alt[L]}
               width={1448}
               height={1086}
               className="w-full h-auto"
             />
             <p className="mt-2 text-center text-[11px] text-[var(--color-muted)] leading-relaxed">
-              {L === "it"
-                ? "Il «cervello» — il provider AI — è l'unica cosa che paghi."
-                : "The “brain” — the AI provider — is the only thing you pay for."}
+              {BRAIN.caption[L]}
             </p>
           </div>
 
@@ -169,7 +298,7 @@ function PricingContent() {
                     {prov.price}
                   </span>
                   <span className="text-[11px] text-[var(--color-muted)]">
-                    /{L === "it" ? "mese" : "month"}
+                    /{BRAIN.per[L]}
                   </span>
                 </div>
                 <p className="text-[12px] text-[var(--color-bright)] leading-relaxed flex-1 mb-4">

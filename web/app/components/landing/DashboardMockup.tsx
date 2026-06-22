@@ -7,6 +7,8 @@
 // testo finto/leggibile (finte etichette = barrette grigie). Rispetta
 // prefers-reduced-motion.
 
+import { useLandingI18n } from "./LandingI18n";
+
 const GREEN = "var(--color-green)";
 const CYAN = "#22d3ee";
 const INDIGO = "#818cf8";
@@ -175,12 +177,13 @@ const cardBase =
   "absolute rounded-2xl border border-[var(--color-border)] shadow-[0_24px_60px_rgba(0,0,0,0.55)]";
 
 export default function DashboardMockup() {
+  const { t } = useLandingI18n();
   return (
     <div
       className="relative w-full select-none"
       style={{ aspectRatio: "16 / 9" }}
       role="img"
-      aria-label="Anteprima della dashboard: lista di posizioni con punteggi, barre, donut e andamento"
+      aria-label={t("dashboard_preview_alt")}
     >
       <style>{`
         @keyframes dashFloatA { from { transform: translateY(0) } to { transform: translateY(-10px) } }
