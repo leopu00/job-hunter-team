@@ -81,6 +81,9 @@ contextBridge.exposeInMainWorld('dashboardApi', {
   // giù / non-2xx. Copre TUTTE le sezioni native (offerte/candidature/stats/
   // mappa/attività…). Solo path "/api/..." (validato nel main). Contratto dev1.
   get: (path) => ipcRenderer.invoke('dashboard:get', path),
+  // [interazione] post(path, body) → POST autenticato (es. chat agenti:
+  // post('/api/capitano/chat', { message })). → { ok, ...data } | { ok:false, error }.
+  post: (path, body) => ipcRenderer.invoke('dashboard:post', { path, body }),
   // → { ok, positions: [...], error? } — positions sempre array.
   listPositions: (opts) => ipcRenderer.invoke('dashboard:list-positions', opts || {}),
   // → { ok, position, score, highlights, company, application, error? }
