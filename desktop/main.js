@@ -61,6 +61,50 @@ function getBindHomeDir() {
   return path.join(require('node:os').homedir(), '.jht')
 }
 
+// [JHT-DASHBOARD-NATIVE] Le viste native del renderer NON possono fetchare
+// http://localhost:PORT/api da file:// (CORS + niente cookie). Il MAIN fa il
+// fetch (Node, no CORS), autenticando con il local-token che il container
+// vede montato in /jht_home (= ~/.jht/.local-token via getBindHomeDir), e
+// ritorna JSON al renderer via IPC. Contratto concordato con dev1 in
+// coordination/chat.jsonl: dashboard:list-positions / dashboard:get-position.
+function readLocalToken() {
+  try {
+    const tokenPath = path.join(getBindHomeDir(), '.local-token')
+    return require('node:fs').readFileSync(tokenPath, 'utf8').trim()
+  } catch (err) {
+    log.warn('dashboard.local-token-read-failed', { err: err && (err.message || String(err)) })
+    return null
+  }
+}
+
+// Fetch autenticato verso l'API del runtime locale. Ritorna sempre un oggetto
+// { ok, ...data | error } — mai throw — così il renderer gestisce gli errori
+// senza try/catch e la destrutturazione del data (es. {positions}) resta valida.
+async function dashboardApiFetch(apiPath) {
+  let status
+  try {
+    status = await runtime.getStatus()
+  } catch (err) {
+    return { ok: false, error: 'runtime-status-failed' }
+  }
+  const port = status && status.port
+  if (!port || (status.mode !== 'running' && status.mode !== 'external')) {
+    return { ok: false, error: `runtime-not-ready:${status ? status.mode : 'unknown'}` }
+  }
+  const token = readLocalToken()
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}${apiPath}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return { ok: false, error: `http-${res.status}`, status: res.status }
+    const data = await res.json()
+    return { ok: true, data }
+  } catch (err) {
+    return { ok: false, error: err && (err.message || String(err)) }
+  }
+}
+
 // Renderer preferences store. Lives in app.getPath('userData') so it
 // survives uninstall/upgrade (see feedback_no_user_data_wipe.md) and
 // does not couple to ~/.jht, which may not exist yet at onboarding
@@ -617,6 +661,42 @@ app.whenReady().then(() => {
     }
   })
   ipcMain.handle('launcher:open-browser', () => openRuntimeInBrowser())
+
+  // [JHT-DASHBOARD-NATIVE] IPC per le viste native della dashboard (lane dev1
+  // renderer). Il main fa il fetch autenticato al runtime locale e ritorna
+  // { ok, ...data | error }. Vedi readLocalToken/dashboardApiFetch.
+  ipcMain.handle('dashboard:list-positions', async (_event, { limit = 50 } = {}) => {
+    const n = Math.max(1, Math.min(500, Number(limit) || 50))
+    const r = await dashboardApiFetch(`/api/positions/recent?limit=${n}`)
+    // Shape concordata: { ok, positions:[...] , error? }. positions sempre array.
+    return r.ok ? { ok: true, positions: (r.data && r.data.positions) || [] } : { ok: false, error: r.error, positions: [] }
+  })
+  ipcMain.handle('dashboard:get-position', async (_event, { id } = {}) => {
+    if (!id) return { ok: false, error: 'missing-id' }
+    const r = await dashboardApiFetch(`/api/positions/${encodeURIComponent(id)}`)
+    return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error }
+  })
+  // Riepilogo per l'header/empty-state della dashboard nativa (/api/stats → 200
+  // verificato live). Utile anche con 0 offerte. Extra rispetto al contratto base.
+  ipcMain.handle('dashboard:get-stats', async () => {
+    const r = await dashboardApiFetch('/api/stats')
+    return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error }
+  })
+  // [JHT-DASHBOARD-NATIVE] Proxy GENERICO per scalare a MOLTE sezioni native
+  // senza un canale IPC per ognuna (contratto concordato con dev1, 23:38):
+  // window.dashboardApi.get(path) → il main fa GET http://127.0.0.1:PORT+path
+  // autenticato col local-token e ritorna il JSON del body, oppure null se il
+  // runtime è giù / risposta non-2xx / parse fallito (le viste mostrano empty-state).
+  // SICUREZZA: solo path che iniziano per "/api/", nessun "://" o ".." → niente
+  // SSRF verso host arbitrari, resta confinato all'API del runtime locale.
+  ipcMain.handle('dashboard:get', async (_event, apiPath) => {
+    if (typeof apiPath !== 'string' || !apiPath.startsWith('/api/') ||
+        apiPath.includes('://') || apiPath.includes('..')) {
+      return null
+    }
+    const r = await dashboardApiFetch(apiPath)
+    return r.ok ? r.data : null
+  })
 
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
   ipcMain.handle('tunnel:open', (_event, { ip } = {}) => {
