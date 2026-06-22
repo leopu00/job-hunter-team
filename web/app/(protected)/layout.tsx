@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
-import { isCloudDeploy } from "@/lib/deploy-mode";
+import { isCloudDeploy, isLocalDeploy } from "@/lib/deploy-mode";
 import { readWorkspaceProfile, isProfileComplete } from "@/lib/profile-reader";
 import { isLocalRequestFromHeaders } from "@/lib/auth";
 import { isDashboardDemoMode } from "@/lib/dashboard-demo";
@@ -50,6 +50,13 @@ export default async function ProtectedLayout({
 }) {
   const hdrs = await headers();
   const localRequest = isLocalRequestFromHeaders(hdrs);
+  // [JHT-DASHBOARD-SPLIT] Un container LOCAL (desktop webview o VPS via tunnel)
+  // non deve MAI forzare il web-login: l'autenticazione è responsabilità
+  // dell'app desktop (sezione Account). Le richieste arrivano al container via
+  // Docker port-map con header forwarded NON loopback → isLocalRequest può
+  // risultare false anche su localhost. Usiamo il deploy mode (deciso a build,
+  // 'local' per il container) come segnale affidabile di "contesto locale".
+  const localContext = localRequest || isLocalDeploy();
   const pathname = hdrs.get("x-pathname") ?? "";
   const search = hdrs.get("x-search") ?? "";
   const demoMode = isDashboardDemoMode(search);
@@ -87,7 +94,7 @@ export default async function ProtectedLayout({
   // (candidate_profiles via cloud-sync), il wizard PC-locale è inutile.
   if (
     !cloudUser &&
-    localRequest &&
+    localContext &&
     pathname &&
     !pathname.startsWith("/onboarding") &&
     !demoMode
@@ -97,10 +104,10 @@ export default async function ProtectedLayout({
     }
   }
 
-  // Auth gate REMOTE: senza sessione e non-localhost → /login.
-  // Skippato in local-only mode (impossibile su Vercel comunque, ma
-  // esplicito per chiarezza).
-  if (isSupabaseConfigured && !cloudUser && !localRequest && !localOnly) {
+  // Auth gate REMOTE: senza sessione e non-locale → /login. Skippato sul
+  // container LOCAL (localContext) — lì il login è dell'app desktop, mai una
+  // pagina web nella webview — e in local-only mode.
+  if (isSupabaseConfigured && !cloudUser && !localContext && !localOnly) {
     const returnTo = pathname ? pathname + search : "";
     if (returnTo && returnTo !== "/") {
       redirect(`/?login=true&returnTo=${encodeURIComponent(returnTo)}`);

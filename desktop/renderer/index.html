@@ -727,23 +727,24 @@
           </div>
         </div>
 
-        <!-- Dashboard: la view locale del team, embedded a tutta pagina nella
-             sua sezione dedicata della sidebar. -->
+        <!-- Dashboard: vista NATIVA delle offerte del team [JHT-DASHBOARD-SPLIT].
+             Niente webview: dashboard-native.js fetcha i dati via window.dashboardApi
+             (IPC → main → runtime locale) e li rende con UI desktop nativa. -->
         <div class="home__panel" data-section="dashboard" hidden>
-          <!-- [JHT-DASHBOARD-SPLIT] Dashboard locale EMBEDDED a tutta pagina:
-               renderHomeTeamStatus (syncTeamDashboard) punta questa <webview> a
-               status.url (http://localhost:PORT servito dal container) quando il
-               runtime è 'running'. webviewTag è abilitato sulla finestra
-               principale in main.js. Finché il team non è su, mostriamo un
-               placeholder al posto della webview. -->
-          <webview id="home-team-dashboard" class="home__dashboard" hidden></webview>
-          <div class="home__dashboard-empty" id="home-dashboard-empty">
-            <div class="step__emoji" aria-hidden="true">📊</div>
+          <header class="home__header">
             <h1 class="home__title" data-i18n="home.dashboard.title">Dashboard</h1>
-            <p class="home__subtitle" data-i18n="home.dashboard.empty">
-              Avvia il team dalla sezione Team per vedere qui la dashboard.
+            <p class="home__subtitle" id="dash-subtitle" data-i18n="home.dashboard.subtitle">
+              Le offerte trovate dal team, con punteggio.
+            </p>
+          </header>
+          <div class="dash__empty" id="dash-empty" hidden>
+            <div class="step__emoji" aria-hidden="true">📊</div>
+            <p class="home__subtitle" id="dash-empty-text" data-i18n="home.dashboard.empty">
+              Avvia il team dalla sezione Team per vedere qui le offerte.
             </p>
           </div>
+          <div class="dash__list" id="dash-list" hidden></div>
+          <div class="dash__detail" id="dash-detail" hidden></div>
         </div>
 
         <!-- Provider: vendor + plan + login -->
