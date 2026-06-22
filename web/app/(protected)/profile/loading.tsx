@@ -1,8 +1,26 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  loading_profile: {
+    it: "Caricamento profilo",
+    en: "Loading profile",
+    hu: "Profil betöltése",
+    es: "Cargando perfil",
+    de: "Profil wird geladen",
+    fr: "Chargement du profil",
+    pt: "Carregando perfil",
+  },
+};
+
 export default function Loading() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   return (
     <div
       aria-busy="true"
-      aria-label="Loading profile"
+      aria-label={tr("loading_profile")}
       style={{ animation: "fade-in 0.2s ease both" }}
     >
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">

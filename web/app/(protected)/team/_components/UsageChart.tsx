@@ -18,6 +18,271 @@ import {
   useState,
 } from "react";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  rangeAll: {
+    it: "tutto",
+    en: "all",
+    hu: "összes",
+    es: "todo",
+    de: "alle",
+    fr: "tout",
+    pt: "tudo",
+  },
+  target: {
+    it: "target",
+    en: "target",
+    hu: "cél",
+    es: "objetivo",
+    de: "Ziel",
+    fr: "cible",
+    pt: "alvo",
+  },
+  waitingFirstTick: {
+    it: "In attesa del primo tick del bridge…",
+    en: "Waiting for the first bridge tick…",
+    hu: "Várakozás a bridge első tickjére…",
+    es: "Esperando el primer tick del bridge…",
+    de: "Warten auf den ersten Bridge-Tick…",
+    fr: "En attente du premier tick du bridge…",
+    pt: "Aguardando o primeiro tick do bridge…",
+  },
+  legendProjection: {
+    it: "proiezione",
+    en: "projection",
+    hu: "előrejelzés",
+    es: "proyección",
+    de: "Projektion",
+    fr: "projection",
+    pt: "projeção",
+  },
+  legendVelocity: {
+    it: "velocità",
+    en: "velocity",
+    hu: "sebesség",
+    es: "velocidad",
+    de: "Geschwindigkeit",
+    fr: "vitesse",
+    pt: "velocidade",
+  },
+  legendIdeal: {
+    it: "ideale",
+    en: "ideal",
+    hu: "ideális",
+    es: "ideal",
+    de: "ideal",
+    fr: "idéal",
+    pt: "ideal",
+  },
+  legendTarget: {
+    it: "target 90-95%",
+    en: "target 90-95%",
+    hu: "cél 90-95%",
+    es: "objetivo 90-95%",
+    de: "Ziel 90-95%",
+    fr: "cible 90-95%",
+    pt: "alvo 90-95%",
+  },
+  legendCheckBy: {
+    it: "check da:",
+    en: "checked by:",
+    hu: "ellenőrizte:",
+    es: "comprobado por:",
+    de: "geprüft von:",
+    fr: "vérifié par:",
+    pt: "verificado por:",
+  },
+  resetIn: {
+    it: "reset tra {x}",
+    en: "reset in {x}",
+    hu: "reset {x} múlva",
+    es: "reset en {x}",
+    de: "Reset in {x}",
+    fr: "reset dans {x}",
+    pt: "reset em {x}",
+  },
+  rateBudget: {
+    it: "Rate budget",
+    en: "Rate budget",
+    hu: "Rate budget",
+    es: "Rate budget",
+    de: "Rate-Budget",
+    fr: "Budget rate",
+    pt: "Rate budget",
+  },
+  backToNow: {
+    it: "Torna al tempo corrente",
+    en: "Back to current time",
+    hu: "Vissza a jelenlegi időhöz",
+    es: "Volver al tiempo actual",
+    de: "Zurück zur aktuellen Zeit",
+    fr: "Revenir à l'heure actuelle",
+    pt: "Voltar ao tempo atual",
+  },
+  timeRange: {
+    it: "intervallo temporale",
+    en: "time range",
+    hu: "időtartomány",
+    es: "intervalo temporal",
+    de: "Zeitbereich",
+    fr: "plage temporelle",
+    pt: "intervalo temporal",
+  },
+  details: {
+    it: "dettagli →",
+    en: "details →",
+    hu: "részletek →",
+    es: "detalles →",
+    de: "Details →",
+    fr: "détails →",
+    pt: "detalhes →",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  yAxisTop: {
+    it: "tetto asse Y",
+    en: "Y-axis top",
+    hu: "Y-tengely teteje",
+    es: "tope del eje Y",
+    de: "Y-Achsen-Obergrenze",
+    fr: "plafond axe Y",
+    pt: "topo do eixo Y",
+  },
+  yAxisTopAria: {
+    it: "Tetto asse Y",
+    en: "Y-axis top",
+    hu: "Y-tengely teteje",
+    es: "Tope del eje Y",
+    de: "Y-Achsen-Obergrenze",
+    fr: "Plafond axe Y",
+    pt: "Topo do eixo Y",
+  },
+  yAxisTitle: {
+    it: "asse Y: 0-{x}% {mode} — doppio click: reset auto",
+    en: "Y-axis: 0-{x}% {mode} — double click: reset auto",
+    hu: "Y-tengely: 0-{x}% {mode} — dupla kattintás: auto visszaállítás",
+    es: "eje Y: 0-{x}% {mode} — doble clic: reset auto",
+    de: "Y-Achse: 0-{x}% {mode} — Doppelklick: Auto zurücksetzen",
+    fr: "axe Y : 0-{x}% {mode} — double clic : reset auto",
+    pt: "eixo Y: 0-{x}% {mode} — duplo clique: reset auto",
+  },
+  modeAutoParen: {
+    it: "(auto)",
+    en: "(auto)",
+    hu: "(auto)",
+    es: "(auto)",
+    de: "(auto)",
+    fr: "(auto)",
+    pt: "(auto)",
+  },
+  autoFitData: {
+    it: "auto-fit sui dati",
+    en: "auto-fit to data",
+    hu: "auto-illesztés az adatokhoz",
+    es: "auto-ajuste a los datos",
+    de: "Auto-Anpassung an Daten",
+    fr: "ajustement auto aux données",
+    pt: "auto-ajuste aos dados",
+  },
+  manualOverride: {
+    it: "override manuale",
+    en: "manual override",
+    hu: "kézi felülbírálás",
+    es: "anulación manual",
+    de: "manuelle Übersteuerung",
+    fr: "remplacement manuel",
+    pt: "substituição manual",
+  },
+  auto: {
+    it: "auto",
+    en: "auto",
+    hu: "auto",
+    es: "auto",
+    de: "auto",
+    fr: "auto",
+    pt: "auto",
+  },
+  man: {
+    it: "man",
+    en: "man",
+    hu: "kézi",
+    es: "man",
+    de: "man",
+    fr: "man",
+    pt: "man",
+  },
+  timeWindow: {
+    it: "finestra temporale",
+    en: "time window",
+    hu: "időablak",
+    es: "ventana temporal",
+    de: "Zeitfenster",
+    fr: "fenêtre temporelle",
+    pt: "janela temporal",
+  },
+  windowTitle: {
+    it: "finestra: {x} {mode} — doppio click: reset",
+    en: "window: {x} {mode} — double click: reset",
+    hu: "ablak: {x} {mode} — dupla kattintás: reset",
+    es: "ventana: {x} {mode} — doble clic: reset",
+    de: "Fenster: {x} {mode} — Doppelklick: Reset",
+    fr: "fenêtre : {x} {mode} — double clic : reset",
+    pt: "janela: {x} {mode} — duplo clique: reset",
+  },
+  fromButtonParen: {
+    it: "(da bottone)",
+    en: "(from button)",
+    hu: "(gombról)",
+    es: "(desde botón)",
+    de: "(per Schaltfläche)",
+    fr: "(depuis bouton)",
+    pt: "(do botão)",
+  },
+  sliderParen: {
+    it: "(slider)",
+    en: "(slider)",
+    hu: "(csúszka)",
+    es: "(deslizador)",
+    de: "(Schieberegler)",
+    fr: "(curseur)",
+    pt: "(deslizador)",
+  },
+  timeWindowAria: {
+    it: "Ampiezza temporale",
+    en: "Time span",
+    hu: "Időtartam",
+    es: "Amplitud temporal",
+    de: "Zeitspanne",
+    fr: "Amplitude temporelle",
+    pt: "Amplitude temporal",
+  },
+  followsButton: {
+    it: "segue il bottone di range",
+    en: "follows the range button",
+    hu: "követi a tartomány gombot",
+    es: "sigue el botón de rango",
+    de: "folgt der Bereichsschaltfläche",
+    fr: "suit le bouton de plage",
+    pt: "segue o botão de intervalo",
+  },
+  noSampleInRange: {
+    it: "Nessun sample nell’intervallo selezionato — prova “{all}”.",
+    en: "No sample in the selected range — try “{all}”.",
+    hu: "Nincs minta a kiválasztott tartományban — próbáld a “{all}”-t.",
+    es: "Ningún sample en el rango seleccionado — prueba “{all}”.",
+    de: "Kein Sample im ausgewählten Bereich — versuche „{all}“.",
+    fr: "Aucun sample dans la plage sélectionnée — essayez « {all} ».",
+    pt: "Nenhum sample no intervalo selecionado — tente “{all}”.",
+  },
+};
 
 type Entry = {
   ts: string;
@@ -124,6 +389,7 @@ function Chart({
   yMax,
   onHover,
   onPan,
+  tr,
 }: {
   entries: Entry[];
   tMin: number;
@@ -136,6 +402,7 @@ function Chart({
   /** Chiamato durante drag con il delta in millisecondi (positivo = vai avanti
    *  nel tempo, negativo = vai indietro). Il parent applica al panRightTs. */
   onPan?: (deltaMs: number) => void;
+  tr: (k: string) => string;
 }) {
   const W = 900;
   const H = 360;
@@ -380,7 +647,7 @@ function Chart({
             fill="rgba(34,197,94,0.75)"
             fontWeight="600"
           >
-            target
+            {tr("target")}
           </text>
         </>
       )}
@@ -536,14 +803,14 @@ function Chart({
           fill="rgba(255,255,255,0.45)"
           textAnchor="middle"
         >
-          In attesa del primo tick del bridge…
+          {tr("waitingFirstTick")}
         </text>
       )}
     </svg>
   );
 }
 
-function Legend() {
+function Legend({ tr }: { tr: (k: string) => string }) {
   const dot = (color: string, size = 7) => (
     <span
       aria-hidden="true"
@@ -583,7 +850,7 @@ function Legend() {
                 "repeating-linear-gradient(90deg, #a78bfa 0 4px, transparent 4px 7px)",
             }}
           />
-          proiezione
+          {tr("legendProjection")}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -595,7 +862,7 @@ function Legend() {
               background: "#f472b6",
             }}
           />
-          velocità
+          {tr("legendVelocity")}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -607,7 +874,7 @@ function Legend() {
               background: "#64748b",
             }}
           />
-          ideale
+          {tr("legendIdeal")}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -620,12 +887,12 @@ function Legend() {
               border: "1px solid rgba(34,197,94,0.5)",
             }}
           />
-          target 90-95%
+          {tr("legendTarget")}
         </span>
       </div>
       {/* Punti — chi ha fatto il check (source label nel JSONL) */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-        <span className="text-[var(--color-dim)]">check da:</span>
+        <span className="text-[var(--color-dim)]">{tr("legendCheckBy")}</span>
         <span className="inline-flex items-center gap-1.5">
           {dot(SOURCE_COLOR.bridge)} bridge
         </span>
@@ -644,7 +911,10 @@ function Legend() {
 }
 
 /** UTC "HH:MM" → "reset tra 2h 14m (19:30 Europe/Rome)". Se tra <60m, solo minuti. */
-function formatResetDisplay(reset_at?: string | null): string {
+function formatResetDisplay(
+  reset_at: string | null | undefined,
+  tr: (k: string) => string,
+): string {
   if (!reset_at) return "";
   const [hStr, mStr] = reset_at.split(":");
   const h = Number(hStr),
@@ -675,7 +945,7 @@ function formatResetDisplay(reset_at?: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-  return `reset tra ${remaining} (${localHHMM})`;
+  return `${tr("resetIn").replace("{x}", remaining)} (${localHHMM})`;
 }
 
 function Tooltip({ entry }: { entry: Entry }) {
@@ -753,6 +1023,8 @@ function Tooltip({ entry }: { entry: Entry }) {
 }
 
 export default function UsageChart() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeId>("6h");
@@ -892,7 +1164,7 @@ export default function UsageChart() {
       <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
         <div className="flex items-baseline gap-3 flex-wrap">
           <span className="text-[11px] uppercase tracking-wide text-[var(--color-dim)]">
-            Rate budget
+            {tr("rateBudget")}
           </span>
           {last && (
             <>
@@ -909,7 +1181,7 @@ export default function UsageChart() {
               </span>
               {last.reset_at && (
                 <span className="text-[10px] text-[var(--color-dim)]">
-                  {formatResetDisplay(last.reset_at)}
+                  {formatResetDisplay(last.reset_at, tr)}
                 </span>
               )}
             </>
@@ -931,12 +1203,16 @@ export default function UsageChart() {
                 cursor: "pointer",
                 fontFamily: "inherit",
               }}
-              title="Torna al tempo corrente"
+              title={tr("backToNow")}
             >
               ↺ live
             </button>
           )}
-          <div className="flex gap-1" role="radiogroup" aria-label="time range">
+          <div
+            className="flex gap-1"
+            role="radiogroup"
+            aria-label={tr("timeRange")}
+          >
             {RANGES.map((r) => {
               const active = r.id === range;
               return (
@@ -957,7 +1233,7 @@ export default function UsageChart() {
                     fontFamily: "inherit",
                   }}
                 >
-                  {r.label}
+                  {r.id === "all" ? tr("rangeAll") : r.label}
                 </button>
               );
             })}
@@ -966,14 +1242,14 @@ export default function UsageChart() {
             href="/team/sentinella"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline"
           >
-            dettagli →
+            {tr("details")}
           </a>
         </div>
       </div>
 
       {loading && filtered.length === 0 ? (
         <div className="text-[11px] text-[var(--color-dim)] py-6 text-center">
-          Caricamento…
+          {tr("loading")}
         </div>
       ) : (
         <div>
@@ -992,6 +1268,7 @@ export default function UsageChart() {
                 onPan={(deltaMs) => {
                   setPanRightTs((prev) => (prev ?? nowTs) + deltaMs);
                 }}
+                tr={tr}
               />
 
               {/* Crosshair + tooltip overlay — posizionati in % sopra l'SVG */}
@@ -1039,7 +1316,7 @@ export default function UsageChart() {
             >
               <span
                 className="text-[9px] font-mono text-[var(--color-dim)]"
-                title="tetto asse Y"
+                title={tr("yAxisTop")}
               >
                 {Math.round(yMax)}%
               </span>
@@ -1051,8 +1328,13 @@ export default function UsageChart() {
                 value={Math.min(500, Math.max(5, yMax))}
                 onChange={(e) => setYMaxOverride(Number(e.target.value))}
                 onDoubleClick={() => setYMaxOverride(null)}
-                title={`asse Y: 0-${Math.round(yMax)}% ${yMaxOverride === null ? "(auto)" : ""} — doppio click: reset auto`}
-                aria-label="Tetto asse Y"
+                title={tr("yAxisTitle")
+                  .replace("{x}", String(Math.round(yMax)))
+                  .replace(
+                    "{mode}",
+                    yMaxOverride === null ? tr("modeAutoParen") : "",
+                  )}
+                aria-label={tr("yAxisTopAria")}
                 className="dom-slider dom-slider-v"
                 style={{
                   writingMode:
@@ -1071,11 +1353,11 @@ export default function UsageChart() {
                 }}
                 title={
                   yMaxOverride === null
-                    ? "auto-fit sui dati"
-                    : "override manuale"
+                    ? tr("autoFitData")
+                    : tr("manualOverride")
                 }
               >
-                {yMaxOverride === null ? "auto" : "man"}
+                {yMaxOverride === null ? tr("auto") : tr("man")}
               </span>
             </div>
           </div>
@@ -1091,7 +1373,7 @@ export default function UsageChart() {
           >
             <span
               className="text-[9px] font-mono text-[var(--color-dim)] w-12 text-right"
-              title="finestra temporale"
+              title={tr("timeWindow")}
             >
               {formatSpan(xSpanCurrent)}
             </span>
@@ -1105,8 +1387,15 @@ export default function UsageChart() {
                 setXSpanOverride(sliderToX(Number(e.target.value)))
               }
               onDoubleClick={() => setXSpanOverride(null)}
-              title={`finestra: ${formatSpan(xSpanCurrent)} ${xSpanOverride === null ? "(da bottone)" : "(slider)"} — doppio click: reset`}
-              aria-label="Ampiezza temporale"
+              title={tr("windowTitle")
+                .replace("{x}", formatSpan(xSpanCurrent))
+                .replace(
+                  "{mode}",
+                  xSpanOverride === null
+                    ? tr("fromButtonParen")
+                    : tr("sliderParen"),
+                )}
+              aria-label={tr("timeWindowAria")}
               className="dom-slider dom-slider-h"
               style={{ flex: 1 }}
             />
@@ -1117,15 +1406,15 @@ export default function UsageChart() {
               }}
               title={
                 xSpanOverride === null
-                  ? "segue il bottone di range"
-                  : "override manuale"
+                  ? tr("followsButton")
+                  : tr("manualOverride")
               }
             >
-              {xSpanOverride === null ? "auto" : "man"}
+              {xSpanOverride === null ? tr("auto") : tr("man")}
             </span>
           </div>
           {/* Legenda sotto */}
-          <Legend />
+          <Legend tr={tr} />
           <style jsx>{`
             .dom-slider {
               -webkit-appearance: none;
@@ -1175,8 +1464,7 @@ export default function UsageChart() {
 
       {filtered.length === 0 && !loading && entries.length > 0 && (
         <div className="text-[10px] text-[var(--color-dim)] text-center mt-2">
-          Nessun sample nell&apos;intervallo selezionato — prova
-          &quot;tutto&quot;.
+          {tr("noSampleInRange").replace("{all}", tr("rangeAll"))}
         </div>
       )}
     </div>

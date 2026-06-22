@@ -1,8 +1,26 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  loading_positions: {
+    it: "Caricamento posizioni",
+    en: "Loading positions",
+    hu: "Állások betöltése",
+    es: "Cargando posiciones",
+    de: "Stellen werden geladen",
+    fr: "Chargement des postes",
+    pt: "Carregando vagas",
+  },
+};
+
 export default function Loading() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   return (
     <div
       aria-busy="true"
-      aria-label="Loading positions"
+      aria-label={tr("loading_positions")}
       style={{ animation: "fade-in 0.2s ease both" }}
     >
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">

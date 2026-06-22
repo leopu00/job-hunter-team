@@ -1,8 +1,24 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<Locale, string> = {
+  it: "Caricamento Team",
+  en: "Loading Team",
+  es: "Cargando Equipo",
+  fr: "Chargement de l'Équipe",
+  de: "Team wird geladen",
+  hu: "Csapat betöltése",
+  pt: "Carregando Equipe",
+};
+
 export default function Loading() {
+  const t = T[useLocale()];
   return (
     <div
       aria-busy="true"
-      aria-label="Loading team"
+      aria-label={t}
       style={{ animation: "fade-in 0.2s ease both" }}
     >
       <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
