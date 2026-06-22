@@ -1416,7 +1416,8 @@ body { display: flex; flex-direction: column; }
   padding: 0 8px;
 }
 
-.home__brand-mark { font-size: 22px; }
+.home__brand-mark { display: inline-flex; align-items: center; }
+.home__brand-mark svg { height: 16px; width: auto; display: block; }
 
 .home__brand-name {
   font-size: 13px;

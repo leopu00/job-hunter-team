@@ -46,6 +46,22 @@ frames, identical on every agent — small and discreet, the dark lenses fully h
 eyes (no eyes visible). Keep them small and oval, NOT large or square, NOT lowered on
 the nose."*
 
+> ✂️ **Prompt CORTI — la creatività la lascia il generatore.** Dare solo: linee guida di
+> stile + scena/ruolo + regola occhiali. **NON forzare** ciò che deve scegliere lui —
+> **colore dei vestiti, età, pose esatte**: imporli fa uscire **ogni immagine uguale**
+> (es. tutti vestiti verdi, tutti coetanei). Il verde è un **accento di palette
+> occasionale, NON una divisa**: gli abiti **variano** (eleganti, di colori diversi);
+> l'età è **libera** ("any age"). Niente blocchi "Avoid" chilometrici — il generatore
+> non è stupido, bastano i vincoli che sbaglia davvero (occhiali, anime, in piedi/seduto).
+
+> 🆕 **Ogni immagine = istanza GPT NUOVA (zero memoria).** Generiamo ognuna in una chat
+> pulita: il modello **non sa** cosa è stato chiesto/generato nei turni precedenti. Quindi
+> ogni prompt dev'essere **autosufficiente** e scritto in **POSITIVO** — descrivi ciò che
+> VUOI vedere, **mai** correzioni di tentativi passati ("non attaccato alla sedia", "non
+> verde"): la negazione è senza contesto e spesso ottiene l'effetto opposto (la attacca,
+> la fa verde). Esempio: due oggetti separati → "a freestanding screen on its own stand,
+> a few steps in front of him", NON "screen not attached to the chair".
+
 > ⚠️ **Generiamo da browser (ChatGPT/web): MAI riferimenti a file nei prompt** (no
 > `ref. …png`, no path) — il generatore non vede i nostri file locali. Le immagini in
 > `web/public/` e `prima-release/` sono solo appunti visivi **per noi**.
@@ -197,22 +213,22 @@ vittoriani eleganti, palette terrosa+verde, NO boy-scout). Affinamenti utente: *
 > Scontorno: `isnet-general-use` (laptop + foglio da preservare). ✅ FATTO →
 > `web/public/agents-scouts.png` (cablato su /agents).
 
-### `team.analista` — l'Analista ⬜ DA GENERARE
+### `team.analista` — gli Analisti (2 figure in piedi) ⬜ DA GENERARE
 
-Il verificatore freddo (legge l'offerta, controlla azienda + link, estrae i dati). Nella
-home è in **camice bianco** da laboratorio. Figura singola. Prompt:
+Verificatori freddi (leggono l'offerta, controllano azienda + link, estraggono i dati),
+in **camice bianco** da laboratorio. **Due figure, entrambe in piedi**, a un **bancone
+alto** carico di fogli e roba da scienziati. Prompt:
 
-> Hand-drawn Western graphic-novel illustration (realistic proportions, NOT anime/manhwa),
-> clean inked outlines, flat colours, warm earthy palette with green accents, vintage
-> style. Plain white background.
+> Western graphic-novel illustration, inked outlines, flat colours, warm muted palette,
+> paper-grain texture; not anime, not 3D, not photorealistic. Plain white background.
 >
-> **The Analyst, full figure head-to-toe — a grown adult, any age (vary naturally).** A
-> cold, meticulous verifier who fact-checks job postings and companies: a white lab coat
-> over smart clothes, inspecting documents. Give them a prop suggesting careful
-> verification (your choice). Wears identical small round/oval dark sunglasses, thin metal
-> frames, lenses fully hiding the eyes (no eyes visible — virtual agent). Calm, precise.
+> Two Analysts of the team, both standing, full figure, two different adults in white
+> lab coats over elegant clothes. They work at a tall standing lab bench cluttered with
+> papers, dossiers, beakers, test tubes, a microscope — one inspects a document with a
+> magnifying glass, the other reads a sheet. Calm, precise.
 >
-> Avoid: anime/manhwa look, large or square glasses, visible eyes, readable text.
+> Both wear identical small round dark sunglasses, thin metal frames, lenses fully
+> hiding the eyes, worn high on the nose.
 
 ---
 
