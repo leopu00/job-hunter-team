@@ -462,23 +462,50 @@ export function loadProfile() {
 
 // ───────────────────────── Agenti ─────────────────────────
 
+const AGENT_GROUPS = [
+  ['Core', ['capitano', 'sentinella', 'assistente', 'mentor', 'dottore']],
+  ['Pipeline', ['scout', 'analista', 'scorer', 'scrittore', 'critico']],
+]
+
 export function loadAgents() {
   return renderInto('dash-agents', async () => {
     const res = await apiGet('/api/agents')
     const agents = Array.isArray(res) ? res : (Array.isArray(res?.agents) ? res.agents : [])
     if (agents.length === 0) return emptyBox('Nessun agente. Avvia il team dalla sezione Team.')
-    const list = el('div', 'dash__list')
-    for (const a of agents) {
-      const running = a.running === true || a.status === 'running' || a.active === true
+    const idOf = (a) => String(a.id || a.role || a.name || '').toLowerCase()
+    const isRunning = (a) => a.running === true || a.status === 'running' || a.active === true
+    const renderRow = (a) => {
       const row = el('div', 'dash-agent')
       const left = el('div', 'dash-agent__main')
-      const dot = el('span', `home__status-dot`); dot.dataset.state = running ? 'running' : 'stopped'
+      const dot = el('span', 'home__status-dot'); dot.dataset.state = isRunning(a) ? 'running' : 'stopped'
       left.append(dot, el('span', 'dash-agent__name', a.name || a.role || a.id || '—'))
       row.appendChild(left)
-      row.appendChild(el('span', 'dash-card__date', running ? 'attivo' : 'fermo'))
-      list.appendChild(row)
+      row.appendChild(el('span', 'dash-card__date', isRunning(a) ? 'attivo' : 'fermo'))
+      return row
     }
-    return list
+    const wrap = el('div', 'dash-agents')
+    const placed = new Set()
+    for (const [title, ids] of AGENT_GROUPS) {
+      const inGroup = agents.filter((a) => ids.some((id) => idOf(a).startsWith(id)))
+      if (inGroup.length === 0) continue
+      const grp = el('div', 'dash-agentgroup')
+      grp.appendChild(el('div', 'dash-detail__label', title))
+      const list = el('div', 'dash__list')
+      for (const a of inGroup) { list.appendChild(renderRow(a)); placed.add(idOf(a)) }
+      grp.appendChild(list)
+      wrap.appendChild(grp)
+    }
+    // Eventuali agenti non categorizzati
+    const rest = agents.filter((a) => !placed.has(idOf(a)))
+    if (rest.length) {
+      const grp = el('div', 'dash-agentgroup')
+      grp.appendChild(el('div', 'dash-detail__label', 'Altri'))
+      const list = el('div', 'dash__list')
+      for (const a of rest) list.appendChild(renderRow(a))
+      grp.appendChild(list)
+      wrap.appendChild(grp)
+    }
+    return wrap
   })
 }
 
