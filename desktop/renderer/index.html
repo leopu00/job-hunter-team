@@ -647,58 +647,70 @@
           <span class="home__brand-name">JHT Desktop</span>
         </div>
         <nav class="home__nav" role="tablist">
-          <button type="button" class="home__nav-item is-active" data-section="team" role="tab">
-            <span class="home__nav-icon">🚀</span>
-            <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="dashboard" role="tab">
-            <span class="home__nav-icon">📊</span>
-            <span class="home__nav-label" data-i18n="home.nav.dashboard">Dashboard</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="stats" role="tab">
-            <span class="home__nav-icon">📈</span>
-            <span class="home__nav-label" data-i18n="home.nav.stats">Statistiche</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="apps" role="tab">
-            <span class="home__nav-icon">📨</span>
-            <span class="home__nav-label" data-i18n="home.nav.apps">Candidature</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="map" role="tab">
-            <span class="home__nav-icon">🗺️</span>
-            <span class="home__nav-label" data-i18n="home.nav.map">Mappa</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="activity" role="tab">
-            <span class="home__nav-icon">📜</span>
-            <span class="home__nav-label" data-i18n="home.nav.activity">Attività</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="agents" role="tab">
-            <span class="home__nav-icon">🤖</span>
-            <span class="home__nav-label" data-i18n="home.nav.agents">Agenti</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="provider" role="tab">
-            <span class="home__nav-icon">🧠</span>
-            <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="docker" role="tab">
-            <span class="home__nav-icon">🐳</span>
-            <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="account" role="tab">
-            <span class="home__nav-icon">👤</span>
-            <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="email" role="tab">
-            <span class="home__nav-icon">📧</span>
-            <span class="home__nav-label" data-i18n="home.nav.email">Email</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="language" role="tab">
-            <span class="home__nav-icon">🌐</span>
-            <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="advanced" role="tab">
-            <span class="home__nav-icon">⚙️</span>
-            <span class="home__nav-label" data-i18n="home.nav.advanced">Avanzate</span>
-          </button>
+          <!-- Gruppo Team: controllo e agenti -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.team">Team</div>
+            <button type="button" class="home__nav-item is-active" data-section="team" role="tab">
+              <span class="home__nav-icon">🚀</span>
+              <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="agents" role="tab">
+              <span class="home__nav-icon">🤖</span>
+              <span class="home__nav-label" data-i18n="home.nav.agents">Agenti</span>
+            </button>
+          </div>
+          <!-- Gruppo Lavoro: i dati della ricerca -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.work">Lavoro</div>
+            <button type="button" class="home__nav-item" data-section="dashboard" role="tab">
+              <span class="home__nav-icon">📊</span>
+              <span class="home__nav-label" data-i18n="home.nav.dashboard">Dashboard</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="stats" role="tab">
+              <span class="home__nav-icon">📈</span>
+              <span class="home__nav-label" data-i18n="home.nav.stats">Statistiche</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="apps" role="tab">
+              <span class="home__nav-icon">📨</span>
+              <span class="home__nav-label" data-i18n="home.nav.apps">Candidature</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="map" role="tab">
+              <span class="home__nav-icon">🗺️</span>
+              <span class="home__nav-label" data-i18n="home.nav.map">Mappa</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="activity" role="tab">
+              <span class="home__nav-icon">📜</span>
+              <span class="home__nav-label" data-i18n="home.nav.activity">Attività</span>
+            </button>
+          </div>
+          <!-- Gruppo Impostazioni -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.settings">Impostazioni</div>
+            <button type="button" class="home__nav-item" data-section="provider" role="tab">
+              <span class="home__nav-icon">🧠</span>
+              <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="docker" role="tab">
+              <span class="home__nav-icon">🐳</span>
+              <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="account" role="tab">
+              <span class="home__nav-icon">👤</span>
+              <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="email" role="tab">
+              <span class="home__nav-icon">📧</span>
+              <span class="home__nav-label" data-i18n="home.nav.email">Email</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="language" role="tab">
+              <span class="home__nav-icon">🌐</span>
+              <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="advanced" role="tab">
+              <span class="home__nav-icon">⚙️</span>
+              <span class="home__nav-label" data-i18n="home.nav.advanced">Avanzate</span>
+            </button>
+          </div>
         </nav>
       </aside>
 
