@@ -32,15 +32,26 @@ function emptyBox(text) {
   return box
 }
 
-// Render generico in un container con gestione errori/empty uniforme.
+function loadingBox() {
+  const box = el('div', 'dash__loading')
+  box.appendChild(el('span', 'status-icon'))
+  box.appendChild(el('span', null, 'Caricamento…'))
+  box.firstChild.dataset.state = 'busy'
+  return box
+}
+
+// Render generico in un container con gestione errori/empty/loading uniforme.
 async function renderInto(containerId, fetchAndBuild) {
   const c = document.getElementById(containerId)
   if (!c) return
   c.innerHTML = ''
+  c.appendChild(loadingBox())
   try {
     const node = await fetchAndBuild()
+    c.innerHTML = ''
     c.appendChild(node)
   } catch (e) {
+    c.innerHTML = ''
     const msg = e?.code === 'no-channel'
       ? 'Canale dati non disponibile. Avvia il team o aggiorna l’app.'
       : 'Il team non è raggiungibile. Avvialo dalla sezione Team e riprova.'
@@ -157,6 +168,7 @@ async function showDetail(id) {
 }
 
 export async function loadDashboard() {
+  setOffersEmpty('Caricamento…')
   try {
     const res = await apiGet('/api/positions/recent?limit=50')
     const positions = Array.isArray(res?.positions) ? res.positions : []
