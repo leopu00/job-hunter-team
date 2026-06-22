@@ -46,6 +46,7 @@ const homeDom = {
   teamInfo: document.getElementById('home-team-info'),
   teamAdvanced: document.getElementById('home-team-advanced'),
   teamLog: document.getElementById('home-team-log'),
+  teamDashboard: document.getElementById('home-team-dashboard'),
   teamDockerWarning: document.getElementById('home-team-docker-warning'),
   teamDockerWarningText: document.getElementById('home-team-docker-warning-text'),
   btnTeamDockerAction: document.getElementById('home-team-docker-action'),
@@ -473,6 +474,30 @@ if (homeDom.btnAccountSignout) {
   homeDom.btnAccountSignout.addEventListener('click', () => signOut())
 }
 
+// [JHT-DASHBOARD-SPLIT] Dashboard locale EMBEDDED nel pannello Team.
+// url truthy → punta la <webview> lì e la mostra (guard dataset.loadedUrl
+// contro il reload a ogni poll); falsy → nascondi e scarica (about:blank)
+// così non resta viva una pagina di un runtime ormai fermo. Il ramo VPS
+// NON usa l'embed: il suo cockpit è una finestra a parte via tunnel SSH
+// (openVpsCockpit → openDashboardWindow), quindi lì passiamo null.
+function syncTeamDashboard(url) {
+  const dash = homeDom.teamDashboard
+  if (!dash) return
+  if (url) {
+    if (dash.dataset.loadedUrl !== url) {
+      dash.src = url
+      dash.dataset.loadedUrl = url
+    }
+    dash.hidden = false
+  } else {
+    if (dash.dataset.loadedUrl) {
+      dash.src = 'about:blank'
+      delete dash.dataset.loadedUrl
+    }
+    dash.hidden = true
+  }
+}
+
 function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
   const mode = status?.mode
   // In VPS mode il team gira sulla VPS remota, sempre "running" dal punto
@@ -508,6 +533,8 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
     // Docker warning del Team panel: in VPS mode il Docker e' remoto,
     // niente da segnalare lato launcher.
     if (homeDom.teamDockerWarning) homeDom.teamDockerWarning.hidden = true
+    // VPS: la dashboard è il cockpit via tunnel (finestra separata), non l'embed.
+    syncTeamDashboard(null)
     return
   }
   const running = !!status?.running && (mode === 'running' || mode === 'external')
@@ -562,6 +589,8 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
     homeDom.teamAdvanced.hidden = true
     homeDom.teamLog.textContent = ''
   }
+  // Embed la dashboard locale quando il runtime è up; altrimenti nascondila.
+  syncTeamDashboard(running && status?.url ? status.url : null)
 }
 
 // Polls docker status every 3s after the user clicked the warning's

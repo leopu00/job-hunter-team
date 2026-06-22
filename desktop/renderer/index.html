@@ -721,6 +721,12 @@
               <pre class="advanced__log" id="home-team-log"></pre>
             </details>
           </div>
+          <!-- [JHT-DASHBOARD-SPLIT] Dashboard locale EMBEDDED: quando il runtime
+               è 'running', renderHomeTeamStatus punta questa <webview> a
+               status.url (http://localhost:PORT servito dal container) → la
+               dashboard vive DENTRO l'app, niente finestra separata né browser.
+               webviewTag è abilitato sulla finestra principale in main.js. -->
+          <webview id="home-team-dashboard" class="home__dashboard" hidden></webview>
         </div>
 
         <!-- Provider: vendor + plan + login -->
