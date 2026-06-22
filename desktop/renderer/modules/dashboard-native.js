@@ -156,6 +156,32 @@ function renderDetail(data) {
     const excluded = p.status === 'excluded' || !!p.user_excluded_reason
     actions.appendChild(mkBtn('🚫 Escludi', '✓ Esclusa', 'user-exclude', excluded, { reason: 'other', note: 'Esclusa dalla dashboard' }))
     d.appendChild(actions)
+
+    // Ticket: richiesta libera al team su questa offerta.
+    const tk = el('div', 'dash-ticket')
+    tk.appendChild(el('div', 'dash-detail__label', 'Chiedi al team'))
+    const tkRow = el('div', 'dash-ticket__row')
+    const tkIn = el('input', 'dash-ticket__input'); tkIn.type = 'text'
+    tkIn.placeholder = 'Es. "Trovane di simili", "Questa è scaduta"…'
+    const tkBtn = el('button', 'btn btn--ghost', 'Invia richiesta'); tkBtn.type = 'button'
+    const sendTicket = async () => {
+      const text = tkIn.value.trim()
+      if (!text) return
+      tkBtn.disabled = true; const orig = tkBtn.textContent; tkBtn.textContent = '…'
+      try {
+        await window.dashboardApi.post(`/api/positions/${legacyId}/ticket`, { request_text: text })
+        tkIn.value = ''; tkBtn.textContent = '✓ Inviata'
+        setTimeout(() => { tkBtn.textContent = orig; tkBtn.disabled = false }, 2000)
+      } catch (e) {
+        tkBtn.textContent = orig; tkBtn.disabled = false
+        _log.error('ticket.failed', { err: String(e?.message || e) })
+      }
+    }
+    tkBtn.addEventListener('click', sendTicket)
+    tkIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendTicket() } })
+    tkRow.append(tkIn, tkBtn)
+    tk.appendChild(tkRow)
+    d.appendChild(tk)
   }
 
   const rows = el('div', 'dash-detail__rows')
