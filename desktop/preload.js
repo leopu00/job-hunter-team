@@ -81,6 +81,8 @@ contextBridge.exposeInMainWorld('dashboardApi', {
   listPositions: (opts) => ipcRenderer.invoke('dashboard:list-positions', opts || {}),
   // → { ok, position, score, highlights, company, application, error? }
   getPosition: (id) => ipcRenderer.invoke('dashboard:get-position', { id }),
+  // → { ok, ...stats, error? } — riepilogo (totali/score medi) per header/empty-state.
+  getStats: () => ipcRenderer.invoke('dashboard:get-stats'),
 })
 
 contextBridge.exposeInMainWorld('setupApi', {

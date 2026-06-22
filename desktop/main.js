@@ -676,6 +676,12 @@ app.whenReady().then(() => {
     const r = await dashboardApiFetch(`/api/positions/${encodeURIComponent(id)}`)
     return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error }
   })
+  // Riepilogo per l'header/empty-state della dashboard nativa (/api/stats → 200
+  // verificato live). Utile anche con 0 offerte. Extra rispetto al contratto base.
+  ipcMain.handle('dashboard:get-stats', async () => {
+    const r = await dashboardApiFetch('/api/stats')
+    return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error }
+  })
 
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
   ipcMain.handle('tunnel:open', (_event, { ip } = {}) => {
