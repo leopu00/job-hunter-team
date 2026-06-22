@@ -2505,3 +2505,7 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
   background: var(--panel); color: var(--text); font: inherit; font-size: 13.5px;
 }
 .chat__composer textarea:focus { outline: none; border-color: var(--border-strong); }
+
+.dash-detail__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-action { font-size: 12.5px; }
+.dash-action:disabled { opacity: 0.6; }
