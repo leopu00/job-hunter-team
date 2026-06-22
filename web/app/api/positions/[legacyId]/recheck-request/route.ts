@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import Database from "better-sqlite3";
 import fs from "fs";
 import { resolveUser } from "@/lib/team-state/auth";
+import {
+  LOCAL_TOKEN_COOKIE,
+  isLocalTokenAuthenticated,
+} from "@/lib/local-token";
 import { JHT_DB_PATH } from "@/lib/jht-paths";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +27,51 @@ async function handleToggle(
   legacyIdParam: string,
   requested: boolean,
 ): Promise<NextResponse> {
+  const legacyId = Number.parseInt(legacyIdParam, 10);
+  if (!Number.isInteger(legacyId) || legacyId <= 0) {
+    return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });
+  }
+
+  // [JHT-DASHBOARD-NATIVE] Desktop nativo: con un local-token valido scrivi
+  // SOLO su SQLite locale (source-of-truth) e ritorna, senza passare dal cloud
+  // (resolveUser→Supabase, che rifiuterebbe il Bearer local-token). La route
+  // resta cloud-session per il browser web.
+  if (
+    isLocalTokenAuthenticated(
+      req.headers.get("authorization"),
+      (await cookies()).get(LOCAL_TOKEN_COOKIE)?.value,
+    )
+  ) {
+    if (!fs.existsSync(JHT_DB_PATH)) {
+      return NextResponse.json({ error: "DB locale assente" }, { status: 503 });
+    }
+    const db = new Database(JHT_DB_PATH);
+    try {
+      db.pragma("journal_mode = WAL");
+      const row = db
+        .prepare<
+          [number],
+          { id: number }
+        >("SELECT id FROM positions WHERE id = ?")
+        .get(legacyId);
+      if (!row) {
+        return NextResponse.json(
+          { error: `Posizione #${legacyId} non trovata` },
+          { status: 404 },
+        );
+      }
+      db.prepare(
+        `UPDATE positions
+            SET recheck_requested = ?,
+                recheck_requested_at = CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE recheck_requested_at END
+          WHERE id = ?`,
+      ).run(requested ? 1 : 0, requested ? 1 : 0, legacyId);
+    } finally {
+      db.close();
+    }
+    return NextResponse.json({ recheck_requested: requested, local: true });
+  }
+
   const resolved = await resolveUser(req);
   if (!resolved.ok) return resolved.res;
   if (resolved.user.source !== "session") {
@@ -31,11 +81,6 @@ async function handleToggle(
     );
   }
   const { userId, supabase } = resolved.user;
-
-  const legacyId = Number.parseInt(legacyIdParam, 10);
-  if (!Number.isInteger(legacyId) || legacyId <= 0) {
-    return NextResponse.json({ error: "legacyId non valido" }, { status: 400 });
-  }
 
   const hasLocal = fs.existsSync(JHT_DB_PATH);
 

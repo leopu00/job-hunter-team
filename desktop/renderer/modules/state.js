@@ -118,8 +118,6 @@ export const dom = {
   btnSetupBack: document.getElementById('btn-setup-back'),
   btnSetupContinue: document.getElementById('btn-setup-continue'),
   btnStartTeam: document.getElementById('btn-start-team'),
-  btnOpenBrowser: document.getElementById('btn-open-browser'),
-  btnStopTeam: document.getElementById('btn-stop-team'),
   dockerBadge: document.getElementById('docker-badge'),
   dockerActions: document.getElementById('docker-actions'),
   dockerCard: document.getElementById('docker-card'),
@@ -179,10 +177,6 @@ export const dom = {
   btnTerminalPaste: document.getElementById('terminal-modal-paste'),
   btnTerminalOpenUrl: document.getElementById('terminal-modal-open-url'),
   btnTerminalCopyUrl: document.getElementById('terminal-modal-copy-url'),
-  runningTitle: document.getElementById('running-title'),
-  runningLead: document.getElementById('running-lead'),
-  runningInfo: document.getElementById('running-info'),
-  advancedLog: document.getElementById('advanced-log'),
   readyHint: document.getElementById('ready-hint'),
 }
 
@@ -193,7 +187,15 @@ export function showStep(name) {
   }
 }
 
+// Sink di log legacy. Storicamente scriveva nel <pre> "Technical details"
+// dello step running (rimosso col dashboard-split). Il <pre> non esiste più,
+// quindi instradiamo SEMPRE anche su window.jhtLog: senza, gli errori che
+// passavano da appendLog (es. il probe di boot che fa cadere sul wizard)
+// sparivano silenziosamente. Resta null-safe sul <pre> per compatibilità.
 export function appendLog(line) {
   if (!line) return
-  dom.advancedLog.textContent += `${line}\n`
+  if (dom.advancedLog) dom.advancedLog.textContent += `${line}\n`
+  try {
+    window.jhtLog?.scope?.('renderer')?.info?.('appendLog', { line: String(line) })
+  } catch { /* logger assente: no-op */ }
 }
