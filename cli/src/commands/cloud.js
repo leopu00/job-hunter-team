@@ -805,6 +805,8 @@ async function handlePush(options) {
   let positions = [];
   let scores = [];
   let applications = [];
+  let companies = [];
+  let highlights = [];
   let pendingMessages = [];
   let tombstones = [];
   let transitions = [];
@@ -817,7 +819,9 @@ async function handlePush(options) {
     try {
       const db = new DatabaseSync(dbPath, { readOnly: true });
       positions = readSqliteTableDelta(db, 'positions', [
-        'id', 'title', 'company', 'url', 'location', 'remote_type', 'status',
+        // company_id (FK locale → companies): risolto a UUID cloud lato server
+        // via companies.legacy_id. Alimenta la Company card del dettaglio (mig 046).
+        'id', 'title', 'company', 'company_id', 'url', 'location', 'remote_type', 'status',
         'notes', 'source', 'jd_text', 'requirements', 'found_by', 'found_at',
         'deadline', 'last_checked', 'last_actor',
         'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
@@ -861,6 +865,19 @@ async function handlePush(options) {
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
         'cv_drive_id', 'cl_drive_id',
       ], cursor.applications);
+      // Companies + position_highlights (mig 046): erano OMESSE dal push →
+      // Company card e blocchi Pro/Contro sempre vuoti sul cloud. `id` (int
+      // locale) → legacy_id cloud; il server risolve le FK (positions.company_id,
+      // highlights.position_id) via le mappe legacy→UUID. hq_country locale →
+      // hq cloud lo mappa il server. Delta su updated_at come le altre tabelle.
+      companies = readSqliteTableDelta(db, 'companies', [
+        'id', 'name', 'website', 'hq_country', 'sector', 'size',
+        'glassdoor_rating', 'red_flags', 'culture_notes', 'analyzed_by',
+        'analyzed_at', 'verdict',
+      ], cursor.companies);
+      highlights = readSqliteTableDelta(db, 'position_highlights', [
+        'id', 'position_id', 'type', 'text',
+      ], cursor.position_highlights);
       // pending_user_messages e' la coda agente -> utente. Pushiamo TUTTE le
       // righe ad ogni tick: l'upsert lato server e' idempotente su
       // (user_id, legacy_id), e gli ack-time / reply-time vanno comunque
@@ -930,6 +947,12 @@ async function handlePush(options) {
   const profileChunks = profilePayload
     ? `, profile (${profilePayload.yaml.length}B yaml + ${Object.keys(profilePayload.summaries).length} summaries)`
     : '';
+  const companyChunks = companies.length > 0
+    ? `, ${companies.length} companies`
+    : '';
+  const highlightChunks = highlights.length > 0
+    ? `, ${highlights.length} highlights`
+    : '';
   const pendingChunks = pendingMessages.length > 0
     ? `, ${pendingMessages.length} pending messages`
     : '';
@@ -943,7 +966,7 @@ async function handlePush(options) {
   const deltaMode = isFirstPush ? 'first-push (full)' : 'delta';
   console.log(
     pc.dim(
-      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${tombstoneChunks}${transitionChunks}${profileChunks}`
+      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${companyChunks}${highlightChunks}${pendingChunks}${tombstoneChunks}${transitionChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
@@ -952,7 +975,8 @@ async function handlePush(options) {
   }
   if (
     positions.length === 0 && scores.length === 0 &&
-    applications.length === 0 && pendingMessages.length === 0 &&
+    applications.length === 0 && companies.length === 0 &&
+    highlights.length === 0 && pendingMessages.length === 0 &&
     tombstones.length === 0 && transitions.length === 0 && !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
@@ -970,6 +994,8 @@ async function handlePush(options) {
       },
       body: JSON.stringify({
         positions, scores, applications,
+        companies,
+        position_highlights: highlights,
         pending_user_messages: pendingMessages,
         tombstones,
         position_transitions: transitions,
@@ -1018,6 +1044,12 @@ async function handlePush(options) {
   console.log(pc.dim(`  positions:        ${body.positions?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  scores:           ${body.scores?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  applications:     ${body.applications?.upserted ?? 0} upserted`));
+  if (companies.length > 0 || body.companies?.upserted) {
+    console.log(pc.dim(`  companies:        ${body.companies?.upserted ?? 0} upserted`));
+  }
+  if (highlights.length > 0 || body.position_highlights?.upserted) {
+    console.log(pc.dim(`  highlights:       ${body.position_highlights?.upserted ?? 0} upserted`));
+  }
   console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
   if (tombstones.length > 0 || body.tombstones?.applied) {
     console.log(pc.dim(`  tombstones:       ${body.tombstones?.applied ?? 0} applied`));
@@ -1035,9 +1067,13 @@ async function handlePush(options) {
   const posMax = maxUpdatedAt(positions);
   const scoMax = maxUpdatedAt(scores);
   const appMax = maxUpdatedAt(applications);
+  const compMax = maxUpdatedAt(companies);
+  const hlMax = maxUpdatedAt(highlights);
   if (posMax) newCursor.positions = posMax;
   if (scoMax) newCursor.scores = scoMax;
   if (appMax) newCursor.applications = appMax;
+  if (compMax) newCursor.companies = compMax;
+  if (hlMax) newCursor.position_highlights = hlMax;
   // Cursor tombstones: MAX(deleted_at) tra le tombstones inviate.
   // Stesso pattern, ma il campo si chiama deleted_at non updated_at.
   let tombMax = null;
