@@ -325,6 +325,39 @@ export function loadStats() {
       pipe.appendChild(row)
     })
     wrap.appendChild(pipe)
+
+    // Distribuzione score (da facets): quante offerte per banda di punteggio.
+    try {
+      const facets = await apiGet('/api/positions/facets')
+      const arr = Array.isArray(facets) ? facets : (Array.isArray(facets?.facets) ? facets.facets : [])
+      if (arr.length) {
+        const bands = [
+          ['90–100', (v) => v >= 90], ['75–89', (v) => v >= 75 && v < 90],
+          ['50–74', (v) => v >= 50 && v < 75], ['25–49', (v) => v >= 25 && v < 50],
+          ['0–24', (v) => v >= 0 && v < 25],
+        ]
+        const counts = bands.map(([, fn]) => arr.filter((p) => typeof p.score === 'number' && fn(p.score)).length)
+        const unscored = arr.filter((p) => typeof p.score !== 'number').length
+        const labels = [...bands.map(([l]) => l), 'senza']
+        const vals = [...counts, unscored]
+        const max = Math.max(1, ...vals)
+        const dist = el('div', 'dash-pipeline')
+        dist.appendChild(el('div', 'dash-detail__label', 'Distribuzione punteggio'))
+        labels.forEach((label, i) => {
+          const row = el('div', 'dash-pipeline__row')
+          row.appendChild(el('span', 'dash-pipeline__label', label))
+          const track = el('div', 'dash-pipeline__track')
+          const bar = el('div', 'dash-pipeline__bar')
+          bar.style.width = `${Math.round((vals[i] / max) * 100)}%`
+          track.appendChild(bar)
+          row.appendChild(track)
+          row.appendChild(el('span', 'dash-pipeline__num', vals[i]))
+          dist.appendChild(row)
+        })
+        wrap.appendChild(dist)
+      }
+    } catch { /* facets non disponibili: salta la distribuzione */ }
+
     return wrap
   })
 }
@@ -456,6 +489,42 @@ export function loadProfile() {
       }
       if (skillsWrap.childElementCount) wrap.appendChild(skillsWrap)
     }
+    return wrap
+  })
+}
+
+// ───────────────────────── Orari di lavoro ─────────────────────────
+
+const WH_LABELS = {
+  enabled: 'Attivo', start: 'Inizio', end: 'Fine', timezone: 'Fuso orario',
+  tz: 'Fuso orario', days: 'Giorni', start_hour: 'Ora inizio', end_hour: 'Ora fine',
+}
+
+export function loadWorkingHours() {
+  return renderInto('dash-hours', async () => {
+    const res = await apiGet('/api/team/working-hours')
+    const wh = res?.working_hours || res || {}
+    const wrap = el('div', 'dash-profile')
+    // Stato corrente (preview): il team sta lavorando ora?
+    const pv = res?.preview
+    if (pv) {
+      const active = pv.working === true || pv.active === true || pv.is_working === true || pv.in_hours === true
+      const badge = el('div', 'dash-hours__status')
+      const dot = el('span', 'home__status-dot'); dot.dataset.state = active ? 'running' : 'stopped'
+      badge.append(dot, el('span', null, active ? 'Il team è in orario di lavoro' : 'Fuori orario di lavoro'))
+      wrap.appendChild(badge)
+    }
+    const rows = el('div', 'dash-detail__rows')
+    let any = false
+    for (const [k, v] of Object.entries(wh)) {
+      if (v == null || typeof v === 'object') continue
+      const label = WH_LABELS[k] || k
+      const val = typeof v === 'boolean' ? (v ? 'Sì' : 'No') : String(v)
+      rows.appendChild(infoRow(label, val)); any = true
+    }
+    if (Array.isArray(wh.days) && wh.days.length) { rows.appendChild(infoRow('Giorni', wh.days.join(', '))); any = true }
+    if (!any) return emptyBox('Orari di lavoro non configurati. Avvia il team.')
+    wrap.appendChild(rows)
     return wrap
   })
 }
