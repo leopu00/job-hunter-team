@@ -183,7 +183,7 @@ export default function ProfileStats({ profile }: Props) {
       const res = await fetch('/api/profile/avatar', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok || data.error) {
-        setAvatarError(data.error ?? 'Errore')
+        setAvatarError(data.error ?? t('ps_error'))
       } else {
         // Refresh avatar
         const r2 = await fetch('/api/profile/avatar')
@@ -297,7 +297,7 @@ export default function ProfileStats({ profile }: Props) {
                     : { color: 'var(--color-red)', borderColor: 'var(--color-red)' }
                 }
               >
-                {teamUnlocked ? '✓ team attivabile' : `${requiredMissing} obbligatori mancanti`}
+                {teamUnlocked ? t('ps_team_unlockable') : `${requiredMissing} ${t('ps_required_missing')}`}
               </span>
               {/* Warning compatto: appare solo se ci sono campi mancanti */}
               {missingFields.length > 0 && (
@@ -360,7 +360,7 @@ export default function ProfileStats({ profile }: Props) {
                     : { color: 'var(--color-red)', borderColor: 'var(--color-red)' }
                 }
               >
-                {teamUnlocked ? '✓ team attivabile' : `${requiredMissing} obbligatori mancanti`}
+                {teamUnlocked ? t('ps_team_unlockable') : `${requiredMissing} ${t('ps_required_missing')}`}
               </span>
             </div>
             <div role="progressbar" aria-valuenow={completion} aria-valuemin={0} aria-valuemax={100} aria-label={t('ps_completion')} className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-panel)' }}>

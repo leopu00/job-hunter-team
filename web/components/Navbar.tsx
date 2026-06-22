@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
+import { cookies } from 'next/headers'
 import type { User } from '@supabase/supabase-js'
+import { locales, defaultLocale, type Locale } from '@/i18n/config'
 import LoginButton from './LoginButton'
 import NavLinks from './NavLinks'
 import NavbarMobile from './NavbarMobile'
@@ -8,11 +10,29 @@ import UserMenu from './UserMenu'
 
 const LanguageSwitcher = dynamic(() => import('@/app/components/LanguageSwitcher'))
 
+const T: Record<Locale, { navAria: string }> = {
+  it: { navAria: 'Navigazione app' },
+  en: { navAria: 'App navigation' },
+  es: { navAria: 'Navegación de la app' },
+  fr: { navAria: "Navigation de l'application" },
+  de: { navAria: 'App-Navigation' },
+  hu: { navAria: 'Alkalmazás navigáció' },
+  pt: { navAria: 'Navegação da app' },
+}
+
 interface NavbarProps {
   user: User | null
 }
 
-export default function Navbar({ user }: NavbarProps) {
+export default async function Navbar({ user }: NavbarProps) {
+  const cookieStore = await cookies()
+  const cookieLocale = cookieStore.get('NEXT_LOCALE')?.value
+  const locale: Locale =
+    cookieLocale && (locales as string[]).includes(cookieLocale)
+      ? (cookieLocale as Locale)
+      : defaultLocale
+  const t = T[locale]
+
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined
   const fullName  = user?.user_metadata?.full_name as string | undefined
   const email     = user?.email ?? ''
@@ -21,7 +41,7 @@ export default function Navbar({ user }: NavbarProps) {
     <header
       className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-panel)]"
     >
-      <nav aria-label="Navigazione app" className="px-5 sm:px-6 h-14 flex items-center gap-4">
+      <nav aria-label={t.navAria} className="px-5 sm:px-6 h-14 flex items-center gap-4">
 
         {/* Brand */}
         <Link

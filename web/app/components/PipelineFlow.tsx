@@ -1,6 +1,93 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<
+  Locale,
+  {
+    active: string;
+    stop: string;
+    play: string;
+    stopTimeLapse: string;
+    playTimeLapse: string;
+    pipelineTime: string;
+    scrubbing: string;
+    backToLive: string;
+  }
+> = {
+  it: {
+    active: "attive",
+    stop: "Stop",
+    play: "Play",
+    stopTimeLapse: "Ferma il time-lapse",
+    playTimeLapse: "Avvia il time-lapse",
+    pipelineTime: "Tempo della pipeline",
+    scrubbing: "scorrimento…",
+    backToLive: "torna a live →",
+  },
+  en: {
+    active: "active",
+    stop: "Stop",
+    play: "Play",
+    stopTimeLapse: "Stop time-lapse",
+    playTimeLapse: "Play time-lapse",
+    pipelineTime: "Pipeline time",
+    scrubbing: "scrubbing…",
+    backToLive: "back to live →",
+  },
+  es: {
+    active: "activas",
+    stop: "Detener",
+    play: "Reproducir",
+    stopTimeLapse: "Detener el time-lapse",
+    playTimeLapse: "Reproducir el time-lapse",
+    pipelineTime: "Tiempo del pipeline",
+    scrubbing: "desplazando…",
+    backToLive: "volver a en vivo →",
+  },
+  fr: {
+    active: "actives",
+    stop: "Arrêter",
+    play: "Lecture",
+    stopTimeLapse: "Arrêter le time-lapse",
+    playTimeLapse: "Lancer le time-lapse",
+    pipelineTime: "Temps du pipeline",
+    scrubbing: "défilement…",
+    backToLive: "revenir au direct →",
+  },
+  de: {
+    active: "aktiv",
+    stop: "Stopp",
+    play: "Abspielen",
+    stopTimeLapse: "Zeitraffer stoppen",
+    playTimeLapse: "Zeitraffer abspielen",
+    pipelineTime: "Pipeline-Zeit",
+    scrubbing: "Scrubbing…",
+    backToLive: "zurück zu Live →",
+  },
+  hu: {
+    active: "aktív",
+    stop: "Leállítás",
+    play: "Lejátszás",
+    stopTimeLapse: "Time-lapse leállítása",
+    playTimeLapse: "Time-lapse lejátszása",
+    pipelineTime: "Pipeline ideje",
+    scrubbing: "görgetés…",
+    backToLive: "vissza élőbe →",
+  },
+  pt: {
+    active: "ativas",
+    stop: "Parar",
+    play: "Reproduzir",
+    stopTimeLapse: "Parar o time-lapse",
+    playTimeLapse: "Reproduzir o time-lapse",
+    pipelineTime: "Tempo do pipeline",
+    scrubbing: "a percorrer…",
+    backToLive: "voltar ao vivo →",
+  },
+};
 
 type Step = {
   key: string;
@@ -138,6 +225,7 @@ function fmtDateTime(ms: number): string {
 }
 
 export default function PipelineFlow({ steps, title }: Props) {
+  const t = T[useLocale()];
   // Server-rendered initial: usa lo snapshot "now" passato da page.tsx
   // come fallback finché non arriva la history client.
   const colorMap = useMemo(() => {
@@ -328,7 +416,7 @@ export default function PipelineFlow({ steps, title }: Props) {
           <span className="text-[var(--color-bright)] font-semibold">
             {totalActive}
           </span>{" "}
-          attive
+          {t.active}
         </span>
       </div>
 
@@ -444,8 +532,8 @@ export default function PipelineFlow({ steps, title }: Props) {
             <button
               type="button"
               onClick={() => setIsPlaying((p) => !p)}
-              aria-label={isPlaying ? "Stop" : "Play"}
-              title={isPlaying ? "Stop time-lapse" : "Play time-lapse"}
+              aria-label={isPlaying ? t.stop : t.play}
+              title={isPlaying ? t.stopTimeLapse : t.playTimeLapse}
               style={{
                 width: 28,
                 height: 28,
@@ -483,7 +571,7 @@ export default function PipelineFlow({ steps, title }: Props) {
               onTouchStart={() => setIsDragging(true)}
               onTouchEnd={() => setIsDragging(false)}
               className="flex-1 pipeline-flow-slider"
-              aria-label="Tempo della pipeline"
+              aria-label={t.pipelineTime}
               style={{
                 accentColor: isPlaying
                   ? "var(--color-yellow)"
@@ -506,7 +594,7 @@ export default function PipelineFlow({ steps, title }: Props) {
                   fontFamily: "inherit",
                 }}
               >
-                {isDragging ? "scrubbing…" : "torna a live →"}
+                {isDragging ? t.scrubbing : t.backToLive}
               </button>
             </div>
           )}

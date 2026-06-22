@@ -2,6 +2,18 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const CLOSE: Record<Locale, string> = {
+  it: "Chiudi",
+  en: "Close",
+  es: "Cerrar",
+  fr: "Fermer",
+  de: "Schließen",
+  hu: "Bezárás",
+  pt: "Fechar",
+};
 
 type Translations = {
   start_here: string;
@@ -42,6 +54,7 @@ export default function OnboardingPopup({
   translations: t,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const closeLabel = CLOSE[useLocale()];
 
   useEffect(() => {
     publishPending(hasProfile);
@@ -87,7 +100,7 @@ export default function OnboardingPopup({
         <button
           type="button"
           onClick={handleClose}
-          aria-label="Close"
+          aria-label={closeLabel}
           className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-dim)] hover:text-[var(--color-bright)] hover:border-[var(--color-border-glow)] transition-colors text-[13px]"
         >
           ✕

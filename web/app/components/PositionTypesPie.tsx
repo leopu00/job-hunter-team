@@ -2,7 +2,69 @@
 
 import { useState } from "react";
 import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 import type { RoleFamilyCount } from "@/lib/position-classifier";
+
+const T: Record<
+  Locale,
+  {
+    selected: string;
+    total: string;
+    type: string;
+    avgScoreRange: string;
+    avgScoreScoredOnly: string;
+  }
+> = {
+  it: {
+    selected: "selezionate",
+    total: "totale",
+    type: "tipo",
+    avgScoreRange: "Score medio (0-100)",
+    avgScoreScoredOnly: "Score medio (0-100, solo posizioni scorate)",
+  },
+  en: {
+    selected: "selected",
+    total: "total",
+    type: "type",
+    avgScoreRange: "Average score (0-100)",
+    avgScoreScoredOnly: "Average score (0-100, scored positions only)",
+  },
+  es: {
+    selected: "seleccionadas",
+    total: "total",
+    type: "tipo",
+    avgScoreRange: "Score medio (0-100)",
+    avgScoreScoredOnly: "Score medio (0-100, solo posiciones puntuadas)",
+  },
+  fr: {
+    selected: "sélectionnées",
+    total: "total",
+    type: "type",
+    avgScoreRange: "Score moyen (0-100)",
+    avgScoreScoredOnly: "Score moyen (0-100, postes notés uniquement)",
+  },
+  de: {
+    selected: "ausgewählt",
+    total: "Gesamt",
+    type: "Typ",
+    avgScoreRange: "Durchschnitts-Score (0-100)",
+    avgScoreScoredOnly: "Durchschnitts-Score (0-100, nur bewertete Stellen)",
+  },
+  hu: {
+    selected: "kiválasztva",
+    total: "összesen",
+    type: "típus",
+    avgScoreRange: "Átlagos score (0-100)",
+    avgScoreScoredOnly: "Átlagos score (0-100, csak pontozott pozíciók)",
+  },
+  pt: {
+    selected: "selecionadas",
+    total: "total",
+    type: "tipo",
+    avgScoreRange: "Score médio (0-100)",
+    avgScoreScoredOnly: "Score médio (0-100, apenas posições pontuadas)",
+  },
+};
 
 // Etichetta colonna "score medio" della legenda (è la media, non lo score di
 // una singola posizione). Compatta per stare nella colonna stretta.
@@ -85,6 +147,7 @@ export default function PositionTypesPie({
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
   const locale = useLocale();
+  const t = T[locale];
   const avgLabel = AVG_LABEL[locale] ?? AVG_LABEL.en;
   const labelFor = (family: string) => labels?.[family] ?? family;
   const total = data.reduce((a, d) => a + d.count, 0);
@@ -110,8 +173,8 @@ export default function PositionTypesPie({
   const centerLabel = focused
     ? labelFor(focused.family)
     : showSelected
-      ? "selezionate"
-      : "totale";
+      ? t.selected
+      : t.total;
   const centerValue = focused
     ? focused.count
     : showSelected
@@ -235,13 +298,13 @@ export default function PositionTypesPie({
             className="grid grid-cols-[minmax(90px,14rem)_1fr_2.5rem_2.5rem_4rem] gap-3 items-center text-[9px] font-semibold tracking-[0.14em] uppercase text-[var(--color-dim)] pb-1.5 border-b border-[var(--color-border)]"
             aria-hidden
           >
-            <span>tipo</span>
+            <span>{t.type}</span>
             <span />
             <span>n</span>
             <span>%</span>
             <span
               className="text-center leading-tight"
-              title="Score medio (0-100)"
+              title={t.avgScoreRange}
             >
               {avgLabel}
             </span>
@@ -314,7 +377,7 @@ export default function PositionTypesPie({
                 </span>
                 <span
                   className="tabular-nums text-center"
-                  title="Score medio (0-100, solo posizioni scorate)"
+                  title={t.avgScoreScoredOnly}
                   style={{
                     color:
                       d.avgScore == null
