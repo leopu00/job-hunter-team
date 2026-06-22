@@ -2471,3 +2471,8 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 .dash-profile__skills { margin-top: 18px; display: flex; flex-direction: column; gap: 14px; }
 .dash-profile__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .dash-chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); }
+
+.dash__loading {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  height: 200px; color: var(--text-dim); font-size: 13.5px;
+}
