@@ -11,7 +11,7 @@ import {
   onLangChange,
 } from './modules/i18n.js'
 import { SUPPORTED_LANGS, LANG_STORAGE_KEY, DEFAULT_LANG } from './modules/translations.js'
-import { STEP_LANGUAGE, STEP_WELCOME, STEP_RUNNING } from './modules/constants.js'
+import { STEP_LANGUAGE, STEP_WELCOME } from './modules/constants.js'
 import { showStep } from './modules/state.js'
 import {
   renderDockerCard,
@@ -24,7 +24,7 @@ import {
 import { smartAdvanceFromWelcome } from './modules/wizard-flow.js'
 import './modules/terminal-login.js'
 import './modules/telegram-tokens.js'
-import { startTeam, stopTeam, refreshRunningStatus } from './modules/running.js'
+import { startTeam } from './modules/running.js'
 import { showWizard, showHome, isSetupComplete } from './modules/home.js'
 
 // -------- Wiring (boot-time event listeners that depend on multiple modules) --------
@@ -95,14 +95,14 @@ dom.btnWelcomeContinue.addEventListener('click', async () => {
   }
 })()
 
-// Running step wiring (start/stop/open browser + status poller).
+// Wizard "Start team" wiring. Il bottone della step Ready delega l'avvio
+// alla Home (startTeam → showHome + startTeamFromHome): non c'è più uno step
+// "running" terminale, la Home segue warming→running e apre la dashboard in-app.
 const _bootLog = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
   ? window.jhtLog.scope('boot')
   : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
 _bootLog.info('wiring.start', {
   btnStartTeam: !!dom.btnStartTeam,
-  btnOpenBrowser: !!dom.btnOpenBrowser,
-  btnStopTeam: !!dom.btnStopTeam,
 })
 if (dom.btnStartTeam) {
   dom.btnStartTeam.addEventListener('click', (e) => {
@@ -112,14 +112,8 @@ if (dom.btnStartTeam) {
 } else {
   _bootLog.error('btnStartTeam.missing-at-wire-time')
 }
-if (dom.btnOpenBrowser) dom.btnOpenBrowser.addEventListener('click', () => window.launcherApi.openBrowser())
-if (dom.btnStopTeam) dom.btnStopTeam.addEventListener('click', stopTeam)
 
 window.launcherApi.onPayloadLog(appendLog)
-
-setInterval(() => {
-  if (state.step === STEP_RUNNING) refreshRunningStatus()
-}, 3000)
 
 // -------- Boot --------
 
