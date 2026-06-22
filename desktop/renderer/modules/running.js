@@ -111,19 +111,25 @@ export async function startTeam() {
     dom.runningLead.textContent = t('running.leadStartRuntime')
     const status = await window.launcherApi.start({})
     updateRunningUI(status)
-    if (status.running && status.url) {
-      // [JHT-DASHBOARD-SPLIT] Niente più schermata terminale "apri nel
-      // browser": apriamo la dashboard nella finestra in-app (openBrowser →
-      // openDashboardWindow) e transitiamo alla Home del launcher, simmetrico
-      // al ramo VPS sopra. Lo step STEP_RUNNING resta solo come schermo di
-      // progresso durante download/avvio runtime, mai come stato finale.
-      await window.launcherApi.openBrowser().catch(() => {})
+    // [JHT-DASHBOARD-SPLIT] Appena il runtime è partito — ANCHE se ancora in
+    // 'warming' (running=false) — lasciamo lo step di progresso STEP_RUNNING e
+    // atterriamo sulla Home in-app col menu laterale, simmetrico al ramo VPS.
+    // La Home gestisce da sola la progressione warming→running col suo poll
+    // (dot 'starting'→'running', bottone Open). NON gatare su status.running:
+    // startRuntime ritorna DURANTE il warm-up, quindi quel ramo non scattava
+    // mai e l'utente restava bloccato sulla schermata deprecata "apri nel
+    // browser". STEP_RUNNING resta solo schermo di progresso, mai stato finale.
+    if (status.mode !== 'error') {
       try {
         await showHome('team')
-        _runningLog.info('startTeam.local.showHome.ok')
+        _runningLog.info('startTeam.local.showHome.ok', { mode: status.mode })
       } catch (e) {
         _runningLog.error('startTeam.local.showHome.failed', { err: String(e?.message || e) })
       }
+      // Apri la dashboard nella finestra in-app (openBrowser → openDashboardWindow).
+      // Non-blocking: openBrowser attende internamente il warm-up (fino a 75s)
+      // prima di mostrare la finestra; non vogliamo ritardare la Home.
+      window.launcherApi.openBrowser().catch(() => {})
     }
   } catch (error) {
     appendLog(`startTeam error: ${error.message || error}`)
