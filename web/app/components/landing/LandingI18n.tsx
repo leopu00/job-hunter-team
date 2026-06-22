@@ -339,14 +339,14 @@ const translations = {
     hu: "az álláskeresésedben?",
   },
   cta_desc: {
-    it: "Smetti di inviare candidature generiche. Lascia che un team di agenti AI lavori per te, in modo intelligente e personalizzato.",
-    en: "Stop sending generic applications. Let a team of AI agents work for you, smart and personalized.",
-    hu: "Hagyd abba az általános jelentkezések küldését. Hagyd, hogy egy AI ügynök csapat dolgozzon érted, intelligensen és személyre szabva.",
+    it: "Un team di agenti AI cerca in tutto il mercato e trova le offerte giuste per te — verificate e ordinate per quanto corrispondono al tuo profilo.",
+    en: "A team of AI agents scours the whole market and finds the openings that fit you — vetted and ranked by how well they match your profile.",
+    hu: "Egy AI ügynök csapat átfésüli az egész piacot, és megtalálja a hozzád illő állásokat — ellenőrizve és a profilodhoz való illeszkedés szerint rangsorolva.",
   },
   cta_button: {
-    it: "Inizia ora — è gratis",
-    en: "Start now — it's free",
-    hu: "Kezdj most — ingyenes",
+    it: "Scarica l'app",
+    en: "Download the app",
+    hu: "Töltsd le az appot",
   },
   cta_team: {
     it: "Vedi il team",
@@ -1478,6 +1478,11 @@ const translations = {
     it: "Un laptop da cui esce un cono di luce blu che si apre fino a un cubo di vetro luminoso: dentro c'è l'ufficio del team al lavoro.",
     en: "A laptop emitting a blue cone of light that opens into a glowing glass cube: inside is the team's office at work.",
     hu: "Egy laptop, amelyből kék fénykúp árad, és egy világító üvegkockává nyílik: belül a csapat irodája dolgozik.",
+  },
+  home_pricing_alt: {
+    it: "Un lucchetto aperto circondato da poche monete, una verde luminosa: la piattaforma è gratuita e open source, paghi solo il provider AI.",
+    en: "An open padlock surrounded by a few coins, one glowing green: the platform is free and open source, you only pay the AI provider.",
+    hu: "Egy nyitott lakat néhány érmével körülvéve, egy zölden világít: a platform ingyenes és nyílt forráskódú, csak az AI-szolgáltatót fizeted.",
   },
 
   home_team_kicker: { it: "Il team", en: "The team", hu: "A csapat" },

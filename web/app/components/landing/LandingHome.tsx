@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { LandingI18nProvider, useLandingI18n } from "./LandingI18n";
-import { LandingFooter } from "./LandingCTA";
+import LandingCTA, { LandingFooter } from "./LandingCTA";
 import LandingNav from "./LandingNav";
 import DashboardMockup from "./DashboardMockup";
 
@@ -18,6 +18,7 @@ export default function LandingHome() {
       <main id="main-content">
         <Hero />
         <Sections />
+        <LandingCTA />
       </main>
       <LandingFooter />
     </LandingI18nProvider>
@@ -134,18 +135,6 @@ function Sections() {
     body: t("home_pricing_body"),
     cta: t("home_pricing_cta"),
   };
-  const project: SectionCopy = {
-    kicker: t("home_project_kicker"),
-    title: t("home_project_title"),
-    body: t("home_project_body"),
-    cta: t("home_project_cta"),
-  };
-  const studies: SectionCopy = {
-    kicker: t("home_studies_kicker"),
-    title: t("home_studies_title"),
-    body: t("home_studies_body"),
-    cta: t("home_studies_cta"),
-  };
 
   return (
     <div className="px-6 pb-12 flex flex-col gap-24 md:gap-28 max-w-6xl mx-auto mt-12 md:mt-20">
@@ -183,9 +172,21 @@ function Sections() {
           />
         }
       />
-      <Block copy={pricing} href="/pricing" />
-      <Block copy={project} href="/project" />
-      <Block copy={studies} href="/case-studies" />
+      <Block
+        copy={pricing}
+        href="/pricing"
+        reverse
+        visual={
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/landing-pricing.png"
+            alt={t("home_pricing_alt")}
+            width={1448}
+            height={1086}
+            className="w-full h-auto max-w-xs mx-auto"
+          />
+        }
+      />
     </div>
   );
 }

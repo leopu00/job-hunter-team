@@ -111,8 +111,8 @@ export const de: Record<string, string> = {
   cta_title_1: "Bereit, deine",
   cta_title_2: "Jobsuche zu revolutionieren?",
   cta_desc:
-    "Schluss mit generischen Bewerbungen. Lass ein Team von KI-Agenten für dich arbeiten — intelligent und personalisiert.",
-  cta_button: "Jetzt starten — kostenlos",
+    "Ein Team von KI-Agenten durchsucht den gesamten Markt und findet die Stellen, die zu dir passen — geprüft und nach Übereinstimmung mit deinem Profil sortiert.",
+  cta_button: "App herunterladen",
   cta_team: "Lerne das Team kennen",
   cta_note: "Keine Kreditkarte erforderlich · Öffentliche Beta",
 
