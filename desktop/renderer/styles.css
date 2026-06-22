@@ -1506,6 +1506,23 @@ body { display: flex; flex-direction: column; }
 
 .home__card + .home__card { margin-top: 16px; }
 
+/* [JHT-DASHBOARD-SPLIT] Dashboard locale embedded nel pannello Team: la
+   <webview> riempie la larghezza del contenuto (non il cap 640px della card)
+   e quasi tutta l'altezza, così il team è visibile dentro l'app. */
+.home__dashboard {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 220px);
+  min-height: 460px;
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.home__dashboard[hidden] { display: none; }
+
 .home__card-link {
   font-size: 13px;
   font-weight: 500;

@@ -188,10 +188,14 @@ export function showStep(name) {
 }
 
 // Sink di log legacy. Storicamente scriveva nel <pre> "Technical details"
-// dello step running (rimosso col dashboard-split). Reso null-safe: i
-// chiamati (docker-card, home, ...) continuano a funzionare e i log
-// strutturati restano comunque su window.jhtLog.
+// dello step running (rimosso col dashboard-split). Il <pre> non esiste più,
+// quindi instradiamo SEMPRE anche su window.jhtLog: senza, gli errori che
+// passavano da appendLog (es. il probe di boot che fa cadere sul wizard)
+// sparivano silenziosamente. Resta null-safe sul <pre> per compatibilità.
 export function appendLog(line) {
   if (!line) return
   if (dom.advancedLog) dom.advancedLog.textContent += `${line}\n`
+  try {
+    window.jhtLog?.scope?.('renderer')?.info?.('appendLog', { line: String(line) })
+  } catch { /* logger assente: no-op */ }
 }
