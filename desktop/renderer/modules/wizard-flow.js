@@ -19,6 +19,8 @@ import {
   STEP_PROVIDER_CHOOSE,
   STEP_PROVIDER_INSTALL,
   STEP_PROVIDER_LOGIN,
+  STEP_WORKING_HOURS,
+  STEP_PROFILE_UPLOAD,
   STEP_READY,
   LOCATION_LOCAL,
   LOCATION_VPS,
@@ -1084,6 +1086,187 @@ window.setupApi.onProviderLog((line) => {
     dom.providerMessage.textContent = t('provider.installStatus.running', { name: match[1] })
   }
 })
+
+// ── Step: working hours (local tail) ────────────────────────────────
+// L'utente sceglie quando il team lavora. Salvato in jht.config.json
+// (team.working_hours) via teamApi → main → ~/.jht. Lo legge il runtime
+// (working_hours.py) al boot. "24/7" = windows vuoto (nessuna restrizione).
+
+const HOURS_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+const hoursSelectedDays = new Set(['mon', 'tue', 'wed', 'thu', 'fri'])
+
+function renderHoursDays() {
+  if (!dom.hoursDays) return
+  dom.hoursDays.innerHTML = ''
+  for (const day of HOURS_DAYS) {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'hours-day-chip'
+    btn.dataset.day = day
+    btn.textContent = t(`hours.day.${day}`)
+    if (hoursSelectedDays.has(day)) btn.classList.add('is-selected')
+    btn.addEventListener('click', () => {
+      if (hoursSelectedDays.has(day)) hoursSelectedDays.delete(day)
+      else hoursSelectedDays.add(day)
+      btn.classList.toggle('is-selected')
+      updateHoursContinueState()
+    })
+    dom.hoursDays.appendChild(btn)
+  }
+}
+
+function hoursIsAlwaysOn() {
+  return Boolean(dom.hoursModeAlways && dom.hoursModeAlways.checked)
+}
+
+function applyHoursMode() {
+  const always = hoursIsAlwaysOn()
+  if (dom.hoursWindowFields) dom.hoursWindowFields.classList.toggle('is-disabled', always)
+  // Disabilita i campi finestra quando 24/7 è scelto (chiarezza visiva).
+  for (const el of [dom.hoursStart, dom.hoursEnd]) {
+    if (el) el.disabled = always
+  }
+  if (dom.hoursDays) {
+    for (const chip of dom.hoursDays.querySelectorAll('.hours-day-chip')) chip.disabled = always
+  }
+  updateHoursContinueState()
+}
+
+function updateHoursContinueState() {
+  if (!dom.btnHoursContinue) return
+  // 24/7 sempre valido; finestra valida solo con ≥1 giorno selezionato.
+  dom.btnHoursContinue.disabled = !hoursIsAlwaysOn() && hoursSelectedDays.size === 0
+}
+
+export async function enterWorkingHours() {
+  showStep(STEP_WORKING_HOURS)
+  if (dom.hoursStatus) dom.hoursStatus.hidden = true
+  // Timezone rilevato dal sistema (mostrato, non modificabile qui).
+  let tz = 'UTC'
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { /* keep UTC */ }
+  state.hoursTimezone = tz
+  if (dom.hoursTz) dom.hoursTz.textContent = t('hours.tz', { tz })
+  // Ripristina una scelta salvata in precedenza (relaunch).
+  try {
+    const res = window.teamApi?.getWorkingHours ? await window.teamApi.getWorkingHours() : null
+    const wh = res && res.ok ? res.working_hours : null
+    if (wh && Array.isArray(wh.windows) && wh.windows.length && Array.isArray(wh.windows[0].days)) {
+      hoursSelectedDays.clear()
+      for (const d of wh.windows[0].days) if (HOURS_DAYS.includes(d)) hoursSelectedDays.add(d)
+      if (dom.hoursStart && wh.windows[0].start) dom.hoursStart.value = wh.windows[0].start
+      if (dom.hoursEnd && wh.windows[0].end) dom.hoursEnd.value = wh.windows[0].end
+      if (dom.hoursModeWindow) dom.hoursModeWindow.checked = true
+      if (wh.timezone) { state.hoursTimezone = wh.timezone; if (dom.hoursTz) dom.hoursTz.textContent = t('hours.tz', { tz: wh.timezone }) }
+    } else if (wh && Array.isArray(wh.windows) && wh.windows.length === 0) {
+      // windows: [] salvato = 24/7
+      if (dom.hoursModeAlways) dom.hoursModeAlways.checked = true
+    }
+  } catch { /* default Mon–Fri 09–18 */ }
+  renderHoursDays()
+  applyHoursMode()
+}
+
+async function saveWorkingHours() {
+  let payload = null
+  if (!hoursIsAlwaysOn()) {
+    const start = (dom.hoursStart && dom.hoursStart.value) || '09:00'
+    const end = (dom.hoursEnd && dom.hoursEnd.value) || '18:00'
+    payload = {
+      timezone: state.hoursTimezone || 'UTC',
+      windows: [{ days: HOURS_DAYS.filter((d) => hoursSelectedDays.has(d)), start, end }],
+    }
+  } // else null → 24/7 (windows vuoto lato main)
+  try {
+    const res = window.teamApi?.setWorkingHours ? await window.teamApi.setWorkingHours(payload) : { ok: true }
+    if (!res?.ok) {
+      log.warn('working-hours.save.failed', { err: res?.error })
+      if (dom.hoursStatus) { dom.hoursStatus.textContent = t('hours.saveError'); dom.hoursStatus.hidden = false }
+      return false
+    }
+    log.info('working-hours.saved', { alwaysOn: hoursIsAlwaysOn() })
+    return true
+  } catch (err) {
+    log.warn('working-hours.save.crashed', { err: String(err) })
+    if (dom.hoursStatus) { dom.hoursStatus.textContent = t('hours.saveError'); dom.hoursStatus.hidden = false }
+    return false
+  }
+}
+
+if (dom.hoursModeWindow) dom.hoursModeWindow.addEventListener('change', applyHoursMode)
+if (dom.hoursModeAlways) dom.hoursModeAlways.addEventListener('change', applyHoursMode)
+if (dom.btnHoursBack) dom.btnHoursBack.addEventListener('click', () => enterProviderLogin())
+if (dom.btnHoursContinue) {
+  dom.btnHoursContinue.addEventListener('click', async () => {
+    if (dom.btnHoursContinue.disabled) return
+    const ok = await saveWorkingHours()
+    if (!ok) return
+    enterProfileUpload()
+  })
+}
+
+// ── Step: profile upload (CV obbligatorio) ──────────────────────────
+// L'utente carica CV + documenti; il main li copia in ~/Documents/Job
+// Hunter Team/allegati (bind /jht_user) e l'Assistente li legge al boot
+// per costruire il profilo. Sostituisce l'onboarding-chat: serve ≥1 file
+// per proseguire.
+
+function renderUploadList(files) {
+  const list = dom.uploadList
+  if (!list) return
+  list.innerHTML = ''
+  const arr = Array.isArray(files) ? files : []
+  for (const f of arr) {
+    const li = document.createElement('li')
+    li.className = 'upload-list__item'
+    const icon = document.createElement('span')
+    icon.className = 'upload-list__icon'
+    icon.textContent = '📄'
+    const name = document.createElement('span')
+    name.className = 'upload-list__name'
+    name.textContent = f.name
+    li.appendChild(icon)
+    li.appendChild(name)
+    list.appendChild(li)
+  }
+  if (dom.uploadEmpty) dom.uploadEmpty.hidden = arr.length > 0
+  if (dom.btnUploadContinue) dom.btnUploadContinue.disabled = arr.length === 0
+}
+
+export async function enterProfileUpload() {
+  showStep(STEP_PROFILE_UPLOAD)
+  let files = []
+  try {
+    const res = window.profileApi?.listDocs ? await window.profileApi.listDocs() : null
+    if (res?.ok && Array.isArray(res.files)) files = res.files
+  } catch { /* empty */ }
+  renderUploadList(files)
+}
+
+if (dom.btnUploadPick) {
+  dom.btnUploadPick.addEventListener('click', async () => {
+    if (!window.profileApi?.uploadDocs) return
+    dom.btnUploadPick.disabled = true
+    try {
+      const res = await window.profileApi.uploadDocs()
+      if (res?.ok) {
+        // Ri-leggo l'elenco completo della cartella (merge upload precedenti).
+        const listed = window.profileApi.listDocs ? await window.profileApi.listDocs() : null
+        renderUploadList(listed?.ok ? listed.files : res.files)
+      } else {
+        log.warn('profile-upload.failed', { err: res?.error })
+      }
+    } finally {
+      dom.btnUploadPick.disabled = false
+    }
+  })
+}
+if (dom.btnUploadBack) dom.btnUploadBack.addEventListener('click', () => enterWorkingHours())
+if (dom.btnUploadContinue) {
+  dom.btnUploadContinue.addEventListener('click', () => {
+    if (dom.btnUploadContinue.disabled) return
+    enterReady()
+  })
+}
 
 // -------- Step: ready (summary) --------
 
