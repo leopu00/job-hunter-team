@@ -16,8 +16,6 @@ import {
   STEP_VPS_PROVISION,
   STEP_SETUP,
   STEP_CONTAINER,
-  STEP_SUBSCRIPTION_NOTICE,
-  STEP_MODEL_COMPARE,
   STEP_PROVIDER_CHOOSE,
   STEP_PROVIDER_INSTALL,
   STEP_PROVIDER_LOGIN,
@@ -25,11 +23,9 @@ import {
   LOCATION_LOCAL,
   LOCATION_VPS,
   PROVIDER_OPTIONS,
-  PROVIDER_PLANS,
-  MODEL_VARIANTS,
   PROVIDER_SUBSCRIBE_URL,
 } from './constants.js'
-import { clearChildren, refreshDockerStatus, onInstallWindowsStack } from './docker-card.js'
+import { refreshDockerStatus, onInstallWindowsStack } from './docker-card.js'
 import { enterProviderLogin } from './terminal-login.js'
 import {
   enterTelegramTokens,
@@ -558,18 +554,10 @@ dom.btnContainerRetry.addEventListener('click', () => {
 
 dom.btnContainerContinue.addEventListener('click', () => {
   if (state.containerReady) {
-    showStep(STEP_SUBSCRIPTION_NOTICE)
-  }
-})
-
-dom.btnSubscriptionBack.addEventListener('click', () => {
-  // VPS path skipped both setup + container locally, so back from
-  // subscription returns to the VPS provisioning step. Local path
-  // keeps the old behavior.
-  if (state.location === LOCATION_VPS) {
-    enterVpsProvision()
-  } else {
-    showStep(STEP_CONTAINER)
+    // 2026-06-23: gli step "Subscriptions, not API keys" e "How the models
+    // compare" sono stati rimossi (solo informativi) → si va dritti alla
+    // scelta del provider.
+    enterProviderChoose()
   }
 })
 
@@ -768,11 +756,11 @@ if (dom.btnVpsContinue) {
   dom.btnVpsContinue.addEventListener('click', () => {
     if (!state.vps.installed) return
     // Telegram tokens are collected AT THE END of the wizard now
-    // (2026-05-19), so no persist step here. Just advance to the
-    // subscription notice → model compare → provider choose/install/
-    // login → telegram → ready. In VPS mode the backend is SSH-aware
-    // (T2): provider-install/login work on the REMOTE container.
-    showStep(STEP_SUBSCRIPTION_NOTICE)
+    // (2026-05-19), so no persist step here. Advance straight to provider
+    // choose → install → login → telegram → ready (subscription-notice +
+    // model-compare removed 2026-06-23). In VPS mode the backend is
+    // SSH-aware (T2): provider-install/login work on the REMOTE container.
+    enterProviderChoose()
   })
 }
 
@@ -849,125 +837,6 @@ if (dom.btnTelegramContinue) {
   })
 }
 
-dom.btnSubscriptionContinue.addEventListener('click', () => {
-  enterModelCompare()
-})
-
-function enterModelCompare() {
-  renderModelCharts()
-  showStep(STEP_MODEL_COMPARE)
-}
-
-dom.btnModelCompareBack.addEventListener('click', () => {
-  showStep(STEP_SUBSCRIPTION_NOTICE)
-})
-
-dom.btnModelCompareContinue.addEventListener('click', () => {
-  enterProviderChoose()
-})
-
-// Render 3 bar charts (intelligence / speed / cost), each with one
-// bar per model variant in MODEL_VARIANTS. Bar height is normalized
-// to the chart's max; for cost we invert so lower $ becomes the
-// taller "affordability" bar.
-function renderModelCharts() {
-  const root = dom.modelCharts
-  if (!root) return
-  clearChildren(root)
-
-  const metrics = [
-    { key: 'intelligence', titleKey: 'modelCompare.intelligence', unitKey: 'modelCompare.intelligenceUnit', higherIsBetter: true,  format: (v) => `${v.toFixed(1)}%` },
-    { key: 'speed',        titleKey: 'modelCompare.speed',        unitKey: 'modelCompare.speedUnit',        higherIsBetter: true,  format: (v) => `${v} t/s` },
-    { key: 'cost',         titleKey: 'modelCompare.cost',         unitKey: 'modelCompare.costUnit',         higherIsBetter: false, format: (v) => `$${v}` },
-  ]
-
-  for (const metric of metrics) {
-    const values = MODEL_VARIANTS.map((m) => m[metric.key])
-    const max = Math.max(...values)
-    const min = Math.min(...values)
-
-    const chart = document.createElement('div')
-    chart.className = 'model-chart'
-
-    const header = document.createElement('div')
-    header.className = 'model-chart__header'
-    const title = document.createElement('span')
-    title.className = 'model-chart__title'
-    title.setAttribute('data-i18n', metric.titleKey)
-    title.textContent = t(metric.titleKey)
-    const unit = document.createElement('span')
-    unit.className = 'model-chart__unit'
-    unit.setAttribute('data-i18n', metric.unitKey)
-    unit.textContent = t(metric.unitKey)
-    header.appendChild(title)
-    header.appendChild(unit)
-    chart.appendChild(header)
-
-    const barsRow = document.createElement('div')
-    barsRow.className = 'model-chart__bars'
-    barsRow.style.gridTemplateColumns = `repeat(${MODEL_VARIANTS.length}, 1fr)`
-
-    let previousProviderId = null
-    for (const model of MODEL_VARIANTS) {
-      const value = model[metric.key]
-      // Normalize to 8–100% so the smallest bar isn't invisible.
-      let pct
-      if (metric.higherIsBetter) {
-        pct = max > 0 ? Math.max(8, Math.round((value / max) * 100)) : 8
-      } else {
-        pct = max > 0 ? Math.max(8, Math.round((min / value) * 100)) : 8
-      }
-      const isWinner = metric.higherIsBetter ? value === max : value === min
-
-      const bar = document.createElement('div')
-      bar.className = 'model-bar'
-      if (isWinner) bar.classList.add('model-bar--winner')
-      // Visual separator between providers so the user reads Claude /
-      // Codex / Kimi as distinct groups inside a single chart.
-      if (previousProviderId && previousProviderId !== model.providerId) {
-        bar.classList.add('model-bar--group-start')
-      }
-      previousProviderId = model.providerId
-
-      const valueLabel = document.createElement('div')
-      valueLabel.className = 'model-bar__value'
-      valueLabel.textContent = metric.format(value)
-
-      const track = document.createElement('div')
-      track.className = 'model-bar__track'
-      const fill = document.createElement('div')
-      fill.className = 'model-bar__fill'
-      fill.style.height = `${pct}%`
-      fill.style.background = model.color
-      track.appendChild(fill)
-
-      // Split name into a primary line + sub line so "GPT-5.3 xhigh"
-      // renders as two tidy lines instead of breaking mid-token.
-      const nameLabel = document.createElement('div')
-      nameLabel.className = 'model-bar__name'
-      const firstSpace = model.modelName.indexOf(' ')
-      if (firstSpace > 0) {
-        const primary = document.createElement('span')
-        primary.textContent = model.modelName.slice(0, firstSpace)
-        const sub = document.createElement('span')
-        sub.className = 'model-bar__name-sub'
-        sub.textContent = model.modelName.slice(firstSpace + 1)
-        nameLabel.appendChild(primary)
-        nameLabel.appendChild(sub)
-      } else {
-        nameLabel.textContent = model.modelName
-      }
-
-      bar.appendChild(valueLabel)
-      bar.appendChild(track)
-      bar.appendChild(nameLabel)
-      barsRow.appendChild(bar)
-    }
-
-    chart.appendChild(barsRow)
-    root.appendChild(chart)
-  }
-}
 
 async function enterProviderChoose() {
   showStep(STEP_PROVIDER_CHOOSE)
@@ -988,7 +857,9 @@ async function enterProviderChoose() {
 }
 
 function updateProviderContinueState() {
-  dom.btnProviderContinue.disabled = !(state.selectedProvider && state.selectedPlan)
+  // 2026-06-23: si sceglie solo il NOME del provider (niente più tier di
+  // abbonamento) → Continue abilitato appena un provider è selezionato.
+  dom.btnProviderContinue.disabled = !state.selectedProvider
 }
 
 function renderProviderOptions() {
@@ -1010,8 +881,6 @@ function renderProviderOptions() {
     radio.addEventListener('change', () => {
       if (!radio.checked) return
       state.selectedProvider = opt.id
-      // Clear the plan when the provider changes — the tier options
-      // are provider-specific and re-rendering will repaint them.
       state.selectedPlan = null
       state.selectedProviders = new Set([opt.id])
       renderProviderOptions()
@@ -1031,115 +900,11 @@ function renderProviderOptions() {
     body.appendChild(name)
     body.appendChild(vendor)
 
-    const plans = PROVIDER_PLANS[opt.id] || []
     const isProviderSelected = state.selectedProvider === opt.id
-
-    if (plans.length > 0) {
-      // Subscription plan table: one COLUMN per tier. Header row holds
-      // the radio that lets the user mark which subscription they own
-      // — only enabled once this provider is selected. The selected
-      // tier is saved so the runtime sentinel can size context windows
-      // against the user's actual quota later on.
-      const table = document.createElement('table')
-      table.className = 'plans-table'
-
-      // Helper: stamp the same `plans-table__col--recommended` class on
-      // every cell in the recommended tier's column so we can highlight
-      // it vertically.
-      const colClass = (p) => (p.recommended ? ' plans-table__col--recommended' : '')
-
-      const thead = document.createElement('thead')
-      const trHead = document.createElement('tr')
-      for (const p of plans) {
-        const th = document.createElement('th')
-        th.className = `plans-table__header${colClass(p)}`
-        const planRadio = document.createElement('input')
-        planRadio.type = 'radio'
-        planRadio.name = `plan-select-${opt.id}`
-        planRadio.className = 'plans-table__radio'
-        planRadio.value = p.id
-        planRadio.checked = isProviderSelected && state.selectedPlan === p.id
-        planRadio.disabled = !isProviderSelected
-        planRadio.addEventListener('change', () => {
-          if (!planRadio.checked) return
-          state.selectedProvider = opt.id
-          state.selectedPlan = p.id
-          state.selectedProviders = new Set([opt.id])
-          renderProviderOptions()
-        })
-        const label = document.createElement('label')
-        label.className = 'plans-table__header-label'
-        label.appendChild(planRadio)
-        const nameSpan = document.createElement('span')
-        nameSpan.textContent = p.name
-        label.appendChild(nameSpan)
-        th.appendChild(label)
-        if (p.recommended) {
-          const badge = document.createElement('span')
-          badge.className = 'plans-table__badge'
-          badge.textContent = t('provider.recommended')
-          th.appendChild(badge)
-          if (p.recommendedTag) {
-            const tag = document.createElement('span')
-            tag.className = 'plans-table__badge-tag'
-            tag.textContent = t(`provider.recommendedTag.${p.recommendedTag}`)
-            th.appendChild(tag)
-          }
-        }
-        trHead.appendChild(th)
-      }
-      thead.appendChild(trHead)
-      table.appendChild(thead)
-
-      const cell = (plan, text, extraClass) => {
-        const td = document.createElement('td')
-        td.className = `${extraClass || ''}${colClass(plan)}`.trim()
-        td.textContent = text
-        return td
-      }
-
-      const tbody = document.createElement('tbody')
-      const trModel = document.createElement('tr')
-      trModel.className = 'plans-table__model-row'
-      for (const p of plans) trModel.appendChild(cell(p, p.model || '—'))
-
-      const trPrice = document.createElement('tr')
-      trPrice.className = 'plans-table__price-row'
-      for (const p of plans) trPrice.appendChild(cell(p, p.price))
-
-      const trWeekly = document.createElement('tr')
-      trWeekly.className = 'plans-table__weekly-row'
-      for (const p of plans) trWeekly.appendChild(cell(p, p.monthly || '—'))
-
-      // "$/M" row: monthly price ÷ monthly token allowance. Simple
-      // rule of thumb — "$100/mo buys you 400M tokens ≈ $0.25/M".
-      const trUnit = document.createElement('tr')
-      trUnit.className = 'plans-table__unit-row'
-      for (const p of plans) {
-        let text = '—'
-        if (typeof p.priceUsd === 'number' && typeof p.monthlyM === 'number' && p.monthlyM > 0) {
-          const per = p.priceUsd / p.monthlyM
-          text = `~$${per.toFixed(2)}/M tok`
-        }
-        trUnit.appendChild(cell(p, text))
-      }
-
-      const trEst = document.createElement('tr')
-      trEst.className = 'plans-table__estimate-row'
-      for (const p of plans) trEst.appendChild(cell(p, p.estimate))
-
-      tbody.appendChild(trModel)
-      tbody.appendChild(trPrice)
-      tbody.appendChild(trWeekly)
-      tbody.appendChild(trUnit)
-      tbody.appendChild(trEst)
-      table.appendChild(tbody)
-      body.appendChild(table)
-    }
 
     // "Don't have a subscription yet?" link — opens the provider's
     // pricing page in the default browser. Always visible, so users
-    // can subscribe on the spot before coming back to mark the tier.
+    // can subscribe on the spot before coming back.
     const subscribeUrl = PROVIDER_SUBSCRIBE_URL[opt.id]
     if (subscribeUrl) {
       const hint = document.createElement('p')
@@ -1169,19 +934,26 @@ function renderProviderOptions() {
 }
 
 dom.btnProviderBack.addEventListener('click', () => {
-  enterModelCompare()
+  // Lo step model-compare è stato rimosso (2026-06-23): Back torna al punto
+  // precedente del flow — provisioning VPS in modalità VPS, altrimenti il
+  // check del container locale.
+  if (state.location === LOCATION_VPS) {
+    enterVpsProvision()
+  } else {
+    showStep(STEP_CONTAINER)
+  }
 })
 
 dom.btnProviderContinue.addEventListener('click', async () => {
-  if (!state.selectedProvider || !state.selectedPlan) return
-  // Persist the single-provider + plan selection. The plan value is
-  // informational; the CLI picks up the actual account entitlements
-  // from its own login. We save regardless of install success so the
-  // sentinel can still read the intended plan later.
+  if (!state.selectedProvider) return
+  // Persist the single-provider selection (niente più tier di abbonamento:
+  // il CLI legge le entitlement reali dal proprio login, e il team
+  // distribuisce comunque il budget su qualsiasi piano). Salviamo a
+  // prescindere dall'esito dell'install.
   try {
     await window.setupApi.saveSelection({
       provider: state.selectedProvider,
-      plan: state.selectedPlan,
+      plan: null,
     })
   } catch { /* best-effort, not critical for the install flow */ }
   showStep(STEP_PROVIDER_INSTALL)
