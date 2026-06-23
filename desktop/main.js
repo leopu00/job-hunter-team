@@ -1,6 +1,6 @@
 const path = require('node:path')
 const { spawn } = require('node:child_process')
-const { app, BrowserWindow, clipboard, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, clipboard, dialog, ipcMain, shell } = require('electron')
 const log = require('./logger')
 
 // macOS GUI apps launched from Finder/Launchpad inherit a sanitized PATH
@@ -167,27 +167,62 @@ const DESKTOP_TO_LAUNCHER_PROVIDER = {
   kimi: 'kimi',
 }
 
+// ~/.jht/jht.config.json è il file di config che il container legge (bind su
+// /jht_home). Più sorgenti scrivono campi diversi: il provider scelto
+// (active_provider/providers) e gli orari di lavoro del team
+// (team.working_hours, scelti nell'onboarding). Per non sovrascriverci a
+// vicenda leggiamo-mergiamo-scriviamo invece di rigenerare il file da zero.
+function getJhtConfigPath() {
+  return path.join(getBindHomeDir(), 'jht.config.json')
+}
+
+function readJhtConfig() {
+  try {
+    const raw = require('node:fs').readFileSync(getJhtConfigPath(), 'utf8')
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeJhtConfig(config) {
+  const bindHomeDir = getBindHomeDir()
+  require('node:fs').mkdirSync(bindHomeDir, { recursive: true })
+  require('node:fs').writeFileSync(
+    getJhtConfigPath(),
+    JSON.stringify(config, null, 2) + '\n',
+  )
+}
+
+// Cartella drop-zone dove l'utente carica CV + documenti del profilo. Bind su
+// /jht_user nel container (vedi container.js: -v $userDir:/jht_user, env
+// JHT_USER_DIR=/jht_user) → l'Assistente la ingerisce al boot del team. Stessa
+// risoluzione path di container.js così host e container vedono lo stesso dir.
+function getUserUploadsDir() {
+  const home = require('node:os').homedir()
+  const userDir =
+    process.env.JHT_USER_DIR_HOST || path.join(home, 'Documents', 'Job Hunter Team')
+  return path.join(userDir, 'allegati')
+}
+
 // Export the user's chosen provider/plan to ~/.jht/jht.config.json so
 // the agent-boot script inside the container can pick the right CLI
 // and load the right identity file (CLAUDE.md for Claude, AGENTS.md
 // for Codex / Kimi). Written right before `docker run` on Start Team.
+// Merge-preserve: NON tocca team.* (es. working_hours) né altri campi.
 function syncJhtConfig() {
   const selection = providerStore.readSelection(require('electron').app.getPath('userData'))
   if (!selection?.provider) return false
   const activeProvider = DESKTOP_TO_LAUNCHER_PROVIDER[selection.provider] || selection.provider
-  const config = {
-    active_provider: activeProvider,
-    plan: selection.plan ?? null,
-    providers: {
-      [activeProvider]: { auth_method: 'subscription' },
-    },
+  const config = readJhtConfig()
+  config.active_provider = activeProvider
+  config.plan = selection.plan ?? null
+  config.providers = {
+    ...(config.providers && typeof config.providers === 'object' ? config.providers : {}),
+    [activeProvider]: { auth_method: 'subscription' },
   }
-  const bindHomeDir = getBindHomeDir()
-  require('node:fs').mkdirSync(bindHomeDir, { recursive: true })
-  require('node:fs').writeFileSync(
-    path.join(bindHomeDir, 'jht.config.json'),
-    JSON.stringify(config, null, 2) + '\n',
-  )
+  writeJhtConfig(config)
   return true
 }
 
@@ -715,6 +750,98 @@ app.whenReady().then(() => {
     }
     const r = await dashboardApiFetch(apiPath, { method: 'POST', body: body ?? {} })
     return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error, status: r.status }
+  })
+
+  // ── Onboarding: orari di lavoro del team ──────────────────────────────
+  // Scritti DIRETTAMENTE in ~/.jht/jht.config.json (team.working_hours), non
+  // via route web: durante l'onboarding il server web (next dev) non gira
+  // ancora (parte solo a "Start team"). Il file è bind su /jht_home e lo
+  // legge shared/skills/working_hours.py al boot del team. Schema:
+  //   { timezone: "Europe/Rome", windows: [{ days:["mon",..], start:"09:00", end:"18:00" }] }
+  // windows: [] (o null) = 24/7 (nessuna restrizione).
+  ipcMain.handle('team:get-working-hours', () => {
+    const cfg = readJhtConfig()
+    const wh = cfg && cfg.team && typeof cfg.team === 'object' ? cfg.team.working_hours : null
+    return { ok: true, working_hours: wh ?? null }
+  })
+  ipcMain.handle('team:set-working-hours', (_event, working_hours) => {
+    try {
+      // Normalizzazione difensiva: accetta null/{} (=24-7) o {timezone, windows}.
+      let value = null
+      if (working_hours && typeof working_hours === 'object') {
+        const tz = typeof working_hours.timezone === 'string' && working_hours.timezone
+          ? working_hours.timezone
+          : 'UTC'
+        const windows = Array.isArray(working_hours.windows)
+          ? working_hours.windows
+              .filter((w) => w && Array.isArray(w.days) && w.days.length &&
+                typeof w.start === 'string' && typeof w.end === 'string')
+              .map((w) => ({ days: w.days, start: w.start, end: w.end }))
+          : []
+        value = { timezone: tz, windows }
+      }
+      const cfg = readJhtConfig()
+      cfg.team = { ...(cfg.team && typeof cfg.team === 'object' ? cfg.team : {}), working_hours: value }
+      writeJhtConfig(cfg)
+      log.info('[onboarding] working-hours saved', { windows: value ? value.windows.length : 0 })
+      return { ok: true, working_hours: value }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)) }
+    }
+  })
+
+  // ── Onboarding: upload documenti del profilo (CV + obiettivi) ─────────
+  // File-picker nativo → copia i file nella drop-zone allegati (bind su
+  // /jht_user). L'Assistente li ingerisce al primo boot del team per
+  // costruire il profilo: niente più onboarding-chat obbligatoria.
+  ipcMain.handle('profile:upload-docs', async () => {
+    const fs = require('node:fs')
+    try {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Carica il tuo CV e i documenti del profilo',
+        buttonLabel: 'Carica',
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: 'Documenti', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'odt', 'pages'] },
+          { name: 'Tutti i file', extensions: ['*'] },
+        ],
+      })
+      if (result.canceled || !Array.isArray(result.filePaths) || !result.filePaths.length) {
+        return { ok: true, files: [] }
+      }
+      const dest = getUserUploadsDir()
+      fs.mkdirSync(dest, { recursive: true })
+      const saved = []
+      for (const fp of result.filePaths) {
+        try {
+          const base = path.basename(fp)
+          fs.copyFileSync(fp, path.join(dest, base))
+          saved.push({ name: base, size: fs.statSync(path.join(dest, base)).size })
+        } catch (err) {
+          log.warn('[onboarding] upload-doc copy failed', { file: fp, err: String(err) })
+        }
+      }
+      log.info('[onboarding] profile docs uploaded', { count: saved.length, dest })
+      return { ok: true, files: saved }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)), files: [] }
+    }
+  })
+  ipcMain.handle('profile:list-docs', () => {
+    const fs = require('node:fs')
+    try {
+      const dest = getUserUploadsDir()
+      if (!fs.existsSync(dest)) return { ok: true, files: [] }
+      const files = fs.readdirSync(dest)
+        .filter((n) => !n.startsWith('.'))
+        .map((n) => {
+          try { return { name: n, size: fs.statSync(path.join(dest, n)).size } }
+          catch { return { name: n, size: 0 } }
+        })
+      return { ok: true, files }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)), files: [] }
+    }
   })
 
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.

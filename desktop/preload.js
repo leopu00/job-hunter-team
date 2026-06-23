@@ -92,6 +92,22 @@ contextBridge.exposeInMainWorld('dashboardApi', {
   getStats: () => ipcRenderer.invoke('dashboard:get-stats'),
 })
 
+// [ONBOARDING] Orari di lavoro del team. Scritti in ~/.jht/jht.config.json
+// (team.working_hours) dal main — niente web, il server non gira ancora a
+// onboarding. wh = { timezone, windows:[{days,start,end}] } | null (=24/7).
+contextBridge.exposeInMainWorld('teamApi', {
+  getWorkingHours: () => ipcRenderer.invoke('team:get-working-hours'),
+  setWorkingHours: (wh) => ipcRenderer.invoke('team:set-working-hours', wh),
+})
+
+// [ONBOARDING] Upload documenti del profilo (CV + obiettivi). Il main apre il
+// file-picker nativo e copia i file nella drop-zone allegati (bind /jht_user)
+// che l'Assistente legge al boot. → { ok, files:[{name,size}], error? }.
+contextBridge.exposeInMainWorld('profileApi', {
+  uploadDocs: () => ipcRenderer.invoke('profile:upload-docs'),
+  listDocs: () => ipcRenderer.invoke('profile:list-docs'),
+})
+
 contextBridge.exposeInMainWorld('setupApi', {
   getStatus: () => ipcRenderer.invoke('setup:get-status'),
   getDockerStatus: () => ipcRenderer.invoke('setup:get-docker-status'),

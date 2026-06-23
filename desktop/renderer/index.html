@@ -529,6 +529,67 @@
         </div>
       </section>
 
+      <!-- Step 2f: working hours (local path tail). Quando il team lavora;
+           fuori dalla finestra si mette in pausa per risparmiare budget. -->
+      <section class="step step--centered" id="step-working-hours" data-step="working-hours" hidden>
+        <div class="step__emoji" aria-hidden="true">⏰</div>
+        <h1 class="step__title" data-i18n="hours.title">When should the team work?</h1>
+        <p class="step__lead" data-i18n="hours.lead">
+          Pick the hours the team is active. Outside this window it pauses to save your budget. You can change this anytime later.
+        </p>
+        <div class="hours-form">
+          <label class="hours-mode">
+            <input type="radio" name="hours-mode" id="hours-mode-window" checked />
+            <span data-i18n="hours.mode.window">Set a working window</span>
+          </label>
+          <div class="hours-window" id="hours-window-fields">
+            <div class="hours-row">
+              <span class="hours-row__label" data-i18n="hours.days">Days</span>
+              <div class="hours-days" id="hours-days"></div>
+            </div>
+            <div class="hours-row">
+              <span class="hours-row__label" data-i18n="hours.from">From</span>
+              <input type="time" id="hours-start" class="hours-time" value="09:00" />
+              <span class="hours-row__label" data-i18n="hours.to">to</span>
+              <input type="time" id="hours-end" class="hours-time" value="18:00" />
+            </div>
+            <p class="step__hint" id="hours-tz" data-i18n="hours.tz">Timezone detected automatically.</p>
+          </div>
+          <label class="hours-mode">
+            <input type="radio" name="hours-mode" id="hours-mode-always" />
+            <span data-i18n="hours.mode.always">Always on (24/7)</span>
+          </label>
+        </div>
+        <p class="step__hint" id="hours-status" hidden></p>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-hours-back" data-i18n="hours.back">Back</button>
+          <button class="btn btn--primary" id="btn-hours-continue" data-i18n="hours.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2g: profile documents upload (CV obbligatorio). Sostituisce
+           l'onboarding-chat: l'Assistente costruisce il profilo dai file. -->
+      <section class="step step--centered" id="step-profile-upload" data-step="profile-upload" hidden>
+        <div class="step__emoji" aria-hidden="true">📄</div>
+        <h1 class="step__title" data-i18n="upload.title">Upload your CV</h1>
+        <p class="step__lead" data-i18n="upload.lead">
+          Add your CV (ideally a PDF) plus any notes about what you're after — target roles, locations, must-haves. The Assistant reads these to build your profile. At least one file is required to start.
+        </p>
+        <div class="upload-box">
+          <button type="button" class="btn btn--secondary" id="btn-upload-pick" data-i18n="upload.pick">
+            Choose files…
+          </button>
+          <ul class="upload-list" id="upload-list"></ul>
+          <p class="step__hint" id="upload-empty" data-i18n="upload.empty">
+            No files yet — your CV as a PDF is the most important one.
+          </p>
+        </div>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-upload-back" data-i18n="upload.back">Back</button>
+          <button class="btn btn--primary" id="btn-upload-continue" data-i18n="upload.continue" disabled>Continue</button>
+        </div>
+      </section>
+
       <!-- Step 3: ready / summary -->
       <section class="step step--centered" id="step-ready" data-step="ready" hidden>
         <div class="step__emoji" aria-hidden="true">🚀</div>
