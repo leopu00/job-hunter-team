@@ -8,7 +8,6 @@ import {
   STEP_PROVIDER_CHOOSE,
   STEP_PROVIDER_LOGIN,
   PROVIDER_OPTIONS,
-  PROVIDER_PLANS,
   LOCATION_VPS,
 } from './constants.js'
 
@@ -794,8 +793,9 @@ async function refreshHomeProvider() {
     const sel = await window.setupApi.getSelection()
     const opt = PROVIDER_OPTIONS.find((p) => p.id === sel?.provider)
     homeDom.providerName.textContent = opt ? opt.label : (sel?.provider || '—')
-    const plan = sel?.plan ? (PROVIDER_PLANS[sel.provider] || []).find((p) => p.id === sel.plan) : null
-    homeDom.providerPlan.textContent = plan ? plan.name : (sel?.plan || '—')
+    // Il piano/abbonamento non viene più scelto nell'onboarding (snellito
+    // 2026-06-23): si mostra solo se per qualche motivo è ancora salvato.
+    homeDom.providerPlan.textContent = sel?.plan || '—'
     const authResp = await window.setupApi.getAuthStates()
     const authList = Array.isArray(authResp?.auth) ? authResp.auth : []
     const row = authList.find((a) => a.id === sel?.provider)

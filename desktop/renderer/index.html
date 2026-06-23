@@ -71,9 +71,9 @@
           </button>
           <button type="button" class="location-card" id="location-card-vps" data-location="vps">
             <span class="location-card__icon" aria-hidden="true">☁️</span>
-            <span class="location-card__title" data-i18n="location.vps.title">VPS (Hetzner)</span>
+            <span class="location-card__title" data-i18n="location.vps.title">A remote server (VPS)</span>
             <span class="location-card__body" data-i18n="location.vps.body">
-              Always on, ~€6/mo. We will provision it from the desktop app (coming next).
+              Always on, ~€6/mo on any VPS host. We'll set it up from the desktop app (coming next).
             </span>
             <span class="location-card__badge location-card__badge--soon" data-i18n="location.vps.badge">Coming soon</span>
           </button>
@@ -93,9 +93,9 @@
            VPS path: required (skip hidden, continue disabled until signed in). -->
       <section class="step step--centered" id="step-supabase-login" data-step="supabase-login" hidden>
         <div class="step__emoji" aria-hidden="true">☁️</div>
-        <h1 class="step__title" data-i18n="supabase.title">Cloud account</h1>
+        <h1 class="step__title" data-i18n="supabase.title">Cloud account (optional)</h1>
         <p class="step__lead" id="supabase-hint" data-i18n="supabase.lead.local">
-          Optional: sign in to sync your dashboard across devices. You can enable it later from settings.
+          Optional sync: sign in to back up your data and check results from your phone — and never lose anything if something happens to this computer. It's entirely optional: you can stay fully local forever, and you can turn sync on later whenever you want.
         </p>
         <div class="supabase-actions">
           <button type="button" class="btn btn--secondary" id="btn-supabase-google" data-i18n="supabase.google">
@@ -128,7 +128,7 @@
           </button>
           <div class="step__actions-group">
             <button class="btn btn--ghost" id="btn-supabase-skip" data-i18n="supabase.skip" hidden>
-              Skip for now
+              Stay local
             </button>
             <button class="btn btn--ghost" id="btn-supabase-signout" data-i18n="supabase.signOut" hidden>
               Sign out
@@ -473,96 +473,16 @@
         </div>
       </section>
 
-      <!-- Step 2c0: subscription notice (why subscriptions, not API keys) -->
-      <section class="step step--centered" id="step-subscription-notice" data-step="subscription-notice" hidden>
-        <div class="team-lineup" aria-hidden="true">
-          <div class="team-lineup__top">
-            <span class="team-lineup__slot" style="grid-column: 2">
-              <span class="team-lineup__emoji">💂</span>
-              <span class="team-lineup__name">Sentinel</span>
-            </span>
-            <span class="team-lineup__slot team-lineup__slot--raised" style="grid-column: 3">
-              <span class="team-lineup__emoji">👨‍✈️</span>
-              <span class="team-lineup__name">Captain</span>
-            </span>
-          </div>
-          <div class="team-lineup__pipeline">
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">🕵️</span>
-              <span class="team-lineup__name">Scout</span>
-            </span>
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">👨‍🔬</span>
-              <span class="team-lineup__name">Analyst</span>
-            </span>
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">👨‍💻</span>
-              <span class="team-lineup__name">Scorer</span>
-            </span>
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">👨‍🏫</span>
-              <span class="team-lineup__name">Writer</span>
-            </span>
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">👨‍⚖️</span>
-              <span class="team-lineup__name">Critic</span>
-            </span>
-          </div>
-        </div>
-        <h1 class="step__title" data-i18n="subscription.title">Subscriptions, not API keys</h1>
-        <p class="step__lead" data-i18n="subscription.lead">
-          The team keeps many AI agents running in parallel, around the clock. API keys bill per token and would cost hundreds per day. A flat subscription keeps your spend predictable.
-        </p>
-        <p class="step__hint" data-i18n="subscription.dedicatedHint" data-i18n-html="true">
-          <strong>Strongly recommended:</strong> use a subscription dedicated to the team — not the one you already use for work or personal tasks. A shared account drains the same weekly quota twice.
-        </p>
-
-        <div class="cost-compare">
-          <div class="cost-compare__col cost-compare__col--api">
-            <span class="cost-compare__label" data-i18n="subscription.compare.api">Pay-per-token (API)</span>
-            <span class="cost-compare__price">$1,000–$2,500<span class="cost-compare__per">/mo</span></span>
-            <span class="cost-compare__hint" data-i18n="subscription.compare.apiHint">~200–400M tokens/mo (Sonnet 4.6 mix)</span>
-          </div>
-          <div class="cost-compare__vs" aria-hidden="true">vs</div>
-          <div class="cost-compare__col cost-compare__col--sub">
-            <span class="cost-compare__label" data-i18n="subscription.compare.sub">Claude Max 20× subscription</span>
-            <span class="cost-compare__price">$200<span class="cost-compare__per">/mo</span></span>
-            <span class="cost-compare__hint" data-i18n="subscription.compare.subHint">same usage, fixed cost</span>
-          </div>
-        </div>
-        <p class="cost-compare__footnote" data-i18n="subscription.compare.footnote">
-          Estimate from Anthropic's public API pricing ($3/M input · $15/M output for Sonnet 4.6) and fully-saturated 5-hour windows against the Max 20× weekly cap. Actual savings depend on your input/output mix.
-        </p>
-
-        <div class="step__actions step__actions--between">
-          <button class="btn btn--ghost" id="btn-subscription-back" data-i18n="subscription.back">Back</button>
-          <button class="btn btn--primary" id="btn-subscription-continue" data-i18n="subscription.continue">Continue</button>
-        </div>
-      </section>
-
-      <!-- Step 2c1: model benchmark comparison (before provider pick) -->
-      <section class="step step--centered" id="step-model-compare" data-step="model-compare" hidden>
-        <h1 class="step__title" data-i18n="modelCompare.title">How the models compare</h1>
-        <p class="step__lead" data-i18n="modelCompare.lead">
-          Five variants that matter: Claude in two tiers (Opus 4.7 ceiling vs Sonnet 4.6 workhorse), Codex at two reasoning efforts (GPT-5.3 high vs xhigh), and Kimi Code — which has no thinking mode, so it's shown as a single bar.
-        </p>
-        <div class="model-charts" id="model-charts"></div>
-        <p class="step__hint model-compare__footnote" data-i18n="modelCompare.footnote" data-i18n-html="true">
-          Sources: SWE-bench Verified leaderboard, Artificial Analysis throughput data, vendor API pricing (April 2026). Kimi Code intelligence is estimated from K2.5 — K2.6 Preview numbers aren't published yet.
-        </p>
-        <div class="step__actions step__actions--between">
-          <button class="btn btn--ghost" id="btn-model-compare-back" data-i18n="modelCompare.back">Back</button>
-          <button class="btn btn--primary" id="btn-model-compare-continue" data-i18n="modelCompare.continue">Continue</button>
-        </div>
-      </section>
-
       <!-- Step 2c: provider choice -->
       <section class="step step--centered" id="step-provider-choose" data-step="provider-choose" hidden>
-        <h1 class="step__title" data-i18n="provider.title">Choose AI providers</h1>
+        <h1 class="step__title" data-i18n="provider.title">Choose your AI provider</h1>
         <p class="step__lead" data-i18n="provider.lead">
-          Pick one or more CLIs. The team runs on subscriptions, not API keys.
+          Pick which subscription you'll connect. The team spreads its budget across whatever plan you have — you just choose the provider.
         </p>
         <div class="provider-options" id="provider-options"></div>
+        <p class="step__hint provider-choose__tier-note" data-i18n="provider.tierNote">
+          Heads up: the entry ~$20/mo plan isn't recommended for any of the three — it isn't enough for even two agents. With that budget, use the CLI on your own rather than a team.
+        </p>
         <div class="step__actions step__actions--between">
           <button class="btn btn--ghost" id="btn-provider-back" data-i18n="provider.back">Back</button>
           <button class="btn btn--primary" id="btn-provider-continue" disabled data-i18n="provider.continue">Continue</button>
