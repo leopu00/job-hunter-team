@@ -1,0 +1,197 @@
+// supabase-direct.js
+//
+// Accesso DIRETTO a Supabase dal daemon VPS — Fase 1 di [JHT-DAEMON-SUPABASE-DIRECT].
+// Vedi docs/internal/2026-06-24-vps-daemon-supabase-direct-design.md.
+//
+// PERCHÉ: oggi ogni lettura di background (ticket, flag-sync, desired-state) passa
+// per le route HTTP di Vercel → 1 invocazione serverless + ~2,8 Observability Events
+// FATTURATI a ogni giro, anche a vuoto. Su Supabase Pro le query NON si pagano a
+// chiamata (paghi il compute always-on): spostare le LETTURE qui azzera quel costo.
+//
+// COME: REST puro (PostgREST + GoTrue) via `fetch`, niente SDK e niente dipendenze
+// nuove. Il daemon ha già `supabase_url` + `supabase_refresh_token` + `user_id` in
+// `cloud.json` (salvati al pairing dal login Google). Con il refresh_token ci si
+// autentica COME l'utente: la RLS (`auth.uid() = user_id`) garantisce l'accesso ai
+// soli dati suoi — niente service-role sulla VPS.
+//
+// NB: GoTrue RUOTA il refresh_token a ogni uso. Va persistito subito (callback
+// `onRefreshToken`), altrimenti al riavvio il token salvato è invalido.
+
+/** Errore di autenticazione Supabase (refresh_token scaduto/revocato → re-pairing). */
+export class SupabaseAuthError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'SupabaseAuthError';
+  }
+}
+
+const REFRESH_SKEW_MS = 60_000; // rinnova 60s prima della scadenza
+
+/**
+ * Crea un client Supabase-diretto minimale (auth refresh + REST read/patch).
+ *
+ * @param {object} o
+ * @param {string} o.supabaseUrl   es. https://<ref>.supabase.co
+ * @param {string} o.anonKey       chiave anon/publishable (pubblica)
+ * @param {string} o.refreshToken  refresh_token dell'utente (da cloud.json)
+ * @param {string} [o.userId]      user_id (per filtri espliciti; la RLS già scoping)
+ * @param {(newToken: string) => (void|Promise<void>)} [o.onRefreshToken]
+ *        chiamata quando GoTrue ruota il refresh_token → persistilo su cloud.json.
+ * @param {(level: 'warn'|'info', msg: string) => void} [o.log]
+ */
+export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userId, onRefreshToken, log } = {}) {
+  if (!supabaseUrl) throw new Error('supabase-direct: manca supabaseUrl');
+  if (!anonKey) throw new Error('supabase-direct: manca anonKey (env JHT_SUPABASE_ANON_KEY o cloud.json.supabase_anon_key)');
+  if (!refreshToken) throw new Error('supabase-direct: manca refreshToken (cloud.json.supabase_refresh_token)');
+
+  const base = supabaseUrl.replace(/\/+$/, '');
+  const authUrl = `${base}/auth/v1/token?grant_type=refresh_token`;
+  const restBase = `${base}/rest/v1`;
+  const noop = () => {};
+  const logFn = typeof log === 'function' ? log : noop;
+
+  let accessToken = null;
+  let expiresAtMs = 0;
+  let currentRefresh = refreshToken;
+
+  /** Scambia il refresh_token con un access_token fresco. Ruota e persiste. */
+  async function refresh() {
+    let res;
+    try {
+      res = await fetch(authUrl, {
+        method: 'POST',
+        headers: { apikey: anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: currentRefresh }),
+      });
+    } catch (err) {
+      throw new Error(`supabase-direct refresh network: ${err.message}`);
+    }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // 400/401 = refresh_token scaduto o revocato → serve re-pairing.
+      if (res.status === 400 || res.status === 401) {
+        throw new SupabaseAuthError(
+          `refresh_token rifiutato (HTTP ${res.status}${body.error_description ? `: ${body.error_description}` : ''}). Re-genera il pairing dal desktop.`,
+        );
+      }
+      throw new Error(`supabase-direct refresh HTTP ${res.status}`);
+    }
+    accessToken = body.access_token || null;
+    const expiresIn = Number(body.expires_in) || 3600;
+    expiresAtMs = Date.now() + expiresIn * 1000;
+    if (!accessToken) throw new Error('supabase-direct refresh: access_token assente nella risposta');
+    // GoTrue ruota il refresh_token → persistilo SUBITO.
+    if (body.refresh_token && body.refresh_token !== currentRefresh) {
+      currentRefresh = body.refresh_token;
+      try {
+        await onRefreshToken?.(currentRefresh);
+      } catch (err) {
+        logFn('warn', `persistenza refresh_token fallita: ${err.message}`);
+      }
+    }
+  }
+
+  /** Garantisce un access_token valido (refresh se mancante o in scadenza). */
+  async function ensureToken() {
+    if (!accessToken || Date.now() >= expiresAtMs - REFRESH_SKEW_MS) {
+      await refresh();
+    }
+    return accessToken;
+  }
+
+  /**
+   * Chiamata REST (PostgREST). Su 401 fa UN refresh + retry (token scaduto a metà).
+   * @param {string} path es. `position_tickets?status=eq.open`
+   * @param {object} [opts] { method, headers, body, prefer }
+   */
+  async function rest(path, opts = {}) {
+    const doFetch = async () => {
+      await ensureToken();
+      const headers = {
+        apikey: anonKey,
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        ...(opts.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(opts.prefer ? { Prefer: opts.prefer } : {}),
+        ...(opts.headers || {}),
+      };
+      return fetch(`${restBase}/${path}`, {
+        method: opts.method || 'GET',
+        headers,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+    };
+
+    let res = await doFetch();
+    if (res.status === 401) {
+      // access_token scaduto durante l'uso → forza refresh e ritenta una volta.
+      accessToken = null;
+      res = await doFetch();
+    }
+    if (res.status === 401) {
+      throw new SupabaseAuthError('PostgREST 401 dopo refresh: sessione non valida.');
+    }
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`supabase-direct REST ${res.status} su ${path}: ${txt.slice(0, 200)}`);
+    }
+    // PATCH con Prefer return=minimal può non avere body.
+    if (res.status === 204) return null;
+    return res.json().catch(() => null);
+  }
+
+  // ── Letture di alto livello (rimpiazzano le GET Vercel del daemon) ──
+
+  /**
+   * Ticket 'open' creati dall'utente sul web. Rimpiazza
+   * GET /api/cloud-sync/tickets (PULL). Ritorna la STESSA shape che il daemon
+   * già consuma: { id, position_legacy_id, request_text, kind, status, created_at }.
+   * @param {object} [o] { since?: ISO string — solo created_at > since }
+   */
+  async function readOpenTickets({ since } = {}) {
+    const params = new URLSearchParams();
+    params.set('select', 'id,position_legacy_id,request_text,kind,status,created_at');
+    params.set('status', 'eq.open');
+    if (since) params.set('created_at', `gt.${since}`);
+    params.set('order', 'created_at.asc');
+    const rows = await rest(`position_tickets?${params.toString()}`);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /**
+   * Riga `team_state` dell'utente (PK user_id → al più 1 riga, già scoping RLS).
+   * Rimpiazza GET /api/team-state (sync rendezvous + desired-state/reconcile).
+   * @param {string[]} [select] colonne; default i campi sync + desired-state.
+   */
+  async function readTeamState(select) {
+    const cols = (select && select.length
+      ? select
+      : ['user_id', 'should_run', 'agents_enabled', 'restart_token',
+         'sync_requested_at', 'sync_completed_at', 'active_device_id']
+    ).join(',');
+    const rows = await rest(`team_state?select=${encodeURIComponent(cols)}&limit=1`);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
+  /**
+   * Aggiorna campi della propria riga team_state (es. ack `sync_completed_at`).
+   * Filtro user_id esplicito oltre alla RLS.
+   */
+  async function patchTeamState(fields) {
+    const filter = userId ? `user_id=eq.${userId}` : 'user_id=not.is.null';
+    await rest(`team_state?${filter}`, {
+      method: 'PATCH',
+      body: fields,
+      prefer: 'return=minimal',
+    });
+  }
+
+  return {
+    ensureToken,
+    rest,
+    readOpenTickets,
+    readTeamState,
+    patchTeamState,
+    getRefreshToken: () => currentRefresh,
+  };
+}
