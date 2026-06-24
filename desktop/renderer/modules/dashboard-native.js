@@ -598,7 +598,26 @@ export function loadAgents() {
       const dot = el('span', 'home__status-dot'); dot.dataset.state = isRunning(a) ? 'running' : 'stopped'
       left.append(dot, el('span', 'dash-agent__name', a.name || a.role || a.id || '—'))
       row.appendChild(left)
-      row.appendChild(el('span', 'dash-card__date', isRunning(a) ? 'attivo' : 'fermo'))
+      const right = el('div', 'dash-agent__actions')
+      right.appendChild(el('span', 'dash-card__date', isRunning(a) ? 'attivo' : 'fermo'))
+      // Controlli per-agente: Ferma (se attivo) / Riavvia. Via agentApi →
+      // docker exec tmux kill-session / start-agent.sh nel container.
+      const role = idOf(a)
+      if (window.agentApi && role) {
+        const mkBtn = (label, fn) => {
+          const b = el('button', 'btn btn--ghost btn--small', label)
+          b.addEventListener('click', async (e) => {
+            e.stopPropagation()
+            b.disabled = true; b.textContent = '…'
+            try { await fn(role) } catch { /* lo stato reale lo mostra il refresh */ }
+            loadAgents()
+          })
+          return b
+        }
+        if (isRunning(a)) right.appendChild(mkBtn('Ferma', (r) => window.agentApi.stop(r)))
+        right.appendChild(mkBtn('Riavvia', (r) => window.agentApi.restart(r)))
+      }
+      row.appendChild(right)
       return row
     }
     const wrap = el('div', 'dash-agents')

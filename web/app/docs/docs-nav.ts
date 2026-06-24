@@ -45,6 +45,7 @@ const NAV_SKELETON: NavSkeletonSection[] = [
     groupKey: "using_the_team",
     items: [
       { href: "/docs/guides/email-forwarding", emoji: "📧" },
+      { href: "/docs/guides/team-gmail", emoji: "📨" },
       { href: "/docs/guides/dashboard-and-results", emoji: "📊" },
       { href: "/docs/guides/cli", emoji: "⌨️" },
     ],
@@ -227,6 +228,43 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
       title: "Reencaminhamento de e-mail",
       description:
         "Dá à equipa uma caixa dedicada e reencaminha automaticamente os teus alertas de emprego.",
+    },
+  },
+  "/docs/guides/team-gmail": {
+    it: {
+      title: "Configura la Gmail del team",
+      description:
+        "Crea una Gmail dedicata + app-password così il team può leggere i tuoi job alert.",
+    },
+    en: {
+      title: "Set up the team's Gmail",
+      description:
+        "Create a dedicated Gmail + app password so the team can read your job alerts.",
+    },
+    es: {
+      title: "Configura el Gmail del equipo",
+      description:
+        "Crea un Gmail dedicado + contraseña de aplicación para que el equipo lea tus alertas de empleo.",
+    },
+    fr: {
+      title: "Configurez le Gmail de l'équipe",
+      description:
+        "Créez un Gmail dédié + un mot de passe d'application pour que l'équipe lise vos alertes d'emploi.",
+    },
+    de: {
+      title: "Das Gmail des Teams einrichten",
+      description:
+        "Erstelle ein dediziertes Gmail + App-Passwort, damit das Team deine Job-Benachrichtigungen lesen kann.",
+    },
+    hu: {
+      title: "A csapat Gmail-fiókjának beállítása",
+      description:
+        "Hozz létre egy dedikált Gmailt + app-jelszót, hogy a csapat olvashassa az állásértesítőket.",
+    },
+    pt: {
+      title: "Configura o Gmail da equipa",
+      description:
+        "Cria um Gmail dedicado + palavra-passe de aplicação para a equipa ler os teus alertas de emprego.",
     },
   },
   "/docs/guides/dashboard-and-results": {

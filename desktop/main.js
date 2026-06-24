@@ -1,6 +1,6 @@
 const path = require('node:path')
 const { spawn } = require('node:child_process')
-const { app, BrowserWindow, clipboard, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, clipboard, dialog, ipcMain, shell } = require('electron')
 const log = require('./logger')
 
 // macOS GUI apps launched from Finder/Launchpad inherit a sanitized PATH
@@ -55,6 +55,7 @@ const sync = require('./sync')
 const vps = require('./vps')
 const tunnel = require('./vps/tunnel')
 const telegram = require('./telegram')
+const emailVerify = require('./email-verify')
 const { freeBytes, formatBytes } = require('./disk-space')
 
 function getBindHomeDir() {
@@ -94,23 +95,129 @@ async function dashboardApiFetch(apiPath, init = {}) {
     return { ok: false, error: `runtime-not-ready:${status ? status.mode : 'unknown'}` }
   }
   const token = readLocalToken()
-  const headers = token ? { Authorization: `Bearer ${token}` } : {}
   const method = init.method || 'GET'
-  const fetchInit = { method, headers, signal: AbortSignal.timeout(15000) }
+  const timeoutMs = typeof init.timeoutMs === 'number' ? init.timeoutMs : 15000
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  // Same-origin per la guardia CSRF del web (web/lib/csrf.ts): senza un Origin
+  // valido i POST/PUT/DELETE prendono 403. NB: NON si può usare il `fetch` di
+  // Electron (stack Chromium) perché `Origin` è un header "forbidden" e viene
+  // scartato silenziosamente → resta l'Origin opaco e la guardia rifiuta.
+  // Usiamo quindi node:http, che lascia impostare Origin liberamente; lo
+  // mettiamo = origin del server locale (in STATIC_ALLOWED) → same-origin OK.
+  headers['Origin'] = `http://127.0.0.1:${port}`
+  let bodyStr = null
   if (init.body !== undefined && method !== 'GET') {
+    bodyStr = JSON.stringify(init.body)
     headers['Content-Type'] = 'application/json'
-    fetchInit.body = JSON.stringify(init.body)
+    headers['Content-Length'] = Buffer.byteLength(bodyStr)
   }
+  const http = require('node:http')
+  return await new Promise((resolve) => {
+    const req = http.request(
+      { host: '127.0.0.1', port, path: apiPath, method, headers, timeout: timeoutMs },
+      (res) => {
+        let data = ''
+        res.setEncoding('utf8')
+        res.on('data', (chunk) => { data += chunk })
+        res.on('end', () => {
+          const code = res.statusCode || 0
+          if (code < 200 || code >= 300) {
+            resolve({ ok: false, error: `http-${code}`, status: code })
+            return
+          }
+          // Alcune route (POST chat) possono rispondere senza JSON: tollera il vuoto.
+          try {
+            resolve({ ok: true, data: data ? JSON.parse(data) : {} })
+          } catch {
+            resolve({ ok: true, data: {} })
+          }
+        })
+      },
+    )
+    req.on('timeout', () => req.destroy(new Error('timeout')))
+    req.on('error', (err) => resolve({ ok: false, error: err && (err.message || String(err)) }))
+    if (bodyStr) req.write(bodyStr)
+    req.end()
+  })
+}
+
+// [team auto-start] Avvia il TEAM completo (core: Capitano/Sentinella/Assistente/
+// Mentor; poi il Capitano scala i worker) appena il container locale è healthy.
+// Il container parte in modalità `dashboard` (solo Next + Assistente), quindi
+// senza questo passo il resto del team non si avvia mai.
+//
+// IMPORTANTE: NON si usa l'endpoint web /api/team/start-all. Il controllo del
+// team è gated server-side a `isLocalRequest()` (web/lib/team-bus.ts), che è
+// FALSO attraverso il port-map di Docker → 403 read_only. Il canale corretto
+// desktop→team è eseguire la CLI DENTRO il container (`docker exec`), come fa
+// già provider-install. Comando idempotente: salta le sessioni tmux già attive.
+// Fire-and-forget: il bootstrap ha pre-delay interni (~40s) ma non blocchiamo
+// la UI; l'output va al pannello log del container.
+function ensureTeamStarted() {
+  const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
   try {
-    const res = await fetch(`http://127.0.0.1:${port}${apiPath}`, fetchInit)
-    if (!res.ok) return { ok: false, error: `http-${res.status}`, status: res.status }
-    // Alcune route (POST chat) possono rispondere senza JSON: tollera il vuoto.
-    const text = await res.text()
-    const data = text ? JSON.parse(text) : {}
-    return { ok: true, data }
+    const child = spawn(
+      'docker',
+      ['exec', name, 'node', '/app/cli/bin/jht.js', 'team', 'start'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    const onLine = (buf) => {
+      const line = String(buf).replace(/\[[0-9;]*m/g, '').trimEnd()
+      if (line) broadcastContainerLog(line)
+    }
+    if (child.stdout) child.stdout.on('data', onLine)
+    if (child.stderr) child.stderr.on('data', onLine)
+    child.on('error', (err) => log.warn('[team] start exec error', { err: String(err) }))
+    child.on('exit', (code) => log.info('[team] start exec exit', { code }))
   } catch (err) {
-    return { ok: false, error: err && (err.message || String(err)) }
+    log.warn('[team] start crashed', { err: String(err) })
   }
+}
+
+// [team status] Stato live degli agenti calcolato lato desktop via
+// `docker exec ... tmux list-sessions`. NB: NON si usa GET /api/agents del web:
+// quella route, attraverso il port-map Docker, vede isLocalRequest()=false →
+// ramo "remote" che NON controlla tmux e riporta tutto 'stopped' (legge da
+// Supabase). Stessa radice del gate read_only sul controllo team. Qui leggiamo
+// direttamente le sessioni tmux nel container. Ritorna { agents:[...] } o null
+// se il container non c'è / nessun server tmux → il caller fa fallback al web
+// (copre VPS e team fermo). Forma compatibile con renderer loadAgents.
+const TEAM_AGENTS = [
+  { id: 'capitano', name: 'Capitano', session: 'CAPITANO' },
+  { id: 'sentinella', name: 'Sentinella', session: 'SENTINELLA' },
+  { id: 'assistente', name: 'Assistente', session: 'ASSISTENTE' },
+  { id: 'scout', name: 'Scout', session: 'SCOUT' },
+  { id: 'analista', name: 'Analista', session: 'ANALISTA' },
+  { id: 'scorer', name: 'Scorer', session: 'SCORER' },
+  { id: 'scrittore', name: 'Scrittore', session: 'SCRITTORE' },
+  { id: 'critico', name: 'Critico', session: 'CRITICO' },
+]
+function teamAgentsStatus() {
+  const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
+  let sessions
+  try {
+    const out = require('node:child_process')
+      .execFileSync('docker', ['exec', name, 'tmux', 'list-sessions', '-F', '#{session_name}'], {
+        timeout: 5000,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+      .toString()
+    sessions = out.split('\n').map((s) => s.trim()).filter(Boolean)
+  } catch {
+    // Container assente o nessun server tmux (team fermo) → fallback al web.
+    return null
+  }
+  const agents = TEAM_AGENTS.map((a) => {
+    // Conta la sessione esatta + le istanze numerate (es. SCOUT-1) e i worker
+    // (es. SENTINELLA-WORKER) che il Capitano/Sentinella spawnano.
+    const instances = sessions.filter(
+      (s) => s === a.session || s.startsWith(`${a.session}-`),
+    ).length
+    return { ...a, status: instances > 0 ? 'running' : 'stopped', instances }
+  })
+  return { agents, source: 'docker-exec' }
 }
 
 // Renderer preferences store. Lives in app.getPath('userData') so it
@@ -167,27 +274,98 @@ const DESKTOP_TO_LAUNCHER_PROVIDER = {
   kimi: 'kimi',
 }
 
+// ~/.jht/jht.config.json è il file di config che il container legge (bind su
+// /jht_home). Più sorgenti scrivono campi diversi: il provider scelto
+// (active_provider/providers) e gli orari di lavoro del team
+// (team.working_hours, scelti nell'onboarding). Per non sovrascriverci a
+// vicenda leggiamo-mergiamo-scriviamo invece di rigenerare il file da zero.
+function getJhtConfigPath() {
+  return path.join(getBindHomeDir(), 'jht.config.json')
+}
+
+function readJhtConfig() {
+  try {
+    const raw = require('node:fs').readFileSync(getJhtConfigPath(), 'utf8')
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeJhtConfig(config) {
+  const bindHomeDir = getBindHomeDir()
+  require('node:fs').mkdirSync(bindHomeDir, { recursive: true })
+  require('node:fs').writeFileSync(
+    getJhtConfigPath(),
+    JSON.stringify(config, null, 2) + '\n',
+  )
+}
+
+// Cartella drop-zone dove l'utente carica CV + documenti del profilo. Bind su
+// /jht_user nel container (vedi container.js: -v $userDir:/jht_user, env
+// JHT_USER_DIR=/jht_user) → l'Assistente la ingerisce al boot del team. Stessa
+// risoluzione path di container.js così host e container vedono lo stesso dir.
+function getUserUploadsDir() {
+  const home = require('node:os').homedir()
+  const userDir =
+    process.env.JHT_USER_DIR_HOST || path.join(home, 'Documents', 'Job Hunter Team')
+  return path.join(userDir, 'allegati')
+}
+
+// Salva i 3 bot Telegram nel jht.config.json LOCALE (channels.telegram.bots),
+// stessa forma che telegram/index.js scrive sul VPS. Usato dall'onboarding in
+// modalità locale (il container legge ~/.jht via bind). Merge-preserve.
+function saveTelegramBotsLocal(bots) {
+  if (!bots || typeof bots !== 'object') return { ok: false, error: 'bots-missing' }
+  const config = readJhtConfig()
+  config.channels =
+    config.channels && typeof config.channels === 'object' ? config.channels : {}
+  config.channels.telegram =
+    config.channels.telegram && typeof config.channels.telegram === 'object'
+      ? config.channels.telegram
+      : {}
+  if (
+    !config.channels.telegram.bots ||
+    typeof config.channels.telegram.bots !== 'object'
+  ) {
+    config.channels.telegram.bots = {}
+  }
+  for (const key of Object.keys(bots)) {
+    const entry = bots[key]
+    if (!entry || !entry.token) continue
+    const rec = { bot_token: entry.token }
+    if (entry.chatId) rec.chat_id = String(entry.chatId)
+    config.channels.telegram.bots[key] = rec
+  }
+  try {
+    writeJhtConfig(config)
+    log.info('[onboarding] telegram bots saved (local)', {
+      botKeys: Object.keys(config.channels.telegram.bots),
+    })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err && (err.message || String(err)) }
+  }
+}
+
 // Export the user's chosen provider/plan to ~/.jht/jht.config.json so
 // the agent-boot script inside the container can pick the right CLI
 // and load the right identity file (CLAUDE.md for Claude, AGENTS.md
 // for Codex / Kimi). Written right before `docker run` on Start Team.
+// Merge-preserve: NON tocca team.* (es. working_hours) né altri campi.
 function syncJhtConfig() {
   const selection = providerStore.readSelection(require('electron').app.getPath('userData'))
   if (!selection?.provider) return false
   const activeProvider = DESKTOP_TO_LAUNCHER_PROVIDER[selection.provider] || selection.provider
-  const config = {
-    active_provider: activeProvider,
-    plan: selection.plan ?? null,
-    providers: {
-      [activeProvider]: { auth_method: 'subscription' },
-    },
+  const config = readJhtConfig()
+  config.active_provider = activeProvider
+  config.plan = selection.plan ?? null
+  config.providers = {
+    ...(config.providers && typeof config.providers === 'object' ? config.providers : {}),
+    [activeProvider]: { auth_method: 'subscription' },
   }
-  const bindHomeDir = getBindHomeDir()
-  require('node:fs').mkdirSync(bindHomeDir, { recursive: true })
-  require('node:fs').writeFileSync(
-    path.join(bindHomeDir, 'jht.config.json'),
-    JSON.stringify(config, null, 2) + '\n',
-  )
+  writeJhtConfig(config)
   return true
 }
 
@@ -702,6 +880,13 @@ app.whenReady().then(() => {
         apiPath.includes('://') || apiPath.includes('..')) {
       return null
     }
+    // Stato agenti: calcolato lato desktop via docker exec (il web /api/agents
+    // è cieco sulle tmux attraverso il port-map → riporta tutto 'stopped').
+    // Fallback al web se il container non c'è (VPS / team fermo).
+    if (apiPath === '/api/agents') {
+      const local = teamAgentsStatus()
+      if (local) return local
+    }
     const r = await dashboardApiFetch(apiPath)
     return r.ok ? r.data : null
   })
@@ -715,6 +900,186 @@ app.whenReady().then(() => {
     }
     const r = await dashboardApiFetch(apiPath, { method: 'POST', body: body ?? {} })
     return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error, status: r.status }
+  })
+
+  // [chat] Invio messaggio utente a un agente. NB: NON via POST /api/<agent>/chat
+  // del web — quella route è gated da requireLocalWrite()→isLocalRequest(), FALSO
+  // col port-map Docker → 403 read_only (il messaggio non arriva mai all'agente).
+  // Canale corretto = docker exec tmux send-keys (no shell → niente quoting).
+  // L'agente risponde via la skill chat-web scrivendo in chat.jsonl, che il poll
+  // della UI rilegge via GET /api/<agent>/chat (requireAuth col token → ok).
+  const CHAT_SESSIONS = { capitano: 'CAPITANO', assistente: 'ASSISTENTE' }
+  ipcMain.handle('chat:send', (_event, { agent, text } = {}) => {
+    const session = CHAT_SESSIONS[agent]
+    if (!session) return { ok: false, error: 'invalid-agent' }
+    const t = typeof text === 'string' ? text.trim() : ''
+    if (!t) return { ok: false, error: 'empty' }
+    const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
+    const payload = `[@utente -> @${agent}] [CHAT] ${t}`
+    const ts = Date.now() / 1000
+    // Persisti il messaggio utente in chat.jsonl (bind ~/.jht/agents/<agent>/):
+    // così sopravvive al ri-render della UI (cambio tab) invece di restare solo
+    // un echo temporaneo. Il renderer userà `ts` per allineare lastTs ed evitare
+    // il doppione con l'echo ottimistico. Stesso formato che scrive la skill
+    // chat-web. Best-effort: se fallisce, l'invio tmux procede comunque.
+    try {
+      const fs = require('node:fs')
+      const chatFile = path.join(getBindHomeDir(), 'agents', agent, 'chat.jsonl')
+      fs.mkdirSync(path.dirname(chatFile), { recursive: true })
+      fs.appendFileSync(chatFile, JSON.stringify({ role: 'user', text: t, ts }) + '\n', 'utf8')
+    } catch (e) {
+      log.warn('[chat] persist-user-msg failed', { err: e && (e.message || String(e)) })
+    }
+    const { execFileSync } = require('node:child_process')
+    const opts = { timeout: 8000, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'] }
+    try {
+      // payload come singolo argv dopo `--` → tmux lo invia letterale, nessun
+      // problema di escaping (execFileSync non passa da una shell).
+      execFileSync('docker', ['exec', name, 'tmux', 'send-keys', '-t', session, '--', payload], opts)
+      execFileSync('docker', ['exec', name, 'tmux', 'send-keys', '-t', session, 'Enter'], opts)
+      log.info('[chat] sent', { agent })
+      return { ok: true, ts }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)) }
+    }
+  })
+
+  // [agent control] Kill / restart di un singolo agente dal pannello Agents.
+  // Via docker exec (il controllo team via web è read-only col port-map). Kill =
+  // tmux kill-session della sessione base + istanze (es. SCOUT-1). Restart =
+  // kill poi `start-agent.sh <role>` (lo stesso che usa il bootstrap del team).
+  const AGENT_SESSION = {
+    capitano: 'CAPITANO', sentinella: 'SENTINELLA', assistente: 'ASSISTENTE',
+    mentor: 'MENTOR', scout: 'SCOUT', analista: 'ANALISTA', scorer: 'SCORER',
+    scrittore: 'SCRITTORE', critico: 'CRITICO',
+  }
+  function dockerExecAgent(args, opts = {}) {
+    const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
+    return require('node:child_process').execFileSync('docker', ['exec', name, ...args], {
+      timeout: opts.timeout || 8000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'],
+    })
+  }
+  function killAgentSessions(role) {
+    const base = AGENT_SESSION[role]
+    if (!base) return
+    let sessions = []
+    try {
+      sessions = dockerExecAgent(['tmux', 'list-sessions', '-F', '#{session_name}'])
+        .toString().split('\n').map((s) => s.trim()).filter(Boolean)
+    } catch { return }
+    for (const s of sessions) {
+      if (s === base || s.startsWith(`${base}-`)) {
+        try { dockerExecAgent(['tmux', 'kill-session', '-t', s]) } catch { /* ignore */ }
+      }
+    }
+  }
+  ipcMain.handle('agent:stop', (_event, { role } = {}) => {
+    if (!AGENT_SESSION[role]) return { ok: false, error: 'invalid-agent' }
+    try { killAgentSessions(role); log.info('[agent] stopped', { role }); return { ok: true } }
+    catch (err) { return { ok: false, error: err && (err.message || String(err)) } }
+  })
+  ipcMain.handle('agent:restart', (_event, { role } = {}) => {
+    if (!AGENT_SESSION[role]) return { ok: false, error: 'invalid-agent' }
+    try {
+      killAgentSessions(role)
+      dockerExecAgent(['bash', '/app/.launcher/start-agent.sh', role], { timeout: 45000 })
+      log.info('[agent] restarted', { role })
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)) }
+    }
+  })
+
+  // ── Onboarding: orari di lavoro del team ──────────────────────────────
+  // Scritti DIRETTAMENTE in ~/.jht/jht.config.json (team.working_hours), non
+  // via route web: durante l'onboarding il server web (next dev) non gira
+  // ancora (parte solo a "Start team"). Il file è bind su /jht_home e lo
+  // legge shared/skills/working_hours.py al boot del team. Schema:
+  //   { timezone: "Europe/Rome", windows: [{ days:["mon",..], start:"09:00", end:"18:00" }] }
+  // windows: [] (o null) = 24/7 (nessuna restrizione).
+  ipcMain.handle('team:get-working-hours', () => {
+    const cfg = readJhtConfig()
+    const wh = cfg && cfg.team && typeof cfg.team === 'object' ? cfg.team.working_hours : null
+    return { ok: true, working_hours: wh ?? null }
+  })
+  ipcMain.handle('team:set-working-hours', (_event, working_hours) => {
+    try {
+      // Normalizzazione difensiva: accetta null/{} (=24-7) o {timezone, windows}.
+      let value = null
+      if (working_hours && typeof working_hours === 'object') {
+        const tz = typeof working_hours.timezone === 'string' && working_hours.timezone
+          ? working_hours.timezone
+          : 'UTC'
+        const windows = Array.isArray(working_hours.windows)
+          ? working_hours.windows
+              .filter((w) => w && Array.isArray(w.days) && w.days.length &&
+                typeof w.start === 'string' && typeof w.end === 'string')
+              .map((w) => ({ days: w.days, start: w.start, end: w.end }))
+          : []
+        value = { timezone: tz, windows }
+      }
+      const cfg = readJhtConfig()
+      cfg.team = { ...(cfg.team && typeof cfg.team === 'object' ? cfg.team : {}), working_hours: value }
+      writeJhtConfig(cfg)
+      log.info('[onboarding] working-hours saved', { windows: value ? value.windows.length : 0 })
+      return { ok: true, working_hours: value }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)) }
+    }
+  })
+
+  // ── Onboarding: upload documenti del profilo (CV + obiettivi) ─────────
+  // File-picker nativo → copia i file nella drop-zone allegati (bind su
+  // /jht_user). L'Assistente li ingerisce al primo boot del team per
+  // costruire il profilo: niente più onboarding-chat obbligatoria.
+  ipcMain.handle('profile:upload-docs', async () => {
+    const fs = require('node:fs')
+    try {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Carica il tuo CV e i documenti del profilo',
+        buttonLabel: 'Carica',
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: 'Documenti', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'odt', 'pages'] },
+          { name: 'Tutti i file', extensions: ['*'] },
+        ],
+      })
+      if (result.canceled || !Array.isArray(result.filePaths) || !result.filePaths.length) {
+        return { ok: true, files: [] }
+      }
+      const dest = getUserUploadsDir()
+      fs.mkdirSync(dest, { recursive: true })
+      const saved = []
+      for (const fp of result.filePaths) {
+        try {
+          const base = path.basename(fp)
+          fs.copyFileSync(fp, path.join(dest, base))
+          saved.push({ name: base, size: fs.statSync(path.join(dest, base)).size })
+        } catch (err) {
+          log.warn('[onboarding] upload-doc copy failed', { file: fp, err: String(err) })
+        }
+      }
+      log.info('[onboarding] profile docs uploaded', { count: saved.length, dest })
+      return { ok: true, files: saved }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)), files: [] }
+    }
+  })
+  ipcMain.handle('profile:list-docs', () => {
+    const fs = require('node:fs')
+    try {
+      const dest = getUserUploadsDir()
+      if (!fs.existsSync(dest)) return { ok: true, files: [] }
+      const files = fs.readdirSync(dest)
+        .filter((n) => !n.startsWith('.'))
+        .map((n) => {
+          try { return { name: n, size: fs.statSync(path.join(dest, n)).size } }
+          catch { return { name: n, size: 0 } }
+        })
+      return { ok: true, files }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)), files: [] }
+    }
   })
 
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
@@ -736,6 +1101,13 @@ app.whenReady().then(() => {
       broadcastContainerLog(`syncJhtConfig failed: ${error?.message ?? error}`)
     }
     const status = await runtime.startRuntime(options)
+    // Una volta che il container/dashboard è pronto, avvia il team completo.
+    // Senza questo si vedeva solo l'Assistente (il container parte in modalità
+    // dashboard). Fire-and-forget: gli agenti salgono in ~30s, la pagina Agents
+    // li mostra man mano. Solo runtime locale pronto.
+    if (status && (status.mode === 'running' || status.mode === 'external')) {
+      ensureTeamStarted()
+    }
     return status
   })
   ipcMain.handle('launcher:stop', () => {
@@ -1132,6 +1504,9 @@ app.whenReady().then(() => {
   ipcMain.handle('telegram:cancel-wait-for-chat', (_event, token) =>
     telegram.cancelWaitForFirstChat(token),
   )
+  ipcMain.handle('telegram:save-local', (_event, args = {}) =>
+    saveTelegramBotsLocal(args.bots),
+  )
   ipcMain.handle('telegram:save-to-vps', (_event, args = {}) =>
     telegram.saveBotsToVps(args.vpsIp, args.bots),
   )
@@ -1143,6 +1518,30 @@ app.whenReady().then(() => {
   ipcMain.handle('email:get-status', () => readEmailStatus())
   ipcMain.handle('email:save-config', (_event, args = {}) => saveEmailConfig(args))
   ipcMain.handle('email:delete-config', () => deleteEmailConfig())
+  // [ONBOARDING] Validazione round-trip delle credenziali della casella del
+  // team: login IMAP + invio SMTP di un codice alla casella + rilettura via
+  // IMAP. Su successo SALVA le credenziali (così l'onboarding non deve fare
+  // un save separato). Ritorna { ok, stage?, error?, looksPersonal }.
+  ipcMain.handle('email:validate', async (_event, { email, password } = {}) => {
+    const looksPersonal = emailVerify.looksPersonal(String(email || ''))
+    let res
+    try {
+      res = await emailVerify.validateRoundTrip(
+        { email, password },
+        { log: (stage) => log.info('[onboarding] email-validate stage', { stage }) },
+      )
+    } catch (err) {
+      return { ok: false, stage: 'unknown', error: err && (err.message || String(err)), looksPersonal }
+    }
+    if (res.ok) {
+      const saved = saveEmailConfig({ email, password })
+      if (!saved.ok) {
+        return { ok: false, stage: 'save', error: saved.error, looksPersonal }
+      }
+      log.info('[onboarding] email validated + saved', { host: res.imap_host })
+    }
+    return { ...res, looksPersonal }
+  })
 
   // -------- vps:write-config (T1: generic config writer remoto) ---------
   // Scrive un file di config sul container remoto via SshExec.writeFile.

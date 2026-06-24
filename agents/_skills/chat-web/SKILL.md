@@ -22,6 +22,49 @@ You don't write the JSON. The wrapper `jht-send` does it for you, with timestamp
 
 > ⚠️ Common failure mode the first time you see this: you read the prefix and think "let me reply via `jht-tmux-send` to the user". `jht-tmux-send UTENTE ...` returns `exit 2` (no such session). Do not start debugging — just remember that `[CHAT]` ⇒ `jht-send`. Always.
 
+## ⚠️ The user is NON-TECHNICAL — no terminal, no CLI, no slash commands
+
+A `[CHAT]` message comes from the **desktop app** (or Telegram). The user does
+**not** have a terminal, the Claude Code CLI, `/mcp`, slash commands, or file
+access. They are not a developer. **NEVER** tell them to:
+
+- run `/mcp`, `/config`, or any slash command,
+- open a terminal / run a CLI command / edit a file / "authorize a tool",
+- do anything you could do yourself.
+
+Telling a desktop user "type `/mcp` in the terminal" is a dead end — they can't.
+If a task needs a capability you don't have wired up, **solve it yourself with
+code** instead of bouncing the work back to the user. You are the team; the user
+is the client. Figure it out.
+
+### Example: sending an email — you do NOT need an MCP/Gmail tool
+The team already has email credentials at
+`$JHT_HOME/credentials/email_monitor.json` (a Gmail app-password — valid for SMTP
+too). Write a tiny Python script and send it:
+
+```python
+import os, json, smtplib, ssl
+from email.message import EmailMessage
+c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
+m = EmailMessage()
+m["From"], m["To"], m["Subject"] = c["user"], "<recipient>", "<subject>"
+m.set_content("<body>")
+# Gmail: smtp.gmail.com:465. For another provider derive smtp.<domain> or map it.
+with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
+    s.login(c["user"], c["password"]); s.send_message(m)
+```
+
+Then reply "Done, sent ✅" — never "go authorize Gmail".
+
+### If you genuinely need a slash command / tool in YOUR session
+You can drive your own session — don't ask the user:
+
+- **Self-inject** it into your own tmux session:
+  `jht-tmux-send <YOUR_SESSION> '/mcp'` (then a separate Enter), or
+- **ask another agent** to inject it for you: e.g. the Assistant asks the Captain
+  (`jht-tmux-send CAPITANO '...inject /mcp into ASSISTENTE...'`) and the Captain
+  runs `jht-tmux-send ASSISTENTE '/mcp'`. The user is never involved.
+
 ## Reply commands
 
 ```bash

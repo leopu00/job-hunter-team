@@ -389,6 +389,38 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - **Co-maintainer:** identify within 60 days post-launch (can be informal, just someone who triages issues — fratello / amico fidato).
 - **Reasoning:** see `docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
 
+##### 📧 [JHT-MANAGED-INBOX] Casella email del team creata da noi (auto-provisioning) — FUTURO, NON ora (idea 2026-06-24)
+
+- **Idea (utente, 2026-06-24):** durante l'onboarding, invece di chiedere all'utente di crearsi una casella dedicata (signup + verifica telefono + app-password = tanto attrito), **gliela creiamo noi**: l'utente sceglie solo il nome (`esempio@inbox.jobhunterteam.ai`), la password la gestiamo noi, l'indirizzo finisce già configurato nella casella di posta del team. BYO email resta possibile, ma il default diventa "creane una per me".
+- **Vantaggio:** abbatte l'attrito per i non-tecnici; inoltre, se la creiamo noi, **sparisce la validazione round-trip** (sappiamo già che funziona) → step email = "scegli il nome → fatto".
+- **Come (3 vie):**
+  - 🅰️ Provider gestito su dominio nostro con API di provisioning (es. **Migadu** tariffa piatta + API, o Zoho/Workspace ~6$/utente/mese che scala male) → crea mailbox via API, IMAP/SMTP standard.
+  - 🅱️ **Mail server self-hosted** (mailcow/Mailu su VPS) → controllo totale, ma ops pesante (deliverability, SPF/DKIM/DMARC, spam, blacklist, backup).
+  - ❌ Cloudflare Email Routing / Mailgun = solo forward o inbound-via-webhook, **niente mailbox IMAP** → non adatto all'architettura attuale (il team legge via IMAP, vedi [[project-email-sourcing-feature]]).
+- **Costo vero = strategico, non codice (perché NON è ora):**
+  - 🔓 **Rompe il principio "tutto-locale, noi non vediamo i dati"** ([[feedback_web_readonly_is_security]]): i job alert inoltrati passerebbero dalla NOSTRA infra.
+  - 💸 Costo/abuso che **scala col numero di utenti** (1 mailbox/utente), stessa classe di problema di [[project_vercel_cost_scales_with_vps_pollers]].
+  - 🛠️ Diventiamo email provider → **GDPR/ToS, retention, anti-spam, richieste legali**; + custodia centralizzata delle password (blast-radius breach).
+- **Raccomandazione:** default = **BYO email** (privacy + zero costi/ops), auto-creazione = **opzione opt-in** con consenso esplicito "la posta passa dalla nostra infra". Via più leggera se si procede = 🅰️ Migadu su `inbox.jobhunterteam.ai`.
+- **Stato attuale (cosa esiste già, 2026-06-24):** onboarding desktop con casella **BYO obbligatoria + validazione round-trip** (login IMAP → invio SMTP codice → rilettura IMAP), `desktop/email-verify.js`, host map per Gmail/Outlook/Yahoo/iCloud/GMX/mail.com/Yandex. Questa voce è il passo SUCCESSIVO opzionale, da NON implementare adesso.
+
+##### 🔑 [JHT-EMAIL-OAUTH] Collegare Gmail via OAuth invece che app-password (fix attrito onboarding) — FUTURO (2026-06-24)
+
+- **Problema (verificato 2026-06-24):** collegare una casella Gmail al team via IMAP/SMTP oggi richiede una **app-password**, che a sua volta richiede la **2FA attiva**, che per un account nuovo richiede un **numero di telefono**. L'utente non-tecnico sbatte sullo schermo "the setting you are looking for is not available" (2FA off) e si arrende. Inoltre **dal 14 marzo 2025 Google ha dismesso l'auth a password legacy** per IMAP/SMTP: o OAuth 2.0 o app-password.
+- **Fix vero = OAuth 2.0 ("Accedi con Google")**: l'utente fa un click "Consenti", niente 2FA/telefono/app-password. È la via sanzionata da Google e a zero attrito lato utente.
+- **Costo per noi:** registrare un'app su Google Cloud Console + **verifica Google per scope sensibili** (`gmail.readonly` / mail) → security assessment (può essere lento/costoso). Token OAuth (refresh) da gestire e rinnovare; imapflow/nodemailer supportano XOAUTH2. Stesso discorso varrebbe per Microsoft 365.
+- **Nel frattempo (2026-06-24):** email resa **OPZIONALE** nell'onboarding (non più gate), flusso guidato Gmail app-password + alternativa GMX (accetta password normale, no 2FA). Vedi [[project-email-sourcing-feature]].
+- **Idea collegata (vision utente):** il team che **manda email all'utente** (notifiche "nuovo match", riepiloghi) come farebbe un vero team di persone → richiede SMTP in uscita verso l'email reale dell'utente; valutare insieme a questo capitolo.
+
+##### 🔐 [JHT-LOCAL-VAULT] Master password → vault cifrato per i segreti locali — FUTURO (idea 2026-06-24)
+
+- **Idea (utente):** all'apertura dell'app desktop l'utente inserisce una **master password** (mai salvata, chiesta 2 volte al setup). Da essa si **deriva** una chiave (KDF) che cifra/decifra tutti i **dati sensibili** a riposo: password email, e in prospettiva chiave SSH del VPS, ecc. La master key vive **solo in memoria** durante la sessione; si cancella alla chiusura e si rigenera al riapri+password (così il team può girare senza re-inserirla a ogni tick).
+- **Design proposto (path locale):**
+  - KDF **scrypt/Argon2id** (salt random in chiaro) → chiave 32 byte; cifratura **AES-256-GCM** (stdlib Node `crypto`, niente dipendenze). Vault `~/.jht/secrets.enc` = `{salt, nonce, ciphertext, tag}`.
+  - **Accesso agenti** (il nodo): la master key NON si scrive su file. A "Start team" il desktop **decifra → scrive il file in chiaro** che il container già legge (`credentials/email_monitor.json`); a "Stop"/chiusura **shred** del file. Gli agenti leggono il file come oggi, non vedono mai la key.
+- **Limite ONESTO (da non nascondere):** protegge **a riposo (app chiusa / team fermo)** — disco rubato, backup, sync, altro utente. **NON** protegge durante il 24/7: mentre il team gira, key in RAM + segreto decifrato sono raggiungibili da chi ha accesso alla macchina viva (come oggi). Sul **VPS always-on** il guadagno è marginale (il server deve poter decifrare senza l'utente → key sul server).
+- **Costi UX:** password dimenticata = segreti irrecuperabili (by design, va avvisato); gate all'apertura = attrito (una sola password per tutto, però). Pattern standard (1Password/Cursor). Mitigazione forte resta l'**app-password revocabile** a basso blast-radius.
+
 ##### 🧪 [JHT-TEST-CAMPAIGN] Documentare run esistenti (NO matrix coverage pre-launch) 🟢 declassato 2026-06-02
 
 - **Decisione 2026-06-02:** la matrix 8/12 celle persona×provider **NON è più BLOCKER pre-launch** (vedi memoria [[project-pre-release-test-strategy]]). Razionale: il team JHT è agnostico al persona — l'unica variabile materiale è il provider tier. Coprire 5 persone diverse su Kimi €40 dà info marginale rispetto a 1 solido run Kimi €40 esterno. La narrativa di lancio si basa sui **3 tier signals** (€100 / €40 / €20) onestamente caratterizzati.
