@@ -1362,6 +1362,15 @@ export async function enterEmailSetup() {
   updateEmailContinueState()
 }
 
+// "Crea una app-password Gmail" → apre direttamente la pagina di Google nel
+// browser di sistema. Se la 2FA non è attiva, Google guida ad attivarla da lì.
+const GMAIL_APP_PW_URL = 'https://myaccount.google.com/apppasswords'
+if (dom.btnEmailAppPw) {
+  dom.btnEmailAppPw.addEventListener('click', () => {
+    if (window.launcherApi?.openExternal) window.launcherApi.openExternal(GMAIL_APP_PW_URL).catch(() => {})
+    else window.open(GMAIL_APP_PW_URL, '_blank')
+  })
+}
 if (dom.emailAddressInput) dom.emailAddressInput.addEventListener('input', invalidateEmailValidation)
 if (dom.emailPasswordInput) dom.emailPasswordInput.addEventListener('input', invalidateEmailValidation)
 if (dom.emailDedicatedConfirm) dom.emailDedicatedConfirm.addEventListener('change', updateEmailContinueState)

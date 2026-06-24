@@ -595,20 +595,26 @@
            round-trip IMAP+SMTP prima di lasciar procedere. -->
       <section class="step step--centered" id="step-email-setup" data-step="email-setup" hidden>
         <div class="step__emoji" aria-hidden="true">📧</div>
-        <h1 class="step__title" data-i18n="email.title">Connect the team inbox</h1>
+        <h1 class="step__title" data-i18n="email.title">Connect the team's Gmail inbox</h1>
         <p class="step__lead" data-i18n="email.lead">
-          The team reads forwarded job alerts from a dedicated inbox. Connect it here. Use an email created for the team — not your personal one — then forward your job alerts to it.
+          The team reads forwarded job alerts from a dedicated Gmail inbox. Create a free Gmail for the team — not your personal one — connect it here, then forward your job alerts to it.
         </p>
         <div class="email-form">
           <label class="email-field">
-            <span class="email-field__label" data-i18n="email.address">Email address</span>
+            <span class="email-field__label" data-i18n="email.address">Gmail address</span>
             <input type="email" id="email-address" class="email-input" placeholder="team.jht@gmail.com" autocomplete="off" spellcheck="false" />
           </label>
           <label class="email-field">
             <span class="email-field__label" data-i18n="email.password">App password</span>
             <input type="password" id="email-password" class="email-input" autocomplete="off" />
-            <span class="step__hint" data-i18n="email.passwordHint">Use an app-specific password (not your normal login password).</span>
+            <span class="step__hint" data-i18n="email.passwordHint">Paste a Gmail app password (a 16-character code) — not your normal login password.</span>
           </label>
+          <div class="email-gmail-help">
+            <button type="button" class="btn btn--secondary btn--small" id="btn-email-app-pw" data-i18n="email.createAppPw">
+              Create a Gmail app password →
+            </button>
+            <span class="step__hint" data-i18n="email.appPwNote">Opens Google. Needs 2-Step Verification enabled; then copy the 16-character code into the field above.</span>
+          </div>
           <label class="email-dedicated">
             <input type="checkbox" id="email-dedicated-confirm" />
             <span data-i18n="email.dedicated">I confirm this is a dedicated inbox for the team, not my personal email.</span>
