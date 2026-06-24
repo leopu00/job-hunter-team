@@ -389,6 +389,21 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - **Co-maintainer:** identify within 60 days post-launch (can be informal, just someone who triages issues — fratello / amico fidato).
 - **Reasoning:** see `docs/internal/_archive/2026-05-01-bridge-and-token-monitoring.md` and conversation log of 2026-05-02. Founder profile mismatch with Steinberger model: target B confirmed (low fame + premium remote job).
 
+##### 📧 [JHT-MANAGED-INBOX] Casella email del team creata da noi (auto-provisioning) — FUTURO, NON ora (idea 2026-06-24)
+
+- **Idea (utente, 2026-06-24):** durante l'onboarding, invece di chiedere all'utente di crearsi una casella dedicata (signup + verifica telefono + app-password = tanto attrito), **gliela creiamo noi**: l'utente sceglie solo il nome (`esempio@inbox.jobhunterteam.ai`), la password la gestiamo noi, l'indirizzo finisce già configurato nella casella di posta del team. BYO email resta possibile, ma il default diventa "creane una per me".
+- **Vantaggio:** abbatte l'attrito per i non-tecnici; inoltre, se la creiamo noi, **sparisce la validazione round-trip** (sappiamo già che funziona) → step email = "scegli il nome → fatto".
+- **Come (3 vie):**
+  - 🅰️ Provider gestito su dominio nostro con API di provisioning (es. **Migadu** tariffa piatta + API, o Zoho/Workspace ~6$/utente/mese che scala male) → crea mailbox via API, IMAP/SMTP standard.
+  - 🅱️ **Mail server self-hosted** (mailcow/Mailu su VPS) → controllo totale, ma ops pesante (deliverability, SPF/DKIM/DMARC, spam, blacklist, backup).
+  - ❌ Cloudflare Email Routing / Mailgun = solo forward o inbound-via-webhook, **niente mailbox IMAP** → non adatto all'architettura attuale (il team legge via IMAP, vedi [[project-email-sourcing-feature]]).
+- **Costo vero = strategico, non codice (perché NON è ora):**
+  - 🔓 **Rompe il principio "tutto-locale, noi non vediamo i dati"** ([[feedback_web_readonly_is_security]]): i job alert inoltrati passerebbero dalla NOSTRA infra.
+  - 💸 Costo/abuso che **scala col numero di utenti** (1 mailbox/utente), stessa classe di problema di [[project_vercel_cost_scales_with_vps_pollers]].
+  - 🛠️ Diventiamo email provider → **GDPR/ToS, retention, anti-spam, richieste legali**; + custodia centralizzata delle password (blast-radius breach).
+- **Raccomandazione:** default = **BYO email** (privacy + zero costi/ops), auto-creazione = **opzione opt-in** con consenso esplicito "la posta passa dalla nostra infra". Via più leggera se si procede = 🅰️ Migadu su `inbox.jobhunterteam.ai`.
+- **Stato attuale (cosa esiste già, 2026-06-24):** onboarding desktop con casella **BYO obbligatoria + validazione round-trip** (login IMAP → invio SMTP codice → rilettura IMAP), `desktop/email-verify.js`, host map per Gmail/Outlook/Yahoo/iCloud/GMX/mail.com/Yandex. Questa voce è il passo SUCCESSIVO opzionale, da NON implementare adesso.
+
 ##### 🧪 [JHT-TEST-CAMPAIGN] Documentare run esistenti (NO matrix coverage pre-launch) 🟢 declassato 2026-06-02
 
 - **Decisione 2026-06-02:** la matrix 8/12 celle persona×provider **NON è più BLOCKER pre-launch** (vedi memoria [[project-pre-release-test-strategy]]). Razionale: il team JHT è agnostico al persona — l'unica variabile materiale è il provider tier. Coprire 5 persone diverse su Kimi €40 dà info marginale rispetto a 1 solido run Kimi €40 esterno. La narrativa di lancio si basa sui **3 tier signals** (€100 / €40 / €20) onestamente caratterizzati.
