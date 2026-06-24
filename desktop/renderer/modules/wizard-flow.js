@@ -21,6 +21,7 @@ import {
   STEP_PROVIDER_LOGIN,
   STEP_WORKING_HOURS,
   STEP_PROFILE_UPLOAD,
+  STEP_EMAIL_SETUP,
   STEP_READY,
   LOCATION_LOCAL,
   LOCATION_VPS,
@@ -1264,6 +1265,111 @@ if (dom.btnUploadBack) dom.btnUploadBack.addEventListener('click', () => enterWo
 if (dom.btnUploadContinue) {
   dom.btnUploadContinue.addEventListener('click', () => {
     if (dom.btnUploadContinue.disabled) return
+    enterEmailSetup()
+  })
+}
+
+// ── Step: team email inbox (obbligatorio) ───────────────────────────
+// Casella DEDICATA che il team monitora per i job alert. Le credenziali
+// vanno validate con un round-trip reale (IMAP login + invio SMTP di un
+// codice + rilettura via IMAP) prima di poter proseguire; va anche spuntata
+// la conferma "è una casella dedicata, non personale". Su validazione OK il
+// main salva le credenziali in ~/.jht/credentials/email_monitor.json.
+
+let emailValidated = false
+
+function setEmailStatus(msg, kind) {
+  if (!dom.emailSetupStatus) return
+  if (!msg) { dom.emailSetupStatus.hidden = true; dom.emailSetupStatus.textContent = ''; return }
+  dom.emailSetupStatus.textContent = msg
+  dom.emailSetupStatus.dataset.kind = kind || 'info'
+  dom.emailSetupStatus.hidden = false
+}
+
+function updateEmailContinueState() {
+  if (!dom.btnEmailContinue) return
+  const confirmed = Boolean(dom.emailDedicatedConfirm && dom.emailDedicatedConfirm.checked)
+  dom.btnEmailContinue.disabled = !(emailValidated && confirmed)
+}
+
+// Qualsiasi modifica a email/password invalida la verifica precedente: vanno
+// riverificate (le credenziali salvate potrebbero non corrispondere più).
+function invalidateEmailValidation() {
+  if (!emailValidated) return
+  emailValidated = false
+  setEmailStatus(null)
+  updateEmailContinueState()
+}
+
+function emailErrorMessage(res) {
+  const stage = res && res.stage
+  const err = res && res.error
+  if (stage === 'format' && err === 'invalid-email') return t('email.err.email')
+  if (stage === 'format' && err === 'invalid-password') return t('email.err.password')
+  if (stage === 'imap-login') return t('email.err.login')
+  if (stage === 'smtp-send') return t('email.err.smtp')
+  if (stage === 'imap-read') return t('email.err.notReceived')
+  if (stage === 'save') return t('email.err.save')
+  return t('email.err.generic')
+}
+
+async function onEmailVerify() {
+  const email = (dom.emailAddressInput && dom.emailAddressInput.value || '').trim()
+  const password = (dom.emailPasswordInput && dom.emailPasswordInput.value) || ''
+  if (!email || !password) {
+    setEmailStatus(t('email.err.empty'), 'error')
+    return
+  }
+  emailValidated = false
+  updateEmailContinueState()
+  if (dom.btnEmailVerify) dom.btnEmailVerify.disabled = true
+  setEmailStatus(t('email.verifying'), 'info')
+  try {
+    const res = window.emailApi?.validate
+      ? await window.emailApi.validate({ email, password })
+      : { ok: false, stage: 'unknown' }
+    if (res && res.ok) {
+      emailValidated = true
+      if (res.looksPersonal) setEmailStatus(t('email.okPersonal'), 'warn')
+      else setEmailStatus(t('email.ok'), 'ok')
+      log.info('email-setup.validated', { looksPersonal: !!res.looksPersonal })
+    } else {
+      emailValidated = false
+      setEmailStatus(emailErrorMessage(res), 'error')
+      log.warn('email-setup.validate-failed', { stage: res?.stage, err: res?.error })
+    }
+  } catch (err) {
+    emailValidated = false
+    setEmailStatus(t('email.err.generic'), 'error')
+    log.warn('email-setup.validate-crashed', { err: String(err) })
+  } finally {
+    if (dom.btnEmailVerify) dom.btnEmailVerify.disabled = false
+    updateEmailContinueState()
+  }
+}
+
+export async function enterEmailSetup() {
+  showStep(STEP_EMAIL_SETUP)
+  emailValidated = false
+  setEmailStatus(null)
+  // Prefill dell'indirizzo se già configurato in precedenza (relaunch).
+  try {
+    const st = window.emailApi?.getStatus ? await window.emailApi.getStatus() : null
+    if (st && st.email && dom.emailAddressInput && !dom.emailAddressInput.value) {
+      dom.emailAddressInput.value = st.email
+    }
+  } catch { /* no-op */ }
+  updateEmailContinueState()
+}
+
+if (dom.emailAddressInput) dom.emailAddressInput.addEventListener('input', invalidateEmailValidation)
+if (dom.emailPasswordInput) dom.emailPasswordInput.addEventListener('input', invalidateEmailValidation)
+if (dom.emailDedicatedConfirm) dom.emailDedicatedConfirm.addEventListener('change', updateEmailContinueState)
+if (dom.btnEmailVerify) dom.btnEmailVerify.addEventListener('click', onEmailVerify)
+if (dom.btnEmailBack) dom.btnEmailBack.addEventListener('click', () => enterProfileUpload())
+if (dom.btnEmailContinue) {
+  dom.btnEmailContinue.addEventListener('click', () => {
+    if (dom.btnEmailContinue.disabled) return
     enterReady()
   })
 }

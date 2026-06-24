@@ -2651,3 +2651,38 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 }
 .upload-list__icon { font-size: 15px; }
 .upload-list__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Team email inbox step (onboarding) */
+.email-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 440px;
+  margin: 10px auto 4px;
+  text-align: left;
+}
+.email-field { display: flex; flex-direction: column; gap: 6px; }
+.email-field__label { font-size: 13px; color: var(--text-dim); }
+.email-input {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+.email-input:focus { outline: none; border-color: var(--border-strong); }
+.email-dedicated {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  line-height: 1.4;
+}
+.email-dedicated input { margin-top: 2px; }
+#email-status[data-kind='ok'] { color: var(--success); }
+#email-status[data-kind='warn'] { color: #e0b15a; }
+#email-status[data-kind='error'] { color: var(--danger); }
