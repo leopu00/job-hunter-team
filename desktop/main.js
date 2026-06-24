@@ -902,6 +902,34 @@ app.whenReady().then(() => {
     return r.ok ? { ok: true, ...r.data } : { ok: false, error: r.error, status: r.status }
   })
 
+  // [chat] Invio messaggio utente a un agente. NB: NON via POST /api/<agent>/chat
+  // del web — quella route è gated da requireLocalWrite()→isLocalRequest(), FALSO
+  // col port-map Docker → 403 read_only (il messaggio non arriva mai all'agente).
+  // Canale corretto = docker exec tmux send-keys (no shell → niente quoting).
+  // L'agente risponde via la skill chat-web scrivendo in chat.jsonl, che il poll
+  // della UI rilegge via GET /api/<agent>/chat (requireAuth col token → ok).
+  const CHAT_SESSIONS = { capitano: 'CAPITANO', assistente: 'ASSISTENTE' }
+  ipcMain.handle('chat:send', (_event, { agent, text } = {}) => {
+    const session = CHAT_SESSIONS[agent]
+    if (!session) return { ok: false, error: 'invalid-agent' }
+    const t = typeof text === 'string' ? text.trim() : ''
+    if (!t) return { ok: false, error: 'empty' }
+    const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
+    const payload = `[@utente -> @${agent}] [CHAT] ${t}`
+    const { execFileSync } = require('node:child_process')
+    const opts = { timeout: 8000, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'] }
+    try {
+      // payload come singolo argv dopo `--` → tmux lo invia letterale, nessun
+      // problema di escaping (execFileSync non passa da una shell).
+      execFileSync('docker', ['exec', name, 'tmux', 'send-keys', '-t', session, '--', payload], opts)
+      execFileSync('docker', ['exec', name, 'tmux', 'send-keys', '-t', session, 'Enter'], opts)
+      log.info('[chat] sent', { agent })
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)) }
+    }
+  })
+
   // ── Onboarding: orari di lavoro del team ──────────────────────────────
   // Scritti DIRETTAMENTE in ~/.jht/jht.config.json (team.working_hours), non
   // via route web: durante l'onboarding il server web (next dev) non gira
