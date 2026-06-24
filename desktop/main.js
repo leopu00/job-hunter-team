@@ -916,6 +916,20 @@ app.whenReady().then(() => {
     if (!t) return { ok: false, error: 'empty' }
     const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
     const payload = `[@utente -> @${agent}] [CHAT] ${t}`
+    const ts = Date.now() / 1000
+    // Persisti il messaggio utente in chat.jsonl (bind ~/.jht/agents/<agent>/):
+    // così sopravvive al ri-render della UI (cambio tab) invece di restare solo
+    // un echo temporaneo. Il renderer userà `ts` per allineare lastTs ed evitare
+    // il doppione con l'echo ottimistico. Stesso formato che scrive la skill
+    // chat-web. Best-effort: se fallisce, l'invio tmux procede comunque.
+    try {
+      const fs = require('node:fs')
+      const chatFile = path.join(getBindHomeDir(), 'agents', agent, 'chat.jsonl')
+      fs.mkdirSync(path.dirname(chatFile), { recursive: true })
+      fs.appendFileSync(chatFile, JSON.stringify({ role: 'user', text: t, ts }) + '\n', 'utf8')
+    } catch (e) {
+      log.warn('[chat] persist-user-msg failed', { err: e && (e.message || String(e)) })
+    }
     const { execFileSync } = require('node:child_process')
     const opts = { timeout: 8000, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'] }
     try {
@@ -924,7 +938,7 @@ app.whenReady().then(() => {
       execFileSync('docker', ['exec', name, 'tmux', 'send-keys', '-t', session, '--', payload], opts)
       execFileSync('docker', ['exec', name, 'tmux', 'send-keys', '-t', session, 'Enter'], opts)
       log.info('[chat] sent', { agent })
-      return { ok: true }
+      return { ok: true, ts }
     } catch (err) {
       return { ok: false, error: err && (err.message || String(err)) }
     }
