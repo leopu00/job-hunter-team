@@ -16,20 +16,19 @@ import {
   STEP_VPS_PROVISION,
   STEP_SETUP,
   STEP_CONTAINER,
-  STEP_SUBSCRIPTION_NOTICE,
-  STEP_MODEL_COMPARE,
   STEP_PROVIDER_CHOOSE,
   STEP_PROVIDER_INSTALL,
   STEP_PROVIDER_LOGIN,
+  STEP_WORKING_HOURS,
+  STEP_PROFILE_UPLOAD,
+  STEP_EMAIL_SETUP,
   STEP_READY,
   LOCATION_LOCAL,
   LOCATION_VPS,
   PROVIDER_OPTIONS,
-  PROVIDER_PLANS,
-  MODEL_VARIANTS,
   PROVIDER_SUBSCRIBE_URL,
 } from './constants.js'
-import { clearChildren, refreshDockerStatus, onInstallWindowsStack } from './docker-card.js'
+import { refreshDockerStatus, onInstallWindowsStack } from './docker-card.js'
 import { enterProviderLogin } from './terminal-login.js'
 import {
   enterTelegramTokens,
@@ -497,7 +496,11 @@ if (dom.tgIntroLink) {
 }
 // Telegram intro sits after provider-login in the new sequence
 // (2026-05-19). Back goes to provider-login.
-if (dom.btnTgIntroBack) dom.btnTgIntroBack.addEventListener('click', () => enterProviderLogin())
+if (dom.btnTgIntroBack) dom.btnTgIntroBack.addEventListener('click', () => {
+  // Locale: lo step precedente è l'email. VPS: resta provider-login.
+  if (state.location === LOCATION_VPS) enterProviderLogin()
+  else enterEmailSetup()
+})
 // Intro Continue jumps straight to the unified tokens step — there
 // used to be a separate "create" step in between, dropped 2026-05-19
 // (telegram-tokens.js calls renderAllTgMeta on its enter to populate
@@ -558,18 +561,10 @@ dom.btnContainerRetry.addEventListener('click', () => {
 
 dom.btnContainerContinue.addEventListener('click', () => {
   if (state.containerReady) {
-    showStep(STEP_SUBSCRIPTION_NOTICE)
-  }
-})
-
-dom.btnSubscriptionBack.addEventListener('click', () => {
-  // VPS path skipped both setup + container locally, so back from
-  // subscription returns to the VPS provisioning step. Local path
-  // keeps the old behavior.
-  if (state.location === LOCATION_VPS) {
-    enterVpsProvision()
-  } else {
-    showStep(STEP_CONTAINER)
+    // 2026-06-23: gli step "Subscriptions, not API keys" e "How the models
+    // compare" sono stati rimossi (solo informativi) → si va dritti alla
+    // scelta del provider.
+    enterProviderChoose()
   }
 })
 
@@ -768,22 +763,51 @@ if (dom.btnVpsContinue) {
   dom.btnVpsContinue.addEventListener('click', () => {
     if (!state.vps.installed) return
     // Telegram tokens are collected AT THE END of the wizard now
-    // (2026-05-19), so no persist step here. Just advance to the
-    // subscription notice → model compare → provider choose/install/
-    // login → telegram → ready. In VPS mode the backend is SSH-aware
-    // (T2): provider-install/login work on the REMOTE container.
-    showStep(STEP_SUBSCRIPTION_NOTICE)
+    // (2026-05-19), so no persist step here. Advance straight to provider
+    // choose → install → login → telegram → ready (subscription-notice +
+    // model-compare removed 2026-06-23). In VPS mode the backend is
+    // SSH-aware (T2): provider-install/login work on the REMOTE container.
+    enterProviderChoose()
   })
 }
 
-// Persist the Telegram bot tokens collected in STEP_TELEGRAM_TOKENS to
-// /root/.jht/jht.config.json on the VPS. Returns true on success; false
-// surfaces the error in the telegram step's tg-save-status element so
-// the user can retry the Continue click. No-op (returns true) outside
-// VPS mode — Local mode doesn't have a remote config to write.
+// Persist the Telegram bot tokens collected in STEP_TELEGRAM_TOKENS.
+// Local mode → ~/.jht/jht.config.json (channels.telegram.bots) via IPC.
+// VPS mode  → /root/.jht/jht.config.json over SSH. Returns true on success;
+// false surfaces the error in the telegram step's tg-save-status element so
+// the user can retry the Continue click.
 async function persistTelegramToVps() {
-  if (state.location !== LOCATION_VPS) return true
   const statusEl = document.getElementById('tg-save-status')
+  // ── Local mode: salva i bot nel config locale (niente VPS/SSH) ──
+  if (state.location !== LOCATION_VPS) {
+    if (!isTelegramTokensReady()) {
+      if (statusEl) {
+        statusEl.textContent = 'Telegram bots not ready — complete the 3-bot setup first.'
+        statusEl.hidden = false
+      }
+      return false
+    }
+    try {
+      const res = window.telegramApi?.saveBotsLocal
+        ? await window.telegramApi.saveBotsLocal(getTelegramBotsForSave())
+        : { ok: false, error: 'no-api' }
+      if (!res?.ok) {
+        if (statusEl) {
+          statusEl.textContent = `Failed to save Telegram bots: ${res?.error || 'unknown'}`
+          statusEl.hidden = false
+        }
+        return false
+      }
+      log.info('telegram.save.local.ok')
+      return true
+    } catch (e) {
+      if (statusEl) {
+        statusEl.textContent = `Failed to save Telegram bots: ${e?.message || e}`
+        statusEl.hidden = false
+      }
+      return false
+    }
+  }
   if (!isTelegramTokensReady()) {
     if (statusEl) {
       statusEl.textContent = 'Telegram bots not ready — complete the 3-bot setup first.'
@@ -849,125 +873,6 @@ if (dom.btnTelegramContinue) {
   })
 }
 
-dom.btnSubscriptionContinue.addEventListener('click', () => {
-  enterModelCompare()
-})
-
-function enterModelCompare() {
-  renderModelCharts()
-  showStep(STEP_MODEL_COMPARE)
-}
-
-dom.btnModelCompareBack.addEventListener('click', () => {
-  showStep(STEP_SUBSCRIPTION_NOTICE)
-})
-
-dom.btnModelCompareContinue.addEventListener('click', () => {
-  enterProviderChoose()
-})
-
-// Render 3 bar charts (intelligence / speed / cost), each with one
-// bar per model variant in MODEL_VARIANTS. Bar height is normalized
-// to the chart's max; for cost we invert so lower $ becomes the
-// taller "affordability" bar.
-function renderModelCharts() {
-  const root = dom.modelCharts
-  if (!root) return
-  clearChildren(root)
-
-  const metrics = [
-    { key: 'intelligence', titleKey: 'modelCompare.intelligence', unitKey: 'modelCompare.intelligenceUnit', higherIsBetter: true,  format: (v) => `${v.toFixed(1)}%` },
-    { key: 'speed',        titleKey: 'modelCompare.speed',        unitKey: 'modelCompare.speedUnit',        higherIsBetter: true,  format: (v) => `${v} t/s` },
-    { key: 'cost',         titleKey: 'modelCompare.cost',         unitKey: 'modelCompare.costUnit',         higherIsBetter: false, format: (v) => `$${v}` },
-  ]
-
-  for (const metric of metrics) {
-    const values = MODEL_VARIANTS.map((m) => m[metric.key])
-    const max = Math.max(...values)
-    const min = Math.min(...values)
-
-    const chart = document.createElement('div')
-    chart.className = 'model-chart'
-
-    const header = document.createElement('div')
-    header.className = 'model-chart__header'
-    const title = document.createElement('span')
-    title.className = 'model-chart__title'
-    title.setAttribute('data-i18n', metric.titleKey)
-    title.textContent = t(metric.titleKey)
-    const unit = document.createElement('span')
-    unit.className = 'model-chart__unit'
-    unit.setAttribute('data-i18n', metric.unitKey)
-    unit.textContent = t(metric.unitKey)
-    header.appendChild(title)
-    header.appendChild(unit)
-    chart.appendChild(header)
-
-    const barsRow = document.createElement('div')
-    barsRow.className = 'model-chart__bars'
-    barsRow.style.gridTemplateColumns = `repeat(${MODEL_VARIANTS.length}, 1fr)`
-
-    let previousProviderId = null
-    for (const model of MODEL_VARIANTS) {
-      const value = model[metric.key]
-      // Normalize to 8–100% so the smallest bar isn't invisible.
-      let pct
-      if (metric.higherIsBetter) {
-        pct = max > 0 ? Math.max(8, Math.round((value / max) * 100)) : 8
-      } else {
-        pct = max > 0 ? Math.max(8, Math.round((min / value) * 100)) : 8
-      }
-      const isWinner = metric.higherIsBetter ? value === max : value === min
-
-      const bar = document.createElement('div')
-      bar.className = 'model-bar'
-      if (isWinner) bar.classList.add('model-bar--winner')
-      // Visual separator between providers so the user reads Claude /
-      // Codex / Kimi as distinct groups inside a single chart.
-      if (previousProviderId && previousProviderId !== model.providerId) {
-        bar.classList.add('model-bar--group-start')
-      }
-      previousProviderId = model.providerId
-
-      const valueLabel = document.createElement('div')
-      valueLabel.className = 'model-bar__value'
-      valueLabel.textContent = metric.format(value)
-
-      const track = document.createElement('div')
-      track.className = 'model-bar__track'
-      const fill = document.createElement('div')
-      fill.className = 'model-bar__fill'
-      fill.style.height = `${pct}%`
-      fill.style.background = model.color
-      track.appendChild(fill)
-
-      // Split name into a primary line + sub line so "GPT-5.3 xhigh"
-      // renders as two tidy lines instead of breaking mid-token.
-      const nameLabel = document.createElement('div')
-      nameLabel.className = 'model-bar__name'
-      const firstSpace = model.modelName.indexOf(' ')
-      if (firstSpace > 0) {
-        const primary = document.createElement('span')
-        primary.textContent = model.modelName.slice(0, firstSpace)
-        const sub = document.createElement('span')
-        sub.className = 'model-bar__name-sub'
-        sub.textContent = model.modelName.slice(firstSpace + 1)
-        nameLabel.appendChild(primary)
-        nameLabel.appendChild(sub)
-      } else {
-        nameLabel.textContent = model.modelName
-      }
-
-      bar.appendChild(valueLabel)
-      bar.appendChild(track)
-      bar.appendChild(nameLabel)
-      barsRow.appendChild(bar)
-    }
-
-    chart.appendChild(barsRow)
-    root.appendChild(chart)
-  }
-}
 
 async function enterProviderChoose() {
   showStep(STEP_PROVIDER_CHOOSE)
@@ -988,7 +893,9 @@ async function enterProviderChoose() {
 }
 
 function updateProviderContinueState() {
-  dom.btnProviderContinue.disabled = !(state.selectedProvider && state.selectedPlan)
+  // 2026-06-23: si sceglie solo il NOME del provider (niente più tier di
+  // abbonamento) → Continue abilitato appena un provider è selezionato.
+  dom.btnProviderContinue.disabled = !state.selectedProvider
 }
 
 function renderProviderOptions() {
@@ -1010,8 +917,6 @@ function renderProviderOptions() {
     radio.addEventListener('change', () => {
       if (!radio.checked) return
       state.selectedProvider = opt.id
-      // Clear the plan when the provider changes — the tier options
-      // are provider-specific and re-rendering will repaint them.
       state.selectedPlan = null
       state.selectedProviders = new Set([opt.id])
       renderProviderOptions()
@@ -1031,115 +936,11 @@ function renderProviderOptions() {
     body.appendChild(name)
     body.appendChild(vendor)
 
-    const plans = PROVIDER_PLANS[opt.id] || []
     const isProviderSelected = state.selectedProvider === opt.id
-
-    if (plans.length > 0) {
-      // Subscription plan table: one COLUMN per tier. Header row holds
-      // the radio that lets the user mark which subscription they own
-      // — only enabled once this provider is selected. The selected
-      // tier is saved so the runtime sentinel can size context windows
-      // against the user's actual quota later on.
-      const table = document.createElement('table')
-      table.className = 'plans-table'
-
-      // Helper: stamp the same `plans-table__col--recommended` class on
-      // every cell in the recommended tier's column so we can highlight
-      // it vertically.
-      const colClass = (p) => (p.recommended ? ' plans-table__col--recommended' : '')
-
-      const thead = document.createElement('thead')
-      const trHead = document.createElement('tr')
-      for (const p of plans) {
-        const th = document.createElement('th')
-        th.className = `plans-table__header${colClass(p)}`
-        const planRadio = document.createElement('input')
-        planRadio.type = 'radio'
-        planRadio.name = `plan-select-${opt.id}`
-        planRadio.className = 'plans-table__radio'
-        planRadio.value = p.id
-        planRadio.checked = isProviderSelected && state.selectedPlan === p.id
-        planRadio.disabled = !isProviderSelected
-        planRadio.addEventListener('change', () => {
-          if (!planRadio.checked) return
-          state.selectedProvider = opt.id
-          state.selectedPlan = p.id
-          state.selectedProviders = new Set([opt.id])
-          renderProviderOptions()
-        })
-        const label = document.createElement('label')
-        label.className = 'plans-table__header-label'
-        label.appendChild(planRadio)
-        const nameSpan = document.createElement('span')
-        nameSpan.textContent = p.name
-        label.appendChild(nameSpan)
-        th.appendChild(label)
-        if (p.recommended) {
-          const badge = document.createElement('span')
-          badge.className = 'plans-table__badge'
-          badge.textContent = t('provider.recommended')
-          th.appendChild(badge)
-          if (p.recommendedTag) {
-            const tag = document.createElement('span')
-            tag.className = 'plans-table__badge-tag'
-            tag.textContent = t(`provider.recommendedTag.${p.recommendedTag}`)
-            th.appendChild(tag)
-          }
-        }
-        trHead.appendChild(th)
-      }
-      thead.appendChild(trHead)
-      table.appendChild(thead)
-
-      const cell = (plan, text, extraClass) => {
-        const td = document.createElement('td')
-        td.className = `${extraClass || ''}${colClass(plan)}`.trim()
-        td.textContent = text
-        return td
-      }
-
-      const tbody = document.createElement('tbody')
-      const trModel = document.createElement('tr')
-      trModel.className = 'plans-table__model-row'
-      for (const p of plans) trModel.appendChild(cell(p, p.model || '—'))
-
-      const trPrice = document.createElement('tr')
-      trPrice.className = 'plans-table__price-row'
-      for (const p of plans) trPrice.appendChild(cell(p, p.price))
-
-      const trWeekly = document.createElement('tr')
-      trWeekly.className = 'plans-table__weekly-row'
-      for (const p of plans) trWeekly.appendChild(cell(p, p.monthly || '—'))
-
-      // "$/M" row: monthly price ÷ monthly token allowance. Simple
-      // rule of thumb — "$100/mo buys you 400M tokens ≈ $0.25/M".
-      const trUnit = document.createElement('tr')
-      trUnit.className = 'plans-table__unit-row'
-      for (const p of plans) {
-        let text = '—'
-        if (typeof p.priceUsd === 'number' && typeof p.monthlyM === 'number' && p.monthlyM > 0) {
-          const per = p.priceUsd / p.monthlyM
-          text = `~$${per.toFixed(2)}/M tok`
-        }
-        trUnit.appendChild(cell(p, text))
-      }
-
-      const trEst = document.createElement('tr')
-      trEst.className = 'plans-table__estimate-row'
-      for (const p of plans) trEst.appendChild(cell(p, p.estimate))
-
-      tbody.appendChild(trModel)
-      tbody.appendChild(trPrice)
-      tbody.appendChild(trWeekly)
-      tbody.appendChild(trUnit)
-      tbody.appendChild(trEst)
-      table.appendChild(tbody)
-      body.appendChild(table)
-    }
 
     // "Don't have a subscription yet?" link — opens the provider's
     // pricing page in the default browser. Always visible, so users
-    // can subscribe on the spot before coming back to mark the tier.
+    // can subscribe on the spot before coming back.
     const subscribeUrl = PROVIDER_SUBSCRIBE_URL[opt.id]
     if (subscribeUrl) {
       const hint = document.createElement('p')
@@ -1169,19 +970,26 @@ function renderProviderOptions() {
 }
 
 dom.btnProviderBack.addEventListener('click', () => {
-  enterModelCompare()
+  // Lo step model-compare è stato rimosso (2026-06-23): Back torna al punto
+  // precedente del flow — provisioning VPS in modalità VPS, altrimenti il
+  // check del container locale.
+  if (state.location === LOCATION_VPS) {
+    enterVpsProvision()
+  } else {
+    showStep(STEP_CONTAINER)
+  }
 })
 
 dom.btnProviderContinue.addEventListener('click', async () => {
-  if (!state.selectedProvider || !state.selectedPlan) return
-  // Persist the single-provider + plan selection. The plan value is
-  // informational; the CLI picks up the actual account entitlements
-  // from its own login. We save regardless of install success so the
-  // sentinel can still read the intended plan later.
+  if (!state.selectedProvider) return
+  // Persist the single-provider selection (niente più tier di abbonamento:
+  // il CLI legge le entitlement reali dal proprio login, e il team
+  // distribuisce comunque il budget su qualsiasi piano). Salviamo a
+  // prescindere dall'esito dell'install.
   try {
     await window.setupApi.saveSelection({
       provider: state.selectedProvider,
-      plan: state.selectedPlan,
+      plan: null,
     })
   } catch { /* best-effort, not critical for the install flow */ }
   showStep(STEP_PROVIDER_INSTALL)
@@ -1312,6 +1120,311 @@ window.setupApi.onProviderLog((line) => {
     dom.providerMessage.textContent = t('provider.installStatus.running', { name: match[1] })
   }
 })
+
+// ── Step: working hours (local tail) ────────────────────────────────
+// L'utente sceglie quando il team lavora. Salvato in jht.config.json
+// (team.working_hours) via teamApi → main → ~/.jht. Lo legge il runtime
+// (working_hours.py) al boot. "24/7" = windows vuoto (nessuna restrizione).
+
+const HOURS_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+const hoursSelectedDays = new Set(['mon', 'tue', 'wed', 'thu', 'fri'])
+
+function renderHoursDays() {
+  if (!dom.hoursDays) return
+  dom.hoursDays.innerHTML = ''
+  for (const day of HOURS_DAYS) {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'hours-day-chip'
+    btn.dataset.day = day
+    btn.textContent = t(`hours.day.${day}`)
+    if (hoursSelectedDays.has(day)) btn.classList.add('is-selected')
+    btn.addEventListener('click', () => {
+      if (hoursSelectedDays.has(day)) hoursSelectedDays.delete(day)
+      else hoursSelectedDays.add(day)
+      btn.classList.toggle('is-selected')
+      updateHoursContinueState()
+    })
+    dom.hoursDays.appendChild(btn)
+  }
+}
+
+function hoursIsAlwaysOn() {
+  return Boolean(dom.hoursModeAlways && dom.hoursModeAlways.checked)
+}
+
+function applyHoursMode() {
+  const always = hoursIsAlwaysOn()
+  if (dom.hoursWindowFields) dom.hoursWindowFields.classList.toggle('is-disabled', always)
+  // Disabilita i campi finestra quando 24/7 è scelto (chiarezza visiva).
+  for (const el of [dom.hoursStart, dom.hoursEnd]) {
+    if (el) el.disabled = always
+  }
+  if (dom.hoursDays) {
+    for (const chip of dom.hoursDays.querySelectorAll('.hours-day-chip')) chip.disabled = always
+  }
+  updateHoursContinueState()
+}
+
+function updateHoursContinueState() {
+  if (!dom.btnHoursContinue) return
+  // 24/7 sempre valido; finestra valida solo con ≥1 giorno selezionato.
+  dom.btnHoursContinue.disabled = !hoursIsAlwaysOn() && hoursSelectedDays.size === 0
+}
+
+export async function enterWorkingHours() {
+  showStep(STEP_WORKING_HOURS)
+  if (dom.hoursStatus) dom.hoursStatus.hidden = true
+  // Timezone rilevato dal sistema (mostrato, non modificabile qui).
+  let tz = 'UTC'
+  try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { /* keep UTC */ }
+  state.hoursTimezone = tz
+  if (dom.hoursTz) dom.hoursTz.textContent = t('hours.tz', { tz })
+  // Ripristina una scelta salvata in precedenza (relaunch).
+  try {
+    const res = window.teamApi?.getWorkingHours ? await window.teamApi.getWorkingHours() : null
+    const wh = res && res.ok ? res.working_hours : null
+    if (wh && Array.isArray(wh.windows) && wh.windows.length && Array.isArray(wh.windows[0].days)) {
+      hoursSelectedDays.clear()
+      for (const d of wh.windows[0].days) if (HOURS_DAYS.includes(d)) hoursSelectedDays.add(d)
+      if (dom.hoursStart && wh.windows[0].start) dom.hoursStart.value = wh.windows[0].start
+      if (dom.hoursEnd && wh.windows[0].end) dom.hoursEnd.value = wh.windows[0].end
+      if (dom.hoursModeWindow) dom.hoursModeWindow.checked = true
+      if (wh.timezone) { state.hoursTimezone = wh.timezone; if (dom.hoursTz) dom.hoursTz.textContent = t('hours.tz', { tz: wh.timezone }) }
+    } else if (wh && Array.isArray(wh.windows) && wh.windows.length === 0) {
+      // windows: [] salvato = 24/7
+      if (dom.hoursModeAlways) dom.hoursModeAlways.checked = true
+    }
+  } catch { /* default Mon–Fri 09–18 */ }
+  renderHoursDays()
+  applyHoursMode()
+}
+
+async function saveWorkingHours() {
+  let payload = null
+  if (!hoursIsAlwaysOn()) {
+    const start = (dom.hoursStart && dom.hoursStart.value) || '09:00'
+    const end = (dom.hoursEnd && dom.hoursEnd.value) || '18:00'
+    payload = {
+      timezone: state.hoursTimezone || 'UTC',
+      windows: [{ days: HOURS_DAYS.filter((d) => hoursSelectedDays.has(d)), start, end }],
+    }
+  } // else null → 24/7 (windows vuoto lato main)
+  try {
+    const res = window.teamApi?.setWorkingHours ? await window.teamApi.setWorkingHours(payload) : { ok: true }
+    if (!res?.ok) {
+      log.warn('working-hours.save.failed', { err: res?.error })
+      if (dom.hoursStatus) { dom.hoursStatus.textContent = t('hours.saveError'); dom.hoursStatus.hidden = false }
+      return false
+    }
+    log.info('working-hours.saved', { alwaysOn: hoursIsAlwaysOn() })
+    return true
+  } catch (err) {
+    log.warn('working-hours.save.crashed', { err: String(err) })
+    if (dom.hoursStatus) { dom.hoursStatus.textContent = t('hours.saveError'); dom.hoursStatus.hidden = false }
+    return false
+  }
+}
+
+if (dom.hoursModeWindow) dom.hoursModeWindow.addEventListener('change', applyHoursMode)
+if (dom.hoursModeAlways) dom.hoursModeAlways.addEventListener('change', applyHoursMode)
+if (dom.btnHoursBack) dom.btnHoursBack.addEventListener('click', () => enterProviderLogin())
+if (dom.btnHoursContinue) {
+  dom.btnHoursContinue.addEventListener('click', async () => {
+    if (dom.btnHoursContinue.disabled) return
+    const ok = await saveWorkingHours()
+    if (!ok) return
+    enterProfileUpload()
+  })
+}
+
+// ── Step: profile upload (CV obbligatorio) ──────────────────────────
+// L'utente carica CV + documenti; il main li copia in ~/Documents/Job
+// Hunter Team/allegati (bind /jht_user) e l'Assistente li legge al boot
+// per costruire il profilo. Sostituisce l'onboarding-chat: serve ≥1 file
+// per proseguire.
+
+function renderUploadList(files) {
+  const list = dom.uploadList
+  if (!list) return
+  list.innerHTML = ''
+  const arr = Array.isArray(files) ? files : []
+  for (const f of arr) {
+    const li = document.createElement('li')
+    li.className = 'upload-list__item'
+    const icon = document.createElement('span')
+    icon.className = 'upload-list__icon'
+    icon.textContent = '📄'
+    const name = document.createElement('span')
+    name.className = 'upload-list__name'
+    name.textContent = f.name
+    li.appendChild(icon)
+    li.appendChild(name)
+    list.appendChild(li)
+  }
+  if (dom.uploadEmpty) dom.uploadEmpty.hidden = arr.length > 0
+  if (dom.btnUploadContinue) dom.btnUploadContinue.disabled = arr.length === 0
+}
+
+export async function enterProfileUpload() {
+  showStep(STEP_PROFILE_UPLOAD)
+  let files = []
+  try {
+    const res = window.profileApi?.listDocs ? await window.profileApi.listDocs() : null
+    if (res?.ok && Array.isArray(res.files)) files = res.files
+  } catch { /* empty */ }
+  renderUploadList(files)
+}
+
+if (dom.btnUploadPick) {
+  dom.btnUploadPick.addEventListener('click', async () => {
+    if (!window.profileApi?.uploadDocs) return
+    dom.btnUploadPick.disabled = true
+    try {
+      const res = await window.profileApi.uploadDocs()
+      if (res?.ok) {
+        // Ri-leggo l'elenco completo della cartella (merge upload precedenti).
+        const listed = window.profileApi.listDocs ? await window.profileApi.listDocs() : null
+        renderUploadList(listed?.ok ? listed.files : res.files)
+      } else {
+        log.warn('profile-upload.failed', { err: res?.error })
+      }
+    } finally {
+      dom.btnUploadPick.disabled = false
+    }
+  })
+}
+if (dom.btnUploadBack) dom.btnUploadBack.addEventListener('click', () => enterWorkingHours())
+if (dom.btnUploadContinue) {
+  dom.btnUploadContinue.addEventListener('click', () => {
+    if (dom.btnUploadContinue.disabled) return
+    enterEmailSetup()
+  })
+}
+
+// ── Step: team email inbox (obbligatorio) ───────────────────────────
+// Casella DEDICATA che il team monitora per i job alert. Le credenziali
+// vanno validate con un round-trip reale (IMAP login + invio SMTP di un
+// codice + rilettura via IMAP) prima di poter proseguire; va anche spuntata
+// la conferma "è una casella dedicata, non personale". Su validazione OK il
+// main salva le credenziali in ~/.jht/credentials/email_monitor.json.
+
+let emailValidated = false
+
+function setEmailStatus(msg, kind) {
+  if (!dom.emailSetupStatus) return
+  if (!msg) { dom.emailSetupStatus.hidden = true; dom.emailSetupStatus.textContent = ''; return }
+  dom.emailSetupStatus.textContent = msg
+  dom.emailSetupStatus.dataset.kind = kind || 'info'
+  dom.emailSetupStatus.hidden = false
+}
+
+function updateEmailContinueState() {
+  if (!dom.btnEmailContinue) return
+  const confirmed = Boolean(dom.emailDedicatedConfirm && dom.emailDedicatedConfirm.checked)
+  dom.btnEmailContinue.disabled = !(emailValidated && confirmed)
+}
+
+// Qualsiasi modifica a email/password invalida la verifica precedente: vanno
+// riverificate (le credenziali salvate potrebbero non corrispondere più).
+function invalidateEmailValidation() {
+  if (!emailValidated) return
+  emailValidated = false
+  setEmailStatus(null)
+  updateEmailContinueState()
+}
+
+function emailErrorMessage(res) {
+  const stage = res && res.stage
+  const err = res && res.error
+  if (stage === 'format' && err === 'invalid-email') return t('email.err.email')
+  if (stage === 'format' && err === 'invalid-password') return t('email.err.password')
+  if (stage === 'imap-login') return t('email.err.login')
+  if (stage === 'smtp-send') return t('email.err.smtp')
+  if (stage === 'imap-read') return t('email.err.notReceived')
+  if (stage === 'save') return t('email.err.save')
+  return t('email.err.generic')
+}
+
+async function onEmailVerify() {
+  const email = (dom.emailAddressInput && dom.emailAddressInput.value || '').trim()
+  const password = (dom.emailPasswordInput && dom.emailPasswordInput.value) || ''
+  if (!email || !password) {
+    setEmailStatus(t('email.err.empty'), 'error')
+    return
+  }
+  emailValidated = false
+  updateEmailContinueState()
+  if (dom.btnEmailVerify) dom.btnEmailVerify.disabled = true
+  setEmailStatus(t('email.verifying'), 'info')
+  try {
+    const res = window.emailApi?.validate
+      ? await window.emailApi.validate({ email, password })
+      : { ok: false, stage: 'unknown' }
+    if (res && res.ok) {
+      emailValidated = true
+      // Niente più avviso "personal-style": l'indirizzo personale/dedicato non
+      // ci interessa — la checkbox di conferma basta. Sempre messaggio di OK.
+      setEmailStatus(t('email.ok'), 'ok')
+      log.info('email-setup.validated')
+    } else {
+      emailValidated = false
+      setEmailStatus(emailErrorMessage(res), 'error')
+      log.warn('email-setup.validate-failed', { stage: res?.stage, err: res?.error })
+    }
+  } catch (err) {
+    emailValidated = false
+    setEmailStatus(t('email.err.generic'), 'error')
+    log.warn('email-setup.validate-crashed', { err: String(err) })
+  } finally {
+    if (dom.btnEmailVerify) dom.btnEmailVerify.disabled = false
+    updateEmailContinueState()
+  }
+}
+
+export async function enterEmailSetup() {
+  showStep(STEP_EMAIL_SETUP)
+  emailValidated = false
+  setEmailStatus(null)
+  // Prefill dell'indirizzo se già configurato in precedenza (relaunch).
+  try {
+    const st = window.emailApi?.getStatus ? await window.emailApi.getStatus() : null
+    if (st && st.email && dom.emailAddressInput && !dom.emailAddressInput.value) {
+      dom.emailAddressInput.value = st.email
+    }
+  } catch { /* no-op */ }
+  updateEmailContinueState()
+}
+
+// Due click su Google: (1) attiva la 2FA, (2) crea l'app-password. Più il
+// link alla guida completa sul sito. Tutti aprono nel browser di sistema.
+const GMAIL_2FA_URL = 'https://myaccount.google.com/signinoptions/twosv'
+const GMAIL_APP_PW_URL = 'https://myaccount.google.com/apppasswords'
+const TEAM_GMAIL_DOCS_URL = 'https://jobhunterteam.ai/docs/guides/team-gmail'
+function openExternalUrl(url) {
+  if (window.launcherApi?.openExternal) window.launcherApi.openExternal(url).catch(() => {})
+  else window.open(url, '_blank')
+}
+if (dom.btnEmail2fa) dom.btnEmail2fa.addEventListener('click', () => openExternalUrl(GMAIL_2FA_URL))
+if (dom.btnEmailAppPw) dom.btnEmailAppPw.addEventListener('click', () => openExternalUrl(GMAIL_APP_PW_URL))
+if (dom.btnEmailDocs) dom.btnEmailDocs.addEventListener('click', () => openExternalUrl(TEAM_GMAIL_DOCS_URL))
+if (dom.emailAddressInput) dom.emailAddressInput.addEventListener('input', invalidateEmailValidation)
+if (dom.emailPasswordInput) dom.emailPasswordInput.addEventListener('input', invalidateEmailValidation)
+if (dom.emailDedicatedConfirm) dom.emailDedicatedConfirm.addEventListener('change', updateEmailContinueState)
+if (dom.btnEmailVerify) dom.btnEmailVerify.addEventListener('click', onEmailVerify)
+if (dom.btnEmailBack) dom.btnEmailBack.addEventListener('click', () => enterProfileUpload())
+// Email OPZIONALE (2026-06-24): "Configura dopo" salta senza salvare credenziali
+// → il team farà web sourcing; l'utente può configurarla dopo dal pannello home.
+if (dom.btnEmailSkip) dom.btnEmailSkip.addEventListener('click', () => {
+  log.info('email-setup.skipped')
+  enterTelegramIntro()
+})
+if (dom.btnEmailContinue) {
+  dom.btnEmailContinue.addEventListener('click', () => {
+    if (dom.btnEmailContinue.disabled) return
+    enterTelegramIntro()
+  })
+}
 
 // -------- Step: ready (summary) --------
 

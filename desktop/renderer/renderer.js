@@ -122,22 +122,37 @@ const stored = (() => {
 })()
 
 async function boot() {
-  if (!(stored && SUPPORTED_LANGS.includes(stored))) {
-    setLang(DEFAULT_LANG, { persist: false })
-    showWizard(STEP_LANGUAGE)
-    return
-  }
-  setLang(stored, { persist: false })
+  // Lingua: fonte affidabile = prefsApi (file nel main). localStorage su
+  // origine file:// NON persiste in Electron → prima era sempre null e
+  // forzava il wizard lingua → "setup da capo" ad ogni riavvio. La decisione
+  // Home NON dipende più dalla lingua: se il provider è salvato → Home.
+  let lang = null
+  try { lang = await window.prefsApi?.get?.('lang') } catch (_) { /* ignore */ }
+  if (!lang) lang = stored // fallback localStorage legacy
+  const validLang = lang && SUPPORTED_LANGS.includes(lang) ? lang : null
+  setLang(validLang || DEFAULT_LANG, { persist: false })
+  _bootLog.info('boot.start', { lang: validLang || null })
+
   try {
     const status = await window.setupApi.getStatus()
-    if (isSetupComplete(status)) {
+    const saved = status && status.providers && Array.isArray(status.providers.saved)
+      ? status.providers.saved : []
+    const complete = isSetupComplete(status)
+    _bootLog.info('boot.status', { saved, complete })
+    if (complete) {
+      _bootLog.info('boot.decision', { screen: 'home' })
       await showHome('team')
       return
     }
   } catch (error) {
+    _bootLog.warn('boot.probe-failed', { err: error && (error.message || String(error)) })
     appendLog(`boot probe: ${error.message || error}`)
   }
-  showWizard(STEP_WELCOME)
+  // Setup incompleto (primo avvio): se la lingua non è mai stata scelta parti
+  // dallo step lingua, altrimenti dal welcome.
+  const screen = validLang ? STEP_WELCOME : STEP_LANGUAGE
+  _bootLog.info('boot.decision', { screen: validLang ? 'wizard:welcome' : 'wizard:language', reason: 'setup-incomplete' })
+  showWizard(screen)
 }
 
 // Paint platform-specific docker-card shape synchronously — before the

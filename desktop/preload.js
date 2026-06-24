@@ -92,6 +92,36 @@ contextBridge.exposeInMainWorld('dashboardApi', {
   getStats: () => ipcRenderer.invoke('dashboard:get-stats'),
 })
 
+// [ONBOARDING] Orari di lavoro del team. Scritti in ~/.jht/jht.config.json
+// (team.working_hours) dal main — niente web, il server non gira ancora a
+// onboarding. wh = { timezone, windows:[{days,start,end}] } | null (=24/7).
+contextBridge.exposeInMainWorld('teamApi', {
+  getWorkingHours: () => ipcRenderer.invoke('team:get-working-hours'),
+  setWorkingHours: (wh) => ipcRenderer.invoke('team:set-working-hours', wh),
+})
+
+// [ONBOARDING] Upload documenti del profilo (CV + obiettivi). Il main apre il
+// file-picker nativo e copia i file nella drop-zone allegati (bind /jht_user)
+// che l'Assistente legge al boot. → { ok, files:[{name,size}], error? }.
+contextBridge.exposeInMainWorld('profileApi', {
+  uploadDocs: () => ipcRenderer.invoke('profile:upload-docs'),
+  listDocs: () => ipcRenderer.invoke('profile:list-docs'),
+})
+
+// [chat] Invio messaggio a un agente (capitano/assistente) via docker exec
+// tmux send-keys nel main — il POST web è read-only col port-map. La history
+// (incl. risposte agente) si legge via dashboardApi.get('/api/<agent>/chat').
+contextBridge.exposeInMainWorld('chatApi', {
+  send: (agent, text) => ipcRenderer.invoke('chat:send', { agent, text }),
+})
+
+// [agent control] Kill / restart di un singolo agente dal pannello Agents
+// (via docker exec nel main). → { ok, error? }.
+contextBridge.exposeInMainWorld('agentApi', {
+  stop: (role) => ipcRenderer.invoke('agent:stop', { role }),
+  restart: (role) => ipcRenderer.invoke('agent:restart', { role }),
+})
+
 contextBridge.exposeInMainWorld('setupApi', {
   getStatus: () => ipcRenderer.invoke('setup:get-status'),
   getDockerStatus: () => ipcRenderer.invoke('setup:get-docker-status'),
@@ -220,6 +250,8 @@ contextBridge.exposeInMainWorld('telegramApi', {
   cancelWaitForChatId: (token) =>
     ipcRenderer.invoke('telegram:cancel-wait-for-chat', token),
   saveBotsToVps: (args) => ipcRenderer.invoke('telegram:save-to-vps', args),
+  // [ONBOARDING locale] Salva i bot nel jht.config.json locale (~/.jht).
+  saveBotsLocal: (bots) => ipcRenderer.invoke('telegram:save-local', { bots }),
 })
 
 // Provider config writer (active_provider + providers.<name>.auth_method)
@@ -236,6 +268,9 @@ contextBridge.exposeInMainWorld('emailApi', {
   getStatus: () => ipcRenderer.invoke('email:get-status'),
   saveConfig: (args) => ipcRenderer.invoke('email:save-config', args),
   deleteConfig: () => ipcRenderer.invoke('email:delete-config'),
+  // [ONBOARDING] Valida round-trip (IMAP login + SMTP invio + IMAP rilettura)
+  // e, su successo, salva le credenziali. → { ok, stage?, error?, looksPersonal }.
+  validate: (args) => ipcRenderer.invoke('email:validate', args),
 })
 
 contextBridge.exposeInMainWorld('syncApi', {

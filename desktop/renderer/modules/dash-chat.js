@@ -34,7 +34,11 @@ function appendMessages(messages) {
   if (!box) return
   let added = false
   for (const m of messages) {
-    if (typeof m.ts === 'number' && m.ts <= state.lastTs) continue
+    // Dedup solo sui timestamp REALI (>0). L'echo ottimistico del messaggio
+    // utente ha ts:0 e con lastTs:0 finiva sotto `0 <= 0` → veniva SALTATO e il
+    // messaggio "spariva". Con `> 0` l'echo si mostra sempre; il dedup resta per
+    // i messaggi del server (ts reali) ricevuti dal poll.
+    if (typeof m.ts === 'number' && m.ts > 0 && m.ts <= state.lastTs) continue
     const role = m.role === 'user' ? 'user' : 'agent'
     const row = el('div', `chat-msg chat-msg--${role}`)
     const bubble = el('div', 'chat-bubble')
@@ -87,7 +91,7 @@ async function send() {
   if (!input) return
   const text = input.value.trim()
   if (!text || state.sending) return
-  if (!window.dashboardApi?.post) {
+  if (!window.chatApi?.send) {
     appendMessages([{ role: 'agent', text: '⚠️ Invio non disponibile (canale dati in aggiornamento). Riprova tra poco.', ts: Date.now() / 1000 }])
     return
   }
@@ -97,7 +101,15 @@ async function send() {
   // Echo ottimistico del messaggio utente (il poll poi lo riconcilia).
   appendMessages([{ role: 'user', text, ts: 0 }])
   try {
-    await window.dashboardApi.post(`/api/${state.agent}/chat`, { text })
+    // Invio via docker exec tmux (il POST /api/<agent>/chat è read-only col
+    // port-map). L'agente risponde scrivendo in chat.jsonl → poll lo mostra.
+    const r = await window.chatApi.send(state.agent, text)
+    if (!r || r.ok !== true) throw new Error(r?.error || 'send failed')
+    // Il main ha persistito il messaggio in chat.jsonl con questo ts: allineo
+    // lastTs così il poll NON lo ri-aggiunge (evita il doppione con l'echo
+    // ottimistico già renderizzato). Al cambio tab (lastTs azzerato) il poll lo
+    // ripesca da chat.jsonl → i messaggi non spariscono più.
+    if (typeof r.ts === 'number' && r.ts > state.lastTs) state.lastTs = r.ts
     await poll()
   } catch (e) {
     _log.error('send.failed', { err: String(e?.message || e) })
