@@ -1,4 +1,4 @@
-# 🦺 Mantenitore 🦺 + Tool-Health + Resilience — Design unificato
+# 👷‍♂️ Mantenitore 👷‍♂️ + Tool-Health + Resilience — Design unificato
 
 **Data:** 2026-06-13 · **Autori:** dev1, dev2, dev3 (panel) · **Stato:** approvato dall'utente, in implementazione
 
@@ -58,7 +58,7 @@ questo.)*
 - **Dato tool-health** *(dev2)*: dà all'agente il segnale per distinguere "rotto" da "vuoto".
 I tre pezzi chiudono il cerchio.
 
-### Blocco 4 — Mantenitore 🦺 *(convergenza dei 3)*
+### Blocco 4 — Mantenitore 👷‍♂️ *(convergenza dei 3)*
 Sibling del Dottore, scope **INFRA**:
 - Gira **1x/giorno**, auto-spawnato (riusa `doctor_schedule.py` + `doctor-watchdog.sh` con uno
   **slot 'maintainer'**, NON un watchdog nuovo), **logbook** sintetico (gemello del Dottore),

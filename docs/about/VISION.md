@@ -27,8 +27,8 @@ The goal is the *opposite* of "enterprise productivity software". Closer to: a D
 | 👨‍⚖️ | **Critic** | The blind reviewer. Doesn't know who wrote what. |
 | 👨‍💼 | **Assistant** | The copilot. Walks you through the platform. |
 | 🧙‍♂️ | **Mentor** | The career coach. Sees the bigger picture. |
-| 🩺 | **Dottore** | The medic. One-shot rounds — revives stuck agents. |
-| 🦺 | **Mantenitore** | The janitor. Keeps the infra (container, tools, disk) healthy. |
+| 🩺 | **Dottore** | The medic. One-shot rounds — refreshes long-running agents' context so they don't drift. |
+| 👷‍♂️ | **Mantenitore** | The janitor. Keeps the infra (container, tools, disk) healthy. |
 
 This is not flavor text. The system prompts of each agent are written in voice. The UI reflects that voice. Telegram messages reflect that voice.
 

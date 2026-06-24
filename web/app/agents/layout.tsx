@@ -9,7 +9,7 @@ const META: Record<
   it: {
     title: "Il Team",
     description:
-      "I ruoli del team di agenti AI di Job Hunter Team: Coordinatore, Scout, Analista, Scorer, Scrittore, Critico, Sentinella, Dottore, Mentor e Assistente.",
+      "I ruoli del team di agenti AI di Job Hunter Team: Coordinatore, Scout, Analista, Scorer, Scrittore, Critico, Tesoriere, Dottore, Mantenitore, Mentor e Assistente.",
     ogDescription:
       "Una squadra di agenti AI specializzati: chi cerca, chi verifica, chi valuta, chi scrive e chi critica.",
     crumb: "Team",
@@ -17,7 +17,7 @@ const META: Record<
   en: {
     title: "The Team",
     description:
-      "The roles of Job Hunter Team's AI agent team: Coordinator, Scout, Analyst, Scorer, Writer, Critic, Sentinel, Doctor, Mentor and Assistant.",
+      "The roles of Job Hunter Team's AI agent team: Coordinator, Scout, Analyst, Scorer, Writer, Critic, Treasurer, Doctor, Maintainer, Mentor and Assistant.",
     ogDescription:
       "A team of specialized AI agents: who searches, who verifies, who rates, who writes and who critiques.",
     crumb: "Team",
@@ -25,7 +25,7 @@ const META: Record<
   es: {
     title: "El Equipo",
     description:
-      "Los roles del equipo de agentes de IA de Job Hunter Team: Coordinador, Scout, Analista, Scorer, Redactor, Crítico, Centinela, Doctor, Mentor y Asistente.",
+      "Los roles del equipo de agentes de IA de Job Hunter Team: Coordinador, Scout, Analista, Scorer, Redactor, Crítico, Tesorero, Doctor, Mantenedor, Mentor y Asistente.",
     ogDescription:
       "Un equipo de agentes de IA especializados: quién busca, quién verifica, quién valora, quién escribe y quién critica.",
     crumb: "Equipo",
@@ -33,7 +33,7 @@ const META: Record<
   fr: {
     title: "L'Équipe",
     description:
-      "Les rôles de l'équipe d'agents IA de Job Hunter Team : Coordinateur, Scout, Analyste, Évaluateur, Rédacteur, Critique, Sentinelle, Docteur, Mentor et Assistant.",
+      "Les rôles de l'équipe d'agents IA de Job Hunter Team : Coordinateur, Scout, Analyste, Évaluateur, Rédacteur, Critique, Trésorier, Docteur, Mainteneur, Mentor et Assistant.",
     ogDescription:
       "Une équipe d'agents IA spécialisés : qui cherche, qui vérifie, qui évalue, qui rédige et qui critique.",
     crumb: "Équipe",
@@ -41,7 +41,7 @@ const META: Record<
   de: {
     title: "Das Team",
     description:
-      "Die Rollen des KI-Agententeams von Job Hunter Team: Koordinator, Scout, Analyst, Bewerter, Verfasser, Kritiker, Wächter, Doktor, Mentor und Assistent.",
+      "Die Rollen des KI-Agententeams von Job Hunter Team: Koordinator, Scout, Analyst, Bewerter, Verfasser, Kritiker, Schatzmeister, Doktor, Instandhalter, Mentor und Assistent.",
     ogDescription:
       "Ein Team spezialisierter KI-Agenten: wer sucht, wer prüft, wer bewertet, wer schreibt und wer kritisiert.",
     crumb: "Team",
@@ -49,7 +49,7 @@ const META: Record<
   pt: {
     title: "A Equipe",
     description:
-      "Os papéis da equipe de agentes de IA do Job Hunter Team: Coordenador, Scout, Analista, Scorer, Redator, Crítico, Sentinela, Doutor, Mentor e Assistente.",
+      "Os papéis da equipe de agentes de IA do Job Hunter Team: Coordenador, Scout, Analista, Scorer, Redator, Crítico, Tesoureiro, Doutor, Mantenedor, Mentor e Assistente.",
     ogDescription:
       "Uma equipe de agentes de IA especializados: quem procura, quem verifica, quem avalia, quem escreve e quem critica.",
     crumb: "Equipe",
@@ -57,7 +57,7 @@ const META: Record<
   hu: {
     title: "A Csapat",
     description:
-      "A Job Hunter Team MI-ügynökcsapatának szerepei: Koordinátor, Felderítő, Elemző, Pontozó, Író, Kritikus, Őrszem, Doktor, Mentor és Asszisztens.",
+      "A Job Hunter Team MI-ügynökcsapatának szerepei: Koordinátor, Felderítő, Elemző, Pontozó, Író, Kritikus, Kincstárnok, Doktor, Karbantartó, Mentor és Asszisztens.",
     ogDescription:
       "Szakosodott MI-ügynökök csapata: aki keres, aki ellenőriz, aki értékel, aki ír és aki kritizál.",
     crumb: "Csapat",

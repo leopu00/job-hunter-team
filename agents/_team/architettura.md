@@ -403,13 +403,13 @@ Out of the pipeline. **One-shot scheduled** agents: the watchdog spawns each on 
 ```
    ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
    │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
-   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   │ (scheduler)│              │ 👷‍♂️ Mantenitore│  findings │            │
    └────────────┘              └──────────────┘          └────────────┘
                                   one-shot → self-destruct
 ```
 
 - **🩺 Dottore** — **agent health**. Periodic context-refresh + retrospective: detects stuck/zombie agent sessions and restarts them with fresh context (long-lived threads burning context cause silent throughput collapse). Folder: `agents/dottore/`.
-- **🦺 Mantenitore** — **infra health**. Daily maintenance sweep on the container/VPS: mission-critical tool smoke-test (browser/Playwright canary), dependency standardization (`jht-install`), disk/RAM trend, orphan GC. A broken crucial tool is a P1. Folder: `agents/mantenitore/`.
+- **👷‍♂️ Mantenitore** — **infra health**. Daily maintenance sweep on the container/VPS: mission-critical tool smoke-test (browser/Playwright canary), dependency standardization (`jht-install`), disk/RAM trend, orphan GC. A broken crucial tool is a P1. Folder: `agents/mantenitore/`.
 
 ---
 

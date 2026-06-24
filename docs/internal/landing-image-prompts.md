@@ -14,7 +14,7 @@ Convenzione `promptId`: `area.nome` (es. `team.analisti`, `hero.main`).
 
 > Hand-drawn **Western graphic-novel / European comic** illustration (realistic adult
 > proportions — **NOT anime / manhwa / webtoon**) — clean inked outlines, flat colours,
-> a **warm muted palette with subtle green accents**, light halftone / paper-grain
+> a **warm muted palette**, light halftone / paper-grain
 > texture; not 3D, not photorealistic, not a glossy AI painting. The agents are
 > **grown adult professionals of any age — vary them naturally, don't default to one
 > age.** Normal, friendly people, calm approachable expressions (NOT stern), varied
@@ -25,6 +25,17 @@ Convenzione `promptId`: `area.nome` (es. `team.analisti`, `hero.main`).
 > porta a volti **webtoon/manhwa giovanissimi**. L'àncora giusta è lo **stile occidentale**
 > ("Western/European comic, not anime/manhwa"), **NON** un'età fissa. Sull'età lasciare
 > **libero** ("any age, vary naturally") — mai imporre "giovane", "vecchio" né "mezza età".
+
+> ⏳ **Trappola "default d'epoca":** lo stile condiviso (palette spenta + grana di carta +
+> fumetto europeo + occhialini tondi a filo di metallo) ha un retrogusto **leggermente
+> retrò** di suo. Per ruoli con archetipo storicamente connotato (es. il **Tesoriere** →
+> registro/monete/bilancia, il **ragioniere/mercante** classico) questo basta a far uscire
+> un personaggio **ottocentesco** anche senza chiederlo. La regola: **togliere le parole
+> "old-fashioned/vintage/clerk" NON basta** — se vuoi il contemporaneo devi **ancorarlo in
+> positivo** ("present-day / contemporary, modern 21st-century business attire" + prop
+> moderni). Frasi come `keeps the books` o prop generici su "guarding money" → il modello
+> riempie il vuoto col default storico. NB: per il team il filo retrò è **gradito** e dà
+> coerenza, quindi è una nota di consapevolezza, non un divieto.
 
 **Regola occhiali (sempre):** ogni agente indossa gli **stessi** piccoli occhiali da
 sole — lenti ovali scure, discrete — come tratto distintivo condiviso del team. Sono
@@ -49,9 +60,8 @@ the nose."*
 > ✂️ **Prompt CORTI — la creatività la lascia il generatore.** Dare solo: linee guida di
 > stile + scena/ruolo + regola occhiali. **NON forzare** ciò che deve scegliere lui —
 > **colore dei vestiti, età, pose esatte**: imporli fa uscire **ogni immagine uguale**
-> (es. tutti vestiti verdi, tutti coetanei). Il verde è un **accento di palette
-> occasionale, NON una divisa**: gli abiti **variano** (eleganti, di colori diversi);
-> l'età è **libera** ("any age"). Niente blocchi "Avoid" chilometrici — il generatore
+> (es. tutti vestiti uguali, tutti coetanei): gli abiti **variano** (eleganti, di colori
+> diversi) e l'età è **libera** ("any age"). Niente blocchi "Avoid" chilometrici — il generatore
 > non è stupido, bastano i vincoli che sbaglia davvero (occhiali, anime, in piedi/seduto).
 
 > 🆕 **Ogni immagine = istanza GPT NUOVA (zero memoria).** Generiamo ognuna in una chat
@@ -121,7 +131,7 @@ riserva per generarla invece:
 > diffuse — NOT from a single pinpoint on the screen)** and widens outward. At the
 > wide end floats a glass sci-fi cube (Tesseract-style, soft blue glowing edges)
 > containing a tiny office/loft with the team of agents at work inside, seen from
-> outside like a miniature world. Subtle green accents. **Isolated on a plain
+> outside like a miniature world. **Isolated on a plain
 > transparent background — no scene, no setting.** Transparent PNG. 16:9.
 >
 > **AVOID:** any readable text or words (no "Tesseract", no labels/UI text), any
@@ -133,7 +143,7 @@ riserva per generarla invece:
 
 ### `landing.pricing`
 > [STYLE] An open, airy composition: an open-source padlock/key motif and a few
-> floating provider "coins" with subtle green accents, suggesting "the platform is
+> floating provider "coins", suggesting "the platform is
 > free, you only pay the AI provider". Minimal, elegant, no readable text. 16:9.
 
 ---
@@ -147,11 +157,12 @@ scenico del ruolo.** Niente testo leggibile.
 | promptId | scena (oltre a STYLE + REGOLA OCCHIALI) |
 |---|---|
 | `team.coordinatore` | The Coordinator — elegant composed director/conductor: refined dark structured tailored jacket/suit (quiet authority, **NO naval/captain uniform, NO peaked cap**), mid-gesture as if cueing the team; the one who turns signals into decisions. *(ex `team.capitano` — rebrand Capitano→Coordinatore, vedi BACKLOG `[JHT-RENAME-COORDINATOR]`)* |
-| `team.sentinella` | The Sentinel — tall guard in full dress uniform (bearskin hat, red tunic); stern, watching a wall of vital-sign monitors with a red alert light. |
+| `team.sentinella` | **The Treasurer** (ex Sentinel — rebrand sul sito: "Sentinella" dava un tono da ronda armata) — keeper of the budget, elegant figure who keeps the books and watches the team's spend, ready to raise the alarm. ✅ FATTO → `web/public/agents-treasurer.png` (cablato su `/agents`; `slug`/`promptId` interni invariati). NB: esce **ottocentesco** per il "default d'epoca" (vedi trappola sopra) — accettato, piace. |
 | `team.dottore` | The Doctor — white medical coat, stethoscope; checking on a seated colleague, caring and calm. |
+| `team.mantenitore` | The Maintainer (👷‍♂️, gemello del Dottore: lui cura l'**infra**, il Dottore gli **agenti**) — maintenance/construction worker with a **yellow hard hat** + hi-vis safety vest, work clothes, wrench/toolbox; keeps tools, deps, disk/RAM healthy and fixes what breaks. |
 | `team.scout` | The Scout — detective/sleuth: trench coat, deerstalker-ish hat, magnifying glass and notepad; out hunting for clues. |
 | `team.analista` | The Analyst — white lab coat, vials/beakers; coolly examining documents at a desk. |
-| `team.scorer` | The Scorer — at a wall of screens in a simulator-style chair, judging; focused. |
+| `team.scorer` | The Scorer — reclining in a **real ergonomic workstation chair** with a **modern curved ultrawide monitor** in front (at head height, NOT overhead), studying a **rich, busy analytics dashboard** (many chart types). Grounded/real, NOT sci-fi. ✅ FATTO → `web/public/agents-scorer.png` (vedi prompt finale sotto). |
 | `team.scrittore` | The Writer — smart blazer; crafting a tailored document at a desk, pen in hand. |
 | `team.critico` | The Critic — judge's robe and wig; reading a CV with a severe, unimpressed expression. |
 | `team.mentor` | The Mentor — wise wizard/sage robe; speaking rarely but with weight, hand raised. |
@@ -171,7 +182,7 @@ rappresentativo** del ruolo — ma **senza dettarlo**: si lascia scegliere al
 generatore (l'utente vuole massima creatività, niente spunti pilotati). Prompt:
 
 > Hand-drawn comic-book / graphic-novel illustration — clean inked outlines, flat
-> colours, warm muted palette with subtle green accents (classic adventure-comic look).
+> colours, warm muted palette (classic adventure-comic look).
 > Full-figure character on a plain white background, no scene.
 >
 > **The Coordinator** — the calm, friendly leader who coordinates the whole team. A
@@ -189,7 +200,7 @@ generatore", senza imporre quale.
 ### `team.scout` — gli Scout (2 figure intere) ⬜ DA GENERARE
 
 Lo Scout è un pool → l'immagine ne mostra **più d'uno**. Lo **stile è ok** (investigatori
-vittoriani eleganti, palette terrosa+verde, NO boy-scout). Affinamenti utente: **esattamente
+vittoriani eleganti, palette terrosa, NO boy-scout). Affinamenti utente: **esattamente
 2 Scout**, **figura intera** come il Coordinatore, pose precise. Titolo ruolo sulla pagina
 → plurale **"Gli Scout / The Scouts"** (fatto).
 
@@ -197,7 +208,7 @@ vittoriani eleganti, palette terrosa+verde, NO boy-scout). Affinamenti utente: *
 "elegant investigators / detective-story" + blocco Avoid. Prompt:
 
 > Hand-drawn Western graphic-novel illustration (realistic proportions, NOT anime/manhwa),
-> clean inked outlines, flat colours, warm earthy palette with green accents, vintage
+> clean inked outlines, flat colours, warm earthy palette, vintage
 > detective style. Plain white background.
 >
 > **Two elegant detective-style investigators (the Scouts), full figure head-to-toe —
@@ -229,6 +240,73 @@ alto** carico di fogli e roba da scienziati. Prompt:
 >
 > Both wear identical small round dark sunglasses, thin metal frames, lenses fully
 > hiding the eyes, worn high on the nose.
+
+### `team.critico` — il Critico ✅ FATTO
+
+File: `web/public/agents-critic.png` (cablato su `/agents`). Prompt usato:
+
+> Hand-drawn Western graphic-novel / European comic illustration (realistic adult
+> proportions — NOT anime / manhwa / webtoon), clean inked outlines, flat colours, warm
+> muted palette, light paper-grain texture; not 3D, not photorealistic, not a glossy AI
+> painting. Plain white background, no scene.
+>
+> The Critic — the team's quality-control reviewer, a single grown adult of any age, full
+> figure head-to-toe. He wears a judge's robe and a judge's curly wig, elegant underneath.
+> He is reviewing a written document (a CV / cover letter), reading it closely with a
+> discerning, mildly skeptical critical air — one eyebrow raised, weighing it — yet still a
+> normal, composed person, not menacing or cartoonishly grim. Give him a prop or two that
+> naturally suit his role of judging and refining the team's written work — your choice
+> (e.g. a red pen mid-correction, a stack of pages, a small gavel).
+>
+> He wears the same small round/oval dark sunglasses with thin metal frames as the rest of
+> the team — small and discreet, the dark lenses fully hide the eyes (no eyes visible),
+> worn high on the nose. Keep them small and oval, NOT large or square, NOT lowered on the nose.
+>
+> Avoid: anime/manhwa look, large or square glasses, visible eyes, readable text, logos.
+
+> Scontorno: `isnet-general-use` (via modulo Python `rembg` — la CLI ha un import rotto).
+> ⚠️ **Scelta utente**: Critico, Tesoriere e Dottore sono composti **più grandi** degli altri
+> (standard ~88%): Critico ~93% (prima era 76% ma "stava troppo lontano"), Tesoriere e Dottore
+> ~98% (richiesti ancora più grandi). Tela 1448×1086, figura centrata.
+
+### `team.scorer` — lo Scorer ✅ RIFATTO
+
+File: `web/public/agents-scorer.png` (cablato su `/agents`). La v1 ("wall of screens / simulator
+chair") usciva **troppo futuristica/sci-fi** e stonava col resto. Rifatto come **oggetto reale**:
+poltrona ergonomica reclinabile + monitor curvo ultrawide moderno **in fronte ad altezza testa**
+(NON sopra la testa), con dashboard ricca di grafici. Prompt finale:
+
+> Hand-drawn Western graphic-novel / European comic illustration (realistic adult proportions —
+> NOT anime / manhwa / webtoon), clean bold inked outlines, flat colours, warm muted palette,
+> light paper-grain texture; not 3D, not photorealistic, not a glossy AI painting. Plain white
+> background, no room scene — just the figure and his chair-rig.
+>
+> The Scorer — the team's data-crunching evaluator who rates each opening, a single grown adult
+> of any age, reclining comfortably in a real ergonomic reclining workstation chair with a
+> keyboard tray, monitors on adjustable arms. In front of him, at about head height (NOT above
+> his head, NOT on the ceiling — he looks straight ahead at it), a large modern curved ultrawide
+> monitor (a single sweeping thin-bezel curved screen; two or three thin modern screens are also
+> fine, but make them clearly modern). He studies it, calm and focused, judging and assigning a score.
+>
+> The screen is a rich, busy analytics dashboard packed with MANY different kinds of charts — bar
+> charts, line graphs, pie / donut charts, scatter plots, dial gauges, small data tables and number
+> panels — dense, varied data laid out in panels across the whole screen, as if he's cross-referencing
+> many metrics at once. Lots of different chart types, NOT just a couple of simple bars. (Still NO
+> readable text or real numbers — only abstract chart and graph shapes.)
+>
+> Keep it grounded and REAL: an ordinary present-day ergonomic chair-and-monitor rig you can actually
+> buy — NOT sci-fi, NOT glowing holograms, NOT spaceship panels, NOT a mission-control wall.
+>
+> He wears the same small round/oval dark sunglasses with thin metal frames as the rest of the team —
+> small and discreet, the dark lenses fully hide the eyes (no eyes visible), worn high on the nose.
+> Keep them small and oval, NOT large or square, NOT lowered on the nose.
+>
+> Avoid: anime/manhwa look, monitors above/over the head or on the ceiling, sci-fi / holographic
+> screens, glowing panels, spaceship-cockpit look, over-simple charts, large or square glasses,
+> visible eyes, readable text, logos. 4:3.
+
+> Scontorno: `isnet-general-use`. È una **scena orizzontale** (poltrona + monitor), non figura in
+> piedi → composta adattata in larghezza (~91% W / ~92% H), centrata su tela 1448×1086.
 
 ---
 
@@ -269,7 +347,7 @@ un cervello umano biologico: c'è un **cervello AI = rete neurale / LLM**.
 
 ### `setup.local` — laptop "ThinkPad" (sfondo trasparente)
 > Comic-book / graphic-novel illustration, hand-drawn inked outlines, flat cel
-> shading, muted palette with subtle green accents; not 3D, not photorealistic.
+> shading, muted palette; not 3D, not photorealistic.
 > A classic boxy matte-black business laptop, open, seen at a three-quarter
 > angle — with the iconic small **RED pointing-nub in the middle of the keyboard**
 > and a discreet status light (clearly a rugged business notebook, but **WITHOUT
@@ -286,7 +364,7 @@ un cervello umano biologico: c'è un **cervello AI = rete neurale / LLM**.
 
 ### `setup.vps` — server davanti + grande nuvola OneDrive completa (sfondo trasparente)
 > Comic-book / graphic-novel illustration, hand-drawn inked outlines, flat cel
-> shading, muted palette with subtle green accents; not 3D, not photorealistic.
+> shading, muted palette; not 3D, not photorealistic.
 > A **large, COMPLETE OneDrive-style flat cloud** (clean simple cloud
 > SHAPE/outline, NOT a fluffy 3D sky-cloud, NO face) — **fully visible and clearly
 > readable as a cloud, big enough to frame the whole scene**. **In front of it, a

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # doctor-watchdog.sh — loop che spawna il Dottore (2×/finestra) e il
-# Mantenitore (🦺 1x/giorno). Gira in una sessione tmux dedicata `DOCTOR-WATCHDOG`.
+# Mantenitore (👷‍♂️ 1x/giorno). Gira in una sessione tmux dedicata `DOCTOR-WATCHDOG`.
 #
 # Avvio (una volta sola):
 #   tmux new-session -d -s DOCTOR-WATCHDOG \
@@ -27,7 +27,7 @@ POLL_SEC="${DOCTOR_WATCHDOG_POLL:-300}"               # ricontrolla ogni 5 min
 OFF_RECHECK_SEC="${DOCTOR_WATCHDOG_OFF_RECHECK:-900}" # fuori finestra ogni 15 min
 FALLBACK_SEC="${DOCTOR_WATCHDOG_FALLBACK:-21600}"     # 24/7 senza finestra: ~ogni 6h
 SPAWNER="/app/.launcher/spawn-doctor.sh"
-MAINT_SPAWNER="/app/.launcher/spawn-maintainer.sh"   # 🦺 Mantenitore (1x/giorno)
+MAINT_SPAWNER="/app/.launcher/spawn-maintainer.sh"   # 👷‍♂️ Mantenitore (1x/giorno)
 SCHED="/app/shared/skills/doctor_schedule.py"
 # On-demand: i coordinatori (Capitano/Assistente/Sentinella/Mentor) hanno la
 # skill `spawn-doctor` per invocare lo spawner fuori dagli slot programmati.
@@ -62,7 +62,7 @@ while true; do
     halt_log_tick=0
   fi
 
-  # 🦺 Slot MANTENITORE — cadenza GIORNALIERA indipendente dal Dottore (redesign
+  # 👷‍♂️ Slot MANTENITORE — cadenza GIORNALIERA indipendente dal Dottore (redesign
   # 2026-06-13). check-maintainer ritorna MAINT solo 1x/giorno ed entro working
   # hours (gestisce lui il gate); marchiamo solo su spawn riuscito → ritenta al
   # prossimo poll se fallisce. Stesso halt-gate del Dottore (sopra).
