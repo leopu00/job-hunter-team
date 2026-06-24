@@ -13,10 +13,9 @@ import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import CaseStudyOverview from "./CaseStudyOverview";
 import WorkBudgetChart from "./WorkBudgetChart";
-import SourcesChart from "./SourcesChart";
-import SourcesTimeChart from "./SourcesTimeChart";
 import SourcesScoreChart from "./SourcesScoreChart";
 import SourcesAvgScoreChart from "./SourcesAvgScoreChart";
+import SourcesDonutChart from "./SourcesDonutChart";
 
 export interface PreparedCase {
   id: string;
@@ -132,7 +131,7 @@ const T: Record<
     sourcesScoreCaption:
       "E la qualità per fonte: le linee mostrano lo score medio giornaliero di ogni provider (asse destro), sopra le barre delle posizioni.",
     sourcesAvgCaption:
-      "Lo score medio complessivo per fonte: quali provider, in media, hanno portato i match migliori.",
+      "Lo score medio e la quota per fonte, sulle posizioni valutate (quelle con uno score): a sinistra la qualità media, a destra la distribuzione % delle fonti.",
     sourcesProse1: "Le fonti da cui lo Scout ha trovato le",
     sourcesProse2: "posizioni: job board, ATS e pagine carriera aziendali.",
   },
@@ -161,7 +160,7 @@ const T: Record<
     sourcesScoreCaption:
       "And quality by source: the lines show each provider's daily average score (right axis), over the position bars.",
     sourcesAvgCaption:
-      "The overall average score by source: which providers brought the best matches on average.",
+      "Average score and share by source, over scored positions (those with a score): on the left the average quality, on the right the % distribution of sources.",
     sourcesProse1: "The sources where the Scout found the",
     sourcesProse2: "positions: job boards, ATS and company career pages.",
   },
@@ -190,7 +189,7 @@ const T: Record<
     sourcesScoreCaption:
       "Y la calidad por fuente: las líneas muestran el score medio diario de cada proveedor (eje derecho), sobre las barras de posiciones.",
     sourcesAvgCaption:
-      "El score medio total por fuente: qué proveedores trajeron, de media, los mejores matches.",
+      "El score medio y la cuota por fuente, sobre las posiciones evaluadas (las que tienen score): a la izquierda la calidad media, a la derecha la distribución % de las fuentes.",
     sourcesProse1: "Las fuentes donde el Scout encontró las",
     sourcesProse2:
       "posiciones: portales de empleo, ATS y páginas de carrera de las empresas.",
@@ -220,7 +219,7 @@ const T: Record<
     sourcesScoreCaption:
       "Et la qualité par source : les lignes montrent le score moyen quotidien de chaque source (axe droit), au-dessus des barres de postes.",
     sourcesAvgCaption:
-      "Le score moyen global par source : quelles sources ont apporté les meilleurs matchs en moyenne.",
+      "Le score moyen et la part par source, sur les postes évalués (ceux avec un score) : à gauche la qualité moyenne, à droite la répartition % des sources.",
     sourcesProse1: "Les sources où le Scout a trouvé les",
     sourcesProse2:
       "postes : sites d’emploi, ATS et pages carrières des entreprises.",
@@ -250,7 +249,7 @@ const T: Record<
     sourcesScoreCaption:
       "Und die Qualität je Quelle: die Linien zeigen den täglichen Durchschnitts-Score jeder Quelle (rechte Achse), über den Stellen-Balken.",
     sourcesAvgCaption:
-      "Der durchschnittliche Gesamt-Score je Quelle: welche Quellen im Schnitt die besten Treffer brachten.",
+      "Durchschnitts-Score und Anteil je Quelle, über die bewerteten Positionen (mit Score): links die Durchschnittsqualität, rechts die prozentuale Verteilung der Quellen.",
     sourcesProse1: "Die Quellen, in denen der Scout die",
     sourcesProse2:
       "Positionen gefunden hat: Jobbörsen, ATS und Karriereseiten von Unternehmen.",
@@ -280,7 +279,7 @@ const T: Record<
     sourcesScoreCaption:
       "És a minőség forrásonként: a vonalak az egyes források napi átlagpontszámát mutatják (jobb tengely), a pozíció-oszlopok felett.",
     sourcesAvgCaption:
-      "Az összesített átlagpontszám forrásonként: mely források hozták átlagosan a legjobb találatokat.",
+      "Átlagpontszám és arány forrásonként, az értékelt pozíciókon (amelyeknek van pontszáma): balra az átlagos minőség, jobbra a források százalékos megoszlása.",
     sourcesProse1: "A források, ahol a Scout megtalálta a",
     sourcesProse2:
       "pozíciókat: állásportálok, ATS és vállalati karrieroldalak.",
@@ -310,7 +309,7 @@ const T: Record<
     sourcesScoreCaption:
       "E a qualidade por fonte: as linhas mostram o score médio diário de cada provedor (eixo direito), sobre as barras de posições.",
     sourcesAvgCaption:
-      "O score médio geral por fonte: quais provedores trouxeram, em média, os melhores matches.",
+      "O score médio e a quota por fonte, sobre as posições avaliadas (as que têm score): à esquerda a qualidade média, à direita a distribuição % das fontes.",
     sourcesProse1: "As fontes onde o Scout encontrou as",
     sourcesProse2:
       "posições: portais de emprego, ATS e páginas de carreira das empresas.",
@@ -573,61 +572,51 @@ export default function CaseStudyDetail({
       )}
 
       {/* ── Da dove arrivano le posizioni (fonti) ─────────────── */}
-      {run.sources && run.sources.length > 0 && (
-        <section className="pt-10 border-t border-[var(--color-border)]">
-          <div className="section-label mb-1">📥 {t.sourcesTitle}</div>
-          <p className="text-[11px] text-[var(--color-dim)] mb-6">
-            {t.sourcesProse1} {nf(locale, run.totals.positions)}{" "}
-            {t.sourcesProse2}
-          </p>
-          <SourcesChart sources={run.sources} total={run.totals.positions} />
+      {run.sourcesDaily &&
+        run.sourcesDaily.length > 0 &&
+        run.sourcesScoreDaily &&
+        run.sourcesScoreDaily.length > 0 &&
+        run.sourcesDailyKeys &&
+        run.sourcesDailyKeys.length > 0 && (
+          <section className="pt-10 border-t border-[var(--color-border)]">
+            <div className="section-label mb-1">📥 {t.sourcesTitle}</div>
+            <p className="text-[11px] text-[var(--color-dim)] mb-6">
+              {t.sourcesProse1} {nf(locale, run.totals.positions)}{" "}
+              {t.sourcesProse2}
+            </p>
 
-          {run.sourcesDaily &&
-            run.sourcesDaily.length > 0 &&
-            run.sourcesDailyKeys &&
-            run.sourcesDailyKeys.length > 0 && (
+            {/* posizioni/giorno per fonte + score medio/giorno (interattivo) */}
+            <p className="text-[11px] text-[var(--color-dim)] mb-4">
+              {t.sourcesScoreCaption}
+            </p>
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+              <SourcesScoreChart
+                daily={run.sourcesDaily}
+                scoreDaily={run.sourcesScoreDaily}
+                keys={run.sourcesDailyKeys}
+              />
+            </div>
+
+            {/* score medio + distribuzione % per fonte (sulle valutate) */}
+            {run.sourcesScore && run.sourcesScore.length > 0 && (
               <>
                 <p className="text-[11px] text-[var(--color-dim)] mt-8 mb-4">
-                  {t.sourcesTimeCaption}
+                  {t.sourcesAvgCaption}
                 </p>
-                <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-                  <SourcesTimeChart
-                    daily={run.sourcesDaily}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                  <SourcesAvgScoreChart
+                    rows={run.sourcesScore}
+                    keys={run.sourcesDailyKeys}
+                  />
+                  <SourcesDonutChart
+                    rows={run.sourcesScore}
                     keys={run.sourcesDailyKeys}
                   />
                 </div>
-
-                {run.sourcesScoreDaily &&
-                  run.sourcesScoreDaily.length > 0 && (
-                    <>
-                      <p className="text-[11px] text-[var(--color-dim)] mt-8 mb-4">
-                        {t.sourcesScoreCaption}
-                      </p>
-                      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-                        <SourcesScoreChart
-                          daily={run.sourcesDaily}
-                          scoreDaily={run.sourcesScoreDaily}
-                          keys={run.sourcesDailyKeys}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                {run.sourcesScore && run.sourcesScore.length > 0 && (
-                  <>
-                    <p className="text-[11px] text-[var(--color-dim)] mt-8 mb-4">
-                      {t.sourcesAvgCaption}
-                    </p>
-                    <SourcesAvgScoreChart
-                      rows={run.sourcesScore}
-                      keys={run.sourcesDailyKeys ?? []}
-                    />
-                  </>
-                )}
               </>
             )}
-        </section>
-      )}
+          </section>
+        )}
     </div>
   );
 }
