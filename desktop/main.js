@@ -97,7 +97,8 @@ async function dashboardApiFetch(apiPath, init = {}) {
   const token = readLocalToken()
   const headers = token ? { Authorization: `Bearer ${token}` } : {}
   const method = init.method || 'GET'
-  const fetchInit = { method, headers, signal: AbortSignal.timeout(15000) }
+  const timeoutMs = typeof init.timeoutMs === 'number' ? init.timeoutMs : 15000
+  const fetchInit = { method, headers, signal: AbortSignal.timeout(timeoutMs) }
   if (init.body !== undefined && method !== 'GET') {
     headers['Content-Type'] = 'application/json'
     fetchInit.body = JSON.stringify(init.body)
@@ -111,6 +112,35 @@ async function dashboardApiFetch(apiPath, init = {}) {
     return { ok: true, data }
   } catch (err) {
     return { ok: false, error: err && (err.message || String(err)) }
+  }
+}
+
+// [team auto-start] Avvia il TEAM completo (core: Capitano/Sentinella/Assistente/
+// Mentor; poi il Capitano scala i worker) appena il container locale è healthy.
+// Il container parte in modalità `dashboard` (solo Next + Assistente), quindi
+// senza questo passo il resto del team non si avvia mai. Riusa l'endpoint
+// /api/team/start-all (lo stesso della web UI), idempotente (already_active per
+// le sessioni già attive). Fire-and-forget: il bootstrap ha pre-delay interni
+// (~30s) ma non blocchiamo la UI. In VPS / runtime non pronto, dashboardApiFetch
+// ritorna subito runtime-not-ready e usciamo senza effetti.
+async function ensureTeamStarted() {
+  try {
+    const r = await dashboardApiFetch('/api/team/start-all', {
+      method: 'POST',
+      body: {},
+      timeoutMs: 120000,
+    })
+    if (r.ok) {
+      log.info('[team] start-all ok')
+      broadcastContainerLog(
+        'Team avviato: core (Capitano, Sentinella, Assistente, Mentor); il Capitano scala i worker.',
+      )
+    } else {
+      log.warn('[team] start-all failed', { error: r.error })
+      broadcastContainerLog(`Team start-all: ${r.error}`)
+    }
+  } catch (err) {
+    log.warn('[team] start-all crashed', { err: String(err) })
   }
 }
 
@@ -900,6 +930,13 @@ app.whenReady().then(() => {
       broadcastContainerLog(`syncJhtConfig failed: ${error?.message ?? error}`)
     }
     const status = await runtime.startRuntime(options)
+    // Una volta che il container/dashboard è pronto, avvia il team completo.
+    // Senza questo si vedeva solo l'Assistente (il container parte in modalità
+    // dashboard). Fire-and-forget: gli agenti salgono in ~30s, la pagina Agents
+    // li mostra man mano. Solo runtime locale pronto.
+    if (status && (status.mode === 'running' || status.mode === 'external')) {
+      ensureTeamStarted()
+    }
     return status
   })
   ipcMain.handle('launcher:stop', () => {
