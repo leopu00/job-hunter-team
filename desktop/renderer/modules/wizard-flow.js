@@ -1363,9 +1363,10 @@ async function onEmailVerify() {
       : { ok: false, stage: 'unknown' }
     if (res && res.ok) {
       emailValidated = true
-      if (res.looksPersonal) setEmailStatus(t('email.okPersonal'), 'warn')
-      else setEmailStatus(t('email.ok'), 'ok')
-      log.info('email-setup.validated', { looksPersonal: !!res.looksPersonal })
+      // Niente più avviso "personal-style": l'indirizzo personale/dedicato non
+      // ci interessa — la checkbox di conferma basta. Sempre messaggio di OK.
+      setEmailStatus(t('email.ok'), 'ok')
+      log.info('email-setup.validated')
     } else {
       emailValidated = false
       setEmailStatus(emailErrorMessage(res), 'error')
