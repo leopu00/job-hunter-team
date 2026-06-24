@@ -55,6 +55,7 @@ const sync = require('./sync')
 const vps = require('./vps')
 const tunnel = require('./vps/tunnel')
 const telegram = require('./telegram')
+const emailVerify = require('./email-verify')
 const { freeBytes, formatBytes } = require('./disk-space')
 
 function getBindHomeDir() {
@@ -1270,6 +1271,30 @@ app.whenReady().then(() => {
   ipcMain.handle('email:get-status', () => readEmailStatus())
   ipcMain.handle('email:save-config', (_event, args = {}) => saveEmailConfig(args))
   ipcMain.handle('email:delete-config', () => deleteEmailConfig())
+  // [ONBOARDING] Validazione round-trip delle credenziali della casella del
+  // team: login IMAP + invio SMTP di un codice alla casella + rilettura via
+  // IMAP. Su successo SALVA le credenziali (così l'onboarding non deve fare
+  // un save separato). Ritorna { ok, stage?, error?, looksPersonal }.
+  ipcMain.handle('email:validate', async (_event, { email, password } = {}) => {
+    const looksPersonal = emailVerify.looksPersonal(String(email || ''))
+    let res
+    try {
+      res = await emailVerify.validateRoundTrip(
+        { email, password },
+        { log: (stage) => log.info('[onboarding] email-validate stage', { stage }) },
+      )
+    } catch (err) {
+      return { ok: false, stage: 'unknown', error: err && (err.message || String(err)), looksPersonal }
+    }
+    if (res.ok) {
+      const saved = saveEmailConfig({ email, password })
+      if (!saved.ok) {
+        return { ok: false, stage: 'save', error: saved.error, looksPersonal }
+      }
+      log.info('[onboarding] email validated + saved', { host: res.imap_host })
+    }
+    return { ...res, looksPersonal }
+  })
 
   // -------- vps:write-config (T1: generic config writer remoto) ---------
   // Scrive un file di config sul container remoto via SshExec.writeFile.

@@ -252,6 +252,9 @@ contextBridge.exposeInMainWorld('emailApi', {
   getStatus: () => ipcRenderer.invoke('email:get-status'),
   saveConfig: (args) => ipcRenderer.invoke('email:save-config', args),
   deleteConfig: () => ipcRenderer.invoke('email:delete-config'),
+  // [ONBOARDING] Valida round-trip (IMAP login + SMTP invio + IMAP rilettura)
+  // e, su successo, salva le credenziali. → { ok, stage?, error?, looksPersonal }.
+  validate: (args) => ipcRenderer.invoke('email:validate', args),
 })
 
 contextBridge.exposeInMainWorld('syncApi', {

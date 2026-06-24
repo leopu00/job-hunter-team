@@ -590,6 +590,40 @@
         </div>
       </section>
 
+      <!-- Step 2h: team email inbox (obbligatorio). Casella DEDICATA che il
+           team monitora per i job alert inoltrati. Credenziali validate con
+           round-trip IMAP+SMTP prima di lasciar procedere. -->
+      <section class="step step--centered" id="step-email-setup" data-step="email-setup" hidden>
+        <div class="step__emoji" aria-hidden="true">📧</div>
+        <h1 class="step__title" data-i18n="email.title">Connect the team inbox</h1>
+        <p class="step__lead" data-i18n="email.lead">
+          The team reads forwarded job alerts from a dedicated inbox. Connect it here. Use an email created for the team — not your personal one — then forward your job alerts to it.
+        </p>
+        <div class="email-form">
+          <label class="email-field">
+            <span class="email-field__label" data-i18n="email.address">Email address</span>
+            <input type="email" id="email-address" class="email-input" placeholder="team.jht@gmail.com" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="email-field">
+            <span class="email-field__label" data-i18n="email.password">App password</span>
+            <input type="password" id="email-password" class="email-input" autocomplete="off" />
+            <span class="step__hint" data-i18n="email.passwordHint">Use an app-specific password (not your normal login password).</span>
+          </label>
+          <label class="email-dedicated">
+            <input type="checkbox" id="email-dedicated-confirm" />
+            <span data-i18n="email.dedicated">I confirm this is a dedicated inbox for the team, not my personal email.</span>
+          </label>
+          <button type="button" class="btn btn--secondary" id="btn-email-verify" data-i18n="email.verify">
+            Verify connection
+          </button>
+          <p class="step__hint" id="email-status" hidden></p>
+        </div>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-email-back" data-i18n="email.back">Back</button>
+          <button class="btn btn--primary" id="btn-email-continue" data-i18n="email.continue" disabled>Continue</button>
+        </div>
+      </section>
+
       <!-- Step 3: ready / summary -->
       <section class="step step--centered" id="step-ready" data-step="ready" hidden>
         <div class="step__emoji" aria-hidden="true">🚀</div>

@@ -15,10 +15,12 @@ export const STEP_CONTAINER = 'container'
 export const STEP_PROVIDER_CHOOSE = 'provider-choose'
 export const STEP_PROVIDER_INSTALL = 'provider-install'
 export const STEP_PROVIDER_LOGIN = 'provider-login'
-// Onboarding tail (local path): pick working hours, then upload the
-// profile documents (CV + goals) the Assistant ingests at team start.
+// Onboarding tail (local path): pick working hours, upload the profile
+// documents (CV + goals) the Assistant ingests at team start, then connect
+// the dedicated team email inbox (validated round-trip before proceeding).
 export const STEP_WORKING_HOURS = 'working-hours'
 export const STEP_PROFILE_UPLOAD = 'profile-upload'
+export const STEP_EMAIL_SETUP = 'email-setup'
 export const STEP_READY = 'ready'
 
 // User-chosen host where the team will live. Picked at onboarding,
