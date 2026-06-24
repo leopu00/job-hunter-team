@@ -178,7 +178,7 @@ Whichever path you took:
 | 👨‍💼 | **Assistant** | Platform copilot — helps you navigate every interface |
 | 🧙‍♂️ | **Mentor** | Career coach — analyzes goals/gaps/market signals |
 | 🩺 | **Dottore** *(one-shot)* | Agent-health — restarts stuck agents with fresh context |
-| 🦺 | **Mantenitore** *(one-shot)* | Infra-health — container, deps, disk, mission-critical tools |
+| 👷‍♂️ | **Mantenitore** *(one-shot)* | Infra-health — container, deps, disk, mission-critical tools |
 | 📡 | **Bridge** *(infrastructure, not LLM)* | Polls provider usage on a fixed clock, notifies the Sentinel |
 
 For the full architecture diagram → see the README.

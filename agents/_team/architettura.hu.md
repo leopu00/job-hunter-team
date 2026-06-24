@@ -404,13 +404,13 @@ A pipeline-on kivul. **Egyszer futo utemezett** agensek: a watchdog mindegyiket 
 ```
    ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
    │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
-   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   │ (scheduler)│              │ 👷‍♂️ Mantenitore│  findings │            │
    └────────────┘              └──────────────┘          └────────────┘
                                   one-shot → self-destruct
 ```
 
 - **🩺 Dottore** — **agens-allapot**. Periodikus kontextus-frissites + retrospektiv: eszleli a beragadt/zombi agens-munkameneteket es ujrainditja oket friss kontextussal (a hosszu eletu, kontextust egetoe szalak csendes atviteli osszeomlast okoznak). Mappa: `agents/dottore/`.
-- **🦺 Mantenitore** — **infra-allapot**. Napi karbantartasi ellenoerzes a konteneren/VPS-en: kuldetes-kritikus eszkoezeoek fueest-tesztje (browser/Playwright canary), fueggoeseg-szabvanyositas (`jht-install`), disk/RAM trend, arva GC. Egy elromlott kritikus eszkoez egy P1. Mappa: `agents/mantenitore/`.
+- **👷‍♂️ Mantenitore** — **infra-allapot**. Napi karbantartasi ellenoerzes a konteneren/VPS-en: kuldetes-kritikus eszkoezeoek fueest-tesztje (browser/Playwright canary), fueggoeseg-szabvanyositas (`jht-install`), disk/RAM trend, arva GC. Egy elromlott kritikus eszkoez egy P1. Mappa: `agents/mantenitore/`.
 
 ---
 

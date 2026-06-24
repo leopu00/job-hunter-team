@@ -404,13 +404,13 @@ Fuori dalla pipeline. Agenti **one-shot schedulati**: il watchdog ne crea uno pe
 ```
    ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
    │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
-   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   │ (scheduler)│              │ 👷‍♂️ Mantenitore│  findings │            │
    └────────────┘              └──────────────┘          └────────────┘
                                   one-shot → self-destruct
 ```
 
 - **🩺 Dottore** — **salute degli agenti**. Refresh periodico del contesto + retrospettiva: rileva sessioni di agenti bloccate/zombie e le riavvia con contesto fresco (thread di lunga durata che bruciano contesto causano un collasso silenzioso del throughput). Cartella: `agents/dottore/`.
-- **🦺 Mantenitore** — **salute dell'infrastruttura**. Sweep di manutenzione giornaliera sul container/VPS: smoke-test dei tool mission-critical (canary browser/Playwright), standardizzazione delle dipendenze (`jht-install`), trend disco/RAM, GC degli orfani. Un tool cruciale rotto è un P1. Cartella: `agents/mantenitore/`.
+- **👷‍♂️ Mantenitore** — **salute dell'infrastruttura**. Sweep di manutenzione giornaliera sul container/VPS: smoke-test dei tool mission-critical (canary browser/Playwright), standardizzazione delle dipendenze (`jht-install`), trend disco/RAM, GC degli orfani. Un tool cruciale rotto è un P1. Cartella: `agents/mantenitore/`.
 
 ---
 

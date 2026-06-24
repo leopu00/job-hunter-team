@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# spawn-maintainer.sh — spawna una sessione MANTENITORE 🦺 (one-shot, 1x/giorno)
+# spawn-maintainer.sh — spawna una sessione MANTENITORE 👷‍♂️ (one-shot, 1x/giorno)
 # killando ogni Mantenitore precedente. Gemello di spawn-doctor.sh ma per il
 # ruolo INFRA: salute container/deps/disco/tool + standardizzazione.
 #

@@ -48,7 +48,7 @@ Sentinella); **salta i fresh**; **parcheggia i singleton idle**. L'interview (do
   verificabili → `OPEN_UNVERIFIED` con nota, non forzare (= P1 recheck-liveness interiorizzata);
   `db_query.py` non ha comando raw, usare sqlite3 per SQL ad-hoc.
 
-## 🦺 MANTENITORE — l'agenda c'è e funziona
+## 👷‍♂️ MANTENITORE — l'agenda c'è e funziona
 
 `/jht_home/logs/mantenitore-logbook.jsonl` (record odierno 08:06, `slot: maintainer-daily`,
 `event: sweep_complete`). Lo sweep ha prodotto:

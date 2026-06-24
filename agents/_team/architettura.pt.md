@@ -404,13 +404,13 @@ Fora da pipeline. Agentes **agendados one-shot**: o watchdog cria cada um no seu
 ```
    ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
    │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
-   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   │ (scheduler)│              │ 👷‍♂️ Mantenitore│  findings │            │
    └────────────┘              └──────────────┘          └────────────┘
                                   one-shot → self-destruct
 ```
 
 - **🩺 Dottore** — **saude dos agentes**. Refresh periodico de contexto + retrospetiva: deteta sessoes de agentes presas/zombie e reinicia-as com contexto fresco (threads de longa duracao que queimam contexto causam colapso silencioso do throughput). Pasta: `agents/dottore/`.
-- **🦺 Mantenitore** — **saude da infra**. Varredura de manutencao diaria no container/VPS: smoke-test das ferramentas criticas para a missao (canary browser/Playwright), padronizacao de dependencias (`jht-install`), tendencia de disco/RAM, GC de orfaos. Uma ferramenta crucial avariada e um P1. Pasta: `agents/mantenitore/`.
+- **👷‍♂️ Mantenitore** — **saude da infra**. Varredura de manutencao diaria no container/VPS: smoke-test das ferramentas criticas para a missao (canary browser/Playwright), padronizacao de dependencias (`jht-install`), tendencia de disco/RAM, GC de orfaos. Uma ferramenta crucial avariada e um P1. Pasta: `agents/mantenitore/`.
 
 ---
 
