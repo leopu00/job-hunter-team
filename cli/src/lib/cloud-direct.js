@@ -19,6 +19,13 @@ import { createSupabaseDirect } from './supabase-direct.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 
+// Anon key del progetto prod: PUBBLICA by-design (è nel bundle del browser, ogni
+// accesso è protetto dalla RLS). Hardcodata come default così il container la ha
+// già — niente env da configurare al redeploy. Sovrascrivibile via env
+// JHT_SUPABASE_ANON_KEY o cloud.json.supabase_anon_key (altri progetti/rotazione).
+const DEFAULT_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNtaXR0d3ZvaHNud3d3aXNxZHJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMDIzMDgsImV4cCI6MjA4OTY3ODMwOH0.g7twGaXdmmqBtukaioaJ1OV2mXVJqpEhkyzXaEIH44I';
+
 export function directReadsEnabled() {
   return process.env.JHT_SUPABASE_DIRECT === '1';
 }
@@ -34,7 +41,7 @@ export function getDirectReader(config) {
   if (!directReadsEnabled()) return null;
   const supabaseUrl = config?.supabase_url;
   const refreshToken = config?.supabase_refresh_token;
-  const anonKey = process.env.JHT_SUPABASE_ANON_KEY || config?.supabase_anon_key;
+  const anonKey = process.env.JHT_SUPABASE_ANON_KEY || config?.supabase_anon_key || DEFAULT_ANON_KEY;
   if (!supabaseUrl || !refreshToken || !anonKey) return null;
 
   // Riusa l'istanza tra i tick/moduli: mantiene l'access_token in cache. La
