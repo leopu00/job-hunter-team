@@ -95,7 +95,7 @@ Each output line is a job lead (`url`, `source`, `subject`, `sender`, `received_
 
 ---
 
-## 🛑 8 Scout-inviolable rules
+## 🛑 9 Scout-inviolable rules
 
 **SC-01** — **Boot coordination before any scrape**. Never start scraping before doing `scout-coord`. Without partition two Scouts hit LinkedIn/EU-remote in parallel and produce 100% duplicates.
 
@@ -118,6 +118,8 @@ Each output line is a job lead (`url`, `source`, `subject`, `sender`, `received_
 **SC-07 — Freshness focus (F-2.E).** Default sweep filters "posted in last 7 days". When you use `linkedin_access.py search`, pass `--posted-within-days 7`. When you use `web_scrape_robust.py`, apply provider-specific URL filters (e.g. LinkedIn `f_TPR=r604800`). Polling: repeat the sweep of a given source every 6h, not more frequent. Track last_scan_at per source in `scout_workspace.history` — resume from where you left off instead of redoing full scans. When a source returns < 3 new jobs in 2 consecutive sweeps → report to Capitano: *"source X saturated, suggest rotation"*. Do not rescan jobs already in DB (combine with SC-05 dedup).
 
 **SC-08 — Resume = RE-ENTER the loop, never ACK-and-idle (P2 fix 2026-06-13).** When you are resumed after a freeze / throttle / `[RIPRENDI]` / wake (the Capitano lifts a pacing freeze, a throttle expires, or you receive a wake signal), go **straight back to the Main loop and run at least ONE search batch (STEP 3)** before anything else. Acknowledging the resume and then sitting idle produces a **fake `new=0`** — "queue exhausted" that is really "agent parked" — which misleads the Capitano and the pacing. A resume is a signal to **WORK**, not to report-and-stop: re-evaluate throttle/feedback only **after** you've run a batch. If a tool you need is broken, follow the `resilience` ladder (retry → repair via `jht-install` → alternative source → `OPEN_UNVERIFIED`), **never** stop silently. Do **not** confuse this with genuine exhaustion (the *Queue exhausted* rule above: all 5 circles dry → notify once + high throttle + retry in hours) — exhaustion is data-driven (sources truly dry), idle-after-resume is a bug.
+
+**SC-09 — Small clean batches, max 5 positions (2026-06-25).** A batch is **at most 5 positions**: process those 5 clean through the 5 gates (STEP 3), then STEP 4 (hand-off) + STEP 5 (throttle), then loop for the next 5. **NEVER ingest a whole board in one shot** (e.g. download all ~200 RemoteOK/LinkedIn hits and bulk-insert): dedup is **per-position before each INSERT** (SC-05) and a complete JD is **mandatory per-position** (SC-02) — a mass batch skips both and inserts **dirty data** that the Analista then burns tokens cleaning, so volume upstream becomes *negative* throughput downstream. If a source returns 200 hits, take the **5 freshest** (SC-07), do them right, hand off, throttle, loop — the other 195 stay for later batches. **Quality per-position beats volume.** (You may improvise your own fetch/parse approach if a standard tool falls short — that is fine — but the *batch size* and *per-position quality* are non-negotiable.)
 
 ---
 
