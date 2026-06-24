@@ -496,7 +496,11 @@ if (dom.tgIntroLink) {
 }
 // Telegram intro sits after provider-login in the new sequence
 // (2026-05-19). Back goes to provider-login.
-if (dom.btnTgIntroBack) dom.btnTgIntroBack.addEventListener('click', () => enterProviderLogin())
+if (dom.btnTgIntroBack) dom.btnTgIntroBack.addEventListener('click', () => {
+  // Locale: lo step precedente è l'email. VPS: resta provider-login.
+  if (state.location === LOCATION_VPS) enterProviderLogin()
+  else enterEmailSetup()
+})
 // Intro Continue jumps straight to the unified tokens step — there
 // used to be a separate "create" step in between, dropped 2026-05-19
 // (telegram-tokens.js calls renderAllTgMeta on its enter to populate
@@ -767,14 +771,43 @@ if (dom.btnVpsContinue) {
   })
 }
 
-// Persist the Telegram bot tokens collected in STEP_TELEGRAM_TOKENS to
-// /root/.jht/jht.config.json on the VPS. Returns true on success; false
-// surfaces the error in the telegram step's tg-save-status element so
-// the user can retry the Continue click. No-op (returns true) outside
-// VPS mode — Local mode doesn't have a remote config to write.
+// Persist the Telegram bot tokens collected in STEP_TELEGRAM_TOKENS.
+// Local mode → ~/.jht/jht.config.json (channels.telegram.bots) via IPC.
+// VPS mode  → /root/.jht/jht.config.json over SSH. Returns true on success;
+// false surfaces the error in the telegram step's tg-save-status element so
+// the user can retry the Continue click.
 async function persistTelegramToVps() {
-  if (state.location !== LOCATION_VPS) return true
   const statusEl = document.getElementById('tg-save-status')
+  // ── Local mode: salva i bot nel config locale (niente VPS/SSH) ──
+  if (state.location !== LOCATION_VPS) {
+    if (!isTelegramTokensReady()) {
+      if (statusEl) {
+        statusEl.textContent = 'Telegram bots not ready — complete the 3-bot setup first.'
+        statusEl.hidden = false
+      }
+      return false
+    }
+    try {
+      const res = window.telegramApi?.saveBotsLocal
+        ? await window.telegramApi.saveBotsLocal(getTelegramBotsForSave())
+        : { ok: false, error: 'no-api' }
+      if (!res?.ok) {
+        if (statusEl) {
+          statusEl.textContent = `Failed to save Telegram bots: ${res?.error || 'unknown'}`
+          statusEl.hidden = false
+        }
+        return false
+      }
+      log.info('telegram.save.local.ok')
+      return true
+    } catch (e) {
+      if (statusEl) {
+        statusEl.textContent = `Failed to save Telegram bots: ${e?.message || e}`
+        statusEl.hidden = false
+      }
+      return false
+    }
+  }
   if (!isTelegramTokensReady()) {
     if (statusEl) {
       statusEl.textContent = 'Telegram bots not ready — complete the 3-bot setup first.'
@@ -1362,15 +1395,18 @@ export async function enterEmailSetup() {
   updateEmailContinueState()
 }
 
-// "Crea una app-password Gmail" → apre direttamente la pagina di Google nel
-// browser di sistema. Se la 2FA non è attiva, Google guida ad attivarla da lì.
+// Due click su Google: (1) attiva la 2FA, (2) crea l'app-password. Più il
+// link alla guida completa sul sito. Tutti aprono nel browser di sistema.
+const GMAIL_2FA_URL = 'https://myaccount.google.com/signinoptions/twosv'
 const GMAIL_APP_PW_URL = 'https://myaccount.google.com/apppasswords'
-if (dom.btnEmailAppPw) {
-  dom.btnEmailAppPw.addEventListener('click', () => {
-    if (window.launcherApi?.openExternal) window.launcherApi.openExternal(GMAIL_APP_PW_URL).catch(() => {})
-    else window.open(GMAIL_APP_PW_URL, '_blank')
-  })
+const TEAM_GMAIL_DOCS_URL = 'https://jobhunterteam.ai/docs/guides/team-gmail'
+function openExternalUrl(url) {
+  if (window.launcherApi?.openExternal) window.launcherApi.openExternal(url).catch(() => {})
+  else window.open(url, '_blank')
 }
+if (dom.btnEmail2fa) dom.btnEmail2fa.addEventListener('click', () => openExternalUrl(GMAIL_2FA_URL))
+if (dom.btnEmailAppPw) dom.btnEmailAppPw.addEventListener('click', () => openExternalUrl(GMAIL_APP_PW_URL))
+if (dom.btnEmailDocs) dom.btnEmailDocs.addEventListener('click', () => openExternalUrl(TEAM_GMAIL_DOCS_URL))
 if (dom.emailAddressInput) dom.emailAddressInput.addEventListener('input', invalidateEmailValidation)
 if (dom.emailPasswordInput) dom.emailPasswordInput.addEventListener('input', invalidateEmailValidation)
 if (dom.emailDedicatedConfirm) dom.emailDedicatedConfirm.addEventListener('change', updateEmailContinueState)
@@ -1380,12 +1416,12 @@ if (dom.btnEmailBack) dom.btnEmailBack.addEventListener('click', () => enterProf
 // → il team farà web sourcing; l'utente può configurarla dopo dal pannello home.
 if (dom.btnEmailSkip) dom.btnEmailSkip.addEventListener('click', () => {
   log.info('email-setup.skipped')
-  enterReady()
+  enterTelegramIntro()
 })
 if (dom.btnEmailContinue) {
   dom.btnEmailContinue.addEventListener('click', () => {
     if (dom.btnEmailContinue.disabled) return
-    enterReady()
+    enterTelegramIntro()
   })
 }
 
