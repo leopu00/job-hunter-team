@@ -603,7 +603,7 @@ export default function CaseStudyDetail({
                 <p className="text-[11px] text-[var(--color-dim)] mt-8 mb-4">
                   {t.sourcesAvgCaption}
                 </p>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
                   <SourcesAvgScoreChart
                     rows={run.sourcesScore}
                     keys={run.sourcesDailyKeys}
