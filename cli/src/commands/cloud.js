@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import * as clack from '@clack/prompts';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
-import { createSupabaseDirect, SupabaseAuthError } from '../lib/supabase-direct.js';
+import { SupabaseAuthError } from '../lib/supabase-direct.js';
+import { getDirectReader } from '../lib/cloud-direct.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
@@ -74,49 +75,6 @@ async function saveCloudConfig(config) {
   await mkdir(JHT_HOME, { recursive: true });
   await writeFile(CLOUD_FILE, JSON.stringify(config, null, 2) + '\n');
   await chmod(CLOUD_FILE, 0o600);
-}
-
-// ── [JHT-DAEMON-SUPABASE-DIRECT] Fase 1 ────────────────────────────────────
-// Le LETTURE di background (ticket 'open', flag sync) possono andare a Supabase
-// DIRETTO invece che alle route Vercel: su Vercel ogni GET è un'invocazione
-// serverless fatturata (+ ~2,8 observability events), su Supabase Pro le query
-// sono dentro il forfait (compute always-on). Opt-in via env JHT_SUPABASE_DIRECT=1
-// (default OFF → nessun cambio sul fleet finché non si abilita su una VPS). Le
-// credenziali sono già in cloud.json dal pairing (supabase_url +
-// supabase_refresh_token, sessione del login Google): la RLS limita il token ai
-// soli dati dell'utente, niente service-role sulla VPS.
-// Vedi docs/internal/2026-06-24-vps-daemon-supabase-direct-design.md.
-function directReadsEnabled() {
-  return process.env.JHT_SUPABASE_DIRECT === '1';
-}
-
-let _directReader = null;
-let _directReaderKey = null;
-function getDirectReader(config) {
-  if (!directReadsEnabled()) return null;
-  const supabaseUrl = config?.supabase_url;
-  const refreshToken = config?.supabase_refresh_token;
-  const anonKey = process.env.JHT_SUPABASE_ANON_KEY || config?.supabase_anon_key;
-  if (!supabaseUrl || !refreshToken || !anonKey) return null;
-  // Riusa l'istanza tra i tick: mantiene l'access_token in cache (1 refresh ~ogni
-  // ora, non 1 per tick). La chiave esclude il refresh_token (ruota a ogni uso).
-  const key = `${supabaseUrl}|${anonKey}|${config.user_id || ''}`;
-  if (_directReader && _directReaderKey === key) return _directReader;
-  _directReader = createSupabaseDirect({
-    supabaseUrl,
-    anonKey,
-    refreshToken,
-    userId: config.user_id,
-    // GoTrue ruota il refresh_token → persistilo su cloud.json (merge load+save).
-    onRefreshToken: async (newToken) => {
-      const c = (await loadCloudConfig()) || {};
-      c.supabase_refresh_token = newToken;
-      await saveCloudConfig(c);
-    },
-    log: (level, msg) => console.error(pc.yellow(`  supabase-direct ${level}: ${msg}`)),
-  });
-  _directReaderKey = key;
-  return _directReader;
 }
 
 function parseToken(raw) {
@@ -1355,32 +1313,62 @@ async function handlePullDesiredState(options = {}) {
   }
 
   const cursor = options.full ? { since: null } : loadPullCursor();
-  const params = new URLSearchParams();
-  if (cursor.since) params.set('since', cursor.since);
-  if (options.limit) params.set('limit', String(options.limit));
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const pullUrl = `${baseUrl}/api/cloud-sync/pull-desired-state?${params.toString()}`;
 
-  let res;
-  try {
-    res = await fetch(pullUrl, {
-      headers: { Authorization: `Bearer ${config.token}` },
-    });
-  } catch (err) {
-    console.error(pc.yellow(`  pull warn: errore di rete (${err.message})`));
-    process.exitCode = 1;
-    return;
+  // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: leggi i flag desired-state da Supabase
+  // DIRETTO se abilitato; su errore o se disabilitato → fallback alla GET Vercel.
+  // NB: la route Vercel filtra su `positions.updated_at` che NON esiste sul cloud
+  // → di fatto è rotta; il path diretto usa i timestamp dei flag come cursore.
+  let body = null;
+  const reader = getDirectReader(config);
+  if (reader) {
+    try {
+      const sinceVal = cursor.since
+        || new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const rows = await reader.readDesiredStateChanges({
+        since: sinceVal,
+        limit: options.limit || 500,
+      });
+      // cursor = MAX tra i timestamp dei flag (positions non ha updated_at).
+      let maxTs = cursor.since;
+      for (const r of rows) {
+        for (const ts of [r.write_requested_at, r.geocode_requested_at,
+          r.recheck_requested_at, r.salary_precise_requested_at, r.user_excluded_at]) {
+          if (ts && (!maxTs || ts > maxTs)) maxTs = ts;
+        }
+      }
+      body = { positions: rows, cursor: maxTs };
+    } catch (err) {
+      const auth = err instanceof SupabaseAuthError;
+      console.error(pc.yellow(`  pull (direct) ${auth ? 'auth' : 'warn'}: ${err.message}${auth ? '' : ' — fallback Vercel'}`));
+      body = null;
+    }
   }
-
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    console.error(
-      pc.yellow(
-        `  pull warn: HTTP ${res.status} ${body.error || 'errore sconosciuto'}`
-      )
-    );
-    process.exitCode = 1;
-    return;
+  if (body === null) {
+    const params = new URLSearchParams();
+    if (cursor.since) params.set('since', cursor.since);
+    if (options.limit) params.set('limit', String(options.limit));
+    const pullUrl = `${baseUrl}/api/cloud-sync/pull-desired-state?${params.toString()}`;
+    let res;
+    try {
+      res = await fetch(pullUrl, {
+        headers: { Authorization: `Bearer ${config.token}` },
+      });
+    } catch (err) {
+      console.error(pc.yellow(`  pull warn: errore di rete (${err.message})`));
+      process.exitCode = 1;
+      return;
+    }
+    body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(
+        pc.yellow(
+          `  pull warn: HTTP ${res.status} ${body.error || 'errore sconosciuto'}`
+        )
+      );
+      process.exitCode = 1;
+      return;
+    }
   }
 
   const positions = Array.isArray(body.positions) ? body.positions : [];
