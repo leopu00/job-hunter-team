@@ -95,30 +95,51 @@ async function dashboardApiFetch(apiPath, init = {}) {
     return { ok: false, error: `runtime-not-ready:${status ? status.mode : 'unknown'}` }
   }
   const token = readLocalToken()
-  const headers = token ? { Authorization: `Bearer ${token}` } : {}
-  // Same-origin per la guardia CSRF del web (web/lib/csrf.ts): il fetch del
-  // main process Electron manda un Origin opaco ('null') che la guardia
-  // rifiuta con 403 sui POST/PUT/DELETE (es. /api/team/start-all). Dichiariamo
-  // l'Origin = origin del server locale (in STATIC_ALLOWED) → richiesta
-  // legittimamente same-origin, la guardia la lascia passare.
-  headers['Origin'] = `http://127.0.0.1:${port}`
   const method = init.method || 'GET'
   const timeoutMs = typeof init.timeoutMs === 'number' ? init.timeoutMs : 15000
-  const fetchInit = { method, headers, signal: AbortSignal.timeout(timeoutMs) }
+  const headers = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  // Same-origin per la guardia CSRF del web (web/lib/csrf.ts): senza un Origin
+  // valido i POST/PUT/DELETE prendono 403. NB: NON si può usare il `fetch` di
+  // Electron (stack Chromium) perché `Origin` è un header "forbidden" e viene
+  // scartato silenziosamente → resta l'Origin opaco e la guardia rifiuta.
+  // Usiamo quindi node:http, che lascia impostare Origin liberamente; lo
+  // mettiamo = origin del server locale (in STATIC_ALLOWED) → same-origin OK.
+  headers['Origin'] = `http://127.0.0.1:${port}`
+  let bodyStr = null
   if (init.body !== undefined && method !== 'GET') {
+    bodyStr = JSON.stringify(init.body)
     headers['Content-Type'] = 'application/json'
-    fetchInit.body = JSON.stringify(init.body)
+    headers['Content-Length'] = Buffer.byteLength(bodyStr)
   }
-  try {
-    const res = await fetch(`http://127.0.0.1:${port}${apiPath}`, fetchInit)
-    if (!res.ok) return { ok: false, error: `http-${res.status}`, status: res.status }
-    // Alcune route (POST chat) possono rispondere senza JSON: tollera il vuoto.
-    const text = await res.text()
-    const data = text ? JSON.parse(text) : {}
-    return { ok: true, data }
-  } catch (err) {
-    return { ok: false, error: err && (err.message || String(err)) }
-  }
+  const http = require('node:http')
+  return await new Promise((resolve) => {
+    const req = http.request(
+      { host: '127.0.0.1', port, path: apiPath, method, headers, timeout: timeoutMs },
+      (res) => {
+        let data = ''
+        res.setEncoding('utf8')
+        res.on('data', (chunk) => { data += chunk })
+        res.on('end', () => {
+          const code = res.statusCode || 0
+          if (code < 200 || code >= 300) {
+            resolve({ ok: false, error: `http-${code}`, status: code })
+            return
+          }
+          // Alcune route (POST chat) possono rispondere senza JSON: tollera il vuoto.
+          try {
+            resolve({ ok: true, data: data ? JSON.parse(data) : {} })
+          } catch {
+            resolve({ ok: true, data: {} })
+          }
+        })
+      },
+    )
+    req.on('timeout', () => req.destroy(new Error('timeout')))
+    req.on('error', (err) => resolve({ ok: false, error: err && (err.message || String(err)) }))
+    if (bodyStr) req.write(bodyStr)
+    req.end()
+  })
 }
 
 // [team auto-start] Avvia il TEAM completo (core: Capitano/Sentinella/Assistente/
