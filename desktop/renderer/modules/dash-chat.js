@@ -105,6 +105,11 @@ async function send() {
     // port-map). L'agente risponde scrivendo in chat.jsonl → poll lo mostra.
     const r = await window.chatApi.send(state.agent, text)
     if (!r || r.ok !== true) throw new Error(r?.error || 'send failed')
+    // Il main ha persistito il messaggio in chat.jsonl con questo ts: allineo
+    // lastTs così il poll NON lo ri-aggiunge (evita il doppione con l'echo
+    // ottimistico già renderizzato). Al cambio tab (lastTs azzerato) il poll lo
+    // ripesca da chat.jsonl → i messaggi non spariscono più.
+    if (typeof r.ts === 'number' && r.ts > state.lastTs) state.lastTs = r.ts
     await poll()
   } catch (e) {
     _log.error('send.failed', { err: String(e?.message || e) })
