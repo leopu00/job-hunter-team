@@ -80,10 +80,10 @@ export default function SourcesAvgScoreChart({
               >
                 {r.avg}
               </span>
-              <span className="text-[10px] tabular-nums w-14 text-right text-[var(--color-dim)]">
+              <span className="text-[10px] tabular-nums w-20 shrink-0 text-right whitespace-nowrap text-[var(--color-dim)]">
                 {r.n} {t.nLabel}
               </span>
-              <span className="text-[10px] font-semibold tabular-nums w-9 text-right text-[var(--color-base)]">
+              <span className="text-[10px] font-semibold tabular-nums w-10 shrink-0 text-right text-[var(--color-base)]">
                 {Math.round((r.n / totalN) * 100)}%
               </span>
             </div>
