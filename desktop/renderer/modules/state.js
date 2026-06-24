@@ -183,6 +183,7 @@ export const dom = {
   emailPasswordInput: document.getElementById('email-password'),
   emailDedicatedConfirm: document.getElementById('email-dedicated-confirm'),
   btnEmailVerify: document.getElementById('btn-email-verify'),
+  btnEmailAppPw: document.getElementById('btn-email-app-pw'),
   emailSetupStatus: document.getElementById('email-status'),
   btnEmailBack: document.getElementById('btn-email-back'),
   btnEmailContinue: document.getElementById('btn-email-continue'),
