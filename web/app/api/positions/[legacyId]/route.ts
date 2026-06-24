@@ -19,13 +19,13 @@ function toUtcIso(s: string | null | undefined): string | null {
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const denied = await requireAuth();
   if (denied) return denied;
 
-  const { id } = await params;
-  const detail = await getPositionById(id);
+  const { legacyId } = await params;
+  const detail = await getPositionById(legacyId);
   if (!detail) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
