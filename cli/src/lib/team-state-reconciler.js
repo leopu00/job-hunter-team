@@ -30,6 +30,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
 import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
+import { getDirectReader } from './cloud-direct.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -196,15 +197,42 @@ export async function reconcileOnce() {
   if (!baseUrl || !token) return { ok: false, skipped: 'missing-credentials' };
   if (existsSync(WEEKLY_HALT_FLAG)) return { ok: true, skipped: 'weekly-halt' };
 
-  const r = await apiCall('GET', baseUrl, token, '/api/team-state');
-  const state = r.state;
+  // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: leggi team_state da Supabase diretto se
+  // abilitato; su errore o se disabilitato → fallback alla GET Vercel. Le PATCH
+  // di reazione (start/stop/restart in reconcile()) restano su Vercel: rare.
+  const reader = getDirectReader(config);
+  let state = null;
+  let gotState = false;
+  if (reader) {
+    try {
+      state = await reader.readTeamState([
+        'should_run', 'is_running', 'restart_token', 'last_restart_token',
+      ]);
+      gotState = true;
+    } catch (err) {
+      log('warn', 'reconcile.direct-read-failed', { err: err.message });
+    }
+  }
+  if (!gotState) {
+    const r = await apiCall('GET', baseUrl, token, '/api/team-state');
+    state = r.state;
+  }
   if (!state) return { ok: true, action: null };
 
   const action = await reconcile(baseUrl, token, state);
-  // Heartbeat: tiene vivo l'indicatore "VPS online" sulla dashboard.
-  await apiCall('PATCH', baseUrl, token, '/api/team-state', {
-    last_heartbeat_at: new Date().toISOString(),
-  }).catch(() => {});
+  // Heartbeat: tiene vivo l'indicatore "VPS online" sulla dashboard. Diretto se
+  // disponibile (per-tick), altrimenti PATCH Vercel.
+  const nowIso = new Date().toISOString();
+  let beat = false;
+  if (reader) {
+    try { await reader.patchTeamState({ last_heartbeat_at: nowIso }); beat = true; }
+    catch { /* fallback Vercel */ }
+  }
+  if (!beat) {
+    await apiCall('PATCH', baseUrl, token, '/api/team-state', {
+      last_heartbeat_at: nowIso,
+    }).catch(() => {});
+  }
   return { ok: true, action };
 }
 
