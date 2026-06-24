@@ -453,7 +453,15 @@ case "$PROVIDER" in
     # --yolo auto-approves every shell command so the agent can write
     # chat.jsonl, create the profile dir, etc. without blocking on the
     # approval prompt (equivalent of Claude's --dangerously-skip-permissions).
-    CLI_ARGS="--yolo"
+    # --max-steps-per-turn 100 (2026-06-25): cap il loop autonomo di un turno
+    # a 100 step (default kimi-cli = 1000). K2.7-Code tende a turni lunghissimi
+    # (rabbit-hole: scraping a mano + processor custom, ~170k token / 0 output);
+    # 100 cappa SOLO i runaway veri (un batch sano è ~20 step → non si pianta).
+    # Quando un worker tocca il cap, la CLI termina il turno con "Max number of
+    # steps reached" e ASPETTA input (max_ralph=0, niente auto-continue): è il
+    # Capitano a sbloccarlo con un "Continua" (regola C-08 ter). Trasforma i
+    # runaway in checkpoint controllabili invece che in burn cieco.
+    CLI_ARGS="--yolo --max-steps-per-turn 100"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="MOONSHOT_API_KEY='${API_KEY}' "
     fi
