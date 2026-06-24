@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import * as clack from '@clack/prompts';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
+import { createSupabaseDirect, SupabaseAuthError } from '../lib/supabase-direct.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
@@ -73,6 +74,49 @@ async function saveCloudConfig(config) {
   await mkdir(JHT_HOME, { recursive: true });
   await writeFile(CLOUD_FILE, JSON.stringify(config, null, 2) + '\n');
   await chmod(CLOUD_FILE, 0o600);
+}
+
+// ── [JHT-DAEMON-SUPABASE-DIRECT] Fase 1 ────────────────────────────────────
+// Le LETTURE di background (ticket 'open', flag sync) possono andare a Supabase
+// DIRETTO invece che alle route Vercel: su Vercel ogni GET è un'invocazione
+// serverless fatturata (+ ~2,8 observability events), su Supabase Pro le query
+// sono dentro il forfait (compute always-on). Opt-in via env JHT_SUPABASE_DIRECT=1
+// (default OFF → nessun cambio sul fleet finché non si abilita su una VPS). Le
+// credenziali sono già in cloud.json dal pairing (supabase_url +
+// supabase_refresh_token, sessione del login Google): la RLS limita il token ai
+// soli dati dell'utente, niente service-role sulla VPS.
+// Vedi docs/internal/2026-06-24-vps-daemon-supabase-direct-design.md.
+function directReadsEnabled() {
+  return process.env.JHT_SUPABASE_DIRECT === '1';
+}
+
+let _directReader = null;
+let _directReaderKey = null;
+function getDirectReader(config) {
+  if (!directReadsEnabled()) return null;
+  const supabaseUrl = config?.supabase_url;
+  const refreshToken = config?.supabase_refresh_token;
+  const anonKey = process.env.JHT_SUPABASE_ANON_KEY || config?.supabase_anon_key;
+  if (!supabaseUrl || !refreshToken || !anonKey) return null;
+  // Riusa l'istanza tra i tick: mantiene l'access_token in cache (1 refresh ~ogni
+  // ora, non 1 per tick). La chiave esclude il refresh_token (ruota a ogni uso).
+  const key = `${supabaseUrl}|${anonKey}|${config.user_id || ''}`;
+  if (_directReader && _directReaderKey === key) return _directReader;
+  _directReader = createSupabaseDirect({
+    supabaseUrl,
+    anonKey,
+    refreshToken,
+    userId: config.user_id,
+    // GoTrue ruota il refresh_token → persistilo su cloud.json (merge load+save).
+    onRefreshToken: async (newToken) => {
+      const c = (await loadCloudConfig()) || {};
+      c.supabase_refresh_token = newToken;
+      await saveCloudConfig(c);
+    },
+    log: (level, msg) => console.error(pc.yellow(`  supabase-direct ${level}: ${msg}`)),
+  });
+  _directReaderKey = key;
+  return _directReader;
 }
 
 function parseToken(raw) {
@@ -1562,36 +1606,59 @@ async function handleTicketSync(options = {}) {
     db.exec('PRAGMA foreign_keys = ON');
 
     // ---- PULL: ticket 'open' dal cloud → locale ----
-    const pullParams = new URLSearchParams();
-    if (cursor.pull_since) pullParams.set('since', cursor.pull_since);
-    try {
-      const res = await fetch(
-        `${baseUrl}/api/cloud-sync/tickets?${pullParams.toString()}`,
-        { headers: { Authorization: `Bearer ${config.token}` } },
-      );
-      const pb = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        console.error(pc.yellow(`  ticket pull warn: HTTP ${res.status} ${pb.error || ''}`));
-      } else if (Array.isArray(pb.tickets)) {
-        const findByCloud = db.prepare('SELECT id FROM position_tickets WHERE cloud_id = ?');
-        const posExists = db.prepare('SELECT 1 FROM positions WHERE id = ?');
-        const ins = db.prepare(
-          `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
-           VALUES (?, ?, ?, 'open', ?, ?)`
-        );
-        for (const ct of pb.tickets) {
-          const cloudId = Number(ct.id);
-          const posId = Number(ct.position_legacy_id);
-          if (!Number.isInteger(cloudId) || !Number.isInteger(posId)) continue;
-          if (findByCloud.get(cloudId)) continue;       // già importato
-          if (!posExists.get(posId)) continue;          // posizione non ancora locale → arriverà
-          ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
-          imported++;
+    // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: se abilitato leggi da Supabase DIRETTO
+    // (niente invocazione Vercel); su errore o se disabilitato → fallback Vercel.
+    const reader = getDirectReader(config);
+    let pullResult = null;           // { tickets, cursor } da direct o Vercel
+    if (reader) {
+      try {
+        const rows = await reader.readOpenTickets({ since: cursor.pull_since });
+        let maxCreated = cursor.pull_since;
+        for (const t of rows) {
+          if (t.created_at && (!maxCreated || t.created_at > maxCreated)) maxCreated = t.created_at;
         }
-        if (pb.cursor) cursor.pull_since = pb.cursor;
+        pullResult = { tickets: rows, cursor: maxCreated };
+      } catch (err) {
+        const auth = err instanceof SupabaseAuthError;
+        console.error(pc.yellow(`  ticket pull (direct) ${auth ? 'auth' : 'warn'}: ${err.message}${auth ? '' : ' — fallback Vercel'}`));
+        pullResult = null;           // direct fallito → prova Vercel
       }
-    } catch (err) {
-      console.error(pc.yellow(`  ticket pull warn: ${err.message}`));
+    }
+    if (pullResult === null) {
+      const pullParams = new URLSearchParams();
+      if (cursor.pull_since) pullParams.set('since', cursor.pull_since);
+      try {
+        const res = await fetch(
+          `${baseUrl}/api/cloud-sync/tickets?${pullParams.toString()}`,
+          { headers: { Authorization: `Bearer ${config.token}` } },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error(pc.yellow(`  ticket pull warn: HTTP ${res.status} ${body.error || ''}`));
+        } else {
+          pullResult = { tickets: Array.isArray(body.tickets) ? body.tickets : [], cursor: body.cursor };
+        }
+      } catch (err) {
+        console.error(pc.yellow(`  ticket pull warn: ${err.message}`));
+      }
+    }
+    if (pullResult && Array.isArray(pullResult.tickets)) {
+      const findByCloud = db.prepare('SELECT id FROM position_tickets WHERE cloud_id = ?');
+      const posExists = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+      const ins = db.prepare(
+        `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
+         VALUES (?, ?, ?, 'open', ?, ?)`
+      );
+      for (const ct of pullResult.tickets) {
+        const cloudId = Number(ct.id);
+        const posId = Number(ct.position_legacy_id);
+        if (!Number.isInteger(cloudId) || !Number.isInteger(posId)) continue;
+        if (findByCloud.get(cloudId)) continue;       // già importato
+        if (!posExists.get(posId)) continue;          // posizione non ancora locale → arriverà
+        ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
+        imported++;
+      }
+      if (pullResult.cursor) cursor.pull_since = pullResult.cursor;
     }
 
     // ---- PUSH: aggiornamenti team + INSERT locali → cloud ----
@@ -1679,17 +1746,31 @@ async function handleSyncRendezvous(options = {}) {
   if (!config || !config.enabled) return;
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
 
+  // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: leggi team_state da Supabase diretto se
+  // abilitato; su errore (o se disabilitato) fallback alla GET Vercel.
+  const reader = getDirectReader(config);
   let state = null;
-  try {
-    const res = await fetch(`${baseUrl}/api/team-state`, {
-      headers: { Authorization: `Bearer ${config.token}` },
-    });
-    if (!res.ok) return;
-    const body = await res.json().catch(() => ({}));
-    state = body.state || null;
-  } catch (err) {
-    if (!silent) console.error(pc.yellow(`  sync-rendezvous warn: ${err.message}`));
-    return;
+  let gotState = false;
+  if (reader) {
+    try {
+      state = await reader.readTeamState(['sync_requested_at', 'sync_completed_at']);
+      gotState = true;
+    } catch (err) {
+      if (!silent) console.error(pc.yellow(`  sync-rendezvous (direct) warn: ${err.message} — fallback Vercel`));
+    }
+  }
+  if (!gotState) {
+    try {
+      const res = await fetch(`${baseUrl}/api/team-state`, {
+        headers: { Authorization: `Bearer ${config.token}` },
+      });
+      if (!res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      state = body.state || null;
+    } catch (err) {
+      if (!silent) console.error(pc.yellow(`  sync-rendezvous warn: ${err.message}`));
+      return;
+    }
   }
   if (!state) return;
 
@@ -1700,14 +1781,23 @@ async function handleSyncRendezvous(options = {}) {
   const pending = reqAt && (!doneAt || reqAt > doneAt);
   if (!pending) return;
 
-  // Push fresco ORA (condizionale: se non c'è delta esce subito, i dati sono
-  // già a cloud). Isolato dal counter del daemon.
+  // Push fresco ORA (resta su Vercel in Fase 1). Isolato dal counter del daemon.
   const prev = process.exitCode;
   process.exitCode = 0;
   await handlePush({});
   process.exitCode = prev;
 
-  // Ack: il browser sta facendo polling bounded di sync_completed_at.
+  // Ack `sync_completed_at`: diretto se disponibile, altrimenti PATCH Vercel.
+  const nowIso = new Date().toISOString();
+  if (reader) {
+    try {
+      await reader.patchTeamState({ sync_completed_at: nowIso });
+      if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack (direct)'));
+      return;
+    } catch (err) {
+      if (!silent) console.error(pc.yellow(`  sync-rendezvous ack (direct) warn: ${err.message} — fallback Vercel`));
+    }
+  }
   try {
     await fetch(`${baseUrl}/api/team-state`, {
       method: 'PATCH',
@@ -1715,7 +1805,7 @@ async function handleSyncRendezvous(options = {}) {
         Authorization: `Bearer ${config.token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ sync_completed_at: new Date().toISOString() }),
+      body: JSON.stringify({ sync_completed_at: nowIso }),
     });
     if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack'));
   } catch (err) {
