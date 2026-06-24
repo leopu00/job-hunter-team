@@ -57,6 +57,62 @@ src_rest = sum(cnt for _, cnt in src_rows[SRC_TOP:])
 if src_rest:
     sources.append({"name": "Altre", "count": src_rest})
 
+# ── fonti NEL TEMPO (barre impilate per giorno, colore = fonte) ──────
+# Stessa normalizzazione di `sources`; top-8 individuali + "Altre" (coda lunga)
+# per tenere leggibile lo stack. Bucket per giorno di found_at (UTC, come usage).
+SRC_TOP_DAILY = 8
+top_daily = [name for name, _ in src_rows[:SRC_TOP_DAILY]]
+top_daily_set = set(top_daily)
+day_src = Q(
+    "SELECT substr(found_at,1,10) d,"
+    "COALESCE(NULLIF(TRIM(REPLACE(LOWER(source),'_','-')),''),'sconosciuta') src "
+    "FROM positions WHERE found_at IS NOT NULL AND TRIM(found_at)<>''")
+sd_agg = collections.OrderedDict()
+sd_has_altre = False
+for d, src in day_src:
+    key = src if src in top_daily_set else "Altre"
+    if key == "Altre":
+        sd_has_altre = True
+    sd_agg.setdefault(d, {})
+    sd_agg[d][key] = sd_agg[d].get(key, 0) + 1
+sources_daily = [{"day": d, "counts": sd_agg[d]} for d in sorted(sd_agg)]
+sources_daily_keys = top_daily + (["Altre"] if sd_has_altre else [])
+
+# ── score medio per giorno PER fonte (linee sull'asse dx del grafico fonti) ──
+# Solo posizioni scorate; stesse chiavi top-8 + "Altre" di sourcesDaily.
+sc_rows = Q(
+    "SELECT substr(p.found_at,1,10) d,"
+    "COALESCE(NULLIF(TRIM(REPLACE(LOWER(p.source),'_','-')),''),'sconosciuta') src,"
+    "s.total_score "
+    "FROM positions p JOIN scores s ON s.position_id=p.id "
+    "WHERE p.found_at IS NOT NULL AND TRIM(p.found_at)<>'' AND s.total_score IS NOT NULL")
+sc_agg = collections.OrderedDict()  # day -> {key: [somma, n]}
+for d, src, sc in sc_rows:
+    key = src if src in top_daily_set else "Altre"
+    bucket = sc_agg.setdefault(d, {})
+    acc = bucket.get(key, [0.0, 0])
+    acc[0] += sc
+    acc[1] += 1
+    bucket[key] = acc
+sources_score_daily = [
+    {"day": d, "score": {k: round(v[0] / v[1], 1) for k, v in sc_agg[d].items()}}
+    for d in sorted(sc_agg)
+]
+
+# ── score medio COMPLESSIVO per fonte (grafico a barre, non per periodo) ──
+sc_by_src = collections.OrderedDict()  # key -> [somma, n]
+for d, src, sc in sc_rows:
+    key = src if src in top_daily_set else "Altre"
+    acc = sc_by_src.get(key, [0.0, 0])
+    acc[0] += sc
+    acc[1] += 1
+    sc_by_src[key] = acc
+sources_score = [
+    {"name": k, "avg": round(v[0] / v[1], 1), "n": v[1]}
+    for k, v in sc_by_src.items()
+]
+sources_score.sort(key=lambda r: -r["avg"])
+
 # ── paesi (solo posizioni VERIFICATE, non escluse: es. UK escluse per work-auth) ──
 countries = [{"name": name, "code": code, "count": cnt} for name, code, cnt in Q(
     "SELECT loc_country, MAX(loc_country_code), COUNT(*) "
@@ -184,6 +240,10 @@ out = {
     "match": match,
     "categories": categories,
     "sources": sources,
+    "sourcesDaily": sources_daily,
+    "sourcesDailyKeys": sources_daily_keys,
+    "sourcesScoreDaily": sources_score_daily,
+    "sourcesScore": sources_score,
     "countries": countries,
     "cities": cities,
     "salary": salary,
