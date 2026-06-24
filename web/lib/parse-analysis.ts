@@ -82,7 +82,9 @@ const META_LINE_RE = new RegExp(
   `^\\s*(${META_TOKENS.join("|")})\\s*:\\s*(.+?)\\s*$`,
 );
 
-export function parseAnalysisNotes(notes: string | null | undefined): ParsedAnalysis {
+export function parseAnalysisNotes(
+  notes: string | null | undefined,
+): ParsedAnalysis {
   const empty: ParsedAnalysis = {
     meta: [],
     excluded: null,
@@ -98,20 +100,23 @@ export function parseAnalysisNotes(notes: string | null | undefined): ParsedAnal
   //    rimuove dal testo, sostituendoli con un newline per non saldare parole.
   let excluded: AnalysisTagged | null = null;
   const mismatches: AnalysisTagged[] = [];
-  const stripped = text.replace(TAGGED_RE, (_m, kind: string, tag: string, body: string) => {
-    const entry: AnalysisTagged = {
-      tag: (tag ?? "").trim().toUpperCase(),
-      text: body.trim(),
-    };
-    if (kind === "EXCLUDED") {
-      // Tiene la prima (le successive sono rare); le altre diventano mismatch.
-      if (!excluded) excluded = entry;
-      else mismatches.push({ ...entry, tag: entry.tag || "EXCLUDED" });
-    } else {
-      mismatches.push(entry);
-    }
-    return "\n";
-  });
+  const stripped = text.replace(
+    TAGGED_RE,
+    (_m, kind: string, tag: string, body: string) => {
+      const entry: AnalysisTagged = {
+        tag: (tag ?? "").trim().toUpperCase(),
+        text: body.trim(),
+      };
+      if (kind === "EXCLUDED") {
+        // Tiene la prima (le successive sono rare); le altre diventano mismatch.
+        if (!excluded) excluded = entry;
+        else mismatches.push({ ...entry, tag: entry.tag || "EXCLUDED" });
+      } else {
+        mismatches.push(entry);
+      }
+      return "\n";
+    },
+  );
 
   // 2) Sul residuo, estrae le righe metadato `KEY: value`.
   const metaMap = new Map<AnalysisMetaKey, string>();
@@ -136,7 +141,8 @@ export function parseAnalysisNotes(notes: string | null | undefined): ParsedAnal
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  const structured = meta.length > 0 || excluded != null || mismatches.length > 0;
+  const structured =
+    meta.length > 0 || excluded != null || mismatches.length > 0;
   return {
     meta,
     excluded,

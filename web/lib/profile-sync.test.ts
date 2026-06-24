@@ -4,7 +4,10 @@
  */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mapYamlToCanonical, reconstructCanonicalProfile } from "./profile-sync.ts";
+import {
+  mapYamlToCanonical,
+  reconstructCanonicalProfile,
+} from "./profile-sync.ts";
 
 const RAW_LEGACY = {
   name: "Mario Rossi",
@@ -21,11 +24,21 @@ const RAW_LEGACY = {
   ],
   candidate: {
     contacts: { email: "m@x.it", phone: "+39 333 000", linkedin: "mrossi" },
-    experience: [{ company: "Acme", role: "Dev", years: "2021 - 2023", summary: "Backend." }],
+    experience: [
+      {
+        company: "Acme",
+        role: "Dev",
+        years: "2021 - 2023",
+        summary: "Backend.",
+      },
+    ],
     education: [{ institution: "Uni", degree: "CS", year: "2020" }],
     citizenship: ["Italian (EU)"],
   },
-  preferences: { geography: ["Milano", "Roma"], work_authorization: { eu: "yes" } },
+  preferences: {
+    geography: ["Milano", "Roma"],
+    work_authorization: { eu: "yes" },
+  },
   goals: { transition: "verso lead" },
 };
 
@@ -44,7 +57,10 @@ describe("mapYamlToCanonical", () => {
   });
 
   it("summary .md → blocchi narrative con dedup (il summary vince sul raw)", () => {
-    const c = mapYamlToCanonical(RAW_LEGACY, "u", { about: "Sono Mario", goals: "Voglio lead" });
+    const c = mapYamlToCanonical(RAW_LEGACY, "u", {
+      about: "Sono Mario",
+      goals: "Voglio lead",
+    });
     const about = c.blocks.find((b) => b.key === "about");
     const goals = c.blocks.filter((b) => b.key === "goals");
     assert.equal(about?.kind, "narrative");
@@ -71,7 +87,10 @@ describe("round-trip map → reconstruct conserva i campi chiave", () => {
     assert.equal(r.name, "Mario Rossi");
     assert.equal(r.target_role, "Backend Developer");
     assert.equal(r.has_degree, true);
-    assert.deepEqual((r.skills as { primary: string[] }).primary, ["Python", "SQL"]);
+    assert.deepEqual((r.skills as { primary: string[] }).primary, [
+      "Python",
+      "SQL",
+    ]);
     assert.equal((r.languages as unknown[]).length, 2);
     assert.equal((r.experience as unknown[]).length, 1);
     assert.equal((r.location_preferences as unknown[]).length, 2);

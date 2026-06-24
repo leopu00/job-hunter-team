@@ -32,7 +32,11 @@ export function resolveCityPins(
   // 1. Centroidi città dai record con coordinate ufficio.
   const acc = new Map<string, { sl: number; so: number; n: number }>();
   for (const r of rows) {
-    if (r.office_lat != null && r.office_lon != null && (r.loc_city ?? "").trim()) {
+    if (
+      r.office_lat != null &&
+      r.office_lon != null &&
+      (r.loc_city ?? "").trim()
+    ) {
       const k = cityKey(r.loc_country, r.loc_city);
       const a = acc.get(k) ?? { sl: 0, so: 0, n: 0 };
       a.sl += r.office_lat;
@@ -42,7 +46,8 @@ export function resolveCityPins(
     }
   }
   const centroid = new Map<string, { lat: number; lon: number }>();
-  for (const [k, a] of acc) centroid.set(k, { lat: a.sl / a.n, lon: a.so / a.n });
+  for (const [k, a] of acc)
+    centroid.set(k, { lat: a.sl / a.n, lon: a.so / a.n });
 
   // 2. Risoluzione per posizione (jitter progressivo per città).
   const seen = new Map<string, number>();

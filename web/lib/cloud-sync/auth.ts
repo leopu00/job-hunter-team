@@ -1,90 +1,109 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/admin'
-import { hashSyncToken } from '@/lib/cloud-sync/tokens'
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { hashSyncToken } from "@/lib/cloud-sync/tokens";
 
-const BEARER_RE = /^Bearer\s+(jht_sync_[A-Za-z0-9_\-]+)$/
+const BEARER_RE = /^Bearer\s+(jht_sync_[A-Za-z0-9_\-]+)$/;
 
 export interface VerifiedToken {
-  userId: string
-  tokenId: string
-  name: string
-  admin: ReturnType<typeof createAdminClient>
+  userId: string;
+  tokenId: string;
+  name: string;
+  admin: ReturnType<typeof createAdminClient>;
 }
 
-export type VerifyResult = { ok: true; data: VerifiedToken } | { ok: false; res: NextResponse }
+export type VerifyResult =
+  | { ok: true; data: VerifiedToken }
+  | { ok: false; res: NextResponse };
 
 // Throttle write su last_used_at: una sola UPDATE/ora per token, anche
 // se il cloud daemon fa decine di request/min. Il campo era usato solo
 // come "ultima volta visto" indicativo: granularità 1h è sufficiente,
 // la write su ogni request saturava il Disk IO Budget (vedi
 // docs/sessions/2026-05-18-supabase-disk-io-investigation/).
-const LAST_USED_THROTTLE_MS = 60 * 60 * 1000
+const LAST_USED_THROTTLE_MS = 60 * 60 * 1000;
 
 /**
  * Verifica un Bearer token jht_sync_... contro cloud_sync_tokens.
  * Aggiorna last_used_at fire-and-forget (throttle 1h). Ritorna admin client per la route.
  */
-export async function verifyBearerToken(req: NextRequest): Promise<VerifyResult> {
-  const authHeader = req.headers.get('authorization') ?? ''
-  const match = authHeader.match(BEARER_RE)
+export async function verifyBearerToken(
+  req: NextRequest,
+): Promise<VerifyResult> {
+  const authHeader = req.headers.get("authorization") ?? "";
+  const match = authHeader.match(BEARER_RE);
   if (!match) {
     return {
       ok: false,
-      res: NextResponse.json({ error: 'Bearer token mancante o malformato' }, { status: 401 }),
-    }
+      res: NextResponse.json(
+        { error: "Bearer token mancante o malformato" },
+        { status: 401 },
+      ),
+    };
   }
 
-  let admin
+  let admin;
   try {
-    admin = createAdminClient()
+    admin = createAdminClient();
   } catch {
     return {
       ok: false,
       res: NextResponse.json(
-        { error: 'server misconfigured: SUPABASE_SERVICE_ROLE_KEY mancante' },
-        { status: 500 }
+        { error: "server misconfigured: SUPABASE_SERVICE_ROLE_KEY mancante" },
+        { status: 500 },
       ),
-    }
+    };
   }
 
-  const hash = hashSyncToken(match[1])
+  const hash = hashSyncToken(match[1]);
   const { data, error } = await admin
-    .from('cloud_sync_tokens')
-    .select('id, user_id, name, revoked_at, last_used_at, expires_at')
-    .eq('token_hash', hash)
-    .maybeSingle()
+    .from("cloud_sync_tokens")
+    .select("id, user_id, name, revoked_at, last_used_at, expires_at")
+    .eq("token_hash", hash)
+    .maybeSingle();
 
   if (error) {
-    return { ok: false, res: NextResponse.json({ error: error.message }, { status: 500 }) }
+    return {
+      ok: false,
+      res: NextResponse.json({ error: error.message }, { status: 500 }),
+    };
   }
   if (!data) {
-    return { ok: false, res: NextResponse.json({ error: 'token non valido' }, { status: 401 }) }
+    return {
+      ok: false,
+      res: NextResponse.json({ error: "token non valido" }, { status: 401 }),
+    };
   }
   if (data.revoked_at) {
-    return { ok: false, res: NextResponse.json({ error: 'token revocato' }, { status: 401 }) }
+    return {
+      ok: false,
+      res: NextResponse.json({ error: "token revocato" }, { status: 401 }),
+    };
   }
   // Scadenza (audit #1): expires_at NULL = nessuna scadenza (device headless).
   // Se valorizzato e nel passato → token scaduto, 401.
   if (data.expires_at && new Date(data.expires_at).getTime() <= Date.now()) {
-    return { ok: false, res: NextResponse.json({ error: 'token scaduto' }, { status: 401 }) }
+    return {
+      ok: false,
+      res: NextResponse.json({ error: "token scaduto" }, { status: 401 }),
+    };
   }
 
   const shouldUpdate =
     !data.last_used_at ||
-    Date.now() - new Date(data.last_used_at).getTime() > LAST_USED_THROTTLE_MS
+    Date.now() - new Date(data.last_used_at).getTime() > LAST_USED_THROTTLE_MS;
 
   if (shouldUpdate) {
     // Fire-and-forget vero: niente await, la request risponde senza
     // attendere il write. L'errore viene silenziato perché non blocca.
     void admin
-      .from('cloud_sync_tokens')
+      .from("cloud_sync_tokens")
       .update({ last_used_at: new Date().toISOString() })
-      .eq('id', data.id)
-      .then(() => undefined)
+      .eq("id", data.id)
+      .then(() => undefined);
   }
 
   return {
     ok: true,
     data: { userId: data.user_id, tokenId: data.id, name: data.name, admin },
-  }
+  };
 }

@@ -1,10 +1,16 @@
-import Database from 'better-sqlite3'
-import fs from 'fs'
-import os from 'os'
-import path from 'path'
-import { JHT_DB_PATH } from '@/lib/jht-paths'
+import Database from "better-sqlite3";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { JHT_DB_PATH } from "@/lib/jht-paths";
 
-declare const globalThis: { __jht_db_cache?: { path: string; sourceMtimeMs: number; db: Database.Database } }
+declare const globalThis: {
+  __jht_db_cache?: {
+    path: string;
+    sourceMtimeMs: number;
+    db: Database.Database;
+  };
+};
 
 // Docker Desktop bind-mount workaround (Windows): quando il container Linux
 // scrive su /jht_home/jobs.db e l'host Windows legge lo stesso file via
@@ -15,55 +21,73 @@ declare const globalThis: { __jht_db_cache?: { path: string; sourceMtimeMs: numb
 // (che fa un read() pieno, non pread), poi SQLite legge da NTFS senza
 // ambiguita'.
 function resolveReadablePath(): { dbPath: string; sourceMtimeMs: number } {
-  const srcStat = fs.statSync(JHT_DB_PATH)
-  if (process.platform !== 'win32') {
-    return { dbPath: JHT_DB_PATH, sourceMtimeMs: srcStat.mtimeMs }
+  const srcStat = fs.statSync(JHT_DB_PATH);
+  if (process.platform !== "win32") {
+    return { dbPath: JHT_DB_PATH, sourceMtimeMs: srcStat.mtimeMs };
   }
-  const cacheDir = path.join(os.tmpdir(), 'jht-web-cache')
-  fs.mkdirSync(cacheDir, { recursive: true })
-  const dbPath = path.join(cacheDir, 'jobs.db')
-  const walPath = dbPath + '-wal'
-  const shmPath = dbPath + '-shm'
+  const cacheDir = path.join(os.tmpdir(), "jht-web-cache");
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const dbPath = path.join(cacheDir, "jobs.db");
+  const walPath = dbPath + "-wal";
+  const shmPath = dbPath + "-shm";
 
-  let needsCopy = true
+  let needsCopy = true;
   try {
-    const dstStat = fs.statSync(dbPath)
-    if (dstStat.mtimeMs >= srcStat.mtimeMs && dstStat.size === srcStat.size) needsCopy = false
-  } catch { /* missing */ }
+    const dstStat = fs.statSync(dbPath);
+    if (dstStat.mtimeMs >= srcStat.mtimeMs && dstStat.size === srcStat.size)
+      needsCopy = false;
+  } catch {
+    /* missing */
+  }
 
   if (needsCopy) {
-    fs.copyFileSync(JHT_DB_PATH, dbPath)
+    fs.copyFileSync(JHT_DB_PATH, dbPath);
     // WAL/SHM possono non esistere (DB checkpointato a fondo); copiarli
     // se presenti assicura che SQLite veda anche i commit post-checkpoint.
     // Se spariti dopo la checkpoint nel container, rimuoviamo i vecchi
     // nella cache per evitare di leggere WAL scollegata dal main DB.
-    for (const [src, dst] of [[JHT_DB_PATH + '-wal', walPath], [JHT_DB_PATH + '-shm', shmPath]]) {
+    for (const [src, dst] of [
+      [JHT_DB_PATH + "-wal", walPath],
+      [JHT_DB_PATH + "-shm", shmPath],
+    ]) {
       try {
-        if (fs.existsSync(src)) fs.copyFileSync(src, dst)
-        else if (fs.existsSync(dst)) fs.unlinkSync(dst)
-      } catch { /* best effort */ }
+        if (fs.existsSync(src)) fs.copyFileSync(src, dst);
+        else if (fs.existsSync(dst)) fs.unlinkSync(dst);
+      } catch {
+        /* best effort */
+      }
     }
   }
-  return { dbPath, sourceMtimeMs: srcStat.mtimeMs }
+  return { dbPath, sourceMtimeMs: srcStat.mtimeMs };
 }
 
 export function getDb(_workspacePath?: string): Database.Database {
   if (!fs.existsSync(JHT_DB_PATH)) {
-    throw new Error(`Database non trovato: ${JHT_DB_PATH}`)
+    throw new Error(`Database non trovato: ${JHT_DB_PATH}`);
   }
-  const { dbPath, sourceMtimeMs } = resolveReadablePath()
+  const { dbPath, sourceMtimeMs } = resolveReadablePath();
 
-  const cached = globalThis.__jht_db_cache
-  if (cached?.path === dbPath && cached?.sourceMtimeMs === sourceMtimeMs && cached?.db?.open) {
-    return cached.db
+  const cached = globalThis.__jht_db_cache;
+  if (
+    cached?.path === dbPath &&
+    cached?.sourceMtimeMs === sourceMtimeMs &&
+    cached?.db?.open
+  ) {
+    return cached.db;
   }
-  if (cached?.db?.open) { try { cached.db.close() } catch { /* ignore */ } }
+  if (cached?.db?.open) {
+    try {
+      cached.db.close();
+    } catch {
+      /* ignore */
+    }
+  }
 
-  const db = new Database(dbPath, { readonly: true })
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-  globalThis.__jht_db_cache = { path: dbPath, sourceMtimeMs, db }
-  return db
+  const db = new Database(dbPath, { readonly: true });
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  globalThis.__jht_db_cache = { path: dbPath, sourceMtimeMs, db };
+  return db;
 }
 
 const SCHEMA_SQL = `
@@ -240,12 +264,12 @@ AFTER UPDATE ON pending_user_messages FOR EACH ROW WHEN NEW.updated_at IS OLD.up
 BEGIN UPDATE pending_user_messages SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id; END;
 
 PRAGMA user_version = 5;
-`
+`;
 
 export function initDb(_workspacePath?: string): void {
-  const db = new Database(JHT_DB_PATH)
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-  db.exec(SCHEMA_SQL)
-  db.close()
+  const db = new Database(JHT_DB_PATH);
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  db.exec(SCHEMA_SQL);
+  db.close();
 }

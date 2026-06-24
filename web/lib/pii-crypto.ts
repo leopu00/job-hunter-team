@@ -56,7 +56,9 @@ export function decryptField(value: string | null | undefined): string | null {
     const data = raw.subarray(28);
     const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
     decipher.setAuthTag(tag);
-    return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
+    return Buffer.concat([decipher.update(data), decipher.final()]).toString(
+      "utf8",
+    );
   } catch {
     return null;
   }
@@ -64,16 +66,27 @@ export function decryptField(value: string | null | undefined): string | null {
 
 type Contacts = Record<string, string | null | undefined>;
 
-const CONTACT_FIELDS = ["email", "phone", "linkedin", "github", "website", "address"] as const;
+const CONTACT_FIELDS = [
+  "email",
+  "phone",
+  "linkedin",
+  "github",
+  "website",
+  "address",
+] as const;
 
-export function encryptContacts(c: Contacts | null | undefined): Contacts | null {
+export function encryptContacts(
+  c: Contacts | null | undefined,
+): Contacts | null {
   if (!c) return null;
   const out: Contacts = {};
   for (const f of CONTACT_FIELDS) out[f] = encryptField(c[f]);
   return out;
 }
 
-export function decryptContacts(c: Contacts | null | undefined): Contacts | null {
+export function decryptContacts(
+  c: Contacts | null | undefined,
+): Contacts | null {
   if (!c) return null;
   const out: Contacts = {};
   for (const f of CONTACT_FIELDS) out[f] = decryptField(c[f]);

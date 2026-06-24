@@ -15,5 +15,7 @@ import { locales, defaultLocale, type Locale } from "@/i18n/config";
 export async function getRequestLocale(): Promise<Locale> {
   const cookieStore = await cookies();
   const raw = cookieStore.get("NEXT_LOCALE")?.value;
-  return raw && (locales as string[]).includes(raw) ? (raw as Locale) : defaultLocale;
+  return raw && (locales as string[]).includes(raw)
+    ? (raw as Locale)
+    : defaultLocale;
 }
