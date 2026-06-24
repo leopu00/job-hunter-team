@@ -74,7 +74,10 @@ export function setLang(lang, { persist = true } = {}) {
   if (!SUPPORTED_LANGS.includes(lang)) return
   currentLang = lang
   if (persist) {
+    // localStorage su origine file:// NON persiste in Electron → la fonte
+    // affidabile è prefsApi (preferences.json nel main process).
     try { localStorage.setItem(LANG_STORAGE_KEY, lang) } catch (_) {}
+    try { window.prefsApi?.set?.('lang', lang) } catch (_) {}
   }
   applyTranslations()
   for (const fn of langListeners) {
