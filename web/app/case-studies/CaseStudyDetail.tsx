@@ -102,6 +102,7 @@ const T: Record<
     sourcesProse1: string; // "Le fonti da cui lo Scout ha trovato le"
     sourcesProse2: string; // "posizioni: job board, ATS e pagine carriera aziendali."
     sourcesTimeCaption: string; // didascalia grafico fonti-nel-tempo
+    sourcesScoreTitle: string; // titolo grafico fonti volume+score nel tempo
     sourcesScoreCaption: string; // didascalia grafico fonti + score medio
     sourcesAvgCaption: string; // didascalia grafico score medio per fonte
   }
@@ -128,6 +129,7 @@ const T: Record<
     sourcesTitle: "Da dove arrivano le posizioni",
     sourcesTimeCaption:
       "Le stesse posizioni nel tempo: quante ne sono arrivate ogni giorno, divise per fonte.",
+    sourcesScoreTitle: "Volume e score per fonte, nel tempo",
     sourcesScoreCaption:
       "E la qualità per fonte: le linee mostrano lo score medio giornaliero di ogni provider (asse destro), sopra le barre delle posizioni.",
     sourcesAvgCaption:
@@ -157,6 +159,7 @@ const T: Record<
     sourcesTitle: "Where the positions come from",
     sourcesTimeCaption:
       "The same positions over time: how many arrived each day, split by source.",
+    sourcesScoreTitle: "Volume and score by source, over time",
     sourcesScoreCaption:
       "And quality by source: the lines show each provider's daily average score (right axis), over the position bars.",
     sourcesAvgCaption:
@@ -186,6 +189,7 @@ const T: Record<
     sourcesTitle: "De dónde vienen las posiciones",
     sourcesTimeCaption:
       "Las mismas posiciones en el tiempo: cuántas llegaron cada día, por fuente.",
+    sourcesScoreTitle: "Volumen y score por fuente, en el tiempo",
     sourcesScoreCaption:
       "Y la calidad por fuente: las líneas muestran el score medio diario de cada proveedor (eje derecho), sobre las barras de posiciones.",
     sourcesAvgCaption:
@@ -216,6 +220,7 @@ const T: Record<
     sourcesTitle: "D’où viennent les postes",
     sourcesTimeCaption:
       "Les mêmes postes dans le temps : combien sont arrivés chaque jour, par source.",
+    sourcesScoreTitle: "Volume et score par source, dans le temps",
     sourcesScoreCaption:
       "Et la qualité par source : les lignes montrent le score moyen quotidien de chaque source (axe droit), au-dessus des barres de postes.",
     sourcesAvgCaption:
@@ -246,6 +251,7 @@ const T: Record<
     sourcesTitle: "Woher die Positionen kommen",
     sourcesTimeCaption:
       "Dieselben Positionen im Zeitverlauf: wie viele pro Tag kamen, nach Quelle.",
+    sourcesScoreTitle: "Volumen und Score je Quelle, im Zeitverlauf",
     sourcesScoreCaption:
       "Und die Qualität je Quelle: die Linien zeigen den täglichen Durchschnitts-Score jeder Quelle (rechte Achse), über den Stellen-Balken.",
     sourcesAvgCaption:
@@ -276,6 +282,7 @@ const T: Record<
     sourcesTitle: "Honnan érkeznek a pozíciók",
     sourcesTimeCaption:
       "Ugyanazok a pozíciók időben: hányat találtunk naponta, források szerint.",
+    sourcesScoreTitle: "Volumen és pontszám forrásonként, időben",
     sourcesScoreCaption:
       "És a minőség forrásonként: a vonalak az egyes források napi átlagpontszámát mutatják (jobb tengely), a pozíció-oszlopok felett.",
     sourcesAvgCaption:
@@ -306,6 +313,7 @@ const T: Record<
     sourcesTitle: "De onde vêm as posições",
     sourcesTimeCaption:
       "As mesmas posições ao longo do tempo: quantas chegaram por dia, por fonte.",
+    sourcesScoreTitle: "Volume e score por fonte, ao longo do tempo",
     sourcesScoreCaption:
       "E a qualidade por fonte: as linhas mostram o score médio diário de cada provedor (eixo direito), sobre as barras de posições.",
     sourcesAvgCaption:
@@ -586,6 +594,9 @@ export default function CaseStudyDetail({
             </p>
 
             {/* posizioni/giorno per fonte + score medio/giorno (interattivo) */}
+            <div className="text-[12px] font-semibold text-[var(--color-base)] mb-1">
+              {t.sourcesScoreTitle}
+            </div>
             <p className="text-[11px] text-[var(--color-dim)] mb-4">
               {t.sourcesScoreCaption}
             </p>
