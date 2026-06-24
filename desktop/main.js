@@ -175,6 +175,51 @@ function ensureTeamStarted() {
   }
 }
 
+// [team status] Stato live degli agenti calcolato lato desktop via
+// `docker exec ... tmux list-sessions`. NB: NON si usa GET /api/agents del web:
+// quella route, attraverso il port-map Docker, vede isLocalRequest()=false →
+// ramo "remote" che NON controlla tmux e riporta tutto 'stopped' (legge da
+// Supabase). Stessa radice del gate read_only sul controllo team. Qui leggiamo
+// direttamente le sessioni tmux nel container. Ritorna { agents:[...] } o null
+// se il container non c'è / nessun server tmux → il caller fa fallback al web
+// (copre VPS e team fermo). Forma compatibile con renderer loadAgents.
+const TEAM_AGENTS = [
+  { id: 'capitano', name: 'Capitano', session: 'CAPITANO' },
+  { id: 'sentinella', name: 'Sentinella', session: 'SENTINELLA' },
+  { id: 'assistente', name: 'Assistente', session: 'ASSISTENTE' },
+  { id: 'scout', name: 'Scout', session: 'SCOUT' },
+  { id: 'analista', name: 'Analista', session: 'ANALISTA' },
+  { id: 'scorer', name: 'Scorer', session: 'SCORER' },
+  { id: 'scrittore', name: 'Scrittore', session: 'SCRITTORE' },
+  { id: 'critico', name: 'Critico', session: 'CRITICO' },
+]
+function teamAgentsStatus() {
+  const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
+  let sessions
+  try {
+    const out = require('node:child_process')
+      .execFileSync('docker', ['exec', name, 'tmux', 'list-sessions', '-F', '#{session_name}'], {
+        timeout: 5000,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+      .toString()
+    sessions = out.split('\n').map((s) => s.trim()).filter(Boolean)
+  } catch {
+    // Container assente o nessun server tmux (team fermo) → fallback al web.
+    return null
+  }
+  const agents = TEAM_AGENTS.map((a) => {
+    // Conta la sessione esatta + le istanze numerate (es. SCOUT-1) e i worker
+    // (es. SENTINELLA-WORKER) che il Capitano/Sentinella spawnano.
+    const instances = sessions.filter(
+      (s) => s === a.session || s.startsWith(`${a.session}-`),
+    ).length
+    return { ...a, status: instances > 0 ? 'running' : 'stopped', instances }
+  })
+  return { agents, source: 'docker-exec' }
+}
+
 // Renderer preferences store. Lives in app.getPath('userData') so it
 // survives uninstall/upgrade (see feedback_no_user_data_wipe.md) and
 // does not couple to ~/.jht, which may not exist yet at onboarding
@@ -834,6 +879,13 @@ app.whenReady().then(() => {
     if (typeof apiPath !== 'string' || !apiPath.startsWith('/api/') ||
         apiPath.includes('://') || apiPath.includes('..')) {
       return null
+    }
+    // Stato agenti: calcolato lato desktop via docker exec (il web /api/agents
+    // è cieco sulle tmux attraverso il port-map → riporta tutto 'stopped').
+    // Fallback al web se il container non c'è (VPS / team fermo).
+    if (apiPath === '/api/agents') {
+      const local = teamAgentsStatus()
+      if (local) return local
     }
     const r = await dashboardApiFetch(apiPath)
     return r.ok ? r.data : null
