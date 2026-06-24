@@ -610,10 +610,19 @@
             <span class="step__hint" data-i18n="email.passwordHint">Paste a Gmail app password (a 16-character code) — not your normal login password.</span>
           </label>
           <div class="email-gmail-help">
-            <button type="button" class="btn btn--secondary btn--small" id="btn-email-app-pw" data-i18n="email.createAppPw">
-              Create a Gmail app password →
+            <span class="step__hint" data-i18n="email.gmailSteps">Gmail: two quick clicks on Google, then paste the code here.</span>
+            <div class="email-gmail-links">
+              <button type="button" class="btn btn--secondary btn--small" id="btn-email-2fa" data-i18n="email.enable2fa">
+                1. Turn on 2-Step Verification →
+              </button>
+              <button type="button" class="btn btn--secondary btn--small" id="btn-email-app-pw" data-i18n="email.createAppPw">
+                2. Create app password →
+              </button>
+            </div>
+            <span class="step__hint" data-i18n="email.appPwNote">Then copy the 16-character code into the field above (not your normal password).</span>
+            <button type="button" class="btn btn--ghost btn--small" id="btn-email-docs" data-i18n="email.docsLink">
+              Full guide →
             </button>
-            <span class="step__hint" data-i18n="email.appPwNote">Opens Google. Needs 2-Step Verification enabled; then copy the 16-character code into the field above.</span>
           </div>
           <label class="email-dedicated">
             <input type="checkbox" id="email-dedicated-confirm" />

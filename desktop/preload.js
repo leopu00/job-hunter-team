@@ -236,6 +236,8 @@ contextBridge.exposeInMainWorld('telegramApi', {
   cancelWaitForChatId: (token) =>
     ipcRenderer.invoke('telegram:cancel-wait-for-chat', token),
   saveBotsToVps: (args) => ipcRenderer.invoke('telegram:save-to-vps', args),
+  // [ONBOARDING locale] Salva i bot nel jht.config.json locale (~/.jht).
+  saveBotsLocal: (bots) => ipcRenderer.invoke('telegram:save-local', { bots }),
 })
 
 // Provider config writer (active_provider + providers.<name>.auth_method)

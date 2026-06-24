@@ -207,6 +207,42 @@ function getUserUploadsDir() {
   return path.join(userDir, 'allegati')
 }
 
+// Salva i 3 bot Telegram nel jht.config.json LOCALE (channels.telegram.bots),
+// stessa forma che telegram/index.js scrive sul VPS. Usato dall'onboarding in
+// modalità locale (il container legge ~/.jht via bind). Merge-preserve.
+function saveTelegramBotsLocal(bots) {
+  if (!bots || typeof bots !== 'object') return { ok: false, error: 'bots-missing' }
+  const config = readJhtConfig()
+  config.channels =
+    config.channels && typeof config.channels === 'object' ? config.channels : {}
+  config.channels.telegram =
+    config.channels.telegram && typeof config.channels.telegram === 'object'
+      ? config.channels.telegram
+      : {}
+  if (
+    !config.channels.telegram.bots ||
+    typeof config.channels.telegram.bots !== 'object'
+  ) {
+    config.channels.telegram.bots = {}
+  }
+  for (const key of Object.keys(bots)) {
+    const entry = bots[key]
+    if (!entry || !entry.token) continue
+    const rec = { bot_token: entry.token }
+    if (entry.chatId) rec.chat_id = String(entry.chatId)
+    config.channels.telegram.bots[key] = rec
+  }
+  try {
+    writeJhtConfig(config)
+    log.info('[onboarding] telegram bots saved (local)', {
+      botKeys: Object.keys(config.channels.telegram.bots),
+    })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err && (err.message || String(err)) }
+  }
+}
+
 // Export the user's chosen provider/plan to ~/.jht/jht.config.json so
 // the agent-boot script inside the container can pick the right CLI
 // and load the right identity file (CLAUDE.md for Claude, AGENTS.md
@@ -1259,6 +1295,9 @@ app.whenReady().then(() => {
   )
   ipcMain.handle('telegram:cancel-wait-for-chat', (_event, token) =>
     telegram.cancelWaitForFirstChat(token),
+  )
+  ipcMain.handle('telegram:save-local', (_event, args = {}) =>
+    saveTelegramBotsLocal(args.bots),
   )
   ipcMain.handle('telegram:save-to-vps', (_event, args = {}) =>
     telegram.saveBotsToVps(args.vpsIp, args.bots),
