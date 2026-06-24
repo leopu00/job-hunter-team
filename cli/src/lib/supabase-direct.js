@@ -159,6 +159,31 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
   }
 
   /**
+   * Posizioni con un flag desired-state cambiato dopo `since` (write/geocode/
+   * recheck/salary_precise + esclusione utente). Rimpiazza
+   * GET /api/cloud-sync/pull-desired-state. NB: `positions` NON ha `updated_at`
+   * (vedi schema), quindi il cursore è sui timestamp dei flag stessi
+   * (`*_requested_at`/`user_excluded_at`) via filtro OR.
+   * @param {object} [o] { since?: ISO string, limit?: number }
+   */
+  async function readDesiredStateChanges({ since, limit = 500 } = {}) {
+    const cols = 'legacy_id,write_requested,write_requested_at,geocode_requested,' +
+      'geocode_requested_at,recheck_requested,recheck_requested_at,salary_precise_requested,' +
+      'salary_precise_requested_at,status,user_excluded_reason,user_excluded_note,' +
+      'user_excluded_at,user_excluded_prev_status';
+    const params = new URLSearchParams();
+    params.set('select', cols);
+    if (since) {
+      params.set('or', `(write_requested_at.gt.${since},geocode_requested_at.gt.${since},` +
+        `recheck_requested_at.gt.${since},salary_precise_requested_at.gt.${since},` +
+        `user_excluded_at.gt.${since})`);
+    }
+    params.set('limit', String(limit));
+    const rows = await rest(`positions?${params.toString()}`);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /**
    * Riga `team_state` dell'utente (PK user_id → al più 1 riga, già scoping RLS).
    * Rimpiazza GET /api/team-state (sync rendezvous + desired-state/reconcile).
    * @param {string[]} [select] colonne; default i campi sync + desired-state.
@@ -190,6 +215,7 @@ export function createSupabaseDirect({ supabaseUrl, anonKey, refreshToken, userI
     ensureToken,
     rest,
     readOpenTickets,
+    readDesiredStateChanges,
     readTeamState,
     patchTeamState,
     getRefreshToken: () => currentRefresh,
