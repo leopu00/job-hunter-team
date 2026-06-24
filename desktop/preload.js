@@ -115,6 +115,13 @@ contextBridge.exposeInMainWorld('chatApi', {
   send: (agent, text) => ipcRenderer.invoke('chat:send', { agent, text }),
 })
 
+// [agent control] Kill / restart di un singolo agente dal pannello Agents
+// (via docker exec nel main). → { ok, error? }.
+contextBridge.exposeInMainWorld('agentApi', {
+  stop: (role) => ipcRenderer.invoke('agent:stop', { role }),
+  restart: (role) => ipcRenderer.invoke('agent:restart', { role }),
+})
+
 contextBridge.exposeInMainWorld('setupApi', {
   getStatus: () => ipcRenderer.invoke('setup:get-status'),
   getDockerStatus: () => ipcRenderer.invoke('setup:get-docker-status'),

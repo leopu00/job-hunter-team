@@ -2685,6 +2685,7 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 .email-dedicated input { margin-top: 2px; }
 .email-gmail-help { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
 .email-gmail-links { display: flex; gap: 8px; flex-wrap: wrap; }
+.dash-agent__actions { display: flex; align-items: center; gap: 10px; }
 #email-status[data-kind='ok'] { color: var(--success); }
 #email-status[data-kind='warn'] { color: #e0b15a; }
 #email-status[data-kind='error'] { color: var(--danger); }
