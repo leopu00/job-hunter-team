@@ -595,9 +595,9 @@
            round-trip IMAP+SMTP prima di lasciar procedere. -->
       <section class="step step--centered" id="step-email-setup" data-step="email-setup" hidden>
         <div class="step__emoji" aria-hidden="true">📧</div>
-        <h1 class="step__title" data-i18n="email.title">Connect the team's Gmail inbox</h1>
+        <h1 class="step__title" data-i18n="email.title">Connect a team inbox (optional)</h1>
         <p class="step__lead" data-i18n="email.lead">
-          The team reads forwarded job alerts from a dedicated Gmail inbox. Create a free Gmail for the team — not your personal one — connect it here, then forward your job alerts to it.
+          Optional but recommended: connect a dedicated Gmail the team can read, then forward your job alerts to it — the team gets higher-quality leads and spends fewer tokens. You can skip this and set it up later; without it the team finds jobs on the web.
         </p>
         <div class="email-form">
           <label class="email-field">
@@ -624,9 +624,12 @@
           </button>
           <p class="step__hint" id="email-status" hidden></p>
         </div>
-        <div class="step__actions step__actions--between">
+        <div class="step__actions step__actions--between step__actions--wide">
           <button class="btn btn--ghost" id="btn-email-back" data-i18n="email.back">Back</button>
-          <button class="btn btn--primary" id="btn-email-continue" data-i18n="email.continue" disabled>Continue</button>
+          <div class="step__actions-group">
+            <button class="btn btn--ghost" id="btn-email-skip" data-i18n="email.skip">Set up later</button>
+            <button class="btn btn--primary" id="btn-email-continue" data-i18n="email.continue" disabled>Continue</button>
+          </div>
         </div>
       </section>
 

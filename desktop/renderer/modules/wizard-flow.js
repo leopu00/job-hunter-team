@@ -1376,6 +1376,12 @@ if (dom.emailPasswordInput) dom.emailPasswordInput.addEventListener('input', inv
 if (dom.emailDedicatedConfirm) dom.emailDedicatedConfirm.addEventListener('change', updateEmailContinueState)
 if (dom.btnEmailVerify) dom.btnEmailVerify.addEventListener('click', onEmailVerify)
 if (dom.btnEmailBack) dom.btnEmailBack.addEventListener('click', () => enterProfileUpload())
+// Email OPZIONALE (2026-06-24): "Configura dopo" salta senza salvare credenziali
+// → il team farà web sourcing; l'utente può configurarla dopo dal pannello home.
+if (dom.btnEmailSkip) dom.btnEmailSkip.addEventListener('click', () => {
+  log.info('email-setup.skipped')
+  enterReady()
+})
 if (dom.btnEmailContinue) {
   dom.btnEmailContinue.addEventListener('click', () => {
     if (dom.btnEmailContinue.disabled) return

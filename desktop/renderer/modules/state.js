@@ -186,6 +186,7 @@ export const dom = {
   btnEmailAppPw: document.getElementById('btn-email-app-pw'),
   emailSetupStatus: document.getElementById('email-status'),
   btnEmailBack: document.getElementById('btn-email-back'),
+  btnEmailSkip: document.getElementById('btn-email-skip'),
   btnEmailContinue: document.getElementById('btn-email-continue'),
   summaryList: document.getElementById('summary-list'),
   terminalModal: document.getElementById('terminal-modal'),
