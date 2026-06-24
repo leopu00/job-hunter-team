@@ -29,6 +29,17 @@ function deriveImap(email) {
     'yahoo.com': { host: 'imap.mail.yahoo.com', port: 993 },
     'icloud.com': { host: 'imap.mail.me.com', port: 993 },
     'me.com': { host: 'imap.mail.me.com', port: 993 },
+    // GMX (accetta la password normale, ottimo per test usa-e-getta)
+    'gmx.com': { host: 'imap.gmx.com', port: 993 },
+    'gmx.net': { host: 'imap.gmx.net', port: 993 },
+    'gmx.de': { host: 'imap.gmx.net', port: 993 },
+    // mail.com + suoi domini-alias comuni → server sempre imap.mail.com
+    'mail.com': { host: 'imap.mail.com', port: 993 },
+    'email.com': { host: 'imap.mail.com', port: 993 },
+    'usa.com': { host: 'imap.mail.com', port: 993 },
+    // Yandex (richiede una app-password)
+    'yandex.com': { host: 'imap.yandex.com', port: 993 },
+    'yandex.ru': { host: 'imap.yandex.ru', port: 993 },
   }
   const d = domainOf(email)
   return KNOWN[d] || { host: `imap.${d}`, port: 993 }
@@ -45,6 +56,17 @@ function deriveSmtp(email) {
     'yahoo.com': { host: 'smtp.mail.yahoo.com', port: 465, secure: true },
     'icloud.com': { host: 'smtp.mail.me.com', port: 587, secure: false },
     'me.com': { host: 'smtp.mail.me.com', port: 587, secure: false },
+    // GMX: SMTP è mail.gmx.* (NON smtp.gmx.*), porta 587 STARTTLS.
+    'gmx.com': { host: 'mail.gmx.com', port: 587, secure: false },
+    'gmx.net': { host: 'mail.gmx.net', port: 587, secure: false },
+    'gmx.de': { host: 'mail.gmx.net', port: 587, secure: false },
+    // mail.com + alias → server sempre smtp.mail.com, 587 STARTTLS.
+    'mail.com': { host: 'smtp.mail.com', port: 587, secure: false },
+    'email.com': { host: 'smtp.mail.com', port: 587, secure: false },
+    'usa.com': { host: 'smtp.mail.com', port: 587, secure: false },
+    // Yandex
+    'yandex.com': { host: 'smtp.yandex.com', port: 465, secure: true },
+    'yandex.ru': { host: 'smtp.yandex.ru', port: 465, secure: true },
   }
   const d = domainOf(email)
   return KNOWN[d] || { host: `smtp.${d}`, port: 465, secure: true }
