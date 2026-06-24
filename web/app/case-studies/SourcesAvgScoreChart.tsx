@@ -45,6 +45,8 @@ export default function SourcesAvgScoreChart({
     });
   // Asse 0-100 (score). Già ordinate per avg desc dal generatore.
   const ordered = [...rows].sort((a, b) => b.avg - a.avg);
+  // Quota % per fonte sulle posizioni valutate (stessa base del donut accanto).
+  const totalN = rows.reduce((s, r) => s + r.n, 0) || 1;
 
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
@@ -78,8 +80,11 @@ export default function SourcesAvgScoreChart({
               >
                 {r.avg}
               </span>
-              <span className="text-[10px] tabular-nums w-16 text-right text-[var(--color-dim)]">
+              <span className="text-[10px] tabular-nums w-14 text-right text-[var(--color-dim)]">
                 {r.n} {t.nLabel}
+              </span>
+              <span className="text-[10px] font-semibold tabular-nums w-9 text-right text-[var(--color-base)]">
+                {Math.round((r.n / totalN) * 100)}%
               </span>
             </div>
           );
