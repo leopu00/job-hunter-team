@@ -35,7 +35,7 @@ la si aggiunge qui, poi la si usa nelle storie.
 |---|---|
 | Capitano | Il capo dell'ufficio: coordina, assegna i compiti, convoca e tiene al lavoro la squadra |
 | Sentinella | La sorvegliante severa che tiene d'occhio i consumi e dà ordini drastici |
-| Dottore | Il medico di turno: passa ogni mezz'ora, chiede a ogni agente «come stai?» e agisce sulla risposta |
+| Dottore | Il medico di turno: durante la giornata rinfresca il contesto degli agenti che lavorano da ore, riavviandoli senza far perdere lavoro |
 | Scout | Il cercatore che batte il mondo in cerca di offerte |
 | Analista | Chi verifica e mette in ordine quello che lo Scout porta a casa |
 | Scorer | Il giudice che dà un voto a ogni offerta |
