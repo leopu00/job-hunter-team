@@ -37,11 +37,23 @@
   --sync-warn: #d4a85a;
 }
 
-/* Linea/asse "budget AI" nei grafici case-studies. NON è un token @theme di
-   Tailwind (lo usiamo solo via var() in JS, che Tailwind non scansiona → in
-   @theme l'override light verrebbe tree-shakato). Come CSS normale, invece,
-   il cascade funziona: giallo ambra su dark, scurito in light. */
-:root { --budget-line: #ffd600; }
+/* Colore "linea/asse budget AI" dei grafici case-studies (giallo su dark,
+   ambra scuro #a16207 in light). Applicato via CLASSI .cs-budget-* (usate in
+   WorkBudgetChart), NON via una CSS-var passata inline negli attributi SVG.
+   ⚠️ Storia: era una var --budget-line consumata solo via var() in JS/SVG → la
+   build (Tailwind v4 / Lightning) prunava sia la variabile sia le regole che la
+   referenziavano (la var non risultava "usata" nel CSS) → stroke=none (linee
+   sparite), background=trasparente (swatch), fill=nero (etichette). Qui i colori
+   sono HARDCODED nelle classi (come .badge-*): niente var da prunare, robusto a
+   build/minificatore. NON reintrodurre una var passata inline via var(). */
+.cs-budget-stroke { stroke: #ffd600; }
+.cs-budget-fill   { fill: #ffd600; }
+.cs-budget-bg     { background-color: #ffd600; }
+.cs-budget-dash   { border-top: 2px dashed #ffd600; }
+html[data-theme="light"] .cs-budget-stroke { stroke: #a16207; }
+html[data-theme="light"] .cs-budget-fill   { fill: #a16207; }
+html[data-theme="light"] .cs-budget-bg     { background-color: #a16207; }
+html[data-theme="light"] .cs-budget-dash   { border-top-color: #a16207; }
 
 /* ── Light theme overrides ───────────────────────────────────────── */
 html[data-theme="light"] {
@@ -59,7 +71,6 @@ html[data-theme="light"] {
   --color-white:        #0a0a20;
   --color-grid:         rgba(0, 0, 0, 0.022);
   --sync-warn:          #8b6914;
-  --budget-line:        #a16207;
   /* I verdi fosforescenti (dark) sono troppo chiari su sfondo bianco: in light
      teniamo LA STESSA tinta verde-foglia a piena saturazione, solo abbassata
      di luminosità quel tanto che basta a leggerla (NON desaturata/spenta).
