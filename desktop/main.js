@@ -145,29 +145,33 @@ async function dashboardApiFetch(apiPath, init = {}) {
 // [team auto-start] Avvia il TEAM completo (core: Capitano/Sentinella/Assistente/
 // Mentor; poi il Capitano scala i worker) appena il container locale è healthy.
 // Il container parte in modalità `dashboard` (solo Next + Assistente), quindi
-// senza questo passo il resto del team non si avvia mai. Riusa l'endpoint
-// /api/team/start-all (lo stesso della web UI), idempotente (already_active per
-// le sessioni già attive). Fire-and-forget: il bootstrap ha pre-delay interni
-// (~30s) ma non blocchiamo la UI. In VPS / runtime non pronto, dashboardApiFetch
-// ritorna subito runtime-not-ready e usciamo senza effetti.
-async function ensureTeamStarted() {
+// senza questo passo il resto del team non si avvia mai.
+//
+// IMPORTANTE: NON si usa l'endpoint web /api/team/start-all. Il controllo del
+// team è gated server-side a `isLocalRequest()` (web/lib/team-bus.ts), che è
+// FALSO attraverso il port-map di Docker → 403 read_only. Il canale corretto
+// desktop→team è eseguire la CLI DENTRO il container (`docker exec`), come fa
+// già provider-install. Comando idempotente: salta le sessioni tmux già attive.
+// Fire-and-forget: il bootstrap ha pre-delay interni (~40s) ma non blocchiamo
+// la UI; l'output va al pannello log del container.
+function ensureTeamStarted() {
+  const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
   try {
-    const r = await dashboardApiFetch('/api/team/start-all', {
-      method: 'POST',
-      body: {},
-      timeoutMs: 120000,
-    })
-    if (r.ok) {
-      log.info('[team] start-all ok')
-      broadcastContainerLog(
-        'Team avviato: core (Capitano, Sentinella, Assistente, Mentor); il Capitano scala i worker.',
-      )
-    } else {
-      log.warn('[team] start-all failed', { error: r.error })
-      broadcastContainerLog(`Team start-all: ${r.error}`)
+    const child = spawn(
+      'docker',
+      ['exec', name, 'node', '/app/cli/bin/jht.js', 'team', 'start'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    )
+    const onLine = (buf) => {
+      const line = String(buf).replace(/\[[0-9;]*m/g, '').trimEnd()
+      if (line) broadcastContainerLog(line)
     }
+    if (child.stdout) child.stdout.on('data', onLine)
+    if (child.stderr) child.stderr.on('data', onLine)
+    child.on('error', (err) => log.warn('[team] start exec error', { err: String(err) }))
+    child.on('exit', (code) => log.info('[team] start exec exit', { code }))
   } catch (err) {
-    log.warn('[team] start-all crashed', { err: String(err) })
+    log.warn('[team] start crashed', { err: String(err) })
   }
 }
 
