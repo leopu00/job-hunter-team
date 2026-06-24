@@ -404,13 +404,13 @@ Hors de la pipeline. Agents **planifies one-shot** : le watchdog en cree un sur 
 ```
    ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
    │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
-   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   │ (scheduler)│              │ 👷‍♂️ Mantenitore│  findings │            │
    └────────────┘              └──────────────┘          └────────────┘
                                   one-shot → self-destruct
 ```
 
 - **🩺 Dottore** — **sante des agents**. Rafraichissement periodique du contexte + retrospective : detecte les sessions d'agents bloquees/zombies et les redemarre avec un contexte neuf (les threads longue duree qui brulent du contexte provoquent un effondrement silencieux du debit). Dossier : `agents/dottore/`.
-- **🦺 Mantenitore** — **sante de l'infra**. Balayage de maintenance quotidien sur le conteneur/VPS : smoke-test des outils mission-critical (canary navigateur/Playwright), standardisation des dependances (`jht-install`), tendance disque/RAM, GC des orphelins. Un outil crucial casse est un P1. Dossier : `agents/mantenitore/`.
+- **👷‍♂️ Mantenitore** — **sante de l'infra**. Balayage de maintenance quotidien sur le conteneur/VPS : smoke-test des outils mission-critical (canary navigateur/Playwright), standardisation des dependances (`jht-install`), tendance disque/RAM, GC des orphelins. Un outil crucial casse est un P1. Dossier : `agents/mantenitore/`.
 
 ---
 

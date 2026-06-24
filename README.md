@@ -70,7 +70,7 @@ The team has **no fixed headcount**: a stable core of always-on agents plus a **
 | | Agent | Role |
 |---|-------|------|
 | 🩺 | **Dottore** | Agent health — detects stuck agents and restarts them with fresh context |
-| 🦺 | **Mantenitore** | Infra health — container, VPS, dependencies, disk/RAM, mission-critical tools |
+| 👷‍♂️ | **Mantenitore** | Infra health — container, VPS, dependencies, disk/RAM, mission-critical tools |
 
 > 📡 The **Bridge** (usage clock) is a process, not an AI agent — see Architecture below.
 
@@ -83,7 +83,7 @@ The team has **no fixed headcount**: a stable core of always-on agents plus a **
                🧙‍♂️ Mentor       👨‍💼 Assistant      👨‍✈️ Captain ◀··intervene·· 💂 Sentinel ◀──notify── 📡 Bridge
                (career coach)    (platform copilot)        │       (event-driven)         (usage clock)
                                                            │      🩺 Dottore ····agent-health··· ▲
-                                                           │      🦺 Mantenitore ··infra-health·· │
+                                                           │      👷‍♂️ Mantenitore ··infra-health·· │
                                                            │      (one-shot, daily sweep)         │
                                                            ▼
                                        ┌──────┬──────┬──────┐

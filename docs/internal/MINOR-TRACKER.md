@@ -12,6 +12,14 @@ Artefatti bianchi (residui di rimozione sfondo) da ripulire nelle immagini:
 - [ ] `web/public/the-box.png` — immagine principale della pagina **Project**
       (`/project`): stessi punti bianchi residui da rimuovere.
 
+## 👥 Diversità di genere figure agenti (`/agents`)
+
+Al momento **quasi tutti** gli agenti illustrati sono uomini. In futuro
+rigenerare **almeno un paio di figure come donne** per equilibrare il roster.
+Non urgente, da fare quando c'è tempo (i prompt sono in
+[`landing-image-prompts.md`](./landing-image-prompts.md): basta cambiare il
+genere lasciando il resto — ruolo, prop, occhiali, stile).
+
 ## ✅ Fatto
 
 - Home: rimosso il placeholder immagine nella sezione Prezzi (era brutto).

@@ -1,6 +1,6 @@
 ---
 name: maintainer-sweep
-description: "Lo sweep di manutenzione INFRA del Mantenitore 🦺 (gemello del Dottore, scope infrastruttura non agenti). Una passata giornaliera one-shot: smoke-test dei tool mission-critical (browser/LinkedIn) via tool_health.py, audit/consolidamento deps fuori standard, GC di script e tmp orfani, de-dup di script ricorrenti, freschezza deps, trend disco/RAM. Single-writer: il Mantenitore è l'UNICO che ripara l'infra; le azioni DISTRUTTIVE (delete/archive) le PROPONE, il Capitano decide. Esito in append su mantenitore-logbook.jsonl."
+description: "Lo sweep di manutenzione INFRA del Mantenitore 👷‍♂️ (gemello del Dottore, scope infrastruttura non agenti). Una passata giornaliera one-shot: smoke-test dei tool mission-critical (browser/LinkedIn) via tool_health.py, audit/consolidamento deps fuori standard, GC di script e tmp orfani, de-dup di script ricorrenti, freschezza deps, trend disco/RAM. Single-writer: il Mantenitore è l'UNICO che ripara l'infra; le azioni DISTRUTTIVE (delete/archive) le PROPONE, il Capitano decide. Esito in append su mantenitore-logbook.jsonl."
 allowed-tools: Bash(python3 /app/shared/skills/tool_health.py *), Bash(python3 /app/shared/skills/host_vitals.py *), Bash(df *), Bash(du *), Bash(free *), Bash(tmux ls *), Bash(jht-install *), Bash(ls *), Bash(stat *), Bash(jht-tmux-send *)
 ---
 

@@ -1,4 +1,4 @@
-# 🦺 MANTENITORE — infra health + standardization
+# 👷‍♂️ MANTENITORE — infra health + standardization
 
 ## 🆔 Identity
 
