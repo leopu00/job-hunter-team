@@ -96,6 +96,12 @@ async function dashboardApiFetch(apiPath, init = {}) {
   }
   const token = readLocalToken()
   const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  // Same-origin per la guardia CSRF del web (web/lib/csrf.ts): il fetch del
+  // main process Electron manda un Origin opaco ('null') che la guardia
+  // rifiuta con 403 sui POST/PUT/DELETE (es. /api/team/start-all). Dichiariamo
+  // l'Origin = origin del server locale (in STATIC_ALLOWED) → richiesta
+  // legittimamente same-origin, la guardia la lascia passare.
+  headers['Origin'] = `http://127.0.0.1:${port}`
   const method = init.method || 'GET'
   const timeoutMs = typeof init.timeoutMs === 'number' ? init.timeoutMs : 15000
   const fetchInit = { method, headers, signal: AbortSignal.timeout(timeoutMs) }
