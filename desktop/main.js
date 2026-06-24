@@ -930,6 +930,52 @@ app.whenReady().then(() => {
     }
   })
 
+  // [agent control] Kill / restart di un singolo agente dal pannello Agents.
+  // Via docker exec (il controllo team via web è read-only col port-map). Kill =
+  // tmux kill-session della sessione base + istanze (es. SCOUT-1). Restart =
+  // kill poi `start-agent.sh <role>` (lo stesso che usa il bootstrap del team).
+  const AGENT_SESSION = {
+    capitano: 'CAPITANO', sentinella: 'SENTINELLA', assistente: 'ASSISTENTE',
+    mentor: 'MENTOR', scout: 'SCOUT', analista: 'ANALISTA', scorer: 'SCORER',
+    scrittore: 'SCRITTORE', critico: 'CRITICO',
+  }
+  function dockerExecAgent(args, opts = {}) {
+    const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
+    return require('node:child_process').execFileSync('docker', ['exec', name, ...args], {
+      timeout: opts.timeout || 8000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'],
+    })
+  }
+  function killAgentSessions(role) {
+    const base = AGENT_SESSION[role]
+    if (!base) return
+    let sessions = []
+    try {
+      sessions = dockerExecAgent(['tmux', 'list-sessions', '-F', '#{session_name}'])
+        .toString().split('\n').map((s) => s.trim()).filter(Boolean)
+    } catch { return }
+    for (const s of sessions) {
+      if (s === base || s.startsWith(`${base}-`)) {
+        try { dockerExecAgent(['tmux', 'kill-session', '-t', s]) } catch { /* ignore */ }
+      }
+    }
+  }
+  ipcMain.handle('agent:stop', (_event, { role } = {}) => {
+    if (!AGENT_SESSION[role]) return { ok: false, error: 'invalid-agent' }
+    try { killAgentSessions(role); log.info('[agent] stopped', { role }); return { ok: true } }
+    catch (err) { return { ok: false, error: err && (err.message || String(err)) } }
+  })
+  ipcMain.handle('agent:restart', (_event, { role } = {}) => {
+    if (!AGENT_SESSION[role]) return { ok: false, error: 'invalid-agent' }
+    try {
+      killAgentSessions(role)
+      dockerExecAgent(['bash', '/app/.launcher/start-agent.sh', role], { timeout: 45000 })
+      log.info('[agent] restarted', { role })
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)) }
+    }
+  })
+
   // ── Onboarding: orari di lavoro del team ──────────────────────────────
   // Scritti DIRETTAMENTE in ~/.jht/jht.config.json (team.working_hours), non
   // via route web: durante l'onboarding il server web (next dev) non gira
