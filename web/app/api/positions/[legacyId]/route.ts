@@ -19,12 +19,15 @@ function toUtcIso(s: string | null | undefined): string | null {
 
 export async function GET(
   _req: Request,
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ legacyId: string }> },
 ) {
   const denied = await requireAuth();
   if (denied) return denied;
 
-  const { id } = await params;
+  // Slug unificato a `legacyId` per tutto il segmento /api/positions/[...]:
+  // Next vieta slug diversi allo stesso livello. L'URL è invariato — questa GET
+  // riceve lo stesso identificatore di prima (solo la chiave del param cambia).
+  const { legacyId: id } = await params;
   const detail = await getPositionById(id);
   if (!detail) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
