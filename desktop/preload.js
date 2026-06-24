@@ -108,6 +108,13 @@ contextBridge.exposeInMainWorld('profileApi', {
   listDocs: () => ipcRenderer.invoke('profile:list-docs'),
 })
 
+// [chat] Invio messaggio a un agente (capitano/assistente) via docker exec
+// tmux send-keys nel main — il POST web è read-only col port-map. La history
+// (incl. risposte agente) si legge via dashboardApi.get('/api/<agent>/chat').
+contextBridge.exposeInMainWorld('chatApi', {
+  send: (agent, text) => ipcRenderer.invoke('chat:send', { agent, text }),
+})
+
 contextBridge.exposeInMainWorld('setupApi', {
   getStatus: () => ipcRenderer.invoke('setup:get-status'),
   getDockerStatus: () => ipcRenderer.invoke('setup:get-docker-status'),
