@@ -14,6 +14,9 @@ import type { Locale } from "@/i18n/config";
 import CaseStudyOverview from "./CaseStudyOverview";
 import WorkBudgetChart from "./WorkBudgetChart";
 import SourcesChart from "./SourcesChart";
+import SourcesTimeChart from "./SourcesTimeChart";
+import SourcesScoreChart from "./SourcesScoreChart";
+import SourcesAvgScoreChart from "./SourcesAvgScoreChart";
 
 export interface PreparedCase {
   id: string;
@@ -99,6 +102,9 @@ const T: Record<
     sourcesTitle: string;
     sourcesProse1: string; // "Le fonti da cui lo Scout ha trovato le"
     sourcesProse2: string; // "posizioni: job board, ATS e pagine carriera aziendali."
+    sourcesTimeCaption: string; // didascalia grafico fonti-nel-tempo
+    sourcesScoreCaption: string; // didascalia grafico fonti + score medio
+    sourcesAvgCaption: string; // didascalia grafico score medio per fonte
   }
 > = {
   it: {
@@ -121,6 +127,12 @@ const T: Record<
     workBudgetProse2:
       "mostrano quanto del piano AI settimanale è stato consumato — quel giorno e cumulato sulla settimana (reset giovedì). Il budget si spalma sui giorni invece di bruciarsi subito.",
     sourcesTitle: "Da dove arrivano le posizioni",
+    sourcesTimeCaption:
+      "Le stesse posizioni nel tempo: quante ne sono arrivate ogni giorno, divise per fonte.",
+    sourcesScoreCaption:
+      "E la qualità per fonte: le linee mostrano lo score medio giornaliero di ogni provider (asse destro), sopra le barre delle posizioni.",
+    sourcesAvgCaption:
+      "Lo score medio complessivo per fonte: quali provider, in media, hanno portato i match migliori.",
     sourcesProse1: "Le fonti da cui lo Scout ha trovato le",
     sourcesProse2: "posizioni: job board, ATS e pagine carriera aziendali.",
   },
@@ -144,6 +156,12 @@ const T: Record<
     workBudgetProse2:
       "show how much of the weekly AI plan was used — that day and cumulatively over the week (resets on Thursday). The budget spreads across the days instead of burning out at once.",
     sourcesTitle: "Where the positions come from",
+    sourcesTimeCaption:
+      "The same positions over time: how many arrived each day, split by source.",
+    sourcesScoreCaption:
+      "And quality by source: the lines show each provider's daily average score (right axis), over the position bars.",
+    sourcesAvgCaption:
+      "The overall average score by source: which providers brought the best matches on average.",
     sourcesProse1: "The sources where the Scout found the",
     sourcesProse2: "positions: job boards, ATS and company career pages.",
   },
@@ -167,6 +185,12 @@ const T: Record<
     workBudgetProse2:
       "muestran cuánto del plan de AI semanal se ha consumido — ese día y acumulado en la semana (se reinicia el jueves). El presupuesto se reparte entre los días en lugar de agotarse de golpe.",
     sourcesTitle: "De dónde vienen las posiciones",
+    sourcesTimeCaption:
+      "Las mismas posiciones en el tiempo: cuántas llegaron cada día, por fuente.",
+    sourcesScoreCaption:
+      "Y la calidad por fuente: las líneas muestran el score medio diario de cada proveedor (eje derecho), sobre las barras de posiciones.",
+    sourcesAvgCaption:
+      "El score medio total por fuente: qué proveedores trajeron, de media, los mejores matches.",
     sourcesProse1: "Las fuentes donde el Scout encontró las",
     sourcesProse2:
       "posiciones: portales de empleo, ATS y páginas de carrera de las empresas.",
@@ -191,6 +215,12 @@ const T: Record<
     workBudgetProse2:
       "montrent quelle part du plan AI hebdomadaire a été consommée — ce jour-là et cumulée sur la semaine (réinitialisation le jeudi). Le budget s’étale sur les jours au lieu de s’épuiser d’un coup.",
     sourcesTitle: "D’où viennent les postes",
+    sourcesTimeCaption:
+      "Les mêmes postes dans le temps : combien sont arrivés chaque jour, par source.",
+    sourcesScoreCaption:
+      "Et la qualité par source : les lignes montrent le score moyen quotidien de chaque source (axe droit), au-dessus des barres de postes.",
+    sourcesAvgCaption:
+      "Le score moyen global par source : quelles sources ont apporté les meilleurs matchs en moyenne.",
     sourcesProse1: "Les sources où le Scout a trouvé les",
     sourcesProse2:
       "postes : sites d’emploi, ATS et pages carrières des entreprises.",
@@ -215,6 +245,12 @@ const T: Record<
     workBudgetProse2:
       "zeigen, wie viel des wöchentlichen AI-Plans verbraucht wurde — an diesem Tag und kumuliert über die Woche (Reset am Donnerstag). Das Budget verteilt sich über die Tage, statt sofort aufgebraucht zu werden.",
     sourcesTitle: "Woher die Positionen kommen",
+    sourcesTimeCaption:
+      "Dieselben Positionen im Zeitverlauf: wie viele pro Tag kamen, nach Quelle.",
+    sourcesScoreCaption:
+      "Und die Qualität je Quelle: die Linien zeigen den täglichen Durchschnitts-Score jeder Quelle (rechte Achse), über den Stellen-Balken.",
+    sourcesAvgCaption:
+      "Der durchschnittliche Gesamt-Score je Quelle: welche Quellen im Schnitt die besten Treffer brachten.",
     sourcesProse1: "Die Quellen, in denen der Scout die",
     sourcesProse2:
       "Positionen gefunden hat: Jobbörsen, ATS und Karriereseiten von Unternehmen.",
@@ -239,6 +275,12 @@ const T: Record<
     workBudgetProse2:
       "azt mutatják, mennyit használtak fel a heti AI-keretből — aznap és a hétre kumulálva (csütörtökön nullázódik). A keret eloszlik a napok között, ahelyett, hogy egyszerre elfogyna.",
     sourcesTitle: "Honnan érkeznek a pozíciók",
+    sourcesTimeCaption:
+      "Ugyanazok a pozíciók időben: hányat találtunk naponta, források szerint.",
+    sourcesScoreCaption:
+      "És a minőség forrásonként: a vonalak az egyes források napi átlagpontszámát mutatják (jobb tengely), a pozíció-oszlopok felett.",
+    sourcesAvgCaption:
+      "Az összesített átlagpontszám forrásonként: mely források hozták átlagosan a legjobb találatokat.",
     sourcesProse1: "A források, ahol a Scout megtalálta a",
     sourcesProse2:
       "pozíciókat: állásportálok, ATS és vállalati karrieroldalak.",
@@ -263,6 +305,12 @@ const T: Record<
     workBudgetProse2:
       "mostram quanto do plano de AI semanal foi consumido — nesse dia e acumulado ao longo da semana (reinicia à quinta-feira). O orçamento distribui-se pelos dias em vez de se esgotar de uma vez.",
     sourcesTitle: "De onde vêm as posições",
+    sourcesTimeCaption:
+      "As mesmas posições ao longo do tempo: quantas chegaram por dia, por fonte.",
+    sourcesScoreCaption:
+      "E a qualidade por fonte: as linhas mostram o score médio diário de cada provedor (eixo direito), sobre as barras de posições.",
+    sourcesAvgCaption:
+      "O score médio geral por fonte: quais provedores trouxeram, em média, os melhores matches.",
     sourcesProse1: "As fontes onde o Scout encontrou as",
     sourcesProse2:
       "posições: portais de emprego, ATS e páginas de carreira das empresas.",
@@ -533,6 +581,51 @@ export default function CaseStudyDetail({
             {t.sourcesProse2}
           </p>
           <SourcesChart sources={run.sources} total={run.totals.positions} />
+
+          {run.sourcesDaily &&
+            run.sourcesDaily.length > 0 &&
+            run.sourcesDailyKeys &&
+            run.sourcesDailyKeys.length > 0 && (
+              <>
+                <p className="text-[11px] text-[var(--color-dim)] mt-8 mb-4">
+                  {t.sourcesTimeCaption}
+                </p>
+                <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+                  <SourcesTimeChart
+                    daily={run.sourcesDaily}
+                    keys={run.sourcesDailyKeys}
+                  />
+                </div>
+
+                {run.sourcesScoreDaily &&
+                  run.sourcesScoreDaily.length > 0 && (
+                    <>
+                      <p className="text-[11px] text-[var(--color-dim)] mt-8 mb-4">
+                        {t.sourcesScoreCaption}
+                      </p>
+                      <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+                        <SourcesScoreChart
+                          daily={run.sourcesDaily}
+                          scoreDaily={run.sourcesScoreDaily}
+                          keys={run.sourcesDailyKeys}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                {run.sourcesScore && run.sourcesScore.length > 0 && (
+                  <>
+                    <p className="text-[11px] text-[var(--color-dim)] mt-8 mb-4">
+                      {t.sourcesAvgCaption}
+                    </p>
+                    <SourcesAvgScoreChart
+                      rows={run.sourcesScore}
+                      keys={run.sourcesDailyKeys ?? []}
+                    />
+                  </>
+                )}
+              </>
+            )}
         </section>
       )}
     </div>
