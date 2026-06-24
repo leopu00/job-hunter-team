@@ -7,11 +7,41 @@ export const ROLE_META: Record<
   TeamActivityRole,
   { label: string; emoji: string; color: string; verb: string; action: string }
 > = {
-  scout: { label: "Scout", emoji: "🔍", color: "#2196f3", verb: "posizioni trovate", action: "ha trovato una posizione" },
-  analista: { label: "Analista", emoji: "🔬", color: "#00e676", verb: "posizioni analizzate", action: "ha analizzato una posizione" },
-  scorer: { label: "Scorer", emoji: "🎯", color: "#b388ff", verb: "score assegnati", action: "ha assegnato uno score" },
-  scrittore: { label: "Scrittore", emoji: "✍️", color: "#ffd600", verb: "CV scritti", action: "ha scritto un CV" },
-  critico: { label: "Critico", emoji: "⚖️", color: "#ff6ac1", verb: "review completate", action: "ha completato una review" },
+  scout: {
+    label: "Scout",
+    emoji: "🔍",
+    color: "#2196f3",
+    verb: "posizioni trovate",
+    action: "ha trovato una posizione",
+  },
+  analista: {
+    label: "Analista",
+    emoji: "🔬",
+    color: "#00e676",
+    verb: "posizioni analizzate",
+    action: "ha analizzato una posizione",
+  },
+  scorer: {
+    label: "Scorer",
+    emoji: "🎯",
+    color: "#b388ff",
+    verb: "score assegnati",
+    action: "ha assegnato uno score",
+  },
+  scrittore: {
+    label: "Scrittore",
+    emoji: "✍️",
+    color: "#ffd600",
+    verb: "CV scritti",
+    action: "ha scritto un CV",
+  },
+  critico: {
+    label: "Critico",
+    emoji: "⚖️",
+    color: "#ff6ac1",
+    verb: "review completate",
+    action: "ha completato una review",
+  },
 };
 
 // Tempo relativo in italiano (es. "2m fa", "3h fa", "5g fa").

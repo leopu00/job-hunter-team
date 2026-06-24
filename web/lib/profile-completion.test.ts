@@ -5,7 +5,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { CandidateProfile } from "./types.ts";
-import { isTeamUnlocked, completionByLevel, weightedCompletion } from "./profile-completion.ts";
+import {
+  isTeamUnlocked,
+  completionByLevel,
+  weightedCompletion,
+} from "./profile-completion.ts";
 
 // profilo con TUTTI i required soddisfatti (niente recommended/optional)
 const BASE = {
@@ -33,10 +37,19 @@ describe("isTeamUnlocked", () => {
     assert.equal(isTeamUnlocked(BASE), true);
   });
   it("false se manca seniority_target", () => {
-    assert.equal(isTeamUnlocked({ ...BASE, positioning: {} } as CandidateProfile), false);
+    assert.equal(
+      isTeamUnlocked({ ...BASE, positioning: {} } as CandidateProfile),
+      false,
+    );
   });
   it("false se skill < 2", () => {
-    assert.equal(isTeamUnlocked({ ...BASE, skills: { primary: ["Python"] } } as CandidateProfile), false);
+    assert.equal(
+      isTeamUnlocked({
+        ...BASE,
+        skills: { primary: ["Python"] },
+      } as CandidateProfile),
+      false,
+    );
   });
   it("false su null", () => {
     assert.equal(isTeamUnlocked(null), false);
@@ -56,13 +69,17 @@ describe("completionByLevel", () => {
     assert.ok(c.optional.missing.length > 0);
   });
   it("job_titles è un requisito recommended tracciato", () => {
-    const missingInBase = completionByLevel(BASE).recommended.missing.map((r) => r.key);
+    const missingInBase = completionByLevel(BASE).recommended.missing.map(
+      (r) => r.key,
+    );
     assert.ok(missingInBase.includes("job_titles"));
     const withRoles = completionByLevel({
       ...BASE,
       job_titles: ["Investment Analyst"],
     } as unknown as CandidateProfile);
-    assert.ok(!withRoles.recommended.missing.map((r) => r.key).includes("job_titles"));
+    assert.ok(
+      !withRoles.recommended.missing.map((r) => r.key).includes("job_titles"),
+    );
   });
 });
 

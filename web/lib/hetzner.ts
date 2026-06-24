@@ -20,34 +20,38 @@
  * fa fallback a "Apri portale Hetzner manualmente".
  */
 
-const HCLOUD_BASE = 'https://api.hetzner.cloud/v1'
+const HCLOUD_BASE = "https://api.hetzner.cloud/v1";
 
 export type HetznerServer = {
-  id: number
-  name: string
-  status: string
+  id: number;
+  name: string;
+  status: string;
   public_net?: {
-    ipv4?: { ip: string } | null
-    ipv6?: { ip: string } | null
-  }
-}
+    ipv4?: { ip: string } | null;
+    ipv6?: { ip: string } | null;
+  };
+};
 
 export type HetznerImage = {
-  id: number
-  type: string
-  status: string
-  description: string | null
-}
+  id: number;
+  type: string;
+  status: string;
+  description: string | null;
+};
 
 export type HetznerAction = {
-  id: number
-  status: 'running' | 'success' | 'error'
-  error?: { code: string; message: string } | null
-}
+  id: number;
+  status: "running" | "success" | "error";
+  error?: { code: string; message: string } | null;
+};
 
 export function getHetznerToken(): string | null {
-  const t = (process.env.HCLOUD_TOKEN || process.env.JHT_HETZNER_API_TOKEN || '').trim()
-  return t || null
+  const t = (
+    process.env.HCLOUD_TOKEN ||
+    process.env.JHT_HETZNER_API_TOKEN ||
+    ""
+  ).trim();
+  return t || null;
 }
 
 /**
@@ -63,42 +67,51 @@ export function getHetznerToken(): string | null {
  * Restituisce numero (id) o { error, status } pronto da rispondere.
  */
 export async function resolveServerId(
-  token: string
-): Promise<{ ok: true; id: number } | { ok: false; status: number; error: string }> {
-  const explicit = (process.env.JHT_VPS_SERVER_ID || '').trim()
+  token: string,
+): Promise<
+  { ok: true; id: number } | { ok: false; status: number; error: string }
+> {
+  const explicit = (process.env.JHT_VPS_SERVER_ID || "").trim();
   if (explicit) {
-    const n = Number(explicit)
+    const n = Number(explicit);
     if (!Number.isFinite(n) || n <= 0) {
-      return { ok: false, status: 500, error: `JHT_VPS_SERVER_ID non numerico: ${explicit}` }
+      return {
+        ok: false,
+        status: 500,
+        error: `JHT_VPS_SERVER_ID non numerico: ${explicit}`,
+      };
     }
-    return { ok: true, id: n }
+    return { ok: true, id: n };
   }
-  const ip = (process.env.JHT_VPS_IP || '').trim()
+  const ip = (process.env.JHT_VPS_IP || "").trim();
   if (!ip) {
     return {
       ok: false,
       status: 500,
-      error: 'JHT_VPS_SERVER_ID e JHT_VPS_IP non settati: impossibile sapere quale server gestire',
-    }
+      error:
+        "JHT_VPS_SERVER_ID e JHT_VPS_IP non settati: impossibile sapere quale server gestire",
+    };
   }
-  const r = await findServerByIp(token, ip)
-  if (!r.ok) return r
-  return { ok: true, id: r.data.id }
+  const r = await findServerByIp(token, ip);
+  if (!r.ok) return r;
+  return { ok: true, id: r.data.id };
 }
 
 async function hcloud<T>(
   token: string,
-  method: 'GET' | 'POST' | 'DELETE',
+  method: "GET" | "POST" | "DELETE",
   path: string,
-  body?: unknown
-): Promise<{ ok: true; data: T } | { ok: false; status: number; error: string }> {
+  body?: unknown,
+): Promise<
+  { ok: true; data: T } | { ok: false; status: number; error: string }
+> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
-    Accept: 'application/json',
-  }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+    Accept: "application/json",
+  };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
 
-  let res: Response
+  let res: Response;
   try {
     res = await fetch(`${HCLOUD_BASE}${path}`, {
       method,
@@ -108,36 +121,45 @@ async function hcloud<T>(
       // per il poll di azioni asincrone (snapshot puo' impiegare minuti
       // — ma chiamiamo poll separati, non un singolo request lungo).
       signal: AbortSignal.timeout(30_000),
-      cache: 'no-store',
-    })
+      cache: "no-store",
+    });
   } catch (e) {
-    return { ok: false, status: 0, error: (e as Error).message }
+    return { ok: false, status: 0, error: (e as Error).message };
   }
 
   // 204 No Content (es. DELETE riuscito): ritorna oggetto vuoto.
-  if (res.status === 204) return { ok: true, data: {} as T }
+  if (res.status === 204) return { ok: true, data: {} as T };
 
-  let json: unknown
+  let json: unknown;
   try {
-    json = await res.json()
+    json = await res.json();
   } catch {
-    return { ok: false, status: res.status, error: `HTTP ${res.status} (no JSON body)` }
+    return {
+      ok: false,
+      status: res.status,
+      error: `HTTP ${res.status} (no JSON body)`,
+    };
   }
 
   if (!res.ok) {
-    const err = (json as { error?: { message?: string; code?: string } })?.error
+    const err = (json as { error?: { message?: string; code?: string } })
+      ?.error;
     return {
       ok: false,
       status: res.status,
       error: err?.message || `HTTP ${res.status}`,
-    }
+    };
   }
-  return { ok: true, data: json as T }
+  return { ok: true, data: json as T };
 }
 
 /** Lista tutti i server del progetto. Paginato a 50 di default Hetzner. */
 export async function listServers(token: string) {
-  return hcloud<{ servers: HetznerServer[] }>(token, 'GET', '/servers?per_page=50')
+  return hcloud<{ servers: HetznerServer[] }>(
+    token,
+    "GET",
+    "/servers?per_page=50",
+  );
 }
 
 /**
@@ -147,13 +169,17 @@ export async function listServers(token: string) {
  * portale Hetzner manualmente, l'app non sa il suo ID).
  */
 export async function findServerByIp(token: string, ip: string) {
-  const r = await listServers(token)
-  if (!r.ok) return r
-  const match = r.data.servers.find((s) => s.public_net?.ipv4?.ip === ip)
+  const r = await listServers(token);
+  if (!r.ok) return r;
+  const match = r.data.servers.find((s) => s.public_net?.ipv4?.ip === ip);
   if (!match) {
-    return { ok: false as const, status: 404, error: `Nessun server Hetzner con IP ${ip}` }
+    return {
+      ok: false as const,
+      status: 404,
+      error: `Nessun server Hetzner con IP ${ip}`,
+    };
   }
-  return { ok: true as const, data: match }
+  return { ok: true as const, data: match };
 }
 
 /**
@@ -162,18 +188,26 @@ export async function findServerByIp(token: string, ip: string) {
  * passa a `success` (di solito 30s-2min). Per il bottone "Snapshot +
  * Termina" attendiamo lo snapshot success PRIMA di chiamare delete.
  */
-export async function createSnapshot(token: string, serverId: number, description: string) {
+export async function createSnapshot(
+  token: string,
+  serverId: number,
+  description: string,
+) {
   return hcloud<{ action: HetznerAction; image: HetznerImage }>(
     token,
-    'POST',
+    "POST",
     `/servers/${serverId}/actions/create_image`,
-    { type: 'snapshot', description }
-  )
+    { type: "snapshot", description },
+  );
 }
 
 /** Poll di una action Hetzner (snapshot, delete, ...). */
 export async function getAction(token: string, actionId: number) {
-  return hcloud<{ action: HetznerAction }>(token, 'GET', `/actions/${actionId}`)
+  return hcloud<{ action: HetznerAction }>(
+    token,
+    "GET",
+    `/actions/${actionId}`,
+  );
 }
 
 /**
@@ -181,20 +215,24 @@ export async function getAction(token: string, actionId: number) {
  * (snapshot di un disco da 80GB non dovrebbe superare i 3-4 min su
  * Hetzner). Restituisce l'ultimo stato osservato.
  */
-export async function waitAction(token: string, actionId: number, timeoutMs = 5 * 60_000) {
-  const start = Date.now()
+export async function waitAction(
+  token: string,
+  actionId: number,
+  timeoutMs = 5 * 60_000,
+) {
+  const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const r = await getAction(token, actionId)
-    if (!r.ok) return r
-    const status = r.data.action.status
-    if (status === 'success' || status === 'error') return r
-    await new Promise((res) => setTimeout(res, 4_000))
+    const r = await getAction(token, actionId);
+    if (!r.ok) return r;
+    const status = r.data.action.status;
+    if (status === "success" || status === "error") return r;
+    await new Promise((res) => setTimeout(res, 4_000));
   }
   return {
     ok: false as const,
     status: 504,
     error: `Action ${actionId} non completata entro ${timeoutMs}ms`,
-  }
+  };
 }
 
 /**
@@ -205,5 +243,9 @@ export async function waitAction(token: string, actionId: number, timeoutMs = 5 
  * dopo. Il server smette di fatturare dal momento del delete.
  */
 export async function deleteServer(token: string, serverId: number) {
-  return hcloud<{ action: HetznerAction }>(token, 'DELETE', `/servers/${serverId}`)
+  return hcloud<{ action: HetznerAction }>(
+    token,
+    "DELETE",
+    `/servers/${serverId}`,
+  );
 }

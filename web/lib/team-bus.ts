@@ -71,7 +71,12 @@ export async function remoteStatusStub<T>(
   stub: T,
 ): Promise<NextResponse | null> {
   if (await isLocalRequest()) return null;
-  return NextResponse.json({ ok: true, remote: true, status: "unknown", ...stub });
+  return NextResponse.json({
+    ok: true,
+    remote: true,
+    status: "unknown",
+    ...stub,
+  });
 }
 
 /**
@@ -89,8 +94,17 @@ export async function remoteStatusStub<T>(
  * comandi storici (interpretato come inactive). Altrimenti boolean.
  */
 export async function inferAgentActiveFromBus(
-  agent: "assistente" | "capitano" | "sentinella" | "scout" | "scorer" |
-         "analista" | "scrittore" | "critico" | "mentor" | "bridge",
+  agent:
+    | "assistente"
+    | "capitano"
+    | "sentinella"
+    | "scout"
+    | "scorer"
+    | "analista"
+    | "scrittore"
+    | "critico"
+    | "mentor"
+    | "bridge",
 ): Promise<{ active: boolean; userId: string } | null> {
   const supabase = await createClient();
   const {

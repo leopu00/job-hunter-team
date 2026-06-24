@@ -23,7 +23,8 @@ export function readLocaleCookie(): Locale {
   // scelta solo in localStorage. Se il cookie non c'è ancora, leggiamo lì.
   try {
     const stored = localStorage.getItem("jht-lang");
-    if (stored && (locales as string[]).includes(stored)) return stored as Locale;
+    if (stored && (locales as string[]).includes(stored))
+      return stored as Locale;
   } catch {
     /* localStorage non disponibile */
   }

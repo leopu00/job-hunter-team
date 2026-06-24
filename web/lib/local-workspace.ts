@@ -1,5 +1,5 @@
-import { isLocalRequest } from '@/lib/auth'
-import { getWorkspacePath, workspaceHasDb } from '@/lib/workspace'
+import { isLocalRequest } from "@/lib/auth";
+import { getWorkspacePath, workspaceHasDb } from "@/lib/workspace";
 
 /**
  * Path del workspace SQLite SE la richiesta è locale (host localhost: Mac/JHT
@@ -13,8 +13,8 @@ import { getWorkspacePath, workspaceHasDb } from '@/lib/workspace'
  * locale senza login cloud.
  */
 export async function localWorkspace(): Promise<string | null> {
-  if (!(await isLocalRequest())) return null
-  const p = await getWorkspacePath()
-  if (!p || !workspaceHasDb(p)) return null
-  return p
+  if (!(await isLocalRequest())) return null;
+  const p = await getWorkspacePath();
+  if (!p || !workspaceHasDb(p)) return null;
+  return p;
 }

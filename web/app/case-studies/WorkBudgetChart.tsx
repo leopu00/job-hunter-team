@@ -101,9 +101,10 @@ const T: Record<
   },
 };
 
-// Ambra "budget", theme-aware: giallo su dark, scurito in light (vedi
-// --budget-line in globals.css). Distinto dai colori dei ruoli.
-const BUDGET = "var(--budget-line)";
+// Colore "budget" (theme-aware: giallo su dark, ambra in light) applicato via
+// classi .cs-budget-* di globals.css — NON via var() inline negli attributi
+// SVG, che il minificatore CSS prunava insieme alla variabile (vedi nota in
+// globals.css). Distinto dai colori dei ruoli.
 
 function dm(day: string) {
   return `${day.slice(8, 10)}/${day.slice(5, 7)}`;
@@ -237,11 +238,11 @@ export default function WorkBudgetChart({
         {rightTicks.map((t) => (
           <text
             key={`r${t}`}
+            className="cs-budget-fill"
             x={padL + plotW + 5}
             y={yR(t) + 3}
             textAnchor="start"
             fontSize={9}
-            fill={BUDGET}
             opacity={0.8}
           >
             {t}%
@@ -279,9 +280,9 @@ export default function WorkBudgetChart({
 
         {/* linea: budget consumato quel giorno (tratteggiata) */}
         <polyline
+          className="cs-budget-stroke"
           points={dailyLine}
           fill="none"
-          stroke={BUDGET}
           strokeWidth={1.5}
           strokeDasharray="4 3"
           opacity={0.55}
@@ -291,9 +292,9 @@ export default function WorkBudgetChart({
         {cumSegs.map((seg, si) => (
           <polyline
             key={si}
+            className="cs-budget-stroke"
             points={seg.map((p) => `${p.x},${p.y}`).join(" ")}
             fill="none"
-            stroke={BUDGET}
             strokeWidth={2}
             opacity={0.95}
             vectorEffect="non-scaling-stroke"
@@ -361,10 +362,7 @@ export default function WorkBudgetChart({
               </div>
             ))}
           <div className="mt-1 pt-1 border-t border-[var(--color-border)] flex items-center gap-1.5">
-            <span
-              className="inline-block w-2 h-2 rounded-sm"
-              style={{ background: BUDGET }}
-            />
+            <span className="cs-budget-bg inline-block w-2 h-2 rounded-sm" />
             <span className="text-[var(--color-muted)]">
               {t.budgetTooltip(Math.round(hd.pct), Math.round(hd.cum))}
             </span>
@@ -392,18 +390,15 @@ export default function WorkBudgetChart({
           {t.legendBudget}
         </span>
         <span className="flex items-center gap-1.5">
-          <span
-            className="inline-block w-4 h-0.5"
-            style={{ background: BUDGET }}
-          />
+          <span className="cs-budget-bg inline-block w-4 h-0.5" />
           <span className="text-[10px] text-[var(--color-muted)]">
             {t.cumWeek}
           </span>
         </span>
         <span className="flex items-center gap-1.5">
           <span
-            className="inline-block w-4 h-0"
-            style={{ borderTop: `2px dashed ${BUDGET}`, opacity: 0.7 }}
+            className="cs-budget-dash inline-block w-4 h-0"
+            style={{ opacity: 0.7 }}
           />
           <span className="text-[10px] text-[var(--color-muted)]">
             {t.dayConsumption}

@@ -1,16 +1,21 @@
-import { createClient } from '@/lib/supabase/server'
-import { isSupabaseConfigured } from '@/lib/workspace'
-import { isCloudDeploy } from '@/lib/deploy-mode'
-import { headers, cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
-import { LOCAL_TOKEN_COOKIE, isLocalTokenAuthenticated } from '@/lib/local-token'
+import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/workspace";
+import { isCloudDeploy } from "@/lib/deploy-mode";
+import { headers, cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import {
+  LOCAL_TOKEN_COOKIE,
+  isLocalTokenAuthenticated,
+} from "@/lib/local-token";
 
 /**
  * Riconosce come "macchina dell'utente" gli host che il desktop
  * launcher usa per aprire il browser sulla app locale.
  */
 export function isLocalhostHost(host: string): boolean {
-  return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?$/.test(host.toLowerCase())
+  return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?$/.test(
+    host.toLowerCase(),
+  );
 }
 
 /**
@@ -18,7 +23,7 @@ export function isLocalhostHost(host: string): boolean {
  * headers che provengono dal proxy interno di Next dev (sempre `::1`).
  */
 function isLoopbackIp(ip: string): boolean {
-  return /^(::1|127\.\d+\.\d+\.\d+|0\.0\.0\.0)$/.test(ip.trim())
+  return /^(::1|127\.\d+\.\d+\.\d+|0\.0\.0\.0)$/.test(ip.trim());
 }
 
 /**
@@ -29,15 +34,15 @@ function isLoopbackIp(ip: string): boolean {
  * Pattern: OpenClaw `hasForwardedRequestHeaders` (gateway/auth.ts).
  */
 const FORWARDED_REQUEST_HEADERS = [
-  'forwarded',
-  'x-forwarded-for',
-  'x-forwarded-proto',
-  'x-forwarded-host',
-  'x-real-ip',
-] as const
+  "forwarded",
+  "x-forwarded-for",
+  "x-forwarded-proto",
+  "x-forwarded-host",
+  "x-real-ip",
+] as const;
 
 export function hasForwardedRequestHeaders(hdrs: Headers): boolean {
-  return FORWARDED_REQUEST_HEADERS.some((name) => hdrs.get(name) !== null)
+  return FORWARDED_REQUEST_HEADERS.some((name) => hdrs.get(name) !== null);
 }
 
 /**
@@ -54,23 +59,23 @@ export function hasForwardedRequestHeaders(hdrs: Headers): boolean {
  */
 export function hasUntrustedForwardedHeaders(hdrs: Headers): boolean {
   // RFC 7239 `Forwarded`: difficile da parsare, conservativo: blocca se presente.
-  if (hdrs.get('forwarded') !== null) return true
+  if (hdrs.get("forwarded") !== null) return true;
 
-  const xff = hdrs.get('x-forwarded-for')
+  const xff = hdrs.get("x-forwarded-for");
   if (xff !== null) {
     // Lista "client, proxy1, proxy2"; il client è il primo hop.
-    const firstHop = xff.split(',')[0]?.trim() ?? ''
-    if (!isLoopbackIp(firstHop)) return true
+    const firstHop = xff.split(",")[0]?.trim() ?? "";
+    if (!isLoopbackIp(firstHop)) return true;
   }
 
-  const xfh = hdrs.get('x-forwarded-host')
-  if (xfh !== null && !isLocalhostHost(xfh)) return true
+  const xfh = hdrs.get("x-forwarded-host");
+  if (xfh !== null && !isLocalhostHost(xfh)) return true;
 
-  const xri = hdrs.get('x-real-ip')
-  if (xri !== null && !isLoopbackIp(xri)) return true
+  const xri = hdrs.get("x-real-ip");
+  if (xri !== null && !isLoopbackIp(xri)) return true;
 
   // x-forwarded-proto è informativo (http/https), non identifica l'origine.
-  return false
+  return false;
 }
 
 /**
@@ -87,20 +92,20 @@ export function isLocalRequestFromHeaders(hdrs: Headers): boolean {
   // Header `Host` deve essere localhost. Su deploy pubblico questo è
   // riscritto al dominio reale dal reverse proxy, quindi un attaccante
   // remoto che setta `Host: localhost` viene comunque bloccato qui.
-  const host = hdrs.get('host') ?? ''
-  if (!isLocalhostHost(host)) return false
+  const host = hdrs.get("host") ?? "";
+  if (!isLocalhostHost(host)) return false;
 
   // Forwarded headers ammessi se TUTTI loopback (Next dev server li aggiunge
   // automaticamente sulle request al loopback con valori `::1`/`localhost`).
   // Un proxy esterno avrà valori non-loopback → blocca.
-  if (hasUntrustedForwardedHeaders(hdrs)) return false
+  if (hasUntrustedForwardedHeaders(hdrs)) return false;
 
-  return true
+  return true;
 }
 
 /** Helper per server components / route handler (App Router async). */
 export async function isLocalRequest(): Promise<boolean> {
-  return isLocalRequestFromHeaders(await headers())
+  return isLocalRequestFromHeaders(await headers());
 }
 
 /**
@@ -118,20 +123,23 @@ export async function isLocalRequest(): Promise<boolean> {
  * e venivano sfruttati per l'auth bypass (vedi finding C1).
  */
 export async function requireAuth(): Promise<NextResponse | null> {
-  if (!isSupabaseConfigured) return null
+  if (!isSupabaseConfigured) return null;
 
-  const hdrs = await headers()
-  const cookieStore = await cookies()
-  const tokenCookie = cookieStore.get(LOCAL_TOKEN_COOKIE)?.value
-  if (isLocalTokenAuthenticated(hdrs.get('authorization'), tokenCookie)) return null
+  const hdrs = await headers();
+  const cookieStore = await cookies();
+  const tokenCookie = cookieStore.get(LOCAL_TOKEN_COOKIE)?.value;
+  if (isLocalTokenAuthenticated(hdrs.get("authorization"), tokenCookie))
+    return null;
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: 'Non autenticato' }, { status: 401 })
+    return NextResponse.json({ error: "Non autenticato" }, { status: 401 });
   }
-  return null
+  return null;
 }
 
 /**
@@ -158,28 +166,28 @@ export async function requireLocalWrite(): Promise<NextResponse | null> {
   // isLocalRequest() sul cloud (host = dominio → false), ma resa deterministica
   // dal flag di build, non dedotta dalla richiesta. La corsia richieste async
   // (ticket/feedback/azioni-posizione leggere) NON passa di qui → resta cloud.
-  if (isCloudDeploy()) return readOnlyResponse()
-  if (await isLocalRequest()) return null
-  return readOnlyResponse()
+  if (isCloudDeploy()) return readOnlyResponse();
+  if (await isLocalRequest()) return null;
+  return readOnlyResponse();
 }
 
 function readOnlyResponse(): NextResponse {
   return NextResponse.json(
     {
-      error: 'read_only',
+      error: "read_only",
       message:
         "Questa azione si fa dall'app desktop. Dal browser è sola visualizzazione.",
     },
     { status: 403 },
-  )
+  );
 }
 
 /** Regex per path sicuri: alfanumerici, slash, underscore, trattino, punto, tilde, spazi, due punti */
-const SAFE_PATH_RE = /^[a-zA-Z0-9\/_\-.~ :]+$/
+const SAFE_PATH_RE = /^[a-zA-Z0-9\/_\-.~ :]+$/;
 
 /**
  * Valida che un path non contenga traversal o caratteri pericolosi.
  */
 export function isValidPath(p: string): boolean {
-  return SAFE_PATH_RE.test(p) && !p.includes('..')
+  return SAFE_PATH_RE.test(p) && !p.includes("..");
 }
