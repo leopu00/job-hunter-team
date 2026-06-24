@@ -404,13 +404,13 @@ Ausserhalb der Pipeline. **Einmalig geplante** Agenten: Der Watchdog erzeugt jed
 ```
    ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
    │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
-   │ (scheduler)│              │ 🦺 Mantenitore│  findings │            │
+   │ (scheduler)│              │ 👷‍♂️ Mantenitore│  findings │            │
    └────────────┘              └──────────────┘          └────────────┘
                                   one-shot → self-destruct
 ```
 
 - **🩺 Dottore** — **Agenten-Gesundheit**. Periodischer Context-Refresh + Retrospektive: erkennt haengende/Zombie-Agentensitzungen und startet sie mit frischem Kontext neu (langlebige Threads, die Kontext verbrennen, verursachen einen stillen Durchsatzkollaps). Ordner: `agents/dottore/`.
-- **🦺 Mantenitore** — **Infra-Gesundheit**. Taeglicher Wartungs-Sweep auf dem Container/VPS: Smoke-Test der missionskritischen Tools (Browser-/Playwright-Canary), Abhaengigkeits-Standardisierung (`jht-install`), Disk-/RAM-Trend, Orphan-GC. Ein defektes kritisches Tool ist ein P1. Ordner: `agents/mantenitore/`.
+- **👷‍♂️ Mantenitore** — **Infra-Gesundheit**. Taeglicher Wartungs-Sweep auf dem Container/VPS: Smoke-Test der missionskritischen Tools (Browser-/Playwright-Canary), Abhaengigkeits-Standardisierung (`jht-install`), Disk-/RAM-Trend, Orphan-GC. Ein defektes kritisches Tool ist ein P1. Ordner: `agents/mantenitore/`.
 
 ---
 
