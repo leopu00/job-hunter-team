@@ -1896,7 +1896,7 @@ async function handleDaemon(options) {
     return;
   }
 
-  console.log(pc.dim(`Cloud sync daemon: push + pull-desired-state ogni ${intervalSec}s verso ${config.base_url}`));
+  console.log(pc.dim(`Cloud sync daemon: letture utente→team ogni ${intervalSec}s (Supabase) + push on-demand su "Sync now" → ${config.base_url}`));
 
   let running = true;
   const shutdown = (sig) => {
@@ -1914,24 +1914,12 @@ async function handleDaemon(options) {
   // (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
   // ogni 10 tick per evitare spam ma confermare che il daemon e' vivo.
   let haltSkipCount = 0;
-  // Consecutive failure tracking: dopo 3 fail consecutivi alziamo un warning
-  // visibile; dopo MAX_CONSECUTIVE_FAILS auto-shutdown del daemon.
-  // Origin: incident RobertHalf 2026-05-19 — daemon ha retentato in loop
-  // silenzioso per 1h, saturando Supabase pool fino al 504 user-facing.
-  // Meglio fermarsi e chiedere intervento manuale che bruciare quota cloud
-  // a vuoto (vedi docs/internal/cloud-sync-architecture.md P1 #4).
-  const MAX_CONSECUTIVE_FAILS = 5;
-  const WARN_AT = 3;
-  let consecutiveFails = 0;
-  // Killswitch dedicato auth-fail (401/403): più aggressivo del counter
-  // generico perché un token revocato non recupera mai da solo, non ha
-  // senso ritentare 5 volte. Threshold 3 = tolleranza minima per false
-  // positive (clock skew, rate-limit edge, JWT refresh race), poi halt
-  // con notifica esplicita all'utente via pending_user_messages.
-  const MAX_CONSECUTIVE_AUTH_FAILS = 3;
-  let consecutiveAuthFails = 0;
-  // Push iniziale immediato: se il container era spento per un po' e gli
-  // agenti hanno scritto offline, il primo tick deve flushare subito.
+  // [PUSH ON-DEMAND 2026-06-25] Niente più push automatico per-tick: la dashboard
+  // cloud si aggiorna SOLO quando l'utente preme "Sync now" (sync_requested_at →
+  // handleSyncRendezvous → handlePush). Per-tick restano solo le LETTURE leggere
+  // (richieste utente→team) + heartbeat, su Supabase. Niente killswitch su push
+  // periodico (non esiste più, quindi nessun loop che possa saturare la quota):
+  // gli errori del push on-demand sono gestiti in handleSyncRendezvous (best-effort).
   while (running) {
     if (existsSync(WEEKLY_HALT_FLAG)) {
       if (haltSkipCount % 10 === 0) {
@@ -1943,35 +1931,12 @@ async function handleDaemon(options) {
         console.log(pc.green(`  HALT-WEEKLY rimosso, riprendo push normali.`));
         haltSkipCount = 0;
       }
-      let tickFailed = false;
-      let authFailedThisTick = false;
-      try {
-        // Reset di process.exitCode tra un tick e l'altro: handlePush lo
-        // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
-        // il loop al prossimo intervallo.
-        const prev = process.exitCode;
-        process.exitCode = 0;
-        const pushResult = await handlePush({});
-        if (process.exitCode === 1) {
-          tickFailed = true;
-        }
-        // handlePush ritorna {ok, authFailed} solo nel path !res.ok+401/403
-        // o network catch. Tutti gli altri early-return ritornano undefined
-        // (config/db missing) → authFailed undefined → falsy. OK.
-        authFailedThisTick = pushResult?.authFailed === true;
-        process.exitCode = prev;
-      } catch (err) {
-        console.error(pc.yellow(`  daemon tick error: ${err.message}`));
-        tickFailed = true;
-      }
+      // [PUSH ON-DEMAND] Nessun handlePush per-tick: il push dati parte SOLO da
+      // handleSyncRendezvous quando l'utente preme "Sync now". Qui per-tick solo
+      // LETTURE leggere (richieste utente→team) + heartbeat, tutte su Supabase.
 
-      // Pull desired-state DOPO il push (cadenza condivisa intervalSec).
-      // Copre il caso multi-device "live": utente clicca su mobile mentre
-      // team gira su VPS → flag arriva in cloud → il container lo vede al
-      // prossimo tick, non solo al riavvio (P1 [JHT-CLOUDSYNC-01]).
-      // Best-effort: errori loggati ma NON contano nel counter del push
-      // (consecutiveFails è dedicato al write-side, dove la quota Vercel/
-      // Supabase è realmente a rischio). exitCode preservato.
+      // Pull desired-state (flag CV/recheck/escludi che l'utente imposta sul web).
+      // Best-effort: errori loggati, exitCode preservato.
       try {
         const prevPull = process.exitCode;
         process.exitCode = 0;
@@ -1982,8 +1947,7 @@ async function handleDaemon(options) {
       }
 
       // Ticket sync (round-trip cloud↔VPS): importa i ticket 'open' creati dal
-      // web e pusha le risoluzioni del team. Stessa cadenza/policy del pull
-      // desired-state: best-effort, errori loggati ma fuori dal counter del push.
+      // web (lettura Supabase) e pusha le risoluzioni del team. Best-effort.
       try {
         const prevTk = process.exitCode;
         process.exitCode = 0;
@@ -1993,8 +1957,8 @@ async function handleDaemon(options) {
         console.error(pc.yellow(`  daemon ticket-sync error: ${err.message}`));
       }
 
-      // Rendezvous "Sync now": se il browser ha chiesto un refresh on-demand
-      // (sync_requested_at), push fresco + ack. Best-effort, fuori dal counter.
+      // Rendezvous "Sync now": se l'utente ha chiesto un refresh (sync_requested_at),
+      // QUI parte l'UNICO push dati VPS→cloud + ack. Best-effort.
       try {
         const prevSr = process.exitCode;
         process.exitCode = 0;
@@ -2004,12 +1968,8 @@ async function handleDaemon(options) {
         console.error(pc.yellow(`  daemon sync-rendezvous error: ${err.message}`));
       }
 
-      // [JHT-CLOUD-INTERACTIVE-RETIRE] Team-state reconcile FUSO nel daemon: la
-      // dashboard scrive `should_run`; qui convergiamo via `jht team start/stop`
-      // (+ heartbeat) una volta per tick. Sostituisce il poller dedicato a 5s →
-      // un solo daemon VPS→cloud, controllo intatto. Best-effort, fuori dal
-      // counter del push (la quota a rischio è il write-side). Import dinamico
-      // (cache-ato dopo il primo tick).
+      // Heartbeat "VPS online" (reconcileOnce, ora solo-heartbeat: lo start/stop
+      // del team passa dal desktop, non dal cloud). Best-effort, su Supabase.
       try {
         const prevRc = process.exitCode;
         process.exitCode = 0;
@@ -2017,69 +1977,7 @@ async function handleDaemon(options) {
         await reconcileOnce();
         process.exitCode = prevRc;
       } catch (err) {
-        console.error(pc.yellow(`  daemon team-state reconcile error: ${err.message}`));
-      }
-
-      if (authFailedThisTick) {
-        consecutiveAuthFails += 1;
-      } else if (!tickFailed) {
-        // Solo un push riuscito (200 OK) resetta il counter auth. Un fail
-        // NON-auth (es. 500 transient) lascia il counter dov'è — un 401
-        // intermittente in mezzo a 500 deve comunque scattare il killswitch.
-        if (consecutiveAuthFails > 0) {
-          console.log(pc.green(`  push ok dopo ${consecutiveAuthFails} auth-fail, contatore auth resettato.`));
-        }
-        consecutiveAuthFails = 0;
-      }
-
-      if (consecutiveAuthFails >= MAX_CONSECUTIVE_AUTH_FAILS) {
-        const msg =
-          `⛔ Cloud sync interrotto: token revocato o non valido ` +
-          `(${MAX_CONSECUTIVE_AUTH_FAILS} risposte 401/403 consecutive). ` +
-          `Riapri il pairing su ${config.base_url}/settings/cloud-sync ` +
-          `e rilancia: jht cloud login.`;
-        console.error(pc.red(`  ✗ ${msg}`));
-        // Notifica utente via pending_user_messages locale: il bridge
-        // Telegram la consegnerà al prossimo poll. Non possiamo affidarci
-        // al push cloud (è proprio quello che ha fallito).
-        await writePendingUserMessage({
-          agent: 'cloud-sync',
-          body: msg,
-          kind: 'alert',
-        });
-        running = false;
-        process.exitCode = 1;
-        break;
-      }
-
-      if (tickFailed) {
-        consecutiveFails += 1;
-        if (consecutiveFails === WARN_AT) {
-          console.error(
-            pc.yellow(
-              `  ⚠ ${WARN_AT} push consecutivi falliti. ` +
-              `Probabile row corrotta o saturazione Supabase. ` +
-              `Verifica logs container e dashboard Supabase. ` +
-              `Auto-shutdown a ${MAX_CONSECUTIVE_FAILS} fail consecutivi.`
-            )
-          );
-        }
-        if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
-          console.error(
-            pc.red(
-              `  ✗ ${MAX_CONSECUTIVE_FAILS} push consecutivi falliti, ` +
-              `auto-shutdown daemon per evitare loop saturante Supabase. ` +
-              `Investiga la causa (vedi docs/internal/cloud-sync-architecture.md ` +
-              `incident RobertHalf 2026-05-19) e rilancia il daemon manualmente.`
-            )
-          );
-          running = false;
-          process.exitCode = 1;
-          break;
-        }
-      } else if (consecutiveFails > 0) {
-        console.log(pc.green(`  push ok dopo ${consecutiveFails} fail, contatore resettato.`));
-        consecutiveFails = 0;
+        console.error(pc.yellow(`  daemon heartbeat error: ${err.message}`));
       }
     }
     if (!running) break;
