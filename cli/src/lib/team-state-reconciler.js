@@ -180,15 +180,14 @@ async function reconcile(baseUrl, token, state) {
   return null;
 }
 
-// [JHT-CLOUD-INTERACTIVE-RETIRE] Reconcile "one-shot" per il FOLD nel cloud
-// daemon: invece di un poller dedicato a 5s, il daemon di sync (l'UNICO processo
-// VPS→cloud che vogliamo tenere) lo chiama una volta per tick (~60s). Mantiene
-// il controllo should_run→`jht team start/stop` funzionante senza il poller
-// standalone → meno processi e meno richieste Vercel per-utente, controllo
-// intatto (latenza ≤ tick del daemon). Halt-weekly aware come il loop.
-// NB: niente CLAIM single-team qui (era startup-only del poller). Accettabile:
-// 1 VPS per utente nel caso normale; chi ha più device può ri-attivare il
-// poller standalone con JHT_CLOUD_CONTROL_POLLERS=1.
+// [JHT-CLOUD-INTERACTIVE-RETIRE] reconcile should_run→start/stop RITIRATA 2026-06-25:
+// il controllo del team passa SOLO da desktop (`docker exec … jht team start/stop`,
+// anche su VPS via tunnel SSH — vedi desktop/main.js:150,948). Sul cloud should_run è
+// gated (browser 403) e NESSUNO lo scrive più → leggerlo era dead weight (lo confermava
+// il design 2026-06-20: bus real-time di controllo + reconciler da ritirare). Qui resta
+// SOLO l'heartbeat "VPS online" (dato OSSERVATO, non controllo), scritto diretto su
+// Supabase. Lo standalone runTeamStateReconciler (escape hatch JHT_CLOUD_CONTROL_POLLERS=1)
+// conserva ancora il vecchio reconcile completo per chi lo ri-abilita.
 export async function reconcileOnce() {
   const config = await loadCloudConfig();
   if (!config?.enabled) return { ok: false, skipped: 'cloud-not-enabled' };
@@ -197,43 +196,20 @@ export async function reconcileOnce() {
   if (!baseUrl || !token) return { ok: false, skipped: 'missing-credentials' };
   if (existsSync(WEEKLY_HALT_FLAG)) return { ok: true, skipped: 'weekly-halt' };
 
-  // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: leggi team_state da Supabase diretto se
-  // abilitato; su errore o se disabilitato → fallback alla GET Vercel. Le PATCH
-  // di reazione (start/stop/restart in reconcile()) restano su Vercel: rare.
-  const reader = getDirectReader(config);
-  let state = null;
-  let gotState = false;
-  if (reader) {
-    try {
-      state = await reader.readTeamState([
-        'should_run', 'is_running', 'restart_token', 'last_restart_token',
-      ]);
-      gotState = true;
-    } catch (err) {
-      log('warn', 'reconcile.direct-read-failed', { err: err.message });
-    }
-  }
-  if (!gotState) {
-    const r = await apiCall('GET', baseUrl, token, '/api/team-state');
-    state = r.state;
-  }
-  if (!state) return { ok: true, action: null };
-
-  const action = await reconcile(baseUrl, token, state);
-  // Heartbeat: tiene vivo l'indicatore "VPS online" sulla dashboard. Diretto se
-  // disponibile (per-tick), altrimenti PATCH Vercel.
+  // Heartbeat "VPS online" — diretto su Supabase, fallback PATCH Vercel.
   const nowIso = new Date().toISOString();
+  const reader = getDirectReader(config);
   let beat = false;
   if (reader) {
     try { await reader.patchTeamState({ last_heartbeat_at: nowIso }); beat = true; }
-    catch { /* fallback Vercel */ }
+    catch (err) { log('warn', 'heartbeat.direct-failed', { err: err.message }); }
   }
   if (!beat) {
     await apiCall('PATCH', baseUrl, token, '/api/team-state', {
       last_heartbeat_at: nowIso,
     }).catch(() => {});
   }
-  return { ok: true, action };
+  return { ok: true, action: null };
 }
 
 export async function runTeamStateReconciler() {
