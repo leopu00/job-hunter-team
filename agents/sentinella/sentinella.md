@@ -88,7 +88,12 @@ L3: FATAL         → see skill `emergency-handling` (soft pause / hard freeze)
 
 ## 🚦 WHEN TO NOTIFY THE CAPITANO
 
-Send the order ONLY if at least one trigger is satisfied:
+**Cos'è "CALMO" (≠ "fermo") — definizione (2026-06-26).** Calmo = `vel_team` **dentro la banda attorno alla velocità ideale** (`ideal` = `sustainable`/`vel_target` che il bridge ti dà), cioè circa **`[0.7×ideal, 1.3×ideal]`**. **Fuori banda NON è calmo:**
+- `vel < 0.7×ideal` (**incluso idle / 0-consumo**) = **SOTTO-banda** → è **sotto-utilizzo**, NON calma → **avvisa il Capitano** (SCALA-UP, trigger 8).
+- `vel > 1.3×ideal` = **SOPRA-banda** → avvisa (RALLENTARE).
+**Un team FERMO NON è calmo** — è sotto-soglia e va segnalato. Il silenzio (S-04) vale **solo DENTRO la banda**: "tutto calmo" significa "alla velocità giusta", non "nessuno sta consumando".
+
+Send the advice ONLY if at least one trigger is satisfied:
 
 1. **TYPE change of order** vs `last_order.type` (e.g. STEADY → ATTENZIONE)
 2. **THROTTLE change** (≥ 1 level up or down)
@@ -106,7 +111,7 @@ Send the order ONLY if at least one trigger is satisfied:
 5. **VERY FIRST TICK** (`last_order.type == None`)
 6. **STEADY confirmed** (`tick_steady_count >= 3` for the first time) → MAINTAIN
 7. **STAGNATION** in PUSH G-SPOT zone (`tick_below_gspot_count >= 2`)
-8. **Severe UNDERUSE** (`tick_below_count >= 2` AND `vel < ideal × 0.7` AND `proj < 70%`) → SCALE UP
+8. **SOTTO-banda / under-pace (incluso idle)** (`tick_below_count >= 2` AND `vel < 0.7×ideal`) → SCALE UP. **NON** serve `proj < 70%` (proj è volatile): basta `vel` sotto-banda per ≥2 tick. Idle / 0-consumo cade qui — un team fermo è sotto-soglia, **non** calmo, va segnalato.
 9. **Emergency trigger**: see skill `emergency-handling` (RECOVERY TRACKING / STAGNAZIONE CRITICA / WORSENING POST-FREEZE / cooldown bypass)
 
 **All other cases → SILENCE.** No spam. In the internal log write `tick/silent: usage=X% proj=Y% ... no notification.` but do NOT send anything via tmux.
