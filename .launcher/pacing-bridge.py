@@ -428,84 +428,6 @@ def hours_to_reset(
     return max(0.0, min(hrs, PRIMARY_WINDOW_HOURS))
 
 
-# ── Daily budget guardrail (2026-06-25) ──────────────────────────────────────
-# Budget GIORNALIERO adattivo = weekly_remaining / finestre-lavoro-residue, e
-# consumato_oggi = weekly_usage_now - weekly_usage a inizio finestra di lavoro
-# corrente. Serve a Capitano/Sentinella per il tetto "+5pp/giorno" (regole
-# C-19/S-09): impedisce di front-loadare il weekly in un solo giorno (notte 1
-# 2026-06-25: 26% in una notte vs ~14% sostenibile). Adattivo: se oggi sfori, il
-# budget dei giorni dopo si riduce da solo (weekly fisso / giorni residui).
-# Tutto guardato: ritorna (None, None) su qualunque errore → il messaggio omette
-# i campi e i prompt cadono sul calcolo a mano dai campi weekly esistenti.
-def _daily_pacing(wht, now, weekly_remaining_pct, weekly_active_hours,
-                  weekly_usage_now):
-    try:
-        if not (isinstance(weekly_remaining_pct, (int, float))
-                and isinstance(weekly_active_hours, (int, float))
-                and weekly_active_hours > 0):
-            return (None, None)
-        try:
-            with open(JHT_HOME / "jht.config.json", encoding="utf-8") as _f:
-                cfg = json.load(_f)
-        except Exception:
-            cfg = None
-        # ore attive in un giorno (≈ lunghezza della finestra di lavoro)
-        try:
-            daily_active_h = wht.active_hours_in_range(
-                now, now + timedelta(days=1), cfg)
-        except Exception:
-            daily_active_h = None
-        if not isinstance(daily_active_h, (int, float)) or daily_active_h <= 0:
-            daily_active_h = 12.0
-        windows_left = max(1.0, weekly_active_hours / daily_active_h)
-        daily_budget = weekly_remaining_pct / windows_left
-        # consumo nella finestra di lavoro corrente: weekly_now - weekly a inizio
-        # finestra (durante le ore OFF il weekly è piatto → baseline corretta).
-        today_consumed = None
-        try:
-            ints = wht._build_intervals(
-                cfg, now - timedelta(days=1), now + timedelta(minutes=1))
-            ws = None
-            for s, e in ints:
-                if s <= now <= e:
-                    ws = s
-                    break
-            if ws is None and ints:
-                ws = ints[-1][0]
-            if ws is not None and isinstance(weekly_usage_now, (int, float)):
-                ws_ts = ws.timestamp()
-                base = None
-                with open(SENTINEL_JSONL, encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            ev = json.loads(line)
-                        except Exception:
-                            continue
-                        wt = ev.get("weekly_usage")
-                        ts = ev.get("ts")
-                        if not isinstance(wt, (int, float)) or not isinstance(ts, str):
-                            continue
-                        try:
-                            t = datetime.fromisoformat(
-                                ts.replace("Z", "+00:00")).timestamp()
-                        except Exception:
-                            continue
-                        if t >= ws_ts:
-                            base = wt
-                            break
-                if base is not None:
-                    today_consumed = max(0.0, weekly_usage_now - base)
-        except Exception:
-            today_consumed = None
-        return (round(daily_budget, 1),
-                round(today_consumed, 1) if today_consumed is not None else None)
-    except Exception:
-        return (None, None)
-
-
 def compute_tick(ast, tba, rb, now: datetime,
                  wht=None, pcap=None) -> dict:
     """Calcola tutto il payload del tick. Ritorna dict con `ok` true/false.
@@ -746,15 +668,6 @@ def compute_tick(ast, tba, rb, now: datetime,
         else:
             verdict = {"kind": "ALLINEATO", "delta": delta_abs, "frac_pct": 0.0}
 
-    # Daily budget guardrail (C-19/S-09): budget giornaliero adattivo + consumo
-    # nella finestra di lavoro corrente, per il tetto +5pp/giorno.
-    daily_budget_pct, today_consumed_pct = _daily_pacing(
-        wht, now,
-        target_info.get("weekly_remaining_pct"),
-        target_info.get("weekly_active_hours"),
-        weekly_used if isinstance(weekly_used, (int, float)) else None,
-    )
-
     return {
         "ok": True,
         "now": now,
@@ -788,8 +701,6 @@ def compute_tick(ast, tba, rb, now: datetime,
         "active_hours_in_window": target_info.get("active_hours_in_window"),
         "weekly_active_hours": target_info.get("weekly_active_hours"),
         "weekly_remaining_pct": target_info.get("weekly_remaining_pct"),
-        "daily_budget_pct": daily_budget_pct,
-        "today_consumed_pct": today_consumed_pct,
         "weekly_window_source": target_info.get("weekly_window_source"),
         "window_cap_pct_of_weekly": target_info.get("window_cap_pct_of_weekly"),
         "next_phase_transition_at": target_info.get("next_phase_transition_at"),
@@ -919,21 +830,6 @@ def format_message(d: dict) -> str:
             f"(burn sostenibile {sb_str}) — vincolo WEEKLY parallelo, "
             f"binda anche in Phase 1 (S-06/C-09)"
         )
-
-    # Daily budget guardrail (C-19/S-09): SOLO DATI (le azioni stanno nei prompt).
-    # Tutto in % del WEEKLY. budget = quota di oggi (weekly_resto / giorni-lavoro
-    # residui, adattivo); cap = budget + 5 PUNTI del weekly; ⛔ = oggi > cap.
-    db = d.get("daily_budget_pct")
-    tc = d.get("today_consumed_pct")
-    if isinstance(db, (int, float)):
-        cap_d = db + 5.0
-        if isinstance(tc, (int, float)):
-            parts.append(
-                f"daily: oggi={tc:.1f}% budget={db:.1f}% cap={cap_d:.1f}%"
-                + (" ⛔" if tc > cap_d else "")
-            )
-        else:
-            parts.append(f"daily: budget={db:.1f}% cap={cap_d:.1f}%")
 
     # NB: il dato weekly_pace (rate weekly reale vs sostenibile + lockout
     # anticipato) NON va in questo messaggio al CAPITANO: andrebbe a bypassare
