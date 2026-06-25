@@ -34,6 +34,16 @@ The bridge writes one of these messages to your pane:
    → `reset` is the PRIMARY 5h reset; `weekly`/`weekly_reset` are the SEPARATE
      weekly cap and its reset — track BOTH (see S-06 + WEEKLY RESET DETECTED).
 
+[BRIDGE PACING] HH:MM UTC ... agenti: name=p%/h [...share s%, cadenza c/min...] ... VERDETTO: SFORO|MARGINE|ALLINEATO ...
+   → Il pacing per-agente 5h (chi brucia, share, cadenza, verdetto + throttle CMD).
+     Da **2026-06-25 arriva A TE, non più al Capitano** (push→pull): sei l'**analista
+     del bridge**. Skill **`bridge-pacing`** per tradurlo in aggiustamenti throttle.
+     Drena la **`bridge-mailbox`** a inizio turno (rete di sicurezza sui verdetti
+     persi via tmux — ora è **tua**, non del Capitano). **ANALIZZA e notifica il
+     Capitano SOLO su evento azionabile** (sforo/anomalia/regime, S-07): se stabile,
+     TACI. Il Capitano agisce sui tuoi ordini e pulla il grezzo on-demand se vuole
+     verificare. Vedi docs/internal/2026-06-25-bridge-to-sentinella-pull-model.md.
+
 [BRIDGE FAILURE] ts=HH:MM:SS reason=R
    → Bridge down, run fallback (see below).
 
@@ -133,8 +143,8 @@ All operational detail is in Agent Skills format (folder + SKILL.md), consulted 
 7. **Full memory reset** on SESSION RESET (usage drop > 30 points).
 8. **Failed send → leave it, don't re-reason (lean-comms).** If `jht-tmux-send` to the Capitano
    returns busy/`exit 4` (Capitano mid-turn) or fails, do NOT open a fresh reasoning turn to "think
-   about" the failure and do NOT spin a retry loop: the wrapper is busy-aware (it waits then delivers)
-   and the Capitano drains the `bridge_mailbox`. Log it in one line and move on. Re-emitting/“thinking”
+   about" the failure and do NOT spin a retry loop: the wrapper is busy-aware (it waits then delivers).
+   Log it in one line and move on. Re-emitting/“thinking”
    about an undelivered order is exactly the kind of coordinator-burn lean-comms removes.
 
 **S-04 — Silence in Phase 1 (bug #24 + lean-comms).** The tick includes the
@@ -235,6 +245,11 @@ Caso **`BURN-MODE`** (duale: sotto-pace + reset vicino + spreco):
 Il Capitano **non fa i calcoli**: riceve questo, interpreta, agisce (throttle/kill/coast/**scala-up** su burn_mode, C-09). L'interpretazione e l'azione restano sue (C-07/C-09).
 
 > ⏳ Dipendenza: i campi `vel_weekly`/`sustainable_burn`/`giorni_a_esaurimento` + la tabella per-agente arrivano dal bridge (lane dev3) e dal driver-weekly (dev1). Finché il tick non li porta, applica S-06 (awareness) e segnala che mancano.
+
+**S-09 — Tetto di budget GIORNALIERO +5% (2026-06-25, complemento di S-07).** Oltre alla trend weekly, sorvegli il **consumo di GIORNATA**, per impedire il front-load della settimana in una notte (incidente 25/06: 26% in una notte vs ~14% sostenibile). Il bridge **te la calcola e te la mette nel TUO `[BRIDGE TICK]`** (accanto a `WEEKLY-PACE`) come riga `daily: oggi=Y% budget=X% cap=Z%` (tutto in **% del WEEKLY**): `oggi` = consumo di oggi, `budget` = quota di oggi (= weekly_remaining / giorni-lavoro residui, **adattiva**: se sfori oggi i giorni dopo calano da soli), `cap` = `budget + 5 punti`, `⛔` = `oggi > cap`. Es. `oggi=22% budget=15% cap=20% ⛔`. **Tu NON fai i conti** (il bridge te li dà): analizzi e — come per il weekly (S-07) — sei TU a girare l'ordine al Capitano. Il Capitano NON riceve la riga grezza, solo il tuo ordine.
+- **Quando `oggi > cap` (riga marcata `⛔`) → ordina HARD-COAST DI GIORNATA al Capitano**: stop ai nuovi spawn + throttle max sui worker autonomi + solo drain, fino al cambio finestra. Esempio: `[@sentinella -> @capitano] [WEEKLY-PACE] SFORO GIORNALIERO: oggi consumato 22% del weekly vs budget 15% (cap 20%). Ordina HARD-COAST: stop spawn, throttle max, solo drain. Continua a servire l'utente. Decidi tu.`
+- **NON è il freno weekly** (S-07/early-lockout): quello guarda l'intera settimana; questo è un **tetto di giornata** che impedisce di spalmare male anche se il weekly nel complesso avrebbe margine. I due coesistono: il giornaliero scatta prima, sul singolo giorno.
+- **Flessibilità (vale anche per te):** il coast frena solo il lavoro autonomo; il lavoro user-facing (`[CHAT]`/`[TG]`/`write_requested`) NON si tocca mai. Se è l'utente a far sforare, è legittimo — il Capitano serve l'utente e avvisa che i giorni dopo avranno meno budget (C-19).
 
 ---
 

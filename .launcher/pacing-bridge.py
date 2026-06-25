@@ -17,7 +17,8 @@ hardcoded (1, 1, 0, 0) ereditati da token-by-agent-series.
 
 Output:
   - stdout (catturato da /tmp/pacing-bridge.log)
-  - tmux send al CAPITANO via jht-tmux-send (single-line, parsabile dall'LLM)
+  - tmux send alla SENTINELLA via jht-tmux-send (analista del pacing; il Capitano
+    NON viene pingato — pull on-demand via rate-budget/agent-speed-table)
 
 Non scrive su sentinel-data.jsonl (non e' un sensore, e' un report).
 Singleton: kill processi pacing-bridge preesistenti gestito dallo
@@ -26,7 +27,7 @@ spawner in start-agent.sh.
 Override env:
   JHT_HOME                 (default /jht_home)
   JHT_PACING_TARGET_PCT    (default 92.0 — centro del band 90-95)
-  JHT_PACING_TARGET_SESSION (default CAPITANO)
+  JHT_PACING_TARGET_SESSION (default SENTINELLA)
   JHT_PACING_TICK_MIN      (default 15)
   JHT_PACING_MIN_PCT_H     (default 0.20 — soglia rumore per agente)
 
@@ -117,7 +118,12 @@ def _resolve_target_band_center() -> float:
 
 
 TARGET_BAND_CENTER = _resolve_target_band_center()
-TARGET_SESSION = os.environ.get("JHT_PACING_TARGET_SESSION", "CAPITANO")
+# Destinatario del [BRIDGE PACING]: la SENTINELLA (analista del pacing), NON il
+# Capitano (2026-06-25, push→pull). Il Capitano non viene pingato ogni 15 min;
+# riceve solo gli ordini filtrati della Sentinella e pulla on-demand (rate-budget
+# / agent-speed-table) per verificare. Vedi
+# docs/internal/2026-06-25-bridge-to-sentinella-pull-model.md.
+TARGET_SESSION = os.environ.get("JHT_PACING_TARGET_SESSION", "SENTINELLA")
 TICK_MIN = int(os.environ.get("JHT_PACING_TICK_MIN", "15"))
 MIN_PCT_H = float(os.environ.get("JHT_PACING_MIN_PCT_H", "0.20"))
 
