@@ -11,7 +11,8 @@ import type { Locale } from "@/i18n/config";
 //
 // Flusso: PATCH /api/team-state { sync_requested_at } → il daemon VPS lo rileva,
 // pusha e marca sync_completed_at → qui facciamo polling BOUNDED (3s, max ~45s)
-// e a completamento UN solo router.refresh(). All'accesso parte una volta sola.
+// e a completamento UN solo router.refresh(). All'apertura NON sincronizza: legge
+// solo l'ultimo timestamp e lo mostra; il refresh avviene SOLO col pulsante.
 // Si mostra SOLO su cloud (status.remote) e loggato: in locale c'è il banner.
 
 const T: Record<
@@ -144,7 +145,6 @@ export default function CloudRefreshButton() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const didAutoSync = useRef(false);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -226,13 +226,23 @@ export default function CloudRefreshButton() {
     setTimeout(poll, 3000);
   }
 
-  // Auto-sync UNA volta all'accesso (solo cloud + loggato).
+  // All'apertura mostra SOLO l'ultimo aggiornamento (lettura del timestamp
+  // sync_completed_at, NESSUN sync): i dati si aggiornano esclusivamente col
+  // pulsante "Sync now". Cosi' nessun push/refresh parte all'insaputa dell'utente.
   useEffect(() => {
-    if (remote && loggedIn && !didAutoSync.current) {
-      didAutoSync.current = true;
-      void requestSync();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!remote || !loggedIn) return;
+    (async () => {
+      try {
+        const r = await fetch("/api/team-state");
+        if (!r.ok) return;
+        const { state } = await r.json();
+        if (mounted.current && state?.sync_completed_at) {
+          setLastSync(state.sync_completed_at);
+        }
+      } catch {
+        /* offline: nessun timestamp */
+      }
+    })();
   }, [remote, loggedIn]);
 
   if (!remote || !loggedIn) return null;
