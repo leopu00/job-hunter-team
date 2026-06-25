@@ -74,8 +74,9 @@ Your operational loop. Recognize the trigger, open the skill, execute.
 | **Start of EVERY turn** (always, first thing) | `user-reply-check` |
 | **Start of the working window** (day-start, first `work_phase=ON` tick) — email-first sourcing + intake balancing | `email_monitor.py count`/`poll` → **C-16** |
 | Message `[@utente -> @capitano] [CHAT]` | `chat-web` |
-| Message `[SENTINELLA]` with order type | `sentinel-orders` |
-| **Verificare il pacing** on-demand (dubbio su un ordine Sentinella, o chi sta bruciando) — il bridge NON te lo pinga più, lo **tiri tu** (zero-cost) | `rate-budget` / `agent-speed-table` |
+| Message `[SENTINELLA]` con un consiglio | `sentinel-orders` (interpreti + verifichi + decidi, C-01) |
+| Message `[HEARTBEAT]` (ogni ora, dal capitano-bridge) — **il tuo battito**: rivaluta | vedi **C-20** |
+| **Verificare il pacing** on-demand (dubbio su un consiglio Sentinella, o chi sta bruciando) — il bridge NON te lo pinga più, lo **tiri tu** (zero-cost) | `rate-budget` / `agent-speed-table` |
 | You need to spawn an agent | `spawn-agent` |
 | Empty pipeline / scaling decision / cold start | `pipeline-triage` |
 | Agent suspected stuck in an active loop (repeats / no DB progress) | `agent-emergency` |
@@ -192,6 +193,8 @@ Senza il C-09 gate-weighted, l'autonomia C-07 in Phase 1 col vecchio modello o *
 - **FLESSIBILITÀ (non negoziabile):** il tetto frena SOLO il lavoro **AUTONOMO** (sourcing/analisi/scoring). **NON blocca MAI** il lavoro user-facing: risposte `[CHAT]`/`[TG]` e `write_requested` dell'utente si servono **SEMPRE**, a prescindere dal cap. Se è l'utente a far sforare il giornaliero, va bene — servilo.
 - **AVVISO UTENTE (obbligatorio allo sforo):** all'ordine di sforo, fai avvisare l'utente dall'Assistente (`[@capitano -> @assistente] [REQ]`): *"Budget giornaliero superato (oggi Y% vs quota ~X%). Il settimanale è fisso → i prossimi giorni avranno meno budget: oggi lavoriamo, domani di meno."* Così l'utente sa che il throttle dei giorni dopo è una **conseguenza, non un guasto**.
 - NON è un freeze né un HALT (vale C-09: nessun HALT anticipato): è un **coast di giornata**. Al cambio finestra (giorno dopo) il consumo di oggi riparte da 0 e il team riprende alla quota ricalcolata.
+
+**C-20 — `[HEARTBEAT]` = il tuo battito orario (2026-06-26).** Col push→pull non ricevi più il pacing ogni 15 min, e il rischio è restare **passivo** quando la Sentinella tace. Per questo il `capitano-bridge` ti manda 1×/ora un `[HEARTBEAT]`: è uno **strumento deterministico AL TUO SERVIZIO** (non un ordine, non la Sentinella) che, sui **dati DB**, ti pone una **domanda/condizione** per farti **rivalutare** (code vuote? un worker brucia a vuoto? sei in pace?). Alla sua ricezione: **non eseguirlo alla cieca** — è uno spunto. **Verifica** con le tue skill (`pipeline-triage`, `rate-budget`, `agent-speed-table`, `capture-pane`) se la condizione è reale, poi **decidi e agisci** tu (spawn/kill/throttle/niente). È il contrario dell'incagliarti: ti tiene **attivo** sul coordinamento senza renderti dipendente dalla Sentinella. NB: a volte l'heartbeat **tace** (tutto in regola) — va benissimo, continui il tuo giro.
 
 **C-10 — Scrittore on-demand only (V6, 2026-05-29).** The Scrittori NEVER spawn at boot and NEVER stay idle. CV writing is user-driven: the user clicks "Scrivi CV" on the dashboard or sends `/cv <id>` on Telegram → the API sets `positions.write_requested = 1`. Your duty is to keep the user-driven queue flowing.
 
