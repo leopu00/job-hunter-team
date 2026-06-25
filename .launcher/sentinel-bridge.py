@@ -994,6 +994,95 @@ def _weekly_pace_via_skill(entry, now_dt, now_ts):
         return None
 
 
+def _daily_pacing_via_skill(entry, now_dt, now_ts):
+    """Budget GIORNALIERO adattivo + consumo nella finestra di lavoro corrente
+    (regole S-09/C-19). Tutto in % del WEEKLY: budget = weekly_remaining /
+    finestre-lavoro residue (se sfori oggi i giorni dopo calano da soli);
+    consumato_oggi = weekly_usage_now - weekly_usage a inizio finestra di lavoro
+    corrente (durante le ore OFF il weekly è piatto → baseline). La Sentinella lo
+    riceve nel [BRIDGE TICK] (S-09), ANALIZZA e ordina il coast al Capitano (C-19)
+    — NON va al Capitano diretto (stesso principio di _weekly_pace_via_skill).
+    Ritorna (budget_pct, consumato_pct) o (None, None)."""
+    try:
+        wrem = entry.get("weekly_remaining_pct")
+        wreset_unix = entry.get("weekly_reset_at_unix")
+        wusage = entry.get("weekly_usage")
+        if (not isinstance(wrem, (int, float))
+                or not isinstance(wreset_unix, (int, float))):
+            return (None, None)
+
+        def _imp(name):
+            p = Path("/app/shared/skills") / f"{name}.py"
+            if not p.exists():
+                p = (Path(__file__).resolve().parent.parent
+                     / "shared" / "skills" / f"{name}.py")
+            spec = importlib.util.spec_from_file_location(name, p)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+
+        wht = _imp("work_hours_target")
+        try:
+            with CONFIG_PATH.open(encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            cfg = None
+        wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
+        wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)
+        if not isinstance(wah, (int, float)) or wah <= 0:
+            return (None, None)
+        daily_active_h = wht.active_hours_in_range(
+            now_dt, now_dt + timedelta(days=1), cfg)
+        if not isinstance(daily_active_h, (int, float)) or daily_active_h <= 0:
+            daily_active_h = 12.0
+        windows_left = max(1.0, wah / daily_active_h)
+        budget = wrem / windows_left
+        consumed = None
+        try:
+            ints = wht._build_intervals(
+                cfg, now_dt - timedelta(days=1), now_dt + timedelta(minutes=1))
+            ws = None
+            for s, e in ints:
+                if s <= now_dt <= e:
+                    ws = s
+                    break
+            if ws is None and ints:
+                ws = ints[-1][0]
+            if ws is not None and isinstance(wusage, (int, float)):
+                ws_ts = ws.timestamp()
+                base = None
+                with open(DATA_JSONL, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            ev = json.loads(line)
+                        except Exception:
+                            continue
+                        wt = ev.get("weekly_usage")
+                        ts = ev.get("ts")
+                        if (not isinstance(wt, (int, float))
+                                or not isinstance(ts, str)):
+                            continue
+                        try:
+                            t = datetime.fromisoformat(
+                                ts.replace("Z", "+00:00")).timestamp()
+                        except Exception:
+                            continue
+                        if t >= ws_ts:
+                            base = wt
+                            break
+                if base is not None:
+                    consumed = max(0.0, wusage - base)
+        except Exception:
+            consumed = None
+        return (round(budget, 1),
+                round(consumed, 1) if consumed is not None else None)
+    except Exception:
+        return (None, None)
+
+
 # ── Claude TUI parser (libreria importata da check_usage) ──────────────
 
 WORKER_SESSION = "SENTINELLA-WORKER"
@@ -1435,6 +1524,23 @@ def main():
                     # ripresa controllata invece di freeze.
                     if weekly_pace.get("burst_transient"):
                         weekly_pace_field += " burst_transient=true"
+                # DAILY (S-09/C-19): budget di giornata + consumo di oggi (% del
+                # WEEKLY). La Sentinella ANALIZZA e, su sforo (oggi>cap), ordina il
+                # coast al Capitano; NON arriva al Capitano diretto.
+                daily_pace_field = ""
+                _dbudget, _dconsumed = _daily_pacing_via_skill(
+                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                if isinstance(_dbudget, (int, float)):
+                    _dcap = _dbudget + 5.0
+                    if isinstance(_dconsumed, (int, float)):
+                        daily_pace_field = (
+                            f" daily: oggi={_dconsumed:.1f}% budget={_dbudget:.1f}%"
+                            f" cap={_dcap:.1f}%"
+                            + (" ⛔" if _dconsumed > _dcap else "")
+                        )
+                    else:
+                        daily_pace_field = (
+                            f" daily: budget={_dbudget:.1f}% cap={_dcap:.1f}%")
                 # TOOLS-HEALTH (dev2): segnale strutturato sui tool mission-critical.
                 # Il maintainer-sweep scrive logs/tools-health.json (output di
                 # tool_health.py); qui lo LEGGIAMO e segnaliamo SOLO se qualcosa è
@@ -1463,7 +1569,7 @@ def main():
                     SENTINELLA_SESSION,
                     f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
                     f"status={status} reset={reset}{tgt_field}{phase_field}"
-                    f"{weekly_field}{weekly_pace_field}{tools_health_field}{monthly_quota_field} src=bridge."
+                    f"{weekly_field}{weekly_pace_field}{daily_pace_field}{tools_health_field}{monthly_quota_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
 
