@@ -180,6 +180,29 @@ if [ "$ROLE" = "bridge" ]; then
     echo "⚠ $PACING_SCRIPT non trovato — pacing NON partito (sentinel ok)"
   fi
 
+  # Capitano heartbeat bridge — battito ORARIO al Capitano (2026-06-26). Col
+  # push→pull il Capitano non riceve più il pacing ogni 15min e si incaglia
+  # quando la Sentinella tace: questo lo risveglia 1×/ora con un nudge basato sui
+  # dati DB (deterministico, NON LLM), così resta attivo senza essere passivo.
+  HEARTBEAT_SCRIPT="/app/.launcher/capitano-bridge.py"
+  if [ -f "$HEARTBEAT_SCRIPT" ]; then
+    for _pid in $(grep -l capitano-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -TERM "$_pid" 2>/dev/null || true
+    done
+    sleep 0.5
+    for _pid in $(grep -l capitano-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -KILL "$_pid" 2>/dev/null || true
+    done
+    sleep 0.5
+    setsid sh -c "
+      JHT_CAPITANO_HEARTBEAT_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+        python3 -u $HEARTBEAT_SCRIPT >> /tmp/capitano-bridge.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ capitano-bridge (heartbeat orario) partito (log /tmp/capitano-bridge.log)"
+  else
+    echo "⚠ $HEARTBEAT_SCRIPT non trovato — heartbeat NON partito"
+  fi
+
   # Window ratio meter — calibrazione auto del rapporto cap-5h/cap-weekly.
   # Daemon leggero (un pass ogni 5 min su sentinel-data.jsonl), scrive
   # ~/.jht/logs/window-ratio-state.json che provider_capacity.py blenda
