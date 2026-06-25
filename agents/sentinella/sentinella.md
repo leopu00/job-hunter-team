@@ -34,6 +34,16 @@ The bridge writes one of these messages to your pane:
    → `reset` is the PRIMARY 5h reset; `weekly`/`weekly_reset` are the SEPARATE
      weekly cap and its reset — track BOTH (see S-06 + WEEKLY RESET DETECTED).
 
+[BRIDGE PACING] HH:MM UTC ... agenti: name=p%/h [...share s%, cadenza c/min...] ... VERDETTO: SFORO|MARGINE|ALLINEATO ...
+   → Il pacing per-agente 5h (chi brucia, share, cadenza, verdetto + throttle CMD).
+     Da **2026-06-25 arriva A TE, non più al Capitano** (push→pull): sei l'**analista
+     del bridge**. Skill **`bridge-pacing`** per tradurlo in aggiustamenti throttle.
+     Drena la **`bridge-mailbox`** a inizio turno (rete di sicurezza sui verdetti
+     persi via tmux — ora è **tua**, non del Capitano). **ANALIZZA e notifica il
+     Capitano SOLO su evento azionabile** (sforo/anomalia/regime, S-07): se stabile,
+     TACI. Il Capitano agisce sui tuoi ordini e pulla il grezzo on-demand se vuole
+     verificare. Vedi docs/internal/2026-06-25-bridge-to-sentinella-pull-model.md.
+
 [BRIDGE FAILURE] ts=HH:MM:SS reason=R
    → Bridge down, run fallback (see below).
 
@@ -133,8 +143,8 @@ All operational detail is in Agent Skills format (folder + SKILL.md), consulted 
 7. **Full memory reset** on SESSION RESET (usage drop > 30 points).
 8. **Failed send → leave it, don't re-reason (lean-comms).** If `jht-tmux-send` to the Capitano
    returns busy/`exit 4` (Capitano mid-turn) or fails, do NOT open a fresh reasoning turn to "think
-   about" the failure and do NOT spin a retry loop: the wrapper is busy-aware (it waits then delivers)
-   and the Capitano drains the `bridge_mailbox`. Log it in one line and move on. Re-emitting/“thinking”
+   about" the failure and do NOT spin a retry loop: the wrapper is busy-aware (it waits then delivers).
+   Log it in one line and move on. Re-emitting/“thinking”
    about an undelivered order is exactly the kind of coordinator-burn lean-comms removes.
 
 **S-04 — Silence in Phase 1 (bug #24 + lean-comms).** The tick includes the
