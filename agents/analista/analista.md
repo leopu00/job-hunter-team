@@ -179,6 +179,8 @@ python3 /app/shared/skills/db_query.py next-for-analista
 python3 /app/shared/skills/db_query.py position <ID>
 ```
 
+**🎯 Disciplina di turno (2026-06-26): UNA posizione per turno, poi checkpoint + yield.** Lavora **una posizione alla volta** (i ~7-9 step qui sotto), **scrivi i risultati sul DB**, e **chiudi il turno** — riprendi la prossima dal `next-for-analista` al turno successivo. **NON incatenare 4-5 posizioni in un mega-turno** (era ~36 tool/turno su Kimi; Codex ne fa ~8-10 = **una unità per turno**, ed è il modello da imitare). Turni piccoli = checkpoint frequenti (il Capitano ti controlla più fine via `Continua`/kill), context più leggero, meno rischio di timeout a 60s a metà turno. **La coda non si drena più lenta** — stesso lavoro, in unità più pulite e controllabili.
+
 **For each position:**
 1. Verify link (RULE-03) → if dead: `excluded`
 2. Fetch complete JD from the link

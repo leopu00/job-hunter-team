@@ -506,3 +506,47 @@ Da qui in poi fase quieta fino al reset 22:43.
 **Skill loading: OK (ipotesi "skill non caricate" SMENTITA).** kimi scopre skill da `.claude/skills`+`.agents/skills` (prio kimi>claude>codex), inietta nomi+descrizioni nel system prompt, l'AI decide se leggere il SKILL.md. SCOUT-8 HA letto scout.md(2×), circles-and-sources, position-insert, scout-coord, db-query, throttle. AGENTS.md presente con Skill-index+STEP. Slash-cmd utili: `/skill:<name>` force-load, `/compact`, `/usage`, `/debug`.
 **Interrogazione SCOUT-9 — perché improvvisa scraper custom (sua diagnosi):** (1) NESSUN entrypoint automatico: AGENTS.md descrive il loop ma manca un `boot` che esegua scout-coord→circles-and-sources→loop → ogni istanza assembla a mano e improvvisa; (2) invocazioni tool NON mostrate con argomenti reali (web_scrape_robust.py citato ma senza CLI) → se non trova il comando, se lo scrive; (3) path confusion (tool in /app/shared/skills, cwd /jht_home/agents/scout-N); (4) over-ottimizzazione: scarica board intere e batch-insert pensando sia più efficiente (viola SC-05 dedup-per-offerta + SC-02 JD-completo). Conclusione del worker: "le istanze precedenti non hanno letto position-insert fino in fondo o preferiscono fare-tanto-in-un-colpo; 170k token per poche offerte = l'improvvisazione paga male". → **Fix reale ≠ max_steps: serve boot entrypoint + esempi CLI concreti + risolvere i path + vietare lo scrape di board intere.**
 - **23:20** — wk **9%** (era 8%; +1% dai test scout-7/8/9 + interrogazione), usage 44%, coast | roster: 2 analisti+core+SCOUT-9(idle test) | ⚠️ a 1% dallo stop-gate 10%. Config safe ripristinata. Reset finestra 22:43 UTC.
+- **00:23 CEST (22:20 UTC)** — wk **10%** (usage 48), coast (coordinator-burn ~1%/15min, 0 worker). ⚠️ ESATTAMENTE al gate (regola: stop a >10, quindi non killato per un soffio). Prossimo tick → 11% → halt auto. In attesa decisione utente (halt ora / redeploy ora). Fix committato+pushato su dev2 (60a5f0992).
+
+### 🚀 REDEPLOY betaB coi 3 fix (00:5x CEST / ~22:5x UTC)
+Immagine `:latest` 741a49715d73 (build 22:44 UTC da master) — verificata: cap100(2) + SC-09(1) + C-08 ter(1). `docker compose up -d` → container ricreato, prune 1.25GB. Team riparte: 4 core su (CAPITANO/SENTINELLA/ASSISTENTE/MENTOR), watchdog+bridge attivi, **0 righe 403**, config max_steps=100. betaA lo rideploya l'utente. Gate 10% rimosso. Monitor 5min × ≥30min per osservare il nuovo comportamento (Scout batch≤5? cap 100→Capitano "Continua"? rabbit-hole ridotto? kT/pos vs ~24?).
+- **01:00 CEST** — post-redeploy boot: 4 core, Capitano legge skill (ctx 11%), **0 worker**, **0 rabbit-hole nuovo** (file in scout-6/7 tmp = leftover pre-redeploy), new=42. Bridge tick pending post-restart. Attendo spawn worker.
+- **01:05 CEST** — bridge vivo (tick 23:05), team in transiente SFORO da boot: Capitano throttla assistente 300s, **0 worker spawnati**, attende decadimento velocità. 0 rabbit-hole nuovo, new=42. Test reale (Scout) non ancora partito.
+- **01:12 CEST** — invariato: Capitano attende il prossimo [BRIDGE PACING] (ultimo 23:00 = SFORO boot → throttle assistente). wk 11%, usage 7%, 4 core, 0 worker. Prossimo pacing ~23:15 UTC → atteso MARGINE → spawn.
+
+### ✅ Test post-redeploy: SCOUT-4 spawnato (01:17 CEST / 23:17 UTC) — SC-09 propagato
+Il [CHAT] mascherato da utente ("avvia il team") ha innescato il Capitano (riconosciuto come `[@utente -> @capitano] [CHAT]`, aperto chat-web/pipeline-triage/spawn-agent, check budget 89% weekly). Ha spawnato SCOUT-4 e nel **kick-off** scrive *"batches of 3-5 positions"* → **conferma che la regola SC-09 è letta e applicata dal Capitano**. scout-4 tmp vuoto (0 rabbit-hole), new=42, wk 11%. Da osservare: SCOUT-4 fa davvero batch≤5? kT/posizione vs ~24? tocca i 100 step → Continua?
+- **01:22 CEST** — pipeline scorre: +ANALISTA-5 (processa le 3 di SCOUT-4). SCOUT-4 batch 3 circle-1, ragiona su circle 1→2/3, **0 rabbit-hole** (tmp solo jds/), tool standard, no stallo 100. wk **12%** (+1% in 5min ~ ramp 2 agenti+boot). Comportamento ✓; efficienza kT/pos da misurare a regime (context proxy 84k include boot skill-read; il "2451kT" è artefatto storico).
+- **01:27 CEST** — pipeline COMPLETA: SCOUT-4→ANALISTA-5→SCORER-1 + core. wk 11→12→12% (~6%/h, MA ora 3 worker PRODUTTIVI vs vecchio 1 Scout in rabbit-hole). SCOUT-4 0 rabbit-hole (tmp solo jds/). Misura kT/pos buggata (filtro created_at/wire) → da correggere. Comportamento ✓, efficienza-token da quantificare pulita.
+
+### 📊 Snapshot efficienza SCOUT-4 post-fix (01:33 CEST / 23:33 UTC)
+**kT/posizione = 19.1** (210 kT / 11 pos, 110 LLM-call) vs baseline rabbit-hole ~24 → **~20% meglio**. **0 rabbit-hole** (tmp solo jds/), **0 stalli 100-step** ("Continua" non ancora esercitato: batch corti restano sotto il cap = effetto voluto). Pipeline COMPLETA e sana: ANALISTA-4+ANALISTA-5+SCORER-1+SCOUT-4+core (Capitano scala a 2 analisti). weekly 11→13% (~8%/h in ramp con 5 worker freschi — paragonabile al vecchio ~6%/h ma ora PRODUTTIVO; il burn-rate complessivo resta leva throttle, separata dal fix-comportamento). **VERDETTO fix: comportamento corretto (no rabbit-hole, batch≤5, +20% efficienza/pos, pipeline pulita). Continua/cap-100 non ancora innescato (positivo).**
+- **01:41 CEST** — Capitano RIASSETTATO dopo [CHAT] pacing: *"Allineato. Weekly 100% al reset, zero overshoot, no front-load, coast su segnale bridge/Sentinella"* (cita C-09). SCOUT-4 kT/pos **17.9** (↓ da 19.1, boot si diluisce). 0 rabbit-hole, 0 Continua. Roster pieno (+DOTTORE). wk 14→15% (~12%/h, ancora ramp).
+- **01:46 CEST** — SCOUT-4 kT/pos **16.5** (↓ da 17.9; 264kT/16pos), wk **15% PLATEAU** (23:40→23:45 fermo → Capitano modera dopo ACK pacing), 0 rabbit-hole, 0 Continua, roster pieno+Dottore. Trend molto buono.
+
+### 🌙 Riassunto notte 2026-06-24 (monitor SPENTO alle 23:51 UTC / 01:51 CEST)
+**Deploy:** betaB rideployato su immagine `:latest` da master (commit 60a5f0992), 3 fix VERIFICATI nell'immagine (cap100 + SC-09 + C-08 ter). betaA rideployato dall'utente.
+**Fix-comportamento: RISOLTO.** SCOUT-4 (forzato via [CHAT] mascherato da utente) fa **batch piccoli (3-5)** coi tool standard, **0 rabbit-hole** per tutta la sessione (tmp solo `jds/`, mai scraper/processor custom). 16 posizioni prodotte pulite.
+**Efficienza:** kT/posizione **~17** (range 19.1→16.5→17.0 lungo la sessione) vs baseline rabbit-hole **~24** → ~29% meglio, in calo man mano che il costo di boot si diluisce.
+**Cap 100 / "Continua":** MAI innescato — i batch corti restano sotto i 100 step (effetto voluto: niente runaway da cappare; il C-08 ter resta pronto ma non necessario in regime sano).
+**Ritmo weekly:** 11%→15% durante il ramp (5-6 worker freschi, avvio aggressivo via [CHAT] "parti subito"), poi **PLATEAU stabile a 15%** dopo che il Capitano ha recepito la raccomandazione pacing ([CHAT]: *"100% al reset, no front-load, coast"* → ACK con cita C-09). Backstop 30% mai vicino.
+**Pipeline finale:** SCOUT-4 + ANALISTA-4 + ANALISTA-5 + SCORER-1 + core (Cap/Sent/Assist/Mentor) + DOTTORE. Sana, 0 403, 0 stalli.
+**Verdetto:** i 3 fix funzionano in produzione. Rabbit-hole eliminato, efficienza ↑, pacing recepito. Da rivedere domani: il ritmo weekly a regime su una notte intera (il burn-rate complessivo resta la leva throttle, distinta dal fix-comportamento) e la prima eventuale attivazione di "Continua" sotto carico reale. Team lasciato girare la notte.
+
+### ✅ CORREZIONE (mattina 25/06 ~06:35 UTC): il Capitano NON killa — sblocca con [RIPRENDI]
+La nota di stamattina ("tende a killare") era SBAGLIATA. Verificato: sessione ANALISTA-5 creata 24/06 23:21:39 e ANCORA quella (mai ri-spawnata). Il *"applico C-12 kill+respawn"* nel ragionamento NON è stato eseguito. Realtà (da messages.jsonl 05:00:53): `[@capitano -> @analista-5] [RIPRENDI] Exit emergency. Resume loop` → per un agente fermo su "Send another message to continue", `[RIPRENDI]` = "Continua" (sblocca preservando il context). **C-08 ter raggiunge il suo scopo, via il vocabolario [RIPRENDI] invece della parola "Continua". Niente kill, niente perdita di lavoro.** Ciclo osservato: hit 100 step → stallo → [RIPRENDI] → +100 step → stallo di nuovo (checkpoint controllati dal Capitano, come da design).
+
+### 📊 Token + step/turn per agente (post-redeploy 23:00 UTC → 06:35 UTC, ~7.5h)
+| agente | kT | turn | tool | step/turn | note |
+|---|---|---|---|---|---|
+| scout-4 | 1754 | 42 | 495 | **11.8** | ↓ da vecchio ~21 (cap+SC-09), verso Codex ~8 |
+| analista-4 | 2330 | 45 | 356 | 7.9 | **top consumer** (ctx 81%!), analisi cara = nuovo cost-center (legittimo) |
+| analista-5 | 1371 | 40 | 372 | 9.3 | stallo max-steps, attende [RIPRENDI] |
+| scorer-1 | 1339 | 39 | 292 | 7.5 | queue vuota, idle |
+| sentinella | 440 | 17 | 24 | 1.4 | monitor |
+| capitano | ~1183 | 36 | 134 | 3.7 | (capitano/assistente double-count nel match wire) |
+| dottore | 21 | 1 | 10 | 10 | one-shot standby |
+| mentor | 0 | 0 | 0 | — | idle |
+| **TEAM** | **~9620 kT** | | | | in ~7.5h |
+**Step/turn ora Codex-like (7-12 worker, 3.7 cap, 1.4 sent) vs vecchio Scout 21.** Il rabbit-hole è sparito (Scout 11.8); il cost-center si è spostato sugli Analisti (analisi JD+salary = cara ma legittima). ANALISTA-4 a ctx 81% (vicino compaction 85%) — idle/standby ma gonfio, da tenere d'occhio.
+**Stato pane (06:35):** backlog DRENATO (analista/scorer queue vuote) → Capitano in standby controllato (throttle + [RIPRENDI] pending), Scout-4 standby, ANALISTA-5 stallo-da-resume, ANALISTA-4/scorer idle. Team coasta corretto su queue-vuote.
