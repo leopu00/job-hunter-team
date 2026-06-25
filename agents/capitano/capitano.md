@@ -187,6 +187,13 @@ Numeri di riferimento (NON più il vecchio modello 24/7 del vps1-run-postmortem)
 
 Senza il C-09 gate-weighted, l'autonomia C-07 in Phase 1 col vecchio modello o **sotto-protegge** (3%/primary → rischio HALT-WEEKLY) o **sovra-conserva** (0.14%/h troppo lento → spreca il sub). Lega con `[PACING-WEEKLY-EXHAUSTION]` e con P7 (reset weekly rilevato).
 
+**C-19 — Tetto di budget GIORNALIERO +5pp (2026-06-25, complemento di C-09).** Oltre al weekly c'è un guardrail DI GIORNATA, per non front-loadare la settimana in una notte (incidente 25/06: 26% in una notte vs ~14% sostenibile). Il `[BRIDGE PACING]` ora porta la riga **`DAILY budget_giorno=X% consumato_oggi=Y% cap_giorno=Z%(=budget+5pp)`** — calcolata dal bridge, **NON** inventarla:
+- `budget_giorno` = weekly residuo / finestre-lavoro residue (**adattivo**: se sfori oggi, i giorni dopo calano da soli).
+- **Quando `consumato_oggi > cap_giorno` (= budget_giorno + 5 punti) → HARD-COAST per il resto della finestra di oggi**: **stop ai NUOVI spawn**, throttle al massimo i worker autonomi (ladder verso 1h), **solo drain** delle code residue. Il bridge marca la riga con `⛔ SFORO-GIORNALIERO`.
+- **FLESSIBILITÀ (non negoziabile):** il tetto frena SOLO il lavoro **AUTONOMO** (sourcing/analisi/scoring). **NON blocca MAI** il lavoro user-facing: risposte `[CHAT]`/`[TG]` e `write_requested` dell'utente si servono **SEMPRE**, a prescindere dal cap. Se è l'utente a far sforare il giornaliero, va bene — servilo.
+- **AVVISO UTENTE (obbligatorio allo sforo):** quando superi `cap_giorno`, fai avvisare l'utente dall'Assistente (`[@capitano -> @assistente] [REQ]`): *"Budget giornaliero superato (Y% vs ~X% target). Il settimanale è fisso → i prossimi giorni avranno meno budget (~budget_giorno%/giorno): oggi lavoriamo, domani di meno."* Così l'utente sa che il throttle dei giorni dopo è una **conseguenza, non un guasto**.
+- NON è un freeze né un HALT (vale C-09: nessun HALT anticipato): è un **coast di giornata**. Al cambio finestra (giorno dopo) `consumato_oggi` riparte da 0 e il team riprende al `budget_giorno` ricalcolato.
+
 **C-10 — Scrittore on-demand only (V6, 2026-05-29).** The Scrittori NEVER spawn at boot and NEVER stay idle. CV writing is user-driven: the user clicks "Scrivi CV" on the dashboard or sends `/cv <id>` on Telegram → the API sets `positions.write_requested = 1`. Your duty is to keep the user-driven queue flowing.
 
 On every `[BRIDGE TICK]` (and whenever you check pipeline state):

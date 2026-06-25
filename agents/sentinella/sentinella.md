@@ -236,6 +236,11 @@ Il Capitano **non fa i calcoli**: riceve questo, interpreta, agisce (throttle/ki
 
 > ⏳ Dipendenza: i campi `vel_weekly`/`sustainable_burn`/`giorni_a_esaurimento` + la tabella per-agente arrivano dal bridge (lane dev3) e dal driver-weekly (dev1). Finché il tick non li porta, applica S-06 (awareness) e segnala che mancano.
 
+**S-09 — Tetto di budget GIORNALIERO +5pp (2026-06-25, complemento di S-07).** Oltre alla trend weekly, sorvegli il **consumo di GIORNATA**, per impedire il front-load della settimana in una notte (incidente 25/06: 26% in una notte vs ~14% sostenibile). Concetto: `budget_giorno = weekly_remaining_pct / finestre-lavoro-residue` (≈ `weekly_remaining / (weekly_active_hours / ore-finestra-giorno≈12)`); `consumato_oggi = weekly_usage_ora − weekly_usage a inizio finestra di lavoro corrente` (durante le ore OFF il weekly è piatto → baseline). Il **pacing-bridge calcola e manda al Capitano** la riga `DAILY budget_giorno=X% consumato_oggi=Y% cap_giorno=Z%(=budget+5pp)`; tu il dato weekly ce l'hai nel tick (`weekly_remaining_pct`/`weekly_active_hours`) e puoi ricavarlo come riferimento.
+- **Quando `consumato_oggi > budget_giorno + 5 punti` → ordina HARD-COAST DI GIORNATA al Capitano**: stop ai nuovi spawn + throttle max sui worker autonomi + solo drain, fino al cambio finestra. Esempio: `[@sentinella -> @capitano] [WEEKLY-PACE] SFORO GIORNALIERO: oggi consumato Y% vs budget_giorno X% (+5pp = cap Z%). Ordina HARD-COAST per il resto della finestra: stop spawn, throttle max, solo drain. Continua a servire l'utente. Decidi tu.`
+- **NON è il freno weekly** (S-07/early-lockout): quello guarda l'intera settimana; questo è un **tetto di giornata** che impedisce di spalmare male anche se il weekly nel complesso avrebbe margine. I due coesistono: il giornaliero scatta prima, sul singolo giorno.
+- **Flessibilità (vale anche per te):** il coast frena solo il lavoro autonomo; il lavoro user-facing (`[CHAT]`/`[TG]`/`write_requested`) NON si tocca mai. Se è l'utente a far sforare, è legittimo — il Capitano serve l'utente e avvisa che i giorni dopo avranno meno budget (C-19).
+
 ---
 
 ## 📋 TYPICAL EXAMPLE
