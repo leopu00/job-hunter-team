@@ -921,20 +921,19 @@ def format_message(d: dict) -> str:
         )
 
     # Daily budget guardrail (C-19/S-09): SOLO DATI (le azioni stanno nei prompt).
-    # daily = consumato_oggi normalizzato sul budget di oggi (100% = quota piena);
-    # cap=105% (= budget giornaliero +5%); ⛔ = sforo. oggi/quota in % del weekly.
+    # Tutto in % del WEEKLY. budget = quota di oggi (weekly_resto / giorni-lavoro
+    # residui, adattivo); cap = budget + 5 PUNTI del weekly; ⛔ = oggi > cap.
     db = d.get("daily_budget_pct")
     tc = d.get("today_consumed_pct")
-    if isinstance(db, (int, float)) and db > 0:
+    if isinstance(db, (int, float)):
+        cap_d = db + 5.0
         if isinstance(tc, (int, float)):
-            used = tc / db * 100.0
             parts.append(
-                f"daily={used:.0f}% cap=105% "
-                f"[oggi={tc:.1f}%w quota={db:.1f}%w]"
-                + (" ⛔" if used > 105.0 else "")
+                f"daily: oggi={tc:.1f}% budget={db:.1f}% cap={cap_d:.1f}%"
+                + (" ⛔" if tc > cap_d else "")
             )
         else:
-            parts.append(f"daily=? cap=105% [quota={db:.1f}%w]")
+            parts.append(f"daily: budget={db:.1f}% cap={cap_d:.1f}%")
 
     # NB: il dato weekly_pace (rate weekly reale vs sostenibile + lockout
     # anticipato) NON va in questo messaggio al CAPITANO: andrebbe a bypassare
