@@ -808,20 +808,25 @@ async function dispatch() {
   //     solo processo. Il poller standalone non parte più.
   //   • user-messages-poller → RITIRATO: la chat web→agente è solo-desktop (via
   //     tunnel arriva a tmux in locale); la lane cloud /api/messages è morta.
-  //   • team-commands-poller (realtime) → RESTA (adattivo) finché il suo feeder
-  //     cloud (controlli sentinella sul web, in dismissione lato collega) non
-  //     sparisce; poi si ritira.
-  // Entrambi i poller ritirati sono CONGELATI (non rimossi) e ri-attivabili a
-  // runtime, senza rebuild, con JHT_CLOUD_CONTROL_POLLERS=1 (escape hatch).
+  //   • team-commands-poller (realtime) → RITIRATO 2026-06-25: il feeder web è
+  //     morto (web read-only → /api/team/command 403 sul cloud, niente più
+  //     team_commands dal browser), pollava a vuoto ~ogni 5s (~150 req/h Vercel).
+  //   • file-bridge-poller → RITIRATO 2026-06-25: pollava Vercel di continuo
+  //     (file-bridge + file-index + purge, ~400 req/h) per file on-demand che
+  //     non servono ora. Il trasferimento file dal cloud resta SOSPESO finché
+  //     non si ri-abilita.
+  // I poller ritirati sono CONGELATI (non rimossi) e ri-attivabili a runtime,
+  // senza rebuild, con JHT_CLOUD_CONTROL_POLLERS=1 (escape hatch).
   const controlPollers = process.env.JHT_CLOUD_CONTROL_POLLERS === '1';
 
-  // Stato iniziale del cloud: se gia' paired, daemon (con reconcile) + realtime
-  // + file-bridge partono. I poller di controllo standalone solo se ri-abilitati.
+  // Stato iniziale del cloud: se gia' paired, parte SOLO il cloud daemon (con
+  // reconcile). team-commands (realtime) + file-bridge ritirati + poller di
+  // controllo standalone: solo se ri-abilitati (escape hatch).
   if (isVps && await isCloudConfigured()) {
     startDaemon();
-    startRealtime();
-    startFileBridge();
     if (controlPollers) {
+      startRealtime();
+      startFileBridge();
       startTeamState();
       startUserMessages();
     }
@@ -851,12 +856,12 @@ async function dispatch() {
           pid1Log(
             controlPollers
               ? 'cloud.json rilevato: avvio cloud daemon (con reconcile) + realtime + file-bridge + poller di controllo standalone (env override)'
-              : 'cloud.json rilevato: avvio cloud daemon (con reconcile team_state) + realtime + file-bridge',
+              : 'cloud.json rilevato: avvio cloud daemon (con reconcile team_state)',
           );
           startDaemon();
-          startRealtime();
-          startFileBridge();
           if (controlPollers) {
+            startRealtime();
+            startFileBridge();
             startTeamState();
             startUserMessages();
           }

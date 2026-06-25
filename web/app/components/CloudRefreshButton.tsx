@@ -4,14 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import { createClient } from "@/lib/supabase/client";
 
 // "Sync now" lato CLOUD ([JHT-DATA-SYNC] fase 3). Mirror del CloudSyncStatusBanner
 // (che è LOCAL-only): quello pusha SQLite→cloud, questo chiede alla VPS un push
 // fresco on-demand, senza polling continuo del browser.
 //
 // Flusso: PATCH /api/team-state { sync_requested_at } → il daemon VPS lo rileva,
-// pusha e marca sync_completed_at → qui facciamo polling BOUNDED (3s, max ~45s)
-// e a completamento UN solo router.refresh(). All'accesso parte una volta sola.
+// pusha e marca sync_completed_at → il browser lo riceve via Supabase REALTIME
+// (websocket, NIENTE polling) e fa UN solo router.refresh(). All'apertura NON
+// sincronizza: mostra solo l'ultimo timestamp; il refresh avviene SOLO col pulsante.
 // Si mostra SOLO su cloud (status.remote) e loggato: in locale c'è il banner.
 
 const T: Record<
@@ -144,8 +146,10 @@ export default function CloudRefreshButton() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const didAutoSync = useRef(false);
   const mounted = useRef(true);
+  // Timestamp della richiesta sync in corso (null = nessuna pendente): il callback
+  // Realtime lo usa per capire se un sync_completed_at in arrivo è "il nostro".
+  const requestedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -175,6 +179,7 @@ export default function CloudRefreshButton() {
     setError(null);
     setSyncing(true);
     const requestedAt = new Date().toISOString();
+    requestedAtRef.current = requestedAt;
     try {
       const res = await fetch("/api/team-state", {
         method: "PATCH",
@@ -186,6 +191,7 @@ export default function CloudRefreshButton() {
         if (mounted.current) {
           setError(d.error || `HTTP ${res.status}`);
           setSyncing(false);
+          requestedAtRef.current = null;
         }
         return;
       }
@@ -193,47 +199,78 @@ export default function CloudRefreshButton() {
       if (mounted.current) {
         setError(err instanceof Error ? err.message : t.networkError);
         setSyncing(false);
+        requestedAtRef.current = null;
       }
       return;
     }
 
-    // Polling BOUNDED del completamento: nessun ascolto continuo, si ferma da sé.
-    const deadline = Date.now() + 45_000;
-    const poll = async () => {
-      if (!mounted.current) return;
-      if (Date.now() > deadline) {
-        setSyncing(false); // la VPS non ha risposto in tempo: i dati a video restano gli ultimi noti
-        return;
+    // NIENTE polling: il completamento arriva via Realtime (vedi useEffect sotto).
+    // Rete di sicurezza: se entro ~60s non arriva nulla (es. VPS offline), togliamo
+    // lo spinner — i dati a video restano gli ultimi noti.
+    window.setTimeout(() => {
+      if (mounted.current && requestedAtRef.current === requestedAt) {
+        requestedAtRef.current = null;
+        setSyncing(false);
       }
-      try {
-        const r = await fetch("/api/team-state");
-        if (r.ok) {
-          const { state } = await r.json();
-          const done: string | null = state?.sync_completed_at ?? null;
-          if (done && done >= requestedAt) {
-            if (!mounted.current) return;
-            setLastSync(done);
-            setSyncing(false);
-            router.refresh(); // UN solo refetch dei dati freschi
-            return;
-          }
-        }
-      } catch {
-        /* transient: ritenta */
-      }
-      setTimeout(poll, 3000);
-    };
-    setTimeout(poll, 3000);
+    }, 60_000);
   }
 
-  // Auto-sync UNA volta all'accesso (solo cloud + loggato).
+  // [REALTIME] Sottoscrizione ai cambi di team_state — niente polling. Supabase
+  // PUSHA l'update sul websocket quando la VPS scrive sync_completed_at; la RLS fa
+  // sì che il browser riceva SOLO la propria riga. All'apertura (e a ogni
+  // riconnessione) una lettura di catch-up: timestamp iniziale + recupero di un
+  // eventuale completamento avvenuto mentre il socket era giù.
   useEffect(() => {
-    if (remote && loggedIn && !didAutoSync.current) {
-      didAutoSync.current = true;
-      void requestSync();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remote, loggedIn]);
+    if (!remote || !loggedIn) return;
+    const supabase = createClient();
+
+    type StateRow = { sync_completed_at?: string | null };
+    const apply = (row: StateRow | null) => {
+      const done = row?.sync_completed_at ?? null;
+      if (!done) return;
+      setLastSync((prev) => (prev && prev >= done ? prev : done));
+      const req = requestedAtRef.current;
+      if (req && done >= req) {
+        requestedAtRef.current = null;
+        if (mounted.current) {
+          setSyncing(false);
+          router.refresh();
+        }
+      }
+    };
+
+    const catchUp = async () => {
+      try {
+        const { data } = await supabase
+          .from("team_state")
+          .select("sync_completed_at")
+          .maybeSingle();
+        if (mounted.current) apply(data as StateRow | null);
+      } catch {
+        /* offline: nessun timestamp */
+      }
+    };
+    void catchUp();
+
+    // Client non configurato (mock): niente websocket, resta solo il catch-up.
+    if (typeof supabase.channel !== "function") return;
+
+    const channel = supabase
+      .channel("cloud-sync-status")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "team_state" },
+        (payload: { new: StateRow }) => apply(payload.new),
+      )
+      .subscribe((status: string) => {
+        // Alla (ri)connessione recupera lo stato corrente (eventi persi a socket giù).
+        if (status === "SUBSCRIBED") void catchUp();
+      });
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [remote, loggedIn, router]);
 
   if (!remote || !loggedIn) return null;
 
