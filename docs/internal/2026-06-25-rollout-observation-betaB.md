@@ -78,9 +78,31 @@ Il Capitano è troppo dipendente dalla Sentinella e si incaglia. Dargli un **bri
   l'utente ("perché non stai sourcing?", "le code sono piene?") → aiuta il Capitano ad aggiustarsi
   perché magari non se le pone, troppo preso a coordinare.
 
-## 📋 TODO emersi (da fare nelle nuove implementazioni)
-1. **Capitano**: togliere l'attesa del "pacing tick" (non arriva più) + non scavalcare gli ordini
-   espliciti Sentinella (KILL/SCALA-UP). Prompt + l'heartbeat-bridge sopra.
-2. **Sentinella**: definizione esplicita di "calmo" = banda attorno alla velocità ideale.
-3. **Kimi rounds**: abbassare max_steps verso il tool/turno di Codex (analista-2 a 36.6 è troppo).
-4. (Backlog già documentato: daily even-spread + riserva utente — vedi `2026-06-25-pacing-future-ideas.md`.)
+## ✅ STATO 2026-06-26 — tutte implementate (su dev2, gated rebuild+redeploy)
+
+1. **Gerarchia Capitano↔Sentinella ribaltata** (`8971ffb34`) — era la causa-radice del bug critico.
+   C-01: la Sentinella **consiglia**, il Capitano **interpreta+verifica+decide** (era "absolute
+   priority without re-checking"). C-02: tolto *"wait for next [BRIDGE TICK] → next order"* (la
+   radice del "aspetto il pacing tick"). La Sentinella è **al suo servizio**, non viceversa.
+2. **Sentinella "calmo"** (`e289972a8`) — calmo = `vel ∈ [0.7×ideal, 1.3×ideal]`; idle/0-consumo =
+   sotto-banda = NON calmo → avvisa. Trigger 8 senza più il gate `proj<70%`.
+3. **Kimi rounds → analista turn-discipline** (`8f8dc2dd6`) — `max_steps` a livello Codex STALLA
+   (provato), cap resta 100; l'analista lavora **UNA posizione per turno** (~9 tool/turno come
+   Codex, era 36 = ~4 posizioni incatenate).
+4. **Heartbeat-bridge** (`3bab28fb5`) — `capitano-bridge.py`: battito 1×/ora, nudge deterministico
+   sui dati DB (pipeline-ferma / worker-caldo / backlog / rotazione+silenzio), C-20. Anti-incaglio.
+   Inoltre `5ee54f910` (launcher: pacing→SENTINELLA di default).
+
+### Correzioni alle ipotesi di questo doc
+- **"Bug daily su Codex" = NON è un bug.** La funzione `_daily_pacing_via_skill` gira sui dati
+  Codex (verificato: `budget = 81/(72/12) = 13.5%`). Il `daily: ASSENTE` su betaA era perché il
+  **redeploy (18:52 UTC) è caduto FUORI dall'orario di lavoro** (06-18 UTC) → 0 tick → il codice
+  nuovo non ha mai girato; gli ultimi tick nel log erano pre-redeploy. Comparirà alla riapertura.
+  **Lezione: rideployare DURANTE l'orario di lavoro del team.**
+- **betaA aveva GIÀ il nuovo image** (stesso digest di betaB, build 18:45) — la prima lettura
+  "vecchia immagine" era sbagliata (guardavo il target del processo, forzato a CAPITANO dal
+  launcher pre-fix, non il codice).
+
+### Backlog (futuro)
+- daily even-spread (CAP→TARGET) + riserva utente — vedi `2026-06-25-pacing-future-ideas.md`.
+- i18n delle modifiche prompt (capitano/sentinella/analista) nelle 6 lingue.
