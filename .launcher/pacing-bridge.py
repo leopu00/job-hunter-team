@@ -920,21 +920,21 @@ def format_message(d: dict) -> str:
             f"binda anche in Phase 1 (S-06/C-09)"
         )
 
-    # Daily budget guardrail (C-19/S-09): tetto +5pp/giorno sul budget giornaliero
-    # adattivo. Impedisce di front-loadare il weekly in un solo giorno.
+    # Daily budget guardrail (C-19/S-09): SOLO DATI (le azioni stanno nei prompt).
+    # daily = consumato_oggi normalizzato sul budget di oggi (100% = quota piena);
+    # cap=105% (= budget giornaliero +5%); ⛔ = sforo. oggi/quota in % del weekly.
     db = d.get("daily_budget_pct")
-    if isinstance(db, (int, float)):
-        tc = d.get("today_consumed_pct")
-        cap_d = db + 5.0
-        tc_str = f"{tc:.1f}%" if isinstance(tc, (int, float)) else "?"
-        over_d = isinstance(tc, (int, float)) and tc > cap_d
-        parts.append(
-            f"DAILY budget_giorno={db:.1f}% consumato_oggi={tc_str} "
-            f"cap_giorno={cap_d:.1f}%(=budget+5pp)"
-            + (" ⛔ SFORO-GIORNALIERO → HARD-COAST (C-19): stop spawn + throttle "
-               "max + solo drain; servi SEMPRE l'utente; avvisa l'utente via "
-               "Assistente che domani il budget sara' minore" if over_d else "")
-        )
+    tc = d.get("today_consumed_pct")
+    if isinstance(db, (int, float)) and db > 0:
+        if isinstance(tc, (int, float)):
+            used = tc / db * 100.0
+            parts.append(
+                f"daily={used:.0f}% cap=105% "
+                f"[oggi={tc:.1f}%w quota={db:.1f}%w]"
+                + (" ⛔" if used > 105.0 else "")
+            )
+        else:
+            parts.append(f"daily=? cap=105% [quota={db:.1f}%w]")
 
     # NB: il dato weekly_pace (rate weekly reale vs sostenibile + lockout
     # anticipato) NON va in questo messaggio al CAPITANO: andrebbe a bypassare
