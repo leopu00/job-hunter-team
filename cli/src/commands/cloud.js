@@ -1914,51 +1914,58 @@ async function handleDaemon(options) {
   // (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
   // ogni 10 tick per evitare spam ma confermare che il daemon e' vivo.
   let haltSkipCount = 0;
-  // [PUSH ON-DEMAND 2026-06-25] Niente più push automatico per-tick: la dashboard
-  // cloud si aggiorna SOLO quando l'utente preme "Sync now" (sync_requested_at →
-  // handleSyncRendezvous → handlePush). Per-tick restano solo le LETTURE leggere
-  // (richieste utente→team) + heartbeat, su Supabase. Niente killswitch su push
-  // periodico (non esiste più, quindi nessun loop che possa saturare la quota):
-  // gli errori del push on-demand sono gestiti in handleSyncRendezvous (best-effort).
+  // [PUSH ON-DEMAND 2026-06-25] Niente push automatico per-tick: la dashboard cloud
+  // si aggiorna SOLO quando l'utente preme "Sync now" (sync_requested_at →
+  // handleSyncRendezvous → handlePush). Niente killswitch su push periodico (non
+  // esiste più): gli errori del push on-demand sono best-effort.
+  //
+  // Cadenza a DUE velocità: il CHECK del flag "Sync now" gira VELOCE (~5s, lettura
+  // di 1 riga su Supabase ≈ gratis) così il pulsante risponde in pochi secondi; le
+  // letture più pesanti (ticket/desired-state) e l'heartbeat restano a intervalSec
+  // (60s). Override del check rapido: env JHT_SYNC_CHECK_SEC.
+  const syncCheckSec = Math.max(1, parseInt(process.env.JHT_SYNC_CHECK_SEC || '5', 10) || 5);
+  const heavyEvery = Math.max(1, Math.round(intervalSec / syncCheckSec));
+  let fastTick = 0;
   while (running) {
     if (existsSync(WEEKLY_HALT_FLAG)) {
-      if (haltSkipCount % 10 === 0) {
-        console.log(pc.dim(`  HALT-WEEKLY attivo (${WEEKLY_HALT_FLAG}) — push saltato.`));
+      if (haltSkipCount % heavyEvery === 0) {
+        console.log(pc.dim(`  HALT-WEEKLY attivo (${WEEKLY_HALT_FLAG}) — sync sospesa.`));
       }
       haltSkipCount += 1;
     } else {
       if (haltSkipCount > 0) {
-        console.log(pc.green(`  HALT-WEEKLY rimosso, riprendo push normali.`));
+        console.log(pc.green(`  HALT-WEEKLY rimosso, riprendo.`));
         haltSkipCount = 0;
       }
-      // [PUSH ON-DEMAND] Nessun handlePush per-tick: il push dati parte SOLO da
-      // handleSyncRendezvous quando l'utente preme "Sync now". Qui per-tick solo
-      // LETTURE leggere (richieste utente→team) + heartbeat, tutte su Supabase.
+      const doHeavy = fastTick % heavyEvery === 0;
 
-      // Pull desired-state (flag CV/recheck/escludi che l'utente imposta sul web).
-      // Best-effort: errori loggati, exitCode preservato.
-      try {
-        const prevPull = process.exitCode;
-        process.exitCode = 0;
-        await handlePullDesiredState({ silent: true });
-        process.exitCode = prevPull;
-      } catch (err) {
-        console.error(pc.yellow(`  daemon pull-desired-state error: ${err.message}`));
+      // ── Letture pesanti (richieste utente→team): ogni intervalSec (~60s) ──
+      if (doHeavy) {
+        // Pull desired-state (flag CV/recheck/escludi impostati dall'utente sul web).
+        try {
+          const prevPull = process.exitCode;
+          process.exitCode = 0;
+          await handlePullDesiredState({ silent: true });
+          process.exitCode = prevPull;
+        } catch (err) {
+          console.error(pc.yellow(`  daemon pull-desired-state error: ${err.message}`));
+        }
+
+        // Ticket sync: importa i ticket 'open' dell'utente (lettura Supabase) e
+        // pusha le risoluzioni del team. Best-effort.
+        try {
+          const prevTk = process.exitCode;
+          process.exitCode = 0;
+          await handleTicketSync({ silent: true });
+          process.exitCode = prevTk;
+        } catch (err) {
+          console.error(pc.yellow(`  daemon ticket-sync error: ${err.message}`));
+        }
       }
 
-      // Ticket sync (round-trip cloud↔VPS): importa i ticket 'open' creati dal
-      // web (lettura Supabase) e pusha le risoluzioni del team. Best-effort.
-      try {
-        const prevTk = process.exitCode;
-        process.exitCode = 0;
-        await handleTicketSync({ silent: true });
-        process.exitCode = prevTk;
-      } catch (err) {
-        console.error(pc.yellow(`  daemon ticket-sync error: ${err.message}`));
-      }
-
-      // Rendezvous "Sync now": se l'utente ha chiesto un refresh (sync_requested_at),
-      // QUI parte l'UNICO push dati VPS→cloud + ack. Best-effort.
+      // ── Check "Sync now": OGNI giro veloce (~5s) ── lettura di 1 riga
+      // (sync_requested_at) su Supabase; il push dati parte solo se c'è davvero
+      // una richiesta dell'utente → il pulsante risponde in pochi secondi.
       try {
         const prevSr = process.exitCode;
         process.exitCode = 0;
@@ -1968,22 +1975,24 @@ async function handleDaemon(options) {
         console.error(pc.yellow(`  daemon sync-rendezvous error: ${err.message}`));
       }
 
-      // Heartbeat "VPS online" (reconcileOnce, ora solo-heartbeat: lo start/stop
-      // del team passa dal desktop, non dal cloud). Best-effort, su Supabase.
-      try {
-        const prevRc = process.exitCode;
-        process.exitCode = 0;
-        const { reconcileOnce } = await import('../lib/team-state-reconciler.js');
-        await reconcileOnce();
-        process.exitCode = prevRc;
-      } catch (err) {
-        console.error(pc.yellow(`  daemon heartbeat error: ${err.message}`));
+      // ── Heartbeat "VPS online": ogni intervalSec ── (reconcileOnce solo-heartbeat;
+      // lo start/stop del team passa dal desktop, non dal cloud).
+      if (doHeavy) {
+        try {
+          const prevRc = process.exitCode;
+          process.exitCode = 0;
+          const { reconcileOnce } = await import('../lib/team-state-reconciler.js');
+          await reconcileOnce();
+          process.exitCode = prevRc;
+        } catch (err) {
+          console.error(pc.yellow(`  daemon heartbeat error: ${err.message}`));
+        }
       }
     }
+    fastTick += 1;
     if (!running) break;
-    // Sleep interrompibile: spezziamo in chunk da 1s cosi' SIGTERM ferma
-    // entro 1s invece di aspettare l'intero intervalSec.
-    for (let i = 0; i < intervalSec && running; i++) {
+    // Sleep interrompibile (~syncCheckSec): chunk da 1s così SIGTERM ferma entro 1s.
+    for (let i = 0; i < syncCheckSec && running; i++) {
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
