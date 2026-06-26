@@ -87,6 +87,14 @@ export async function createRealtimeSync({ config, log = () => {} } = {}) {
   }
   await persistRefreshToken(data.session.refresh_token);
 
+  // CRUCIALE per postgres_changes con RLS: il socket Realtime DEVE usare lo
+  // user-JWT (non l'anon key) PRIMA di qualsiasi subscribe, altrimenti la RLS
+  // valuta come anon e blocca SILENZIOSAMENTE la consegna (canale SUBSCRIBED ma
+  // zero eventi). L'auto-wiring di supabase-js è asincrono e può arrivare dopo la
+  // subscribe → lo forziamo qui.
+  try { await client.realtime.setAuth(data.session.access_token); }
+  catch (e) { log('warn', `setAuth iniziale: ${e.message}`); }
+
   // Ad ogni rotazione del token (TOKEN_REFRESHED) → ripersisti + riallinea il
   // Realtime al nuovo access token.
   client.auth.onAuthStateChange((event, session) => {
