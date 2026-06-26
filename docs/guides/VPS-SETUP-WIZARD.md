@@ -210,14 +210,13 @@ compose up -d` via SSH.
 
 ## 🔜 What happens if you close the desktop app
 
-Nothing serious. The desktop app is only:
-- The wizard (you use it once)
-- A shell for the local chat (optional)
-- A VPS status monitor
-
-**The team keeps running on the Hetzner VPS 24/7**. You interact with the team
-via Telegram (always) or via the jobhunterteam.ai web dashboard (always).
-The desktop app is only needed for the first setup and for occasional maintenance.
+Nothing breaks — **the team keeps running on the Hetzner VPS 24/7**, independently
+of the desktop app. But the desktop app is your **interaction cockpit**: chat,
+file upload and start/stop reach the VPS over an SSH tunnel, so re-open it whenever
+you want to control or talk to the team. While it's closed:
+- **Telegram** stays available for async chat
+- the **jobhunterteam.ai web dashboard** lets you **view** your data from anywhere
+  (positions, scores, map) — read-only, no team control
 
 ## 🛠️ Maintenance (common post-setup operations)
 

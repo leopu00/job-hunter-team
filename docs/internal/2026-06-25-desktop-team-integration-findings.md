@@ -139,8 +139,11 @@ ha il **contesto del canale**.
      dell'Assistente**, così parte lì.
 
 > Vale per **tutti** gli agenti, non solo l'Assistente. È un capitolo "agent
-> awareness del canale + auto-sufficienza" da progettare e propagare nei prompt/skill
-> (e in i18n). NON ancora implementato.
+> awareness del canale + auto-sufficienza".
+> **✅ IMPLEMENTATO 2026-06-26**: sezione aggiunta alla skill `chat-web` in tutte e 7
+> le lingue (`5294edab4` EN+IT, `df578405f` de/es/fr/hu/pt). Gli agenti che ricevono
+> `[CHAT]` ora hanno il contesto del canale desktop e le regole di auto-sufficienza.
+> Prende effetto al riavvio degli agenti (ricaricano la skill).
 
 ---
 
@@ -161,13 +164,32 @@ ha il **contesto del canale**.
 | Boot → Home (lingua via prefsApi) | `1e0aef188` |
 | Chat: invio via docker exec + echo non filtrato | `fea65bf87` |
 | Kill/restart per-agente dal pannello | `8a4cc069a` |
+| Chat: persistenza msg utente in chat.jsonl (Bug 3) + skill chat-web awareness EN+IT | `5294edab4` |
+| Skill chat-web awareness — 5 lingue restanti (de/es/fr/hu/pt) | `df578405f` |
+| Fix warning bootstrap: `--silent` su pull-desired-state + skip grazioso ticket-sync | `f84336afb` |
 
-## 7. TODO aperti
-- [ ] **Bug 3 chat**: persistere i messaggi utente in `chat.jsonl` (§4).
-- [ ] **Agent awareness canale + auto-sufficienza** (§5): prompt/skill di tutti gli
-      agenti — non chiedere azioni terminale all'utente desktop; risolvere con
-      Python/script; auto-iniettare slash command o delegarli a un altro agente.
-- [ ] Container detached + auto-start team (§3).
-- [ ] `pull desired-state: unknown option '--silent'` e `ticket-sync: no such table
-      position_tickets` (warning non-fatali nel bootstrap team).
-- [ ] OAuth Gmail / vault master-password (BACKLOG `[JHT-EMAIL-OAUTH]`, `[JHT-LOCAL-VAULT]`).
+## 7. TODO
+
+### ✅ Chiusi (sessione 2026-06-25/26)
+- [x] **Bug 3 chat**: i messaggi utente ora persistono in `chat.jsonl` (§4) — `5294edab4`.
+- [x] **Agent awareness canale + auto-sufficienza** (§5): aggiunto a `chat-web` in
+      **tutte e 7 le lingue** (EN+IT `5294edab4`, de/es/fr/hu/pt `df578405f`) — non
+      chiedere azioni terminale all'utente desktop; risolvere con Python/script;
+      auto-iniettare slash command o delegarli a un altro agente.
+- [x] **Warning bootstrap**: `pull desired-state: unknown option '--silent'` (opzione
+      mancante) e `ticket-sync: no such table position_tickets` (skip grazioso se la
+      tabella non c'è ancora al primo boot) — `f84336afb`.
+
+### ⏳ Aperti — richiedono test DAL VIVO (non committare alla cieca)
+- [ ] **Retry su conflitto-porta** in `startRuntime` (§3): quando `docker run -p
+      3000:3000` fallisce perché il port-forward del container appena ucciso è ancora
+      in teardown ("port already allocated"), oggi l'utente vede un Error generico
+      (timeout). Serve un retry breve (2-3 tentativi, ~2s) + messaggio chiaro. Tocca
+      il **percorso critico di avvio** (async, `runtime.js:418`) → fare e verificare
+      con l'app avviabile, non da remoto. Workaround attuale: ricliccare Start.
+- [ ] **Container detached + auto-start team** (§3): `docker run -d` per sopravvivere
+      ai restart dell'app; cambia la semantica "chiudo l'app = fermo il team". Rischioso
+      a caldo, da progettare con l'utente.
+
+### 📋 Backlog (feature, non in questo giro)
+- [ ] OAuth Gmail / vault master-password (`[JHT-EMAIL-OAUTH]`, `[JHT-LOCAL-VAULT]`).
