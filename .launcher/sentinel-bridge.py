@@ -994,6 +994,40 @@ def _weekly_pace_via_skill(entry, now_dt, now_ts):
         return None
 
 
+# Riserva serale (2026-06-26): frazione del budget giornaliero tenuta da parte
+# di giorno e RILASCIATA/bruciata nelle ultime ore della finestra → l'utente la
+# usa per la chat col team, o si brucia sul lavoro (niente budget sprecato).
+# Spalma il consumo invece del front-load mattutino tipico di Kimi.
+_RESERVE_FRAC = 0.15          # 15% del budget di oggi tenuto da parte
+_RESERVE_RELEASE_H = 2.0      # rilasciato nelle ultime ~2h della finestra
+
+
+def _evening_release(now_dt):
+    """True se siamo nelle ultime ~2h della finestra di lavoro corrente (la
+    riserva serale va RILASCIATA/bruciata); False altrimenti (riserva TENUTA).
+    Robusta: qualunque errore o fase OFF → False (conservativo: tieni la riserva)."""
+    try:
+        p = Path("/app/shared/skills") / "work_hours_target.py"
+        if not p.exists():
+            p = (Path(__file__).resolve().parent.parent
+                 / "shared" / "skills" / "work_hours_target.py")
+        spec = importlib.util.spec_from_file_location("work_hours_target", p)
+        wht = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(wht)
+        try:
+            with CONFIG_PATH.open(encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            cfg = None
+        nph = wht.next_phase_transition(now_dt, cfg)
+        if nph and nph[0] == "ON" and nph[1] is not None:
+            h_to_end = (nph[1] - now_dt).total_seconds() / 3600.0
+            return 0.0 <= h_to_end <= _RESERVE_RELEASE_H
+    except Exception:
+        pass
+    return False
+
+
 def _daily_pacing_via_skill(entry, now_dt, now_ts):
     """Budget GIORNALIERO adattivo + consumo nella finestra di lavoro corrente
     (regole S-09/C-19). Tutto in % del WEEKLY: budget = weekly_remaining /
@@ -1532,15 +1566,22 @@ def main():
                     entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
                 if isinstance(_dbudget, (int, float)):
                     _dcap = _dbudget + 5.0
+                    # Riserva serale: R% del budget, tenuta di giorno, bruciata/
+                    # rilasciata nelle ultime ~2h della finestra (anti front-load).
+                    _dnow = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+                    _dres = round(_dbudget * _RESERVE_FRAC, 1)
+                    _drel = _evening_release(_dnow)
+                    _res_field = (
+                        f" riserva={_dres:.1f}%→{'brucia' if _drel else 'tieni'}")
                     if isinstance(_dconsumed, (int, float)):
                         daily_pace_field = (
                             f" daily: oggi={_dconsumed:.1f}% budget={_dbudget:.1f}%"
-                            f" cap={_dcap:.1f}%"
+                            f" cap={_dcap:.1f}%{_res_field}"
                             + (" ⛔" if _dconsumed > _dcap else "")
                         )
                     else:
                         daily_pace_field = (
-                            f" daily: budget={_dbudget:.1f}% cap={_dcap:.1f}%")
+                            f" daily: budget={_dbudget:.1f}% cap={_dcap:.1f}%{_res_field}")
                 # TOOLS-HEALTH (dev2): segnale strutturato sui tool mission-critical.
                 # Il maintainer-sweep scrive logs/tools-health.json (output di
                 # tool_health.py); qui lo LEGGIAMO e segnaliamo SOLO se qualcosa è

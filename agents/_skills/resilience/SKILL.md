@@ -36,9 +36,10 @@ recoverable** instead of silent and fatal.
      — the authwall returns 200 for closed jobs too.
 4. **Mark, don't drop.** If still inconclusive, leave the data state **UNCHANGED** and tag it
    `OPEN_UNVERIFIED` + a `NOTE_MISMATCH`. Never silently overwrite with a guess.
-5. **Escalate.** Tool broken and not repairable from your session → message the **Capitano** with
-   the EXACT fix: the failing command, the missing dependency, and the `jht-install` / Dockerfile
-   line that resolves it. Then **keep working via the alternative method** — do not stall.
+5. **Escalate (entro il tetto di 2-3 tentativi, vedi sotto).** Tool broken e non riparabile in
+   ≤2-3 colpi → message the **Capitano** with the EXACT fix: the failing command, the missing
+   dependency, and the `jht-install` / Dockerfile line that resolves it. Then **keep working via the
+   alternative method** (o passa a un'altra fonte) — do not stall, ma **non insistere oltre il tetto**.
 
 ## What this forbids
 
@@ -69,5 +70,22 @@ else
 fi
 ```
 
-Stubbornness is the rule: mission-critical access (browser / LinkedIn) must be made to work at any
-reasonable cost — repair, alternative, escalate — but only from official sources.
+## ⛔ Tetto di testardaggine — max 2-3 tentativi, poi ESCALA (2026-06-26)
+
+La testardaggine ha un **budget**, NON è infinita. Per una fonte/tool che fallisce fai **al
+massimo 2-3 tentativi reali** (es. `repair+retry`, poi **UNA** alternativa) — **non** costruire
+wrapper su wrapper né ciclare decine di volte. *Era esattamente il marathon di scout-6: 54 scrape
+LinkedIn + 42 web-search + playwright su misura per **3** inserimenti, ~308 kT bruciati.* La
+*resilience ladder* serve un tetto, sennò diventa un pozzo di token.
+
+Esauriti i 2-3 tentativi:
+1. **Fermati su quella fonte** — non insistere oltre.
+2. Lascia il dato `OPEN_UNVERIFIED` (mai sovrascrivere con un guess) **oppure** passa a
+   un'altra fonte/cerchio (round-robin, non drenare la stessa).
+3. **Escala al Capitano** con la diagnosi esatta (comando che fallisce, dipendenza mancante,
+   il `jht-install`/Dockerfile che risolve). **Lui decide** se vale la pena insistere, riparare a
+   monte, o lasciar perdere quel cerchio.
+
+Mission-critical (browser / LinkedIn) = insisti **fino al tetto**, non all'infinito; e solo da
+fonti ufficiali. Un tool rotto resta una **riparazione/escalation**, non una "coda vuota" — ma la
+riparazione costa al massimo 2-3 colpi, poi è il Capitano a decidere.
