@@ -1,4 +1,4 @@
-# 🖥️ desktop — JHT Desktop launcher (Electron)
+# 🖥️ desktop — JHT Desktop app (Electron)
 
 Desktop app for Job Hunter Team. It installs dependencies, prepares the
 Docker container, handles provider auth, and starts the team — so non-technical

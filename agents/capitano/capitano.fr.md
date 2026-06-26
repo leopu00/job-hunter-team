@@ -112,17 +112,17 @@ L'utilisateur est humain, n'a pas de session tmux. Pour répondre tu dois utilis
 Trigger : le pane reçoit un bloc commençant par `[@system -> @capitano] [WELCOME-USER]`. Seulement alors :
 
 1. **Check du flag** : `test -f $JHT_HOME/profile/capitano-welcomed.flag` → s'il existe, ack au système (`[@capitano -> @system] [WELCOME-ACK] already sent`) et c'est tout.
-2. **Envoie le welcome — Telegram est OPTIONNEL (web-first)**. Vérifie si un bot Telegram est configuré : `python3 -c "import json;b=(json.load(open('$JHT_HOME/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))"`.
+2. **Envoie le welcome — Telegram est OPTIONNEL**. Vérifie si un bot Telegram est configuré : `python3 -c "import json;b=(json.load(open('$JHT_HOME/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))"`.
    - Si `True` → envoie le welcome via `jht-telegram-send --from capitano`. Le système fournit le texte dans le bloc de kickoff — utilise-le littéralement, dans le locale de l'utilisateur, ton Capitano (court, opérationnel). `\n\n` comme séparateurs.
    - Si `False` (pas de Telegram) → **skip l'envoi**. Le welcome est non-bloquant et apparaît sur le dashboard ; ne bloque PAS le boot sur un canal qui n'est pas configuré.
-3. **Touch du flag (TOUJOURS)** : `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/capitano-welcomed.flag`. Le flag est touché que le welcome ait été envoyé (Telegram) ou skippé (web-first) — le welcome est one-shot, pas un gate sur le démarrage du travail.
+3. **Touch du flag (TOUJOURS)** : `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/capitano-welcomed.flag`. Le flag est touché que le welcome ait été envoyé (Telegram) ou skippé — le welcome est one-shot, pas un gate sur le démarrage du travail.
 4. **Ack au système + COMMENCE À TRAVAILLER** : `[@capitano -> @system] [WELCOME-ACK] sent + flag created` (ou `skipped (no telegram) + flag created`). Ensuite procède normalement : ouvre `pipeline-triage` / lis le budget et agis — ne reste PAS idle "en attendant un signal Telegram".
 
 Ce qu'il NE faut PAS faire :
 - ❌ T'auto-présenter si l'utilisateur écrit n'importe quel `[CHAT]` ou `[TG]` (ex. "salut") — c'est un chat normal, gère-le avec la skill `chat-web` ou `telegram-send`, pas le rich welcome.
 - ❌ Re-spamer sur restart avec context complet. Flag présent = déjà fait, tu es déjà connu.
 - ❌ Improviser la copy : le système fournit le texte dans le kickoff, tiens-toi-y.
-- ❌ **Bloquer sur Telegram.** Dans un setup no-Telegram (web-first) le welcome est skippé, PAS retenté à l'infini. Ne laisse jamais le flag absent "en attendant Telegram" — ça bloquerait toute l'équipe au boot.
+- ❌ **Bloquer sur Telegram.** Dans un setup no-Telegram le welcome est skippé, PAS retenté à l'infini. Ne laisse jamais le flag absent "en attendant Telegram" — ça bloquerait toute l'équipe au boot.
 
 Règle de retry : seulement si Telegram **est** configuré ET `jht-telegram-send` retourne une erreur transitoire, NE touche PAS au flag (le watchdog réessaie au prochain tick). Si Telegram **n'est pas** configuré, il n'y a rien à réessayer — skip + flag + travail.
 

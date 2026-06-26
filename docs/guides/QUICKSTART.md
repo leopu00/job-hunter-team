@@ -2,7 +2,7 @@
 
 Get the team running in **about 10 minutes**, depending on the path you pick.
 
-> 🧪 JHT is in beta. The installer and the desktop launcher are still maturing — if anything goes wrong, see [`docs/BETA.md`](BETA.md).
+> 🧪 JHT is in beta. The installer and the desktop app are still maturing — if anything goes wrong, see [`docs/BETA.md`](BETA.md).
 
 ---
 
@@ -29,7 +29,7 @@ Pick the path that fits how you work:
 | | Path | Best for | Time |
 |---|---|---|---|
 | 🦞 | [AI agent drives JHT](#-path-1-let-your-ai-agent-do-it) | You already use Claude Code / OpenClaw / Codex / Cursor | < 5 min |
-| 🖥️ | [Desktop launcher](#%EF%B8%8F-path-2-desktop-launcher-non-tech) | Non-technical users, GUI-only | ~10 min |
+| 🖥️ | [Desktop app](#%EF%B8%8F-path-2-desktop-app-non-tech) | Non-technical users, GUI-only | ~10 min |
 | 📦 | [One-liner installer](#-path-3-one-liner-installer-cli-users) | Comfortable with the terminal | ~10 min |
 | 🛠️ | [From source](#%EF%B8%8F-path-4-from-source-contributors) | Contributors, hackers | ~15 min |
 
@@ -45,9 +45,9 @@ If you already use a personal AI assistant (Claude Code, OpenClaw, Codex, Cursor
 
 ---
 
-## 🖥️ Path 2 — Desktop launcher (non-tech)
+## 🖥️ Path 2 — Desktop app (non-tech)
 
-The launcher handles everything through a graphical interface — no terminal required.
+The app handles everything through a graphical interface — no terminal required.
 
 1. Download from [`/download`](https://jobhunterteam.ai/download) or GitHub Releases:
    - macOS: `.dmg`

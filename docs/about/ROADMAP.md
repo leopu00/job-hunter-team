@@ -11,7 +11,7 @@
 
 > 🧭 **Design philosophy & product vision live in [`VISION.md`](VISION.md)** — agents-as-characters, the Mentor, the anti-goals. This section covers the *deployment & stack* vision only.
 
-Job Hunter Team is an open-source application that runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). Non-technical users download the Electron launcher; technical users clone the repo and use the CLI. In both cases, the AI agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service.
+Job Hunter Team is an open-source application that runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). Non-technical users download the Electron app; technical users clone the repo and use the CLI. In both cases, the AI agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service.
 
 **AI on the side of workers, not against them.**
 
@@ -467,7 +467,7 @@ The current `jobs.db` schema is functional but **lossy**: state transitions, Cri
 
 ## 🐳 Docker — what we built (compressed)
 
-Docker is the **default** in both the CLI installer and the desktop launcher (since v0.1.9). The container isolates agent processes, exposing only two bind-mounted folders: `~/.jht` (config/DB) and `~/Documents/Job Hunter Team` (CVs/output).
+Docker is the **default** in both the CLI installer and the desktop app (since v0.1.9). The container isolates agent processes, exposing only two bind-mounted folders: `~/.jht` (config/DB) and `~/Documents/Job Hunter Team` (CVs/output).
 
 | What | Status | Reference |
 |---|---|---|
