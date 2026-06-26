@@ -27,4 +27,4 @@ npm start            # production
 ## See also
 
 - Telegram design (3 bots, ingest, working hours): [`docs/internal/architecture/bot-telegram.md`](../docs/internal/architecture/bot-telegram.md)
-- Terminology / interaction roadmap: web-first is primary, Telegram secondary.
+- Terminology / interaction roadmap: **desktop-first** for interaction (web = read-only data plane), Telegram optional async channel.
