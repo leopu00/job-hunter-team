@@ -2039,7 +2039,8 @@ async function handleDaemon(options) {
 async function runRealtimeLoop({ config, isRunning }) {
   const log = (level, msg) => console.error(pc.dim(`  cloud-realtime ${level}: ${msg}`));
 
-  // Debounce: una raffica di UPDATE su team_state non deve lanciare push concorrenti.
+  // Debounce per corsia: una raffica di eventi Realtime non deve lanciare letture
+  // concorrenti sovrapposte (push o ticket-sync).
   let syncing = false;
   const runSync = async (tag) => {
     if (syncing) return;
@@ -2047,6 +2048,14 @@ async function runRealtimeLoop({ config, isRunning }) {
     try { await handleSyncRendezvous({ silent: true }); }
     catch (e) { console.error(pc.yellow(`  ${tag} sync-rendezvous error: ${e.message}`)); }
     finally { syncing = false; }
+  };
+  let ticketing = false;
+  const runTicketSync = async (tag) => {
+    if (ticketing) return;
+    ticketing = true;
+    try { await handleTicketSync({ silent: true }); }
+    catch (e) { console.error(pc.yellow(`  ${tag} ticket-sync error: ${e.message}`)); }
+    finally { ticketing = false; }
   };
 
   let rt = null;
@@ -2057,41 +2066,60 @@ async function runRealtimeLoop({ config, isRunning }) {
     // ── Tappa 2: sync-flag → Realtime ── UPDATE su team_state (sync_requested_at) → push.
     rt.subscribe('team-state', { table: 'team_state', event: 'UPDATE' }, () => { void runSync('realtime'); });
 
-    // [PART-B: ticket realtime subscription]
-    // DEV #1 — iscriversi a position_tickets (event '*') → handleTicketSync({ silent: true }).
+    // ── Tappa 3: ticket → Realtime ── cambio su position_tickets → ticket-sync.
     // Richiede mig 048 (position_tickets in publication supabase_realtime + REPLICA
-    // IDENTITY FULL). Vedi il prompt Part B / docs/internal/2026-06-26-sync-status-report.md.
+    // IDENTITY FULL). La RLS consegna solo le righe dell'utente.
+    rt.subscribe('tickets', { table: 'position_tickets', event: '*' }, () => { void runTicketSync('realtime'); });
 
-    log('info', 'realtime pronto (team_state) — sync via websocket + paracadute attivo.');
+    log('info', 'realtime pronto (team_state + position_tickets) — sync/ticket via websocket + paracadute attivo.');
   } catch (e) {
     console.error(pc.yellow(`  cloud-realtime setup fallito (${e.message}) — degrado al solo paracadute poll.`));
   }
 
-  // ── Paracadute (tappa 6) — OBBLIGATORIO ── poll lento di recupero: se il socket
-  // muore o perde un evento, qui il daemon recupera comunque. Gira SEMPRE (anche se
-  // il setup Realtime è fallito → degrada a poll puro). Ri-legge TUTTE le corsie.
+  // ── Cadenze lente (tappe 4-5-6) ──
+  // - heartbeat ~3min (tappa 5): SOTTO la soglia stale della dashboard (5min, vedi
+  //   web/app/api/team-state/claim/route.ts HEARTBEAT_STALE_MS) → la VPS non sparisce mai.
+  //   Presence vera (websocket=online) è DEFERRED: richiederebbe di cambiare come la
+  //   dashboard legge l'online → per ora resta l'heartbeat scritto (reconcileOnce).
+  // - desired-state ~5min (tappa 4): positions cambia troppo per il Realtime → poll lento.
+  // - paracadute ~5min (tappa 6, OBBLIGATORIO): ri-legge sync + ticket → se il socket
+  //   muore o perde un evento il daemon recupera comunque. Gira SEMPRE, anche se il
+  //   setup Realtime è fallito (degrada a poll puro).
+  const heartbeatSec = Math.max(30, parseInt(process.env.JHT_HEARTBEAT_SEC || '180', 10) || 180);
   const parachuteSec = Math.max(60, parseInt(process.env.JHT_PARACHUTE_SEC || '300', 10) || 300);
-  const sleepParachute = async () => {
-    for (let i = 0; i < parachuteSec && isRunning(); i++) await new Promise((r) => setTimeout(r, 1000));
-  };
-  while (isRunning()) {
-    if (existsSync(WEEKLY_HALT_FLAG)) { await sleepParachute(); continue; }
+  const desiredStateSec = Math.max(60, parseInt(process.env.JHT_DESIRED_STATE_SEC || '300', 10) || 300);
+  const everyParachute = Math.max(1, Math.round(parachuteSec / heartbeatSec));
+  const everyDesired = Math.max(1, Math.round(desiredStateSec / heartbeatSec));
 
-    // Recupero corsie (best-effort, indipendenti):
-    await runSync('parachute');
-    try { await handleTicketSync({ silent: true }); }
-    catch (e) { console.error(pc.yellow(`  parachute ticket-sync error: ${e.message}`)); }
-    try { await handlePullDesiredState({ silent: true }); }
-    catch (e) { console.error(pc.yellow(`  parachute pull-desired-state error: ${e.message}`)); }
-    // [PART-C: parachute slow lane] DEV #2 — affina le cadenze: desired-state ~5min,
-    // heartbeat ~3min (verifica la soglia "online" della dashboard), presence. Per ora
-    // tutte le corsie girano qui a parachuteSec (~5min).
+  const heartbeat = async () => {
     try {
       const { reconcileOnce } = await import('../lib/team-state-reconciler.js');
       await reconcileOnce();
-    } catch (e) { console.error(pc.yellow(`  parachute heartbeat error: ${e.message}`)); }
+    } catch (e) { console.error(pc.yellow(`  heartbeat error: ${e.message}`)); }
+  };
+  const sleepTick = async () => {
+    for (let i = 0; i < heartbeatSec && isRunning(); i++) await new Promise((r) => setTimeout(r, 1000));
+  };
 
-    await sleepParachute();
+  let tick = 0;
+  while (isRunning()) {
+    if (existsSync(WEEKLY_HALT_FLAG)) { await sleepTick(); tick += 1; continue; }
+
+    // Heartbeat ~ogni 3min (mantiene la VPS "online" sulla dashboard).
+    await heartbeat();
+    // Paracadute ~ogni 5min: recupero sync + ticket (eventi persi / socket morto).
+    if (tick % everyParachute === 0) {
+      await runSync('parachute');
+      await runTicketSync('parachute');
+    }
+    // Desired-state ~ogni 5min (poll lento, niente Realtime).
+    if (tick % everyDesired === 0) {
+      try { await handlePullDesiredState({ silent: true }); }
+      catch (e) { console.error(pc.yellow(`  pull-desired-state error: ${e.message}`)); }
+    }
+
+    tick += 1;
+    await sleepTick();
   }
 
   if (rt) { try { await rt.close(); } catch { /* ignore */ } }
