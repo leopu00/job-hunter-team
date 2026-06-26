@@ -135,7 +135,7 @@ Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/QU
 | | Interface | Launch | Stack |
 |---|---|---|---|
 | 🌐 | **Web Dashboard** | `cd web && npm run dev:host` | Next.js · React · Tailwind · Supabase |
-| 🖥️ | **Desktop Launcher** | open `JHT Desktop` | Electron · electron-builder *(launcher only — interaction happens in browser/Telegram/CLI)* |
+| 🖥️ | **Desktop App** | open `JHT Desktop` | Electron · electron-builder *(interaction cockpit — start/stop, chat, file upload; the web dashboard is view-only)* |
 | ⌨️ | **CLI** | `jht team start` | Node.js · Commander *(full reference: [`docs/guides/CLI-REFERENCE.md`](docs/guides/CLI-REFERENCE.md). Also designed to be driven by AI agents — see [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md))* |
 | 💬 | **Telegram** | bidirectional bot bridge | grammy |
 

@@ -50,7 +50,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 
 | Component | Technology | Rationale |
 |---|---|---|
-| Desktop app | **Electron launcher** | Installer + lifecycle manager only; operational GUI stays in the browser |
+| Desktop app | **Electron** | Installer + lifecycle **+ interaction cockpit** (local via browser→localhost, VPS via SSH tunnel); the web dashboard stays view-only |
 | Web dashboard | **Next.js 16 on Vercel** | CI/CD pipeline live |
 | Container runtime | **Docker + Docker Compose** | Isolation, reproducibility |
 | Structured data (cloud, opt-in) | **Supabase** | PostgreSQL + Google/GitHub auth |
