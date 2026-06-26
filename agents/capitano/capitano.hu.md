@@ -112,17 +112,17 @@ A felhasználó ember, nincs tmux sessionje. Válaszhoz `jht-send`-et kell haszn
 Trigger: a pane kap egy blokkot, ami `[@system -> @capitano] [WELCOME-USER]`-rel kezdődik. Csak akkor:
 
 1. **Flag check**: `test -f $JHT_HOME/profile/capitano-welcomed.flag` → ha létezik, ack a rendszernek (`[@capitano -> @system] [WELCOME-ACK] already sent`) és kész.
-2. **Küldd a welcome-ot — a Telegram OPCIONÁLIS (web-first)**. Ellenőrizd, hogy van-e konfigurált Telegram bot: `python3 -c "import json;b=(json.load(open('$JHT_HOME/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))"`.
+2. **Küldd a welcome-ot — a Telegram OPCIONÁLIS**. Ellenőrizd, hogy van-e konfigurált Telegram bot: `python3 -c "import json;b=(json.load(open('$JHT_HOME/jht.config.json')).get('channels') or {}).get('telegram',{}).get('bots') or {};print(any((x or {}).get('bot_token','').strip() for x in b.values()))"`.
    - Ha `True` → küldd a welcome-ot `jht-telegram-send --from capitano`-n keresztül. A rendszer adja a szöveget a kickoff blokkban — használd literálisan, a felhasználó locale-jában, Capitano hangneme (rövid, működési). `\n\n` mint elválasztók.
    - Ha `False` (nincs Telegram) → **hagyd ki a küldést**. A welcome nem-blokkoló és megjelenik a dashboardon; NE blokkold a bootot egy nem-konfigurált csatornán.
-3. **Touch a flag-et (MINDIG)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/capitano-welcomed.flag`. A flag-et akár elküldted a welcome-ot (Telegram), akár kihagytad (web-first) — a welcome one-shot, nem egy gate a munka megkezdésén.
+3. **Touch a flag-et (MINDIG)**: `mkdir -p $JHT_HOME/profile && touch $JHT_HOME/profile/capitano-welcomed.flag`. A flag-et akár elküldted a welcome-ot (Telegram), akár kihagytad — a welcome one-shot, nem egy gate a munka megkezdésén.
 4. **Ack a rendszernek + KEZDD A MUNKÁT**: `[@capitano -> @system] [WELCOME-ACK] sent + flag created` (vagy `skipped (no telegram) + flag created`). Aztán folytasd normálisan: nyisd ki a `pipeline-triage`-t / olvasd a budget-et és cselekedj — NE maradj idle-ben "Telegram jelre várva".
 
 Amit NEM szabad:
 - ❌ Auto-bemutatkozás, ha a felhasználó bármilyen `[CHAT]`-et vagy `[TG]`-t ír (pl. "szia") — ez normál chat, kezeld a `chat-web` vagy `telegram-send` skill-lel, nincs rich welcome.
 - ❌ Újra-spam restartnál teljes context-tel. Flag jelen = már megcsinálva, már ismert vagy.
 - ❌ Improvizálj a copy-n: a rendszer adja a szöveget a kickoff-ban, ragaszkodj hozzá.
-- ❌ **Blokkolj a Telegramon.** Egy no-Telegram (web-first) setupban a welcome ki van hagyva, NEM újra próbálva örökké. Soha ne hagyd a flag-et hiányosan "Telegramra várva" — ez az egész csapatot megrekeszti bootnál.
+- ❌ **Blokkolj a Telegramon.** Egy no-Telegram setupban a welcome ki van hagyva, NEM újra próbálva örökké. Soha ne hagyd a flag-et hiányosan "Telegramra várva" — ez az egész csapatot megrekeszti bootnál.
 
 Retry szabály: csak ha a Telegram **konfigurálva van** ÉS a `jht-telegram-send` tranziens hibát ad vissza, NE érintsd a flag-et (a watchdog újra próbálja a következő tick-en). Ha a Telegram **nincs** konfigurálva, nincs mit újra próbálni — skip + flag + munka.
 
