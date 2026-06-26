@@ -59,7 +59,7 @@ The launcher handles everything through a graphical interface — no terminal re
    - Pick your provider (🟠 Claude / 🔵 Codex / 🌙 Kimi) and sign in via embedded terminal
 3. Click **Start** — the team boots in the background and your default browser opens on the dashboard.
 
-> 💡 The desktop app is a **launcher**, not the interaction interface. After it starts the team, you talk to the agents through the **web dashboard**, **Telegram**, or the **CLI**. The launcher itself is just the on/off switch + setup wizard.
+> 💡 The desktop app is your **interaction cockpit**: it sets up and starts the team, and it's where you chat with the agents, upload files, and start/stop — for a local team via a browser window to `localhost`, for a VPS team over an SSH tunnel. The **web dashboard is read-only** (positions, scores, map); **Telegram** is the optional async channel for when you're away.
 
 > ⚠️ On first launch macOS/Windows may warn about an "unverified app" — JHT is open source and you can build from source if you don't trust the binary. Code signing is intentionally deferred during beta (see BACKLOG `[JHT-DESKTOP-05]`). To bypass: right-click → Open on macOS, "Run anyway" on Windows.
 
