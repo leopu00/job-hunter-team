@@ -21,6 +21,32 @@ ancora, perché non c'è alcun websocket da cui cadere).
 
 ---
 
+## ⏩ Aggiornamento 2026-06-26 — Part A (fondazione) implementata su dev3
+
+Il piano a 7 tappe è stato diviso in 3 parti parallele. **Part A (fondazione) è fatta
+su `dev3`**, dietro il flag **`JHT_REALTIME_SYNC=1` (default OFF → comportamento odierno
+invariato)**:
+
+- **Tappa 1 ✅** — dep `@supabase/supabase-js` nel cli + nuovo modulo
+  `cli/src/lib/cloud-realtime.js` (`createRealtimeSync`: auth via `refresh_token` come
+  supabase-direct, `subscribe`/`trackPresence`/`close`, riconnessione gestita dall'SDK).
+- **Tappa 2 ✅** — `handleDaemon` ha un ramo event-driven (`runRealtimeLoop`): si iscrive
+  a `team_state` (UPDATE) → su `sync_requested_at` fa il push. Quando il flag è ON il
+  sync-check a 5s **non gira più**.
+- **Tappa 6 ✅ (scheletro)** — paracadute poll-lento (~5min, env `JHT_PARACHUTE_SEC`)
+  che ri-legge TUTTE le corsie (sync, ticket, desired-state, heartbeat) → con la SOLA
+  Part A il daemon flag-ON è già funzionale a 5min (~48 q/h), e recupera se il socket muore.
+- Marcatori per il lavoro parallelo: **`// [PART-B: ticket realtime subscription]`** e
+  **`// [PART-C: parachute slow lane]`** in `runRealtimeLoop`.
+
+**Restano (parallelizzate, su altre branch, poi merge dev3):**
+- **Part B** = tappa 3 (ticket → Realtime + mig 048 publication/replica full).
+- **Part C** = tappe 4 (desired-state poll 5min), 5 (heartbeat 3min / presence), 6 (rifinitura cadenze paracadute).
+
+> ⚠️ Flag OFF di default: nessun cambio sul fleet finché Leone non lo accende su betaC per il test.
+
+---
+
 ## ✅ Step 0 — redesign 2026-06-25 (FATTO, in master `fcabbb0a6`)
 
 | Pezzo | Stato | Evidenza in codice |
