@@ -34,7 +34,16 @@ Tutte e 7 le tappe sono implementate su `dev3`, dietro il flag
 | 4 | desired-state → poll ~5min | ✅ | `JHT_DESIRED_STATE_SEC` (default 300) nel loop lento |
 | 5 | heartbeat → poll ~3min | ✅ | `JHT_HEARTBEAT_SEC` (default 180) — **sotto la soglia stale 5min** della dashboard (`team-state/claim/route.ts` `HEARTBEAT_STALE_MS`). Presence vera **DEFERRED** (richiede di cambiare come il web legge l'online) |
 | 6 | paracadute poll-lento | ✅ | ogni ~5min (`JHT_PARACHUTE_SEC`) ri-legge sync + ticket → recupero se il socket muore. Gira anche se il setup Realtime fallisce (degrada a poll puro) |
-| 7 | test su betaC dietro flag | ⏳ | **da fare da Leone**: accendere `JHT_REALTIME_SYNC=1` su betaC, validare reattività + recupero a socket caduto |
+| 7 | test su betaC dietro flag | ✅ | **VALIDATO 2026-06-26**: `JHT_REALTIME_SYNC=1` su betaC, canali `team_state`+`position_tickets` SUBSCRIBED, heartbeat 70s (online), "Sync now" end-to-end via websocket in **1,6s** (`sync_ok=true`). Vedi sotto |
+
+### 🧪 Esito test live su betaC (2026-06-26)
+- Immagine `:latest` (build 26/06 14:34) verificata contenere il codice; **mig 048 applicata a prod** (`position_tickets` in publication + replica full).
+- `JHT_REALTIME_SYNC=1` aggiunto al compose betaC (oltre a `JHT_SUPABASE_DIRECT=1` già presente).
+- Canali `team-state` + `tickets` **SUBSCRIBED**, refresh_token valido (nessun errore auth).
+- **Sync now end-to-end: 1,6s** (trigger `sync_requested_at` → evento websocket → push → ack `sync_completed_at`).
+- 🐛 **BUG TROVATO E FIXATO live** (`90447acf4`): postgres_changes con RLS non consegnava nulla (canale SUBSCRIBED ma 0 eventi) perché il socket Realtime usava l'**anon key** invece dello **user-JWT** (l'auto-wiring del token in supabase-js è async e arrivava DOPO la subscribe). Fix: `client.realtime.setAuth(access_token)` forzato PRIMA delle subscribe.
+- ⚠️ **L'immagine NON ha ancora il fix setAuth** (committato dopo la build): betaC gira col file **patchato a mano** (`docker cp`). Per renderlo permanente serve **merge dev3→master + rebuild :latest + redeploy**. Finché non si rifà l'immagine, NON fare `docker compose up -d` su betaC (perderebbe la patch).
+- ⏳ Non ancora stress-testato: recupero a socket caduto (paracadute, validato per design) e dual-auth supabase-direct+realtime nel tempo (nessun errore finora).
 
 **Nota sul lavoro parallelo:** la divisione in 3 (Part A/B/C) ha dato in pratica solo la
 **mig 048** (consegnata duplicata da due branch, non costruita sulla fondazione). Il
