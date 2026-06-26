@@ -45,6 +45,14 @@ Tutte e 7 le tappe sono implementate su `dev3`, dietro il flag
 - ✅ **PERMANENTE (2026-06-26 15:18)**: dopo merge dev3→master, rebuild `:latest` (`280e46c0072a`, fix setAuth nativo) → `docker compose pull` + `up -d` su betaC (verificato che l'immagine contenga il fix prima di ricreare). Niente più patch a mano. Ri-validato: Sync now **2,0s**, heartbeat 80s (online).
 - ⏳ Non ancora stress-testato: recupero a socket caduto (paracadute, validato per design) e dual-auth supabase-direct+realtime nel tempo (nessun errore finora).
 
+### 🔮 Lavoro futuro — robustezza & scaling Realtime (`[JHT-REALTIME-SCALE]`)
+NON urgente ora (1 VPS attivo, margine enorme). Da affrontare crescendo a molti clienti — il design **degrada con grazia** (col Realtime totalmente giù il floor è il solo paracadute ≈ ~56 q/h/utente = -94% vs il vecchio, nessun dato perso), quindi sono ottimizzazioni di scala, non blocchi:
+- **Monitor del rate di riconnessione** per-VPS (contare `CHANNEL_ERROR`/`SUBSCRIBED` nei log + alert se il socket cade spesso) → accorgersene prima dai log, non dai clienti.
+- **Tetto connessioni Realtime Supabase** (~500 concorrenti su Pro): è il **muro di scala vero**, più dei singoli drop → pianificare bump del tier / sharding man mano che gli utenti crescono.
+- **Thundering herd**: a un riavvio del server Realtime tutti gli N socket cadono+riconnettono insieme (auth refresh + re-subscribe ×N) → valutare jitter/backoff extra oltre a quello dell'SDK.
+- **Unificare l'auth**: REST diretto + websocket usano lo STESSO `refresh_token` → 2 sessioni che ruotano in parallelo; a scala + riconnessioni frequenti può dare race di rotazione token (0 finora). Fix pulito = una sola sessione auth condivisa.
+- **Paracadute come leva**: se il Realtime fosse inaffidabile su larga scala, abbassare `JHT_PARACHUTE_SEC` (5min→2-3min) per recupero più stretto.
+
 **Nota sul lavoro parallelo:** la divisione in 3 (Part A/B/C) ha dato in pratica solo la
 **mig 048** (consegnata duplicata da due branch, non costruita sulla fondazione). Il
 cablaggio `cloud.js` di Part B (subscribe ticket) e tutta Part C sono stati completati
