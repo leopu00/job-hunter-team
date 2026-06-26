@@ -1629,6 +1629,20 @@ async function handleTicketSync(options = {}) {
     db = new DatabaseSync(dbPath);
     db.exec('PRAGMA foreign_keys = ON');
 
+    // Su container appena creato lo schema SQLite locale (incl. position_tickets,
+    // creata da shared/skills/_db.py al primo tocco Python) può non esistere ancora:
+    // sync-tickets gira al boot PRIMA dello spawn agenti. Skip grazioso (exit 0) per
+    // non sporcare il boot con "no such table"; il giro successivo del daemon, dopo
+    // che il team ha inizializzato il DB, troverà la tabella e sincronizzerà.
+    const hasTicketsTable = db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='position_tickets'")
+      .get();
+    if (!hasTicketsTable) {
+      log(pc.dim('  ticket-sync skip: tabella position_tickets non ancora creata (team al primo boot).'));
+      db.close();
+      return;
+    }
+
     // ---- PULL: ticket 'open' dal cloud → locale ----
     // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: se abilitato leggi da Supabase DIRETTO
     // (niente invocazione Vercel); su errore o se disabilitato → fallback Vercel.
@@ -2112,6 +2126,7 @@ export function registerCloudCommand(program) {
     .option('--full', 'Ignora cursor (lookback 7gg server-side)')
     .option('--limit <n>', 'Max righe per chiamata (default 500, max 2000)')
     .option('--dry-run', 'Mostra cosa verrebbe applicato senza UPDATE')
+    .option('--silent', 'Output minimo (per il boot)')
     .action(handlePullDesiredState);
 
   cloud
