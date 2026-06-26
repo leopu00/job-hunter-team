@@ -42,7 +42,7 @@ Tutte e 7 le tappe sono implementate su `dev3`, dietro il flag
 - Canali `team-state` + `tickets` **SUBSCRIBED**, refresh_token valido (nessun errore auth).
 - **Sync now end-to-end: 1,6s** (trigger `sync_requested_at` → evento websocket → push → ack `sync_completed_at`).
 - 🐛 **BUG TROVATO E FIXATO live** (`90447acf4`): postgres_changes con RLS non consegnava nulla (canale SUBSCRIBED ma 0 eventi) perché il socket Realtime usava l'**anon key** invece dello **user-JWT** (l'auto-wiring del token in supabase-js è async e arrivava DOPO la subscribe). Fix: `client.realtime.setAuth(access_token)` forzato PRIMA delle subscribe.
-- ⚠️ **L'immagine NON ha ancora il fix setAuth** (committato dopo la build): betaC gira col file **patchato a mano** (`docker cp`). Per renderlo permanente serve **merge dev3→master + rebuild :latest + redeploy**. Finché non si rifà l'immagine, NON fare `docker compose up -d` su betaC (perderebbe la patch).
+- ✅ **PERMANENTE (2026-06-26 15:18)**: dopo merge dev3→master, rebuild `:latest` (`280e46c0072a`, fix setAuth nativo) → `docker compose pull` + `up -d` su betaC (verificato che l'immagine contenga il fix prima di ricreare). Niente più patch a mano. Ri-validato: Sync now **2,0s**, heartbeat 80s (online).
 - ⏳ Non ancora stress-testato: recupero a socket caduto (paracadute, validato per design) e dual-auth supabase-direct+realtime nel tempo (nessun errore finora).
 
 **Nota sul lavoro parallelo:** la divisione in 3 (Part A/B/C) ha dato in pratica solo la
