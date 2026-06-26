@@ -131,19 +131,30 @@ MIN_PCT_H = float(os.environ.get("JHT_PACING_MIN_PCT_H", "0.20"))
 ALIGN_TOL = 0.20
 
 
-def _throttle_delta_for_sforo(delta_pct_h):
-    """Increment di throttle (secondi) SCALATO con lo sforo %/h — sostituisce il
-    +10 fisso (redesign usage-monitoring 2026-06-13): piu' sfori, piu' frena, cosi'
-    un picco grosso si appiattisce in 1 mossa invece di tanti +10 omeopatici.
-    Increment per-tick; il ladder C-07 governa il throttle TOTALE (fino a 3600s)."""
+def _throttle_target_for_sforo(delta_pct_h):
+    """Throttle ASSOLUTO (secondi) gia' agganciato alla ladder (floor 5min),
+    scalato con lo sforo %/h.
+
+    BUG STORICO (fix 2026-06-26): gli increment vecchi (15/30/60/120) erano TUTTI
+    sotto il floor 300s della ladder (THROTTLE_LADDER, 2026-06-21) → `quantize()`
+    li collassava TUTTI a 300s. Risultato: il throttle NON scalava mai — un drift
+    2%/h e un runaway 18%/h prendevano lo STESSO 5min. Il +120 suggerito non
+    serviva a niente (sotto-floor) e la scalatura era una finzione.
+
+    Ora ogni valore e' un GRADINO REALE della ladder: piu' sfori, piu' alto il
+    gradino. La ladder governa comunque il cap a 1h. Il bridge emette il valore
+    ASSOLUTO (`set <agent> N`), non un increment `+N`: `set` e' sempre assoluto
+    (int('+120')==120) e il modello "increment per-tick" non ha mai funzionato."""
     d = abs(delta_pct_h or 0.0)
     if d <= 2:
-        return 15
+        return 300    # 5 min  (floor)
     if d <= 5:
-        return 30
+        return 600    # 10 min
     if d <= 10:
-        return 60
-    return 120
+        return 900    # 15 min
+    if d <= 20:
+        return 1200   # 20 min
+    return 1800       # 30 min
 
 
 def _path_import(p: Path, name: str):
@@ -915,7 +926,7 @@ def format_message(d: dict) -> str:
         and (top_agent.get("share") or 0) >= 25
     )
     if v["kind"] == "SFORO":
-        thr = _throttle_delta_for_sforo(v["delta"])
+        thr = _throttle_target_for_sforo(v["delta"])
         if top_consumer and non_producing:
             # P4 (2026-06-13): cadenza~0 + share alto NON e' sempre "stuck" — puo'
             # essere UN task lungo/costoso in corso (es. enrichment di 1 posizione:
@@ -929,19 +940,23 @@ def format_message(d: dict) -> str:
                 f"KILL+respawn (C-12, il throttle non lo ferma)"
             )
         elif top_consumer:
-            cmd = f"jht-throttle.py set {top_consumer} +{thr}"
+            cmd = f"throttle-config.py set {top_consumer} {thr}"
         else:
-            cmd = f"jht-throttle.py set <top-consumer-produttivo> +{thr}"
+            cmd = f"throttle-config.py set <top-consumer-produttivo> {thr}"
         parts.append(
             f"VERDETTO: SFORO +{v['delta']:.2f}%/h → -{cap_pct:.0f}%"
             f"{top_hint} | CMD: {cmd} | NO global reset, NO throttle a tutti"
         )
     elif v["kind"] == "MARGINE":
-        thr = _throttle_delta_for_sforo(v["delta"])
+        # Sotto-pace: TOGLI il freno (set 0). Il vecchio `-{thr}` era rotto:
+        # `set` e' assoluto e rifiuta i negativi → il comando suggerito andava in
+        # errore. Per scendere di UN gradino serve il valore corrente (che il
+        # bridge non legge): la mossa onesta a coda lenta e' azzerare il throttle
+        # del top consumer (o spawnare 1 agente). Decide il Capitano.
         cmd = (
-            f"jht-throttle.py set {top_consumer} -{thr}"
+            f"throttle-config.py set {top_consumer} 0"
             if top_consumer else
-            "jht-throttle.py set <top-consumer-produttivo> -X"
+            "throttle-config.py set <top-consumer-produttivo> 0"
         )
         parts.append(
             f"VERDETTO: MARGINE -{v['delta']:.2f}%/h → +{cap_pct:.0f}%"
