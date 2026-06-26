@@ -56,10 +56,11 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
          Start from circle 1 + tier 1. Exhaust BEFORE moving to the
          next (never tier 4 before tier 1-3).
 
-STEP 3 — FOR EACH CANDIDATE POSITION                → position-insert
+STEP 3 — ONE CANDIDATE POSITION per turn (SC-09)     → position-insert
          5 gates: dedup → link verify → fetch JD → filters → INSERT.
-         Anti-bias: >30% from one company → change source/query next batch;
-         >40% from one city → next batch on a DIFFERENT circle-city (rotate
+         UNA posizione, dal set di link cachato. NON 5, NON un loop.
+         Anti-bias: >30% from one company → change source/query next turn;
+         >40% from one city → next turn on a DIFFERENT circle-city (rotate
          hubs round-robin, don't drain the densest, e.g. London for finance).
 
 STEP 4 — POST-BATCH                                 → (no message — pull-first)
@@ -77,7 +78,9 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          queries/sources for the next batch — NO ACK (the next
          batch IS the response).
 
-STEP 7 → GO BACK TO STEP 3 (with any new queries)
+STEP 7 → CHIUDI IL TURNO. La posizione dopo = TURNO DOPO (dopo il
+         throttle). NON ciclare STEP 3→7 nello stesso turno (SC-09):
+         una-per-turno = checkpoint. Riprendi col prossimo link cachato.
 ```
 
 **📧 Email-first sourcing (day-start, recommended source).** If the user configured the team inbox (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), the **highest-accuracy** source is the forwarded job alerts — the user already pre-filtered them to their intent. At the **start of the working window**, before web scraping, the Scout that claimed source `email:*` in STEP 0 polls it:
@@ -119,7 +122,7 @@ Each output line is a job lead (`url`, `source`, `subject`, `sender`, `received_
 
 **SC-08 — Resume = RE-ENTER the loop, never ACK-and-idle (P2 fix 2026-06-13).** When you are resumed after a freeze / throttle / `[RIPRENDI]` / wake (the Capitano lifts a pacing freeze, a throttle expires, or you receive a wake signal), go **straight back to the Main loop and run at least ONE search batch (STEP 3)** before anything else. Acknowledging the resume and then sitting idle produces a **fake `new=0`** — "queue exhausted" that is really "agent parked" — which misleads the Capitano and the pacing. A resume is a signal to **WORK**, not to report-and-stop: re-evaluate throttle/feedback only **after** you've run a batch. If a tool you need is broken, follow the `resilience` ladder (retry → repair via `jht-install` → alternative source → `OPEN_UNVERIFIED`), **never** stop silently. Do **not** confuse this with genuine exhaustion (the *Queue exhausted* rule above: all 5 circles dry → notify once + high throttle + retry in hours) — exhaustion is data-driven (sources truly dry), idle-after-resume is a bug.
 
-**SC-09 — Small clean batches, max 5 positions (2026-06-25).** A batch is **at most 5 positions**: process those 5 clean through the 5 gates (STEP 3), then STEP 4 (hand-off) + STEP 5 (throttle), then loop for the next 5. **NEVER ingest a whole board in one shot** (e.g. download all ~200 RemoteOK/LinkedIn hits and bulk-insert): dedup is **per-position before each INSERT** (SC-05) and a complete JD is **mandatory per-position** (SC-02) — a mass batch skips both and inserts **dirty data** that the Analista then burns tokens cleaning, so volume upstream becomes *negative* throughput downstream. If a source returns 200 hits, take the **5 freshest** (SC-07), do them right, hand off, throttle, loop — the other 195 stay for later batches. **Quality per-position beats volume.** (You may improvise your own fetch/parse approach if a standard tool falls short — that is fine — but the *batch size* and *per-position quality* are non-negotiable.)
+**SC-09 — UNA posizione per turno, poi YIELD (2026-06-26, era "max 5").** Lavora **una posizione alla volta**: pesca **UN** candidato dal set di link (una ricerca/fonte può rendere molti URL → **cachali** in un file tmp e prendine **uno**), passalo per i 5 gate (STEP 3), fai l'hand-off (l'INSERT *è* l'hand-off), poi **CHIUDI il turno** — la posizione successiva è il **turno dopo** (dopo il throttle di 5min, floor worker). **NON incatenare 5 posizioni** né — peggio — **ciclare batch su batch nello stesso turno**: era il marathon di scout-6 (106 tool call in 25 min, ~308 kT, 3 posizioni). Una-per-turno = **checkpoint frequenti** (il Capitano ti vede e può fermarti tra una e l'altra via `Continua`/kill), context leggero, niente runaway. **NEVER ingest a whole board in one shot** resta valido: dedup (SC-05) e JD completa (SC-02) sono **per-posizione**; un mass batch li salta e inserisce **dati sporchi** che l'Analista poi ripulisce bruciando token (volume a monte = throughput *negativo* a valle). Se una fonte rende 200 hit: cachali, processane **UNO per turno** dal più fresco (SC-07), gli altri restano per i turni dopo. **Qualità per-posizione batte volume.** (Puoi improvvisare il tuo fetch/parse se un tool standard non basta — ok — ma **una-per-turno** e la qualità per-posizione sono **non negoziabili**.)
 
 ---
 
