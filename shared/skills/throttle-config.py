@@ -47,11 +47,17 @@ CLI:
   throttle-config quantize <sec>         # aggancia alla ladder (floor 5min)
 
 Ladder (2026-06-21): ogni throttle >0 è agganciato a {5,10,15,20,25,30,40,50,60}min
-(floor 5min, cap 1h). `0` resta `0`. Set/get/dump restituiscono sempre l'EFFETTIVO.
+(floor 5min, cap 1h). Set/get/dump restituiscono sempre l'EFFETTIVO.
+
+Worker floor (2026-06-26): i WORKER (Scout/Analista/Scorer/Scrittore/Critico)
+hanno floor 5min SEMPRE — `0` su un worker → 300s (anti-marathon). Il core
+interattivo (Capitano/Sentinella/Assistente/Mentor) NON ha floor (`0` resta `0`)
+→ resta reattivo per la chat utente. Vedi `_is_worker` / `WORKER_FLOOR`.
 """
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -95,6 +101,24 @@ def quantize(seconds) -> int:
     if s >= THROTTLE_LADDER[-1]:
         return THROTTLE_LADDER[-1]
     return min(THROTTLE_LADDER, key=lambda x: abs(x - s))
+
+
+# ── Floor 5min per i WORKER (anti-marathon, 2026-06-26) ──────────────
+# I worker (Scout/Analista/Scorer/Scrittore/Critico) macinano budget in loop:
+# a throttle 0 incatenano batch su batch (il marathon di scout-6, ~308kT per 3
+# posizioni). Floor 5min = ogni unità è seguita da una pausa-checkpoint, il
+# consumo si spalma, e il Capitano ha un punto di controllo tra un'unità e
+# l'altra. Il CORE interattivo (Capitano/Sentinella/Assistente/Mentor) NON ha
+# floor: deve restare reattivo per la chat serale dell'utente.
+WORKER_FLOOR = 300  # 5min — il minimo per un worker, mai 0
+_WORKER_ROLES = frozenset({"scout", "analista", "scorer", "scrittore", "critico"})
+
+
+def _is_worker(agent) -> bool:
+    """True se l'agente è un worker (nome base in _WORKER_ROLES, ignorando il
+    suffisso `-N`: scout-3 → scout). Core/one-shot/ignoti → False (niente floor)."""
+    base = re.sub(r"-\d+$", "", str(agent or "").strip().lower())
+    return base in _WORKER_ROLES
 
 
 def load() -> dict:
@@ -150,9 +174,12 @@ def get_agent(agent: str) -> int:
         v = int(v)
     except (TypeError, ValueError):
         v = 0
-    # Effettivo = agganciato alla ladder (floor 5min). Vale anche per i
-    # valori legacy già nel throttle.json (es. 60/120 → 300) senza riscrivere.
-    return quantize(max(MIN_SLEEP, min(MAX_SLEEP, v)))
+    # Effettivo = agganciato alla ladder. I WORKER hanno floor 5min SEMPRE
+    # (anti-marathon, 2026-06-26): mai 0. Il core interattivo NON ha floor →
+    # resta reattivo. Vale anche per i valori legacy già nel throttle.json
+    # (es. 60/120 → 300, o 0 su un worker → 300) senza riscrivere il file.
+    floor = WORKER_FLOOR if _is_worker(agent) else MIN_SLEEP
+    return quantize(max(floor, min(MAX_SLEEP, v)))
 
 
 def set_agent(agent: str, seconds: int) -> None:
@@ -219,7 +246,8 @@ def main() -> int:
         for k in sorted(cfg.keys()):
             if k == "default":
                 continue
-            print(f"{k:14s} = {quantize(cfg[k])}s")
+            # get_agent applica il floor worker (5min) → dump mostra l'EFFETTIVO
+            print(f"{k:14s} = {get_agent(k)}s")
         return 0
 
     if args.cmd == "reset":

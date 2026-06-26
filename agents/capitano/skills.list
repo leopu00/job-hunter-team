@@ -25,6 +25,9 @@ sentinel-orders
 bridge-pacing
 bridge-mailbox
 pipeline-triage
+# Calibrazione graduale del roster: quanti worker + che throttle per centrare
+# la velocità-target, con piano a scaglioni (C-02, anti ACCELERARE→marathon).
+scaling-calc
 
 # Emergency: spawn fresh DOTTORE on-demand quando serve health-check
 # subito (post-mortem 2026-05-18: tra cicli auto il DOTTORE è bash
