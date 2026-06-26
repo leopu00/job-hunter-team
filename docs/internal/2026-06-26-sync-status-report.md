@@ -21,29 +21,30 @@ ancora, perché non c'è alcun websocket da cui cadere).
 
 ---
 
-## ⏩ Aggiornamento 2026-06-26 — Part A (fondazione) implementata su dev3
+## ⏩ Aggiornamento 2026-06-26 — piano event-driven COMPLETO su dev3 (7/7, dietro flag)
 
-Il piano a 7 tappe è stato diviso in 3 parti parallele. **Part A (fondazione) è fatta
-su `dev3`**, dietro il flag **`JHT_REALTIME_SYNC=1` (default OFF → comportamento odierno
-invariato)**:
+Tutte e 7 le tappe sono implementate su `dev3`, dietro il flag
+**`JHT_REALTIME_SYNC=1` (default OFF → comportamento odierno invariato)**.
 
-- **Tappa 1 ✅** — dep `@supabase/supabase-js` nel cli + nuovo modulo
-  `cli/src/lib/cloud-realtime.js` (`createRealtimeSync`: auth via `refresh_token` come
-  supabase-direct, `subscribe`/`trackPresence`/`close`, riconnessione gestita dall'SDK).
-- **Tappa 2 ✅** — `handleDaemon` ha un ramo event-driven (`runRealtimeLoop`): si iscrive
-  a `team_state` (UPDATE) → su `sync_requested_at` fa il push. Quando il flag è ON il
-  sync-check a 5s **non gira più**.
-- **Tappa 6 ✅ (scheletro)** — paracadute poll-lento (~5min, env `JHT_PARACHUTE_SEC`)
-  che ri-legge TUTTE le corsie (sync, ticket, desired-state, heartbeat) → con la SOLA
-  Part A il daemon flag-ON è già funzionale a 5min (~48 q/h), e recupera se il socket muore.
-- Marcatori per il lavoro parallelo: **`// [PART-B: ticket realtime subscription]`** e
-  **`// [PART-C: parachute slow lane]`** in `runRealtimeLoop`.
+| # | Tappa | Stato | Dove |
+|---|---|---|---|
+| 1 | dep `@supabase/supabase-js` + `cli/src/lib/cloud-realtime.js` | ✅ | `createRealtimeSync`: auth via `refresh_token` come supabase-direct, `subscribe`/`trackPresence`/`close`, riconnessione SDK |
+| 2 | sync-flag → Realtime | ✅ | `runRealtimeLoop`: subscribe `team_state` UPDATE → push. Flag ON ⇒ niente sync-check 5s |
+| 3 | ticket → Realtime + mig 048 | ✅ | subscribe `position_tickets` `*` → `handleTicketSync`; **mig 048** (publication + REPLICA IDENTITY FULL) |
+| 4 | desired-state → poll ~5min | ✅ | `JHT_DESIRED_STATE_SEC` (default 300) nel loop lento |
+| 5 | heartbeat → poll ~3min | ✅ | `JHT_HEARTBEAT_SEC` (default 180) — **sotto la soglia stale 5min** della dashboard (`team-state/claim/route.ts` `HEARTBEAT_STALE_MS`). Presence vera **DEFERRED** (richiede di cambiare come il web legge l'online) |
+| 6 | paracadute poll-lento | ✅ | ogni ~5min (`JHT_PARACHUTE_SEC`) ri-legge sync + ticket → recupero se il socket muore. Gira anche se il setup Realtime fallisce (degrada a poll puro) |
+| 7 | test su betaC dietro flag | ⏳ | **da fare da Leone**: accendere `JHT_REALTIME_SYNC=1` su betaC, validare reattività + recupero a socket caduto |
 
-**Restano (parallelizzate, su altre branch, poi merge dev3):**
-- **Part B** = tappa 3 (ticket → Realtime + mig 048 publication/replica full).
-- **Part C** = tappe 4 (desired-state poll 5min), 5 (heartbeat 3min / presence), 6 (rifinitura cadenze paracadute).
+**Nota sul lavoro parallelo:** la divisione in 3 (Part A/B/C) ha dato in pratica solo la
+**mig 048** (consegnata duplicata da due branch, non costruita sulla fondazione). Il
+cablaggio `cloud.js` di Part B (subscribe ticket) e tutta Part C sono stati completati
+qui sulla fondazione. Mig 048 presa dalla versione `public.`-qualified.
 
-> ⚠️ Flag OFF di default: nessun cambio sul fleet finché Leone non lo accende su betaC per il test.
+**Carico stimato flag ON (idle):** heartbeat 20/h + paracadute (sync+ticket) 24/h +
+desired-state 12/h ≈ **~56 q/h/utente** + 1 connessione websocket (vs ~900/h). ≈ -94%.
+
+> ⚠️ Flag OFF di default: zero cambio sul fleet finché Leone non lo accende su betaC.
 
 ---
 
