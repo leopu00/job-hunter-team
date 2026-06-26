@@ -301,6 +301,13 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - **Opzioni** (analizzate in `docs/internal/2026-06-20-proj-volatile-pacing-todo.md`): A) togliere proj dai messaggi+prompt tenendo i gate (zero cambi comportamento); B) show-on-demand; C) **fix vero** = spostare i gate da proj a segnali velocity-based.
 - **Stato:** 🟡 **DEFERRED di proposito** (utente 2026-06-20). Parte delicata, esperimenti live, sta funzionando — NON toccare ora. **Osservazione collegata:** Kimi/betaB dal reset **Dom 21/06 19:11** (primo ciclo intero post recheck-on-demand; caso peggiore = budget basso + modello debole). Se Kimi va male → prioritizza opzione C.
 
+##### 🧊 [PACING-RESET-EDGE-FREEZE] Falso freeze da `proj>200` al bordo reset — FIX da fare 🔴 (NEW 2026-06-26)
+
+- **Sintomo osservato (betaA/Codex, 2026-06-26 08:00 UTC):** al tick di bordo reset (`reset_in=0.00h`) il `proj` è schizzato a **308.8%**, superando la soglia emergenza `>200` → la Sentinella ha eseguito `freeze_team.py` congelando **7 operativi** (ANALISTA-6, DOTTORE, MANTENITORE, MENTOR, SCORER-1, SCOUT-3, SCOUT-4). Pochi minuti dopo l'usage è sceso a 1% (il reset reale) e il team è stato riaperto. **Freeze inutile.**
+- **Causa:** `proj` è una proiezione `usage / frazione_finestra_trascorsa`; a `reset_in≈0` il **denominatore →0** e gonfia `proj` a centinaia di %. È lo stesso difetto di volatilità di `[PACING-PROJ-VOLATILE]`, ma qui fa scattare un'azione **distruttiva** (freeze del team), non solo rumore. La Sentinella se ne accorge da sola ("reset_in=0.00h può amplificare il proj") ma esegue comunque perché la skill non prevede l'eccezione.
+- **Fix:** sopprimere il trigger emergenza `proj>200` quando `reset_in≈0` (o `burst_transient=true`). Punti: skill `agents/sentinella/_skills/emergency-handling/SKILL.md` (×7 lingue) — aggiungere la guardia "ignora proj se reset_in < ~0.1h / burst_transient"; e `shared/skills/compute_metrics.py:357` (lo stesso `proj>200` guida `suggested_throttle_s`). Idealmente il bridge non emette nemmeno un `proj` valido a reset_in≈0 (sopprimilo o marcalo `EDGE`).
+- **Priorità:** 🔴 media-alta — è un'azione distruttiva su falso positivo, ma a basso danno (auto-riaperto al reset). Da fare nel prossimo giro pacing.
+
 ##### 🔐 [JHT-ACCESS-CREDENTIALS-GAPS] Access & credentials — gap doc vs codice (NEW 2026-05-26)
 
 - **Context:** sessione di consolidamento doc 2026-05-26 (`docs/internal/ops/access-and-credentials.md`) ha riallineato la storia "dove vivono le credenziali" e rivelato 6 punti dove la doc promette qualcosa che il codice non implementa ancora.
