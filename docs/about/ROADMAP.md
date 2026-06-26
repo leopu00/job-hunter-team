@@ -112,7 +112,7 @@ For full task list → [BACKLOG · Phase 1](../../BACKLOG.md#1️⃣-phase-1--we
 
 ### 🖥️ Phase 2 — Desktop Launcher
 
-> _"Download, install, everything starts in the background, then you work from the browser."_
+> _"Download, install, everything starts in the background — then you drive the team from the desktop app (the web stays read-only)."_
 
 ```
 🟡 Status: IN PROGRESS — ~80%

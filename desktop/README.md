@@ -1,9 +1,11 @@
 # 🖥️ desktop — JHT Desktop launcher (Electron)
 
-Desktop launcher for Job Hunter Team. It installs dependencies, prepares the
+Desktop app for Job Hunter Team. It installs dependencies, prepares the
 Docker container, handles provider auth, and starts the team — so non-technical
-users never touch a terminal. **Interaction itself happens in the browser /
-Telegram / CLI** — the launcher only bootstraps and supervises.
+users never touch a terminal. It's also the **interaction cockpit**: chat,
+file upload, and team start/stop — for a local team via a browser window to
+`localhost`, for a VPS team via the same stack over an SSH tunnel. The **web
+dashboard is read-only** (data only); Telegram is the optional async channel.
 
 - **Package:** `jht-desktop` · **Stack:** Electron · electron-builder
 
