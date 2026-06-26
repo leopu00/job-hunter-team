@@ -126,7 +126,7 @@ Three subscriptions cover the ~400M tokens/month requirement:
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
-**Desktop launcher** — `.dmg` / `.exe` / `.AppImage` / `.deb` from [`/download`](https://jobhunterteam.ai/download) or GitHub Releases.
+**Desktop app** — `.dmg` / `.exe` / `.AppImage` / `.deb` from [`/download`](https://jobhunterteam.ai/download) or GitHub Releases.
 
 Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/QUICKSTART.md`](docs/guides/QUICKSTART.md).
 
@@ -135,7 +135,7 @@ Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/QU
 | | Interface | Launch | Stack |
 |---|---|---|---|
 | 🌐 | **Web Dashboard** | `cd web && npm run dev:host` | Next.js · React · Tailwind · Supabase |
-| 🖥️ | **Desktop Launcher** | open `JHT Desktop` | Electron · electron-builder *(launcher only — interaction happens in browser/Telegram/CLI)* |
+| 🖥️ | **Desktop App** | open `JHT Desktop` | Electron · electron-builder *(interaction cockpit — start/stop, chat, file upload; the web dashboard is view-only)* |
 | ⌨️ | **CLI** | `jht team start` | Node.js · Commander *(full reference: [`docs/guides/CLI-REFERENCE.md`](docs/guides/CLI-REFERENCE.md). Also designed to be driven by AI agents — see [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md))* |
 | 💬 | **Telegram** | bidirectional bot bridge | grammy |
 
@@ -145,7 +145,7 @@ JHT's CLI is intentionally designed to be driven by other AI assistants — not 
 
 > *"Set up JHT and start the team for me."*
 
-…and it will figure out the rest. No manual configuration, no Docker commands, no reading 5 pages of docs. The same `jht` CLI surface is used by humans, by AI agents, and by the Desktop launcher.
+…and it will figure out the rest. No manual configuration, no Docker commands, no reading 5 pages of docs. The same `jht` CLI surface is used by humans, by AI agents, and by the Desktop app.
 
 See [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md) for example prompts and the full integration guide.
 
@@ -178,7 +178,7 @@ Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 |---|---|---|
 | ⌨️ [`cli/`](cli/) | `jht` CLI (Commander) — primary control surface | [README](cli/README.md) · [CLI reference](docs/guides/CLI-REFERENCE.md) |
 | 🌐 [`web/`](web/) | Dashboard (Next.js · React · Tailwind) | [README](web/README.md) |
-| 🖥️ [`desktop/`](desktop/) | Desktop launcher (Electron) | [README](desktop/README.md) |
+| 🖥️ [`desktop/`](desktop/) | Desktop app (Electron) | [README](desktop/README.md) |
 | ⌨️ [`tui/`](tui/) | Terminal UI | [README](tui/README.md) |
 | 💬 [`telegram-bridge/`](telegram-bridge/) | Bidirectional Telegram bridge (grammy) | [README](telegram-bridge/README.md) |
 | 🧩 [`shared/`](shared/) | Shared core lib (config · LLM · monitoring · auth) | [README](shared/README.md) |

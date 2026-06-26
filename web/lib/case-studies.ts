@@ -13,6 +13,7 @@ import {
   type TeamActivityRole,
 } from "@/lib/team-activity";
 import betaCRun from "@/data/case-studies/betaC-codex-run.json";
+import betaBRun from "@/data/case-studies/betaB-kimi-run.json";
 
 // Link contribute (doc reali sul repo GitHub).
 export const GITHUB_REPO = "https://github.com/leopu00/job-hunter-team";
@@ -97,6 +98,47 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       why: "Ecco perché i numeri vengono così: cercando ruoli finance e investment in grandi città europee, il team ha concentrato la ricerca negli hub finanziari (Londra, Zurigo, Ginevra, Lussemburgo, Dublino) e quasi tutte le posizioni ricadono in categorie business & finance — esattamente il profilo del candidato.",
     },
     run: betaCRun as unknown as CaseStudyRun,
+  },
+  {
+    id: "beta-2",
+    label: "Beta tester 2",
+    tagline: "Technical writing · traduzione · localizzazione",
+    category: "Technical Writing",
+    seniority: "Senior · cross-domain",
+    geos: ["Ungheria", "Italia", "Europa"],
+    model: "Kimi",
+    subscription: {
+      provider: "Moonshot Kimi",
+      plan: "Kimi Code",
+      price: "~€40/mese",
+    },
+    profile: {
+      badge: "B2",
+      headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
+      summary:
+        "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta circa 10 anni di esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, falegnameria, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
+      facts: [
+        { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
+        { label: "Esperienza", value: "~10 anni cross-domain · industria + lingue" },
+        { label: "Background", value: "Manifattura · CAD/CAM/CNC · falegnameria · traduzione/interpretariato" },
+        { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
+        { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
+      ],
+      locationNote:
+        "Priorità al full remote; geograficamente prima l'Ungheria, poi l'Italia, poi il resto d'Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
+      targetCities: [
+        "Budapest",
+        "Milano",
+        "Dublino",
+        "Amsterdam",
+        "Madrid",
+        "Barcellona",
+        "Varsavia",
+        "Lisbona",
+      ],
+      why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
+    },
+    run: betaBRun as unknown as CaseStudyRun,
   },
 ];
 

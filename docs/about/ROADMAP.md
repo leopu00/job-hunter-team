@@ -11,7 +11,7 @@
 
 > 🧭 **Design philosophy & product vision live in [`VISION.md`](VISION.md)** — agents-as-characters, the Mentor, the anti-goals. This section covers the *deployment & stack* vision only.
 
-Job Hunter Team is an open-source application that runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). Non-technical users download the Electron launcher; technical users clone the repo and use the CLI. In both cases, the AI agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service.
+Job Hunter Team is an open-source application that runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). Non-technical users download the Electron app; technical users clone the repo and use the CLI. In both cases, the AI agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service.
 
 **AI on the side of workers, not against them.**
 
@@ -50,7 +50,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 
 | Component | Technology | Rationale |
 |---|---|---|
-| Desktop app | **Electron launcher** | Installer + lifecycle manager only; operational GUI stays in the browser |
+| Desktop app | **Electron** | Installer + lifecycle **+ interaction cockpit** (local via browser→localhost, VPS via SSH tunnel); the web dashboard stays view-only |
 | Web dashboard | **Next.js 16 on Vercel** | CI/CD pipeline live |
 | Container runtime | **Docker + Docker Compose** | Isolation, reproducibility |
 | Structured data (cloud, opt-in) | **Supabase** | PostgreSQL + Google/GitHub auth |
@@ -112,7 +112,7 @@ For full task list → [BACKLOG · Phase 1](../../BACKLOG.md#1️⃣-phase-1--we
 
 ### 🖥️ Phase 2 — Desktop Launcher
 
-> _"Download, install, everything starts in the background, then you work from the browser."_
+> _"Download, install, everything starts in the background — then you drive the team from the desktop app (the web stays read-only)."_
 
 ```
 🟡 Status: IN PROGRESS — ~80%
@@ -467,7 +467,7 @@ The current `jobs.db` schema is functional but **lossy**: state transitions, Cri
 
 ## 🐳 Docker — what we built (compressed)
 
-Docker is the **default** in both the CLI installer and the desktop launcher (since v0.1.9). The container isolates agent processes, exposing only two bind-mounted folders: `~/.jht` (config/DB) and `~/Documents/Job Hunter Team` (CVs/output).
+Docker is the **default** in both the CLI installer and the desktop app (since v0.1.9). The container isolates agent processes, exposing only two bind-mounted folders: `~/.jht` (config/DB) and `~/Documents/Job Hunter Team` (CVs/output).
 
 | What | Status | Reference |
 |---|---|---|
