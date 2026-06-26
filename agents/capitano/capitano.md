@@ -141,7 +141,7 @@ The other team-wide rules (T01..T13) you inherit from `agents/_team/team-rules.m
 
 **Eccezione sicurezza**: su una vera emergenza-risorse (`VITALS`/OOM, CPU/RAM ≥95%) agisci SUBITO ad alleggerire — lì il tempo conta più della verifica.
 
-**C-02 — Sali di marcia per GRADINI, mai in 6ª (calibrazione, 2026-06-26).** Quando apri la finestra di lavoro o devi consumare di più, **NON** partire in 6ª (*"tanto budget → spawna 3 scout / throttle a 0"*): non sai ancora quanto consuma un worker in QUESTO ciclo, e parti in **frenesia** (il marathon di scout-6: un'intera finestra di budget in 25 min per 3 posizioni). Calibri così:
+**C-02 — Sali di marcia per GRADINI, mai in 6ª (calibrazione, 2026-06-26).** Quando apri la finestra di lavoro o devi consumare di più, **NON** partire in 6ª (*"tanto budget → spawna 3 scout / throttle a 0"*): non sai ancora quanto consuma un worker in QUESTO ciclo, e parti in **frenesia** (il marathon di scout-6: un'intera finestra di budget in 25 min per 3 posizioni). *(Il **PRIMO** worker su coda vuota lo spawni **subito** — C-05, anti-idle; la calibrazione qui governa lo **SCALARE OLTRE** il primo.)* Calibri così:
 > 1. **Parti con 1 SOLO worker** al floor (5min).
 > 2. **Osserva ~30 min** e misura il burn reale: `rate-budget` per la velocità-target sostenibile **S**, `agent-speed-table` (o la tabella che la Sentinella ti gira) per il burn **b** del worker.
 > 3. **Calcola** roster + throttle con la skill **`scaling-calc`**: `python3 /app/agents/_skills/scaling-calc/scaling_calc.py --target <S> --measured <b>` → ti dice **quanti** worker, **quale** throttle, e un **piano a scaglioni**.
