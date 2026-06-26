@@ -13,6 +13,7 @@ import {
   type TeamActivityRole,
 } from "@/lib/team-activity";
 import betaCRun from "@/data/case-studies/betaC-codex-run.json";
+import betaBRun from "@/data/case-studies/betaB-kimi-run.json";
 
 // Link contribute (doc reali sul repo GitHub).
 export const GITHUB_REPO = "https://github.com/leopu00/job-hunter-team";
@@ -97,6 +98,47 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       why: "Ecco perché i numeri vengono così: cercando ruoli finance e investment in grandi città europee, il team ha concentrato la ricerca negli hub finanziari (Londra, Zurigo, Ginevra, Lussemburgo, Dublino) e quasi tutte le posizioni ricadono in categorie business & finance — esattamente il profilo del candidato.",
     },
     run: betaCRun as unknown as CaseStudyRun,
+  },
+  {
+    id: "beta-2",
+    label: "Beta tester 2",
+    tagline: "Technical writing · localizzazione · Europa",
+    category: "Technical Writing",
+    seniority: "Mid-level",
+    geos: ["Italia", "Europa"],
+    model: "Kimi",
+    subscription: {
+      provider: "Moonshot Kimi",
+      plan: "Kimi Code",
+      price: "~€40/mese",
+    },
+    profile: {
+      badge: "B2",
+      headline: "Technical writer, documentazione e localizzazione",
+      summary:
+        "Technical writer con esperienza nella documentazione di prodotto e software (API, developer docs, manualistica industriale) e nella localizzazione. Cerca ruoli di technical writing, documentation e content design in Europa, con base in Italia e legami con l'Ungheria — aperto al lavoro da remoto.",
+      facts: [
+        { label: "Settore", value: "Technical writing · documentation · localizzazione" },
+        { label: "Esperienza", value: "Mid-level · documentazione di prodotto" },
+        { label: "Specializzazione", value: "Software & API docs · localizzazione · content" },
+        { label: "Lingue", value: "Italiano · Inglese · Ungherese" },
+        { label: "Mobilità", value: "Cittadino UE · remote-friendly · base Italia/Ungheria" },
+      ],
+      locationNote:
+        "Aperto a ruoli in Europa, con preferenza per hub tech e aziende remote-friendly — base in Italia e disponibilità verso l'area ungherese. Tra le città ricorrenti nella ricerca:",
+      targetCities: [
+        "Milano",
+        "Budapest",
+        "Dublino",
+        "Amsterdam",
+        "Madrid",
+        "Barcellona",
+        "Varsavia",
+        "Lisbona",
+      ],
+      why: "Ecco perché i numeri vengono così: cercando ruoli di technical writing e localizzazione spesso remoti, il team ha pescato soprattutto da LinkedIn e dalle job board specializzate, e quasi tutte le posizioni ricadono in famiglie di documentazione, localizzazione e content — coerenti col profilo. La concentrazione su Italia e Ungheria riflette la base del candidato e le sue lingue.",
+    },
+    run: betaBRun as unknown as CaseStudyRun,
   },
 ];
 
