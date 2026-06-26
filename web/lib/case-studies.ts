@@ -102,10 +102,10 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
   {
     id: "beta-2",
     label: "Beta tester 2",
-    tagline: "Technical writing · localizzazione · Europa",
+    tagline: "Technical writing · localizzazione · full remote",
     category: "Technical Writing",
-    seniority: "Mid-level",
-    geos: ["Italia", "Europa"],
+    seniority: "Senior",
+    geos: ["Ungheria", "Italia", "Europa"],
     model: "Kimi",
     subscription: {
       provider: "Moonshot Kimi",
@@ -114,21 +114,21 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
     },
     profile: {
       badge: "B2",
-      headline: "Technical writer, documentazione e localizzazione",
+      headline: "Technical writer senior, documentazione e localizzazione",
       summary:
-        "Technical writer con esperienza nella documentazione di prodotto e software (API, developer docs, manualistica industriale) e nella localizzazione. Cerca ruoli di technical writing, documentation e content design in Europa, con base in Italia e legami con l'Ungheria — aperto al lavoro da remoto.",
+        "Technical writer e traduttore tecnico senior con circa 10 anni di esperienza cross-domain: documentazione industriale e software (API, developer docs, manualistica), traduzione tecnica e localizzazione/LQA/UAT. Cerca ruoli senior di technical writing, localizzazione e comunicazione tecnica multilingue, preferibilmente in full remote — priorità geografica Ungheria, poi Italia, poi resto d'Europa.",
       facts: [
-        { label: "Settore", value: "Technical writing · documentation · localizzazione" },
-        { label: "Esperienza", value: "Mid-level · documentazione di prodotto" },
-        { label: "Specializzazione", value: "Software & API docs · localizzazione · content" },
-        { label: "Lingue", value: "Italiano · Inglese · Ungherese" },
-        { label: "Mobilità", value: "Cittadino UE · remote-friendly · base Italia/Ungheria" },
+        { label: "Settore", value: "Technical writing · documentazione · localizzazione" },
+        { label: "Esperienza", value: "~10 anni · senior · cross-domain" },
+        { label: "Specializzazione", value: "Industrial & software docs · localizzazione · LQA/UAT" },
+        { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
+        { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
       ],
       locationNote:
-        "Aperto a ruoli in Europa, con preferenza per hub tech e aziende remote-friendly — base in Italia e disponibilità verso l'area ungherese. Tra le città ricorrenti nella ricerca:",
+        "Priorità al full remote; geograficamente prima l'Ungheria, poi l'Italia, poi il resto d'Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
       targetCities: [
-        "Milano",
         "Budapest",
+        "Milano",
         "Dublino",
         "Amsterdam",
         "Madrid",
@@ -136,7 +136,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
         "Varsavia",
         "Lisbona",
       ],
-      why: "Ecco perché i numeri vengono così: cercando ruoli di technical writing e localizzazione spesso remoti, il team ha pescato soprattutto da LinkedIn e dalle job board specializzate, e quasi tutte le posizioni ricadono in famiglie di documentazione, localizzazione e content — coerenti col profilo. La concentrazione su Italia e Ungheria riflette la base del candidato e le sue lingue.",
+      why: "Ecco perché i numeri vengono così: cercando ruoli senior di technical writing, traduzione tecnica e localizzazione spesso in full remote, il team ha pescato soprattutto da LinkedIn e dalle job board specializzate, e quasi tutte le posizioni ricadono in famiglie di documentazione, localizzazione e content. La presenza di Ungheria e Italia in cima riflette la priorità geografica e le lingue native del candidato.",
     },
     run: betaBRun as unknown as CaseStudyRun,
   },
