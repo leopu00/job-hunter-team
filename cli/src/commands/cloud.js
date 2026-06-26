@@ -6,6 +6,7 @@ import * as clack from '@clack/prompts';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
 import { SupabaseAuthError } from '../lib/supabase-direct.js';
 import { getDirectReader } from '../lib/cloud-direct.js';
+import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
@@ -1940,6 +1941,16 @@ async function handleDaemon(options) {
   const syncCheckSec = Math.max(1, parseInt(process.env.JHT_SYNC_CHECK_SEC || '5', 10) || 5);
   const heavyEvery = Math.max(1, Math.round(intervalSec / syncCheckSec));
   let fastTick = 0;
+
+  // [JHT-REALTIME-SYNC] Ramo event-driven (flag JHT_REALTIME_SYNC=1, default OFF):
+  // il daemon si iscrive a Supabase Realtime e reagisce agli eventi invece di pollare
+  // a ~5s. Con flag OFF resta il loop poll qui sotto (comportamento odierno invariato).
+  if (realtimeSyncEnabled()) {
+    await runRealtimeLoop({ config, isRunning: () => running });
+    console.log(pc.dim('Daemon terminato (event-driven).'));
+    return;
+  }
+
   while (running) {
     if (existsSync(WEEKLY_HALT_FLAG)) {
       if (haltSkipCount % heavyEvery === 0) {
@@ -2011,6 +2022,79 @@ async function handleDaemon(options) {
     }
   }
   console.log(pc.dim('Daemon terminato.'));
+}
+
+/**
+ * [JHT-REALTIME-SYNC] Loop event-driven del daemon (flag ON). Si iscrive a Supabase
+ * Realtime per reagire agli eventi (tappa 2: sync-flag su team_state) e gira un
+ * PARACADUTE poll lento (~5min, tappa 6) che ri-legge TUTTE le corsie → recupero se
+ * il socket muore o perde un evento. Con la SOLA fondazione (Part A) tutto già
+ * funziona via paracadute a 5min; Part B aggiunge il fast-path Realtime sui ticket,
+ * Part C affina le cadenze (desired-state 5min, heartbeat 3min, presence).
+ *
+ * @param {object} o
+ * @param {object} o.config      cloud.json già caricato
+ * @param {() => boolean} o.isRunning  true finché il daemon non riceve SIGTERM/SIGINT
+ */
+async function runRealtimeLoop({ config, isRunning }) {
+  const log = (level, msg) => console.error(pc.dim(`  cloud-realtime ${level}: ${msg}`));
+
+  // Debounce: una raffica di UPDATE su team_state non deve lanciare push concorrenti.
+  let syncing = false;
+  const runSync = async (tag) => {
+    if (syncing) return;
+    syncing = true;
+    try { await handleSyncRendezvous({ silent: true }); }
+    catch (e) { console.error(pc.yellow(`  ${tag} sync-rendezvous error: ${e.message}`)); }
+    finally { syncing = false; }
+  };
+
+  let rt = null;
+  try {
+    const { createRealtimeSync } = await import('../lib/cloud-realtime.js');
+    rt = await createRealtimeSync({ config, log });
+
+    // ── Tappa 2: sync-flag → Realtime ── UPDATE su team_state (sync_requested_at) → push.
+    rt.subscribe('team-state', { table: 'team_state', event: 'UPDATE' }, () => { void runSync('realtime'); });
+
+    // [PART-B: ticket realtime subscription]
+    // DEV #1 — iscriversi a position_tickets (event '*') → handleTicketSync({ silent: true }).
+    // Richiede mig 048 (position_tickets in publication supabase_realtime + REPLICA
+    // IDENTITY FULL). Vedi il prompt Part B / docs/internal/2026-06-26-sync-status-report.md.
+
+    log('info', 'realtime pronto (team_state) — sync via websocket + paracadute attivo.');
+  } catch (e) {
+    console.error(pc.yellow(`  cloud-realtime setup fallito (${e.message}) — degrado al solo paracadute poll.`));
+  }
+
+  // ── Paracadute (tappa 6) — OBBLIGATORIO ── poll lento di recupero: se il socket
+  // muore o perde un evento, qui il daemon recupera comunque. Gira SEMPRE (anche se
+  // il setup Realtime è fallito → degrada a poll puro). Ri-legge TUTTE le corsie.
+  const parachuteSec = Math.max(60, parseInt(process.env.JHT_PARACHUTE_SEC || '300', 10) || 300);
+  const sleepParachute = async () => {
+    for (let i = 0; i < parachuteSec && isRunning(); i++) await new Promise((r) => setTimeout(r, 1000));
+  };
+  while (isRunning()) {
+    if (existsSync(WEEKLY_HALT_FLAG)) { await sleepParachute(); continue; }
+
+    // Recupero corsie (best-effort, indipendenti):
+    await runSync('parachute');
+    try { await handleTicketSync({ silent: true }); }
+    catch (e) { console.error(pc.yellow(`  parachute ticket-sync error: ${e.message}`)); }
+    try { await handlePullDesiredState({ silent: true }); }
+    catch (e) { console.error(pc.yellow(`  parachute pull-desired-state error: ${e.message}`)); }
+    // [PART-C: parachute slow lane] DEV #2 — affina le cadenze: desired-state ~5min,
+    // heartbeat ~3min (verifica la soglia "online" della dashboard), presence. Per ora
+    // tutte le corsie girano qui a parachuteSec (~5min).
+    try {
+      const { reconcileOnce } = await import('../lib/team-state-reconciler.js');
+      await reconcileOnce();
+    } catch (e) { console.error(pc.yellow(`  parachute heartbeat error: ${e.message}`)); }
+
+    await sleepParachute();
+  }
+
+  if (rt) { try { await rt.close(); } catch { /* ignore */ } }
 }
 
 // Esportata per uso programmatico (es. wire al boot di `jht team start`
