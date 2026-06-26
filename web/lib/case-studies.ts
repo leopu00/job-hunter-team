@@ -102,9 +102,9 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
   {
     id: "beta-2",
     label: "Beta tester 2",
-    tagline: "Technical writing · localizzazione · full remote",
+    tagline: "Technical writing · traduzione · localizzazione",
     category: "Technical Writing",
-    seniority: "Senior",
+    seniority: "Senior · cross-domain",
     geos: ["Ungheria", "Italia", "Europa"],
     model: "Kimi",
     subscription: {
@@ -114,13 +114,13 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
     },
     profile: {
       badge: "B2",
-      headline: "Technical writer senior, documentazione e localizzazione",
+      headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
       summary:
-        "Technical writer e traduttore tecnico senior con circa 10 anni di esperienza cross-domain: documentazione industriale e software (API, developer docs, manualistica), traduzione tecnica e localizzazione/LQA/UAT. Cerca ruoli senior di technical writing, localizzazione e comunicazione tecnica multilingue, preferibilmente in full remote — priorità geografica Ungheria, poi Italia, poi resto d'Europa.",
+        "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta circa 10 anni di esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, falegnameria, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
       facts: [
-        { label: "Settore", value: "Technical writing · documentazione · localizzazione" },
-        { label: "Esperienza", value: "~10 anni · senior · cross-domain" },
-        { label: "Specializzazione", value: "Industrial & software docs · localizzazione · LQA/UAT" },
+        { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
+        { label: "Esperienza", value: "~10 anni cross-domain · industria + lingue" },
+        { label: "Background", value: "Manifattura · CAD/CAM/CNC · falegnameria · traduzione/interpretariato" },
         { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
         { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
       ],
@@ -136,7 +136,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
         "Varsavia",
         "Lisbona",
       ],
-      why: "Ecco perché i numeri vengono così: cercando ruoli senior di technical writing, traduzione tecnica e localizzazione spesso in full remote, il team ha pescato soprattutto da LinkedIn e dalle job board specializzate, e quasi tutte le posizioni ricadono in famiglie di documentazione, localizzazione e content. La presenza di Ungheria e Italia in cima riflette la priorità geografica e le lingue native del candidato.",
+      why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
     },
     run: betaBRun as unknown as CaseStudyRun,
   },
