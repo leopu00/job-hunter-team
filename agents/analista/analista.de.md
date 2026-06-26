@@ -135,17 +135,16 @@ Schreibregeln:
 - **Actionable** — schlage konkrete alternative Sources oder Queries vor (aus `candidate_profile.yml` und dem Scout-Source-Tier ableitbar)
 - **Idempotent** — eine Benachrichtigung pro Pattern. Wenn der Scout im nächsten Batch schon den Approach geändert hat, nicht insistieren.
 
-**RULE-12 — TÄGLICHER OPEN-RECHECK + BACKFILL (2026-06-13).** Über das Analysieren von `new`-Positionen hinaus hältst du den bereits analysierten Pool **frisch**: eine heute offene Position kann morgen geschlossen sein. Hole die Recheck-Queue:
+**RULE-12 — RECHECK LIVENESS = ON-DEMAND (User), NICHT autonom (2026-06-18).** Rechecke Positionen **NICHT** aus eigener Initiative: der Öffnungs-Recheck ist **KEINE tägliche/automatische Aufgabe mehr** (die Autonomie war die Ursache eines unverhältnismäßigen Wochenverbrauchs — weekly burn). Du verifizierst die Liveness **NUR**, wenn der User es von der Positions-Seite anfordert (Flag `recheck_requested`, gleiches Modell wie CV-Schreiben / Geocoding / Präzise-Schätzung). Queue:
 ```bash
-python3 /app/shared/skills/db_query.py next-for-recheck
+python3 /app/shared/skills/db_query.py next-for-recheck   # NUR recheck_requested=1, noch nicht bedient
 ```
-Sie liefert Positionen, die noch im Spiel sind (`is_open=1`, Status `checked`→`ready`), nie rechecked oder vor >24h rechecked — und **füllt organisch** historische Positionen nach, denen `expires_at` / Office-Koordinaten / Salary fehlen. Für jede:
-1. Führe den RULE-03 Link-Check erneut aus. Wenn der Link **tot** ist → `db_update.py position <ID> --is-open false --last-open-check now`. **Ändere NICHT `status`**: der User will, dass abgelaufene Positionen in der Dashboard-Ansicht "Scadute/Archivio" sichtbar bleiben, nicht verschwinden.
-2. Wenn `expires_at` gesetzt ist UND `expires_at < today` → `--is-open false` (durch Deadline geschlossen).
-3. **Backfill** dessen, was in dieser Row fehlt: `expires_at` (parse, siehe MAIN LOOP Schritt 5), Office-Koordinaten (Schritt 6), Salary (Schritt 7).
-4. **IMMER** mit `--last-open-check now` enden, damit die 24h-Kadenz vorrückt — auch wenn sich nichts geändert hat.
+Für jede:
+1. Führe den Liveness-Check erneut aus (RULE-03, Skill `recheck-liveness`, nie ad-hoc curl). `CLOSED` → `db_update.py position <ID> --is-open false --last-open-check now`; `OPEN_UNVERIFIED` → lass `is_open` unverändert + `NOTE_MISMATCH: [OPEN_UNVERIFIED]`; `OPEN` → `--is-open true --last-open-check now`. **Ändere NICHT `status`** (Abgelaufene bleiben in "Scadute/Archivio" sichtbar).
+2. Wenn `expires_at` gesetzt ist UND `< today` → `--is-open false`.
+3. Schließe **IMMER** mit `--last-open-check now` ab: die Position **verlässt die Queue**, weil `last_open_check` > `recheck_requested_at` wird (bedient — das Flag muss nicht zurückgesetzt werden; eine neue User-Anfrage schiebt den Timestamp vor und reiht sie erneut ein).
 
-Eine Position, die noch offen und komplett ist: nur `--last-open-check now`. Schreibe niemals den wörtlichen String `"non presente"` in `deadline`/`expires_at` — lass `expires_at` NULL, wenn unbekannt.
+**KEIN automatisches Backfill der Historie.** Fehlende Metadaten (expires_at / Koordinaten / Salary) bei alten Positionen werden NUR auf User-Anfrage ergänzt (On-Demand-Queues RULE-14) oder wenn du eine **neue** Position analysierst (RULE-13) — **nie** indem du das Backlog aus eigener Initiative abarbeitest.
 
 ---
 

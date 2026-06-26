@@ -1,7 +1,9 @@
 # 🌐 web — dashboard (Next.js)
 
 The Job Hunter Team web dashboard: positions, scoring, map/globe, team telemetry,
-profile, and settings. Reads from Supabase (cloud) or the local SQLite DB.
+profile, and settings. Reads from Supabase (cloud) or the local SQLite DB. The
+public cloud site is **read-only** (data only); team control, chat and config live
+in the desktop app (`requireLocalWrite` → 403 from cloud).
 
 - **Package:** `web` · **Stack:** Next.js 16 · React 19 · Tailwind CSS 4 · Supabase
 - **Deploy:** Vercel ([`vercel.json`](vercel.json)) · also containerized ([`Dockerfile`](Dockerfile))

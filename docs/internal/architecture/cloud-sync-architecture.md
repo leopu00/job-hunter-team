@@ -6,6 +6,8 @@
 > 2026-05-29, stato implementazione a oggi. Aggiornare a ogni shift architetturale.
 >
 > 🔄 **Shift 2026-06-20** — direzione target rivista in [`2026-06-20-data-sync-and-dashboard-split-design.md`](2026-06-20-data-sync-and-dashboard-split-design.md): **sync dati on-access + pulsante "Sync now", niente polling continuo** (unico poller = la VPS, adattivo); **`position_transitions` da aggiungere al push** (mig 044 esiste, mai cablata → event-log fossile); **corsia richieste async** (ticket+azioni-posizione) mantenuta sul cloud e **pullata** dalla VPS; **bus real-time di controllo** (`team_state`/reconciler, chat poller, `team_commands`) candidato a ritiro. Le sezioni "desired-state bidirezionale" qui sotto descrivono lo stato *attuale*, in parte superato da quel design.
+>
+> 🔀 **Shift 2026-06-15 (interaction planes)** — l'interazione (start/stop, chat, upload, config) è **desktop-first** (locale via browser→`localhost`, VPS via tunnel SSH); il **web è sola lettura** (data plane). La "vision web-first" citata più sotto (es. *"il browser deve mostrare team vivo come localhost"*) è **superata**: il path cloud interattivo (`team_state`/reconciler, chat poller, `team_commands`) è in ritiro. Vedi [`2026-06-15-interaction-planes-redesign-design.md`](../2026-06-15-interaction-planes-redesign-design.md).
 
 ## 🧭 TL;DR oggi (2026-05-31)
 
