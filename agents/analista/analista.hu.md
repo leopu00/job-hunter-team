@@ -135,17 +135,16 @@ jht-tmux-send <SCOUT-SESSION> "[@$MY_ID -> @<scout-id>] [FEEDBACK] Pattern észl
 - **Actionable** — javasolj konkrét alternatív sources-okat vagy query-ket (a `candidate_profile.yml`-ből és a scout source tier-ből leszármaztathatóak)
 - **Idempotens** — egy értesítés patternenként. Ha a scout már változtatott approach-ot a következő batch-ben, ne erősködj.
 
-**RULE-12 — NAPI OPEN RECHECK + BACKFILL (2026-06-13).** A `new` pozíciók elemzésén túl a már elemzett poolt is **frissen** tartod: egy pozíció, ami ma nyitva van, holnap zárva lehet. Húzd le a recheck queue-t:
+**RULE-12 — RECHECK LIVENESS = ON-DEMAND (felhasználó), NEM autonóm (2026-06-18).** **NE** rechecks-eld a pozíciókat saját kezdeményezésből: a nyitó recheck **MÁR NEM napi/automatikus feladat** (az autonómia volt az aránytalan heti fogyasztás oka — weekly burn). A liveness-t **CSAK** akkor ellenőrzöd újra, amikor a felhasználó kéri a pozíció oldaláról (`recheck_requested` flag, ugyanaz a modell, mint CV-írás / Geocoding / Pontos-becslés). Queue:
 ```bash
-python3 /app/shared/skills/db_query.py next-for-recheck
+python3 /app/shared/skills/db_query.py next-for-recheck   # CSAK recheck_requested=1, még nem kiszolgáltak
 ```
-Visszaadja a még játékban lévő pozíciókat (`is_open=1`, status `checked`→`ready`), amelyeket soha nem rechecked-eltek vagy >24h-val ezelőtt — és **organikusan backfill-eli** a `expires_at` / iroda-koordináták / fizetés hiányzó történelmi pozíciókat. Mindegyikhez:
-1. Futtasd újra a RULE-03 link check-et. Ha a link **halott** → `db_update.py position <ID> --is-open false --last-open-check now`. **NE változtasd a `status`-t**: a felhasználó azt akarja, hogy a lejárt pozíciók láthatóak maradjanak a "Scadute/Archivio" dashboard nézetben, ne tűnjenek el.
-2. Ha az `expires_at` be van állítva ÉS `expires_at < today` → `--is-open false` (deadline miatt zárva).
-3. **Backfill** ami hiányzik azon a row-on: `expires_at` (parse, lásd MAIN LOOP 5. lépés), iroda-koordináták (6. lépés), fizetés (7. lépés).
-4. **MINDIG** zárd `--last-open-check now`-val, hogy a 24h kadencia haladjon — még ha semmi nem változott is.
+Mindegyikhez:
+1. Futtasd újra a liveness check-et (RULE-03, `recheck-liveness` skill, soha ad-hoc curl). `CLOSED` → `db_update.py position <ID> --is-open false --last-open-check now`; `OPEN_UNVERIFIED` → hagyd az `is_open`-t változatlanul + `NOTE_MISMATCH: [OPEN_UNVERIFIED]`; `OPEN` → `--is-open true --last-open-check now`. **NE változtasd a `status`-t** (a lejártak láthatóak maradnak a "Scadute/Archivio"-ban).
+2. Ha az `expires_at` be van állítva ÉS `< today` → `--is-open false`.
+3. **MINDIG** `--last-open-check now`-val zárd: a pozíció **kikerül a queue-ból**, mert a `last_open_check` > `recheck_requested_at` lesz (kiszolgálva — nem kell nullázni a flag-et; a felhasználó új kérése előretolja a timestamp-et és újra besorolja).
 
-Egy még nyitott és komplett pozíció: csak `--last-open-check now`. Soha ne írd a literal `"non presente"` stringet a `deadline`/`expires_at`-be — hagyd az `expires_at`-et NULL-ként, ha ismeretlen.
+**SEMMI automatikus történeti backfill.** A hiányzó metaadatok (expires_at / koordináták / fizetés) a régi pozíciókon CSAK a felhasználó kérésére töltődnek ki (on-demand queue-k RULE-14) vagy amikor **új** pozíciót elemzel (RULE-13) — **soha** nem a backlog-ot saját kezdeményezésből végigverve.
 
 ---
 
