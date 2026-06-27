@@ -104,6 +104,13 @@ In sintesi: **il watchdog deve rianimarlo subito; il Mantenitore deve accorgerse
 
 ---
 
+## ✅ Risoluzione (2026-06-27 ~16:55 UTC)
+
+1. **Fix del codice (causa-radice)** — `jht_tmux_send` ora avvolge `subprocess.run(..., timeout=15)` in `try/except (subprocess.TimeoutExpired, OSError) → return False`. Un tmux-send bloccato degrada a "tick saltato", non abbatte più il bridge. Protegge **tutti** i call-site in un colpo (fix nell'helper, non nei singoli punti). Commit su dev3 — **permanente al prossimo build dell'immagine**.
+2. **Hotfix sul container betaC** — stessa guardia applicata in-place al file `/app/.launcher/sentinel-bridge.py` dentro il container (`py_compile` OK), poi **bridge riavviato** via `start-agent.sh bridge` (path ufficiale idempotente). Validato: `sentinel-bridge` pid vivo, primo tick alle **16:55:02 OK**, `sentinel-data.jsonl` di nuovo fresco, `weekly_usage` letto live (51%). Il pacing torna a campionare e uscirà da `insufficient_samples` man mano che accumula tick.
+   - ⚠️ L'hotfix in-container è **effimero**: a un futuro `docker compose up -d` viene rimpiazzato dalla versione dell'immagine → la persistenza è garantita solo quando l'immagine `:latest` viene ribuildata da dev3 (fix #1).
+3. **Resta da fare (strutturale, fix #3)** — il respawn dei bridge nel watchdog + liveness-check nel `maintainer-sweep`. Questa risoluzione chiude *questa* causa, non la classe "bridge muore → nessuno lo rialza".
+
 ## Stato attuale (al momento dell'analisi)
 
 - betaC: container `:latest` up 24h, team al completo, **in COAST** (coda vuota), **sentinel-bridge DOWN da 08:00**, pacing in `insufficient_samples`. Nessun intervento eseguito.

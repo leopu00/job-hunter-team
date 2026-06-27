@@ -427,7 +427,16 @@ def session_exists(s):
 
 
 def jht_tmux_send(session, text):
-    return subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode == 0
+    # Difesa: un tmux-send che si blocca (pane occupato) NON deve mai abbattere il
+    # bridge. Senza questa guardia, TimeoutExpired propagava fuori dal while-loop di
+    # main() (l'unico handler esterno è KeyboardInterrupt) → bridge morto in silenzio,
+    # zero auto-recovery (setsid detached, fuori dal respawn di pid1). Vedi postmortem
+    # docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md. Degrada a "tick saltato".
+    try:
+        return subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode == 0
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"[bridge V6] WARN jht_tmux_send({session}): {e}", file=sys.stderr)
+        return False
 
 
 def _sample_vitals_and_maybe_alert():
