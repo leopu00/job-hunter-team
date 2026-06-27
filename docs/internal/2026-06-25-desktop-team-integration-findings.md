@@ -163,7 +163,14 @@ ha il **contesto del canale**.
 | Kill/restart per-agente dal pannello | `8a4cc069a` |
 
 ## 7. TODO aperti
-- [ ] **Bug 3 chat**: persistere i messaggi utente in `chat.jsonl` (§4).
+- [ ] **GAP wizard VPS salta CV + orari (NEW 2026-06-27, setup b3).** Il ramo VPS bypassa
+      `enterWorkingHours` + upload CV (`wizard-flow.js:1437-1438` `enterReady.vps.bypass-to-home`):
+      gli step esistono (`b1968ca5a`) ma solo nel ramo locale → **in VPS mode l'utente non
+      carica MAI il CV**. Fix: includere working-hours + CV upload nel ramo VPS (o post-setup da home).
+- [ ] **GAP upload documenti VPS mode (NEW 2026-06-27).** Dalla home in VPS mode non si caricano
+      CV/allegati. Workaround b3: scp manuale su `/jht_user/cv` + Assistente lanciato a mano.
+- [ ] **Bug 3 chat**: persistere i messaggi utente in `chat.jsonl` (§4). *(Conferma 2026-06-27:
+      chat non funziona in VPS mode durante setup b3.)*
 - [ ] **Agent awareness canale + auto-sufficienza** (§5): prompt/skill di tutti gli
       agenti — non chiedere azioni terminale all'utente desktop; risolvere con
       Python/script; auto-iniettare slash command o delegarli a un altro agente.
