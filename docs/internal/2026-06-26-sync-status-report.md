@@ -53,6 +53,21 @@ NON urgente ora (1 VPS attivo, margine enorme). Da affrontare crescendo a molti 
 - **Unificare l'auth**: REST diretto + websocket usano lo STESSO `refresh_token` → 2 sessioni che ruotano in parallelo; a scala + riconnessioni frequenti può dare race di rotazione token (0 finora). Fix pulito = una sola sessione auth condivisa.
 - **Paracadute come leva**: se il Realtime fosse inaffidabile su larga scala, abbassare `JHT_PARACHUTE_SEC` (5min→2-3min) per recupero più stretto.
 
+### 💸 Decisione: posizione Vercel — NON inseguire lo "zero Vercel" (2026-06-27)
+**Verificato live su betaC:** in idle il daemon fa **0 chiamate a Vercel in 6 min** (letture/heartbeat su Supabase diretto, eventi via websocket). Il **polling sempre-attivo** — che scalava col n° di utenti ed era il vero driver di costo — è **eliminato**.
+
+**Cosa resta su Vercel (e va bene così):**
+- **Push dati** (`handlePush` → `${base_url}/api/cloud-sync/push`, `cloud.js:989`): **on-demand** (solo su "Sync now"), + push risoluzione ticket (`/api/cloud-sync/tickets`). User-driven, bounded.
+- **Sito/dashboard** `jobhunterteam.ai` (Next.js su Vercel): hosting web inerente, consuma **solo quando un utente naviga** (read-only). Non si toglie spostando il push.
+- Auth/login + bootstrap/restore: rari.
+
+**Decisione: si tiene il push su Vercel, NON si fa la "Fase 3" (push diretto a Supabase).** Motivi:
+1. Il progetto Vercel serve comunque (ci gira il sito) → daemon 100% vs ~99% Vercel-free non cambia se paghi/usi Vercel.
+2. Il push è on-demand (pochi click/giorno/utente) → **non è un costo di scala**; il driver di scala (polling) è già morto.
+3. Spostare il push = refactor vero e rischioso (upsert su molte tabelle dal VPS: positions/scores/applications/companies/highlights, RLS, mapping `legacy_id`, conflitti) per **guadagno ~zero** (bolletta già al canone base $20, polling già eliminato).
+
+**Regola:** l'obiettivo non era "zero Vercel" (impossibile finché c'è il sito + inutile), era **"Vercel non scala col daemon sempre-attivo"** → CENTRATO. Se un domani il costo Vercel crescesse con gli utenti, sarà il **traffico del sito**, non il push → leva giusta = ottimizzare l'app Next (caching/ISR, render statico, alleggerire le API di lettura), NON azzerare il push del daemon.
+
 **Nota sul lavoro parallelo:** la divisione in 3 (Part A/B/C) ha dato in pratica solo la
 **mig 048** (consegnata duplicata da due branch, non costruita sulla fondazione). Il
 cablaggio `cloud.js` di Part B (subscribe ticket) e tutta Part C sono stati completati
