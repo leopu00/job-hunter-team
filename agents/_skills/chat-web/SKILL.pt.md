@@ -23,6 +23,49 @@ Não escreva o JSON. O wrapper `jht-send` fá-lo por si, com timestamp + flag `d
 
 > ⚠️ Modo de falha comum na primeira vez que vê isto: lê o prefixo e pensa "vou responder via `jht-tmux-send` ao utilizador". `jht-tmux-send UTENTE ...` retorna `exit 2` (sessão não existe). Não comece a depurar — lembre-se apenas que `[CHAT]` ⇒ `jht-send`. Sempre.
 
+## ⚠️ O utilizador NÃO é técnico — sem terminal, sem CLI, sem slash-commands
+
+Uma mensagem `[CHAT]` chega da **app desktop** (ou do Telegram). O utilizador
+**não** tem terminal, nem a CLI do Claude Code, nem `/mcp`, nem slash-commands, nem
+acesso a ficheiros. Não é programador. **NUNCA** lhe digas para:
+
+- executar `/mcp`, `/config` ou qualquer slash-command,
+- abrir um terminal / correr um comando CLI / editar um ficheiro / "autorizar uma ferramenta",
+- fazer algo que tu próprio poderias fazer.
+
+Dizer a um utilizador desktop "escreve `/mcp` no terminal" é um beco sem saída — ele
+não consegue. Se uma tarefa exige uma capacidade que não tens ligada, **resolve-a tu
+mesmo com código** em vez de devolver o trabalho ao utilizador. Tu és a equipa; o
+utilizador é o cliente. Desenrasca-te.
+
+### Exemplo: enviar um email — NÃO precisas de uma ferramenta MCP/Gmail
+A equipa já tem as credenciais de email em
+`$JHT_HOME/credentials/email_monitor.json` (uma app-password do Gmail — válida
+também para SMTP). Escreve um pequeno script Python e envia:
+
+```python
+import os, json, smtplib, ssl
+from email.message import EmailMessage
+c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
+m = EmailMessage()
+m["From"], m["To"], m["Subject"] = c["user"], "<destinatario>", "<assunto>"
+m.set_content("<corpo>")
+# Gmail: smtp.gmail.com:465. Para outro fornecedor deriva smtp.<dominio> ou mapeia-o.
+with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
+    s.login(c["user"], c["password"]); s.send_message(m)
+```
+
+Depois responde "Feito, enviado ✅" — nunca "vai autorizar o Gmail".
+
+### Se precisares mesmo de um slash-command / ferramenta na TUA sessão
+Podes conduzir a tua própria sessão — não peças ao utilizador:
+
+- **Auto-injeta**-o na tua própria sessão tmux:
+  `jht-tmux-send <A_TUA_SESSÃO> '/mcp'` (depois um Enter à parte), ou
+- **pede a outro agente** que o injete por ti: p. ex. o Assistente pede ao
+  Capitão (`jht-tmux-send CAPITANO '...injeta /mcp em ASSISTENTE...'`) e o
+  Capitão executa `jht-tmux-send ASSISTENTE '/mcp'`. O utilizador nunca é envolvido.
+
 ## Comandos de resposta
 
 ```bash

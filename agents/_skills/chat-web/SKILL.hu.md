@@ -23,6 +23,49 @@ Nem te írod a JSON-t. A `jht-send` wrapper csinálja, időbélyeggel + `done` j
 
 > ⚠️ Gyakori hibamód, amikor először látod ezt: olvasod az előtagot és arra gondolsz "válaszoljak `jht-tmux-send`-del a felhasználónak". A `jht-tmux-send UTENTE ...` `exit 2`-vel tér vissza (nincs ilyen munkamenet). Ne kezdj hibakeresni — csak emlékezz, hogy `[CHAT]` ⇒ `jht-send`. Mindig.
 
+## ⚠️ A felhasználó NEM technikai — nincs terminál, nincs CLI, nincsenek slash-parancsok
+
+Egy `[CHAT]` üzenet az **asztali appból** (vagy Telegramból) érkezik. A felhasználónak
+**nincs** terminálja, sem Claude Code CLI-je, sem `/mcp`-je, sem slash-parancsa, sem
+fájl-hozzáférése. Nem fejlesztő. **SOHA** ne mondd neki, hogy:
+
+- futtasson `/mcp`-t, `/config`-ot vagy bármilyen slash-parancsot,
+- nyisson terminált / futtasson CLI-parancsot / szerkesszen fájlt / "engedélyezzen egy eszközt",
+- csináljon bármit, amit te magad is meg tudnál csinálni.
+
+Azt mondani egy asztali felhasználónak, hogy „írd be a `/mcp`-t a terminálba", zsákutca
+— nem tudja megtenni. Ha egy feladathoz olyan képesség kell, amit nem kötöttél be,
+**oldd meg te magad kóddal**, ahelyett, hogy visszadobnád a munkát a felhasználóra. Te
+vagy a csapat; a felhasználó az ügyfél. Találd ki.
+
+### Példa: email küldése — NEM kell MCP/Gmail eszköz
+A csapatnak már megvannak az email-hitelesítő adatai itt:
+`$JHT_HOME/credentials/email_monitor.json` (egy Gmail app-jelszó — SMTP-hez is
+érvényes). Írj egy kis Python szkriptet és küldd el:
+
+```python
+import os, json, smtplib, ssl
+from email.message import EmailMessage
+c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
+m = EmailMessage()
+m["From"], m["To"], m["Subject"] = c["user"], "<cimzett>", "<targy>"
+m.set_content("<torzs>")
+# Gmail: smtp.gmail.com:465. Más szolgáltatóhoz vezesd le az smtp.<domain>-t vagy képezd le.
+with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
+    s.login(c["user"], c["password"]); s.send_message(m)
+```
+
+Aztán válaszolj: „Kész, elküldve ✅" — soha ne „menj és engedélyezd a Gmailt".
+
+### Ha tényleg slash-parancs / eszköz kell a SAJÁT munkamenetedben
+Te magad vezérelheted a saját munkamenetedet — ne a felhasználót kérd:
+
+- **Öninjektáld** a saját tmux munkamenetedbe:
+  `jht-tmux-send <SAJÁT_MUNKAMENET> '/mcp'` (majd egy külön Enter), vagy
+- **kérj meg egy másik ügynököt**, hogy injektálja helyetted: pl. az Asszisztens
+  megkéri a Kapitányt (`jht-tmux-send CAPITANO '...injektáld a /mcp-t ASSISTENTE-be...'`)
+  és a Kapitány lefuttatja a `jht-tmux-send ASSISTENTE '/mcp'`-t. A felhasználó sosem érintett.
+
 ## Válasz parancsok
 
 ```bash

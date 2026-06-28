@@ -139,8 +139,16 @@ ha il **contesto del canale**.
      dell'Assistente**, così parte lì.
 
 > Vale per **tutti** gli agenti, non solo l'Assistente. È un capitolo "agent
-> awareness del canale + auto-sufficienza" da progettare e propagare nei prompt/skill
-> (e in i18n). NON ancora implementato.
+> awareness del canale + auto-sufficienza".
+>
+> **IMPLEMENTATO (2026-06-28).** Il principio vive nella skill `chat-web` (sezione
+> "⚠️ The user is NON-TECHNICAL — no terminal, no CLI, no slash commands": niente
+> azioni da terminale all'utente desktop, risolvi con Python — esempio smtplib con
+> `$JHT_HOME/credentials/email_monitor.json` — auto-iniezione slash command
+> `jht-tmux-send <PROPRIA_SESSIONE> '/mcp'` o delega a un altro agente). Era già in
+> EN + IT; portato anche in es/fr/de/hu/pt (le 5 i18n che mancavano). I 3 agenti
+> user-facing (Capitano/Assistente/Mentor) caricano già `chat-web` su ogni `[CHAT]`,
+> quindi la regola li raggiunge senza toccare i 77 file dei prompt.
 
 ---
 
@@ -182,11 +190,14 @@ ha il **contesto del canale**.
 - [ ] **GAP email in VPS mode (NEW 2026-06-28).** Il ramo VPS salta lo step email: le credenziali
       `email_monitor.json` si salvano solo in locale (`~/.jht/credentials`), serve una variante
       remota (write SSH + chown 1001) come per orari/CV. Per ora il team VPS fa web sourcing.
-- [ ] **Bug 3 chat**: persistere i messaggi utente in `chat.jsonl` (§4). *(Conferma 2026-06-27:
-      chat non funziona in VPS mode durante setup b3.)*
-- [ ] **Agent awareness canale + auto-sufficienza** (§5): prompt/skill di tutti gli
-      agenti — non chiedere azioni terminale all'utente desktop; risolvere con
-      Python/script; auto-iniettare slash command o delegarli a un altro agente.
+- [x] **Bug 3 chat (FIXED 2026-06-28).** Local mode: già persistito (chat:send scrive
+      il msg utente in chat.jsonl, main.js). VPS mode: il fix mancava — chat:send faceva
+      `docker exec` locale (container remoto) → falliva. Ora ramo VPS via SSH+docker exec:
+      persist (`cat >> chat.jsonl` da stdin) + invio (`tmux load-buffer -`/`paste-buffer`,
+      niente quoting del payload). §4.
+- [x] **Agent awareness canale + auto-sufficienza (FIXED 2026-06-28).** Nella skill
+      `chat-web` (vedi §5): era in EN+IT, portato anche in es/fr/de/hu/pt. I 3 agenti
+      user-facing la caricano su ogni `[CHAT]`.
 - [ ] Container detached + auto-start team (§3).
 - [ ] `pull desired-state: unknown option '--silent'` e `ticket-sync: no such table
       position_tickets` (warning non-fatali nel bootstrap team).
