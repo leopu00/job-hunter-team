@@ -43,7 +43,10 @@ jobs:
           node-version: "24"
 
       - name: Install Prettier
-        run: npm install --no-save prettier
+        # Versione FISSA: senza pin `npm install prettier` prende l'ultima e una
+        # nuova release riformatta file non toccati → Lint rosso su PR estranee.
+        # Allineata alla 3.8.3 contro cui il repo è già formattato.
+        run: npm install --no-save prettier@3.8.3
 
       - name: Prettier check — web/
         run: npx prettier --check "web/app/**/*.{ts,tsx}"
