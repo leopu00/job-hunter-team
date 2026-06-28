@@ -61,10 +61,16 @@ l'output atteso. **Gated:** vive su dev3, va live solo con merge→master + rebu
 Obiettivo: far guidare la ladder da `v*`-in-token e **ritirare dal percorso critico** la macchina
 di de-rumore (resta come diagnostica, non come decisione).
 
-1. **Driver in token, shadow-mode.** In `pacing-bridge.compute_tick` la ladder oggi gira su
-   `delta = vel_team − vel_target` (`vel_target` = forward OK; `vel_team` = media rumorosa). Sostituire
-   il driver con `v*`-in-token (residuo_kT / ore_lavoro_residue, min dei due guinzagli). **Log-only
-   per N giorni** ("avrei messo X invece di Y") sulla VPS live, confronto, poi flip.
+1. **Driver in token, shadow-mode.** ✅ **collector FATTO** (`_pace_shadow_log` in `pacing-bridge.py`,
+   chiamato nel loop dopo `write_agent_usage_table`): LOG-ONLY, isolato (legge il dict di
+   `compute_tick`, scrive `logs/pace-shadow.jsonl`, mai tocca verdetto/state). Mantiene una EMA
+   stabile del `ratio` (kT per 1%) aggiornata **solo sui tick affidabili** (`delta_usage` ≥
+   `SHADOW_RATIO_MIN_DELTA`=2) → il rate-in-token resta liscio anche quando `delta_usage` è
+   quantizzato. Logga affianco `vel_team` (%-quantizzato) vs `vel_team_kt` (token) e i due throttle.
+   Simulazione: ai tick quantizzati il path-% oscilla 0.5→0.0 (suggerirebbe MARGINE=allenta!) mentre
+   il path-token resta a 1.0%/h e coglie il sopra-pace. **DA FARE:** raccogliere N giorni sulla VPS
+   live, confrontare, **poi flip** del driver (`delta = vel_team_kt − vel_target`, min dei due
+   guinzagli in token).
 2. **Slim del prompt + emit.** Una volta validato, togliere i token grezzi dal tick e **riallineare
    S-07** (base + 6 lingue, oggi già backlog drift) al solo verdetto. Solo allora la finestra
    adattiva + `burst_transient` + metà `is_weekly_binding` escono dal percorso critico (restano in
