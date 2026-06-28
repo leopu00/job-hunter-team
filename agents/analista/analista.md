@@ -88,7 +88,7 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/etc. or "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
-If even ONE field is missing, the analysis is INCOMPLETE. After the 5 fields: write 3-4 sentences of analysis — match with the candidate profile, evident gaps, red flags.
+If even ONE field is missing, the analysis is INCOMPLETE. After the 5 fields: write 3-4 sentences of analysis **in the user's language** (RULE-T14 — analyst notes follow the user locale; never default to English) — match with the candidate profile, evident gaps, red flags.
 
 **RULE-05** — EXPERIENCE FLAG: If the JD requires more years than the candidate has, flag it explicitly in the notes. The Scorer depends on this. ALWAYS use the calculated real experience (see CANDIDATE PROFILE section), not the rounded field.
 
@@ -167,6 +167,13 @@ NB ora **recheck / geocode / salary-precise / write sono tutti flag user-driven*
    ```
    La risposta compare nella sezione "Richieste al team" della pagina posizione. Se nel farlo modifichi dati della posizione (es. `is_open`, note), usali coi normali `db_update.py`: la `--response` è il **messaggio** per l'utente, non un duplicato dei dati.
 
+**RULE-16 — JD SUMMARY (`jd_summary`, user-facing digest, MANDATORY).** Beyond the raw `jd_text` (fetched verbatim by the Scout — it stays in DB as your source + a legacy fallback), write a **`jd_summary`**: the optimized, readable version of the offer that the USER actually reads on the position page — **NOT a copy of the JD**. You already fetched the full JD at MAIN LOOP step 2, so this costs nothing extra. Distill the gist:
+- **1-3 short paragraphs OR a bullet list** (whichever fits the offer) — never a wall of text.
+- **Light markdown**: `**bold**` on the decisive facts (role, seniority, location, contract, salary if stated), `- ` bullets for key responsibilities/requirements, a few **emoji** to make it scannable (sparing — ~1 per bullet at most).
+- Capture **what the job is, who it is for, what it offers** — the substance. Cut the boilerplate ("dynamic team", "market leader", …).
+- **In the USER's language** (RULE-T14): the summary is your distillation FOR the user, so it follows the user locale even when the JD body is in another language — you read the original, you write the gist in the user's language. (The verbatim `jd_text` stays original; your `jd_summary` does not.)
+- Write it: `db_update.py position <ID> --jd-summary "<markdown>"`. Use **real newlines** (`$'...\n...'`, see the step-12 note), never literal `\n`.
+
 ---
 
 ## MAIN LOOP
@@ -186,6 +193,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Fetch complete JD from the link
 3. Analyze: fit with profile, gaps, red flags
 4. Write the 5 structured fields + analysis in the notes
+4b. **Write `jd_summary`** (RULE-16) — the optimized, user-facing digest of the offer (1-3 paragraphs or bullets, light markdown + a few emoji, **in the user's language**). NOT a copy of `jd_text`. Cheap: you already have the JD from step 2.
 5. **Deadline → `expires_at`** (machine-readable). Parse the JD with the existing skill:
    ```bash
    python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # prints ISO date or empty
@@ -218,7 +226,11 @@ python3 /app/shared/skills/db_query.py position <ID>
 
 ```bash
 # Update status
-python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "EXPERIENCE_REQUIRED: 1-2 years\n..."
+# ⚠️ Use $'...' (ANSI-C quoting) for REAL newlines. Inside plain double quotes
+# "...\n..." the \n stays a LITERAL backslash-n and the page renders it as text
+# (historical formatting bug). $'...\n...' produces actual line breaks.
+python3 /app/shared/skills/db_update.py position <ID> --status checked \
+  --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<3-4 sentences of analysis, in the user language>'
 
 # Exclude
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <specific reason>"

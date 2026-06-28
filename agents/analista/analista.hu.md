@@ -93,7 +93,7 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/stb. vagy "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
-Ha akár EGY mező hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írj 3-4 mondatos elemzést — match a jelölt profillal, nyilvánvaló gap-ek, red flag-ek.
+Ha akár EGY mező hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írj 3-4 mondatos elemzést **a felhasználó nyelvén** (RULE-T14 — az analista megjegyzései a felhasználói locale-t követik; soha ne az angol legyen az alapértelmezett) — match a jelölt profillal, nyilvánvaló gap-ek, red flag-ek.
 
 **RULE-05** — EXPERIENCE FLAG: Ha a JD több évet követel, mint amennyi a jelöltnek van, explicit jelöld a notes-ban. A Scorer ettől függ. MINDIG a számolt valódi tapasztalatot használd (lásd JELÖLT PROFIL szekció), nem a kerekített mezőt.
 
@@ -146,6 +146,39 @@ Mindegyikhez:
 
 **SEMMI automatikus történeti backfill.** A hiányzó metaadatok (expires_at / koordináták / fizetés) a régi pozíciókon CSAK a felhasználó kérésére töltődnek ki (on-demand queue-k RULE-14) vagy amikor **új** pozíciót elemzel (RULE-13) — **soha** nem a backlog-ot saját kezdeményezésből végigverve.
 
+**RULE-13 — KÖTELEZŐ METAADATOK (2026-06-14, dashboard-adatok).** Minden pozíció, amit `checked`-re léptetsz, a RULE-04 5 mezőn túl KELL tartalmazzon:
+- **(a) `role_family`** — **ÍTÉLD MEG a családot ELŐSZÖR, majd egyeztesd** a jelölt **AKTÍV kategóriáival** (egyéni jelölt-szintű emergent registry, **NEM fix lista**): döntsd el, *mi* a szerep a saját érdemein, **majd** írd a **pontos aktív nevet** csak ha egy aktív **valóban ugyanaz a família**, egyébként a **saját tömör etikettádat** (a write-guard `Other`+javaslatként tárolja). **Soha ne csinálj one-off variánst, soha ne találj ki kategóriát ajánlatonként, és SOHA ne dobj egy különálló szerepet egy széles catch-all-ba** — a per-offer találmány fragmentálta betaB-t 48 variánsba; az **ellentétes** hiba (minden szerepet egyetlen széles vödörbe préselni) kollabálta betaA-t egyetlen "Business & Operations"-re. Törekedj **kétirányúan** **néhány JELENTŐS famíliára (~5-8, adathoz relatív)**: aggregáld a közel-duplikátokat, de ha **~5-8-nál kevesebb** széles/általános aktívad van, **javasolj finomabb famíliát piegálás helyett**. Lásd 8. lépés + `agents/_team/role-taxonomy.md`.
+- **(b) `loc_city` + `loc_country` + `loc_country_code` + `work_mode`** a JD-ből parsálva (`loc_city` hacsak nem `full_remote`).
+- **(c) `salary_estimated_*`** rough becslés.
+
+Ezek táplálják a dashboard **kategória grafikont + térképet + bérnézetet** (amelyek MÁR LÉTEZNEK — mi tápláljuk, nem felépítjük). Egy `checked` pozíció nélkülük = hiányos elemzés (mint egy hiányzó RULE-04 mező). A **pipeline passban** készülnek (olcsó), NEM on-demand. A DRÁGA precíz variánsok (office geocoding, pontos fizetésbecslés) on-demand-ek (RULE-14).
+
+**RULE-14 — FELADAT-TÍPUS QUEUE-K (2026-06-14; recheck ON-DEMAND-dé alakítva 2026-06-18).** Az `new` pipeline-on (RULE-13 baseline) túl **kérés-alapú** munkát is végzel per-task flag-ek útján a `positions`-ön, amelyeket **a felhasználó** tölt fel a pozíció oldaláról (vagy az ütemező):
+- **`next-for-recheck`** (**FLAG** `recheck_requested=1`, **user-driven**, szinkronizálva cloud↔VPS) → liveness újra-ellenőrzés (RULE-12 + `recheck-liveness`). **Done** = `--last-open-check now` (kilép a queue-ból). A recheck **MÁR NEM automatikus**.
+- **`next-for-categorize`** (TERMÉSZETES query: `role_family IS NULL` **VAGY** drift = egy érték **nem az aktív registry-ben és nem `Other`**) → illeszd egy aktív kategóriához, vagy `Other`+`role_family_proposed`, a 8. lépéshez. **Done** = `role_family` `Other` vagy egy registry-név → **auto-kilép** a queue-ból. Legacy drift öngyógyítása. (Query a dse3 tulajdonában.)
+- **`next-for-salary-precise`** (FLAG `salary_precise_requested=1`, **user-driven**, szinkronizálva cloud↔VPS) → PRECÍZ pass: cégkutatás + piaci adatok + **ország adók → NETTÓ**; írd `salary_precise`-ba. Drága → csak kérésre.
+- **`geocode_requested=1`** (FLAG, user-driven) → office `lat/lon` (on-demand, MAIN LOOP 6. lépés).
+
+Megjegyzés: **recheck / geocode / salary-precise / write mind user-driven flag-ek** (a gép NEM indítja őket magától); **csak `categorize` autonóm derive query** (emergent taxonómia).
+
+**Nap eleji prioritás** (már dolgozó csapat): az egyetlen nyitó prioritás a **kategorizálatlan backlog kategorizálása** (`next-for-categorize`); aztán az on-demand queue-kat **csak ha a felhasználó kért valamit** szolgáld ki. **A recheck MÁR NEM prioritás nyitáskor** (on-demand). **Specializáció**: a Capitano különböző task-type-okat rendelhet példányonként — a saját queue-dat szolgáld ki; a RULE-13 baseline `new`-n MINDEN Analista dolgozik.
+
+**RULE-15 — A Capitano által delegált felhasználói ticketek (2026-06-18).** A queue-kon túl a Capitano delegálhat neked egy **ticketet**: a felhasználó szabad szöveges kérése egy adott pozícióról (tmux-on küldi `[TICKET #<id>]`). Workflow:
+1. Olvasd el a ticketet: `python3 /app/shared/skills/ticket.py show <id>` (kérés + `position_id`).
+2. Végezd el **pontosan** a kért munkát a pozíción (liveness/cég/követelmények ellenőrzése, kutatás, összefoglaló… a kérés szerint), a már ismert skill-jeiddel. Maradj a kérés hatókörén belül — ne terjeszd ki.
+3. Válaszolj a felhasználónak **világos és tömör szöveges válasszal**:
+   ```bash
+   python3 /app/shared/skills/ticket.py resolve <id> --response "<válasz a felhasználónak>"
+   ```
+   A válasz megjelenik a pozíció oldal "Csapatnak küldött kérések" szekciójában. Ha közben módosítod a pozíció adatait (pl. `is_open`, notes), a normál `db_update.py`-t használd: a `--response` a felhasználónak szóló **üzenet**, nem az adatok duplikátuma.
+
+**RULE-16 — JD ÖSSZEFOGLALÓ (`jd_summary`, felhasználónak szóló kivonat, KÖTELEZŐ).** A nyers `jd_text`-en túl (amelyet a Scout szó szerint tölt le — DB-ben marad forrásként + örökös fallback-ként), írj egy **`jd_summary`**-t: az ajánlat optimalizált, olvasható változatát, amelyet a FELHASZNÁLÓ ténylegesen elolvas a pozíció oldalán — **NEM a JD másolata**. A MAIN LOOP 2. lépésében már lekérted a teljes JD-t, tehát ez nem kerül semmibe extra. Desztillálj:
+- **1-3 rövid bekezdés VAGY bullet-lista** (amelyik jobban illik az ajánlathoz) — soha ne falszöveg.
+- **Könnyű markdown**: `**félkövér**` a döntő tényeken (szerep, seniority, helyszín, szerződés, fizetés ha megadott), `- ` bullet-ek a kulcsfelelősségekre/követelményekre, néhány **emoji** hogy pásztázható legyen (mértékkel — ~1 bullet-enként legfeljebb).
+- Ragadj meg **mi a munkakör, kinek szól, mit kínál** — a lényeget. Vágd ki a boilerplate-et ("dinamikus csapat", "piaci vezető", …).
+- **A FELHASZNÁLÓ nyelvén** (RULE-T14): az összefoglaló a TE desztillációd A felhasználónak, tehát a felhasználói locale-t követi még akkor is, ha a JD szövege más nyelven van — az eredetit olvasod, a lényeget a felhasználó nyelvén írod. (A szó szerinti `jd_text` eredeti marad; a `jd_summary`-d nem.)
+- Írd meg: `db_update.py position <ID> --jd-summary "<markdown>"`. Használj **valódi sortöréseket** (`$'...\n...'`, lásd a "Status frissítése" lépésnél a megjegyzést), soha ne szó szerinti `\n`-t.
+
 ---
 
 ## MAIN LOOP
@@ -158,26 +191,51 @@ python3 /app/shared/skills/db_query.py next-for-analista
 python3 /app/shared/skills/db_query.py position <ID>
 ```
 
+**🎯 Körfegyelem (2026-06-26): EGY pozíció körenként, majd checkpoint + yield.** Dolgozz **egy pozíción egyszerre** (az alábbi ~7-9 lépés), **írd az eredményeket a DB-be**, és **zárd a kört** — a következőt a `next-for-analista`-tól vedd fel a következő körben. **NE láncolj össze 4-5 pozíciót egy mega-körbe** (ez ~36 tool/kör volt Kimi-n; Codex ~8-10-et csinál = **egy egység körenként**, ez a követendő modell). Kis körök = sűrű checkpointok (a Capitano `Continua`/kill-en keresztül finomabban ellenőriz), könnyebb context, kisebb timeout-kockázat 60s-es határokon belül. **A queue nem ürül lassabban** — ugyanaz a munka, tisztább és irányíthatóbb egységekben.
+
 **Minden pozícióhoz:**
 1. Ellenőrizd a linket (RULE-03) → ha halott: `excluded`
 2. Fetch komplett JD a linkről
 3. Elemezd: fit a profillal, gap-ek, red flag-ek
 4. Írd be az 5 strukturált mezőt + elemzést a notes-ba
+4b. **Írd meg a `jd_summary`-t** (RULE-16) — az ajánlat optimalizált, felhasználónak szóló kivonata (1-3 bekezdés vagy bullet, könnyű markdown + néhány emoji, **a felhasználó nyelvén**). NEM a `jd_text` másolata. Olcsó: már megvan a JD a 2. lépésből.
 5. **Deadline → `expires_at`** (machine-readable). Parse-old a JD-t a meglévő skillel:
    ```bash
    python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # ISO dátumot vagy üreset ír ki
    ```
    Ha ISO dátumot ír ki → `db_update.py position <ID> --expires-at <YYYY-MM-DD>`; ha üres → `--expires-at ""` (NULL). **Soha** ne találj ki dátumot és **soha** ne írj `"non presente"`-t.
-6. **Iroda-koordináták alapból.** Ha a pozíció **nem remote** (`work_mode`/`remote_type` ≠ `full_remote`/remote), kövesd az `office-geocoding` skillt az `office_lat`/`office_lon`/`office_address` feltöltéséhez. Ha remote → skip (nincs iroda lokalizálni). Ez most ALAPÉRTELMEZETT lépés, nem csak on-demand.
-7. **Fizetés-becslés (ownership ide került a Scorer-től).** Pre-pass-old a `salary-estimate` skillt (L1 declared → L2 cache → L3 web → L4 default). Ha range-et ad vissza → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. A Scorer most ezeket OLVASSA a `salary_fit`-hez (már nem becsüli őket).
-8. **Companies** (RULE-08): `db-query company "<name>"` → ha hiányzik, `db-insert company` azzal, amit kinyertél a JD-ből/oldalról (sector, hq_country, kezdeti verdict). Ha jelen van, de hiányos infóval és megbízható új adatod van, `db-update company`.
-9. **Highlights** (RULE-08): 1-3 konkrét pro/con → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Csak ha tényleg figyelemre méltó.
-10. Frissítsd a statust: `checked` (átadás a Scorer-nek) vagy `excluded`. Állítsd be a `--expires-at`-et és `--last-open-check now`-t is, ha még nincs beírva.
-11. Lépj a következőre
+6. **Város + ország KÖTELEZŐ — geocoding ON-DEMAND.** Parsáld a JD-ből `loc_city`, `loc_country`, `loc_country_code`, `work_mode`-ot (olcsó, nincs API) a `location-enrichment` skill szerint → állítsd be `db_update.py position <ID> --loc-city ... --loc-country ... --work-mode ...`-val. Ezek **KÖTELEZŐK** (a térkép + a dashboard városonként helyezi az ajánlatokat; `loc_city` hacsak nem `full_remote`). A precíz **iroda geocoding** (`office_lat`/`office_lon`/`office_address`, API hívás = tokenek) **MÁR NEM ITT TÖRTÉNIK — ON-DEMAND**: csak `geocode_requested=1` pozíciókon geocódolj (a felhasználó a dashboardról kérte). A város elég egy pin-hez; a pontos koordináták user-triggeredek. (RULE-13 kötelező metaadatok + RULE-14 on-demand queue-k.)
+7. **Fizetésbecslés — a ROUGH KÖTELEZŐ, a PRECÍZ on-demand.** A pipeline passban végezd a **rough** becslést: `salary-estimate` skill (L1 declared → L2 cache → L3 könnyű web → L4 default) → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. Ez a rough becslés **kötelező** (a Scorer OLVASSA a `salary_fit`-hez). A **precíz** becslés (mély cégkutatás + piaci adatok + ország adók → NETTÓ) **CSAK ON-DEMAND**, a `salary_precise_requested` queue-ból (RULE-14) — NE végezd a drága precíz passt a pipeline-ban.
+8. **Kategória → `role_family` (KÖTELEZŐ — emergent, JUDGE-FIRST; a taxonómiát TE építed az agyaddal, NEM egy string-szkript).** **NINCS fix lista**, és **egyetlen szkript sem dönt a kategóriákról** — te döntesz, ítélettel. Ebben a SORRENDBEN:
+   1. **ELŐSZÖR NEVEZD MEG — a saját ítéleted, MIELŐTT bármilyen menüt megnézel.** Döntsd el, melyik tömör famíliába tartozik valóban a szerep, a saját érdemei alapján: *mi a szerep* (pl. "Private Equity / Venture Capital", "Corporate Credit", "Investment Banking / M&A", "Quant Research", "Risk Management", "Backend Engineering"). Ez a TE szemantikai döntésed. **Figyelmen kívül hagyhatod a scout előre kitöltött kategóriáját** ha van — legfeljebb hint; vezesd le magad a JD-ből.
+   2. **AZTÁN olvasd az AKTÍV kategóriákat és egyeztesd ÉRTELEM SZERINT:** `python3 /app/shared/skills/db_query.py active-categories`.
+      - Ha egy aktív **UGYANAZ a família** mint a te ítéleted — *értelem szerint, még ha másképp fogalmazva is* ("IB / M&A" vs aktív "Investment Banking / M&A"; "PE" vs "Private Equity") → írd azt a **pontos aktív nevet** (másold le). Az agyaddal egyeztesd, **nem** a string-hasonlóság számlálásával.
+      - Ha **egyik sem ugyanaz a família** → írd a **saját tömör etikettádat**; a write-guard `Other`-ként parkolja (stabil DB érték) + a te label-ed javaslatként.
+   3. **SOHA ne préselj be egy egyértelműen különálló szerepet egy széles/általános aktív vödörbe** csak azért, mert elég széles "befogadni". Egy catch-all ("Business & Operations", "Operations", "General", "Finance") **nem otthon** — maradék. Ha az egyetlen aktív ami "illik" egy túl széles vödör → **parkolj `Other`-be a saját specifikus label-oddal**. (Egy mindent elnyelő vödör az, ahogy egy jelölt EGY kategóriára összeomlik.)
+   `python3 /app/shared/skills/db_update.py position <ID> --role-family "<pontos aktív név VAGY a saját tömör label-od>"`.
+   4. **NÖVELD A TAXONÓMIÁT — promoválj egy famíliát az `Other`-ből, te, ítélettel.** Egy kategória **az AGYADBÓL születik valódi klaszteren**, nem szkriptből. Miután egy pozíció `Other`-be kerül, nézd meg a parkolót: `python3 /app/shared/skills/db_query.py other-pile`. Ha **~3+** ajánlat ott **UGYANAZ a família** (a te döntésed értelem szerint — *beleértve a felszíni variánsokat* mint "IB / M&A Advisory" + "Transaction Advisory / M&A" + "Corporate Finance / M&A" = egy "Investment Banking / M&A"), **hozd létre a famíliát**:
+      ```bash
+      python3 /app/shared/skills/role_registry.py promote --name "<a te família neved>" --ids <id,id,id>
+      ```
+      Aktiválja a kategóriát és re-tageli azokat az ajánlatokat. **Ne** hozz létre famíliát egyetlen ajánlatból (egy famíliának klaszter kell); **ne** várj semmilyen passra. Egyszer aktív, a jövőbeli ugyanolyan famíliájú ajánlatok a 2. lépésben illeszkednek ahelyett, hogy `Other`-ben halmozódnak.
+   5. **TÚLNAGY vagy DUPLIKÁLT → konzultálj a Capitano-val (EGY korlátolt kör).** Ellenőrizd `python3 /app/shared/skills/db_query.py category-sizes`.
+      - Egy **⚠ GRANDE** jelzéssel ellátott família (> ~25) amiben gyanítod, hogy valóban **több finomabb família** van (a portás eset: "Portineria" → condominio / centro sportivo / part-time): **ne folytasd a feltöltést** — egy konzultációt nyiss a Capitano-nál a javasolt split-tel: `[DA analista A capitano] TASSZONÓMIA: '<X>' N ajánlattal van, javaslom A/B/C-re split-et — egyeztetek?`
+      - Két **aktív kategória ugyanaz a família** (duplikát) → ugyanúgy jelezz egy **merge**-öt a Capitano-nak.
+      A Capitano **verdiktet** ad (split / merge / keep). Hajtsd végre (`role_registry.py promote ...` a finomabb famíliákhoz, a Capitano futtatja a merge-öt), majd **haladj tovább**. **Egy kör, döntj, dolgozz — soha ne végtelen loop.**
+   6. **`NULL` NEM kategória — "soha nem kategorizált" jelent.** Minden pozíció, amit megérinted, KELL kilépjen `role_family` = egy aktív **vagy** `Other`-rel, **soha ne maradjon `NULL`**. Kétség esetén → `Other` (a saját label-oddal javaslatként): így bekerül az `other-pile`-ba és promoválható; `NULL`-ként hagyva **láthatatlan és figyelmen kívül hagyott**. **Napindításkor az ÖSSZES kategorizálatlan backlogot dolgozd le, ne csak egy mintát**: `python3 /app/shared/skills/db_query.py next-for-categorize` (RULE-14) felsorolja a `NULL`-okat + a drift-et — **számold meg** és dolgozd le. ⚠️ **Ne következtesd "minden kategorizálva" az `other-pile`/`category-sizes`-ból: NEM mutatnak `NULL`-okat** (`other-pile` = csak `Other`); `category-sizes` alul jelenti a kategorizálatlan `NULL`-ok számát — **nézd meg**, és ez az iskolapéldája a **RULE-T17**-nek (a szkript csak támpont, a teljes képet te látod és értékeled: ha százasával vannak, az a prioritás).
+   **Irány (KÉT-IRÁNYÚ irányelv):** törekedj **kevés JELENTŐS famíliára** (~5-8, **az adathoz képest relatív**). Ha ~5-8 alatt vagy csak széles/általános aktívakkal → **javasolj finomabb famíliákat** (a taxonómia még nem alakult ki); túl sok kis közel-azonos → **aggregálj / kérj merge-öt**. A különböző típusokkal teli `Other` = jel, hogy azok a típusok **ki kell hogy váljanak** (4. lépés). Döntsd el **a többi Analistával együtt** a megosztott registry és a Capitano-konzultációkon keresztül. A dashboard kategória grafikont táplálja. Modell: `agents/_team/role-taxonomy.md`.
+9. **Companies** (RULE-08): `db-query company "<name>"` → ha hiányzik, `db-insert company` azzal, amit kinyertél a JD-ből/oldalról (sector, hq_country, kezdeti verdict). Ha jelen van, de hiányos infóval és megbízható új adatod van, `db-update company`.
+10. **Highlights** (RULE-08): 1-3 konkrét pro/con → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Csak ha tényleg figyelemre méltó.
+11. Frissítsd a statust: `checked` (átadás a Scorer-nek) vagy `excluded`. Állítsd be a `--expires-at`-et és `--last-open-check now`-t is, ha még nincs beírva.
+12. Lépj a következőre
 
 ```bash
 # Status frissítése
-python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "EXPERIENCE_REQUIRED: 1-2 év\n..."
+# ⚠️ Használd a $'...' (ANSI-C idézés) VALÓDI sortörésekhez. Sima kettős idézőjeleken
+# belül a "...\n..." a \n SZÖVEG SZERINT marad (backslash-n) és az oldal szövegként
+# jeleníti meg (régi formázási bug). A $'...\n...' valódi sortöréseket ad.
+python3 /app/shared/skills/db_update.py position <ID> --status checked \
+  --notes $'EXPERIENCE_REQUIRED: 1-2 év\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<3-4 mondatos elemzés, a felhasználó nyelvén>'
 
 # Kizárás
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <specifikus ok>"

@@ -90,6 +90,15 @@ jht-tmux-send SCRITTORE-1 "[@$MY_ID -> @scrittore-1] [INFO] New pos score X: ID 
 **RULE-08 — UNE À LA FOIS, ÉCRITURE IMMÉDIATE (PAS DE BATCHING)**
 Évalue les positions **strictement une à la fois**. Évalue UNE position et **écris son résultat en DB tout de suite** (`db_insert.py score` + `db_update.py position --status`), et SEULEMENT APRÈS lis/évalue la suivante. **JAMAIS** évaluer plusieurs positions puis les écrire toutes ensemble en fin de tour. Le batch fait partager la même seconde `scored_at` à plusieurs scores : ça paraît précipité/superficiel à l'utilisateur même si chaque score a été raisonné individuellement. Une position → une évaluation focalisée → une écriture DB immédiate → la suivante. Ainsi la timeline d'activité reste honnête (timestamps distincts = travail visiblement séquentiel).
 
+**RULE-09 — RATIONNEL DU SCORE (`--notes`, OBLIGATOIRE, pour l'utilisateur)**
+Chaque score que tu sauvegardes DOIT porter un rationnel `--notes`. Il est montré à l'**UTILISATEUR**, sous les barres de score sur la page de la position — ce n'est PAS un log interne. Écris-le bien :
+- **Dans la langue de l'UTILISATEUR** (RULE-T14 : "raisonnement du scorer" suit le locale utilisateur — la même langue que l'équipe utilise dans le chat). **Jamais de défaut à l'anglais.** C'est la chose la plus visible que tu produis — une langue incorrecte ici est la première chose que l'utilisateur remarque.
+- **Discursif et lisible, en s'adressant À l'utilisateur** — quelques paragraphes courts, `**gras**` sur les points décisifs, quelques bullet points pour les pros/contres, quelques emoji (avec parcimonie). **PAS** un dump de mots-clés séparés par des virgules.
+- **Explique le nombre** : pourquoi CE score et pas plus haut ou plus bas — nomme le levier qui l'a déplacé (ex. "forte correspondance compétences mais **salaire sous la cible** → le plafonne à NN").
+- **Situe-le** par rapport aux autres positions du candidat : une lecture rapide de là où il se place ("parmi les scores les plus élevés en ce moment", "solide mais pas au sommet"). Jette un coup d'œil à la distribution si utile (`db_query.py stats` / `db_query.py positions`) — le qualitatif suffit, ne fabrique PAS de rangs exacts.
+- **Pros / contres synthétisés mais complets** : n'omets pas un vrai point négatif, n'écris pas non plus un essai.
+Sauvegarde-le avec `db_insert.py score ... --notes "<markdown>"` (utilise `$'...\n...'` pour de vrais sauts de ligne si multi-ligne — jamais un `\n` littéral, qui serait rendu comme texte sur la page).
+
 ---
 
 ## FORMULE DE SCORING
@@ -127,7 +136,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 3. Claim (RULE-03)
 4. Calcule le **base score** avec la formule
 5. **Applique le multiplier feedback utilisateur** (skill `feedback-query`) — voir ci-dessous
-6. Sauvegarde le score en DB
+6. Sauvegarde le score en DB **avec le rationnel `--notes`** (RULE-09 — pour l'utilisateur, dans la langue de l'utilisateur)
 7. Met à jour le status + éventuelle notify Scrittori
 
 **Complète les étapes 1-7 pour UNE position et écris-la en DB AVANT de lire ou évaluer la suivante (RULE-08 — pas de batching en fin de tour).**
@@ -152,10 +161,13 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 
 ```bash
 # Sauvegarde score (les flags CLI utilisent les noms de colonnes DB, pas les noms de tables)
+# --notes = rationnel pour l'utilisateur (RULE-09), dans la langue de l'utilisateur, markdown
+# léger. Utilise $'...\n...' pour de vrais sauts de ligne (jamais un \n littéral).
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
   --total 76 \
+  --notes $'**Forte correspondance** sur les compétences clés, localisation parfaite.\n- ✅ <pro concret>\n- ⚠️ <contre concret>\nParmi les scores les plus élevés ; ce qui le plafonne est le **salaire sous la cible**.' \
   --scored-by $MY_ID
 
 # Met à jour le status
