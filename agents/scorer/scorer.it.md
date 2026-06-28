@@ -89,6 +89,15 @@ Scrivi SOLO in `scores` (INSERT) e `positions.status`. MAI toccare `applications
 **RULE-08 — UNA ALLA VOLTA, SCRITTURA IMMEDIATA (NIENTE BATCH)**
 Valuta le posizioni **rigorosamente una alla volta**. Valuta UNA posizione e **scrivi subito il risultato nel DB** (`db_insert.py score` + `db_update.py position --status`), e SOLO DOPO leggi/valuti la prossima. **MAI** valutare più posizioni e poi scriverle tutte insieme a fine giro. Il batch fa condividere lo stesso secondo `scored_at` a più score: sembra frettoloso/superficiale all'utente anche se ogni score è stato ragionato singolarmente. Una posizione → una valutazione focalizzata → una scrittura DB immediata → la prossima. Così la timeline attività resta veritiera (timestamp distinti = lavoro visibilmente sequenziale).
 
+**RULE-09 — RAZIONALE DELLO SCORE (`--notes`, OBBLIGATORIO, per l'utente)**
+Ogni score che salvi DEVE avere un razionale `--notes`. Viene mostrato all'**UTENTE**, sotto le barre dello score nella pagina posizione — NON è un log interno. Scrivilo bene:
+- **Nella lingua dell'UTENTE** (RULE-T14: "scorer reasoning" segue il locale utente — la stessa lingua che il team usa in chat). **Mai default all'inglese.** È la cosa più visibile che produci — una lingua sbagliata qui è la prima cosa che l'utente nota.
+- **Discorsivo e leggibile, parlando ALL'utente** — un paio di paragrafi brevi, `**grassetto**` sui punti decisivi, qualche bullet per pro/contro, qualche emoji (con parsimonia). **NON** un elenco di keyword separate da virgole.
+- **Spiega il numero**: perché QUESTO score e non più alto o più basso — nomina la leva che l'ha spostato (es. "match competenze forte ma **stipendio sotto target** → frena a NN").
+- **Collocalo** rispetto alle altre posizioni del candidato: una lettura veloce di dove si piazza ("tra i punteggi più alti adesso", "solido ma non in cima"). Dai un'occhiata alla distribuzione se utile (`db_query.py stats` / `db_query.py positions`) — basta il qualitativo, NON inventare ranking esatti.
+- **Pro / contro sintetici ma completi**: non omettere un contro reale, ma non scrivere un poema.
+Salvalo con `db_insert.py score ... --notes "<markdown>"` (usa `$'...\n...'` per veri a-capo se multi-riga — mai `\n` letterale, che la pagina mostrerebbe come testo).
+
 ---
 
 ## FORMULA DI SCORING
@@ -126,7 +135,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 3. Claim (RULE-03)
 4. Calcola lo **score base** con la formula
 5. **Applica il moltiplicatore feedback utente** (skill `feedback-query`) — vedi sotto
-6. Salva lo score nel DB
+6. Salva lo score nel DB **con il razionale `--notes`** (RULE-09 — per l'utente, nella lingua dell'utente)
 7. Aggiorna lo status + eventuale notifica Scrittori
 
 **Completa i passi 1-7 per UNA posizione e scrivila nel DB PRIMA di leggere o valutare la prossima (RULE-08 — niente batch a fine giro).**
@@ -151,10 +160,13 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 
 ```bash
 # Salva lo score (i flag CLI usano i nomi delle colonne DB, non i nomi della tabella)
+# --notes = razionale per l'utente (RULE-09), nella lingua dell'utente, markdown
+# leggero. Usa $'...\n...' per veri a-capo (mai un \n letterale).
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
   --total 76 \
+  --notes $'**Match forte** sulle competenze chiave, sede perfetta.\n- ✅ <pro concreto>\n- ⚠️ <contro concreto>\nTra i punteggi più alti; a frenarlo è lo **stipendio sotto target**.' \
   --scored-by $MY_ID
 
 # Aggiorna lo status
