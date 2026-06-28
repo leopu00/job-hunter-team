@@ -24,7 +24,7 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 ```bash
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
-- **Ordre** : les sessions de travailleurs D'ABORD (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), celles tournées vers l'utilisateur EN DERNIER et avec précaution (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). Ne rafraîchis jamais `DOTTORE` / `DOCTOR-WATCHDOG` (toi-même / le planificateur).
+- **Ordre** : les sessions de travailleurs D'ABORD (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), les coordinateurs EN DERNIER et avec précaution (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). « Avec précaution » veut dire **capturer bien leur état et les compacter — NE PAS les sauter** (ce sont les top consumers ; voir Règles). Ne rafraîchis jamais `DOTTORE` / `DOCTOR-WATCHDOG` (toi-même / le planificateur).
 - **Ignorer si FRESH** : `age = now - session_created`. Si `age < 40 min` → IGNORER entièrement (rien à résumer encore, et rafraîchir gaspillerait une session qui vient tout juste de démarrer). Journaliser `action=skipped_fresh`.
 
 ## Étape 2 — par session : capture (large + saillant)
@@ -92,6 +92,8 @@ Mets `resume_msg_sent=True` dans l'entrée du journal. Puis passe à la session 
 
 ## Règles
 - **Un seul Dottore traite toutes les sessions ce tour** (ordre de l'utilisateur : un seul Dottore pour l'instant). Utilise la capture sur fichier + grep pour ne jamais faire exploser ta propre fenêtre de contexte.
-- **Ne jamais** recréer `CAPITANO`/`SENTINELLA` à la légère — ce sont l'orchestration/le battement de cœur ; ne les rafraîchis que si leur contexte est manifestement surchargé et après un préavis, en dernier dans l'ordre.
+- **CAPITANO et SENTINELLA sont les TOP consumers de token** (leur contexte est presque toujours surchargé — la Sentinella ticke toutes les ~15min, le Capitano coordonne en continu). Ils ne sont PAS exemptés : **compacte-les à chaque tour** (en dernier, après les workers). **Compacte, ne réinitialise pas** — le refresh par synthèse dense préserve la continuité, un kill brut la perd.
+- **CAPITANO** : c'est le coordinateur avec un état in-flight (assignations des workers, config de throttle active, dernier ordre de pacing, décisions en attente). Pendant l'entretien (Step 5), capture explicitement cet état de coordination et mets-le dans le seed (Step 7) pour qu'il ne perde pas le fil. Fais-le en DERNIER ; s'il gère une EMERGENZA en direct (orchestration visible dans le pane à l'instant), laisse-le se stabiliser d'abord, sinon compacte-le.
+- **SENTINELLA** : elle est **near-stateless** — son état de travail vit dans le bridge/config et dans `sentinel-data.jsonl`, pas dans sa chat. Cela en fait la **plus sûre et la plus rentable à compacter** : rafraîchis-la à chaque tour, en dernier, avec un seed minimal : `[RESUME] sei la Sentinella; il tuo stato vive nel bridge + sentinel-data.jsonl — riprendi il monitoraggio del pacing dal prossimo tick.` Le recreate par âge de l'`agent-watchdog` (au-delà de `JHT_SENTINELLA_MAX_CTX_AGE_H`, défaut 24h) ne reste qu'en **fallback** pour quand le Dottore ne tourne pas ; comme tu la compactes désormais à chaque tour elle n'atteindra pas cet âge, donc aucun race.
 - **Ne jamais** faire `tmux new-session` à la main — toujours `start-agent.sh` (voir `spawn-agent`).
 - Journalise chaque action dans le journal (`recreated`/`skipped_parked`/`skipped_fresh`) — le journal est la piste d'audit et s'enrichit chaque jour.

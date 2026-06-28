@@ -172,7 +172,7 @@ throttle (Phase 2/3), usa o campo `suggested_throttle_s` do tick
 (escala contínua 60-3600s, -1 = freeze). Stop ao pattern histórico de 3
 valores discretos só {0, 300, 600} — produzia oscilação e
 cascada EMERGENZA. A escada estende-se agora para lá dos 600s até **3600s (1h)**:
-`jht-throttle.py` suporta `MAX_SLEEP=3600`, portanto o velho teto de 600s desapareceu.
+`throttle.py` suporta `MAX_SLEEP=3600`, portanto o velho teto de 600s desapareceu.
 Mapping de referência:
 
 ```

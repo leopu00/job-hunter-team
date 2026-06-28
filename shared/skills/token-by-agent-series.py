@@ -75,6 +75,24 @@ CLAUDE_AGENT_PREFIX = "-jht-home-agents-"
 # iniziale: payload.cwd = "/jht_home/agents/<role>" → agent = basename.
 CODEX_DIR = JHT_HOME / ".codex" / "sessions"
 
+# Ruoli canonici degli agenti del team. Servono a validare il fallback
+# `[TAG]` dell'estrazione: un tag maiuscolo che NON è un ruolo (es.
+# `[RESUME]`, `[STATUS]`, `[MSG]`, `[WELCOME-USER]`) NON deve diventare un
+# "agente fantasma" nell'attribuzione token del pacing.
+# (Costante duplicata in token_metrics_lib.py — la logica di estrazione lo è
+# già; tenerle in sync.)
+VALID_AGENT_ROLES = frozenset({
+    "capitano", "sentinella", "assistente", "mentor", "dottore",
+    "mantenitore", "scout", "analista", "scorer", "scrittore",
+    "critico", "tesoriere",
+})
+
+
+def _is_valid_agent(name: str) -> bool:
+    """True se `name` è un ruolo canonico, anche con suffisso numerico
+    (es. 'scout-2' → base 'scout')."""
+    return re.sub(r"-\d+$", "", name) in VALID_AGENT_ROLES
+
 
 def _extract_agent_from_text(text: str):
     """Applica i pattern noti di mapping su una stringa libera.
@@ -82,6 +100,8 @@ def _extract_agent_from_text(text: str):
       [@A -> @B] ...    → owner = B (l'ultimo @<name>, è il receiver)
       [@user -> @capitano] ... → owner = capitano
       [SENTINELLA] ...  → owner = sentinella (uppercase fallback)
+    Il fallback `[TAG]` è validato contro VALID_AGENT_ROLES: un tag che non
+    è un ruolo (es. `[RESUME]`) ritorna None invece di un agente fantasma.
     """
     if not text:
         return None
@@ -91,7 +111,9 @@ def _extract_agent_from_text(text: str):
         return cands[-1]
     m = re.match(r"^\s*\[([A-Z][A-Z0-9_-]+)\]", text)
     if m:
-        return m.group(1).lower().replace("_", "-")
+        name = m.group(1).lower().replace("_", "-")
+        if _is_valid_agent(name):
+            return name
     return None
 
 

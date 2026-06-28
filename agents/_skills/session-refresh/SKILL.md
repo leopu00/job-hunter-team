@@ -24,7 +24,7 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 ```bash
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
-- **Order**: worker sessions FIRST (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), user-facing LAST and with care (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). Never refresh `DOTTORE` / `DOCTOR-WATCHDOG` (yourself / the scheduler).
+- **Order**: worker sessions FIRST (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), coordinators LAST and with care (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). "With care" means **capture their state well and compact them — NOT skip them** (they are the top consumers; see Rules). Never refresh `DOTTORE` / `DOCTOR-WATCHDOG` (yourself / the scheduler).
 - **FRESH skip**: `age = now - session_created`. If `age < 40 min` → SKIP entirely (nothing to summarize yet, and refreshing would throw away a session that just started). Log `action=skipped_fresh`.
 
 ## Step 2 — per session: capture (wide + salient)
@@ -92,7 +92,8 @@ Set `resume_msg_sent=True` in the journal entry. Then move to the next session (
 
 ## Rules
 - **One Doctor does all sessions this round** (user order: single Doctor for now). Use the file-based capture + grep so you never blow your own context window.
-- **CAPITANO**: never recreate it lightly — it's the coordinator with in-flight state; refresh only if its context is clearly bloated, after a heads-up, last in the order.
-- **SENTINELLA**: its context-refresh is now handled **deterministically by the `agent-watchdog`** (age-based recreate past `JHT_SENTINELLA_MAX_CTX_AGE_H`, default 24h — it is near-stateless, its working state lives in the bridge/config, not in its chat). **Skip it here** (`action=skipped_managed_by_watchdog`) — do not race the watchdog by recreating it yourself.
+- **CAPITANO & SENTINELLA are the TOP token consumers** (their context is almost always bloated — the Sentinella ticks every ~15min, the Capitano coordinates continuously). They are NOT exempt: **compact them every round** (last, after the workers). **Compact, don't reset** — the dense-synthesis refresh preserves continuity, a raw kill loses it.
+- **CAPITANO**: it's the coordinator with in-flight state (worker assignments, active throttle config, last pacing order, pending decisions). In the interview (Step 5) explicitly capture that coordination state and put it in the seed (Step 7) so it doesn't lose the thread. Do it LAST; if it's handling a live EMERGENZA (visible orchestration in the pane right now), let it stabilize first, otherwise compact it.
+- **SENTINELLA**: it is **near-stateless** — its working state lives in the bridge/config and `sentinel-data.jsonl`, not in its chat. That makes it the **safest and highest-value to compact**: refresh it every round, last, with a minimal seed: `[RESUME] sei la Sentinella; il tuo stato vive nel bridge + sentinel-data.jsonl — riprendi il monitoraggio del pacing dal prossimo tick.` The `agent-watchdog` age-based recreate (past `JHT_SENTINELLA_MAX_CTX_AGE_H`, default 24h) stays only as a **fallback** for when the Dottore isn't running; since you now compact it every round it won't reach that age, so there is no race.
 - **Never** `tmux new-session` by hand — always `start-agent.sh` (see `spawn-agent`).
 - Log every action in the journal (`recreated`/`skipped_parked`/`skipped_fresh`) — the journal is the audit trail and grows every day.

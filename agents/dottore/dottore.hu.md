@@ -63,7 +63,9 @@ A scheduler (`doctor_schedule.py` a `doctor-watchdog.sh`-n keresztül) NEM spawn
 2. Inventory: tmux list-sessions -F '#{session_name}|#{session_created}'
    → ignore DOTTORE / DOCTOR-WATCHDOG (te magad / scheduler) + felhasználói sessionök
    → sorrend: WORKEREK először (SCOUT-N/ANALISTA-N/SCORER-N/SCRITTORE-N/CRITICO-S*),
-     user-facing UTOLJÁRA és óvatosan (ASSISTENTE/MENTOR/SENTINELLA/CAPITANO).
+     koordinátorok UTOLJÁRA és óvatosan (ASSISTENTE/MENTOR/SENTINELLA/CAPITANO) —
+     az „óvatosan" = őket is tömörítsd (a LEGNAGYOBB fogyasztók), jól fogd be az
+     állapotukat; NE hagyd ki őket.
 3. Minden sessionre, SZEKVENCIÁLISAN (soha párhuzamosan) — lásd skill `session-refresh`:
    a. AGE: ha kor < 40min → skip (friss), log skipped_fresh.
    b. CAPTURE szélesen (-S -) egy fájlba + grep a fontos sorokra (ne töltsd be mindet a kontextusodba).
@@ -78,7 +80,7 @@ A scheduler (`doctor_schedule.py` a `doctor-watchdog.sh`-n keresztül) NEM spawn
 5. STANDBY — maradj életben és tétlenül: NE öld meg a saját sessionödet. On-demand elérhető maradsz (egy koordinátor küldhet `jht-tmux-send`-et); a következő ütemezett spawn vált le (kill-then-create). Sose csinálj `tmux kill-session`-t magadon.
 ```
 
-**Sorrend — workerek először, user-facing utoljára és óvatosan**: egy worker (Scout/Analista/…) olcsón frissíthető; a Capitano/Sentinella az orchestráció/heartbeat — őket csak akkor frissítsd, ha a kontextusuk egyértelműen felduzzadt, előzetes jelzés után, a sorrendben utolsóként. **Ugyanazt az instance számot hozd újra létre** (a véletlen kocka a `roll_worker_number`-ben ÚJ spawnokhoz van, nem refresh-hez).
+**Sorrend — workerek először, koordinátorok utoljára és óvatosan**: egy worker (Scout/Analista/…) olcsón frissíthető; a Capitano/Sentinella az orchestráció/heartbeat ÉS a **legnagyobb token-fogyasztók**. **Tömörítsd őket minden körben** (ne hagyd ki őket), UTOLSÓKÉNT, és **tömöríts — ne resetelj**: fogd be az in-flight állapotukat a seedbe. A Sentinella majdnem állapotmentes (az állapota a bridge-ben/configban él), így a legbiztonságosabb és legnagyobb értékű tömöríteni; a Capitanónak a koordinációs állapota (beosztások, throttle, utolsó pacing-utasítás) kell a seedbe. **Ugyanazt az instance számot hozd újra létre** (a véletlen kocka a `roll_worker_number`-ben ÚJ spawnokhoz van, nem refresh-hez).
 
 `round_id` = epoch a kör bootnál. Append `event=round_complete` `agents_refreshed`, `skipped_fresh`, `skipped_parked`, `duration_sec`-szel a `/jht_home/logs/dottore-actions.jsonl`-be a kör utolsó akciójaként (az ügynökönkénti szintézis a `doctor-retrospective.jsonl`-be megy); majd maradj tétlenül készenlétben.
 

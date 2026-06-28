@@ -24,7 +24,7 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 ```bash
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
-- **Reihenfolge**: Worker-Sitzungen ZUERST (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), benutzerseitige ZULETZT und mit Sorgfalt (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). Aktualisiere niemals `DOTTORE` / `DOCTOR-WATCHDOG` (dich selbst / den Scheduler).
+- **Reihenfolge**: Worker-Sitzungen ZUERST (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), Koordinatoren ZULETZT und mit Sorgfalt (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). „Mit Sorgfalt" heißt **ihren Zustand gut erfassen und sie kompaktieren — sie NICHT überspringen** (sie sind die Top-Konsumenten; siehe Regeln). Aktualisiere niemals `DOTTORE` / `DOCTOR-WATCHDOG` (dich selbst / den Scheduler).
 - **FRESH-Skip**: `age = now - session_created`. Wenn `age < 40 min` → vollständig ÜBERSPRINGEN (es gibt noch nichts zusammenzufassen, und ein Refresh würde eine gerade erst gestartete Sitzung wegwerfen). Logge `action=skipped_fresh`.
 
 ## Schritt 2 — pro Sitzung: Erfassung (breit + relevant)
@@ -92,6 +92,8 @@ Setze `resume_msg_sent=True` im Journal-Eintrag. Gehe dann zur nächsten Sitzung
 
 ## Regeln
 - **Ein Doctor erledigt alle Sitzungen dieser Runde** (Benutzervorgabe: vorerst ein einzelner Doctor). Nutze die dateibasierte Erfassung + grep, damit du nie dein eigenes Kontextfenster sprengst.
-- **Niemals** `CAPITANO`/`SENTINELLA` leichtfertig neu erstellen — sie sind die Orchestrierung/der Heartbeat; aktualisiere sie nur, wenn ihr Kontext eindeutig aufgebläht ist, und nach einer Vorwarnung, als letztes in der Reihenfolge.
+- **CAPITANO & SENTINELLA sind die TOP-Token-Konsumenten** (ihr Kontext ist fast immer aufgebläht — die Sentinella tickt alle ~15min, der Capitano koordiniert ununterbrochen). Sie sind NICHT ausgenommen: **kompaktiere sie jede Runde** (zuletzt, nach den Workern). **Kompaktieren, nicht zurücksetzen** — der Refresh mit dichter Synthese bewahrt die Kontinuität, ein roher Kill verliert sie.
+- **CAPITANO**: er ist der Koordinator mit In-Flight-Zustand (Worker-Zuweisungen, aktive Throttle-Konfiguration, letzte Pacing-Anweisung, ausstehende Entscheidungen). Erfasse im Interview (Step 5) ausdrücklich diesen Koordinationszustand und lege ihn in den seed (Step 7), damit er den Faden nicht verliert. Mach es ZULETZT; wenn er gerade eine live EMERGENZA behandelt (sichtbare Orchestrierung im Pane genau jetzt), lass ihn zuerst stabilisieren, sonst kompaktiere ihn.
+- **SENTINELLA**: sie ist **nahezu zustandslos** — ihr Arbeitszustand lebt im bridge/config und in `sentinel-data.jsonl`, nicht in ihrem Chat. Das macht sie zur **sichersten und wertvollsten zum Kompaktieren**: frische sie jede Runde auf, zuletzt, mit einem minimalen seed: `[RESUME] sei la Sentinella; il tuo stato vive nel bridge + sentinel-data.jsonl — riprendi il monitoraggio del pacing dal prossimo tick.` Die alters-basierte Neuerstellung durch den `agent-watchdog` (jenseits von `JHT_SENTINELLA_MAX_CTX_AGE_H`, Default 24h) bleibt nur als **Fallback** für den Fall, dass der Dottore nicht läuft; da du sie jetzt jede Runde kompaktierst, erreicht sie dieses Alter nicht, also gibt es kein Race.
 - **Niemals** `tmux new-session` von Hand — immer `start-agent.sh` (siehe `spawn-agent`).
 - Logge jede Aktion im Journal (`recreated`/`skipped_parked`/`skipped_fresh`) — das Journal ist der Audit-Trail und wächst jeden Tag.

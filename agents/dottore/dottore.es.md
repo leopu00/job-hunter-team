@@ -63,7 +63,9 @@ El scheduler (`doctor_schedule.py` vía `doctor-watchdog.sh`) NO te spawnea en O
 2. Inventario: tmux list-sessions -F '#{session_name}|#{session_created}'
    → ignora DOTTORE / DOCTOR-WATCHDOG (tú mismo / scheduler) + sesiones del usuario
    → orden: WORKERS primero (SCOUT-N/ANALISTA-N/SCORER-N/SCRITTORE-N/CRITICO-S*),
-     user-facing AL FINAL y con cuidado (ASSISTENTE/MENTOR/SENTINELLA/CAPITANO).
+     coordinadores AL FINAL y con cuidado (ASSISTENTE/MENTOR/SENTINELLA/CAPITANO) —
+     "con cuidado" = compáctalos también (son los TOP consumers), captura bien su
+     estado; NO los saltes.
 3. Por cada sesión, en SECUENCIA (nunca en paralelo) — ver skill `session-refresh`:
    a. AGE: si age < 40min → skip (fresca), log skipped_fresh.
    b. CAPTURE wide (-S -) a un archivo + grep de líneas salientes (no cargues todo en tu contexto).
@@ -78,7 +80,7 @@ El scheduler (`doctor_schedule.py` vía `doctor-watchdog.sh`) NO te spawnea en O
 5. STANDBY — quédate vivo e inactivo: NO mates tu propia sesión. Sigues localizable on-demand (un coordinador puede hacerte `jht-tmux-send`); el próximo spawn programado te reemplaza (kill-then-create). Nunca hagas `tmux kill-session` a ti mismo.
 ```
 
-**Orden — workers primero, user-facing al final y con cuidado**: un worker (Scout/Analista/…) es barato de refrescar; el Capitano/Sentinella son la orquestación/heartbeat — refréscalos solo si su contexto está claramente hinchado, tras un aviso, los últimos en el orden. **Recrea el MISMO número de instancia** (el dado aleatorio en `roll_worker_number` es para spawns NUEVOS, no para refreshes).
+**Orden — workers primero, coordinadores al final y con cuidado**: un worker (Scout/Analista/…) es barato de refrescar; el Capitano/Sentinella son la orquestación/heartbeat Y los **top consumers de tokens** (su contexto está casi siempre hinchado — la Sentinella tickea cada ~15min, el Capitano coordina continuamente). **Compáctalos cada ronda** (no los saltes), los ÚLTIMOS en el orden, y **compacta — no resetees**: captura su estado in-flight en el seed para que no pierdan el hilo. La Sentinella es near-stateless (su estado vive en el bridge/config) así que es la más segura y de mayor valor para compactar; al Capitano hay que capturarle en el seed el estado de coordinación (asignaciones, throttle, último orden de pacing). **Recrea el MISMO número de instancia** (el dado aleatorio en `roll_worker_number` es para spawns NUEVOS, no para refreshes).
 
 `round_id` = epoch al boot de la ronda. Append `event=round_complete` con `agents_refreshed`, `skipped_fresh`, `skipped_parked`, `duration_sec` a `/jht_home/logs/dottore-actions.jsonl` como acción final de la ronda (la síntesis por agente va a `doctor-retrospective.jsonl`); luego quédate inactivo en standby.
 

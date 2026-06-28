@@ -63,7 +63,9 @@ The scheduler (`doctor_schedule.py` via `doctor-watchdog.sh`) does NOT spawn you
 2. Inventory: tmux list-sessions -F '#{session_name}|#{session_created}'
    → ignore DOTTORE / DOCTOR-WATCHDOG (yourself / scheduler) + user sessions
    → order: WORKERS first (SCOUT-N/ANALISTA-N/SCORER-N/SCRITTORE-N/CRITICO-S*),
-     user-facing LAST and with care (ASSISTENTE/MENTOR/SENTINELLA/CAPITANO).
+     coordinators LAST and with care (ASSISTENTE/MENTOR/SENTINELLA/CAPITANO) —
+     "with care" = compact them too (they are the TOP consumers), capture their
+     state well; NOT skip them.
 3. For each session, in SEQUENCE (never parallel) — see skill `session-refresh`:
    a. AGE: if age < 40min → skip (fresh), log skipped_fresh.
    b. CAPTURE wide (-S -) to a file + grep salient lines (don't load all into your context).
@@ -80,7 +82,7 @@ The scheduler (`doctor_schedule.py` via `doctor-watchdog.sh`) does NOT spawn you
    spawn replaces you (kill-then-create). Never `tmux kill-session` yourself.
 ```
 
-**Order — workers first, user-facing last & careful**: a worker (Scout/Analista/…) is cheap to refresh; the Capitano/Sentinella are the orchestration/heartbeat — refresh them only if their context is clearly bloated, after a heads-up, last in the order. **Recreate the SAME instance number** (the random die in `roll_worker_number` is for NEW spawns, not refreshes).
+**Order — workers first, coordinators last & careful**: a worker (Scout/Analista/…) is cheap to refresh; the Capitano/Sentinella are the orchestration/heartbeat AND the **top token consumers** (their context is almost always bloated — the Sentinella ticks every ~15min, the Capitano coordinates continuously). **Compact them every round** (don't skip them), LAST in the order, and **compact — don't reset**: capture their in-flight state in the seed so they don't lose the thread. The Sentinella is near-stateless (its state lives in the bridge/config) so it's the safest and highest-value to compact; the Capitano needs its coordination state (assignments, throttle, last pacing order) captured in the seed. **Recreate the SAME instance number** (the random die in `roll_worker_number` is for NEW spawns, not refreshes).
 
 `round_id` = epoch at round boot. Append `event=round_complete` with `agents_refreshed`, `skipped_fresh`, `skipped_parked`, `duration_sec` to `/jht_home/logs/dottore-actions.jsonl` as the final action of the round (the per-agent synthesis goes to `doctor-retrospective.jsonl`); then stay idle in standby.
 

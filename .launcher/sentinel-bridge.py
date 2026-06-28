@@ -146,6 +146,15 @@ PACING_STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
 # critico. Quando proj rientra nel g-spot, il cooldown si resetta.
 SENTINELLA_COOLDOWN_MIN = 15.0
 
+# Tick leggero (2026-06-28): durante un episodio attuabile PROLUNGATO e a
+# REGIME INVARIATO (stesso `status`), re-confermare la Sentinella ogni quarto
+# è quasi sempre ridondante (l'ordine/throttle è già applicato) — è il caso
+# osservato su VPS betaD (sforo/sottoutilizzo stabile per ore → ~40 wake/g).
+# Quando il regime non cambia, posticipiamo la re-conferma fino a questo cap
+# di sicurezza (la svegliamo comunque, per ricalibrare, ma molto più di rado).
+# Un cambio di `status` (regime) la sveglia SEMPRE, anche prima del cap.
+SENTINELLA_RECONFIRM_MIN = 45.0
+
 
 # ── Config + tmux helpers (libreria per le skill) ───────────────────────
 
@@ -339,7 +348,7 @@ def _next_tick_sleep_sec(now_dt, override_min=None):
     return to_next
 
 
-def _should_notify_sentinella(on_pace, state, now_ts, is_quarter):
+def _should_notify_sentinella(on_pace, state, now_ts, is_quarter, status=None):
     """Decide se SVEGLIARE la Sentinella (gate deterministico, edge-driven).
 
     Lean-comms (2026-06-15): il bridge decide il "silenzio" in codice PRIMA di
@@ -352,16 +361,25 @@ def _should_notify_sentinella(on_pace, state, now_ts, is_quarter):
         "HOLD già attivo" ad ogni tick 5min — la causa del coordinator-burn
         osservato (la Sentinella ragionava verbosamente per ridire "silenzio").
 
+    Tick leggero (2026-06-28): durante un episodio in corso, se il REGIME
+    (`status`) è INVARIATO rispetto all'ultima notifica, la re-conferma ai
+    quarti è ridondante (l'ordine è già applicato) → la posticipiamo fino al
+    cap SENTINELLA_RECONFIRM_MIN. Un cambio di `status` la sveglia subito (al
+    quarto utile). `status=None` → comportamento legacy (re-conferma al
+    cooldown), per non sorprendere eventuali chiamatori senza regime.
+
     Il gate orario (fuori finestra → mai svegliare) è applicato a monte dal
     chiamante (vedi `_within_working_hours`), non qui.
 
     state è un dict con:
       last_sent_ts            — timestamp Unix dell'ultima notifica (None se reset)
+      last_sent_status        — `status` (regime) all'ultima notifica (None se reset)
     """
     if on_pace:
         # Calmo: nessun bisogno di Sentinella. Reset del cooldown così il
         # prossimo episodio attuabile è notificato immediatamente.
         state["last_sent_ts"] = None
+        state["last_sent_status"] = None
         return False
 
     last_ts = state.get("last_sent_ts")
@@ -372,7 +390,15 @@ def _should_notify_sentinella(on_pace, state, now_ts, is_quarter):
     if not is_quarter:
         return False
     elapsed_min = (now_ts - last_ts) / 60.0
-    return elapsed_min >= SENTINELLA_COOLDOWN_MIN
+    if elapsed_min < SENTINELLA_COOLDOWN_MIN:
+        return False
+    if status is None:
+        # Legacy: senza regime, re-conferma appena scaduto il cooldown.
+        return True
+    # Tick leggero: regime cambiato → sveglia; regime invariato → aspetta il cap.
+    if status != state.get("last_sent_status"):
+        return True
+    return elapsed_min >= SENTINELLA_RECONFIRM_MIN
 
 
 def _write_state_file(state, last_tick_at, next_tick_at, tick_interval_min,
@@ -1335,6 +1361,7 @@ def main():
         "tick_phase": "DEFAULT",
         "gspot_consecutive": 0,
         "last_sent_ts": None,
+        "last_sent_status": None,   # regime all'ultima notifica (tick leggero)
     }
 
     while True:
@@ -1482,7 +1509,7 @@ def main():
                 effective_on_pace = on_pace and not weekly_binding
                 _advance_tick_phase(state, effective_on_pace)
                 should_notify = _should_notify_sentinella(
-                    effective_on_pace, state, now_ts, is_quarter
+                    effective_on_pace, state, now_ts, is_quarter, status=status
                 )
                 state["last_status"] = status
 
@@ -1635,6 +1662,7 @@ def main():
                     f"{weekly_field}{weekly_pace_field}{daily_pace_field}{tools_health_field}{monthly_quota_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
+                state["last_sent_status"] = status   # regime notificato (tick leggero)
 
             # Recovery se eravamo in failure streak (gate orario: zitto fuori finestra)
             if fail_streak >= FETCH_FAIL_THRESHOLD or capitano_alerted:
