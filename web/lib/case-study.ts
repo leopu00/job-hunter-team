@@ -76,5 +76,22 @@ export interface CaseStudyRun {
   // attività. hour = "YYYY-MM-DDTHH", counts per ruolo, cum = budget% a quell'ora.
   // Opzionale: assente negli snapshot precedenti.
   hourly?: { hour: string; counts: Record<string, number>; cum: number }[];
+  // Funnel trovate → escluse/tenute. `funnelDaily` per giorno (found_at + status
+  // attuale), `funnelTotals` complessivo (per il donut). Opzionali.
+  funnelDaily?: {
+    day: string;
+    found: number;
+    excluded: number;
+    kept: number;
+    scored: number;
+    ready: number;
+  }[];
+  funnelTotals?: {
+    found: number;
+    excluded: number;
+    kept: number;
+    scored: number;
+    ready: number;
+  };
   usage?: CaseStudyUsage | null;
 }
