@@ -23,6 +23,7 @@ Exit code: 0 se tutti i processi NON-opzionali sono vivi, 1 se ne manca uno.
 """
 import glob
 import json
+import os
 import sys
 
 # Processi attesi long-running. Per ognuno: (nome, marker-cmdline, gruppo).
@@ -49,6 +50,26 @@ TG_MARKER = "tg-bridge.py"
 TG_EXPECTED = 3  # assistente / capitano / mentor
 
 
+def _cloud_daemon_expected():
+    """Il cloud-daemon va atteso SOLO se il cloud sync è configurato e abilitato.
+
+    pid1 lo avvia con lo stesso predicato (cli/src/commands/pid1.js → cloud.json
+    `enabled === true && typeof token === 'string'`); `dashboard` gira sempre,
+    il cloud-daemon è IN PIÙ solo quando il pairing è attivo. Su istanze con
+    cloud disabilitato (es. betaB, `enabled: false` dal 2026-05-22 per quota
+    Vercel) pid1 NON lo avvia → marcarlo atteso lo fa vedere "morto" al
+    watchdog, che scala a vuoto (falso positivo). Default prudente: False se
+    cloud.json manca/illeggibile (= nessun pairing → nessun daemon atteso).
+    """
+    home = os.environ.get("JHT_HOME") or os.path.expanduser("~")
+    try:
+        with open(os.path.join(home, "cloud.json"), encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return False
+    return cfg.get("enabled") is True and isinstance(cfg.get("token"), str)
+
+
 def _cmdlines():
     out = []
     for p in glob.glob("/proc/[0-9]*/cmdline"):
@@ -66,10 +87,17 @@ def scan():
     def count(marker):
         return sum(1 for c in cmds if marker in c)
 
+    cloud_expected = _cloud_daemon_expected()
     rows = []
     for name, marker, group in EXPECTED:
         n = count(marker)
-        rows.append({"name": name, "group": group, "alive": n > 0, "count": n})
+        row = {"name": name, "group": group, "alive": n > 0, "count": n}
+        # cloud-daemon: atteso solo a cloud sync abilitato (vedi pid1). A
+        # pairing disabilitato è opzionale → non conta come 'dead' (no falso
+        # positivo del watchdog).
+        if name == "cloud-daemon" and not cloud_expected:
+            row["optional"] = True
+        rows.append(row)
     tg = count(TG_MARKER)
     rows.append({
         "name": "tg-bridge", "group": "tg-bridge", "alive": tg > 0,

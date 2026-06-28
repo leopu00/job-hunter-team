@@ -845,7 +845,18 @@ def fetch_kimi_api():
         return None
     try:
         usage_5h = int(five_h.get("used", 0))
-        weekly_used = int(weekly.get("used", 0)) if weekly.get("used") is not None else None
+        # Weekly: l'API espone `used` SOLO quando >0. A settimana fresca
+        # (account appena resettato/switchato) data.usage ha solo
+        # `limit`+`remaining` e OMETTE `used` → il vecchio codice leggeva
+        # None e il pacing restava weekly-cieco fino al primo 1% speso.
+        # Deriva used = limit - remaining (= 0 a inizio settimana).
+        wk_used = weekly.get("used")
+        if wk_used is not None:
+            weekly_used = int(wk_used)
+        elif weekly.get("remaining") is not None and weekly.get("limit") is not None:
+            weekly_used = max(0, int(weekly["limit"]) - int(weekly["remaining"]))
+        else:
+            weekly_used = None
     except (TypeError, ValueError):
         return None
     # Weekly reset (bug #19A): la rotta /coding/v1/usages espone data.usage

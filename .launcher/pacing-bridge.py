@@ -125,6 +125,18 @@ TARGET_BAND_CENTER = _resolve_target_band_center()
 # docs/internal/2026-06-25-bridge-to-sentinella-pull-model.md.
 TARGET_SESSION = os.environ.get("JHT_PACING_TARGET_SESSION", "SENTINELLA")
 TICK_MIN = int(os.environ.get("JHT_PACING_TICK_MIN", "15"))
+# Auto-recovery pipeline (2026-06-28): se il target (Sentinella) è irricettivo
+# — jht-tmux-send rc=3 = "testo mai echeggiato + pane non occupato" = pane
+# morta/wedged — per più tick di fila, i verdetti di pacing si perdono e la
+# pipeline si ferma in SILENZIO (nessuno orchestra i worker → consumo ~0). Dopo
+# questa soglia di tick consecutivi rc=3 si escala al CAPITANO (vivo), che
+# applica C-08 (liveness-check Dottore → respawn). rc=4 (viva-ma-occupata) NON
+# conta: turno lungo legittimo (anti-overspawn, capitano C-08bis). Caso reale
+# 2026-06-28: Sentinella wedged ~1h, bridge la sapeva morta a ogni tick ma lo
+# segnale moriva nel log → pipeline ferma e nessuno avvisato.
+UNRECEPTIVE_ESCALATE_AFTER = int(
+    os.environ.get("JHT_PACING_UNRECEPTIVE_ESCALATE_AFTER", "2"))
+ESCALATION_SESSION = os.environ.get("JHT_PACING_ESCALATION_SESSION", "CAPITANO")
 MIN_PCT_H = float(os.environ.get("JHT_PACING_MIN_PCT_H", "0.20"))
 
 # Soglia in %/h sotto la quale "ALLINEATO" — evita oscillazioni stupide.
@@ -1089,7 +1101,15 @@ def _resolve_tmux_send() -> str | None:
     return None
 
 
-def send_to_capitano(msg: str) -> bool:
+def send_to_capitano(msg: str) -> int:
+    """Invia il verdetto alla sessione target (TARGET_SESSION = Sentinella).
+
+    Ritorna il returncode di jht-tmux-send così il loop può distinguere i casi:
+      0  → consegnato
+      3  → irricettiva (testo mai echeggiato, pane non occupato) = possibile morta/wedged
+      4  → viva ma occupata (turno in corso) → NON è morta, NON escalare
+      -1 → infra (binario assente / sparito / timeout)
+    """
     cmd_path = _resolve_tmux_send()
     if cmd_path is None:
         print(
@@ -1097,7 +1117,7 @@ def send_to_capitano(msg: str) -> bool:
             f"({_JHT_TMUX_SEND_FALLBACKS}), skip send",
             file=sys.stderr,
         )
-        return False
+        return -1
     try:
         r = subprocess.run(
             [cmd_path, TARGET_SESSION, msg],
@@ -1108,17 +1128,57 @@ def send_to_capitano(msg: str) -> bool:
     except FileNotFoundError:
         print(f"[pacing-bridge] {cmd_path} sparito tra resolve e exec",
               file=sys.stderr)
-        return False
+        return -1
     except subprocess.TimeoutExpired:
         print("[pacing-bridge] jht-tmux-send timeout dopo 30s", file=sys.stderr)
-        return False
+        return -1
     if r.returncode != 0:
         print(
             f"[pacing-bridge] jht-tmux-send rc={r.returncode} "
             f"stderr={r.stderr.strip()}",
             file=sys.stderr,
         )
+    return r.returncode
+
+
+def escalate_unreceptive_to_capitano(streak: int) -> bool:
+    """Notifica il CAPITANO che il target pacing è irricettivo da `streak` tick.
+
+    Inviata al CAPITANO (vivo, hardcoded ESCALATION_SESSION), NON al target
+    morto. Il Capitano applica C-08: liveness-check via Dottore e, se confermata
+    morta/wedged, respawn. Best-effort: un fallimento non rompe il loop.
+    """
+    cmd_path = _resolve_tmux_send()
+    if cmd_path is None:
         return False
+    msg = (
+        f"[BRIDGE] {TARGET_SESSION} irricettiva da {streak} tick consecutivi "
+        f"(jht-tmux-send rc=3: testo mai echeggiato, pane non occupato) → i tick "
+        f"di pacing NON le arrivano, la pipeline è ferma e nessun worker viene "
+        f"orchestrato. Applica C-08: liveness-check via Dottore e, se confermata "
+        f"morta/wedged, respawn (bash /app/.launcher/start-agent.sh "
+        f"{TARGET_SESSION.lower()}). Non è rc=4 (viva-occupata): è pane non "
+        f"ricettiva. Log: /tmp/pacing-bridge.log"
+    )
+    try:
+        r = subprocess.run(
+            [cmd_path, ESCALATION_SESSION, msg],
+            capture_output=True, text=True, timeout=30,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    if r.returncode != 0:
+        print(
+            f"[pacing-bridge] escalation a {ESCALATION_SESSION} fallita "
+            f"rc={r.returncode} stderr={r.stderr.strip()}",
+            file=sys.stderr,
+        )
+        return False
+    print(
+        f"[pacing-bridge] ESCALATION → {ESCALATION_SESSION}: {TARGET_SESSION} "
+        f"irricettiva da {streak} tick (richiesto liveness-check + respawn)",
+        flush=True,
+    )
     return True
 
 
@@ -1316,6 +1376,9 @@ def loop():
     # del primo tick reale.
     write_state(None, next_quarter(), None, wht=wht, pcap=pcap)
 
+    # Tick consecutivi con target irricettivo (rc=3) → soglia → escalation.
+    unreceptive_streak = 0
+
     while True:
         nxt = next_quarter()
         sleep_s = (nxt - datetime.now(timezone.utc)).total_seconds()
@@ -1337,7 +1400,8 @@ def loop():
             d = compute_tick(ast, tba, rb, now, wht=wht, pcap=pcap)
             msg = format_message(d)
             print(msg, flush=True)
-            delivered = send_to_capitano(msg)
+            rc = send_to_capitano(msg)
+            delivered = (rc == 0)
             # Mailbox SEMPRE: anche quando tmux send fallisce (rc=3 perche'
             # capitano in turno lungo) il verdetto resta consultabile dal
             # capitano via bridge_mailbox.py drain. Risolve il problema
@@ -1354,6 +1418,19 @@ def loop():
             write_agent_usage_table(tba, now)
             # Passo B SHADOW (log-only): confronto throttle %-quantizzato vs token.
             _pace_shadow_log(d, now)
+            # Auto-recovery pipeline: target irricettivo (rc=3 = pane
+            # morta/wedged) per ≥ soglia tick consecutivi → escala al CAPITANO
+            # (vivo) per liveness-check + respawn. Solo rc=3 conta come "forse
+            # morta": rc=0 (consegnato) e rc=4 (viva-occupata) azzerano lo streak
+            # (anti-overspawn). Cooldown: azzero dopo l'escalation → ri-avviso
+            # solo dopo altri N tick se ancora giù.
+            if rc == 3 and TARGET_SESSION != ESCALATION_SESSION:
+                unreceptive_streak += 1
+                if unreceptive_streak >= UNRECEPTIVE_ESCALATE_AFTER:
+                    escalate_unreceptive_to_capitano(unreceptive_streak)
+                    unreceptive_streak = 0
+            elif rc != 3:
+                unreceptive_streak = 0
         except Exception as e:
             # Non vogliamo che un errore di un tick affossi il loop.
             print(f"[pacing-bridge] errore tick {now.isoformat()}: {e}",
@@ -1375,7 +1452,7 @@ def once(do_send: bool):
     print(msg)
     delivered = False
     if do_send:
-        delivered = send_to_capitano(msg)
+        delivered = (send_to_capitano(msg) == 0)
     kind = "stalled" if (d and d.get("error") == "pipeline_stalled") \
            else ("skip" if (d and not d.get("ok")) else "tick")
     append_to_mailbox(msg, delivered_via_tmux=delivered, kind=kind)
