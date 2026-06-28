@@ -1,4 +1,4 @@
-# 2026-05-17 — Pipeline snapshot charts (Capitano on-demand)
+# 📈 2026-05-17 — Pipeline snapshot charts (Capitano on-demand)
 
 Seconda sessione di grafici on-demand del Capitano (post chiusura finestra
 Kimi 22:11→03:11 UTC). Tema: **visualizzazione stato pipeline**, non più
@@ -46,7 +46,7 @@ architetturale del DB (vedi `2026-05-17-team-strategy-bugs.md` bug #14).
 > hanno superato la verifica (scored + writing + ready + excluded)."*
 
 **Conclusione dell'utente**: dovremmo **loggare anche il cambio di stato**.
-Vedi bug #14 in [`2026-05-17-team-strategy-bugs.md`](../../internal/2026-05-17-team-strategy-bugs.md).
+Vedi bug #14 in [`2026-05-17-team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md).
 
 ## I 6 PNG, in dettaglio
 
@@ -171,7 +171,7 @@ verranno potate quando il container si riavvia):
    le visualizzazioni che mostrano "nuove" o "verificate" daranno sempre 0.
    Fix: event log delle transizioni in `position_state_transitions(position_id,
    from_state, to_state, ts, by_agent)`, poi reconstruct stock con interval
-   join. Vedi bug #14 in `docs/internal/2026-05-17-team-strategy-bugs.md`.
+   join. Vedi bug #14 in `docs/internal/_archive/2026-05-17-team-strategy-bugs.md`.
 
 3. **Iterazione visuale costosa**: 4 round per layout corretto + 3 round
    per candle colori + 1 round per scoprire il bug strutturale = 8 round
@@ -183,5 +183,5 @@ verranno potate quando il container si riavvia):
 
 - [`docs/sessions/2026-05-17-budget-windows/`](../2026-05-17-budget-windows/) —
   prima sessione grafici on-demand (budget windows). Stesso pattern.
-- [`docs/internal/2026-05-17-team-strategy-bugs.md`](../../internal/2026-05-17-team-strategy-bugs.md) —
+- [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](../../internal/_archive/2026-05-17-team-strategy-bugs.md) —
   bug #14 (state transitions log) emerso da questa sessione.

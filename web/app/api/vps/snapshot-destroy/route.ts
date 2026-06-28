@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import {
   createSnapshot,
   deleteServer,
@@ -34,6 +34,8 @@ export const maxDuration = 300;
  * la richiesta che eliminare senza backup.
  */
 export async function POST(req: Request) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const denied = await requireAuth();
   if (denied) return denied;
 

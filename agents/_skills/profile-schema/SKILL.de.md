@@ -149,4 +149,3 @@ Die `WARN:`-Meldungen (z.B. Legacy-Key) blockieren nicht, sollten aber behoben w
 - `profile-summaries` — die narrativen Texte → werden zu Bloecken `kind: narrative`
 - `onboarding-flow` — wann was aktualisiert wird
 - `shared/config/profile-schema.ts` · `shared/skills/validate_profile.py`
-- `docs/internal/candidate-profile-cloud-sync-redesign-2026-06-05.md`

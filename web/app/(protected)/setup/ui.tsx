@@ -3,6 +3,8 @@
 /* Componenti UI condivisi per il wizard setup */
 
 import React from "react";
+import { useLocale } from "@/lib/use-locale";
+import { t } from "./setup-i18n";
 
 export const inputCls = [
   "w-full px-3 py-2 rounded text-[12px] font-mono",
@@ -29,15 +31,17 @@ export const STEPS = [
 ] as const;
 export type Step = (typeof STEPS)[number];
 
-export const STEP_LABELS: Record<Step, string> = {
-  provider: "Provider",
-  auth: "Auth",
-  model: "Modello",
-  telegram: "Telegram",
-  summary: "Riepilogo",
+/** Chiavi i18n per le label degli step (vedi setup-i18n.ts). */
+export const STEP_LABEL_KEYS: Record<Step, string> = {
+  provider: "step_provider",
+  auth: "step_auth",
+  model: "step_model",
+  telegram: "step_telegram",
+  summary: "step_summary",
 };
 
 export function StepBar({ current }: { current: Step }) {
+  const locale = useLocale();
   const idx = STEPS.indexOf(current);
   return (
     <div className="flex items-center gap-1 mb-8 flex-wrap">
@@ -59,7 +63,7 @@ export function StepBar({ current }: { current: Step }) {
               color: i === idx ? "var(--color-bright)" : "var(--color-dim)",
             }}
           >
-            {STEP_LABELS[s]}
+            {t(STEP_LABEL_KEYS[s], locale)}
           </span>
           {i < STEPS.length - 1 && (
             <span className="text-[var(--color-border)] mx-1">›</span>
@@ -136,7 +140,7 @@ export function Field({
 export function NavButtons({
   onBack,
   onNext,
-  nextLabel = "Continua",
+  nextLabel,
   disabled = false,
 }: {
   onBack?: () => void;
@@ -144,6 +148,7 @@ export function NavButtons({
   nextLabel?: string;
   disabled?: boolean;
 }) {
+  const locale = useLocale();
   return (
     <div className="flex gap-3">
       {onBack && (
@@ -152,7 +157,7 @@ export function NavButtons({
           className="flex-1 py-2.5 rounded text-[12px] font-semibold cursor-pointer"
           style={btnSecondary}
         >
-          Indietro
+          {t("nav_back", locale)}
         </button>
       )}
       <button
@@ -165,7 +170,7 @@ export function NavButtons({
             : btnPrimary
         }
       >
-        {nextLabel}
+        {nextLabel ?? t("nav_continue", locale)}
       </button>
     </div>
   );

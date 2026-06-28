@@ -389,11 +389,28 @@ Ausserhalb der Pipeline. Laeuft kontinuierlich parallel dazu.
             ▼             ▼             ▼
        👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
-       copilot                       (planned)
+       copilot                       (always-on)
 ```
 
 - **👨‍💼 Assistant** — `tier: smart`. Uebersetzt nicht-technische Benutzeranfragen in Befehle fuer den Captain. Verbirgt Implementierungsdetails vor dem benutzerseitigen Chat.
-- **🧙‍♂️ Mentor** — `tier: expert`, geplant. Zukuenftiger Karriere-Coach: analysiert die Profil/Ergebnis-Luecke, erstellt einen Aktionsplan. Ordner: `agents/mentor/`.
+- **🧙‍♂️ Mentor** — `tier: expert`, **aktiv** (Grundlagen ausgeliefert, Optimierung laufend). Karriere-Coach: analysiert die Profil/Ergebnis-Luecke, erstellt einen Aktionsplan, strategische Check-ins. Benutzerorientiert always-on, beim Boot erzeugt. Ordner: `agents/mentor/`.
+
+---
+
+## 🩺 Seitenkanal — Gesundheit & Wartung
+
+Ausserhalb der Pipeline. **Einmalig geplante** Agenten: Der Watchdog erzeugt jeden in seinem taeglichen Slot; sie fuehren einen Sweep durch, melden an den Captain und zerstoeren sich dann selbst.
+
+```
+   ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
+   │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
+   │ (scheduler)│              │ 👷‍♂️ Mantenitore│  findings │            │
+   └────────────┘              └──────────────┘          └────────────┘
+                                  one-shot → self-destruct
+```
+
+- **🩺 Dottore** — **Agenten-Gesundheit**. Periodischer Context-Refresh + Retrospektive: erkennt haengende/Zombie-Agentensitzungen und startet sie mit frischem Kontext neu (langlebige Threads, die Kontext verbrennen, verursachen einen stillen Durchsatzkollaps). Ordner: `agents/dottore/`.
+- **👷‍♂️ Mantenitore** — **Infra-Gesundheit**. Taeglicher Wartungs-Sweep auf dem Container/VPS: Smoke-Test der missionskritischen Tools (Browser-/Playwright-Canary), Abhaengigkeits-Standardisierung (`jht-install`), Disk-/RAM-Trend, Orphan-GC. Ein defektes kritisches Tool ist ein P1. Ordner: `agents/mantenitore/`.
 
 ---
 

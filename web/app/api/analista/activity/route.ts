@@ -1,40 +1,26 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { localWorkspace } from "@/lib/local-workspace";
+import {
+  categorizeExclusion,
+  getAnalistaActivityLocal,
+} from "@/lib/local-queries";
 
 export const dynamic = "force-dynamic";
 
-function categorizeExclusion(notes: string | null): string {
-  const n = (notes || "").toLowerCase();
-  const m = n.match(/esclus[ao]:\s*\[(\w+)\]/i);
-  if (m) return m[1].toUpperCase();
-  if (
-    /link scaduto|link morto|404|redirect|lavoro occupato|pagina rimossa|url morto/.test(
-      n,
-    )
-  )
-    return "LINK_MORTO";
-  if (/score < 40|score <40|score basso/.test(n)) return "SCORE_BASSO";
-  if (/duplicat|già presente|stessa posizione/.test(n)) return "DUPLICATA";
-  if (
-    /us-only|uk-only|americas|restrizione geografica|work authorization uk|post-brexit/.test(
-      n,
-    )
-  )
-    return "GEO";
-  if (/lingua croata|tedesco obbligat|polacco|ungherese|français|dutch/.test(n))
-    return "LINGUA";
-  if (/senior con 5\+|5\+ anni obbligatori|seniority troppo/.test(n))
-    return "SENIORITY";
-  if (/senza python|no python|solo java|solo node|stack incomp/.test(n))
-    return "STACK";
-  if (/zero sviluppo|mismatch|ruolo non-dev|iam analyst|no coding/.test(n))
-    return "RUOLO";
-  if (/scam|fantasma|red flag/.test(n)) return "SCAM";
-  if (/voto critico|critic/.test(n)) return "CRITICO";
-  return "NON_CATEGORIZZATA";
-}
-
 export async function GET() {
+  // Local-only (host localhost + jobs.db presente): leggi DIRETTO dal DB
+  // locale, mai Supabase → le pagine team funzionano senza login cloud
+  // (direction shift "interaction planes", gap WEB-READONLY). Se il ramo
+  // local fallisce (es. schema parziale), si scende al path Supabase sotto.
+  const ws = await localWorkspace();
+  if (ws) {
+    try {
+      return NextResponse.json(getAnalistaActivityLocal(ws));
+    } catch (err) {
+      console.error("[analista/activity] local", err);
+    }
+  }
   try {
     const supabase = await createClient();
     const today = new Date().toISOString().slice(0, 10);

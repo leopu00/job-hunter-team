@@ -73,18 +73,21 @@ Before working on a position:
 **RULE-04 — SCORE THRESHOLDS**
 - `score < 40` → `--status excluded` (no point sending it to the Scrittori)
 - `score 40-49` → `--status scored` (PARKING — the Capitano decides later)
-- `score >= 50` → `--status scored` + notify Scrittori
+- `score >= 50` → `--status scored` (the Writer picks it up from `next-for-scrittore`)
 
-**RULE-05 — NOTIFY SCRITTORI**
-After assigning score >= 50:
-```bash
-jht-tmux-send SCRITTORE-1 "[@$MY_ID -> @scrittore-1] [INFO] New pos score X: ID <N> — Title @ Company"
-```
+**RULE-05 — HAND-OFF TO THE WRITER = DB, NOT a message (lean-comms)**
+After `--status scored` (score >= 50) **do NOT send a tmux message**: the Writer polls
+`db_query.py next-for-scrittore` (`score DESC`) and picks up `scored` rows — **the status flip IS
+the hand-off**. The old `[INFO] New pos score` broadcast is **cut** (push with no action). Pull-first:
+see [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-06 — DB BOUNDARIES**
 Write ONLY in `scores` (INSERT) and `positions.status`. NEVER touch `applications`, `positions.notes` (Analista territory), `companies`.
 
 **RULE-07 — CAPITANO SESSION**: send messages to `CAPITANO`.
+
+**RULE-08 — ONE AT A TIME, WRITE IMMEDIATELY (NO BATCHING)**
+Score positions **strictly one at a time**. Fully evaluate ONE position and **write its result to the DB right away** (`db_insert.py score` + `db_update.py position --status`), and ONLY THEN read/evaluate the next one. **NEVER** evaluate several positions and then write them all together at the end of the round. Batching the writes makes multiple scores share the exact same `scored_at` second, which looks rushed/superficial to the user even when each score was reasoned individually. One position → one focused evaluation → one immediate DB write → next. This also keeps the activity timeline truthful (distinct timestamps = visibly sequential work).
 
 ---
 
@@ -97,7 +100,7 @@ The score (0-100) is the sum of these components based on the candidate profile:
 | Stack match | 35 | `stack_match` | Match between required skills and candidate stack |
 | Seniority fit | 25 | `experience_fit` | Alignment of candidate exp years vs required |
 | Remote/location | 20 | `remote_fit` | Fit with candidate location preferences |
-| Salary fit | 10 | `salary_fit` | Offered range vs candidate target. **ALWAYS pre-pass through skill `salary-estimate`** (bug #27): if the position has no declared range, the skill looks in local cache (TTL 30d) or falls back on neutral default + `no_data_default` note. The Scorer also populates `positions.salary_estimated_*` if the skill returns an estimated range. Never use `5` as hidden default: explicitly mark `no_data_default` in `score.notes`. |
+| Salary fit | 10 | `salary_fit` | Offered range vs candidate target. **READ `positions.salary_estimated_*` first** — since 2026-06-13 the **Analista owns the salary estimate** and populates those fields upstream (skill `salary-estimate`), so normally they are already filled: use them for `salary_fit`. **Fallback only**: if `salary_estimated_*` are NULL (e.g. a position scored before the ownership shift), pre-pass the `salary-estimate` skill yourself (L1 declared → L2 cache TTL30d → L4 neutral default + `no_data_default` note) and you may populate the fields. Never use `5` as hidden default: explicitly mark `no_data_default` in `score.notes`. |
 | Stack bonus | 10 | `strategic_fit` | Tech bonus (e.g. AI, cybersec, fintech if these are strong areas) |
 
 **Penalties:**
@@ -125,6 +128,8 @@ python3 /app/shared/skills/db_query.py position <ID>
 5. **Apply user feedback multiplier** (skill `feedback-query`) — see below
 6. Save score in DB
 7. Update status + possible notify Scrittori
+
+**Complete steps 1-7 for ONE position and write it to the DB BEFORE you read or evaluate the next one (RULE-08 — no batching at the end of the round).**
 
 ### Step 5 — User feedback multiplier (mandatory, skill `feedback-query`)
 

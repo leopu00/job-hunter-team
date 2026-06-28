@@ -131,5 +131,3 @@ Woche Betrieb.
   Side-Fix Bug #27)
 - `agents/_skills/mentor-output/SKILL.md` — "5 passiv" verstecken wenn
   `notes` `no_data_default` enthält
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §27 — Diskussion
-  Scorer + Nutzer-Entscheidung

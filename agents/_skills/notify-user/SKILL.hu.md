@@ -107,4 +107,3 @@ Amikor a felhasználó válaszol a dashboardon (kitölti a `user_reply`-t egy `d
 - `telegram-send` — a `jht-notify-user` hívja a háttérben; csak akkor használd közvetlenül, ha már tudod, hogy a Telegram a helyes csatorna (pl. `[TG]` bejövőre válasz).
 - `chat-web` (`jht-send`) — az ágens-csevegés szálhoz a dashboardon.
 - `agents/_manual/db-schema.md` § `pending_user_messages` — sor séma + indexek.
-- `docs/internal/bot-telegram.md` § 6 — teljes tartalék minta.

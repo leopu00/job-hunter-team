@@ -63,6 +63,9 @@ shared/data/gap-report.json
 candidate_profile.yml
 candidate_profile.example.yml
 
+# Note operative private (onboarding beta tester, piani migrazione/account, ecc.)
+docs/internal/private/
+
 # ── CHIAVI E CERTIFICATI ─────────────────────────────────────
 shared/secrets/*
 !shared/secrets/.gitkeep

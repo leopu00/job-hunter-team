@@ -389,11 +389,28 @@ A pipeline-on kivul. Folyamatosan fut mellette.
             ▼             ▼             ▼
        👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
-       copilot                       (planned)
+       copilot                       (always-on)
 ```
 
 - **👨‍💼 Assistant** — `tier: smart`. A felhasznalo nem technikai kereseit a Captain szamara ertelmezheto utasitasokka forditja. Elrejti az implementacios reszleteket a felhasznaloi chatbol.
-- **🧙‍♂️ Mentor** — `tier: expert`, tervezett. Jovoebeli karriertanaecsado: elemzi a profil/eredmenyek koezti hezagot, cselekvesi tervet keszit. Mappa: `agents/mentor/`.
+- **🧙‍♂️ Mentor** — `tier: expert`, **aktiv** (az alapok kesz, az optimalizalas folyamatban). Karriertanaecsado: elemzi a profil/eredmenyek koezti hezagot, cselekvesi tervet keszit, strategiai check-ineket vegez. Felhasznalo-orientalt, mindig aktiv, bootolaskor jon letre. Mappa: `agents/mentor/`.
+
+---
+
+## 🩺 Oldalsatorna — Allapot es karbantartas
+
+A pipeline-on kivul. **Egyszer futo utemezett** agensek: a watchdog mindegyiket a sajat napi idoreseben inditja el; vegrehajtanak egy ellenoerzest, jelentenek a Captainnek, majd oenmegsemmisuelnek.
+
+```
+   ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
+   │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
+   │ (scheduler)│              │ 👷‍♂️ Mantenitore│  findings │            │
+   └────────────┘              └──────────────┘          └────────────┘
+                                  one-shot → self-destruct
+```
+
+- **🩺 Dottore** — **agens-allapot**. Periodikus kontextus-frissites + retrospektiv: eszleli a beragadt/zombi agens-munkameneteket es ujrainditja oket friss kontextussal (a hosszu eletu, kontextust egetoe szalak csendes atviteli osszeomlast okoznak). Mappa: `agents/dottore/`.
+- **👷‍♂️ Mantenitore** — **infra-allapot**. Napi karbantartasi ellenoerzes a konteneren/VPS-en: kuldetes-kritikus eszkoezeoek fueest-tesztje (browser/Playwright canary), fueggoeseg-szabvanyositas (`jht-install`), disk/RAM trend, arva GC. Egy elromlott kritikus eszkoez egy P1. Mappa: `agents/mantenitore/`.
 
 ---
 

@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { DashboardPosition } from "@/lib/queries";
 import { formatFoundAt } from "@/lib/format-time";
+import { colorForFamily } from "@/lib/position-classifier";
 import {
   convertCurrency,
   currencySymbol,
@@ -18,10 +20,29 @@ const STATUS_COLORS: Record<string, string> = {
   scored: "var(--color-purple)",
   writing: "var(--color-yellow)",
   review: "var(--color-orange)",
-  ready: "#7fffb2",
+  ready: "var(--color-ready)",
   applied: "var(--color-green)",
   response: "#58a6ff",
   excluded: "var(--color-red)",
+};
+
+// Emoji per ruolo dell'ultima azione (colonna "Aggiornato da").
+// La chiave è last_action_by (ruolo), non il nome istanza.
+const ACTOR_EMOJI: Record<string, string> = {
+  scout: "🔍",
+  analista: "🔬",
+  scorer: "🎯",
+  scrittore: "✍️",
+  critico: "⚖️",
+  user: "👤",
+};
+
+// Verdetto critico → colore del voto (qui il colore È semantico: è un
+// giudizio di qualità, non come la modalità remote).
+const CRITIC_COLORS: Record<string, string> = {
+  PASS: "var(--color-green)",
+  NEEDS_WORK: "var(--color-yellow)",
+  REJECT: "var(--color-red)",
 };
 
 function scoreClass(s?: number | null) {
@@ -35,24 +56,6 @@ function scoreBg(s?: number | null) {
   if (s >= 75) return "var(--color-green)";
   if (s >= 55) return "var(--color-yellow)";
   return "var(--color-red)";
-}
-
-// Range stipendio compatto in "k", convertito nella valuta scelta
-// (es. "€60–80k", "$≥70k"). null → "—".
-function formatSalary(
-  min: number | null,
-  max: number | null,
-  from: string,
-  to: string,
-  rates: Rates,
-): string {
-  const sym = currencySymbol(to);
-  const f = (n: number) => formatMoneyCompact(convertCurrency(n, from, to, rates));
-  if (min != null && max != null)
-    return min === max ? `${sym}${f(min)}` : `${sym}${f(min)}–${f(max)}`;
-  if (min != null) return `${sym}≥${f(min)}`;
-  if (max != null) return `${sym}≤${f(max)}`;
-  return "—";
 }
 
 // Lordo mensile = lordo annuo / 12, convertito e in "k" con 1 decimale
@@ -80,16 +83,20 @@ export type TableLabels = {
   viewAll: string;
   noPositions: string;
   colId: string;
+  colUpdated: string;
+  colUpdatedBy: string;
   colTitle: string;
   colCompany: string;
+  colCategory: string;
   colCountry: string;
   colCity: string;
   colRemote: string;
   colScore: string;
+  colCritic: string;
   colSalary: string;
   colMonthly: string;
+  colSource: string;
   colStatus: string;
-  colUpdated: string;
 };
 
 type Props = {
@@ -112,11 +119,49 @@ export default function RecentPositionsTable({
   rates,
   displayCurrency,
 }: Props) {
+  // Doppia scrollbar orizzontale: una barra-proxy in cima sincronizzata con
+  // il contenitore della tabella in fondo (utile con tabella larga + tante
+  // righe, così non devi scorrere fino in fondo per scrollare a destra).
+  const topRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [scrollW, setScrollW] = useState(0);
+
+  useEffect(() => {
+    const el = bottomRef.current;
+    if (!el) return;
+    const update = () => setScrollW(el.scrollWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [rows]);
+
+  // Sync bidirezionale dello scrollLeft tra le due barre.
+  const syncing = useRef(false);
+  const mirror = (from: HTMLDivElement | null, to: HTMLDivElement | null) => {
+    if (syncing.current || !from || !to) return;
+    syncing.current = true;
+    to.scrollLeft = from.scrollLeft;
+    syncing.current = false;
+  };
+
+  // Colonne "dati" allineate al centro (header + valore): le altre (testo:
+  // titolo/azienda/paese…) restano a sinistra, che si legge meglio.
+  const centeredHeaders = new Set([
+    labels.colScore,
+    labels.colSalary,
+    labels.colMonthly,
+    labels.colUpdatedBy,
+    labels.colCritic,
+  ]);
+
   return (
     <div className="mb-8">
       <div className="flex items-center justify-between mb-4">
         <span className="section-label">
-          {filtered ? `${labels.titleFiltered} · ${totalFiltered}` : labels.title}
+          {filtered
+            ? `${labels.titleFiltered} · ${totalFiltered}`
+            : labels.title}
         </span>
         <Link
           href="/positions"
@@ -125,7 +170,20 @@ export default function RecentPositionsTable({
           {labels.viewAll}
         </Link>
       </div>
-      <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+      {/* Scrollbar orizzontale in cima (proxy sincronizzata con la tabella) */}
+      <div
+        ref={topRef}
+        onScroll={() => mirror(topRef.current, bottomRef.current)}
+        className="overflow-x-auto overflow-y-hidden"
+        aria-hidden="true"
+      >
+        <div style={{ width: scrollW, height: 1 }} />
+      </div>
+      <div
+        ref={bottomRef}
+        onScroll={() => mirror(bottomRef.current, topRef.current)}
+        className="overflow-x-auto border border-[var(--color-border)] rounded-lg"
+      >
         <table
           className="w-full text-[12px]"
           style={{ borderCollapse: "collapse" }}
@@ -135,21 +193,24 @@ export default function RecentPositionsTable({
             <tr className="bg-[var(--color-panel)] border-b border-[var(--color-border)]">
               {[
                 labels.colId,
+                labels.colUpdated,
                 labels.colTitle,
                 labels.colCompany,
+                labels.colCategory,
                 labels.colCountry,
                 labels.colCity,
                 labels.colRemote,
                 labels.colScore,
-                labels.colSalary,
                 labels.colMonthly,
+                labels.colSource,
+                labels.colUpdatedBy,
+                labels.colCritic,
                 labels.colStatus,
-                labels.colUpdated,
               ].map((h) => (
                 <th
                   key={h}
                   scope="col"
-                  className="px-4 py-3 text-left text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap"
+                  className={`px-4 py-3 ${centeredHeaders.has(h) ? "text-center" : "text-left"} text-[9.5px] font-semibold tracking-[0.15em] uppercase whitespace-nowrap`}
                   style={{ color: "var(--color-dim)" }}
                 >
                   {h}
@@ -161,7 +222,7 @@ export default function RecentPositionsTable({
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={11}
+                  colSpan={14}
                   className="px-4 py-10 text-center text-[var(--color-dim)] text-[11px]"
                 >
                   {labels.noPositions}
@@ -184,19 +245,37 @@ export default function RecentPositionsTable({
                       ? `JHT-${String(p.legacy_id).padStart(3, "0")}`
                       : p.id.slice(0, 8)}
                   </td>
-                  <td
-                    className="px-4 py-3 font-medium whitespace-nowrap max-w-[200px] truncate"
-                    title={p.title ?? undefined}
-                  >
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
+                    {formatFoundAt(p.last_action_at || p.found_at || "")}
+                  </td>
+                  <td className="px-4 py-3 font-medium">
                     <Link
                       href={`/positions/${p.id}`}
-                      className="text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
+                      title={p.title ?? undefined}
+                      className="block max-w-[28rem] truncate text-[var(--color-bright)] hover:text-[var(--color-green)] no-underline transition-colors"
                     >
                       {p.title}
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-[var(--color-base)] whitespace-nowrap">
                     {p.company}
+                  </td>
+                  <td className="px-4 py-3 text-[11px] whitespace-nowrap">
+                    {p.role_family && p.role_family.trim() ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className="inline-block w-2 h-2 rounded-full shrink-0"
+                          style={{
+                            background: colorForFamily(p.role_family.trim()),
+                          }}
+                        />
+                        <span className="text-[var(--color-base)]">
+                          {p.role_family.trim()}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)]">—</span>
+                    )}
                   </td>
                   {(() => {
                     const country = (p.loc_country ?? "").trim();
@@ -227,22 +306,12 @@ export default function RecentPositionsTable({
                     );
                   })()}
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span
-                      className="text-[10px]"
-                      style={{
-                        color:
-                          p.remote_type === "full_remote"
-                            ? "var(--color-green)"
-                            : p.remote_type === "hybrid"
-                              ? "var(--color-yellow)"
-                              : "var(--color-red)",
-                      }}
-                    >
+                    <span className="text-[10px] text-[var(--color-muted)]">
                       {p.remote_type?.replace("_", " ") ?? "—"}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
+                    <div className="flex items-center gap-2 justify-center">
                       <span
                         className={`text-[12px] font-semibold w-6 text-right ${scoreClass(p.score)}`}
                       >
@@ -262,8 +331,8 @@ export default function RecentPositionsTable({
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-base)] whitespace-nowrap tabular-nums text-right">
-                    {formatSalary(
+                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-center">
+                    {formatMonthly(
                       p.salary_min,
                       p.salary_max,
                       p.salary_currency,
@@ -271,13 +340,43 @@ export default function RecentPositionsTable({
                       rates,
                     )}
                   </td>
-                  <td className="px-4 py-3 text-[11px] text-[var(--color-muted)] whitespace-nowrap tabular-nums text-right">
-                    {formatMonthly(
-                      p.salary_min,
-                      p.salary_max,
-                      p.salary_currency,
-                      displayCurrency,
-                      rates,
+                  <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap">
+                    {p.source ? (
+                      <span className="capitalize">
+                        {p.source.replace(/[-_]/g, " ")}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)]">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[10px] whitespace-nowrap font-mono text-center">
+                    {p.last_action_actor ? (
+                      <span className="inline-flex items-center gap-1.5 text-[var(--color-muted)]">
+                        <span aria-hidden="true">
+                          {ACTOR_EMOJI[p.last_action_by] ?? "🤖"}
+                        </span>
+                        {p.last_action_actor}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)]">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap tabular-nums text-center">
+                    {p.critic_score != null ? (
+                      <span
+                        className="text-[12px] font-semibold"
+                        style={{
+                          color:
+                            CRITIC_COLORS[p.critic_verdict ?? ""] ??
+                            "var(--color-muted)",
+                        }}
+                      >
+                        {p.critic_score.toFixed(1)}
+                      </span>
+                    ) : (
+                      <span className="text-[var(--color-dim)] text-[11px]">
+                        —
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -292,9 +391,6 @@ export default function RecentPositionsTable({
                     >
                       {p.status}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-[10px] text-[var(--color-dim)] whitespace-nowrap font-mono tabular-nums">
-                    {formatFoundAt(p.last_action_at || p.found_at || "")}
                   </td>
                 </tr>
               ))

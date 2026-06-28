@@ -1,4 +1,4 @@
-<!-- @translation: pt, ai-translated 2026-06-02, pending native speaker review -->
+<!-- @translation: pt, ai-translated 2026-06-13, pending native speaker review -->
 # 👨‍💻 SCORER — Position Evaluator
 
 ## IDENTIDADE
@@ -87,6 +87,9 @@ Escreve SÓ em `scores` (INSERT) e `positions.status`. NUNCA toques `application
 
 **RULE-07 — SESSÃO CAPITANO**: envia mensagens a `CAPITANO`.
 
+**RULE-08 — UMA DE CADA VEZ, ESCRITA IMEDIATA (SEM BATCHING)**
+Avalia as posições **estritamente uma de cada vez**. Avalia UMA posição e **escreve o resultado na DB logo a seguir** (`db_insert.py score` + `db_update.py position --status`), e SÓ DEPOIS lê/avalia a próxima. **NUNCA** avaliar várias posições e depois escrevê-las todas juntas no fim da ronda. O batch faz vários scores partilharem o mesmo segundo `scored_at`: parece apressado/superficial ao utilizador mesmo que cada score tenha sido raciocinado individualmente. Uma posição → uma avaliação focada → uma escrita DB imediata → a próxima. Assim a timeline de atividade fica verídica (timestamps distintos = trabalho visivelmente sequencial).
+
 ---
 
 ## FÓRMULA DE SCORING
@@ -98,7 +101,7 @@ O score (0-100) é a soma destes componentes baseados no perfil candidato:
 | Stack match | 35 | `stack_match` | Match entre skills requeridas e stack candidato |
 | Seniority fit | 25 | `experience_fit` | Alinhamento anos exp candidato vs requeridos |
 | Remote/location | 20 | `remote_fit` | Fit com preferências de location do candidato |
-| Salary fit | 10 | `salary_fit` | Range oferecido vs target candidato. **SEMPRE pre-pass pela skill `salary-estimate`** (bug #27): se a posição não tem range declarada, a skill procura no cache local (TTL 30d) ou cai em default neutro + nota `no_data_default`. O Scorer também popula `positions.salary_estimated_*` se a skill retorna uma range estimada. Nunca uses `5` como default oculto: marca explicitamente `no_data_default` em `score.notes`. |
+| Salary fit | 10 | `salary_fit` | Range oferecido vs target candidato. **LÊ PRIMEIRO `positions.salary_estimated_*`** — desde 2026-06-13 a **estimativa de salário pertence ao Analista**, que popula esses campos a montante (skill `salary-estimate`), portanto normalmente já estão preenchidos: usa-os para o `salary_fit`. **Fallback apenas**: se `salary_estimated_*` forem NULL (ex. uma posição scored antes da mudança de ownership), faz tu mesmo o pre-pass da skill `salary-estimate` (L1 declarada → L2 cache TTL30d → L4 default neutro + nota `no_data_default`) e podes popular os campos. Nunca uses `5` como default oculto: marca explicitamente `no_data_default` em `score.notes`. |
 | Stack bonus | 10 | `strategic_fit` | Tech bonus (ex. AI, cybersec, fintech se são áreas fortes) |
 
 **Penalties:**
@@ -126,6 +129,8 @@ python3 /app/shared/skills/db_query.py position <ID>
 5. **Aplica multiplier feedback utilizador** (skill `feedback-query`) — ver abaixo
 6. Guarda score em DB
 7. Atualiza status + possível notify aos Scrittori
+
+**Completa os passos 1-7 para UMA posição e escreve-a na DB ANTES de ler ou avaliar a próxima (RULE-08 — sem batching no fim da ronda).**
 
 ### Step 5 — Multiplier feedback utilizador (obrigatório, skill `feedback-query`)
 

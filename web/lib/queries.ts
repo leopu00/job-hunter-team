@@ -1,9 +1,29 @@
 // fresh
-import { createClient } from '@/lib/supabase/server'
-import { getWorkspacePath, isSupabaseConfigured, workspaceHasDb } from '@/lib/workspace'
-import { isLocalRequest } from '@/lib/auth'
-import * as local from '@/lib/local-queries'
-import { aggregateRoleFamilies, UNCATEGORIZED_LABEL, type RoleFamilyCount } from '@/lib/position-classifier'
+import { createClient } from "@/lib/supabase/server";
+import {
+  getWorkspacePath,
+  isSupabaseConfigured,
+  workspaceHasDb,
+} from "@/lib/workspace";
+import { isLocalRequest } from "@/lib/auth";
+import * as local from "@/lib/local-queries";
+import { resolveCityPins } from "@/lib/city-coords";
+import {
+  aggregateRoleFamilies,
+  UNCATEGORIZED_LABEL,
+  type RoleFamilyCount,
+} from "@/lib/position-classifier";
+import {
+  addDaysKey,
+  buildTeamActivity,
+  normActor,
+  resolveActivityRange,
+  TEAM_ACTIVITY_ROLES,
+  type TeamActivity,
+  type TeamActivityEvent,
+  type TeamActivityRole,
+  type RecentActivityEvent,
+} from "@/lib/team-activity";
 import type {
   DashboardStats,
   PositionWithScore,
@@ -14,7 +34,8 @@ import type {
   ApplicationWithPosition,
   Application,
   PendingMessage,
-} from '@/lib/types'
+  PositionTicket,
+} from "@/lib/types";
 
 // Source of truth = origine della request:
 //   - host=localhost (Mac dell'utente, JHT Desktop o browser locale) → SQLite
@@ -24,57 +45,100 @@ import type {
 // perché vediamo TUTTE le row locali e usiamo Supabase come overlay (non
 // come fonte). In cloud puro Supabase è l'unica fonte.
 async function ws(): Promise<string | null> {
-  if (!(await isLocalRequest())) return null
-  const p = await getWorkspacePath()
-  if (!p || !workspaceHasDb(p)) return null
-  return p
+  if (!(await isLocalRequest())) return null;
+  const p = await getWorkspacePath();
+  if (!p || !workspaceHasDb(p)) return null;
+  return p;
 }
 
 // ── Dashboard Stats ────────────────────────────────────────────────
-const EMPTY_STATS: DashboardStats = { total: 0, new: 0, checked: 0, scored: 0, writing: 0, review: 0, ready: 0, applied: 0, excluded: 0, response: 0 }
+const EMPTY_STATS: DashboardStats = {
+  total: 0,
+  new: 0,
+  checked: 0,
+  scored: 0,
+  writing: 0,
+  review: 0,
+  ready: 0,
+  applied: 0,
+  excluded: 0,
+  response: 0,
+  scored_open: 0,
+  to_write: 0,
+};
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const w = await ws()
+  const w = await ws();
   if (w) {
-    try { return local.getDashboardStatsLocal(w) } catch { return EMPTY_STATS }
+    try {
+      return local.getDashboardStatsLocal(w);
+    } catch {
+      return EMPTY_STATS;
+    }
   }
-  if (!isSupabaseConfigured) return EMPTY_STATS
+  if (!isSupabaseConfigured) return EMPTY_STATS;
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('status').is('deleted_at', null)
-  if (error || !data) return EMPTY_STATS
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("positions")
+    .select("status, write_requested")
+    .is("deleted_at", null);
+  if (error || !data) return EMPTY_STATS;
 
-  const counts = data.reduce((acc: Record<string, number>, row: any) => {
-    acc[row.status] = (acc[row.status] ?? 0) + 1
-    return acc
-  }, {} as Record<string, number>)
+  const counts = data.reduce(
+    (acc: Record<string, number>, row: any) => {
+      acc[row.status] = (acc[row.status] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  // Pipeline write-requested-aware: il box "Da scrivere" conta le posizioni
+  // selezionate dall'utente (write_requested) ma con CV non ancora pronto
+  // (scored/writing/review); "Con lo score" conta le scored NON selezionate.
+  const TO_WRITE_STATUSES = new Set(["scored", "writing", "review"]);
+  let to_write = 0;
+  let scored_requested = 0;
+  for (const row of data as any[]) {
+    if (row.write_requested && TO_WRITE_STATUSES.has(row.status)) to_write++;
+    if (row.write_requested && row.status === "scored") scored_requested++;
+  }
+  const scored_open = (counts["scored"] ?? 0) - scored_requested;
 
   return {
-    total: data.length, new: counts['new'] ?? 0, checked: counts['checked'] ?? 0,
-    scored: counts['scored'] ?? 0, writing: counts['writing'] ?? 0, review: counts['review'] ?? 0,
-    ready: counts['ready'] ?? 0, applied: counts['applied'] ?? 0, excluded: counts['excluded'] ?? 0,
-    response: counts['response'] ?? 0,
-  }
+    total: data.length,
+    new: counts["new"] ?? 0,
+    checked: counts["checked"] ?? 0,
+    scored: counts["scored"] ?? 0,
+    writing: counts["writing"] ?? 0,
+    review: counts["review"] ?? 0,
+    ready: counts["ready"] ?? 0,
+    applied: counts["applied"] ?? 0,
+    excluded: counts["excluded"] ?? 0,
+    response: counts["response"] ?? 0,
+    scored_open,
+    to_write,
+  };
 }
 
 // ── Posizioni ordinate per ULTIMA azione qualsiasi ────────────────
 export type RecentlyTouchedPosition = PositionWithScore & {
-  last_action_at: string
-  last_action_by: string
-  last_action_actor: string
-  voto: number | null
-}
+  last_action_at: string;
+  last_action_by: string;
+  last_action_actor: string;
+  voto: number | null;
+};
 
 type CloudRecentEvent = {
-  positionId: string
-  ts: string
-  role: string
-  actor: string
-}
+  positionId: string;
+  ts: string;
+  role: string;
+  actor: string;
+};
 
 function firstRelated<T>(value: T | T[] | null | undefined): T | null {
-  if (Array.isArray(value)) return value[0] ?? null
-  return value ?? null
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
 }
 
 function recordCloudEvent(
@@ -84,23 +148,25 @@ function recordCloudEvent(
   role: string,
   actor?: string | null,
 ) {
-  if (!positionId || !ts) return
-  const time = Date.parse(ts)
-  if (!Number.isFinite(time)) return
-  const prev = events.get(positionId)
-  if (prev && Date.parse(prev.ts) >= time) return
+  if (!positionId || !ts) return;
+  const time = Date.parse(ts);
+  if (!Number.isFinite(time)) return;
+  const prev = events.get(positionId);
+  if (prev && Date.parse(prev.ts) >= time) return;
   events.set(positionId, {
     positionId,
     ts,
     role,
     actor: actor || role,
-  })
+  });
 }
 
-async function getRecentlyTouchedPositionsCloud(limit: number): Promise<RecentlyTouchedPosition[]> {
-  if (!isSupabaseConfigured) return []
-  const supabase = await createClient()
-  const sampleLimit = Math.min(200, Math.max(40, limit * 5))
+async function getRecentlyTouchedPositionsCloud(
+  limit: number,
+): Promise<RecentlyTouchedPosition[]> {
+  if (!isSupabaseConfigured) return [];
+  const supabase = await createClient();
+  const sampleLimit = Math.min(200, Math.max(40, limit * 5));
 
   const [
     foundRes,
@@ -112,55 +178,55 @@ async function getRecentlyTouchedPositionsCloud(limit: number): Promise<Recently
     responseRes,
   ] = await Promise.all([
     supabase
-      .from('positions')
-      .select('id, found_at, found_by')
-      .not('found_at', 'is', null)
-      .is('deleted_at', null)
-      .order('found_at', { ascending: false })
+      .from("positions")
+      .select("id, found_at, found_by")
+      .not("found_at", "is", null)
+      .is("deleted_at", null)
+      .order("found_at", { ascending: false })
       .limit(sampleLimit),
     supabase
-      .from('positions')
-      .select('id, last_checked')
-      .not('last_checked', 'is', null)
-      .is('deleted_at', null)
-      .order('last_checked', { ascending: false })
+      .from("positions")
+      .select("id, last_checked")
+      .not("last_checked", "is", null)
+      .is("deleted_at", null)
+      .order("last_checked", { ascending: false })
       .limit(sampleLimit),
     supabase
-      .from('scores')
-      .select('position_id, scored_at, scored_by')
-      .not('scored_at', 'is', null)
-      .is('deleted_at', null)
-      .order('scored_at', { ascending: false })
+      .from("scores")
+      .select("position_id, scored_at, scored_by")
+      .not("scored_at", "is", null)
+      .is("deleted_at", null)
+      .order("scored_at", { ascending: false })
       .limit(sampleLimit),
     supabase
-      .from('applications')
-      .select('position_id, written_at, written_by')
-      .not('written_at', 'is', null)
-      .is('deleted_at', null)
-      .order('written_at', { ascending: false })
+      .from("applications")
+      .select("position_id, written_at, written_by")
+      .not("written_at", "is", null)
+      .is("deleted_at", null)
+      .order("written_at", { ascending: false })
       .limit(sampleLimit),
     supabase
-      .from('applications')
-      .select('position_id, critic_reviewed_at, reviewed_by')
-      .not('critic_reviewed_at', 'is', null)
-      .is('deleted_at', null)
-      .order('critic_reviewed_at', { ascending: false })
+      .from("applications")
+      .select("position_id, critic_reviewed_at, reviewed_by")
+      .not("critic_reviewed_at", "is", null)
+      .is("deleted_at", null)
+      .order("critic_reviewed_at", { ascending: false })
       .limit(sampleLimit),
     supabase
-      .from('applications')
-      .select('position_id, applied_at')
-      .not('applied_at', 'is', null)
-      .is('deleted_at', null)
-      .order('applied_at', { ascending: false })
+      .from("applications")
+      .select("position_id, applied_at")
+      .not("applied_at", "is", null)
+      .is("deleted_at", null)
+      .order("applied_at", { ascending: false })
       .limit(sampleLimit),
     supabase
-      .from('applications')
-      .select('position_id, response_at')
-      .not('response_at', 'is', null)
-      .is('deleted_at', null)
-      .order('response_at', { ascending: false })
+      .from("applications")
+      .select("position_id, response_at")
+      .not("response_at", "is", null)
+      .is("deleted_at", null)
+      .order("response_at", { ascending: false })
       .limit(sampleLimit),
-  ])
+  ]);
 
   if (
     foundRes.error ||
@@ -171,40 +237,53 @@ async function getRecentlyTouchedPositionsCloud(limit: number): Promise<Recently
     appliedRes.error ||
     responseRes.error
   ) {
-    return getRecentPositions(limit) as Promise<RecentlyTouchedPosition[]>
+    return getRecentPositions(limit) as Promise<RecentlyTouchedPosition[]>;
   }
 
-  const events = new Map<string, CloudRecentEvent>()
+  const events = new Map<string, CloudRecentEvent>();
   for (const p of foundRes.data ?? []) {
-    recordCloudEvent(events, p.id, p.found_at, 'scout', p.found_by)
+    recordCloudEvent(events, p.id, p.found_at, "scout", p.found_by);
   }
   for (const p of checkedRes.data ?? []) {
-    recordCloudEvent(events, p.id, p.last_checked, 'analista', 'analista')
+    recordCloudEvent(events, p.id, p.last_checked, "analista", "analista");
   }
   for (const s of scoredRes.data ?? []) {
-    recordCloudEvent(events, s.position_id, s.scored_at, 'scorer', s.scored_by)
+    recordCloudEvent(events, s.position_id, s.scored_at, "scorer", s.scored_by);
   }
   for (const a of writtenRes.data ?? []) {
-    recordCloudEvent(events, a.position_id, a.written_at, 'scrittore', a.written_by)
+    recordCloudEvent(
+      events,
+      a.position_id,
+      a.written_at,
+      "scrittore",
+      a.written_by,
+    );
   }
   for (const a of reviewedRes.data ?? []) {
-    recordCloudEvent(events, a.position_id, a.critic_reviewed_at, 'critico', a.reviewed_by)
+    recordCloudEvent(
+      events,
+      a.position_id,
+      a.critic_reviewed_at,
+      "critico",
+      a.reviewed_by,
+    );
   }
   for (const a of appliedRes.data ?? []) {
-    recordCloudEvent(events, a.position_id, a.applied_at, 'user', 'user')
+    recordCloudEvent(events, a.position_id, a.applied_at, "user", "user");
   }
   for (const a of responseRes.data ?? []) {
-    recordCloudEvent(events, a.position_id, a.response_at, 'user', 'user')
+    recordCloudEvent(events, a.position_id, a.response_at, "user", "user");
   }
 
-  const ids = Array.from(events.keys())
+  const ids = Array.from(events.keys());
   if (ids.length === 0) {
-    return getRecentPositions(limit) as Promise<RecentlyTouchedPosition[]>
+    return getRecentPositions(limit) as Promise<RecentlyTouchedPosition[]>;
   }
 
   const { data, error } = await supabase
-    .from('positions')
-    .select(`
+    .from("positions")
+    .select(
+      `
       id, legacy_id, title, company, location, remote_type,
       salary_declared_min, salary_declared_max, url, source,
       found_at, status, notes, last_checked, found_by, score,
@@ -213,17 +292,18 @@ async function getRecentlyTouchedPositionsCloud(limit: number): Promise<Recently
         critic_score, written_at, written_by,
         critic_reviewed_at, reviewed_by, applied_at, response_at
       )
-    `)
-    .in('id', ids)
-    .is('deleted_at', null)
+    `,
+    )
+    .in("id", ids)
+    .is("deleted_at", null);
 
-  if (error || !data) return []
+  if (error || !data) return [];
 
   const positions = (data as any[]).map((p: any) => {
-    const event = events.get(p.id)
-    if (!event) return null
-    const score = firstRelated<any>(p.scores)
-    const application = firstRelated<any>(p.applications)
+    const event = events.get(p.id);
+    if (!event) return null;
+    const score = firstRelated<any>(p.scores);
+    const application = firstRelated<any>(p.applications);
     return {
       ...p,
       scores: undefined,
@@ -234,11 +314,11 @@ async function getRecentlyTouchedPositionsCloud(limit: number): Promise<Recently
       last_action_by: event.role,
       last_action_actor: event.actor,
       voto:
-        typeof application?.critic_score === 'number'
+        typeof application?.critic_score === "number"
           ? application.critic_score
           : null,
-    } as RecentlyTouchedPosition
-  })
+    } as RecentlyTouchedPosition;
+  });
 
   return positions
     .filter(
@@ -249,39 +329,64 @@ async function getRecentlyTouchedPositionsCloud(limit: number): Promise<Recently
       (a: RecentlyTouchedPosition, b: RecentlyTouchedPosition) =>
         Date.parse(b.last_action_at) - Date.parse(a.last_action_at),
     )
-    .slice(0, limit)
+    .slice(0, limit);
 }
 
-export async function getRecentlyTouchedPositions(limit = 15): Promise<RecentlyTouchedPosition[]> {
-  const w = await ws()
-  if (w) { try { return local.getRecentlyTouchedPositionsLocal(w, limit) } catch { return [] } }
-  try { return getRecentlyTouchedPositionsCloud(limit) } catch { return [] }
+export async function getRecentlyTouchedPositions(
+  limit = 15,
+): Promise<RecentlyTouchedPosition[]> {
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getRecentlyTouchedPositionsLocal(w, limit);
+    } catch {
+      return [];
+    }
+  }
+  try {
+    return getRecentlyTouchedPositionsCloud(limit);
+  } catch {
+    return [];
+  }
 }
 
 // ── Recent positions with scores ───────────────────────────────────
-export async function getRecentPositions(limit = 15): Promise<(PositionWithScore & { last_action_at?: string })[]> {
-  const w = await ws()
-  if (w) { try { return local.getRecentPositionsLocal(w, limit) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+export async function getRecentPositions(
+  limit = 15,
+): Promise<(PositionWithScore & { last_action_at?: string })[]> {
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getRecentPositionsLocal(w, limit);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
   const { data, error } = await supabase
-    .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, url, source, found_at, last_checked, status, notes, scores ( total_score, scored_at )')
-    .not('status', 'eq', 'excluded')
-    .is('deleted_at', null)
-    .order('found_at', { ascending: false })
-    .limit(limit)
-  if (error || !data) return []
+    .from("positions")
+    .select(
+      "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, url, source, found_at, last_checked, status, notes, scores ( total_score, scored_at )",
+    )
+    .not("status", "eq", "excluded")
+    .is("deleted_at", null)
+    .order("found_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
   return data.map((p: any) => {
     // last_action_at = ULTIMA azione: scout / analista / scorer
-    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
-    const candidates = [p.found_at, p.last_checked, score?.scored_at].filter(Boolean) as string[]
-    const last_action_at = candidates.length > 0
-      ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
-      : p.found_at
-    return { ...p, score: score?.total_score ?? undefined, last_action_at }
-  })
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores;
+    const candidates = [p.found_at, p.last_checked, score?.scored_at].filter(
+      Boolean,
+    ) as string[];
+    const last_action_at =
+      candidates.length > 0
+        ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
+        : p.found_at;
+    return { ...p, score: score?.total_score ?? undefined, last_action_at };
+  });
 }
 
 // ── All positions with optional filters ────────────────────────────
@@ -289,259 +394,499 @@ export async function getRecentPositions(limit = 15): Promise<(PositionWithScore
 // (default). Per gli altri ordinamenti (score, critic, ecc.) il fetch
 // resta su found_at e poi riordiniamo in memoria — limit 600 in chiamata
 // è gestibile e tiene la logica fuori da PostgREST nested ordering.
-const POSITION_SORT_KEYS = ['id', 'title', 'company', 'source', 'location', 'score', 'critic', 'found_at', 'status'] as const
-type PositionSortKey = (typeof POSITION_SORT_KEYS)[number]
+const POSITION_SORT_KEYS = [
+  "id",
+  "title",
+  "company",
+  "role_family",
+  "source",
+  "location",
+  "loc_city",
+  "loc_country",
+  "remote",
+  "score",
+  "salary",
+  "monthly",
+  "last_action_by",
+  "critic",
+  "found_at",
+  "last_action_at",
+  "status",
+] as const;
+type PositionSortKey = (typeof POSITION_SORT_KEYS)[number];
 
 export type PositionFilterOpts = {
-  statuses?: string[]
-  remoteTypes?: string[]
-  sources?: string[]
-  tiers?: string[]       // ['seria','practice','riferimento','noscore']
-  verdicts?: string[]    // applications.critic_verdict (PASS|NEEDS_WORK|REJECT)
+  statuses?: string[];
+  remoteTypes?: string[];
+  sources?: string[];
+  verdicts?: string[]; // applications.critic_verdict (PASS|NEEDS_WORK|REJECT)
   // ── Filtri "intelligenti" (sidebar /positions, stile mappa) ──
-  families?: string[]    // positions.role_family (UNCATEGORIZED_LABEL = "Da categorizzare")
-  countries?: string[]   // loc_country ("(unknown)" = senza paese)
-  cities?: string[]      // chiavi "Country|City" ("(country-only)" = senza città)
-  scoreBands?: Array<{ lo: number; hi: number }> // fasce score (OR tra loro)
-  unscored?: boolean     // include posizioni senza score numerico
-  limit?: number
-  offset?: number
-  sort?: string
-  dir?: 'asc' | 'desc'
-}
+  families?: string[]; // positions.role_family (UNCATEGORIZED_LABEL = "Da categorizzare")
+  countries?: string[]; // loc_country ("(unknown)" = senza paese)
+  cities?: string[]; // chiavi "Country|City" ("(country-only)" = senza città)
+  scoreBands?: Array<{ lo: number; hi: number }>; // range score (OR tra loro)
+  unscored?: boolean; // include posizioni senza score numerico
+  criticBands?: Array<{ lo: number; hi: number }>; // range voto critico 0-10 (OR)
+  criticUnscored?: boolean; // include posizioni senza voto del critico
+  // true = solo selezionate dall'utente (write_requested); false = solo NON
+  // selezionate; undefined = nessun filtro. Alimenta i deep-link delle card
+  // pipeline "Da scrivere" / "Con lo score".
+  writeRequested?: boolean;
+  limit?: number;
+  offset?: number;
+  sort?: string;
+  dir?: "asc" | "desc";
+};
 
 // Chiave city coerente con la sidebar/mappa: "Country|City". Country vuoto
 // → "(unknown)"; city vuota → "(country-only)".
-function facetCityKey(country: string | null | undefined, city: string | null | undefined): string {
-  const c = (country ?? '').trim() || '(unknown)'
-  const ci = (city ?? '').trim() || '(country-only)'
-  return `${c}|${ci}`
+function facetCityKey(
+  country: string | null | undefined,
+  city: string | null | undefined,
+): string {
+  const c = (country ?? "").trim() || "(unknown)";
+  const ci = (city ?? "").trim() || "(country-only)";
+  return `${c}|${ci}`;
 }
 
 // Filtri faceted applicati post-fetch (uniformi tra Supabase e local, così
 // la logica vive in un solo posto). Tra dimensioni diverse: AND. Dentro la
 // stessa dimensione: OR. Lo score band + unscored sono OR fra loro.
-function applyFacetFilters(rows: PositionWithScore[], opts?: PositionFilterOpts): PositionWithScore[] {
-  let out = rows
+function applyFacetFilters(
+  rows: PositionWithScore[],
+  opts?: PositionFilterOpts,
+): PositionWithScore[] {
+  let out = rows;
   if (opts?.families?.length) {
-    const set = new Set(opts.families)
-    out = out.filter(p => set.has((p.role_family ?? '').trim() || UNCATEGORIZED_LABEL))
+    const set = new Set(opts.families);
+    out = out.filter((p) =>
+      set.has((p.role_family ?? "").trim() || UNCATEGORIZED_LABEL),
+    );
   }
   if (opts?.countries?.length) {
-    const set = new Set(opts.countries)
-    out = out.filter(p => set.has((p.loc_country ?? '').trim() || '(unknown)'))
+    const set = new Set(opts.countries);
+    out = out.filter((p) =>
+      set.has((p.loc_country ?? "").trim() || "(unknown)"),
+    );
   }
   if (opts?.cities?.length) {
-    const set = new Set(opts.cities)
-    out = out.filter(p => set.has(facetCityKey(p.loc_country, p.loc_city)))
+    const set = new Set(opts.cities);
+    out = out.filter((p) => set.has(facetCityKey(p.loc_country, p.loc_city)));
   }
-  const bands = opts?.scoreBands ?? []
+  const bands = opts?.scoreBands ?? [];
   if (bands.length || opts?.unscored) {
-    out = out.filter(p => {
-      const s = p.score
-      if (s == null || s === 0) return !!opts?.unscored
-      return bands.some(b => s >= b.lo && s <= b.hi)
-    })
+    out = out.filter((p) => {
+      const s = p.score;
+      if (s == null || s === 0) return !!opts?.unscored;
+      return bands.some((b) => s >= b.lo && s <= b.hi);
+    });
   }
-  return out
+  const cbands = opts?.criticBands ?? [];
+  if (cbands.length || opts?.criticUnscored) {
+    out = out.filter((p) => {
+      const c = p.critic_score;
+      if (c == null) return !!opts?.criticUnscored;
+      return cbands.some((b) => c >= b.lo && c <= b.hi);
+    });
+  }
+  if (opts?.writeRequested != null) {
+    out = out.filter((p) => Boolean(p.write_requested) === opts.writeRequested);
+  }
+  return out;
 }
 
-// Tier → score-range. 'noscore' = score null/0.
-const TIER_RANGES: Record<string, { min?: number; max?: number; noScore?: boolean }> = {
-  seria:       { min: 70 },
-  practice:    { min: 40, max: 69 },
-  riferimento: { min: 1,  max: 39 },
-  noscore:     { noScore: true },
-}
+export async function getPositions(
+  opts?: PositionFilterOpts,
+): Promise<PositionWithScore[]> {
+  const w = await ws();
+  if (w) {
+    try {
+      return applyFacetFilters(local.getPositionsLocal(w, opts), opts);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-function applyTierFilter(rows: PositionWithScore[], tiers: string[]): PositionWithScore[] {
-  if (!tiers.length) return rows
-  return rows.filter(p => tiers.some(t => {
-    const r = TIER_RANGES[t]; if (!r) return false
-    const s = p.score
-    if (r.noScore) return s == null || s === 0
-    if (s == null || s === 0) return false
-    if (r.min != null && s < r.min) return false
-    if (r.max != null && s > r.max) return false
-    return true
-  }))
-}
-
-export async function getPositions(opts?: PositionFilterOpts): Promise<PositionWithScore[]> {
-  const w = await ws()
-  if (w) { try { return applyFacetFilters(local.getPositionsLocal(w, opts), opts) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
-
-  const supabase = await createClient()
+  const supabase = await createClient();
   let query = supabase
-    .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, url, source, found_at, deadline, status, notes, score, role_family, loc_country, loc_city, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit ), applications ( critic_score, critic_verdict )')
-    .is('deleted_at', null)
-    .order('found_at', { ascending: false })
+    .from("positions")
+    .select(
+      "id, legacy_id, title, company, location, remote_type, salary_declared_min, salary_declared_max, salary_declared_currency, salary_estimated_min, salary_estimated_max, salary_estimated_currency, url, source, found_at, found_by, last_checked, deadline, status, notes, score, role_family, loc_country, loc_city, write_requested, scores ( total_score, stack_match, remote_fit, salary_fit, strategic_fit, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
+    )
+    .is("deleted_at", null)
+    .order("found_at", { ascending: false });
 
-  if (opts?.statuses?.length) query = query.in('status', opts.statuses)
-  if (opts?.remoteTypes?.length) query = query.in('remote_type', opts.remoteTypes)
-  if (opts?.sources?.length) query = query.in('source', opts.sources)
-  if (opts?.limit) query = query.limit(opts.limit)
-  if (opts?.offset) query = query.range(opts.offset, (opts.offset + (opts.limit ?? 50)) - 1)
+  if (opts?.statuses?.length) query = query.in("status", opts.statuses);
+  if (opts?.remoteTypes?.length)
+    query = query.in("remote_type", opts.remoteTypes);
+  if (opts?.sources?.length) query = query.in("source", opts.sources);
+  if (opts?.limit) query = query.limit(opts.limit);
+  if (opts?.offset)
+    query = query.range(opts.offset, opts.offset + (opts.limit ?? 50) - 1);
 
-  const { data, error } = await query
-  if (error || !data) return []
+  const { data, error } = await query;
+  if (error || !data) return [];
   let mapped: PositionWithScore[] = data.map((p: any) => {
-    const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
+    const s = firstRelated<any>(p.scores);
+    const app = firstRelated<any>(p.applications);
+    // Stipendio: stima del team se presente, fallback sul dichiarato (stessa
+    // fonte per min/max/currency, così non mischiamo valute).
+    const useEst =
+      p.salary_estimated_min != null || p.salary_estimated_max != null;
+    const salary_min =
+      (useEst ? p.salary_estimated_min : p.salary_declared_min) ?? null;
+    const salary_max =
+      (useEst ? p.salary_estimated_max : p.salary_declared_max) ?? null;
+    const salary_currency =
+      (useEst ? p.salary_estimated_currency : p.salary_declared_currency) ??
+      "EUR";
+    // Ultima azione (stesso mapping di getDashboardPositions).
+    const {
+      at: last_action_at,
+      by: last_action_by,
+      actor: last_action_actor,
+    } = pickLastAction([
+      { ts: p.found_at, by: "scout", actor: p.found_by },
+      { ts: p.last_checked, by: "analista", actor: "analista" },
+      { ts: s?.scored_at, by: "scorer", actor: s?.scored_by },
+      { ts: app?.written_at, by: "scrittore", actor: app?.written_by },
+      { ts: app?.critic_reviewed_at, by: "critico", actor: app?.reviewed_by },
+      { ts: app?.applied_at, by: "user", actor: "user" },
+      { ts: app?.response_at, by: "user", actor: "user" },
+    ]);
     return {
       ...p,
-      score: p.score ?? p.scores?.total_score ?? undefined,
+      score: p.score ?? s?.total_score ?? undefined,
       scores: p.scores ?? undefined,
       critic_score: app?.critic_score ?? null,
       critic_verdict: app?.critic_verdict ?? null,
-    }
-  })
+      salary_min,
+      salary_max,
+      salary_currency,
+      last_action_at,
+      last_action_by,
+      last_action_actor,
+    };
+  });
 
-  // Filtri post-fetch: tier (range union) + verdict (nested join).
-  if (opts?.tiers?.length) mapped = applyTierFilter(mapped, opts.tiers)
+  // Filtri post-fetch: verdict (nested join).
   if (opts?.verdicts?.length) {
-    const set = new Set(opts.verdicts)
-    mapped = mapped.filter(p => p.critic_verdict && set.has(p.critic_verdict))
+    const set = new Set(opts.verdicts);
+    mapped = mapped.filter(
+      (p) => p.critic_verdict && set.has(p.critic_verdict),
+    );
   }
   // Filtri "intelligenti" sidebar (family/location/score band).
-  mapped = applyFacetFilters(mapped, opts)
+  mapped = applyFacetFilters(mapped, opts);
 
   // Sort in memoria per le colonne richieste dalla UI.
-  const sortKey: PositionSortKey | null = POSITION_SORT_KEYS.includes(opts?.sort as PositionSortKey)
+  const sortKey: PositionSortKey | null = POSITION_SORT_KEYS.includes(
+    opts?.sort as PositionSortKey,
+  )
     ? (opts!.sort as PositionSortKey)
-    : null
-  if (!sortKey) return mapped
-  const dirMul = opts?.dir === 'asc' ? 1 : -1
+    : null;
+  if (!sortKey) return mapped;
+  const dirMul = opts?.dir === "asc" ? 1 : -1;
   const getVal = (p: PositionWithScore): string | number | null => {
     switch (sortKey) {
-      case 'score': return p.score ?? null
-      case 'critic': return p.critic_score ?? null
-      case 'found_at': return p.found_at ?? null
-      default: return (p as any)[sortKey] ?? null
+      case "score":
+        return p.score ?? null;
+      case "critic":
+        return p.critic_score ?? null;
+      case "found_at":
+        return p.found_at ?? null;
+      case "remote":
+        return p.remote_type ?? null;
+      case "salary":
+      case "monthly":
+        return p.salary_min ?? null;
+      case "last_action_by":
+        return p.last_action_actor ?? null;
+      case "id":
+        return p.legacy_id ?? null;
+      default:
+        return (p as any)[sortKey] ?? null;
     }
-  }
+  };
   return [...mapped].sort((a, b) => {
-    const va = getVal(a), vb = getVal(b)
+    const va = getVal(a),
+      vb = getVal(b);
     // NULLS LAST in entrambe le direzioni
-    if (va == null && vb == null) return 0
-    if (va == null) return 1
-    if (vb == null) return -1
-    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dirMul
-    return String(va).localeCompare(String(vb)) * dirMul
-  })
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    if (typeof va === "number" && typeof vb === "number")
+      return (va - vb) * dirMul;
+    return String(va).localeCompare(String(vb)) * dirMul;
+  });
 }
 
 // ── Single position with all details ───────────────────────────────
 export async function getPositionById(id: string): Promise<{
-  position: Position; score: Score | null; highlights: PositionHighlight[]; company: Company | null; application: Application | null
+  position: Position;
+  score: Score | null;
+  highlights: PositionHighlight[];
+  company: Company | null;
+  application: Application | null;
+  tickets: PositionTicket[];
 } | null> {
-  const w = await ws()
-  if (w) { try { return local.getPositionByIdLocal(w, id) } catch { return null } }
-  if (!isSupabaseConfigured) return null
-
-  const supabase = await createClient()
-  const [posRes, scoreRes, hlRes, appRes] = await Promise.all([
-    supabase.from('positions').select('*').eq('id', id).is('deleted_at', null).single(),
-    supabase.from('scores').select('*').eq('position_id', id).is('deleted_at', null).maybeSingle(),
-    supabase.from('position_highlights').select('*').eq('position_id', id).order('type'),
-    supabase.from('applications').select('*').eq('position_id', id).is('deleted_at', null).maybeSingle(),
-  ])
-  if (posRes.error || !posRes.data) return null
-  const position = posRes.data as Position
-  let company: Company | null = null
-  if (position.company_id) {
-    const { data: compData } = await supabase.from('companies').select('*').eq('id', position.company_id).maybeSingle()
-    company = compData ?? null
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getPositionByIdLocal(w, id);
+    } catch {
+      return null;
+    }
   }
-  return { position, score: scoreRes.data ?? null, highlights: (hlRes.data ?? []) as PositionHighlight[], company, application: appRes.data ?? null }
+  if (!isSupabaseConfigured) return null;
+
+  const supabase = await createClient();
+  const [posRes, scoreRes, hlRes, appRes] = await Promise.all([
+    supabase
+      .from("positions")
+      .select("*")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .single(),
+    supabase
+      .from("scores")
+      .select("*")
+      .eq("position_id", id)
+      .is("deleted_at", null)
+      .maybeSingle(),
+    supabase
+      .from("position_highlights")
+      .select("*")
+      .eq("position_id", id)
+      .order("type"),
+    supabase
+      .from("applications")
+      .select("*")
+      .eq("position_id", id)
+      .is("deleted_at", null)
+      .maybeSingle(),
+  ]);
+  if (posRes.error || !posRes.data) return null;
+  const position = posRes.data as Position;
+  let company: Company | null = null;
+  if (position.company_id) {
+    const { data: compData } = await supabase
+      .from("companies")
+      .select("*")
+      .eq("id", position.company_id)
+      .maybeSingle();
+    company = compData ?? null;
+  }
+  let tickets: PositionTicket[] = [];
+  if (position.legacy_id != null) {
+    const { data: tkData } = await supabase
+      .from("position_tickets")
+      .select("*")
+      .eq("position_legacy_id", position.legacy_id)
+      .order("created_at", { ascending: true });
+    tickets = (tkData ?? []).map((t: any) => ({
+      id: String(t.id),
+      position_id: String(position.id),
+      request_text: t.request_text,
+      kind: t.kind ?? "custom",
+      status: t.status,
+      assigned_agent: t.assigned_agent ?? null,
+      response_text: t.response_text ?? null,
+      created_at: t.created_at ?? null,
+      resolved_at: t.resolved_at ?? null,
+    }));
+  }
+  return {
+    position,
+    score: scoreRes.data ?? null,
+    highlights: (hlRes.data ?? []) as PositionHighlight[],
+    company,
+    application: appRes.data ?? null,
+    tickets,
+  };
 }
 
 // ── Applications with position info ────────────────────────────────
 export async function getApplications(): Promise<ApplicationWithPosition[]> {
-  const w = await ws()
-  if (w) { try { return local.getApplicationsLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getApplicationsLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('*, positions ( id, title, company, status, url )').is('deleted_at', null).order('written_at', { ascending: false })
-  if (error || !data) return []
-  return data as ApplicationWithPosition[]
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("*, positions ( id, title, company, status, url )")
+    .is("deleted_at", null)
+    .order("written_at", { ascending: false });
+  if (error || !data) return [];
+  return data as ApplicationWithPosition[];
 }
 
 // ── Applications filtered by status ────────────────────────────────
-export async function getApplicationsByStatus(status: string): Promise<ApplicationWithPosition[]> {
-  const w = await ws()
-  if (w) { try { return local.getApplicationsByStatusLocal(w, status) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+export async function getApplicationsByStatus(
+  status: string,
+): Promise<ApplicationWithPosition[]> {
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getApplicationsByStatusLocal(w, status);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('*, positions ( id, title, company, status, url )').eq('status', status).is('deleted_at', null).order('response_at', { ascending: false })
-  if (error || !data) return []
-  return data as ApplicationWithPosition[]
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("*, positions ( id, title, company, status, url )")
+    .eq("status", status)
+    .is("deleted_at", null)
+    .order("response_at", { ascending: false });
+  if (error || !data) return [];
+  return data as ApplicationWithPosition[];
 }
 
 // ── Risposte ────────────────────────────────────────────────────────
 export async function getRisposte(): Promise<ApplicationWithPosition[]> {
-  const w = await ws()
-  if (w) { try { return local.getRisposteLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getRisposteLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('*, positions ( id, title, company, status, url )').or('status.eq.response,response.not.is.null').is('deleted_at', null).order('response_at', { ascending: false })
-  if (error || !data) return []
-  const seen = new Set<string>()
-  return (data as ApplicationWithPosition[]).filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true })
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("*, positions ( id, title, company, status, url )")
+    .or("status.eq.response,response.not.is.null")
+    .is("deleted_at", null)
+    .order("response_at", { ascending: false });
+  if (error || !data) return [];
+  const seen = new Set<string>();
+  return (data as ApplicationWithPosition[]).filter((a) => {
+    if (seen.has(a.id)) return false;
+    seen.add(a.id);
+    return true;
+  });
 }
 
 // ── Risposte count ──────────────────────────────────────────────────
 export async function getRisposteCount(): Promise<number> {
-  const w = await ws()
-  if (w) { try { return local.getRisposteCountLocal(w) } catch { return 0 } }
-  if (!isSupabaseConfigured) return 0
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getRisposteCountLocal(w);
+    } catch {
+      return 0;
+    }
+  }
+  if (!isSupabaseConfigured) return 0;
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('id').or('status.eq.response,response.not.is.null').is('deleted_at', null)
-  if (error || !data) return 0
-  return new Set(data.map((r: any) => r.id)).size
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("id")
+    .or("status.eq.response,response.not.is.null")
+    .is("deleted_at", null);
+  if (error || !data) return 0;
+  return new Set(data.map((r: any) => r.id)).size;
 }
 
 // ── Score distribution ──────────────────────────────────────────────
 export async function getScoreDistribution() {
-  const w = await ws()
-  if (w) { try { return local.getScoreDistributionLocal(w) } catch { /* fall through */ } }
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getScoreDistributionLocal(w);
+    } catch {
+      /* fall through */
+    }
+  }
 
-  const empty = { buckets: [] as Array<{ label: string; count: number; color: string }>, total: 0, withScore: 0, avgScore: null as number | null, scores: [] as number[] }
-  if (!isSupabaseConfigured) return empty
+  const empty = {
+    buckets: [] as Array<{ label: string; count: number; color: string }>,
+    total: 0,
+    withScore: 0,
+    avgScore: null as number | null,
+    scores: [] as number[],
+  };
+  if (!isSupabaseConfigured) return empty;
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('score, scores(total_score)').not('status', 'eq', 'excluded').is('deleted_at', null)
-  if (error || !data) return empty
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("positions")
+    .select("score, scores(total_score)")
+    .not("status", "eq", "excluded")
+    .is("deleted_at", null);
+  if (error || !data) return empty;
 
-  const scores = data.map((r: any) => (r.score as number | null) ?? (r as any).scores?.total_score ?? null)
-  const withScore = scores.filter((s: any): s is number => s != null && s > 0)
+  const scores = data.map(
+    (r: any) =>
+      (r.score as number | null) ?? (r as any).scores?.total_score ?? null,
+  );
+  const withScore = scores.filter((s: any): s is number => s != null && s > 0);
   const buckets = [
-    { label: '76\u2013100', min: 76, max: 100, color: 'var(--color-green)' },
-    { label: '61\u201375',  min: 61, max: 75,  color: 'var(--color-yellow)' },
-    { label: '41\u201360',  min: 41, max: 60,  color: 'var(--color-orange)' },
-    { label: '\u2264 40',   min: 0,  max: 40,  color: 'var(--color-red)' },
-  ].map(b => ({ label: b.label, count: withScore.filter((s: number) => s >= b.min && s <= b.max).length, color: b.color }))
-  const sum = withScore.reduce((a: number, s: number) => a + s, 0)
-  return { buckets, total: scores.length, withScore: withScore.length, avgScore: withScore.length > 0 ? Math.round(sum / withScore.length) : null, scores: withScore }
+    { label: "76\u2013100", min: 76, max: 100, color: "var(--color-green)" },
+    { label: "61\u201375", min: 61, max: 75, color: "var(--color-yellow)" },
+    { label: "41\u201360", min: 41, max: 60, color: "var(--color-orange)" },
+    { label: "\u2264 40", min: 0, max: 40, color: "var(--color-red)" },
+  ].map((b) => ({
+    label: b.label,
+    count: withScore.filter((s: number) => s >= b.min && s <= b.max).length,
+    color: b.color,
+  }));
+  const sum = withScore.reduce((a: number, s: number) => a + s, 0);
+  return {
+    buckets,
+    total: scores.length,
+    withScore: withScore.length,
+    avgScore: withScore.length > 0 ? Math.round(sum / withScore.length) : null,
+    scores: withScore,
+  };
 }
 
 // ── Source distribution ─────────────────────────────────────────────
-export async function getSourceDistribution(): Promise<Array<{ source: string; count: number }>> {
-  const w = await ws()
-  if (w) { try { return local.getSourceDistributionLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+export async function getSourceDistribution(): Promise<
+  Array<{ source: string; count: number }>
+> {
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getSourceDistributionLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('source').not('status', 'eq', 'excluded').is('deleted_at', null)
-  if (error || !data) return []
-  const counts: Record<string, number> = {}
-  for (const row of data) { const s = row.source ?? 'sconosciuta'; counts[s] = (counts[s] ?? 0) + 1 }
-  return Object.entries(counts).map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count).slice(0, 8)
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("positions")
+    .select("source")
+    .not("status", "eq", "excluded")
+    .is("deleted_at", null);
+  if (error || !data) return [];
+  const counts: Record<string, number> = {};
+  for (const row of data) {
+    const s = row.source ?? "sconosciuta";
+    counts[s] = (counts[s] ?? 0) + 1;
+  }
+  return Object.entries(counts)
+    .map(([source, count]) => ({ source, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
 }
 
 // ── Positions con coordinate ufficio (per JobsGlobe) ───────────────
@@ -551,41 +896,58 @@ export async function getSourceDistribution(): Promise<Array<{ source: string; c
 // client, con conteggi che si incrociano. Diverso da coords/no-coords
 // del map (che escludono le 'excluded' e dipendono dalle coordinate).
 export type PositionFacet = {
-  id: string
-  role_family: string | null
-  score: number | null
-  loc_country: string | null
-  loc_city: string | null
-  status: string
-  title: string | null
-  company: string | null
-}
+  id: string;
+  role_family: string | null;
+  score: number | null;
+  critic_score: number | null;
+  loc_country: string | null;
+  loc_city: string | null;
+  status: string;
+  title: string | null;
+  company: string | null;
+};
 
 export async function getPositionFacets(): Promise<PositionFacet[]> {
-  const w = await ws()
-  if (w) { try { return local.getPositionFacetsLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getPositionFacetsLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
   const { data, error } = await supabase
-    .from('positions')
-    .select('id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score )')
-    .is('deleted_at', null)
-  if (error || !data) return []
+    .from("positions")
+    .select(
+      "id, title, company, status, role_family, loc_country, loc_city, score, scores ( total_score ), applications ( critic_score )",
+    )
+    .is("deleted_at", null);
+  if (error || !data) return [];
   return (data as any[]).map((p) => {
-    const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
-    const score = (p.score as number | null) ?? (typeof s?.total_score === 'number' ? s.total_score : null)
+    const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
+    const score =
+      (p.score as number | null) ??
+      (typeof s?.total_score === "number" ? s.total_score : null);
+    const app = Array.isArray(p.applications)
+      ? p.applications[0]
+      : p.applications;
+    const critic =
+      typeof app?.critic_score === "number" ? app.critic_score : null;
     return {
       id: String(p.id),
       role_family: p.role_family ?? null,
-      score: typeof score === 'number' ? score : null,
+      score: typeof score === "number" ? score : null,
+      critic_score: critic,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
       status: p.status,
       title: p.title ?? null,
       company: p.company ?? null,
-    }
-  })
+    };
+  });
 }
 
 // ── Dataset dashboard: universo ATTIVO con campi-facet + campi-tabella ──
@@ -594,51 +956,122 @@ export async function getPositionFacets(): Promise<PositionFacet[]> {
 // location, remote_type, recency). Esclude le 'excluded', coerente con le
 // altre metriche della dashboard. Ordinato per ultima azione desc.
 export type DashboardPosition = {
-  id: string
-  legacy_id: number | null
-  title: string | null
-  company: string | null
-  location: string | null
-  remote_type: string | null
-  status: string
-  score: number | null
-  role_family: string | null
-  loc_country: string | null
-  loc_city: string | null
-  salary_min: number | null
-  salary_max: number | null
-  salary_currency: string
-  found_at: string | null
-  last_action_at: string
+  id: string;
+  legacy_id: number | null;
+  title: string | null;
+  company: string | null;
+  location: string | null;
+  remote_type: string | null;
+  status: string;
+  score: number | null;
+  role_family: string | null;
+  loc_country: string | null;
+  loc_city: string | null;
+  source: string | null;
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_currency: string;
+  found_at: string | null;
+  last_action_at: string;
+  // Chi ha eseguito l'ultima azione: ruolo (scout/analista/scorer/scrittore/
+  // critico/user) e nome istanza (es. 'scout-1', fallback al ruolo).
+  last_action_by: string;
+  last_action_actor: string;
+  // Voto del Critico (0-10) + verdetto (PASS|NEEDS_WORK|REJECT), null se non
+  // ancora revisionata.
+  critic_score: number | null;
+  critic_verdict: string | null;
+};
+
+// Sceglie l'evento con timestamp più recente tra i candidati passati.
+// Usato sia dal path cloud sia (replicato) dal path locale per derivare
+// last_action_at/by/actor in modo coerente con getRecentlyTouchedPositions.
+export type LastActionCandidate = {
+  ts: string | null | undefined;
+  by: string;
+  actor: string | null | undefined;
+};
+export function pickLastAction(cands: LastActionCandidate[]): {
+  at: string;
+  by: string;
+  actor: string;
+} {
+  let best: { at: string; by: string; actor: string } | null = null;
+  for (const c of cands) {
+    if (!c.ts) continue;
+    if (!best || c.ts > best.at) {
+      best = { at: c.ts, by: c.by, actor: c.actor || c.by };
+    }
+  }
+  return best ?? { at: "", by: "scout", actor: "scout" };
 }
 
 export async function getDashboardPositions(): Promise<DashboardPosition[]> {
-  const w = await ws()
-  if (w) { try { return local.getDashboardPositionsLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getDashboardPositionsLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
   const { data, error } = await supabase
-    .from('positions')
-    .select('id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, last_checked, scores ( total_score, scored_at )')
-    .not('status', 'eq', 'excluded')
-    .is('deleted_at', null)
-    .order('found_at', { ascending: false })
-    .limit(1000)
-  if (error || !data) return []
+    .from("positions")
+    .select(
+      "id, legacy_id, title, company, location, remote_type, status, role_family, loc_country, loc_city, source, score, salary_estimated_min, salary_estimated_max, salary_estimated_currency, salary_declared_min, salary_declared_max, salary_declared_currency, found_at, found_by, last_checked, scores ( total_score, scored_at, scored_by ), applications ( critic_score, critic_verdict, written_at, written_by, critic_reviewed_at, reviewed_by, applied_at, response_at )",
+    )
+    .not("status", "eq", "excluded")
+    .is("deleted_at", null)
+    .order("found_at", { ascending: false })
+    .limit(1000);
+  if (error || !data) return [];
   return (data as any[]).map((p) => {
-    const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
-    const score = (p.score as number | null) ?? (typeof s?.total_score === 'number' ? s.total_score : null)
-    const candidates = [p.found_at, p.last_checked, s?.scored_at].filter(Boolean) as string[]
-    const last_action_at = candidates.length > 0
-      ? candidates.reduce((acc, cur) => (cur > acc ? cur : acc))
-      : (p.found_at ?? '')
+    const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
+    const a = Array.isArray(p.applications)
+      ? p.applications[0]
+      : p.applications;
+    const score =
+      (p.score as number | null) ??
+      (typeof s?.total_score === "number" ? s.total_score : null);
+    // last_action_at + chi: stesso mapping ruolo/attore di
+    // getRecentlyTouchedPositions, ma derivato inline per riga.
+    const {
+      at: last_action_at,
+      by: last_action_by,
+      actor: last_action_actor,
+    } = pickLastAction([
+      { ts: p.found_at, by: "scout", actor: p.found_by },
+      { ts: p.last_checked, by: "analista", actor: "analista" },
+      { ts: s?.scored_at, by: "scorer", actor: s?.scored_by },
+      { ts: a?.written_at, by: "scrittore", actor: a?.written_by },
+      // critic_reviewed_at è auto-settato dalla chiamata --critic-score
+      // che esegue lo SCRITTORE (single-writer rule, bug #21): il critico
+      // non scrive mai sul DB. Quindi l'autore di quell'update è lo
+      // scrittore, non il critico. Il voto del critico vive nella sua
+      // colonna dedicata.
+      { ts: a?.critic_reviewed_at, by: "scrittore", actor: a?.written_by },
+      { ts: a?.applied_at, by: "user", actor: "user" },
+      { ts: a?.response_at, by: "user", actor: "user" },
+    ]);
     // Stipendio: preferisci la stima del team, fallback sul dichiarato.
     // min/max/currency provengono dalla STESSA fonte per non mischiare valute.
-    const useEst = p.salary_estimated_min != null || p.salary_estimated_max != null
-    const salary_min = (useEst ? p.salary_estimated_min : p.salary_declared_min) as number | null ?? null
-    const salary_max = (useEst ? p.salary_estimated_max : p.salary_declared_max) as number | null ?? null
-    const salary_currency = ((useEst ? p.salary_estimated_currency : p.salary_declared_currency) as string | null) ?? 'EUR'
+    const useEst =
+      p.salary_estimated_min != null || p.salary_estimated_max != null;
+    const salary_min =
+      ((useEst ? p.salary_estimated_min : p.salary_declared_min) as
+        | number
+        | null) ?? null;
+    const salary_max =
+      ((useEst ? p.salary_estimated_max : p.salary_declared_max) as
+        | number
+        | null) ?? null;
+    const salary_currency =
+      ((useEst ? p.salary_estimated_currency : p.salary_declared_currency) as
+        | string
+        | null) ?? "EUR";
     return {
       id: String(p.id),
       legacy_id: (p.legacy_id as number | null) ?? null,
@@ -647,50 +1080,78 @@ export async function getDashboardPositions(): Promise<DashboardPosition[]> {
       location: p.location ?? null,
       remote_type: p.remote_type ?? null,
       status: p.status,
-      score: typeof score === 'number' ? score : null,
+      score: typeof score === "number" ? score : null,
       role_family: p.role_family ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
-      salary_min: typeof salary_min === 'number' ? salary_min : null,
-      salary_max: typeof salary_max === 'number' ? salary_max : null,
+      source: p.source ?? null,
+      salary_min: typeof salary_min === "number" ? salary_min : null,
+      salary_max: typeof salary_max === "number" ? salary_max : null,
       salary_currency,
       found_at: p.found_at ?? null,
-      last_action_at,
-    }
-  })
+      last_action_at: last_action_at || (p.found_at ?? ""),
+      last_action_by,
+      last_action_actor,
+      critic_score: typeof a?.critic_score === "number" ? a.critic_score : null,
+      critic_verdict: a?.critic_verdict ?? null,
+    };
+  });
 }
 
 export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
-  const w = await ws()
-  if (w) { try { return local.getPositionsWithCoordsLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getPositionsWithCoordsLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
+  // Niente più filtro office_lat: prendiamo TUTTE le non-escluse e risolviamo
+  // le coordinate a livello città (ufficio esatto o centro-città).
   const { data, error } = await supabase
-    .from('positions')
-    .select('id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, is_remote, scores ( total_score )')
-    .not('status', 'eq', 'excluded')
-    .not('office_lat', 'is', null)
-    .is('deleted_at', null)
-  if (error || !data) return []
-  return data.map((p: any) => {
-    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
-    return {
+    .from("positions")
+    .select(
+      "id, title, company, status, role_family, location, loc_country, loc_city, office_address, office_lat, office_lon, is_remote, created_at, scores ( total_score )",
+    )
+    .not("status", "eq", "excluded")
+    .is("deleted_at", null);
+  if (error || !data) return [];
+  const rows = data as any[];
+  const pins = resolveCityPins(
+    rows.map((p) => ({
+      loc_country: p.loc_country ?? null,
+      loc_city: p.loc_city ?? null,
+      office_lat: p.office_lat,
+      office_lon: p.office_lon,
+    })),
+  );
+  const out: local.PositionCoord[] = [];
+  rows.forEach((p, i) => {
+    const c = pins[i];
+    if (!c) return; // città non risolvibile → finisce tra i no-coords
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores;
+    out.push({
       id: String(p.id),
       title: p.title,
       company: p.company,
       status: p.status,
       role_family: p.role_family ?? null,
-      score: typeof score?.total_score === 'number' ? score.total_score : null,
-      lat: p.office_lat,
-      lon: p.office_lon,
+      score: typeof score?.total_score === "number" ? score.total_score : null,
+      lat: c.lat,
+      lon: c.lon,
       is_remote: !!p.is_remote,
       location: p.location ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
       office_address: p.office_address ?? null,
-    }
-  })
+      created_at: p.created_at ?? null,
+    });
+  });
+  return out;
 }
 
 // ── Tree gerarchico per /map sidebar Location ──────────────────────
@@ -699,96 +1160,109 @@ export async function getPositionsWithCoords(): Promise<local.PositionCoord[]> {
 // senza loc_country finiscono sotto "(unknown)"; quelle senza loc_city
 // sotto una città chiamata "(country-only)".
 export type LocationPositionLite = {
-  id: string
-  title: string | null
-  company: string | null
-  score: number | null
-}
+  id: string;
+  title: string | null;
+  company: string | null;
+  score: number | null;
+};
 export type LocationCity = {
-  city: string | null
-  count: number
-  positions: LocationPositionLite[]
-}
+  city: string | null;
+  count: number;
+  positions: LocationPositionLite[];
+};
 export type LocationCountry = {
-  country: string
-  count: number
-  cities: LocationCity[]
-}
+  country: string;
+  count: number;
+  cities: LocationCity[];
+};
 
-function buildLocationTree(rows: Array<{
-  id: string
-  title: string | null
-  company: string | null
-  loc_country: string | null
-  loc_city: string | null
-  score: number | null
-}>): LocationCountry[] {
-  const byCountry = new Map<string, Map<string | null, LocationPositionLite[]>>()
+function buildLocationTree(
+  rows: Array<{
+    id: string;
+    title: string | null;
+    company: string | null;
+    loc_country: string | null;
+    loc_city: string | null;
+    score: number | null;
+  }>,
+): LocationCountry[] {
+  const byCountry = new Map<
+    string,
+    Map<string | null, LocationPositionLite[]>
+  >();
   for (const r of rows) {
-    const country = r.loc_country?.trim() || '(unknown)'
-    const city = r.loc_city?.trim() || null
-    const cMap = byCountry.get(country) ?? new Map<string | null, LocationPositionLite[]>()
-    const arr = cMap.get(city) ?? []
+    const country = r.loc_country?.trim() || "(unknown)";
+    const city = r.loc_city?.trim() || null;
+    const cMap =
+      byCountry.get(country) ??
+      new Map<string | null, LocationPositionLite[]>();
+    const arr = cMap.get(city) ?? [];
     arr.push({
       id: r.id,
       title: r.title,
       company: r.company,
       score: r.score,
-    })
-    cMap.set(city, arr)
-    byCountry.set(country, cMap)
+    });
+    cMap.set(city, arr);
+    byCountry.set(country, cMap);
   }
-  const out: LocationCountry[] = []
+  const out: LocationCountry[] = [];
   for (const [country, cMap] of byCountry) {
-    const cities: LocationCity[] = []
-    let total = 0
+    const cities: LocationCity[] = [];
+    let total = 0;
     for (const [city, positions] of cMap) {
       // Ordina positions per score desc (null in fondo)
-      positions.sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
-      cities.push({ city, count: positions.length, positions })
-      total += positions.length
+      positions.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+      cities.push({ city, count: positions.length, positions });
+      total += positions.length;
     }
     // City con city=null in fondo
     cities.sort((a, b) => {
-      if (a.city == null) return 1
-      if (b.city == null) return -1
-      return b.count - a.count
-    })
-    out.push({ country, count: total, cities })
+      if (a.city == null) return 1;
+      if (b.city == null) return -1;
+      return b.count - a.count;
+    });
+    out.push({ country, count: total, cities });
   }
   // Country sorted by count desc, "(unknown)" in fondo
   out.sort((a, b) => {
-    if (a.country === '(unknown)') return 1
-    if (b.country === '(unknown)') return -1
-    return b.count - a.count
-  })
-  return out
+    if (a.country === "(unknown)") return 1;
+    if (b.country === "(unknown)") return -1;
+    return b.count - a.count;
+  });
+  return out;
 }
 
 export async function getPositionLocations(): Promise<LocationCountry[]> {
-  const w = await ws()
-  if (w) { try { return local.getPositionLocationsLocal(w) } catch { /* fall through */ } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getPositionLocationsLocal(w);
+    } catch {
+      /* fall through */
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
   const { data, error } = await supabase
-    .from('positions')
-    .select('id, title, company, loc_country, loc_city, scores ( total_score )')
-    .not('status', 'eq', 'excluded')
-    .is('deleted_at', null)
-  if (error || !data) return []
-  const rows = (data as any[]).map(p => {
-    const s = Array.isArray(p.scores) ? p.scores[0] : p.scores
+    .from("positions")
+    .select("id, title, company, loc_country, loc_city, scores ( total_score )")
+    .not("status", "eq", "excluded")
+    .is("deleted_at", null);
+  if (error || !data) return [];
+  const rows = (data as any[]).map((p) => {
+    const s = Array.isArray(p.scores) ? p.scores[0] : p.scores;
     return {
       id: String(p.id),
       title: p.title ?? null,
       company: p.company ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
-      score: typeof s?.total_score === 'number' ? s.total_score : null,
-    }
-  })
-  return buildLocationTree(rows)
+      score: typeof s?.total_score === "number" ? s.total_score : null,
+    };
+  });
+  return buildLocationTree(rows);
 }
 
 // ── Positions SENZA coordinate ufficio (per "remote bucket" /map) ─
@@ -797,45 +1271,70 @@ export async function getPositionLocations(): Promise<LocationCountry[]> {
 // widget "+ N senza coord" sulla pagina /map che spiega la
 // discrepanza tra chart e mappa.
 export type PositionNoCoord = {
-  id: string
-  title: string | null
-  company: string | null
-  status: string
-  role_family: string | null
-  score: number | null
-  is_remote: boolean
-  location: string | null
-  loc_country: string | null
-  loc_city: string | null
-}
+  id: string;
+  title: string | null;
+  company: string | null;
+  status: string;
+  role_family: string | null;
+  score: number | null;
+  is_remote: boolean;
+  remote_type: string | null;
+  location: string | null;
+  loc_country: string | null;
+  loc_city: string | null;
+  created_at: string | null;
+};
 export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
-  const w = await ws()
-  if (w) { try { return local.getPositionsWithoutCoordsLocal(w) } catch { /* fall through */ } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getPositionsWithoutCoordsLocal(w);
+    } catch {
+      /* fall through */
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
+  // Tutte le non-escluse; tieni solo quelle la cui città NON è risolvibile a
+  // pin (no città, o città senza alcun sibling geocodificato) → bucket residuo.
   const { data, error } = await supabase
-    .from('positions')
-    .select('id, title, company, status, role_family, office_lat, is_remote, location, loc_country, loc_city, scores ( total_score )')
-    .not('status', 'eq', 'excluded')
-    .is('office_lat', null)
-    .is('deleted_at', null)
-  if (error || !data) return []
-  return (data as any[]).map((p) => {
-    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
-    return {
+    .from("positions")
+    .select(
+      "id, title, company, status, role_family, office_lat, office_lon, is_remote, remote_type, location, loc_country, loc_city, created_at, scores ( total_score )",
+    )
+    .not("status", "eq", "excluded")
+    .is("deleted_at", null);
+  if (error || !data) return [];
+  const rows = data as any[];
+  const pins = resolveCityPins(
+    rows.map((p) => ({
+      loc_country: p.loc_country ?? null,
+      loc_city: p.loc_city ?? null,
+      office_lat: p.office_lat,
+      office_lon: p.office_lon,
+    })),
+  );
+  const out: PositionNoCoord[] = [];
+  rows.forEach((p, i) => {
+    if (pins[i]) return; // ha un pin città → non è "senza coordinate"
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores;
+    out.push({
       id: String(p.id),
       title: p.title,
       company: p.company,
       status: p.status,
       role_family: p.role_family ?? null,
-      score: typeof score?.total_score === 'number' ? score.total_score : null,
+      score: typeof score?.total_score === "number" ? score.total_score : null,
       is_remote: !!p.is_remote,
+      remote_type: p.remote_type ?? null,
       location: p.location ?? null,
       loc_country: p.loc_country ?? null,
       loc_city: p.loc_city ?? null,
-    }
-  })
+      created_at: p.created_at ?? null,
+    });
+  });
+  return out;
 }
 
 // ── Position state-history (timestamp delle transizioni) ──────────
@@ -843,32 +1342,44 @@ export async function getPositionsWithoutCoords(): Promise<PositionNoCoord[]> {
 // stato, sufficienti a ricostruire la composizione della pipeline a
 // un istante T arbitrario (slider temporale nel dashboard).
 export type PositionStateHistory = {
-  id: string
-  status: string
-  critic_verdict: string | null
-  found_at: string | null
-  last_checked: string | null
-  scored_at: string | null
-  written_at: string | null
-  critic_reviewed_at: string | null
-  applied_at: string | null
-  response_at: string | null
-}
+  id: string;
+  status: string;
+  critic_verdict: string | null;
+  found_at: string | null;
+  last_checked: string | null;
+  scored_at: string | null;
+  written_at: string | null;
+  critic_reviewed_at: string | null;
+  applied_at: string | null;
+  response_at: string | null;
+};
 
-export async function getPositionStateHistory(): Promise<PositionStateHistory[]> {
-  const w = await ws()
-  if (w) { try { return local.getPositionStateHistoryLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+export async function getPositionStateHistory(): Promise<
+  PositionStateHistory[]
+> {
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getPositionStateHistoryLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
   const { data, error } = await supabase
-    .from('positions')
-    .select('id, status, found_at, last_checked, scores(scored_at), applications(written_at, critic_reviewed_at, critic_verdict, applied_at, response_at)')
-    .is('deleted_at', null)
-  if (error || !data) return []
+    .from("positions")
+    .select(
+      "id, status, found_at, last_checked, scores(scored_at), applications(written_at, critic_reviewed_at, critic_verdict, applied_at, response_at)",
+    )
+    .is("deleted_at", null);
+  if (error || !data) return [];
   return (data as any[]).map((p) => {
-    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores
-    const app = Array.isArray(p.applications) ? p.applications[0] : p.applications
+    const score = Array.isArray(p.scores) ? p.scores[0] : p.scores;
+    const app = Array.isArray(p.applications)
+      ? p.applications[0]
+      : p.applications;
     return {
       id: String(p.id),
       status: p.status,
@@ -880,223 +1391,773 @@ export async function getPositionStateHistory(): Promise<PositionStateHistory[]>
       critic_reviewed_at: app?.critic_reviewed_at ?? null,
       applied_at: app?.applied_at ?? null,
       response_at: app?.response_at ?? null,
-    }
-  })
+    };
+  });
 }
 
 // ── Critic votes distribution ──────────────────────────────────────
 export async function getCriticScores(): Promise<number[]> {
-  const w = await ws()
-  if (w) { try { return local.getCriticScoresLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getCriticScoresLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
   const { data, error } = await supabase
-    .from('applications')
-    .select('critic_score, positions!inner(status)')
-    .not('critic_score', 'is', null)
-    .not('positions.status', 'eq', 'excluded')
-    .is('deleted_at', null)
-    .is('positions.deleted_at', null)
-  if (error || !data) return []
+    .from("applications")
+    .select("critic_score, positions!inner(status)")
+    .not("critic_score", "is", null)
+    .not("positions.status", "eq", "excluded")
+    .is("deleted_at", null)
+    .is("positions.deleted_at", null);
+  if (error || !data) return [];
   return data
     .map((r: any) => r.critic_score)
-    .filter((s: any): s is number => typeof s === 'number')
+    .filter((s: any): s is number => typeof s === "number");
 }
 
 // ── Position type distribution ──────────────────────────────────────
-export async function getPositionTypeDistribution(): Promise<RoleFamilyCount[]> {
-  const w = await ws()
+export async function getPositionTypeDistribution(): Promise<
+  RoleFamilyCount[]
+> {
+  const w = await ws();
   // Coerente con getScoreDistribution: se la versione locale fallisce
   // (es. better-sqlite3 binding mancante), fall-through a Supabase
   // invece di restituire silenziosamente [] e perdere la donut.
-  if (w) { try { return local.getPositionTypeDistributionLocal(w) } catch { /* fall through */ } }
-  if (!isSupabaseConfigured) return []
+  if (w) {
+    try {
+      return local.getPositionTypeDistributionLocal(w);
+    } catch {
+      /* fall through */
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
   // Legge `role_family` dalla colonna popolata dal team analyst.
   // Score: preferisci positions.score, fallback su scores.total_score via join.
   // Critic: applications.critic_score.
   const { data, error } = await supabase
-    .from('positions')
-    .select('role_family, score, scores(total_score), applications(critic_score)')
-    .not('status', 'eq', 'excluded')
-    .is('deleted_at', null)
-  if (error || !data) return []
+    .from("positions")
+    .select(
+      "role_family, score, scores(total_score), applications(critic_score)",
+    )
+    .not("status", "eq", "excluded")
+    .is("deleted_at", null);
+  if (error || !data) return [];
   const rows = (data as any[]).map((r) => {
-    const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores
-    const appRel = Array.isArray(r.applications) ? r.applications[0] : r.applications
+    const scoresRel = Array.isArray(r.scores) ? r.scores[0] : r.scores;
+    const appRel = Array.isArray(r.applications)
+      ? r.applications[0]
+      : r.applications;
     return {
       role_family: r.role_family as string | null,
-      score: (r.score as number | null) ?? (scoresRel?.total_score ?? null),
+      score: (r.score as number | null) ?? scoresRel?.total_score ?? null,
       critic: (appRel?.critic_score as number | null) ?? null,
-    }
-  })
-  return aggregateRoleFamilies(rows)
+    };
+  });
+  return aggregateRoleFamilies(rows);
 }
 
 // ── Positions count by status ───────────────────────────────────────
 export async function getPositionsByStatus(): Promise<Record<string, number>> {
-  const w = await ws()
-  if (w) { try { return local.getPositionsByStatusLocal(w) } catch { return {} } }
-  if (!isSupabaseConfigured) return {}
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getPositionsByStatusLocal(w);
+    } catch {
+      return {};
+    }
+  }
+  if (!isSupabaseConfigured) return {};
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('positions').select('status').is('deleted_at', null)
-  if (error || !data) return {}
-  return data.reduce((acc: Record<string, number>, row: any) => { acc[row.status] = (acc[row.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("positions")
+    .select("status")
+    .is("deleted_at", null);
+  if (error || !data) return {};
+  return data.reduce(
+    (acc: Record<string, number>, row: any) => {
+      acc[row.status] = (acc[row.status] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 }
 
 // ── Scout stats ─────────────────────────────────────────────────────
 export async function getScoutStats() {
-  const w = await ws()
-  if (w) { try { return local.getScoutStatsLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
-
-  const supabase = await createClient()
-  const [posRes, appRes] = await Promise.all([
-    supabase.from('positions').select('id, found_by, status').is('deleted_at', null),
-    supabase.from('applications').select('position_id').or('status.eq.response,response.not.is.null').is('deleted_at', null),
-  ])
-  if (posRes.error || !posRes.data) return []
-  const respondedPositionIds = new Set((appRes.data as any[] ?? []).map((a: any) => a.position_id))
-  const grouped: Record<string, { total: number; excluded: number; applied: number; responded: number }> = {}
-  for (const row of posRes.data) {
-    const key = row.found_by ?? 'sconosciuto'
-    if (!grouped[key]) grouped[key] = { total: 0, excluded: 0, applied: 0, responded: 0 }
-    grouped[key].total++
-    if (row.status === 'excluded') grouped[key].excluded++
-    if (row.status === 'applied' || row.status === 'response') grouped[key].applied++
-    if (respondedPositionIds.has(row.id)) grouped[key].responded++
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getScoutStatsLocal(w);
+    } catch {
+      return [];
+    }
   }
-  return Object.entries(grouped).map(([scout, s]) => ({ scout, total: s.total, active: s.total - s.excluded, excluded: s.excluded, applied: s.applied, responded: s.responded })).sort((a, b) => b.total - a.total)
+  if (!isSupabaseConfigured) return [];
+
+  const supabase = await createClient();
+  const [posRes, appRes] = await Promise.all([
+    supabase
+      .from("positions")
+      .select("id, found_by, status")
+      .is("deleted_at", null),
+    supabase
+      .from("applications")
+      .select("position_id")
+      .or("status.eq.response,response.not.is.null")
+      .is("deleted_at", null),
+  ]);
+  if (posRes.error || !posRes.data) return [];
+  const respondedPositionIds = new Set(
+    ((appRes.data as any[]) ?? []).map((a: any) => a.position_id),
+  );
+  const grouped: Record<
+    string,
+    { total: number; excluded: number; applied: number; responded: number }
+  > = {};
+  for (const row of posRes.data) {
+    const key = row.found_by ?? "sconosciuto";
+    if (!grouped[key])
+      grouped[key] = { total: 0, excluded: 0, applied: 0, responded: 0 };
+    grouped[key].total++;
+    if (row.status === "excluded") grouped[key].excluded++;
+    if (row.status === "applied" || row.status === "response")
+      grouped[key].applied++;
+    if (respondedPositionIds.has(row.id)) grouped[key].responded++;
+  }
+  return Object.entries(grouped)
+    .map(([scout, s]) => ({
+      scout,
+      total: s.total,
+      active: s.total - s.excluded,
+      excluded: s.excluded,
+      applied: s.applied,
+      responded: s.responded,
+    }))
+    .sort((a, b) => b.total - a.total);
 }
 
 // ── Scorer stats ────────────────────────────────────────────────────
 export async function getScorerStats() {
-  const w = await ws()
-  if (w) { try { return local.getScorerStatsLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getScorerStatsLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('scores').select('scored_by, total_score').is('deleted_at', null)
-  if (error || !data) return []
-  const grouped: Record<string, number[]> = {}
-  for (const row of data) { const key = row.scored_by ?? 'sconosciuto'; if (!grouped[key]) grouped[key] = []; grouped[key].push(row.total_score) }
-  return Object.entries(grouped).map(([scorer, scores]) => ({
-    scorer, total: scores.length, avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
-    high: scores.filter(s => s >= 70).length, mid: scores.filter(s => s >= 40 && s < 70).length, low: scores.filter(s => s < 40).length,
-  })).sort((a, b) => b.total - a.total)
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("scores")
+    .select("scored_by, total_score")
+    .is("deleted_at", null);
+  if (error || !data) return [];
+  const grouped: Record<string, number[]> = {};
+  for (const row of data) {
+    const key = row.scored_by ?? "sconosciuto";
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(row.total_score);
+  }
+  return Object.entries(grouped)
+    .map(([scorer, scores]) => ({
+      scorer,
+      total: scores.length,
+      avgScore: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+      high: scores.filter((s) => s >= 70).length,
+      mid: scores.filter((s) => s >= 40 && s < 70).length,
+      low: scores.filter((s) => s < 40).length,
+    }))
+    .sort((a, b) => b.total - a.total);
 }
 
 // ── Scrittore stats ─────────────────────────────────────────────────
 export async function getScrittoreStats() {
-  const w = await ws()
-  if (w) { try { return local.getScrittoreStatsLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getScrittoreStatsLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('written_by, critic_verdict, applied').is('deleted_at', null)
-  if (error || !data) return []
-  const grouped: Record<string, { total: number; pass: number; needsWork: number; sent: number }> = {}
-  for (const row of data) { const key = row.written_by ?? 'sconosciuto'; if (!grouped[key]) grouped[key] = { total: 0, pass: 0, needsWork: 0, sent: 0 }; grouped[key].total++; if (row.critic_verdict === 'PASS') grouped[key].pass++; if (row.critic_verdict === 'NEEDS_WORK') grouped[key].needsWork++; if (row.applied) grouped[key].sent++ }
-  return Object.entries(grouped).map(([scrittore, s]) => ({ scrittore, ...s })).sort((a, b) => b.total - a.total)
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("written_by, critic_verdict, applied")
+    .is("deleted_at", null);
+  if (error || !data) return [];
+  const grouped: Record<
+    string,
+    { total: number; pass: number; needsWork: number; sent: number }
+  > = {};
+  for (const row of data) {
+    const key = row.written_by ?? "sconosciuto";
+    if (!grouped[key])
+      grouped[key] = { total: 0, pass: 0, needsWork: 0, sent: 0 };
+    grouped[key].total++;
+    if (row.critic_verdict === "PASS") grouped[key].pass++;
+    if (row.critic_verdict === "NEEDS_WORK") grouped[key].needsWork++;
+    if (row.applied) grouped[key].sent++;
+  }
+  return Object.entries(grouped)
+    .map(([scrittore, s]) => ({ scrittore, ...s }))
+    .sort((a, b) => b.total - a.total);
 }
 
 // ── Analista stats ──────────────────────────────────────────────────
 export async function getAnalistaStats() {
-  const w = await ws()
-  if (w) { try { return local.getAnalistaStatsLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getAnalistaStatsLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('companies').select('analyzed_by, verdict').not('analyzed_by', 'is', null)
-  if (error || !data) return []
-  const grouped: Record<string, { total: number; go: number; cautious: number; noGo: number }> = {}
-  for (const row of data) { const key = row.analyzed_by!; if (!grouped[key]) grouped[key] = { total: 0, go: 0, cautious: 0, noGo: 0 }; grouped[key].total++; if (row.verdict === 'GO') grouped[key].go++; if (row.verdict === 'CAUTIOUS') grouped[key].cautious++; if (row.verdict === 'NO_GO') grouped[key].noGo++ }
-  return Object.entries(grouped).map(([analista, s]) => ({ analista, ...s })).sort((a, b) => b.total - a.total)
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("companies")
+    .select("analyzed_by, verdict")
+    .not("analyzed_by", "is", null);
+  if (error || !data) return [];
+  const grouped: Record<
+    string,
+    { total: number; go: number; cautious: number; noGo: number }
+  > = {};
+  for (const row of data) {
+    const key = row.analyzed_by!;
+    if (!grouped[key]) grouped[key] = { total: 0, go: 0, cautious: 0, noGo: 0 };
+    grouped[key].total++;
+    if (row.verdict === "GO") grouped[key].go++;
+    if (row.verdict === "CAUTIOUS") grouped[key].cautious++;
+    if (row.verdict === "NO_GO") grouped[key].noGo++;
+  }
+  return Object.entries(grouped)
+    .map(([analista, s]) => ({ analista, ...s }))
+    .sort((a, b) => b.total - a.total);
 }
 
 // ── Critico stats ───────────────────────────────────────────────────
 export async function getCriticoStats() {
-  const w = await ws()
-  if (w) { try { return local.getCriticoStatsLocal(w) } catch { return [] } }
-  if (!isSupabaseConfigured) return []
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getCriticoStatsLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('reviewed_by, critic_verdict').not('reviewed_by', 'is', null).is('deleted_at', null)
-  if (error || !data) return []
-  const grouped: Record<string, { total: number; pass: number; needsWork: number; reject: number }> = {}
-  for (const row of data) { const key = row.reviewed_by!; if (!grouped[key]) grouped[key] = { total: 0, pass: 0, needsWork: 0, reject: 0 }; grouped[key].total++; if (row.critic_verdict === 'PASS') grouped[key].pass++; if (row.critic_verdict === 'NEEDS_WORK') grouped[key].needsWork++; if (row.critic_verdict === 'REJECT') grouped[key].reject++ }
-  return Object.entries(grouped).map(([critico, s]) => ({ critico, ...s })).sort((a, b) => b.total - a.total)
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("reviewed_by, critic_verdict")
+    .not("reviewed_by", "is", null)
+    .is("deleted_at", null);
+  if (error || !data) return [];
+  const grouped: Record<
+    string,
+    { total: number; pass: number; needsWork: number; reject: number }
+  > = {};
+  for (const row of data) {
+    const key = row.reviewed_by!;
+    if (!grouped[key])
+      grouped[key] = { total: 0, pass: 0, needsWork: 0, reject: 0 };
+    grouped[key].total++;
+    if (row.critic_verdict === "PASS") grouped[key].pass++;
+    if (row.critic_verdict === "NEEDS_WORK") grouped[key].needsWork++;
+    if (row.critic_verdict === "REJECT") grouped[key].reject++;
+  }
+  return Object.entries(grouped)
+    .map(([critico, s]) => ({ critico, ...s }))
+    .sort((a, b) => b.total - a.total);
 }
 
 // ── Critic verdict aggregate totals ─────────────────────────────────
 // Per il widget "Conversion rate" della dashboard: somma PASS /
 // NEEDS_WORK / REJECT su TUTTE le applications (non spezzate per critico).
 export type CriticVerdictTotals = {
-  pass: number
-  needs_work: number
-  reject: number
-  total: number
-}
+  pass: number;
+  needs_work: number;
+  reject: number;
+  total: number;
+};
 
 export async function getCriticVerdictTotals(): Promise<CriticVerdictTotals> {
-  const w = await ws()
+  const w = await ws();
   if (w) {
-    try { return local.getCriticVerdictTotalsLocal(w) } catch { return { pass: 0, needs_work: 0, reject: 0, total: 0 } }
+    try {
+      return local.getCriticVerdictTotalsLocal(w);
+    } catch {
+      return { pass: 0, needs_work: 0, reject: 0, total: 0 };
+    }
   }
-  if (!isSupabaseConfigured) return { pass: 0, needs_work: 0, reject: 0, total: 0 }
+  if (!isSupabaseConfigured)
+    return { pass: 0, needs_work: 0, reject: 0, total: 0 };
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('critic_verdict').not('critic_verdict', 'is', null).is('deleted_at', null)
-  if (error || !data) return { pass: 0, needs_work: 0, reject: 0, total: 0 }
-  const out: CriticVerdictTotals = { pass: 0, needs_work: 0, reject: 0, total: 0 }
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("critic_verdict")
+    .not("critic_verdict", "is", null)
+    .is("deleted_at", null);
+  if (error || !data) return { pass: 0, needs_work: 0, reject: 0, total: 0 };
+  const out: CriticVerdictTotals = {
+    pass: 0,
+    needs_work: 0,
+    reject: 0,
+    total: 0,
+  };
   for (const row of data as { critic_verdict: string | null }[]) {
-    out.total++
-    if (row.critic_verdict === 'PASS') out.pass++
-    else if (row.critic_verdict === 'NEEDS_WORK') out.needs_work++
-    else if (row.critic_verdict === 'REJECT') out.reject++
+    out.total++;
+    if (row.critic_verdict === "PASS") out.pass++;
+    else if (row.critic_verdict === "NEEDS_WORK") out.needs_work++;
+    else if (row.critic_verdict === "REJECT") out.reject++;
   }
-  return out
+  return out;
 }
 
 // ── Pending user messages (V5) ──────────────────────────────────────
 // Notifiche agente -> utente in fallback web. Cloud: filtra per user_id
 // implicito via RLS. Local: legge SQLite via local-queries.
-export async function getPendingMessages(limit = 20): Promise<PendingMessage[]> {
-  const w = await ws()
+export async function getPendingMessages(
+  limit = 20,
+): Promise<PendingMessage[]> {
+  const w = await ws();
   if (w) {
-    try { return local.getPendingMessagesLocal(w, limit) } catch { return [] }
+    try {
+      return local.getPendingMessagesLocal(w, limit);
+    } catch {
+      return [];
+    }
   }
-  if (!isSupabaseConfigured) return []
+  if (!isSupabaseConfigured) return [];
 
-  const supabase = await createClient()
+  const supabase = await createClient();
   const { data, error } = await supabase
-    .from('pending_user_messages')
+    .from("pending_user_messages")
     .select(
-      'id, agent, body, kind, related_position_id, delivered_via, delivered_at, ' +
-      'acknowledged_at, user_reply, user_reply_at, agent_seen_reply_at, created_at'
+      "id, agent, body, kind, related_position_id, delivered_via, delivered_at, " +
+        "acknowledged_at, user_reply, user_reply_at, agent_seen_reply_at, created_at",
     )
-    .eq('delivered_via', 'web')
-    .is('acknowledged_at', null)
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error || !data) return []
-  return data as PendingMessage[]
+    .eq("delivered_via", "web")
+    .is("acknowledged_at", null)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return data as PendingMessage[];
+}
+
+// ── Team activity (per-agente nel tempo) ───────────────────────────
+// Prefissi di ruolo validi per mappare by_agent (es. 'analista-2' → 'analista').
+const ROLE_PREFIX_SET = new Set<string>(TEAM_ACTIVITY_ROLES);
+
+type PosMeta = {
+  id: string | number;
+  legacy_id: number | null;
+  title: string | null;
+  company: string | null;
+  source: string | null;
+  loc_city: string | null;
+};
+const isLegacyPid = (p: string) => /^\d+$/.test(p);
+
+// Sorgente accurata per-istanza: l'event-log sincronizzato position_transitions
+// (by_agent = istanza reale: scout-1, analista-2, scorer-4…). Copre scout /
+// analista / scorer; scrittore/critico restano sulle applications (le
+// transizioni sono position-centric). pid = position_legacy_id (intero) →
+// risolto a uuid in enrichRecent. RLS già filtra per utente. Vuoto per gli
+// account senza event-log → i chiamanti ricadono sulla derivazione da colonne.
+async function fetchTransitionEvents(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  fromIso?: string,
+  untilIso?: string,
+): Promise<TeamActivityEvent[]> {
+  // PostgREST taglia a ~1000 righe/richiesta: con event-log oltre 1000
+  // transizioni una query secca perderebbe (senza order) le più recenti in
+  // ordine fisico → il feed si fermerebbe a giorni indietro. Pagina per `ts`
+  // DESC con .range() finché la pagina è piena, così la copertura è completa.
+  const PAGE = 1000;
+  const rows: any[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    let q = supabase
+      .from("position_transitions")
+      .select("position_legacy_id, by_agent, ts")
+      .not("by_agent", "is", null)
+      .order("ts", { ascending: false })
+      .range(offset, offset + PAGE - 1);
+    if (fromIso) q = q.gte("ts", fromIso);
+    if (untilIso) q = q.lt("ts", untilIso);
+    const { data, error } = await q;
+    if (error || !data) break;
+    rows.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return rows.flatMap((r) => {
+    const role = String(r.by_agent ?? "").split("-")[0] as TeamActivityRole;
+    if (!ROLE_PREFIX_SET.has(role)) return [];
+    return [
+      {
+        role,
+        actor: normActor(role, r.by_agent),
+        ts: r.ts as string,
+        pid: r.position_legacy_id != null ? String(r.position_legacy_id) : null,
+      },
+    ];
+  });
+}
+
+// Arricchisce il feed/log con titolo·azienda·id leggibile, gestendo entrambe le
+// semantiche di pid: legacy_id (eventi da position_transitions) e uuid (eventi
+// da applications). Per i legacy risolve anche pid→uuid così i link funzionano.
+async function enrichRecent(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  events: RecentActivityEvent[],
+): Promise<void> {
+  const pids = [
+    ...new Set(events.map((e) => e.pid).filter((p): p is string => !!p)),
+  ];
+  if (!pids.length) return;
+  const legacyIds = [...new Set(pids.filter(isLegacyPid).map(Number))];
+  const uuids = pids.filter((p) => !isLegacyPid(p));
+  const byLegacy = new Map<number, PosMeta>();
+  const byUuid = new Map<string, PosMeta>();
+  for (let i = 0; i < legacyIds.length; i += 150) {
+    const chunk = legacyIds.slice(i, i + 150);
+    const { data } = await supabase
+      .from("positions")
+      .select("id, legacy_id, title, company, source, loc_city")
+      .in("legacy_id", chunk);
+    for (const r of (data ?? []) as unknown as PosMeta[])
+      if (r.legacy_id != null) byLegacy.set(r.legacy_id, r);
+  }
+  for (let i = 0; i < uuids.length; i += 150) {
+    const chunk = uuids.slice(i, i + 150);
+    const { data } = await supabase
+      .from("positions")
+      .select("id, legacy_id, title, company, source, loc_city")
+      .in("id", chunk);
+    for (const r of (data ?? []) as unknown as PosMeta[])
+      byUuid.set(String(r.id), r);
+  }
+  for (const ev of events) {
+    if (!ev.pid) continue;
+    if (isLegacyPid(ev.pid)) {
+      const m = byLegacy.get(Number(ev.pid));
+      if (m) {
+        ev.title = m.title;
+        ev.company = m.company;
+        ev.legacyId = m.legacy_id;
+        ev.source = m.source;
+        ev.city = m.loc_city;
+        ev.pid = String(m.id);
+      }
+    } else {
+      const m = byUuid.get(ev.pid);
+      if (m) {
+        ev.title = m.title;
+        ev.company = m.company;
+        ev.legacyId = m.legacy_id;
+        ev.source = m.source;
+        ev.city = m.loc_city;
+      }
+    }
+  }
+
+  // Score assegnato (eventi scorer): lookup mirata su `scores` per i soli pid
+  // scorer, ormai risolti a uuid sopra. Una riga per posizione → mappa pid→score.
+  const scorerPids = [
+    ...new Set(
+      events
+        .filter((e) => e.role === "scorer" && e.pid && !isLegacyPid(e.pid))
+        .map((e) => e.pid as string),
+    ),
+  ];
+  if (scorerPids.length) {
+    const byScore = new Map<string, number>();
+    for (let i = 0; i < scorerPids.length; i += 150) {
+      const chunk = scorerPids.slice(i, i + 150);
+      const { data } = await supabase
+        .from("scores")
+        .select("position_id, total_score")
+        .in("position_id", chunk);
+      for (const r of (data ?? []) as {
+        position_id: string;
+        total_score: number | null;
+      }[])
+        if (r.total_score != null)
+          byScore.set(String(r.position_id), r.total_score);
+    }
+    for (const ev of events)
+      if (ev.role === "scorer" && ev.pid && byScore.has(ev.pid))
+        ev.score = byScore.get(ev.pid)!;
+  }
+}
+
+// Local: SQLite (getTeamActivityLocal). Cloud: Supabase, una query per
+// timestamp filtrata sulla finestra (.gte) per restare sotto il cap di 1000
+// righe/richiesta e ridurre il traffico. Stesso buildTeamActivity → numeri
+// identici nelle due modalità. Vedi lib/team-activity.ts per le sorgenti.
+export async function getTeamActivity(opts?: {
+  from?: string;
+  to?: string;
+}): Promise<TeamActivity> {
+  const { from, to } = resolveActivityRange(opts, new Date());
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getTeamActivityLocal(w, from, to);
+    } catch {
+      return buildTeamActivity([], from, to);
+    }
+  }
+  if (!isSupabaseConfigured) return buildTeamActivity([], from, to);
+
+  const supabase = await createClient();
+  // Range [from 00:00 UTC, to+1 00:00 UTC): estremo destro esclusivo così il
+  // giorno `to` è incluso per intero.
+  const fromIso = `${from}T00:00:00.000Z`;
+  const untilIso = `${addDaysKey(to, 1)}T00:00:00.000Z`;
+
+  // actorCol = colonna con l'id istanza (es. found_by). null per l'Analista,
+  // che su last_checked non lo registra → normActor ricade sul ruolo.
+  const fetchEvents = async (
+    table: string,
+    col: string,
+    actorCol: string | null,
+    idCol: string,
+    role: TeamActivityRole,
+    softDelete: boolean,
+  ): Promise<TeamActivityEvent[]> => {
+    const select = [col, actorCol, idCol].filter(Boolean).join(", ");
+    let q = supabase
+      .from(table)
+      .select(select)
+      .gte(col, fromIso)
+      .lt(col, untilIso);
+    if (softDelete) q = q.is("deleted_at", null);
+    const { data, error } = await q;
+    if (error || !data) return [];
+    return (data as any[])
+      .filter((r) => !!r[col])
+      .map((r) => ({
+        role,
+        actor: normActor(role, actorCol ? r[actorCol] : null),
+        ts: r[col] as string,
+        pid: r[idCol] != null ? String(r[idCol]) : null,
+      }));
+  };
+
+  // Sorgente per-istanza: event-log (position_transitions) se presente,
+  // altrimenti derivazione dalle colonne *_by (account senza event-log).
+  const tx = await fetchTransitionEvents(supabase, fromIso, untilIso);
+  const events: TeamActivityEvent[] = tx.length
+    ? [
+        ...tx,
+        ...(
+          await Promise.all([
+            fetchEvents(
+              "applications",
+              "written_at",
+              "written_by",
+              "position_id",
+              "scrittore",
+              true,
+            ),
+            fetchEvents(
+              "applications",
+              "critic_reviewed_at",
+              "reviewed_by",
+              "position_id",
+              "critico",
+              true,
+            ),
+          ])
+        ).flat(),
+      ]
+    : (
+        await Promise.all([
+          fetchEvents("positions", "found_at", "found_by", "id", "scout", true),
+          fetchEvents(
+            "positions",
+            "last_checked",
+            null,
+            "id",
+            "analista",
+            true,
+          ),
+          fetchEvents(
+            "scores",
+            "scored_at",
+            "scored_by",
+            "position_id",
+            "scorer",
+            false,
+          ),
+          fetchEvents(
+            "applications",
+            "written_at",
+            "written_by",
+            "position_id",
+            "scrittore",
+            true,
+          ),
+          fetchEvents(
+            "applications",
+            "critic_reviewed_at",
+            "reviewed_by",
+            "position_id",
+            "critico",
+            true,
+          ),
+        ])
+      ).flat();
+
+  const act = buildTeamActivity(events, from, to);
+  await enrichRecent(supabase, act.recent);
+  return act;
+}
+
+// ── Activity log: TUTTE le azioni (per la pagina dedicata) ──────────
+// Local: SQLite (UNION). Cloud: una fetch per sorgente (senza finestra),
+// ordinata e arricchita con titolo/azienda/id. NB cap Supabase ~1000 righe
+// per query: ok per gli account attuali (<1000 posizioni/score).
+export async function getTeamActivityLog(): Promise<RecentActivityEvent[]> {
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getTeamActivityLogLocal(w);
+    } catch {
+      return [];
+    }
+  }
+  if (!isSupabaseConfigured) return [];
+
+  const supabase = await createClient();
+  const fetchAll = async (
+    table: string,
+    col: string,
+    actorCol: string | null,
+    idCol: string,
+    role: TeamActivityRole,
+    softDelete: boolean,
+  ): Promise<RecentActivityEvent[]> => {
+    const select = [col, actorCol, idCol].filter(Boolean).join(", ");
+    let q = supabase.from(table).select(select).not(col, "is", null);
+    if (softDelete) q = q.is("deleted_at", null);
+    const { data, error } = await q;
+    if (error || !data) return [];
+    return (data as any[]).map((r) => ({
+      role,
+      actor: normActor(role, actorCol ? r[actorCol] : null),
+      ts: r[col] as string,
+      pid: r[idCol] != null ? String(r[idCol]) : null,
+    }));
+  };
+
+  // Event-log per-istanza se presente; altrimenti derivazione da colonne.
+  const tx = await fetchTransitionEvents(supabase);
+  const events: RecentActivityEvent[] = tx.length
+    ? [
+        ...tx,
+        ...(
+          await Promise.all([
+            fetchAll(
+              "applications",
+              "written_at",
+              "written_by",
+              "position_id",
+              "scrittore",
+              true,
+            ),
+            fetchAll(
+              "applications",
+              "critic_reviewed_at",
+              "reviewed_by",
+              "position_id",
+              "critico",
+              true,
+            ),
+          ])
+        ).flat(),
+      ]
+    : (
+        await Promise.all([
+          fetchAll("positions", "found_at", "found_by", "id", "scout", true),
+          fetchAll("positions", "last_checked", null, "id", "analista", true),
+          fetchAll(
+            "scores",
+            "scored_at",
+            "scored_by",
+            "position_id",
+            "scorer",
+            false,
+          ),
+          fetchAll(
+            "applications",
+            "written_at",
+            "written_by",
+            "position_id",
+            "scrittore",
+            true,
+          ),
+          fetchAll(
+            "applications",
+            "critic_reviewed_at",
+            "reviewed_by",
+            "position_id",
+            "critico",
+            true,
+          ),
+        ])
+      ).flat();
+  events.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
+  await enrichRecent(supabase, events);
+  return events;
 }
 
 // ── Application stats ───────────────────────────────────────────────
 export async function getApplicationStats(): Promise<Record<string, number>> {
-  const w = await ws()
-  if (w) { try { return local.getApplicationStatsLocal(w) } catch { return {} } }
-  if (!isSupabaseConfigured) return {}
+  const w = await ws();
+  if (w) {
+    try {
+      return local.getApplicationStatsLocal(w);
+    } catch {
+      return {};
+    }
+  }
+  if (!isSupabaseConfigured) return {};
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.from('applications').select('status, applied').is('deleted_at', null)
-  if (error || !data) return {}
-  const counts = data.reduce((acc: Record<string, number>, row: any) => { acc[row.status] = (acc[row.status] ?? 0) + 1; return acc }, {} as Record<string, number>)
-  counts['_total'] = data.length
-  counts['_sent'] = data.filter((r: any) => r.applied).length
-  return counts
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("applications")
+    .select("status, applied")
+    .is("deleted_at", null);
+  if (error || !data) return {};
+  const counts = data.reduce(
+    (acc: Record<string, number>, row: any) => {
+      acc[row.status] = (acc[row.status] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+  counts["_total"] = data.length;
+  counts["_sent"] = data.filter((r: any) => r.applied).length;
+  return counts;
 }

@@ -1,4 +1,4 @@
-<!-- @translation: hu, ai-translated 2026-06-02, pending native speaker review -->
+<!-- @translation: hu, ai-translated 2026-06-13, pending native speaker review -->
 # 👨‍🔬 ANALISTA — JD és cég ellenőrző
 
 ## IDENTITÁS
@@ -135,6 +135,17 @@ jht-tmux-send <SCOUT-SESSION> "[@$MY_ID -> @<scout-id>] [FEEDBACK] Pattern észl
 - **Actionable** — javasolj konkrét alternatív sources-okat vagy query-ket (a `candidate_profile.yml`-ből és a scout source tier-ből leszármaztathatóak)
 - **Idempotens** — egy értesítés patternenként. Ha a scout már változtatott approach-ot a következő batch-ben, ne erősködj.
 
+**RULE-12 — RECHECK LIVENESS = ON-DEMAND (felhasználó), NEM autonóm (2026-06-18).** **NE** rechecks-eld a pozíciókat saját kezdeményezésből: a nyitó recheck **MÁR NEM napi/automatikus feladat** (az autonómia volt az aránytalan heti fogyasztás oka — weekly burn). A liveness-t **CSAK** akkor ellenőrzöd újra, amikor a felhasználó kéri a pozíció oldaláról (`recheck_requested` flag, ugyanaz a modell, mint CV-írás / Geocoding / Pontos-becslés). Queue:
+```bash
+python3 /app/shared/skills/db_query.py next-for-recheck   # CSAK recheck_requested=1, még nem kiszolgáltak
+```
+Mindegyikhez:
+1. Futtasd újra a liveness check-et (RULE-03, `recheck-liveness` skill, soha ad-hoc curl). `CLOSED` → `db_update.py position <ID> --is-open false --last-open-check now`; `OPEN_UNVERIFIED` → hagyd az `is_open`-t változatlanul + `NOTE_MISMATCH: [OPEN_UNVERIFIED]`; `OPEN` → `--is-open true --last-open-check now`. **NE változtasd a `status`-t** (a lejártak láthatóak maradnak a "Scadute/Archivio"-ban).
+2. Ha az `expires_at` be van állítva ÉS `< today` → `--is-open false`.
+3. **MINDIG** `--last-open-check now`-val zárd: a pozíció **kikerül a queue-ból**, mert a `last_open_check` > `recheck_requested_at` lesz (kiszolgálva — nem kell nullázni a flag-et; a felhasználó új kérése előretolja a timestamp-et és újra besorolja).
+
+**SEMMI automatikus történeti backfill.** A hiányzó metaadatok (expires_at / koordináták / fizetés) a régi pozíciókon CSAK a felhasználó kérésére töltődnek ki (on-demand queue-k RULE-14) vagy amikor **új** pozíciót elemzel (RULE-13) — **soha** nem a backlog-ot saját kezdeményezésből végigverve.
+
 ---
 
 ## MAIN LOOP
@@ -152,10 +163,17 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Fetch komplett JD a linkről
 3. Elemezd: fit a profillal, gap-ek, red flag-ek
 4. Írd be az 5 strukturált mezőt + elemzést a notes-ba
-5. **Companies** (RULE-08): `db-query company "<name>"` → ha hiányzik, `db-insert company` azzal, amit kinyertél a JD-ből/oldalról (sector, hq_country, kezdeti verdict). Ha jelen van, de hiányos infóval és megbízható új adatod van, `db-update company`.
-6. **Highlights** (RULE-08): 1-3 konkrét pro/con → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Csak ha tényleg figyelemre méltó.
-7. Frissítsd a statust: `checked` (átadás a Scorer-nek) vagy `excluded`
-8. Lépj a következőre
+5. **Deadline → `expires_at`** (machine-readable). Parse-old a JD-t a meglévő skillel:
+   ```bash
+   python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # ISO dátumot vagy üreset ír ki
+   ```
+   Ha ISO dátumot ír ki → `db_update.py position <ID> --expires-at <YYYY-MM-DD>`; ha üres → `--expires-at ""` (NULL). **Soha** ne találj ki dátumot és **soha** ne írj `"non presente"`-t.
+6. **Iroda-koordináták alapból.** Ha a pozíció **nem remote** (`work_mode`/`remote_type` ≠ `full_remote`/remote), kövesd az `office-geocoding` skillt az `office_lat`/`office_lon`/`office_address` feltöltéséhez. Ha remote → skip (nincs iroda lokalizálni). Ez most ALAPÉRTELMEZETT lépés, nem csak on-demand.
+7. **Fizetés-becslés (ownership ide került a Scorer-től).** Pre-pass-old a `salary-estimate` skillt (L1 declared → L2 cache → L3 web → L4 default). Ha range-et ad vissza → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. A Scorer most ezeket OLVASSA a `salary_fit`-hez (már nem becsüli őket).
+8. **Companies** (RULE-08): `db-query company "<name>"` → ha hiányzik, `db-insert company` azzal, amit kinyertél a JD-ből/oldalról (sector, hq_country, kezdeti verdict). Ha jelen van, de hiányos infóval és megbízható új adatod van, `db-update company`.
+9. **Highlights** (RULE-08): 1-3 konkrét pro/con → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Csak ha tényleg figyelemre méltó.
+10. Frissítsd a statust: `checked` (átadás a Scorer-nek) vagy `excluded`. Állítsd be a `--expires-at`-et és `--last-open-check now`-t is, ha még nincs beírva.
+11. Lépj a következőre
 
 ```bash
 # Status frissítése

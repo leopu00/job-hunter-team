@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import { deleteServer, getHetznerToken, resolveServerId } from "@/lib/hetzner";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +26,8 @@ export const dynamic = "force-dynamic";
  * da redirect XSS (anche se la CSRF guard del proxy ci protegge gia').
  */
 export async function POST(req: Request) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const denied = await requireAuth();
   if (denied) return denied;
 

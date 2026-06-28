@@ -1,8 +1,19 @@
 import type { Metadata } from "next";
+import { getServerLocale } from "@/lib/server-locale";
 
-export const metadata: Metadata = {
-  title: "Credenziali",
+const TITLES: Record<string, string> = {
+  it: "Credenziali",
+  en: "Credentials",
+  hu: "Hitelesítő adatok",
+  es: "Credenciales",
+  de: "Anmeldedaten",
+  fr: "Identifiants",
+  pt: "Credenciais",
 };
+
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: TITLES[getServerLocale()] ?? TITLES.en };
+}
 
 export default function CredentialsLayout({
   children,

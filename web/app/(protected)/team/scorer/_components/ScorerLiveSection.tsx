@@ -1,6 +1,234 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const LOCALE_TAG: Record<Locale, string> = {
+  it: "it-IT",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  hu: "hu-HU",
+  pt: "pt-PT",
+};
+
+type RelTime = {
+  now: string;
+  m: (n: number) => string;
+  h: (n: number) => string;
+};
+
+const T: Record<
+  Locale,
+  {
+    remote: string;
+    rt: RelTime;
+    monthShort: string;
+    noRealtime: string;
+    loadingLive: string;
+    live: string;
+    offline: string;
+    inQueue: string;
+    scoredTot: string;
+    scoredToday: string;
+    excludedToday: string;
+    avgToday: string;
+    updatedAt: string;
+    inQueueChecked: string;
+    noQueue: string;
+    last10Scored: string;
+    noScored: string;
+    last10Excluded: string;
+    todayLc: string;
+    scoredLc: string;
+    excludedLc: string;
+    passLc: (pct: number) => string;
+    noRecentExclusion: string;
+  }
+> = {
+  it: {
+    remote: "Remote",
+    rt: { now: "adesso", m: (n) => `${n}m fa`, h: (n) => `${n}h fa` },
+    monthShort: "short",
+    noRealtime: "Dati real-time non disponibili.",
+    loadingLive: "Caricamento dati live…",
+    live: "Live",
+    offline: "Offline",
+    inQueue: "in coda",
+    scoredTot: "scored tot",
+    scoredToday: "scored oggi",
+    excludedToday: "escluse oggi",
+    avgToday: "media oggi",
+    updatedAt: "agg. ",
+    inQueueChecked: "In Coda — Checked",
+    noQueue: "Nessuna posizione in coda",
+    last10Scored: "Ultime 10 Scored",
+    noScored: "Nessuna posizione scored",
+    last10Excluded: "Ultime 10 Escluse (score < 40)",
+    todayLc: "oggi",
+    scoredLc: "scored",
+    excludedLc: "escluse",
+    passLc: (pct) => `(${pct}% pass)`,
+    noRecentExclusion: "Nessuna esclusione recente",
+  },
+  en: {
+    remote: "Remote",
+    rt: { now: "now", m: (n) => `${n}m ago`, h: (n) => `${n}h ago` },
+    monthShort: "short",
+    noRealtime: "Real-time data unavailable.",
+    loadingLive: "Loading live data…",
+    live: "Live",
+    offline: "Offline",
+    inQueue: "in queue",
+    scoredTot: "scored tot",
+    scoredToday: "scored today",
+    excludedToday: "excluded today",
+    avgToday: "avg today",
+    updatedAt: "upd. ",
+    inQueueChecked: "In Queue — Checked",
+    noQueue: "No positions in queue",
+    last10Scored: "Last 10 Scored",
+    noScored: "No scored positions",
+    last10Excluded: "Last 10 Excluded (score < 40)",
+    todayLc: "today",
+    scoredLc: "scored",
+    excludedLc: "excluded",
+    passLc: (pct) => `(${pct}% pass)`,
+    noRecentExclusion: "No recent exclusions",
+  },
+  es: {
+    remote: "Remoto",
+    rt: { now: "ahora", m: (n) => `hace ${n}m`, h: (n) => `hace ${n}h` },
+    monthShort: "short",
+    noRealtime: "Datos en tiempo real no disponibles.",
+    loadingLive: "Cargando datos en vivo…",
+    live: "Live",
+    offline: "Offline",
+    inQueue: "en cola",
+    scoredTot: "scored tot",
+    scoredToday: "scored hoy",
+    excludedToday: "excluidas hoy",
+    avgToday: "media hoy",
+    updatedAt: "act. ",
+    inQueueChecked: "En Cola — Checked",
+    noQueue: "Ninguna posición en cola",
+    last10Scored: "Últimas 10 Scored",
+    noScored: "Ninguna posición scored",
+    last10Excluded: "Últimas 10 Excluidas (score < 40)",
+    todayLc: "hoy",
+    scoredLc: "scored",
+    excludedLc: "excluidas",
+    passLc: (pct) => `(${pct}% pass)`,
+    noRecentExclusion: "Ninguna exclusión reciente",
+  },
+  fr: {
+    remote: "À distance",
+    rt: {
+      now: "maintenant",
+      m: (n) => `il y a ${n} min`,
+      h: (n) => `il y a ${n} h`,
+    },
+    monthShort: "short",
+    noRealtime: "Données en temps réel indisponibles.",
+    loadingLive: "Chargement des données en direct…",
+    live: "Live",
+    offline: "Offline",
+    inQueue: "en file",
+    scoredTot: "scored tot",
+    scoredToday: "scored aujourd'hui",
+    excludedToday: "exclues aujourd'hui",
+    avgToday: "moy. aujourd'hui",
+    updatedAt: "maj ",
+    inQueueChecked: "En File — Checked",
+    noQueue: "Aucun poste en file",
+    last10Scored: "10 derniers Scored",
+    noScored: "Aucun poste scored",
+    last10Excluded: "10 dernières Exclues (score < 40)",
+    todayLc: "aujourd'hui",
+    scoredLc: "scored",
+    excludedLc: "exclues",
+    passLc: (pct) => `(${pct}% pass)`,
+    noRecentExclusion: "Aucune exclusion récente",
+  },
+  de: {
+    remote: "Remote",
+    rt: { now: "jetzt", m: (n) => `vor ${n} Min.`, h: (n) => `vor ${n} Std.` },
+    monthShort: "short",
+    noRealtime: "Echtzeitdaten nicht verfügbar.",
+    loadingLive: "Live-Daten werden geladen…",
+    live: "Live",
+    offline: "Offline",
+    inQueue: "in Warteschlange",
+    scoredTot: "scored ges.",
+    scoredToday: "scored heute",
+    excludedToday: "heute ausgeschlossen",
+    avgToday: "Ø heute",
+    updatedAt: "akt. ",
+    inQueueChecked: "In Warteschlange — Checked",
+    noQueue: "Keine Positionen in Warteschlange",
+    last10Scored: "Letzte 10 Scored",
+    noScored: "Keine bewerteten Positionen",
+    last10Excluded: "Letzte 10 Ausgeschlossen (score < 40)",
+    todayLc: "heute",
+    scoredLc: "scored",
+    excludedLc: "ausgeschlossen",
+    passLc: (pct) => `(${pct}% pass)`,
+    noRecentExclusion: "Keine kürzlichen Ausschlüsse",
+  },
+  hu: {
+    remote: "Távmunka",
+    rt: { now: "most", m: (n) => `${n} perce`, h: (n) => `${n} órája` },
+    monthShort: "short",
+    noRealtime: "A valós idejű adatok nem érhetők el.",
+    loadingLive: "Élő adatok betöltése…",
+    live: "Live",
+    offline: "Offline",
+    inQueue: "sorban",
+    scoredTot: "scored össz.",
+    scoredToday: "scored ma",
+    excludedToday: "ma kizárva",
+    avgToday: "átlag ma",
+    updatedAt: "frissítve ",
+    inQueueChecked: "Sorban — Checked",
+    noQueue: "Nincs pozíció a sorban",
+    last10Scored: "Utolsó 10 Scored",
+    noScored: "Nincs pontozott pozíció",
+    last10Excluded: "Utolsó 10 Kizárt (score < 40)",
+    todayLc: "ma",
+    scoredLc: "scored",
+    excludedLc: "kizárva",
+    passLc: (pct) => `(${pct}% pass)`,
+    noRecentExclusion: "Nincs friss kizárás",
+  },
+  pt: {
+    remote: "Remoto",
+    rt: { now: "agora", m: (n) => `há ${n}m`, h: (n) => `há ${n}h` },
+    monthShort: "short",
+    noRealtime: "Dados em tempo real indisponíveis.",
+    loadingLive: "Carregando dados ao vivo…",
+    live: "Live",
+    offline: "Offline",
+    inQueue: "na fila",
+    scoredTot: "scored tot",
+    scoredToday: "scored hoje",
+    excludedToday: "excluídas hoje",
+    avgToday: "média hoje",
+    updatedAt: "atual. ",
+    inQueueChecked: "Na Fila — Checked",
+    noQueue: "Nenhuma vaga na fila",
+    last10Scored: "Últimas 10 Scored",
+    noScored: "Nenhuma vaga scored",
+    last10Excluded: "Últimas 10 Excluídas (score < 40)",
+    todayLc: "hoje",
+    scoredLc: "scored",
+    excludedLc: "excluídas",
+    passLc: (pct) => `(${pct}% pass)`,
+    noRecentExclusion: "Nenhuma exclusão recente",
+  },
+};
 
 type QueueItem = {
   id: string;
@@ -36,19 +264,22 @@ type ScorerData = {
   recent_excluded: ScoredItem[];
 };
 
-function fmtTs(ts: string) {
+function fmtTs(ts: string, localeTag: string, rt: RelTime) {
   if (!ts) return "—";
   const d = new Date(ts);
   const now = new Date();
   const diffMin = Math.floor((now.getTime() - d.getTime()) / 60000);
-  if (diffMin < 1) return "adesso";
-  if (diffMin < 60) return `${diffMin}m fa`;
-  if (diffMin < 1440) return `${Math.floor(diffMin / 60)}h fa`;
-  return d.toLocaleDateString("it-IT", { day: "2-digit", month: "short" });
+  if (diffMin < 1) return rt.now;
+  if (diffMin < 60) return rt.m(diffMin);
+  if (diffMin < 1440) return rt.h(Math.floor(diffMin / 60));
+  return d.toLocaleDateString(localeTag, { day: "2-digit", month: "short" });
 }
 
-function locLabel(item: { remote_type: string; location: string }) {
-  if (item.remote_type === "full_remote") return "Remote";
+function locLabel(
+  item: { remote_type: string; location: string },
+  remoteLabel: string,
+) {
+  if (item.remote_type === "full_remote") return remoteLabel;
   return (item.location ?? "").split(",")[0] || "";
 }
 
@@ -75,8 +306,18 @@ function scoreBadge(score: number) {
   );
 }
 
-function QueueRow({ p }: { p: QueueItem }) {
-  const loc = locLabel(p);
+function QueueRow({
+  p,
+  localeTag,
+  rt,
+  remoteLabel,
+}: {
+  p: QueueItem;
+  localeTag: string;
+  rt: RelTime;
+  remoteLabel: string;
+}) {
+  const loc = locLabel(p, remoteLabel);
   const inScoring = (p.notes ?? "").includes("IN_SCORING");
   return (
     <div
@@ -122,15 +363,25 @@ function QueueRow({ p }: { p: QueueItem }) {
           CHECKED
         </span>
         <span className="text-[9px] text-[var(--color-dim)] ml-auto">
-          {fmtTs(p.last_checked)}
+          {fmtTs(p.last_checked, localeTag, rt)}
         </span>
       </div>
     </div>
   );
 }
 
-function ScoredRow({ p }: { p: ScoredItem }) {
-  const loc = locLabel(p);
+function ScoredRow({
+  p,
+  localeTag,
+  rt,
+  remoteLabel,
+}: {
+  p: ScoredItem;
+  localeTag: string;
+  rt: RelTime;
+  remoteLabel: string;
+}) {
+  const loc = locLabel(p, remoteLabel);
   return (
     <div className="flex flex-col gap-0.5 py-2 border-b border-[var(--color-border)] last:border-0">
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -152,15 +403,25 @@ function ScoredRow({ p }: { p: ScoredItem }) {
           </span>
         )}
         <span className="text-[9px] text-[var(--color-dim)] ml-auto">
-          {fmtTs(p.scored_at)}
+          {fmtTs(p.scored_at, localeTag, rt)}
         </span>
       </div>
     </div>
   );
 }
 
-function ExcludedRow({ p }: { p: ScoredItem }) {
-  const loc = locLabel(p);
+function ExcludedRow({
+  p,
+  localeTag,
+  rt,
+  remoteLabel,
+}: {
+  p: ScoredItem;
+  localeTag: string;
+  rt: RelTime;
+  remoteLabel: string;
+}) {
+  const loc = locLabel(p, remoteLabel);
   return (
     <div className="flex flex-col gap-0.5 py-2 border-b border-[var(--color-border)] last:border-0 opacity-70">
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -185,7 +446,7 @@ function ExcludedRow({ p }: { p: ScoredItem }) {
           </span>
         )}
         <span className="text-[9px] text-[var(--color-dim)] ml-auto">
-          {fmtTs(p.scored_at)}
+          {fmtTs(p.scored_at, localeTag, rt)}
         </span>
       </div>
     </div>
@@ -193,10 +454,14 @@ function ExcludedRow({ p }: { p: ScoredItem }) {
 }
 
 export default function ScorerLiveSection() {
+  const locale = useLocale();
+  const t = T[locale];
+  const localeTag = LOCALE_TAG[locale] ?? "en-US";
   const [data, setData] = useState<ScorerData | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [error, setError] = useState(false);
   const [isAgentActive, setIsAgentActive] = useState(false);
+  const isCloud = useIsCloud();
 
   const fetch_ = useCallback(async () => {
     const [activityResult, statusResult] = await Promise.allSettled([
@@ -229,14 +494,15 @@ export default function ScorerLiveSection() {
 
   useEffect(() => {
     fetch_();
+    if (isCloud) return;
     const id = setInterval(fetch_, 8000);
     return () => clearInterval(id);
-  }, [fetch_]);
+  }, [fetch_, isCloud]);
 
   if (error)
     return (
       <div className="mt-8 p-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] text-[11px] text-[var(--color-dim)]">
-        Dati real-time non disponibili.
+        {t.noRealtime}
       </div>
     );
 
@@ -244,7 +510,7 @@ export default function ScorerLiveSection() {
     return (
       <div className="mt-8 flex items-center gap-2 text-[11px] text-[var(--color-dim)]">
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--color-dim)] animate-pulse" />
-        Caricamento dati live…
+        {t.loadingLive}
       </div>
     );
 
@@ -280,28 +546,28 @@ export default function ScorerLiveSection() {
           }}
         />
         <span className="text-[9px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mr-3">
-          {isAgentActive ? "Live" : "Offline"}
+          {isAgentActive ? t.live : t.offline}
         </span>
 
         {[
           {
             val: stats.queue_size,
-            label: "in coda",
+            label: t.inQueue,
             color: "var(--color-orange)",
           },
           {
             val: stats.scored_total,
-            label: "scored tot",
+            label: t.scoredTot,
             color: "var(--color-yellow)",
           },
           {
             val: stats.scored_today,
-            label: "scored oggi",
+            label: t.scoredToday,
             color: "var(--color-yellow)",
           },
           {
             val: stats.excluded_today,
-            label: "escluse oggi",
+            label: t.excludedToday,
             color: "var(--color-red)",
           },
         ].map(({ val, label, color }) => (
@@ -329,14 +595,14 @@ export default function ScorerLiveSection() {
             {stats.avg_score_today ?? "—"}
           </span>
           <span className="text-[8px] text-[var(--color-dim)] tracking-wide mt-0.5">
-            media oggi
+            {t.avgToday}
           </span>
         </div>
 
         {lastUpdate && (
           <span className="text-[9px] text-[var(--color-dim)] ml-auto">
-            agg.{" "}
-            {lastUpdate.toLocaleTimeString("it-IT", {
+            {t.updatedAt}
+            {lastUpdate.toLocaleTimeString(localeTag, {
               hour: "2-digit",
               minute: "2-digit",
               second: "2-digit",
@@ -351,7 +617,7 @@ export default function ScorerLiveSection() {
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
           <div className="flex items-center justify-between mb-3">
             <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-dim)]">
-              In Coda — Checked
+              {t.inQueueChecked}
             </span>
             <span
               className="text-[10px] font-bold px-1.5 py-0.5 rounded"
@@ -365,10 +631,18 @@ export default function ScorerLiveSection() {
           </div>
           {queue.length === 0 ? (
             <p className="text-[10px] text-[var(--color-dim)] py-4 text-center">
-              Nessuna posizione in coda
+              {t.noQueue}
             </p>
           ) : (
-            queue.map((p) => <QueueRow key={p.id} p={p} />)
+            queue.map((p) => (
+              <QueueRow
+                key={p.id}
+                p={p}
+                localeTag={localeTag}
+                rt={t.rt}
+                remoteLabel={t.remote}
+              />
+            ))
           )}
         </div>
 
@@ -379,15 +653,23 @@ export default function ScorerLiveSection() {
               className="text-[9px] font-semibold tracking-[0.15em] uppercase"
               style={{ color: "var(--color-yellow)" }}
             >
-              Ultime 10 Scored
+              {t.last10Scored}
             </span>
           </div>
           {recent_scored.length === 0 ? (
             <p className="text-[10px] text-[var(--color-dim)] py-4 text-center">
-              Nessuna posizione scored
+              {t.noScored}
             </p>
           ) : (
-            recent_scored.map((p) => <ScoredRow key={p.id} p={p} />)
+            recent_scored.map((p) => (
+              <ScoredRow
+                key={p.id}
+                p={p}
+                localeTag={localeTag}
+                rt={t.rt}
+                remoteLabel={t.remote}
+              />
+            ))
           )}
         </div>
       </div>
@@ -399,7 +681,7 @@ export default function ScorerLiveSection() {
             className="text-[9px] font-semibold tracking-[0.15em] uppercase"
             style={{ color: "var(--color-red)" }}
           >
-            Ultime 10 Escluse (score &lt; 40)
+            {t.last10Excluded}
           </span>
           <span
             className="text-[10px] font-bold px-1.5 py-0.5 rounded"
@@ -408,7 +690,7 @@ export default function ScorerLiveSection() {
               color: "var(--color-red)",
             }}
           >
-            {stats.excluded_today} oggi
+            {stats.excluded_today} {t.todayLc}
           </span>
         </div>
 
@@ -416,7 +698,7 @@ export default function ScorerLiveSection() {
         {sTotal > 0 && (
           <div className="flex items-center gap-2 mb-3 text-[9px] font-mono">
             <span style={{ color: "var(--color-yellow)" }}>
-              {stats.scored_today} scored
+              {stats.scored_today} {t.scoredLc}
             </span>
             <div
               className="flex-1 h-1.5 rounded-full overflow-hidden"
@@ -431,18 +713,26 @@ export default function ScorerLiveSection() {
               />
             </div>
             <span style={{ color: "var(--color-red)" }}>
-              {stats.excluded_today} escluse
+              {stats.excluded_today} {t.excludedLc}
             </span>
-            <span className="text-[var(--color-dim)]">({passPct}% pass)</span>
+            <span className="text-[var(--color-dim)]">{t.passLc(passPct)}</span>
           </div>
         )}
 
         {recent_excluded.length === 0 ? (
           <p className="text-[10px] text-[var(--color-dim)] py-2 text-center">
-            Nessuna esclusione recente
+            {t.noRecentExclusion}
           </p>
         ) : (
-          recent_excluded.map((p) => <ExcludedRow key={p.id} p={p} />)
+          recent_excluded.map((p) => (
+            <ExcludedRow
+              key={p.id}
+              p={p}
+              localeTag={localeTag}
+              rt={t.rt}
+              remoteLabel={t.remote}
+            />
+          ))
         )}
       </div>
     </div>

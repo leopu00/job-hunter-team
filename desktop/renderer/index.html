@@ -71,9 +71,9 @@
           </button>
           <button type="button" class="location-card" id="location-card-vps" data-location="vps">
             <span class="location-card__icon" aria-hidden="true">☁️</span>
-            <span class="location-card__title" data-i18n="location.vps.title">VPS (Hetzner)</span>
+            <span class="location-card__title" data-i18n="location.vps.title">A remote server (VPS)</span>
             <span class="location-card__body" data-i18n="location.vps.body">
-              Always on, ~€6/mo. We will provision it from the desktop app (coming next).
+              Always on, ~€6/mo on any VPS host. We'll set it up from the desktop app (coming next).
             </span>
             <span class="location-card__badge location-card__badge--soon" data-i18n="location.vps.badge">Coming soon</span>
           </button>
@@ -93,9 +93,9 @@
            VPS path: required (skip hidden, continue disabled until signed in). -->
       <section class="step step--centered" id="step-supabase-login" data-step="supabase-login" hidden>
         <div class="step__emoji" aria-hidden="true">☁️</div>
-        <h1 class="step__title" data-i18n="supabase.title">Cloud account</h1>
+        <h1 class="step__title" data-i18n="supabase.title">Cloud account (optional)</h1>
         <p class="step__lead" id="supabase-hint" data-i18n="supabase.lead.local">
-          Optional: sign in to sync your dashboard across devices. You can enable it later from settings.
+          Optional sync: sign in to back up your data and check results from your phone — and never lose anything if something happens to this computer. It's entirely optional: you can stay fully local forever, and you can turn sync on later whenever you want.
         </p>
         <div class="supabase-actions">
           <button type="button" class="btn btn--secondary" id="btn-supabase-google" data-i18n="supabase.google">
@@ -128,7 +128,7 @@
           </button>
           <div class="step__actions-group">
             <button class="btn btn--ghost" id="btn-supabase-skip" data-i18n="supabase.skip" hidden>
-              Skip for now
+              Stay local
             </button>
             <button class="btn btn--ghost" id="btn-supabase-signout" data-i18n="supabase.signOut" hidden>
               Sign out
@@ -167,6 +167,7 @@
         </p>
         <div class="step__actions step__actions--between step__actions--wide">
           <button class="btn btn--ghost" id="btn-tg-intro-back" data-i18n="telegram.intro.back">Back</button>
+          <button class="btn btn--ghost" id="btn-tg-intro-skip" data-i18n="telegram.intro.skip">Skip for now</button>
           <button class="btn btn--primary" id="btn-tg-intro-continue" data-i18n="telegram.intro.continue">Got it, continue</button>
         </div>
       </section>
@@ -373,6 +374,11 @@
             <span class="dep-card__badge" id="docker-badge" data-i18n="setup.verifying">checking…</span>
           </div>
 
+          <!-- macOS-only: let the user choose the container runtime
+               (Colima recommended / Docker Desktop). Populated from JS in
+               docker-card.js; hidden on Windows/Linux. See ADR-0006. -->
+          <div class="runtime-chooser" id="runtime-chooser" hidden></div>
+
           <ol class="install-steps" id="docker-steps" hidden style="display: none">
             <li class="install-step" id="step-homebrew" data-state="pending">
               <span class="install-step__icon"></span>
@@ -467,96 +473,16 @@
         </div>
       </section>
 
-      <!-- Step 2c0: subscription notice (why subscriptions, not API keys) -->
-      <section class="step step--centered" id="step-subscription-notice" data-step="subscription-notice" hidden>
-        <div class="team-lineup" aria-hidden="true">
-          <div class="team-lineup__top">
-            <span class="team-lineup__slot" style="grid-column: 2">
-              <span class="team-lineup__emoji">💂</span>
-              <span class="team-lineup__name">Sentinel</span>
-            </span>
-            <span class="team-lineup__slot team-lineup__slot--raised" style="grid-column: 3">
-              <span class="team-lineup__emoji">👨‍✈️</span>
-              <span class="team-lineup__name">Captain</span>
-            </span>
-          </div>
-          <div class="team-lineup__pipeline">
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">🕵️</span>
-              <span class="team-lineup__name">Scout</span>
-            </span>
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">👨‍🔬</span>
-              <span class="team-lineup__name">Analyst</span>
-            </span>
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">👨‍💻</span>
-              <span class="team-lineup__name">Scorer</span>
-            </span>
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">👨‍🏫</span>
-              <span class="team-lineup__name">Writer</span>
-            </span>
-            <span class="team-lineup__slot">
-              <span class="team-lineup__emoji">👨‍⚖️</span>
-              <span class="team-lineup__name">Critic</span>
-            </span>
-          </div>
-        </div>
-        <h1 class="step__title" data-i18n="subscription.title">Subscriptions, not API keys</h1>
-        <p class="step__lead" data-i18n="subscription.lead">
-          The team keeps many AI agents running in parallel, around the clock. API keys bill per token and would cost hundreds per day. A flat subscription keeps your spend predictable.
-        </p>
-        <p class="step__hint" data-i18n="subscription.dedicatedHint" data-i18n-html="true">
-          <strong>Strongly recommended:</strong> use a subscription dedicated to the team — not the one you already use for work or personal tasks. A shared account drains the same weekly quota twice.
-        </p>
-
-        <div class="cost-compare">
-          <div class="cost-compare__col cost-compare__col--api">
-            <span class="cost-compare__label" data-i18n="subscription.compare.api">Pay-per-token (API)</span>
-            <span class="cost-compare__price">$1,000–$2,500<span class="cost-compare__per">/mo</span></span>
-            <span class="cost-compare__hint" data-i18n="subscription.compare.apiHint">~200–400M tokens/mo (Sonnet 4.6 mix)</span>
-          </div>
-          <div class="cost-compare__vs" aria-hidden="true">vs</div>
-          <div class="cost-compare__col cost-compare__col--sub">
-            <span class="cost-compare__label" data-i18n="subscription.compare.sub">Claude Max 20× subscription</span>
-            <span class="cost-compare__price">$200<span class="cost-compare__per">/mo</span></span>
-            <span class="cost-compare__hint" data-i18n="subscription.compare.subHint">same usage, fixed cost</span>
-          </div>
-        </div>
-        <p class="cost-compare__footnote" data-i18n="subscription.compare.footnote">
-          Estimate from Anthropic's public API pricing ($3/M input · $15/M output for Sonnet 4.6) and fully-saturated 5-hour windows against the Max 20× weekly cap. Actual savings depend on your input/output mix.
-        </p>
-
-        <div class="step__actions step__actions--between">
-          <button class="btn btn--ghost" id="btn-subscription-back" data-i18n="subscription.back">Back</button>
-          <button class="btn btn--primary" id="btn-subscription-continue" data-i18n="subscription.continue">Continue</button>
-        </div>
-      </section>
-
-      <!-- Step 2c1: model benchmark comparison (before provider pick) -->
-      <section class="step step--centered" id="step-model-compare" data-step="model-compare" hidden>
-        <h1 class="step__title" data-i18n="modelCompare.title">How the models compare</h1>
-        <p class="step__lead" data-i18n="modelCompare.lead">
-          Five variants that matter: Claude in two tiers (Opus 4.7 ceiling vs Sonnet 4.6 workhorse), Codex at two reasoning efforts (GPT-5.3 high vs xhigh), and Kimi Code — which has no thinking mode, so it's shown as a single bar.
-        </p>
-        <div class="model-charts" id="model-charts"></div>
-        <p class="step__hint model-compare__footnote" data-i18n="modelCompare.footnote" data-i18n-html="true">
-          Sources: SWE-bench Verified leaderboard, Artificial Analysis throughput data, vendor API pricing (April 2026). Kimi Code intelligence is estimated from K2.5 — K2.6 Preview numbers aren't published yet.
-        </p>
-        <div class="step__actions step__actions--between">
-          <button class="btn btn--ghost" id="btn-model-compare-back" data-i18n="modelCompare.back">Back</button>
-          <button class="btn btn--primary" id="btn-model-compare-continue" data-i18n="modelCompare.continue">Continue</button>
-        </div>
-      </section>
-
       <!-- Step 2c: provider choice -->
       <section class="step step--centered" id="step-provider-choose" data-step="provider-choose" hidden>
-        <h1 class="step__title" data-i18n="provider.title">Choose AI providers</h1>
+        <h1 class="step__title" data-i18n="provider.title">Choose your AI provider</h1>
         <p class="step__lead" data-i18n="provider.lead">
-          Pick one or more CLIs. The team runs on subscriptions, not API keys.
+          Pick which subscription you'll connect. The team spreads its budget across whatever plan you have — you just choose the provider.
         </p>
         <div class="provider-options" id="provider-options"></div>
+        <p class="step__hint provider-choose__tier-note" data-i18n="provider.tierNote">
+          Heads up: the entry ~$20/mo plan isn't recommended for any of the three — it isn't enough for even two agents. With that budget, use the CLI on your own rather than a team.
+        </p>
         <div class="step__actions step__actions--between">
           <button class="btn btn--ghost" id="btn-provider-back" data-i18n="provider.back">Back</button>
           <button class="btn btn--primary" id="btn-provider-continue" disabled data-i18n="provider.continue">Continue</button>
@@ -603,6 +529,119 @@
         </div>
       </section>
 
+      <!-- Step 2f: working hours (local path tail). Quando il team lavora;
+           fuori dalla finestra si mette in pausa per risparmiare budget. -->
+      <section class="step step--centered" id="step-working-hours" data-step="working-hours" hidden>
+        <div class="step__emoji" aria-hidden="true">⏰</div>
+        <h1 class="step__title" data-i18n="hours.title">When should the team work?</h1>
+        <p class="step__lead" data-i18n="hours.lead">
+          Pick the hours the team is active. Outside this window it pauses to save your budget. You can change this anytime later.
+        </p>
+        <div class="hours-form">
+          <label class="hours-mode">
+            <input type="radio" name="hours-mode" id="hours-mode-window" checked />
+            <span data-i18n="hours.mode.window">Set a working window</span>
+          </label>
+          <div class="hours-window" id="hours-window-fields">
+            <div class="hours-row">
+              <span class="hours-row__label" data-i18n="hours.days">Days</span>
+              <div class="hours-days" id="hours-days"></div>
+            </div>
+            <div class="hours-row">
+              <span class="hours-row__label" data-i18n="hours.from">From</span>
+              <input type="time" id="hours-start" class="hours-time" value="09:00" />
+              <span class="hours-row__label" data-i18n="hours.to">to</span>
+              <input type="time" id="hours-end" class="hours-time" value="18:00" />
+            </div>
+            <p class="step__hint" id="hours-tz" data-i18n="hours.tz">Timezone detected automatically.</p>
+          </div>
+          <label class="hours-mode">
+            <input type="radio" name="hours-mode" id="hours-mode-always" />
+            <span data-i18n="hours.mode.always">Always on (24/7)</span>
+          </label>
+        </div>
+        <p class="step__hint" id="hours-status" hidden></p>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-hours-back" data-i18n="hours.back">Back</button>
+          <button class="btn btn--primary" id="btn-hours-continue" data-i18n="hours.continue">Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2g: profile documents upload (CV obbligatorio). Sostituisce
+           l'onboarding-chat: l'Assistente costruisce il profilo dai file. -->
+      <section class="step step--centered" id="step-profile-upload" data-step="profile-upload" hidden>
+        <div class="step__emoji" aria-hidden="true">📄</div>
+        <h1 class="step__title" data-i18n="upload.title">Upload your CV</h1>
+        <p class="step__lead" data-i18n="upload.lead">
+          Add your CV (ideally a PDF) plus any notes about what you're after — target roles, locations, must-haves. The Assistant reads these to build your profile. At least one file is required to start.
+        </p>
+        <div class="upload-box">
+          <button type="button" class="btn btn--secondary" id="btn-upload-pick" data-i18n="upload.pick">
+            Choose files…
+          </button>
+          <ul class="upload-list" id="upload-list"></ul>
+          <p class="step__hint" id="upload-empty" data-i18n="upload.empty">
+            No files yet — your CV as a PDF is the most important one.
+          </p>
+        </div>
+        <div class="step__actions step__actions--between">
+          <button class="btn btn--ghost" id="btn-upload-back" data-i18n="upload.back">Back</button>
+          <button class="btn btn--primary" id="btn-upload-continue" data-i18n="upload.continue" disabled>Continue</button>
+        </div>
+      </section>
+
+      <!-- Step 2h: team email inbox (obbligatorio). Casella DEDICATA che il
+           team monitora per i job alert inoltrati. Credenziali validate con
+           round-trip IMAP+SMTP prima di lasciar procedere. -->
+      <section class="step step--centered" id="step-email-setup" data-step="email-setup" hidden>
+        <div class="step__emoji" aria-hidden="true">📧</div>
+        <h1 class="step__title" data-i18n="email.title">Connect a team inbox (optional)</h1>
+        <p class="step__lead" data-i18n="email.lead">
+          Optional but recommended: connect a dedicated Gmail the team can read, then forward your job alerts to it — the team gets higher-quality leads and spends fewer tokens. You can skip this and set it up later; without it the team finds jobs on the web.
+        </p>
+        <div class="email-form">
+          <label class="email-field">
+            <span class="email-field__label" data-i18n="email.address">Gmail address</span>
+            <input type="email" id="email-address" class="email-input" placeholder="team.jht@gmail.com" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="email-field">
+            <span class="email-field__label" data-i18n="email.password">App password</span>
+            <input type="password" id="email-password" class="email-input" autocomplete="off" />
+            <span class="step__hint" data-i18n="email.passwordHint">Paste a Gmail app password (a 16-character code) — not your normal login password.</span>
+          </label>
+          <div class="email-gmail-help">
+            <span class="step__hint" data-i18n="email.gmailSteps">Gmail: two quick clicks on Google, then paste the code here.</span>
+            <div class="email-gmail-links">
+              <button type="button" class="btn btn--secondary btn--small" id="btn-email-2fa" data-i18n="email.enable2fa">
+                1. Turn on 2-Step Verification →
+              </button>
+              <button type="button" class="btn btn--secondary btn--small" id="btn-email-app-pw" data-i18n="email.createAppPw">
+                2. Create app password →
+              </button>
+            </div>
+            <span class="step__hint" data-i18n="email.appPwNote">Then copy the 16-character code into the field above (not your normal password).</span>
+            <button type="button" class="btn btn--ghost btn--small" id="btn-email-docs" data-i18n="email.docsLink">
+              Full guide →
+            </button>
+          </div>
+          <label class="email-dedicated">
+            <input type="checkbox" id="email-dedicated-confirm" />
+            <span data-i18n="email.dedicated">I confirm this is a dedicated inbox for the team, not my personal email.</span>
+          </label>
+          <button type="button" class="btn btn--secondary" id="btn-email-verify" data-i18n="email.verify">
+            Verify connection
+          </button>
+          <p class="step__hint" id="email-status" hidden></p>
+        </div>
+        <div class="step__actions step__actions--between step__actions--wide">
+          <button class="btn btn--ghost" id="btn-email-back" data-i18n="email.back">Back</button>
+          <div class="step__actions-group">
+            <button class="btn btn--ghost" id="btn-email-skip" data-i18n="email.skip">Set up later</button>
+            <button class="btn btn--primary" id="btn-email-continue" data-i18n="email.continue" disabled>Continue</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Step 3: ready / summary -->
       <section class="step step--centered" id="step-ready" data-step="ready" hidden>
         <div class="step__emoji" aria-hidden="true">🚀</div>
@@ -629,27 +668,6 @@
         </div>
       </section>
 
-      <!-- Step 4: running -->
-      <section class="step step--centered" id="step-running" data-step="running" hidden>
-        <div class="step__emoji" aria-hidden="true">🏁</div>
-        <h1 class="step__title" id="running-title" data-i18n="running.title">Team running</h1>
-        <p class="step__lead" id="running-lead" data-i18n="running.leadRunning">
-          The runtime is up. Open the dashboard in your browser to get started.
-        </p>
-        <div class="running-info" id="running-info"></div>
-        <div class="step__actions">
-          <button class="btn btn--primary" id="btn-open-browser" data-i18n="running.openBrowser">
-            Open dashboard
-          </button>
-          <button class="btn btn--ghost" id="btn-stop-team" data-i18n="running.stop">
-            Stop team
-          </button>
-        </div>
-        <details class="advanced">
-          <summary data-i18n="running.advanced">Technical details</summary>
-          <pre class="advanced__log" id="advanced-log"></pre>
-        </details>
-      </section>
     </main>
 
     <!-- Home: post-setup dashboard. Mostrata quando Docker + container image +
@@ -658,34 +676,95 @@
     <div class="home" id="home" hidden>
       <aside class="home__sidebar">
         <div class="home__brand">
-          <span class="home__brand-mark">🎯</span>
-          <span class="home__brand-name">JHT Desktop</span>
+          <span class="home__brand-mark" aria-hidden="true">
+            <svg viewBox="3 9.5 26 13" xmlns="http://www.w3.org/2000/svg">
+              <path fill="currentColor" d="M7.34 21.15Q5.8 21.15 4.9 20.3Q4 19.45 4 18H5.74Q5.74 18.76 6.16 19.19Q6.59 19.63 7.34 19.63Q8.08 19.63 8.51 19.2Q8.94 18.77 8.94 18.02V10.85H10.68V18.02Q10.68 19.47 9.78 20.31Q8.89 21.15 7.34 21.15Z M13.01 21.01V10.85H14.75V14.97H17.48V10.85H19.22V21.01H17.48V16.54H14.75V21.01Z"/>
+              <path fill="currentColor" d="M23.59 21.01V12.42H20.93V10.85H28V12.42H25.34V21.01Z"/>
+            </svg>
+          </span>
+          <span class="home__brand-name">Desktop</span>
         </div>
         <nav class="home__nav" role="tablist">
-          <button type="button" class="home__nav-item is-active" data-section="team" role="tab">
-            <span class="home__nav-icon">🚀</span>
-            <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="provider" role="tab">
-            <span class="home__nav-icon">🧠</span>
-            <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="docker" role="tab">
-            <span class="home__nav-icon">🐳</span>
-            <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="account" role="tab">
-            <span class="home__nav-icon">👤</span>
-            <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="language" role="tab">
-            <span class="home__nav-icon">🌐</span>
-            <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
-          </button>
-          <button type="button" class="home__nav-item" data-section="advanced" role="tab">
-            <span class="home__nav-icon">⚙️</span>
-            <span class="home__nav-label" data-i18n="home.nav.advanced">Avanzate</span>
-          </button>
+          <!-- Gruppo Team: controllo e agenti -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.team">Team</div>
+            <button type="button" class="home__nav-item is-active" data-section="team" role="tab">
+              <span class="home__nav-icon">🚀</span>
+              <span class="home__nav-label" data-i18n="home.nav.team">Team</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="agents" role="tab">
+              <span class="home__nav-icon">🤖</span>
+              <span class="home__nav-label" data-i18n="home.nav.agents">Agenti</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="chat" role="tab">
+              <span class="home__nav-icon">💬</span>
+              <span class="home__nav-label" data-i18n="home.nav.chat">Chat</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="notifs" role="tab">
+              <span class="home__nav-icon">🔔</span>
+              <span class="home__nav-label" data-i18n="home.nav.notifs">Notifiche</span>
+            </button>
+          </div>
+          <!-- Gruppo Lavoro: i dati della ricerca -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.work">Lavoro</div>
+            <button type="button" class="home__nav-item" data-section="dashboard" role="tab">
+              <span class="home__nav-icon">📊</span>
+              <span class="home__nav-label" data-i18n="home.nav.dashboard">Dashboard</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="stats" role="tab">
+              <span class="home__nav-icon">📈</span>
+              <span class="home__nav-label" data-i18n="home.nav.stats">Statistiche</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="apps" role="tab">
+              <span class="home__nav-icon">📨</span>
+              <span class="home__nav-label" data-i18n="home.nav.apps">Candidature</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="map" role="tab">
+              <span class="home__nav-icon">🗺️</span>
+              <span class="home__nav-label" data-i18n="home.nav.map">Mappa</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="activity" role="tab">
+              <span class="home__nav-icon">📜</span>
+              <span class="home__nav-label" data-i18n="home.nav.activity">Attività</span>
+            </button>
+          </div>
+          <!-- Gruppo Impostazioni -->
+          <div class="home__nav-group">
+            <div class="home__nav-grouptitle" data-i18n="home.navgroup.settings">Impostazioni</div>
+            <button type="button" class="home__nav-item" data-section="profile" role="tab">
+              <span class="home__nav-icon">📝</span>
+              <span class="home__nav-label" data-i18n="home.nav.profile">Profilo</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="hours" role="tab">
+              <span class="home__nav-icon">⏰</span>
+              <span class="home__nav-label" data-i18n="home.nav.hours">Orari</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="provider" role="tab">
+              <span class="home__nav-icon">🧠</span>
+              <span class="home__nav-label" data-i18n="home.nav.provider">Provider</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="docker" role="tab">
+              <span class="home__nav-icon">🐳</span>
+              <span class="home__nav-label" data-i18n="home.nav.docker">Docker</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="account" role="tab">
+              <span class="home__nav-icon">👤</span>
+              <span class="home__nav-label" data-i18n="home.nav.account">Account</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="email" role="tab">
+              <span class="home__nav-icon">📧</span>
+              <span class="home__nav-label" data-i18n="home.nav.email">Email</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="language" role="tab">
+              <span class="home__nav-icon">🌐</span>
+              <span class="home__nav-label" data-i18n="home.nav.language">Lingua</span>
+            </button>
+            <button type="button" class="home__nav-item" data-section="advanced" role="tab">
+              <span class="home__nav-icon">⚙️</span>
+              <span class="home__nav-label" data-i18n="home.nav.advanced">Avanzate</span>
+            </button>
+          </div>
         </nav>
       </aside>
 
@@ -727,11 +806,148 @@
                 Ferma team
               </button>
             </div>
+            <label class="home__autostart" id="home-team-autostart-row" hidden>
+              <input type="checkbox" id="home-team-autostart" />
+              <span data-i18n="home.team.autostart">Avvia il team automaticamente quando apro l'app</span>
+            </label>
             <details class="advanced" id="home-team-advanced" hidden>
               <summary data-i18n="home.team.advanced">Dettagli tecnici</summary>
               <pre class="advanced__log" id="home-team-log"></pre>
             </details>
           </div>
+        </div>
+
+        <!-- Dashboard: vista NATIVA delle offerte del team [JHT-DASHBOARD-SPLIT].
+             Niente webview: dashboard-native.js fetcha i dati via window.dashboardApi
+             (IPC → main → runtime locale) e li rende con UI desktop nativa. -->
+        <div class="home__panel" data-section="dashboard" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.dashboard.title">Dashboard</h1>
+            <p class="home__subtitle" id="dash-subtitle" data-i18n="home.dashboard.subtitle">
+              Le offerte trovate dal team, con punteggio.
+            </p>
+          </header>
+          <div class="dash__filters" id="dash-filters" hidden>
+            <input type="text" id="dash-search" class="dash__search" data-i18n-ph="home.dashboard.search" placeholder="Cerca titolo o azienda…" />
+            <select id="dash-fstatus" class="dash__select">
+              <option value="">Tutti gli stati</option>
+              <option value="new">Nuove</option>
+              <option value="checked">Verificate</option>
+              <option value="scored">Valutate</option>
+              <option value="writing">In scrittura</option>
+              <option value="ready">Pronte</option>
+              <option value="applied">Inviate</option>
+              <option value="response">Risposte</option>
+              <option value="excluded">Escluse</option>
+            </select>
+            <select id="dash-fscore" class="dash__select">
+              <option value="">Tutti i punteggi</option>
+              <option value="90">90+</option>
+              <option value="75">75+</option>
+              <option value="50">50+</option>
+              <option value="unscored">Senza punteggio</option>
+            </select>
+            <span id="dash-count" class="dash__count"></span>
+          </div>
+          <div class="dash__empty" id="dash-empty" hidden>
+            <div class="step__emoji" aria-hidden="true">📊</div>
+            <p class="home__subtitle" id="dash-empty-text" data-i18n="home.dashboard.empty">
+              Avvia il team dalla sezione Team per vedere qui le offerte.
+            </p>
+          </div>
+          <div class="dash__list" id="dash-list" hidden></div>
+          <div class="dash__detail" id="dash-detail" hidden></div>
+        </div>
+
+        <!-- Chat agenti: Capitano / Assistente (nativo) -->
+        <div class="home__panel" data-section="chat" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.chat.title">Chat</h1>
+            <p class="home__subtitle" data-i18n="home.chat.subtitle">Parla con il Capitano o l’Assistente del team.</p>
+          </header>
+          <div class="chat">
+            <div class="chat__tabs">
+              <button type="button" class="chat-tab is-active" data-agent="capitano">Capitano</button>
+              <button type="button" class="chat-tab" data-agent="assistente">Assistente</button>
+            </div>
+            <div class="chat__messages" id="chat-messages"></div>
+            <div class="chat__composer">
+              <textarea id="chat-input" rows="2" data-i18n-ph="home.chat.placeholder" placeholder="Scrivi un messaggio…"></textarea>
+              <button type="button" class="btn btn--primary" id="chat-send" data-i18n="home.chat.send">Invia</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notifiche (nativo) -->
+        <div class="home__panel" data-section="notifs" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.notifs.title">Notifiche</h1>
+            <p class="home__subtitle" data-i18n="home.notifs.subtitle">Avvisi e aggiornamenti del team.</p>
+          </header>
+          <div id="dash-notifs"></div>
+        </div>
+
+        <!-- Statistiche: conteggi pipeline (nativo) -->
+        <div class="home__panel" data-section="stats" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.stats.title">Statistiche</h1>
+            <p class="home__subtitle" data-i18n="home.stats.subtitle">La pipeline del team a colpo d’occhio.</p>
+          </header>
+          <div id="dash-stats"></div>
+        </div>
+
+        <!-- Candidature (nativo) -->
+        <div class="home__panel" data-section="apps" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.apps.title">Candidature</h1>
+            <p class="home__subtitle" data-i18n="home.apps.subtitle">Le candidature inviate e il loro stato.</p>
+          </header>
+          <div id="dash-apps"></div>
+        </div>
+
+        <!-- Mappa: offerte per luogo (nativo) -->
+        <div class="home__panel" data-section="map" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.map.title">Mappa</h1>
+            <p class="home__subtitle" data-i18n="home.map.subtitle">Le offerte raggruppate per luogo.</p>
+          </header>
+          <div id="dash-map"></div>
+        </div>
+
+        <!-- Attività: timeline del team (nativo) -->
+        <div class="home__panel" data-section="activity" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.activity.title">Attività</h1>
+            <p class="home__subtitle" data-i18n="home.activity.subtitle">Le ultime azioni del team.</p>
+          </header>
+          <div id="dash-activity"></div>
+        </div>
+
+        <!-- Agenti: roster + stato live (nativo) -->
+        <div class="home__panel" data-section="agents" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.agents.title">Agenti</h1>
+            <p class="home__subtitle" data-i18n="home.agents.subtitle">Gli agenti del team e il loro stato.</p>
+          </header>
+          <div id="dash-agents"></div>
+        </div>
+
+        <!-- Profilo: vista del profilo candidato (nativo) -->
+        <div class="home__panel" data-section="profile" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.profile.title">Profilo</h1>
+            <p class="home__subtitle" data-i18n="home.profile.subtitle">Il profilo del candidato usato dal team.</p>
+          </header>
+          <div id="dash-profile"></div>
+        </div>
+
+        <!-- Orari di lavoro del team (nativo) -->
+        <div class="home__panel" data-section="hours" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.hours.title">Orari di lavoro</h1>
+            <p class="home__subtitle" data-i18n="home.hours.subtitle">Quando il team è autorizzato a lavorare.</p>
+          </header>
+          <div id="dash-hours"></div>
         </div>
 
         <!-- Provider: vendor + plan + login -->
@@ -762,6 +978,36 @@
               <button class="btn btn--ghost" id="home-btn-provider-change" data-i18n="home.provider.change">
                 Cambia provider
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Email del team: casella job-alert dedicata -->
+        <div class="home__panel" data-section="email" hidden>
+          <header class="home__header">
+            <h1 class="home__title" data-i18n="home.email.title">Email del team</h1>
+            <p class="home__subtitle" data-i18n="home.email.subtitle">
+              Casella dedicata in cui inoltrare i tuoi job alert: il team la legge a inizio giornata. Opzionale ma consigliata.
+            </p>
+          </header>
+          <div class="home__card">
+            <div class="home__row">
+              <span class="home__row-label" data-i18n="home.email.statusLabel">Stato</span>
+              <span class="home__row-value" id="home-email-status">—</span>
+            </div>
+            <label class="home__sync-field">
+              <span data-i18n="home.email.address">Indirizzo email</span>
+              <input type="email" id="home-email-address" autocomplete="off" spellcheck="false" placeholder="nome.jht@gmail.com" />
+            </label>
+            <label class="home__sync-field">
+              <span data-i18n="home.email.appPassword">App password</span>
+              <input type="password" id="home-email-password" autocomplete="off" placeholder="••••••••••••••••" />
+            </label>
+            <p class="home__card-hint" id="home-email-msg" hidden></p>
+            <div class="home__actions home__actions--inline">
+              <button type="button" class="btn btn--primary" id="home-btn-email-save" data-i18n="home.email.save">Salva</button>
+              <button type="button" class="btn btn--ghost" id="home-btn-email-delete" hidden data-i18n="home.email.remove">Rimuovi</button>
+              <button type="button" class="btn btn--ghost" id="home-btn-email-help" data-i18n="home.email.helpSetup">Come impostare l'inoltro</button>
             </div>
           </div>
         </div>

@@ -2,6 +2,114 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<
+  Locale,
+  {
+    attempts: string;
+    minDelay: string;
+    maxDelay: string;
+    breadcrumb: string;
+    title: string;
+    subtitle: (providers: number, max: number, window: string) => string;
+    loading: string;
+    configNotFound: string;
+    refresh: string;
+    loadingConfig: string;
+  }
+> = {
+  it: {
+    attempts: "Tentativi",
+    minDelay: "Min delay",
+    maxDelay: "Max delay",
+    breadcrumb: "Rate Limiter",
+    title: "Rate Limiter",
+    subtitle: (p, max, w) =>
+      `${p} provider · finestra globale: ${max} req/${w}`,
+    loading: "Caricamento…",
+    configNotFound: "jht.config.json non trovato",
+    refresh: "aggiorna",
+    loadingConfig: "Caricamento configurazione…",
+  },
+  en: {
+    attempts: "Attempts",
+    minDelay: "Min delay",
+    maxDelay: "Max delay",
+    breadcrumb: "Rate Limiter",
+    title: "Rate Limiter",
+    subtitle: (p, max, w) => `${p} provider · global window: ${max} req/${w}`,
+    loading: "Loading…",
+    configNotFound: "jht.config.json not found",
+    refresh: "refresh",
+    loadingConfig: "Loading configuration…",
+  },
+  es: {
+    attempts: "Intentos",
+    minDelay: "Min delay",
+    maxDelay: "Max delay",
+    breadcrumb: "Rate Limiter",
+    title: "Rate Limiter",
+    subtitle: (p, max, w) =>
+      `${p} proveedores · ventana global: ${max} req/${w}`,
+    loading: "Cargando…",
+    configNotFound: "jht.config.json no encontrado",
+    refresh: "actualizar",
+    loadingConfig: "Cargando configuración…",
+  },
+  fr: {
+    attempts: "Tentatives",
+    minDelay: "Min delay",
+    maxDelay: "Max delay",
+    breadcrumb: "Rate Limiter",
+    title: "Rate Limiter",
+    subtitle: (p, max, w) =>
+      `${p} fournisseurs · fenêtre globale : ${max} req/${w}`,
+    loading: "Chargement…",
+    configNotFound: "jht.config.json introuvable",
+    refresh: "actualiser",
+    loadingConfig: "Chargement de la configuration…",
+  },
+  de: {
+    attempts: "Versuche",
+    minDelay: "Min delay",
+    maxDelay: "Max delay",
+    breadcrumb: "Rate Limiter",
+    title: "Rate Limiter",
+    subtitle: (p, max, w) =>
+      `${p} Anbieter · globales Fenster: ${max} req/${w}`,
+    loading: "Wird geladen…",
+    configNotFound: "jht.config.json nicht gefunden",
+    refresh: "aktualisieren",
+    loadingConfig: "Konfiguration wird geladen…",
+  },
+  hu: {
+    attempts: "Próbálkozások",
+    minDelay: "Min delay",
+    maxDelay: "Max delay",
+    breadcrumb: "Rate Limiter",
+    title: "Rate Limiter",
+    subtitle: (p, max, w) =>
+      `${p} szolgáltató · globális ablak: ${max} req/${w}`,
+    loading: "Betöltés…",
+    configNotFound: "jht.config.json nem található",
+    refresh: "frissítés",
+    loadingConfig: "Konfiguráció betöltése…",
+  },
+  pt: {
+    attempts: "Tentativas",
+    minDelay: "Min delay",
+    maxDelay: "Max delay",
+    breadcrumb: "Rate Limiter",
+    title: "Rate Limiter",
+    subtitle: (p, max, w) => `${p} provedores · janela global: ${max} req/${w}`,
+    loading: "Carregando…",
+    configNotFound: "jht.config.json não encontrado",
+    refresh: "atualizar",
+    loadingConfig: "Carregando configuração…",
+  },
+};
 
 type RetryConfig = {
   attempts: number;
@@ -65,6 +173,7 @@ function BackoffBar({ steps, max }: { steps: number[]; max: number }) {
 }
 
 function ProviderCard({ p }: { p: ProviderLimit }) {
+  const t = T[useLocale()];
   const icon = PROVIDER_ICONS[p.id] ?? "◆";
   const maxStep = Math.max(...p.backoffSteps, 1);
   return (
@@ -118,13 +227,13 @@ function ProviderCard({ p }: { p: ProviderLimit }) {
         {/* Retry details */}
         <div className="grid grid-cols-2 gap-2">
           {[
-            { label: "Tentativi", value: p.retry.attempts },
+            { label: t.attempts, value: p.retry.attempts },
             {
               label: "Jitter",
               value: `±${(p.retry.jitter * 100).toFixed(0)}%`,
             },
-            { label: "Min delay", value: fmt(p.retry.minDelayMs) },
-            { label: "Max delay", value: fmt(p.retry.maxDelayMs) },
+            { label: t.minDelay, value: fmt(p.retry.minDelayMs) },
+            { label: t.maxDelay, value: fmt(p.retry.maxDelayMs) },
           ].map(({ label, value }) => (
             <div
               key={label}
@@ -147,6 +256,7 @@ function ProviderCard({ p }: { p: ProviderLimit }) {
 }
 
 export default function RateLimiterPage() {
+  const t = T[useLocale()];
   const [data, setData] = useState<RateLimiterData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -177,21 +287,25 @@ export default function RateLimiterPage() {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Rate Limiter
+            {t.breadcrumb}
           </span>
         </nav>
         <div className="mt-3 flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-              Rate Limiter
+              {t.title}
             </h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
               {data
-                ? `${data.providers.length} provider · finestra globale: ${data.globalWindow.maxRequests} req/${fmt(data.globalWindow.windowMs)}`
-                : "Caricamento…"}
+                ? t.subtitle(
+                    data.providers.length,
+                    data.globalWindow.maxRequests,
+                    fmt(data.globalWindow.windowMs),
+                  )
+                : t.loading}
               {data && !data.configLoaded && (
                 <span className="ml-2 text-[var(--color-yellow)]">
-                  <span aria-hidden="true">⚠</span> jht.config.json non trovato
+                  <span aria-hidden="true">⚠</span> {t.configNotFound}
                 </span>
               )}
             </p>
@@ -213,7 +327,7 @@ export default function RateLimiterPage() {
               e.currentTarget.style.color = "var(--color-muted)";
             }}
           >
-            ↻ aggiorna
+            ↻ {t.refresh}
           </button>
         </div>
       </div>
@@ -225,7 +339,7 @@ export default function RateLimiterPage() {
           aria-live="polite"
         >
           <span className="text-[var(--color-dim)] text-[12px]">
-            Caricamento configurazione…
+            {t.loadingConfig}
           </span>
         </div>
       )}

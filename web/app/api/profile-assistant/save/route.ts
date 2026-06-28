@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireLocalWrite } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/workspace";
 import { createClient } from "@/lib/supabase/server";
 import yaml from "js-yaml";
@@ -17,6 +18,8 @@ export const dynamic = "force-dynamic";
 const GLOBAL_CONFIG_PATH = JHT_CONFIG_PATH;
 
 export async function POST(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let body: { profile?: Record<string, unknown>; confirmed?: boolean };
   try {
     body = await req.json();

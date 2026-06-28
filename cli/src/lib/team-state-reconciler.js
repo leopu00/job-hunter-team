@@ -29,6 +29,8 @@ import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
+import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
+import { getDirectReader } from './cloud-direct.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -41,8 +43,8 @@ const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 const TEAM_HALTED_FLAG = join(JHT_HOME, '.team-halted.flag');
 const JHT_BIN = '/app/cli/bin/jht.js';
 
-const POLL_INTERVAL_MS = 5000;
-const POLL_INTERVAL_MAX_MS = 60000;
+// Cadenza adattiva (vedi poll-tier.js): 5s solo dopo un cambio di should_run,
+// poi backoff ≤30s (cap a idle: il controllo start/stop resta reattivo).
 const HEARTBEAT_EVERY_MS = 30000;
 
 function log(level, msg, meta) {
@@ -178,6 +180,38 @@ async function reconcile(baseUrl, token, state) {
   return null;
 }
 
+// [JHT-CLOUD-INTERACTIVE-RETIRE] reconcile should_run→start/stop RITIRATA 2026-06-25:
+// il controllo del team passa SOLO da desktop (`docker exec … jht team start/stop`,
+// anche su VPS via tunnel SSH — vedi desktop/main.js:150,948). Sul cloud should_run è
+// gated (browser 403) e NESSUNO lo scrive più → leggerlo era dead weight (lo confermava
+// il design 2026-06-20: bus real-time di controllo + reconciler da ritirare). Qui resta
+// SOLO l'heartbeat "VPS online" (dato OSSERVATO, non controllo), scritto diretto su
+// Supabase. Lo standalone runTeamStateReconciler (escape hatch JHT_CLOUD_CONTROL_POLLERS=1)
+// conserva ancora il vecchio reconcile completo per chi lo ri-abilita.
+export async function reconcileOnce() {
+  const config = await loadCloudConfig();
+  if (!config?.enabled) return { ok: false, skipped: 'cloud-not-enabled' };
+  const baseUrl = (config.base_url || '').replace(/\/+$/, '');
+  const token = config.token;
+  if (!baseUrl || !token) return { ok: false, skipped: 'missing-credentials' };
+  if (existsSync(WEEKLY_HALT_FLAG)) return { ok: true, skipped: 'weekly-halt' };
+
+  // Heartbeat "VPS online" — diretto su Supabase, fallback PATCH Vercel.
+  const nowIso = new Date().toISOString();
+  const reader = getDirectReader(config);
+  let beat = false;
+  if (reader) {
+    try { await reader.patchTeamState({ last_heartbeat_at: nowIso }); beat = true; }
+    catch (err) { log('warn', 'heartbeat.direct-failed', { err: err.message }); }
+  }
+  if (!beat) {
+    await apiCall('PATCH', baseUrl, token, '/api/team-state', {
+      last_heartbeat_at: nowIso,
+    }).catch(() => {});
+  }
+  return { ok: true, action: null };
+}
+
 export async function runTeamStateReconciler() {
   const config = await loadCloudConfig();
   if (!config?.enabled) {
@@ -239,19 +273,29 @@ export async function runTeamStateReconciler() {
   }
   let consecutiveErrors = 0;
   let lastHeartbeatAt = 0;
+  // Attività = ultimo cambio di should_run. Subito dopo un cambio si polla a 5s
+  // (convergenza reattiva), poi backoff a 30s. allowDeepIdle=false → mai 120s,
+  // così un comando start/stop viene raccolto entro ≤30s anche da fermi.
+  let lastActivityAt = Date.now();
+  let lastShouldRun = null;
 
   while (!shuttingDown) {
     if (existsSync(WEEKLY_HALT_FLAG)) {
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      await new Promise((r) => setTimeout(r, POLL_IDLE_MS));
       continue;
     }
 
-    let backoff = POLL_INTERVAL_MS;
+    let backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
     try {
       const r = await apiCall('GET', baseUrl, token, '/api/team-state');
       consecutiveErrors = 0;
       const state = r.state;
       if (state) {
+        if (state.should_run !== lastShouldRun) {
+          lastShouldRun = state.should_run;
+          lastActivityAt = Date.now();
+          backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
+        }
         await reconcile(baseUrl, token, state);
         if (Date.now() - lastHeartbeatAt >= HEARTBEAT_EVERY_MS) {
           await apiCall('PATCH', baseUrl, token, '/api/team-state', {
@@ -262,7 +306,7 @@ export async function runTeamStateReconciler() {
       }
     } catch (err) {
       consecutiveErrors += 1;
-      backoff = Math.min(POLL_INTERVAL_MAX_MS, POLL_INTERVAL_MS * 2 ** Math.min(consecutiveErrors, 4));
+      backoff = errorBackoff(tierInterval(lastActivityAt, { allowDeepIdle: false }), consecutiveErrors);
       log('error', 'poll.failed', { err: err.message, consecutiveErrors, nextBackoffMs: backoff });
     }
 

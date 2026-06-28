@@ -13,8 +13,8 @@
  *
  * Pattern coerente con OpenClaw `safe-resolve.ts`.
  */
-import fs from 'node:fs'
-import path from 'node:path'
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Resolve `candidate` e verifica che stia sotto `baseDir`.
@@ -27,24 +27,29 @@ import path from 'node:path'
  * applicato `realpathSync` su tutti e due. Se `baseDir` ha symlink,
  * la canonicizzazione li segue e il confronto avviene tra path reali.
  */
-export function safeResolveUnder(baseDir: string, candidate: string): string | null {
-  let realBase: string
+export function safeResolveUnder(
+  baseDir: string,
+  candidate: string,
+): string | null {
+  let realBase: string;
   try {
-    realBase = fs.realpathSync(baseDir)
+    realBase = fs.realpathSync(baseDir);
   } catch {
-    return null
+    return null;
   }
 
-  let realCandidate: string
+  let realCandidate: string;
   try {
-    realCandidate = fs.realpathSync(candidate)
+    realCandidate = fs.realpathSync(candidate);
   } catch {
-    return null
+    return null;
   }
 
-  const baseWithSep = realBase.endsWith(path.sep) ? realBase : realBase + path.sep
+  const baseWithSep = realBase.endsWith(path.sep)
+    ? realBase
+    : realBase + path.sep;
   if (realCandidate !== realBase && !realCandidate.startsWith(baseWithSep)) {
-    return null
+    return null;
   }
-  return realCandidate
+  return realCandidate;
 }

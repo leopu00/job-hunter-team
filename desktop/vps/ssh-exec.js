@@ -227,6 +227,44 @@ function openPty(ip, remoteCmd, opts = {}) {
   })
 }
 
+// [JHT-VPS-TUNNEL] Port-forward locale → remoto: `ssh -N -L
+// localPort:remoteHost:remotePort root@ip`. Nessun comando remoto (-N), tiene
+// solo aperto il forward. Il cockpit desktop punta poi a localhost:localPort e
+// usa lo stack locale ESEGUITO sulla VPS come se fosse in locale.
+//
+// Keep-alive: ServerAliveInterval/CountMax fanno cadere il processo se la
+// connessione muore (la rilancia il tunnel manager), ExitOnForwardFailure fa
+// fallire subito se la porta remota non è raggiungibile (invece di restare
+// appeso con un forward morto). pty=false → BatchMode (auth solo a chiave).
+//
+// Ritorna il ChildProcess (stdio pipe): il manager legge stderr per la
+// diagnostica e osserva 'exit' per il reconnect.
+function openForward(ip, { localPort, remoteHost = 'localhost', remotePort = 3000, keyPath } = {}) {
+  if (!Number.isInteger(localPort) || localPort < 1 || localPort > 65535) {
+    throw new Error(`ssh-exec: invalid localPort "${localPort}"`)
+  }
+  if (!Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65535) {
+    throw new Error(`ssh-exec: invalid remotePort "${remotePort}"`)
+  }
+  const args = sshArgs(ip, {
+    pty: false,
+    keyPath,
+    extra: [
+      '-N',
+      '-L', `${localPort}:${remoteHost}:${remotePort}`,
+      '-o', 'ServerAliveInterval=30',
+      '-o', 'ServerAliveCountMax=3',
+      '-o', 'ExitOnForwardFailure=yes',
+    ],
+  })
+  log.debug('openForward.spawn', { ip, localPort, remoteHost, remotePort })
+  // -N non produce stdout; teniamo solo stderr per la diagnostica del manager.
+  return spawn('ssh', args, {
+    stdio: ['ignore', 'ignore', 'pipe'],
+    windowsHide: true,
+  })
+}
+
 // Scrive un file remoto. Due strategie:
 //
 //   atomic=false  → `cat > '<path>' && chmod <mode> '<path>'`
@@ -327,6 +365,7 @@ module.exports = {
   run,
   runStream,
   openPty,
+  openForward,
   writeFile,
   forIp,
   // Esposti per i test: validazione args + helper readPrivKeyPath.

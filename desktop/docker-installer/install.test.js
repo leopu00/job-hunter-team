@@ -52,6 +52,7 @@ test('brew install triggers brew installer when missing, then proceeds', async (
   let brewWasMissing = true
   const run = fakeRunSequence([
     { ok: true, code: 0, stderr: '' }, // brew install colima docker docker-compose
+    { ok: true, code: 0, stderr: '' }, // brew link --overwrite docker
     { ok: true, code: 0, stderr: '' }, // bash -c mkdir + ln (compose plugin symlink)
     { ok: true, code: 0, stderr: '' }, // colima start
   ])
@@ -100,6 +101,7 @@ test('stage=colima-start when colima start fails on both VZ and QEMU', async () 
   // we surface stage=colima-start.
   const run = fakeRunSequence([
     { ok: true, code: 0, stderr: '' },               // brew install colima docker docker-compose
+    { ok: true, code: 0, stderr: '' },               // brew link --overwrite docker
     { ok: true, code: 0, stderr: '' },               // bash -c mkdir + ln (compose plugin symlink)
     { ok: false, code: 2, stderr: 'cannot start vm vz' }, // colima start (vz)
     { ok: true, code: 0, stderr: '' },               // brew install qemu
@@ -110,6 +112,9 @@ test('stage=colima-start when colima start fails on both VZ and QEMU', async () 
     run,
     brewCheck: async () => true,
     dockerCheck: async () => true,
+    // qemu-img absent → the QEMU fallback must `brew install qemu` first.
+    // Injected so the test doesn't depend on the host actually having qemu-img.
+    qemuImgCheck: async () => false,
   })
   assert.equal(result.ok, false)
   assert.equal(result.stage, 'colima-start')
@@ -119,6 +124,7 @@ test('stage=colima-start when colima start fails on both VZ and QEMU', async () 
 test('stage=daemon-unreachable when docker ps still fails after start', async () => {
   const run = fakeRunSequence([
     { ok: true, code: 0, stderr: '' }, // brew install colima docker docker-compose
+    { ok: true, code: 0, stderr: '' }, // brew link --overwrite docker
     { ok: true, code: 0, stderr: '' }, // bash -c mkdir + ln (compose plugin symlink)
     { ok: true, code: 0, stderr: '' }, // colima start (vz)
   ])
@@ -137,6 +143,7 @@ test('ok=true when brew install + colima start + docker ps all succeed', async (
   const logs = []
   const run = fakeRunSequence([
     { ok: true, code: 0, stderr: '' }, // brew install colima docker docker-compose
+    { ok: true, code: 0, stderr: '' }, // brew link --overwrite docker
     { ok: true, code: 0, stderr: '' }, // bash -c mkdir + ln (compose plugin symlink)
     { ok: true, code: 0, stderr: '' }, // colima start
   ])
@@ -149,10 +156,11 @@ test('ok=true when brew install + colima start + docker ps all succeed', async (
   })
   assert.equal(result.ok, true)
   assert.equal(result.stage, 'ok')
-  assert.equal(run.calls.length, 3)
+  assert.equal(run.calls.length, 4)
   assert.deepEqual(run.calls[0].args, ['install', 'colima', 'docker', 'docker-compose'])
-  assert.equal(run.calls[1].args[0], '-c') // bash -c '...compose plugin symlink...'
-  assert.deepEqual(run.calls[2].args, ['start'])
+  assert.deepEqual(run.calls[1].args, ['link', '--overwrite', 'docker'])
+  assert.equal(run.calls[2].args[0], '-c') // bash -c '...compose plugin symlink...'
+  assert.deepEqual(run.calls[3].args, ['start'])
   // Logs should have surfaced through the onLog callback.
   assert.ok(logs.some((l) => /brew install colima docker/.test(l)))
 })

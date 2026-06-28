@@ -171,6 +171,10 @@ function createRuntimeManager(config = {}) {
   const spawnFn = config.spawnFn ?? spawn
   const containerMode = config.containerMode === true
   const ensureContainerFn = config.ensureContainerFn ?? containerRuntime.ensureContainerRuntime
+  // Read fresh at each start so a runtime switch (Colima ⇄ Docker Desktop)
+  // from settings takes effect on the next Start without an app restart.
+  const getContainerRuntimeChoice =
+    config.getContainerRuntimeChoice ?? (() => containerRuntime.DEFAULT_RUNTIME)
   const containerSpawnSpecFactory =
     config.containerSpawnSpecFactory ?? containerRuntime.buildDockerSpawnSpec
   const spawnSpecFactory =
@@ -191,6 +195,12 @@ function createRuntimeManager(config = {}) {
     lastError: null,
     lastExitCode: null,
     warmingProgress: null,  // { stage: 'health'|'warmup', done, total, currentPath? }
+    // Container detached (docker run -d): non c'è un child-process del team da
+    // tracciare (vive nel daemon). `detached` = "possediamo un container
+    // detached avviato/adottato, controllabile via docker stop". `logChild` =
+    // il `docker logs -f` opzionale che riversa i log nel file (osservabilità).
+    detached: false,
+    logChild: null,
   }
 
   function getWebDir() {
@@ -292,13 +302,20 @@ function createRuntimeManager(config = {}) {
     })
   }
 
-  // Polling su /api/health fino a 200 (o timeoutMs). A differenza di
-  // waitForPort (TCP only), qui sappiamo davvero se l'app Next ha
-  // finito il boot ed è in grado di servire API.
+  // Polling sulla root `/` fino a una risposta 2xx/3xx (o timeoutMs). A
+  // differenza di waitForPort (TCP only), qui sappiamo davvero se l'app Next
+  // ha finito il boot ed è in grado di servire.
+  //
+  // [runtime-fix] Prima si pollava `/api/health`, ma quella route NON esiste
+  // nell'immagine (Next risponde 404) → waitForHealthy non diventava MAI
+  // healthy → timeout → stopRuntime rimuove il container → mode 'error', il
+  // team restava bloccato su 'Starting' e l'embed (gateato su 'running') non
+  // compariva mai. La dashboard però serviva: `/` è 200. Pollando `/` il
+  // warm-up converge e il runtime raggiunge 'running'.
   async function waitForHealthy(port, timeoutMs = healthTimeoutMs) {
     const started = Date.now()
     while (Date.now() - started < timeoutMs) {
-      const { ok } = await httpGet(port, '/api/health', 2500)
+      const { ok } = await httpGet(port, '/', 2500)
       if (ok) return true
       await new Promise((resolve) => setTimeout(resolve, 600))
     }
@@ -353,7 +370,9 @@ function createRuntimeManager(config = {}) {
       // `running` resta true anche durante 'warming' così la UI non torna
       // a "ferma" mentre Turbopack compila le prime pagine.
       running: ['running', 'starting', 'warming'].includes(state.mode),
-      managed: !!state.child,
+      // managed = "lo Stop dell'app può fermarlo". Vero col child foreground
+      // (dev) E con un container detached che possediamo (docker stop).
+      managed: !!state.child || state.detached,
       port: state.port,
       url: getUrl(),
       runtimeKind: state.runtimeKind,
@@ -373,14 +392,60 @@ function createRuntimeManager(config = {}) {
     child.stderr?.on('data', (chunk) => appendLog(chunk))
   }
 
+  // Con `docker run -d` il processo di lancio esce subito: per continuare a
+  // vedere i log del container apriamo `docker logs -f` e li riversiamo nel
+  // file (come faceva bindLogs sul child foreground). Best-effort.
+  function startContainerLogStream() {
+    stopContainerLogStream()
+    try {
+      const lc = spawnFn(
+        'docker',
+        ['logs', '-f', '--tail', '20', containerRuntime.DEFAULT_CONTAINER_NAME],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      lc.stdout?.on('data', (chunk) => appendLog(chunk))
+      lc.stderr?.on('data', (chunk) => appendLog(chunk))
+      lc.on('error', () => {})
+      state.logChild = lc
+    } catch {
+      // docker logs non disponibile — i log restano comunque nel daemon.
+    }
+  }
+
+  function stopContainerLogStream() {
+    if (state.logChild) {
+      try { state.logChild.kill() } catch { /* già morto */ }
+      state.logChild = null
+    }
+  }
+
   function resetState(mode = 'stopped') {
     state.child = null
     state.mode = mode
     state.runtimeKind = null
+    state.detached = false
   }
 
   async function getStatus() {
     if (!state.child) {
+      // Container detached: il team può girare senza un child-process tracciato
+      // (es. sopravvissuto a un restart dell'app). Riconoscilo via `docker ps`
+      // così la home mostra "running/managed" invece di "stopped". Lo Stop poi
+      // funziona via removeContainerIfExists (docker rm -f).
+      if (containerMode && containerRuntime.isContainerRunning()) {
+        const inspection = await inspectPort(state.port)
+        state.detached = true
+        if (state.runtimeKind == null) state.runtimeKind = 'container'
+        // Se non c'è ancora un log-stream attivo (riavvio app), riaprilo.
+        if (!state.logChild) startContainerLogStream()
+        return buildStatus({
+          mode: inspection.state === 'reachable' ? 'running' : 'starting',
+          running: true,
+          managed: true,
+          note: 'detached-container',
+        })
+      }
+      state.detached = false
       const inspection = await inspectPort(state.port)
       if (inspection.state === 'reachable') {
         return buildStatus({
@@ -410,6 +475,22 @@ function createRuntimeManager(config = {}) {
 
     if (state.child) {
       return buildStatus({ note: 'already-managed' })
+    }
+
+    // Container detached già su (sopravvissuto a un restart dell'app): adottalo
+    // come MANAGED invece di rilanciarne uno nuovo. È la vincita principale del
+    // modello detached — riapri il launcher e il team è già lì, niente
+    // ri-spawn né token bruciati. (Va PRIMA del check porta: il container
+    // potrebbe essere up ma la porta non ancora reachable durante il warm-up.)
+    if (containerMode && containerRuntime.isContainerRunning()) {
+      state.detached = true
+      state.runtimeKind = 'container'
+      state.startedAt = state.startedAt || new Date().toISOString()
+      startContainerLogStream()
+      const reachable = await waitForPort(preferredPort, containerStartTimeoutMs)
+      if (reachable) await waitForHealthy(preferredPort, healthTimeoutMs)
+      state.mode = 'running'
+      return buildStatus({ note: 'adopted-running-container', running: true, managed: true })
     }
 
     const allowPortFallback = options.allowPortFallback !== false
@@ -446,7 +527,10 @@ function createRuntimeManager(config = {}) {
 
     if (containerMode) {
       try {
-        ensureContainerFn({ logger: (msg) => writeLogHeader(msg) })
+        ensureContainerFn({
+          logger: (msg) => writeLogHeader(msg),
+          runtime: getContainerRuntimeChoice(),
+        })
       } catch (err) {
         state.mode = 'error'
         state.lastError = err instanceof Error ? err.message : String(err)
@@ -500,22 +584,43 @@ function createRuntimeManager(config = {}) {
       repoRoot: getRepoRoot(),
     })
     const child = spawnFn(spec.command, spec.args, spec.options)
-
-    state.child = child
     bindLogs(child)
 
-    child.once('exit', (code, signal) => {
-      state.lastExitCode = code
-      if (state.mode !== 'stopped') {
-        state.mode = 'stopped'
+    if (containerMode) {
+      // `docker run -d`: il processo di lancio stampa l'ID e ESCE subito (0 =
+      // container avviato nel daemon). NON è il processo del team — quindi non
+      // lo teniamo come state.child (sopravvive ai restart dell'app). Aspetta
+      // solo il suo exit per sapere se il lancio è riuscito.
+      const launchCode = await new Promise((resolve) => {
+        child.once('exit', (code) => resolve(typeof code === 'number' ? code : -1))
+        child.once('error', () => resolve(-1))
+      })
+      if (launchCode !== 0) {
+        state.mode = 'error'
+        state.lastError = `docker run -d terminato con exit code ${launchCode}`
+        try { containerRuntime.removeContainerIfExists() } catch { /* best-effort */ }
+        return buildStatus()
       }
-      if (signal) {
-        state.lastError = `Runtime terminato dal segnale ${signal}`
-      } else if (code && code !== 0) {
-        state.lastError = `Runtime terminato con exit code ${code}`
-      }
-      resetState(state.mode)
-    })
+      state.child = null
+      state.detached = true
+      startContainerLogStream()
+    } else {
+      // Dev/non-container: processo Next foreground, figlio dell'app. Semantica
+      // invariata — l'exit del child = runtime fermo.
+      state.child = child
+      child.once('exit', (code, signal) => {
+        state.lastExitCode = code
+        if (state.mode !== 'stopped') {
+          state.mode = 'stopped'
+        }
+        if (signal) {
+          state.lastError = `Runtime terminato dal segnale ${signal}`
+        } else if (code && code !== 0) {
+          state.lastError = `Runtime terminato con exit code ${code}`
+        }
+        resetState(state.mode)
+      })
+    }
 
     const ready = await waitForPort(state.port, containerMode ? containerStartTimeoutMs : startTimeoutMs)
     if (!ready) {
@@ -537,7 +642,7 @@ function createRuntimeManager(config = {}) {
     if (!healthy) {
       await stopRuntime()
       state.mode = 'error'
-      state.lastError = `Next non risponde su /api/health entro ${healthTimeoutMs / 1000}s (possibile cache Turbopack corrotta)`
+      state.lastError = `Next non risponde su / entro ${healthTimeoutMs / 1000}s (possibile cache Turbopack corrotta)`
       state.warmingProgress = null
       return buildStatus()
     }
@@ -563,11 +668,13 @@ function createRuntimeManager(config = {}) {
   }
 
   async function stopRuntime() {
-    // Fallback robusto: anche quando state.child e' null (perche' Electron
-    // e' stato riavviato o il bind col processo docker e' stato perso)
-    // ci assicuriamo sempre che il container `jht` sia rimosso. Prima
-    // questo early return lasciava il container orfano e "Stop team" non
-    // faceva nulla per l'utente.
+    // Spegni sempre lo stream `docker logs -f` locale (cosmetico).
+    stopContainerLogStream()
+    // Fallback robusto: anche quando state.child e' null (container detached, o
+    // Electron riavviato / bind col processo docker perso) ci assicuriamo
+    // sempre che il container `jht` sia rimosso (docker rm -f). E' anche il
+    // path dello Stop esplicito di un container detached. Prima questo early
+    // return lasciava il container orfano e "Stop team" non faceva nulla.
     if (!state.child) {
       if (containerMode) {
         try {
@@ -576,6 +683,7 @@ function createRuntimeManager(config = {}) {
           // ignore — container potrebbe non esistere, ok
         }
       }
+      state.detached = false
       state.mode = 'stopped'
       return buildStatus()
     }
@@ -623,6 +731,20 @@ function createRuntimeManager(config = {}) {
     return buildStatus()
   }
 
+  // Chiamata da app.before-quit. Container detached: LASCIALO VIVERE oltre la
+  // chiusura del launcher (è il punto del modello -d: riaprendo l'app il team
+  // è già su). Spegni solo lo stream log locale. Dev/non-container: stoppa come
+  // prima (è un processo figlio dell'app, morirebbe comunque). Lo Stop
+  // ESPLICITO dell'utente passa invece da stopRuntime (launcher:stop) e ferma
+  // davvero il container.
+  function shutdownForQuit() {
+    if (containerMode) {
+      stopContainerLogStream()
+      return buildStatus()
+    }
+    return stopRuntime()
+  }
+
   function inspectFullSetup() {
     const base = inspectWebSetup(getRepoRoot())
     const deps = inspectDependencies()
@@ -640,6 +762,7 @@ function createRuntimeManager(config = {}) {
     getStatus,
     startRuntime,
     stopRuntime,
+    shutdownForQuit,
   }
 }
 

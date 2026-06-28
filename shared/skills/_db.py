@@ -75,6 +75,13 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_write_requested(conn)
     _migrate_v6_to_v7_tombstones(conn)
     _migrate_positions_geocode_requested(conn)
+    _migrate_positions_expiry(conn)
+    _migrate_positions_salary_precise(conn)
+    _migrate_positions_role_family_proposed(conn)
+    _migrate_positions_user_excluded(conn)
+    _migrate_positions_recheck_requested(conn)
+    _migrate_role_family_registry(conn)
+    _migrate_position_tickets_cloud_id(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,6 +128,7 @@ def ensure_schema(conn: sqlite3.Connection):
         last_checked TIMESTAMP,
         last_actor TEXT,
         role_family TEXT,
+        role_family_proposed TEXT,
         loc_city TEXT,
         loc_region TEXT,
         loc_country TEXT,
@@ -136,10 +144,16 @@ def ensure_schema(conn: sqlite3.Connection):
         office_address TEXT,
         office_geocoded INTEGER DEFAULT 0,
         office_verified INTEGER DEFAULT 0,
+        expires_at DATE,
+        is_open INTEGER DEFAULT 1,
+        last_open_check TIMESTAMP,
         write_requested INTEGER DEFAULT 0,
         write_requested_at TIMESTAMP,
         geocode_requested INTEGER DEFAULT 0,
         geocode_requested_at TIMESTAMP,
+        salary_precise_requested INTEGER DEFAULT 0,
+        salary_precise_requested_at TIMESTAMP,
+        salary_precise TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         -- Length guardrails: mirror dei CHECK constraint Postgres (mig 015).
@@ -228,17 +242,47 @@ def ensure_schema(conn: sqlite3.Connection):
         FOREIGN KEY (related_position_id) REFERENCES positions(id)
     );
 
+    -- Ticket utente→team su una posizione (2026-06-18). L'utente, dalla pagina
+    -- posizione, scrive una richiesta testuale libera → ticket 'open'. Il
+    -- Capitano lo assegna a un agente (status 'assigned', assigned_agent) come
+    -- per il Writer on-demand; l'agente risolve scrivendo response_text
+    -- ('resolved'). L'utente vede richiesta+risposta in una sezione dedicata.
+    -- Mirror Supabase: mig 043. Write-ops: shared/skills/ticket.py.
+    CREATE TABLE IF NOT EXISTS position_tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        position_id INTEGER NOT NULL,
+        request_text TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'custom',
+        status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','assigned','resolved')),
+        assigned_agent TEXT,
+        response_text TEXT,
+        -- id del ticket gemello su Supabase (mig 043): correlazione per il
+        -- round-trip cloud↔VPS. NULL = ticket creato in locale, non ancora
+        -- pushato sul cloud (il daemon lo INSERT e scrive qui l'id). Vedi
+        -- `jht cloud sync-tickets`.
+        cloud_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        assigned_at TIMESTAMP,
+        resolved_at TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (position_id) REFERENCES positions(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
     CREATE INDEX IF NOT EXISTS idx_positions_company ON positions(company);
     CREATE INDEX IF NOT EXISTS idx_positions_company_id ON positions(company_id);
     CREATE INDEX IF NOT EXISTS idx_positions_url ON positions(url);
     CREATE INDEX IF NOT EXISTS idx_positions_write_requested ON positions(write_requested) WHERE write_requested = 1;
     CREATE INDEX IF NOT EXISTS idx_positions_geocode_requested ON positions(geocode_requested) WHERE geocode_requested = 1;
+    CREATE INDEX IF NOT EXISTS idx_positions_salary_precise_requested ON positions(salary_precise_requested) WHERE salary_precise_requested = 1;
     CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
     CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_agent ON pending_user_messages(agent);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_delivery ON pending_user_messages(delivered_via, acknowledged_at);
     CREATE INDEX IF NOT EXISTS idx_pending_user_messages_unseen_reply ON pending_user_messages(user_reply_at, agent_seen_reply_at);
+    CREATE INDEX IF NOT EXISTS idx_position_tickets_status ON position_tickets(status);
+    CREATE INDEX IF NOT EXISTS idx_position_tickets_position ON position_tickets(position_id);
+    CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL;
 
     -- Bug #14: event-log delle transizioni di stato delle positions.
     -- `positions.status` è una colonna sovrascritta ad ogni UPDATE, quindi
@@ -890,6 +934,105 @@ def _migrate_positions_office_geocoding(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:
+    """Aggiunge `position_tickets.cloud_id` (int, nullable).
+
+    Correlazione per il round-trip cloud↔VPS dei ticket ([JHT-DATA-SYNC]
+    fase 2): l'id del ticket gemello su Supabase (mig 043). NULL = creato in
+    locale, non ancora pushato (il daemon `jht cloud sync-tickets` lo INSERT
+    sul cloud e scrive qui l'id). Per i ticket creati dal web cloud, il pull
+    li importa in locale già con cloud_id valorizzato. Idempotente: guard
+    `_column_exists`. La tabella può non esistere su DB pre-2026-06-18 → in
+    quel caso il CREATE TABLE IF NOT EXISTS più sotto la crea già con la colonna.
+    """
+    if not _table_exists(conn, 'position_tickets'):
+        return
+    if _column_exists(conn, 'position_tickets', 'cloud_id'):
+        return
+    conn.execute("ALTER TABLE position_tickets ADD COLUMN cloud_id INTEGER")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_position_tickets_cloud_id "
+        "ON position_tickets(cloud_id) WHERE cloud_id IS NOT NULL"
+    )
+
+
+def _migrate_positions_user_excluded(conn: sqlite3.Connection) -> None:
+    """Aggiunge le colonne di esclusione MANUALE dell'UTENTE (mirror Supabase mig 041).
+
+    L'utente esclude una job offer dalla pagina dettaglio scegliendo una causa
+    (5 default + 'Altro'). Effetto: status -> 'excluded' → la posizione esce da
+    next-for-recheck / next-for-categorize (che filtrano già lo stato), così gli
+    agenti NON ri-verificano la liveness: lo fa l'utente. Reversibile via
+    user_excluded_prev_status. Idempotente: guard PRAGMA table_info (limite SQLite:
+    no DEFAULT non-costante in ADD COLUMN, qui tutte NULL-able).
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('user_excluded_reason',      'TEXT'),
+        ('user_excluded_note',        'TEXT'),
+        ('user_excluded_at',          'TIMESTAMP'),
+        ('user_excluded_prev_status', 'TEXT'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_user_excluded "
+        "ON positions(user_excluded_at) WHERE user_excluded_at IS NOT NULL"
+    )
+
+
+def _migrate_positions_recheck_requested(conn: sqlite3.Connection) -> None:
+    """Aggiunge `recheck_requested` + `recheck_requested_at` (mirror Supabase mig 042).
+
+    Recheck/liveness ON-DEMAND: il recheck NON è più autonomo (era RULE-12, causa
+    del weekly burn). L'utente lo richiede dalla pagina posizione → flag a 1 →
+    l'Analista serve next-for-recheck (flag-driven). "Servito" = last_open_check
+    aggiornato dopo recheck_requested_at (la posizione esce senza azzerare il
+    flag). Idempotente: guard PRAGMA table_info.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('recheck_requested',    'INTEGER DEFAULT 0'),
+        ('recheck_requested_at', 'TIMESTAMP'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_recheck_requested "
+        "ON positions(recheck_requested) WHERE recheck_requested = 1"
+    )
+
+
+def _migrate_positions_expiry(conn: sqlite3.Connection) -> None:
+    """Aggiunge expires_at / is_open / last_open_check (espansione Analista 2026-06-13).
+
+    Scadenze machine-readable + ciclo aperto/scaduto. L'Analista parsa il JD con
+    `deadline_extract.py` -> `expires_at` (DATE ISO, NULL se sconosciuta); al richeck
+    giornaliero (RULE-12) setta `is_open=0` se link morto o `expires_at` passata.
+    `deadline` TEXT resta (raw, polluto: 164/219 valori ma 3 ISO). Mirror Supabase
+    mig 038. Idempotente: guard PRAGMA table_info, DEFAULT costante (limite SQLite
+    ADD COLUMN). Vedi docs/internal/ANALISTA-EXPANSION-design.md.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    cols = (
+        ('expires_at',      'DATE'),
+        ('is_open',         'INTEGER DEFAULT 1'),
+        ('last_open_check', 'TIMESTAMP'),
+    )
+    for name, decl in cols:
+        if not _column_exists(conn, 'positions', name):
+            conn.execute(f"ALTER TABLE positions ADD COLUMN {name} {decl}")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_open_expiry "
+        "ON positions(expires_at) WHERE is_open = 1"
+    )
+
+
 def _migrate_positions_write_requested(conn: sqlite3.Connection) -> None:
     """Aggiunge `positions.write_requested` + `write_requested_at` (V6).
 
@@ -942,6 +1085,135 @@ def _migrate_positions_geocode_requested(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_positions_geocode_requested "
         "ON positions(geocode_requested) WHERE geocode_requested = 1"
     )
+
+
+def _migrate_positions_salary_precise(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.salary_precise_requested` + `_at` + `salary_precise` (V9).
+
+    Flag USER-DRIVEN per Salary-precise on-demand: l'analista produce sempre la
+    stima rough (`salary_estimated_*`) nel passaggio pipeline; la versione PRECISA
+    (ricerca azienda + media web + tasse + NETTO) e' costosa → l'utente la richiede
+    dal dashboard/Telegram, il flag viaggia nel sync (push+pull, cross-device) e
+    l'analista la produce solo quando acceso, scrivendo il breakdown in
+    `salary_precise`. Replica del pattern Writer/Geocoding-on-demand (mig 024/027).
+
+    recheck/categorize NON hanno colonna: sono code SISTEMATICHE via query naturale
+    (last_open_check stale / role_family IS NULL), loop-guard gratis.
+
+    Idempotente: guard via _column_exists, ALTER ADD COLUMN solo se mancante.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'salary_precise_requested'):
+        conn.execute("ALTER TABLE positions ADD COLUMN salary_precise_requested INTEGER DEFAULT 0")
+    if not _column_exists(conn, 'positions', 'salary_precise_requested_at'):
+        conn.execute("ALTER TABLE positions ADD COLUMN salary_precise_requested_at TIMESTAMP")
+    if not _column_exists(conn, 'positions', 'salary_precise'):
+        conn.execute("ALTER TABLE positions ADD COLUMN salary_precise TEXT")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_positions_salary_precise_requested "
+        "ON positions(salary_precise_requested) WHERE salary_precise_requested = 1"
+    )
+
+
+def _migrate_positions_role_family_proposed(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.role_family_proposed` (tassonomia EMERGENTE, 2026-06-15).
+
+    Quando l'analista non trova una categoria ATTIVA del registro che calzi, la
+    role_family diventa la sentinella catch-all ('Other') e l'etichetta fine
+    proposta dall'analista (raw, mostrata) va qui. Il pass di promozione
+    (`role_registry`) clusterizza le righe-sentinella per `normalize_key(proposed)`
+    e promuove un cluster a categoria attiva quando supera la soglia di supporto.
+    Niente colonna-chiave-normalizzata: la chiave si calcola al volo (più leggera).
+
+    Idempotente: guard via _column_exists, ALTER ADD COLUMN solo se mancante.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if not _column_exists(conn, 'positions', 'role_family_proposed'):
+        conn.execute("ALTER TABLE positions ADD COLUMN role_family_proposed TEXT")
+
+
+def _migrate_role_family_registry(conn: sqlite3.Connection) -> None:
+    """Crea `role_family_registry` (tassonomia EMERGENTE, 2026-06-15).
+
+    Registro PER-utente delle categorie `role_family` ATTIVE, decise e nominate
+    dal TEAM a partire dai dati reali — NESSUN nome di categoria predefinito in
+    codice. Parte VUOTO: una categoria nasce solo quando un cluster di proposte
+    (righe-sentinella + `role_family_proposed`) raggiunge la soglia di supporto
+    nel pass di promozione.
+
+    - `status`: 'active' (mostrata/abbinabile) | 'dormant' (sotto-soglia o oltre
+      il cap ~20) | 'merged' (confluita in `merged_into`).
+    - `support_count`: cache ricomputata dal pass dai `positions`.
+    - PK (user_id, name): active + supporto sono PER-utente (un candidato finance
+      non vede attive le categorie di un dev → la tassonomia si adatta al
+      candidato). `user_id` keyed anche per parità col cloud multi-tenant.
+
+    Idempotente: CREATE TABLE/INDEX IF NOT EXISTS.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS role_family_registry (
+            user_id       TEXT NOT NULL,
+            name          TEXT NOT NULL,
+            status        TEXT NOT NULL DEFAULT 'active',
+            support_count INTEGER NOT NULL DEFAULT 0,
+            merged_into   TEXT,
+            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            promoted_at   TIMESTAMP,
+            PRIMARY KEY (user_id, name)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_rfr_active "
+        "ON role_family_registry(user_id, status)"
+    )
+
+
+def local_user_id() -> str:
+    """User_id del candidato LOCALE (DB single-candidate sul VPS).
+
+    Il prompt analista e il write-guard non conoscono lo user_id → risolviamo
+    qui un default stabile, così la firma per-utente (`active_categories`,
+    registro) resta valida per il cloud multi-tenant ma localmente non serve
+    passare l'id. Fonte: env `JHT_SUPABASE_USER_ID` (impostata al boot del
+    container, già usata da db_to_supabase); fallback costante 'local' se
+    assente. La sync (cli/cloud.js) mappa il valore locale allo user_id reale
+    nel push verso il cloud.
+    """
+    return os.environ.get("JHT_SUPABASE_USER_ID") or "local"
+
+
+def active_categories(conn: sqlite3.Connection, user_id=None, with_support: bool = False):
+    """Categorie `role_family` ATTIVE per `user_id` dal registro emergente.
+
+    Ritorna i soli `name` con `status='active'` (dormant/merged ESCLUSE),
+    ordinati per supporto desc poi nome. `with_support=True` → list[(name, n)].
+
+    È l'UNICA fonte delle categorie a runtime: niente lista hardcoded. Usata da:
+    - write-guard (db_update): enforce `role_family ∈ active(user) ∪ {sentinella}`;
+    - prompt analista (via CLI `db_query.py active-categories <user_id>`):
+      match-best-active-or-Altro.
+    Tabella assente / utente senza attive → lista vuota (cold-start: tutto va
+    nella sentinella finché il pass non promuove il primo cluster).
+    `user_id=None` → risolto a `local_user_id()` (default candidato locale).
+    """
+    if user_id is None:
+        user_id = local_user_id()
+    try:
+        rows = conn.execute(
+            "SELECT name, support_count FROM role_family_registry "
+            "WHERE user_id = ? AND status = 'active' "
+            "ORDER BY support_count DESC, name ASC",
+            (user_id,),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    if with_support:
+        return [(r[0], r[1]) for r in rows]
+    return [r[0] for r in rows]
 
 
 def _migrate_v6_to_v7_tombstones(conn: sqlite3.Connection) -> None:

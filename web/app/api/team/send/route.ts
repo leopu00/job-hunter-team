@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runBash } from "@/lib/shell";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 const VALID_SESSION = /^[A-Z][A-Z0-9_-]*$/i;
 
 export async function POST(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const authError = await requireAuth();
   if (authError) return authError;
 

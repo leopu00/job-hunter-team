@@ -3,6 +3,46 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { DarkModeToggle } from '@/app/theme-provider'
+import { useLocale } from '@/lib/use-locale'
+
+const T: Record<string, Record<string, string>> = {
+  settings: {
+    it: 'Impostazioni',
+    en: 'Settings',
+    hu: 'Beállítások',
+    es: 'Ajustes',
+    de: 'Einstellungen',
+    fr: 'Paramètres',
+    pt: 'Configurações',
+  },
+  theme: {
+    it: 'Tema',
+    en: 'Theme',
+    hu: 'Téma',
+    es: 'Tema',
+    de: 'Design',
+    fr: 'Thème',
+    pt: 'Tema',
+  },
+  team: {
+    it: 'Team',
+    en: 'Team',
+    hu: 'Csapat',
+    es: 'Equipo',
+    de: 'Team',
+    fr: 'Équipe',
+    pt: 'Equipe',
+  },
+  org_chart: {
+    it: 'Organigramma',
+    en: 'Org chart',
+    hu: 'Szervezeti ábra',
+    es: 'Organigrama',
+    de: 'Organigramm',
+    fr: 'Organigramme',
+    pt: 'Organograma',
+  },
+}
 
 const DEV_MODE_KEY = 'jht-dev-mode'
 const DEV_MODE_EVENT = 'jht-dev-mode-change'
@@ -39,6 +79,8 @@ export function useDevMode(): boolean {
 export default function SettingsMenu() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const locale = useLocale()
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k
 
   useEffect(() => {
     if (!open) return
@@ -60,7 +102,7 @@ export default function SettingsMenu() {
         onClick={() => setOpen(v => !v)}
         aria-haspopup="true"
         aria-expanded={open}
-        aria-label="Impostazioni"
+        aria-label={tr('settings')}
         className="flex items-center justify-center w-8 h-8 rounded hover:bg-[var(--color-card)] transition-colors"
         style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-muted)' }}
       >
@@ -84,18 +126,15 @@ export default function SettingsMenu() {
           }}
         >
           <div className="px-3 py-2 text-[9px] font-semibold tracking-widest uppercase" style={{ color: 'var(--color-dim)', borderBottom: '1px solid var(--color-border)' }}>
-            Impostazioni
+            {tr('settings')}
           </div>
 
           <div className="flex items-center justify-between gap-3 px-3 py-2.5">
             <span className="text-[11px] font-semibold" style={{ color: 'var(--color-bright)' }}>
-              Tema
+              {tr('theme')}
             </span>
             <DarkModeToggle />
           </div>
-
-          <SectionHeader>Team</SectionHeader>
-          <MenuLink href="/team-pyramid" onClick={() => setOpen(false)}>Organigramma</MenuLink>
 
           {/* Voci placeholder — riabilitare una alla volta dopo validazione.
               <SectionHeader>Notifiche</SectionHeader>

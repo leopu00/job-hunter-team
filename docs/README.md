@@ -1,0 +1,41 @@
+# 📚 Documentazione — Job Hunter Team
+
+Indice di primo livello della documentazione. Le cartelle sono ordinate dalla più
+utente-facing alla più interna.
+
+---
+
+## 🎯 [`about/`](about/) — cos'è JHT e se funziona
+Doc pubblica per chi valuta JHT, in due cluster (vedi [indice](about/README.md)):
+- 📖 **Narrativa:** `VISION` · `STORY` · `ROADMAP`
+- 🔬 **Prove & economia:** `PROVIDERS` · `MONITORING` · `RESULTS`
+
+## 📘 [`guides/`](guides/) — guide operative
+Setup, uso e operazioni (vedi [indice](guides/README.md)). Tutte in inglese, naming `UPPERCASE-KEBAB`.
+- 🚀 **Start:** `QUICKSTART` · `CLI-INSTALL` · `CLI-REFERENCE` · `AI-AGENT-INTEGRATION`
+- ☁️ **VPS:** `VPS-SETUP-WIZARD` · `VPS-SETUP`
+- 🧪 **Beta:** `BETA` · `FEEDBACK-TICKETING`
+
+## 🏛️ [`adr/`](adr/) — decisioni architetturali
+Le scelte vincolanti e il loro perché (Architecture Decision Records).
+`0001` Colima · `0002` 3 CLI agenti · `0003` single-writer · `0004` no-API-keys · `0005` provider-risk
+
+## 🔒 [`security/`](security/) — sicurezza
+Review pre-launch, threat model, checklist, comparazioni.
+`01`→`06` + `README`
+
+## 🚀 [`launch/`](launch/) — materiali di lancio
+`demo-storyboard` · `show-hn-draft`
+
+## 📊 [`sessions/`](sessions/) — log run reali
+Una cartella per run agenti (Codex/Kimi/long-session) con README + dump dati.
+
+## 🔧 [`internal/`](internal/) — note di lavoro interne
+Architettura viva, postmortem, esperimenti, roadmap, ops. Vedi
+[`internal/README.md`](internal/README.md) per l'indice per categoria:
+`architecture/` · `postmortems/` · `experiments/` · `roadmap/` · `ops/` · `qa-reports/` · `_archive/`
+
+---
+
+> 📄 Documenti meta nella root del repo: `README.md` · `CHANGELOG.md` ·
+> `BACKLOG.md` · `SECURITY.md` · `CODE_OF_CONDUCT.md`.

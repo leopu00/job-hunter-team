@@ -18,7 +18,9 @@ export function normalizeOptionalString(value: unknown): string | undefined {
   return normalizeNullableString(value) ?? undefined;
 }
 
-export function normalizeOptionalLowercaseString(value: unknown): string | undefined {
+export function normalizeOptionalLowercaseString(
+  value: unknown,
+): string | undefined {
   return normalizeOptionalString(value)?.toLowerCase();
 }
 

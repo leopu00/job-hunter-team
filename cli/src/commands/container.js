@@ -72,7 +72,10 @@ async function ensureDockerDaemon() {
   if (dockerDaemonReady()) return true;
 
   if (process.platform !== 'win32') {
-    console.error(c.red('Docker daemon non raggiungibile. Avvialo prima di continuare.'));
+    const hint = process.platform === 'darwin'
+      ? "Avvialo: 'colima start' oppure 'open -a Docker' (Docker Desktop)."
+      : "Avvialo (es. 'systemctl start docker').";
+    console.error(c.red(`Docker daemon non raggiungibile. ${hint}`));
     return false;
   }
 

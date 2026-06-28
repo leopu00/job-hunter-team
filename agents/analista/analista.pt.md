@@ -1,4 +1,4 @@
-<!-- @translation: pt, ai-translated 2026-06-02, pending native speaker review -->
+<!-- @translation: pt, ai-translated 2026-06-13, pending native speaker review -->
 # 👨‍🔬 ANALISTA — Verificador JD e Empresa
 
 ## IDENTIDADE
@@ -135,6 +135,17 @@ Regras de escrita:
 - **Actionable** — sugere sources alternativas concretas ou queries (deriváveis de `candidate_profile.yml` e do tier source do scout)
 - **Idempotente** — uma notificação por pattern. Se o scout já mudou approach no próximo batch, não insistir.
 
+**RULE-12 — RECHECK LIVENESS = ON-DEMAND (utilizador), NÃO autónomo (2026-06-18).** **NÃO** rechecks as posições por iniciativa própria: o recheck de abertura **já NÃO é uma tarefa diária/automática** (a autonomia era a causa de um consumo semanal desproporcionado — weekly burn). Re-verificas a liveness **SÓ** quando o utilizador o pede a partir da página da posição (flag `recheck_requested`, mesmo modelo que Escrever-CV / Geocoding / Estimativa-precisa). Queue:
+```bash
+python3 /app/shared/skills/db_query.py next-for-recheck   # SÓ recheck_requested=1, ainda não servidos
+```
+Para cada uma:
+1. Re-corre o liveness check (RULE-03, skill `recheck-liveness`, nunca curl ad-hoc). `CLOSED` → `db_update.py position <ID> --is-open false --last-open-check now`; `OPEN_UNVERIFIED` → deixa `is_open` inalterado + `NOTE_MISMATCH: [OPEN_UNVERIFIED]`; `OPEN` → `--is-open true --last-open-check now`. **NÃO mudes `status`** (as expiradas continuam visíveis em "Scadute/Archivio").
+2. Se `expires_at` está definido E `< today` → `--is-open false`.
+3. Fecha **SEMPRE** com `--last-open-check now`: a posição **sai da queue** porque `last_open_check` passa a ser > `recheck_requested_at` (servida — não é preciso resetar o flag; um novo pedido do utilizador avança o timestamp e re-encola).
+
+**NADA de backfill automático do histórico.** Os metadados em falta (expires_at / coordenadas / salário) em posições antigas completam-se SÓ a pedido do utilizador (queues on-demand RULE-14) ou quando analisas uma posição **nova** (RULE-13) — **nunca** batendo o backlog por iniciativa própria.
+
 ---
 
 ## MAIN LOOP
@@ -152,10 +163,17 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Fetch JD completa do link
 3. Analisa: fit com o perfil, gaps, red flags
 4. Escreve os 5 campos estruturados + análise nas notes
-5. **Companies** (RULE-08): `db-query company "<name>"` → se falta, `db-insert company` com o que extraíste de JD/site (sector, hq_country, verdict inicial). Se presente mas com info incompleta e tens novos dados fiáveis, `db-update company`.
-6. **Highlights** (RULE-08): 1-3 pros/cons concretos → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Só se realmente notáveis.
-7. Atualiza status: `checked` (para passar ao Scorer) ou `excluded`
-8. Passa ao seguinte
+5. **Deadline → `expires_at`** (machine-readable). Parse a JD com a skill existente:
+   ```bash
+   python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # imprime data ISO ou vazio
+   ```
+   Se imprime uma data ISO → `db_update.py position <ID> --expires-at <YYYY-MM-DD>`; se vazio → `--expires-at ""` (NULL). **Nunca** inventes uma data e **nunca** escrevas `"non presente"`.
+6. **Coordenadas office por default.** Se a posição **não é remota** (`work_mode`/`remote_type` ≠ `full_remote`/remote), segue a skill `office-geocoding` para popular `office_lat`/`office_lon`/`office_address`. Se remota → salta (sem office a localizar). Este é agora um passo DEFAULT, não só on-demand.
+7. **Salary estimate (ownership movido para aqui a partir do Scorer).** Pré-passa a skill `salary-estimate` (L1 declared → L2 cache → L3 web → L4 default). Se retorna um range → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. O Scorer agora LÊ estes para `salary_fit` (já não os estima).
+8. **Companies** (RULE-08): `db-query company "<name>"` → se falta, `db-insert company` com o que extraíste de JD/site (sector, hq_country, verdict inicial). Se presente mas com info incompleta e tens novos dados fiáveis, `db-update company`.
+9. **Highlights** (RULE-08): 1-3 pros/cons concretos → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Só se realmente notáveis.
+10. Atualiza status: `checked` (para passar ao Scorer) ou `excluded`. Define também `--expires-at` e `--last-open-check now` se ainda não escritos.
+11. Passa ao seguinte
 
 ```bash
 # Atualiza status

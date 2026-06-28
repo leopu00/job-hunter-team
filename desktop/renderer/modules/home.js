@@ -1,12 +1,13 @@
 import { state, showStep, appendLog } from './state.js'
 import { t, getCurrentLang, setLang, initLangDropdown } from './i18n.js'
+import { loadDashboard, loadStats, loadApplications, loadMap, loadActivity, loadAgents, loadProfile, loadWorkingHours, loadNotifications } from './dashboard-native.js'
+import { loadChat, stopChat } from './dash-chat.js'
 import {
   STEP_WELCOME,
   STEP_READY,
   STEP_PROVIDER_CHOOSE,
   STEP_PROVIDER_LOGIN,
   PROVIDER_OPTIONS,
-  PROVIDER_PLANS,
   LOCATION_VPS,
 } from './constants.js'
 
@@ -29,7 +30,11 @@ const VPS_DASHBOARD_URL = 'https://jobhunterteam.ai/dashboard'
 
 // -------- Home (post-setup dashboard) --------
 
-const HOME_SECTIONS = ['team', 'provider', 'docker', 'account', 'language', 'advanced']
+const HOME_SECTIONS = ['team', 'chat', 'notifs', 'dashboard', 'stats', 'apps', 'map', 'activity', 'agents', 'profile', 'hours', 'provider', 'docker', 'account', 'email', 'language', 'advanced']
+
+// Pagina pubblica che spiega come impostare l'inoltro automatico (pulsante nel
+// pannello Email). Aggiornare se la guida cambia URL.
+const EMAIL_FORWARDING_DOC_URL = 'https://jobhunterteam.ai/docs/guides/email-forwarding'
 
 const homeDom = {
   root: document.getElementById('home'),
@@ -48,6 +53,8 @@ const homeDom = {
   btnStart: document.getElementById('home-btn-start'),
   btnOpen: document.getElementById('home-btn-open'),
   btnStop: document.getElementById('home-btn-stop'),
+  autostartRow: document.getElementById('home-team-autostart-row'),
+  autostart: document.getElementById('home-team-autostart'),
   providerName: document.getElementById('home-provider-name'),
   providerPlan: document.getElementById('home-provider-plan'),
   providerAuth: document.getElementById('home-provider-auth'),
@@ -86,6 +93,13 @@ const homeDom = {
   btnAccountSigninGoogle: document.getElementById('home-account-signin-google'),
   btnAccountSigninGithub: document.getElementById('home-account-signin-github'),
   btnAccountSignout: document.getElementById('home-account-signout'),
+  emailStatus: document.getElementById('home-email-status'),
+  emailAddress: document.getElementById('home-email-address'),
+  emailPassword: document.getElementById('home-email-password'),
+  emailMsg: document.getElementById('home-email-msg'),
+  btnEmailSave: document.getElementById('home-btn-email-save'),
+  btnEmailDelete: document.getElementById('home-btn-email-delete'),
+  btnEmailHelp: document.getElementById('home-btn-email-help'),
   syncCard: document.getElementById('home-sync-card'),
   syncSubtitle: document.getElementById('home-sync-subtitle'),
   syncDisabled: document.getElementById('home-sync-disabled'),
@@ -159,6 +173,7 @@ function stopTeamPanelPoll() {
 }
 
 function setHomeSection(name) {
+  if (name !== 'chat') stopChat()
   if (!HOME_SECTIONS.includes(name)) name = 'team'
   state.homeSection = name
   for (const btn of homeDom.navItems) {
@@ -174,8 +189,19 @@ function setHomeSection(name) {
     startTeamPanelPoll()
   } else {
     stopTeamPanelPoll()
-    if (name === 'provider') refreshHomeProvider()
+    if (name === 'dashboard') loadDashboard()
+    else if (name === 'stats') loadStats()
+    else if (name === 'apps') loadApplications()
+    else if (name === 'map') loadMap()
+    else if (name === 'activity') loadActivity()
+    else if (name === 'agents') loadAgents()
+    else if (name === 'chat') loadChat()
+    else if (name === 'notifs') loadNotifications()
+    else if (name === 'profile') loadProfile()
+    else if (name === 'hours') loadWorkingHours()
+    else if (name === 'provider') refreshHomeProvider()
     else if (name === 'docker') refreshHomeDocker()
+    else if (name === 'email') refreshHomeEmail()
   }
 }
 
@@ -461,6 +487,26 @@ if (homeDom.btnAccountSignout) {
   homeDom.btnAccountSignout.addEventListener('click', () => signOut())
 }
 
+// Checkbox "auto-start del team al boot" (opt-in, default OFF — consuma token
+// a ogni apertura). Stato persistito nella pref `autoStartTeam` (preferences.json
+// host-side), letta al boot dal main (maybeAutoStartTeam). Idratata in local
+// mode; il change handler si registra una sola volta.
+let autostartWired = false
+async function hydrateAutostartToggle() {
+  if (!homeDom.autostartRow || !homeDom.autostart) return
+  homeDom.autostartRow.hidden = false
+  try {
+    const cur = window.prefsApi?.get ? await window.prefsApi.get('autoStartTeam') : null
+    homeDom.autostart.checked = cur === true
+  } catch { /* default unchecked */ }
+  if (!autostartWired) {
+    autostartWired = true
+    homeDom.autostart.addEventListener('change', () => {
+      try { window.prefsApi?.set?.('autoStartTeam', !!homeDom.autostart.checked) } catch { /* no-op */ }
+    })
+  }
+}
+
 function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
   const mode = status?.mode
   // In VPS mode il team gira sulla VPS remota, sempre "running" dal punto
@@ -496,8 +542,12 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
     // Docker warning del Team panel: in VPS mode il Docker e' remoto,
     // niente da segnalare lato launcher.
     if (homeDom.teamDockerWarning) homeDom.teamDockerWarning.hidden = true
+    // Auto-start è una scelta locale (il team VPS è già su) → nascondi.
+    if (homeDom.autostartRow) homeDom.autostartRow.hidden = true
     return
   }
+  // Local mode: mostra e idrata la checkbox "auto-start al boot" (opt-in).
+  hydrateAutostartToggle()
   const running = !!status?.running && (mode === 'running' || mode === 'external')
   const starting = mode === 'starting' || mode === 'warming'
   const errored = mode === 'error'
@@ -520,7 +570,10 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
   homeDom.teamStatus.textContent = t(statusKey)
   homeDom.teamSubtitle.textContent = t(subtitleKey)
   homeDom.btnStart.hidden = running || starting
-  homeDom.btnOpen.hidden = !running
+  // [JHT-DASHBOARD-SPLIT] In LOCAL la dashboard è embedded nel pannello: il
+  // bottone "Apri dashboard" (che apriva la finestra separata) è ridondante,
+  // lo teniamo nascosto. Resta visibile solo nel ramo VPS (cockpit via tunnel).
+  homeDom.btnOpen.hidden = true
   homeDom.btnStop.hidden = !(running || starting)
   // Info rows
   homeDom.teamInfo.innerHTML = ''
@@ -537,9 +590,11 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
     row.append(l, v)
     homeDom.teamInfo.appendChild(row)
   }
-  if (status?.url) pushRow(t('running.info.url'), status.url)
-  if (status?.port) pushRow(t('running.info.port'), String(status.port))
-  if (mode) pushRow(t('running.info.mode'), mode)
+  // [JHT-DASHBOARD-SPLIT] NON esporre URL/porta localhost nel pannello: per
+  // design (data-sync-and-dashboard-split, § "separazione delle due dashboard")
+  // la dashboard locale vive DENTRO l'app e l'utente non deve mai pensare a
+  // `localhost:3000`. Il dot + label "Starting/Running" + il bottone Open
+  // comunicano tutto; il URL grezzo era solo plumbing confondente.
   homeDom.teamInfo.hidden = homeDom.teamInfo.childElementCount === 0
   if (status?.lastError) {
     homeDom.teamAdvanced.hidden = false
@@ -682,7 +737,7 @@ async function refreshHomeTeam() {
   }
 }
 
-async function startTeamFromHome() {
+export async function startTeamFromHome() {
   if (state.starting) return
   // Carica location dalle prefs se non gia' in state (perso ai restart).
   if (!state.location && window.prefsApi?.get) {
@@ -733,9 +788,10 @@ async function startTeamFromHome() {
     }
     const status = await window.launcherApi.start({})
     renderHomeTeamStatus(status)
-    if (status?.running && status?.url) {
-      await window.launcherApi.openBrowser().catch(() => {})
-    }
+    // [JHT-DASHBOARD-SPLIT] Avviato il team, niente finestra/browser: la
+    // dashboard è una sezione NATIVA a sé (sidebar → Dashboard) che fetcha le
+    // offerte dal runtime via window.dashboardApi. L'utente la apre da lì
+    // quando vuole; qui ci limitiamo ad avviare il runtime.
   } catch (error) {
     appendLog(`startTeamFromHome: ${error.message || error}`)
     renderHomeTeamStatus({ mode: 'error', lastError: error.message || String(error) })
@@ -763,8 +819,9 @@ async function refreshHomeProvider() {
     const sel = await window.setupApi.getSelection()
     const opt = PROVIDER_OPTIONS.find((p) => p.id === sel?.provider)
     homeDom.providerName.textContent = opt ? opt.label : (sel?.provider || '—')
-    const plan = sel?.plan ? (PROVIDER_PLANS[sel.provider] || []).find((p) => p.id === sel.plan) : null
-    homeDom.providerPlan.textContent = plan ? plan.name : (sel?.plan || '—')
+    // Il piano/abbonamento non viene più scelto nell'onboarding (snellito
+    // 2026-06-23): si mostra solo se per qualche motivo è ancora salvato.
+    homeDom.providerPlan.textContent = sel?.plan || '—'
     const authResp = await window.setupApi.getAuthStates()
     const authList = Array.isArray(authResp?.auth) ? authResp.auth : []
     const row = authList.find((a) => a.id === sel?.provider)
@@ -895,16 +952,101 @@ async function refreshHomeDocker() {
 }
 
 // Wiring home
+// -------- Email del team (casella job-alert dedicata) --------
+
+function setEmailMessage(text, kind) {
+  if (!homeDom.emailMsg) return
+  if (!text) {
+    homeDom.emailMsg.hidden = true
+    homeDom.emailMsg.textContent = ''
+    return
+  }
+  homeDom.emailMsg.hidden = false
+  homeDom.emailMsg.textContent = text
+  homeDom.emailMsg.dataset.kind = kind || 'info'
+}
+
+async function refreshHomeEmail() {
+  if (!homeDom.emailStatus || !window.emailApi?.getStatus) return
+  try {
+    const st = await window.emailApi.getStatus()
+    if (st?.configured) {
+      homeDom.emailStatus.textContent = st.email || t('home.email.statusConfigured')
+      if (homeDom.emailAddress && !homeDom.emailAddress.value) {
+        homeDom.emailAddress.value = st.email || ''
+      }
+      if (homeDom.btnEmailDelete) homeDom.btnEmailDelete.hidden = false
+    } else {
+      homeDom.emailStatus.textContent = t('home.email.statusNone')
+      if (homeDom.btnEmailDelete) homeDom.btnEmailDelete.hidden = true
+    }
+  } catch {
+    homeDom.emailStatus.textContent = t('home.email.statusNone')
+  }
+}
+
+async function onEmailSave() {
+  const email = (homeDom.emailAddress?.value || '').trim()
+  const password = homeDom.emailPassword?.value || ''
+  setEmailMessage('', 'info')
+  if (!window.emailApi?.saveConfig) return
+  const res = await window.emailApi.saveConfig({ email, password })
+  if (res?.ok) {
+    if (homeDom.emailPassword) homeDom.emailPassword.value = ''
+    setEmailMessage(t('home.email.saved'), 'ok')
+    await refreshHomeEmail()
+  } else {
+    const map = {
+      'invalid-email': 'home.email.errEmail',
+      'invalid-password': 'home.email.errPassword',
+    }
+    setEmailMessage(t(map[res?.error] || 'home.email.errGeneric'), 'err')
+  }
+}
+
+async function onEmailDelete() {
+  if (!window.emailApi?.deleteConfig) return
+  const res = await window.emailApi.deleteConfig()
+  if (res?.ok) {
+    if (homeDom.emailAddress) homeDom.emailAddress.value = ''
+    if (homeDom.emailPassword) homeDom.emailPassword.value = ''
+    setEmailMessage(t('home.email.removed'), 'ok')
+    await refreshHomeEmail()
+  } else {
+    setEmailMessage(t('home.email.errGeneric'), 'err')
+  }
+}
+
+if (homeDom.btnEmailSave) homeDom.btnEmailSave.addEventListener('click', onEmailSave)
+if (homeDom.btnEmailDelete) homeDom.btnEmailDelete.addEventListener('click', onEmailDelete)
+if (homeDom.btnEmailHelp) {
+  homeDom.btnEmailHelp.addEventListener('click', () => {
+    window.launcherApi?.openExternal?.(EMAIL_FORWARDING_DOC_URL)
+  })
+}
+
 for (const btn of homeDom.navItems) {
   btn.addEventListener('click', () => setHomeSection(btn.dataset.section))
 }
 homeDom.btnStart.addEventListener('click', startTeamFromHome)
 homeDom.btnStop.addEventListener('click', stopTeamFromHome)
 homeDom.btnOpen.addEventListener('click', async () => {
-  // In VPS mode "Apri team" punta alla dashboard cloud, non al
-  // localhost:3000 del container desktop (che non esiste). In Local
-  // mode mantiene il comportamento storico (openBrowser → localhost).
+  // [JHT-VPS-TUNNEL] In VPS mode apri il COCKPIT via tunnel SSH: la dashboard
+  // della VPS in una finestra dell'app, controllo pieno come fosse locale
+  // (l'Host resta localhost). Fallback alla dashboard cloud read-only nel
+  // browser se il tunnel non è disponibile (VPS irraggiungibile, ssh assente).
+  // In Local mode resta il comportamento storico (openBrowser → finestra app).
   if (await isVpsMode()) {
+    const vpsIp = (await window.prefsApi?.get('vpsIp').catch(() => null)) || state.vps?.ip || null
+    if (vpsIp && window.launcherApi.openVpsCockpit) {
+      try {
+        const r = await window.launcherApi.openVpsCockpit(vpsIp)
+        if (r && r.ok) return
+        appendLog(`cockpit VPS: ${r?.error || 'tunnel non disponibile'} — fallback cloud`)
+      } catch (e) {
+        appendLog(`cockpit VPS: ${e.message || e} — fallback cloud`)
+      }
+    }
     try { await window.launcherApi.openExternal(VPS_DASHBOARD_URL) }
     catch (e) { appendLog(`btnOpen vps: ${e.message || e}`) }
     return

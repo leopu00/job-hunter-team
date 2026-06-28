@@ -14,6 +14,10 @@ db-update
 # Throttle (cooldown loop, freeze)
 throttle
 
+# Resilience ladder (SC-08): su resume/batch con tool rotto → retry/ripara/alt/OPEN_UNVERIFIED,
+# mai stop silenzioso (no falso new=0).
+resilience
+
 # User feedback signal (like/dislike/hide/star from web dashboard)
 feedback-query
 
@@ -21,3 +25,6 @@ feedback-query
 scout-coord
 circles-and-sources
 position-insert
+
+# Email sourcing (day-start): poll the dedicated team inbox, any platform
+email-monitor

@@ -42,11 +42,21 @@ ENV DEBIAN_FRONTEND=noninteractive \
     # which lives on a bind-mount so installs persist across container
     # recreation. See ADR 0004 + the desktop provider-install step.
     NPM_CONFIG_PREFIX=/jht_home/.npm-global \
+    # /opt/jht-deps — prefisso GLOBALE scrivibile dagli agenti per gli extra
+    # che non rientrano nelle lane standard (apt→sistema, uv→python user,
+    # npm→node): binari in bin/, librerie in lib/. Baked nell'immagine con
+    # ownership jht così TUTTI gli agenti installano nello STESSO posto
+    # (niente più deps sparpagliati per cartelle diverse). È la "freedom
+    # standardizzata" del redesign Mantenitore: il wrapper `jht-install`
+    # instrada qui ciò che non ha una lane dedicata. LD_LIBRARY_PATH copre
+    # le .so installate qui senza toccare il sistema.
+    JHT_DEPS_PREFIX=/opt/jht-deps \
+    LD_LIBRARY_PATH=/opt/jht-deps/lib \
     # /app/agents/_tools contiene wrapper come `jht-send` che gli agenti
     # usano per scrivere in chat.jsonl. Va nel PATH del container (non solo
     # nel tmux pane) così anche i sub-shell spawnati da Codex/Kimi --yolo
     # lo trovano senza dipendere dall'export re-inviato via send-keys.
-    PATH=/app/agents/_tools:/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
+    PATH=/app/agents/_tools:/opt/jht-deps/bin:/jht_home/.npm-global/bin:/home/jht/.local/bin:$PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip \
@@ -54,6 +64,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       build-essential pkg-config \
       libsqlite3-0 \
       tini \
+      # procps = ps/free/top/vmstat. Senza, `free(1)` manca: il Mantenitore lo
+      # reinstallava a OGNI sweep e host_vitals.py perdeva il fallback RAM da
+      # /proc. Baked qui = niente reinstall quotidiana.
+      procps \
       # Toolbox "agent-friendly": gli agenti Codex/Kimi/Claude vedono
       # spesso PDF (CV, lettere), pagine web, JSON complessi. Senza questi
       # tool scrivevano parser PDF in Python puro impiegando minuti invece
@@ -68,6 +82,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # lo installa on-demand via `uv pip install faster-whisper` alla prima
       # voice note (vedi RULE-T15 self-extension principle).
       ffmpeg tesseract-ocr \
+      # Librerie di sistema runtime di Chromium (headless shell). `playwright
+      # install --with-deps` più sotto DOVREBBE installarle, ma sul runner CI
+      # il browser risultava BROKEN (libatk-1.0/libnss3/libgbm/libasound
+      # mancanti) → il build-time GATE (tool_health.py) andava rosso. Le
+      # ancoriamo qui esplicitamente così sono garantite a prescindere da
+      # --with-deps: il binario chromium-headless-shell le linka a runtime.
+      libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 \
+      libnss3 libnspr4 libcups2 libdrm2 libgbm1 libasound2 \
+      libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+      libpango-1.0-0 libcairo2 libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -87,9 +111,26 @@ RUN pip3 install --no-cache-dir -r requirements.txt \
     # Pre-install only the headless shell (used by linkedin_check.py
     # with headless=True). The full Chromium build is intentionally NOT
     # installed — it was 602M of dead weight on top of the 323M shell.
-    && playwright install --only-shell chromium
+    # --with-deps is MANDATORY: the shell binary links libatk-1.0.so.0,
+    # libnss3, libcups, etc. Without the OS deps the binary exists but
+    # exits 127 on launch → linkedin_check.py dies → LinkedIn open-checks
+    # (~68% of sources) silently report new=0 / "queue exhausted" fleet-wide.
+    # install-deps runs its own apt-get update, so the apt lists cleaned
+    # above are repopulated here; we clean them again to keep the layer slim.
+    && playwright install --with-deps --only-shell chromium \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
+
+# Build-time GATE (redesign tool-health 2026-06-13). The libatk regression
+# shipped a browser that exists but exits 127 on launch, and stayed invisible
+# in prod for hours (surfaced only as analyst "new=0" reports). This step
+# launches chromium headless FOR REAL via the exact path linkedin_check.py
+# uses (Python playwright, headless, --only-shell baked above): if a system
+# .so is missing, the BUILD goes red here instead of prod. tool_health.py
+# exits 1 on any BROKEN tool. "Never again a silent libatk."
+RUN python3 shared/skills/tool_health.py --only playwright_browser \
+    || { echo "BUILD GATE FAILED: chromium headless cannot launch — missing system libs (libatk/nss/gbm/asound)? See shared/skills/tool_health.py" >&2; exit 1; }
 
 RUN npm run build --prefix tui \
     && for pkg in shared/*/package.json; do \
@@ -108,7 +149,10 @@ RUN npm run build --prefix tui \
 
 RUN useradd --create-home --shell /bin/bash jht \
     && mkdir -p /jht_home /jht_user \
-    && chown -R jht:jht /jht_home /jht_user /app /opt/playwright \
+    # /opt/jht-deps (bin+lib): prefisso globale scrivibile per gli extra,
+    # ownership jht così gli agenti ci installano senza root (vedi ENV).
+    && mkdir -p /opt/jht-deps/bin /opt/jht-deps/lib \
+    && chown -R jht:jht /jht_home /jht_user /app /opt/playwright /opt/jht-deps \
     # Espone i tool degli agenti (es. jht-send) in /usr/local/bin così
     # sono trovati anche dalle sub-shell login che Codex/Kimi --yolo
     # spawnano con PATH ripulito da /etc/login.defs. Senza questo,

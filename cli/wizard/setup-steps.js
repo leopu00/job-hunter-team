@@ -192,6 +192,40 @@ export async function promptTelegramRequired(prompter, baseChannels) {
 }
 
 /**
+ * Setup Telegram CONSIGLIATO ma OPZIONALE (direction shift "interaction
+ * planes", 2026-06-16). L'interazione primaria si sposta sul desktop; Telegram
+ * diventa il canale async per quando sei lontano dal desktop. Niente piu' gate:
+ * chiediamo con un confirm e l'utente puo' saltare (e configurarlo dopo con
+ * `jht config` o rilanciando il wizard).
+ *
+ * Ritorna il telegramChannel (`{ bots, userTag }`) se configurato, oppure
+ * `null` se l'utente salta. Isolata da `promptTelegramRequired` apposta per
+ * essere testabile senza rete: il ramo "skip" non tocca Telegram.
+ *
+ * @param {import('./prompts.js').WizardPrompter} prompter
+ * @param {object} [baseChannels] — config.channels esistente (per pre-fill)
+ * @returns {Promise<object|null>}
+ */
+export async function promptTelegramOptional(prompter, baseChannels) {
+  const wants = await prompter.confirm({
+    message:
+      'Configurare i bot Telegram adesso? Consigliato (notifiche + chat da ' +
+      'lontano dal desktop), ma puoi saltare e farlo dopo con `jht config`.',
+    initialValue: true,
+  });
+  if (!wants) {
+    await prompter.note(
+      'Telegram saltato. Il team parte lo stesso: lo gestisci dal desktop ' +
+      '(dashboard + chat). Per aggiungerlo dopo: `jht config` o rilancia ' +
+      '`jht setup`.',
+      'Telegram opzionale — saltato',
+    );
+    return null;
+  }
+  return promptTelegramRequired(prompter, baseChannels);
+}
+
+/**
  * Wizard di un singolo bot Telegram: token → getMe → deep-link → wait /start.
  * Riusa la logica precedente (un solo bot) parametrizzata sul ruolo.
  */
@@ -318,7 +352,9 @@ export async function promptWorkingHours(prompter, currentWorkingHours) {
     night:   { days: ALL_DAYS,                        start: '22:00', end: '07:00' },
   };
   function detectCurrentPreset() {
-    if (!currentWorkingHours?.windows?.length) return 'always';
+    // Default proposto = 9h daytime 7/7 (decisione utente 2026-06-19), non piu'
+    // 24/7. Chi vuole il team sempre attivo sceglie esplicitamente 'always'.
+    if (!currentWorkingHours?.windows?.length) return 'daytime';
     if (currentWorkingHours.windows.length !== 1) return 'custom_later';
     const w = currentWorkingHours.windows[0];
     for (const [key, p] of Object.entries(PRESETS)) {

@@ -86,19 +86,29 @@ function salaryPercentFor(p: LuxuryPosition): number {
   return SALARY_BAR_MIN_PCT + norm * (SALARY_BAR_MAX_PCT - SALARY_BAR_MIN_PCT);
 }
 
-function formatRelative(iso: string): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "—";
-  const diff = Date.now() - t;
-  if (diff < 60_000) return "just now";
+function formatRelative(
+  iso: string,
+  t: (
+    key:
+      | "rel_just_now"
+      | "rel_m_ago"
+      | "rel_h_ago"
+      | "rel_d_ago"
+      | "rel_mo_ago",
+  ) => string,
+): string {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return "—";
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return t("rel_just_now");
   const min = Math.floor(diff / 60_000);
-  if (min < 60) return `${min}m ago`;
+  if (min < 60) return t("rel_m_ago").replace("{n}", String(min));
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t("rel_h_ago").replace("{n}", String(h));
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
+  if (d < 30) return t("rel_d_ago").replace("{n}", String(d));
   const mo = Math.floor(d / 30);
-  return `${mo}mo ago`;
+  return t("rel_mo_ago").replace("{n}", String(mo));
 }
 
 export default function LatestPositionsTable() {
@@ -255,7 +265,7 @@ export default function LatestPositionsTable() {
                       }}
                     >
                       <td className="px-3 py-2 whitespace-nowrap text-[var(--color-dim)] font-mono tabular-nums">
-                        {mounted ? formatRelative(updatedAt) : "—"}
+                        {mounted ? formatRelative(updatedAt, t) : "—"}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-center text-[var(--color-bright)] font-mono tabular-nums">
                         {/* Match Score: cifra + mini donut chart. */}
@@ -336,7 +346,7 @@ export default function LatestPositionsTable() {
                               strokeWidth="3"
                               strokeLinecap="round"
                               strokeLinejoin="round"
-                              aria-label="CV scritto"
+                              aria-label={t("table_cv_written")}
                             >
                               <path d="M5 13l4 4L19 7" />
                             </svg>

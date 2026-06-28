@@ -54,35 +54,155 @@ function startColima() {
   })
 }
 
-function ensureContainerRuntime({ logger = () => {} } = {}) {
-  log.info('ensure-runtime.start', { platform: process.platform })
-  if (process.platform === 'darwin') {
-    const installed = colimaInstalled()
-    log.debug('ensure-runtime.colima-installed', { installed })
-    if (!installed) {
-      log.error('ensure-runtime.colima-missing')
-      throw new Error(
-        "Colima non e' installato. Esegui 'brew install colima docker' oppure rilancia con JHT_NO_DOCKER=1.",
-      )
-    }
-    if (!colimaRunning()) {
-      log.info('ensure-runtime.colima-start')
+// Valid container-runtime preferences (macOS only — Windows is always Docker
+// Desktop, Linux is always the native Engine). 'auto' = detect-first: reuse
+// whatever Docker already responds, else prefer Colima (our default).
+const RUNTIME_CHOICES = ['auto', 'colima', 'docker-desktop']
+const DEFAULT_RUNTIME = 'auto'
+
+// macOS: is Docker Desktop installed? It ships as /Applications/Docker.app.
+// (Colima has no .app — its presence is the `colima` binary, see colimaInstalled.)
+function dockerDesktopInstalled() {
+  if (process.platform !== 'darwin') return false
+  try {
+    return fs.existsSync('/Applications/Docker.app')
+  } catch {
+    return false
+  }
+}
+
+// macOS: launch the Docker Desktop GUI. `open -a` returns immediately; the
+// daemon comes up a few seconds later, so callers must poll (waitForDocker).
+// We never manage Docker Desktop beyond this nudge — it is the user's app.
+function startDockerDesktop() {
+  execFileSync('open', ['-a', 'Docker'], {
+    stdio: ['ignore', 'ignore', 'ignore'],
+    timeout: 10000,
+  })
+}
+
+// Synchronous sleep without spawning a process — keeps this module's
+// imperative, execFileSync-based style. Used only while polling for the
+// Docker Desktop daemon to warm up on macOS.
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+function waitForDocker(timeoutMs = 120000, pollMs = 2000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    if (isDockerAvailable()) return true
+    sleepSync(pollMs)
+  }
+  return isDockerAvailable()
+}
+
+// Snapshot of what container runtimes exist / respond on this host. Cheap
+// probes (a few execFileSync each); fed to decideRuntimeAction.
+function detectRuntimeState(platform = process.platform) {
+  return {
+    platform,
+    dockerResponds: isDockerAvailable(),
+    colimaInstalled: platform === 'darwin' ? colimaInstalled() : false,
+    dockerDesktopInstalled: platform === 'darwin' ? dockerDesktopInstalled() : false,
+  }
+}
+
+// Pure decision: given the detected state and the user's choice, what should
+// ensureContainerRuntime do? Kept side-effect-free so it is unit-testable.
+//
+// Detect-first wins everywhere: if a daemon already answers `docker`, use it
+// regardless of the stored choice — never spin a second VM on top of a
+// working one (the Colima-on-top-of-Docker-Desktop double-VM clash, ADR-0006).
+function decideRuntimeAction(state, choice = DEFAULT_RUNTIME) {
+  const { platform, dockerResponds, colimaInstalled: colima, dockerDesktopInstalled: desktop } = state
+
+  if (dockerResponds) return { action: 'ok' }
+
+  if (platform !== 'darwin') {
+    // Linux: the Engine is a host-managed service. Windows desktop: the daemon
+    // gets auto-launched on the CLI command path, not here. Either way: report.
+    return { action: 'error-daemon-down' }
+  }
+
+  const want = choice === 'colima' || choice === 'docker-desktop' ? choice : 'auto'
+
+  if (want === 'docker-desktop') {
+    return desktop ? { action: 'start-docker-desktop' } : { action: 'error-install-docker-desktop' }
+  }
+  if (want === 'colima') {
+    return colima ? { action: 'start-colima' } : { action: 'error-install-colima' }
+  }
+  // auto → prefer whatever is already installed (Colima first, our default),
+  // else Docker Desktop, else there is nothing to start.
+  if (colima) return { action: 'start-colima' }
+  if (desktop) return { action: 'start-docker-desktop' }
+  return { action: 'error-nothing-installed' }
+}
+
+// Ensure a container runtime is up before we `docker run`. Honors the user's
+// macOS choice (Colima / Docker Desktop / auto); Linux & Windows unchanged.
+function ensureContainerRuntime({ logger = () => {}, runtime = DEFAULT_RUNTIME } = {}) {
+  const state = detectRuntimeState()
+  log.info('ensure-runtime.start', {
+    platform: state.platform,
+    runtime,
+    dockerResponds: state.dockerResponds,
+  })
+  const { action } = decideRuntimeAction(state, runtime)
+  log.info('ensure-runtime.action', { action })
+
+  switch (action) {
+    case 'ok':
+      // A daemon already serves docker — detect-first, nothing to start.
+      return
+    case 'start-colima': {
       logger('Avvio Colima (puo richiedere fino a un minuto)...')
       const t0 = Date.now()
       startColima()
       log.info('ensure-runtime.colima-started', { ms: Date.now() - t0 })
       logger('Colima avviato')
-    } else {
-      log.debug('ensure-runtime.colima-already-running')
+      break
     }
+    case 'start-docker-desktop': {
+      logger('Avvio Docker Desktop...')
+      startDockerDesktop()
+      if (!waitForDocker(120000)) {
+        log.error('ensure-runtime.docker-desktop-timeout')
+        throw new Error(
+          'Docker Desktop avviato ma il daemon non risponde dopo 2 minuti. Aprilo a mano e riprova.',
+        )
+      }
+      logger('Docker Desktop pronto')
+      break
+    }
+    case 'error-install-docker-desktop':
+      log.error('ensure-runtime.docker-desktop-missing')
+      throw new Error(
+        "Docker Desktop non e' installato. Scaricalo da https://www.docker.com/products/docker-desktop/ oppure passa a Colima.",
+      )
+    case 'error-install-colima':
+      log.error('ensure-runtime.colima-missing')
+      throw new Error(
+        "Colima non e' installato. Esegui 'brew install colima docker' oppure passa a Docker Desktop.",
+      )
+    case 'error-nothing-installed':
+      log.error('ensure-runtime.nothing-installed')
+      throw new Error(
+        "Nessun runtime container trovato. Installa Colima ('brew install colima docker') o Docker Desktop.",
+      )
+    case 'error-daemon-down':
+    default:
+      log.error('ensure-runtime.docker-unavailable')
+      throw new Error(
+        "Docker non risponde. Avvialo (Linux: 'systemctl start docker'; Windows: apri Docker Desktop).",
+      )
   }
-  const docker = isDockerAvailable()
-  log.info('ensure-runtime.docker-check', { available: docker })
-  if (!docker) {
-    log.error('ensure-runtime.docker-unavailable')
-    throw new Error(
-      "Docker non risponde. Verifica con 'docker info' (Linux) o 'colima status' (Mac).",
-    )
+
+  // Final guard: whatever we started, the daemon must answer now.
+  if (!isDockerAvailable()) {
+    log.error('ensure-runtime.docker-unavailable-after-start')
+    throw new Error("Docker non risponde dopo l'avvio del runtime. Verifica con 'docker info'.")
   }
 }
 
@@ -112,6 +232,11 @@ function buildDockerArgs({
   const { jhtHome, jhtUser } = ensureHostPaths()
   const args = [
     'run',
+    // -d (detached): il container vive nel daemon Docker, NON come processo
+    // figlio di Electron → sopravvive ai restart dell'app (il team non riparte
+    // da zero ogni volta che si riapre il launcher). --rm lo rimuove quando si
+    // ferma (Stop team / crash) → niente accumulo di container zombie.
+    '-d',
     '--rm',
     '--name',
     name,
@@ -178,6 +303,27 @@ function buildDockerArgs({
   return args
 }
 
+// True se un container con questo nome è in stato RUNNING. Usato dal runtime
+// per adottare un container detached sopravvissuto a un restart dell'app
+// (invece di rilanciarne uno nuovo) e per riportare lo stato corretto quando
+// non c'è un child-process da tracciare. Best-effort: docker assente/daemon
+// giù → false.
+function isContainerRunning(name = DEFAULT_CONTAINER_NAME) {
+  try {
+    const out = execFileSync(
+      'docker',
+      ['ps', '--filter', `name=${name}`, '--format', '{{.Names}}'],
+      { encoding: 'utf8', timeout: 5000, windowsHide: true },
+    )
+    return String(out)
+      .split('\n')
+      .map((s) => s.trim())
+      .includes(name)
+  } catch {
+    return false
+  }
+}
+
 function removeContainerIfExists(name = DEFAULT_CONTAINER_NAME) {
   try {
     execFileSync('docker', ['rm', '-f', name], {
@@ -209,14 +355,22 @@ function buildDockerSpawnSpec({ port, name = DEFAULT_CONTAINER_NAME }) {
 module.exports = {
   DEFAULT_IMAGE,
   DEFAULT_CONTAINER_NAME,
+  RUNTIME_CHOICES,
+  DEFAULT_RUNTIME,
   shouldUseContainer,
   isDockerAvailable,
   colimaInstalled,
   colimaRunning,
   startColima,
+  dockerDesktopInstalled,
+  startDockerDesktop,
+  waitForDocker,
+  detectRuntimeState,
+  decideRuntimeAction,
   ensureContainerRuntime,
   ensureHostPaths,
   buildDockerArgs,
   buildDockerSpawnSpec,
   removeContainerIfExists,
+  isContainerRunning,
 }

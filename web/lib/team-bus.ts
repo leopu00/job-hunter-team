@@ -24,44 +24,22 @@ export async function enqueueIfRemote(
 ): Promise<NextResponse | null> {
   if (await isLocalRequest()) return null;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "cloud dispatch richiede login Supabase: apri la dashboard da web e accedi",
-      },
-      { status: 401 },
-    );
-  }
-
-  const { data, error } = await supabase
-    .from("team_commands")
-    .insert({
-      user_id: user.id,
-      action,
-      payload: { target },
-    })
-    .select("id, status, requested_at")
-    .single();
-
-  if (error) {
-    return NextResponse.json(
-      { ok: false, error: `dispatch al bus fallito: ${error.message}` },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({
-    ok: true,
-    queued: true,
-    message: `Comando inoltrato alla VPS (action=${action}, target=${target}). Riprova fra qualche secondo.`,
-    command: data,
-  });
+  // WEB-READONLY (2026-06-20): il controllo del team (start/stop/restart) si fa
+  // SOLO dall'app desktop. Niente piu' dispatch al bus team_commands da cloud:
+  // dal browser e' sola visualizzazione → 403 read_only. Ritiro del path cloud
+  // interattivo (design 2026-06-15). `action`/`target` restano in firma per
+  // compatibilita' coi caller esistenti, ma non vengono piu' accodati.
+  void action;
+  void target;
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "read_only",
+      message:
+        "Il controllo del team si fa dall'app desktop. Dal browser è sola visualizzazione.",
+    },
+    { status: 403 },
+  );
 }
 
 /**
@@ -93,7 +71,12 @@ export async function remoteStatusStub<T>(
   stub: T,
 ): Promise<NextResponse | null> {
   if (await isLocalRequest()) return null;
-  return NextResponse.json({ ok: true, remote: true, status: "unknown", ...stub });
+  return NextResponse.json({
+    ok: true,
+    remote: true,
+    status: "unknown",
+    ...stub,
+  });
 }
 
 /**
@@ -111,8 +94,17 @@ export async function remoteStatusStub<T>(
  * comandi storici (interpretato come inactive). Altrimenti boolean.
  */
 export async function inferAgentActiveFromBus(
-  agent: "assistente" | "capitano" | "sentinella" | "scout" | "scorer" |
-         "analista" | "scrittore" | "critico" | "mentor" | "bridge",
+  agent:
+    | "assistente"
+    | "capitano"
+    | "sentinella"
+    | "scout"
+    | "scorer"
+    | "analista"
+    | "scrittore"
+    | "critico"
+    | "mentor"
+    | "bridge",
 ): Promise<{ active: boolean; userId: string } | null> {
   const supabase = await createClient();
   const {

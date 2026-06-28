@@ -30,52 +30,52 @@
  */
 
 const STATIC_ALLOWED = new Set([
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:3002',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:3001',
-  'http://127.0.0.1:3002',
-])
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+  "http://127.0.0.1:3002",
+]);
 
 function isMutatingMethod(method: string): boolean {
-  const m = method.trim().toUpperCase()
-  return m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE'
+  const m = method.trim().toUpperCase();
+  return m === "POST" || m === "PUT" || m === "PATCH" || m === "DELETE";
 }
 
 function publicOrigin(): string | null {
-  const value = process.env.JHT_PUBLIC_ORIGIN?.trim()
-  if (!value) return null
+  const value = process.env.JHT_PUBLIC_ORIGIN?.trim();
+  if (!value) return null;
   try {
-    const parsed = new URL(value)
-    return `${parsed.protocol}//${parsed.host}`
+    const parsed = new URL(value);
+    return `${parsed.protocol}//${parsed.host}`;
   } catch {
-    return null
+    return null;
   }
 }
 
 export function isAllowedOrigin(value: string | null | undefined): boolean {
-  const v = (value ?? '').trim()
-  if (!v || v === 'null') return false
-  if (STATIC_ALLOWED.has(v)) return true
-  const prod = publicOrigin()
-  return prod !== null && v === prod
+  const v = (value ?? "").trim();
+  if (!v || v === "null") return false;
+  if (STATIC_ALLOWED.has(v)) return true;
+  const prod = publicOrigin();
+  return prod !== null && v === prod;
 }
 
 function originFromReferer(referer: string): string | null {
   try {
-    const url = new URL(referer)
-    return `${url.protocol}//${url.host}`
+    const url = new URL(referer);
+    return `${url.protocol}//${url.host}`;
   } catch {
-    return null
+    return null;
   }
 }
 
 export interface MutationCheck {
-  method: string
-  origin?: string | null
-  referer?: string | null
-  secFetchSite?: string | null
+  method: string;
+  origin?: string | null;
+  referer?: string | null;
+  secFetchSite?: string | null;
   /**
    * Origin del server (es. `https://jobhunterteam.ai`), tipicamente
    * ricavato dai forwarded headers nel proxy. Quando l'Origin/Referer
@@ -83,7 +83,7 @@ export interface MutationCheck {
    * per definizione e va lasciata passare anche se il dominio prod non
    * è in `STATIC_ALLOWED`/`JHT_PUBLIC_ORIGIN`.
    */
-  hostOrigin?: string | null
+  hostOrigin?: string | null;
 }
 
 /**
@@ -91,26 +91,26 @@ export interface MutationCheck {
  * Esposta separatamente per i test unit.
  */
 export function shouldRejectBrowserMutation(params: MutationCheck): boolean {
-  if (!isMutatingMethod(params.method)) return false
+  if (!isMutatingMethod(params.method)) return false;
 
-  const sfs = (params.secFetchSite ?? '').trim().toLowerCase()
-  if (sfs === 'cross-site') return true
+  const sfs = (params.secFetchSite ?? "").trim().toLowerCase();
+  if (sfs === "cross-site") return true;
 
-  const hostOrigin = (params.hostOrigin ?? '').trim()
-  const origin = (params.origin ?? '').trim()
+  const hostOrigin = (params.hostOrigin ?? "").trim();
+  const origin = (params.origin ?? "").trim();
   if (origin) {
-    if (hostOrigin && origin === hostOrigin) return false
-    return !isAllowedOrigin(origin)
+    if (hostOrigin && origin === hostOrigin) return false;
+    return !isAllowedOrigin(origin);
   }
 
-  const referer = (params.referer ?? '').trim()
+  const referer = (params.referer ?? "").trim();
   if (referer) {
-    const ref = originFromReferer(referer)
-    if (ref === null) return true
-    if (hostOrigin && ref === hostOrigin) return false
-    return !isAllowedOrigin(ref)
+    const ref = originFromReferer(referer);
+    if (ref === null) return true;
+    if (hostOrigin && ref === hostOrigin) return false;
+    return !isAllowedOrigin(ref);
   }
 
   // Niente Origin né Referer: client non-browser. Pass-through.
-  return false
+  return false;
 }

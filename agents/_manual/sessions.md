@@ -29,13 +29,15 @@ The JHT team runs as a set of tmux sessions inside the container. Session names 
 | `CRITICO` | Standalone Critic | Legacy — in V5 the Critic is spawned dynamically by Writers (see below) |
 | `SENTINELLA` | Usage watchdog | Edge-triggered, talks to `CAPITANO` only |
 | `ASSISTENTE` | User-facing copilot | Translates user requests into orders |
-| `MENTOR` | Career-coach agent | Planned, currently a placeholder |
+| `MENTOR` | Career-coach agent | Active — user-facing always-on, spawned at boot (basics shipped, optimization ongoing) |
 
 ### Dynamic sessions
 
 | Session | Spawned by | Lifetime |
 |---|---|---|
 | `CRITICO-S<N>` | `SCRITTORE-<N>` (one fresh Critic per review round) | One review request → one session, killed by the Writer immediately after |
+| `DOTTORE` | watchdog (daily slot) | One-shot — agent-health sweep, reports to `CAPITANO`, then self-destructs |
+| `MANTENITORE` | watchdog (daily slot) | One-shot — infra-health sweep, reports to `CAPITANO`, then self-destructs |
 
 The Writer creates `CRITICO-S<N>` matching its own number (`SCRITTORE-1` → `CRITICO-S1`), runs the review, then `tmux kill-session`. A fresh Critic instance is spawned for **each** of the 3 review rounds — never reused.
 

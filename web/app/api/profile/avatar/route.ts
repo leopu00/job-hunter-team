@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireLocalWrite } from "@/lib/auth";
 import { JHT_PROFILE_DIR } from "@/lib/jht-paths";
 import fs from "fs";
 import path from "path";
@@ -37,6 +38,8 @@ export async function GET() {
 
 /** POST — upload avatar (single image) */
 export async function POST(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   let formData: FormData;
   try {
     formData = await req.formData();
@@ -90,6 +93,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — remove avatar */
 export async function DELETE() {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   for (const ext of [".png", ".jpg", ".jpeg", ".webp"]) {
     const p = path.join(JHT_PROFILE_DIR, AVATAR_NAME + ext);
     if (fs.existsSync(p)) fs.unlinkSync(p);

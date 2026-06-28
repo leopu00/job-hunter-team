@@ -2,6 +2,174 @@
 
 import Link from "next/link";
 import { useEffect, useState, useCallback } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+/* ── i18n inline ─────────────────────────────────────────────────── */
+const T: Record<string, Record<string, string>> = {
+  title: {
+    it: "Canali",
+    en: "Channels",
+    hu: "Csatornák",
+    es: "Canales",
+    de: "Kanäle",
+    fr: "Canaux",
+    pt: "Canais",
+  },
+  subtitle: {
+    it: "{c} connessi · {a} attivi · {t} totali",
+    en: "{c} connected · {a} active · {t} total",
+    hu: "{c} csatlakoztatva · {a} aktív · {t} összesen",
+    es: "{c} conectados · {a} activos · {t} en total",
+    de: "{c} verbunden · {a} aktiv · {t} gesamt",
+    fr: "{c} connectés · {a} actifs · {t} au total",
+    pt: "{c} conectados · {a} ativos · {t} no total",
+  },
+  never: {
+    it: "mai",
+    en: "never",
+    hu: "soha",
+    es: "nunca",
+    de: "nie",
+    fr: "jamais",
+    pt: "nunca",
+  },
+  connected: {
+    it: "connesso",
+    en: "connected",
+    hu: "csatlakoztatva",
+    es: "conectado",
+    de: "verbunden",
+    fr: "connecté",
+    pt: "conectado",
+  },
+  disconnected: {
+    it: "disconnesso",
+    en: "disconnected",
+    hu: "leválasztva",
+    es: "desconectado",
+    de: "getrennt",
+    fr: "déconnecté",
+    pt: "desconectado",
+  },
+  toggle_on: {
+    it: "Attiva",
+    en: "Enable",
+    hu: "Bekapcsolás",
+    es: "Activar",
+    de: "Aktivieren",
+    fr: "Activer",
+    pt: "Ativar",
+  },
+  toggle_off: {
+    it: "Disattiva",
+    en: "Disable",
+    hu: "Kikapcsolás",
+    es: "Desactivar",
+    de: "Deaktivieren",
+    fr: "Désactiver",
+    pt: "Desativar",
+  },
+  toggle_aria: {
+    it: "{action} canale {id}",
+    en: "{action} channel {id}",
+    hu: "{id} csatorna {action}",
+    es: "{action} canal {id}",
+    de: "Kanal {id} {action}",
+    fr: "{action} le canal {id}",
+    pt: "{action} canal {id}",
+  },
+  cap_attachments: {
+    it: "allegati",
+    en: "attachments",
+    hu: "mellékletek",
+    es: "adjuntos",
+    de: "Anhänge",
+    fr: "pièces jointes",
+    pt: "anexos",
+  },
+  stat_sent: {
+    it: "inviati",
+    en: "sent",
+    hu: "elküldve",
+    es: "enviados",
+    de: "gesendet",
+    fr: "envoyés",
+    pt: "enviados",
+  },
+  stat_received: {
+    it: "ricevuti",
+    en: "received",
+    hu: "fogadva",
+    es: "recibidos",
+    de: "empfangen",
+    fr: "reçus",
+    pt: "recebidos",
+  },
+  stat_errors: {
+    it: "errori",
+    en: "errors",
+    hu: "hibák",
+    es: "errores",
+    de: "Fehler",
+    fr: "erreurs",
+    pt: "erros",
+  },
+  stat_last: {
+    it: "ultima att.",
+    en: "last act.",
+    hu: "utolsó akt.",
+    es: "última act.",
+    de: "letzte Akt.",
+    fr: "dern. act.",
+    pt: "última at.",
+  },
+  filter_all: {
+    it: "tutti",
+    en: "all",
+    hu: "mind",
+    es: "todos",
+    de: "alle",
+    fr: "tous",
+    pt: "todos",
+  },
+  filter_connected: {
+    it: "connessi",
+    en: "connected",
+    hu: "csatlakoztatva",
+    es: "conectados",
+    de: "verbunden",
+    fr: "connectés",
+    pt: "conectados",
+  },
+  filter_disconnected: {
+    it: "disconnessi",
+    en: "disconnected",
+    hu: "leválasztva",
+    es: "desconectados",
+    de: "getrennt",
+    fr: "déconnectés",
+    pt: "desconectados",
+  },
+  empty: {
+    it: "Nessun canale trovato.",
+    en: "No channels found.",
+    hu: "Nem található csatorna.",
+    es: "No se encontraron canales.",
+    de: "Keine Kanäle gefunden.",
+    fr: "Aucun canal trouvé.",
+    pt: "Nenhum canal encontrado.",
+  },
+};
+
+const LOCALE_TAG: Record<string, string> = {
+  it: "it-IT",
+  en: "en-US",
+  hu: "hu-HU",
+  es: "es-ES",
+  de: "de-DE",
+  fr: "fr-FR",
+  pt: "pt-PT",
+};
 
 type ChannelId = "web" | "cli" | "telegram" | "email" | "slack" | "webhook";
 type Caps = {
@@ -66,18 +234,25 @@ function StatItem({ label, value }: { label: string; value: string | number }) {
 function ChannelCard({
   ch,
   onToggle,
+  tr,
+  locale,
 }: {
   ch: ChannelInfo;
   onToggle: (id: ChannelId, enabled: boolean) => void;
+  tr: (k: string) => string;
+  locale: string;
 }) {
   const lastActivity = ch.stats.lastActivityAt
-    ? new Date(ch.stats.lastActivityAt).toLocaleString("it-IT", {
-        day: "2-digit",
-        month: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "mai";
+    ? new Date(ch.stats.lastActivityAt).toLocaleString(
+        LOCALE_TAG[locale] ?? "en-US",
+        {
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+      )
+    : tr("never");
 
   return (
     <div className="border border-[var(--color-border)] rounded-lg bg-[var(--color-panel)] p-5 flex flex-col gap-4 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
@@ -106,11 +281,16 @@ function ChannelCard({
               border: `1px solid ${ch.connected ? "rgba(0,232,122,0.3)" : "rgba(255,69,96,0.3)"}`,
             }}
           >
-            {ch.connected ? "connesso" : "disconnesso"}
+            {ch.connected ? tr("connected") : tr("disconnected")}
           </span>
           <button
             onClick={() => onToggle(ch.id, !ch.enabled)}
-            aria-label={`${ch.enabled ? "Disattiva" : "Attiva"} canale ${ch.id}`}
+            aria-label={tr("toggle_aria")
+              .replace(
+                "{action}",
+                ch.enabled ? tr("toggle_off") : tr("toggle_on"),
+              )
+              .replace("{id}", ch.id)}
             className="px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition-colors"
             style={{
               color: ch.enabled ? "var(--color-green)" : "var(--color-dim)",
@@ -128,15 +308,21 @@ function ChannelCard({
       <div className="flex gap-1.5 flex-wrap">
         <CapBadge label="markdown" active={ch.capabilities.markdown} />
         <CapBadge label="streaming" active={ch.capabilities.streaming} />
-        <CapBadge label="allegati" active={ch.capabilities.attachments} />
+        <CapBadge
+          label={tr("cap_attachments")}
+          active={ch.capabilities.attachments}
+        />
         <CapBadge label="push" active={ch.capabilities.push} />
       </div>
 
       <div className="flex justify-between pt-3 border-t border-[var(--color-border)]">
-        <StatItem label="inviati" value={ch.stats.messagesSent} />
-        <StatItem label="ricevuti" value={ch.stats.messagesReceived} />
-        <StatItem label="errori" value={ch.stats.errors} />
-        <StatItem label="ultima att." value={lastActivity} />
+        <StatItem label={tr("stat_sent")} value={ch.stats.messagesSent} />
+        <StatItem
+          label={tr("stat_received")}
+          value={ch.stats.messagesReceived}
+        />
+        <StatItem label={tr("stat_errors")} value={ch.stats.errors} />
+        <StatItem label={tr("stat_last")} value={lastActivity} />
       </div>
     </div>
   );
@@ -145,6 +331,8 @@ function ChannelCard({
 type FilterStatus = "all" | "connected" | "disconnected";
 
 export default function ChannelsPage() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [channels, setChannels] = useState<ChannelInfo[]>([]);
   const [connectedCount, setConnectedCount] = useState(0);
   const [filter, setFilter] = useState<FilterStatus>("all");
@@ -176,9 +364,9 @@ export default function ChannelsPage() {
   };
 
   const FILTERS: Array<{ key: FilterStatus; label: string }> = [
-    { key: "all", label: "tutti" },
-    { key: "connected", label: "connessi" },
-    { key: "disconnected", label: "disconnessi" },
+    { key: "all", label: tr("filter_all") },
+    { key: "connected", label: tr("filter_connected") },
+    { key: "disconnected", label: tr("filter_disconnected") },
   ];
 
   return (
@@ -198,15 +386,17 @@ export default function ChannelsPage() {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Canali
+            {tr("title")}
           </span>
         </nav>
         <h1 className="mt-3 text-2xl font-bold tracking-tight text-[var(--color-white)]">
-          Canali
+          {tr("title")}
         </h1>
         <p className="text-[var(--color-muted)] text-[11px] mt-1">
-          {connectedCount} connessi · {channels.filter((c) => c.enabled).length}{" "}
-          attivi · {channels.length} totali
+          {tr("subtitle")
+            .replace("{c}", String(connectedCount))
+            .replace("{a}", String(channels.filter((c) => c.enabled).length))
+            .replace("{t}", String(channels.length))}
         </p>
       </div>
 
@@ -231,9 +421,7 @@ export default function ChannelsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {channels.length === 0 ? (
           <div className="col-span-full flex flex-col items-center py-16">
-            <p className="text-[var(--color-dim)] text-[12px]">
-              Nessun canale trovato.
-            </p>
+            <p className="text-[var(--color-dim)] text-[12px]">{tr("empty")}</p>
           </div>
         ) : (
           channels.map((ch, i) => (
@@ -241,7 +429,12 @@ export default function ChannelsPage() {
               key={ch.id}
               style={{ animation: `fade-in 0.4s ease ${i * 0.08}s both` }}
             >
-              <ChannelCard ch={ch} onToggle={toggleChannel} />
+              <ChannelCard
+                ch={ch}
+                onToggle={toggleChannel}
+                tr={tr}
+                locale={locale}
+              />
             </div>
           ))
         )}

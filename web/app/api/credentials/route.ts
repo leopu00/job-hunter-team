@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import { JHT_HOME } from "@/lib/jht-paths";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +89,8 @@ export async function GET() {
 
 /** POST — salva una credenziale (API key o OAuth token) */
 export async function POST(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const denied = await requireAuth();
   if (denied) return denied;
   let body: { provider?: string; apiKey?: string; accessToken?: string } = {};
@@ -159,6 +161,8 @@ export async function POST(req: NextRequest) {
 
 /** DELETE — rimuove credenziale per provider: ?provider=claude */
 export async function DELETE(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const denied = await requireAuth();
   if (denied) return denied;
   const provider = req.nextUrl.searchParams.get("provider");

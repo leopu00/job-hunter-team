@@ -11,6 +11,83 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { colorForAgent as colorFor } from "./agent-colors";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  title: {
+    it: "Token per agente",
+    en: "Tokens per agent",
+    hu: "Token ügynökönként",
+    es: "Tokens por agente",
+    de: "Tokens pro Agent",
+    fr: "Tokens par agent",
+    pt: "Tokens por agente",
+  },
+  descCumulative: {
+    it: "Consumo cumulativo weighted (Kimi wire.jsonl + Claude project jsonl + Codex rollout). Aggiornamento ogni 30s.",
+    en: "Weighted cumulative consumption (Kimi wire.jsonl + Claude project jsonl + Codex rollout). Updated every 30s.",
+    hu: "Súlyozott kumulatív fogyasztás (Kimi wire.jsonl + Claude project jsonl + Codex rollout). Frissítés 30 másodpercenként.",
+    es: "Consumo acumulado ponderado (Kimi wire.jsonl + Claude project jsonl + Codex rollout). Actualización cada 30s.",
+    de: "Gewichteter kumulativer Verbrauch (Kimi wire.jsonl + Claude project jsonl + Codex rollout). Aktualisierung alle 30s.",
+    fr: "Consommation cumulée pondérée (Kimi wire.jsonl + Claude project jsonl + Codex rollout). Mise à jour toutes les 30s.",
+    pt: "Consumo acumulado ponderado (Kimi wire.jsonl + Claude project jsonl + Codex rollout). Atualização a cada 30s.",
+  },
+  descRate: {
+    it: "Velocità di consumo per bucket — kT/min weighted. Aggiornamento ogni 30s.",
+    en: "Consumption rate per bucket — weighted kT/min. Updated every 30s.",
+    hu: "Fogyasztási sebesség bucketenként — súlyozott kT/perc. Frissítés 30 másodpercenként.",
+    es: "Velocidad de consumo por bucket — kT/min ponderado. Actualización cada 30s.",
+    de: "Verbrauchsrate pro Bucket — gewichtete kT/min. Aktualisierung alle 30s.",
+    fr: "Vitesse de consommation par bucket — kT/min pondéré. Mise à jour toutes les 30s.",
+    pt: "Velocidade de consumo por bucket — kT/min ponderado. Atualização a cada 30s.",
+  },
+  cumulative: {
+    it: "Cumulativo",
+    en: "Cumulative",
+    hu: "Kumulatív",
+    es: "Acumulado",
+    de: "Kumulativ",
+    fr: "Cumulé",
+    pt: "Acumulado",
+  },
+  invalidResponse: {
+    it: "Risposta non valida",
+    en: "Invalid response",
+    hu: "Érvénytelen válasz",
+    es: "Respuesta no válida",
+    de: "Ungültige Antwort",
+    fr: "Réponse non valide",
+    pt: "Resposta inválida",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  noDataRange: {
+    it: "Nessun dato nel range selezionato.",
+    en: "No data in the selected range.",
+    hu: "Nincs adat a kiválasztott tartományban.",
+    es: "Sin datos en el rango seleccionado.",
+    de: "Keine Daten im ausgewählten Bereich.",
+    fr: "Aucune donnée dans la plage sélectionnée.",
+    pt: "Sem dados no intervalo selecionado.",
+  },
+  cumulativeTooltip: {
+    it: "· cumulativo",
+    en: "· cumulative",
+    hu: "· kumulatív",
+    es: "· acumulado",
+    de: "· kumulativ",
+    fr: "· cumulé",
+    pt: "· acumulado",
+  },
+};
 
 type Series = Record<string, number | string>;
 
@@ -39,12 +116,15 @@ type RangeId = (typeof RANGES)[number]["id"];
 type Mode = "cumulative" | "rate";
 
 export default function AgentTokensChart() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<RangeId>("3h");
   const [mode, setMode] = useState<Mode>("cumulative");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const isCloud = useIsCloud();
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +142,7 @@ export default function AgentTokensChart() {
       .then((d: Payload) => {
         if (cancelled) return;
         if (!d.ok) {
-          setError("Risposta non valida");
+          setError(tr("invalidResponse"));
           setData(null);
         } else {
           setData(d);
@@ -81,8 +161,11 @@ export default function AgentTokensChart() {
     };
   }, [range]);
 
-  // Polling ogni 30s (rivisita stesso range)
+  // Polling ogni 30s (rivisita stesso range) — disattivato su cloud (sync
+  // on-demand): la fetch iniziale nell'useEffect su [range] popola i dati
+  // all'apertura, poi niente interval.
   useEffect(() => {
+    if (isCloud) return;
     const id = setInterval(() => {
       const minutes = RANGES.find((r) => r.id === range)?.minutes ?? 180;
       const bucketSec = Math.max(1, Math.round((minutes * 60) / 120));
@@ -96,19 +179,17 @@ export default function AgentTokensChart() {
         .catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
-  }, [range]);
+  }, [range, isCloud]);
 
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold text-[var(--color-bright)]">
-            Token per agente
+            {tr("title")}
           </h2>
           <p className="text-[10px] text-[var(--color-dim)] mt-0.5">
-            {mode === "cumulative"
-              ? "Consumo cumulativo weighted (Kimi wire.jsonl + Claude project jsonl + Codex rollout). Aggiornamento ogni 30s."
-              : "Velocità di consumo per bucket — kT/min weighted. Aggiornamento ogni 30s."}
+            {mode === "cumulative" ? tr("descCumulative") : tr("descRate")}
           </p>
         </div>
         <div className="flex gap-1">
@@ -135,7 +216,7 @@ export default function AgentTokensChart() {
       <div className="mb-3 flex gap-1">
         {(
           [
-            { id: "cumulative", label: "Cumulativo" },
+            { id: "cumulative", label: tr("cumulative") },
             { id: "rate", label: "Rate (kT/min)" },
           ] as const
         ).map((m) => (
@@ -158,7 +239,7 @@ export default function AgentTokensChart() {
 
       {loading && !data && (
         <div className="h-[280px] flex items-center justify-center text-[11px] text-[var(--color-dim)]">
-          loading…
+          {tr("loading")}
         </div>
       )}
       {error && !data && (
@@ -168,7 +249,7 @@ export default function AgentTokensChart() {
       )}
       {data && data.agents.length === 0 && (
         <div className="h-[280px] flex items-center justify-center text-[11px] text-[var(--color-dim)]">
-          Nessun dato nel range selezionato.
+          {tr("noDataRange")}
         </div>
       )}
       {data && data.agents.length > 0 && (
@@ -177,6 +258,7 @@ export default function AgentTokensChart() {
           mode={mode}
           hoverIdx={hoverIdx}
           onHover={setHoverIdx}
+          tr={tr}
         />
       )}
     </div>
@@ -188,11 +270,13 @@ function Chart({
   mode,
   hoverIdx,
   onHover,
+  tr,
 }: {
   data: Payload;
   mode: Mode;
   hoverIdx: number | null;
   onHover: (i: number | null) => void;
+  tr: (k: string) => string;
 }) {
   const W = 900;
   const H = 320;
@@ -456,7 +540,7 @@ function Chart({
           <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">
             {new Date(hoverTs).toLocaleTimeString()}
             <span className="ml-1 opacity-60">
-              {mode === "cumulative" ? "· cumulativo" : "· rate"}
+              {mode === "cumulative" ? tr("cumulativeTooltip") : "· rate"}
             </span>
           </div>
           <div className="mt-1.5 grid gap-1 text-[11px] font-mono">

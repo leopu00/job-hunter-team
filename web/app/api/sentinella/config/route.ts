@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "node:fs/promises";
-import { requireAuth } from "@/lib/auth";
+import { requireAuth, requireLocalWrite } from "@/lib/auth";
 import { JHT_CONFIG_PATH } from "@/lib/jht-paths";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +49,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   const authError = await requireAuth();
   if (authError) return authError;
 

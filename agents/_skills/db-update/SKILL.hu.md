@@ -33,7 +33,7 @@ python3 /app/shared/skills/db_update.py position 42 --salary-declared-min 40000 
 # Becsült fizetés (glassdoor / levels.fyi / analyst becslése)
 python3 /app/shared/skills/db_update.py position 42 --salary-estimated-min 35000 --salary-estimated-max 50000 --salary-estimated-source glassdoor
 
-# Szerepkör család (szemantikai kategória). Lásd docs/internal/2026-05-23-position-classifier-llm-roadmap.md
+# Szerepkör család (szemantikai kategória).
 python3 /app/shared/skills/db_update.py position 42 --role-family "Technical Writing"
 
 # Strukturált helyszín (Analyst). Teljes példa "Dublin, Ireland" hibrid:
@@ -45,7 +45,7 @@ python3 /app/shared/skills/db_update.py position 42 \
   --work-country "Ireland" --work-country-code "IE" \
   --is-multi-location false
 
-# Speciális esetek példái (lásd docs/internal/2026-05-23-location-playbook.md):
+# Speciális esetek példái:
 # A) "Europe Remote" → country=NULL, continent=EU, work_country a cég HQ-jából
 python3 /app/shared/skills/db_update.py position 42 \
   --loc-continent "Europe" --work-mode "remote" \

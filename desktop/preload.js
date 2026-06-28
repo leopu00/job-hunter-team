@@ -47,6 +47,10 @@ contextBridge.exposeInMainWorld('launcherApi', {
   stop: () => ipcRenderer.invoke('launcher:stop'),
   openBrowser: () => ipcRenderer.invoke('launcher:open-browser'),
   openExternal: (url) => ipcRenderer.invoke('launcher:open-external', url),
+  // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH (dashboard in-app, non cloud).
+  openVpsCockpit: (ip) => ipcRenderer.invoke('vps:open-cockpit', { ip }),
+  tunnelStatus: () => ipcRenderer.invoke('tunnel:status'),
+  tunnelClose: () => ipcRenderer.invoke('tunnel:close'),
   devLaunch: () => ipcRenderer.invoke('dev:launch'),
   devIsAvailable: () => ipcRenderer.invoke('dev:is-available'),
   devProbe: () => ipcRenderer.invoke('dev:probe'),
@@ -68,6 +72,64 @@ contextBridge.exposeInMainWorld('launcherApi', {
   },
 })
 
+// [JHT-DASHBOARD-NATIVE] API dati per le viste native della dashboard (lane
+// renderer dev1). Il main fa il fetch autenticato al runtime locale (no CORS
+// da file://) e ritorna { ok, positions|... , error }. Contratto in
+// coordination/chat.jsonl (23:26/23:31).
+contextBridge.exposeInMainWorld('dashboardApi', {
+  // [generico] get(path) → JSON del body dell'API runtime, o null se runtime
+  // giù / non-2xx. Copre TUTTE le sezioni native (offerte/candidature/stats/
+  // mappa/attività…). Solo path "/api/..." (validato nel main). Contratto dev1.
+  get: (path) => ipcRenderer.invoke('dashboard:get', path),
+  // [interazione] post(path, body) → POST autenticato (es. chat agenti:
+  // post('/api/capitano/chat', { message })). → { ok, ...data } | { ok:false, error }.
+  post: (path, body) => ipcRenderer.invoke('dashboard:post', { path, body }),
+  // → { ok, positions: [...], error? } — positions sempre array.
+  listPositions: (opts) => ipcRenderer.invoke('dashboard:list-positions', opts || {}),
+  // → { ok, position, score, highlights, company, application, error? }
+  getPosition: (id) => ipcRenderer.invoke('dashboard:get-position', { id }),
+  // → { ok, ...stats, error? } — riepilogo (totali/score medi) per header/empty-state.
+  getStats: () => ipcRenderer.invoke('dashboard:get-stats'),
+})
+
+// [ONBOARDING] Orari di lavoro del team. Scritti in ~/.jht/jht.config.json
+// (team.working_hours) dal main — niente web, il server non gira ancora a
+// onboarding. wh = { timezone, windows:[{days,start,end}] } | null (=24/7).
+contextBridge.exposeInMainWorld('teamApi', {
+  getWorkingHours: () => ipcRenderer.invoke('team:get-working-hours'),
+  setWorkingHours: (wh) => ipcRenderer.invoke('team:set-working-hours', wh),
+  // VPS mode: stessi orari ma sul container remoto via SSH. args = { vpsIp,
+  // working_hours }. Usato dal wizard quando location === 'vps'.
+  getWorkingHoursVps: (args) => ipcRenderer.invoke('team:get-working-hours-vps', args),
+  setWorkingHoursVps: (args) => ipcRenderer.invoke('team:set-working-hours-vps', args),
+})
+
+// [ONBOARDING] Upload documenti del profilo (CV + obiettivi). Il main apre il
+// file-picker nativo e copia i file nella drop-zone allegati (bind /jht_user)
+// che l'Assistente legge al boot. → { ok, files:[{name,size}], error? }.
+contextBridge.exposeInMainWorld('profileApi', {
+  uploadDocs: () => ipcRenderer.invoke('profile:upload-docs'),
+  listDocs: () => ipcRenderer.invoke('profile:list-docs'),
+  // VPS mode: file-picker locale → upload nella drop-zone allegati REMOTA
+  // via SSH. args = { vpsIp }. → { ok, files:[{name,size}], error? }.
+  uploadDocsVps: (args) => ipcRenderer.invoke('profile:upload-docs-vps', args),
+  listDocsVps: (args) => ipcRenderer.invoke('profile:list-docs-vps', args),
+})
+
+// [chat] Invio messaggio a un agente (capitano/assistente) via docker exec
+// tmux send-keys nel main — il POST web è read-only col port-map. La history
+// (incl. risposte agente) si legge via dashboardApi.get('/api/<agent>/chat').
+contextBridge.exposeInMainWorld('chatApi', {
+  send: (agent, text) => ipcRenderer.invoke('chat:send', { agent, text }),
+})
+
+// [agent control] Kill / restart di un singolo agente dal pannello Agents
+// (via docker exec nel main). → { ok, error? }.
+contextBridge.exposeInMainWorld('agentApi', {
+  stop: (role) => ipcRenderer.invoke('agent:stop', { role }),
+  restart: (role) => ipcRenderer.invoke('agent:restart', { role }),
+})
+
 contextBridge.exposeInMainWorld('setupApi', {
   getStatus: () => ipcRenderer.invoke('setup:get-status'),
   getDockerStatus: () => ipcRenderer.invoke('setup:get-docker-status'),
@@ -75,6 +137,10 @@ contextBridge.exposeInMainWorld('setupApi', {
   openDockerDownloadPage: () => ipcRenderer.invoke('setup:open-docker-download-page'),
   openDockerDesktop: () => ipcRenderer.invoke('setup:open-docker-desktop'),
   startColima: () => ipcRenderer.invoke('setup:start-colima'),
+  startDockerDesktop: () => ipcRenderer.invoke('setup:start-docker-desktop'),
+  getContainerRuntime: () => ipcRenderer.invoke('setup:get-container-runtime'),
+  setContainerRuntime: (choice) =>
+    ipcRenderer.invoke('setup:set-container-runtime', { choice }),
   installDocker: () => ipcRenderer.invoke('setup:install-docker'),
   installWindowsStack: () => ipcRenderer.invoke('setup:install-windows-stack'),
   reboot: () => ipcRenderer.invoke('setup:reboot'),
@@ -192,6 +258,8 @@ contextBridge.exposeInMainWorld('telegramApi', {
   cancelWaitForChatId: (token) =>
     ipcRenderer.invoke('telegram:cancel-wait-for-chat', token),
   saveBotsToVps: (args) => ipcRenderer.invoke('telegram:save-to-vps', args),
+  // [ONBOARDING locale] Salva i bot nel jht.config.json locale (~/.jht).
+  saveBotsLocal: (bots) => ipcRenderer.invoke('telegram:save-local', { bots }),
 })
 
 // Provider config writer (active_provider + providers.<name>.auth_method)
@@ -200,6 +268,17 @@ contextBridge.exposeInMainWorld('telegramApi', {
 // al primo boot del container (fix bug "provider non riconosciuto").
 contextBridge.exposeInMainWorld('providerApi', {
   saveToVps: (args) => ipcRenderer.invoke('provider:save-to-vps', args),
+})
+
+// Email del team: casella job-alert dedicata. Le credenziali si salvano in
+// locale (~/.jht/credentials/email_monitor.json), mai sul cloud.
+contextBridge.exposeInMainWorld('emailApi', {
+  getStatus: () => ipcRenderer.invoke('email:get-status'),
+  saveConfig: (args) => ipcRenderer.invoke('email:save-config', args),
+  deleteConfig: () => ipcRenderer.invoke('email:delete-config'),
+  // [ONBOARDING] Valida round-trip (IMAP login + SMTP invio + IMAP rilettura)
+  // e, su successo, salva le credenziali. → { ok, stage?, error?, looksPersonal }.
+  validate: (args) => ipcRenderer.invoke('email:validate', args),
 })
 
 contextBridge.exposeInMainWorld('syncApi', {

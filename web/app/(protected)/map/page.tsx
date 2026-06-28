@@ -5,6 +5,7 @@ import {
   getPositionTypeDistribution,
 } from "@/lib/queries";
 import MapCharts from "@/app/components/MapCharts";
+import LockBodyScroll from "./LockBodyScroll";
 import { isSupabaseConfigured, isLocalOnlyMode } from "@/lib/workspace";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { getServerLocale } from "@/lib/server-locale";
@@ -160,6 +161,9 @@ export default async function MapPage() {
         animation: "fade-in 0.35s ease both",
       }}
     >
+      {/* Blocca lo scroll del documento: /map è full-viewport, lo
+          scroll su una card finiva sul documento creando la banda nera. */}
+      <LockBodyScroll />
       {/* Scoped reset: chart components hanno wrapper card built-in
           (bg-[var(--color-card)] + border + p-5). In /map li vogliamo
           "bare", solo grafico su sfondo trasparente. */}

@@ -2,6 +2,227 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<
+  Locale,
+  {
+    confirmUpdate: (count: number, sessions: string) => string;
+    updatedTo: (ver: string) => string;
+    unknownError: string;
+    configured: string;
+    notConfigured: string;
+    updateBadge: string;
+    auth: string;
+    activeModel: string;
+    models: string;
+    apiKeyWarnPre: string;
+    apiKeyWarnPost: string;
+    checkUpdate: string;
+    update: string;
+    stopTeamUpdate: string;
+    cancel: string;
+    activeBadge: string;
+    breadcrumb: string;
+    title: string;
+    subtitle: (avail: number, total: number, active: string) => string;
+    loading: string;
+    configNotFound: string;
+    refresh: string;
+    loadingProviders: string;
+  }
+> = {
+  it: {
+    confirmUpdate: (count, sessions) =>
+      `Il provider è attivo. Update richiede di stoppare ${count} sessioni (${sessions}). Continuare?`,
+    updatedTo: (ver) => `aggiornato a ${ver}`,
+    unknownError: "errore sconosciuto",
+    configured: "configurato",
+    notConfigured: "non configurato",
+    updateBadge: "update",
+    auth: "Autenticazione",
+    activeModel: "Modello attivo",
+    models: "Modelli",
+    apiKeyWarnPre: "Aggiungi la chiave API in",
+    apiKeyWarnPost: "o nella variabile d'ambiente corrispondente.",
+    checkUpdate: "Check / Update",
+    update: "Update",
+    stopTeamUpdate: "Stop team + update",
+    cancel: "Annulla",
+    activeBadge: "attivo",
+    breadcrumb: "Provider",
+    title: "Provider LLM",
+    subtitle: (avail, total, active) =>
+      `${avail}/${total} configurati · provider attivo: ${active}`,
+    loading: "Caricamento…",
+    configNotFound: "jht.config.json non trovato",
+    refresh: "aggiorna",
+    loadingProviders: "Caricamento provider…",
+  },
+  en: {
+    confirmUpdate: (count, sessions) =>
+      `The provider is active. Update requires stopping ${count} sessions (${sessions}). Continue?`,
+    updatedTo: (ver) => `updated to ${ver}`,
+    unknownError: "unknown error",
+    configured: "configured",
+    notConfigured: "not configured",
+    updateBadge: "update",
+    auth: "Authentication",
+    activeModel: "Active model",
+    models: "Models",
+    apiKeyWarnPre: "Add the API Key in",
+    apiKeyWarnPost: "or in the matching environment variable.",
+    checkUpdate: "Check / Update",
+    update: "Update",
+    stopTeamUpdate: "Stop team + update",
+    cancel: "Cancel",
+    activeBadge: "active",
+    breadcrumb: "Provider",
+    title: "LLM Providers",
+    subtitle: (avail, total, active) =>
+      `${avail}/${total} configured · active provider: ${active}`,
+    loading: "Loading…",
+    configNotFound: "jht.config.json not found",
+    refresh: "refresh",
+    loadingProviders: "Loading providers…",
+  },
+  es: {
+    confirmUpdate: (count, sessions) =>
+      `El proveedor está activo. Update requiere detener ${count} sesiones (${sessions}). ¿Continuar?`,
+    updatedTo: (ver) => `actualizado a ${ver}`,
+    unknownError: "error desconocido",
+    configured: "configurado",
+    notConfigured: "no configurado",
+    updateBadge: "update",
+    auth: "Autenticación",
+    activeModel: "Modelo activo",
+    models: "Modelos",
+    apiKeyWarnPre: "Añade la API Key en",
+    apiKeyWarnPost: "o en la variable de entorno correspondiente.",
+    checkUpdate: "Check / Update",
+    update: "Update",
+    stopTeamUpdate: "Detener equipo + update",
+    cancel: "Cancelar",
+    activeBadge: "activo",
+    breadcrumb: "Proveedor",
+    title: "Proveedores LLM",
+    subtitle: (avail, total, active) =>
+      `${avail}/${total} configurados · proveedor activo: ${active}`,
+    loading: "Cargando…",
+    configNotFound: "jht.config.json no encontrado",
+    refresh: "actualizar",
+    loadingProviders: "Cargando proveedores…",
+  },
+  fr: {
+    confirmUpdate: (count, sessions) =>
+      `Le fournisseur est actif. Update nécessite d'arrêter ${count} sessions (${sessions}). Continuer ?`,
+    updatedTo: (ver) => `mis à jour vers ${ver}`,
+    unknownError: "erreur inconnue",
+    configured: "configuré",
+    notConfigured: "non configuré",
+    updateBadge: "update",
+    auth: "Authentification",
+    activeModel: "Modèle actif",
+    models: "Modèles",
+    apiKeyWarnPre: "Ajoutez l'API Key dans",
+    apiKeyWarnPost: "ou dans la variable d'environnement correspondante.",
+    checkUpdate: "Check / Update",
+    update: "Update",
+    stopTeamUpdate: "Arrêter l'équipe + update",
+    cancel: "Annuler",
+    activeBadge: "actif",
+    breadcrumb: "Fournisseur",
+    title: "Fournisseurs LLM",
+    subtitle: (avail, total, active) =>
+      `${avail}/${total} configurés · fournisseur actif : ${active}`,
+    loading: "Chargement…",
+    configNotFound: "jht.config.json introuvable",
+    refresh: "actualiser",
+    loadingProviders: "Chargement des fournisseurs…",
+  },
+  de: {
+    confirmUpdate: (count, sessions) =>
+      `Der Anbieter ist aktiv. Update erfordert das Stoppen von ${count} Sitzungen (${sessions}). Fortfahren?`,
+    updatedTo: (ver) => `aktualisiert auf ${ver}`,
+    unknownError: "unbekannter Fehler",
+    configured: "konfiguriert",
+    notConfigured: "nicht konfiguriert",
+    updateBadge: "update",
+    auth: "Authentifizierung",
+    activeModel: "Aktives Modell",
+    models: "Modelle",
+    apiKeyWarnPre: "Füge den API Key in",
+    apiKeyWarnPost: "oder in die entsprechende Umgebungsvariable ein.",
+    checkUpdate: "Check / Update",
+    update: "Update",
+    stopTeamUpdate: "Team stoppen + update",
+    cancel: "Abbrechen",
+    activeBadge: "aktiv",
+    breadcrumb: "Anbieter",
+    title: "LLM-Anbieter",
+    subtitle: (avail, total, active) =>
+      `${avail}/${total} konfiguriert · aktiver Anbieter: ${active}`,
+    loading: "Wird geladen…",
+    configNotFound: "jht.config.json nicht gefunden",
+    refresh: "aktualisieren",
+    loadingProviders: "Anbieter werden geladen…",
+  },
+  hu: {
+    confirmUpdate: (count, sessions) =>
+      `A szolgáltató aktív. Az Update ${count} munkamenet leállítását igényli (${sessions}). Folytatja?`,
+    updatedTo: (ver) => `frissítve erre: ${ver}`,
+    unknownError: "ismeretlen hiba",
+    configured: "beállítva",
+    notConfigured: "nincs beállítva",
+    updateBadge: "update",
+    auth: "Hitelesítés",
+    activeModel: "Aktív modell",
+    models: "Modellek",
+    apiKeyWarnPre: "Add meg az API Key-t itt:",
+    apiKeyWarnPost: "vagy a megfelelő környezeti változóban.",
+    checkUpdate: "Check / Update",
+    update: "Update",
+    stopTeamUpdate: "Csapat leállítása + update",
+    cancel: "Mégse",
+    activeBadge: "aktív",
+    breadcrumb: "Szolgáltató",
+    title: "LLM-szolgáltatók",
+    subtitle: (avail, total, active) =>
+      `${avail}/${total} beállítva · aktív szolgáltató: ${active}`,
+    loading: "Betöltés…",
+    configNotFound: "jht.config.json nem található",
+    refresh: "frissítés",
+    loadingProviders: "Szolgáltatók betöltése…",
+  },
+  pt: {
+    confirmUpdate: (count, sessions) =>
+      `O provedor está ativo. Update exige parar ${count} sessões (${sessions}). Continuar?`,
+    updatedTo: (ver) => `atualizado para ${ver}`,
+    unknownError: "erro desconhecido",
+    configured: "configurado",
+    notConfigured: "não configurado",
+    updateBadge: "update",
+    auth: "Autenticação",
+    activeModel: "Modelo ativo",
+    models: "Modelos",
+    apiKeyWarnPre: "Adicione a API Key em",
+    apiKeyWarnPost: "ou na variável de ambiente correspondente.",
+    checkUpdate: "Check / Update",
+    update: "Update",
+    stopTeamUpdate: "Parar equipe + update",
+    cancel: "Cancelar",
+    activeBadge: "ativo",
+    breadcrumb: "Provedor",
+    title: "Provedores LLM",
+    subtitle: (avail, total, active) =>
+      `${avail}/${total} configurados · provedor ativo: ${active}`,
+    loading: "Carregando…",
+    configNotFound: "jht.config.json não encontrado",
+    refresh: "atualizar",
+    loadingProviders: "Carregando provedores…",
+  },
+};
 
 type ProviderInfo = {
   id: string;
@@ -38,6 +259,7 @@ function ProviderCard({
   provider: ProviderInfo;
   onUpdated: () => void;
 }) {
+  const t = T[useLocale()];
   const icon = PROVIDER_ICONS[provider.id] ?? "◆";
   const [updating, setUpdating] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -60,17 +282,20 @@ function ProviderCard({
         if (res.status === 409 && data.runningSessions?.length) {
           setFeedback({
             kind: "confirm",
-            msg: `Il provider è attivo. Update richiede di stoppare ${data.runningSessions.length} sessioni (${data.runningSessions.join(", ")}). Continuare?`,
+            msg: t.confirmUpdate(
+              data.runningSessions.length,
+              data.runningSessions.join(", "),
+            ),
             pendingForce: true,
           });
         } else if (data.ok) {
           setFeedback({
             kind: "ok",
-            msg: `aggiornato a ${data.installedVersion || "?"}`,
+            msg: t.updatedTo(data.installedVersion || "?"),
           });
           onUpdated();
         } else {
-          const err = (data.stderr || data.error || "errore sconosciuto")
+          const err = (data.stderr || data.error || t.unknownError)
             .split("\n")
             .slice(-3)
             .join(" ");
@@ -85,7 +310,7 @@ function ProviderCard({
         setUpdating(false);
       }
     },
-    [provider.id, onUpdated],
+    [provider.id, onUpdated, t],
   );
 
   return (
@@ -120,7 +345,7 @@ function ProviderCard({
                   background: "rgba(0,232,122,0.08)",
                 }}
               >
-                ● attivo
+                ● {t.activeBadge}
               </span>
             )}
             <span
@@ -133,7 +358,7 @@ function ProviderCard({
                 background: "transparent",
               }}
             >
-              {provider.available ? "configurato" : "non configurato"}
+              {provider.available ? t.configured : t.notConfigured}
             </span>
             {provider.updateAvailable && (
               <span
@@ -144,7 +369,7 @@ function ProviderCard({
                   background: "rgba(245,158,11,0.08)",
                 }}
               >
-                ⚠ update {provider.latestVersion}
+                ⚠ {t.updateBadge} {provider.latestVersion}
               </span>
             )}
           </div>
@@ -158,7 +383,7 @@ function ProviderCard({
       <div className="px-5 py-4 flex flex-col gap-3">
         {/* Auth */}
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-[var(--color-dim)]">Autenticazione</span>
+          <span className="text-[var(--color-dim)]">{t.auth}</span>
           <span className="font-mono" style={{ color: "var(--color-muted)" }}>
             {provider.authMethod}
             {provider.keySource && (
@@ -172,7 +397,7 @@ function ProviderCard({
         {/* Modello attivo */}
         {provider.activeModel && (
           <div className="flex items-center justify-between text-[11px]">
-            <span className="text-[var(--color-dim)]">Modello attivo</span>
+            <span className="text-[var(--color-dim)]">{t.activeModel}</span>
             <span className="font-mono text-[var(--color-bright)]">
               {provider.activeModel}
             </span>
@@ -181,7 +406,9 @@ function ProviderCard({
 
         {/* Modelli disponibili */}
         <div>
-          <p className="text-[10px] text-[var(--color-dim)] mb-1.5">Modelli</p>
+          <p className="text-[10px] text-[var(--color-dim)] mb-1.5">
+            {t.models}
+          </p>
           <div className="flex flex-wrap gap-1">
             {provider.models.map((m) => (
               <span
@@ -211,11 +438,11 @@ function ProviderCard({
             className="text-[10px] text-[var(--color-dim)] px-3 py-2 rounded border border-[var(--color-border)]"
             style={{ background: "var(--color-card)" }}
           >
-            Aggiungi la chiave API in{" "}
+            {t.apiKeyWarnPre}{" "}
             <span className="font-mono text-[var(--color-muted)]">
               jht.config.json
             </span>{" "}
-            o nella variabile d&apos;ambiente corrispondente.
+            {t.apiKeyWarnPost}
           </p>
         )}
 
@@ -260,8 +487,8 @@ function ProviderCard({
               {updating
                 ? "…"
                 : provider.updateAvailable
-                  ? "↑ Update"
-                  : "Check / Update"}
+                  ? `↑ ${t.update}`
+                  : t.checkUpdate}
             </button>
           </div>
         )}
@@ -305,7 +532,7 @@ function ProviderCard({
                     fontFamily: "inherit",
                   }}
                 >
-                  Stop team + update
+                  {t.stopTeamUpdate}
                 </button>
                 <button
                   onClick={() => setFeedback(null)}
@@ -318,7 +545,7 @@ function ProviderCard({
                     fontFamily: "inherit",
                   }}
                 >
-                  Annulla
+                  {t.cancel}
                 </button>
               </div>
             )}
@@ -330,6 +557,7 @@ function ProviderCard({
 }
 
 export default function ProvidersPage() {
+  const t = T[useLocale()];
   const [data, setData] = useState<ProvidersData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -362,21 +590,25 @@ export default function ProvidersPage() {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Provider
+            {t.breadcrumb}
           </span>
         </nav>
         <div className="mt-3 flex items-start justify-between flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
-              Provider LLM
+              {t.title}
             </h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
               {data
-                ? `${available}/${data.providers.length} configurati · provider attivo: ${data.activeProvider}`
-                : "Caricamento…"}
+                ? t.subtitle(
+                    available,
+                    data.providers.length,
+                    data.activeProvider,
+                  )
+                : t.loading}
               {data && !data.configLoaded && (
                 <span className="ml-2 text-[var(--color-yellow)]">
-                  <span aria-hidden="true">⚠</span> jht.config.json non trovato
+                  <span aria-hidden="true">⚠</span> {t.configNotFound}
                 </span>
               )}
             </p>
@@ -398,7 +630,7 @@ export default function ProvidersPage() {
               e.currentTarget.style.color = "var(--color-muted)";
             }}
           >
-            ↻ aggiorna
+            ↻ {t.refresh}
           </button>
         </div>
       </div>
@@ -410,7 +642,7 @@ export default function ProvidersPage() {
           aria-live="polite"
         >
           <span className="text-[var(--color-dim)] text-[12px]">
-            Caricamento provider…
+            {t.loadingProviders}
           </span>
         </div>
       )}

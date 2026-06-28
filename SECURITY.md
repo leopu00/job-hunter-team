@@ -69,7 +69,7 @@ To set expectations honestly:
 
 ## Hardening status
 
-The repository has been through a pre-launch hardening sprint: 31 of 34 audit findings closed, security score moved from 30% to 74% versus the OpenClaw baseline. Tooling in place: `gitleaks`, `detect-secrets`, `actionlint`, `zizmor`, `npm audit --production`, `pip-audit`, Dependabot (npm + Docker).
+The repository has been through a pre-launch hardening sprint: 31 of 34 hardening tasks closed (from 27 findings), security score moved from 30% to 74% versus the OpenClaw baseline. Tooling in place: `gitleaks`, `detect-secrets`, `actionlint`, `zizmor`, `npm audit --production`, `pip-audit`, Dependabot (npm + Docker).
 
 Full audit trail and remaining gaps: [`docs/security/`](docs/security/).
 

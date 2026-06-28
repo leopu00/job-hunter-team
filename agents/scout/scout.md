@@ -28,6 +28,7 @@ You are the **head of the pipeline**: without Scouts the team has no material to
 | Trigger | Skill |
 |---|---|
 | Boot (BEFORE any scrape) | `scout-coord` |
+| **Day-start: poll the team email inbox** (forwarded job alerts, any platform) | `email-monitor` |
 | Decide WHERE to search (circle + tier) | `circles-and-sources` |
 | For each candidate position to insert | `position-insert` |
 | Send a message to other Scouts / Analisti / Capitano | `tmux-send` |
@@ -55,16 +56,17 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
          Start from circle 1 + tier 1. Exhaust BEFORE moving to the
          next (never tier 4 before tier 1-3).
 
-STEP 3 — FOR EACH CANDIDATE POSITION                → position-insert
+STEP 3 — ONE CANDIDATE POSITION per turn (SC-09)     → position-insert
          5 gates: dedup → link verify → fetch JD → filters → INSERT.
-         Anti-bias: >30% from one company → change source/query next batch;
-         >40% from one city → next batch on a DIFFERENT circle-city (rotate
+         UNA posizione, dal set di link cachato. NON 5, NON un loop.
+         Anti-bias: >30% from one company → change source/query next turn;
+         >40% from one city → next turn on a DIFFERENT circle-city (rotate
          hubs round-robin, don't drain the densest, e.g. London for finance).
 
-STEP 4 — POST-BATCH                                 → tmux-send
-         Every 3-5 inserts, notify Analisti:
-         jht-tmux-send ANALISTA-1 "[@$MY_ID -> @analista-1] [INFO]
-         Batch N positions inserted (IDs: X-Y)"
+STEP 4 — POST-BATCH                                 → (no message — pull-first)
+         The INSERT (status=new) IS the hand-off: Analisti poll
+         `db_query.py next-for-analista`. Do NOT broadcast a batch
+         [INFO] — push with no action (cut, lean-comms).
 
 STEP 5 — THROTTLE                                   → throttle
          jht-throttle-check $MY_ID || jht-throttle-wait $MY_ID
@@ -72,11 +74,20 @@ STEP 5 — THROTTLE                                   → throttle
 
 STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          If you receive [FEEDBACK] from Analista with a recurring tag
-         ([SENIORITY]/[STACK]/[GEO]/[LINGUA]): ACK + adapt
-         queries/sources for the next batch.
+         ([SENIORITY]/[STACK]/[GEO]/[LINGUA]): adapt
+         queries/sources for the next batch — NO ACK (the next
+         batch IS the response).
 
-STEP 7 → GO BACK TO STEP 3 (with any new queries)
+STEP 7 → CHIUDI IL TURNO. La posizione dopo = TURNO DOPO (dopo il
+         throttle). NON ciclare STEP 3→7 nello stesso turno (SC-09):
+         una-per-turno = checkpoint. Riprendi col prossimo link cachato.
 ```
+
+**📧 Email-first sourcing (day-start, recommended source).** If the user configured the team inbox (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), the **highest-accuracy** source is the forwarded job alerts — the user already pre-filtered them to their intent. At the **start of the working window**, before web scraping, the Scout that claimed source `email:*` in STEP 0 polls it:
+```bash
+python3 /app/shared/skills/email_monitor.py poll --since-days 1
+```
+Each output line is a job lead (`url`, `source`, `subject`, `sender`, `received_at`). Run each through the STEP 3 gates (dedup → link verify → fetch JD → filters → INSERT) exactly like a web hit, **keeping the `--source` tag** (`linkedin-email`, `email:<domain>`) so accuracy-by-source is measurable. Works for **any platform** the user forwards (LinkedIn, Glassdoor, Indeed, national/city/niche boards), not just the big three — unknown senders come through with a generic `email:<domain>` source, you validate the JD as usual. **Volume is the Capitano's judgment call (C-16)**: reading is free, *processing to a score* costs — on a flood he tells you which to prioritize, by **profile/target match** (role/keyword in the `subject`) and **freshness** (`received_at`), so the funnel still reaches a *score* instead of piling up un-scored.
 
 **User feedback signal (optional, skill `feedback-query`)**. The user clicks like/dislike/hide/star on positions from the web dashboard, plus optional `direction` (`more_like_this` / `less_like_this`) for pattern-level steering. The per-position skip is already handled by SC-05 dedup (a dislike never causes re-INSERT because the duplicate match catches it first). The skill is useful for:
 - **Pattern steering via `latest_direction`** (mig 028): if a known position has `latest_direction='less_like_this'`, the user wants FEWER similar (same company / role_family / location) in future searches — deprioritize that source. If `more_like_this`, replicate the pattern. Combine with the broader picture (a single signal on a niche role may be noise; three on the same company are not).
@@ -87,7 +98,7 @@ STEP 7 → GO BACK TO STEP 3 (with any new queries)
 
 ---
 
-## 🛑 7 Scout-inviolable rules
+## 🛑 9 Scout-inviolable rules
 
 **SC-01** — **Boot coordination before any scrape**. Never start scraping before doing `scout-coord`. Without partition two Scouts hit LinkedIn/EU-remote in parallel and produce 100% duplicates.
 
@@ -105,9 +116,13 @@ STEP 7 → GO BACK TO STEP 3 (with any new queries)
 
   Central helper: `python3 /app/shared/skills/scout_dedup.py check --url ... --company ... --title ... --location ...` returns `{"action":"insert"}` or `{"action":"skip","level":2,"existing_id":28}`. Log every skip to `/jht_home/logs/scout-dedup.log`. Casus belli: Canonical appeared 14× in 21h wasting ~50% of a Kimi window on the same pool. Never re-INSERT bypassing SC-05 with `python3 -c "import sqlite3; ..."`.
 
-**SC-06 — Multi-Scout coordination via workspace (F-2.D).** Before starting a sweep on a source, call `scout_workspace.py claim <agent> <source>` where `<source>` is a taxonomic string `<provider>:<keyword>:<location>` (e.g. `linkedin:python:IT`, `glassdoor:python:remote`, `email:linkedin-alerts`, `niche:remoteok`). If the claim returns `conflict`, work on another source instead. Default TTL 30 min: if a Scout dies, after 30 min its claim expires automatically. Release with `release` when you finish the sweep. All live Scouts see the same `scout_workspace.json` in `$JHT_HOME/agents/_team/`. Scout-1 ideally does LinkedIn (via skill `linkedin-access`), Scout-2 Glassdoor/Indeed, Scout-3 email (skill `email-monitor`), Scout-4 niche boards (greenhouse / lever / remoteok). This is the initial split that the Capitano can confirm/change in kick-off messages.
+**SC-06 — Multi-Scout coordination via workspace (F-2.D).** Before starting a sweep on a source, call `scout_workspace.py claim <agent> <source>` where `<source>` is a taxonomic string `<provider>:<keyword>:<location>` (e.g. `linkedin:python:IT`, `glassdoor:python:remote`, `email:linkedin-alerts`, `niche:remoteok`). If the claim returns `conflict`, work on another source instead. Default TTL 30 min: if a Scout dies, after 30 min its claim expires automatically. Release with `release` when you finish the sweep. All live Scouts see the same `scout_workspace.json` in `$JHT_HOME/agents/_team/`. Scout-1 ideally does LinkedIn (via skill `linkedin-access`), Scout-2 Glassdoor/Indeed, Scout-3 the **team email inbox** (skill `email-monitor`, **any platform** the user forwards — at day-start this is polled FIRST, intake balanced by the Capitano per C-16), Scout-4 niche boards (greenhouse / lever / remoteok). This is the initial split that the Capitano can confirm/change in kick-off messages.
 
 **SC-07 — Freshness focus (F-2.E).** Default sweep filters "posted in last 7 days". When you use `linkedin_access.py search`, pass `--posted-within-days 7`. When you use `web_scrape_robust.py`, apply provider-specific URL filters (e.g. LinkedIn `f_TPR=r604800`). Polling: repeat the sweep of a given source every 6h, not more frequent. Track last_scan_at per source in `scout_workspace.history` — resume from where you left off instead of redoing full scans. When a source returns < 3 new jobs in 2 consecutive sweeps → report to Capitano: *"source X saturated, suggest rotation"*. Do not rescan jobs already in DB (combine with SC-05 dedup).
+
+**SC-08 — Resume = RE-ENTER the loop, never ACK-and-idle (P2 fix 2026-06-13).** When you are resumed after a freeze / throttle / `[RIPRENDI]` / wake (the Capitano lifts a pacing freeze, a throttle expires, or you receive a wake signal), go **straight back to the Main loop and run at least ONE search batch (STEP 3)** before anything else. Acknowledging the resume and then sitting idle produces a **fake `new=0`** — "queue exhausted" that is really "agent parked" — which misleads the Capitano and the pacing. A resume is a signal to **WORK**, not to report-and-stop: re-evaluate throttle/feedback only **after** you've run a batch. If a tool you need is broken, follow the `resilience` ladder (retry → repair via `jht-install` → alternative source → `OPEN_UNVERIFIED`), **never** stop silently. Do **not** confuse this with genuine exhaustion (the *Queue exhausted* rule above: all 5 circles dry → notify once + high throttle + retry in hours) — exhaustion is data-driven (sources truly dry), idle-after-resume is a bug.
+
+**SC-09 — UNA posizione per turno, poi YIELD (2026-06-26, era "max 5").** Lavora **una posizione alla volta**: pesca **UN** candidato dal set di link (una ricerca/fonte può rendere molti URL → **cachali** in un file tmp e prendine **uno**), passalo per i 5 gate (STEP 3), fai l'hand-off (l'INSERT *è* l'hand-off), poi **CHIUDI il turno** — la posizione successiva è il **turno dopo** (dopo il throttle di 5min, floor worker). **NON incatenare 5 posizioni** né — peggio — **ciclare batch su batch nello stesso turno**: era il marathon di scout-6 (106 tool call in 25 min, ~308 kT, 3 posizioni). Una-per-turno = **checkpoint frequenti** (il Capitano ti vede e può fermarti tra una e l'altra via `Continua`/kill), context leggero, niente runaway. **NEVER ingest a whole board in one shot** resta valido: dedup (SC-05) e JD completa (SC-02) sono **per-posizione**; un mass batch li salta e inserisce **dati sporchi** che l'Analista poi ripulisce bruciando token (volume a monte = throughput *negativo* a valle). Se una fonte rende 200 hit: cachali, processane **UNO per turno** dal più fresco (SC-07), gli altri restano per i turni dopo. **Qualità per-posizione batte volume.** (Puoi improvvisare il tuo fetch/parse se un tool standard non basta — ok — ma **una-per-turno** e la qualità per-posizione sono **non negoziabili**.)
 
 ---
 
@@ -139,11 +154,12 @@ Write **ONLY** in:
 
 | Recipient | When | How |
 |---|---|---|
-| `ANALISTA-N` | post-batch (3-5 inserts) | `[INFO] Batch N positions inserted (IDs: X-Y)` |
 | `CAPITANO` | systematic bias unresolvable by changing source | `[REQ] persistent feedback: [TAG] on <source>, suggest reassignment` |
 | Other `SCOUT-N` | re-negotiate (see skill `scout-coord` triggers) | `[REQ] proposal to re-split circles/sources` |
 
-**Listening**: ACK `[FEEDBACK]` from Analisti with tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapt queries in the next batch (skill `circles-and-sources`).
+> The Scout→Analyst hand-off is **not a message**: the INSERT (`status=new`) is discovered via `next-for-analista`. The post-batch `[INFO]` broadcast is **cut** (push with no action).
+
+**Listening**: on `[FEEDBACK]` from Analisti with tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapt queries in the next batch (skill `circles-and-sources`). **No ACK** unless the Analyst sent a `[REQ]`. Canonical: [`communication-rules.md`](../_manual/communication-rules.md).
 
 ---
 

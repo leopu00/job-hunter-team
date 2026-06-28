@@ -12,6 +12,424 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/app/components/Toast";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  read_only_desktop: {
+    it: "✋ Gli orari si modificano dall'app desktop. Qui (browser) è sola visualizzazione.",
+    en: "✋ Working hours are edited from the desktop app. Here (browser) it's view-only.",
+    hu: "✋ A munkaidőt az asztali appból lehet módosítani. Itt (böngésző) csak megtekintés.",
+    es: "✋ Los horarios se editan desde la app de escritorio. Aquí (navegador) es solo lectura.",
+    de: "✋ Arbeitszeiten werden in der Desktop-App bearbeitet. Hier (Browser) nur Ansicht.",
+    fr: "✋ Les horaires se modifient depuis l'app desktop. Ici (navigateur), lecture seule.",
+    pt: "✋ Os horários são editados no app desktop. Aqui (navegador) é só visualização.",
+  },
+  day_range_hint: {
+    it: "Per ogni giorno scegli inizio e fine. Le ore sono un solo blocco contiguo (min 4h); la notte (es. 22:00→07:00) passa al giorno dopo.",
+    en: "For each day pick start and end. Hours are one contiguous block (min 4h); the night (e.g. 22:00→07:00) crosses midnight.",
+    hu: "Minden naphoz adj meg kezdést és véget. Egy összefüggő blokk (min 4h); az éjszaka (pl. 22:00→07:00) átnyúlik.",
+    es: "Para cada día elige inicio y fin. Un único bloque contiguo (mín 4h); la noche (p.ej. 22:00→07:00) cruza medianoche.",
+    de: "Für jeden Tag Start und Ende wählen. Ein zusammenhängender Block (min 4h); die Nacht (z.B. 22:00→07:00) überschreitet Mitternacht.",
+    fr: "Pour chaque jour, choisis début et fin. Un seul bloc continu (min 4h) ; la nuit (ex. 22:00→07:00) passe au lendemain.",
+    pt: "Para cada dia escolha início e fim. Um único bloco contíguo (mín 4h); a noite (ex. 22:00→07:00) cruza a meia-noite.",
+  },
+  day_off: {
+    it: "riposo",
+    en: "off",
+    hu: "pihenő",
+    es: "descanso",
+    de: "frei",
+    fr: "repos",
+    pt: "folga",
+  },
+  night_label: {
+    it: "notte",
+    en: "night",
+    hu: "éjszaka",
+    es: "noche",
+    de: "Nacht",
+    fr: "nuit",
+    pt: "noite",
+  },
+  min_hours_err: {
+    it: "min {n}h",
+    en: "min {n}h",
+    hu: "min {n}h",
+    es: "mín {n}h",
+    de: "min {n}h",
+    fr: "min {n}h",
+    pt: "mín {n}h",
+  },
+  need_one_day: {
+    it: "Attiva almeno un giorno",
+    en: "Enable at least one day",
+    hu: "Engedélyezz legalább egy napot",
+    es: "Activa al menos un día",
+    de: "Mindestens einen Tag aktivieren",
+    fr: "Active au moins un jour",
+    pt: "Ative pelo menos um dia",
+  },
+  fix_blocks: {
+    it: "Ogni blocco attivo deve durare almeno 4h",
+    en: "Each active block must last at least 4h",
+    hu: "Minden aktív blokk legalább 4 óra",
+    es: "Cada bloque activo debe durar al menos 4h",
+    de: "Jeder aktive Block muss mind. 4h dauern",
+    fr: "Chaque bloc actif doit durer au moins 4h",
+    pt: "Cada bloco ativo deve durar pelo menos 4h",
+  },
+  preset_office: {
+    it: "Office (Lun-Ven 9-18)",
+    en: "Office (Mon-Fri 9-18)",
+    hu: "Iroda (H-P 9-18)",
+    es: "Oficina (Lun-Vie 9-18)",
+    de: "Büro (Mo-Fr 9-18)",
+    fr: "Bureau (Lun-Ven 9-18)",
+    pt: "Escritório (Seg-Sex 9-18)",
+  },
+  preset_weekend: {
+    it: "Weekend (Sab-Dom 9-18)",
+    en: "Weekend (Sat-Sun 9-18)",
+    hu: "Hétvége (Szo-V 9-18)",
+    es: "Fin de semana (Sáb-Dom 9-18)",
+    de: "Wochenende (Sa-So 9-18)",
+    fr: "Week-end (Sam-Dim 9-18)",
+    pt: "Fim de semana (Sáb-Dom 9-18)",
+  },
+  preset_daytime: {
+    it: "Tutti i giorni 9-18",
+    en: "Every day 9-18",
+    hu: "Minden nap 9-18",
+    es: "Todos los días 9-18",
+    de: "Jeden Tag 9-18",
+    fr: "Tous les jours 9-18",
+    pt: "Todos os dias 9-18",
+  },
+  preset_night: {
+    it: "Notturno (22-07)",
+    en: "Night (22-07)",
+    hu: "Éjszakai (22-07)",
+    es: "Nocturno (22-07)",
+    de: "Nachts (22-07)",
+    fr: "Nuit (22-07)",
+    pt: "Noturno (22-07)",
+  },
+  preset_247: {
+    it: "24/7 (sempre attivo)",
+    en: "24/7 (always on)",
+    hu: "24/7 (mindig aktív)",
+    es: "24/7 (siempre activo)",
+    de: "24/7 (immer aktiv)",
+    fr: "24/7 (toujours actif)",
+    pt: "24/7 (sempre ativo)",
+  },
+  day_mon: {
+    it: "Lun",
+    en: "Mon",
+    hu: "Hét",
+    es: "Lun",
+    de: "Mo",
+    fr: "Lun",
+    pt: "Seg",
+  },
+  day_tue: {
+    it: "Mar",
+    en: "Tue",
+    hu: "Ked",
+    es: "Mar",
+    de: "Di",
+    fr: "Mar",
+    pt: "Ter",
+  },
+  day_wed: {
+    it: "Mer",
+    en: "Wed",
+    hu: "Sze",
+    es: "Mié",
+    de: "Mi",
+    fr: "Mer",
+    pt: "Qua",
+  },
+  day_thu: {
+    it: "Gio",
+    en: "Thu",
+    hu: "Csü",
+    es: "Jue",
+    de: "Do",
+    fr: "Jeu",
+    pt: "Qui",
+  },
+  day_fri: {
+    it: "Ven",
+    en: "Fri",
+    hu: "Pén",
+    es: "Vie",
+    de: "Fr",
+    fr: "Ven",
+    pt: "Sex",
+  },
+  day_sat: {
+    it: "Sab",
+    en: "Sat",
+    hu: "Szo",
+    es: "Sáb",
+    de: "Sa",
+    fr: "Sam",
+    pt: "Sáb",
+  },
+  day_sun: {
+    it: "Dom",
+    en: "Sun",
+    hu: "Vas",
+    es: "Dom",
+    de: "So",
+    fr: "Dim",
+    pt: "Dom",
+  },
+  custom: {
+    it: "Custom",
+    en: "Custom",
+    hu: "Egyéni",
+    es: "Personalizado",
+    de: "Benutzerdefiniert",
+    fr: "Personnalisé",
+    pt: "Personalizado",
+  },
+  toast_load_err: {
+    it: "Errore caricamento working hours",
+    en: "Error loading working hours",
+    hu: "Hiba a munkaidő betöltésekor",
+    es: "Error al cargar el horario de trabajo",
+    de: "Fehler beim Laden der Arbeitszeiten",
+    fr: "Erreur de chargement des horaires",
+    pt: "Erro ao carregar o horário de trabalho",
+  },
+  toast_removed: {
+    it: "Team 24/7 (working hours rimosse)",
+    en: "Team 24/7 (working hours removed)",
+    hu: "Csapat 24/7 (munkaidő eltávolítva)",
+    es: "Equipo 24/7 (horario de trabajo eliminado)",
+    de: "Team 24/7 (Arbeitszeiten entfernt)",
+    fr: "Équipe 24/7 (horaires supprimés)",
+    pt: "Equipa 24/7 (horário de trabalho removido)",
+  },
+  toast_saved: {
+    it: "Working hours salvate",
+    en: "Working hours saved",
+    hu: "Munkaidő elmentve",
+    es: "Horario de trabajo guardado",
+    de: "Arbeitszeiten gespeichert",
+    fr: "Horaires enregistrés",
+    pt: "Horário de trabalho guardado",
+  },
+  toast_err: {
+    it: "Errore: {msg}",
+    en: "Error: {msg}",
+    hu: "Hiba: {msg}",
+    es: "Error: {msg}",
+    de: "Fehler: {msg}",
+    fr: "Erreur : {msg}",
+    pt: "Erro: {msg}",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Lädt…",
+    fr: "Chargement…",
+    pt: "A carregar…",
+  },
+  wh_title: {
+    it: "Working hours",
+    en: "Working hours",
+    hu: "Munkaidő",
+    es: "Horario de trabajo",
+    de: "Arbeitszeiten",
+    fr: "Horaires de travail",
+    pt: "Horário de trabalho",
+  },
+  wh_desc: {
+    it: "Le ore in cui il team lavora. Il budget weekly viene distribuito solo su queste ore.",
+    en: "The hours when the team works. The weekly budget is distributed only across these hours.",
+    hu: "Az órák, amikor a csapat dolgozik. A heti keret csak ezekre az órákra oszlik el.",
+    es: "Las horas en que trabaja el equipo. El presupuesto semanal se distribuye solo en estas horas.",
+    de: "Die Stunden, in denen das Team arbeitet. Das Wochenbudget wird nur auf diese Stunden verteilt.",
+    fr: "Les heures où l'équipe travaille. Le budget hebdomadaire est réparti uniquement sur ces heures.",
+    pt: "As horas em que a equipa trabalha. O orçamento semanal é distribuído apenas por estas horas.",
+  },
+  per_week: {
+    it: "/ settimana",
+    en: "/ week",
+    hu: "/ hét",
+    es: "/ semana",
+    de: "/ Woche",
+    fr: "/ semaine",
+    pt: "/ semana",
+  },
+  tz_label: {
+    it: "Timezone IANA",
+    en: "IANA timezone",
+    hu: "IANA időzóna",
+    es: "Zona horaria IANA",
+    de: "IANA-Zeitzone",
+    fr: "Fuseau horaire IANA",
+    pt: "Fuso horário IANA",
+  },
+  tz_use_local: {
+    it: "usa locale ({tz})",
+    en: "use local ({tz})",
+    hu: "helyi használata ({tz})",
+    es: "usar local ({tz})",
+    de: "lokale verwenden ({tz})",
+    fr: "utiliser local ({tz})",
+    pt: "usar local ({tz})",
+  },
+  heatmap_hint: {
+    it: "Clicca le celle per attivare/disattivare. Click sul giorno o sull'ora per toggle riga/colonna.",
+    en: "Click cells to toggle on/off. Click the day or hour to toggle the row/column.",
+    hu: "Kattints a cellákra a be-/kikapcsoláshoz. Kattints a napra vagy órára a sor/oszlop váltásához.",
+    es: "Haz clic en las celdas para activar/desactivar. Haz clic en el día o la hora para alternar fila/columna.",
+    de: "Klicke auf Zellen zum Ein-/Ausschalten. Klicke auf Tag oder Stunde, um Zeile/Spalte umzuschalten.",
+    fr: "Cliquez sur les cellules pour activer/désactiver. Cliquez sur le jour ou l'heure pour basculer la ligne/colonne.",
+    pt: "Clique nas células para ativar/desativar. Clique no dia ou na hora para alternar a linha/coluna.",
+  },
+  saving: {
+    it: "Salvataggio…",
+    en: "Saving…",
+    hu: "Mentés…",
+    es: "Guardando…",
+    de: "Speichern…",
+    fr: "Enregistrement…",
+    pt: "A guardar…",
+  },
+  save_custom: {
+    it: "Salva custom",
+    en: "Save custom",
+    hu: "Egyéni mentése",
+    es: "Guardar personalizado",
+    de: "Benutzerdefiniert speichern",
+    fr: "Enregistrer personnalisé",
+    pt: "Guardar personalizado",
+  },
+  cancel: {
+    it: "Annulla",
+    en: "Cancel",
+    hu: "Mégse",
+    es: "Cancelar",
+    de: "Abbrechen",
+    fr: "Annuler",
+    pt: "Cancelar",
+  },
+  weekly_distribution: {
+    it: "Distribuzione settimanale",
+    en: "Weekly distribution",
+    hu: "Heti eloszlás",
+    es: "Distribución semanal",
+    de: "Wöchentliche Verteilung",
+    fr: "Répartition hebdomadaire",
+    pt: "Distribuição semanal",
+  },
+  sweet_spot_provider: {
+    it: "Sweet spot — provider",
+    en: "Sweet spot — provider",
+    hu: "Sweet spot — szolgáltató",
+    es: "Punto óptimo — proveedor",
+    de: "Sweet Spot — Anbieter",
+    fr: "Point optimal — fournisseur",
+    pt: "Ponto ideal — fornecedor",
+  },
+  weekly_unlimited: {
+    it: "🟢 Weekly unlimited (nessun vincolo)",
+    en: "🟢 Weekly unlimited (no constraint)",
+    hu: "🟢 Heti korlátlan (nincs megkötés)",
+    es: "🟢 Semanal ilimitado (sin restricción)",
+    de: "🟢 Wöchentlich unbegrenzt (keine Einschränkung)",
+    fr: "🟢 Hebdomadaire illimité (aucune contrainte)",
+    pt: "🟢 Semanal ilimitado (sem restrição)",
+  },
+  below_sweet_spot: {
+    it: "⚠️ Sotto sweet spot",
+    en: "⚠️ Below sweet spot",
+    hu: "⚠️ Sweet spot alatt",
+    es: "⚠️ Por debajo del punto óptimo",
+    de: "⚠️ Unter dem Sweet Spot",
+    fr: "⚠️ Sous le point optimal",
+    pt: "⚠️ Abaixo do ponto ideal",
+  },
+  above_sweet_spot: {
+    it: "⚠️ Sopra sweet spot",
+    en: "⚠️ Above sweet spot",
+    hu: "⚠️ Sweet spot felett",
+    es: "⚠️ Por encima del punto óptimo",
+    de: "⚠️ Über dem Sweet Spot",
+    fr: "⚠️ Au-dessus du point optimal",
+    pt: "⚠️ Acima do ponto ideal",
+  },
+  warn_low: {
+    it: "~{pct}% del weekly budget non sarà utilizzato (troppe poche ore).",
+    en: "~{pct}% of the weekly budget will not be used (too few hours).",
+    hu: "A heti keret ~{pct}%-a nem lesz felhasználva (túl kevés óra).",
+    es: "~{pct}% del presupuesto semanal no se usará (muy pocas horas).",
+    de: "~{pct}% des Wochenbudgets werden nicht genutzt (zu wenige Stunden).",
+    fr: "~{pct}% du budget hebdomadaire ne sera pas utilisé (trop peu d'heures).",
+    pt: "~{pct}% do orçamento semanal não será utilizado (poucas horas).",
+  },
+  warn_high: {
+    it: "Le finestre 5h userebbero <25% del cap (overhead alto). Riduci di ~{h}h.",
+    en: "The 5h windows would use <25% of the cap (high overhead). Reduce by ~{h}h.",
+    hu: "Az 5 órás ablakok a felső határ <25%-át használnák (magas többletköltség). Csökkentsd ~{h} órával.",
+    es: "Las ventanas de 5h usarían <25% del tope (sobrecarga alta). Reduce ~{h}h.",
+    de: "Die 5-h-Fenster würden <25 % des Limits nutzen (hoher Overhead). Reduziere um ~{h} h.",
+    fr: "Les fenêtres de 5h utiliseraient <25% du plafond (surcharge élevée). Réduisez de ~{h}h.",
+    pt: "As janelas de 5h usariam <25% do limite (sobrecarga alta). Reduza ~{h}h.",
+  },
+  current_phase: {
+    it: "Fase corrente",
+    en: "Current phase",
+    hu: "Aktuális fázis",
+    es: "Fase actual",
+    de: "Aktuelle Phase",
+    fr: "Phase actuelle",
+    pt: "Fase atual",
+  },
+  window_target: {
+    it: "Target finestra 5h",
+    en: "5h window target",
+    hu: "5 órás ablak cél",
+    es: "Objetivo ventana 5h",
+    de: "5-h-Fensterziel",
+    fr: "Cible fenêtre 5h",
+    pt: "Meta janela 5h",
+  },
+  next_transition: {
+    it: "Prossima transizione",
+    en: "Next transition",
+    hu: "Következő átmenet",
+    es: "Próxima transición",
+    de: "Nächster Übergang",
+    fr: "Prochaine transition",
+    pt: "Próxima transição",
+  },
+  ratio_cap: {
+    it: "Ratio cap-5h / weekly",
+    en: "5h-cap / weekly ratio",
+    hu: "5h-keret / heti arány",
+    es: "Ratio tope-5h / semanal",
+    de: "Verhältnis 5-h-Limit / wöchentlich",
+    fr: "Ratio plafond-5h / hebdo",
+    pt: "Rácio limite-5h / semanal",
+  },
+  preview_hint: {
+    it: "ℹ️ Preview disponibile solo con container attivo (`jht team start`).",
+    en: "ℹ️ Preview available only with an active container (`jht team start`).",
+    hu: "ℹ️ Az előnézet csak aktív konténerrel érhető el (`jht team start`).",
+    es: "ℹ️ Vista previa disponible solo con un contenedor activo (`jht team start`).",
+    de: "ℹ️ Vorschau nur mit aktivem Container verfügbar (`jht team start`).",
+    fr: "ℹ️ Aperçu disponible uniquement avec un conteneur actif (`jht team start`).",
+    pt: "ℹ️ Pré-visualização disponível apenas com um contentor ativo (`jht team start`).",
+  },
+};
 
 type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 
@@ -50,23 +468,29 @@ type Preview = {
 type PresetKey = "office" | "weekend" | "daytime" | "night" | "24-7" | "custom";
 
 const ALL_DAYS: Weekday[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const DAY_LABELS: Record<Weekday, string> = {
-  mon: "Lun",
-  tue: "Mar",
-  wed: "Mer",
-  thu: "Gio",
-  fri: "Ven",
-  sat: "Sab",
-  sun: "Dom",
+const DAY_TKEY: Record<Weekday, string> = {
+  mon: "day_mon",
+  tue: "day_tue",
+  wed: "day_wed",
+  thu: "day_thu",
+  fri: "day_fri",
+  sat: "day_sat",
+  sun: "day_sun",
+};
+const PRESET_TKEY: Record<Exclude<PresetKey, "custom">, string> = {
+  office: "preset_office",
+  weekend: "preset_weekend",
+  daytime: "preset_daytime",
+  night: "preset_night",
+  "24-7": "preset_247",
 };
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 const PRESETS: Record<
   Exclude<PresetKey, "custom">,
-  { label: string; icon: string; cfg: WorkingHoursConfig | null }
+  { icon: string; cfg: WorkingHoursConfig | null }
 > = {
   office: {
-    label: "Office (Lun-Ven 9-18)",
     icon: "💼",
     cfg: {
       timezone: "",
@@ -80,7 +504,6 @@ const PRESETS: Record<
     },
   },
   weekend: {
-    label: "Weekend (Sab-Dom 9-18)",
     icon: "🌴",
     cfg: {
       timezone: "",
@@ -88,7 +511,6 @@ const PRESETS: Record<
     },
   },
   daytime: {
-    label: "Tutti i giorni 9-18",
     icon: "☀️",
     cfg: {
       timezone: "",
@@ -96,14 +518,13 @@ const PRESETS: Record<
     },
   },
   night: {
-    label: "Notturno (22-07)",
     icon: "🌙",
     cfg: {
       timezone: "",
       windows: [{ days: ALL_DAYS, start: "22:00", end: "07:00" }],
     },
   },
-  "24-7": { label: "24/7 (sempre attivo)", icon: "🌐", cfg: null },
+  "24-7": { icon: "🌐", cfg: null },
 };
 
 function detectLocalTz(): string {
@@ -114,92 +535,99 @@ function detectLocalTz(): string {
   }
 }
 
-/* ─── Heatmap helpers ───────────────────────────────────────────────── */
+/* ─── Range-per-giorno helpers ──────────────────────────────────────── */
+// Vincoli (decisione utente 2026-06-19): UN solo blocco CONTIGUO per giorno,
+// minimo MIN_DAY_HOURS, default 9h. La notte (start > end, es. 22:00→07:00)
+// e' un blocco contiguo che attraversa la mezzanotte, gestito nativamente da
+// questo modello e dall'algoritmo Python a runtime.
 
-type CellGrid = boolean[][]; // [day_idx 0..6][hour 0..23]
+const MIN_DAY_HOURS = 4;
+const DEFAULT_START = "09:00";
+const DEFAULT_END = "18:00";
+const HOUR_OPTIONS = HOURS.map((h) => `${String(h).padStart(2, "0")}:00`);
 
-function gridFromConfig(cfg: WorkingHoursConfig | null): CellGrid {
-  const grid: CellGrid = Array.from({ length: 7 }, () =>
-    new Array(24).fill(false),
-  );
-  if (!cfg || !cfg.windows?.length) {
-    return grid.map((row) => row.map(() => true)); // 24/7 = tutto ON
-  }
-  for (const w of cfg.windows) {
-    const [sh, sm] = w.start.split(":").map(Number);
-    const [eh, em] = w.end.split(":").map(Number);
-    const startMin = sh * 60 + sm;
-    const endMin = eh * 60 + em;
-    const wraps = endMin <= startMin;
-    for (const d of w.days) {
-      const di = ALL_DAYS.indexOf(d);
-      if (di < 0) continue;
-      for (let h = 0; h < 24; h++) {
-        const hMin = h * 60;
-        const inside = wraps
-          ? hMin >= startMin || hMin < endMin
-          : hMin >= startMin && hMin < endMin;
-        if (inside) grid[di][h] = true;
-      }
-    }
-  }
-  return grid;
+// Schedule editabile di un giorno: acceso/spento + un solo blocco start→end.
+type DaySched = { on: boolean; start: string; end: string };
+
+// Durata in ore di un blocco HH:MM→HH:MM, con wrap di mezzanotte
+// (es. 22:00→07:00 = 9h). Allineata a windowDurationHours di shared/config.
+function blockHours(start: string, end: string): number {
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  let h = eh + em / 60 - (sh + sm / 60);
+  if (h <= 0) h += 24;
+  return h;
 }
 
-/** Converte una grid 7×24 in una lista di WorkingHoursWindow minimali.
- *  Pattern: per ogni giorno trova run consecutivi di celle ON, crea una
- *  window per run. Poi raggruppa windows con stesso start/end e merge
- *  i loro days. Risultato: schema compatto e valido. */
-function configFromGrid(grid: CellGrid, timezone: string): WorkingHoursConfig {
-  // 1) Per ogni giorno → lista di (start_hour, end_hour) chiuso aperto
-  const perDay: Array<Array<{ start: number; end: number }>> = grid.map(
-    (row) => {
-      const runs: Array<{ start: number; end: number }> = [];
-      let i = 0;
-      while (i < 24) {
-        if (!row[i]) {
-          i++;
-          continue;
-        }
-        const s = i;
-        while (i < 24 && row[i]) i++;
-        runs.push({ start: s, end: i });
-      }
-      return runs;
-    },
+function isWrap(start: string, end: string): boolean {
+  return (
+    start !== "" && end !== "" && blockHours(start, end) > 0 && end <= start
   );
+}
 
-  // 2) Raggruppa run-by-run per chiave (start,end) → days
+// cfg → 7 schedule (uno per giorno). null/vuoto (24/7) → base daytime 9h
+// modificabile: in custom mode si parte da un orario sensato, non da 24h.
+function schedFromConfig(cfg: WorkingHoursConfig | null): DaySched[] {
+  if (!cfg || !cfg.windows?.length) {
+    return ALL_DAYS.map(() => ({
+      on: true,
+      start: DEFAULT_START,
+      end: DEFAULT_END,
+    }));
+  }
+  const out: DaySched[] = ALL_DAYS.map(() => ({
+    on: false,
+    start: DEFAULT_START,
+    end: DEFAULT_END,
+  }));
+  for (const w of cfg.windows) {
+    for (const d of w.days) {
+      const di = ALL_DAYS.indexOf(d);
+      if (di >= 0) out[di] = { on: true, start: w.start, end: w.end };
+    }
+  }
+  return out;
+}
+
+// 7 schedule → config: raggruppa i giorni ON per (start,end) → una window
+// per orario distinto (ogni giorno compare in al piu' una window → valido
+// per lo schema, contiguita' garantita).
+function configFromSched(
+  sched: DaySched[],
+  timezone: string,
+): WorkingHoursConfig {
   const byKey = new Map<
     string,
-    { start: number; end: number; days: Weekday[] }
+    { start: string; end: string; days: Weekday[] }
   >();
-  perDay.forEach((runs, di) => {
-    for (const r of runs) {
-      const key = `${r.start}-${r.end}`;
-      if (!byKey.has(key)) {
-        byKey.set(key, { start: r.start, end: r.end, days: [] });
-      }
-      byKey.get(key)!.days.push(ALL_DAYS[di]);
-    }
+  sched.forEach((s, di) => {
+    if (!s.on) return;
+    const key = `${s.start}-${s.end}`;
+    if (!byKey.has(key))
+      byKey.set(key, { start: s.start, end: s.end, days: [] });
+    byKey.get(key)!.days.push(ALL_DAYS[di]);
   });
-
   const windows: WorkingHoursWindow[] = Array.from(byKey.values()).map((w) => ({
     days: w.days,
-    start: `${String(w.start).padStart(2, "0")}:00`,
-    end: w.end === 24 ? "00:00" : `${String(w.end).padStart(2, "0")}:00`,
+    start: w.start,
+    end: w.end,
   }));
   return { timezone: timezone || detectLocalTz(), windows };
 }
 
-function isAllOn(grid: CellGrid): boolean {
-  return grid.every((row) => row.every((cell) => cell));
+// Giorni ON che violano i vincoli (durata < min, oppure start == end).
+function invalidDays(sched: DaySched[]): number[] {
+  const bad: number[] = [];
+  sched.forEach((s, di) => {
+    if (!s.on) return;
+    if (s.start === s.end || blockHours(s.start, s.end) < MIN_DAY_HOURS)
+      bad.push(di);
+  });
+  return bad;
 }
 
-/* ─── Bar chart per-giorno ──────────────────────────────────────────── */
-
-function hoursPerDay(grid: CellGrid): number[] {
-  return grid.map((row) => row.filter(Boolean).length);
+function schedHoursPerDay(sched: DaySched[]): number[] {
+  return sched.map((s) => (s.on ? blockHours(s.start, s.end) : 0));
 }
 
 /* ─── Preset detection ──────────────────────────────────────────────── */
@@ -238,24 +666,31 @@ function fmtTransition(iso: string | null | undefined): string {
 
 function computeWeeklyHours(cfg: WorkingHoursConfig | null): number {
   if (!cfg || !cfg.windows?.length) return 168;
-  return gridFromConfig(cfg).reduce(
-    (acc, row) => acc + row.filter(Boolean).length,
-    0,
-  );
+  let total = 0;
+  for (const w of cfg.windows) {
+    total += blockHours(w.start, w.end) * (w.days?.length ?? 0);
+  }
+  return Math.round(total * 10) / 10;
 }
 
 /* ─── Component ─────────────────────────────────────────────────────── */
 
 export default function WorkHoursPicker() {
   const { toast } = useToast();
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cfg, setCfg] = useState<WorkingHoursConfig | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  // Modificabile solo dall'app desktop (host localhost). Dal browser cloud la UI
+  // e' sola visualizzazione (pattern WEB-READONLY). Default true finche' la GET
+  // non dice il contrario, cosi' in locale non c'e' flash di "read-only".
+  const [editable, setEditable] = useState(true);
   const preset: PresetKey = useMemo(() => detectPreset(cfg), [cfg]);
-  // Editing grid: stato locale che vive solo in custom mode. Sincronizzata
-  // con cfg quando preset cambia, e applicata via "Salva" per persistere.
-  const [editGrid, setEditGrid] = useState<CellGrid | null>(null);
+  // Editing schedule (range per giorno): stato locale che vive solo in custom
+  // mode. Sincronizzato con cfg all'ingresso in custom, applicato via "Salva".
+  const [editSched, setEditSched] = useState<DaySched[] | null>(null);
 
   const loadState = useCallback(async () => {
     setLoading(true);
@@ -264,12 +699,14 @@ export default function WorkHoursPicker() {
       const data = await r.json();
       setCfg(data.working_hours ?? null);
       setPreview(data.preview ?? null);
+      setEditable(data.editable !== false);
     } catch {
-      toast("Errore caricamento working hours", "error");
+      toast(tr("toast_load_err"), "error");
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast, locale]);
 
   useEffect(() => {
     loadState();
@@ -288,30 +725,29 @@ export default function WorkHoursPicker() {
         if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
         setCfg(data.working_hours ?? null);
         setPreview(data.preview ?? null);
-        setEditGrid(null);
+        setEditSched(null);
         toast(
-          next === null
-            ? "Team 24/7 (working hours rimosse)"
-            : "Working hours salvate",
+          next === null ? tr("toast_removed") : tr("toast_saved"),
           "success",
         );
       } catch (e: any) {
-        toast(`Errore: ${e.message}`, "error");
+        toast(tr("toast_err").replace("{msg}", e.message), "error");
       } finally {
         setSaving(false);
       }
     },
-    [toast],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [toast, locale],
   );
 
   const applyPreset = useCallback(
     (key: PresetKey) => {
       if (key === "custom") {
-        // Entra in custom: clona il config corrente nella editGrid.
-        setEditGrid(gridFromConfig(cfg));
+        // Entra in custom: deriva lo schedule per-giorno dal config corrente.
+        setEditSched(schedFromConfig(cfg));
         return;
       }
-      setEditGrid(null);
+      setEditSched(null);
       const p = PRESETS[key];
       if (!p.cfg) {
         save(null);
@@ -322,47 +758,44 @@ export default function WorkHoursPicker() {
     [cfg, save],
   );
 
-  const toggleCell = (di: number, hr: number) => {
-    if (!editGrid) return;
-    const next = editGrid.map((row, i) =>
-      i === di ? row.map((c, h) => (h === hr ? !c : c)) : row,
-    );
-    setEditGrid(next);
+  const toggleDay = (di: number) => {
+    if (!editSched) return;
+    setEditSched(editSched.map((s, i) => (i === di ? { ...s, on: !s.on } : s)));
   };
 
-  const toggleDayRow = (di: number) => {
-    if (!editGrid) return;
-    const allOn = editGrid[di].every(Boolean);
-    const next = editGrid.map((row, i) =>
-      i === di ? row.map(() => !allOn) : row,
+  const setDayField = (di: number, field: "start" | "end", value: string) => {
+    if (!editSched) return;
+    setEditSched(
+      editSched.map((s, i) => (i === di ? { ...s, [field]: value } : s)),
     );
-    setEditGrid(next);
-  };
-
-  const toggleHourCol = (hr: number) => {
-    if (!editGrid) return;
-    const allOn = editGrid.every((row) => row[hr]);
-    const next = editGrid.map((row) =>
-      row.map((c, h) => (h === hr ? !allOn : c)),
-    );
-    setEditGrid(next);
   };
 
   if (loading) {
     return (
       <div className="rounded-lg border border-[var(--color-border)] p-6">
-        <h2 className="text-lg font-medium mb-2">📅 Working hours</h2>
-        <p className="text-sm opacity-60">Caricamento…</p>
+        <h2 className="text-lg font-medium mb-2">📅 {tr("wh_title")}</h2>
+        <p className="text-sm opacity-60">{tr("loading")}</p>
       </div>
     );
   }
 
-  const isCustom = preset === "custom" || editGrid !== null;
-  const grid = editGrid ?? gridFromConfig(cfg);
+  const isCustom = preset === "custom" || editSched !== null;
+  const sched = editSched ?? schedFromConfig(cfg);
+  const badDays = invalidDays(sched);
+  const noDayOn = sched.every((s) => !s.on);
+  // perDayHours: in custom dallo schedule editato; in non-custom dal cfg reale
+  // (24/7 = 24h/giorno, altrimenti la durata del blocco di quel giorno).
+  const perDayHours: number[] = isCustom
+    ? schedHoursPerDay(sched)
+    : !cfg || !cfg.windows?.length
+      ? ALL_DAYS.map(() => 24)
+      : ALL_DAYS.map((d) => {
+          const w = (cfg.windows ?? []).find((x) => x.days.includes(d));
+          return w ? blockHours(w.start, w.end) : 0;
+        });
   const weeklyHours = isCustom
-    ? grid.reduce((a, r) => a + r.filter(Boolean).length, 0)
+    ? Math.round(perDayHours.reduce((a, h) => a + h, 0) * 10) / 10
     : computeWeeklyHours(cfg);
-  const perDayHours = hoursPerDay(grid);
   const maxDayHours = Math.max(...perDayHours, 1);
 
   const provInfo = preview?.provider;
@@ -374,12 +807,15 @@ export default function WorkHoursPicker() {
     const wasted = Math.round((1 - weeklyHours / minH) * 100);
     sweetSpotWarn = {
       kind: "low",
-      msg: `~${wasted}% del weekly budget non sarà utilizzato (troppe poche ore).`,
+      msg: tr("warn_low").replace("{pct}", String(wasted)),
     };
   } else if (!unlimited && maxH != null && weeklyHours > maxH) {
     sweetSpotWarn = {
       kind: "high",
-      msg: `Le finestre 5h userebbero <25% del cap (overhead alto). Riduci di ~${Math.round(weeklyHours - maxH)}h.`,
+      msg: tr("warn_high").replace(
+        "{h}",
+        String(Math.round(weeklyHours - maxH)),
+      ),
     };
   }
 
@@ -387,39 +823,42 @@ export default function WorkHoursPicker() {
     <div className="rounded-lg border border-[var(--color-border)] p-6">
       <div className="flex items-baseline justify-between mb-4 gap-4 flex-wrap">
         <div>
-          <h2 className="text-lg font-medium">📅 Working hours</h2>
-          <p className="text-xs opacity-60 mt-1">
-            Le ore in cui il team lavora. Il budget weekly viene distribuito
-            solo su queste ore.
-          </p>
+          <h2 className="text-lg font-medium">📅 {tr("wh_title")}</h2>
+          <p className="text-xs opacity-60 mt-1">{tr("wh_desc")}</p>
         </div>
         <div className="text-right">
           <div className="text-2xl font-mono">{weeklyHours}h</div>
-          <div className="text-xs opacity-60">/ settimana</div>
+          <div className="text-xs opacity-60">{tr("per_week")}</div>
         </div>
       </div>
+
+      {!editable && (
+        <div className="mb-4 text-xs px-3 py-2 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
+          {tr("read_only_desktop")}
+        </div>
+      )}
 
       {/* Preset chips */}
       <div className="flex flex-wrap gap-2 mb-4">
         {(Object.keys(PRESETS) as Array<keyof typeof PRESETS>).map((k) => (
           <button
             key={k}
-            disabled={saving}
-            onClick={() => applyPreset(k as PresetKey)}
+            disabled={saving || !editable}
+            onClick={() => editable && applyPreset(k as PresetKey)}
             className={
               "px-3 py-1.5 rounded-md border text-sm transition " +
-              (preset === k && !editGrid
+              (preset === k && !editSched
                 ? "border-orange-500 bg-orange-500/10 text-orange-300"
                 : "border-[var(--color-border)] hover:border-orange-500/50")
             }
           >
             <span className="mr-1.5">{PRESETS[k].icon}</span>
-            {PRESETS[k].label}
+            {tr(PRESET_TKEY[k])}
           </button>
         ))}
         <button
-          disabled={saving}
-          onClick={() => applyPreset("custom")}
+          disabled={saving || !editable}
+          onClick={() => editable && applyPreset("custom")}
           className={
             "px-3 py-1.5 rounded-md border text-sm transition " +
             (isCustom
@@ -428,16 +867,16 @@ export default function WorkHoursPicker() {
           }
         >
           <span className="mr-1.5">🎛️</span>
-          Custom
+          {tr("custom")}
         </button>
       </div>
 
-      {/* Timezone + heatmap (solo in custom mode) */}
-      {isCustom && (
+      {/* Editor range-per-giorno (solo in custom mode + app desktop) */}
+      {editable && isCustom && (
         <div className="space-y-4 mt-4 pt-4 border-t border-[var(--color-border)]">
           <div>
             <label className="block text-xs opacity-60 mb-1">
-              Timezone IANA
+              {tr("tz_label")}
             </label>
             <input
               type="text"
@@ -461,90 +900,121 @@ export default function WorkHoursPicker() {
               }
               className="ml-2 text-xs opacity-60 hover:opacity-100"
             >
-              usa locale ({detectLocalTz()})
+              {tr("tz_use_local").replace("{tz}", detectLocalTz())}
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <p className="text-xs opacity-60 mb-2">
-              Clicca le celle per attivare/disattivare. Click sul giorno o
-              sull&apos;ora per toggle riga/colonna.
-            </p>
-            <table className="border-separate" style={{ borderSpacing: "1px" }}>
-              <thead>
-                <tr>
-                  <th></th>
-                  {HOURS.map((h) => (
-                    <th
-                      key={h}
-                      onClick={() => toggleHourCol(h)}
-                      className="text-[10px] font-normal opacity-50 hover:opacity-100 cursor-pointer w-5 text-center"
+          <div>
+            <p className="text-xs opacity-60 mb-3">{tr("day_range_hint")}</p>
+            <div className="space-y-1.5">
+              {ALL_DAYS.map((d, di) => {
+                const s = sched[di];
+                const bad = badDays.includes(di);
+                const dur = s.on ? blockHours(s.start, s.end) : 0;
+                const wrap = s.on && isWrap(s.start, s.end);
+                return (
+                  <div key={d} className="flex items-center gap-3 text-sm py-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleDay(di)}
+                      className={
+                        "w-14 text-left px-2 py-1 rounded border transition select-none " +
+                        (s.on
+                          ? "border-orange-500/60 bg-orange-500/10 text-orange-300"
+                          : "border-[var(--color-border)] opacity-50 hover:opacity-80")
+                      }
                     >
-                      {h % 3 === 0 ? h : ""}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ALL_DAYS.map((d, di) => (
-                  <tr key={d}>
-                    <td
-                      onClick={() => toggleDayRow(di)}
-                      className="text-xs pr-2 cursor-pointer opacity-70 hover:opacity-100 select-none"
-                    >
-                      {DAY_LABELS[d]}
-                    </td>
-                    {HOURS.map((h) => (
-                      <td
-                        key={h}
-                        onClick={() => toggleCell(di, h)}
-                        className={
-                          "w-5 h-5 rounded cursor-pointer transition " +
-                          (grid[di][h]
-                            ? "bg-orange-500 hover:bg-orange-400"
-                            : "bg-white/5 hover:bg-white/10")
-                        }
-                        title={`${DAY_LABELS[d]} ${String(h).padStart(2, "0")}:00`}
-                      />
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      {tr(DAY_TKEY[d])}
+                    </button>
+                    {s.on ? (
+                      <>
+                        <select
+                          value={s.start}
+                          onChange={(e) =>
+                            setDayField(di, "start", e.target.value)
+                          }
+                          className="px-2 py-1 rounded bg-transparent border border-[var(--color-border)] font-mono text-sm"
+                        >
+                          {HOUR_OPTIONS.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="opacity-50">→</span>
+                        <select
+                          value={s.end}
+                          onChange={(e) =>
+                            setDayField(di, "end", e.target.value)
+                          }
+                          className="px-2 py-1 rounded bg-transparent border border-[var(--color-border)] font-mono text-sm"
+                        >
+                          {HOUR_OPTIONS.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </select>
+                        <span
+                          className={
+                            "font-mono text-xs " +
+                            (bad ? "text-red-400" : "opacity-60")
+                          }
+                        >
+                          {dur}h{wrap ? ` · 🌙 ${tr("night_label")}` : ""}
+                          {bad
+                            ? ` · ${tr("min_hours_err").replace("{n}", String(MIN_DAY_HOURS))}`
+                            : ""}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="opacity-40 text-xs">
+                        {tr("day_off")}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          <button
-            onClick={() => {
-              if (!editGrid) return;
-              if (isAllOn(editGrid)) {
-                save(null); // tutto ON = 24/7 = nessun config
-              } else {
+          <div className="mt-2">
+            <button
+              onClick={() => {
+                if (!editSched) return;
                 save(
-                  configFromGrid(editGrid, cfg?.timezone || detectLocalTz()),
+                  configFromSched(editSched, cfg?.timezone || detectLocalTz()),
                 );
-              }
-            }}
-            disabled={saving || weeklyHours === 0}
-            className="px-4 py-1.5 rounded-md bg-orange-600 hover:bg-orange-500 text-sm disabled:opacity-40"
-          >
-            {saving ? "Salvataggio…" : "💾 Salva custom"}
-          </button>
-          <button
-            onClick={() => {
-              setEditGrid(null);
-              loadState();
-            }}
-            disabled={saving}
-            className="ml-2 px-4 py-1.5 rounded-md border border-[var(--color-border)] hover:border-white/30 text-sm"
-          >
-            Annulla
-          </button>
+              }}
+              disabled={saving || badDays.length > 0 || noDayOn}
+              className="px-4 py-1.5 rounded-md bg-orange-600 hover:bg-orange-500 text-sm disabled:opacity-40"
+            >
+              {saving ? tr("saving") : `💾 ${tr("save_custom")}`}
+            </button>
+            <button
+              onClick={() => {
+                setEditSched(null);
+                loadState();
+              }}
+              disabled={saving}
+              className="ml-2 px-4 py-1.5 rounded-md border border-[var(--color-border)] hover:border-white/30 text-sm"
+            >
+              {tr("cancel")}
+            </button>
+            {(badDays.length > 0 || noDayOn) && (
+              <span className="ml-3 text-xs text-red-400">
+                {noDayOn ? tr("need_one_day") : tr("fix_blocks")}
+              </span>
+            )}
+          </div>
         </div>
       )}
 
       {/* Bar chart per-giorno (sempre visibile) */}
       <div className="mt-6 pt-4 border-t border-[var(--color-border)]">
-        <div className="text-xs opacity-60 mb-2">Distribuzione settimanale</div>
+        <div className="text-xs opacity-60 mb-2">
+          {tr("weekly_distribution")}
+        </div>
         <div className="space-y-1.5">
           {ALL_DAYS.map((d, di) => {
             const h = perDayHours[di];
@@ -552,7 +1022,7 @@ export default function WorkHoursPicker() {
             const widthPct = (h / maxDayHours) * 100;
             return (
               <div key={d} className="flex items-center text-xs gap-2">
-                <div className="w-10 opacity-60">{DAY_LABELS[d]}</div>
+                <div className="w-10 opacity-60">{tr(DAY_TKEY[d])}</div>
                 <div className="flex-1 bg-white/5 rounded h-3.5 overflow-hidden">
                   <div
                     className="h-full bg-orange-500/70 transition-all"
@@ -573,12 +1043,12 @@ export default function WorkHoursPicker() {
         <div className="mt-6 pt-4 border-t border-[var(--color-border)]">
           <div className="flex items-baseline justify-between mb-2">
             <div className="text-xs opacity-60">
-              Sweet spot — provider{" "}
+              {tr("sweet_spot_provider")}{" "}
               <span className="font-mono opacity-100">{provInfo.provider}</span>
             </div>
             {unlimited ? (
               <div className="text-xs text-green-400">
-                🟢 Weekly unlimited (nessun vincolo)
+                {tr("weekly_unlimited")}
               </div>
             ) : (
               <div className="text-xs opacity-70 font-mono">
@@ -599,8 +1069,8 @@ export default function WorkHoursPicker() {
               }
             >
               {sweetSpotWarn.kind === "low"
-                ? "⚠️ Sotto sweet spot"
-                : "⚠️ Sopra sweet spot"}
+                ? tr("below_sweet_spot")
+                : tr("above_sweet_spot")}
               : {sweetSpotWarn.msg}
             </div>
           )}
@@ -611,7 +1081,7 @@ export default function WorkHoursPicker() {
       {preview && (
         <div className="mt-6 pt-4 border-t border-[var(--color-border)] grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
-            <div className="text-xs opacity-60">Fase corrente</div>
+            <div className="text-xs opacity-60">{tr("current_phase")}</div>
             <div
               className={
                 "font-mono mt-1 " +
@@ -624,7 +1094,7 @@ export default function WorkHoursPicker() {
             </div>
           </div>
           <div>
-            <div className="text-xs opacity-60">Target finestra 5h</div>
+            <div className="text-xs opacity-60">{tr("window_target")}</div>
             <div className="font-mono mt-1">
               {typeof preview.current_window_target_pct === "number"
                 ? `${preview.current_window_target_pct.toFixed(0)}%`
@@ -632,13 +1102,13 @@ export default function WorkHoursPicker() {
             </div>
           </div>
           <div>
-            <div className="text-xs opacity-60">Prossima transizione</div>
+            <div className="text-xs opacity-60">{tr("next_transition")}</div>
             <div className="font-mono mt-1">
               {fmtTransition(preview.next_phase_transition_at)}
             </div>
           </div>
           <div>
-            <div className="text-xs opacity-60">Ratio cap-5h / weekly</div>
+            <div className="text-xs opacity-60">{tr("ratio_cap")}</div>
             <div className="font-mono mt-1">
               {preview.window_cap_pct_of_weekly != null
                 ? `${preview.window_cap_pct_of_weekly}%`
@@ -649,9 +1119,7 @@ export default function WorkHoursPicker() {
       )}
 
       {!preview && cfg && (
-        <p className="mt-4 text-xs opacity-50">
-          ℹ️ Preview disponibile solo con container attivo (`jht team start`).
-        </p>
+        <p className="mt-4 text-xs opacity-50">{tr("preview_hint")}</p>
       )}
     </div>
   );

@@ -1,7 +1,9 @@
 "use client";
 
+import { useLocale } from "@/lib/use-locale";
 import { PROVIDERS } from "./providers";
-import { Card, NavButtons, btnPrimary } from "./ui";
+import { Card, NavButtons } from "./ui";
+import { t } from "./setup-i18n";
 import type { FormState } from "./types";
 
 interface Props {
@@ -11,11 +13,9 @@ interface Props {
 }
 
 export function StepProvider({ form, set, next }: Props) {
+  const locale = useLocale();
   return (
-    <Card
-      title="Provider AI"
-      sub="Scegli il provider di intelligenza artificiale"
-    >
+    <Card title={t("prov_title", locale)} sub={t("prov_sub", locale)}>
       <div className="flex flex-col gap-2">
         {PROVIDERS.map((p) => (
           <button
@@ -46,7 +46,7 @@ export function StepProvider({ form, set, next }: Props) {
                 className="text-[10px]"
                 style={{ color: "var(--color-green)" }}
               >
-                {p.hint}
+                {t(p.hintKey, locale)}
               </span>
             </div>
           </button>

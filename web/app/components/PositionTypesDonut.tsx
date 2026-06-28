@@ -1,7 +1,50 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 import type { RoleFamilyCount } from "@/lib/position-classifier";
+
+const T: Record<
+  Locale,
+  { ariaLabel: string; types: (n: number) => string; total: string }
+> = {
+  it: {
+    ariaLabel: "Tipi di posizione",
+    types: (n) => `${n} tipi`,
+    total: "totale",
+  },
+  en: {
+    ariaLabel: "Position types",
+    types: (n) => `${n} types`,
+    total: "total",
+  },
+  es: {
+    ariaLabel: "Tipos de posición",
+    types: (n) => `${n} tipos`,
+    total: "total",
+  },
+  fr: {
+    ariaLabel: "Types de poste",
+    types: (n) => `${n} types`,
+    total: "total",
+  },
+  de: {
+    ariaLabel: "Stellentypen",
+    types: (n) => `${n} Typen`,
+    total: "Gesamt",
+  },
+  hu: {
+    ariaLabel: "Pozíciótípusok",
+    types: (n) => `${n} típus`,
+    total: "összesen",
+  },
+  pt: {
+    ariaLabel: "Tipos de posição",
+    types: (n) => `${n} tipos`,
+    total: "total",
+  },
+};
 
 type Props = {
   data: RoleFamilyCount[];
@@ -64,6 +107,7 @@ export default function PositionTypesDonut({
   selectedTypes = [],
   onToggleType,
 }: Props) {
+  const t = T[useLocale()];
   const [hovered, setHovered] = useState<string | null>(null);
   const total = data.reduce((a, d) => a + d.count, 0);
   const hasSelection = selectedTypes.length > 0;
@@ -105,6 +149,11 @@ export default function PositionTypesDonut({
         display: "flex",
         alignItems: "center",
         gap: 16,
+        // width 100% + minWidth 0: il widget è vincolato alla larghezza
+        // del contenitore (card /map) → la legenda non sfora, le label
+        // lunghe troncano e la % resta dentro al bordo.
+        width: "100%",
+        minWidth: 0,
       }}
       onMouseLeave={() => setHovered(null)}
     >
@@ -113,7 +162,7 @@ export default function PositionTypesDonut({
         height={size}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         role="img"
-        aria-label="Position types"
+        aria-label={t.ariaLabel}
         style={{ flexShrink: 0 }}
       >
         {(() => {
@@ -165,8 +214,8 @@ export default function PositionTypesDonut({
           {focused
             ? (labels[focused.family] ?? focused.family)
             : aggregatedCount != null
-              ? `${selectedTypes.length} tipi`
-              : "totale"}
+              ? t.types(selectedTypes.length)
+              : t.total}
         </text>
         <text
           x={CX}
@@ -197,7 +246,7 @@ export default function PositionTypesDonut({
         Click toggle stessa selezione delle fette; hover evidenzia
         la fetta corrispondente. */}
       <ul
-        className="flex flex-col gap-1 min-w-0"
+        className="flex flex-col gap-1 min-w-0 flex-1"
         style={{ fontSize: 11, lineHeight: 1.2 }}
       >
         {data.map((d) => {
@@ -206,7 +255,6 @@ export default function PositionTypesDonut({
           const dimmed =
             (hovered != null && !isHover && !isSelected) ||
             (hovered == null && hasSelection && !isSelected);
-          const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
           return (
             <li
               key={d.family}
@@ -251,7 +299,7 @@ export default function PositionTypesDonut({
                   fontWeight: 600,
                 }}
               >
-                {pct}%
+                {d.count}
               </span>
             </li>
           );

@@ -91,7 +91,7 @@ const LANGUAGES: {
 ];
 
 function LangDropdown() {
-  const { lang, setLang } = useLandingI18n();
+  const { lang, setLang, t } = useLandingI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -114,7 +114,7 @@ function LangDropdown() {
         style={{
           cursor: "pointer",
         }}
-        aria-label={`Language: ${current.label}`}
+        aria-label={t("nav_language").replace("{label}", current.label)}
       >
         <current.Flag />
         <svg
@@ -209,12 +209,10 @@ export default function LandingNav() {
 
   return (
     <nav
-      aria-label="Main navigation"
+      aria-label={t("nav_main")}
       className="fixed top-0 left-0 right-0 z-50"
       style={{
-        background:
-          "linear-gradient(180deg, var(--color-void) 60%, transparent)",
-        backdropFilter: "blur(12px)",
+        background: "var(--color-void)",
       }}
     >
       <div className="flex items-center justify-between px-5 sm:px-6 py-4">
@@ -225,6 +223,30 @@ export default function LandingNav() {
         </Link>
 
         <div className="hidden md:flex items-center gap-6">
+          <Link
+            href="/"
+            aria-current={currentPage("/")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/")}
+          >
+            {t("nav_home")}
+          </Link>
+          <Link
+            href="/agents"
+            aria-current={currentPage("/agents")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/agents")}
+          >
+            {t("nav_team")}
+          </Link>
+          <Link
+            href="/project"
+            aria-current={currentPage("/project")}
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/project")}
+          >
+            {t("nav_project")}
+          </Link>
           <Link
             href="/case-studies"
             aria-current={currentPage("/case-studies")}
@@ -242,18 +264,19 @@ export default function LandingNav() {
             {t("nav_download")}
           </Link>
           <Link
-            href="/project"
-            aria-current={currentPage("/project")}
+            href="/pricing"
+            aria-current={currentPage("/pricing")}
             className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/project")}
+            style={navLinkStyle("/pricing")}
           >
-            {t("nav_project")}
+            {t("nav_pricing")}
           </Link>
           <a
             href="https://github.com/leopu00/job-hunter-team"
             target="_blank"
             rel="noreferrer"
-            className="text-[11px] tracking-wide text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+            className="text-[11px] tracking-wide hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={{ color: "var(--color-muted)" }}
           >
             {t("nav_github")}
           </a>
@@ -280,7 +303,7 @@ export default function LandingNav() {
               border: "1px solid var(--color-border)",
               cursor: "pointer",
             }}
-            aria-label="Menu"
+            aria-label={t("nav_menu")}
             aria-expanded={mobileOpen}
             aria-controls="mobile-nav-menu"
           >
@@ -327,6 +350,33 @@ export default function LandingNav() {
           }}
         >
           <Link
+            href="/"
+            aria-current={currentPage("/")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/")}
+          >
+            {t("nav_home")}
+          </Link>
+          <Link
+            href="/agents"
+            aria-current={currentPage("/agents")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/agents")}
+          >
+            {t("nav_team")}
+          </Link>
+          <Link
+            href="/project"
+            aria-current={currentPage("/project")}
+            onClick={() => setMobileOpen(false)}
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={navLinkStyle("/project")}
+          >
+            {t("nav_project")}
+          </Link>
+          <Link
             href="/case-studies"
             aria-current={currentPage("/case-studies")}
             onClick={() => setMobileOpen(false)}
@@ -345,20 +395,21 @@ export default function LandingNav() {
             {t("nav_download")}
           </Link>
           <Link
-            href="/project"
-            aria-current={currentPage("/project")}
+            href="/pricing"
+            aria-current={currentPage("/pricing")}
             onClick={() => setMobileOpen(false)}
             className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
-            style={navLinkStyle("/project")}
+            style={navLinkStyle("/pricing")}
           >
-            {t("nav_project")}
+            {t("nav_pricing")}
           </Link>
           <a
             href="https://github.com/leopu00/job-hunter-team"
             target="_blank"
             rel="noreferrer"
             onClick={() => setMobileOpen(false)}
-            className="text-[12px] py-3 text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors no-underline"
+            className="text-[12px] py-3 hover:text-[var(--color-bright)] transition-colors no-underline"
+            style={{ color: "var(--color-muted)" }}
           >
             {t("nav_github")}
           </a>

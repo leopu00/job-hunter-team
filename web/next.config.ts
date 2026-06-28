@@ -2,6 +2,7 @@ import type { NextConfig } from 'next'
 import createNextIntlPlugin from 'next-intl/plugin';
 import withBundleAnalyzerInit from '@next/bundle-analyzer';
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
 
 // Bundle analyzer: attivo solo con ANALYZE=true per non rallentare le
 // build normali. `npm run analyze` da web/ apre i report HTML in
@@ -16,6 +17,18 @@ const withBundleAnalyzer = withBundleAnalyzerInit({
 const CWD = process.cwd()
 const MONOREPO_ROOT =
   CWD.endsWith(`${path.sep}web`) || CWD.endsWith('/web') ? path.dirname(CWD) : CWD
+
+// Versione app dalla single source di verità (root package.json): la footer la
+// legge via NEXT_PUBLIC_APP_VERSION e si aggiorna da sola a ogni bump.
+let APP_VERSION = '0.0.0'
+try {
+  APP_VERSION =
+    (JSON.parse(
+      readFileSync(path.join(MONOREPO_ROOT, 'package.json'), 'utf8'),
+    ).version as string) || APP_VERSION
+} catch {
+  /* fallback al default */
+}
 
 // Static security headers. The Content-Security-Policy header is *not*
 // here: it carries a per-request nonce and is therefore set by
@@ -34,6 +47,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  env: { NEXT_PUBLIC_APP_VERSION: APP_VERSION },
   outputFileTracingRoot: MONOREPO_ROOT,
   // Pattern path-assoluti relativi al MONOREPO_ROOT: i glob `../X/**`
   // erano relativi a CWD (web/) e funzionavano in build locale ma su
@@ -82,6 +96,14 @@ const nextConfig: NextConfig = {
         hostname: 'avatars.githubusercontent.com', // Avatar GitHub OAuth
       },
     ],
+  },
+  async redirects() {
+    return [
+      // Il form manuale /profile/edit è stato rimosso: la modifica del profilo
+      // passa dalla chat con l'Assistente (vedi ProfileAssistantFab). Vecchi
+      // bookmark/link → pagina profilo.
+      { source: '/profile/edit', destination: '/profile', permanent: false },
+    ]
   },
   async headers() {
     return [

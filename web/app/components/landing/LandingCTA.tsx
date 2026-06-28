@@ -2,54 +2,69 @@
 
 import Link from "next/link";
 import { useLandingI18n } from "./LandingI18n";
+import { useTheme, type Theme } from "../../theme-provider";
+
+// Switcher tema compatto per il footer: sistema / notte / giorno (testo).
+function FooterThemeSwitch() {
+  const { theme, setTheme } = useTheme();
+  const { t } = useLandingI18n();
+  const OPTIONS: { value: Theme; labelKey: string }[] = [
+    { value: "system", labelKey: "theme_system" },
+    { value: "dark", labelKey: "theme_dark" },
+    { value: "light", labelKey: "theme_light" },
+  ];
+  return (
+    <div
+      className="flex items-center gap-2.5"
+      role="radiogroup"
+      aria-label={t("theme_aria")}
+    >
+      {OPTIONS.map(({ value, labelKey }) => {
+        const active = theme === value;
+        const label = t(labelKey as Parameters<typeof t>[0]);
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTheme(value)}
+            role="radio"
+            aria-checked={active}
+            aria-label={label}
+            className="text-[9px] leading-none cursor-pointer transition-colors bg-transparent border-0 p-0"
+            style={{
+              color: active ? "var(--color-green)" : "var(--color-dim)",
+            }}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function LandingCTA() {
   const { t } = useLandingI18n();
 
   return (
-    <section aria-label="Inizia ora" id="cta" className="px-6 py-24 relative">
-      <div
-        className="max-w-3xl mx-auto text-center rounded-xl p-10 md:p-16 border border-[var(--color-border)] relative overflow-hidden"
+    <section
+      aria-label={t("cta_section_aria")}
+      id="cta"
+      className="px-6 py-20 text-center max-w-2xl mx-auto"
+    >
+      <h2 className="text-xl md:text-2xl font-bold text-[var(--color-white)] tracking-tight mb-6">
+        {t("cta_title_1")} {t("cta_title_2")}
+      </h2>
+      <Link
+        href="/download"
+        className="inline-block px-8 py-3.5 rounded text-[13px] font-bold tracking-wider no-underline transition-all"
         style={{
-          background: "var(--color-panel)",
-          animation: "fade-in 0.5s ease both",
+          background: "var(--color-green)",
+          color: "#060608",
         }}
       >
-        {/* Background glow */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          aria-hidden="true"
-          style={{
-            background:
-              "radial-gradient(ellipse at center, rgba(0,232,122,0.06) 0%, transparent 70%)",
-          }}
-        />
-
-        <div className="relative z-10">
-          <h2 className="text-2xl md:text-3xl font-bold text-[var(--color-white)] tracking-tight mb-4">
-            {t("cta_title_1")}
-            <br />
-            {t("cta_title_2")}
-          </h2>
-          <p className="text-[12px] text-[var(--color-bright)] leading-relaxed max-w-md mx-auto mb-8">
-            {t("cta_desc")}
-          </p>
-          <Link
-            href="/download"
-            className="inline-block px-8 py-3.5 rounded text-[13px] font-bold tracking-wider no-underline transition-all"
-            style={{
-              background: "var(--color-green)",
-              color: "#060608",
-              boxShadow: "0 0 30px rgba(0,232,122,0.3)",
-            }}
-          >
-            {t("cta_button")}
-          </Link>
-          <p className="mt-4 text-[10px] text-[var(--color-dim)]">
-            {t("cta_note")}
-          </p>
-        </div>
-      </div>
+        {t("cta_button")}
+      </Link>
     </section>
   );
 }
@@ -62,14 +77,14 @@ export function LandingFooter() {
   return (
     <footer
       role="contentinfo"
-      aria-label="Footer Job Hunter Team"
+      aria-label={t("footer_aria")}
       className="px-6 pt-12 pb-8 border-t border-[var(--color-border)]"
     >
       <div className="max-w-5xl mx-auto">
         {/* Columns */}
         <nav
-          aria-label="Link footer"
-          className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10"
+          aria-label={t("footer_links_aria")}
+          className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-4"
         >
           {/* Brand */}
           <div>
@@ -81,6 +96,9 @@ export function LandingFooter() {
             <p className="text-[10px] text-[var(--color-dim)] leading-relaxed">
               {t("footer_brand_desc")}
             </p>
+            <div className="mt-4">
+              <FooterThemeSwitch />
+            </div>
           </div>
 
           {/* Prodotto */}
@@ -109,6 +127,9 @@ export function LandingFooter() {
             <h4 className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-3">
               {t("footer_resources")}
             </h4>
+            <Link href="/docs" className={linkClass}>
+              Docs
+            </Link>
             <a
               href="https://github.com/leopu00/job-hunter-team"
               target="_blank"
@@ -150,7 +171,22 @@ export function LandingFooter() {
             &copy; {new Date().getFullYear()} Job Hunter Team &mdash;{" "}
             {t("footer_copyright")}
           </span>
-          <span className="text-[9px] text-[var(--color-dim)]">v0.1.6</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[9px] text-[var(--color-dim)]">
+              Made with ❤️ by{" "}
+              <a
+                href="https://github.com/leopu00"
+                target="_blank"
+                rel="noreferrer"
+                className="text-[var(--color-muted)] hover:text-[var(--color-green)] no-underline"
+              >
+                leopu00
+              </a>
+            </span>
+            <span className="text-[9px] text-[var(--color-dim)]">
+              v{process.env.NEXT_PUBLIC_APP_VERSION}
+            </span>
+          </div>
         </div>
       </div>
     </footer>

@@ -6,6 +6,9 @@ export const state = {
   step: STEP_WELCOME,
   docker: null,
   extraDeps: null,
+  // macOS container-runtime choice from setup:get-container-runtime:
+  // { choice: 'auto'|'colima'|'docker-desktop', choices, detected }. null until loaded.
+  containerRuntime: null,
   payloadBusy: false,
   starting: false,
   containerBusy: false,
@@ -87,6 +90,7 @@ export const dom = {
   tgIntroLink: document.getElementById('tg-intro-link'),
   btnTgIntroBack: document.getElementById('btn-tg-intro-back'),
   btnTgIntroContinue: document.getElementById('btn-tg-intro-continue'),
+  btnTgIntroSkip: document.getElementById('btn-tg-intro-skip'),
   // Telegram tokens step (unified — used to be split create+tokens).
   // Meta rows ("Insert this name / username") are injected by
   // wizard-flow.js into the per-role #tg-meta-<role> slot inside the
@@ -114,11 +118,10 @@ export const dom = {
   btnSetupBack: document.getElementById('btn-setup-back'),
   btnSetupContinue: document.getElementById('btn-setup-continue'),
   btnStartTeam: document.getElementById('btn-start-team'),
-  btnOpenBrowser: document.getElementById('btn-open-browser'),
-  btnStopTeam: document.getElementById('btn-stop-team'),
   dockerBadge: document.getElementById('docker-badge'),
   dockerActions: document.getElementById('docker-actions'),
   dockerCard: document.getElementById('docker-card'),
+  runtimeChooser: document.getElementById('runtime-chooser'),
   winRequirements: document.getElementById('win-requirements'),
   winStepDocker: document.getElementById('win-step-docker'),
   winStepDockerAction: document.getElementById('win-step-docker-action'),
@@ -146,11 +149,6 @@ export const dom = {
   btnContainerBack: document.getElementById('btn-container-back'),
   btnContainerRetry: document.getElementById('btn-container-retry'),
   btnContainerContinue: document.getElementById('btn-container-continue'),
-  btnSubscriptionBack: document.getElementById('btn-subscription-back'),
-  btnSubscriptionContinue: document.getElementById('btn-subscription-continue'),
-  modelCharts: document.getElementById('model-charts'),
-  btnModelCompareBack: document.getElementById('btn-model-compare-back'),
-  btnModelCompareContinue: document.getElementById('btn-model-compare-continue'),
   providerOptions: document.getElementById('provider-options'),
   btnProviderBack: document.getElementById('btn-provider-back'),
   btnProviderContinue: document.getElementById('btn-provider-continue'),
@@ -165,6 +163,33 @@ export const dom = {
   btnLoginBack: document.getElementById('btn-login-back'),
   btnLoginContinue: document.getElementById('btn-login-continue'),
   btnReadyManageLogin: document.getElementById('btn-ready-manage-login'),
+  // Onboarding tail (local): working hours + profile upload.
+  hoursModeWindow: document.getElementById('hours-mode-window'),
+  hoursModeAlways: document.getElementById('hours-mode-always'),
+  hoursWindowFields: document.getElementById('hours-window-fields'),
+  hoursDays: document.getElementById('hours-days'),
+  hoursStart: document.getElementById('hours-start'),
+  hoursEnd: document.getElementById('hours-end'),
+  hoursTz: document.getElementById('hours-tz'),
+  hoursStatus: document.getElementById('hours-status'),
+  btnHoursBack: document.getElementById('btn-hours-back'),
+  btnHoursContinue: document.getElementById('btn-hours-continue'),
+  btnUploadPick: document.getElementById('btn-upload-pick'),
+  uploadList: document.getElementById('upload-list'),
+  uploadEmpty: document.getElementById('upload-empty'),
+  btnUploadBack: document.getElementById('btn-upload-back'),
+  btnUploadContinue: document.getElementById('btn-upload-continue'),
+  emailAddressInput: document.getElementById('email-address'),
+  emailPasswordInput: document.getElementById('email-password'),
+  emailDedicatedConfirm: document.getElementById('email-dedicated-confirm'),
+  btnEmailVerify: document.getElementById('btn-email-verify'),
+  btnEmail2fa: document.getElementById('btn-email-2fa'),
+  btnEmailAppPw: document.getElementById('btn-email-app-pw'),
+  btnEmailDocs: document.getElementById('btn-email-docs'),
+  emailSetupStatus: document.getElementById('email-status'),
+  btnEmailBack: document.getElementById('btn-email-back'),
+  btnEmailSkip: document.getElementById('btn-email-skip'),
+  btnEmailContinue: document.getElementById('btn-email-continue'),
   summaryList: document.getElementById('summary-list'),
   terminalModal: document.getElementById('terminal-modal'),
   terminalModalTitle: document.getElementById('terminal-modal-title'),
@@ -174,10 +199,6 @@ export const dom = {
   btnTerminalPaste: document.getElementById('terminal-modal-paste'),
   btnTerminalOpenUrl: document.getElementById('terminal-modal-open-url'),
   btnTerminalCopyUrl: document.getElementById('terminal-modal-copy-url'),
-  runningTitle: document.getElementById('running-title'),
-  runningLead: document.getElementById('running-lead'),
-  runningInfo: document.getElementById('running-info'),
-  advancedLog: document.getElementById('advanced-log'),
   readyHint: document.getElementById('ready-hint'),
 }
 
@@ -188,7 +209,15 @@ export function showStep(name) {
   }
 }
 
+// Sink di log legacy. Storicamente scriveva nel <pre> "Technical details"
+// dello step running (rimosso col dashboard-split). Il <pre> non esiste più,
+// quindi instradiamo SEMPRE anche su window.jhtLog: senza, gli errori che
+// passavano da appendLog (es. il probe di boot che fa cadere sul wizard)
+// sparivano silenziosamente. Resta null-safe sul <pre> per compatibilità.
 export function appendLog(line) {
   if (!line) return
-  dom.advancedLog.textContent += `${line}\n`
+  if (dom.advancedLog) dom.advancedLog.textContent += `${line}\n`
+  try {
+    window.jhtLog?.scope?.('renderer')?.info?.('appendLog', { line: String(line) })
+  } catch { /* logger assente: no-op */ }
 }

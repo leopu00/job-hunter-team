@@ -106,6 +106,16 @@ body { display: flex; flex-direction: column; }
   justify-content: center;
 }
 
+/* La step Ready ha DUE .step__actions figli diretti (la riga principale
+   Manage-login/Start + lo shortcut dev-mode): la regola absolute sopra li
+   impila sullo stesso bottom:24px e, essendo width:100%, l'area piena del
+   blocco dev-mode (ultimo nel DOM → in cima) copriva il bottone "Start" e
+   ne mangiava i click (visibile solo in dev mode, dove il blocco è mostrato).
+   Lascia passare i click attraverso l'area vuota del contenitore: solo il
+   suo bottone resta cliccabile. */
+#dev-mode-actions { pointer-events: none; }
+#dev-mode-actions > .btn { pointer-events: auto; }
+
 .step--centered .step__hint {
   max-width: 520px;
   margin-left: auto;
@@ -1416,7 +1426,8 @@ body { display: flex; flex-direction: column; }
   padding: 0 8px;
 }
 
-.home__brand-mark { font-size: 22px; }
+.home__brand-mark { display: inline-flex; align-items: center; }
+.home__brand-mark svg { height: 16px; width: auto; display: block; }
 
 .home__brand-name {
   font-size: 13px;
@@ -1505,6 +1516,112 @@ body { display: flex; flex-direction: column; }
 .home__card[hidden] { display: none; }
 
 .home__card + .home__card { margin-top: 16px; }
+
+/* [JHT-DASHBOARD-SPLIT] Dashboard locale embedded nel pannello Team: la
+   <webview> riempie la larghezza del contenuto (non il cap 640px della card)
+   e quasi tutta l'altezza, così il team è visibile dentro l'app. */
+/* [JHT-DASHBOARD-SPLIT] Dashboard NATIVA: lista offerte + dettaglio, UI
+   desktop nativa (niente webview). */
+.dash__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  height: calc(100vh - 220px);
+  min-height: 320px;
+  gap: 10px;
+  color: var(--text-dim);
+  max-width: 520px;
+  margin: 0 auto;
+}
+.dash__empty[hidden] { display: none; }
+
+.dash__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dash__list[hidden] { display: none; }
+
+.dash-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.dash-card:hover { border-color: var(--border-strong); background: rgba(255,255,255,0.03); }
+
+.dash-card__main { min-width: 0; flex: 1; }
+.dash-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.dash-card__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.dash-card__date { font-size: 11.5px; color: var(--text-dim); }
+
+/* Badge score: gradiente neutro per banda (no etichette practice/seria). */
+.dash-score {
+  min-width: 38px;
+  text-align: center;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.dash-score--high { background: rgba(0, 232, 122, 0.14); border-color: rgba(0, 232, 122, 0.4); }
+.dash-score--mid  { background: rgba(245, 180, 60, 0.14); border-color: rgba(245, 180, 60, 0.4); }
+.dash-score--low  { background: rgba(255, 255, 255, 0.05); }
+.dash-score--none { background: transparent; color: var(--text-dim); }
+
+/* Dettaglio singola offerta */
+.dash__detail { display: flex; flex-direction: column; gap: 16px; max-width: 820px; }
+.dash__detail[hidden] { display: none; }
+.dash-detail__back { align-self: flex-start; }
+.dash-detail__head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.dash-detail__title { margin: 0; font-size: 20px; font-weight: 700; }
+.dash-detail__rows { display: flex; flex-direction: column; gap: 8px; }
+.dash-detail__row { display: flex; gap: 12px; font-size: 13.5px; }
+.dash-detail__label { width: 110px; flex-shrink: 0; color: var(--text-dim); }
+.dash-detail__value { color: var(--text); word-break: break-word; }
+a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
+.dash-detail__highlights { display: flex; gap: 24px; flex-wrap: wrap; }
+.dash-detail__hlcol { flex: 1; min-width: 220px; }
+.dash-detail__hltitle { font-weight: 700; margin-bottom: 6px; }
+.dash-detail__hlcol.is-pro .dash-detail__hltitle { color: rgba(0, 232, 122, 0.9); }
+.dash-detail__hlcol.is-con .dash-detail__hltitle { color: rgba(245, 120, 120, 0.9); }
+.dash-detail__hllist { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--text); display: flex; flex-direction: column; gap: 4px; }
+.dash-detail__desc { font-size: 13.5px; color: var(--text); }
+.dash-detail__desc p { white-space: pre-wrap; line-height: 1.5; margin: 6px 0 0; color: var(--text-dim); }
 
 .home__card-link {
   font-size: 13px;
@@ -2028,6 +2145,21 @@ body { display: flex; flex-direction: column; }
   flex-wrap: wrap;
 }
 
+/* Toggle opt-in "auto-start del team al boot" sotto le azioni del Team. */
+.home__autostart {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-muted, #8a8a92);
+  cursor: pointer;
+  user-select: none;
+}
+.home__autostart input {
+  cursor: pointer;
+}
+
 .home__content .lang-select { max-width: 280px; }
 
 .home__card-text {
@@ -2238,3 +2370,337 @@ body { display: flex; flex-direction: column; }
   text-decoration: underline;
   word-break: break-all;
 }
+
+/* ── macOS container-runtime chooser (Colima / Docker Desktop, ADR-0006) ── */
+.runtime-chooser {
+  margin: 4px 0 14px;
+}
+.runtime-chooser[hidden] { display: none; }
+
+.runtime-chooser__title {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0 0 8px;
+}
+
+.runtime-chooser__options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 560px) {
+  .runtime-chooser__options { grid-template-columns: 1fr; }
+}
+
+.runtime-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.runtime-option:hover:not(:disabled) { border-color: var(--border-strong); }
+
+.runtime-option--active {
+  border-color: rgba(126, 200, 154, 0.55);
+  background: rgba(126, 200, 154, 0.08);
+}
+
+.runtime-option__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.runtime-option__tag {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--success);
+  border: 1px solid rgba(126, 200, 154, 0.4);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.runtime-option__hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* [JHT-DASHBOARD-SPLIT] Statistiche / Candidature / Attività native */
+.dash-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.dash-stat {
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: center;
+}
+.dash-stat__num { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dash-stat__label { margin-top: 4px; font-size: 12.5px; color: var(--text-dim); }
+
+.dash-apps__counts { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.dash-apps__count {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 10px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+}
+.dash-apps__count-num { font-size: 18px; font-weight: 700; }
+.dash-apps__count-label { font-size: 11.5px; color: var(--text-dim); }
+
+.dash-activity__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+}
+.dash-activity__what { font-size: 13.5px; font-weight: 600; }
+
+.dash-agent {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+}
+.dash-agent__main { display: flex; align-items: center; gap: 10px; }
+.dash-agent__name { font-size: 13.5px; font-weight: 600; }
+
+/* [JHT-DASHBOARD-SPLIT] Sidebar raggruppata per area (Team / Lavoro / Impostazioni) */
+.home__nav-group { display: flex; flex-direction: column; gap: 2px; }
+.home__nav-group + .home__nav-group { margin-top: 16px; }
+.home__nav-grouptitle {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); padding: 0 12px 6px;
+}
+
+.dash-profile__skills { margin-top: 18px; display: flex; flex-direction: column; gap: 14px; }
+.dash-profile__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.dash-chip { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); }
+
+.dash__loading {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  height: 200px; color: var(--text-dim); font-size: 13.5px;
+}
+
+/* [JHT-DASHBOARD-NATIVE] Chat agenti nativa */
+.chat { display: flex; flex-direction: column; height: calc(100vh - 170px); min-height: 420px; max-width: 820px; }
+.chat__tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.chat-tab {
+  padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text-dim); cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.chat-tab.is-active { color: var(--text); border-color: var(--border-strong); background: rgba(255,255,255,0.06); }
+.chat__messages {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+  padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-subtle);
+}
+.chat-msg { display: flex; }
+.chat-msg--user { justify-content: flex-end; }
+.chat-msg--agent { justify-content: flex-start; }
+.chat-bubble {
+  max-width: 78%; padding: 9px 13px; border-radius: 14px; font-size: 13.5px; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word; border: 1px solid var(--border);
+}
+.chat-msg--user .chat-bubble { background: rgba(0,232,122,0.12); border-color: rgba(0,232,122,0.35); }
+.chat-msg--agent .chat-bubble { background: var(--panel); }
+.chat-bubble code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 4px; }
+.chat__composer { display: flex; gap: 8px; margin-top: 10px; align-items: flex-end; }
+.chat__composer textarea {
+  flex: 1; resize: none; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); font: inherit; font-size: 13.5px;
+}
+.chat__composer textarea:focus { outline: none; border-color: var(--border-strong); }
+
+.dash-detail__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-action { font-size: 12.5px; }
+.dash-action:disabled { opacity: 0.6; }
+
+/* [JHT-DASHBOARD-NATIVE] Filtri lista offerte */
+.dash__filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.dash__filters[hidden] { display: none; }
+.dash__search {
+  flex: 1; min-width: 200px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit; font-size: 13.5px;
+}
+.dash__search:focus { outline: none; border-color: var(--border-strong); }
+.dash__select {
+  padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); font: inherit; font-size: 13px;
+}
+.dash__count { font-size: 12px; color: var(--text-dim); margin-left: auto; }
+
+/* [JHT-DASHBOARD-NATIVE] Pipeline a barre (Statistiche) */
+.dash-statswrap { display: flex; flex-direction: column; gap: 24px; }
+.dash-pipeline { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.dash-pipeline__row { display: flex; align-items: center; gap: 12px; }
+.dash-pipeline__label { width: 110px; flex-shrink: 0; font-size: 13px; color: var(--text-dim); }
+.dash-pipeline__track { flex: 1; height: 18px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.dash-pipeline__bar { height: 100%; background: linear-gradient(90deg, rgba(0,232,122,0.5), rgba(0,232,122,0.25)); border-radius: 6px; min-width: 2px; }
+.dash-pipeline__num { width: 40px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.dash-profile__assistant { align-self: flex-start; margin-bottom: 6px; }
+.dash-profile { display: flex; flex-direction: column; gap: 4px; }
+
+.dash-agents { display: flex; flex-direction: column; gap: 18px; }
+.dash-agentgroup { display: flex; flex-direction: column; gap: 8px; }
+
+.dash-hours__status { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; font-size: 14px; }
+
+.dash-ticket { display: flex; flex-direction: column; gap: 6px; }
+.dash-ticket__row { display: flex; gap: 8px; }
+.dash-ticket__input {
+  flex: 1; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); font: inherit; font-size: 13.5px;
+}
+.dash-ticket__input:focus { outline: none; border-color: var(--border-strong); }
+
+.dash-notif { display: flex; gap: 12px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+.dash-notif.is-read { opacity: 0.6; }
+.dash-notif__icon { font-size: 16px; }
+.dash-notif__title { font-size: 13.5px; font-weight: 600; }
+
+/* ── Onboarding tail: working hours + profile upload (2026-06-23) ── */
+.hours-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 460px;
+  margin: 8px auto 4px;
+  text-align: left;
+}
+.hours-mode {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.hours-window {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  transition: opacity 140ms ease;
+}
+.hours-window.is-disabled { opacity: 0.4; pointer-events: none; }
+.hours-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hours-row__label { font-size: 13px; color: var(--text-dim); min-width: 42px; }
+.hours-days { display: flex; gap: 6px; flex-wrap: wrap; }
+.hours-day-chip {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+.hours-day-chip:hover { border-color: var(--border-strong); }
+.hours-day-chip.is-selected {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+.hours-time {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13.5px;
+}
+.hours-time:focus { outline: none; border-color: var(--border-strong); }
+
+.upload-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 460px;
+  margin: 10px auto 4px;
+  padding: 22px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.upload-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.upload-list__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  font-size: 13.5px;
+}
+.upload-list__icon { font-size: 15px; }
+.upload-list__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Team email inbox step (onboarding) */
+.email-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 440px;
+  margin: 10px auto 4px;
+  text-align: left;
+}
+.email-field { display: flex; flex-direction: column; gap: 6px; }
+.email-field__label { font-size: 13px; color: var(--text-dim); }
+.email-input {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+.email-input:focus { outline: none; border-color: var(--border-strong); }
+.email-dedicated {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text-dim);
+  cursor: pointer;
+  line-height: 1.4;
+}
+.email-dedicated input { margin-top: 2px; }
+.email-gmail-help { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.email-gmail-links { display: flex; gap: 8px; flex-wrap: wrap; }
+.dash-agent__actions { display: flex; align-items: center; gap: 10px; }
+#email-status[data-kind='ok'] { color: var(--success); }
+#email-status[data-kind='warn'] { color: #e0b15a; }
+#email-status[data-kind='error'] { color: var(--danger); }
