@@ -157,6 +157,92 @@ def _throttle_target_for_sforo(delta_pct_h):
     return 1800       # 30 min
 
 
+# ── Passo B SHADOW (2026-06-28): driver-in-token, LOG-ONLY ───────────────────
+# Tesi utente: il vel_team su `delta_usage` (% INTERO, ±0.5%/h di quantizzazione)
+# è rumore; i TOKEN sono lisci. Qui NON cambiamo il freno (resta su vel_team):
+# logghiamo affianco cosa SAREBBE il throttle guidando dal rate-in-token, usando
+# una `ratio` (kT per 1%) STABILE — EMA aggiornata SOLO sui tick con delta_usage
+# affidabile (≥ soglia), così su un tick quantizzato (delta=1) il rate-token resta
+# liscio invece di saltare. Confronto su N giorni → poi si decide il flip (slim).
+# Completamente isolato: legge il dict già ritornato da compute_tick, scrive un
+# jsonl a parte, mai tocca il verdetto/lo state. Vedi
+# docs/internal/2026-06-28-pace-imperative-and-token-slim.md.
+SHADOW_RATIO_MIN_DELTA = 2.0   # %-interi minimi per fidarsi del ratio del tick
+SHADOW_EMA_ALPHA = 0.3         # peso del campione nuovo nell'EMA del ratio
+_SHADOW_STATE = "pace-shadow-state.json"
+_SHADOW_LOG = "pace-shadow.jsonl"
+
+
+def _pace_shadow_log(d, now):
+    """Logga (LOG-ONLY) il confronto throttle-su-%-quantizzato vs throttle-su-token.
+
+    Mai solleva: ogni errore è ingoiato (lo shadow non deve mai disturbare il tick).
+    """
+    try:
+        if not (isinstance(d, dict) and d.get("ok")):
+            return
+        delta_usage = d.get("delta_usage")
+        team_kt = d.get("team_kt")
+        ratio = d.get("ratio")
+        vel_team = d.get("vel_team")
+        vel_target = d.get("vel_target")
+        window_h = (d.get("effective_window_min") or 0) / 60.0
+        verdict = d.get("verdict") or {}
+        if window_h <= 0 or not isinstance(team_kt, (int, float)):
+            return
+        state_path = LOGS_DIR / _SHADOW_STATE
+        try:
+            st = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            st = {}
+        ratio_ema = st.get("ratio_ema")
+        # Aggiorna l'EMA SOLO su campioni affidabili (delta_usage non quantizzato).
+        if (isinstance(delta_usage, (int, float))
+                and delta_usage >= SHADOW_RATIO_MIN_DELTA
+                and isinstance(ratio, (int, float)) and ratio > 0):
+            ratio_ema = (ratio if ratio_ema is None
+                         else ratio_ema * (1 - SHADOW_EMA_ALPHA)
+                         + ratio * SHADOW_EMA_ALPHA)
+            st["ratio_ema"] = ratio_ema
+            st["n"] = int(st.get("n", 0)) + 1
+            try:
+                state_path.write_text(json.dumps(st), encoding="utf-8")
+            except OSError:
+                pass
+        rec = {
+            "ts": now.isoformat(),
+            "delta_usage_pct": delta_usage,
+            "team_kt": round(team_kt, 2),
+            "ratio_window_kt_per_pct": (round(ratio, 1)
+                                        if isinstance(ratio, (int, float)) else None),
+            "ratio_ema_kt_per_pct": (round(ratio_ema, 1)
+                                     if isinstance(ratio_ema, (int, float)) else None),
+            "vel_team_pct_h": (round(vel_team, 3)
+                               if isinstance(vel_team, (int, float)) else None),
+            "vel_target_pct_h": (round(vel_target, 3)
+                                 if isinstance(vel_target, (int, float)) else None),
+        }
+        # Rate-in-token usando il ratio STABILE (EMA): liscio anche se delta_usage=1.
+        if isinstance(ratio_ema, (int, float)) and ratio_ema > 0:
+            vel_team_kt = (team_kt / window_h) / ratio_ema
+            rec["vel_team_kt_pct_h"] = round(vel_team_kt, 3)
+            if isinstance(vel_target, (int, float)):
+                delta_kt = vel_team_kt - vel_target
+                rec["delta_kt_pct_h"] = round(delta_kt, 3)
+                # throttle "shadow" = solo in direzione SFORO (>0); altrimenti None.
+                rec["thr_kt_s"] = (_throttle_target_for_sforo(delta_kt)
+                                   if delta_kt > 0 else None)
+        # throttle "attuale" come riferimento (sul delta del verdetto reale).
+        vd = verdict.get("delta")
+        rec["verdict_kind"] = verdict.get("kind")
+        rec["thr_now_s"] = (_throttle_target_for_sforo(vd)
+                            if isinstance(vd, (int, float)) and vd > 0 else None)
+        with (LOGS_DIR / _SHADOW_LOG).open("a", encoding="utf-8") as f:
+            f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+    except Exception as e:  # noqa: BLE001 — lo shadow non deve MAI rompere il tick
+        print(f"[pacing-bridge] WARN shadow-log: {e}", file=sys.stderr, flush=True)
+
+
 def _path_import(p: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, str(p))
     mod = importlib.util.module_from_spec(spec)
@@ -1266,6 +1352,8 @@ def loop():
                         wht=wht, pcap=pcap)
             # Tabella temporale per-agente (2h/5min) per la Sentinella (S-07).
             write_agent_usage_table(tba, now)
+            # Passo B SHADOW (log-only): confronto throttle %-quantizzato vs token.
+            _pace_shadow_log(d, now)
         except Exception as e:
             # Non vogliamo che un errore di un tick affossi il loop.
             print(f"[pacing-bridge] errore tick {now.isoformat()}: {e}",
