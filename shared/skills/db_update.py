@@ -81,6 +81,21 @@ def _guard_role_family(conn, raw, _active=None):
     return _SENTINEL, v
 
 
+def interpret_escapes(text):
+    """Converte le escape LETTERALI \\n \\t \\r in caratteri veri.
+
+    Gli agenti (LLM) scrivono `\\n\\n` come separatori di paragrafo dentro una
+    stringa singola passata come arg CLI. Senza questa conversione finirebbero
+    LETTERALI in DB e quindi in dashboard (i `\\n` resterebbero visibili come
+    testo). Coerente con jht-telegram-send / jht-notify-user. Applicato ai soli
+    campi free-text leggibili dall'utente (notes, jd_summary), non ai campi
+    scraped (jd_text/requirements).
+    """
+    if text is None:
+        return None
+    return text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r")
+
+
 def update_position(args):
     conn = get_db()
     ensure_schema(conn)
@@ -106,7 +121,7 @@ def update_position(args):
         changed.append(f"status={args.status}")
     if args.notes:
         updates.append("notes = ?")
-        params.append(args.notes)
+        params.append(interpret_escapes(args.notes))
         changed.append(f"notes={args.notes[:40]}...")
     if args.jd_text:
         updates.append("jd_text = ?")
@@ -114,7 +129,7 @@ def update_position(args):
         changed.append("jd_text")
     if args.jd_summary:
         updates.append("jd_summary = ?")
-        params.append(args.jd_summary)
+        params.append(interpret_escapes(args.jd_summary))
         changed.append("jd_summary")
     if args.requirements:
         updates.append("requirements = ?")

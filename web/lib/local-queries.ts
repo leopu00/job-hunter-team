@@ -1625,6 +1625,23 @@ export function ackPendingMessageLocal(ws: string, id: string): boolean {
   return result.changes > 0;
 }
 
+// Marca come letti tutti i messaggi web pendenti in un colpo solo. Stesso
+// filtro di getPendingMessagesLocal (delivered_via='web' AND non ack) cosi'
+// azzera esattamente cio' che la dashboard mostra. Ritorna il n. di righe.
+export function ackAllPendingMessagesLocal(ws: string): number {
+  const db = getDb(ws);
+  const result = db
+    .prepare(
+      `
+    UPDATE pending_user_messages
+    SET acknowledged_at = CURRENT_TIMESTAMP
+    WHERE delivered_via = 'web' AND acknowledged_at IS NULL
+  `,
+    )
+    .run();
+  return result.changes;
+}
+
 export function replyPendingMessageLocal(
   ws: string,
   id: string,
