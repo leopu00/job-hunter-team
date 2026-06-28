@@ -1042,6 +1042,65 @@ def _evening_release(now_dt):
     return False
 
 
+def _pace_verdict_line(weekly_pace, wk_remaining_pct):
+    """VERDETTO imperativo del weekly-pace per la Sentinella (Passo A, 2026-06-28).
+
+    Visione utente: dare alla Sentinella la CONCLUSIONE pronta, non solo i numeri
+    grezzi (`vel_weekly`/`ratio`/`debt`...). Un segnale imperativo ("RALLENTA ~X%")
+    è molto più eseguibile in autonomia da un modello debole (i Kimi, poco
+    manovrabili) di "ratio 1.07x ALLINEATO". La DECISIONE resta la divisione
+    forward `sustainable = budget_residuo / ore_lavoro_residue` (campo
+    `sustainable_pct_h`, già calcolato da weekly_pace.py): si auto-corregge da sola
+    (uno schizzo di un agente abbassa il residuo → la velocità richiesta cala →
+    qui esce "RALLENTA" al tick dopo). Il `vel_weekly` (media 2h) serve SOLO a
+    quantificare di quanto tagliare, NON a decidere.
+
+    Ritorna la stringa-prefisso (es. ` WEEKLY-PACE→RALLENTA ~42%: ...`) o "" se i
+    dati non bastano. I token grezzi restano APPESI dopo (contratto S-07 intatto);
+    il Passo B (gated) li toglierà insieme al riallineo del prompt.
+    """
+    if not isinstance(weekly_pace, dict):
+        return ""
+    kind = weekly_pace.get("kind")
+    if kind in (None, "ND"):
+        return ""
+    sust = weekly_pace.get("sustainable_pct_h")        # v* = velocità richiesta ORA
+    vel = weekly_pace.get("vel_weekly_pct_h")           # rate misurato (diagnostico)
+    binding = bool(weekly_pace.get("binding"))
+    burst = bool(weekly_pace.get("burst_transient"))
+    burn = bool(weekly_pace.get("burn_mode"))
+    early = weekly_pace.get("early_lockout_h")
+    proj = weekly_pace.get("projected_final_pct")
+    wasted = weekly_pace.get("wasted_pct")
+    reset_h = weekly_pace.get("reset_in_active_h")
+    # Contesto "resta X% in Yh-lavoro" (il guinzaglio weekly, leggibile).
+    leash = ""
+    if isinstance(wk_remaining_pct, (int, float)) and isinstance(reset_h, (int, float)):
+        leash = f" (resta {wk_remaining_pct:.0f}% in {reset_h:.0f}h-lavoro)"
+    # Priorità: burst in uscita > frena (binding/sopra-pace) > accelera (burn) > mantieni.
+    if burst:
+        return " WEEKLY-PACE→RIPRESA-CONTROLLATA: picco in uscita, NON frenare duro"
+    if binding or kind == "SOPRA-PACE":
+        cut = None
+        if isinstance(vel, (int, float)) and vel > 0 and isinstance(sust, (int, float)):
+            cut = max(0.0, (vel - sust) / vel * 100.0)
+        head = (f" WEEKLY-PACE→RALLENTA ~{cut:.0f}%" if cut is not None
+                else " WEEKLY-PACE→RALLENTA")
+        goal = (f": vai a ~{sust:.2f}%/h (ora {vel:.2f})"
+                if isinstance(sust, (int, float)) and isinstance(vel, (int, float))
+                else "")
+        trend = (f" → altrimenti ESAURISCI ~{early:.0f}h-lavoro PRIMA del reset"
+                 if isinstance(early, (int, float)) and early > 0 else "")
+        return head + goal + leash + trend
+    if burn:
+        return (f" WEEKLY-PACE→ACCELERA-SATURA: a ritmo attuale chiudi ~{proj:.0f}%,"
+                f" spreco ~{wasted:.0f}% del weekly prima del reset"
+                if isinstance(proj, (int, float)) and isinstance(wasted, (int, float))
+                else " WEEKLY-PACE→ACCELERA-SATURA: budget a rischio spreco")
+    goal = (f" (~{sust:.2f}%/h)" if isinstance(sust, (int, float)) else "")
+    return f" WEEKLY-PACE→MANTIENI{goal}{leash}"
+
+
 def _daily_pacing_via_skill(entry, now_dt, now_ts):
     """Budget GIORNALIERO adattivo + consumo nella finestra di lavoro corrente
     (regole S-09/C-19). Tutto in % del WEEKLY: budget = weekly_remaining /
@@ -1551,7 +1610,12 @@ def main():
                 if (isinstance(weekly_pace, dict)
                         and weekly_pace.get("kind") not in (None, "ND")):
                     el = weekly_pace.get("early_lockout_h")
-                    weekly_pace_field = (
+                    # Passo A (2026-06-28): VERDETTO imperativo PRIMA dei token
+                    # grezzi → la Sentinella (e soprattutto i Kimi) legge subito
+                    # l'azione. I grezzi restano appesi (contratto S-07 intatto).
+                    weekly_pace_field = _pace_verdict_line(
+                        weekly_pace, wk_remaining)
+                    weekly_pace_field += (
                         f" WEEKLY-PACE[{weekly_pace['kind']}]"
                         f" vel_weekly={weekly_pace['vel_weekly_pct_h']}%/h"
                         f" sost={weekly_pace['sustainable_pct_h']}%/h"
