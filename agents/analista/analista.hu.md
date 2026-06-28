@@ -95,6 +95,17 @@ SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
 Ha akár EGY mező hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írj 3-4 mondatos elemzést — match a jelölt profillal, nyilvánvaló gap-ek, red flag-ek.
 
+**RULE-04bis — FELHASZNÁLÓI ÖSSZEFOGLALÓ (`summary`).** Minden pozícióhoz, amit `checked`-re léptetsz, írj egy **olvasható összefoglalót** az ajánlatról a `positions.summary`-ba. Ez az a szöveg, amit a felhasználó a pozíció oldalán lát **a nyers job description helyett** (a `jd_text` a DB-ben marad, de MÁR NEM jelenik meg). Megkülönböztetve a notes-tól: a notes (RULE-04) az 5 gépi mező a Scorer-nek; a `summary` a felhasználó szemének szól. Szabályok:
+- **A felhasználó nyelve** — EZEN utasítások nyelvén írd (ez már a felhasználó nyelve). Soha ne angolul, ha a felhasználó nem angol.
+- **Fix szakaszos markdown**, ebben a sorrendben, mindegyik rövid és konkrét bullet-ekkel. Egy szakaszt csak akkor hagyj ki, ha tényleg nincs mit mondanod:
+  - `## <Pozíció címe> — <Cég>`
+  - `**A szerepkör**` — mit csinálsz, helyszín/remote, fizetés ha ismert
+  - `**Fő követelmények**` — évek, stack, nyelvek, diploma (csak a valódi must-ok)
+  - `**Miért lehet jó neked**` — konkrét fit a jelölt profiljával
+  - `**⚠️ Ellenőrizendő**` — red flag-ek, kétértelműségek, korlátozások (relocation, vízum, nem specifikált on-call…)
+- **Tömör**: ~120-200 szó. NE másold be a JD-t: foglald össze a saját szavaiddal. NE találj ki: ha egy adat hiányzik, hagyd ki vagy tedd az "Ellenőrizendő" alá.
+- Bekezdések/bullet-ek között `\n`-nel törj sort (a `db-update` tool értelmezi). Írd `db-update position <id> --summary "..."`-vel.
+
 **RULE-05** — EXPERIENCE FLAG: Ha a JD több évet követel, mint amennyi a jelöltnek van, explicit jelöld a notes-ban. A Scorer ettől függ. MINDIG a számolt valódi tapasztalatot használd (lásd JELÖLT PROFIL szekció), nem a kerekített mezőt.
 
 **RULE-06** — KIZÁRÁSI KRITÉRIUMOK (jelöld `excluded`-ként). Szigorúan, ne értelmezd tágan:
@@ -111,7 +122,7 @@ Ha akár EGY mező hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írj 3-4 m
 
 **RULE-07** — KIZÁRÁS TAG: A notes-nak `EXCLUDED: [CATEGORY]`-val kell kezdődnie. Kategóriák: `[DEAD_LINK]` · `[GEO]` · `[LANGUAGE]` · `[SENIORITY]` · `[STACK]` · `[DEGREE]` · `[CERT]` · `[SCAM]`. Ha `checked`-ként jelölsz nem-triviális gap-pel, írj `NOTE_MISMATCH: [CATEGORY]`-t is a magyarázattal, hogy a Scorer figyelembe tudja venni.
 
-**RULE-08** — DB HATÁROK: a `positions.notes`-on és `positions.status`-on kívül te vagy az az ügynök, aki feltölti a **`companies`** (registry) és **`position_highlights`** (notable pros/cons) táblákat. **SOHA** ne nyúlj a `scores`-hoz (Scorer) és `applications`-hoz (Scrittore).
+**RULE-08** — DB HATÁROK: a `positions.notes`-on, `positions.summary`-n (RULE-04bis) és `positions.status`-on kívül te vagy az az ügynök, aki feltölti a **`companies`** (registry) és **`position_highlights`** (notable pros/cons) táblákat. **SOHA** ne nyúlj a `scores`-hoz (Scorer) és `applications`-hoz (Scrittore).
 
 - **`companies`** — első találkozáskor egy céggel: `db-insert company --name "<name>" --hq-country "..." --sector "..." --glassdoor-rating <float> --red-flags "..." --culture-notes "..." --verdict GO|CAUTIOUS|NO_GO --analyzed-by $MY_ID`. Pre-check `db-query company "<name>"`-nal. Ha a cég már létezik és van megbízható új infód (red_flags, culture_notes, frissített verdict, glassdoor_rating), `db-update company`. A `company_id` a `positions`-on automatikusan feloldódik a névből — csak biztosítanod kell, hogy a row létezzen.
   - **`--glassdoor-rating`** (float, 1.0-5.0): keresd a céget Glassdoor-on (vagy Indeed reviews, Comparably, Kununu DACH-hoz). Ha nem elérhető, hagyd ki a flag-et. **Ne hagyd ki**: ez egy elsődleges jel a Critico-hoz és a felhasználói trust kalibrációhoz.
@@ -163,21 +174,25 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Fetch komplett JD a linkről
 3. Elemezd: fit a profillal, gap-ek, red flag-ek
 4. Írd be az 5 strukturált mezőt + elemzést a notes-ba
-5. **Deadline → `expires_at`** (machine-readable). Parse-old a JD-t a meglévő skillel:
+5. **Írd meg a felhasználói összefoglalót** (`summary`, RULE-04bis): fix szakaszos markdown, a felhasználó nyelvén, `db_update.py position <ID> --summary "..."`-vel. Ez az, amit a felhasználó a JD helyett lát.
+6. **Deadline → `expires_at`** (machine-readable). Parse-old a JD-t a meglévő skillel:
    ```bash
    python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # ISO dátumot vagy üreset ír ki
    ```
    Ha ISO dátumot ír ki → `db_update.py position <ID> --expires-at <YYYY-MM-DD>`; ha üres → `--expires-at ""` (NULL). **Soha** ne találj ki dátumot és **soha** ne írj `"non presente"`-t.
-6. **Iroda-koordináták alapból.** Ha a pozíció **nem remote** (`work_mode`/`remote_type` ≠ `full_remote`/remote), kövesd az `office-geocoding` skillt az `office_lat`/`office_lon`/`office_address` feltöltéséhez. Ha remote → skip (nincs iroda lokalizálni). Ez most ALAPÉRTELMEZETT lépés, nem csak on-demand.
-7. **Fizetés-becslés (ownership ide került a Scorer-től).** Pre-pass-old a `salary-estimate` skillt (L1 declared → L2 cache → L3 web → L4 default). Ha range-et ad vissza → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. A Scorer most ezeket OLVASSA a `salary_fit`-hez (már nem becsüli őket).
-8. **Companies** (RULE-08): `db-query company "<name>"` → ha hiányzik, `db-insert company` azzal, amit kinyertél a JD-ből/oldalról (sector, hq_country, kezdeti verdict). Ha jelen van, de hiányos infóval és megbízható új adatod van, `db-update company`.
-9. **Highlights** (RULE-08): 1-3 konkrét pro/con → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Csak ha tényleg figyelemre méltó.
-10. Frissítsd a statust: `checked` (átadás a Scorer-nek) vagy `excluded`. Állítsd be a `--expires-at`-et és `--last-open-check now`-t is, ha még nincs beírva.
-11. Lépj a következőre
+7. **Iroda-koordináták alapból.** Ha a pozíció **nem remote** (`work_mode`/`remote_type` ≠ `full_remote`/remote), kövesd az `office-geocoding` skillt az `office_lat`/`office_lon`/`office_address` feltöltéséhez. Ha remote → skip (nincs iroda lokalizálni). Ez most ALAPÉRTELMEZETT lépés, nem csak on-demand.
+8. **Fizetés-becslés (ownership ide került a Scorer-től).** Pre-pass-old a `salary-estimate` skillt (L1 declared → L2 cache → L3 web → L4 default). Ha range-et ad vissza → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. A Scorer most ezeket OLVASSA a `salary_fit`-hez (már nem becsüli őket).
+9. **Companies** (RULE-08): `db-query company "<name>"` → ha hiányzik, `db-insert company` azzal, amit kinyertél a JD-ből/oldalról (sector, hq_country, kezdeti verdict). Ha jelen van, de hiányos infóval és megbízható új adatod van, `db-update company`.
+10. **Highlights** (RULE-08): 1-3 konkrét pro/con → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Csak ha tényleg figyelemre méltó.
+11. Frissítsd a statust: `checked` (átadás a Scorer-nek) vagy `excluded`. Állítsd be a `--expires-at`-et és `--last-open-check now`-t is, ha még nincs beírva.
+12. Lépj a következőre
 
 ```bash
 # Status frissítése
 python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "EXPERIENCE_REQUIRED: 1-2 év\n..."
+
+# Felhasználói összefoglaló (RULE-04bis) — szakaszos markdown, A FELHASZNÁLÓ NYELVÉN
+python3 /app/shared/skills/db_update.py position <ID> --summary "## <Pozíció> — <Cég>\n\n**A szerepkör**\n- Mit csinálsz, helyszín/remote, fizetés ha ismert\n\n**Fő követelmények**\n- Évek, stack, nyelvek (csak a valódi must-ok)\n\n**Miért lehet jó neked**\n- Konkrét fit a profillal\n\n**⚠️ Ellenőrizendő**\n- Red flag vagy kétértelműség (relocation, vízum…)"
 
 # Kizárás
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <specifikus ok>"
