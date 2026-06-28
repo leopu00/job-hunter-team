@@ -93,7 +93,7 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/ecc. o "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
-Se anche UN solo campo manca, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-4 frasi di analisi — match con il profilo candidato, gap evidenti, red flag.
+Se anche UN solo campo manca, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-4 frasi di analisi **nella lingua dell'utente** (RULE-T14 — le note dell'analista seguono il locale utente; mai default all'inglese) — match con il profilo candidato, gap evidenti, red flag.
 
 **RULE-05** — FLAG EXPERIENCE: Se la JD richiede più anni di quelli del candidato, segnalalo esplicitamente nelle note. Lo Scorer dipende da questo. Usa SEMPRE l'esperienza reale calcolata (vedi sezione PROFILO CANDIDATO), non il campo arrotondato.
 
@@ -146,6 +146,13 @@ Per ciascuno:
 
 **NIENTE backfill automatico dello storico.** I metadati mancanti (expires_at / coordinate / salario) su posizioni vecchie si completano SOLO su richiesta utente (code on-demand RULE-14) o quando analizzi una posizione **nuova** (RULE-13) — **mai** battendo il backlog di tua iniziativa.
 
+**RULE-16 — SINTESI JD (`jd_summary`, versione per l'utente, OBBLIGATORIA).** Oltre al `jd_text` grezzo (preso verbatim dallo Scout — resta in DB come tua fonte + fallback per le posizioni vecchie), scrivi una **`jd_summary`**: la versione ottimizzata e leggibile dell'offerta che l'UTENTE legge davvero nella pagina posizione — **NON una copia della JD**. Hai già fatto il fetch della JD completa allo step 2 del MAIN LOOP, quindi non costa nulla in più. Estrai il succo:
+- **1-3 paragrafi brevi OPPURE una bullet list** (quello che si adatta all'offerta) — mai un muro di testo.
+- **Markdown leggero**: `**grassetto**` sui fatti decisivi (ruolo, seniority, sede, contratto, stipendio se dichiarato), bullet `- ` per responsabilità/requisiti chiave, qualche **emoji** per rendere il testo scansionabile (con parsimonia — ~1 per bullet al massimo).
+- Cattura **cosa è il lavoro, per chi è, cosa offre** — la sostanza. Taglia il boilerplate ("team dinamico", "leader di mercato", …).
+- **Nella lingua dell'UTENTE** (RULE-T14): la sintesi è la TUA distillazione PER l'utente, quindi segue il locale utente anche quando il corpo della JD è in un'altra lingua — leggi l'originale, scrivi il succo nella lingua dell'utente. (Il `jd_text` verbatim resta in lingua originale; la tua `jd_summary` no.)
+- Scrivila: `db_update.py position <ID> --jd-summary "<markdown>"`. Usa **veri a-capo** (`$'...\n...'`, vedi la nota allo step "Aggiorna status"), mai `\n` letterale.
+
 ---
 
 ## MAIN LOOP
@@ -163,6 +170,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Fetch JD completa dal link
 3. Analizza: fit con il profilo, gap, red flag
 4. Scrivi i 5 campi strutturati + analisi nelle note
+4b. **Scrivi la `jd_summary`** (RULE-16) — la sintesi ottimizzata dell'offerta per l'utente (1-3 paragrafi o bullet, markdown leggero + qualche emoji, **nella lingua dell'utente**). NON una copia di `jd_text`. Economico: hai già la JD dallo step 2.
 5. **Deadline → `expires_at`** (machine-readable). Fai il parse della JD con la skill esistente:
    ```bash
    python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # stampa data ISO o vuoto
@@ -177,7 +185,11 @@ python3 /app/shared/skills/db_query.py position <ID>
 
 ```bash
 # Aggiorna status
-python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "EXPERIENCE_REQUIRED: 1-2 years\n..."
+# ⚠️ Usa $'...' (ANSI-C quoting) per VERI a-capo. Dentro i doppi apici normali
+# "...\n..." il \n resta LETTERALE (backslash-n) e la pagina lo mostra come
+# testo (bug storico di formattazione). $'...\n...' produce a-capo reali.
+python3 /app/shared/skills/db_update.py position <ID> --status checked \
+  --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<3-4 frasi di analisi, nella lingua dell\'utente>'
 
 # Escludi
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <ragione specifica>"
