@@ -30,8 +30,10 @@
   --color-orange: #ff8c42;
   --color-purple: #a855f7;
 
-  /* Font */
-  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  /* Font del brand: Courier Prime self-hosted (next/font, var iniettata su <html>),
+     poi i fallback. Mono CON grazie → la "J" ha il trattino in alto. La favicon SVG
+     usa gli STESSI glifi Courier Prime, quindi logo e favicon combaciano sempre. */
+  --font-mono: var(--font-brand-mono), 'Courier Prime', 'Courier New', monospace;
 
   /* Scoped tokens (override per-theme dove serve, non toccano --color-*). */
   --sync-warn: #d4a85a;
