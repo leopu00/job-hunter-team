@@ -173,7 +173,7 @@ Throttle vorschlägst (Phase 2/3), nutze das `suggested_throttle_s`-Feld des Tic
 (kontinuierliche Skala 60-3600s, -1 = Freeze). Schluss mit dem historischen Pattern von 3
 diskreten Werten nur {0, 300, 600} — es produzierte Oszillation und
 EMERGENZA-Kaskade. Die Leiter reicht jetzt über 600s hinaus bis **3600s (1h)**:
-`jht-throttle.py` unterstützt `MAX_SLEEP=3600`, also ist die alte 600s-Decke weg.
+`throttle.py` unterstützt `MAX_SLEEP=3600`, also ist die alte 600s-Decke weg.
 Referenz-Mapping:
 
 ```

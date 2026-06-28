@@ -172,7 +172,7 @@ javasolsz (2./3. fázis), használd a tick `suggested_throttle_s` mezőjét
 (folytonos skála 60-3600s, -1 = freeze). Állítsd meg a történelmi mintát a 3
 diszkrét értéken {0, 300, 600} — oszcillációt és
 EMERGENZA-cascade-et termelt. A létra most már 600s fölé is kiterjed,
-**3600s-ig (1h)**: a `jht-throttle.py` támogatja a `MAX_SLEEP=3600`-at, így a régi
+**3600s-ig (1h)**: a `throttle.py` támogatja a `MAX_SLEEP=3600`-at, így a régi
 600s plafon megszűnt. Referencia mapping:
 
 ```

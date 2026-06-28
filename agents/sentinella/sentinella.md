@@ -171,7 +171,7 @@ throttle (Phase 2/3), use the tick's `suggested_throttle_s` field
 (continuous scale 60-3600s, -1 = freeze). Stop the historical pattern of 3
 discrete values only {0, 300, 600} — it produced oscillation and
 EMERGENZA-cascade. The ladder now extends past 600s up to **3600s (1h)**:
-`jht-throttle.py` supports `MAX_SLEEP=3600`, so the old 600s ceiling is gone.
+`throttle.py` supports `MAX_SLEEP=3600`, so the old 600s ceiling is gone.
 Reference mapping:
 
 ```
