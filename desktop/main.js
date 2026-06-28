@@ -929,7 +929,7 @@ app.whenReady().then(() => {
   // L'agente risponde via la skill chat-web scrivendo in chat.jsonl, che il poll
   // della UI rilegge via GET /api/<agent>/chat (requireAuth col token → ok).
   const CHAT_SESSIONS = { capitano: 'CAPITANO', assistente: 'ASSISTENTE' }
-  ipcMain.handle('chat:send', (_event, { agent, text } = {}) => {
+  ipcMain.handle('chat:send', async (_event, { agent, text } = {}) => {
     const session = CHAT_SESSIONS[agent]
     if (!session) return { ok: false, error: 'invalid-agent' }
     const t = typeof text === 'string' ? text.trim() : ''
@@ -937,16 +937,60 @@ app.whenReady().then(() => {
     const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
     const payload = `[@utente -> @${agent}] [CHAT] ${t}`
     const ts = Date.now() / 1000
-    // Persisti il messaggio utente in chat.jsonl (bind ~/.jht/agents/<agent>/):
-    // così sopravvive al ri-render della UI (cambio tab) invece di restare solo
-    // un echo temporaneo. Il renderer userà `ts` per allineare lastTs ed evitare
-    // il doppione con l'echo ottimistico. Stesso formato che scrive la skill
-    // chat-web. Best-effort: se fallisce, l'invio tmux procede comunque.
+    const jsonLine = JSON.stringify({ role: 'user', text: t, ts }) + '\n'
+    // Path di chat.jsonl DENTRO il container (JHT_HOME=/jht_home, sia locale
+    // che VPS). In locale è bind su ~/.jht; in VPS vive solo sul container
+    // remoto → si scrive via docker exec.
+    const remoteChatFile = `/jht_home/agents/${agent}/chat.jsonl`
+
+    // VPS mode: il container è REMOTO → tmux/persist via SSH+docker exec, non
+    // docker exec locale (che fallisce: nessun container `jht` sul Mac). Era il
+    // motivo per cui la chat non funzionava in VPS mode (setup b3).
+    const vpsIp = readPref('location') === 'vps' ? readPref('vpsIp') : null
+    if (vpsIp) {
+      const SshExec = require('./vps/ssh-exec')
+      try {
+        // 1) Persisti il msg utente in chat.jsonl (docker exec -i → cat >>):
+        // l'input via stdin evita ogni quoting del testo utente, e il file
+        // resta con l'owner del container. Best-effort.
+        const persist = SshExec.run(
+          vpsIp,
+          `docker exec -i ${name} sh -c 'cat >> ${remoteChatFile}'`,
+          { input: jsonLine, timeout: 15000 },
+        )
+        if (!persist.ok) log.warn('[chat] vps persist failed', { stderr: persist.stderr })
+        // 2) Invia il messaggio alla sessione tmux. load-buffer da stdin +
+        // paste-buffer evita il quoting del payload attraverso la shell remota
+        // (send-keys -- payload via SSH sarebbe a rischio escaping).
+        const load = SshExec.run(
+          vpsIp,
+          `docker exec -i ${name} tmux load-buffer -`,
+          { input: payload, timeout: 15000 },
+        )
+        if (!load.ok) return { ok: false, error: load.stderr || 'vps-load-buffer-failed' }
+        const paste = SshExec.run(
+          vpsIp,
+          `docker exec ${name} tmux paste-buffer -t ${session} && docker exec ${name} tmux send-keys -t ${session} Enter`,
+          { timeout: 15000 },
+        )
+        if (!paste.ok) return { ok: false, error: paste.stderr || 'vps-send-failed' }
+        log.info('[chat] sent (vps)', { agent })
+        return { ok: true, ts }
+      } catch (err) {
+        return { ok: false, error: err && (err.message || String(err)) }
+      }
+    }
+
+    // Local mode: persisti il messaggio utente in chat.jsonl (bind
+    // ~/.jht/agents/<agent>/) così sopravvive al ri-render della UI (cambio
+    // tab) invece di restare solo un echo temporaneo. Il renderer userà `ts`
+    // per allineare lastTs ed evitare il doppione con l'echo ottimistico.
+    // Stesso formato che scrive la skill chat-web. Best-effort.
     try {
       const fs = require('node:fs')
       const chatFile = path.join(getBindHomeDir(), 'agents', agent, 'chat.jsonl')
       fs.mkdirSync(path.dirname(chatFile), { recursive: true })
-      fs.appendFileSync(chatFile, JSON.stringify({ role: 'user', text: t, ts }) + '\n', 'utf8')
+      fs.appendFileSync(chatFile, jsonLine, 'utf8')
     } catch (e) {
       log.warn('[chat] persist-user-msg failed', { err: e && (e.message || String(e)) })
     }
