@@ -21,10 +21,8 @@ interface PositionIn {
   notes?: string | null;
   source?: string | null;
   jd_text?: string | null;
+  jd_summary?: string | null;
   requirements?: string | null;
-  // Riassunto leggibile prodotto dall'Analista (markdown, lingua utente).
-  // Sostituisce la JD grezza nella UI cloud. Mig Supabase 049.
-  summary?: string | null;
   found_by?: string | null;
   found_at?: string | null;
   deadline?: string | null;
@@ -497,8 +495,8 @@ export async function POST(req: NextRequest) {
         notes: p.notes ?? null,
         source: p.source ?? null,
         jd_text: p.jd_text ?? null,
+        jd_summary: p.jd_summary ?? null,
         requirements: p.requirements ?? null,
-        summary: p.summary ?? null,
         found_by: p.found_by ?? null,
         found_at: p.found_at ?? null,
         deadline: p.deadline ?? null,

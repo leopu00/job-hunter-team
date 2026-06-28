@@ -57,6 +57,14 @@ Sentinel order vocabulary (`STEADY`, `ATTENZIONE`, `EMERGENZA`,
 `RECOVERY TRACKING`, `PUSH G-SPOT`, `RIENTRO`, `RESET SESSIONE`,
 `PAUSA TEAM`, `HARD FREEZE`, `RIPRENDI`).
 
+**Not "internal reasoning":** any text that surfaces to the user on the
+dashboard — score rationale (`scores.notes`), analyst notes
+(`positions.notes`), JD summary (`positions.jd_summary`), highlights,
+company `red_flags`/`culture_notes` — is **user-facing content** and follows
+**RULE-T14** (the user's locale), NOT this rule. "Internal" here means your
+private chain-of-thought, debug logs, and code/commits — not the fields the
+team writes to the DB for the user to read.
+
 ---
 
 ## 🧊 RULE-T07 — Honor Sentinel orders

@@ -24,11 +24,6 @@ Táblák: `position`, `application`.
 python3 /app/shared/skills/db_update.py position 42 --status checked
 python3 /app/shared/skills/db_update.py position 42 --status excluded
 
-# Felhasználói összefoglaló (RULE-04bis) — szakaszos markdown, A FELHASZNÁLÓ NYELVÉN.
-# Helyettesíti a nyers JD-t a UI-ban. Használj \n-t a sortörésekhez (a tool értelmezi).
-python3 /app/shared/skills/db_update.py position 42 \
-  --summary "## Cím — Cég\n\n**A szerepkör**\n- ...\n\n**Fő követelmények**\n- ...\n\n**Miért lehet jó neked**\n- ...\n\n**⚠️ Ellenőrizendő**\n- ..."
-
 # last-checked jelölő (link életben levése megerősítve — anti-ütközés foglalásként is használt)
 python3 /app/shared/skills/db_update.py position 42 --last-checked now
 

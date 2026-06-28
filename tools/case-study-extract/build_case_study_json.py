@@ -41,9 +41,19 @@ match = {
 }
 
 # ── categorie (role_family emerse) ───────────────────────────────────
-categories = [{"name": name, "count": cnt} for name, cnt in Q(
-    "SELECT COALESCE(NULLIF(TRIM(role_family),''),'Non categorizzato') rf,COUNT(*) "
-    "FROM positions GROUP BY rf ORDER BY 2 DESC, rf")]
+# count = posizioni nella famiglia; scored = quante hanno uno score;
+# avg = media total_score sulle scorate (None se nessuna). LEFT JOIN così le
+# famiglie senza posizioni scorate restano in lista con avg=None.
+categories = [
+    {"name": name, "count": cnt, "scored": scored,
+     "avg": round(avg, 1) if avg is not None else None}
+    for name, cnt, scored, avg in Q(
+        "SELECT COALESCE(NULLIF(TRIM(p.role_family),''),'Non categorizzato') rf,"
+        "COUNT(DISTINCT p.id) cnt,"
+        "COUNT(s.total_score) scored,"
+        "AVG(s.total_score) avg_score "
+        "FROM positions p LEFT JOIN scores s ON s.position_id=p.id "
+        "GROUP BY rf ORDER BY 2 DESC, rf")]
 
 # ── fonti (job board / ATS / pagine carriera) ────────────────────────
 # Normalizzate (lower/trim, '_'→'-' per fondere company_careers/company-careers);
@@ -171,18 +181,18 @@ events = [{"ts": ts.replace(" ", "T") + "Z", "agent": by, "action": to}
 agents = sorted({e["agent"] for e in events})
 ts_min, ts_max = Q("SELECT MIN(ts),MAX(ts) FROM position_state_transitions")[0]
 
-# ── usage giornaliero (% del budget SETTIMANALE AI consumato per giorno) ──
-# Da sentinel-data.jsonl: weekly_usage è cumulativo dentro la settimana (cresce
-# 0→~100) e si azzera al reset (Gio ~06:00 UTC). Consumo del giorno = valore di
-# FINE giornata − fine del giorno precedente nella STESSA settimana (0 se è il
-# primo giorno della settimana). Robusto all'oscillazione intraday; ogni
-# settimana completa somma ~100%.
-def _week_key(day_iso):  # giovedì di riferimento (settimana di budget)
-    d = datetime.date.fromisoformat(day_iso)
-    return (d - datetime.timedelta(days=(d.weekday() - 3) % 7)).isoformat()
+# ── usage giornaliero (% del budget AI consumato per giorno) ──
+# Da sentinel-data.jsonl: weekly_usage è cumulativo dentro il ciclo di budget
+# (cresce 0→~100) e si azzera al reset. Il reset NON è solo il giovedì di
+# calendario: l'utente può prendere un nuovo abbonamento e ripartire da 0 senza
+# aspettare la settimana. Quindi i CICLI si rilevano dai dati: nuovo ciclo quando
+# il cum SCENDE (reset, naturale o nuovo abbonamento) o c'è un buco di giorni.
+# Consumo del giorno = fine giornata − fine del giorno prima NELLO STESSO ciclo
+# (= il valore stesso se è il primo giorno del ciclo). `week` = data inizio ciclo.
 
 SENTINEL = "/root/.jht/logs/sentinel-data.jsonl"
 usage = None
+hour_cum = {}  # "YYYY-MM-DDTHH" -> budget cumulato % (ultimo sample dell'ora)
 if os.path.exists(SENTINEL):
     samples = []  # (ts, weekly_usage)
     provider = "codex"
@@ -201,18 +211,29 @@ if os.path.exists(SENTINEL):
         if e.get("provider"):
             provider = e["provider"]
     samples.sort()
+    for ts, wu in samples:  # budget cum per ORA (ultimo sample dell'ora vince)
+        hour_cum[ts[:13]] = wu
     day_last = collections.OrderedDict()  # day -> weekly_usage di fine giornata
     for ts, wu in samples:
         day_last[ts[:10]] = wu  # l'ultimo sample del giorno sovrascrive
     daily = []
-    week_prev = {}  # week_key -> fine del giorno precedente (nella settimana)
+    prev_day = None
+    prev_end = None
+    cycle = None  # data di inizio del ciclo di budget corrente
     for day, end in day_last.items():
-        wk = _week_key(day)
-        pct = end - week_prev.get(wk, 0)
-        week_prev[wk] = end
-        # pct = consumo del giorno; cum = totale settimanale a fine giornata
+        gap = (prev_day is not None and
+               (datetime.date.fromisoformat(day)
+                - datetime.date.fromisoformat(prev_day)).days > 1)
+        reset = prev_end is not None and end < prev_end - 1  # cum sceso = reset
+        if cycle is None or reset or gap:
+            cycle, base = day, 0.0  # nuovo ciclo: riparte da 0
+        else:
+            base = prev_end
+        pct = end - base
+        # pct = consumo del giorno; cum = totale del ciclo a fine giornata
         daily.append({"day": day, "pct": round(max(pct, 0), 1),
-                      "cum": round(end, 1), "week": wk})
+                      "cum": round(end, 1), "week": cycle})
+        prev_day, prev_end = day, end
     # orario di lavoro configurato (contesto: su quali ore/giorni si spalma)
     working_hours = None
     CONFIG = "/root/.jht/jht.config.json"
@@ -233,6 +254,53 @@ if os.path.exists(SENTINEL):
     usage = {"provider": provider, "unit": "weekly_budget_pct",
              "daily": daily, "workingHours": working_hours}
 
+# ── attività + budget per ORA (per viste intraday su fasi corte, es. burst free-run) ──
+# Solo le ore con almeno una transizione (compatto). Ogni bucket:
+# {hour:"YYYY-MM-DDTHH", counts:{ruolo:n}, cum: budget% a quell'ora}. Il cum è
+# riportato in avanti dall'ultimo sample noto, così le ore senza sample budget
+# non azzerano la linea.
+hour_acts = collections.OrderedDict()  # hour -> {role: n}
+for e in events:
+    hr = e["ts"][:13]  # "YYYY-MM-DDTHH"
+    role = e["agent"].split("-")[0]
+    b = hour_acts.setdefault(hr, {})
+    b[role] = b.get(role, 0) + 1
+hourly = []
+_last_cum = 0.0
+for hr in sorted(hour_acts):
+    if hr in hour_cum:
+        _last_cum = hour_cum[hr]
+    hourly.append({"hour": hr, "counts": hour_acts[hr], "cum": round(_last_cum, 1)})
+
+# ── funnel TROVATE → ESCLUSE / TENUTE (per giorno + totali) ──────────
+# Per ogni giorno di found_at: quante posizioni trovate e come sono finite
+# (status attuale). "tenute" = non escluse. Serve a mostrare la proporzione
+# escluse vs tenute giorno per giorno (e in totale, per il donut).
+fd_rows = Q(
+    "SELECT substr(found_at,1,10) d, status, COUNT(*) "
+    "FROM positions WHERE found_at IS NOT NULL AND TRIM(found_at)<>'' "
+    "GROUP BY 1, 2")
+fd = collections.OrderedDict()  # day -> {status: n}
+for d, st, n in fd_rows:
+    fd.setdefault(d, {})[(st or "?")] = n
+funnel_daily = []
+for d in sorted(fd):
+    sm = fd[d]
+    excl = sm.get("excluded", 0)
+    found = sum(sm.values())
+    funnel_daily.append({
+        "day": d, "found": found, "excluded": excl, "kept": found - excl,
+        "scored": sm.get("scored", 0), "ready": sm.get("ready", 0),
+    })
+status_tot = {(st or "?"): n for st, n in Q(
+    "SELECT status, COUNT(*) FROM positions GROUP BY status")}
+_excl_tot = status_tot.get("excluded", 0)
+_found_tot = sum(status_tot.values())
+funnel_totals = {
+    "found": _found_tot, "excluded": _excl_tot, "kept": _found_tot - _excl_tot,
+    "scored": status_tot.get("scored", 0), "ready": status_tot.get("ready", 0),
+}
+
 out = {
     "source": "betaC-codex",
     "tsRange": [ts_min, ts_max],
@@ -249,6 +317,9 @@ out = {
     "salary": salary,
     "agents": agents,
     "events": events,
+    "hourly": hourly,
+    "funnelDaily": funnel_daily,
+    "funnelTotals": funnel_totals,
     "usage": usage,
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))

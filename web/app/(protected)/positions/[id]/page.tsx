@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getPositionById } from "@/lib/queries";
 import type { PositionHighlight } from "@/lib/types";
 import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
+import { MarkdownLite } from "@/lib/markdown-lite";
 import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
 import { ExcludeButton } from "./ExcludeButton";
@@ -78,7 +79,7 @@ const T: Record<string, Record<string, string>> = {
     pt: "Contras",
   },
   score_breakdown: {
-    it: "Score breakdown",
+    it: "Dettaglio punteggio",
     en: "Score breakdown",
     hu: "Pontszám részletei",
     es: "Desglose de puntuación",
@@ -87,7 +88,7 @@ const T: Record<string, Record<string, string>> = {
     pt: "Detalhe da pontuação",
   },
   sb_stack_match: {
-    it: "Stack match",
+    it: "Competenze",
     en: "Stack match",
     hu: "Stack egyezés",
     es: "Coincidencia de stack",
@@ -96,7 +97,7 @@ const T: Record<string, Record<string, string>> = {
     pt: "Correspondência de stack",
   },
   sb_remote_fit: {
-    it: "Remote fit",
+    it: "Da remoto",
     en: "Remote fit",
     hu: "Távmunka illeszkedés",
     es: "Ajuste remoto",
@@ -105,7 +106,7 @@ const T: Record<string, Record<string, string>> = {
     pt: "Ajuste remoto",
   },
   sb_salary_fit: {
-    it: "Salary fit",
+    it: "Stipendio",
     en: "Salary fit",
     hu: "Fizetés illeszkedés",
     es: "Ajuste salarial",
@@ -114,7 +115,7 @@ const T: Record<string, Record<string, string>> = {
     pt: "Ajuste salarial",
   },
   sb_experience_fit: {
-    it: "Experience fit",
+    it: "Esperienza",
     en: "Experience fit",
     hu: "Tapasztalat illeszkedés",
     es: "Ajuste de experiencia",
@@ -123,7 +124,7 @@ const T: Record<string, Record<string, string>> = {
     pt: "Ajuste de experiência",
   },
   sb_strategic_fit: {
-    it: "Strategic fit",
+    it: "Strategia",
     en: "Strategic fit",
     hu: "Stratégiai illeszkedés",
     es: "Ajuste estratégico",
@@ -229,15 +230,6 @@ const T: Record<string, Record<string, string>> = {
     de: "Stellenbeschreibung",
     fr: "Description du poste",
     pt: "Descrição da vaga",
-  },
-  summary: {
-    it: "Riassunto",
-    en: "Summary",
-    hu: "Összefoglaló",
-    es: "Resumen",
-    de: "Zusammenfassung",
-    fr: "Résumé",
-    pt: "Resumo",
   },
   requirements: {
     it: "Requisiti",
@@ -601,92 +593,6 @@ function ScoreBar({
   );
 }
 
-// Inline-bold (**testo**) dentro una riga del riassunto.
-function renderInlineBold(text: string, kp: string) {
-  return text.split(/(\*\*[^*]+\*\*)/).map((seg, i) =>
-    seg.startsWith("**") && seg.endsWith("**") ? (
-      <strong key={`${kp}-${i}`}>{seg.slice(2, -2)}</strong>
-    ) : (
-      <span key={`${kp}-${i}`}>{seg}</span>
-    ),
-  );
-}
-
-// Renderer leggero per il riassunto dell'Analista: titolo `## `, intestazioni
-// di sezione `**...**` su riga propria, bullet `- `, paragrafi. Niente
-// dipendenza markdown esterna — il formato e' vincolato dal prompt analista
-// (RULE-04bis). Difensivo sulle escape letterali \n/\t come normalizeBody.
-type SummaryBlock =
-  | { t: "h"; text: string }
-  | { t: "sub"; text: string }
-  | { t: "ul"; items: string[] }
-  | { t: "p"; text: string };
-
-function SummaryMarkdown({ text }: { text: string }) {
-  const norm = text.replace(/\\r\\n|\\n/g, "\n").replace(/\\t/g, "\t");
-  const blocks: SummaryBlock[] = [];
-  for (const raw of norm.split("\n")) {
-    const line = raw.trim();
-    if (!line) continue;
-    if (line.startsWith("## ")) {
-      blocks.push({ t: "h", text: line.slice(3) });
-    } else if (line.startsWith("- ") || line.startsWith("* ")) {
-      const last = blocks[blocks.length - 1];
-      if (last && last.t === "ul") last.items.push(line.slice(2));
-      else blocks.push({ t: "ul", items: [line.slice(2)] });
-    } else if (/^\*\*[^*]+\*\*$/.test(line)) {
-      blocks.push({ t: "sub", text: line.slice(2, -2) });
-    } else {
-      blocks.push({ t: "p", text: line });
-    }
-  }
-  return (
-    <div className="flex flex-col gap-1">
-      {blocks.map((b, i) => {
-        if (b.t === "h")
-          return (
-            <div
-              key={i}
-              className="text-[13px] font-bold text-[var(--color-bright)] mb-0.5"
-            >
-              {renderInlineBold(b.text, `h${i}`)}
-            </div>
-          );
-        if (b.t === "sub")
-          return (
-            <div
-              key={i}
-              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mt-1.5"
-            >
-              {b.text}
-            </div>
-          );
-        if (b.t === "ul")
-          return (
-            <ul key={i} className="list-disc pl-4 flex flex-col gap-0.5 m-0">
-              {b.items.map((it, j) => (
-                <li
-                  key={j}
-                  className="text-[11px] text-[var(--color-muted)] leading-relaxed"
-                >
-                  {renderInlineBold(it, `li${i}-${j}`)}
-                </li>
-              ))}
-            </ul>
-          );
-        return (
-          <p
-            key={i}
-            className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0"
-          >
-            {renderInlineBold(b.text, `p${i}`)}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
 interface PageProps {
   params: Promise<{ id: string }>;
 }
@@ -958,6 +864,60 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </div>
           )}
 
+          {/* Job description — sintesi ottimizzata dell'Analista (jd_summary,
+              markdown, lingua utente). Fallback al testo grezzo per le
+              posizioni legacy non ancora ri-analizzate. */}
+          {(position.jd_summary ||
+            position.jd_text ||
+            position.requirements) && (
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
+              <div className="section-label mb-3">{t("job_description")}</div>
+              {position.jd_summary ? (
+                <>
+                  <MarkdownLite
+                    text={position.jd_summary}
+                    className="text-[12px] text-[var(--color-base)] leading-relaxed"
+                  />
+                  {position.url && (
+                    <a
+                      href={position.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                    >
+                      {t("original_listing")} ↗
+                    </a>
+                  )}
+                </>
+              ) : (
+                <>
+                  {position.requirements && (
+                    <div className="mb-4">
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("requirements")}
+                      </div>
+                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
+                        {position.requirements.slice(0, 2000)}
+                        {position.requirements.length > 2000 ? "…" : ""}
+                      </pre>
+                    </div>
+                  )}
+                  {position.jd_text && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("full_description")}
+                      </div>
+                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
+                        {position.jd_text.slice(0, 3000)}
+                        {position.jd_text.length > 3000 ? "…" : ""}
+                      </pre>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Score breakdown */}
           {score && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
@@ -990,9 +950,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 />
               </div>
               {score.notes && (
-                <p className="mt-4 text-[11px] text-[var(--color-muted)] leading-relaxed border-t border-[var(--color-border)] pt-3">
-                  {score.notes}
-                </p>
+                <MarkdownLite
+                  text={score.notes}
+                  className="mt-4 text-[11px] text-[var(--color-muted)] leading-relaxed border-t border-[var(--color-border)] pt-3"
+                />
               )}
             </div>
           )}
@@ -1079,15 +1040,6 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   )}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Riassunto offerta — prodotto dall'Analista nella lingua utente.
-              Sostituisce la JD grezza: jd_text/requirements NON sono piu' mostrati. */}
-          {position.summary && (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-3">{t("summary")}</div>
-              <SummaryMarkdown text={position.summary} />
             </div>
           )}
         </div>
@@ -1317,9 +1269,10 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
                         {t("an_notes")}
                       </div>
-                      <p className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap">
-                        {analysis.prose}
-                      </p>
+                      <MarkdownLite
+                        text={analysis.prose}
+                        className="text-[11px] text-[var(--color-muted)] leading-relaxed"
+                      />
                     </div>
                   )}
                 </div>

@@ -6,16 +6,20 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { CaseStudyProfile } from "@/lib/case-studies";
-import type { CaseStudyRun } from "@/lib/case-study";
+import type { CaseStudyProfile, CaseStudyPhase } from "@/lib/case-studies";
+import type { CaseStudyRun, CaseStudyUsage } from "@/lib/case-study";
 import type { TeamActivity } from "@/lib/team-activity";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import CaseStudyOverview from "./CaseStudyOverview";
 import WorkBudgetChart from "./WorkBudgetChart";
+import IntradayBudgetChart from "./IntradayBudgetChart";
 import SourcesScoreChart from "./SourcesScoreChart";
 import SourcesAvgScoreChart from "./SourcesAvgScoreChart";
 import SourcesDonutChart from "./SourcesDonutChart";
+import PositionsFunnelChart from "./PositionsFunnelChart";
+import ExcludedDonut from "./ExcludedDonut";
+import ConversionFunnelCard from "./ConversionFunnelCard";
 
 export interface PreparedCase {
   id: string;
@@ -23,6 +27,7 @@ export interface PreparedCase {
   tagline: string;
   subscription: { provider: string; plan: string; price: string };
   profile: CaseStudyProfile;
+  phases?: CaseStudyPhase[];
   run: CaseStudyRun; // events alleggeriti
   activity: TeamActivity;
 }
@@ -105,6 +110,11 @@ const T: Record<
     sourcesScoreTitle: string; // titolo grafico fonti volume+score nel tempo
     sourcesScoreCaption: string; // didascalia grafico fonti + score medio
     sourcesAvgCaption: string; // didascalia grafico score medio per fonte
+    funnelTitle: string; // titolo sezione funnel trovate→escluse/tenute
+    funnelProse: string; // didascalia sezione funnel
+    funnelChartTitle: string; // titolo grafico funnel giornaliero
+    funnelDonutTitle: string; // titolo donut tenute vs escluse
+    conversionTitle: string; // titolo card statistiche di conversione
   }
 > = {
   it: {
@@ -136,6 +146,12 @@ const T: Record<
       "Lo score medio e la quota per fonte, sulle posizioni valutate (quelle con uno score): a sinistra la qualità media, a destra la distribuzione % delle fonti.",
     sourcesProse1: "Le fonti da cui lo Scout ha trovato le",
     sourcesProse2: "posizioni: job board, ATS e pagine carriera aziendali.",
+    funnelTitle: "Quante posizioni vengono tenute",
+    funnelProse:
+      "Di tutte le posizioni trovate, quante superano i filtri (località, work-auth, pertinenza) e quante vengono escluse — giorno per giorno e in totale.",
+    funnelChartTitle: "Trovate: tenute vs escluse · giorno per giorno",
+    funnelDonutTitle: "Tenute vs escluse · totale",
+    conversionTitle: "Statistiche di conversione",
   },
   en: {
     caseStudies: "Case studies",
@@ -166,6 +182,12 @@ const T: Record<
       "Average score and share by source, over scored positions (those with a score): on the left the average quality, on the right the % distribution of sources.",
     sourcesProse1: "The sources where the Scout found the",
     sourcesProse2: "positions: job boards, ATS and company career pages.",
+    funnelTitle: "How many positions are kept",
+    funnelProse:
+      "Of all the positions found, how many pass the filters (location, work authorization, relevance) and how many are excluded — day by day and overall.",
+    funnelChartTitle: "Found: kept vs excluded · day by day",
+    funnelDonutTitle: "Kept vs excluded · total",
+    conversionTitle: "Conversion statistics",
   },
   es: {
     caseStudies: "Casos de estudio",
@@ -197,6 +219,12 @@ const T: Record<
     sourcesProse1: "Las fuentes donde el Scout encontró las",
     sourcesProse2:
       "posiciones: portales de empleo, ATS y páginas de carrera de las empresas.",
+    funnelTitle: "Cuántas posiciones se conservan",
+    funnelProse:
+      "De todas las posiciones encontradas, cuántas pasan los filtros (ubicación, autorización de trabajo, relevancia) y cuántas se excluyen — día a día y en total.",
+    funnelChartTitle: "Encontradas: conservadas vs excluidas · día a día",
+    funnelDonutTitle: "Conservadas vs excluidas · total",
+    conversionTitle: "Estadísticas de conversión",
   },
   fr: {
     caseStudies: "Études de cas",
@@ -228,6 +256,12 @@ const T: Record<
     sourcesProse1: "Les sources où le Scout a trouvé les",
     sourcesProse2:
       "postes : sites d’emploi, ATS et pages carrières des entreprises.",
+    funnelTitle: "Combien de postes sont conservés",
+    funnelProse:
+      "Sur tous les postes trouvés, combien passent les filtres (localisation, autorisation de travail, pertinence) et combien sont exclus — jour par jour et au total.",
+    funnelChartTitle: "Trouvés : conservés vs exclus · jour par jour",
+    funnelDonutTitle: "Conservés vs exclus · total",
+    conversionTitle: "Statistiques de conversion",
   },
   de: {
     caseStudies: "Fallstudien",
@@ -259,6 +293,12 @@ const T: Record<
     sourcesProse1: "Die Quellen, in denen der Scout die",
     sourcesProse2:
       "Positionen gefunden hat: Jobbörsen, ATS und Karriereseiten von Unternehmen.",
+    funnelTitle: "Wie viele Positionen behalten werden",
+    funnelProse:
+      "Von allen gefundenen Positionen: wie viele die Filter passieren (Ort, Arbeitserlaubnis, Relevanz) und wie viele ausgeschlossen werden — Tag für Tag und insgesamt.",
+    funnelChartTitle: "Gefunden: behalten vs. ausgeschlossen · Tag für Tag",
+    funnelDonutTitle: "Behalten vs. ausgeschlossen · gesamt",
+    conversionTitle: "Conversion-Statistik",
   },
   hu: {
     caseStudies: "Esettanulmányok",
@@ -290,6 +330,12 @@ const T: Record<
     sourcesProse1: "A források, ahol a Scout megtalálta a",
     sourcesProse2:
       "pozíciókat: állásportálok, ATS és vállalati karrieroldalak.",
+    funnelTitle: "Hány pozíciót tartunk meg",
+    funnelProse:
+      "Az összes megtalált pozícióból hány megy át a szűrőkön (helyszín, munkavállalási engedély, relevancia) és hány kerül kizárásra — naponta és összesen.",
+    funnelChartTitle: "Találatok: megtartott vs. kizárt · naponta",
+    funnelDonutTitle: "Megtartott vs. kizárt · összesen",
+    conversionTitle: "Konverziós statisztika",
   },
   pt: {
     caseStudies: "Estudos de caso",
@@ -321,6 +367,12 @@ const T: Record<
     sourcesProse1: "As fontes onde o Scout encontrou as",
     sourcesProse2:
       "posições: portais de emprego, ATS e páginas de carreira das empresas.",
+    funnelTitle: "Quantas posições são mantidas",
+    funnelProse:
+      "De todas as posições encontradas, quantas passam os filtros (localização, autorização de trabalho, relevância) e quantas são excluídas — dia a dia e no total.",
+    funnelChartTitle: "Encontradas: mantidas vs excluídas · dia a dia",
+    funnelDonutTitle: "Mantidas vs excluídas · total",
+    conversionTitle: "Estatísticas de conversão",
   },
 };
 
@@ -334,7 +386,7 @@ export default function CaseStudyDetail({
   const locale = useLocale();
   const t = T[locale];
   const [menuOpen, setMenuOpen] = useState(false);
-  const { run, activity, profile } = current;
+  const { run, activity, profile, phases } = current;
 
   const activeDays = activity.roleDaily.filter((d) =>
     Object.values(d.counts).some((n) => n > 0),
@@ -568,14 +620,71 @@ export default function CaseStudyDetail({
             </strong>{" "}
             {t.workBudgetProse2}
           </p>
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-            <WorkBudgetChart
-              usage={run.usage}
-              roleDaily={activity.roleDaily}
-              roles={activeRoles}
-              workingHoursText={whText}
-            />
-          </div>
+          {phases && phases.length > 0 ? (
+            // Run multi-fase (es. Codex poi Kimi): un grafico PER FASE, così non si
+            // mescolano sessioni con modello/abbonamento/modalità diversi.
+            <div className="space-y-8">
+              {phases.map((ph) => {
+                const within = (d: string) =>
+                  d >= ph.from && (ph.to == null || d <= ph.to);
+                const u: CaseStudyUsage = {
+                  ...run.usage!,
+                  daily: run.usage!.daily.filter((x) => within(x.day)),
+                };
+                const rd = activity.roleDaily.filter((x) => within(x.date));
+                if (u.daily.length === 0) return null;
+                return (
+                  <div key={ph.key}>
+                    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 mb-2.5">
+                      <span className="text-[13px] font-bold text-[var(--color-white)]">
+                        {ph.label}
+                      </span>
+                      <span
+                        className="text-[10px] font-semibold rounded-md px-2 py-0.5"
+                        style={{
+                          background:
+                            "color-mix(in srgb, var(--color-blue) 14%, transparent)",
+                          color: "var(--color-blue)",
+                        }}
+                      >
+                        {ph.price}
+                      </span>
+                      <span className="text-[10px] text-[var(--color-dim)]">
+                        {ph.note}
+                      </span>
+                    </div>
+                    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+                      {ph.detail === "hourly" && run.hourly ? (
+                        // Fase corta (es. free-run): dettaglio ora per ora.
+                        <IntradayBudgetChart
+                          hourly={run.hourly.filter((x) =>
+                            within(x.hour.slice(0, 10)),
+                          )}
+                          roles={activeRoles}
+                        />
+                      ) : (
+                        <WorkBudgetChart
+                          usage={u}
+                          roleDaily={rd}
+                          roles={activeRoles}
+                          workingHoursText={ph.to == null ? whText : null}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+              <WorkBudgetChart
+                usage={run.usage}
+                roleDaily={activity.roleDaily}
+                roles={activeRoles}
+                workingHoursText={whText}
+              />
+            </div>
+          )}
         </section>
       )}
 
@@ -628,6 +737,50 @@ export default function CaseStudyDetail({
             )}
           </section>
         )}
+
+      {/* ── Funnel: trovate → tenute vs escluse (sezione nuova) ──────── */}
+      {run.funnelDaily && run.funnelDaily.length > 0 && run.funnelTotals && (
+        <section className="pt-10 border-t border-[var(--color-border)]">
+          <div className="section-label mb-1">🪣 {t.funnelTitle}</div>
+          <p className="text-[11px] text-[var(--color-dim)] mb-6">
+            {t.funnelProse}
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6 items-stretch">
+            {/* sinistra: grafico giornaliero — titolo SOPRA la card, card riempita */}
+            <div className="flex flex-col">
+              <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
+                {t.funnelChartTitle}
+              </div>
+              <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 flex-1 flex flex-col">
+                <PositionsFunnelChart daily={run.funnelDaily} />
+              </div>
+            </div>
+            {/* destra: donut + conversione — titoli SOPRA le card */}
+            <div className="flex flex-col gap-6">
+              <div>
+                <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
+                  {t.funnelDonutTitle}
+                </div>
+                <ExcludedDonut
+                  kept={run.funnelTotals.kept}
+                  excluded={run.funnelTotals.excluded}
+                />
+              </div>
+              <div>
+                <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
+                  {t.conversionTitle}
+                </div>
+                <ConversionFunnelCard
+                  found={run.totals.positions}
+                  scored={run.match.scored}
+                  strong70={run.match.strong70}
+                  strong80={run.match.strong80}
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

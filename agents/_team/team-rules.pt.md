@@ -61,6 +61,14 @@ literalmente — o vocabulario de ordens da Sentinella (`STEADY`,
 `ACCELERARE`, `RECOVERY TRACKING`, `PUSH G-SPOT`, `RIENTRO`,
 `RESET SESSIONE`, `PAUSA TEAM`, `HARD FREEZE`, `RIPRENDI`).
 
+**NÃO é "raciocínio interno":** qualquer texto que chega ao utilizador na
+dashboard — racional do score (`scores.notes`), notas do analista
+(`positions.notes`), síntese JD (`positions.jd_summary`), highlights,
+`red_flags`/`culture_notes` da empresa — é **conteúdo para o utilizador** e segue
+a **RULE-T14** (o locale do utilizador), NÃO esta regra. "Interno" aqui
+significa o teu chain-of-thought privado, os logs de debug e o código/commits —
+não os campos que a equipa escreve na DB para o utilizador ler.
+
 ---
 
 ## 🧊 RULE-T07 — Respeita as ordens da Sentinella

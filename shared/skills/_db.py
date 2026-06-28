@@ -80,9 +80,9 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_role_family_proposed(conn)
     _migrate_positions_user_excluded(conn)
     _migrate_positions_recheck_requested(conn)
+    _migrate_positions_jd_summary(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
-    _migrate_positions_summary(conn)
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS companies (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -119,7 +119,7 @@ def ensure_schema(conn: sqlite3.Connection):
         source TEXT,
         jd_text TEXT,
         requirements TEXT,
-        summary TEXT,
+        jd_summary TEXT,
         found_by TEXT,
         found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deadline TEXT,
@@ -936,6 +936,21 @@ def _migrate_positions_office_geocoding(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_positions_jd_summary(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.jd_summary` (text, nullable).
+
+    Sintesi della JD scritta dall'Analista PER l'utente (1-3 paragrafi o
+    bullet, lingua dell'utente, markdown leggero: grassetto/bullet/emoji) —
+    è la versione ottimizzata e leggibile che la pagina posizione mostra al
+    posto del dump grezzo di `jd_text`. Allinea SQLite a Supabase mig 049.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if _column_exists(conn, 'positions', 'jd_summary'):
+        return
+    conn.execute("ALTER TABLE positions ADD COLUMN jd_summary TEXT")
+
+
 def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:
     """Aggiunge `position_tickets.cloud_id` (int, nullable).
 
@@ -1110,22 +1125,6 @@ def _migrate_positions_salary_precise(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE positions ADD COLUMN salary_precise_requested INTEGER DEFAULT 0")
     if not _column_exists(conn, 'positions', 'salary_precise_requested_at'):
         conn.execute("ALTER TABLE positions ADD COLUMN salary_precise_requested_at TIMESTAMP")
-
-
-def _migrate_positions_summary(conn: sqlite3.Connection) -> None:
-    """Aggiunge `positions.summary` (Supabase mig 049).
-
-    Riassunto leggibile dell'offerta prodotto dall'Analista nella lingua
-    dell'utente (markdown a sezioni). Sostituisce la JD grezza nella UI:
-    la `jd_text` resta per uso interno degli agenti, mai mostrata all'utente.
-    Vedi prompt analista RULE-04bis.
-
-    Idempotente: guard via _column_exists, ALTER ADD COLUMN solo se mancante.
-    """
-    if not _table_exists(conn, 'positions'):
-        return
-    if not _column_exists(conn, 'positions', 'summary'):
-        conn.execute("ALTER TABLE positions ADD COLUMN summary TEXT")
     if not _column_exists(conn, 'positions', 'salary_precise'):
         conn.execute("ALTER TABLE positions ADD COLUMN salary_precise TEXT")
     conn.execute(
