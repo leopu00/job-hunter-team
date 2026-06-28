@@ -633,215 +633,321 @@
   "categories": [
     {
       "name": "Technical Writing / Hardware, Industrial & Manufacturing",
-      "count": 136
+      "count": 136,
+      "scored": 79,
+      "avg": 64.9
     },
     {
       "name": "Technical Writing / Software, API & Developer Documentation",
-      "count": 117
+      "count": 117,
+      "scored": 96,
+      "avg": 64.7
     },
     {
       "name": "Engineering (Other)",
-      "count": 100
+      "count": 100,
+      "scored": 49,
+      "avg": 71.1
     },
     {
       "name": "Localization & Translation",
-      "count": 89
+      "count": 89,
+      "scored": 44,
+      "avg": 63.1
     },
     {
       "name": "Technical Writing / General & Product",
-      "count": 83
+      "count": 83,
+      "scored": 57,
+      "avg": 66.0
     },
     {
       "name": "Content & UX Writing",
-      "count": 78
+      "count": 78,
+      "scored": 35,
+      "avg": 53.9
     },
     {
       "name": "Content Writing / E-Learning",
-      "count": 52
+      "count": 52,
+      "scored": 32,
+      "avg": 57.2
     },
     {
       "name": "Localization / AI Enablement",
-      "count": 43
+      "count": 43,
+      "scored": 29,
+      "avg": 53.4
     },
     {
       "name": "Documentation Control / Quality",
-      "count": 38
+      "count": 38,
+      "scored": 21,
+      "avg": 58.2
     },
     {
       "name": "Technical Writing / Documentation Engineering & CMS",
-      "count": 38
+      "count": 38,
+      "scored": 26,
+      "avg": 57.5
     },
     {
       "name": "Other",
-      "count": 34
+      "count": 34,
+      "scored": 7,
+      "avg": 52.4
     },
     {
       "name": "Technical Writing / Medical, Scientific & Regulatory",
-      "count": 33
+      "count": 33,
+      "scored": 8,
+      "avg": 57.4
     },
     {
       "name": "QA & Testing",
-      "count": 32
+      "count": 32,
+      "scored": 18,
+      "avg": 41.9
     },
     {
       "name": "Data / AI Operations",
-      "count": 31
+      "count": 31,
+      "scored": 11,
+      "avg": 47.6
     },
     {
       "name": "Knowledge Management",
-      "count": 29
+      "count": 29,
+      "scored": 19,
+      "avg": 55.6
     },
     {
       "name": "Customer & Technical Support",
-      "count": 19
+      "count": 19,
+      "scored": 14,
+      "avg": 60.2
     },
     {
       "name": "Localization QA",
-      "count": 15
+      "count": 15,
+      "scored": 8,
+      "avg": 60.1
     },
     {
       "name": "Business Analysis",
-      "count": 10
+      "count": 10,
+      "scored": 1,
+      "avg": 49.0
     },
     {
       "name": "Engineering (Other) / Quality, Regulatory & Validation Engineering",
-      "count": 7
+      "count": 7,
+      "scored": 1,
+      "avg": 58.0
     },
     {
       "name": "Interpretation / Telephone",
-      "count": 7
+      "count": 7,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Non categorizzato",
-      "count": 5
+      "count": 5,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Virtual Assistance / Administrative Support",
-      "count": 5
+      "count": 5,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Retail / Operations",
-      "count": 4
+      "count": 4,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Engineering (Other) / CAD, CAM, CNC & Manufacturing Operations",
-      "count": 3
+      "count": 3,
+      "scored": 3,
+      "avg": 38.0
     },
     {
       "name": "Engineering (Other) / Civil, Construction & Site Engineering",
-      "count": 3
+      "count": 3,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Engineering (Other) / Other Engineering & Specialist Roles",
-      "count": 3
+      "count": 3,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Engineering (Other) / Technical Office, Drafting & Design",
-      "count": 3
+      "count": 3,
+      "scored": 2,
+      "avg": 57.5
     },
     {
       "name": "Localization / Content Operations",
-      "count": 3
+      "count": 3,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Business & Operations",
-      "count": 2
+      "count": 2,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Civil Engineering / Construction",
-      "count": 2
+      "count": 2,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Documentation / Quality",
-      "count": 2
+      "count": 2,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Quality Assurance",
-      "count": 2
+      "count": 2,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Technical Writing",
-      "count": 2
+      "count": 2,
+      "scored": 1,
+      "avg": 51.0
     },
     {
       "name": "Customer Operations / Writing",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Customer Support",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Data Science & AI",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Design",
-      "count": 1
+      "count": 1,
+      "scored": 1,
+      "avg": 62.0
     },
     {
       "name": "DevOps / SRE / Platform",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Digital Content / Web Operations",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Document Control / Technical Documentation",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Field Engineering / Maintenance",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Finance / Controlling",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Knowledge Architecture / Knowledge Management",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Knowledge Management / Technical Writing",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Product & Project Mgmt",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Product Management",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Production / Technical Office",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Quality Assurance / Engineering",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Quality Assurance / Regulatory",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Software Engineering",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Supply Chain / Operations",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "Technical Writing / Technical Publications",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     },
     {
       "name": "UX Writing / Content Design",
-      "count": 1
+      "count": 1,
+      "scored": 0,
+      "avg": null
     }
   ],
   "sources": [
