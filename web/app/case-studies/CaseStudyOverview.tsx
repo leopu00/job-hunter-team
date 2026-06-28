@@ -4,7 +4,7 @@
 // categorie). Tutto da dati aggregati e anonimi dello snapshot. Tooltip isolato
 // condiviso (ChartTooltip) → nessun jitter all'hover.
 
-import { useMemo, useRef } from "react";
+import { Fragment, useMemo, useRef } from "react";
 import type { CaseStudyRun } from "@/lib/case-study";
 import {
   TooltipLayer,
@@ -45,6 +45,9 @@ const T: Record<
     positionsFound: string;
     otherCategories: (n: number) => string;
     positions: string;
+    colCount: string;
+    colShare: string;
+    colAvgScore: string;
   }
 > = {
   it: {
@@ -78,6 +81,9 @@ const T: Record<
     positionsFound: "POSIZIONI TROVATE",
     otherCategories: (n) => `Altre ${n} categorie`,
     positions: "posizioni",
+    colCount: "Posizioni",
+    colShare: "Quota",
+    colAvgScore: "Media score",
   },
   en: {
     matchLabel: "🎯 How well it finds you work",
@@ -110,6 +116,9 @@ const T: Record<
     positionsFound: "POSITIONS FOUND",
     otherCategories: (n) => `${n} more categories`,
     positions: "positions",
+    colCount: "Positions",
+    colShare: "Share",
+    colAvgScore: "Avg score",
   },
   es: {
     matchLabel: "🎯 Lo bien que te encuentra trabajo",
@@ -142,6 +151,9 @@ const T: Record<
     positionsFound: "POSICIONES ENCONTRADAS",
     otherCategories: (n) => `Otras ${n} categorías`,
     positions: "posiciones",
+    colCount: "Posiciones",
+    colShare: "Cuota",
+    colAvgScore: "Media score",
   },
   fr: {
     matchLabel: "🎯 À quel point il vous trouve du travail",
@@ -174,6 +186,9 @@ const T: Record<
     positionsFound: "POSTES TROUVÉS",
     otherCategories: (n) => `${n} autres catégories`,
     positions: "postes",
+    colCount: "Postes",
+    colShare: "Part",
+    colAvgScore: "Score moyen",
   },
   de: {
     matchLabel: "🎯 Wie gut es Arbeit für dich findet",
@@ -207,6 +222,9 @@ const T: Record<
     positionsFound: "GEFUNDENE STELLEN",
     otherCategories: (n) => `${n} weitere Kategorien`,
     positions: "Stellen",
+    colCount: "Stellen",
+    colShare: "Anteil",
+    colAvgScore: "Ø Score",
   },
   hu: {
     matchLabel: "🎯 Mennyire jól talál neked munkát",
@@ -239,6 +257,9 @@ const T: Record<
     positionsFound: "TALÁLT ÁLLÁSOK",
     otherCategories: (n) => `Még ${n} kategória`,
     positions: "állások",
+    colCount: "Állások",
+    colShare: "Arány",
+    colAvgScore: "Átlag pont",
   },
   pt: {
     matchLabel: "🎯 Quão bem encontra trabalho para si",
@@ -271,6 +292,9 @@ const T: Record<
     positionsFound: "VAGAS ENCONTRADAS",
     otherCategories: (n) => `Mais ${n} categorias`,
     positions: "vagas",
+    colCount: "Vagas",
+    colShare: "Quota",
+    colAvgScore: "Média score",
   },
 };
 
@@ -289,6 +313,13 @@ const CAT_COLORS = [
   "#7e57c2",
   "#4dd0e1",
 ];
+
+// Griglia UNICA condivisa da header e tutte le righe della tabella categorie:
+// nome · quantità · quota% · media score. Le colonne auto si dimensionano sul
+// contenuto più largo di TUTTA la colonna (un solo grid → numeri incolonnati e
+// barre score con la stessa baseline a sinistra). Lo score prende lo spazio
+// residuo (1fr) così le barre sono lunghe e confrontabili.
+const CAT_GRID = "auto auto auto minmax(8rem,1fr)";
 
 // ISO2 → emoji bandiera.
 function flag(cc: string): string {
@@ -325,21 +356,34 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
   const { match, cities, countries, categories } = run;
 
   // ── Categorie: top 8 + "Altre" ──
+  // avg = media score della famiglia; per "Altre" è la media PESATA sulle
+  // scorate (Σ avg·scored / Σ scored), così l'aggregato non distorce.
   const catView = useMemo(() => {
     const sorted = [...categories].sort((a, b) => b.count - a.count);
     const top = sorted.slice(0, 8);
-    const restN = sorted.slice(8).reduce((s, c) => s + c.count, 0);
-    const items = top.map((c, i) => ({
+    const rest = sorted.slice(8);
+    const items: {
+      name: string;
+      count: number;
+      color: string;
+      avg: number | null;
+    }[] = top.map((c, i) => ({
       name: c.name,
       count: c.count,
       color: CAT_COLORS[i % CAT_COLORS.length],
+      avg: c.avg ?? null,
     }));
-    if (restN > 0)
+    if (rest.length) {
+      const restN = rest.reduce((s, c) => s + c.count, 0);
+      const wSum = rest.reduce((s, c) => s + (c.avg ?? 0) * (c.scored ?? 0), 0);
+      const sSum = rest.reduce((s, c) => s + (c.scored ?? 0), 0);
       items.push({
-        name: t.otherCategories(sorted.length - 8),
+        name: t.otherCategories(rest.length),
         count: restN,
         color: DIM,
+        avg: sSum > 0 ? Math.round((wSum / sSum) * 10) / 10 : null,
       });
+    }
     const total = items.reduce((s, c) => s + c.count, 0) || 1;
     return { items, total };
   }, [categories, t]);
@@ -655,9 +699,9 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           {/* Donut */}
           <div
             className="relative shrink-0 mx-auto"
-            style={{ width: 180, height: 180 }}
+            style={{ width: 210, height: 210 }}
           >
-            <svg viewBox="0 0 180 180" width={180} height={180}>
+            <svg viewBox="0 0 180 180" width={210} height={210}>
               <g transform="rotate(-90 90 90)">
                 {arcs.map((s) => (
                   <circle
@@ -704,54 +748,78 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
               </text>
             </svg>
           </div>
-          {/* Legenda */}
-          <div className="w-full space-y-2">
+          {/* Tabella categorie — UN SOLO grid: colonne incolonnate e barre score
+              con la STESSA baseline a sinistra (lunghezza = score, scala 0–100). */}
+          <div
+            className="w-full grid items-center gap-x-4 gap-y-2"
+            style={{ gridTemplateColumns: CAT_GRID }}
+          >
+            {/* header colonne (4 celle + separatore full-width) */}
+            <span />
+            <span className="text-[8.5px] uppercase tracking-wide text-[var(--color-dim)] text-right">
+              {t.colCount}
+            </span>
+            <span className="text-[8.5px] uppercase tracking-wide text-[var(--color-dim)] text-right">
+              {t.colShare}
+            </span>
+            <span className="text-[8.5px] uppercase tracking-wide text-[var(--color-dim)]">
+              {t.colAvgScore}
+            </span>
+            <span
+              className="border-b border-[var(--color-border)] -mt-1"
+              style={{ gridColumn: "1 / -1" }}
+            />
+
+            {/* righe categorie */}
             {arcs.map((s) => (
-              <div
-                key={s.name}
-                className="flex items-center gap-3"
-                onMouseEnter={(e) =>
-                  showTip(e, s.name, [
-                    {
-                      color: s.color,
-                      label: `${s.pct}% · ${t.positions}`,
-                      value: nf(s.count, tag),
-                    },
-                  ])
-                }
-                onMouseMove={moveTip}
-                onMouseLeave={hideTip}
-              >
-                <span
-                  className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
-                  style={{ background: s.color }}
-                />
-                <span
-                  className="text-[11px] text-[var(--color-muted)] flex-1 truncate"
-                  title={s.name}
-                >
-                  {s.name}
-                </span>
-                <div
-                  className="w-24 h-1.5 rounded-full overflow-hidden shrink-0"
-                  style={{ background: "var(--color-border)" }}
-                >
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${s.frac * 100}%`,
-                      background: s.color,
-                      opacity: 0.85,
-                    }}
+              <Fragment key={s.name}>
+                {/* nome + pallino colore */}
+                <span className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                    style={{ background: s.color }}
                   />
-                </div>
-                <span className="text-[11px] font-bold tabular-nums w-7 text-right shrink-0">
+                  <span
+                    className="text-[11px] text-[var(--color-muted)] truncate"
+                    title={s.name}
+                  >
+                    {s.name}
+                  </span>
+                </span>
+                {/* quantità */}
+                <span className="text-[11px] font-bold tabular-nums text-right">
+                  {nf(s.count, tag)}
+                </span>
+                {/* quota % */}
+                <span className="text-[11px] text-[var(--color-dim)] tabular-nums text-right">
                   {s.pct}%
                 </span>
-                <span className="text-[10px] text-[var(--color-dim)] tabular-nums w-8 text-right shrink-0">
-                  {s.count}
+                {/* barra media score (baseline comune a sinistra) + numero */}
+                <span className="flex items-center gap-2">
+                  <span
+                    className="flex-1 h-1.5 rounded-full overflow-hidden"
+                    style={{ background: "var(--color-border)" }}
+                  >
+                    {s.avg != null && (
+                      <span
+                        className="block h-full rounded-full"
+                        style={{
+                          width: `${s.avg}%`,
+                          background: s.color,
+                          opacity: 0.85,
+                        }}
+                      />
+                    )}
+                  </span>
+                  <span
+                    className={`text-[11px] font-bold tabular-nums w-6 text-right shrink-0 ${
+                      s.avg == null ? "text-[var(--color-dim)]" : ""
+                    }`}
+                  >
+                    {s.avg != null ? Math.round(s.avg) : "—"}
+                  </span>
                 </span>
-              </div>
+              </Fragment>
             ))}
           </div>
         </div>
