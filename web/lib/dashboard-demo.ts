@@ -67,6 +67,7 @@ function position(input: {
     source: input.source,
     jd_text: null,
     requirements: null,
+    summary: null,
     found_by: `scout-${(input.legacyId % 3) + 1}`,
     found_at: hoursAgo(input.foundHoursAgo),
     deadline: null,

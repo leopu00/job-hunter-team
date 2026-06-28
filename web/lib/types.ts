@@ -29,6 +29,9 @@ export interface Position {
   source: string | null;
   jd_text: string | null;
   requirements: string | null;
+  // Riassunto leggibile (markdown, lingua utente) prodotto dall'Analista;
+  // mostrato al posto della JD grezza nella pagina posizione. Mig 049.
+  summary: string | null;
   found_by: string | null;
   found_at: string;
   deadline: string | null;
