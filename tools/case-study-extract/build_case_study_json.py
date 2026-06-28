@@ -171,15 +171,14 @@ events = [{"ts": ts.replace(" ", "T") + "Z", "agent": by, "action": to}
 agents = sorted({e["agent"] for e in events})
 ts_min, ts_max = Q("SELECT MIN(ts),MAX(ts) FROM position_state_transitions")[0]
 
-# ── usage giornaliero (% del budget SETTIMANALE AI consumato per giorno) ──
-# Da sentinel-data.jsonl: weekly_usage è cumulativo dentro la settimana (cresce
-# 0→~100) e si azzera al reset (Gio ~06:00 UTC). Consumo del giorno = valore di
-# FINE giornata − fine del giorno precedente nella STESSA settimana (0 se è il
-# primo giorno della settimana). Robusto all'oscillazione intraday; ogni
-# settimana completa somma ~100%.
-def _week_key(day_iso):  # giovedì di riferimento (settimana di budget)
-    d = datetime.date.fromisoformat(day_iso)
-    return (d - datetime.timedelta(days=(d.weekday() - 3) % 7)).isoformat()
+# ── usage giornaliero (% del budget AI consumato per giorno) ──
+# Da sentinel-data.jsonl: weekly_usage è cumulativo dentro il ciclo di budget
+# (cresce 0→~100) e si azzera al reset. Il reset NON è solo il giovedì di
+# calendario: l'utente può prendere un nuovo abbonamento e ripartire da 0 senza
+# aspettare la settimana. Quindi i CICLI si rilevano dai dati: nuovo ciclo quando
+# il cum SCENDE (reset, naturale o nuovo abbonamento) o c'è un buco di giorni.
+# Consumo del giorno = fine giornata − fine del giorno prima NELLO STESSO ciclo
+# (= il valore stesso se è il primo giorno del ciclo). `week` = data inizio ciclo.
 
 SENTINEL = "/root/.jht/logs/sentinel-data.jsonl"
 usage = None
@@ -208,14 +207,23 @@ if os.path.exists(SENTINEL):
     for ts, wu in samples:
         day_last[ts[:10]] = wu  # l'ultimo sample del giorno sovrascrive
     daily = []
-    week_prev = {}  # week_key -> fine del giorno precedente (nella settimana)
+    prev_day = None
+    prev_end = None
+    cycle = None  # data di inizio del ciclo di budget corrente
     for day, end in day_last.items():
-        wk = _week_key(day)
-        pct = end - week_prev.get(wk, 0)
-        week_prev[wk] = end
-        # pct = consumo del giorno; cum = totale settimanale a fine giornata
+        gap = (prev_day is not None and
+               (datetime.date.fromisoformat(day)
+                - datetime.date.fromisoformat(prev_day)).days > 1)
+        reset = prev_end is not None and end < prev_end - 1  # cum sceso = reset
+        if cycle is None or reset or gap:
+            cycle, base = day, 0.0  # nuovo ciclo: riparte da 0
+        else:
+            base = prev_end
+        pct = end - base
+        # pct = consumo del giorno; cum = totale del ciclo a fine giornata
         daily.append({"day": day, "pct": round(max(pct, 0), 1),
-                      "cum": round(end, 1), "week": wk})
+                      "cum": round(end, 1), "week": cycle})
+        prev_day, prev_end = day, end
     # orario di lavoro configurato (contesto: su quali ore/giorni si spalma)
     working_hours = None
     CONFIG = "/root/.jht/jht.config.json"
