@@ -163,12 +163,25 @@ ha il **contesto del canale**.
 | Kill/restart per-agente dal pannello | `8a4cc069a` |
 
 ## 7. TODO aperti
-- [ ] **GAP wizard VPS salta CV + orari (NEW 2026-06-27, setup b3).** Il ramo VPS bypassa
-      `enterWorkingHours` + upload CV (`wizard-flow.js:1437-1438` `enterReady.vps.bypass-to-home`):
-      gli step esistono (`b1968ca5a`) ma solo nel ramo locale → **in VPS mode l'utente non
-      carica MAI il CV**. Fix: includere working-hours + CV upload nel ramo VPS (o post-setup da home).
-- [ ] **GAP upload documenti VPS mode (NEW 2026-06-27).** Dalla home in VPS mode non si caricano
-      CV/allegati. Workaround b3: scp manuale su `/jht_user/cv` + Assistente lanciato a mano.
+- [x] **GAP wizard VPS salta CV + orari (FIXED 2026-06-28).** Il ramo VPS saltava
+      `enterWorkingHours` + upload CV (andava dritto a Telegram dopo provider-login in
+      `terminal-login.js`): gli step esistevano (`b1968ca5a`) ma solo nel ramo locale → **in
+      VPS mode l'utente non sceglieva MAI gli orari né caricava il CV**. Fix: dopo provider-login
+      entrambi i rami passano per working-hours → upload CV; i due step sono ora VPS-aware e
+      scrivono sul container REMOTO via SSH (nuovo modulo `desktop/vps/remote-config.js`:
+      `saveWorkingHoursToVps` → `team.working_hours` in `/root/.jht/jht.config.json`,
+      read→merge→atomic-write + chown 1001; `uploadDocsToVps` → drop-zone allegati remota
+      `/root/Documents/Job Hunter Team/allegati` via `SshExec.writeFile` con Buffer = upload
+      binario senza scp). Sequenza VPS: provider-login → working-hours → upload → telegram →
+      ready(home). L'email resta saltata in VPS (vedi sotto). Smoke test in-memory: PASS.
+- [x] **GAP upload documenti VPS mode (FIXED 2026-06-28).** Stesso modulo: il file-picker nativo
+      gira sul Mac, i file vengono letti come Buffer e scritti nella drop-zone allegati REMOTA
+      (path corretto `…/allegati`, NON `/jht_user/cv` come nel workaround manuale b3). chown -R
+      1001 così l'Assistente li legge al boot. *(Resta da fare l'upload **dalla home** in VPS
+      mode — qui è coperto solo il wizard.)*
+- [ ] **GAP email in VPS mode (NEW 2026-06-28).** Il ramo VPS salta lo step email: le credenziali
+      `email_monitor.json` si salvano solo in locale (`~/.jht/credentials`), serve una variante
+      remota (write SSH + chown 1001) come per orari/CV. Per ora il team VPS fa web sourcing.
 - [ ] **Bug 3 chat**: persistere i messaggi utente in `chat.jsonl` (§4). *(Conferma 2026-06-27:
       chat non funziona in VPS mode durante setup b3.)*
 - [ ] **Agent awareness canale + auto-sufficienza** (§5): prompt/skill di tutti gli

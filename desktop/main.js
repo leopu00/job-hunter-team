@@ -55,6 +55,7 @@ const sync = require('./sync')
 const vps = require('./vps')
 const tunnel = require('./vps/tunnel')
 const telegram = require('./telegram')
+const remoteConfig = require('./vps/remote-config')
 const emailVerify = require('./email-verify')
 const { freeBytes, formatBytes } = require('./disk-space')
 
@@ -311,6 +312,25 @@ function getUserUploadsDir() {
   const userDir =
     process.env.JHT_USER_DIR_HOST || path.join(home, 'Documents', 'Job Hunter Team')
   return path.join(userDir, 'allegati')
+}
+
+// Normalizzazione difensiva degli orari di lavoro scelti nel wizard.
+// Accetta null/{} (=24/7) o {timezone, windows:[{days,start,end}]} e ritorna
+// { timezone, windows } | null. Condivisa fra il save locale (~/.jht) e
+// quello VPS (jht.config.json remoto via SSH) così le due strade producono
+// lo stesso schema che legge working_hours.py al boot.
+function normalizeWorkingHours(working_hours) {
+  if (!working_hours || typeof working_hours !== 'object') return null
+  const tz = typeof working_hours.timezone === 'string' && working_hours.timezone
+    ? working_hours.timezone
+    : 'UTC'
+  const windows = Array.isArray(working_hours.windows)
+    ? working_hours.windows
+        .filter((w) => w && Array.isArray(w.days) && w.days.length &&
+          typeof w.start === 'string' && typeof w.end === 'string')
+        .map((w) => ({ days: w.days, start: w.start, end: w.end }))
+    : []
+  return { timezone: tz, windows }
 }
 
 // Salva i 3 bot Telegram nel jht.config.json LOCALE (channels.telegram.bots),
@@ -1004,20 +1024,7 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('team:set-working-hours', (_event, working_hours) => {
     try {
-      // Normalizzazione difensiva: accetta null/{} (=24-7) o {timezone, windows}.
-      let value = null
-      if (working_hours && typeof working_hours === 'object') {
-        const tz = typeof working_hours.timezone === 'string' && working_hours.timezone
-          ? working_hours.timezone
-          : 'UTC'
-        const windows = Array.isArray(working_hours.windows)
-          ? working_hours.windows
-              .filter((w) => w && Array.isArray(w.days) && w.days.length &&
-                typeof w.start === 'string' && typeof w.end === 'string')
-              .map((w) => ({ days: w.days, start: w.start, end: w.end }))
-          : []
-        value = { timezone: tz, windows }
-      }
+      const value = normalizeWorkingHours(working_hours)
       const cfg = readJhtConfig()
       cfg.team = { ...(cfg.team && typeof cfg.team === 'object' ? cfg.team : {}), working_hours: value }
       writeJhtConfig(cfg)
@@ -1027,6 +1034,18 @@ app.whenReady().then(() => {
       return { ok: false, error: err && (err.message || String(err)) }
     }
   })
+
+  // ── Onboarding VPS: orari di lavoro sul container REMOTO ──────────────
+  // Stessi dati del ramo locale ma scritti in /root/.jht/jht.config.json
+  // sulla VPS via SSH (read→merge→atomic-write + chown 1001). Il wizard in
+  // modalità VPS instrada qui invece che su team:set-working-hours, così
+  // l'utente non salta mai la scelta degli orari (gap b3, 2026-06-27).
+  ipcMain.handle('team:get-working-hours-vps', (_event, { vpsIp } = {}) =>
+    remoteConfig.getWorkingHoursFromVps(vpsIp),
+  )
+  ipcMain.handle('team:set-working-hours-vps', (_event, { vpsIp, working_hours } = {}) =>
+    remoteConfig.saveWorkingHoursToVps(vpsIp, normalizeWorkingHours(working_hours)),
+  )
 
   // ── Onboarding: upload documenti del profilo (CV + obiettivi) ─────────
   // File-picker nativo → copia i file nella drop-zone allegati (bind su
@@ -1081,6 +1100,35 @@ app.whenReady().then(() => {
       return { ok: false, error: err && (err.message || String(err)), files: [] }
     }
   })
+
+  // ── Onboarding VPS: upload documenti del profilo sul container REMOTO ──
+  // File-picker nativo (lato Mac) → legge i file come Buffer → li scrive
+  // nella drop-zone allegati REMOTA via SSH (/root/Documents/Job Hunter
+  // Team/allegati, bind /jht_user/allegati). L'Assistente li ingerisce al
+  // boot del team sulla VPS. Speculare a profile:upload-docs locale.
+  ipcMain.handle('profile:upload-docs-vps', async (_event, { vpsIp } = {}) => {
+    if (!vpsIp) return { ok: false, error: 'vpsIp required', files: [] }
+    try {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Carica il tuo CV e i documenti del profilo',
+        buttonLabel: 'Carica',
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: 'Documenti', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'odt', 'pages'] },
+          { name: 'Tutti i file', extensions: ['*'] },
+        ],
+      })
+      if (result.canceled || !Array.isArray(result.filePaths) || !result.filePaths.length) {
+        return { ok: true, files: [] }
+      }
+      return await remoteConfig.uploadDocsToVps(vpsIp, result.filePaths)
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)), files: [] }
+    }
+  })
+  ipcMain.handle('profile:list-docs-vps', (_event, { vpsIp } = {}) =>
+    remoteConfig.listDocsOnVps(vpsIp),
+  )
 
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
   ipcMain.handle('tunnel:open', (_event, { ip } = {}) => {
