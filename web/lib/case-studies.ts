@@ -37,6 +37,22 @@ export interface CaseStudyProfile {
   why: string;
 }
 
+// Una "fase" del run quando il candidato è stato testato in periodi distinti con
+// modello/abbonamento/modalità diversi (es. betaB: prima Codex libero, poi Kimi
+// monitorato). Se presente, la sezione budget mostra un grafico PER FASE invece
+// di uno unico che mescolerebbe sessioni non confrontabili. `to: null` = fase in
+// corso. Le date sono YYYY-MM-DD e filtrano usage.daily + attività.
+export interface CaseStudyPhase {
+  key: string;
+  label: string; // "Codex" / "Kimi"
+  price: string; // "~€100/mese"
+  note: string; // descrizione breve della modalità (IT, come il profilo)
+  from: string; // "2026-05-19"
+  to: string | null; // "2026-06-04"; null = fase corrente
+  /** "hourly" = grafico intraday (ora per ora) invece che giornaliero; per fasi corte */
+  detail?: "hourly";
+}
+
 export interface CaseStudyMeta {
   id: string;
   label: string; // "Beta tester 1"
@@ -49,6 +65,8 @@ export interface CaseStudyMeta {
   /** abbonamento AI usato per questo run (l'unica spesa reale) */
   subscription: { provider: string; plan: string; price: string };
   profile: CaseStudyProfile;
+  /** fasi del run con modello diverso (opzionale); se assente = run mono-fase */
+  phases?: CaseStudyPhase[];
   run: CaseStudyRun;
 }
 
@@ -138,6 +156,28 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       ],
       why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
     },
+    // Due sessioni distinte sullo STESSO candidato: prima un test con Codex (agenti
+    // liberi, senza monitor del budget), poi il run attuale con Kimi (monitorato).
+    // Il buco 05-12/06 tra le due è downtime e non appartiene a nessuna fase.
+    phases: [
+      {
+        key: "codex",
+        label: "Codex",
+        price: "~€100/mese",
+        note: "primo test — agenti liberi, senza monitor, fino a esaurire il budget",
+        from: "2026-05-19",
+        to: "2026-05-21",
+        detail: "hourly",
+      },
+      {
+        key: "kimi",
+        label: "Kimi",
+        price: "~€40/mese",
+        note: "run attuale — budget settimanale monitorato e dosato (pacing)",
+        from: "2026-06-13",
+        to: null,
+      },
+    ],
     run: betaBRun as unknown as CaseStudyRun,
   },
 ];

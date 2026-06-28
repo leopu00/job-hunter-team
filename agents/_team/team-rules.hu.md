@@ -63,6 +63,8 @@ szo szerint ertelmeznek — a Sentinella parancsszotar (`STEADY`,
 `ACCELERARE`, `RECOVERY TRACKING`, `PUSH G-SPOT`, `RIENTRO`,
 `RESET SESSIONE`, `PAUSA TEAM`, `HARD FREEZE`, `RIPRENDI`).
 
+**NEM "belső gondolkodás":** minden szöveg, amely a dashboardon a felhasználóhoz kerül — score indoklása (`scores.notes`), analista megjegyzései (`positions.notes`), JD összefoglaló (`positions.jd_summary`), highlight-ok, cég `red_flags`/`culture_notes` — **felhasználónak szóló tartalom**, amely a **RULE-T14**-et (a felhasználó locale-ját) követi, NEM ezt a szabályt. A "belső" itt a privát chain-of-thought-odat, a debug naplókat és a kód/commit-eket jelenti — nem azokat a mezőket, amelyeket a csapat a DB-be ír azért, hogy a felhasználó olvassa.
+
 ---
 
 ## 🧊 RULE-T07 — Tartsd tiszteletben a Sentinella parancsait

@@ -52,7 +52,10 @@ export interface CaseStudyRun {
   tsRange: [string, string];
   totals: { positions: number; scored: number; excluded: number };
   match: CaseStudyMatch;
-  categories: { name: string; count: number }[];
+  // count = posizioni nella famiglia; scored = quante hanno uno score; avg =
+  // media total_score sulle scorate (null/assente se nessuna). scored/avg sono
+  // opzionali: snapshot precedenti all'aggiunta non li hanno.
+  categories: { name: string; count: number; scored?: number; avg?: number | null }[];
   // Fonti da cui sono arrivate le posizioni (top-N + "Altre"). Opzionale:
   // assente negli snapshot generati prima dell'aggiunta del campo.
   sources?: { name: string; count: number }[];
@@ -72,5 +75,26 @@ export interface CaseStudyRun {
   salary: { n: number; avgMin: number | null; avgMax: number | null };
   agents: string[];
   events: { ts: string; agent: string; action: string }[];
+  // Attività + budget per ORA (per viste intraday su fasi corte): solo le ore con
+  // attività. hour = "YYYY-MM-DDTHH", counts per ruolo, cum = budget% a quell'ora.
+  // Opzionale: assente negli snapshot precedenti.
+  hourly?: { hour: string; counts: Record<string, number>; cum: number }[];
+  // Funnel trovate → escluse/tenute. `funnelDaily` per giorno (found_at + status
+  // attuale), `funnelTotals` complessivo (per il donut). Opzionali.
+  funnelDaily?: {
+    day: string;
+    found: number;
+    excluded: number;
+    kept: number;
+    scored: number;
+    ready: number;
+  }[];
+  funnelTotals?: {
+    found: number;
+    excluded: number;
+    kept: number;
+    scored: number;
+    ready: number;
+  };
   usage?: CaseStudyUsage | null;
 }

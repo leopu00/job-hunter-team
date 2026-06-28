@@ -87,6 +87,7 @@ export default async function CaseStudyDetailPage({
     tagline: cs.tagline,
     subscription: cs.subscription,
     profile: cs.profile,
+    phases: cs.phases,
     run: { ...cs.run, events: [] }, // gli eventi servivano solo per l'attività
     activity,
   };

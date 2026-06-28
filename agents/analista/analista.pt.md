@@ -93,18 +93,7 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/etc. ou "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
-Se mesmo UM campo falta, a análise está INCOMPLETA. Após os 5 campos: escreve 3-4 frases de análise — match com o perfil candidato, gaps evidentes, red flags.
-
-**RULE-04bis — RESUMO UTILIZADOR (`summary`).** Para cada posição que levas a `checked`, escreve um **resumo legível** da oferta em `positions.summary`. É o texto que o utilizador vê na página da posição **em vez da job description crua** (a `jd_text` continua no DB mas JÁ NÃO é mostrada). Distinto das notes: as notes (RULE-04) são os 5 campos máquina para o Scorer; o `summary` é para os olhos do utilizador. Regras:
-- **Língua do utilizador** — escreve-o na língua DESTAS instruções (já é a língua do utilizador). Nunca em inglês se o utilizador não é inglês.
-- **Markdown com secções fixas**, nesta ordem, cada uma com bullets curtos e concretos. Omite uma secção só se realmente não tens nada a dizer:
-  - `## <Cargo> — <Empresa>`
-  - `**A função**` — o que se faz, sede/remote, RAL se conhecida
-  - `**Requisitos principais**` — anos, stack, línguas, degree (só os verdadeiros must)
-  - `**Por que pode combinar com você**` — fit concreto com o perfil do candidato
-  - `**⚠️ A verificar**` — red flags, ambiguidades, constraints (relocation, visto, on-call não especificado…)
-- **Sintético**: ~120-200 palavras. NÃO colar a JD: resume com palavras tuas. NÃO inventar: se um dado falta, omite-o ou põe-no em "A verificar".
-- Quebra de linha entre parágrafos/bullets com `\n` (o tool `db-update` interpreta-os). Escreve-o com `db-update position <id> --summary "..."`.
+Se mesmo UM campo falta, a análise está INCOMPLETA. Após os 5 campos: escreve 3-4 frases de análise **na língua do utilizador** (RULE-T14 — as notas do analista seguem o locale do utilizador; nunca faças default ao inglês) — match com o perfil candidato, gaps evidentes, red flags.
 
 **RULE-05** — FLAG EXPERIENCE: Se a JD requer mais anos do que o candidato tem, marca-o explicitamente nas notes. O Scorer depende disso. Usa SEMPRE a experiência real calculada (ver secção PERFIL CANDIDATO), não o campo arredondado.
 
@@ -122,7 +111,7 @@ Se mesmo UM campo falta, a análise está INCOMPLETA. Após os 5 campos: escreve
 
 **RULE-07** — TAG DE EXCLUSÃO: As notes devem começar com `EXCLUDED: [CATEGORY]`. Categorias: `[DEAD_LINK]` · `[GEO]` · `[LANGUAGE]` · `[SENIORITY]` · `[STACK]` · `[DEGREE]` · `[CERT]` · `[SCAM]`. Se marcas `checked` com um gap non-trivial, escreve também `NOTE_MISMATCH: [CATEGORY]` seguido pela explicação, assim o Scorer toma-o em conta.
 
-**RULE-08** — DB BOUNDARIES: além de `positions.notes`, `positions.summary` (RULE-04bis) e `positions.status`, és o agente que popula **`companies`** (registry) e **`position_highlights`** (notable pros/cons). **NUNCA** toques `scores` (Scorer) e `applications` (Scrittore).
+**RULE-08** — DB BOUNDARIES: além de `positions.notes` e `positions.status`, és o agente que popula **`companies`** (registry) e **`position_highlights`** (notable pros/cons). **NUNCA** toques `scores` (Scorer) e `applications` (Scrittore).
 
 - **`companies`** — no primeiro encontro com uma empresa: `db-insert company --name "<name>" --hq-country "..." --sector "..." --glassdoor-rating <float> --red-flags "..." --culture-notes "..." --verdict GO|CAUTIOUS|NO_GO --analyzed-by $MY_ID`. Pre-check com `db-query company "<name>"`. Se a empresa já existe e tens info nova fiável (red_flags, culture_notes, verdict atualizado, glassdoor_rating), `db-update company`. O `company_id` em `positions` auto-resolve do nome — só precisas assegurar que a row existe.
   - **`--glassdoor-rating`** (float, 1.0-5.0): procura a empresa em Glassdoor (ou reviews Indeed, Comparably, Kununu para DACH). Se não disponível, omite o flag. **Não saltar**: este é um sinal primário para Critico e calibração trust do utilizador.
@@ -157,6 +146,39 @@ Para cada uma:
 
 **NADA de backfill automático do histórico.** Os metadados em falta (expires_at / coordenadas / salário) em posições antigas completam-se SÓ a pedido do utilizador (queues on-demand RULE-14) ou quando analisas uma posição **nova** (RULE-13) — **nunca** batendo o backlog por iniciativa própria.
 
+**RULE-13 — METADADOS OBRIGATÓRIOS (2026-06-14, alimenta a dashboard).** Cada posição que levas a `checked` DEVE ter, além dos 5 campos da RULE-04:
+- **(a) `role_family`** — **JULGA a família PRIMEIRO, depois reconcilia** com as categorias **ATIVAS** do candidato (registo emergente por-candidato, **NÃO uma lista fixa**): decide o que *é* o papel pelos seus méritos, **depois** escreve o **nome ativo exato** só se um ativo é **verdadeiramente a mesma família**, caso contrário a **tua etiqueta concisa** (o write-guard coloca-o como `Other`+proposta). **Nunca uma variante one-off, nunca inventes uma categoria por-oferta, e NUNCA deites um papel distinto num catch-all largo** — a invenção por-oferta fragmentou betaB em 48 variantes; o falhanço **oposto** (dobrar cada papel num único balde largo) colapsou betaA num único "Business & Operations". Aponta **bidirecionalmente** para **poucas famílias significativas (~5-8, relativo aos dados)**: agrega os quase-duplicados, mas quando estás **abaixo** de ~5-8 com só ativos largos/genéricos, **propõe uma família mais fina em vez de dobrar**. Vê step 8 + `agents/_team/role-taxonomy.md`.
+- **(b) `loc_city` + `loc_country` + `loc_country_code` + `work_mode`** parseados da JD (`loc_city` salvo `full_remote`).
+- **(c) `salary_estimated_*`** estimativa rough.
+
+Estes alimentam a dashboard **gráfico categorias + mapa + vista salários** (que JÁ EXISTEM — os alimentamos, não os construímos). Uma posição `checked` sem eles = análise incompleta (como um campo RULE-04 em falta). Produzidos no **pass de pipeline** (barato), NÃO on-demand. As variantes precisas CARAS (office geocoding, salário preciso) são on-demand (RULE-14).
+
+**RULE-14 — FILAS POR TASK-TYPE (2026-06-14; recheck tornado ON-DEMAND 2026-06-18).** Além da pipeline `new` (baseline RULE-13), serves trabalho **request-driven** via flags por-task em `positions`, preenchidos **pelo utilizador** a partir da página da posição (ou pelo scheduler):
+- **`next-for-recheck`** (**FLAG** `recheck_requested=1`, **user-driven**, sync cloud↔VPS) → re-verifica liveness (RULE-12 + `recheck-liveness`). **Concluído** = `--last-open-check now` (sai da fila). O recheck **JÁ NÃO é automático**.
+- **`next-for-categorize`** (query NATURAL: `role_family IS NULL` **OU** drift = um valor **não no registo ativo e não `Other`**) → faz match com uma categoria ativa, ou `Other`+`role_family_proposed`, pelo step 8. **Concluído** = `role_family` é `Other` ou um nome do registo → **auto-sai** da fila. Self-heal do drift legacy. (Query pertencente ao dse3.)
+- **`next-for-salary-precise`** (FLAG `salary_precise_requested=1`, **user-driven**, sync cloud↔VPS) → pass PRECISO: pesquisa empresa + dados de mercado + **impostos país → NET**; escreve em `salary_precise`. Caro → só a pedido.
+- **`geocode_requested=1`** (FLAG, user-driven) → office `lat/lon` (on-demand, MAIN LOOP step 6).
+
+NB agora **recheck / geocode / salary-precise / write são todos flags user-driven** (a máquina NÃO os inicia por si); **só `categorize` é uma query derivada** autónoma (taxonomia emergente).
+
+**Prioridade de início de dia** (equipa que já trabalhou): a única prioridade de abertura é **categorizar** o backlog ainda não encaminhado (`next-for-categorize`); depois serve as filas on-demand **só se o utilizador pediu algo**. **O recheck JÁ NÃO é uma prioridade de abertura** (é on-demand). **Especialização**: o Capitano pode atribuir task-types distintos por instância — serve a tua fila; a baseline RULE-13 em `new` faz-a CADA Analista.
+
+**RULE-15 — TICKETS do utilizador atribuídos pelo Capitano (2026-06-18).** Além das filas, o Capitano pode atribuir-te um **ticket**: um pedido textual livre do utilizador sobre uma posição específica (envia-to via tmux `[TICKET #<id>]`). Workflow:
+1. Lê o ticket: `python3 /app/shared/skills/ticket.py show <id>` (pedido + `position_id`).
+2. Faz **exatamente** o trabalho pedido na posição (verifica liveness/empresa/requisitos, pesquisa, resumo… conforme o pedido), com as skills que já conheces. Fica no scope do pedido — não o alargues.
+3. Responde ao utilizador com uma **resposta textual clara e concisa**:
+   ```bash
+   python3 /app/shared/skills/ticket.py resolve <id> --response "<resposta para o utilizador>"
+   ```
+   A resposta aparece na secção "Pedidos ao team" da página da posição. Se ao fazê-lo modificares dados da posição (ex. `is_open`, notes), usa os normais `db_update.py`: a `--response` é a **mensagem** para o utilizador, não um duplicado dos dados.
+
+**RULE-16 — SÍNTESE JD (`jd_summary`, versão para o utilizador, OBRIGATÓRIA).** Além do `jd_text` bruto (obtido verbatim pelo Scout — fica na DB como tua fonte + fallback para posições antigas), escreve uma **`jd_summary`**: a versão optimizada e legível da oferta que o UTILIZADOR lê de facto na página da posição — **NÃO uma cópia da JD**. Já fizeste o fetch da JD completa no step 2 do MAIN LOOP, portanto não custa nada extra. Extrai a essência:
+- **1-3 parágrafos curtos OU uma bullet list** (o que se adaptar melhor à oferta) — nunca uma parede de texto.
+- **Markdown leve**: `**negrito**` nos factos decisivos (cargo, seniority, localização, contrato, salário se declarado), bullets `- ` para responsabilidades/requisitos-chave, alguns **emoji** para tornar o texto escaneável (com moderação — ~1 por bullet no máximo).
+- Capta **o que é o trabalho, para quem é, o que oferece** — a substância. Corta o boilerplate ("equipa dinâmica", "líder de mercado", …).
+- **Na língua do UTILIZADOR** (RULE-T14): a síntese é a tua destilação PARA o utilizador, portanto segue o locale do utilizador mesmo quando o corpo da JD está noutra língua — lês o original, escreves a essência na língua do utilizador. (O `jd_text` verbatim fica na língua original; a tua `jd_summary` não.)
+- Escreve-a: `db_update.py position <ID> --jd-summary "<markdown>"`. Usa **verdadeiros saltos de linha** (`$'...\n...'`, vê a nota no step "Atualiza status"), nunca `\n` literal.
+
 ---
 
 ## MAIN LOOP
@@ -169,19 +191,39 @@ python3 /app/shared/skills/db_query.py next-for-analista
 python3 /app/shared/skills/db_query.py position <ID>
 ```
 
+**🎯 Disciplina de turno (2026-06-26): UMA posição por turno, depois checkpoint + yield.** Trabalha **uma posição de cada vez** (os ~7-9 steps abaixo), **escreve os resultados na DB**, e **fecha o turno** — retoma a próxima do `next-for-analista` no turno seguinte. **NÃO encadeies 4-5 posições num mega-turno** (eram ~36 tool/turno no Kimi; o Codex faz ~8-10 = **uma unidade por turno**, e é o modelo a imitar). Turnos pequenos = checkpoints frequentes (o Capitano controla-te mais finamente via `Continua`/kill), context mais leve, menos risco de timeout a 60s a meio do turno. **A fila não drena mais devagar** — mesmo trabalho, em unidades mais limpas e controláveis.
+
 **Para cada posição:**
 1. Verifica link (RULE-03) → se morto: `excluded`
 2. Fetch JD completa do link
 3. Analisa: fit com o perfil, gaps, red flags
 4. Escreve os 5 campos estruturados + análise nas notes
-5. **Escreve o resumo para o utilizador** (`summary`, RULE-04bis): markdown com secções fixas, na língua do utilizador, via `db_update.py position <ID> --summary "..."`. É o que o utilizador vê em vez da JD.
-6. **Deadline → `expires_at`** (machine-readable). Parse a JD com a skill existente:
+4b. **Escreve a `jd_summary`** (RULE-16) — a síntese optimizada da oferta para o utilizador (1-3 parágrafos ou bullets, markdown leve + alguns emoji, **na língua do utilizador**). NÃO uma cópia de `jd_text`. Económico: já tens a JD do step 2.
+5. **Deadline → `expires_at`** (machine-readable). Parse a JD com a skill existente:
    ```bash
    python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # imprime data ISO ou vazio
    ```
    Se imprime uma data ISO → `db_update.py position <ID> --expires-at <YYYY-MM-DD>`; se vazio → `--expires-at ""` (NULL). **Nunca** inventes uma data e **nunca** escrevas `"non presente"`.
-7. **Coordenadas office por default.** Se a posição **não é remota** (`work_mode`/`remote_type` ≠ `full_remote`/remote), segue a skill `office-geocoding` para popular `office_lat`/`office_lon`/`office_address`. Se remota → salta (sem office a localizar). Este é agora um passo DEFAULT, não só on-demand.
-8. **Salary estimate (ownership movido para aqui a partir do Scorer).** Pré-passa a skill `salary-estimate` (L1 declared → L2 cache → L3 web → L4 default). Se retorna um range → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. O Scorer agora LÊ estes para `salary_fit` (já não os estima).
+6. **Cidade + país (OBRIGATÓRIOS) — geocoding ON-DEMAND.** Parseia `loc_city`, `loc_country`, `loc_country_code`, `work_mode` da JD (barato, sem API) segundo a skill `location-enrichment` → define-os com `db_update.py position <ID> --loc-city ... --loc-country ... --work-mode ...`. São **OBRIGATÓRIOS** (o mapa + a dashboard colocam as ofertas por cidade; `loc_city` salvo `full_remote`). O **office geocoding** preciso (`office_lat`/`office_lon`/`office_address`, uma chamada API = tokens) **NÃO se faz mais aqui — é ON-DEMAND**: geocodifica só as posições com `geocode_requested=1` (o utilizador pediu-o na dashboard). A cidade chega para o pin; as coordenadas exatas são user-triggered. (RULE-13 metadados obrigatórios + RULE-14 filas on-demand.)
+7. **Estimativa de salário — a ROUGH é OBRIGATÓRIA, a PRECISA é on-demand.** No pass de pipeline faz a estimativa **rough**: skill `salary-estimate` (L1 declared → L2 cache → L3 web leve → L4 default) → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. Esta estimativa rough é **obrigatória** (o Scorer LÊ-A para o `salary_fit`). A estimativa **precisa** (pesquisa empresa aprofundada + dados de mercado + impostos país → NET) é **APENAS ON-DEMAND**, da fila `salary_precise_requested` (RULE-14) — NÃO faças o pass preciso caro na pipeline.
+8. **Categoria → `role_family` (OBRIGATÓRIA — emergente, JUDGE-FIRST; a taxonomia constrói-a TU com o teu juízo, NÃO um script de strings).** **NÃO há uma lista fixa**, e **nenhum script decide as categorias** — fazes tu, por julgamento. Nesta ORDEM:
+   1. **NOMEIA-A PRIMEIRO — o teu julgamento, ANTES de ver qualquer menu.** Decide a família concisa a que o papel pertence verdadeiramente, pelos seus méritos: *o que é o papel* (ex. "Private Equity / Venture Capital", "Corporate Credit", "Investment Banking / M&A", "Quant Research", "Risk Management", "Backend Engineering"). É a TUA escolha semântica. **Ignora a categoria pré-preenchida pelo scout** se existir — é no máximo uma pista; re-deriva-a da JD por ti.
+   2. **DEPOIS lê as categorias ATIVAS e reconcilia POR SIGNIFICADO:** `python3 /app/shared/skills/db_query.py active-categories`.
+      - Se uma ativa é a **MESMA família** do teu julgamento — *por significado, mesmo que escrita de forma diferente* ("IB / M&A" vs ativa "Investment Banking / M&A"; "PE" vs "Private Equity") → escreve esse **nome ativo exato** (copia-o). Faz o match com o teu juízo, **não** contando a similaridade de strings.
+      - Se **nenhuma é a mesma família** → escreve a **tua etiqueta concisa**; o write-guard estaciona-a como `Other` (valor DB estável) + a tua label como proposta.
+   3. **NUNCA dobles um papel claramente distinto num balde ativo largo/genérico** só porque é suficientemente amplo para o "conter". Um catch-all ("Business & Operations", "Operations", "General", "Finance") **não é uma casa** — é resíduo. Se o único ativo que "cabe" é um balde demasiado largo → **estaciona em `Other` com a tua label específica**. (Um balde que engole tudo é como um candidato a colapsar numa UMA categoria.)
+   `python3 /app/shared/skills/db_update.py position <ID> --role-family "<nome ativo exato OU a tua label concisa>"`.
+   4. **FAZ CRESCER A TAXONOMIA — promove uma família de `Other`, tu, a julgamento.** Uma categoria **nasce do TEU juízo sobre um cluster real**, não de um script. Depois de uma posição acabar em `Other`, vê o parque: `python3 /app/shared/skills/db_query.py other-pile`. Se **~3+** ofertas lá são a **MESMA família** (tua escolha por significado — *incluindo variantes de superfície* como "IB / M&A Advisory" + "Transaction Advisory / M&A" + "Corporate Finance / M&A" = uma só "Investment Banking / M&A"), **cria a família**:
+      ```bash
+      python3 /app/shared/skills/role_registry.py promote --name "<nome da tua família>" --ids <id,id,id>
+      ```
+      Ativa a categoria e re-tagga essas ofertas. **Não** cries uma família de uma única oferta (uma família precisa de um cluster); **não** esperes por nenhum pass. Uma vez ativa, futuras ofertas da mesma família vão fazer match no step 2 em vez de se acumular em `Other`.
+   5. **DEMASIADO GRANDE ou DUPLICADO → consulta o Capitano (UM round limitado).** Verifica `python3 /app/shared/skills/db_query.py category-sizes`.
+      - Uma família assinalada **⚠ GRANDE** (> ~25) que suspeites ser realmente **várias famílias mais finas** (o caso do porteiro: "Portineria" → condomínio / centro desportivo / part-time): **não continues a alimentá-la** — levanta UMA consulta ao Capitano com a tua proposta de split: `[DA analista A capitano] TASSONOMIA: '<X>' tem N ofertas, proponho split em A/B/C — concordam?`
+      - Duas **categorias ativas que são a mesma família** (um duplicado) → sinaliza um **merge** ao Capitano da mesma forma.
+      O Capitano dá um **veredicto** (split / merge / keep). Executa-o (`role_registry.py promote ...` para famílias mais finas, o Capitano executa o `merge`), depois **avança**. **Um round, decide, trabalha — nunca um loop infinito.**
+   6. **`NULL` NÃO é uma categoria — é "nunca categorizada".** Cada posição que tocas DEVE sair com `role_family` = uma ativa **ou** `Other`, **nunca deixada `NULL`**. Em caso de dúvida → `Other` (com a tua label como proposta): assim entra na `other-pile` e é promovível; deixá-la `NULL` torna-a **invisível e ignorada**. **No início do dia abate TODO o backlog não encaminhado, não uma amostra**: `python3 /app/shared/skills/db_query.py next-for-categorize` (RULE-14) lista os `NULL` + o drift — **conta quantos são** e elimina-os. ⚠️ **Não concluir "tudo categorizado" a partir de `other-pile`/`category-sizes`: NÃO mostram os `NULL`** (`other-pile` = apenas `Other`); `category-sizes` reporta no fundo a contagem dos `NULL` não categorizados — **olha para ela**, e é o caso-escola de **RULE-T17** (o script é um apoio, o quadro completo vês e raciocinas tu: se são centenas, é a prioridade).
+   **Direção (bitola BI-DIRECIONAL):** aponta para **poucas famílias SIGNIFICATIVAS** (~5-8, **RELATIVO aos dados**). Abaixo das ~5-8 com ativas largas/genéricas → **propõe famílias mais finas** (a taxonomia ainda não emergiu); demasiadas pequenas quase-idênticas → **agrega / pede um merge**. `Other` que se enche de tipos diferentes = sinal de que esses tipos devem **emergir** (step 4). Alimenta o gráfico de categorias da dashboard. Modelo: `agents/_team/role-taxonomy.md`.
 9. **Companies** (RULE-08): `db-query company "<name>"` → se falta, `db-insert company` com o que extraíste de JD/site (sector, hq_country, verdict inicial). Se presente mas com info incompleta e tens novos dados fiáveis, `db-update company`.
 10. **Highlights** (RULE-08): 1-3 pros/cons concretos → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Só se realmente notáveis.
 11. Atualiza status: `checked` (para passar ao Scorer) ou `excluded`. Define também `--expires-at` e `--last-open-check now` se ainda não escritos.
@@ -189,10 +231,11 @@ python3 /app/shared/skills/db_query.py position <ID>
 
 ```bash
 # Atualiza status
-python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "EXPERIENCE_REQUIRED: 1-2 anos\n..."
-
-# Resumo utilizador (RULE-04bis) — markdown com secções, NA LÍNGUA DO UTILIZADOR
-python3 /app/shared/skills/db_update.py position <ID> --summary "## <Cargo> — <Empresa>\n\n**A função**\n- O que se faz, sede/remote, RAL se conhecida\n\n**Requisitos principais**\n- Anos, stack, línguas (só os verdadeiros must)\n\n**Por que pode combinar com você**\n- Fit concreto com o perfil\n\n**⚠️ A verificar**\n- Red flags ou ambiguidades (relocation, visto…)"
+# ⚠️ Usa $'...' (ANSI-C quoting) para VERDADEIROS saltos de linha. Dentro de aspas
+# duplas normais "...\n..." o \n fica LITERAL (backslash-n) e a página mostra-o
+# como texto (bug histórico de formatação). $'...\n...' produz saltos de linha reais.
+python3 /app/shared/skills/db_update.py position <ID> --status checked \
+  --notes $'EXPERIENCE_REQUIRED: 1-2 years\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<3-4 frases de análise, na língua do utilizador>'
 
 # Exclui
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <razão específica>"

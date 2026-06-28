@@ -304,7 +304,7 @@ async function handleRestore(options) {
         salary_declared_min, salary_declared_max, salary_declared_currency,
         salary_estimated_min, salary_estimated_max, salary_estimated_currency,
         salary_estimated_source,
-        url, source, jd_text, requirements, summary, found_by, found_at, deadline,
+        url, source, jd_text, jd_summary, requirements, found_by, found_at, deadline,
         status, notes, last_checked, last_actor, role_family,
         loc_city, loc_region, loc_country, loc_country_code,
         work_country, work_country_code,
@@ -313,8 +313,8 @@ async function handleRestore(options) {
         write_requested, write_requested_at,
         geocode_requested, geocode_requested_at,
         created_at, updated_at
-      ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.exec('BEGIN');
     try {
@@ -331,8 +331,7 @@ async function handleRestore(options) {
           p.salary_declared_min ?? null, p.salary_declared_max ?? null, p.salary_declared_currency ?? null,
           p.salary_estimated_min ?? null, p.salary_estimated_max ?? null, p.salary_estimated_currency ?? null,
           p.salary_estimated_source ?? null,
-          p.url ?? null, p.source ?? null, p.jd_text ?? null, p.requirements ?? null,
-          p.summary ?? null,
+          p.url ?? null, p.source ?? null, p.jd_text ?? null, p.jd_summary ?? null, p.requirements ?? null,
           p.found_by ?? null, p.found_at ?? null, p.deadline ?? null,
           p.status ?? 'new', p.notes ?? null, p.last_checked ?? null, p.last_actor ?? null, p.role_family ?? null,
           p.loc_city ?? null, p.loc_region ?? null, p.loc_country ?? null, p.loc_country_code ?? null,
@@ -826,7 +825,7 @@ async function handlePush(options) {
         // company_id (FK locale → companies): risolto a UUID cloud lato server
         // via companies.legacy_id. Alimenta la Company card del dettaglio (mig 046).
         'id', 'title', 'company', 'company_id', 'url', 'location', 'remote_type', 'status',
-        'notes', 'source', 'jd_text', 'requirements', 'summary', 'found_by', 'found_at',
+        'notes', 'source', 'jd_text', 'jd_summary', 'requirements', 'found_by', 'found_at',
         'deadline', 'last_checked', 'last_actor',
         'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
         'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
