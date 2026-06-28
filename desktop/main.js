@@ -176,6 +176,57 @@ function ensureTeamStarted() {
   }
 }
 
+// Avvia il runtime locale (container/dashboard) + il team completo. Estratto
+// dall'handler `launcher:start` così lo riusa anche l'auto-start al boot.
+// runtime.startRuntime è idempotente: adotta un container detached già su
+// (sopravvissuto a un restart) invece di rilanciarlo.
+async function startTeamRuntime(options = {}) {
+  try {
+    syncJhtConfig()
+  } catch (error) {
+    // Non-fatal: l'agent-boot ha un fallback Claude-subscription, quindi un
+    // config mancante/parziale fa solo cadere l'utente sul provider di default.
+    broadcastContainerLog(`syncJhtConfig failed: ${error?.message ?? error}`)
+  }
+  const status = await runtime.startRuntime(options)
+  // Container/dashboard pronto → avvia il team completo (il container parte in
+  // modalità dashboard: senza questo si vedrebbe solo l'Assistente). Fire-and-
+  // forget: gli agenti salgono in ~30s, la pagina Agents li mostra man mano.
+  if (status && (status.mode === 'running' || status.mode === 'external')) {
+    ensureTeamStarted()
+  }
+  return status
+}
+
+// Setup completo = un provider salvato (stesso criterio del renderer
+// isSetupComplete: providers.saved>0). Niente provider → l'app è ancora nel
+// wizard, non auto-avviare nulla.
+function isSetupCompleteMain() {
+  try {
+    const sel = providerStore.readSelection(app.getPath('userData'))
+    return !!(sel && sel.provider)
+  } catch {
+    return false
+  }
+}
+
+// [autostart] Opt-in: al boot, se l'utente l'ha abilitato (pref autoStartTeam,
+// default OFF perché consuma token) e il setup è completo, avvia il team senza
+// click su "Start". Skip in VPS mode (il team gira sulla VPS) e se un container
+// è già su (detached sopravvissuto al restart → la home lo adotta da sola).
+async function maybeAutoStartTeam() {
+  try {
+    if (readPref('location') === 'vps') return
+    if (readPref('autoStartTeam') !== true) return
+    if (!isSetupCompleteMain()) return
+    if (containerRuntime.isContainerRunning()) return
+    log.info('autostart.starting')
+    await startTeamRuntime({})
+  } catch (err) {
+    log.warn('autostart.failed', { err: String(err) })
+  }
+}
+
 // [team status] Stato live degli agenti calcolato lato desktop via
 // `docker exec ... tmux list-sessions`. NB: NON si usa GET /api/agents del web:
 // quella route, attraverso il port-map Docker, vede isLocalRequest()=false →
@@ -1183,25 +1234,7 @@ app.whenReady().then(() => {
   ipcMain.handle('tunnel:close', () => tunnel.closeTunnel())
   ipcMain.handle('tunnel:status', () => tunnel.getStatus())
   ipcMain.handle('vps:open-cockpit', (_event, { ip } = {}) => openVpsCockpit(ip))
-  ipcMain.handle('launcher:start', async (_event, options) => {
-    try {
-      syncJhtConfig()
-    } catch (error) {
-      // Non-fatal: the agent-boot script has a Claude-subscription
-      // fallback, so a missing or partial config just means the user
-      // drops into the default provider.
-      broadcastContainerLog(`syncJhtConfig failed: ${error?.message ?? error}`)
-    }
-    const status = await runtime.startRuntime(options)
-    // Una volta che il container/dashboard è pronto, avvia il team completo.
-    // Senza questo si vedeva solo l'Assistente (il container parte in modalità
-    // dashboard). Fire-and-forget: gli agenti salgono in ~30s, la pagina Agents
-    // li mostra man mano. Solo runtime locale pronto.
-    if (status && (status.mode === 'running' || status.mode === 'external')) {
-      ensureTeamStarted()
-    }
-    return status
-  })
+  ipcMain.handle('launcher:start', async (_event, options) => startTeamRuntime(options))
   ipcMain.handle('launcher:stop', () => {
     // [JHT-DASHBOARD-SPLIT] Stop team = il server localhost cade → chiudi la
     // finestra dashboard per non lasciare un "connessione rifiutata" appeso.
@@ -2254,6 +2287,10 @@ app.whenReady().then(() => {
 
   createWindow()
 
+  // [autostart] Dopo che la finestra è su, valuta l'auto-start del team
+  // (opt-in via pref). Non blocca il boot: fire-and-forget.
+  maybeAutoStartTeam()
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
@@ -2262,7 +2299,11 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
-  if (runtime) runtime.stopRuntime().catch(() => {})
+  // Container detached: NON fermare il team alla chiusura dell'app — sopravvive
+  // così riaprendo il launcher è già su (niente ri-spawn / token). Lo stop
+  // esplicito resta su "Stop team" (launcher:stop → runtime.stopRuntime).
+  // Dev/non-container: shutdownForQuit ferma comunque il processo figlio.
+  if (runtime) Promise.resolve(runtime.shutdownForQuit()).catch(() => {})
   tunnel.closeTunnel().catch(() => {})
   terminal.killAll()
 })

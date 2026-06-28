@@ -232,6 +232,11 @@ function buildDockerArgs({
   const { jhtHome, jhtUser } = ensureHostPaths()
   const args = [
     'run',
+    // -d (detached): il container vive nel daemon Docker, NON come processo
+    // figlio di Electron → sopravvive ai restart dell'app (il team non riparte
+    // da zero ogni volta che si riapre il launcher). --rm lo rimuove quando si
+    // ferma (Stop team / crash) → niente accumulo di container zombie.
+    '-d',
     '--rm',
     '--name',
     name,
@@ -298,6 +303,27 @@ function buildDockerArgs({
   return args
 }
 
+// True se un container con questo nome è in stato RUNNING. Usato dal runtime
+// per adottare un container detached sopravvissuto a un restart dell'app
+// (invece di rilanciarne uno nuovo) e per riportare lo stato corretto quando
+// non c'è un child-process da tracciare. Best-effort: docker assente/daemon
+// giù → false.
+function isContainerRunning(name = DEFAULT_CONTAINER_NAME) {
+  try {
+    const out = execFileSync(
+      'docker',
+      ['ps', '--filter', `name=${name}`, '--format', '{{.Names}}'],
+      { encoding: 'utf8', timeout: 5000, windowsHide: true },
+    )
+    return String(out)
+      .split('\n')
+      .map((s) => s.trim())
+      .includes(name)
+  } catch {
+    return false
+  }
+}
+
 function removeContainerIfExists(name = DEFAULT_CONTAINER_NAME) {
   try {
     execFileSync('docker', ['rm', '-f', name], {
@@ -346,4 +372,5 @@ module.exports = {
   buildDockerArgs,
   buildDockerSpawnSpec,
   removeContainerIfExists,
+  isContainerRunning,
 }
