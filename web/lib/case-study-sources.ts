@@ -6,11 +6,13 @@
 // verde richiamano i brand; le altre sono distinte.
 export const SOURCE_COLORS: Record<string, string> = {
   linkedin: "#0A66C2",
+  "linkedin-public": "#4F9BE8",
   greenhouse: "#22A06B",
   workday: "#F59E0B",
   ashby: "#8B5CF6",
   "company-careers": "#0EA5A4",
   "official-careers-direct": "#EC4899",
+  "bnpparibas-careers": "#15803D",
   lever: "#EF4444",
   smartrecruiters: "#3B82F6",
   efinancialcareers: "#14B8A6",
@@ -37,6 +39,8 @@ export const ALTRE_COLOR = "var(--color-dim)";
 // Etichette "belle" per i brand (i nomi grezzi sono lowercase normalizzati).
 const SOURCE_LABELS: Record<string, string> = {
   linkedin: "LinkedIn",
+  "linkedin-public": "LinkedIn (public)",
+  "bnpparibas-careers": "BNP Paribas",
   greenhouse: "Greenhouse",
   workday: "Workday",
   ashby: "Ashby",
