@@ -19,6 +19,7 @@ import SourcesAvgScoreChart from "./SourcesAvgScoreChart";
 import SourcesDonutChart from "./SourcesDonutChart";
 import PositionsFunnelChart from "./PositionsFunnelChart";
 import ExcludedDonut from "./ExcludedDonut";
+import ExclusionReasonsCard from "./ExclusionReasonsCard";
 
 export interface PreparedCase {
   id: string;
@@ -743,14 +744,19 @@ export default function CaseStudyDetail({
               </div>
               <PositionsFunnelChart daily={run.funnelDaily} />
             </div>
-            <div className="flex flex-col">
-              <div className="text-[12px] font-semibold text-[var(--color-base)] mb-4">
-                {t.funnelDonutTitle}
+            <div className="flex flex-col gap-6">
+              <div>
+                <div className="text-[12px] font-semibold text-[var(--color-base)] mb-4">
+                  {t.funnelDonutTitle}
+                </div>
+                <ExcludedDonut
+                  kept={run.funnelTotals.kept}
+                  excluded={run.funnelTotals.excluded}
+                />
               </div>
-              <ExcludedDonut
-                kept={run.funnelTotals.kept}
-                excluded={run.funnelTotals.excluded}
-              />
+              {run.exclusionReasons && run.exclusionReasons.length > 0 && (
+                <ExclusionReasonsCard reasons={run.exclusionReasons} />
+              )}
             </div>
           </div>
         </section>
