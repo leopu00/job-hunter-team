@@ -72,5 +72,9 @@ export interface CaseStudyRun {
   salary: { n: number; avgMin: number | null; avgMax: number | null };
   agents: string[];
   events: { ts: string; agent: string; action: string }[];
+  // Attività + budget per ORA (per viste intraday su fasi corte): solo le ore con
+  // attività. hour = "YYYY-MM-DDTHH", counts per ruolo, cum = budget% a quell'ora.
+  // Opzionale: assente negli snapshot precedenti.
+  hourly?: { hour: string; counts: Record<string, number>; cum: number }[];
   usage?: CaseStudyUsage | null;
 }
