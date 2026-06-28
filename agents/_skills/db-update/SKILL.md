@@ -23,6 +23,11 @@ Tables: `position`, `application`.
 python3 /app/shared/skills/db_update.py position 42 --status checked
 python3 /app/shared/skills/db_update.py position 42 --status excluded
 
+# User summary (RULE-04bis) — section markdown, IN THE USER'S LANGUAGE.
+# Replaces the raw JD in the UI. Use \n for line breaks (the tool interprets them).
+python3 /app/shared/skills/db_update.py position 42 \
+  --summary "## Title — Company\n\n**The role**\n- ...\n\n**Key requirements**\n- ...\n\n**Why it could fit you**\n- ...\n\n**⚠️ To check**\n- ..."
+
 # last-checked marker (link confirmed alive — also used as anti-collision claim)
 python3 /app/shared/skills/db_update.py position 42 --last-checked now
 

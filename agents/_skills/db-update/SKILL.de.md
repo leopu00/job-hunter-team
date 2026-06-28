@@ -24,6 +24,11 @@ Tabellen: `position`, `application`.
 python3 /app/shared/skills/db_update.py position 42 --status checked
 python3 /app/shared/skills/db_update.py position 42 --status excluded
 
+# Nutzer-Zusammenfassung (RULE-04bis) — Markdown mit Abschnitten, IN DER SPRACHE DES NUTZERS.
+# Ersetzt die rohe JD in der UI. Nutze \n für Zeilenumbrüche (das Tool interpretiert sie).
+python3 /app/shared/skills/db_update.py position 42 \
+  --summary "## Titel — Unternehmen\n\n**Die Rolle**\n- ...\n\n**Kernanforderungen**\n- ...\n\n**Warum es zu dir passen könnte**\n- ...\n\n**⚠️ Zu prüfen**\n- ..."
+
 # last-checked-Marker (Link als lebendig bestätigt — auch als Anti-Kollisions-Beanspruchung verwendet)
 python3 /app/shared/skills/db_update.py position 42 --last-checked now
 

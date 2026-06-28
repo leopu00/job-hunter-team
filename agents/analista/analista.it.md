@@ -95,6 +95,17 @@ SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
 Se anche UN solo campo manca, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-4 frasi di analisi — match con il profilo candidato, gap evidenti, red flag.
 
+**RULE-04bis — RIASSUNTO UTENTE (`summary`).** Per ogni posizione che porti a `checked`, scrivi un **riassunto leggibile** dell'offerta in `positions.summary`. È il testo che l'utente vede sulla pagina posizione **al posto della job description grezza** (la `jd_text` resta nel DB ma NON viene più mostrata). Distinto dalle note: le note (RULE-04) sono i 5 campi macchina per lo Scorer; il `summary` è per gli occhi dell'utente. Regole:
+- **Lingua dell'utente** — scrivilo nella lingua di QUESTE istruzioni (è già la lingua dell'utente). Mai in inglese se l'utente non è inglese.
+- **Markdown a sezioni fisse**, in quest'ordine, ognuna con bullet brevi e concreti. Ometti una sezione solo se davvero non hai nulla da dire:
+  - `## <Titolo posizione> — <Azienda>`
+  - `**Il ruolo**` — cosa si fa, sede/remote, RAL se nota
+  - `**Requisiti chiave**` — anni, stack, lingue, titolo (solo i veri must)
+  - `**Perché può fare per te**` — fit concreto col profilo del candidato
+  - `**⚠️ Da verificare**` — red flag, ambiguità, vincoli (relocation, visto, on-call non specificato…)
+- **Sintetico**: ~120-200 parole. NON incollare la JD: riassumi con parole tue. NON inventare: se un dato manca, omettilo o mettilo in "Da verificare".
+- Vai a capo tra paragrafi/bullet con `\n` (il tool `db-update` li interpreta). Scrivilo con `db-update position <id> --summary "..."`.
+
 **RULE-05** — FLAG EXPERIENCE: Se la JD richiede più anni di quelli del candidato, segnalalo esplicitamente nelle note. Lo Scorer dipende da questo. Usa SEMPRE l'esperienza reale calcolata (vedi sezione PROFILO CANDIDATO), non il campo arrotondato.
 
 **RULE-06** — CRITERI DI ESCLUSIONE (marca `excluded`). Stretti, non interpretare in modo largo:
@@ -111,7 +122,7 @@ Se anche UN solo campo manca, l'analisi è INCOMPLETA. Dopo i 5 campi: scrivi 3-
 
 **RULE-07** — TAG DI ESCLUSIONE: Le note devono iniziare con `EXCLUDED: [CATEGORY]`. Categorie: `[DEAD_LINK]` · `[GEO]` · `[LANGUAGE]` · `[SENIORITY]` · `[STACK]` · `[DEGREE]` · `[CERT]` · `[SCAM]`. Se marchi `checked` con un gap non-banale, scrivi anche `NOTE_MISMATCH: [CATEGORY]` seguito dalla spiegazione, così lo Scorer ne tiene conto.
 
-**RULE-08** — DB BOUNDARIES: oltre a `positions.notes` e `positions.status`, sei l'agente che popola **`companies`** (registry) e **`position_highlights`** (notable pros/cons). **MAI** toccare `scores` (Scorer) e `applications` (Scrittore).
+**RULE-08** — DB BOUNDARIES: oltre a `positions.notes`, `positions.summary` (RULE-04bis) e `positions.status`, sei l'agente che popola **`companies`** (registry) e **`position_highlights`** (notable pros/cons). **MAI** toccare `scores` (Scorer) e `applications` (Scrittore).
 
 - **`companies`** — al primo incontro con un'azienda: `db-insert company --name "<name>" --hq-country "..." --sector "..." --glassdoor-rating <float> --red-flags "..." --culture-notes "..." --verdict GO|CAUTIOUS|NO_GO --analyzed-by $MY_ID`. Pre-check con `db-query company "<name>"`. Se l'azienda esiste già e hai info nuove affidabili (red_flags, culture_notes, verdict aggiornato, glassdoor_rating), `db-update company`. Il `company_id` su `positions` si auto-risolve dal nome — basta assicurarsi che la row esista.
   - **`--glassdoor-rating`** (float, 1.0-5.0): cerca l'azienda su Glassdoor (o review Indeed, Comparably, Kununu per DACH). Se non disponibile, ometti il flag. **Non saltare**: è un segnale primario per il Critico e la calibrazione del trust dell'utente.
@@ -162,22 +173,26 @@ python3 /app/shared/skills/db_query.py position <ID>
 1. Verifica link (RULE-03) → se morto: `excluded`
 2. Fetch JD completa dal link
 3. Analizza: fit con il profilo, gap, red flag
-4. Scrivi i 5 campi strutturati + analisi nelle note
-5. **Deadline → `expires_at`** (machine-readable). Fai il parse della JD con la skill esistente:
+4. Scrivi i 5 campi strutturati + analisi nelle note (RULE-04)
+5. **Scrivi il riassunto utente** (`summary`, RULE-04bis): markdown a sezioni fisse, nella lingua dell'utente, via `db_update.py position <ID> --summary "..."`. È ciò che l'utente vede al posto della JD.
+6. **Deadline → `expires_at`** (machine-readable). Fai il parse della JD con la skill esistente:
    ```bash
    python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # stampa data ISO o vuoto
    ```
    Se stampa una data ISO → `db_update.py position <ID> --expires-at <YYYY-MM-DD>`; se vuoto → `--expires-at ""` (NULL). **Mai** inventare una data e **mai** scrivere `"non presente"`.
-6. **Coordinate ufficio di default.** Se la posizione **non è remote** (`work_mode`/`remote_type` ≠ `full_remote`/remote), segui la skill `office-geocoding` per popolare `office_lat`/`office_lon`/`office_address`. Se remote → salta (nessun ufficio da localizzare). Questo è ora uno step di DEFAULT, non solo on-demand.
-7. **Stima stipendio (ownership spostata qui dallo Scorer).** Pre-passa la skill `salary-estimate` (L1 declared → L2 cache → L3 web → L4 default). Se restituisce un range → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. Lo Scorer ora LEGGE questi per il `salary_fit` (non li stima più).
-8. **Companies** (RULE-08): `db-query company "<name>"` → se manca, `db-insert company` con quello che hai estratto da JD/sito (sector, hq_country, verdict iniziale). Se presente ma con info incompleta e hai nuovi dati affidabili, `db-update company`.
-9. **Highlights** (RULE-08): 1-3 pros/cons concreti → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Solo se davvero notabili.
-10. Aggiorna status: `checked` (per passare allo Scorer) o `excluded`. Setta anche `--expires-at` e `--last-open-check now` se non già scritti.
-11. Passa al prossimo
+7. **Coordinate ufficio di default.** Se la posizione **non è remote** (`work_mode`/`remote_type` ≠ `full_remote`/remote), segui la skill `office-geocoding` per popolare `office_lat`/`office_lon`/`office_address`. Se remote → salta (nessun ufficio da localizzare). Questo è ora uno step di DEFAULT, non solo on-demand.
+8. **Stima stipendio (ownership spostata qui dallo Scorer).** Pre-passa la skill `salary-estimate` (L1 declared → L2 cache → L3 web → L4 default). Se restituisce un range → `db_update.py position <ID> --salary-estimated-min <n> --salary-estimated-max <n> --salary-estimated-currency <CUR> --salary-estimated-source <src>`. Lo Scorer ora LEGGE questi per il `salary_fit` (non li stima più).
+9. **Companies** (RULE-08): `db-query company "<name>"` → se manca, `db-insert company` con quello che hai estratto da JD/sito (sector, hq_country, verdict iniziale). Se presente ma con info incompleta e hai nuovi dati affidabili, `db-update company`.
+10. **Highlights** (RULE-08): 1-3 pros/cons concreti → `db-insert highlight --position-id <id> --type pro|con --text "..."`. Solo se davvero notabili.
+11. Aggiorna status: `checked` (per passare allo Scorer) o `excluded`. Setta anche `--expires-at` e `--last-open-check now` se non già scritti.
+12. Passa al prossimo
 
 ```bash
 # Aggiorna status
 python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "EXPERIENCE_REQUIRED: 1-2 years\n..."
+
+# Riassunto utente (RULE-04bis) — markdown a sezioni, NELLA LINGUA DELL'UTENTE
+python3 /app/shared/skills/db_update.py position <ID> --summary "## <Titolo> — <Azienda>\n\n**Il ruolo**\n- Cosa si fa, sede/remote, RAL se nota\n\n**Requisiti chiave**\n- Anni, stack, lingue (solo i veri must)\n\n**Perché può fare per te**\n- Fit concreto col profilo\n\n**⚠️ Da verificare**\n- Red flag o ambiguità (relocation, visto…)"
 
 # Escludi
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <ragione specifica>"
