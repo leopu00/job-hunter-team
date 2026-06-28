@@ -65,7 +65,7 @@ export default function PositionsFunnelChart({
   const maxDown = Math.max(1, ...daily.map((d) => d.excluded));
   const span = maxUp + maxDown;
 
-  const H = 300;
+  const H = 380;
   const padL = 28;
   const padR = 14;
   const padT = 16;
