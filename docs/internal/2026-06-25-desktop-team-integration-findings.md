@@ -74,11 +74,24 @@ Causa: la lingua si salvava in `localStorage`, ma l'HTML è caricato via `file:/
 `stopRuntime()`. Quindi ogni restart di Electron (per caricare una modifica al main
 process) **uccide il team** → si deve ricliccare "Start" e attendere ~40s.
 
-### Da valutare (follow-up, NON fatto — rischioso a caldo)
-- **Container detached** (`docker run -d`): sopravvive ai restart dell'app. Cambia
-  però la semantica "chiudo l'app = fermo il team" (che per il locale è voluta).
-- **Auto-start team al boot** quando setup completo: niente più click "Start"
-  (consuma token ad ogni apertura → opt-in).
+### ✅ IMPLEMENTATO (2026-06-28)
+- **Container detached** (`docker run -d`): il container vive nel daemon, non più
+  come processo figlio di Electron → sopravvive ai restart dell'app (riapri il
+  launcher e il team è già su, niente ri-spawn / token). `--rm` resta (rimozione
+  allo Stop/crash → niente zombie). Il runtime non traccia più un `state.child` in
+  container mode: lo stato è dato da `docker ps` (`isContainerRunning`), `managed`
+  resta true (lo Stop usa `docker rm -f`). `startRuntime` **adotta** un container
+  già running invece di rilanciarlo; `getStatus` lo riconosce dopo un restart;
+  `before-quit` chiama `shutdownForQuit()` che LASCIA vivere il container (lo Stop
+  esplicito resta su "Ferma team"). Log via `docker logs -f` riversati nel file.
+- **Auto-start team al boot** (opt-in, default OFF — consuma token): pref
+  `autoStartTeam`; al boot `maybeAutoStartTeam()` avvia il team se abilitato +
+  setup completo + non-VPS + container non già su. Toggle nel pannello Team della
+  home (i18n 7 lingue). Riuso di `startTeamRuntime()` (estratto da `launcher:start`).
+- ⚠️ **Da verificare con un run reale sul Mac** (non testabile headless): adozione
+  post-restart, Stop esplicito, e il caso "immagine `:latest` aggiornata mentre un
+  container vecchio è adottato" (adopt salta il pull → codice stale finché non si
+  ferma e rilancia).
 
 Gotcha collegato: quando `docker run -p 3000:3000` fallisce (es. port-forward
 ancora occupato dopo un `docker rm -f` ravvicinato → "port already allocated"),
@@ -140,10 +153,15 @@ ha il **contesto del canale**.
 
 > Vale per **tutti** gli agenti, non solo l'Assistente. È un capitolo "agent
 > awareness del canale + auto-sufficienza".
-> **✅ IMPLEMENTATO 2026-06-26**: sezione aggiunta alla skill `chat-web` in tutte e 7
-> le lingue (`5294edab4` EN+IT, `df578405f` de/es/fr/hu/pt). Gli agenti che ricevono
-> `[CHAT]` ora hanno il contesto del canale desktop e le regole di auto-sufficienza.
-> Prende effetto al riavvio degli agenti (ricaricano la skill).
+>
+> **✅ IMPLEMENTATO (2026-06-26 → rifinito 2026-06-28).** Il principio vive nella skill
+> `chat-web` (sezione "⚠️ The user is NON-TECHNICAL — no terminal, no CLI, no slash
+> commands": niente azioni da terminale all'utente desktop, risolvi con Python — esempio
+> smtplib con `$JHT_HOME/credentials/email_monitor.json` — auto-iniezione slash command
+> `jht-tmux-send <PROPRIA_SESSIONE> '/mcp'` o delega a un altro agente). Era già in EN+IT
+> (`5294edab4`); portato anche in de/es/fr/hu/pt (`df578405f`, le 5 i18n che mancavano).
+> I 3 agenti user-facing (Capitano/Assistente/Mentor) caricano già `chat-web` su ogni
+> `[CHAT]`, quindi la regola li raggiunge senza toccare i 77 file dei prompt.
 
 ---
 
@@ -170,8 +188,9 @@ ha il **contesto del canale**.
 
 ## 7. TODO
 
-### ✅ Chiusi (sessione 2026-06-25/26)
-- [x] **Bug 3 chat**: i messaggi utente ora persistono in `chat.jsonl` (§4) — `5294edab4`.
+### ✅ Chiusi
+**Sessione 2026-06-25/26 (local mode):**
+- [x] **Bug 3 chat** (local): i messaggi utente persistono in `chat.jsonl` (§4) — `5294edab4`.
 - [x] **Agent awareness canale + auto-sufficienza** (§5): aggiunto a `chat-web` in
       **tutte e 7 le lingue** (EN+IT `5294edab4`, de/es/fr/hu/pt `df578405f`) — non
       chiedere azioni terminale all'utente desktop; risolvere con Python/script;
@@ -180,6 +199,31 @@ ha il **contesto del canale**.
       mancante) e `ticket-sync: no such table position_tickets` (skip grazioso se la
       tabella non c'è ancora al primo boot) — `f84336afb`.
 
+**Sessione 2026-06-28 (VPS mode):**
+- [x] **GAP wizard VPS salta CV + orari.** Il ramo VPS saltava `enterWorkingHours` + upload
+      CV (andava dritto a Telegram dopo provider-login in `terminal-login.js`): gli step
+      esistevano (`b1968ca5a`) ma solo nel ramo locale → **in VPS mode l'utente non sceglieva
+      MAI gli orari né caricava il CV**. Fix: dopo provider-login entrambi i rami passano per
+      working-hours → upload CV; i due step sono ora VPS-aware e scrivono sul container REMOTO
+      via SSH (nuovo modulo `desktop/vps/remote-config.js`: `saveWorkingHoursToVps` →
+      `team.working_hours` in `/root/.jht/jht.config.json`, read→merge→atomic-write + chown
+      1001; `uploadDocsToVps` → drop-zone allegati remota `/root/Documents/Job Hunter
+      Team/allegati` via `SshExec.writeFile` con Buffer = upload binario senza scp). Sequenza
+      VPS: provider-login → working-hours → upload → telegram → ready(home). Smoke test
+      in-memory: PASS.
+- [x] **GAP upload documenti VPS mode.** Stesso modulo: il file-picker nativo gira sul Mac, i
+      file vengono letti come Buffer e scritti nella drop-zone allegati REMOTA (path corretto
+      `…/allegati`, NON `/jht_user/cv` come nel workaround manuale b3). chown -R 1001 così
+      l'Assistente li legge al boot. *(Resta da fare l'upload **dalla home** in VPS mode — qui
+      è coperto solo il wizard.)*
+- [x] **Bug 3 chat (VPS mode).** Local era già persistito; in VPS `chat:send` faceva
+      `docker exec` locale (container remoto) → falliva. Ora ramo VPS via SSH+docker exec:
+      persist (`cat >> chat.jsonl` da stdin) + invio (`tmux load-buffer -`/`paste-buffer`,
+      niente quoting del payload). §4.
+- [x] **Container detached + auto-start team** (§3): `docker run -d` (sopravvive ai restart,
+      adozione del container già su) + auto-start opt-in (pref `autoStartTeam` + toggle home).
+      ⚠️ Da validare con un run reale sul Mac.
+
 ### ⏳ Aperti — richiedono test DAL VIVO (non committare alla cieca)
 - [ ] **Retry su conflitto-porta** in `startRuntime` (§3): quando `docker run -p
       3000:3000` fallisce perché il port-forward del container appena ucciso è ancora
@@ -187,9 +231,10 @@ ha il **contesto del canale**.
       (timeout). Serve un retry breve (2-3 tentativi, ~2s) + messaggio chiaro. Tocca
       il **percorso critico di avvio** (async, `runtime.js:418`) → fare e verificare
       con l'app avviabile, non da remoto. Workaround attuale: ricliccare Start.
-- [ ] **Container detached + auto-start team** (§3): `docker run -d` per sopravvivere
-      ai restart dell'app; cambia la semantica "chiudo l'app = fermo il team". Rischioso
-      a caldo, da progettare con l'utente.
+- [ ] **GAP email in VPS mode** (NEW 2026-06-28): il ramo VPS salta lo step email; le
+      credenziali `email_monitor.json` si salvano solo in locale (`~/.jht/credentials`),
+      serve una variante remota (write SSH + chown 1001) come per orari/CV. Per ora il
+      team VPS fa web sourcing.
 
 ### 📋 Backlog (feature, non in questo giro)
 - [ ] OAuth Gmail / vault master-password (`[JHT-EMAIL-OAUTH]`, `[JHT-LOCAL-VAULT]`).
