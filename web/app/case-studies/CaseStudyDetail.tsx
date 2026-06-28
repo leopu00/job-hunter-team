@@ -13,6 +13,7 @@ import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 import CaseStudyOverview from "./CaseStudyOverview";
 import WorkBudgetChart from "./WorkBudgetChart";
+import IntradayBudgetChart from "./IntradayBudgetChart";
 import SourcesScoreChart from "./SourcesScoreChart";
 import SourcesAvgScoreChart from "./SourcesAvgScoreChart";
 import SourcesDonutChart from "./SourcesDonutChart";
@@ -603,12 +604,22 @@ export default function CaseStudyDetail({
                       </span>
                     </div>
                     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-                      <WorkBudgetChart
-                        usage={u}
-                        roleDaily={rd}
-                        roles={activeRoles}
-                        workingHoursText={ph.to == null ? whText : null}
-                      />
+                      {ph.detail === "hourly" && run.hourly ? (
+                        // Fase corta (es. free-run): dettaglio ora per ora.
+                        <IntradayBudgetChart
+                          hourly={run.hourly.filter((x) =>
+                            within(x.hour.slice(0, 10)),
+                          )}
+                          roles={activeRoles}
+                        />
+                      ) : (
+                        <WorkBudgetChart
+                          usage={u}
+                          roleDaily={rd}
+                          roles={activeRoles}
+                          workingHoursText={ph.to == null ? whText : null}
+                        />
+                      )}
                     </div>
                   </div>
                 );
