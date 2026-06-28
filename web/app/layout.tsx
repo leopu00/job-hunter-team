@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Courier_Prime } from "next/font/google";
+import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import MainContent from "./components/main-content";
 import { ThemeProvider } from "./theme-provider";
@@ -57,15 +57,10 @@ const GlobalSearch = dynamic(() =>
 );
 const FloatingChat = dynamic(() => import("./components/FloatingChat"));
 
-// Font del brand: Courier Prime (mono CON grazie slab → la "J" ha il trattino in
-// alto). Self-hosted da next/font = DETERMINISTICO su ogni macchina (niente più
-// flip-flop JetBrains Mono ↔ Courier New del fallback di sistema). La favicon SVG
-// è ricavata dagli STESSI glifi Courier Prime, quindi logo e favicon combaciano
-// sempre. Pesi 400/700: i pesi UI intermedi si agganciano alla faccia più vicina.
-const brandMono = Courier_Prime({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-brand-mono",
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -148,7 +143,7 @@ export default async function RootLayout({
   return (
     <html
       lang={locale}
-      className={brandMono.variable}
+      className={jetbrainsMono.variable}
       suppressHydrationWarning
     >
       <head>
