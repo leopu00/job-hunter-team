@@ -2,36 +2,36 @@
   "source": "betaB-kimi",
   "tsRange": [
     "2026-05-19 20:29:58",
-    "2026-06-26 05:01:50"
+    "2026-06-27 20:51:47"
   ],
   "totals": {
-    "positions": 1001,
-    "scored": 382,
-    "excluded": 514
+    "positions": 1050,
+    "scored": 403,
+    "excluded": 539
   },
   "match": {
-    "scored": 540,
-    "avg": 61.2,
+    "scored": 562,
+    "avg": 61.0,
     "min": 25,
     "max": 94,
-    "strong70": 164,
+    "strong70": 168,
     "strong80": 59,
     "buckets": [
       {
         "label": "0-39",
-        "n": 22
+        "n": 23
       },
       {
         "label": "40-59",
-        "n": 231
+        "n": 243
       },
       {
         "label": "60-69",
-        "n": 123
+        "n": 128
       },
       {
         "label": "70-79",
-        "n": 105
+        "n": 109
       },
       {
         "label": "80-100",
@@ -42,12 +42,12 @@
       {
         "key": "stack",
         "label": "Competenze",
-        "avg": 18.4
+        "avg": 17.9
       },
       {
         "key": "exp",
         "label": "Esperienza",
-        "avg": 7.5
+        "avg": 7.4
       },
       {
         "key": "strategic",
@@ -57,12 +57,12 @@
       {
         "key": "remote",
         "label": "Modalita",
-        "avg": 14.4
+        "avg": 14.0
       },
       {
         "key": "salary",
         "label": "Retribuzione",
-        "avg": 10.2
+        "avg": 10.0
       }
     ],
     "scores": [
@@ -71,6 +71,7 @@
       28,
       28,
       28,
+      30,
       30,
       31,
       33,
@@ -97,6 +98,7 @@
       40,
       40,
       40,
+      40,
       41,
       41,
       41,
@@ -119,6 +121,9 @@
       43,
       43,
       43,
+      43,
+      43,
+      44,
       44,
       44,
       44,
@@ -149,6 +154,7 @@
       45,
       45,
       45,
+      45,
       46,
       46,
       46,
@@ -162,6 +168,8 @@
       46,
       46,
       46,
+      47,
+      47,
       47,
       47,
       47,
@@ -200,6 +208,7 @@
       50,
       50,
       50,
+      50,
       51,
       51,
       51,
@@ -210,6 +219,7 @@
       51,
       51,
       51,
+      51,
       52,
       52,
       52,
@@ -265,6 +275,9 @@
       55,
       55,
       55,
+      55,
+      56,
+      56,
       56,
       56,
       56,
@@ -344,6 +357,10 @@
       61,
       61,
       61,
+      61,
+      62,
+      62,
+      62,
       62,
       62,
       62,
@@ -381,6 +398,7 @@
       64,
       64,
       64,
+      65,
       65,
       65,
       65,
@@ -486,6 +504,7 @@
       73,
       73,
       73,
+      73,
       74,
       74,
       74,
@@ -505,6 +524,8 @@
       75,
       75,
       75,
+      75,
+      76,
       76,
       76,
       76,
@@ -527,6 +548,7 @@
       77,
       77,
       77,
+      78,
       78,
       78,
       78,
@@ -611,11 +633,11 @@
   "categories": [
     {
       "name": "Technical Writing / Hardware, Industrial & Manufacturing",
-      "count": 128
+      "count": 136
     },
     {
       "name": "Technical Writing / Software, API & Developer Documentation",
-      "count": 113
+      "count": 117
     },
     {
       "name": "Engineering (Other)",
@@ -623,35 +645,39 @@
     },
     {
       "name": "Localization & Translation",
-      "count": 84
+      "count": 89
     },
     {
       "name": "Technical Writing / General & Product",
-      "count": 81
+      "count": 83
     },
     {
       "name": "Content & UX Writing",
-      "count": 75
+      "count": 78
     },
     {
       "name": "Content Writing / E-Learning",
-      "count": 51
+      "count": 52
     },
     {
       "name": "Localization / AI Enablement",
-      "count": 41
-    },
-    {
-      "name": "Technical Writing / Documentation Engineering & CMS",
-      "count": 36
+      "count": 43
     },
     {
       "name": "Documentation Control / Quality",
-      "count": 35
+      "count": 38
+    },
+    {
+      "name": "Technical Writing / Documentation Engineering & CMS",
+      "count": 38
     },
     {
       "name": "Other",
-      "count": 32
+      "count": 34
+    },
+    {
+      "name": "Technical Writing / Medical, Scientific & Regulatory",
+      "count": 33
     },
     {
       "name": "QA & Testing",
@@ -666,10 +692,6 @@
       "count": 29
     },
     {
-      "name": "Technical Writing / Medical, Scientific & Regulatory",
-      "count": 27
-    },
-    {
       "name": "Customer & Technical Support",
       "count": 19
     },
@@ -682,8 +704,16 @@
       "count": 10
     },
     {
+      "name": "Engineering (Other) / Quality, Regulatory & Validation Engineering",
+      "count": 7
+    },
+    {
       "name": "Interpretation / Telephone",
       "count": 7
+    },
+    {
+      "name": "Non categorizzato",
+      "count": 5
     },
     {
       "name": "Virtual Assistance / Administrative Support",
@@ -703,10 +733,6 @@
     },
     {
       "name": "Engineering (Other) / Other Engineering & Specialist Roles",
-      "count": 3
-    },
-    {
-      "name": "Engineering (Other) / Quality, Regulatory & Validation Engineering",
       "count": 3
     },
     {
@@ -731,6 +757,10 @@
     },
     {
       "name": "Quality Assurance",
+      "count": 2
+    },
+    {
+      "name": "Technical Writing",
       "count": 2
     },
     {
@@ -817,14 +847,14 @@
   "sources": [
     {
       "name": "linkedin",
-      "count": 806
-    },
-    {
-      "name": "ashby",
-      "count": 25
+      "count": 845
     },
     {
       "name": "linkedin-guest",
+      "count": 32
+    },
+    {
+      "name": "ashby",
       "count": 25
     },
     {
@@ -857,7 +887,7 @@
     },
     {
       "name": "remoteok",
-      "count": 5
+      "count": 6
     },
     {
       "name": "uiuxjobsboard",
@@ -865,7 +895,7 @@
     },
     {
       "name": "Altre",
-      "count": 45
+      "count": 47
     }
   ],
   "sourcesDaily": [
@@ -972,14 +1002,22 @@
     {
       "day": "2026-06-26",
       "counts": {
-        "linkedin": 1
+        "linkedin": 35,
+        "Altre": 3
+      }
+    },
+    {
+      "day": "2026-06-27",
+      "counts": {
+        "linkedin": 5,
+        "linkedin-guest": 7
       }
     }
   ],
   "sourcesDailyKeys": [
     "linkedin",
-    "ashby",
     "linkedin-guest",
+    "ashby",
     "euremotejobs",
     "remoterocketship",
     "greenhouse",
@@ -1088,7 +1126,15 @@
     {
       "day": "2026-06-26",
       "score": {
-        "linkedin": 51.0
+        "linkedin": 54.4,
+        "Altre": 76.5
+      }
+    },
+    {
+      "day": "2026-06-27",
+      "score": {
+        "linkedin": 48.0,
+        "linkedin-guest": 43.0
       }
     }
   ],
@@ -1115,8 +1161,8 @@
     },
     {
       "name": "Altre",
-      "avg": 67.5,
-      "n": 59
+      "avg": 67.8,
+      "n": 61
     },
     {
       "name": "euremotejobs",
@@ -1125,13 +1171,13 @@
     },
     {
       "name": "linkedin-guest",
-      "avg": 61.9,
-      "n": 7
+      "avg": 59.5,
+      "n": 8
     },
     {
       "name": "linkedin",
-      "avg": 59.3,
-      "n": 402
+      "avg": 59.0,
+      "n": 421
     },
     {
       "name": "remoterocketship",
@@ -1143,17 +1189,17 @@
     {
       "name": "Italy",
       "code": "IT",
-      "count": 140
+      "count": 147
     },
     {
       "name": "Hungary",
       "code": "HU",
-      "count": 44
+      "count": 46
     },
     {
       "name": "Spain",
       "code": "ES",
-      "count": 31
+      "count": 32
     },
     {
       "name": "United Kingdom",
@@ -1163,17 +1209,17 @@
     {
       "name": "Poland",
       "code": "PL",
-      "count": 23
+      "count": 25
+    },
+    {
+      "name": "Ireland",
+      "code": "IE",
+      "count": 22
     },
     {
       "name": "Netherlands",
       "code": "NL",
       "count": 22
-    },
-    {
-      "name": "Ireland",
-      "code": "IE",
-      "count": 20
     },
     {
       "name": "Portugal",
@@ -1183,7 +1229,7 @@
     {
       "name": "Germany",
       "code": "DE",
-      "count": 12
+      "count": 16
     },
     {
       "name": "Romania",
@@ -1211,14 +1257,14 @@
       "count": 6
     },
     {
-      "name": "Lithuania",
-      "code": "LT",
+      "name": "Bulgaria",
+      "code": "BG",
       "count": 6
     },
     {
-      "name": "Bulgaria",
-      "code": "BG",
-      "count": 5
+      "name": "Lithuania",
+      "code": "LT",
+      "count": 6
     },
     {
       "name": "Belgium",
@@ -1241,6 +1287,11 @@
       "count": 3
     },
     {
+      "name": "Denmark",
+      "code": "DK",
+      "count": 3
+    },
+    {
       "name": "Estonia",
       "code": "EE",
       "count": 3
@@ -1254,11 +1305,6 @@
       "name": "Sweden",
       "code": "SE",
       "count": 3
-    },
-    {
-      "name": "Denmark",
-      "code": "DK",
-      "count": 2
     },
     {
       "name": "Latvia",
@@ -1898,9 +1944,9 @@
     }
   ],
   "salary": {
-    "n": 72,
-    "avgMin": 33770,
-    "avgMax": 43629
+    "n": 76,
+    "avgMin": 34066,
+    "avgMax": 44000
   },
   "agents": [
     "analista-1",
@@ -16856,6 +16902,616 @@
       "ts": "2026-06-26T05:01:50Z",
       "agent": "scorer-6",
       "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T10:30:51Z",
+      "agent": "scout-6",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T10:32:58Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T10:39:53Z",
+      "agent": "scout-6",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T10:39:53Z",
+      "agent": "scout-6",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T10:42:46Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T10:43:43Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T11:31:33Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T11:37:18Z",
+      "agent": "scorer-6",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T11:42:49Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T17:52:26Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T17:55:44Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T17:55:44Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T17:55:44Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T17:56:29Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:01:27Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T18:08:58Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:08:58Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:08:58Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:08:58Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:14:37Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T18:21:12Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:21:12Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:21:12Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:21:12Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:24:38Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T18:26:02Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T18:34:54Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:34:54Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:34:54Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:34:54Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T18:36:43Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T18:48:02Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T18:49:52Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T18:58:57Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T19:01:03Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T19:01:06Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T19:01:31Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T19:01:45Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T19:01:57Z",
+      "agent": "scorer-6",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T19:02:14Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T19:10:19Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T19:13:53Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T19:21:33Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T19:24:28Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T19:32:39Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T19:35:02Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T19:43:39Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T19:45:33Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T19:54:37Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T20:05:34Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T20:16:19Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T20:26:31Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T20:27:16Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:02:33Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:02:33Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:02:33Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:02:33Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:03:17Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T22:04:33Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:09:08Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:10:36Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:10:41Z",
+      "agent": "scorer-6",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:13:23Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:14:22Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:14:59Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:15:34Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:15:37Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T22:16:58Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:17:52Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:19:49Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:21:13Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T22:21:44Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T22:22:00Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:23:00Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:27:46Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T22:29:51Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:31:45Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T22:31:59Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T22:33:34Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:38:43Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:39:22Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T22:39:37Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:40:25Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:42:17Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:42:32Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T22:43:45Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:44:19Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-26T22:45:35Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T22:47:35Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T22:51:47Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-26T22:53:07Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T22:53:21Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T22:53:35Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-26T22:54:21Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-26T22:57:39Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-27T03:03:07Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T03:07:32Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-27T04:05:38Z",
+      "agent": "scorer-6",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-27T06:00:59Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T06:05:01Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-27T06:05:22Z",
+      "agent": "scorer-6",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-27T07:01:22Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T07:03:22Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-27T07:06:11Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-27T10:01:28Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T10:06:48Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-27T12:02:08Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T12:05:58Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-27T13:01:11Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-27T16:05:36Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T16:05:36Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T16:05:36Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T16:05:53Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T16:15:16Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T16:15:16Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T16:15:16Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-27T16:48:24Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-27T17:49:31Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-27T18:45:04Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-27T18:50:20Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-27T19:50:48Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-27T20:51:47Z",
+      "agent": "analista-1",
+      "action": "checked"
     }
   ],
   "usage": {
@@ -17038,8 +17694,20 @@
       },
       {
         "day": "2026-06-26",
-        "pct": 9,
-        "cum": 56,
+        "pct": 34,
+        "cum": 81,
+        "week": "2026-06-25"
+      },
+      {
+        "day": "2026-06-27",
+        "pct": 18,
+        "cum": 99,
+        "week": "2026-06-25"
+      },
+      {
+        "day": "2026-06-28",
+        "pct": 1,
+        "cum": 100,
         "week": "2026-06-25"
       }
     ],
@@ -17056,8 +17724,8 @@
             "sat",
             "sun"
           ],
-          "start": "19:30",
-          "end": "07:30"
+          "start": "16:00",
+          "end": "20:00"
         }
       ]
     }
