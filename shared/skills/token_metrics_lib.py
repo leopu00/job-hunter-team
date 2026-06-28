@@ -39,6 +39,23 @@ def _jht_home() -> Path:
 
 # ── Session → Agent mapping ─────────────────────────────────────────────
 
+# Ruoli canonici degli agenti del team. Validano il fallback `[TAG]`: un tag
+# maiuscolo che NON è un ruolo (es. `[RESUME]`, `[STATUS]`, `[MSG]`) NON deve
+# diventare un "agente fantasma" nell'attribuzione token.
+# (Costante duplicata in token-by-agent-series.py — tenerle in sync.)
+VALID_AGENT_ROLES = frozenset({
+    "capitano", "sentinella", "assistente", "mentor", "dottore",
+    "mantenitore", "scout", "analista", "scorer", "scrittore",
+    "critico", "tesoriere",
+})
+
+
+def _is_valid_agent(name: str) -> bool:
+    """True se `name` è un ruolo canonico, anche con suffisso numerico
+    (es. 'scout-2' → base 'scout')."""
+    return re.sub(r"-\d+$", "", name) in VALID_AGENT_ROLES
+
+
 def parse_session_to_agent(state_path: Path) -> str | None:
     """Estrai l'agente OWNER della sessione Kimi dal custom_title in
     `<session_dir>/state.json`.
@@ -49,6 +66,8 @@ def parse_session_to_agent(state_path: Path) -> str | None:
       "[SENTINELLA] [STATUS] ..."  → owner = sentinella  (broadcast)
       "[@assistente] ..."          → owner = assistente
 
+    Il fallback `[TAG]` è validato contro VALID_AGENT_ROLES: un tag che non
+    è un ruolo (es. `[RESUME]`) ritorna None invece di un agente fantasma.
     Ritorna None se non riconosciuto.
     """
     try:
@@ -63,7 +82,9 @@ def parse_session_to_agent(state_path: Path) -> str | None:
         return cands[-1]
     m = re.match(r"^\[([A-Z][A-Z0-9_-]+)\]", title)
     if m:
-        return m.group(1).lower().replace("_", "-")
+        name = m.group(1).lower().replace("_", "-")
+        if _is_valid_agent(name):
+            return name
     return None
 
 
