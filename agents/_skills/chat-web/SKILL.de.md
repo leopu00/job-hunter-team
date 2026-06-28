@@ -23,6 +23,49 @@ Du schreibst das JSON nicht. Der Wrapper `jht-send` macht das für dich, mit Zei
 
 > ⚠️ Häufiger Fehlermodus beim ersten Mal: du liest das Präfix und denkst "lass mich via `jht-tmux-send` an den Nutzer antworten". `jht-tmux-send UTENTE ...` gibt `exit 2` zurück (keine solche Sitzung). Fang nicht an zu debuggen — merke dir einfach, dass `[CHAT]` ⇒ `jht-send`. Immer.
 
+## ⚠️ Der Nutzer ist NICHT technisch — kein Terminal, keine CLI, keine Slash-Commands
+
+Eine `[CHAT]`-Nachricht kommt aus der **Desktop-App** (oder Telegram). Der Nutzer
+**hat** kein Terminal, keine Claude-Code-CLI, kein `/mcp`, keine Slash-Commands und
+keinen Dateizugriff. Er ist kein Entwickler. Sag ihm **NIEMALS**, er solle:
+
+- `/mcp`, `/config` oder irgendeinen Slash-Command ausführen,
+- ein Terminal öffnen / einen CLI-Befehl ausführen / eine Datei bearbeiten / "ein Tool autorisieren",
+- irgendetwas tun, das du selbst tun könntest.
+
+Einem Desktop-Nutzer zu sagen „tippe `/mcp` ins Terminal" ist eine Sackgasse — er
+kann es nicht. Wenn eine Aufgabe eine Fähigkeit braucht, die du nicht verdrahtet
+hast, **löse sie selbst mit Code**, statt die Arbeit an den Nutzer zurückzugeben. Du
+bist das Team; der Nutzer ist der Kunde. Finde einen Weg.
+
+### Beispiel: eine E-Mail senden — du brauchst KEIN MCP/Gmail-Tool
+Das Team hat die E-Mail-Zugangsdaten bereits in
+`$JHT_HOME/credentials/email_monitor.json` (ein Gmail-App-Passwort — auch für SMTP
+gültig). Schreibe ein kleines Python-Skript und sende:
+
+```python
+import os, json, smtplib, ssl
+from email.message import EmailMessage
+c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
+m = EmailMessage()
+m["From"], m["To"], m["Subject"] = c["user"], "<empfaenger>", "<betreff>"
+m.set_content("<inhalt>")
+# Gmail: smtp.gmail.com:465. Für einen anderen Anbieter leite smtp.<domain> ab oder mappe es.
+with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
+    s.login(c["user"], c["password"]); s.send_message(m)
+```
+
+Dann antworte „Erledigt, gesendet ✅" — niemals „geh und autorisiere Gmail".
+
+### Wenn du wirklich einen Slash-Command / ein Tool in DEINER Session brauchst
+Du kannst deine eigene Session steuern — frag nicht den Nutzer:
+
+- **Selbst-injiziere** ihn in deine eigene tmux-Session:
+  `jht-tmux-send <DEINE_SESSION> '/mcp'` (dann ein separates Enter), oder
+- **bitte einen anderen Agenten**, ihn für dich zu injizieren: z. B. der Assistent
+  bittet den Kapitän (`jht-tmux-send CAPITANO '...injiziere /mcp in ASSISTENTE...'`)
+  und der Kapitän führt `jht-tmux-send ASSISTENTE '/mcp'` aus. Der Nutzer ist nie beteiligt.
+
 ## Antwort-Befehle
 
 ```bash

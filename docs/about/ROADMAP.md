@@ -2,14 +2,16 @@
 
 > Last updated: 2026-05-31
 >
-> 📋 **For tactical, task-by-task detail → see [`BACKLOG.md`](../BACKLOG.md)**.
+> 📋 **For tactical, task-by-task detail → see [`BACKLOG.md`](../../BACKLOG.md)**.
 > This file is the strategic, visual summary — where we're going, not the day-to-day.
 
 ---
 
 ## 🎯 Vision
 
-Job Hunter Team is an open-source application that runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). Non-technical users download the Electron launcher; technical users clone the repo and use the CLI. In both cases, the AI agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service.
+> 🧭 **Design philosophy & product vision live in [`VISION.md`](VISION.md)** — agents-as-characters, the Mentor, the anti-goals. This section covers the *deployment & stack* vision only.
+
+Job Hunter Team is an open-source application that runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). Non-technical users download the Electron app; technical users clone the repo and use the CLI. In both cases, the AI agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service.
 
 **AI on the side of workers, not against them.**
 
@@ -19,7 +21,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
                                  ▼
                        ┌──────────────────┐
                        │ 🐳 JHT Container │
-                       │  (8 agents +     │
+                       │  (agent team +   │
                        │   📡 Bridge)     │
                        └──────────────────┘
                                  │
@@ -29,13 +31,26 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
          (today)          (Phase 2)          (Phase 3, ⭐ target)
 ```
 
-> See [`docs/internal/INFRA.md`](../internal/INFRA.md) for the deployment diagram and [`docs/VISION.md`](VISION.md) for the design philosophy.
+> See [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) for the deployment diagram and [`VISION.md`](VISION.md) for the design philosophy.
+
+---
+
+> ### 🔀 Direction shift — Interaction planes (2026-06-15)
+>
+> A beta-test learning reframes *where* the user interacts with the team. Two clean planes replace the "make the cloud web interactive" effort:
+>
+> - **📊 Data plane (one-way, read-only everywhere):** container → Supabase → **web dashboard**. The public site at `jobhunterteam.ai` becomes **view-only** (positions, scores, map, case-studies) — usable from a phone or a work PC. No team control, no chat.
+> - **🎛️ Interaction plane (two-way, always co-located with the team):** chat, file upload, start/stop, feedback live in the **desktop app**. For a **local** team that's a browser window to `localhost`; for a **VPS** team it's the *same* stack reached over an **SSH tunnel**, so the remote team feels local. **Telegram** is the optional async channel for when you're away from the desktop (recommended, not mandatory).
+>
+> This **retires the cloud desired-state *interactive* path** (web→cloud→VPS control/chat), keeping only the one-way data mirror. Full rationale, gap analysis and phased plan → [`docs/internal/2026-06-15-interaction-planes-redesign-design.md`](../internal/2026-06-15-interaction-planes-redesign-design.md). Items below predating this note may be **superseded** by it.
+
+---
 
 **Stack decisions:**
 
 | Component | Technology | Rationale |
 |---|---|---|
-| Desktop app | **Electron launcher** | Installer + lifecycle manager only; operational GUI stays in the browser |
+| Desktop app | **Electron** | Installer + lifecycle **+ interaction cockpit** (local via browser→localhost, VPS via SSH tunnel); the web dashboard stays view-only |
 | Web dashboard | **Next.js 16 on Vercel** | CI/CD pipeline live |
 | Container runtime | **Docker + Docker Compose** | Isolation, reproducibility |
 | Structured data (cloud, opt-in) | **Supabase** | PostgreSQL + Google/GitHub auth |
@@ -66,7 +81,7 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 🟢 Status: IN PROGRESS — ~88%
 ━━━━━━━━━━━━━━━━━━━░░ 
 
-✅ Next.js 16 app, ~76 page.tsx routes (App Router)
+✅ Next.js 16 app, ~44 page.tsx routes + 135 API route.ts (App Router)
 ✅ Google + GitHub OAuth
 ✅ DB schema (migrations 001–011, RLS, onboarding-state)
 ✅ Vercel CI/CD pipeline + jobhunterteam.ai live
@@ -91,13 +106,13 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 🟡 Local-PC-no-API mode — local-queries.ts esiste, switch logico pending in queries.ts
 ```
 
-For full task list → [BACKLOG · Phase 1](../BACKLOG.md#1️⃣-phase-1--web-platform-consolidation-current-sprint)
+For full task list → [BACKLOG · Phase 1](../../BACKLOG.md#1️⃣-phase-1--web-platform-consolidation-current-sprint)
 
 ---
 
 ### 🖥️ Phase 2 — Desktop Launcher
 
-> _"Download, install, everything starts in the background, then you work from the browser."_
+> _"Download, install, everything starts in the background — then you drive the team from the desktop app (the web stays read-only)."_
 
 ```
 🟡 Status: IN PROGRESS — ~80%
@@ -127,7 +142,7 @@ For full task list → [BACKLOG · Phase 1](../BACKLOG.md#1️⃣-phase-1--web-p
 ⏸️ Code signing (deferred post-beta — open source + community review = trust signal)
 ```
 
-For full task list → [BACKLOG · Phase 2](../BACKLOG.md#2️⃣-phase-2--🖥️-desktop-launcher)
+For full task list → [BACKLOG · Phase 2](../../BACKLOG.md#2️⃣-phase-2--🖥️-desktop-launcher)
 
 ---
 
@@ -159,7 +174,7 @@ For full task list → [BACKLOG · Phase 2](../BACKLOG.md#2️⃣-phase-2--🖥�
 
 > 🌉 **Bridge to today**: power users can already bring up JHT on a self-hosted VPS through the desktop wizard (manual IP + SSH key, T1-T4 path). PHASE 3 generalises that one-VPS flow into a multi-provider, billing-aware one-click experience.
 
-For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁️-multi-provider-cloud-provisioning-future-post-10)
+For full task list → [BACKLOG · Phase 3](../../BACKLOG.md#3️⃣-phase-3--☁️-multi-provider-cloud-provisioning-future-post-10)
 
 ---
 
@@ -190,10 +205,10 @@ For full task list → [BACKLOG · Phase 3](../BACKLOG.md#3️⃣-phase-3--☁�
 > lingua della conversazione dal system prompt e non dalla query utente.
 > Su JHT i 9 prompt agenti sommano migliaia di righe → safeguard via
 > RULE-T14 (runtime) + baseline EN (post-2026-05-19) + overlay locali.
-> Design doc: [`docs/internal/2026-05-06-agent-prompts-i18n.md`](../internal/2026-05-06-agent-prompts-i18n.md).
+> Design doc: [`docs/internal/experiments/2026-05-06-agent-prompts-i18n.md`](../internal/experiments/2026-05-06-agent-prompts-i18n.md).
 ```
 
-For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-internationalization)
+For full task list → [BACKLOG · Phase 4](../../BACKLOG.md#4️⃣-phase-4--🌍-internationalization)
 
 ---
 
@@ -221,7 +236,7 @@ For full task list → [BACKLOG · Phase 4](../BACKLOG.md#4️⃣-phase-4--🌍-
 ⬜ SHA256 checksums on download page
 ```
 
-For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-public-website)
+For full task list → [BACKLOG · Phase 5](../../BACKLOG.md#5️⃣-phase-5--🌐-public-website)
 
 ---
 
@@ -238,7 +253,7 @@ For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-
 ⬜ 🎬 Animated GIFs (BLOCKER) — README above the fold (dashboard, team pipeline, onboarding); video deferred
 ✅ 🛡️ Security review — 31/34 fix, score 30→74%, see docs/security/ (tutti i blocker pre-launch chiusi: SSRF dispatcher integrato a webhooks+gateway, CSP nonce-based in prod via `web/middleware.ts`, resolve-system-bin deferito con razionale Homebrew/Docker macOS; verificato 2026-06-02)
 ✅ 🧪 docs/guides/BETA.md created (con "Coverage we still need" matrix)
-🟡 🐛 GitHub issue triage — templates (bug_report.md, feature_request.md) + .github/labels.yml (25 label) + docs/internal/triage.md SLA 48h/24h DONE; manca `gh label sync` live + project board
+🟡 🐛 GitHub issue triage — templates (bug_report.md, feature_request.md) + .github/labels.yml (25 label) + docs/internal/ops/triage.md SLA 48h/24h DONE; manca `gh label sync` live + project board
 🟡 📰 Show HN draft — docs/launch/show-hn-draft.md (171 righe, 4 title variants, Plan B subreddits); manca GIF embedded (dipende da LAUNCH-03 GIFs)
 🟡 🎬 Demo storyboard — docs/launch/demo-storyboard.md (202 righe, 6-beat shot list); pivot to GIF-first, video deferred
 ⬜ 🧊 Stabilize monitoring architecture (1-2 weeks freeze pre-launch)
@@ -247,7 +262,7 @@ For full task list → [BACKLOG · Phase 5](../BACKLOG.md#5️⃣-phase-5--🌐-
 ⬜ 🎙️ Press kit (logos svg+png, 5+ screenshots, 3 description variants 30/100/300w) — assets/press-kit/ mancante
 ```
 
-For full task list → [BACKLOG · Phase 6](../BACKLOG.md#6️⃣-phase-6--🚢-pre-launch-public-oss-new)
+For full task list → [BACKLOG · Phase 6](../../BACKLOG.md#6️⃣-phase-6--🚢-pre-launch-public-oss-new)
 
 ---
 
@@ -259,7 +274,9 @@ These don't belong to a single phase — they ship progressively across multiple
 
 > _"A bot per role today; a per-agent chat + team forum tomorrow."_
 
-**Shipped (decisione 2026-05-13 rev2, commits `f23df913` → `579d91e6`):** onboarding wizard configures **three mandatory bots** — Assistente, Capitano, Mentor — with `tg-bridge` routing per role and `jht-telegram-send` skill on all three. Notifiche batch ogni N ready. Mentor sempre user-facing.
+**Shipped (decisione 2026-05-13 rev2, commits `f23df913` → `579d91e6`):** onboarding wizard configures three bots — Assistente, Capitano, Mentor — with `tg-bridge` routing per role and `jht-telegram-send` skill on all three. Notifiche batch ogni N ready. Mentor sempre user-facing.
+
+> **🔀 Aggiornamento 2026-06-15 (direction shift):** Telegram diventa **opzionale (consigliato, non obbligatorio)**. Con l'interazione spostata sul desktop, Telegram è il canale *async* per quando l'utente è lontano dal desktop — non un gate di setup. I 3 bot restano *consigliati* nel wizard ma **skippabili**; oggi il gate "mandatory" vive solo nel path VPS del wizard (`cli/wizard/setup.js:258`, `desktop/renderer/modules/wizard-flow.js:775`), mentre boot e runtime già tollerano l'assenza. → `[JHT-TELEGRAM-OPTIONAL]` in BACKLOG.
 
 ```
 ✅ Setup 3 bot obbligatori in onboarding (Assistente / Capitano / Mentor)
@@ -281,11 +298,13 @@ Roadmap successivo — vero "team forum":
 
 **Modello**: ibrido **push macro-events + bidirezionalità a "desired-state"** (Kubernetes-style). Il container è source-of-truth dei *risultati* (positions/scores/applications); Supabase è il mirror. Le **intenzioni utente** dal web (start/stop team, scrivi CV, chat, like/dislike) viaggiano cloud → container tramite long-poller HTTP + endpoint `/api/cloud-sync/pull-desired-state`. La formula "push-only" della decisione 2026-05-13 è stata superata dal refactor `team_state` (2026-05-23, mig 019-023) e dal writer-on-demand (2026-05-29, mig 024) + pull-desired-state (2026-05-31).
 
+> **🔀 Aggiornamento 2026-06-15 (direction shift):** la **bidirezionalità "desired-state" cloud→container** (start/stop, chat, like/dislike, scrivi-CV via web cloud) è **superata** dallo spostamento dell'interazione sul desktop (diretta in locale, via **tunnel SSH** per la VPS). Resta solo il **push dati one-way** (positions/scores/applications → Supabase → dashboard read-only). Il path interattivo cloud (`team_state` control, `user_to_agent_messages`, `position_feedback`, flag `*_requested` come roundtrip cloud, `team_commands`) è candidato a **freeze/ritiro** — scope esatto in [`docs/internal/2026-06-15-interaction-planes-redesign-design.md`](../internal/2026-06-15-interaction-planes-redesign-design.md) § "Cosa si ritira".
+
 **Bootstrap automatico**: quando l'utente fa login con lo stesso account su un container nuovo/vuoto (es. nuova VPS, nuovo PC), l'app rileva il DB locale vuoto e fa un pull automatico — DB allineato, sync normale da lì in poi. Niente comandi manuali.
 
 **Cosa si sincronizza**: posizioni + metadati (`jobs.db`), profilo utente (`candidate_profile.yml`), tema/settings dashboard, flag user-driven (`write_requested`), tombstones (mig 025). Memoria agenti runtime e CV binari restano locali.
 
-→ Task di implementazione: `[JHT-CLOUDSYNC-01]`, `[JHT-CLOUD-RESTORE]`, `[JHT-CLOUD-SYNC-PROFILE]`, `[JHT-CLOUD-SYNC-THEME]` in `BACKLOG.md`. Living doc: [`docs/internal/cloud-sync-architecture.md`](../internal/cloud-sync-architecture.md).
+→ Task di implementazione: `[JHT-CLOUDSYNC-01]`, `[JHT-CLOUD-RESTORE]`, `[JHT-CLOUD-SYNC-PROFILE]`, `[JHT-CLOUD-SYNC-THEME]` in `BACKLOG.md`. Living doc: [`docs/internal/architecture/cloud-sync-architecture.md`](../internal/architecture/cloud-sync-architecture.md).
 
 ### 🛠️ Skill discovery — launcher-distributed isolation (priority)
 
@@ -448,7 +467,7 @@ The current `jobs.db` schema is functional but **lossy**: state transitions, Cri
 
 ## 🐳 Docker — what we built (compressed)
 
-Docker is the **default** in both the CLI installer and the desktop launcher (since v0.1.9). The container isolates agent processes, exposing only two bind-mounted folders: `~/.jht` (config/DB) and `~/Documents/Job Hunter Team` (CVs/output).
+Docker is the **default** in both the CLI installer and the desktop app (since v0.1.9). The container isolates agent processes, exposing only two bind-mounted folders: `~/.jht` (config/DB) and `~/Documents/Job Hunter Team` (CVs/output).
 
 | What | Status | Reference |
 |---|---|---|
@@ -456,16 +475,16 @@ Docker is the **default** in both the CLI installer and the desktop launcher (si
 | GHCR image: `ghcr.io/leopu00/jht:latest` | ✅ Shipped | v0.1.9 |
 | `install.sh` Docker-by-default + `--no-docker` opt-out | ✅ Shipped | v0.1.9 |
 | Desktop launcher: lazy install of Colima/Docker | ✅ Shipped | v0.1.10–0.1.12 |
-| Container runtime per OS | ✅ Shipped | Colima (macOS), docker.io (Linux/WSL2), Docker Desktop (Windows — installed via WSL2 wizard) |
+| Container runtime per OS | ✅ Shipped | macOS: Colima *or* Docker Desktop (user choice, detect-first — ADR-0006), docker.io (Linux/WSL2), Docker Desktop (Windows — installed via WSL2 wizard) |
 | `isContainer()` gating in TUI/CLI/desktop | ✅ Shipped | v0.1.9 |
 
-> Full implementation history → [`CHANGELOG.md`](../CHANGELOG.md). Architectural rationale (why container, why no host-side `--dangerously-skip-permissions`) → [`docs/adr/0001-colima-not-docker-desktop.md`](./adr/0001-colima-not-docker-desktop.md).
+> Full implementation history → [`CHANGELOG.md`](../../CHANGELOG.md). Architectural rationale (why container, why no host-side `--dangerously-skip-permissions`) → [`docs/adr/0001-colima-not-docker-desktop.md`](../adr/0001-colima-not-docker-desktop.md); macOS runtime choice (Colima or Docker Desktop) → [`docs/adr/0006-user-choice-container-runtime-macos.md`](../adr/0006-user-choice-container-runtime-macos.md).
 
 ---
 
 ## 📦 Usage modes (compressed)
 
-For deployment modes (🖥️ Local PC / 🏠 Dedicated computer / ☁️ Self-hosted VPS) and the trade-offs of each → see [`docs/internal/INFRA.md`](../internal/INFRA.md) § "Where the team runs".
+For deployment modes (🖥️ Local PC / 🏠 Dedicated computer / ☁️ Self-hosted VPS) and the trade-offs of each → see [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) § "Where the team runs".
 
 For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Kimi) → see [`docs/PROVIDERS.md`](PROVIDERS.md).
 
@@ -473,12 +492,12 @@ For the supported LLM subscription tiers (🟠 Claude Max / 🔵 Codex / 🌙 Ki
 
 ## 📚 Related
 
-- 📋 [`BACKLOG.md`](../BACKLOG.md) — tactical, task-by-task work plan
-- 📝 [`CHANGELOG.md`](../CHANGELOG.md) — what's been shipped per release
+- 📋 [`BACKLOG.md`](../../BACKLOG.md) — tactical, task-by-task work plan
+- 📝 [`CHANGELOG.md`](../../CHANGELOG.md) — what's been shipped per release
 - 🎯 [`docs/VISION.md`](VISION.md) — design philosophy
-- 📐 [`docs/internal/INFRA.md`](../internal/INFRA.md) — deployment diagram
+- 📐 [`docs/internal/ops/INFRA.md`](../internal/ops/INFRA.md) — deployment diagram
 - 💳 [`docs/PROVIDERS.md`](PROVIDERS.md) — supported subscriptions
 - 🧪 [`docs/guides/BETA.md`](../guides/BETA.md) — beta program + post-launch open invitation (any role/industry)
 - 🦞 [`docs/AI-AGENT-INTEGRATION.md`](../guides/AI-AGENT-INTEGRATION.md) — let your AI assistant drive `jht`
-- 🔒 [`docs/MAINTAINERS.md`](../internal/MAINTAINERS.md) — internal operations reference
-- 📐 [`docs/adr/`](./adr/) — architectural decision records
+- 🔒 [`docs/MAINTAINERS.md`](../internal/ops/MAINTAINERS.md) — internal operations reference
+- 📐 [`docs/adr/`](../adr/) — architectural decision records

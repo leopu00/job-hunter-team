@@ -1,0 +1,98 @@
+---
+name: session-refresh
+description: "Doctor-only. Context-refresh round: for each agent session do a retrospective (age + wide capture + interview + analytics), append a dense synthesis to the growing daily journal, then KILL + recreate + resume the session with continuation context — so the agent's context window is cleared without losing where it was. Runs 2× per work window (at +30min and at mid). Skips fresh sessions and never restarts a session the Capitano deliberately parked."
+allowed-tools: Bash(tmux *), Bash(python3 *), Bash(bash /app/.launcher/start-agent.sh *), Bash(jht-tmux-send *), Bash(/app/agents/_skills/tmux-send/jht-tmux-send *), Bash(sleep *), Bash(cat *), Bash(grep *), Bash(echo *)
+---
+
+# session-refresh — clear agent context, keep continuity
+
+You (the Dottore) are spawned at a scheduled slot (`+30min` from the work-window start, or at `mid` window). Your job this round is **not** liveness-pinging — it is to **refresh the context** of the active agent sessions: each long-running session accumulates a bloated context window; you summarize what it did, persist it, then recreate the session fresh and hand back the continuation.
+
+> Why this exists: the old Dottore burned ~51% of team budget pinging `[HEALTH]` every 2h with zero useful checks. This round is rare (2×/window) and produces a durable, dense journal of the team's work.
+
+## Step 0 — window start (the analytics window)
+```bash
+WIN_START=$(python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skills.working_hours import current_window_bounds as b; w=b(); print(w[0].isoformat() if w else '')")
+# 24/7 (no window): fall back to the last 6h
+[ -z "$WIN_START" ] && WIN_START=$(python3 -c "import datetime; print((datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=6)).isoformat())")
+ROUND_ID=$(date -u +%Y%m%dT%H%M%SZ)
+DAY=$(date -u +%F)
+JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
+```
+
+## Step 1 — list sessions + age, decide order
+```bash
+tmux list-sessions -F '#{session_name}|#{session_created}'
+```
+- **Order**: worker sessions FIRST (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), user-facing LAST and with care (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). Never refresh `DOTTORE` / `DOCTOR-WATCHDOG` (yourself / the scheduler).
+- **FRESH skip**: `age = now - session_created`. If `age < 40 min` → SKIP entirely (nothing to summarize yet, and refreshing would throw away a session that just started). Log `action=skipped_fresh`.
+
+## Step 2 — per session: capture (wide + salient)
+Capture the WHOLE scrollback once, then the salient lines — do NOT load thousands of lines into your own context, grep the highlights:
+```bash
+tmux capture-pane -p -S - -t "$S" > /tmp/cap_$S.txt          # full scrollback to file
+tail -n 60 /tmp/cap_$S.txt                                    # recent state
+grep -nE '\[ERROR\]|Traceback|throttle|EXCLUDED|inserted|\[FEEDBACK\]|\[RETRO\]|spawn|Killed' /tmp/cap_$S.txt | tail -40   # salient moments
+```
+
+## Step 3 — analytics (objective numbers, not just the agent's story)
+```bash
+python3 /app/shared/skills/doctor_analytics.py "$S" "$WIN_START"
+```
+Returns JSON: `produced{found,analyzed,scored,written,reviewed}`, `communications{sent,received,top_peers}`, `throttles{events,max_sleep_s}`, `last_captain_msg`, `session_age_h`, `role`, `instance`.
+
+## Step 4 — PARKED check (data-driven, do NOT guess)
+A session is **PARKED** (the Capitano deliberately left it on but is not using it — e.g. a Scout left over from the previous window that the Capitano did not assign today) when **all** hold:
+- age ≥ 40min (not fresh), AND
+- `produced` is all-zero in the window, AND
+- `last_captain_msg` is null or older than the window start.
+
+If PARKED → **do NOT recreate to restart it**. Write the synthesis (Step 6) with `action=skipped_parked` and move on. (Recreating it would turn a deliberate park into work the Capitano did not want.) If you do recreate it for hygiene, the resume message MUST say it was idle: `[RESUME] you were in STANDBY — stay idle until the Capitano assigns you a queue.`
+
+## Step 5 — interview the agent
+```bash
+/app/agents/_skills/tmux-send/jht-tmux-send "$S" "[@dottore -> @${s_lower}] [RETRO] Inizio-giornata: 1) intoppi in questa sessione? 2) imparato qualcosa di utile? 3) cosa stavi facendo proprio ora (per il resume)? Rispondi denso, 3-4 righe."
+sleep 45
+tmux capture-pane -p -S -40 -t "$S" | tail -25   # read the reply
+```
+(Skip the interview for PARKED/fresh sessions — there is nothing in-flight to ask about.)
+
+## Step 6 — append the DENSE synthesis (append-only, grows daily)
+One JSONL entry per agent per round. Combine analytics + interview into a tight summary. NEVER overwrite — multiple Doctors across the day all append.
+```bash
+python3 - "$S" "$ROUND_ID" "$DAY" "$JOURNAL" <<'PY'
+import json, sys, datetime
+session, round_id, day, journal = sys.argv[1:5]
+entry = {
+  "ts": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00","Z"),
+  "round_id": round_id, "day": day,
+  "timing": "start+30",          # or "mid"  — set to the slot you were spawned for
+  "session": session, "role": "<role>", "session_age_h": 0.0,
+  "analytics": { },              # paste the doctor_analytics.py JSON here
+  "interview": {"intoppi": "...", "imparato": "...", "summary_denso": "..."},
+  "action": "recreated",         # recreated | skipped_parked | skipped_fresh
+  "resume_msg_sent": False,
+}
+with open(journal, "a") as f:
+    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+print("appended", session)
+PY
+```
+
+## Step 7 — recreate + resume (only if NOT fresh and NOT parked)
+Atomic refresh — you already captured the context in Step 2, so killing is safe:
+```bash
+ROLE=<role>; N=<instance>      # from analytics; recreate the SAME number (no dice — the die is for NEW spawns only)
+tmux kill-session -t "$S"
+bash /app/.launcher/start-agent.sh "$ROLE" "$N"
+sleep 8
+/app/agents/_skills/tmux-send/jht-tmux-send "$S" "[@dottore -> @${s_lower}] [RESUME] Contesto pre-refresh: stavi facendo <X>; avevi completato <Y> (analytics: produced=<...>); il prossimo passo era <Z>. Riprendi da li'. Coda: <next-for-role>."
+```
+Set `resume_msg_sent=True` in the journal entry. Then move to the next session (pace ~15-20s between agents).
+
+## Rules
+- **One Doctor does all sessions this round** (user order: single Doctor for now). Use the file-based capture + grep so you never blow your own context window.
+- **CAPITANO**: never recreate it lightly — it's the coordinator with in-flight state; refresh only if its context is clearly bloated, after a heads-up, last in the order.
+- **SENTINELLA**: its context-refresh is now handled **deterministically by the `agent-watchdog`** (age-based recreate past `JHT_SENTINELLA_MAX_CTX_AGE_H`, default 24h — it is near-stateless, its working state lives in the bridge/config, not in its chat). **Skip it here** (`action=skipped_managed_by_watchdog`) — do not race the watchdog by recreating it yourself.
+- **Never** `tmux new-session` by hand — always `start-agent.sh` (see `spawn-agent`).
+- Log every action in the journal (`recreated`/`skipped_parked`/`skipped_fresh`) — the journal is the audit trail and grows every day.

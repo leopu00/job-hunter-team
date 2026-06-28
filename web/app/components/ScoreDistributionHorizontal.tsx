@@ -1,6 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+import { scoreGreenCss } from "@/lib/score-color";
+
+const T: Record<Locale, { noScore: string }> = {
+  it: { noScore: "senza score" },
+  en: { noScore: "no score" },
+  es: { noScore: "sin score" },
+  fr: { noScore: "sans score" },
+  de: { noScore: "ohne Score" },
+  hu: { noScore: "nincs score" },
+  pt: { noScore: "sem score" },
+};
 
 type Props = {
   scores: number[];
@@ -23,6 +36,14 @@ type Props = {
   unscoredCount?: number;
   unscoredSelected?: boolean;
   onToggleUnscored?: () => void;
+  // Fit-mode: l'SVG riempie il contenitore. Usato in /map per dare al
+  // chart la stessa dimensione fissa delle altre card d'angolo.
+  fit?: boolean;
+  // Aspect-ratio (larghezza/altezza) dell'area utile della card. In
+  // fit-mode l'altezza delle righe viene calcolata così che il viewBox
+  // abbia LO STESSO aspect-ratio del box → il chart lo RIEMPIE
+  // esattamente, senza lettera-boxing né distorsione del testo.
+  fitAspect?: number;
 };
 
 const W = 480;
@@ -38,12 +59,10 @@ const PAD_BOTTOM = 8;
 const ROW_H = 24;
 const LABEL_FONT = 13;
 
+// Stessa scala SOLO-VERDE dei pin sulla mappa (web/lib/score-color.ts):
+// score basso = verde tenue, score alto = verde vivo. frac = score/maxScore.
 function colorForFraction(frac: number): string {
-  if (frac >= 0.75) return "var(--color-green)";
-  if (frac >= 0.6) return "#7fffb2";
-  if (frac >= 0.45) return "var(--color-yellow)";
-  if (frac >= 0.3) return "var(--color-orange)";
-  return "var(--color-red)";
+  return scoreGreenCss(frac * 100);
 }
 
 function percentile(sorted: number[], p: number): number {
@@ -69,7 +88,10 @@ export default function ScoreDistributionHorizontal({
   unscoredCount = 0,
   unscoredSelected = false,
   onToggleUnscored,
+  fit = false,
+  fitAspect,
 }: Props) {
+  const t = T[useLocale()];
   const hasRangeSelection = selectedRanges.length > 0 || unscoredSelected;
   const [hover, setHover] = useState<number | null>(null);
 
@@ -160,7 +182,14 @@ export default function ScoreDistributionHorizontal({
     .filter((b) => b.count > 0);
   const hasUnscored = unscoredCount > 0;
   const rows = visibleBins.length + (hasUnscored ? 1 : 0);
-  const H = PAD_TOP + PAD_BOTTOM + rows * ROW_H;
+  // Fit-mode con aspect noto: il viewBox prende l'aspect-ratio del box
+  // (H = W / aspect) e le righe si distribuiscono per riempirlo → il
+  // chart riempie esattamente la card. Altrimenti geometria fissa.
+  const useFitFill = fit && !!fitAspect && rows > 0;
+  const H = useFitFill
+    ? Math.round(W / (fitAspect as number))
+    : PAD_TOP + PAD_BOTTOM + rows * ROW_H;
+  const rowH = useFitFill ? (H - PAD_TOP - PAD_BOTTOM) / rows : ROW_H;
   const chartW = W - PAD_LEFT - PAD_RIGHT;
   // Scala barre: includi unscored nel max per coerenza visiva.
   const barMax = Math.max(1, stats.max, unscoredCount);
@@ -168,7 +197,12 @@ export default function ScoreDistributionHorizontal({
     decimals > 0 ? v.toFixed(decimals) : Math.round(v).toString();
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]">
+    <div
+      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 transition-colors duration-200 hover:border-[var(--color-border-glow)]"
+      // fit-mode: il root riempie l'altezza del box d'angolo così
+      // l'SVG (height 100%) ci si scala dentro.
+      style={fit ? { height: "100%" } : undefined}
+    >
       {accentLabel && (
         <div className="flex items-center justify-end mb-3">
           <span
@@ -191,11 +225,20 @@ export default function ScoreDistributionHorizontal({
       ) : (
         <svg
           width="100%"
-          height={H}
+          height={fit ? "100%" : undefined}
           viewBox={`0 0 ${W} ${H}`}
+          // fit: lo scala dentro il box ancorandolo in alto a destra
+          // (xMaxYMin). Altrimenti height:auto → l'elemento segue
+          // l'aspect-ratio del contenuto (niente gap di centratura che
+          // spingerebbe le barre giù).
+          preserveAspectRatio={fit ? "xMaxYMin meet" : undefined}
           role="img"
           aria-label={title}
-          style={{ overflow: "visible" }}
+          style={{
+            overflow: "visible",
+            height: fit ? "100%" : "auto",
+            display: "block",
+          }}
           onMouseLeave={() => setHover(null)}
         >
           {/* Riga speciale "senza score" — in fondo (ultima riga).
@@ -203,8 +246,8 @@ export default function ScoreDistributionHorizontal({
               (alto-score in cima). Unscored = rowIdx visibleBins.length. */}
           {hasUnscored &&
             (() => {
-              const y = PAD_TOP + visibleBins.length * ROW_H;
-              const barH = ROW_H - 4;
+              const y = PAD_TOP + visibleBins.length * rowH;
+              const barH = rowH - 4;
               const w = (unscoredCount / barMax) * chartW;
               const isHover = hover === -1;
               const isSelected = unscoredSelected;
@@ -264,7 +307,7 @@ export default function ScoreDistributionHorizontal({
                     fontStyle="italic"
                     style={{ fontFamily: "inherit" }}
                   >
-                    no score
+                    {t.noScore}
                   </text>
                 </g>
               );
@@ -281,8 +324,8 @@ export default function ScoreDistributionHorizontal({
             // Unscored (se presente) occupa l'ultima riga: i bin
             // restano nelle righe 0..visibleBins.length-1.
             const rowIdx = visibleBins.length - 1 - visIdx;
-            const y = PAD_TOP + rowIdx * ROW_H;
-            const barH = ROW_H - 4;
+            const y = PAD_TOP + rowIdx * rowH;
+            const barH = rowH - 4;
             const w = (count / barMax) * chartW;
             const score = lo + stats.activeStep / 2;
             const isHover = hover === i;

@@ -78,5 +78,3 @@ felülírható: `JHT_USER_TZ` env var (a helper olvassa).
 
 - `shared/skills/format_time.py` — implementáció.
 - `candidate_profile.yml.example` — `timezone:` mező dokumentáció.
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §15 — incidens
-  hivatkozás.

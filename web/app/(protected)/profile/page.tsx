@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/workspace";
+import { isCloudDeploy } from "@/lib/deploy-mode";
 import { readWorkspaceProfile } from "@/lib/profile-reader";
 import { isLocalRequest } from "@/lib/auth";
 import type { CandidateProfile } from "@/lib/types";
@@ -9,6 +10,7 @@ import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { getProfileT } from "@/lib/profile-i18n";
 import ProfileStats from "@/components/ProfileStats";
 import ProfileAssistantFab from "@/components/ProfileAssistantFab";
+import ProfileEditButton from "@/components/ProfileEditButton";
 import RevealableContactRow from "@/app/components/RevealableContactRow";
 import ProfileBlockRenderer from "@/app/components/ProfileBlockRenderer";
 import { decryptContacts } from "@/lib/pii-crypto";
@@ -30,7 +32,11 @@ const SKILL_CATEGORY_COLORS = [
  */
 function experienceSortKey(period?: string): number {
   if (!period) return 0;
-  if (/present|in corso|current|ongoing|attuale|adesso|oggi|presente|now/i.test(period))
+  if (
+    /present|in corso|current|ongoing|attuale|adesso|oggi|presente|now/i.test(
+      period,
+    )
+  )
     return 999999;
   const years = (period.match(/\b(?:19|20)\d{2}\b/g) ?? []).map(Number);
   return years.length ? Math.max(...years) : 0;
@@ -68,9 +74,9 @@ export default async function ProfilePage() {
     if (!user) {
       return (
         <div className="p-12 text-center text-[var(--color-muted)]">
-          Session expired.{" "}
+          {t("session_expired")}{" "}
           <Link href="/" className="text-[var(--color-green)]">
-            Sign in again
+            {t("sign_in_again")}
           </Link>
         </div>
       );
@@ -93,7 +99,10 @@ export default async function ProfilePage() {
       .select("email,phone,linkedin,github,website,address")
       .eq("user_id", user.id)
       .maybeSingle();
-    cloudContacts = decryptContacts(contactsRow) as Record<string, string | null> | null;
+    cloudContacts = decryptContacts(contactsRow) as Record<
+      string,
+      string | null
+    > | null;
   } else {
     profile = readWorkspaceProfile();
   }
@@ -103,11 +112,15 @@ export default async function ProfilePage() {
   // competenze, lingue, contatti, note libere). I blocchi narrativi/semi-liberi
   // (about, goals, strengths, preferences, positioning_*, interessi…) non hanno
   // una resa fissa equivalente — vanno mostrati qui, altrimenti restano invisibili.
-  const COVERED_BLOCK = /^(experience|education|skills|languages|contacts|free_notes)/;
+  const COVERED_BLOCK =
+    /^(experience|education|skills|languages|contacts|free_notes)/;
   const extraBlocks = blocks.filter((b) => b.key && !COVERED_BLOCK.test(b.key));
 
   const pos = profile?.positioning ?? {};
-  const contacts = (cloudContacts ?? pos.contacts ?? {}) as Record<string, string>;
+  const contacts = (cloudContacts ?? pos.contacts ?? {}) as Record<
+    string,
+    string
+  >;
   const experience = (pos.experience ?? []) as {
     role?: string;
     company?: string;
@@ -165,7 +178,10 @@ export default async function ProfilePage() {
       <div style={{ animation: "fade-in 0.35s ease both" }}>
         {/* Header */}
         <div className="mb-8 pb-6 border-b border-[var(--color-border)]">
-          <nav aria-label="Breadcrumb" className="flex items-center gap-2 mb-1">
+          <nav
+            aria-label={t("aria_breadcrumb")}
+            className="flex items-center gap-2 mb-1"
+          >
             <Link
               href="/dashboard"
               className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
@@ -195,25 +211,14 @@ export default async function ProfilePage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Link
-                href="/profile/edit"
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px] font-bold no-underline transition-all hover:opacity-90"
-                style={{ background: "var(--color-green)", color: "#000" }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
-                >
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-                {t("edit")}
-              </Link>
+              {/* [JHT-DASHBOARD-SPLIT] Profilo: vista sul cloud, modifica solo
+                  desktop (l'edit passa dall'assistente). Export dati resta. */}
+              {!isCloudDeploy() && (
+                <ProfileEditButton
+                  label={t("edit")}
+                  message={t("chat_edit_msg")}
+                />
+              )}
               {profile && (
                 <a
                   href="/api/profile/export"
@@ -261,7 +266,7 @@ export default async function ProfilePage() {
         )}
 
         {profile && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="columns-1 md:columns-2 gap-6 mb-8">
             {/* Basic Info */}
             <ProfileSection id="info-base" title={t("sec_info_base")}>
               <ProfileField label={t("f_name")} value={profile.name} />
@@ -700,37 +705,37 @@ export default async function ProfilePage() {
                   title={t("sec_job_prefs")}
                 >
                   <div className="flex flex-wrap gap-2 mb-3">
-                  {profile.location_preferences.map((lp, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)]"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        style={{ color: "var(--color-green)" }}
+                    {profile.location_preferences.map((lp, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)]"
                       >
-                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                        <circle cx="12" cy="10" r="3" />
-                      </svg>
-                      <div>
-                        <span className="text-[10px] font-semibold text-[var(--color-green)]">
-                          {(lp.type ?? "").replace(/_/g, " ")}
-                        </span>
-                        <span className="text-[10px] text-[var(--color-muted)] ml-1">
-                          {lp.region && lp.region}
-                          {lp.cities && lp.cities.join(", ")}
-                          {lp.max_days != null &&
-                            ` (max ${lp.max_days} ${t("days_per_week")})`}
-                          {lp.note && lp.note}
-                        </span>
+                        <svg
+                          aria-hidden="true"
+                          width="12"
+                          height="12"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          style={{ color: "var(--color-green)" }}
+                        >
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                          <circle cx="12" cy="10" r="3" />
+                        </svg>
+                        <div>
+                          <span className="text-[10px] font-semibold text-[var(--color-green)]">
+                            {(lp.type ?? "").replace(/_/g, " ")}
+                          </span>
+                          <span className="text-[10px] text-[var(--color-muted)] ml-1">
+                            {lp.region && lp.region}
+                            {lp.cities && lp.cities.join(", ")}
+                            {lp.max_days != null &&
+                              ` (max ${lp.max_days} ${t("days_per_week")})`}
+                            {lp.note && lp.note}
+                          </span>
+                        </div>
                       </div>
-                    </div>
                     ))}
                   </div>
                   {profile.salary_target &&
@@ -747,6 +752,7 @@ export default async function ProfilePage() {
                           {profile.salary_target.italy_min != null && (
                             <SalaryRange
                               label={t("salary_italy")}
+                              ariaLabel={t("aria_salary_range")}
                               min={profile.salary_target.italy_min}
                               max={
                                 profile.salary_target.italy_max ??
@@ -758,6 +764,7 @@ export default async function ProfilePage() {
                           {profile.salary_target.remote_eu_min != null && (
                             <SalaryRange
                               label={t("salary_remote_eu")}
+                              ariaLabel={t("aria_salary_range")}
                               min={profile.salary_target.remote_eu_min}
                               max={
                                 profile.salary_target.remote_eu_max ??
@@ -912,7 +919,7 @@ export default async function ProfilePage() {
             )}
 
             {/* Strengths — nascosto quando vuoto; i chip "campi mancanti"
-                puntano a /profile/edit, non a questa sezione di view. */}
+                aprono la chat dell'Assistente, non un form. */}
             {strengths.length > 0 && (
               <ProfileSection
                 id="punti-di-forza"
@@ -942,15 +949,13 @@ export default async function ProfilePage() {
               </ProfileSection>
             )}
 
-            {/* Note libere — full width */}
+            {/* Note libere */}
             {freeNotes && (
-              <div className="md:col-span-2">
-                <ProfileSection title={t("sec_free_notes")}>
-                  <p className="text-[12px] text-[var(--color-bright)] leading-relaxed whitespace-pre-wrap">
-                    {freeNotes}
-                  </p>
-                </ProfileSection>
-              </div>
+              <ProfileSection title={t("sec_free_notes")}>
+                <p className="text-[12px] text-[var(--color-bright)] leading-relaxed whitespace-pre-wrap">
+                  {freeNotes}
+                </p>
+              </ProfileSection>
             )}
 
             {/* Approfondimenti — blocchi L2/L3 non coperti dalle sezioni fisse.
@@ -964,7 +969,7 @@ export default async function ProfilePage() {
           </div>
         )}
       </div>
-      <ProfileAssistantFab />
+      {!isCloudDeploy() && <ProfileAssistantFab />}
     </>
   );
 }
@@ -983,7 +988,7 @@ function ProfileSection({
   return (
     <div
       id={id}
-      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors scroll-mt-20"
+      className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors scroll-mt-20 break-inside-avoid mb-6"
     >
       <div className="section-label mb-4">{title}</div>
       {children}
@@ -993,11 +998,13 @@ function ProfileSection({
 
 function SalaryRange({
   label,
+  ariaLabel,
   min,
   max,
   color,
 }: {
   label: string;
+  ariaLabel: string;
   min: number;
   max: number;
   color: string;
@@ -1017,7 +1024,7 @@ function SalaryRange({
         aria-valuenow={Math.round(Math.min(100, (max / 120000) * 100))}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label="Salary range"
+        aria-label={ariaLabel}
         className="h-1.5 rounded-full overflow-hidden"
         style={{ background: "var(--color-panel)" }}
       >

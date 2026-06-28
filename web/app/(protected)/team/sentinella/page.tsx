@@ -8,6 +8,338 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTeamCommandPoller } from "@/app/hooks/useTeamCommandPoller";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const LOCALE_TAG: Record<Locale, string> = {
+  it: "it-IT",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  hu: "hu-HU",
+  pt: "pt-PT",
+};
+
+type Strings = {
+  dashboard: string;
+  team: string;
+  sentinel: string;
+  subtitle: string;
+  connecting: string;
+  tmuxActive: string;
+  tmuxInactive: string;
+  openTerminal: string;
+  openPowershell: string;
+  tickInterval: string;
+  minHint: string;
+  saving: string;
+  save: string;
+  historyLoadError: string;
+  loadingHistory: string;
+  velSmoothed: string;
+  velIdeal: string;
+  projection: string;
+  lastTick: string;
+  terminalOutput: string;
+  refreshSentinella: string;
+  noOutput: string;
+  chartEmpty: string;
+  legendProjection: string;
+  legendIdeal: string;
+  startSending: string;
+  startQueued: string;
+  startStarting: string;
+  startSentinel: string;
+  startTimeout: string;
+  saveError: string;
+  networkError: string;
+  unknownError: string;
+  fetchFailed: string;
+  savedTick: (min: number) => string;
+  samplesLine: (n: number) => string;
+};
+
+const T: Record<Locale, Strings> = {
+  it: {
+    dashboard: "Dashboard",
+    team: "Team",
+    sentinel: "Sentinella",
+    subtitle:
+      "Monitor rate-limit e budget del provider AI attivo. Tick ogni 10 min, UI aggiorna ogni 30 s.",
+    connecting: "connessione…",
+    tmuxActive: "sessione tmux attiva",
+    tmuxInactive: "sessione tmux inattiva",
+    openTerminal: "apri terminale",
+    openPowershell: "apri powershell",
+    tickInterval: "Intervallo tick",
+    minHint: "min (0.5 = 30s)",
+    saving: "Salvo…",
+    save: "Salva",
+    historyLoadError: "Errore caricamento storico: ",
+    loadingHistory: "Caricamento storico…",
+    velSmoothed: "vel. smussata",
+    velIdeal: "vel. ideale",
+    projection: "proiezione",
+    lastTick: "ultimo tick",
+    terminalOutput: "Output terminale",
+    refreshSentinella: "aggiornamento ogni 5s · sessione SENTINELLA",
+    noOutput: "nessun output…",
+    chartEmpty: "In attesa del primo tick della Sentinella…",
+    legendProjection: "proiezione",
+    legendIdeal: "ideale",
+    startSending: "Invio…",
+    startQueued: "In coda sulla VPS…",
+    startStarting: "Avvio in corso…",
+    startSentinel: "Avvia Sentinella",
+    startTimeout: "Timeout: il subscriber sulla VPS non risponde.",
+    saveError: "Errore salvataggio",
+    networkError: "Errore di rete",
+    unknownError: "errore sconosciuto",
+    fetchFailed: "fetch failed",
+    savedTick: (min) => `Salvato (${min} min). Attivo entro ~15s.`,
+    samplesLine: (n) =>
+      `${n} campionamenti dalla sessione corrente (ultimi 500).`,
+  },
+  en: {
+    dashboard: "Dashboard",
+    team: "Team",
+    sentinel: "Sentinel",
+    subtitle:
+      "Monitors the active AI provider's rate-limit and budget. Tick every 10 min, UI refreshes every 30 s.",
+    connecting: "connecting…",
+    tmuxActive: "tmux session active",
+    tmuxInactive: "tmux session inactive",
+    openTerminal: "open terminal",
+    openPowershell: "open powershell",
+    tickInterval: "Tick interval",
+    minHint: "min (0.5 = 30s)",
+    saving: "Saving…",
+    save: "Save",
+    historyLoadError: "History load error: ",
+    loadingHistory: "Loading history…",
+    velSmoothed: "smoothed vel.",
+    velIdeal: "ideal vel.",
+    projection: "projection",
+    lastTick: "last tick",
+    terminalOutput: "Terminal output",
+    refreshSentinella: "refresh every 5s · SENTINELLA session",
+    noOutput: "no output…",
+    chartEmpty: "Waiting for the Sentinel's first tick…",
+    legendProjection: "projection",
+    legendIdeal: "ideal",
+    startSending: "Sending…",
+    startQueued: "Queued on the VPS…",
+    startStarting: "Starting…",
+    startSentinel: "Start Sentinel",
+    startTimeout: "Timeout: the subscriber on the VPS is not responding.",
+    saveError: "Save error",
+    networkError: "Network error",
+    unknownError: "unknown error",
+    fetchFailed: "fetch failed",
+    savedTick: (min) => `Saved (${min} min). Active within ~15s.`,
+    samplesLine: (n) => `${n} samples from the current session (last 500).`,
+  },
+  es: {
+    dashboard: "Panel",
+    team: "Equipo",
+    sentinel: "Centinela",
+    subtitle:
+      "Monitorea el límite de tasa y el presupuesto del proveedor de IA activo. Tick cada 10 min, la interfaz se actualiza cada 30 s.",
+    connecting: "conectando…",
+    tmuxActive: "sesión tmux activa",
+    tmuxInactive: "sesión tmux inactiva",
+    openTerminal: "abrir terminal",
+    openPowershell: "abrir powershell",
+    tickInterval: "Intervalo de tick",
+    minHint: "min (0.5 = 30s)",
+    saving: "Guardando…",
+    save: "Guardar",
+    historyLoadError: "Error al cargar el historial: ",
+    loadingHistory: "Cargando historial…",
+    velSmoothed: "vel. suavizada",
+    velIdeal: "vel. ideal",
+    projection: "proyección",
+    lastTick: "último tick",
+    terminalOutput: "Salida del terminal",
+    refreshSentinella: "actualización cada 5s · sesión SENTINELLA",
+    noOutput: "sin salida…",
+    chartEmpty: "Esperando el primer tick del Centinela…",
+    legendProjection: "proyección",
+    legendIdeal: "ideal",
+    startSending: "Enviando…",
+    startQueued: "En cola en el VPS…",
+    startStarting: "Iniciando…",
+    startSentinel: "Iniciar Centinela",
+    startTimeout: "Tiempo agotado: el suscriptor en el VPS no responde.",
+    saveError: "Error al guardar",
+    networkError: "Error de red",
+    unknownError: "error desconocido",
+    fetchFailed: "fallo de obtención",
+    savedTick: (min) => `Guardado (${min} min). Activo en ~15s.`,
+    samplesLine: (n) => `${n} muestras de la sesión actual (últimas 500).`,
+  },
+  fr: {
+    dashboard: "Tableau de bord",
+    team: "Équipe",
+    sentinel: "Sentinelle",
+    subtitle:
+      "Surveille la limite de débit et le budget du fournisseur d'IA actif. Tick toutes les 10 min, l'interface se rafraîchit toutes les 30 s.",
+    connecting: "connexion…",
+    tmuxActive: "session tmux active",
+    tmuxInactive: "session tmux inactive",
+    openTerminal: "ouvrir le terminal",
+    openPowershell: "ouvrir powershell",
+    tickInterval: "Intervalle de tick",
+    minHint: "min (0.5 = 30s)",
+    saving: "Enregistrement…",
+    save: "Enregistrer",
+    historyLoadError: "Erreur de chargement de l'historique : ",
+    loadingHistory: "Chargement de l'historique…",
+    velSmoothed: "vél. lissée",
+    velIdeal: "vél. idéale",
+    projection: "projection",
+    lastTick: "dernier tick",
+    terminalOutput: "Sortie du terminal",
+    refreshSentinella: "actualisation toutes les 5 s · session SENTINELLA",
+    noOutput: "aucune sortie…",
+    chartEmpty: "En attente du premier tick de la Sentinelle…",
+    legendProjection: "projection",
+    legendIdeal: "idéal",
+    startSending: "Envoi…",
+    startQueued: "En file d'attente sur le VPS…",
+    startStarting: "Démarrage en cours…",
+    startSentinel: "Démarrer la Sentinelle",
+    startTimeout: "Délai dépassé : l'abonné sur le VPS ne répond pas.",
+    saveError: "Erreur d'enregistrement",
+    networkError: "Erreur réseau",
+    unknownError: "erreur inconnue",
+    fetchFailed: "échec de récupération",
+    savedTick: (min) => `Enregistré (${min} min). Actif sous ~15 s.`,
+    samplesLine: (n) =>
+      `${n} échantillons de la session actuelle (500 derniers).`,
+  },
+  de: {
+    dashboard: "Dashboard",
+    team: "Team",
+    sentinel: "Wächter",
+    subtitle:
+      "Überwacht Rate-Limit und Budget des aktiven KI-Anbieters. Tick alle 10 min, UI aktualisiert alle 30 s.",
+    connecting: "verbinde…",
+    tmuxActive: "tmux-Sitzung aktiv",
+    tmuxInactive: "tmux-Sitzung inaktiv",
+    openTerminal: "Terminal öffnen",
+    openPowershell: "PowerShell öffnen",
+    tickInterval: "Tick-Intervall",
+    minHint: "min (0.5 = 30s)",
+    saving: "Speichere…",
+    save: "Speichern",
+    historyLoadError: "Fehler beim Laden des Verlaufs: ",
+    loadingHistory: "Verlauf wird geladen…",
+    velSmoothed: "geglättete Geschw.",
+    velIdeal: "ideale Geschw.",
+    projection: "Projektion",
+    lastTick: "letzter Tick",
+    terminalOutput: "Terminal-Ausgabe",
+    refreshSentinella: "Aktualisierung alle 5 s · Sitzung SENTINELLA",
+    noOutput: "keine Ausgabe…",
+    chartEmpty: "Warte auf den ersten Tick des Wächters…",
+    legendProjection: "Projektion",
+    legendIdeal: "ideal",
+    startSending: "Senden…",
+    startQueued: "In Warteschlange auf dem VPS…",
+    startStarting: "Wird gestartet…",
+    startSentinel: "Wächter starten",
+    startTimeout:
+      "Zeitüberschreitung: Der Subscriber auf dem VPS antwortet nicht.",
+    saveError: "Speicherfehler",
+    networkError: "Netzwerkfehler",
+    unknownError: "unbekannter Fehler",
+    fetchFailed: "Abruf fehlgeschlagen",
+    savedTick: (min) => `Gespeichert (${min} min). Aktiv in ~15 s.`,
+    samplesLine: (n) =>
+      `${n} Stichproben aus der aktuellen Sitzung (letzte 500).`,
+  },
+  hu: {
+    dashboard: "Irányítópult",
+    team: "Csapat",
+    sentinel: "Őrszem",
+    subtitle:
+      "Az aktív MI-szolgáltató rate-limitjét és büdzséjét figyeli. Tick 10 percenként, a felület 30 mp-enként frissül.",
+    connecting: "kapcsolódás…",
+    tmuxActive: "tmux munkamenet aktív",
+    tmuxInactive: "tmux munkamenet inaktív",
+    openTerminal: "terminál megnyitása",
+    openPowershell: "powershell megnyitása",
+    tickInterval: "Tick intervallum",
+    minHint: "min (0.5 = 30s)",
+    saving: "Mentés…",
+    save: "Mentés",
+    historyLoadError: "Hiba az előzmények betöltésekor: ",
+    loadingHistory: "Előzmények betöltése…",
+    velSmoothed: "simított seb.",
+    velIdeal: "ideális seb.",
+    projection: "vetítés",
+    lastTick: "utolsó tick",
+    terminalOutput: "Terminál kimenet",
+    refreshSentinella: "frissítés 5 mp-enként · SENTINELLA munkamenet",
+    noOutput: "nincs kimenet…",
+    chartEmpty: "Várakozás az Őrszem első tickjére…",
+    legendProjection: "vetítés",
+    legendIdeal: "ideális",
+    startSending: "Küldés…",
+    startQueued: "Sorban a VPS-en…",
+    startStarting: "Indítás folyamatban…",
+    startSentinel: "Őrszem indítása",
+    startTimeout: "Időtúllépés: a VPS-en lévő feliratkozó nem válaszol.",
+    saveError: "Mentési hiba",
+    networkError: "Hálózati hiba",
+    unknownError: "ismeretlen hiba",
+    fetchFailed: "lekérés sikertelen",
+    savedTick: (min) => `Mentve (${min} perc). ~15 mp-en belül aktív.`,
+    samplesLine: (n) => `${n} minta az aktuális munkamenetből (utolsó 500).`,
+  },
+  pt: {
+    dashboard: "Painel",
+    team: "Equipe",
+    sentinel: "Sentinela",
+    subtitle:
+      "Monitora o limite de taxa e o orçamento do provedor de IA ativo. Tick a cada 10 min, a interface atualiza a cada 30 s.",
+    connecting: "conectando…",
+    tmuxActive: "sessão tmux ativa",
+    tmuxInactive: "sessão tmux inativa",
+    openTerminal: "abrir terminal",
+    openPowershell: "abrir powershell",
+    tickInterval: "Intervalo de tick",
+    minHint: "min (0.5 = 30s)",
+    saving: "Salvando…",
+    save: "Salvar",
+    historyLoadError: "Erro ao carregar o histórico: ",
+    loadingHistory: "Carregando histórico…",
+    velSmoothed: "vel. suavizada",
+    velIdeal: "vel. ideal",
+    projection: "projeção",
+    lastTick: "último tick",
+    terminalOutput: "Saída do terminal",
+    refreshSentinella: "atualização a cada 5s · sessão SENTINELLA",
+    noOutput: "sem saída…",
+    chartEmpty: "Aguardando o primeiro tick da Sentinela…",
+    legendProjection: "projeção",
+    legendIdeal: "ideal",
+    startSending: "Enviando…",
+    startQueued: "Na fila no VPS…",
+    startStarting: "Iniciando…",
+    startSentinel: "Iniciar Sentinela",
+    startTimeout: "Tempo esgotado: o subscriber no VPS não responde.",
+    saveError: "Erro ao salvar",
+    networkError: "Erro de rede",
+    unknownError: "erro desconhecido",
+    fetchFailed: "falha ao buscar",
+    savedTick: (min) => `Salvo (${min} min). Ativo em ~15s.`,
+    samplesLine: (n) => `${n} amostras da sessão atual (últimas 500).`,
+  },
+};
 
 type Entry = {
   ts: string;
@@ -70,7 +402,15 @@ const THROTTLE_LABEL = [
 ];
 
 // ── SVG chart (inline, zero deps) ──────────────────────────────────
-function Chart({ entries }: { entries: Entry[] }) {
+function Chart({
+  entries,
+  localeTag,
+  t,
+}: {
+  entries: Entry[];
+  localeTag: string;
+  t: Strings;
+}) {
   const W = 900;
   const H = 320;
   const PAD = { top: 20, right: 60, bottom: 40, left: 50 };
@@ -189,7 +529,7 @@ function Chart({ entries }: { entries: Entry[] }) {
             fontSize={11}
             fill="rgba(255,255,255,0.5)"
           >
-            {new Date(entries[0].ts).toLocaleTimeString()}
+            {new Date(entries[0].ts).toLocaleTimeString(localeTag)}
           </text>
           <text
             x={W - PAD.right}
@@ -198,7 +538,9 @@ function Chart({ entries }: { entries: Entry[] }) {
             fill="rgba(255,255,255,0.5)"
             textAnchor="end"
           >
-            {new Date(entries[entries.length - 1].ts).toLocaleTimeString()}
+            {new Date(entries[entries.length - 1].ts).toLocaleTimeString(
+              localeTag,
+            )}
           </text>
         </>
       )}
@@ -211,7 +553,7 @@ function Chart({ entries }: { entries: Entry[] }) {
           fill="rgba(255,255,255,0.45)"
           textAnchor="middle"
         >
-          In attesa del primo tick della Sentinella…
+          {t.chartEmpty}
         </text>
       )}
 
@@ -223,11 +565,11 @@ function Chart({ entries }: { entries: Entry[] }) {
         </text>
         <rect x={70} y={-8} width={14} height={2} fill="#a78bfa" />
         <text x={90} y={-2} fontSize={11} fill="rgba(255,255,255,0.8)">
-          proiezione
+          {t.legendProjection}
         </text>
         <rect x={170} y={-8} width={14} height={2} fill="#64748b" />
         <text x={190} y={-2} fontSize={11} fill="rgba(255,255,255,0.8)">
-          ideale
+          {t.legendIdeal}
         </text>
       </g>
 
@@ -314,6 +656,10 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 // ── Page ───────────────────────────────────────────────────────────
 export default function SentinellaPage() {
+  const locale = useLocale();
+  const t = T[locale];
+  const localeTag = LOCALE_TAG[locale] ?? "en-US";
+  const isCloud = useIsCloud();
   // Metriche storiche (grafico + cards)
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -338,14 +684,14 @@ export default function SentinellaPage() {
         setEntries(j.entries || []);
         setErr(null);
       } else {
-        setErr(j.error || "errore sconosciuto");
+        setErr(j.error || t.unknownError);
       }
     } catch (e: any) {
-      setErr(e?.message || "fetch failed");
+      setErr(e?.message || t.fetchFailed);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const loadOp = useCallback(async () => {
     try {
@@ -374,13 +720,14 @@ export default function SentinellaPage() {
     loadData();
     loadOp();
     loadTickConfig();
+    if (isCloud) return;
     const dataId = setInterval(loadData, 30_000); // tick ogni 10 min, refresh UI ogni 30s
     const opId = setInterval(loadOp, 5_000); // terminale live
     return () => {
       clearInterval(dataId);
       clearInterval(opId);
     };
-  }, [loadData, loadOp, loadTickConfig]);
+  }, [loadData, loadOp, loadTickConfig, isCloud]);
 
   useEffect(() => {
     if (termRef.current)
@@ -410,17 +757,15 @@ export default function SentinellaPage() {
     startCmd.state === "running";
   const startLabel =
     startCmd.state === "posting"
-      ? "Invio…"
+      ? t.startSending
       : startCmd.state === "pending"
-        ? "In coda sulla VPS…"
+        ? t.startQueued
         : startCmd.state === "running"
-          ? "Avvio in corso…"
-          : "Avvia Sentinella";
+          ? t.startStarting
+          : t.startSentinel;
   const startMsg =
     startCmd.error ||
-    (startCmd.state === "timeout"
-      ? "Timeout: il subscriber sulla VPS non risponde."
-      : null) ||
+    (startCmd.state === "timeout" ? t.startTimeout : null) ||
     startCmd.message;
 
   const handleSaveTick = async () => {
@@ -435,12 +780,12 @@ export default function SentinellaPage() {
       const j = await r.json();
       if (j?.ok) {
         setTickMin(j.tick_minutes);
-        setTickMsg(`Salvato (${j.tick_minutes} min). Attivo entro ~15s.`);
+        setTickMsg(t.savedTick(j.tick_minutes));
       } else {
-        setTickMsg(j?.error ?? "Errore salvataggio");
+        setTickMsg(j?.error ?? t.saveError);
       }
     } catch {
-      setTickMsg("Errore di rete");
+      setTickMsg(t.networkError);
     } finally {
       setSavingTick(false);
     }
@@ -465,7 +810,7 @@ export default function SentinellaPage() {
             href="/dashboard"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Dashboard
+            {t.dashboard}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -474,7 +819,7 @@ export default function SentinellaPage() {
             href="/team"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Team
+            {t.team}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -483,7 +828,7 @@ export default function SentinellaPage() {
             className="text-[10px] text-[var(--color-muted)]"
             aria-current="page"
           >
-            Sentinella
+            {t.sentinel}
           </span>
         </nav>
 
@@ -493,7 +838,7 @@ export default function SentinellaPage() {
             className="text-2xl font-bold tracking-tight text-[var(--color-white)]"
             style={{ margin: 0 }}
           >
-            Sentinella
+            {t.sentinel}
           </h1>
           {last && <StatusBadge status={last.status} />}
         </div>
@@ -501,8 +846,7 @@ export default function SentinellaPage() {
           className="text-[var(--color-muted)] text-[11px] mt-2"
           style={{ margin: "8px 0 0" }}
         >
-          Monitor rate-limit e budget del provider AI attivo. Tick ogni 10 min,
-          UI aggiorna ogni 30 s.
+          {t.subtitle}
         </p>
       </div>
 
@@ -535,43 +879,49 @@ export default function SentinellaPage() {
             }}
           >
             {op == null
-              ? "connessione…"
+              ? t.connecting
               : isActive
-                ? "sessione tmux attiva"
-                : "sessione tmux inattiva"}
+                ? t.tmuxActive
+                : t.tmuxInactive}
           </span>
         </div>
 
-        {!isActive && (
-          <button
-            onClick={handleStart}
-            disabled={startBusy || op == null}
-            className="px-5 py-2 rounded-lg text-[12px] font-bold tracking-wide transition-all"
-            style={{
-              background:
-                startBusy || op == null ? "var(--color-border)" : "#607d8b",
-              color: startBusy || op == null ? "var(--color-dim)" : "#fff",
-              cursor: startBusy || op == null ? "not-allowed" : "pointer",
-              opacity: startBusy ? 0.7 : 1,
-            }}
-          >
-            {startLabel}
-          </button>
-        )}
+        {/* Controlli (start/terminale) — solo desktop, nascosti sul cloud read-only */}
+        {isCloud !== true && (
+          <>
+            {!isActive && (
+              <button
+                onClick={handleStart}
+                disabled={startBusy || op == null}
+                className="px-5 py-2 rounded-lg text-[12px] font-bold tracking-wide transition-all"
+                style={{
+                  background:
+                    startBusy || op == null ? "var(--color-border)" : "#607d8b",
+                  color: startBusy || op == null ? "var(--color-dim)" : "#fff",
+                  cursor: startBusy || op == null ? "not-allowed" : "pointer",
+                  opacity: startBusy ? 0.7 : 1,
+                }}
+              >
+                {startLabel}
+              </button>
+            )}
 
-        {isActive && (
-          <button
-            onClick={async () => {
-              await fetch("/api/team/terminal/open?session=SENTINELLA", {
-                method: "POST",
-              });
-            }}
-            className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
-          >
-            {typeof navigator !== "undefined" && /Mac/.test(navigator.platform)
-              ? "apri terminale"
-              : "apri powershell"}
-          </button>
+            {isActive && (
+              <button
+                onClick={async () => {
+                  await fetch("/api/team/terminal/open?session=SENTINELLA", {
+                    method: "POST",
+                  });
+                }}
+                className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer"
+              >
+                {typeof navigator !== "undefined" &&
+                /Mac/.test(navigator.platform)
+                  ? t.openTerminal
+                  : t.openPowershell}
+              </button>
+            )}
+          </>
         )}
 
         {startMsg && (
@@ -589,55 +939,59 @@ export default function SentinellaPage() {
         )}
       </div>
 
-      {/* Intervallo tick */}
-      <div className="mb-6 flex items-center gap-3 flex-wrap bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-4 py-3">
-        <label
-          htmlFor="tick-min"
-          className="text-[10px] uppercase tracking-[0.15em] text-[var(--color-dim)]"
-        >
-          Intervallo tick
-        </label>
-        <input
-          id="tick-min"
-          type="number"
-          min={0.25}
-          max={60}
-          step={0.25}
-          value={tickDraft}
-          onChange={(e) =>
-            setTickDraft(
-              Math.max(0.25, Math.min(60, Number(e.target.value) || 0.25)),
-            )
-          }
-          className="w-20 px-2 py-1 text-[12px] font-mono bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-[var(--color-base)]"
-        />
-        <span className="text-[11px] text-[var(--color-muted)]">
-          min (0.5 = 30s)
-        </span>
-        <button
-          onClick={handleSaveTick}
-          disabled={savingTick || tickDraft === tickMin}
-          className="px-3 py-1 rounded text-[11px] font-semibold tracking-wide transition-all"
-          style={{
-            background:
-              savingTick || tickDraft === tickMin
-                ? "var(--color-border)"
-                : "#607d8b",
-            color:
-              savingTick || tickDraft === tickMin ? "var(--color-dim)" : "#fff",
-            cursor:
-              savingTick || tickDraft === tickMin ? "not-allowed" : "pointer",
-            opacity: savingTick ? 0.7 : 1,
-          }}
-        >
-          {savingTick ? "Salvo…" : "Salva"}
-        </button>
-        {tickMsg && (
+      {/* Intervallo tick — controllo write (config sentinella): solo desktop, nascosto sul cloud */}
+      {isCloud !== true && (
+        <div className="mb-6 flex items-center gap-3 flex-wrap bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg px-4 py-3">
+          <label
+            htmlFor="tick-min"
+            className="text-[10px] uppercase tracking-[0.15em] text-[var(--color-dim)]"
+          >
+            {t.tickInterval}
+          </label>
+          <input
+            id="tick-min"
+            type="number"
+            min={0.25}
+            max={60}
+            step={0.25}
+            value={tickDraft}
+            onChange={(e) =>
+              setTickDraft(
+                Math.max(0.25, Math.min(60, Number(e.target.value) || 0.25)),
+              )
+            }
+            className="w-20 px-2 py-1 text-[12px] font-mono bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-[var(--color-base)]"
+          />
           <span className="text-[11px] text-[var(--color-muted)]">
-            {tickMsg}
+            {t.minHint}
           </span>
-        )}
-      </div>
+          <button
+            onClick={handleSaveTick}
+            disabled={savingTick || tickDraft === tickMin}
+            className="px-3 py-1 rounded text-[11px] font-semibold tracking-wide transition-all"
+            style={{
+              background:
+                savingTick || tickDraft === tickMin
+                  ? "var(--color-border)"
+                  : "#607d8b",
+              color:
+                savingTick || tickDraft === tickMin
+                  ? "var(--color-dim)"
+                  : "#fff",
+              cursor:
+                savingTick || tickDraft === tickMin ? "not-allowed" : "pointer",
+              opacity: savingTick ? 0.7 : 1,
+            }}
+          >
+            {savingTick ? t.saving : t.save}
+          </button>
+          {tickMsg && (
+            <span className="text-[11px] text-[var(--color-muted)]">
+              {tickMsg}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Errori fetch dati */}
       {err && (
@@ -651,7 +1005,8 @@ export default function SentinellaPage() {
             marginBottom: 16,
           }}
         >
-          Errore caricamento storico: {err}
+          {t.historyLoadError}
+          {err}
         </div>
       )}
 
@@ -665,7 +1020,7 @@ export default function SentinellaPage() {
             fontSize: 12,
           }}
         >
-          Caricamento storico…
+          {t.loadingHistory}
         </div>
       ) : last ? (
         <div
@@ -679,7 +1034,7 @@ export default function SentinellaPage() {
           <Metric label="provider" value={last.provider} />
           <Metric label="usage" value={`${last.usage}%`} />
           <Metric
-            label="vel. smussata"
+            label={t.velSmoothed}
             value={
               last.velocity_smooth !== undefined
                 ? `${last.velocity_smooth}%/h`
@@ -687,7 +1042,7 @@ export default function SentinellaPage() {
             }
           />
           <Metric
-            label="vel. ideale"
+            label={t.velIdeal}
             value={
               last.velocity_ideal !== undefined
                 ? `${last.velocity_ideal}%/h`
@@ -695,7 +1050,7 @@ export default function SentinellaPage() {
             }
           />
           <Metric
-            label="proiezione"
+            label={t.projection}
             value={last.projection !== undefined ? `${last.projection}%` : "—"}
           />
           <Metric
@@ -708,18 +1063,18 @@ export default function SentinellaPage() {
           />
           <Metric label="reset at" value={last.reset_at || "—"} />
           <Metric
-            label="ultimo tick"
-            value={new Date(last.ts).toLocaleTimeString()}
+            label={t.lastTick}
+            value={new Date(last.ts).toLocaleTimeString(localeTag)}
           />
         </div>
       ) : null}
 
       {/* Grafico — sempre visibile */}
-      <Chart entries={entries} />
+      <Chart entries={entries} localeTag={localeTag} t={t} />
 
       {entries.length > 0 && (
         <div style={{ marginTop: 12, fontSize: 12, opacity: 0.6 }}>
-          {entries.length} campionamenti dalla sessione corrente (ultimi 500).
+          {t.samplesLine(entries.length)}
         </div>
       )}
 
@@ -727,9 +1082,9 @@ export default function SentinellaPage() {
       {isActive && (
         <div style={{ animation: "fade-in 0.25s ease both", marginTop: 28 }}>
           <div className="flex items-center justify-between mb-2">
-            <div className="section-label">Output terminale</div>
+            <div className="section-label">{t.terminalOutput}</div>
             <span className="text-[9px] text-[var(--color-dim)] font-mono">
-              aggiornamento ogni 5s · sessione SENTINELLA
+              {t.refreshSentinella}
             </span>
           </div>
           <div
@@ -747,7 +1102,7 @@ export default function SentinellaPage() {
             {op?.output ? (
               op.output
             ) : (
-              <span style={{ color: "var(--color-dim)" }}>nessun output…</span>
+              <span style={{ color: "var(--color-dim)" }}>{t.noOutput}</span>
             )}
           </div>
         </div>

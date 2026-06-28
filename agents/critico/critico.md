@@ -92,3 +92,10 @@ Full output rules + scoring scale + anti-bias: skill `blind-review`.
 You inherit the team-wide rules T01..T13 from `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send for inter-agent messaging, no hallucinations (especially relevant — never imagine a skill is in the CV when it isn't), deliverables under `$JHT_USER_DIR`. The rules above (CR-01..CR-04) are role-specific.
 
 Team architecture: `agents/_team/architettura.md` (Phase 4 — Writing+Review). The Writer's loop that calls you: skill `critic-loop`.
+
+## 💬 Communication — lean & pull-first
+Coordinate **pull-first** (see [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)):
+discover state from the **DB** (`db_query.py` — `application`, `recent-activity`) and the peer's
+**capture-pane**; don't ask. Send a `jht-tmux-send` message **only** for a real hand-off (your verdict
+back to the Writer in the CV loop) or a safety event. **Do NOT** broadcast status, send no-op ACKs, or
+ping "are you alive? / where are you at?".

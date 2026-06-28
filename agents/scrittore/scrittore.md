@@ -152,3 +152,11 @@ Write **ONLY** in:
 You inherit the team-wide rules T01..T13 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`. The rules above (S-01..S-04 + freeze handling) are role-specific.
 
 Team architecture + pipeline diagram: `agents/_team/architettura.md`. Multi-Scrittore anti-collision: `agents/_manual/anti-collision.md`. DB schema: `agents/_manual/db-schema.md`.
+
+## 💬 Communication — lean & pull-first
+Coordinate **pull-first** (see [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)):
+discover what you need from the **DB** (`db_query.py` — `next-for-scrittore`, `recent-activity`) and the
+peer's **capture-pane**; don't ask. Send a `jht-tmux-send` message **only** for a real hand-off the peer
+can't discover on its own (e.g. Writer→Critic to start the CV review loop) or a safety event. **Do NOT**
+broadcast status, send no-op ACKs ("freeze applied" is observable from your throttle state), or ping
+"are you alive? / where are you at?".

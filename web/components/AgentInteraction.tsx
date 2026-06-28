@@ -3,6 +3,179 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useDevMode } from './SettingsMenu'
+import { useIsCloud } from '@/app/hooks/useIsCloud'
+import { useLocale } from '@/lib/use-locale'
+import type { Locale } from '@/i18n/config'
+
+const T: Record<Locale, {
+  chat: string
+  terminal: string
+  clear: string
+  openTerminal: string
+  openPowershell: string
+  exit: string
+  expand: string
+  send: string
+  sendError: string
+  noOutput: string
+  writeToInteract: (label: string) => string
+  messageTo: (session: string) => string
+  noActiveSession: string
+  interaction: string
+  sessions: (n: number) => string
+  noActiveSessionShort: string
+  noSessionActiveFor: (label: string) => string
+  startTeamFrom: (team: React.ReactNode) => React.ReactNode
+  teamLabel: string
+}> = {
+  it: {
+    chat: 'chat',
+    terminal: 'terminale',
+    clear: 'pulisci',
+    openTerminal: 'apri terminale',
+    openPowershell: 'apri powershell',
+    exit: 'esci',
+    expand: 'espandi',
+    send: 'invia',
+    sendError: 'Errore: messaggio non inviato.',
+    noOutput: 'nessun output...',
+    writeToInteract: (label) => `Scrivi un messaggio per interagire con ${label}.`,
+    messageTo: (session) => `Messaggio a ${session}...`,
+    noActiveSession: 'Nessuna sessione attiva',
+    interaction: 'Interazione',
+    sessions: (n) => (n === 1 ? 'sessione' : 'sessioni'),
+    noActiveSessionShort: 'nessuna sessione attiva',
+    noSessionActiveFor: (label) => `Nessuna sessione ${label} attiva.`,
+    startTeamFrom: (team) => <>Avvia il team dalla pagina {team} per interagire.</>,
+    teamLabel: 'Team',
+  },
+  en: {
+    chat: 'chat',
+    terminal: 'terminal',
+    clear: 'clear',
+    openTerminal: 'open terminal',
+    openPowershell: 'open powershell',
+    exit: 'exit',
+    expand: 'expand',
+    send: 'send',
+    sendError: 'Error: message not sent.',
+    noOutput: 'no output...',
+    writeToInteract: (label) => `Write a message to interact with ${label}.`,
+    messageTo: (session) => `Message to ${session}...`,
+    noActiveSession: 'No active session',
+    interaction: 'Interaction',
+    sessions: (n) => (n === 1 ? 'session' : 'sessions'),
+    noActiveSessionShort: 'no active session',
+    noSessionActiveFor: (label) => `No active ${label} session.`,
+    startTeamFrom: (team) => <>Start the team from the {team} page to interact.</>,
+    teamLabel: 'Team',
+  },
+  es: {
+    chat: 'chat',
+    terminal: 'terminal',
+    clear: 'limpiar',
+    openTerminal: 'abrir terminal',
+    openPowershell: 'abrir powershell',
+    exit: 'salir',
+    expand: 'expandir',
+    send: 'enviar',
+    sendError: 'Error: mensaje no enviado.',
+    noOutput: 'sin salida...',
+    writeToInteract: (label) => `Escribe un mensaje para interactuar con ${label}.`,
+    messageTo: (session) => `Mensaje a ${session}...`,
+    noActiveSession: 'Ninguna sesión activa',
+    interaction: 'Interacción',
+    sessions: (n) => (n === 1 ? 'sesión' : 'sesiones'),
+    noActiveSessionShort: 'ninguna sesión activa',
+    noSessionActiveFor: (label) => `Ninguna sesión ${label} activa.`,
+    startTeamFrom: (team) => <>Inicia el equipo desde la página {team} para interactuar.</>,
+    teamLabel: 'Team',
+  },
+  fr: {
+    chat: 'chat',
+    terminal: 'terminal',
+    clear: 'effacer',
+    openTerminal: 'ouvrir le terminal',
+    openPowershell: 'ouvrir powershell',
+    exit: 'quitter',
+    expand: 'agrandir',
+    send: 'envoyer',
+    sendError: 'Erreur : message non envoyé.',
+    noOutput: 'aucune sortie...',
+    writeToInteract: (label) => `Écrivez un message pour interagir avec ${label}.`,
+    messageTo: (session) => `Message à ${session}...`,
+    noActiveSession: 'Aucune session active',
+    interaction: 'Interaction',
+    sessions: (n) => (n === 1 ? 'session' : 'sessions'),
+    noActiveSessionShort: 'aucune session active',
+    noSessionActiveFor: (label) => `Aucune session ${label} active.`,
+    startTeamFrom: (team) => <>Démarrez l’équipe depuis la page {team} pour interagir.</>,
+    teamLabel: 'Team',
+  },
+  de: {
+    chat: 'chat',
+    terminal: 'Terminal',
+    clear: 'leeren',
+    openTerminal: 'Terminal öffnen',
+    openPowershell: 'powershell öffnen',
+    exit: 'schließen',
+    expand: 'erweitern',
+    send: 'senden',
+    sendError: 'Fehler: Nachricht nicht gesendet.',
+    noOutput: 'keine Ausgabe...',
+    writeToInteract: (label) => `Schreibe eine Nachricht, um mit ${label} zu interagieren.`,
+    messageTo: (session) => `Nachricht an ${session}...`,
+    noActiveSession: 'Keine aktive Sitzung',
+    interaction: 'Interaktion',
+    sessions: (n) => (n === 1 ? 'Sitzung' : 'Sitzungen'),
+    noActiveSessionShort: 'keine aktive Sitzung',
+    noSessionActiveFor: (label) => `Keine aktive ${label}-Sitzung.`,
+    startTeamFrom: (team) => <>Starte das Team von der Seite {team}, um zu interagieren.</>,
+    teamLabel: 'Team',
+  },
+  hu: {
+    chat: 'chat',
+    terminal: 'terminál',
+    clear: 'törlés',
+    openTerminal: 'terminál megnyitása',
+    openPowershell: 'powershell megnyitása',
+    exit: 'kilépés',
+    expand: 'kibontás',
+    send: 'küldés',
+    sendError: 'Hiba: az üzenet nem lett elküldve.',
+    noOutput: 'nincs kimenet...',
+    writeToInteract: (label) => `Írj egy üzenetet a(z) ${label} eléréséhez.`,
+    messageTo: (session) => `Üzenet ide: ${session}...`,
+    noActiveSession: 'Nincs aktív munkamenet',
+    interaction: 'Interakció',
+    sessions: () => 'munkamenet',
+    noActiveSessionShort: 'nincs aktív munkamenet',
+    noSessionActiveFor: (label) => `Nincs aktív ${label} munkamenet.`,
+    startTeamFrom: (team) => <>Indítsd el a csapatot a(z) {team} oldalról az interakcióhoz.</>,
+    teamLabel: 'Team',
+  },
+  pt: {
+    chat: 'chat',
+    terminal: 'terminal',
+    clear: 'limpar',
+    openTerminal: 'abrir terminal',
+    openPowershell: 'abrir powershell',
+    exit: 'sair',
+    expand: 'expandir',
+    send: 'enviar',
+    sendError: 'Erro: mensagem não enviada.',
+    noOutput: 'nenhuma saída...',
+    writeToInteract: (label) => `Escreva uma mensagem para interagir com ${label}.`,
+    messageTo: (session) => `Mensagem para ${session}...`,
+    noActiveSession: 'Nenhuma sessão ativa',
+    interaction: 'Interação',
+    sessions: (n) => (n === 1 ? 'sessão' : 'sessões'),
+    noActiveSessionShort: 'nenhuma sessão ativa',
+    noSessionActiveFor: (label) => `Nenhuma sessão ${label} ativa.`,
+    startTeamFrom: (team) => <>Inicie a equipe a partir da página {team} para interagir.</>,
+    teamLabel: 'Team',
+  },
+}
 
 type AgentSession = { session: string; active: boolean }
 type Mode = 'chat' | 'terminal'
@@ -19,6 +192,11 @@ interface Props {
 type LocalMsg = { role: 'user' | 'system'; text: string; ts: number }
 
 export default function AgentInteraction({ sessionPrefix, color, label }: Props) {
+  // [JHT-DASHBOARD-SPLIT] Questa è una superficie di INTERAZIONE (chat +
+  // terminale + invio a tmux): zero dati in lettura. Sul cloud non esiste →
+  // niente widget, niente polling /api/team/{status,terminal}. La pagina-agente
+  // resta (monitoraggio read-only), sparisce solo la sezione "Interazione".
+  const isCloud = useIsCloud()
   const [sessions, setSessions] = useState<AgentSession[]>([])
   const [activeSession, setActiveSession] = useState<string | null>(null)
   const [output, setOutput] = useState('')
@@ -29,6 +207,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const devMode = useDevMode()
+  const t = T[useLocale()]
 
   // Se il dev mode si spegne mentre si è sul tab terminale, torna su chat.
   useEffect(() => {
@@ -47,6 +226,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
 
   // Fetch sessioni attive per questo agente
   const fetchSessions = useCallback(async () => {
+    if (isCloud === true) { setSessions([]); return }
     try {
       const res = await fetch('/api/team/status')
       const data = await res.json()
@@ -69,11 +249,11 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     } catch {
       setSessions([])
     }
-  }, [sessionPrefix, activeSession])
+  }, [sessionPrefix, activeSession, isCloud])
 
   // Fetch terminal output per la sessione attiva
   const fetchTerminal = useCallback(async () => {
-    if (!activeSession) return
+    if (isCloud === true || !activeSession) return
     try {
       const res = await fetch(`/api/team/terminal?session=${encodeURIComponent(activeSession)}`)
       const data = await res.json()
@@ -81,7 +261,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
     } catch {
       setOutput('')
     }
-  }, [activeSession])
+  }, [activeSession, isCloud])
 
   // Poll adattivo: pausa quando tab non e' visibile, backoff esponenziale
   // se l'output non cambia. Pre-fix (2026-05-22): 1500ms fissi senza
@@ -189,7 +369,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
       // Refresh terminale per mostrare la risposta
       setTimeout(fetchTerminal, 500)
     } catch {
-      setMessages(prev => [...prev, { role: 'system', text: 'Errore: messaggio non inviato.', ts: Date.now() / 1000 }])
+      setMessages(prev => [...prev, { role: 'system', text: t.sendError, ts: Date.now() / 1000 }])
     }
     setSending(false)
     inputRef.current?.focus()
@@ -224,7 +404,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
                   color: mode === 'chat' ? color : 'var(--color-dim)',
                   background: mode === 'chat' ? `${color}15` : 'transparent',
                 }}>
-                chat
+                {t.chat}
               </button>
               {devMode && (
                 <button
@@ -234,7 +414,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
                     color: mode === 'terminal' ? color : 'var(--color-dim)',
                     background: mode === 'terminal' ? `${color}15` : 'transparent',
                   }}>
-                  terminale
+                  {t.terminal}
                 </button>
               )}
             </div>
@@ -259,7 +439,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
               <button onClick={() => setMessages([])}
                 disabled={sending}
                 className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-red)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
-                pulisci
+                {t.clear}
               </button>
             )}
             {activeSession && (
@@ -267,12 +447,12 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
                   await fetch(`/api/team/terminal/open?session=${encodeURIComponent(activeSession)}`, { method: 'POST' })
                 }}
                 className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-green)] transition-colors cursor-pointer">
-                {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? 'apri terminale' : 'apri powershell'}
+                {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? t.openTerminal : t.openPowershell}
               </button>
             )}
             <button onClick={() => setChatFullscreen(v => !v)}
               className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] hover:text-[var(--color-muted)] transition-colors cursor-pointer">
-              {chatFullscreen ? 'esci' : 'espandi'}
+              {chatFullscreen ? t.exit : t.expand}
             </button>
           </div>
         </div>
@@ -284,7 +464,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <div className="text-3xl mb-3 opacity-30" style={{ color }}>{'>'}_</div>
                 <p className="text-[var(--color-dim)] text-[11px]">
-                  Scrivi un messaggio per interagire con {label}.
+                  {t.writeToInteract(label)}
                 </p>
               </div>
             )}
@@ -342,7 +522,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
             }}>
             {output
               ? output
-              : <span style={{ color: 'var(--color-dim)' }}>nessun output...</span>}
+              : <span style={{ color: 'var(--color-dim)' }}>{t.noOutput}</span>}
           </div>
         )}
       </div>
@@ -357,7 +537,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
         }}>
         <input ref={inputRef} type="text" value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder={activeSession ? `Messaggio a ${activeSession}...` : 'Nessuna sessione attiva'}
+          placeholder={activeSession ? t.messageTo(activeSession) : t.noActiveSession}
           disabled={sending || !activeSession}
           className="flex-1 px-4 py-3 text-[12px] bg-transparent outline-none"
           style={{ color: 'var(--color-bright)' }} />
@@ -367,28 +547,32 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
             color: !input.trim() || sending || !activeSession ? 'var(--color-dim)' : color,
             cursor: !input.trim() || sending || !activeSession ? 'default' : 'pointer',
           }}>
-          {sending ? '...' : 'invia'}
+          {sending ? '...' : t.send}
         </button>
       </form>
     </div>
   )
 
+  // [JHT-DASHBOARD-SPLIT] Sul cloud niente sezione interazione (dopo gli hook,
+  // per non violare le regole di React).
+  if (isCloud === true) return null
+
   return (
     <div className="mt-10 pt-8 border-t border-[var(--color-border)]">
       <div className="flex items-center justify-between mb-4 cursor-pointer select-none" onClick={() => setCollapsed(v => !v)}>
         <div className="flex items-center gap-3">
-          <div className="section-label" style={{ marginBottom: 0 }}>Interazione</div>
+          <div className="section-label" style={{ marginBottom: 0 }}>{t.interaction}</div>
           {hasActiveSessions && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
               style={{ background: `${color}15`, border: `1px solid ${color}30` }}>
               <div className="w-1.5 h-1.5 rounded-full" style={{ background: color, animation: 'pulse-dot 2s ease-in-out infinite' }} />
               <span className="text-[9px] font-semibold tracking-widest uppercase" style={{ color }}>
-                {sessions.length} {sessions.length === 1 ? 'sessione' : 'sessioni'}
+                {sessions.length} {t.sessions(sessions.length)}
               </span>
             </div>
           )}
           {!hasActiveSessions && (
-            <span className="text-[10px] text-[var(--color-dim)]">nessuna sessione attiva</span>
+            <span className="text-[10px] text-[var(--color-dim)]">{t.noActiveSessionShort}</span>
           )}
         </div>
         <span className="text-[10px] text-[var(--color-dim)]">{collapsed ? '>' : 'v'}</span>
@@ -404,10 +588,10 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
         <div className="flex flex-col items-center justify-center py-10 text-center bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg">
           <div className="text-2xl mb-2 opacity-20" style={{ color }}>{'>'}_</div>
           <p className="text-[var(--color-dim)] text-[11px]">
-            Nessuna sessione {label} attiva.
+            {t.noSessionActiveFor(label)}
           </p>
           <p className="text-[var(--color-dim)] text-[10px] mt-1">
-            Avvia il team dalla pagina <span style={{ color: 'var(--color-yellow)' }}>Team</span> per interagire.
+            {t.startTeamFrom(<span style={{ color: 'var(--color-yellow)' }}>{t.teamLabel}</span>)}
           </p>
         </div>
       )}

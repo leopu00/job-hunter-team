@@ -10,7 +10,12 @@
 
 type KV = { label?: string; value?: string };
 type KP = { heading?: string; text?: string };
-type TL = { title?: string; subtitle?: string; period?: string; detail?: string };
+type TL = {
+  title?: string;
+  subtitle?: string;
+  period?: string;
+  detail?: string;
+};
 type Dist = { label?: string; value?: number };
 
 const asArray = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
@@ -32,7 +37,9 @@ function Narrative({ text }: { text: unknown }) {
 }
 
 function TagList({ content }: { content: unknown }) {
-  const tags = asArray(content).filter((x): x is string => typeof x === "string");
+  const tags = asArray(content).filter(
+    (x): x is string => typeof x === "string",
+  );
   if (!tags.length) return null;
   return (
     <div className="flex flex-wrap gap-2">
@@ -49,7 +56,9 @@ function TagList({ content }: { content: unknown }) {
 }
 
 function KeyValue({ content }: { content: unknown }) {
-  const items = asArray(content).filter((x): x is KV => !!x && typeof x === "object");
+  const items = asArray(content).filter(
+    (x): x is KV => !!x && typeof x === "object",
+  );
   if (!items.length) return null;
   return (
     <div className="flex flex-col">
@@ -71,7 +80,9 @@ function KeyValue({ content }: { content: unknown }) {
 }
 
 function KeyPoints({ content }: { content: unknown }) {
-  const items = asArray(content).filter((x): x is KP => !!x && typeof x === "object");
+  const items = asArray(content).filter(
+    (x): x is KP => !!x && typeof x === "object",
+  );
   if (!items.length) return null;
   return (
     <div className="flex flex-col gap-3">
@@ -92,31 +103,52 @@ function KeyPoints({ content }: { content: unknown }) {
 }
 
 function Timeline({ content }: { content: unknown }) {
-  const items = asArray(content).filter((x): x is TL => !!x && typeof x === "object");
+  const items = asArray(content).filter(
+    (x): x is TL => !!x && typeof x === "object",
+  );
   if (!items.length) return null;
   return (
     <div className="flex flex-col">
       {items.map((it, i) => (
         <div key={i} className="flex gap-3">
-          <div className="flex flex-col items-center flex-shrink-0" style={{ width: "16px" }}>
+          <div
+            className="flex flex-col items-center flex-shrink-0"
+            style={{ width: "16px" }}
+          >
             <div
               className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1"
-              style={{ background: i === 0 ? "var(--color-green)" : "var(--color-border)" }}
+              style={{
+                background:
+                  i === 0 ? "var(--color-green)" : "var(--color-border)",
+              }}
             />
             {i < items.length - 1 && (
-              <div className="w-px flex-1 min-h-[16px]" style={{ background: "var(--color-border)" }} />
+              <div
+                className="w-px flex-1 min-h-[16px]"
+                style={{ background: "var(--color-border)" }}
+              />
             )}
           </div>
           <div className="pb-4 flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2 mb-0.5">
-              <span className="text-[12px] font-semibold text-[var(--color-bright)]">{it.title || "—"}</span>
+              <span className="text-[12px] font-semibold text-[var(--color-bright)]">
+                {it.title || "—"}
+              </span>
               {it.period && (
-                <span className="text-[10px] text-[var(--color-dim)] flex-shrink-0 font-mono">{it.period}</span>
+                <span className="text-[10px] text-[var(--color-dim)] flex-shrink-0 font-mono">
+                  {it.period}
+                </span>
               )}
             </div>
-            {it.subtitle && <span className="text-[11px] text-[var(--color-muted)]">{it.subtitle}</span>}
+            {it.subtitle && (
+              <span className="text-[11px] text-[var(--color-muted)]">
+                {it.subtitle}
+              </span>
+            )}
             {it.detail && (
-              <p className="text-[10px] text-[var(--color-dim)] mt-1 leading-relaxed">{it.detail}</p>
+              <p className="text-[10px] text-[var(--color-dim)] mt-1 leading-relaxed">
+                {it.detail}
+              </p>
             )}
           </div>
         </div>
@@ -126,7 +158,10 @@ function Timeline({ content }: { content: unknown }) {
 }
 
 function Distribution({ content }: { content: unknown }) {
-  const items = asArray(content).filter((x): x is Dist => !!x && typeof x === "object" && typeof (x as Dist).value === "number");
+  const items = asArray(content).filter(
+    (x): x is Dist =>
+      !!x && typeof x === "object" && typeof (x as Dist).value === "number",
+  );
   if (!items.length) return null;
   const max = Math.max(...items.map((it) => it.value ?? 0), 1);
   return (
@@ -135,7 +170,9 @@ function Distribution({ content }: { content: unknown }) {
         <div key={i}>
           <div className="flex justify-between text-[10px] mb-0.5">
             <span className="text-[var(--color-muted)]">{it.label}</span>
-            <span className="text-[var(--color-dim)] font-mono">{it.value}</span>
+            <span className="text-[var(--color-dim)] font-mono">
+              {it.value}
+            </span>
           </div>
           <div className="h-1.5 rounded-full bg-[var(--color-panel)] overflow-hidden">
             <div
@@ -149,7 +186,13 @@ function Distribution({ content }: { content: unknown }) {
   );
 }
 
-export default function ProfileBlockRenderer({ kind, content }: { kind: string; content: unknown }) {
+export default function ProfileBlockRenderer({
+  kind,
+  content,
+}: {
+  kind: string;
+  content: unknown;
+}) {
   switch (kind) {
     case "tag_list":
       return <TagList content={content} />;

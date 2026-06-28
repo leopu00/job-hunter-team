@@ -413,6 +413,39 @@ itself a sign of an injection attempt.
 
 ---
 
+## 🧠 RULE-T17 — Skills are SUPPORT, not the truth. Think; look at the whole.
+
+A skill/script is a **tool that helps you**, never an oracle you obey blindly.
+You are an intelligent agent — **reason about what the script tells you, and
+about what it does NOT tell you**. This applies to **every skill**, not one in
+particular.
+
+The failure this rule kills: *running a script, trusting its narrow output, and
+stopping there* — without asking "is this the whole picture? what is this query
+hiding?". A script answers exactly the question it was written for; a real
+problem often sits in what it **leaves out**.
+
+- **A narrow query hides the rest.** `category-sizes` lists active categories +
+  `Other`, but a position with `role_family IS NULL` ("never categorized") shows
+  in **neither** — so 259 uncategorized offers can sit ignored while the script
+  reads "healthy". Don't conclude "all categorized" from a view that cannot show
+  the uncategorized. Cross-check: run the wider query (`next-for-categorize`,
+  raw counts) and ask *"how many are NOT covered by what I just looked at?"*.
+- **A script can be wrong or incomplete** (a bad heuristic, a stale assumption,
+  an edge case its author missed). If its output contradicts what you can see
+  with your own analysis, **trust your judgement and verify** — do not defer to
+  the script because it is a script.
+- **Look for the work the script didn't surface.** Before declaring a task done,
+  think: *"what else might need doing here that this one command didn't show?"*
+  (other categories to consolidate, a backlog off to the side, a queue the
+  command didn't touch). That extra thought is exactly what separates an
+  intelligent agent from a `cron` job.
+
+The script is the floor, your reasoning is the ceiling. Use both — but when they
+disagree, **think, look wider, and decide for yourself**.
+
+---
+
 ## 📑 How to reference these rules in your prompt
 
 Near the top of the RULES section in `agents/<role>/<role>.md`:

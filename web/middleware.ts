@@ -23,6 +23,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSupabaseConfig } from '@/lib/supabase/config'
 import { shouldRejectBrowserMutation } from '@/lib/csrf'
+import { isLocalDeploy } from '@/lib/deploy-mode'
 
 // --- Local request detection (inlined da lib/auth.ts per Edge compat) ---
 // lib/auth.ts importa `next/headers` + `lib/workspace` (`node:fs`) →
@@ -328,7 +329,6 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/positions') ||
       pathname.startsWith('/ready') ||
       pathname.startsWith('/risposte') ||
-      pathname.startsWith('/crescita') ||
       pathname.startsWith('/team') ||
       pathname.startsWith('/scout') ||
       pathname.startsWith('/analista') ||
@@ -339,7 +339,12 @@ export async function middleware(request: NextRequest) {
     // Bypass auth per richieste locali (desktop container): il login
     // Supabase è opzionale in locale, "Continua senza" in /onboarding/cloud
     // deve poter accedere a /dashboard senza account.
-    if (isProtected && !user && !localRequest) {
+    // [JHT-DASHBOARD-SPLIT] Anche il deploy LOCAL (container desktop/VPS, build
+    // NEXT_PUBLIC_JHT_DEPLOY=local) bypassa: via Docker port-map gli header
+    // forwarded non sono loopback → localRequest può essere false anche su
+    // localhost, ma un container local NON deve mai forzare il web-login (è
+    // compito dell'app desktop, sezione Account).
+    if (isProtected && !user && !localRequest && !isLocalDeploy()) {
       const returnTo = pathname + request.nextUrl.search
       const loginUrl = new URL('/?login=true', request.url)
       if (returnTo && returnTo !== '/') {

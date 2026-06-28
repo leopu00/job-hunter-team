@@ -4,6 +4,9 @@ import { join } from 'node:path';
 import pc from 'picocolors';
 import * as clack from '@clack/prompts';
 import { JHT_HOME, JHT_DB_PATH } from '../jht-paths.js';
+import { SupabaseAuthError } from '../lib/supabase-direct.js';
+import { getDirectReader } from '../lib/cloud-direct.js';
+import { realtimeSyncEnabled } from '../lib/cloud-realtime.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
@@ -20,6 +23,10 @@ const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
 // il container era offline. Separato dal push cursor: due direzioni di
 // flusso indipendenti (vedi docs/internal/cloud-sync-architecture.md).
 const CLOUD_PULL_CURSOR_FILE = join(JHT_HOME, '.cloud-pull-cursor.json');
+// Cursor sync ticket (round-trip cloud↔VPS, [JHT-DATA-SYNC] fase 2):
+// { pull_since } = ultimo created_at importato dal cloud (ticket 'open' utente);
+// { push_since } = ultimo updated_at pushato in cloud (risoluzioni del team).
+const CLOUD_TICKETS_CURSOR_FILE = join(JHT_HOME, '.cloud-tickets-cursor.json');
 const DEFAULT_BASE_URL = 'https://jobhunterteam.ai';
 
 /**
@@ -726,6 +733,32 @@ async function savePullCursor(cursor) {
 }
 
 /**
+ * Cursor sync ticket. Ritorna { pull_since, push_since } (ISO|null).
+ * Missing/corrupt = entrambi null → pull fa lookback 7gg server-side, push
+ * manda tutto (idempotente: gli UPDATE per cloud_id e gli INSERT linkano).
+ */
+function loadTicketsCursor() {
+  if (!existsSync(CLOUD_TICKETS_CURSOR_FILE)) return { pull_since: null, push_since: null };
+  try {
+    const p = JSON.parse(readFileSync(CLOUD_TICKETS_CURSOR_FILE, 'utf-8'));
+    return {
+      pull_since: typeof p?.pull_since === 'string' ? p.pull_since : null,
+      push_since: typeof p?.push_since === 'string' ? p.push_since : null,
+    };
+  } catch {
+    return { pull_since: null, push_since: null };
+  }
+}
+
+async function saveTicketsCursor(cursor) {
+  try {
+    await writeFile(CLOUD_TICKETS_CURSOR_FILE, JSON.stringify(cursor, null, 2));
+  } catch (err) {
+    console.error(pc.yellow(`  warn: tickets cursor save failed (${err.message})`));
+  }
+}
+
+/**
  * Dato un array di righe con campo updated_at, ritorna il MAX(updated_at)
  * come stringa ISO. Null se l'array e' vuoto o nessuna riga ha il campo.
  */
@@ -775,8 +808,11 @@ async function handlePush(options) {
   let positions = [];
   let scores = [];
   let applications = [];
+  let companies = [];
+  let highlights = [];
   let pendingMessages = [];
   let tombstones = [];
+  let transitions = [];
   // Cursor delta-sync: ad ogni tick leggiamo solo righe con updated_at >
   // ultimo pushato per quella tabella. Prima volta (cursor vuoto): full
   // read. Dopo push HTTP 200: aggiorniamo cursor con MAX(updated_at)
@@ -786,9 +822,11 @@ async function handlePush(options) {
     try {
       const db = new DatabaseSync(dbPath, { readOnly: true });
       positions = readSqliteTableDelta(db, 'positions', [
-        'id', 'title', 'company', 'url', 'location', 'remote_type', 'status',
+        // company_id (FK locale → companies): risolto a UUID cloud lato server
+        // via companies.legacy_id. Alimenta la Company card del dettaglio (mig 046).
+        'id', 'title', 'company', 'company_id', 'url', 'location', 'remote_type', 'status',
         'notes', 'source', 'jd_text', 'requirements', 'found_by', 'found_at',
-        'deadline', 'last_checked',
+        'deadline', 'last_checked', 'last_actor',
         'salary_declared_min', 'salary_declared_max', 'salary_declared_currency',
         'salary_estimated_min', 'salary_estimated_max', 'salary_estimated_currency',
         'salary_estimated_source',
@@ -799,6 +837,24 @@ async function handlePush(options) {
         // l'utente seleziona via UI quali posizioni geocodare con
         // precisione ufficio; il flag viaggia a cloud per UI cross-device.
         'geocode_requested', 'geocode_requested_at',
+        // Recheck on-demand (mig 042): liveness su richiesta utente (il recheck
+        // non è più autonomo); il flag viaggia a cloud per UI cross-device.
+        'recheck_requested', 'recheck_requested_at',
+        // Salary-precise on-demand (V9/mig040, dse3): flag user-driven
+        // (cross-device: push qui + pull desired-state) + risultato testuale.
+        'salary_precise_requested', 'salary_precise_requested_at', 'salary_precise',
+        // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
+        // dall'analista, alimentano i grafici categoria/mappa della dashboard
+        // (che ESISTE gia' — va solo alimentata). Erano OMESSI dal push →
+        // restavano stranded sulla VPS, con le colonne cloud gia' presenti.
+        'role_family',
+        'loc_city', 'loc_region', 'loc_country', 'loc_country_code', 'loc_continent',
+        'work_mode', 'work_country', 'work_country_code',
+        'location_notes', 'is_multi_location',
+        'office_lat', 'office_lon', 'office_address', 'office_geocoded', 'office_verified',
+        // Expiry/lifecycle (mig 038): recheck-liveness scrive is_open/expires_at/
+        // last_open_check → dashboard "Scadute/Archivio". Colonne cloud presenti (mig038 applicata 2026-06-14).
+        'expires_at', 'is_open', 'last_open_check',
       ], cursor.positions);
       scores = readSqliteTableDelta(db, 'scores', [
         'position_id', 'total_score', 'experience_fit', 'salary_fit',
@@ -812,6 +868,19 @@ async function handlePush(options) {
         'written_by', 'reviewed_by', 'critic_reviewed_at', 'applied',
         'cv_drive_id', 'cl_drive_id',
       ], cursor.applications);
+      // Companies + position_highlights (mig 046): erano OMESSE dal push →
+      // Company card e blocchi Pro/Contro sempre vuoti sul cloud. `id` (int
+      // locale) → legacy_id cloud; il server risolve le FK (positions.company_id,
+      // highlights.position_id) via le mappe legacy→UUID. hq_country locale →
+      // hq cloud lo mappa il server. Delta su updated_at come le altre tabelle.
+      companies = readSqliteTableDelta(db, 'companies', [
+        'id', 'name', 'website', 'hq_country', 'sector', 'size',
+        'glassdoor_rating', 'red_flags', 'culture_notes', 'analyzed_by',
+        'analyzed_at', 'verdict',
+      ], cursor.companies);
+      highlights = readSqliteTableDelta(db, 'position_highlights', [
+        'id', 'position_id', 'type', 'text',
+      ], cursor.position_highlights);
       // pending_user_messages e' la coda agente -> utente. Pushiamo TUTTE le
       // righe ad ogni tick: l'upsert lato server e' idempotente su
       // (user_id, legacy_id), e gli ack-time / reply-time vanno comunque
@@ -846,6 +915,30 @@ async function handlePush(options) {
         // tombstones nel payload (compat con vecchi DB).
         if (!/no such table/i.test(err.message)) throw err;
       }
+      // Event-log per-istanza (position_state_transitions → cloud
+      // position_transitions, mig 044): append-only, NO updated_at → cursor su
+      // `ts` (monotono) con `>` stretto, come i tombstones. A riposo (nessuna
+      // nuova transizione) non contribuisce al payload → niente push inutili.
+      // Mappiamo position_id locale → position_legacy_id cloud (stesso int).
+      // Idempotente lato server (UNIQUE) → un re-push non duplica. Chiude
+      // l'event-log fossile ("Attività recente" ferma all'ultimo backfill).
+      try {
+        const tCols =
+          'position_id AS position_legacy_id, from_state, to_state, ts, by_agent, notes';
+        if (cursor.transitions) {
+          transitions = db.prepare(
+            `SELECT ${tCols} FROM position_state_transitions
+             WHERE ts > ? ORDER BY ts ASC`
+          ).all(cursor.transitions);
+        } else {
+          transitions = db.prepare(
+            `SELECT ${tCols} FROM position_state_transitions ORDER BY ts ASC`
+          ).all();
+        }
+      } catch (err) {
+        // DB senza la tabella (schema vecchio): no-op silenzioso.
+        if (!/no such table/i.test(err.message)) throw err;
+      }
       db.close();
     } catch (err) {
       console.error(pc.red(`Errore lettura SQLite: ${err.message}`));
@@ -857,17 +950,26 @@ async function handlePush(options) {
   const profileChunks = profilePayload
     ? `, profile (${profilePayload.yaml.length}B yaml + ${Object.keys(profilePayload.summaries).length} summaries)`
     : '';
+  const companyChunks = companies.length > 0
+    ? `, ${companies.length} companies`
+    : '';
+  const highlightChunks = highlights.length > 0
+    ? `, ${highlights.length} highlights`
+    : '';
   const pendingChunks = pendingMessages.length > 0
     ? `, ${pendingMessages.length} pending messages`
     : '';
   const tombstoneChunks = tombstones.length > 0
     ? `, ${tombstones.length} tombstones`
     : '';
+  const transitionChunks = transitions.length > 0
+    ? `, ${transitions.length} transitions`
+    : '';
   const isFirstPush = !cursor.positions && !cursor.scores && !cursor.applications;
   const deltaMode = isFirstPush ? 'first-push (full)' : 'delta';
   console.log(
     pc.dim(
-      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${pendingChunks}${tombstoneChunks}${profileChunks}`
+      `Payload [${deltaMode}]: ${positions.length} positions, ${scores.length} scores, ${applications.length} applications${companyChunks}${highlightChunks}${pendingChunks}${tombstoneChunks}${transitionChunks}${profileChunks}`
     )
   );
   if (options.dryRun) {
@@ -876,8 +978,9 @@ async function handlePush(options) {
   }
   if (
     positions.length === 0 && scores.length === 0 &&
-    applications.length === 0 && pendingMessages.length === 0 &&
-    tombstones.length === 0 && !profilePayload
+    applications.length === 0 && companies.length === 0 &&
+    highlights.length === 0 && pendingMessages.length === 0 &&
+    tombstones.length === 0 && transitions.length === 0 && !profilePayload
   ) {
     console.log(pc.yellow('Nessun dato da sincronizzare.'));
     return;
@@ -894,8 +997,11 @@ async function handlePush(options) {
       },
       body: JSON.stringify({
         positions, scores, applications,
+        companies,
+        position_highlights: highlights,
         pending_user_messages: pendingMessages,
         tombstones,
+        position_transitions: transitions,
         ...(profilePayload ? { profile: profilePayload } : {}),
       }),
     });
@@ -941,9 +1047,18 @@ async function handlePush(options) {
   console.log(pc.dim(`  positions:        ${body.positions?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  scores:           ${body.scores?.upserted ?? 0} upserted`));
   console.log(pc.dim(`  applications:     ${body.applications?.upserted ?? 0} upserted`));
+  if (companies.length > 0 || body.companies?.upserted) {
+    console.log(pc.dim(`  companies:        ${body.companies?.upserted ?? 0} upserted`));
+  }
+  if (highlights.length > 0 || body.position_highlights?.upserted) {
+    console.log(pc.dim(`  highlights:       ${body.position_highlights?.upserted ?? 0} upserted`));
+  }
   console.log(pc.dim(`  pending messages: ${body.pending_user_messages?.upserted ?? 0} upserted`));
   if (tombstones.length > 0 || body.tombstones?.applied) {
     console.log(pc.dim(`  tombstones:       ${body.tombstones?.applied ?? 0} applied`));
+  }
+  if (transitions.length > 0 || body.position_transitions?.upserted) {
+    console.log(pc.dim(`  transitions:      ${body.position_transitions?.upserted ?? 0} new`));
   }
 
   // Aggiorna cursor delta-sync solo dopo HTTP 200: il prossimo tick
@@ -955,9 +1070,13 @@ async function handlePush(options) {
   const posMax = maxUpdatedAt(positions);
   const scoMax = maxUpdatedAt(scores);
   const appMax = maxUpdatedAt(applications);
+  const compMax = maxUpdatedAt(companies);
+  const hlMax = maxUpdatedAt(highlights);
   if (posMax) newCursor.positions = posMax;
   if (scoMax) newCursor.scores = scoMax;
   if (appMax) newCursor.applications = appMax;
+  if (compMax) newCursor.companies = compMax;
+  if (hlMax) newCursor.position_highlights = hlMax;
   // Cursor tombstones: MAX(deleted_at) tra le tombstones inviate.
   // Stesso pattern, ma il campo si chiama deleted_at non updated_at.
   let tombMax = null;
@@ -967,6 +1086,13 @@ async function handlePush(options) {
     }
   }
   if (tombMax) newCursor.tombstones = tombMax;
+  // Cursor transitions: MAX(ts) tra le righe inviate (campo `ts`, non
+  // updated_at). `>` stretto al prossimo tick → no re-push a riposo.
+  let transMax = null;
+  for (const t of transitions) {
+    if (t?.ts && (transMax === null || t.ts > transMax)) transMax = t.ts;
+  }
+  if (transMax) newCursor.transitions = transMax;
   // Salviamo anche se nulla e' cambiato: la prima volta crea il file e
   // disabilita la modalita' "first-push" al prossimo tick. La 2a volta
   // in poi e' no-op a livello di contenuto.
@@ -1224,32 +1350,62 @@ async function handlePullDesiredState(options = {}) {
   }
 
   const cursor = options.full ? { since: null } : loadPullCursor();
-  const params = new URLSearchParams();
-  if (cursor.since) params.set('since', cursor.since);
-  if (options.limit) params.set('limit', String(options.limit));
   const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const pullUrl = `${baseUrl}/api/cloud-sync/pull-desired-state?${params.toString()}`;
 
-  let res;
-  try {
-    res = await fetch(pullUrl, {
-      headers: { Authorization: `Bearer ${config.token}` },
-    });
-  } catch (err) {
-    console.error(pc.yellow(`  pull warn: errore di rete (${err.message})`));
-    process.exitCode = 1;
-    return;
+  // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: leggi i flag desired-state da Supabase
+  // DIRETTO se abilitato; su errore o se disabilitato → fallback alla GET Vercel.
+  // NB: la route Vercel filtra su `positions.updated_at` che NON esiste sul cloud
+  // → di fatto è rotta; il path diretto usa i timestamp dei flag come cursore.
+  let body = null;
+  const reader = getDirectReader(config);
+  if (reader) {
+    try {
+      const sinceVal = cursor.since
+        || new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const rows = await reader.readDesiredStateChanges({
+        since: sinceVal,
+        limit: options.limit || 500,
+      });
+      // cursor = MAX tra i timestamp dei flag (positions non ha updated_at).
+      let maxTs = cursor.since;
+      for (const r of rows) {
+        for (const ts of [r.write_requested_at, r.geocode_requested_at,
+          r.recheck_requested_at, r.salary_precise_requested_at, r.user_excluded_at]) {
+          if (ts && (!maxTs || ts > maxTs)) maxTs = ts;
+        }
+      }
+      body = { positions: rows, cursor: maxTs };
+    } catch (err) {
+      const auth = err instanceof SupabaseAuthError;
+      console.error(pc.yellow(`  pull (direct) ${auth ? 'auth' : 'warn'}: ${err.message}${auth ? '' : ' — fallback Vercel'}`));
+      body = null;
+    }
   }
-
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    console.error(
-      pc.yellow(
-        `  pull warn: HTTP ${res.status} ${body.error || 'errore sconosciuto'}`
-      )
-    );
-    process.exitCode = 1;
-    return;
+  if (body === null) {
+    const params = new URLSearchParams();
+    if (cursor.since) params.set('since', cursor.since);
+    if (options.limit) params.set('limit', String(options.limit));
+    const pullUrl = `${baseUrl}/api/cloud-sync/pull-desired-state?${params.toString()}`;
+    let res;
+    try {
+      res = await fetch(pullUrl, {
+        headers: { Authorization: `Bearer ${config.token}` },
+      });
+    } catch (err) {
+      console.error(pc.yellow(`  pull warn: errore di rete (${err.message})`));
+      process.exitCode = 1;
+      return;
+    }
+    body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.error(
+        pc.yellow(
+          `  pull warn: HTTP ${res.status} ${body.error || 'errore sconosciuto'}`
+        )
+      );
+      process.exitCode = 1;
+      return;
+    }
   }
 
   const positions = Array.isArray(body.positions) ? body.positions : [];
@@ -1293,6 +1449,7 @@ async function handlePullDesiredState(options = {}) {
   // produrrebbe una riga zoppa con NULL su title/company → CHECK fail.
   let updated = 0;
   let missing = 0;
+  let excludeChanges = 0;
   try {
     const db = new DatabaseSync(dbPath);
     db.exec('PRAGMA foreign_keys = ON');
@@ -1307,21 +1464,82 @@ async function handlePullDesiredState(options = {}) {
          SET write_requested = ?,
              write_requested_at = ?,
              geocode_requested = ?,
-             geocode_requested_at = ?
+             geocode_requested_at = ?,
+             recheck_requested = ?,
+             recheck_requested_at = ?,
+             salary_precise_requested = ?,
+             salary_precise_requested_at = ?
        WHERE id = ?
     `);
-    const checkStmt = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+    // SELECT lo stato locale corrente: serve sia per il "missing" sia per la
+    // sync NARROW dell'esclusione utente (sotto).
+    const checkStmt = db.prepare(
+      'SELECT status, user_excluded_at, user_excluded_prev_status FROM positions WHERE id = ?'
+    );
+    // Esclusione utente cloud→locale: applichiamo SOLO l'azione-utente
+    // (user_excluded_at valorizzato lato cloud), MAI lo status generico (che
+    // resta autoritativo sulla VPS). last_actor='user' + transizione, come fa
+    // il team su un cambio stato → il team smette di lavorarci e l'event-log
+    // registra CHI. Idempotente: agiamo solo se lo stato user-exclude diverge.
+    const applyExcludeStmt = db.prepare(
+      `UPDATE positions
+          SET status = 'excluded', user_excluded_reason = ?, user_excluded_note = ?,
+              user_excluded_at = ?, user_excluded_prev_status = ?, last_actor = 'user'
+        WHERE id = ?`
+    );
+    const applyUnexcludeStmt = db.prepare(
+      `UPDATE positions
+          SET status = ?, user_excluded_reason = NULL, user_excluded_note = NULL,
+              user_excluded_at = NULL, user_excluded_prev_status = NULL, last_actor = 'user'
+        WHERE id = ?`
+    );
+    const transStmt = db.prepare(
+      `INSERT INTO position_state_transitions
+         (position_id, from_state, to_state, by_agent, notes)
+       VALUES (?, ?, ?, 'user', ?)`
+    );
     for (const p of positions) {
       const legacyId = Number(p.legacy_id);
       if (!Number.isInteger(legacyId) || legacyId <= 0) continue;
-      const exists = checkStmt.get(legacyId);
-      if (!exists) { missing++; continue; }
+      const local = checkStmt.get(legacyId);
+      if (!local) { missing++; continue; }
       const writeFlag = p.write_requested === true || p.write_requested === 1 ? 1 : 0;
       const writeAt = p.write_requested_at || null;
       const geoFlag = p.geocode_requested === true || p.geocode_requested === 1 ? 1 : 0;
       const geoAt = p.geocode_requested_at || null;
-      stmt.run(writeFlag, writeAt, geoFlag, geoAt, legacyId);
+      const rcFlag = p.recheck_requested === true || p.recheck_requested === 1 ? 1 : 0;
+      const rcAt = p.recheck_requested_at || null;
+      const spFlag = p.salary_precise_requested === true || p.salary_precise_requested === 1 ? 1 : 0;
+      const spAt = p.salary_precise_requested_at || null;
+      stmt.run(writeFlag, writeAt, geoFlag, geoAt, rcFlag, rcAt, spFlag, spAt, legacyId);
       updated++;
+
+      // ── Sync NARROW dell'esclusione utente ──
+      const cloudExcluded = !!p.user_excluded_at; // l'utente l'ha esclusa sul cloud
+      const localExcluded = !!local.user_excluded_at; // già esclusa-da-utente in locale
+      if (cloudExcluded && !localExcluded) {
+        // Applica l'esclusione: prev = lo stato locale attuale (se non già 'excluded').
+        const prev = local.status === 'excluded'
+          ? (local.user_excluded_prev_status || 'scored')
+          : local.status;
+        applyExcludeStmt.run(
+          p.user_excluded_reason || null,
+          p.user_excluded_note || null,
+          p.user_excluded_at,
+          prev,
+          legacyId,
+        );
+        if (local.status !== 'excluded') {
+          transStmt.run(legacyId, local.status, 'excluded', p.user_excluded_reason || null);
+        }
+        excludeChanges++;
+      } else if (!cloudExcluded && localExcluded) {
+        // L'utente ha annullato l'esclusione sul cloud → ripristina lo stato.
+        const restore = local.user_excluded_prev_status || 'scored';
+        applyUnexcludeStmt.run(restore, legacyId);
+        transStmt.run(legacyId, 'excluded', restore, null);
+        excludeChanges++;
+      }
     }
     db.close();
   } catch (err) {
@@ -1336,8 +1554,9 @@ async function handlePullDesiredState(options = {}) {
   // riflette il proprio SQLite e farebbe da eco). Quando updated == 0
   // (tipico, no nuovi click) restiamo zitti se silent.
   const successMsg = pc.green(`✓ Pull desired-state applicato: ${updated} positions aggiornate`)
+    + (excludeChanges > 0 ? pc.green(` (${excludeChanges} esclusioni utente sincronizzate)`) : '')
     + (missing > 0 ? pc.dim(` (${missing} legacy_id non presenti localmente, skip)`) : '');
-  if (updated > 0 || !silent) {
+  if (updated > 0 || excludeChanges > 0 || !silent) {
     console.log(successMsg);
   }
 
@@ -1346,6 +1565,290 @@ async function handlePullDesiredState(options = {}) {
   }
   if (body.has_more) {
     log(pc.dim('  has_more=true: rilancia per recuperare le righe rimanenti'));
+  }
+}
+
+/**
+ * Sync bidirezionale dei ticket cloud↔VPS ([JHT-DATA-SYNC] fase 2). Chiude
+ * il follow-up dichiarato in mig 043. Una sola sessione SQLite RW:
+ *
+ *   PULL  cloud → locale : importa i ticket 'open' creati dall'utente sul web
+ *         (INSERT in position_tickets con cloud_id valorizzato; il Capitano li
+ *         vede via C-15). Skip se già importati (cloud_id) o se la posizione
+ *         non è ancora locale (arriverà col push dati).
+ *   PUSH  locale → cloud : manda gli aggiornamenti del team (assigned/resolved
+ *         + response_text) sui ticket con cloud_id, e INSERT dei ticket nati
+ *         in locale (cloud_id NULL) — l'endpoint ritorna l'id che scriviamo in
+ *         cloud_id per chiudere la correlazione.
+ *
+ * Endpoint: GET/POST /api/cloud-sync/tickets. Best-effort: non blocca il boot
+ * né il daemon su errore di rete. Idempotente: cloud `id` canonico, UPDATE per
+ * id + filtro user_id lato server, UNIQUE non necessario (UPDATE/INSERT espliciti).
+ *
+ * options: --db <path>, --full (ignora cursor), --silent (boot/daemon).
+ */
+async function handleTicketSync(options = {}) {
+  const silent = options.silent === true;
+  const log = (msg) => { if (!silent) console.log(msg); };
+
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) {
+    if (!silent) {
+      console.error(pc.red('Cloud sync non abilitato.'));
+      console.error(pc.dim('Abilita con: ') + pc.bold('jht cloud login'));
+    }
+    process.exitCode = 1;
+    return;
+  }
+
+  const dbPath = options.db || JHT_DB_PATH;
+  const dbExists = await stat(dbPath).then(() => true).catch(() => false);
+  if (!dbExists) {
+    log(pc.dim(`  ticket-sync skip: SQLite locale non trovato (${dbPath}).`));
+    return;
+  }
+
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    console.error(pc.red('node:sqlite non disponibile (richiede Node 22.5+).'));
+    process.exitCode = 1;
+    return;
+  }
+
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const cursor = options.full
+    ? { pull_since: null, push_since: null }
+    : loadTicketsCursor();
+
+  let imported = 0;
+  let pushedUpdates = 0;
+  let pushedInserts = 0;
+  let db;
+  try {
+    db = new DatabaseSync(dbPath);
+    db.exec('PRAGMA foreign_keys = ON');
+
+    // Su container appena creato lo schema SQLite locale (incl. position_tickets,
+    // creata da shared/skills/_db.py al primo tocco Python) può non esistere ancora:
+    // sync-tickets gira al boot PRIMA dello spawn agenti. Skip grazioso (exit 0) per
+    // non sporcare il boot con "no such table"; il giro successivo del daemon, dopo
+    // che il team ha inizializzato il DB, troverà la tabella e sincronizzerà.
+    const hasTicketsTable = db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='position_tickets'")
+      .get();
+    if (!hasTicketsTable) {
+      log(pc.dim('  ticket-sync skip: tabella position_tickets non ancora creata (team al primo boot).'));
+      db.close();
+      return;
+    }
+
+    // ---- PULL: ticket 'open' dal cloud → locale ----
+    // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: se abilitato leggi da Supabase DIRETTO
+    // (niente invocazione Vercel); su errore o se disabilitato → fallback Vercel.
+    const reader = getDirectReader(config);
+    let pullResult = null;           // { tickets, cursor } da direct o Vercel
+    if (reader) {
+      try {
+        const rows = await reader.readOpenTickets({ since: cursor.pull_since });
+        let maxCreated = cursor.pull_since;
+        for (const t of rows) {
+          if (t.created_at && (!maxCreated || t.created_at > maxCreated)) maxCreated = t.created_at;
+        }
+        pullResult = { tickets: rows, cursor: maxCreated };
+      } catch (err) {
+        const auth = err instanceof SupabaseAuthError;
+        console.error(pc.yellow(`  ticket pull (direct) ${auth ? 'auth' : 'warn'}: ${err.message}${auth ? '' : ' — fallback Vercel'}`));
+        pullResult = null;           // direct fallito → prova Vercel
+      }
+    }
+    if (pullResult === null) {
+      const pullParams = new URLSearchParams();
+      if (cursor.pull_since) pullParams.set('since', cursor.pull_since);
+      try {
+        const res = await fetch(
+          `${baseUrl}/api/cloud-sync/tickets?${pullParams.toString()}`,
+          { headers: { Authorization: `Bearer ${config.token}` } },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error(pc.yellow(`  ticket pull warn: HTTP ${res.status} ${body.error || ''}`));
+        } else {
+          pullResult = { tickets: Array.isArray(body.tickets) ? body.tickets : [], cursor: body.cursor };
+        }
+      } catch (err) {
+        console.error(pc.yellow(`  ticket pull warn: ${err.message}`));
+      }
+    }
+    if (pullResult && Array.isArray(pullResult.tickets)) {
+      const findByCloud = db.prepare('SELECT id FROM position_tickets WHERE cloud_id = ?');
+      const posExists = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+      const ins = db.prepare(
+        `INSERT INTO position_tickets (position_id, request_text, kind, status, cloud_id, created_at)
+         VALUES (?, ?, ?, 'open', ?, ?)`
+      );
+      for (const ct of pullResult.tickets) {
+        const cloudId = Number(ct.id);
+        const posId = Number(ct.position_legacy_id);
+        if (!Number.isInteger(cloudId) || !Number.isInteger(posId)) continue;
+        if (findByCloud.get(cloudId)) continue;       // già importato
+        if (!posExists.get(posId)) continue;          // posizione non ancora locale → arriverà
+        ins.run(posId, ct.request_text || '', ct.kind || 'custom', cloudId, ct.created_at || null);
+        imported++;
+      }
+      if (pullResult.cursor) cursor.pull_since = pullResult.cursor;
+    }
+
+    // ---- PUSH: aggiornamenti team + INSERT locali → cloud ----
+    const selCols =
+      `id AS local_id, cloud_id, position_id AS position_legacy_id,
+       request_text, kind, status, assigned_agent, response_text,
+       created_at, assigned_at, resolved_at, updated_at`;
+    const rows = cursor.push_since
+      ? db.prepare(
+          `SELECT ${selCols} FROM position_tickets
+           WHERE cloud_id IS NULL OR updated_at > ?`
+        ).all(cursor.push_since)
+      : db.prepare(`SELECT ${selCols} FROM position_tickets`).all();
+
+    if (rows.length > 0) {
+      try {
+        const res = await fetch(`${baseUrl}/api/cloud-sync/tickets`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ tickets: rows }),
+        });
+        const pb = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          console.error(pc.yellow(`  ticket push warn: HTTP ${res.status} ${pb.error || ''}`));
+        } else {
+          pushedUpdates = pb.updated || 0;
+          pushedInserts = pb.inserted || 0;
+          // write-back dei cloud_id sugli INSERT → chiude la correlazione.
+          if (pb.id_map && typeof pb.id_map === 'object') {
+            const setCloud = db.prepare('UPDATE position_tickets SET cloud_id = ? WHERE id = ?');
+            for (const [localId, cloudId] of Object.entries(pb.id_map)) {
+              const ci = Number(cloudId);
+              const li = Number(localId);
+              if (Number.isInteger(ci) && Number.isInteger(li)) setCloud.run(ci, li);
+            }
+          }
+          // avanza push cursor = MAX(updated_at) tra le righe inviate.
+          let maxU = cursor.push_since || null;
+          for (const r of rows) {
+            if (r.updated_at && (maxU === null || r.updated_at > maxU)) maxU = r.updated_at;
+          }
+          if (maxU) cursor.push_since = maxU;
+        }
+      } catch (err) {
+        console.error(pc.yellow(`  ticket push warn: ${err.message}`));
+      }
+    }
+
+    db.close();
+  } catch (err) {
+    try { if (db) db.close(); } catch { /* già chiuso */ }
+    console.error(pc.red(`Errore ticket-sync SQLite: ${err.message}`));
+    process.exitCode = 1;
+    return;
+  }
+
+  await saveTicketsCursor(cursor);
+
+  const total = imported + pushedUpdates + pushedInserts;
+  if (total > 0 || !silent) {
+    console.log(
+      pc.green(
+        `✓ Ticket sync: ${imported} importati↓, ${pushedUpdates} aggiornati↑, ${pushedInserts} nuovi↑`
+      )
+    );
+  }
+}
+
+/**
+ * Rendezvous "Sync now" ([JHT-DATA-SYNC] fase 3): chiude il refresh on-demand
+ * senza polling continuo dei browser. Il browser (apertura dashboard o pulsante
+ * "Sync now") scrive `team_state.sync_requested_at`; qui il daemon lo rileva,
+ * fa un push fresco e marca `sync_completed_at` → il browser fa UN refetch.
+ *
+ * Pending = sync_requested_at presente e > sync_completed_at (o completed NULL).
+ * Best-effort: 1 GET /api/team-state per tick (lettura singola riga per user,
+ * economica); push + PATCH ack solo quando c'è davvero una richiesta.
+ */
+async function handleSyncRendezvous(options = {}) {
+  const silent = options.silent === true;
+  const config = await loadCloudConfig();
+  if (!config || !config.enabled) return;
+  const baseUrl = (config.base_url || DEFAULT_BASE_URL).replace(/\/+$/, '');
+
+  // [JHT-DAEMON-SUPABASE-DIRECT] Fase 1: leggi team_state da Supabase diretto se
+  // abilitato; su errore (o se disabilitato) fallback alla GET Vercel.
+  const reader = getDirectReader(config);
+  let state = null;
+  let gotState = false;
+  if (reader) {
+    try {
+      state = await reader.readTeamState(['sync_requested_at', 'sync_completed_at']);
+      gotState = true;
+    } catch (err) {
+      if (!silent) console.error(pc.yellow(`  sync-rendezvous (direct) warn: ${err.message} — fallback Vercel`));
+    }
+  }
+  if (!gotState) {
+    try {
+      const res = await fetch(`${baseUrl}/api/team-state`, {
+        headers: { Authorization: `Bearer ${config.token}` },
+      });
+      if (!res.ok) return;
+      const body = await res.json().catch(() => ({}));
+      state = body.state || null;
+    } catch (err) {
+      if (!silent) console.error(pc.yellow(`  sync-rendezvous warn: ${err.message}`));
+      return;
+    }
+  }
+  if (!state) return;
+
+  const reqAt = state.sync_requested_at || null;
+  const doneAt = state.sync_completed_at || null;
+  // Timestamp ISO (UTC, suffisso Z dal cloud) → confronto lessicografico =
+  // cronologico. Pending se richiesto e non ancora completato dopo la richiesta.
+  const pending = reqAt && (!doneAt || reqAt > doneAt);
+  if (!pending) return;
+
+  // Push fresco ORA (resta su Vercel in Fase 1). Isolato dal counter del daemon.
+  const prev = process.exitCode;
+  process.exitCode = 0;
+  await handlePush({});
+  process.exitCode = prev;
+
+  // Ack `sync_completed_at`: diretto se disponibile, altrimenti PATCH Vercel.
+  const nowIso = new Date().toISOString();
+  if (reader) {
+    try {
+      await reader.patchTeamState({ sync_completed_at: nowIso });
+      if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack (direct)'));
+      return;
+    } catch (err) {
+      if (!silent) console.error(pc.yellow(`  sync-rendezvous ack (direct) warn: ${err.message} — fallback Vercel`));
+    }
+  }
+  try {
+    await fetch(`${baseUrl}/api/team-state`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sync_completed_at: nowIso }),
+    });
+    if (!silent) console.log(pc.green('✓ Sync now servito: push fresco + ack'));
+  } catch (err) {
+    if (!silent) console.error(pc.yellow(`  sync-rendezvous ack warn: ${err.message}`));
   }
 }
 
@@ -1408,7 +1911,7 @@ async function handleDaemon(options) {
     return;
   }
 
-  console.log(pc.dim(`Cloud sync daemon: push + pull-desired-state ogni ${intervalSec}s verso ${config.base_url}`));
+  console.log(pc.dim(`Cloud sync daemon: letture utente→team ogni ${intervalSec}s (Supabase) + push on-demand su "Sync now" → ${config.base_url}`));
 
   let running = true;
   const shutdown = (sig) => {
@@ -1426,150 +1929,207 @@ async function handleDaemon(options) {
   // (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
   // ogni 10 tick per evitare spam ma confermare che il daemon e' vivo.
   let haltSkipCount = 0;
-  // Consecutive failure tracking: dopo 3 fail consecutivi alziamo un warning
-  // visibile; dopo MAX_CONSECUTIVE_FAILS auto-shutdown del daemon.
-  // Origin: incident RobertHalf 2026-05-19 — daemon ha retentato in loop
-  // silenzioso per 1h, saturando Supabase pool fino al 504 user-facing.
-  // Meglio fermarsi e chiedere intervento manuale che bruciare quota cloud
-  // a vuoto (vedi docs/internal/cloud-sync-architecture.md P1 #4).
-  const MAX_CONSECUTIVE_FAILS = 5;
-  const WARN_AT = 3;
-  let consecutiveFails = 0;
-  // Killswitch dedicato auth-fail (401/403): più aggressivo del counter
-  // generico perché un token revocato non recupera mai da solo, non ha
-  // senso ritentare 5 volte. Threshold 3 = tolleranza minima per false
-  // positive (clock skew, rate-limit edge, JWT refresh race), poi halt
-  // con notifica esplicita all'utente via pending_user_messages.
-  const MAX_CONSECUTIVE_AUTH_FAILS = 3;
-  let consecutiveAuthFails = 0;
-  // Push iniziale immediato: se il container era spento per un po' e gli
-  // agenti hanno scritto offline, il primo tick deve flushare subito.
+  // [PUSH ON-DEMAND 2026-06-25] Niente push automatico per-tick: la dashboard cloud
+  // si aggiorna SOLO quando l'utente preme "Sync now" (sync_requested_at →
+  // handleSyncRendezvous → handlePush). Niente killswitch su push periodico (non
+  // esiste più): gli errori del push on-demand sono best-effort.
+  //
+  // Cadenza a DUE velocità: il CHECK del flag "Sync now" gira VELOCE (~5s, lettura
+  // di 1 riga su Supabase ≈ gratis) così il pulsante risponde in pochi secondi; le
+  // letture più pesanti (ticket/desired-state) e l'heartbeat restano a intervalSec
+  // (60s). Override del check rapido: env JHT_SYNC_CHECK_SEC.
+  const syncCheckSec = Math.max(1, parseInt(process.env.JHT_SYNC_CHECK_SEC || '5', 10) || 5);
+  const heavyEvery = Math.max(1, Math.round(intervalSec / syncCheckSec));
+  let fastTick = 0;
+
+  // [JHT-REALTIME-SYNC] Ramo event-driven (flag JHT_REALTIME_SYNC=1, default OFF):
+  // il daemon si iscrive a Supabase Realtime e reagisce agli eventi invece di pollare
+  // a ~5s. Con flag OFF resta il loop poll qui sotto (comportamento odierno invariato).
+  if (realtimeSyncEnabled()) {
+    await runRealtimeLoop({ config, isRunning: () => running });
+    console.log(pc.dim('Daemon terminato (event-driven).'));
+    return;
+  }
+
   while (running) {
     if (existsSync(WEEKLY_HALT_FLAG)) {
-      if (haltSkipCount % 10 === 0) {
-        console.log(pc.dim(`  HALT-WEEKLY attivo (${WEEKLY_HALT_FLAG}) — push saltato.`));
+      if (haltSkipCount % heavyEvery === 0) {
+        console.log(pc.dim(`  HALT-WEEKLY attivo (${WEEKLY_HALT_FLAG}) — sync sospesa.`));
       }
       haltSkipCount += 1;
     } else {
       if (haltSkipCount > 0) {
-        console.log(pc.green(`  HALT-WEEKLY rimosso, riprendo push normali.`));
+        console.log(pc.green(`  HALT-WEEKLY rimosso, riprendo.`));
         haltSkipCount = 0;
       }
-      let tickFailed = false;
-      let authFailedThisTick = false;
+      const doHeavy = fastTick % heavyEvery === 0;
+
+      // ── Letture pesanti (richieste utente→team): ogni intervalSec (~60s) ──
+      if (doHeavy) {
+        // Pull desired-state (flag CV/recheck/escludi impostati dall'utente sul web).
+        try {
+          const prevPull = process.exitCode;
+          process.exitCode = 0;
+          await handlePullDesiredState({ silent: true });
+          process.exitCode = prevPull;
+        } catch (err) {
+          console.error(pc.yellow(`  daemon pull-desired-state error: ${err.message}`));
+        }
+
+        // Ticket sync: importa i ticket 'open' dell'utente (lettura Supabase) e
+        // pusha le risoluzioni del team. Best-effort.
+        try {
+          const prevTk = process.exitCode;
+          process.exitCode = 0;
+          await handleTicketSync({ silent: true });
+          process.exitCode = prevTk;
+        } catch (err) {
+          console.error(pc.yellow(`  daemon ticket-sync error: ${err.message}`));
+        }
+      }
+
+      // ── Check "Sync now": OGNI giro veloce (~5s) ── lettura di 1 riga
+      // (sync_requested_at) su Supabase; il push dati parte solo se c'è davvero
+      // una richiesta dell'utente → il pulsante risponde in pochi secondi.
       try {
-        // Reset di process.exitCode tra un tick e l'altro: handlePush lo
-        // setta a 1 su errore di rete o sqlite, ma noi vogliamo continuare
-        // il loop al prossimo intervallo.
-        const prev = process.exitCode;
+        const prevSr = process.exitCode;
         process.exitCode = 0;
-        const pushResult = await handlePush({});
-        if (process.exitCode === 1) {
-          tickFailed = true;
-        }
-        // handlePush ritorna {ok, authFailed} solo nel path !res.ok+401/403
-        // o network catch. Tutti gli altri early-return ritornano undefined
-        // (config/db missing) → authFailed undefined → falsy. OK.
-        authFailedThisTick = pushResult?.authFailed === true;
-        process.exitCode = prev;
+        await handleSyncRendezvous({ silent: true });
+        process.exitCode = prevSr;
       } catch (err) {
-        console.error(pc.yellow(`  daemon tick error: ${err.message}`));
-        tickFailed = true;
+        console.error(pc.yellow(`  daemon sync-rendezvous error: ${err.message}`));
       }
 
-      // Pull desired-state DOPO il push (cadenza condivisa intervalSec).
-      // Copre il caso multi-device "live": utente clicca su mobile mentre
-      // team gira su VPS → flag arriva in cloud → il container lo vede al
-      // prossimo tick, non solo al riavvio (P1 [JHT-CLOUDSYNC-01]).
-      // Best-effort: errori loggati ma NON contano nel counter del push
-      // (consecutiveFails è dedicato al write-side, dove la quota Vercel/
-      // Supabase è realmente a rischio). exitCode preservato.
-      try {
-        const prevPull = process.exitCode;
-        process.exitCode = 0;
-        await handlePullDesiredState({ silent: true });
-        process.exitCode = prevPull;
-      } catch (err) {
-        console.error(pc.yellow(`  daemon pull-desired-state error: ${err.message}`));
-      }
-
-      if (authFailedThisTick) {
-        consecutiveAuthFails += 1;
-      } else if (!tickFailed) {
-        // Solo un push riuscito (200 OK) resetta il counter auth. Un fail
-        // NON-auth (es. 500 transient) lascia il counter dov'è — un 401
-        // intermittente in mezzo a 500 deve comunque scattare il killswitch.
-        if (consecutiveAuthFails > 0) {
-          console.log(pc.green(`  push ok dopo ${consecutiveAuthFails} auth-fail, contatore auth resettato.`));
+      // ── Heartbeat "VPS online": ogni intervalSec ── (reconcileOnce solo-heartbeat;
+      // lo start/stop del team passa dal desktop, non dal cloud).
+      if (doHeavy) {
+        try {
+          const prevRc = process.exitCode;
+          process.exitCode = 0;
+          const { reconcileOnce } = await import('../lib/team-state-reconciler.js');
+          await reconcileOnce();
+          process.exitCode = prevRc;
+        } catch (err) {
+          console.error(pc.yellow(`  daemon heartbeat error: ${err.message}`));
         }
-        consecutiveAuthFails = 0;
-      }
-
-      if (consecutiveAuthFails >= MAX_CONSECUTIVE_AUTH_FAILS) {
-        const msg =
-          `⛔ Cloud sync interrotto: token revocato o non valido ` +
-          `(${MAX_CONSECUTIVE_AUTH_FAILS} risposte 401/403 consecutive). ` +
-          `Riapri il pairing su ${config.base_url}/settings/cloud-sync ` +
-          `e rilancia: jht cloud login.`;
-        console.error(pc.red(`  ✗ ${msg}`));
-        // Notifica utente via pending_user_messages locale: il bridge
-        // Telegram la consegnerà al prossimo poll. Non possiamo affidarci
-        // al push cloud (è proprio quello che ha fallito).
-        await writePendingUserMessage({
-          agent: 'cloud-sync',
-          body: msg,
-          kind: 'alert',
-        });
-        running = false;
-        process.exitCode = 1;
-        break;
-      }
-
-      if (tickFailed) {
-        consecutiveFails += 1;
-        if (consecutiveFails === WARN_AT) {
-          console.error(
-            pc.yellow(
-              `  ⚠ ${WARN_AT} push consecutivi falliti. ` +
-              `Probabile row corrotta o saturazione Supabase. ` +
-              `Verifica logs container e dashboard Supabase. ` +
-              `Auto-shutdown a ${MAX_CONSECUTIVE_FAILS} fail consecutivi.`
-            )
-          );
-        }
-        if (consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
-          console.error(
-            pc.red(
-              `  ✗ ${MAX_CONSECUTIVE_FAILS} push consecutivi falliti, ` +
-              `auto-shutdown daemon per evitare loop saturante Supabase. ` +
-              `Investiga la causa (vedi docs/internal/cloud-sync-architecture.md ` +
-              `incident RobertHalf 2026-05-19) e rilancia il daemon manualmente.`
-            )
-          );
-          running = false;
-          process.exitCode = 1;
-          break;
-        }
-      } else if (consecutiveFails > 0) {
-        console.log(pc.green(`  push ok dopo ${consecutiveFails} fail, contatore resettato.`));
-        consecutiveFails = 0;
       }
     }
+    fastTick += 1;
     if (!running) break;
-    // Sleep interrompibile: spezziamo in chunk da 1s cosi' SIGTERM ferma
-    // entro 1s invece di aspettare l'intero intervalSec.
-    for (let i = 0; i < intervalSec && running; i++) {
+    // Sleep interrompibile (~syncCheckSec): chunk da 1s così SIGTERM ferma entro 1s.
+    for (let i = 0; i < syncCheckSec && running; i++) {
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
   console.log(pc.dim('Daemon terminato.'));
 }
 
+/**
+ * [JHT-REALTIME-SYNC] Loop event-driven del daemon (flag ON). Si iscrive a Supabase
+ * Realtime per reagire agli eventi (tappa 2: sync-flag su team_state) e gira un
+ * PARACADUTE poll lento (~5min, tappa 6) che ri-legge TUTTE le corsie → recupero se
+ * il socket muore o perde un evento. Con la SOLA fondazione (Part A) tutto già
+ * funziona via paracadute a 5min; Part B aggiunge il fast-path Realtime sui ticket,
+ * Part C affina le cadenze (desired-state 5min, heartbeat 3min, presence).
+ *
+ * @param {object} o
+ * @param {object} o.config      cloud.json già caricato
+ * @param {() => boolean} o.isRunning  true finché il daemon non riceve SIGTERM/SIGINT
+ */
+async function runRealtimeLoop({ config, isRunning }) {
+  const log = (level, msg) => console.error(pc.dim(`  cloud-realtime ${level}: ${msg}`));
+
+  // Debounce per corsia: una raffica di eventi Realtime non deve lanciare letture
+  // concorrenti sovrapposte (push o ticket-sync).
+  let syncing = false;
+  const runSync = async (tag) => {
+    if (syncing) return;
+    syncing = true;
+    try { await handleSyncRendezvous({ silent: true }); }
+    catch (e) { console.error(pc.yellow(`  ${tag} sync-rendezvous error: ${e.message}`)); }
+    finally { syncing = false; }
+  };
+  let ticketing = false;
+  const runTicketSync = async (tag) => {
+    if (ticketing) return;
+    ticketing = true;
+    try { await handleTicketSync({ silent: true }); }
+    catch (e) { console.error(pc.yellow(`  ${tag} ticket-sync error: ${e.message}`)); }
+    finally { ticketing = false; }
+  };
+
+  let rt = null;
+  try {
+    const { createRealtimeSync } = await import('../lib/cloud-realtime.js');
+    rt = await createRealtimeSync({ config, log });
+
+    // ── Tappa 2: sync-flag → Realtime ── UPDATE su team_state (sync_requested_at) → push.
+    rt.subscribe('team-state', { table: 'team_state', event: 'UPDATE' }, () => { void runSync('realtime'); });
+
+    // ── Tappa 3: ticket → Realtime ── cambio su position_tickets → ticket-sync.
+    // Richiede mig 048 (position_tickets in publication supabase_realtime + REPLICA
+    // IDENTITY FULL). La RLS consegna solo le righe dell'utente.
+    rt.subscribe('tickets', { table: 'position_tickets', event: '*' }, () => { void runTicketSync('realtime'); });
+
+    log('info', 'realtime pronto (team_state + position_tickets) — sync/ticket via websocket + paracadute attivo.');
+  } catch (e) {
+    console.error(pc.yellow(`  cloud-realtime setup fallito (${e.message}) — degrado al solo paracadute poll.`));
+  }
+
+  // ── Cadenze lente (tappe 4-5-6) ──
+  // - heartbeat ~3min (tappa 5): SOTTO la soglia stale della dashboard (5min, vedi
+  //   web/app/api/team-state/claim/route.ts HEARTBEAT_STALE_MS) → la VPS non sparisce mai.
+  //   Presence vera (websocket=online) è DEFERRED: richiederebbe di cambiare come la
+  //   dashboard legge l'online → per ora resta l'heartbeat scritto (reconcileOnce).
+  // - desired-state ~5min (tappa 4): positions cambia troppo per il Realtime → poll lento.
+  // - paracadute ~5min (tappa 6, OBBLIGATORIO): ri-legge sync + ticket → se il socket
+  //   muore o perde un evento il daemon recupera comunque. Gira SEMPRE, anche se il
+  //   setup Realtime è fallito (degrada a poll puro).
+  const heartbeatSec = Math.max(30, parseInt(process.env.JHT_HEARTBEAT_SEC || '180', 10) || 180);
+  const parachuteSec = Math.max(60, parseInt(process.env.JHT_PARACHUTE_SEC || '300', 10) || 300);
+  const desiredStateSec = Math.max(60, parseInt(process.env.JHT_DESIRED_STATE_SEC || '300', 10) || 300);
+  const everyParachute = Math.max(1, Math.round(parachuteSec / heartbeatSec));
+  const everyDesired = Math.max(1, Math.round(desiredStateSec / heartbeatSec));
+
+  const heartbeat = async () => {
+    try {
+      const { reconcileOnce } = await import('../lib/team-state-reconciler.js');
+      await reconcileOnce();
+    } catch (e) { console.error(pc.yellow(`  heartbeat error: ${e.message}`)); }
+  };
+  const sleepTick = async () => {
+    for (let i = 0; i < heartbeatSec && isRunning(); i++) await new Promise((r) => setTimeout(r, 1000));
+  };
+
+  let tick = 0;
+  while (isRunning()) {
+    if (existsSync(WEEKLY_HALT_FLAG)) { await sleepTick(); tick += 1; continue; }
+
+    // Heartbeat ~ogni 3min (mantiene la VPS "online" sulla dashboard).
+    await heartbeat();
+    // Paracadute ~ogni 5min: recupero sync + ticket (eventi persi / socket morto).
+    if (tick % everyParachute === 0) {
+      await runSync('parachute');
+      await runTicketSync('parachute');
+    }
+    // Desired-state ~ogni 5min (poll lento, niente Realtime).
+    if (tick % everyDesired === 0) {
+      try { await handlePullDesiredState({ silent: true }); }
+      catch (e) { console.error(pc.yellow(`  pull-desired-state error: ${e.message}`)); }
+    }
+
+    tick += 1;
+    await sleepTick();
+  }
+
+  if (rt) { try { await rt.close(); } catch { /* ignore */ } }
+}
+
 // Esportata per uso programmatico (es. wire al boot di `jht team start`
 // per recuperare write_requested cliccato via web mentre container era
 // offline). Best-effort: il caller invoca con { silent: true } e ignora
 // process.exitCode così il boot prosegue anche se cloud è giù.
-export { handlePullDesiredState };
+export { handlePullDesiredState, handleTicketSync };
 
 /**
  * pull-profile — scarica il profilo dal cloud e ricostruisce
@@ -1678,7 +2238,16 @@ export function registerCloudCommand(program) {
     .option('--full', 'Ignora cursor (lookback 7gg server-side)')
     .option('--limit <n>', 'Max righe per chiamata (default 500, max 2000)')
     .option('--dry-run', 'Mostra cosa verrebbe applicato senza UPDATE')
+    .option('--silent', 'Output minimo (per il boot)')
     .action(handlePullDesiredState);
+
+  cloud
+    .command('sync-tickets')
+    .description('Round-trip ticket cloud<->VPS: importa i ticket utente, pusha le risoluzioni del team')
+    .option('--db <path>', 'Path del database SQLite (default ~/.jht/jobs.db)')
+    .option('--full', 'Ignora i cursor (pull lookback 7gg, push tutto)')
+    .option('--silent', 'Output minimo (per il boot)')
+    .action(handleTicketSync);
 
   cloud
     .command('pull-profile')
@@ -1750,6 +2319,19 @@ export function registerCloudCommand(program) {
     .action(async () => {
       const { runUserMessagesPoller } = await import('../lib/user-messages-poller.js');
       await runUserMessagesPoller();
+    });
+
+  // `file-bridge-listen` — poller del bridge effimero dei file. Pubblica
+  // l'indice dei file del container e serve le richieste on-demand del web
+  // caricando i file in un bucket Supabase di transito via signed upload URL
+  // (poi purgati). Co-spawnato da pid1 accanto agli altri reader. Vedi
+  // docs/internal/file-bridge-on-demand-2026-06-07.md
+  cloud
+    .command('file-bridge-listen')
+    .description('Poller file bridge (indice + upload on-demand CV/allegati al web)')
+    .action(async () => {
+      const { runFileBridgePoller } = await import('../lib/file-bridge-poller.js');
+      await runFileBridgePoller();
     });
 
   // `cloud preflight` — single-team enforcement check post-pairing.

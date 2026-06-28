@@ -13,6 +13,9 @@ Uso:
   python3 db_query.py next-for-scrittore    # posizioni scored >= 50 senza application
   python3 db_query.py next-for-critico      # application in review senza verdict
   python3 db_query.py next-for-geocoding    # posizioni con geocoding richiesto dall'utente
+  python3 db_query.py next-for-recheck      # posizioni da ri-verificare liveness (scadute)
+  python3 db_query.py next-for-categorize   # posizioni senza role_family (backlog categoria)
+  python3 db_query.py next-for-salary-precise # posizioni con salary preciso richiesto dall'utente
   python3 db_query.py application 42        # check anti-riscrittura (REGOLA-02)
                                             # exit 1 se critic_verdict NOT NULL → SKIP
   python3 db_query.py check-url 4361788825  # cerca per job ID numerico
@@ -24,7 +27,24 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
-from _db import get_db, ensure_schema
+from _db import get_db, ensure_schema, active_categories
+
+# Categorie ATTIVE del registro emergente (lane registro dev2). Usa la funzione
+# canonica di _db (active_categories: user_id=None → local_user_id) appena è
+# disponibile; fallback single-tenant tollerante finché il cross-merge non la
+# porta su questo branch (così il branch resta self-contained e testabile).
+try:
+    from _db import active_categories as _read_active_categories
+except ImportError:  # pragma: no cover - ponte pre-cross-merge
+    def _read_active_categories(conn, *a, **k):
+        try:
+            rows = conn.execute(
+                "SELECT name FROM role_family_registry "
+                "WHERE status='active' ORDER BY support_count DESC"
+            ).fetchall()
+        except Exception:
+            return []
+        return [(r[0] if not hasattr(r, "keys") else r["name"]) for r in rows]
 
 
 def format_salary_v2(row):
@@ -309,6 +329,39 @@ def stats():
     conn.close()
 
 
+def recent_activity(minutes=30, limit=40):
+    """Event-log OSSERVABILITÀ (lean-comms redesign): chi ha mosso quali posizioni,
+    quando. Sostituisce i broadcast 'status' inter-agente — invece di narrare in chat
+    'ho scorato #X / coda vuota', si QUERYa qui (pull, non push). Sorgente già
+    esistente: position_state_transitions (by_agent, from→to, ts, notes). Tempi in UTC
+    (CURRENT_TIMESTAMP). Vedi agents/_manual/communication-rules.md (Tier-1 DB)."""
+    conn = get_db()
+    ensure_schema(conn)
+    rows = conn.execute(
+        "SELECT ts, by_agent, position_id, from_state, to_state, notes "
+        "FROM position_state_transitions "
+        "WHERE ts >= datetime('now', ?) "
+        "ORDER BY ts DESC LIMIT ?",
+        (f'-{int(minutes)} minutes', int(limit))
+    ).fetchall()
+    if not rows:
+        print(f"\nNessuna attività pipeline negli ultimi {minutes} min (UTC).")
+        conn.close()
+        return
+    by_agent = {}
+    for r in rows:
+        by_agent[r['by_agent']] = by_agent.get(r['by_agent'], 0) + 1
+    print(f"\nAttività pipeline ultimi {minutes} min ({len(rows)} transizioni, UTC):")
+    print("  per-agente: " + ", ".join(
+        f"{a}={n}" for a, n in sorted(by_agent.items(), key=lambda x: -x[1])))
+    for r in rows:
+        frm = r['from_state'] or '∅'
+        note = f" — {r['notes'][:40]}" if r['notes'] else ""
+        print(f"  {str(r['ts'])[11:19]} {str(r['by_agent'])[:14]:<14} "
+              f"#{r['position_id']} {frm}→{r['to_state']}{note}")
+    conn.close()
+
+
 def next_for_role(role):
     conn = get_db()
     ensure_schema(conn)
@@ -373,6 +426,67 @@ def next_for_role(role):
             ORDER BY p.geocode_requested_at ASC
         """).fetchall()
         label = "Posizioni con geocoding richiesto dall'utente (non ancora geocodate)"
+
+    elif role == 'recheck':
+        # RECHECK ON-DEMAND (2026-06-18): NON più autonomo. L'Analista ri-verifica
+        # la liveness SOLO se l'utente l'ha richiesto dalla pagina posizione
+        # (recheck_requested=1, stesso pattern di write/geocode/salary-precise).
+        # NIENTE query "naturale" su last_open_check stale (era la causa del weekly
+        # burn) e NIENTE backfill automatico dello storico. "Servito" =
+        # last_open_check aggiornato DOPO recheck_requested_at → esce dalla coda
+        # senza azzerare il flag (una nuova richiesta sposta avanti il timestamp).
+        rows = conn.execute("""
+            SELECT p.id, p.title, p.company, p.expires_at, p.last_open_check
+            FROM positions p
+            WHERE p.recheck_requested = 1
+              AND (p.last_open_check IS NULL
+                   OR p.last_open_check < p.recheck_requested_at)
+            ORDER BY p.recheck_requested_at ASC
+        """).fetchall()
+        label = "Posizioni con richeck richiesto dall'utente (liveness on-demand)"
+
+    elif role == 'categorize':
+        # Tassonomia EMERGENTE + SELF-HEALING (2026-06-15, GO utente): coda di
+        # (ri)categorizzazione. Si ri-accoda chi NON è ancora incanalato dalla
+        # tassonomia emergente = role_family NULL (mai categorizzata) OPPURE un
+        # valore che NON è una categoria ATTIVA del registro e non è la sentinella
+        # 'Other' (= drift legacy / categoria sparita). L'analista lo rivaluta →
+        # match a un'attiva o 'Other' + proposta; il pass di promozione fa emergere
+        # le categorie dai dati. Loop-guard: 'Other' (residuo già incanalato) e le
+        # attive NON si ri-accodano mai. Il fix è nel codice + nel ciclo del team
+        # (mai UPDATE esterni sui dati VPS). A registro VUOTO (cold-start) tutto il
+        # non-'Other' è drift da rivalutare → bootstrap dell'emergenza (costo
+        # accettato una-tantum: lo storico viene riproposto e poi clusterizzato).
+        active = _read_active_categories(conn)
+        if active:
+            ph = ",".join("?" * len(active))
+            drift_clause = f"OR (p.role_family NOT IN ({ph}) AND p.role_family <> 'Other')"
+            qparams = list(active)
+        else:
+            drift_clause = "OR (p.role_family <> 'Other')"
+            qparams = []
+        rows = conn.execute(f"""
+            SELECT p.id, p.title, p.company, p.location, p.role_family
+            FROM positions p
+            WHERE (p.role_family IS NULL {drift_clause})
+              AND p.status IN ('checked','scored','writing','review','ready')
+            ORDER BY (p.role_family IS NOT NULL), p.created_at ASC
+        """, qparams).fetchall()
+        label = "Posizioni da (ri)categorizzare (mancante o drift → registro emergente)"
+
+    elif role == 'salary-precise':
+        # Parte B (2026-06-14): coda ON-DEMAND USER-DRIVEN. L'utente seleziona dal
+        # dashboard/Telegram → salary_precise_requested = 1 (viaggia nel sync). L'analista
+        # produce il breakdown preciso (azienda + media web + tasse + NETTO) in
+        # salary_precise. Processa SOLO i flaggati non ancora prodotti.
+        rows = conn.execute("""
+            SELECT p.id, p.title, p.company, p.salary_precise_requested_at
+            FROM positions p
+            WHERE p.salary_precise_requested = 1
+              AND (p.salary_precise IS NULL OR TRIM(p.salary_precise) = '')
+            ORDER BY p.salary_precise_requested_at ASC
+        """).fetchall()
+        label = "Posizioni con stima salary precisa richiesta dall'utente"
 
     else:
         print(f"Ruolo sconosciuto: {role}")
@@ -501,6 +615,10 @@ def main():
     # dashboard + stats
     sub.add_parser('dashboard')
     sub.add_parser('stats')
+    # recent-activity: event-log osservabilità (lean-comms) — sostituisce i broadcast status
+    ra = sub.add_parser('recent-activity')
+    ra.add_argument('--minutes', type=int, default=30)
+    ra.add_argument('--limit', type=int, default=40)
 
     # next-for-*
     sub.add_parser('next-for-analista')
@@ -508,6 +626,30 @@ def main():
     sub.add_parser('next-for-scrittore')
     sub.add_parser('next-for-critico')
     sub.add_parser('next-for-geocoding')
+    sub.add_parser('next-for-recheck')
+    sub.add_parser('next-for-categorize')
+    sub.add_parser('next-for-salary-precise')
+
+    # active-categories <user_id> (tassonomia emergente): nomi role_family
+    # ATTIVI del registro per l'utente. Consumato dal write-guard (db_update)
+    # e dal prompt analista (match-best-active-or-Altro). Nessuna lista
+    # hardcoded: legge role_family_registry.
+    ac = sub.add_parser('active-categories')
+    ac.add_argument('user_id', nargs='?', default=None,
+                    help='omesso → candidato locale (default VPS single-candidate)')
+    ac.add_argument('--json', action='store_true', help='output JSON array')
+
+    # other-pile (2026-06-20): posizioni nel parcheggio 'Other' con la proposta
+    # dell'analista. L'analista le LEGGE per individuare a GIUDIZIO i grappoli di
+    # offerte simili e promuoverli a famiglia (role_registry.py promote --ids ...).
+    op = sub.add_parser('other-pile')
+    op.add_argument('--limit', type=int, default=300)
+
+    # category-sizes (2026-06-20): categorie attive con dimensione LIVE → trigger del
+    # consulto/split col Capitano quando una famiglia diventa troppo grande.
+    cs = sub.add_parser('category-sizes')
+    cs.add_argument('user_id', nargs='?', default=None)
+    cs.add_argument('--big', type=int, default=25, help='soglia direzionale "grande" (default 25)')
 
     # application (anti-riscrittura check)
     ap = sub.add_parser('application')
@@ -547,6 +689,8 @@ def main():
         dashboard()
     elif args.cmd == 'stats':
         stats()
+    elif args.cmd == 'recent-activity':
+        recent_activity(args.minutes, args.limit)
     elif args.cmd == 'application':
         return query_application(args.position_id)
     elif args.cmd == 'check-url':
@@ -561,6 +705,57 @@ def main():
             "WHERE cv_pdf_path IS NOT NULL AND TRIM(cv_pdf_path) != ''"
         ):
             print(r['cv_pdf_path'])
+    elif args.cmd == 'active-categories':
+        conn = get_db()
+        ensure_schema(conn)
+        names = active_categories(conn, args.user_id)
+        if args.json:
+            import json as _json
+            print(_json.dumps(names, ensure_ascii=False))
+        else:
+            for n in names:
+                print(n)
+        conn.close()
+    elif args.cmd == 'other-pile':
+        conn = get_db()
+        ensure_schema(conn)
+        rows = conn.execute(
+            "SELECT id, title, company, role_family_proposed FROM positions "
+            "WHERE role_family = 'Other' "
+            "ORDER BY role_family_proposed, id LIMIT ?",
+            (args.limit,),
+        ).fetchall()
+        print(f"# {len(rows)} posizioni in 'Other' — raggruppa i SIMILI a giudizio, "
+              f"poi: role_registry.py promote --name \"<famiglia>\" --ids <id,id,...>")
+        for r in rows:
+            prop = r['role_family_proposed'] or '—'
+            title = (r['title'] or '')[:48]
+            comp = (r['company'] or '')[:22]
+            print(f"  #{r['id']}\t{prop}\t| {title} @ {comp}")
+        conn.close()
+    elif args.cmd == 'category-sizes':
+        conn = get_db()
+        ensure_schema(conn)
+        actives = active_categories(conn, args.user_id)
+        print(f"# categorie attive (dimensione live) — > {args.big} ⇒ valuta consulto/split col Capitano:")
+        for name in actives:
+            n = conn.execute(
+                "SELECT COUNT(*) FROM positions WHERE role_family = ?", (name,)
+            ).fetchone()[0]
+            flag = '  ⚠ GRANDE' if n > args.big else ''
+            print(f"  {n:>4}  {name}{flag}")
+        other = conn.execute(
+            "SELECT COUNT(*) FROM positions WHERE role_family = 'Other'"
+        ).fetchone()[0]
+        print(f"  {other:>4}  Other (parcheggio — 'other-pile' per i grappoli da promuovere)")
+        # NON categorizzate (role_family IS NULL): NON è una categoria, è il backlog
+        # mai incanalato. Va mostrato qui o il quadro è falso (resta invisibile e ignorato).
+        uncat = conn.execute(
+            "SELECT COUNT(*) FROM positions WHERE role_family IS NULL"
+        ).fetchone()[0]
+        flag = '  ⚠ DA CATEGORIZZARE SUBITO (next-for-categorize) — NULL non è una categoria' if uncat else ''
+        print(f"  {uncat:>4}  NON categorizzate (role_family IS NULL){flag}")
+        conn.close()
     elif args.cmd.startswith('next-for-'):
         role = args.cmd.replace('next-for-', '')
         next_for_role(role)

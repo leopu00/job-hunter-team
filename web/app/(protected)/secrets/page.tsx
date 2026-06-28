@@ -2,6 +2,172 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  type_other: {
+    it: "Altro",
+    en: "Other",
+    hu: "Egyéb",
+    es: "Otro",
+    de: "Andere",
+    fr: "Autre",
+    pt: "Outro",
+  },
+  secrets_count: {
+    it: "{n} secrets salvati",
+    en: "{n} secrets saved",
+    hu: "{n} mentett titok",
+    es: "{n} secretos guardados",
+    de: "{n} gespeicherte Secrets",
+    fr: "{n} secrets enregistrés",
+    pt: "{n} segredos salvos",
+  },
+  cancel: {
+    it: "✕ annulla",
+    en: "✕ cancel",
+    hu: "✕ mégse",
+    es: "✕ cancelar",
+    de: "✕ abbrechen",
+    fr: "✕ annuler",
+    pt: "✕ cancelar",
+  },
+  new_secret: {
+    it: "+ nuovo secret",
+    en: "+ new secret",
+    hu: "+ új titok",
+    es: "+ nuevo secreto",
+    de: "+ neues Secret",
+    fr: "+ nouveau secret",
+    pt: "+ novo segredo",
+  },
+  name_placeholder: {
+    it: "Nome (es. OPENAI_KEY)",
+    en: "Name (e.g. OPENAI_KEY)",
+    hu: "Név (pl. OPENAI_KEY)",
+    es: "Nombre (ej. OPENAI_KEY)",
+    de: "Name (z. B. OPENAI_KEY)",
+    fr: "Nom (ex. OPENAI_KEY)",
+    pt: "Nome (ex. OPENAI_KEY)",
+  },
+  name_aria: {
+    it: "Nome segreto",
+    en: "Secret name",
+    hu: "Titok neve",
+    es: "Nombre del secreto",
+    de: "Secret-Name",
+    fr: "Nom du secret",
+    pt: "Nome do segredo",
+  },
+  type_aria: {
+    it: "Tipo segreto",
+    en: "Secret type",
+    hu: "Titok típusa",
+    es: "Tipo de secreto",
+    de: "Secret-Typ",
+    fr: "Type de secret",
+    pt: "Tipo de segredo",
+  },
+  value_placeholder: {
+    it: "Valore…",
+    en: "Value…",
+    hu: "Érték…",
+    es: "Valor…",
+    de: "Wert…",
+    fr: "Valeur…",
+    pt: "Valor…",
+  },
+  value_aria: {
+    it: "Valore segreto",
+    en: "Secret value",
+    hu: "Titok értéke",
+    es: "Valor del secreto",
+    de: "Secret-Wert",
+    fr: "Valeur du secret",
+    pt: "Valor do segredo",
+  },
+  save: {
+    it: "salva",
+    en: "save",
+    hu: "mentés",
+    es: "guardar",
+    de: "speichern",
+    fr: "enregistrer",
+    pt: "salvar",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Laden…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  no_secrets: {
+    it: "Nessun secret",
+    en: "No secrets",
+    hu: "Nincs titok",
+    es: "Ningún secreto",
+    de: "Keine Secrets",
+    fr: "Aucun secret",
+    pt: "Nenhum segredo",
+  },
+  no_secrets_hint: {
+    it: "Salva qui le tue API key e token cifrati.",
+    en: "Save your encrypted API keys and tokens here.",
+    hu: "Mentsd ide a titkosított API-kulcsaidat és tokenjeidet.",
+    es: "Guarda aquí tus claves API y tokens cifrados.",
+    de: "Speichere hier deine verschlüsselten API-Keys und Tokens.",
+    fr: "Enregistrez ici vos clés API et tokens chiffrés.",
+    pt: "Salve aqui suas chaves API e tokens criptografados.",
+  },
+  reveal_show: {
+    it: "Mostra valore",
+    en: "Show value",
+    hu: "Érték megjelenítése",
+    es: "Mostrar valor",
+    de: "Wert anzeigen",
+    fr: "Afficher la valeur",
+    pt: "Mostrar valor",
+  },
+  reveal_hide: {
+    it: "Nascondi valore",
+    en: "Hide value",
+    hu: "Érték elrejtése",
+    es: "Ocultar valor",
+    de: "Wert verbergen",
+    fr: "Masquer la valeur",
+    pt: "Ocultar valor",
+  },
+  copy_aria: {
+    it: "Copia valore",
+    en: "Copy value",
+    hu: "Érték másolása",
+    es: "Copiar valor",
+    de: "Wert kopieren",
+    fr: "Copier la valeur",
+    pt: "Copiar valor",
+  },
+  delete_aria: {
+    it: "Elimina segreto",
+    en: "Delete secret",
+    hu: "Titok törlése",
+    es: "Eliminar secreto",
+    de: "Secret löschen",
+    fr: "Supprimer le secret",
+    pt: "Excluir segredo",
+  },
+  confirm_reveal: {
+    it: 'Mostrare il valore in chiaro di "{name}"?',
+    en: 'Show the plain value of "{name}"?',
+    hu: '"{name}" értékének megjelenítése nyílt szövegben?',
+    es: '¿Mostrar el valor en claro de "{name}"?',
+    de: 'Klartextwert von "{name}" anzeigen?',
+    fr: 'Afficher la valeur en clair de "{name}" ?',
+    pt: 'Mostrar o valor em claro de "{name}"?',
+  },
+};
 
 type SecretType = "api_key" | "token" | "password" | "webhook" | "other";
 type Secret = {
@@ -13,13 +179,6 @@ type Secret = {
   createdAt: number;
 };
 
-const TYPE_LABEL: Record<SecretType, string> = {
-  api_key: "API Key",
-  token: "Token",
-  password: "Password",
-  webhook: "Webhook",
-  other: "Altro",
-};
 const TYPE_ICON: Record<SecretType, string> = {
   api_key: "🔑",
   token: "🎫",
@@ -28,8 +187,18 @@ const TYPE_ICON: Record<SecretType, string> = {
   other: "◆",
 };
 
-function fmtDate(ms: number) {
-  return new Date(ms).toLocaleDateString("it-IT", {
+const LOCALE_TAG: Record<string, string> = {
+  it: "it-IT",
+  en: "en-US",
+  hu: "hu-HU",
+  es: "es-ES",
+  de: "de-DE",
+  fr: "fr-FR",
+  pt: "pt-PT",
+};
+
+function fmtDate(ms: number, locale: string) {
+  return new Date(ms).toLocaleDateString(LOCALE_TAG[locale] ?? "en-US", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -37,6 +206,15 @@ function fmtDate(ms: number) {
 }
 
 export default function SecretsPage() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+  const TYPE_LABEL: Record<SecretType, string> = {
+    api_key: "API Key",
+    token: "Token",
+    password: "Password",
+    webhook: "Webhook",
+    other: tr("type_other"),
+  };
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -79,7 +257,7 @@ export default function SecretsPage() {
       );
       return;
     }
-    if (!window.confirm(`Mostrare il valore in chiaro di "${secret.name}"?`))
+    if (!window.confirm(tr("confirm_reveal").replace("{name}", secret.name)))
       return;
     const value = await fetchRevealed(secret.id);
     if (value !== null)
@@ -151,7 +329,7 @@ export default function SecretsPage() {
               Secrets
             </h1>
             <p className="text-[var(--color-muted)] text-[11px] mt-1">
-              {secrets.length} secrets salvati
+              {tr("secrets_count").replace("{n}", String(secrets.length))}
             </p>
           </div>
           <button
@@ -165,7 +343,7 @@ export default function SecretsPage() {
               cursor: "pointer",
             }}
           >
-            {showForm ? "✕ annulla" : "+ nuovo secret"}
+            {showForm ? tr("cancel") : tr("new_secret")}
           </button>
         </div>
       </div>
@@ -180,8 +358,8 @@ export default function SecretsPage() {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Nome (es. OPENAI_KEY)"
-                aria-label="Nome segreto"
+                placeholder={tr("name_placeholder")}
+                aria-label={tr("name_aria")}
                 className="flex-1 text-[12px]"
                 style={{ color: "var(--color-bright)" }}
                 autoComplete="off"
@@ -190,7 +368,7 @@ export default function SecretsPage() {
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as SecretType)}
-                aria-label="Tipo segreto"
+                aria-label={tr("type_aria")}
                 className="text-[11px] px-2 py-1 rounded"
                 style={{
                   background: "var(--color-bg)",
@@ -211,8 +389,8 @@ export default function SecretsPage() {
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && create()}
-                placeholder="Valore…"
-                aria-label="Valore segreto"
+                placeholder={tr("value_placeholder")}
+                aria-label={tr("value_aria")}
                 className="flex-1 text-[12px]"
                 style={{ color: "var(--color-bright)" }}
                 autoComplete="off"
@@ -232,7 +410,7 @@ export default function SecretsPage() {
                   cursor: name.trim() && value.trim() ? "pointer" : "default",
                 }}
               >
-                {creating ? "…" : "salva"}
+                {creating ? "…" : tr("save")}
               </button>
             </div>
           </div>
@@ -246,7 +424,7 @@ export default function SecretsPage() {
           aria-live="polite"
         >
           <span className="text-[var(--color-dim)] text-[12px]">
-            Caricamento…
+            {tr("loading")}
           </span>
         </div>
       )}
@@ -258,10 +436,10 @@ export default function SecretsPage() {
                 🔐
               </span>
               <p className="text-[12px] font-semibold text-[var(--color-muted)]">
-                Nessun secret
+                {tr("no_secrets")}
               </p>
               <p className="text-[10px] text-[var(--color-dim)]">
-                Salva qui le tue API key e token cifrati.
+                {tr("no_secrets_hint")}
               </p>
             </div>
           ) : (
@@ -280,13 +458,15 @@ export default function SecretsPage() {
                   </p>
                   <p className="text-[10px] font-mono text-[var(--color-dim)] mt-0.5">
                     {s.masked ? s.value : s.value} · {TYPE_LABEL[s.type]} ·{" "}
-                    {fmtDate(s.createdAt)}
+                    {fmtDate(s.createdAt, locale)}
                   </p>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
                   <button
                     onClick={() => reveal(s)}
-                    aria-label={s.masked ? "Mostra valore" : "Nascondi valore"}
+                    aria-label={
+                      s.masked ? tr("reveal_show") : tr("reveal_hide")
+                    }
                     className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors"
                     style={{
                       border: "1px solid var(--color-border)",
@@ -300,7 +480,7 @@ export default function SecretsPage() {
                   </button>
                   <button
                     onClick={() => copy(s)}
-                    aria-label="Copia valore"
+                    aria-label={tr("copy_aria")}
                     className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors"
                     style={{
                       border: "1px solid var(--color-border)",
@@ -317,7 +497,7 @@ export default function SecretsPage() {
                   </button>
                   <button
                     onClick={() => del(s.id)}
-                    aria-label="Elimina segreto"
+                    aria-label={tr("delete_aria")}
                     className="px-2 py-1 rounded text-[9px] cursor-pointer transition-colors"
                     style={{
                       border: "1px solid rgba(255,69,96,0.2)",

@@ -1,7 +1,7 @@
-<!-- @translation: hu, ai-translated 2026-06-06 -->
+<!-- @translation: hu, ai-translated 2026-06-13 -->
 ---
 name: spawn-agent
-description: "Elindit egy JHT csapat-agenst (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) a launcheren keresztul, majd elkuldi a kick-off uzenetet, ami tenylegesen elinditja a fo ciklust. Csak Capitano — a Capitano a csapat skalazodasanak egyetlen tulajdonosa. MINDIG hasznald ezt a skillt: a `start-agent.sh` megkerulese `tmux new-session` + nyers `send-keys \"kimi ...\"` segitsegevel olyan munkameneteket hoz letre, ahol a CLI soha nem indul el (`command not found`), a Capitano \"elo\" munkamenetet lat, ami valojaban halott, es a csapat csoendesen alulteljesit."
+description: "Elindit egy JHT csapat-agenst (Scout, Analista, Scorer, Scrittore, Critico, Assistente, Capitano-2) a launcheren keresztul, majd elkuldi a kick-off uzenetet, ami tenylegesen elinditja a fo ciklusat. Csak Capitano — a Capitano a csapat skalazodasanak egyetlen tulajdonosa. MINDIG hasznald ezt a skillt: a `start-agent.sh` megkerulese `tmux new-session` + nyers `send-keys \"kimi ...\"` segitsegevel olyan munkameneteket hoz letre, ahol a CLI soha nem indul el (`command not found`), a Capitano \"elo\" munkamenetet lat, ami valojaban halott, es a csapat csoendesen alulteljesit."
 allowed-tools: Bash(bash /app/.launcher/start-agent.sh *), Bash(tmux *), Bash(jht-tmux-send *), Bash(sleep *)
 ---
 
@@ -21,6 +21,13 @@ bash /app/.launcher/start-agent.sh scout 2       # SCOUT-2
 bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
 bash /app/.launcher/start-agent.sh critico       # CRITICO (singleton, szam nelkul)
 ```
+
+**Peldanyszam — dobj a kockaval (skalazhato workerek, 2026-06-13).** A `scout` / `analista` / `scorer` / `scrittore` eseten **NE** valaszd a szamot sorrendben: a munka mindig az `-1`/`-2`-n halmozodott fel, miközben a `-4` szinte semmit sem csinalt. Elobb dobj egy szabad veletlen szamot, majd add at:
+```bash
+N=$(python3 /app/shared/skills/roll_worker_number.py scout) && \
+  bash /app/.launcher/start-agent.sh scout "$N"
+```
+A `roll_worker_number.py` egy **d6-ot dob, kizarva a mar hasznalatban levo szamokat** (letezo `SCOUT-N` munkamenetek) → soha nincs utkozes, es a munkateher a peldanyszamok kozott oszlik szet ahelyett, hogy mindig az `-1`-et terhelne. Csak **UJ spawnokra** vonatkozik; a singletonok (Critico / Sentinella / Dottore / Assistente / Mentor) nem kapnak szamot, es a Dottore session-refresh-e **ugyanazt** a szamot hozza ujra letre (nem dob).
 
 A launcher atomikusan vegzi:
 - letrehozza a tmux munkamenetet a kanonikus nevvel (`SCOUT-2`, `ANALISTA-1`, …)
@@ -98,6 +105,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 - ❌ Tobb agens inditasa szoros ciklusban 1-tick pacing nelkul — lasd a `pipeline-triage`-t a skalazasi szabalyokhoz (1 spawn Sentinel-tikkenent, ~5 perc kulonbseggel).
 - ❌ Crash utan vakon ujrainditani anelkul, hogy `db_query.py`-t olvasnad az utolso task allapotanak visszaallitasahoz — az uj agens elolrol kezdi es duplikalja a munkat.
 - ❌ Ennek a skillnek hasznalata egy mukodo agens "ujrainditasara", mert lassunk tunik. Lassu ≠ halott. Hosszu korok lathato token kimenettel nem spawn-eset — hanem `liveness-check`-eset (Dottore).
+- ❌ Helyettesítő spawnolása, mert a `jht-tmux-send` nem tudott kézbesíteni. **`exit 4` = a cél TUI turn közben van (`Working … esc to interrupt`) → az ügynök ÉL, csak elfoglalt.** Az üzenet NEM lett szinkron módon kézbesítve: próbáld újra a küldést később, soha ne spawnolj klónt. Csak az `exit 3` (a szöveg soha nem jelent meg ÉS a pane nem elfoglalt → csupasz shell / beragadt modal) lehetséges-halott jel, és még akkor is a verdikt a **Dottore**-é (`liveness-check`), nem egy reflex spawn. Egy elfoglalt ügynökre spawnolni pontosan a 2026-06-07-es overspawn bug (`docs/internal/2026-06-11-overspawn-rootcause.md`): a klón átveszi az irányítást, miközben az eredeti zombie-ként tovább égeti a budgetet.
 - ❌ Critico inditasa. A Scrittore onalloan inditja a sajat `CRITICO-S<N>`-jet — a Capitano soha nem nyul kozvetlenul a Criticohoz.
 
 ## Lasd meg

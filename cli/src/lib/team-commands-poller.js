@@ -34,14 +34,15 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
+import { tierInterval, errorBackoff, POLL_IDLE_MS } from './poll-tier.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 const JHT_BIN = '/app/cli/bin/jht.js';
 
-const POLL_INTERVAL_MS_DEFAULT = 5000;
-const POLL_INTERVAL_MAX_MS = 60000;
+// Cadenza adattiva (vedi poll-tier.js): 5s solo dopo un comando, poi ≤30s.
+// I comandi (es. dalla pagina sentinella cloud) vengono raccolti entro ≤30s.
 
 function log(level, msg, meta) {
   const ts = new Date().toISOString();
@@ -249,14 +250,14 @@ export async function runTeamCommandsPoller() {
   // Vedi docs/internal/2026-05-21-halt-weekly-incident.md +
   // docs/internal/2026-05-22-vercel-quota-exhaustion.md.
   let haltLogTick = 0;
+  let lastActivityAt = Date.now();
   while (!shuttingDown) {
     if (existsSync(WEEKLY_HALT_FLAG)) {
       if (haltLogTick % 60 === 0) {
-        // log ogni 60 cicli (~5min @ 5s default) per non spammare
         log('info', 'poll.skipped', { reason: 'weekly-halt-flag active' });
       }
       haltLogTick += 1;
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS_DEFAULT));
+      await new Promise((resolve) => setTimeout(resolve, POLL_IDLE_MS));
       continue;
     }
     if (haltLogTick > 0) {
@@ -264,12 +265,15 @@ export async function runTeamCommandsPoller() {
       haltLogTick = 0;
     }
 
-    let backoff = POLL_INTERVAL_MS_DEFAULT;
+    let backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
     try {
       const r = await apiGet(baseUrl, token, '/api/cloud-sync/team-commands?status=pending&limit=20');
       consecutiveErrors = 0;
       const commands = Array.isArray(r.commands) ? r.commands : [];
       if (commands.length > 0) {
+        // Attività confermata: torna a tier active (5s) per i comandi seguenti.
+        lastActivityAt = Date.now();
+        backoff = tierInterval(lastActivityAt, { allowDeepIdle: false });
         log('info', 'poll.found-pending', { count: commands.length });
         for (const cmd of commands) {
           if (shuttingDown) break;
@@ -281,8 +285,7 @@ export async function runTeamCommandsPoller() {
       }
     } catch (err) {
       consecutiveErrors += 1;
-      // Backoff esponenziale 5s → 10s → 20s → 40s → 60s cap.
-      backoff = Math.min(POLL_INTERVAL_MAX_MS, POLL_INTERVAL_MS_DEFAULT * 2 ** Math.min(consecutiveErrors, 4));
+      backoff = errorBackoff(tierInterval(lastActivityAt, { allowDeepIdle: false }), consecutiveErrors);
       log('error', 'poll.failed', { err: err.message, consecutiveErrors, nextBackoffMs: backoff });
     }
     if (shuttingDown) break;

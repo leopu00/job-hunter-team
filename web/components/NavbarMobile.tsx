@@ -4,6 +4,18 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useDashboardT } from '@/app/components/DashboardI18n'
+import { useLocale } from '@/lib/use-locale'
+import type { Locale } from '@/i18n/config'
+
+const T: Record<Locale, { menuAria: string }> = {
+  it: { menuAria: 'Menu navigazione' },
+  en: { menuAria: 'Navigation menu' },
+  es: { menuAria: 'Menú de navegación' },
+  fr: { menuAria: 'Menu de navigation' },
+  de: { menuAria: 'Navigationsmenü' },
+  hu: { menuAria: 'Navigációs menü' },
+  pt: { menuAria: 'Menu de navegação' },
+}
 
 const NAV_KEYS: { href: string; key: string; accent?: string }[] = [
   { href: '/dashboard',    key: 'nav_dashboard' },
@@ -11,13 +23,13 @@ const NAV_KEYS: { href: string; key: string; accent?: string }[] = [
   { href: '/positions',    key: 'nav_positions' },
   { href: '/team',         key: 'nav_team' },
   { href: '/profile',      key: 'nav_profile' },
-  { href: '/credentials',  key: 'nav_settings' },
 ]
 
 export default function NavbarMobile() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
   const { t } = useDashboardT()
+  const tl = T[useLocale()]
 
   return (
     <div className="md:hidden flex items-center">
@@ -25,13 +37,13 @@ export default function NavbarMobile() {
         onClick={() => setOpen(v => !v)}
         className="flex flex-col gap-1 p-1.5 rounded"
         style={{ background: 'none', border: '1px solid var(--color-border)', cursor: 'pointer' }}
-        aria-label="Menu navigazione"
+        aria-label={tl.menuAria}
         aria-expanded={open}
         aria-controls="app-mobile-nav"
       >
-        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: open ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
-        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', opacity: open ? 0 : 1 }} />
-        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-muted)', transition: 'all 0.2s', transform: open ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
+        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-bright)', transition: 'all 0.2s', transform: open ? 'rotate(45deg) translate(2px, 2px)' : '' }} />
+        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-bright)', transition: 'all 0.2s', opacity: open ? 0 : 1 }} />
+        <span className="block w-4 h-0.5 rounded-full" style={{ background: 'var(--color-bright)', transition: 'all 0.2s', transform: open ? 'rotate(-45deg) translate(2px, -2px)' : '' }} />
       </button>
 
       {open && (

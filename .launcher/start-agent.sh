@@ -149,12 +149,14 @@ if [ "$ROLE" = "bridge" ]; then
   " >/dev/null 2>&1 < /dev/null &
   echo "✓ sentinel-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log /tmp/sentinel-bridge.log)"
 
-  # Pacing bridge — tick orario al CAPITANO sul ritmo del team. Stesso
+  # Pacing bridge — tick alla SENTINELLA (analista del pacing) sul ritmo del
+  # team (2026-06-25 push→pull: NON più al Capitano, vedi bridge-to-sentinella
+  # doc). Stesso
   # pattern del sentinel-bridge: setsid + singleton tramite kill via
   # /proc/*/cmdline + log su /tmp. Indipendente dal sentinel-bridge:
   # legge sentinel-data.jsonl (scritto dal sentinel-bridge) + token logs
   # locali, calcola Δusage / vel_team / vel_target / %/h per agente, e
-  # manda un [BRIDGE PACING] al Capitano allineato a :00,:15,:30,:45 UTC.
+  # manda un [BRIDGE PACING] alla Sentinella allineato a :00,:15,:30,:45 UTC.
   PACING_SCRIPT="/app/.launcher/pacing-bridge.py"
   if [ -f "$PACING_SCRIPT" ]; then
     for _pid in $(grep -l pacing-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
@@ -170,12 +172,35 @@ if [ "$ROLE" = "bridge" ]; then
     # le env vars del parent. Setting PATH a single-quoted lo aveva
     # rotto (BUG: $PATH non espanso → python3 not found, bridge morto).
     setsid sh -c "
-      JHT_PACING_TARGET_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+      JHT_PACING_TARGET_SESSION='${JHT_PACING_TARGET_SESSION:-SENTINELLA}' \
         python3 -u $PACING_SCRIPT >> /tmp/pacing-bridge.log 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ pacing-bridge partito (target=${JHT_TARGET_SESSION:-CAPITANO}, log /tmp/pacing-bridge.log)"
+    echo "✓ pacing-bridge partito (target=${JHT_PACING_TARGET_SESSION:-SENTINELLA}, log /tmp/pacing-bridge.log)"
   else
     echo "⚠ $PACING_SCRIPT non trovato — pacing NON partito (sentinel ok)"
+  fi
+
+  # Capitano heartbeat bridge — battito ORARIO al Capitano (2026-06-26). Col
+  # push→pull il Capitano non riceve più il pacing ogni 15min e si incaglia
+  # quando la Sentinella tace: questo lo risveglia 1×/ora con un nudge basato sui
+  # dati DB (deterministico, NON LLM), così resta attivo senza essere passivo.
+  HEARTBEAT_SCRIPT="/app/.launcher/capitano-bridge.py"
+  if [ -f "$HEARTBEAT_SCRIPT" ]; then
+    for _pid in $(grep -l capitano-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -TERM "$_pid" 2>/dev/null || true
+    done
+    sleep 0.5
+    for _pid in $(grep -l capitano-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+      kill -KILL "$_pid" 2>/dev/null || true
+    done
+    sleep 0.5
+    setsid sh -c "
+      JHT_CAPITANO_HEARTBEAT_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+        python3 -u $HEARTBEAT_SCRIPT >> /tmp/capitano-bridge.log 2>&1
+    " >/dev/null 2>&1 < /dev/null &
+    echo "✓ capitano-bridge (heartbeat orario) partito (log /tmp/capitano-bridge.log)"
+  else
+    echo "⚠ $HEARTBEAT_SCRIPT non trovato — heartbeat NON partito"
   fi
 
   # Window ratio meter — calibrazione auto del rapporto cap-5h/cap-weekly.
@@ -453,7 +478,15 @@ case "$PROVIDER" in
     # --yolo auto-approves every shell command so the agent can write
     # chat.jsonl, create the profile dir, etc. without blocking on the
     # approval prompt (equivalent of Claude's --dangerously-skip-permissions).
-    CLI_ARGS="--yolo"
+    # --max-steps-per-turn 100 (2026-06-25): cap il loop autonomo di un turno
+    # a 100 step (default kimi-cli = 1000). K2.7-Code tende a turni lunghissimi
+    # (rabbit-hole: scraping a mano + processor custom, ~170k token / 0 output);
+    # 100 cappa SOLO i runaway veri (un batch sano è ~20 step → non si pianta).
+    # Quando un worker tocca il cap, la CLI termina il turno con "Max number of
+    # steps reached" e ASPETTA input (max_ralph=0, niente auto-continue): è il
+    # Capitano a sbloccarlo con un "Continua" (regola C-08 ter). Trasforma i
+    # runaway in checkpoint controllabili invece che in burn cieco.
+    CLI_ARGS="--yolo --max-steps-per-turn 100"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="MOONSHOT_API_KEY='${API_KEY}' "
     fi
@@ -644,6 +677,29 @@ fi
 if [ -f "$TEMPLATE" ] && { [ ! -f "$IDENTITY_DEST" ] || ! cmp -s "$TEMPLATE" "$IDENTITY_DEST"; }; then
   cp "$TEMPLATE" "$IDENTITY_DEST"
   echo "  → $IDENTITY_FILE sincronizzato da template ($(basename "$TEMPLATE"))"
+fi
+
+# ── Team docs (team-rules, architettura) — fix-radice-A 2026-06-14 ───────────
+# I prompt agente linkano [..](../_team/team-rules.md): path RELATIVO alla
+# workdir runtime ($JHT_AGENTS_DIR/<role>/). Senza copiare i doc team-wide
+# accanto alle workdir quel link è rotto a runtime (il file vive solo in
+# /app/agents/_team/). Copiandoli in $JHT_AGENTS_DIR/_team/ il "../_team/..."
+# risolve per OGNI agente, e la tassonomia role_family team-wide diventa
+# raggiungibile. Locale-aware come le skill (variante <name>.<locale>.md → <name>.md).
+TEAM_SRC="$REPO_ROOT/agents/_team"
+TEAM_DEST="$JHT_AGENTS_DIR/_team"
+if [ -d "$TEAM_SRC" ]; then
+  mkdir -p "$TEAM_DEST"
+  for f in "$TEAM_SRC"/*.md; do
+    [ -f "$f" ] || continue
+    base="$(basename "$f")"
+    case "$base" in *.??.md) continue;; esac   # salta le varianti localizzate
+    cp "$f" "$TEAM_DEST/$base"
+    localized="$TEAM_SRC/${base%.md}.$USER_LOCALE.md"
+    if [ "$USER_LOCALE" != "en" ] && [ -f "$localized" ]; then
+      cp "$localized" "$TEAM_DEST/$base"
+    fi
+  done
 fi
 
 # ── Skill distribution ──────────────────────────────────────────────────────

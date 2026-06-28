@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
 
 interface Counts {
   positions: number;
@@ -18,17 +20,142 @@ interface SyncStatus {
   in_sync: boolean;
 }
 
-function formatRelativeTime(iso: string): string {
+const T: Record<
+  Locale,
+  {
+    inFuture: string;
+    fewSecondsAgo: string;
+    secAgo: (n: number) => string;
+    minAgo: (n: number) => string;
+    hourAgo: (n: number) => string;
+    daysAgo: (n: number) => string;
+    cloudSync: string;
+    toSync: string;
+    last: string;
+    neverSynced: string;
+    syncing: string;
+    syncNow: string;
+    networkError: string;
+  }
+> = {
+  it: {
+    inFuture: "nel futuro",
+    fewSecondsAgo: "pochi secondi fa",
+    secAgo: (n) => `${n} sec fa`,
+    minAgo: (n) => (n === 1 ? "1 min fa" : `${n} min fa`),
+    hourAgo: (n) => (n === 1 ? "1 ora fa" : `${n} ore fa`),
+    daysAgo: (n) => (n === 1 ? "1 giorno fa" : `${n} giorni fa`),
+    cloudSync: "✓ Cloud sync",
+    toSync: "◐ Da sincronizzare",
+    last: "Ultimo:",
+    neverSynced: "Mai sincronizzato",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    networkError: "Errore di rete",
+  },
+  en: {
+    inFuture: "in the future",
+    fewSecondsAgo: "a few seconds ago",
+    secAgo: (n) => `${n} sec ago`,
+    minAgo: (n) => (n === 1 ? "1 min ago" : `${n} min ago`),
+    hourAgo: (n) => (n === 1 ? "1 hour ago" : `${n} hours ago`),
+    daysAgo: (n) => (n === 1 ? "1 day ago" : `${n} days ago`),
+    cloudSync: "✓ Cloud sync",
+    toSync: "◐ To sync",
+    last: "Last:",
+    neverSynced: "Never synced",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    networkError: "Network error",
+  },
+  es: {
+    inFuture: "en el futuro",
+    fewSecondsAgo: "hace unos segundos",
+    secAgo: (n) => `hace ${n} s`,
+    minAgo: (n) => (n === 1 ? "hace 1 min" : `hace ${n} min`),
+    hourAgo: (n) => (n === 1 ? "hace 1 hora" : `hace ${n} horas`),
+    daysAgo: (n) => (n === 1 ? "hace 1 día" : `hace ${n} días`),
+    cloudSync: "✓ Cloud sync",
+    toSync: "◐ Por sincronizar",
+    last: "Último:",
+    neverSynced: "Nunca sincronizado",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    networkError: "Error de red",
+  },
+  fr: {
+    inFuture: "dans le futur",
+    fewSecondsAgo: "il y a quelques secondes",
+    secAgo: (n) => `il y a ${n} s`,
+    minAgo: (n) => (n === 1 ? "il y a 1 min" : `il y a ${n} min`),
+    hourAgo: (n) => (n === 1 ? "il y a 1 heure" : `il y a ${n} heures`),
+    daysAgo: (n) => (n === 1 ? "il y a 1 jour" : `il y a ${n} jours`),
+    cloudSync: "✓ Cloud sync",
+    toSync: "◐ À synchroniser",
+    last: "Dernier :",
+    neverSynced: "Jamais synchronisé",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    networkError: "Erreur réseau",
+  },
+  de: {
+    inFuture: "in der Zukunft",
+    fewSecondsAgo: "vor wenigen Sekunden",
+    secAgo: (n) => `vor ${n} Sek.`,
+    minAgo: (n) => (n === 1 ? "vor 1 Min." : `vor ${n} Min.`),
+    hourAgo: (n) => (n === 1 ? "vor 1 Stunde" : `vor ${n} Stunden`),
+    daysAgo: (n) => (n === 1 ? "vor 1 Tag" : `vor ${n} Tagen`),
+    cloudSync: "✓ Cloud sync",
+    toSync: "◐ Zu synchronisieren",
+    last: "Zuletzt:",
+    neverSynced: "Nie synchronisiert",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    networkError: "Netzwerkfehler",
+  },
+  hu: {
+    inFuture: "a jövőben",
+    fewSecondsAgo: "néhány másodperce",
+    secAgo: (n) => `${n} mp.-e`,
+    minAgo: (n) => `${n} perce`,
+    hourAgo: (n) => (n === 1 ? "1 órája" : `${n} órája`),
+    daysAgo: (n) => (n === 1 ? "1 napja" : `${n} napja`),
+    cloudSync: "✓ Cloud sync",
+    toSync: "◐ Szinkronizálandó",
+    last: "Utolsó:",
+    neverSynced: "Soha nem szinkronizált",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    networkError: "Hálózati hiba",
+  },
+  pt: {
+    inFuture: "no futuro",
+    fewSecondsAgo: "há alguns segundos",
+    secAgo: (n) => `há ${n} s`,
+    minAgo: (n) => (n === 1 ? "há 1 min" : `há ${n} min`),
+    hourAgo: (n) => (n === 1 ? "há 1 hora" : `há ${n} horas`),
+    daysAgo: (n) => (n === 1 ? "há 1 dia" : `há ${n} dias`),
+    cloudSync: "✓ Cloud sync",
+    toSync: "◐ Por sincronizar",
+    last: "Último:",
+    neverSynced: "Nunca sincronizado",
+    syncing: "Sync…",
+    syncNow: "Sync now",
+    networkError: "Erro de rede",
+  },
+};
+
+function formatRelativeTime(iso: string, t: (typeof T)[Locale]): string {
   const diffMs = Date.now() - new Date(iso).getTime();
-  if (diffMs < 0) return "in futuro";
+  if (diffMs < 0) return t.inFuture;
   const sec = Math.floor(diffMs / 1000);
-  if (sec < 60) return sec <= 5 ? "pochi secondi fa" : `${sec} sec fa`;
+  if (sec < 60) return sec <= 5 ? t.fewSecondsAgo : t.secAgo(sec);
   const min = Math.floor(sec / 60);
-  if (min < 60) return min === 1 ? "1 min fa" : `${min} min fa`;
+  if (min < 60) return t.minAgo(min);
   const hr = Math.floor(min / 60);
-  if (hr < 24) return hr === 1 ? "1 ora fa" : `${hr} ore fa`;
+  if (hr < 24) return t.hourAgo(hr);
   const days = Math.floor(hr / 24);
-  return days === 1 ? "1 giorno fa" : `${days} giorni fa`;
+  return t.daysAgo(days);
 }
 
 /**
@@ -40,6 +167,7 @@ export default function CloudSyncStatusBanner() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = T[useLocale()];
 
   async function refresh() {
     try {
@@ -71,7 +199,7 @@ export default function CloudSyncStatusBanner() {
       }
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore di rete");
+      setError(err instanceof Error ? err.message : t.networkError);
     } finally {
       setSyncing(false);
     }
@@ -99,19 +227,19 @@ export default function CloudSyncStatusBanner() {
         className="px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap"
         style={{ color: accent, border: `1px solid ${accent}` }}
       >
-        {inSync ? "✓ Cloud sync" : "◐ Da sincronizzare"}
+        {inSync ? t.cloudSync : t.toSync}
       </span>
 
       <span className="text-[var(--color-dim)] whitespace-nowrap">
         {status.last_sync ? (
           <>
-            Ultimo:{" "}
+            {t.last}{" "}
             <span style={{ color: "var(--color-bright)" }}>
-              {formatRelativeTime(status.last_sync.at)}
+              {formatRelativeTime(status.last_sync.at, t)}
             </span>
           </>
         ) : (
-          <>Mai sincronizzato</>
+          <>{t.neverSynced}</>
         )}
       </span>
 
@@ -143,7 +271,7 @@ export default function CloudSyncStatusBanner() {
           background: "transparent",
         }}
       >
-        {syncing ? "Sync…" : "Sync now"}
+        {syncing ? t.syncing : t.syncNow}
       </button>
 
       {error && (

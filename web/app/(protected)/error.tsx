@@ -2,6 +2,61 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<
+  Locale,
+  {
+    title: string;
+    unexpected: string;
+    retry: string;
+    backToDashboard: string;
+  }
+> = {
+  it: {
+    title: "Errore nel caricamento",
+    unexpected: "Si è verificato un errore imprevisto.",
+    retry: "Riprova",
+    backToDashboard: "Torna alla Dashboard",
+  },
+  en: {
+    title: "Loading error",
+    unexpected: "An unexpected error occurred.",
+    retry: "Retry",
+    backToDashboard: "Back to Dashboard",
+  },
+  es: {
+    title: "Error de carga",
+    unexpected: "Se ha producido un error inesperado.",
+    retry: "Reintentar",
+    backToDashboard: "Volver al Panel",
+  },
+  fr: {
+    title: "Erreur de chargement",
+    unexpected: "Une erreur inattendue s'est produite.",
+    retry: "Réessayer",
+    backToDashboard: "Retour au tableau de bord",
+  },
+  de: {
+    title: "Ladefehler",
+    unexpected: "Ein unerwarteter Fehler ist aufgetreten.",
+    retry: "Erneut versuchen",
+    backToDashboard: "Zurück zum Dashboard",
+  },
+  hu: {
+    title: "Betöltési hiba",
+    unexpected: "Váratlan hiba történt.",
+    retry: "Újra",
+    backToDashboard: "Vissza az irányítópultra",
+  },
+  pt: {
+    title: "Erro de carregamento",
+    unexpected: "Ocorreu um erro inesperado.",
+    retry: "Tentar de novo",
+    backToDashboard: "Voltar ao Painel",
+  },
+};
 
 export default function ProtectedError({
   error,
@@ -10,6 +65,7 @@ export default function ProtectedError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = T[useLocale()];
   useEffect(() => {
     console.error("[JHT] errore area protetta:", error);
   }, [error]);
@@ -36,13 +92,13 @@ export default function ProtectedError({
           className="text-[16px] font-bold"
           style={{ color: "var(--color-white)" }}
         >
-          Errore nel caricamento
+          {t.title}
         </h2>
         <p
           className="text-[11px] leading-relaxed"
           style={{ color: "var(--color-muted)" }}
         >
-          {error.message || "Si e verificato un errore imprevisto."}
+          {error.message || t.unexpected}
         </p>
         {error.digest && (
           <p
@@ -62,7 +118,7 @@ export default function ProtectedError({
             className="px-4 py-2 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer"
             style={{ background: "var(--color-green)", color: "#000" }}
           >
-            Riprova
+            {t.retry}
           </button>
           <Link
             href="/dashboard"
@@ -72,7 +128,7 @@ export default function ProtectedError({
               color: "var(--color-muted)",
             }}
           >
-            Torna alla Dashboard
+            {t.backToDashboard}
           </Link>
         </div>
       </div>

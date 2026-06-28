@@ -11,7 +11,7 @@ import {
   onLangChange,
 } from './modules/i18n.js'
 import { SUPPORTED_LANGS, LANG_STORAGE_KEY, DEFAULT_LANG } from './modules/translations.js'
-import { STEP_LANGUAGE, STEP_WELCOME, STEP_RUNNING } from './modules/constants.js'
+import { STEP_LANGUAGE, STEP_WELCOME } from './modules/constants.js'
 import { showStep } from './modules/state.js'
 import {
   renderDockerCard,
@@ -24,7 +24,7 @@ import {
 import { smartAdvanceFromWelcome } from './modules/wizard-flow.js'
 import './modules/terminal-login.js'
 import './modules/telegram-tokens.js'
-import { startTeam, stopTeam, refreshRunningStatus } from './modules/running.js'
+import { startTeam } from './modules/running.js'
 import { showWizard, showHome, isSetupComplete } from './modules/home.js'
 
 // -------- Wiring (boot-time event listeners that depend on multiple modules) --------
@@ -95,14 +95,14 @@ dom.btnWelcomeContinue.addEventListener('click', async () => {
   }
 })()
 
-// Running step wiring (start/stop/open browser + status poller).
+// Wizard "Start team" wiring. Il bottone della step Ready delega l'avvio
+// alla Home (startTeam → showHome + startTeamFromHome): non c'è più uno step
+// "running" terminale, la Home segue warming→running e apre la dashboard in-app.
 const _bootLog = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
   ? window.jhtLog.scope('boot')
   : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
 _bootLog.info('wiring.start', {
   btnStartTeam: !!dom.btnStartTeam,
-  btnOpenBrowser: !!dom.btnOpenBrowser,
-  btnStopTeam: !!dom.btnStopTeam,
 })
 if (dom.btnStartTeam) {
   dom.btnStartTeam.addEventListener('click', (e) => {
@@ -112,14 +112,8 @@ if (dom.btnStartTeam) {
 } else {
   _bootLog.error('btnStartTeam.missing-at-wire-time')
 }
-if (dom.btnOpenBrowser) dom.btnOpenBrowser.addEventListener('click', () => window.launcherApi.openBrowser())
-if (dom.btnStopTeam) dom.btnStopTeam.addEventListener('click', stopTeam)
 
 window.launcherApi.onPayloadLog(appendLog)
-
-setInterval(() => {
-  if (state.step === STEP_RUNNING) refreshRunningStatus()
-}, 3000)
 
 // -------- Boot --------
 
@@ -128,22 +122,37 @@ const stored = (() => {
 })()
 
 async function boot() {
-  if (!(stored && SUPPORTED_LANGS.includes(stored))) {
-    setLang(DEFAULT_LANG, { persist: false })
-    showWizard(STEP_LANGUAGE)
-    return
-  }
-  setLang(stored, { persist: false })
+  // Lingua: fonte affidabile = prefsApi (file nel main). localStorage su
+  // origine file:// NON persiste in Electron → prima era sempre null e
+  // forzava il wizard lingua → "setup da capo" ad ogni riavvio. La decisione
+  // Home NON dipende più dalla lingua: se il provider è salvato → Home.
+  let lang = null
+  try { lang = await window.prefsApi?.get?.('lang') } catch (_) { /* ignore */ }
+  if (!lang) lang = stored // fallback localStorage legacy
+  const validLang = lang && SUPPORTED_LANGS.includes(lang) ? lang : null
+  setLang(validLang || DEFAULT_LANG, { persist: false })
+  _bootLog.info('boot.start', { lang: validLang || null })
+
   try {
     const status = await window.setupApi.getStatus()
-    if (isSetupComplete(status)) {
+    const saved = status && status.providers && Array.isArray(status.providers.saved)
+      ? status.providers.saved : []
+    const complete = isSetupComplete(status)
+    _bootLog.info('boot.status', { saved, complete })
+    if (complete) {
+      _bootLog.info('boot.decision', { screen: 'home' })
       await showHome('team')
       return
     }
   } catch (error) {
+    _bootLog.warn('boot.probe-failed', { err: error && (error.message || String(error)) })
     appendLog(`boot probe: ${error.message || error}`)
   }
-  showWizard(STEP_WELCOME)
+  // Setup incompleto (primo avvio): se la lingua non è mai stata scelta parti
+  // dallo step lingua, altrimenti dal welcome.
+  const screen = validLang ? STEP_WELCOME : STEP_LANGUAGE
+  _bootLog.info('boot.decision', { screen: validLang ? 'wizard:welcome' : 'wizard:language', reason: 'setup-incomplete' })
+  showWizard(screen)
 }
 
 // Paint platform-specific docker-card shape synchronously — before the

@@ -1,6 +1,18 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<Locale, { copied: string; copy: string; error: string }> = {
+  it: { copied: "Copiato!", copy: "Copia", error: "Errore" },
+  en: { copied: "Copied!", copy: "Copy", error: "Error" },
+  es: { copied: "¡Copiado!", copy: "Copiar", error: "Error" },
+  fr: { copied: "Copié !", copy: "Copier", error: "Erreur" },
+  de: { copied: "Kopiert!", copy: "Kopieren", error: "Fehler" },
+  hu: { copied: "Másolva!", copy: "Másolás", error: "Hiba" },
+  pt: { copied: "Copiado!", copy: "Copiar", error: "Erro" },
+};
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -120,6 +132,7 @@ export function CopyButton({
 }: CopyButtonProps) {
   const { state, copy } = useCopy(successDuration);
   const iconPx = ICON_PX[size];
+  const t = T[useLocale()];
 
   const stateColor =
     state === "copied"
@@ -156,7 +169,7 @@ export function CopyButton({
     return (
       <button
         onClick={() => copy(text)}
-        aria-label={label ?? (state === "copied" ? "Copiato!" : "Copia")}
+        aria-label={label ?? (state === "copied" ? t.copied : t.copy)}
         className={`inline-flex items-center justify-center cursor-pointer transition-colors ${INLINE_CLS[size]} ${hoverCls} ${className}`}
         style={{ ...baseStyle, padding: 0 }}
       >
@@ -174,7 +187,7 @@ export function CopyButton({
   return (
     <button
       onClick={() => copy(text)}
-      aria-label={label ?? (state === "copied" ? "Copiato!" : "Copia")}
+      aria-label={label ?? (state === "copied" ? t.copied : t.copy)}
       className={`inline-flex items-center font-semibold cursor-pointer transition-all select-none ${BTN_CLS[size]} ${hoverCls} ${className}`}
       style={baseStyle}
     >
@@ -189,11 +202,7 @@ export function CopyButton({
         <span>{children}</span>
       ) : (
         <span>
-          {state === "copied"
-            ? "Copiato!"
-            : state === "error"
-              ? "Errore"
-              : "Copia"}
+          {state === "copied" ? t.copied : state === "error" ? t.error : t.copy}
         </span>
       )}
     </button>

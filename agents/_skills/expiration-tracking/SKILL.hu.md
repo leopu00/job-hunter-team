@@ -84,4 +84,3 @@ kinyert határidők alulról felfelé fedik a legtöbb esetet.
 - `shared/skills/deadline_extract.py` — parser
 - `shared/skills/expiration_alerts.py` — emitter + idempotenciás állapot
 - `agents/_skills/db-update/SKILL.md` § Positions — `--deadline` jelző
-- `docs/internal/_archive/2026-05-17-team-strategy-bugs.md` §F-4

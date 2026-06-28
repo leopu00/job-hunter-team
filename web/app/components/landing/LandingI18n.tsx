@@ -52,20 +52,23 @@ function getSavedLang(): Lang {
 
 const translations = {
   // Nav
+  nav_home: { it: "Home", en: "Home", hu: "Home" },
   nav_features: { it: "Features", en: "Features", hu: "Funkciók" },
   nav_how: { it: "Come funziona", en: "How it works", hu: "Hogyan működik" },
   nav_github: { it: "GitHub", en: "GitHub", hu: "GitHub" },
   nav_download: { it: "Download", en: "Download", hu: "Letöltés" },
+  nav_team: { it: "Team", en: "Team", hu: "Csapat" },
+  nav_pricing: { it: "Prezzi", en: "Pricing", hu: "Árak" },
   nav_case_studies: {
-    it: "Case studies",
-    en: "Case studies",
-    hu: "Esettanulmányok",
+    it: "Studies",
+    en: "Studies",
+    hu: "Studies",
   },
   nav_project: { it: "Il progetto", en: "Project", hu: "Projekt" },
+  nav_chronicles: { it: "Cronache", en: "Chronicles", hu: "Krónikák" },
   nav_demo: { it: "Demo", en: "Demo", hu: "Demó" },
   nav_guide: { it: "Guida", en: "Guide", hu: "Útmutató" },
   nav_faq: { it: "FAQ", en: "FAQ", hu: "GYIK" },
-  nav_pricing: { it: "Pricing", en: "Pricing", hu: "Árak" },
   nav_about: { it: "Chi siamo", en: "About", hu: "Rólunk" },
   nav_stats: { it: "Stats", en: "Stats", hu: "Statisztikák" },
   nav_login: { it: "Accedi", en: "Sign in", hu: "Bejelentkezés" },
@@ -92,6 +95,10 @@ const translations = {
     en: "A multi-agent system that automates every step of your job search: from scanning listings to personalized applications. You set the strategy, the agents execute.",
     hu: "Egy multi-ügynök rendszer, amely automatizálja az álláskeresés minden lépését: az ajánlatok keresésétől a személyre szabott jelentkezésekig. Te döntesz a stratégiáról, az ügynökök végrehajtják.",
   },
+  home_intro: {
+    it: "Job Hunter Team è una squadra di agenti AI che conduce per te la ricerca di lavoro. Senza sosta perlustrano il mercato, vagliano ogni offerta, la valutano su ciò che desideri davvero e preparano CV e lettere su misura — lasciando sempre a te l'ultima parola. Tu indichi la rotta, loro fanno il lavoro: gira in modo privato sulla tua macchina e ti consegna una rosa di occasioni che vale il tuo tempo, non una casella piena di rumore.",
+    en: "Job Hunter Team is a team of AI agents that runs your job search for you. Around the clock they scan the market, vet every opening, score it against what you truly want, and draft tailored CVs and cover letters — always leaving the final word to you. You set the direction, they do the legwork: it runs privately on your own machine and hands you a shortlist worth your time, not an inbox full of noise.",
+  },
   hero_cta: { it: "Inizia qui", en: "Start here", hu: "Kezdj itt" },
   hero_cta2: {
     it: "Scopri come funziona",
@@ -106,6 +113,7 @@ const translations = {
   },
 
   // Features
+  feat_aria: { it: "Funzionalità", en: "Features", hu: "Funkciók" },
   feat_label: { it: "capabilities", en: "capabilities", hu: "képességek" },
   feat_title_1: {
     it: "Tutto ciò che serve,",
@@ -331,14 +339,14 @@ const translations = {
     hu: "az álláskeresésedben?",
   },
   cta_desc: {
-    it: "Smetti di inviare candidature generiche. Lascia che un team di agenti AI lavori per te, in modo intelligente e personalizzato.",
-    en: "Stop sending generic applications. Let a team of AI agents work for you, smart and personalized.",
-    hu: "Hagyd abba az általános jelentkezések küldését. Hagyd, hogy egy AI ügynök csapat dolgozzon érted, intelligensen és személyre szabva.",
+    it: "Un team di agenti AI cerca in tutto il mercato e trova le offerte giuste per te — verificate e ordinate per quanto corrispondono al tuo profilo.",
+    en: "A team of AI agents scours the whole market and finds the openings that fit you — vetted and ranked by how well they match your profile.",
+    hu: "Egy AI ügynök csapat átfésüli az egész piacot, és megtalálja a hozzád illő állásokat — ellenőrizve és a profilodhoz való illeszkedés szerint rangsorolva.",
   },
   cta_button: {
-    it: "Inizia ora — è gratis",
-    en: "Start now — it's free",
-    hu: "Kezdj most — ingyenes",
+    it: "Scarica l'app",
+    en: "Download the app",
+    hu: "Töltsd le az appot",
   },
   cta_team: {
     it: "Vedi il team",
@@ -395,6 +403,9 @@ const translations = {
     en: "Open Source under MIT License",
     hu: "Nyílt forráskód MIT licenc alatt",
   },
+  theme_system: { it: "sistema", en: "system" },
+  theme_dark: { it: "notte", en: "night" },
+  theme_light: { it: "giorno", en: "day" },
 
   // Download page
   dl_desc: {
@@ -452,6 +463,32 @@ const translations = {
   dl_detected: { it: "rilevato", en: "detected", hu: "észlelt" },
   dl_mode_desktop_title: { it: "Desktop", en: "Desktop", hu: "Asztali" },
   dl_mode_terminal_title: { it: "CLI", en: "CLI", hu: "CLI" },
+  dl_mode_prompt_title: { it: "Prompt", en: "Prompt", hu: "Prompt" },
+  dl_prompt_intro: {
+    it: "Copia questo prompt e dallo al tuo assistente AI: penserà lui a installare e avviare il team.",
+    en: "Copy this prompt and hand it to your AI assistant: it will install and start the team for you.",
+    hu: "Másold ki ezt a promptot és add át az AI asszisztensednek: ő telepíti és elindítja helyetted a csapatot.",
+  },
+  dl_copy_prompt: {
+    it: "Copia prompt",
+    en: "Copy prompt",
+    hu: "Prompt másolása",
+  },
+  dl_prompt_note: {
+    it: "L'assistente AI deve avere accesso al tuo computer — terminale e file (es. Claude Code, Cursor, Codex CLI).",
+    en: "The AI assistant needs access to your computer — terminal and files (e.g. Claude Code, Cursor, Codex CLI).",
+    hu: "Az AI asszisztensnek hozzá kell férnie a számítógépedhez — terminál és fájlok (pl. Claude Code, Cursor, Codex CLI).",
+  },
+  dl_help_text: {
+    it: "Non sai dove o come installarlo?",
+    en: "Not sure where or how to install it?",
+    hu: "Nem tudod, hová vagy hogyan telepítsd?",
+  },
+  dl_help_link: {
+    it: "Leggi la guida",
+    en: "Read the guide",
+    hu: "Olvasd el az útmutatót",
+  },
   dl_instructions: { it: "Istruzioni", en: "Instructions", hu: "Utasítások" },
   dl_close: { it: "Chiudi", en: "Close", hu: "Bezárás" },
   dl_download: { it: "Scarica", en: "Download", hu: "Letöltés" },
@@ -577,6 +614,26 @@ const translations = {
       "Húzd a JHT Desktopot az Alkalmazások mappába",
       "Indítsd el a JHT Desktopot: a launcher megnyitja az irányítópultot a böngészőben",
     ],
+    es: [
+      "Abre el archivo .dmg descargado",
+      "Arrastra JHT Desktop a la carpeta Aplicaciones",
+      "Inicia JHT Desktop: el launcher abrirá el panel en tu navegador",
+    ],
+    de: [
+      "Öffne die heruntergeladene .dmg-Datei",
+      "Ziehe JHT Desktop in den Ordner „Programme“",
+      "Starte JHT Desktop: Der Launcher öffnet das Dashboard in deinem Browser",
+    ],
+    fr: [
+      "Ouvrez le fichier .dmg téléchargé",
+      "Faites glisser JHT Desktop dans le dossier Applications",
+      "Lancez JHT Desktop : le launcher ouvrira le tableau de bord dans votre navigateur",
+    ],
+    pt: [
+      "Abra o ficheiro .dmg transferido",
+      "Arraste o JHT Desktop para a pasta Aplicações",
+      "Inicie o JHT Desktop: o launcher abrirá o painel no seu navegador",
+    ],
   },
   dl_linux_instr: {
     it: [
@@ -594,6 +651,26 @@ const translations = {
       "Tedd végrehajthatóvá és indítsd el: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
       "A JHT Desktop megnyitja a helyi irányítópultot a böngészőben",
     ],
+    es: [
+      "Descarga el archivo .AppImage",
+      "Hazlo ejecutable e iníccialo: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
+      "JHT Desktop abre el panel local en tu navegador",
+    ],
+    de: [
+      "Lade die .AppImage-Datei herunter",
+      "Mache sie ausführbar und starte sie: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
+      "JHT Desktop öffnet das lokale Dashboard in deinem Browser",
+    ],
+    fr: [
+      "Téléchargez le fichier .AppImage",
+      "Rendez-le exécutable et lancez-le : chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
+      "JHT Desktop ouvre le tableau de bord local dans votre navigateur",
+    ],
+    pt: [
+      "Transfira o ficheiro .AppImage",
+      "Torne-o executável e inicie-o: chmod +x job-hunter-team-*.AppImage && ./job-hunter-team-*.AppImage",
+      "O JHT Desktop abre o painel local no seu navegador",
+    ],
   },
   dl_windows_instr: {
     it: [
@@ -610,6 +687,26 @@ const translations = {
       "Töltsd le az .exe fájlt",
       "Futtasd az NSIS telepítő varázslót és fejezd be a telepítést",
       "Nyisd meg a JHT Desktopot a Start menüből: a launcher elindítja a helyi irányítópultot a böngészőben",
+    ],
+    es: [
+      "Descarga el archivo .exe",
+      "Ejecuta el asistente de instalación NSIS y completa la instalación",
+      "Abre JHT Desktop desde el menú Inicio: el launcher inicia el panel local en tu navegador",
+    ],
+    de: [
+      "Lade die .exe-Datei herunter",
+      "Führe den NSIS-Installationsassistenten aus und schließe die Installation ab",
+      "Öffne JHT Desktop über das Startmenü: Der Launcher startet das lokale Dashboard in deinem Browser",
+    ],
+    fr: [
+      "Téléchargez le fichier .exe",
+      "Exécutez l'assistant d'installation NSIS et terminez l'installation",
+      "Ouvrez JHT Desktop depuis le menu Démarrer : le launcher démarre le tableau de bord local dans votre navigateur",
+    ],
+    pt: [
+      "Transfira o ficheiro .exe",
+      "Execute o assistente de instalação NSIS e conclua a instalação",
+      "Abra o JHT Desktop a partir do menu Iniciar: o launcher inicia o painel local no seu navegador",
     ],
   },
   dl_mac_guide_title: {
@@ -641,6 +738,30 @@ const translations = {
       "Internetkapcsolat a csomag letöltéséhez és az első bootstraphez",
       "Engedély a helyi böngésző megnyitásához, ha szükséges",
     ],
+    es: [
+      "macOS 12 Monterey o posterior",
+      "Unos 500 MB de espacio libre en disco",
+      "Conexión a internet para descargar el paquete y completar el primer bootstrap",
+      "Permiso para abrir el navegador local cuando se solicite",
+    ],
+    de: [
+      "macOS 12 Monterey oder neuer",
+      "Etwa 500 MB freier Speicherplatz",
+      "Internetverbindung zum Herunterladen des Pakets und für den ersten Bootstrap",
+      "Berechtigung zum Öffnen des lokalen Browsers bei Aufforderung",
+    ],
+    fr: [
+      "macOS 12 Monterey ou version ultérieure",
+      "Environ 500 Mo d'espace disque libre",
+      "Connexion internet pour télécharger le paquet et effectuer le premier bootstrap",
+      "Autorisation d'ouvrir le navigateur local lorsque demandé",
+    ],
+    pt: [
+      "macOS 12 Monterey ou posterior",
+      "Cerca de 500 MB de espaço livre em disco",
+      "Ligação à internet para transferir o pacote e concluir o primeiro bootstrap",
+      "Permissão para abrir o navegador local quando solicitado",
+    ],
   },
   dl_mac_node_title: {
     it: "Passo 1 — Apri il pacchetto",
@@ -670,6 +791,30 @@ const translations = {
       "Nyisd meg a letöltött .dmg fájlt",
       "Húzd a JHT Desktopot az Alkalmazások mappába",
       "Ha a macOS megerősítést kér, engedélyezd az app megnyitását",
+    ],
+    es: [
+      "Descarga el paquete de macOS desde el botón de arriba",
+      "Abre el archivo .dmg descargado",
+      "Arrastra JHT Desktop a Aplicaciones",
+      "Si macOS pide confirmación, permite que la app se abra",
+    ],
+    de: [
+      "Lade das macOS-Paket über die Schaltfläche oben herunter",
+      "Öffne die heruntergeladene .dmg-Datei",
+      "Ziehe JHT Desktop in den Ordner „Programme“",
+      "Wenn macOS eine Bestätigung verlangt, erlaube das Öffnen der App",
+    ],
+    fr: [
+      "Téléchargez le paquet macOS depuis le bouton ci-dessus",
+      "Ouvrez le fichier .dmg téléchargé",
+      "Faites glisser JHT Desktop dans Applications",
+      "Si macOS demande une confirmation, autorisez l'ouverture de l'application",
+    ],
+    pt: [
+      "Transfira o pacote macOS a partir do botão acima",
+      "Abra o ficheiro .dmg transferido",
+      "Arraste o JHT Desktop para Aplicações",
+      "Se o macOS pedir confirmação, permita a abertura da aplicação",
     ],
   },
   dl_mac_node_alt: {
@@ -701,6 +846,30 @@ const translations = {
       "Ha szükséges, engedélyezd az appnak a böngésző megnyitását",
       "Az irányítópult automatikusan megnyílik a localhoston",
     ],
+    es: [
+      "Abre JHT Desktop desde la carpeta Aplicaciones",
+      "Espera al primer bootstrap del runtime local",
+      "Si se solicita, permite que la app abra el navegador",
+      "El panel se abrirá automáticamente en localhost",
+    ],
+    de: [
+      "Öffne JHT Desktop aus dem Ordner „Programme“",
+      "Warte auf den ersten Bootstrap der lokalen Laufzeitumgebung",
+      "Erlaube der App bei Aufforderung, den Browser zu öffnen",
+      "Das Dashboard öffnet sich automatisch auf localhost",
+    ],
+    fr: [
+      "Ouvrez JHT Desktop depuis le dossier Applications",
+      "Attendez le premier bootstrap de l'environnement d'exécution local",
+      "Si demandé, autorisez l'application à ouvrir le navigateur",
+      "Le tableau de bord s'ouvrira automatiquement sur localhost",
+    ],
+    pt: [
+      "Abra o JHT Desktop a partir da pasta Aplicações",
+      "Aguarde o primeiro bootstrap do runtime local",
+      "Se solicitado, permita que a aplicação abra o navegador",
+      "O painel abrirá automaticamente em localhost",
+    ],
   },
   dl_mac_expect_title: {
     it: "Cosa succede",
@@ -731,6 +900,38 @@ const translations = {
       "Leállíthatod vagy újra megnyithatod a JHT-t az asztali launcherről",
       "Ha a 3000-es port foglalt, a launcher egy közeli szabad portot választ",
       "A naplók helyben maradnak a lemezen hibakereséshez",
+    ],
+    es: [
+      "El launcher verifica el payload web incluido en la app",
+      "Inicia el runtime local en un puerto libre, 3000 por defecto",
+      "Abre automáticamente el navegador en el panel local",
+      "Puedes detener o reabrir JHT desde el launcher de escritorio",
+      "Si el puerto 3000 está ocupado, el launcher elige un puerto libre cercano",
+      "Los registros quedan guardados localmente para depuración",
+    ],
+    de: [
+      "Der Launcher überprüft das in der App enthaltene Web-Payload",
+      "Er startet die lokale Laufzeitumgebung auf einem freien Port, standardmäßig 3000",
+      "Er öffnet automatisch den Browser mit dem lokalen Dashboard",
+      "Du kannst JHT über den Desktop-Launcher stoppen oder erneut öffnen",
+      "Ist Port 3000 belegt, wählt der Launcher einen nahegelegenen freien Port",
+      "Die Protokolle bleiben lokal auf der Festplatte für die Fehlersuche",
+    ],
+    fr: [
+      "Le launcher vérifie le payload web inclus dans l'application",
+      "Il démarre l'environnement d'exécution local sur un port libre, 3000 par défaut",
+      "Il ouvre automatiquement le navigateur sur le tableau de bord local",
+      "Vous pouvez arrêter ou rouvrir JHT depuis le launcher de bureau",
+      "Si le port 3000 est occupé, le launcher choisit un port libre voisin",
+      "Les journaux restent enregistrés localement pour le débogage",
+    ],
+    pt: [
+      "O launcher verifica o payload web incluído na app",
+      "Inicia o runtime local numa porta livre, 3000 por predefinição",
+      "Abre automaticamente o navegador no painel local",
+      "Pode parar ou reabrir o JHT a partir do launcher de ambiente de trabalho",
+      "Se a porta 3000 estiver ocupada, o launcher escolhe uma porta livre próxima",
+      "Os registos ficam guardados localmente para depuração",
     ],
   },
 
@@ -1149,6 +1350,253 @@ const translations = {
     it: "Revisione…",
     en: "Reviewing…",
     hu: "Felülvizsgálom…",
+  },
+
+  // ─── Login page (LandingClient) ───────────────────────────────────
+  login_save_progress: {
+    it: "Accedi per salvare i tuoi progressi",
+    en: "Sign in to save your progress",
+    hu: "Jelentkezz be a haladásod mentéséhez",
+  },
+  login_auth_failed: {
+    it: "Autenticazione fallita.",
+    en: "Authentication failed.",
+    hu: "A hitelesítés sikertelen.",
+  },
+  login_config_missing: {
+    it: "Configurazione mancante.",
+    en: "Configuration missing.",
+    hu: "Hiányzó konfiguráció.",
+  },
+  login_with_google: {
+    it: "Accedi con Google",
+    en: "Login with Google",
+    hu: "Bejelentkezés Google-lel",
+  },
+  login_with_github: {
+    it: "Accedi con GitHub",
+    en: "Login with GitHub",
+    hu: "Bejelentkezés GitHub-bal",
+  },
+  back: { it: "Indietro", en: "Back", hu: "Vissza" },
+
+  // ─── Relative time (LatestPositionsTable) ─────────────────────────
+  rel_just_now: {
+    it: "adesso",
+    en: "just now",
+    hu: "épp most",
+  },
+  rel_m_ago: {
+    it: "{n}m fa",
+    en: "{n}m ago",
+    hu: "{n} perce",
+  },
+  rel_h_ago: {
+    it: "{n}h fa",
+    en: "{n}h ago",
+    hu: "{n} órája",
+  },
+  rel_d_ago: {
+    it: "{n}g fa",
+    en: "{n}d ago",
+    hu: "{n} napja",
+  },
+  rel_mo_ago: {
+    it: "{n}mes fa",
+    en: "{n}mo ago",
+    hu: "{n} hónapja",
+  },
+  table_cv_written: {
+    it: "CV scritto",
+    en: "CV written",
+    hu: "Önéletrajz megírva",
+  },
+
+  // ─── Aria-labels (mockup / placeholder / scroll / nav / cookie) ───
+  dashboard_preview_alt: {
+    it: "Anteprima della dashboard: lista di posizioni con punteggi, barre, donut e andamento",
+    en: "Dashboard preview: list of positions with scores, bars, donut and trend",
+    hu: "Irányítópult előnézet: pozíciók listája pontszámokkal, sávokkal, fánkdiagrammal és trenddel",
+  },
+  image_placeholder: {
+    it: "Immagine — placeholder",
+    en: "Image — placeholder",
+    hu: "Kép — helykitöltő",
+  },
+  scroll_to_top: {
+    it: "Torna in cima",
+    en: "Back to top",
+    hu: "Vissza a tetejére",
+  },
+  nav_main: {
+    it: "Navigazione principale",
+    en: "Main navigation",
+    hu: "Fő navigáció",
+  },
+  nav_menu: { it: "Menu", en: "Menu", hu: "Menü" },
+  nav_language: {
+    it: "Lingua: {label}",
+    en: "Language: {label}",
+    hu: "Nyelv: {label}",
+  },
+  cookie_consent: {
+    it: "Consenso ai cookie",
+    en: "Cookie consent",
+    hu: "Cookie hozzájárulás",
+  },
+
+  // ─── CTA / Footer aria-labels (LandingCTA) ────────────────────────
+  cta_section_aria: {
+    it: "Inizia ora",
+    en: "Get started",
+    hu: "Kezdés",
+  },
+  theme_aria: { it: "Tema", en: "Theme", hu: "Téma" },
+  footer_aria: {
+    it: "Footer Job Hunter Team",
+    en: "Job Hunter Team footer",
+    hu: "Job Hunter Team lábléc",
+  },
+  footer_links_aria: {
+    it: "Link footer",
+    en: "Footer links",
+    hu: "Lábléc hivatkozások",
+  },
+
+  // ─── LandingHome: hero alt + sezioni ──────────────────────────────
+  home_hero_alt: {
+    it: "Illustrazione a fumetto: un team di agenti AI — tutti con gli stessi occhiali da sole neri — seduto attorno a un lungo tavolo da riunione in un elegante ufficio in grattacielo, mentre un agente in piedi presenta dei grafici su una lavagna.",
+    en: "Comic-style illustration: a team of AI agents — all wearing the same black sunglasses — seated around a long boardroom table in an elegant high-rise office, while one standing agent presents charts on a whiteboard.",
+    hu: "Képregény stílusú illusztráció: AI ügynökök csapata — mind ugyanazt a fekete napszemüveget viselve — egy hosszú tárgyalóasztal körül ül egy elegáns felhőkarcoló irodában, miközben egy álló ügynök diagramokat mutat be egy táblán.",
+  },
+  home_team_alt: {
+    it: "Tre agenti del team a figura intera: lo Scout con la lente, l'Analista in camice, lo Scrittore con la penna d'oca — tutti con gli occhiali da sole.",
+    en: "Three full-body team agents: the Scout with a magnifying glass, the Analyst in a lab coat, the Writer with a quill pen — all wearing sunglasses.",
+    hu: "Három teljes alakos csapatügynök: a Scout nagyítóval, az Analista fehér köpenyben, az Író lúdtollal — mind napszemüvegben.",
+  },
+  home_setup_alt: {
+    it: "Un laptop da cui esce un cono di luce blu che si apre fino a un cubo di vetro luminoso: dentro c'è l'ufficio del team al lavoro.",
+    en: "A laptop emitting a blue cone of light that opens into a glowing glass cube: inside is the team's office at work.",
+    hu: "Egy laptop, amelyből kék fénykúp árad, és egy világító üvegkockává nyílik: belül a csapat irodája dolgozik.",
+  },
+  home_pricing_alt: {
+    it: "Un lucchetto aperto circondato da poche monete, una verde luminosa: la piattaforma è gratuita e open source, paghi solo il provider AI.",
+    en: "An open padlock surrounded by a few coins, one glowing green: the platform is free and open source, you only pay the AI provider.",
+    hu: "Egy nyitott lakat néhány érmével körülvéve, egy zölden világít: a platform ingyenes és nyílt forráskódú, csak az AI-szolgáltatót fizeted.",
+  },
+
+  home_team_kicker: { it: "Il team", en: "The team", hu: "A csapat" },
+  home_team_title: {
+    it: "Una squadra, non un singolo bot",
+    en: "A team, not a single bot",
+    hu: "Egy csapat, nem egyetlen bot",
+  },
+  home_team_body: {
+    it: "Dietro Job Hunter Team c'è una squadra di agenti AI specializzati: chi cerca le offerte, chi le verifica, chi le valuta, chi scrive il tuo CV e chi lo critica senza pietà. Ognuno fa una cosa, e la fa bene.",
+    en: "Behind Job Hunter Team is a team of specialized AI agents: one finds the openings, one vets them, one scores them, one writes your CV and one critiques it without mercy. Each does one thing, and does it well.",
+    hu: "A Job Hunter Team mögött specializált AI ügynökök csapata áll: az egyik megtalálja az ajánlatokat, egy másik ellenőrzi, egy pontozza, egy megírja az önéletrajzodat és egy kíméletlenül bírálja. Mindegyik egy dolgot csinál, és jól csinálja.",
+  },
+  home_team_cta: {
+    it: "Scopri il team →",
+    en: "Meet the team →",
+    hu: "Ismerd meg a csapatot →",
+  },
+  home_dashboard_kicker: {
+    it: "La tua dashboard",
+    en: "Your dashboard",
+    hu: "A te irányítópultod",
+  },
+  home_dashboard_title: {
+    it: "Tutto sotto controllo, dal web",
+    en: "Everything in view, from the web",
+    hu: "Minden áttekinthető, a webről",
+  },
+  home_dashboard_body: {
+    it: "Vedi ogni posizione trovata, il punteggio di compatibilità, la mappa delle opportunità per città e paese, lo stato delle tue candidature. Registrati per ritrovare tutto ovunque — ma non è obbligatorio: puoi tenere ogni dato solo sul tuo computer, senza cloud.",
+    en: "See every opening found, its match score, the map of opportunities by city and country, the status of your applications. Sign up to find it all anywhere — but it's not required: you can keep every piece of data on your own computer, no cloud.",
+    hu: "Lásd minden megtalált ajánlatot, az illeszkedési pontszámot, a lehetőségek térképét város és ország szerint, a jelentkezéseid állapotát. Regisztrálj, hogy bárhol megtaláld mindezt — de nem kötelező: minden adatot megtarthatsz csak a saját számítógépeden, felhő nélkül.",
+  },
+  home_dashboard_cta: {
+    it: "Accedi o registrati →",
+    en: "Sign in or sign up →",
+    hu: "Jelentkezz be vagy regisztrálj →",
+  },
+  home_dashboard_note: {
+    it: "Login facoltativo · i tuoi dati possono restare solo sul tuo PC.",
+    en: "Login optional · your data can stay only on your PC.",
+    hu: "A bejelentkezés opcionális · az adataid csak a PC-den maradhatnak.",
+  },
+  home_setup_kicker: { it: "Avvialo", en: "Run it", hu: "Indítsd el" },
+  home_setup_title: {
+    it: "Come vuoi, dove vuoi",
+    en: "However and wherever you want",
+    hu: "Ahogy és ahol szeretnéd",
+  },
+  home_setup_body: {
+    it: "Sul tuo PC con Docker, su un computer dedicato sempre acceso o su una VPS economica che lavora per te giorno e notte. Tutto si gestisce dall'app desktop: avvii, fermi e tieni d'occhio la squadra con un clic.",
+    en: "On your PC with Docker, on an always-on dedicated computer, or on an affordable VPS that works for you day and night. It's all managed from the desktop app: start, stop and keep an eye on the team with one click.",
+    hu: "A PC-den Dockerrel, egy mindig bekapcsolt dedikált számítógépen, vagy egy megfizethető VPS-en, amely éjjel-nappal dolgozik érted. Minden az asztali appból kezelhető: indítsd, állítsd le és tartsd szemmel a csapatot egyetlen kattintással.",
+  },
+  home_setup_cta: {
+    it: "Come si avvia →",
+    en: "How to run it →",
+    hu: "Hogyan indítsd el →",
+  },
+  home_pricing_kicker: { it: "Prezzi", en: "Pricing", hu: "Árak" },
+  home_pricing_title: {
+    it: "Open source. La piattaforma è gratis.",
+    en: "Open source. The platform is free.",
+    hu: "Nyílt forráskód. A platform ingyenes.",
+  },
+  home_pricing_body: {
+    it: "Job Hunter Team non si paga. L'unico costo è l'abbonamento al provider AI che scegli — da circa €40 al mese — oppure nulla, se un domani userai modelli locali e pagherai solo l'elettricità.",
+    en: "Job Hunter Team is free. The only cost is the subscription to the AI provider you choose — from about €40 a month — or nothing, if one day you use local models and pay only for electricity.",
+    hu: "A Job Hunter Team ingyenes. Az egyetlen költség az általad választott AI szolgáltató előfizetése — körülbelül €40-tól havonta — vagy semmi, ha egy nap helyi modelleket használsz és csak az áramért fizetsz.",
+  },
+  home_pricing_cta: {
+    it: "Vedi i costi →",
+    en: "See the costs →",
+    hu: "Lásd a költségeket →",
+  },
+  home_project_kicker: {
+    it: "Il progetto",
+    en: "The project",
+    hu: "A projekt",
+  },
+  home_project_title: {
+    it: "Cosa c'è dietro, in chiaro",
+    en: "What's behind it, in the open",
+    hu: "Mi van mögötte, nyíltan",
+  },
+  home_project_body: {
+    it: "Codice aperto, dati tuoi, nessun vincolo. Scopri com'è fatto Job Hunter Team, la filosofia dietro alla squadra di agenti e dove sta andando.",
+    en: "Open code, your data, no lock-in. See how Job Hunter Team is built, the philosophy behind the agent team, and where it's headed.",
+    hu: "Nyílt kód, a te adataid, semmi kötöttség. Nézd meg, hogyan épül fel a Job Hunter Team, az ügynökcsapat mögötti filozófiát, és merre tart.",
+  },
+  home_project_cta: {
+    it: "Scopri il progetto →",
+    en: "Discover the project →",
+    hu: "Fedezd fel a projektet →",
+  },
+  home_studies_kicker: {
+    it: "Case studies",
+    en: "Case studies",
+    hu: "Esettanulmányok",
+  },
+  home_studies_title: {
+    it: "Cosa fa davvero, sul campo",
+    en: "What it really does, in the field",
+    hu: "Mit csinál valójában, a terepen",
+  },
+  home_studies_body: {
+    it: "Non promesse, ma risultati: cosa ha prodotto il team su profili candidato reali — posizioni trovate, analizzate e valutate. Dati aggregati e anonimi, una pagina che cresce a ogni nuovo team monitorato.",
+    en: "Not promises but results: what the team produced on real candidate profiles — positions found, analyzed and scored. Aggregated, anonymous data; a page that grows with every team we monitor.",
+    hu: "Nem ígéretek, hanem eredmények: mit termelt a csapat valódi jelölti profilokon — megtalált, elemzett és pontozott pozíciók. Aggregált, anonim adatok; egy oldal, amely minden új megfigyelt csapattal bővül.",
+  },
+  home_studies_cta: {
+    it: "Vedi i case study →",
+    en: "See the case studies →",
+    hu: "Lásd az esettanulmányokat →",
   },
 } as const;
 

@@ -1,8 +1,26 @@
+"use client";
+
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  loading_dashboard: {
+    it: "Caricamento dashboard",
+    en: "Loading dashboard",
+    hu: "Irányítópult betöltése",
+    es: "Cargando panel",
+    de: "Dashboard wird geladen",
+    fr: "Chargement du tableau de bord",
+    pt: "Carregando painel",
+  },
+};
+
 export default function DashboardLoading() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   return (
     <div
       aria-busy="true"
-      aria-label="Loading dashboard"
+      aria-label={tr("loading_dashboard")}
       style={{ animation: "fade-in 0.2s ease both" }}
     >
       {/* Header skeleton */}

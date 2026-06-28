@@ -1,9 +1,530 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { getPositionById } from "@/lib/queries";
 import type { PositionHighlight } from "@/lib/types";
+import { parseAnalysisNotes, tagColor } from "@/lib/parse-analysis";
+import { locales, defaultLocale, type Locale } from "@/i18n/config";
 import { WriteRequestButton } from "./WriteRequestButton";
+import { ExcludeButton } from "./ExcludeButton";
+import { RecheckButton } from "./RecheckButton";
+import { TicketPanel } from "./TicketPanel";
 import { GeocodeRequestButton } from "./GeocodeRequestButton";
+
+/* ── i18n inline ─────────────────────────────────────────────────── */
+
+const T: Record<string, Record<string, string>> = {
+  bc_dashboard: {
+    it: "Dashboard",
+    en: "Dashboard",
+    hu: "Irányítópult",
+    es: "Panel",
+    de: "Dashboard",
+    fr: "Tableau de bord",
+    pt: "Painel",
+  },
+  bc_positions: {
+    it: "Posizioni",
+    en: "Positions",
+    hu: "Pozíciók",
+    es: "Posiciones",
+    de: "Stellen",
+    fr: "Postes",
+    pt: "Vagas",
+  },
+  original_listing: {
+    it: "Annuncio originale",
+    en: "Original listing",
+    hu: "Eredeti hirdetés",
+    es: "Anuncio original",
+    de: "Originalanzeige",
+    fr: "Annonce originale",
+    pt: "Anúncio original",
+  },
+  cv_in_progress: {
+    it: "CV gia' in lavorazione o consegnato",
+    en: "CV already in progress or delivered",
+    hu: "Az önéletrajz már folyamatban van vagy elkészült",
+    es: "CV ya en proceso o entregado",
+    de: "Lebenslauf bereits in Bearbeitung oder geliefert",
+    fr: "CV déjà en cours ou livré",
+    pt: "CV já em andamento ou entregue",
+  },
+  cv_only_from_scored: {
+    it: "Posizione in stato '{status}': la richiesta CV e' ammessa solo da 'scored'",
+    en: "Position in status '{status}': CV request is only allowed from 'scored'",
+    hu: "A pozíció '{status}' állapotban van: önéletrajz csak 'scored' állapotból kérhető",
+    es: "Posición en estado '{status}': la solicitud de CV solo se permite desde 'scored'",
+    de: "Stelle im Status '{status}': Lebenslauf-Anfrage ist nur ab 'scored' erlaubt",
+    fr: "Poste au statut '{status}' : la demande de CV n'est autorisée qu'à partir de 'scored'",
+    pt: "Vaga no estado '{status}': o pedido de CV só é permitido a partir de 'scored'",
+  },
+  pro: {
+    it: "Pro",
+    en: "Pros",
+    hu: "Előnyök",
+    es: "Pros",
+    de: "Vorteile",
+    fr: "Avantages",
+    pt: "Prós",
+  },
+  con: {
+    it: "Contro",
+    en: "Cons",
+    hu: "Hátrányok",
+    es: "Contras",
+    de: "Nachteile",
+    fr: "Inconvénients",
+    pt: "Contras",
+  },
+  score_breakdown: {
+    it: "Score breakdown",
+    en: "Score breakdown",
+    hu: "Pontszám részletei",
+    es: "Desglose de puntuación",
+    de: "Punkteaufschlüsselung",
+    fr: "Détail du score",
+    pt: "Detalhe da pontuação",
+  },
+  sb_stack_match: {
+    it: "Stack match",
+    en: "Stack match",
+    hu: "Stack egyezés",
+    es: "Coincidencia de stack",
+    de: "Stack-Übereinstimmung",
+    fr: "Correspondance stack",
+    pt: "Correspondência de stack",
+  },
+  sb_remote_fit: {
+    it: "Remote fit",
+    en: "Remote fit",
+    hu: "Távmunka illeszkedés",
+    es: "Ajuste remoto",
+    de: "Remote-Eignung",
+    fr: "Adéquation à distance",
+    pt: "Ajuste remoto",
+  },
+  sb_salary_fit: {
+    it: "Salary fit",
+    en: "Salary fit",
+    hu: "Fizetés illeszkedés",
+    es: "Ajuste salarial",
+    de: "Gehaltseignung",
+    fr: "Adéquation salariale",
+    pt: "Ajuste salarial",
+  },
+  sb_experience_fit: {
+    it: "Experience fit",
+    en: "Experience fit",
+    hu: "Tapasztalat illeszkedés",
+    es: "Ajuste de experiencia",
+    de: "Erfahrungseignung",
+    fr: "Adéquation d'expérience",
+    pt: "Ajuste de experiência",
+  },
+  sb_strategic_fit: {
+    it: "Strategic fit",
+    en: "Strategic fit",
+    hu: "Stratégiai illeszkedés",
+    es: "Ajuste estratégico",
+    de: "Strategische Eignung",
+    fr: "Adéquation stratégique",
+    pt: "Ajuste estratégico",
+  },
+  application: {
+    it: "Candidatura",
+    en: "Application",
+    hu: "Jelentkezés",
+    es: "Candidatura",
+    de: "Bewerbung",
+    fr: "Candidature",
+    pt: "Candidatura",
+  },
+  a_status: {
+    it: "Stato",
+    en: "Status",
+    hu: "Állapot",
+    es: "Estado",
+    de: "Status",
+    fr: "Statut",
+    pt: "Estado",
+  },
+  a_critic: {
+    it: "Critico",
+    en: "Critic",
+    hu: "Kritikus",
+    es: "Crítico",
+    de: "Kritiker",
+    fr: "Critique",
+    pt: "Crítico",
+  },
+  a_written: {
+    it: "Scritta",
+    en: "Written",
+    hu: "Megírva",
+    es: "Redactada",
+    de: "Verfasst",
+    fr: "Rédigée",
+    pt: "Redigida",
+  },
+  a_sent: {
+    it: "Inviata",
+    en: "Sent",
+    hu: "Elküldve",
+    es: "Enviada",
+    de: "Gesendet",
+    fr: "Envoyée",
+    pt: "Enviada",
+  },
+  a_via: {
+    it: "Via",
+    en: "Via",
+    hu: "Csatorna",
+    es: "Vía",
+    de: "Über",
+    fr: "Via",
+    pt: "Via",
+  },
+  a_interview_round: {
+    it: "Round colloquio",
+    en: "Interview round",
+    hu: "Interjúforduló",
+    es: "Ronda de entrevista",
+    de: "Interviewrunde",
+    fr: "Tour d'entretien",
+    pt: "Ronda de entrevista",
+  },
+  cv_drive: {
+    it: "CV (Drive)",
+    en: "CV (Drive)",
+    hu: "Önéletrajz (Drive)",
+    es: "CV (Drive)",
+    de: "Lebenslauf (Drive)",
+    fr: "CV (Drive)",
+    pt: "CV (Drive)",
+  },
+  cover_letter_drive: {
+    it: "Cover Letter (Drive)",
+    en: "Cover Letter (Drive)",
+    hu: "Motivációs levél (Drive)",
+    es: "Carta de presentación (Drive)",
+    de: "Anschreiben (Drive)",
+    fr: "Lettre de motivation (Drive)",
+    pt: "Carta de apresentação (Drive)",
+  },
+  response_received: {
+    it: "Risposta ricevuta",
+    en: "Response received",
+    hu: "Beérkezett válasz",
+    es: "Respuesta recibida",
+    de: "Antwort erhalten",
+    fr: "Réponse reçue",
+    pt: "Resposta recebida",
+  },
+  job_description: {
+    it: "Job Description",
+    en: "Job Description",
+    hu: "Munkaköri leírás",
+    es: "Descripción del puesto",
+    de: "Stellenbeschreibung",
+    fr: "Description du poste",
+    pt: "Descrição da vaga",
+  },
+  requirements: {
+    it: "Requisiti",
+    en: "Requirements",
+    hu: "Követelmények",
+    es: "Requisitos",
+    de: "Anforderungen",
+    fr: "Exigences",
+    pt: "Requisitos",
+  },
+  full_description: {
+    it: "Descrizione completa",
+    en: "Full description",
+    hu: "Teljes leírás",
+    es: "Descripción completa",
+    de: "Vollständige Beschreibung",
+    fr: "Description complète",
+    pt: "Descrição completa",
+  },
+  details: {
+    it: "Dettagli",
+    en: "Details",
+    hu: "Részletek",
+    es: "Detalles",
+    de: "Details",
+    fr: "Détails",
+    pt: "Detalhes",
+  },
+  d_source: {
+    it: "Fonte",
+    en: "Source",
+    hu: "Forrás",
+    es: "Fuente",
+    de: "Quelle",
+    fr: "Source",
+    pt: "Fonte",
+  },
+  d_found: {
+    it: "Trovata",
+    en: "Found",
+    hu: "Megtalálva",
+    es: "Encontrada",
+    de: "Gefunden",
+    fr: "Trouvée",
+    pt: "Encontrada",
+  },
+  d_deadline: {
+    it: "Scadenza",
+    en: "Deadline",
+    hu: "Határidő",
+    es: "Fecha límite",
+    de: "Frist",
+    fr: "Échéance",
+    pt: "Prazo",
+  },
+  d_found_by: {
+    it: "Trovata da",
+    en: "Found by",
+    hu: "Megtalálta",
+    es: "Encontrada por",
+    de: "Gefunden von",
+    fr: "Trouvée par",
+    pt: "Encontrada por",
+  },
+  d_salary_declared: {
+    it: "Stipendio dichiarato",
+    en: "Declared salary",
+    hu: "Megadott fizetés",
+    es: "Salario declarado",
+    de: "Angegebenes Gehalt",
+    fr: "Salaire déclaré",
+    pt: "Salário declarado",
+  },
+  d_salary_estimated: {
+    it: "Stipendio stimato",
+    en: "Estimated salary",
+    hu: "Becsült fizetés",
+    es: "Salario estimado",
+    de: "Geschätztes Gehalt",
+    fr: "Salaire estimé",
+    pt: "Salário estimado",
+  },
+  view_original_offer: {
+    it: "Vedi offerta originale",
+    en: "View original offer",
+    hu: "Eredeti ajánlat megtekintése",
+    es: "Ver oferta original",
+    de: "Originalangebot ansehen",
+    fr: "Voir l'offre originale",
+    pt: "Ver oferta original",
+  },
+  company: {
+    it: "Azienda",
+    en: "Company",
+    hu: "Vállalat",
+    es: "Empresa",
+    de: "Unternehmen",
+    fr: "Entreprise",
+    pt: "Empresa",
+  },
+  c_hq: {
+    it: "HQ",
+    en: "HQ",
+    hu: "Központ",
+    es: "Sede",
+    de: "Hauptsitz",
+    fr: "Siège",
+    pt: "Sede",
+  },
+  c_sector: {
+    it: "Settore",
+    en: "Sector",
+    hu: "Ágazat",
+    es: "Sector",
+    de: "Branche",
+    fr: "Secteur",
+    pt: "Setor",
+  },
+  c_size: {
+    it: "Dimensione",
+    en: "Size",
+    hu: "Méret",
+    es: "Tamaño",
+    de: "Größe",
+    fr: "Taille",
+    pt: "Dimensão",
+  },
+  company_website: {
+    it: "Sito aziendale",
+    en: "Company website",
+    hu: "Vállalati weboldal",
+    es: "Sitio web de la empresa",
+    de: "Unternehmenswebsite",
+    fr: "Site de l'entreprise",
+    pt: "Site da empresa",
+  },
+  notes: {
+    it: "Note",
+    en: "Notes",
+    hu: "Megjegyzések",
+    es: "Notas",
+    de: "Notizen",
+    fr: "Notes",
+    pt: "Notas",
+  },
+  team_analysis: {
+    it: "Analisi del team",
+    en: "Team analysis",
+    hu: "Csapat elemzése",
+    es: "Análisis del equipo",
+    de: "Team-Analyse",
+    fr: "Analyse de l'équipe",
+    pt: "Análise da equipa",
+  },
+  an_requirements: {
+    it: "Requisiti chiave",
+    en: "Key requirements",
+    hu: "Fő követelmények",
+    es: "Requisitos clave",
+    de: "Kernanforderungen",
+    fr: "Exigences clés",
+    pt: "Requisitos-chave",
+  },
+  an_mismatches: {
+    it: "Disallineamenti",
+    en: "Mismatches",
+    hu: "Eltérések",
+    es: "Desajustes",
+    de: "Abweichungen",
+    fr: "Écarts",
+    pt: "Desalinhamentos",
+  },
+  an_excluded: {
+    it: "Motivo esclusione",
+    en: "Exclusion reason",
+    hu: "Kizárás oka",
+    es: "Motivo de exclusión",
+    de: "Ausschlussgrund",
+    fr: "Motif d'exclusion",
+    pt: "Motivo de exclusão",
+  },
+  an_notes: {
+    it: "Note del team",
+    en: "Team notes",
+    hu: "Csapat jegyzetei",
+    es: "Notas del equipo",
+    de: "Team-Notizen",
+    fr: "Notes de l'équipe",
+    pt: "Notas da equipa",
+  },
+  meta_seniority_jd: {
+    it: "Seniority",
+    en: "Seniority",
+    hu: "Szint",
+    es: "Seniority",
+    de: "Seniorität",
+    fr: "Séniorité",
+    pt: "Senioridade",
+  },
+  meta_experience_required: {
+    it: "Esperienza richiesta",
+    en: "Experience required",
+    hu: "Szükséges tapasztalat",
+    es: "Experiencia requerida",
+    de: "Erforderliche Erfahrung",
+    fr: "Expérience requise",
+    pt: "Experiência exigida",
+  },
+  meta_experience_type: {
+    it: "Tipo esperienza",
+    en: "Experience type",
+    hu: "Tapasztalat típusa",
+    es: "Tipo de experiencia",
+    de: "Erfahrungstyp",
+    fr: "Type d'expérience",
+    pt: "Tipo de experiência",
+  },
+  meta_degree: {
+    it: "Laurea",
+    en: "Degree",
+    hu: "Diploma",
+    es: "Titulación",
+    de: "Abschluss",
+    fr: "Diplôme",
+    pt: "Diploma",
+  },
+  meta_language_required: {
+    it: "Lingua",
+    en: "Language",
+    hu: "Nyelv",
+    es: "Idioma",
+    de: "Sprache",
+    fr: "Langue",
+    pt: "Idioma",
+  },
+};
+
+// Normalizzazione dei valori a vocabolario chiuso che l'Analista scrive in
+// inglese (es. "not specified", "mandatory"): per le altre stringhe aperte
+// (anni, nomi lingua, livelli seniority) si rende il valore grezzo.
+const VAL: Record<string, Record<string, string>> = {
+  "not specified": {
+    it: "non specificato",
+    en: "not specified",
+    hu: "nincs megadva",
+    es: "no especificado",
+    de: "nicht angegeben",
+    fr: "non spécifié",
+    pt: "não especificado",
+  },
+  "not required": {
+    it: "non richiesta",
+    en: "not required",
+    hu: "nem szükséges",
+    es: "no requerida",
+    de: "nicht erforderlich",
+    fr: "non requise",
+    pt: "não exigida",
+  },
+  "not mentioned": {
+    it: "non indicato",
+    en: "not mentioned",
+    hu: "nincs említve",
+    es: "no mencionado",
+    de: "nicht erwähnt",
+    fr: "non mentionné",
+    pt: "não mencionado",
+  },
+  mandatory: {
+    it: "obbligatoria",
+    en: "mandatory",
+    hu: "kötelező",
+    es: "obligatoria",
+    de: "obligatorisch",
+    fr: "obligatoire",
+    pt: "obrigatória",
+  },
+  required: {
+    it: "richiesta",
+    en: "required",
+    hu: "szükséges",
+    es: "requerida",
+    de: "erforderlich",
+    fr: "requise",
+    pt: "exigida",
+  },
+  preferred: {
+    it: "preferita",
+    en: "preferred",
+    hu: "előnyben",
+    es: "preferida",
+    de: "bevorzugt",
+    fr: "souhaitée",
+    pt: "preferida",
+  },
+};
 
 const STATUS_COLORS: Record<string, string> = {
   new: "var(--color-muted)",
@@ -11,7 +532,7 @@ const STATUS_COLORS: Record<string, string> = {
   scored: "var(--color-purple)",
   writing: "var(--color-yellow)",
   review: "var(--color-orange)",
-  ready: "#7fffb2",
+  ready: "var(--color-ready)",
   applied: "var(--color-green)",
   response: "#58a6ff",
   excluded: "var(--color-red)",
@@ -21,6 +542,17 @@ function scoreColor(s: number | null) {
   if (!s) return "var(--color-dim)";
   if (s >= 75) return "var(--color-green)";
   if (s >= 55) return "var(--color-yellow)";
+  return "var(--color-red)";
+}
+
+// Colore di un sotto-punteggio relativo al SUO massimo (stack /40, remote
+// /25, …): un 26/40 (65%) è "buono", non "rosso". Il colore precedente
+// usava soglie assolute → tutte le barre apparivano rosse anche con fit ok.
+function ratioColor(value: number | null, max: number) {
+  if (value == null || max <= 0) return "var(--color-dim)";
+  const pct = (value / max) * 100;
+  if (pct >= 70) return "var(--color-green)";
+  if (pct >= 45) return "var(--color-yellow)";
   return "var(--color-red)";
 }
 
@@ -34,6 +566,7 @@ function ScoreBar({
   max: number;
 }) {
   const pct = value ? Math.round((value / max) * 100) : 0;
+  const color = ratioColor(value, max);
   return (
     <div className="flex items-center gap-3">
       <span className="text-[10px] text-[var(--color-dim)] w-28 shrink-0">
@@ -45,14 +578,15 @@ function ScoreBar({
       >
         <div
           className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, background: scoreColor(value) }}
+          style={{ width: `${pct}%`, background: color }}
         />
       </div>
       <span
-        className="text-[11px] font-semibold w-8 text-right"
-        style={{ color: scoreColor(value) }}
+        className="text-[11px] font-semibold w-12 text-right tabular-nums"
+        style={{ color }}
       >
         {value ?? "—"}
+        <span className="text-[var(--color-dim)] font-normal">/{max}</span>
       </span>
     </div>
   );
@@ -64,13 +598,31 @@ interface PageProps {
 
 export default async function PositionDetailPage({ params }: PageProps) {
   const { id } = await params;
+
+  // Locale corrente dalla fonte unica (cookie NEXT_LOCALE), come next-intl.
+  const cookieStore = await cookies();
+  const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
+  const locale: Locale =
+    cookieLocale && (locales as string[]).includes(cookieLocale)
+      ? (cookieLocale as Locale)
+      : defaultLocale;
+  const t = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
+
   const data = await getPositionById(id);
 
   if (!data) notFound();
 
-  const { position, score, highlights, company, application } = data;
+  const { position, score, highlights, company, application, tickets } = data;
   const pros = highlights.filter((h: PositionHighlight) => h.type === "pro");
   const cons = highlights.filter((h: PositionHighlight) => h.type === "con");
+
+  // Analisi semi-strutturata dell'Analista (campo notes) → metadati,
+  // motivo esclusione, disallineamenti, prosa. Vedi lib/parse-analysis.
+  const analysis = parseAnalysisNotes(position.notes);
+  const vt = (v: string) => {
+    const k = v.trim().toLowerCase();
+    return VAL[k]?.[locale] ?? VAL[k]?.en ?? v;
+  };
 
   const statusColor = STATUS_COLORS[position.status] ?? "var(--color-dim)";
 
@@ -95,14 +647,14 @@ export default async function PositionDetailPage({ params }: PageProps) {
           href="/dashboard"
           className="text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
         >
-          Dashboard
+          {t("bc_dashboard")}
         </Link>
         <span className="text-[var(--color-border)]">/</span>
         <Link
           href="/positions"
           className="text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
         >
-          Posizioni
+          {t("bc_positions")}
         </Link>
         <span className="text-[var(--color-border)]">/</span>
         <span className="text-[var(--color-muted)]">
@@ -180,7 +732,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   color: "var(--color-blue)",
                 }}
               >
-                Annuncio originale ↗
+                {t("original_listing")} ↗
               </a>
             )}
             {position.legacy_id != null && (
@@ -194,6 +746,15 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 alreadyGeocoded={position.office_geocoded === true}
               />
             )}
+            {position.legacy_id != null && (
+              // Recheck ON-DEMAND (mig 042): il recheck non è più automatico,
+              // l'utente lo richiede qui → l'Analista ri-verifica la liveness.
+              <RecheckButton
+                legacyId={position.legacy_id}
+                initialRequested={position.recheck_requested === true}
+                lastOpenCheck={position.last_open_check}
+              />
+            )}
             {position.legacy_id != null &&
               (() => {
                 // Writer-on-demand (V6): il button e' visibile solo se la
@@ -204,9 +765,12 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 const alreadyWriting = application != null;
                 const isDisabled = wrongStatus || alreadyWriting;
                 const reason = alreadyWriting
-                  ? "CV gia' in lavorazione o consegnato"
+                  ? t("cv_in_progress")
                   : wrongStatus
-                    ? `Posizione in stato '${position.status}': la richiesta CV e' ammessa solo da 'scored'`
+                    ? t("cv_only_from_scored").replace(
+                        "{status}",
+                        position.status,
+                      )
                     : undefined;
                 return (
                   <WriteRequestButton
@@ -217,6 +781,16 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   />
                 );
               })()}
+            {position.legacy_id != null && (
+              // Esclusione manuale utente (mig 041): l'utente esclude l'offerta
+              // con una causa → status 'excluded', gli agenti smettono di
+              // ri-verificarne la liveness (esce da next-for-recheck).
+              <ExcludeButton
+                legacyId={position.legacy_id}
+                status={position.status}
+                initialReason={position.user_excluded_reason ?? null}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -233,7 +807,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     className="text-[9.5px] font-semibold tracking-[0.14em] uppercase mb-3"
                     style={{ color: "var(--color-green)" }}
                   >
-                    Pro
+                    {t("pro")}
                   </div>
                   <ul className="space-y-2">
                     {pros.map((h: PositionHighlight) => (
@@ -259,7 +833,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     className="text-[9.5px] font-semibold tracking-[0.14em] uppercase mb-3"
                     style={{ color: "var(--color-red)" }}
                   >
-                    Contro
+                    {t("con")}
                   </div>
                   <ul className="space-y-2">
                     {cons.map((h: PositionHighlight) => (
@@ -282,33 +856,40 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </div>
           )}
 
+          {/* Richieste al team (ticket utente→team) */}
+          {position.legacy_id != null && (
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
+              <TicketPanel legacyId={position.legacy_id} tickets={tickets} />
+            </div>
+          )}
+
           {/* Score breakdown */}
           {score && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-4">Score breakdown</div>
+              <div className="section-label mb-4">{t("score_breakdown")}</div>
               <div className="space-y-3">
                 <ScoreBar
-                  label="Stack match"
+                  label={t("sb_stack_match")}
                   value={score.stack_match}
                   max={40}
                 />
                 <ScoreBar
-                  label="Remote fit"
+                  label={t("sb_remote_fit")}
                   value={score.remote_fit}
                   max={25}
                 />
                 <ScoreBar
-                  label="Salary fit"
+                  label={t("sb_salary_fit")}
                   value={score.salary_fit}
                   max={20}
                 />
                 <ScoreBar
-                  label="Experience fit"
+                  label={t("sb_experience_fit")}
                   value={score.experience_fit}
                   max={10}
                 />
                 <ScoreBar
-                  label="Strategic fit"
+                  label={t("sb_strategic_fit")}
                   value={score.strategic_fit}
                   max={15}
                 />
@@ -324,15 +905,15 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {/* Application */}
           {application && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-4">Candidatura</div>
+              <div className="section-label mb-4">{t("application")}</div>
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <InfoRow label="Stato" value={application.status} />
+                <InfoRow label={t("a_status")} value={application.status} />
                 <InfoRow
-                  label="Critico"
+                  label={t("a_critic")}
                   value={application.critic_verdict ?? "—"}
                 />
                 <InfoRow
-                  label="Scritta"
+                  label={t("a_written")}
                   value={
                     application.written_at
                       ? application.written_at.slice(0, 10)
@@ -340,7 +921,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   }
                 />
                 <InfoRow
-                  label="Inviata"
+                  label={t("a_sent")}
                   value={
                     application.applied_at
                       ? application.applied_at.slice(0, 10)
@@ -348,11 +929,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   }
                 />
                 {application.applied_via && (
-                  <InfoRow label="Via" value={application.applied_via} />
+                  <InfoRow label={t("a_via")} value={application.applied_via} />
                 )}
                 {application.interview_round && (
                   <InfoRow
-                    label="Round colloquio"
+                    label={t("a_interview_round")}
                     value={`#${application.interview_round}`}
                   />
                 )}
@@ -370,7 +951,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       color: "var(--color-green)",
                     }}
                   >
-                    CV (Drive) ↗
+                    {t("cv_drive")} ↗
                   </a>
                 )}
                 {application.cl_drive_id && (
@@ -384,14 +965,14 @@ export default async function PositionDetailPage({ params }: PageProps) {
                       color: "var(--color-blue)",
                     }}
                   >
-                    Cover Letter (Drive) ↗
+                    {t("cover_letter_drive")} ↗
                   </a>
                 )}
               </div>
               {application.response && (
                 <div className="mt-4 p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)]">
                   <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-1">
-                    Risposta ricevuta
+                    {t("response_received")}
                   </div>
                   <p className="text-[11px] text-[var(--color-base)]">
                     {application.response}
@@ -409,11 +990,11 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {/* Job description */}
           {(position.jd_text || position.requirements) && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-3">Job Description</div>
+              <div className="section-label mb-3">{t("job_description")}</div>
               {position.requirements && (
                 <div className="mb-4">
                   <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                    Requisiti
+                    {t("requirements")}
                   </div>
                   <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
                     {position.requirements.slice(0, 2000)}
@@ -424,7 +1005,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
               {position.jd_text && (
                 <div>
                   <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                    Descrizione completa
+                    {t("full_description")}
                   </div>
                   <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
                     {position.jd_text.slice(0, 3000)}
@@ -440,17 +1021,20 @@ export default async function PositionDetailPage({ params }: PageProps) {
         <div className="space-y-4">
           {/* Details */}
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-            <div className="section-label mb-3">Dettagli</div>
+            <div className="section-label mb-3">{t("details")}</div>
             <div className="space-y-2">
               {position.source && (
-                <InfoRow label="Fonte" value={position.source} />
+                <InfoRow label={t("d_source")} value={position.source} />
               )}
-              <InfoRow label="Trovata" value={position.found_at.slice(0, 10)} />
+              <InfoRow
+                label={t("d_found")}
+                value={position.found_at.slice(0, 10)}
+              />
               {position.deadline && (
-                <InfoRow label="Scadenza" value={position.deadline} />
+                <InfoRow label={t("d_deadline")} value={position.deadline} />
               )}
               {position.found_by && (
-                <InfoRow label="Trovata da" value={position.found_by} />
+                <InfoRow label={t("d_found_by")} value={position.found_by} />
               )}
               {formatSalary(
                 position.salary_declared_min,
@@ -458,7 +1042,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 position.salary_declared_currency,
               ) && (
                 <InfoRow
-                  label="Stipendio dichiarato"
+                  label={t("d_salary_declared")}
                   value={
                     formatSalary(
                       position.salary_declared_min,
@@ -474,7 +1058,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 position.salary_estimated_currency,
               ) && (
                 <InfoRow
-                  label="Stipendio stimato"
+                  label={t("d_salary_estimated")}
                   value={
                     formatSalary(
                       position.salary_estimated_min,
@@ -492,7 +1076,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
                 rel="noopener noreferrer"
                 className="mt-4 flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
               >
-                Vedi offerta originale ↗
+                {t("view_original_offer")} ↗
               </a>
             )}
           </div>
@@ -500,7 +1084,7 @@ export default async function PositionDetailPage({ params }: PageProps) {
           {/* Company */}
           {company && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-3">Azienda</div>
+              <div className="section-label mb-3">{t("company")}</div>
               <div className="space-y-2">
                 {company.verdict && (
                   <div className="flex items-center gap-2 mb-3">
@@ -530,12 +1114,12 @@ export default async function PositionDetailPage({ params }: PageProps) {
                     )}
                   </div>
                 )}
-                {company.hq && <InfoRow label="HQ" value={company.hq} />}
+                {company.hq && <InfoRow label={t("c_hq")} value={company.hq} />}
                 {company.sector && (
-                  <InfoRow label="Settore" value={company.sector} />
+                  <InfoRow label={t("c_sector")} value={company.sector} />
                 )}
                 {company.size && (
-                  <InfoRow label="Dimensione" value={company.size} />
+                  <InfoRow label={t("c_size")} value={company.size} />
                 )}
                 {company.culture_notes && (
                   <p className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-2">
@@ -558,19 +1142,113 @@ export default async function PositionDetailPage({ params }: PageProps) {
                   rel="noopener noreferrer"
                   className="mt-3 flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
                 >
-                  Sito aziendale ↗
+                  {t("company_website")} ↗
                 </a>
               )}
             </div>
           )}
 
-          {/* Notes */}
+          {/* Team analysis — parsing del campo notes (vedi parse-analysis) */}
           {position.notes && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-4 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-2">Note</div>
-              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
-                {position.notes}
-              </p>
+              <div className="section-label mb-3">{t("team_analysis")}</div>
+
+              {analysis.raw ? (
+                <p className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap">
+                  {position.notes}
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {/* Requisiti chiave estratti (seniority, esperienza, …) */}
+                  {analysis.meta.length > 0 && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("an_requirements")}
+                      </div>
+                      <div className="space-y-2">
+                        {analysis.meta.map((m) => (
+                          <InfoRow
+                            key={m.key}
+                            label={t(`meta_${m.key}`)}
+                            value={vt(m.value)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Motivo esclusione (banner rosso) */}
+                  {analysis.excluded && (
+                    <div
+                      className="rounded-lg border p-3"
+                      style={{
+                        borderColor: "var(--color-red)",
+                        background:
+                          "color-mix(in srgb, var(--color-red) 9%, transparent)",
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0"
+                          style={{
+                            color: "var(--color-red)",
+                            borderColor: "var(--color-red)",
+                          }}
+                        >
+                          {analysis.excluded.tag || t("an_excluded")}
+                        </span>
+                        <span className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-red)]">
+                          {t("an_excluded")}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[var(--color-base)] leading-relaxed">
+                        {analysis.excluded.text}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Disallineamenti taggati (STACK / GEO / SENIORITY / …) */}
+                  {analysis.mismatches.length > 0 && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("an_mismatches")}
+                      </div>
+                      <ul className="space-y-2.5">
+                        {analysis.mismatches.map((mm, i) => (
+                          <li key={i} className="flex gap-2">
+                            {mm.tag && (
+                              <span
+                                className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 h-fit"
+                                style={{
+                                  color: tagColor(mm.tag),
+                                  borderColor: tagColor(mm.tag),
+                                }}
+                              >
+                                {mm.tag}
+                              </span>
+                            )}
+                            <span className="text-[11px] text-[var(--color-muted)] leading-relaxed min-w-0 break-words">
+                              {mm.text}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Prosa libera residua */}
+                  {analysis.prose && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("an_notes")}
+                      </div>
+                      <p className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap">
+                        {analysis.prose}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

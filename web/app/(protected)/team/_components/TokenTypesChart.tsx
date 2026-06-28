@@ -11,6 +11,56 @@
 //   • futuro: calibrare i 4 pesi via least-squares ai step events del bridge.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  composition: {
+    it: "Composizione consumo per tipo di token",
+    en: "Consumption breakdown by token type",
+    hu: "Fogyasztás összetétele token típus szerint",
+    es: "Composición del consumo por tipo de token",
+    de: "Verbrauchszusammensetzung nach Token-Typ",
+    fr: "Composition de la consommation par type de token",
+    pt: "Composição do consumo por tipo de token",
+  },
+  waitingData: {
+    it: "In attesa dati…",
+    en: "Waiting for data…",
+    hu: "Adatokra várva…",
+    es: "Esperando datos…",
+    de: "Warte auf Daten…",
+    fr: "En attente de données…",
+    pt: "Aguardando dados…",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  timeRange: {
+    it: "intervallo temporale",
+    en: "time range",
+    hu: "időtartomány",
+    es: "intervalo temporal",
+    de: "Zeitbereich",
+    fr: "plage temporelle",
+    pt: "intervalo de tempo",
+  },
+  clickToggle: {
+    it: "click per nascondere/mostrare:",
+    en: "click to hide/show:",
+    hu: "kattints elrejtéshez/megjelenítéshez:",
+    es: "clic para ocultar/mostrar:",
+    de: "klicken zum Aus-/Einblenden:",
+    fr: "cliquer pour masquer/afficher :",
+    pt: "clique para ocultar/mostrar:",
+  },
+};
 
 type Series = Array<{
   ts: string;
@@ -63,11 +113,13 @@ function Chart({
   tMin,
   tMax,
   hidden,
+  tr,
 }: {
   data: Series;
   tMin: number;
   tMax: number;
   hidden: Record<string, boolean>;
+  tr: (k: string) => string;
 }) {
   const W = 1200;
   const H = 420;
@@ -216,7 +268,7 @@ function Chart({
           fill="rgba(255,255,255,0.45)"
           textAnchor="middle"
         >
-          In attesa dati…
+          {tr("waitingData")}
         </text>
       )}
     </svg>
@@ -224,6 +276,8 @@ function Chart({
 }
 
 export default function TokenTypesChart() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<RangeId>("30m");
@@ -235,6 +289,7 @@ export default function TokenTypesChart() {
   const [hidden, setHidden] = useState<Record<string, boolean>>({
     cache_read_kt: true,
   });
+  const isCloud = useIsCloud();
 
   const minutes = useMemo(
     () => RANGES.find((r) => r.id === range)?.minutes ?? 30,
@@ -261,13 +316,16 @@ export default function TokenTypesChart() {
   useEffect(() => {
     setLoading(true);
     load();
-    const id = setInterval(load, 30_000);
+    // Su CLOUD la sync è on-demand: niente polling-dati continuo (scalerebbe
+    // col numero di tab). In locale resta pieno. L'orologio NON va spento.
+    let id: ReturnType<typeof setInterval> | undefined;
+    if (!isCloud) id = setInterval(load, 30_000);
     const clockId = setInterval(() => setNowTs(Date.now()), 10_000);
     return () => {
-      clearInterval(id);
+      if (id) clearInterval(id);
       clearInterval(clockId);
     };
-  }, [load]);
+  }, [load, isCloud]);
 
   const tMax = nowTs;
   const tMin = nowTs - minutes * 60_000;
@@ -282,7 +340,7 @@ export default function TokenTypesChart() {
       <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-baseline gap-3 flex-wrap">
           <span className="text-[11px] uppercase tracking-wide text-[var(--color-dim)]">
-            Composizione consumo per tipo di token
+            {tr("composition")}
           </span>
           {totals && (
             <span className="text-[11px] text-[var(--color-muted)]">
@@ -303,7 +361,11 @@ export default function TokenTypesChart() {
             </span>
           )}
         </div>
-        <div className="flex gap-1" role="radiogroup" aria-label="time range">
+        <div
+          className="flex gap-1"
+          role="radiogroup"
+          aria-label={tr("timeRange")}
+        >
           {RANGES.map((r) => {
             const active = r.id === range;
             return (
@@ -331,7 +393,7 @@ export default function TokenTypesChart() {
 
       {loading && !data ? (
         <div className="text-[11px] text-[var(--color-dim)] py-6 text-center">
-          Caricamento…
+          {tr("loading")}
         </div>
       ) : (
         <>
@@ -340,11 +402,10 @@ export default function TokenTypesChart() {
             tMin={tMin}
             tMax={tMax}
             hidden={hidden}
+            tr={tr}
           />
           <div className="px-1 mt-2 text-[10px] text-[var(--color-muted)] flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <span className="text-[var(--color-dim)]">
-              click per nascondere/mostrare:
-            </span>
+            <span className="text-[var(--color-dim)]">{tr("clickToggle")}</span>
             {TYPES.map((tp) => {
               const off = hidden[tp.key];
               return (

@@ -52,6 +52,19 @@ JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
 CONFIG_PATH = JHT_HOME / "jht.config.json"
 LOGS_DIR = JHT_HOME / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
+# ── Vitals RAM/CPU (2026-06-18) ─────────────────────────────────────────
+# Il bridge campiona i vitals di sistema a OGNI tick su un FILE DEDICATO
+# (vitals.jsonl), NON nel tick della Sentinella: la Sentinella NON è avvisata
+# del consumo PC nel suo flusso decisionale di quota. Sveglia la Sentinella SOLO
+# se RAM o CPU superano la soglia (emergenza risorse, non quota), rate-limited.
+# Il Mantenitore legge vitals.jsonl 1×/giorno e mette i picchi in croce con la
+# diagnosi infra. Logica di lettura in shared/skills/host_vitals.py.
+VITALS_SKILL = str(Path(__file__).resolve().parent.parent / "shared" / "skills" / "host_vitals.py")
+VITALS_FILE = LOGS_DIR / "vitals.jsonl"
+VITALS_ALERT_PCT = 95.0
+VITALS_ALERT_COOLDOWN_MIN = 30.0
+_LAST_VITALS_ALERT_AT = 0.0
 DATA_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 LOG_TXT = LOGS_DIR / "sentinel-log.txt"
 PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
@@ -85,6 +98,22 @@ DEFAULT_TICK_MIN = 3.0
 GSPOT_FAST_TICK_MIN = 2.0
 GSPOT_STABLE_TICK_MIN = 5.0
 GSPOT_CALM_TICK_MIN = 10.0
+
+# ── Lean-comms (2026-06-15): tick ANCORATO + wake ai quarti ───────────────
+# Il tick non è più adattivo (FAST/CALM): è ANCORATO all'orologio ogni
+# ANCHOR_TICK_MIN minuti (x:00/05/10/...). Prevedibile e phase-locked
+# (sopravvive a restart/istanze multiple senza drift). La Sentinella viene
+# svegliata SOLO ai quarti (x:00/15/30/45) — un sottoinsieme dei tick — e
+# solo su edge azionabile dentro l'orario lavorativo. Le costanti GSPOT_*
+# sopra restano per il solo state-file UI (tick_phase informativo).
+ANCHOR_TICK_MIN = 5.0
+
+# NB 2026-06-20: l'auto-pass di promozione tassonomia (role_registry.run_pass a
+# stringhe, ~1h) è stato RIMOSSO dal bridge. La promozione delle famiglie role_family
+# è ora BRAIN-DRIVEN: la fanno gli analisti col giudizio (role_registry.py promote/merge,
+# grappoli da 'Other') + l'arbitrato del Capitano, al momento dell'analisi — non un
+# trigger periodico. Lo string-pass frammentava ("VC Investing" vs "VC / Growth") → 0
+# promozioni → tutto fermo in 'Other' (rootcause betaA). Vedi role_registry.py docstring.
 
 GSPOT_LOWER = 80.0    # proj < 80% → sotto g-spot (sottoutilizzo)
 GSPOT_UPPER = 105.0   # proj > 105% → sopra g-spot (critico)
@@ -266,32 +295,82 @@ def _advance_tick_phase(state, in_gspot):
         state["gspot_consecutive"] = 0  # nessuna ulteriore promozione, ma resta pulito
 
 
-def _should_notify_sentinella(in_gspot, state, now_ts):
-    """Decide se SVEGLIARE la Sentinella su questo tick.
+def _within_working_hours(work_phase):
+    """Gate orario ASSOLUTO (lean-comms 2026-06-15): fuori dalla finestra
+    lavorativa NESSUNA LLM va svegliata (né Sentinella né Capitano). Il bridge
+    continua a campionare lo stato (Python), ma tace verso le LLM.
 
-    Regola: la Sentinella riceve TICK solo quando la proiezione è fuori dal
-    g-spot (situazione che richiede un'azione). Una volta notificata, il
-    bridge entra in cooldown SENTINELLA_COOLDOWN_MIN: anche se la situazione
-    rimane critica, il bridge tace e la Sentinella+Capitano non consumano
-    token in loop. Dopo il cooldown, se ancora fuori g-spot, rinotifica.
+    `work_phase` arriva dal pacing-bridge (`ON`/`OFF`). None = nessuno schedule
+    configurato → 24/7 (back-compat: si notifica sempre). Fail-safe: se il dato
+    manca trattiamo come ON (meglio una sveglia di troppo che perdere un edge)."""
+    if work_phase is None:
+        return True
+    # Sopprime SOLO su OFF esplicito: qualunque altro valore (ON, o un token
+    # inatteso) → notifica. Fail-safe: andare sempre-muti su un valore imprevisto
+    # perderebbe OGNI edge — peggio di una sveglia di troppo. work_hours_target
+    # produce solo "ON"/"OFF", quindi nei casi reali è equivalente a == "ON".
+    return str(work_phase).strip().upper() != "OFF"
 
-    Quando la proj rientra nel g-spot, il cooldown si resetta — così il
-    prossimo episodio critico viene notificato subito.
+
+def _is_quarter(now_dt):
+    """True ai quarti d'orologio (x:00/15/30/45). Col tick ancorato a
+    ANCHOR_TICK_MIN (5min) i tick cadono su 0/5/10/... → i quarti sono esatti.
+    La Sentinella si sveglia (per condizioni in corso) solo ai quarti."""
+    return now_dt.minute % 15 == 0
+
+
+def _next_tick_sleep_sec(now_dt, override_min=None):
+    """Secondi di sleep fino al PROSSIMO tick.
+
+    - override esplicito (config `sentinella_tick_minutes`) → quel valore
+      (testing/casi speciali), col floor MIN_TICK_SECONDS.
+    - default → ANCORATO al prossimo confine di ANCHOR_TICK_MIN sull'orologio
+      (x:00/05/10/...): cadenza prevedibile e phase-locked (i quarti 0/15/30/45
+      sono un sottoinsieme → wake Sentinella ai quarti). Se il confine è troppo
+      vicino (< floor) salta a quello successivo per non spammare il provider.
+    """
+    if override_min is not None:
+        return max(MIN_TICK_SECONDS, override_min * 60)
+    anchor_s = ANCHOR_TICK_MIN * 60
+    secs_into_hour = now_dt.minute * 60 + now_dt.second + now_dt.microsecond / 1e6
+    to_next = anchor_s - (secs_into_hour % anchor_s)
+    if to_next < MIN_TICK_SECONDS:
+        to_next += anchor_s
+    return to_next
+
+
+def _should_notify_sentinella(on_pace, state, now_ts, is_quarter):
+    """Decide se SVEGLIARE la Sentinella (gate deterministico, edge-driven).
+
+    Lean-comms (2026-06-15): il bridge decide il "silenzio" in codice PRIMA di
+    invocare l'LLM. Regole:
+      • on_pace (calmo) → silenzio, reset del cooldown.
+      • primo tick attuabile dell'episodio (transizione calma→attuabile) →
+        notifica SUBITO (è un edge reale, anche fuori dai quarti).
+      • episodio attuabile IN CORSO → re-conferma SOLO ai quarti (x:00/15/30/45)
+        e non più spesso di SENTINELLA_COOLDOWN_MIN. Elimina il re-wake
+        "HOLD già attivo" ad ogni tick 5min — la causa del coordinator-burn
+        osservato (la Sentinella ragionava verbosamente per ridire "silenzio").
+
+    Il gate orario (fuori finestra → mai svegliare) è applicato a monte dal
+    chiamante (vedi `_within_working_hours`), non qui.
 
     state è un dict con:
-      last_sent_ts            — timestamp Unix dell'ultima notifica critica
-                                (None se mai notificata)
+      last_sent_ts            — timestamp Unix dell'ultima notifica (None se reset)
     """
-    if in_gspot:
-        # In g-spot: nessun bisogno di Sentinella. Reset del cooldown così
-        # il prossimo episodio critico è notificato immediatamente.
+    if on_pace:
+        # Calmo: nessun bisogno di Sentinella. Reset del cooldown così il
+        # prossimo episodio attuabile è notificato immediatamente.
         state["last_sent_ts"] = None
         return False
 
     last_ts = state.get("last_sent_ts")
     if last_ts is None:
-        # Primo tick fuori dal g-spot in questo episodio → notifica.
+        # Transizione calma→attuabile: edge → notifica (anche fuori quarto).
         return True
+    # Episodio attuabile in corso: re-conferma solo ai quarti, col cooldown.
+    if not is_quarter:
+        return False
     elapsed_min = (now_ts - last_ts) / 60.0
     return elapsed_min >= SENTINELLA_COOLDOWN_MIN
 
@@ -348,7 +427,54 @@ def session_exists(s):
 
 
 def jht_tmux_send(session, text):
-    return subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode == 0
+    # Difesa: un tmux-send che si blocca (pane occupato) NON deve mai abbattere il
+    # bridge. Senza questa guardia, TimeoutExpired propagava fuori dal while-loop di
+    # main() (l'unico handler esterno è KeyboardInterrupt) → bridge morto in silenzio,
+    # zero auto-recovery (setsid detached, fuori dal respawn di pid1). Vedi postmortem
+    # docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md. Degrada a "tick saltato".
+    try:
+        return subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode == 0
+    except (subprocess.TimeoutExpired, OSError) as e:
+        print(f"[bridge V6] WARN jht_tmux_send({session}): {e}", file=sys.stderr)
+        return False
+
+
+def _sample_vitals_and_maybe_alert():
+    """Campiona RAM/CPU → vitals.jsonl (file dedicato, NON il tick Sentinella).
+
+    Sveglia la Sentinella SOLO se RAM o CPU >= VITALS_ALERT_PCT (pressione risorse
+    REALE, distinta dalla quota token), con cooldown anti-spam. Isolato: qualsiasi
+    errore qui NON tocca il tick di quota. Il Mantenitore correla vitals.jsonl 1×/dì.
+    """
+    global _LAST_VITALS_ALERT_AT
+    try:
+        r = subprocess.run([sys.executable, VITALS_SKILL, "sample"],
+                           capture_output=True, text=True, timeout=10)
+        if r.returncode != 0 or not r.stdout.strip():
+            return
+        v = json.loads(r.stdout.strip().splitlines()[-1])
+    except Exception:
+        return
+    cpu = (v.get("cpu") or {}).get("pct")
+    mem = (v.get("mem") or {}).get("pct")
+    over = []
+    if isinstance(cpu, (int, float)) and cpu >= VITALS_ALERT_PCT:
+        over.append(f"CPU {cpu}%")
+    if isinstance(mem, (int, float)) and mem >= VITALS_ALERT_PCT:
+        over.append(f"RAM {mem}%")
+    if not over:
+        return
+    now = time.time()
+    if now - _LAST_VITALS_ALERT_AT < VITALS_ALERT_COOLDOWN_MIN * 60:
+        return
+    _LAST_VITALS_ALERT_AT = now
+    jht_tmux_send(
+        SENTINELLA_SESSION,
+        f"[BRIDGE VITALS ALERT] Risorse container sopra soglia: {', '.join(over)} "
+        f"(>={VITALS_ALERT_PCT:.0f}%). Pressione risorse REALE (rischio OOM/saturazione), "
+        f"distinta dalla quota token. Valuta escalation al Capitano: ridurre roster / "
+        f"kill 1 worker. Storico per la diagnosi: {VITALS_FILE} (Mantenitore 1×/giorno).",
+    )
 
 
 # ── Codex: lettura rollout JSONL ────────────────────────────────────────
@@ -701,6 +827,16 @@ def fetch_kimi_api():
     # rolling weekly. Se Moonshot in futuro lo rinomina (es. resets_at), la
     # get-with-fallback resta safe (None se assente).
     weekly_reset_iso = weekly.get("resetTime") or weekly.get("resets_at")
+    # P5 (2026-06-13): totalQuota = tetto MENSILE del pacchetto Kimi (condiviso con
+    # la membership). NON resetta come 5h/weekly: a esaurimento CONGELA Kimi Code
+    # finche' non si ricarica/upgrade. Oggi monitoriamo solo 5h + weekly e siamo
+    # ciechi a questo. Lo esponiamo come monthly_remaining_pct (None se assente).
+    total_q = data.get("totalQuota") or {}
+    try:
+        monthly_remaining = (int(total_q.get("remaining"))
+                             if total_q.get("remaining") is not None else None)
+    except (TypeError, ValueError):
+        monthly_remaining = None
     return {
         "usage": usage_5h,
         "reset_at": _iso_to_hhmm(five_h.get("resetTime")),
@@ -708,6 +844,7 @@ def fetch_kimi_api():
         "weekly_usage": weekly_used,
         "weekly_reset_at": _iso_to_hhmm(weekly_reset_iso),
         "weekly_reset_at_unix": _iso_to_unix(weekly_reset_iso),
+        "monthly_remaining_pct": monthly_remaining,
     }
 
 
@@ -823,6 +960,175 @@ def _compute_metrics_via_skill(parsed, last, history):
     cm = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cm)
     return cm.compute_metrics(parsed, last, history=history)
+
+
+def _weekly_pace_via_skill(entry, now_dt, now_ts):
+    """weekly_pace (rate weekly REALE 2h vs sostenibile + lockout anticipato) via
+    la pure-function condivisa shared/skills/weekly_pace.py. weekly_active_hours
+    da work_hours_target (ore ON da now al weekly_reset). Ritorna dict o None.
+
+    Parte 2/3 redesign usage-monitoring (2026-06-13): il dato grezzo va nel
+    [BRIDGE TICK] alla Sentinella → S-07 lo elabora e CONSIGLIA il Capitano (C-09),
+    invece di farlo arrivare al Capitano che bypasserebbe l'analisi (= il bug
+    dell'indagine: status SOTTOUTILIZZO 89% mentre il weekly andava a 100%).
+    UN solo calcolo del pace (lezione fix#4): la stessa funzione shared."""
+    try:
+        wrem = entry.get("weekly_remaining_pct")
+        wreset_unix = entry.get("weekly_reset_at_unix")
+        if (not isinstance(wrem, (int, float))
+                or not isinstance(wreset_unix, (int, float))):
+            return None
+
+        def _imp(name):
+            p = Path("/app/shared/skills") / f"{name}.py"
+            if not p.exists():
+                p = (Path(__file__).resolve().parent.parent
+                     / "shared" / "skills" / f"{name}.py")
+            spec = importlib.util.spec_from_file_location(name, p)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+
+        wht = _imp("work_hours_target")
+        wp = _imp("weekly_pace")
+        try:
+            with CONFIG_PATH.open(encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            cfg = None
+        wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
+        wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)
+        # Ore attive dell'INTERO ciclo (per il debito cumulativo, 2026-06-28):
+        # il ciclo weekly e' di 7 giorni che terminano al reset → start = reset-7d.
+        # Cosi' weekly_pace puo' calcolare ideal_used e debt_pct (saldo vs retta).
+        wtot = wht.active_hours_in_range(wreset_dt - timedelta(days=7), wreset_dt, cfg)
+        return wp.weekly_pace_assessment(str(DATA_JSONL), now_ts, wrem, wah,
+                                         weekly_total_active_hours=wtot)
+    except Exception:
+        return None
+
+
+# Riserva serale (2026-06-26): frazione del budget giornaliero tenuta da parte
+# di giorno e RILASCIATA/bruciata nelle ultime ore della finestra → l'utente la
+# usa per la chat col team, o si brucia sul lavoro (niente budget sprecato).
+# Spalma il consumo invece del front-load mattutino tipico di Kimi.
+_RESERVE_FRAC = 0.15          # 15% del budget di oggi tenuto da parte
+_RESERVE_RELEASE_H = 2.0      # rilasciato nelle ultime ~2h della finestra
+
+
+def _evening_release(now_dt):
+    """True se siamo nelle ultime ~2h della finestra di lavoro corrente (la
+    riserva serale va RILASCIATA/bruciata); False altrimenti (riserva TENUTA).
+    Robusta: qualunque errore o fase OFF → False (conservativo: tieni la riserva)."""
+    try:
+        p = Path("/app/shared/skills") / "work_hours_target.py"
+        if not p.exists():
+            p = (Path(__file__).resolve().parent.parent
+                 / "shared" / "skills" / "work_hours_target.py")
+        spec = importlib.util.spec_from_file_location("work_hours_target", p)
+        wht = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(wht)
+        try:
+            with CONFIG_PATH.open(encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            cfg = None
+        nph = wht.next_phase_transition(now_dt, cfg)
+        if nph and nph[0] == "ON" and nph[1] is not None:
+            h_to_end = (nph[1] - now_dt).total_seconds() / 3600.0
+            return 0.0 <= h_to_end <= _RESERVE_RELEASE_H
+    except Exception:
+        pass
+    return False
+
+
+def _daily_pacing_via_skill(entry, now_dt, now_ts):
+    """Budget GIORNALIERO adattivo + consumo nella finestra di lavoro corrente
+    (regole S-09/C-19). Tutto in % del WEEKLY: budget = weekly_remaining /
+    finestre-lavoro residue (se sfori oggi i giorni dopo calano da soli);
+    consumato_oggi = weekly_usage_now - weekly_usage a inizio finestra di lavoro
+    corrente (durante le ore OFF il weekly è piatto → baseline). La Sentinella lo
+    riceve nel [BRIDGE TICK] (S-09), ANALIZZA e ordina il coast al Capitano (C-19)
+    — NON va al Capitano diretto (stesso principio di _weekly_pace_via_skill).
+    Ritorna (budget_pct, consumato_pct) o (None, None)."""
+    try:
+        wrem = entry.get("weekly_remaining_pct")
+        wreset_unix = entry.get("weekly_reset_at_unix")
+        wusage = entry.get("weekly_usage")
+        if (not isinstance(wrem, (int, float))
+                or not isinstance(wreset_unix, (int, float))):
+            return (None, None)
+
+        def _imp(name):
+            p = Path("/app/shared/skills") / f"{name}.py"
+            if not p.exists():
+                p = (Path(__file__).resolve().parent.parent
+                     / "shared" / "skills" / f"{name}.py")
+            spec = importlib.util.spec_from_file_location(name, p)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+
+        wht = _imp("work_hours_target")
+        try:
+            with CONFIG_PATH.open(encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            cfg = None
+        wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
+        wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)
+        if not isinstance(wah, (int, float)) or wah <= 0:
+            return (None, None)
+        daily_active_h = wht.active_hours_in_range(
+            now_dt, now_dt + timedelta(days=1), cfg)
+        if not isinstance(daily_active_h, (int, float)) or daily_active_h <= 0:
+            daily_active_h = 12.0
+        windows_left = max(1.0, wah / daily_active_h)
+        budget = wrem / windows_left
+        consumed = None
+        try:
+            ints = wht._build_intervals(
+                cfg, now_dt - timedelta(days=1), now_dt + timedelta(minutes=1))
+            ws = None
+            for s, e in ints:
+                if s <= now_dt <= e:
+                    ws = s
+                    break
+            if ws is None and ints:
+                ws = ints[-1][0]
+            if ws is not None and isinstance(wusage, (int, float)):
+                ws_ts = ws.timestamp()
+                base = None
+                with open(DATA_JSONL, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            ev = json.loads(line)
+                        except Exception:
+                            continue
+                        wt = ev.get("weekly_usage")
+                        ts = ev.get("ts")
+                        if (not isinstance(wt, (int, float))
+                                or not isinstance(ts, str)):
+                            continue
+                        try:
+                            t = datetime.fromisoformat(
+                                ts.replace("Z", "+00:00")).timestamp()
+                        except Exception:
+                            continue
+                        if t >= ws_ts:
+                            base = wt
+                            break
+                if base is not None:
+                    consumed = max(0.0, wusage - base)
+        except Exception:
+            consumed = None
+        return (round(budget, 1),
+                round(consumed, 1) if consumed is not None else None)
+    except Exception:
+        return (None, None)
 
 
 # ── Claude TUI parser (libreria importata da check_usage) ──────────────
@@ -1007,16 +1313,16 @@ def main():
     override_min, _ = read_config()
     print(f"[bridge V6] pid={os.getpid()} sentinella={SENTINELLA_SESSION} capitano={CAPITANO_SESSION}")
     if override_min is not None:
-        print(f"[bridge V6] tick interval: {override_min} min (override da config)")
+        print(f"[bridge V7] tick interval: {override_min} min (override da config)")
     else:
         print(
-            f"[bridge V6] tick interval: ADAPTIVE state machine "
-            f"(default={DEFAULT_TICK_MIN}min, g-spot fast={GSPOT_FAST_TICK_MIN}min, "
-            f"stable={GSPOT_STABLE_TICK_MIN}min, calm={GSPOT_CALM_TICK_MIN}min)"
+            f"[bridge V7] tick ANCORATO all'orologio ogni {ANCHOR_TICK_MIN}min "
+            f"(x:00/05/10/...); Sentinella svegliata ai quarti (x:00/15/30/45) "
+            f"solo su edge azionabile + GATE ORARIO (no wake fuori finestra)"
         )
         print(
-            f"[bridge V6] g-spot=[{GSPOT_LOWER}-{GSPOT_UPPER}%], "
-            f"sentinella cooldown={SENTINELLA_COOLDOWN_MIN}min"
+            f"[bridge V7] sentinella cooldown={SENTINELLA_COOLDOWN_MIN}min, "
+            f"edge-driven (lean-comms 2026-06-15)"
         )
 
     fail_streak = 0
@@ -1036,6 +1342,11 @@ def main():
         override_min, provider = read_config()
 
         parsed, fail_reason = _do_fetch(provider)
+
+        # Gate orario assoluto (lean-comms): calcolato qui — copre sia il path
+        # successo sia quello di fallimento. work_phase dal pacing-bridge.
+        dyn_target, work_phase = _read_dynamic_target()
+        within_hours = _within_working_hours(work_phase)
 
         if parsed:
             # ── Path successo: scrivi sample, tick alla Sentinella ────
@@ -1066,9 +1377,28 @@ def main():
             write_jsonl(entry)
             write_log(entry)
 
+            # Vitals RAM/CPU (2026-06-18): campiona a OGNI tick su vitals.jsonl
+            # (file dedicato — NON nel tick Sentinella, che resta sul flusso quota).
+            # Sveglia la Sentinella SOLO se RAM/CPU >95% (rate-limited). FUORI dal
+            # gate orario sotto: una pressione risorse è emergenza infra, non quota.
+            _sample_vitals_and_maybe_alert()
+
             usage = entry.get("usage")
             proj = entry.get("projection")
             status = entry.get("status")
+            # A2 lockout-resilience (2026-06-14): quando il weekly è ESAURITO
+            # (remaining<=0) il team è hard-locked (403 access_terminated). Lo status
+            # calcolato sull'arco-5h resta SOTTOUTILIZZO ("lavora di più") → il Capitano
+            # continua a spawnare worker → 403-spam multi-agente. Forziamo status=LOCKED
+            # così la Sentinella/Capitano FERMANO gli spawn = spenta la SORGENTE dei 403.
+            # Resta il check-cardine "weekly<100%" (sotto, fuori da ogni gate) per il
+            # risveglio automatico al reset: LOCKED non significa MAI congelare il polling.
+            wk_remaining_now = entry.get("weekly_remaining_pct")
+            weekly_locked = (
+                isinstance(wk_remaining_now, (int, float)) and wk_remaining_now <= 0
+            )
+            if weekly_locked:
+                status = "LOCKED"
             # Reset 5h: come per il weekly, preferiamo DATA+ORARIO da reset_at_unix
             # (HH:MM nudo è ambiguo a cavallo di mezzanotte); fallback all'HH:MM.
             reset_unix = entry.get("reset_at_unix")
@@ -1088,7 +1418,7 @@ def main():
             # Target dinamico work-hours-aware (V8): il g-spot si centra
             # sul target scritto dal pacing-bridge invece che sul 92% fisso.
             # Quando schedule + ratio mancano → fallback alla banda storica.
-            dyn_target, work_phase = _read_dynamic_target()
+            # (dyn_target/work_phase ora calcolati a monte, fuori dal branch.)
             # Phase 1 (pacing-migration-plan-2026-06-05): cadenza tick e wake della
             # Sentinella ancorati al segnale STABILE vel_team vs vel_target (dal
             # pacing-bridge), NON a `proj` (volatile, ±400pt tick-to-tick).
@@ -1100,9 +1430,61 @@ def main():
             # presto (l'under-utilizzo invece non sveglia — lo gestisce il Capitano).
             vel_team_s, vel_target_s = _read_pacing_pace()
             on_pace = _is_on_pace(vel_team_s, vel_target_s, proj, dyn_target)
-            _advance_tick_phase(state, on_pace)
+            # Fix #4 (runaway-scaling 2026-06-07): il vincolo weekly è binding
+            # anche quando il 5h è on-pace. Lo trattiamo come condizione NON
+            # calma → sveglia la Sentinella (ATTENZIONE WEEKLY in Phase 1) e
+            # accelera la cadenza, rispettando comunque il cooldown anti-spam.
+            # Senza questo, a weekly 92% on-pace la Sentinella non veniva MAI
+            # svegliata e il freno non scattava (status SOTTOUTILIZZO decorativo).
             now_ts = time.time()
-            should_notify = _should_notify_sentinella(on_pace, state, now_ts)
+            now_local = datetime.now().astimezone()
+            is_quarter = _is_quarter(now_local)
+            weekly_binding = bool(entry.get("weekly_binding"))
+            # compute_metrics tiene weekly_binding=False by-design: il proj_weekly
+            # naive sovra-proietta sulle notti idle, quindi non è un trigger
+            # affidabile. Il binding VERO arriva dal pace active-hours-aware
+            # (weekly_pace): se il rate weekly REALE è SOPRA-PACE e proietta lockout
+            # PRIMA del reset (e non è un burst in esaurimento), il weekly È binding
+            # → sveglia la Sentinella anche col 5h on-pace. Chiude il buco storico
+            # "Sentinella cieca al weekly" (status SOTTOUTILIZZO mentre il weekly va
+            # a fuoco = front-load). Un team in pari/sotto-pace NON è binding (no
+            # coast prematuro). Calcolato UNA volta qui e riusato nel tick sotto;
+            # solo in-orario e non-locked (fuori finestra nessuno viene svegliato).
+            weekly_pace = None
+            if within_hours and not weekly_locked:
+                weekly_pace = _weekly_pace_via_skill(
+                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                if isinstance(weekly_pace, dict) and weekly_pace.get("binding"):
+                    weekly_binding = True
+            if not within_hours:
+                # GATE ORARIO ASSOLUTO (lean-comms): fuori finestra NESSUNA LLM
+                # svegliata. Il bridge ha già scritto il sample (monitoring puro)
+                # ma tace. Reset cooldown + last_status così alla ripresa il 1°
+                # tick in-orario ri-valuta da zero (edge/LOCKED ri-notificati 1 volta).
+                effective_on_pace = True
+                _advance_tick_phase(state, effective_on_pace)
+                state["last_sent_ts"] = None
+                state["last_status"] = None
+                should_notify = False
+            elif weekly_locked:
+                # A2 lockout-resilience: a weekly esaurito NON ha senso pacare-veloce
+                # né spammare la Sentinella. Cadenza CALMA (effective_on_pace=True) + UN
+                # solo avviso sulla TRANSIZIONE a LOCKED (layer-2: 1 notice, poi silenzio).
+                # Il polling continua comunque (calm, mai stop) → il check weekly<100% al
+                # prossimo tick fa ripartire il team da solo al reset (resurrection-check).
+                # FIX lean-comms: last_status ora è tracciato in-memory (prima non veniva
+                # MAI settato nel dict → il gate notificava ad OGNI tick, non 1 volta).
+                effective_on_pace = True
+                _advance_tick_phase(state, effective_on_pace)
+                should_notify = state.get("last_status") != "LOCKED"
+                state["last_status"] = status
+            else:
+                effective_on_pace = on_pace and not weekly_binding
+                _advance_tick_phase(state, effective_on_pace)
+                should_notify = _should_notify_sentinella(
+                    effective_on_pace, state, now_ts, is_quarter
+                )
+                state["last_status"] = status
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""
@@ -1141,21 +1523,122 @@ def main():
                     ).astimezone().strftime("%d/%m %H:%M")
                 else:
                     wk_reset = entry.get("weekly_reset_at")
+                # Fix #4: propaga weekly_remaining_pct (calcolato in codice da
+                # compute_metrics) e, quando il weekly è binding, un marcatore
+                # ATTENZIONE-WEEKLY esplicito → la Sentinella (S-06) emette
+                # l'ordine autoritativo verso il Capitano (C-09) senza doverlo
+                # dedurre dal solo primary.
+                wk_remaining = entry.get("weekly_remaining_pct")
+                wk_remaining_field = (
+                    f" weekly_remaining={wk_remaining}%"
+                    if wk_remaining is not None
+                    else ""
+                )
+                weekly_binding_field = " ATTENZIONE-WEEKLY" if weekly_binding else ""
                 weekly_field = (
                     f" weekly={wk_usage}% weekly_reset={wk_reset}"
+                    f"{wk_remaining_field}{weekly_binding_field}"
                     if wk_usage is not None
                     else ""
                 )
+                # WEEKLY-PACE: dato grezzo per la Sentinella (S-07) — rate weekly
+                # REALE (2h) vs sostenibile + lockout anticipato. La Sentinella lo
+                # ELABORA e consiglia il Capitano; NON arriva al Capitano diretto.
+                if weekly_pace is None:  # non già calcolato sopra (es. ramo LOCKED)
+                    weekly_pace = _weekly_pace_via_skill(
+                        entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                weekly_pace_field = ""
+                if (isinstance(weekly_pace, dict)
+                        and weekly_pace.get("kind") not in (None, "ND")):
+                    el = weekly_pace.get("early_lockout_h")
+                    weekly_pace_field = (
+                        f" WEEKLY-PACE[{weekly_pace['kind']}]"
+                        f" vel_weekly={weekly_pace['vel_weekly_pct_h']}%/h"
+                        f" sost={weekly_pace['sustainable_pct_h']}%/h"
+                        f" ratio={weekly_pace['ratio']}x"
+                        + (f" early_lockout={el}h" if el else "")
+                    )
+                    # debt (2026-06-28): saldo cumulativo vs retta ideale. >0 =
+                    # speso troppo presto (front-load) → in debito la Sentinella
+                    # (S-07) usa tolleranza 1.0x e scala il freno anche sul debito,
+                    # non solo sul runway. Espone debt anche quando kind=ALLINEATO
+                    # (e' il caso che il rate da solo mascherava).
+                    dbt = weekly_pace.get("debt_pct")
+                    if isinstance(dbt, (int, float)):
+                        weekly_pace_field += f" debt={dbt:+.0f}pp"
+                    # burn_mode (duale di early_lockout): SOTTO-PACE + vicino al
+                    # reset + spreco alto → la Sentinella deve consigliare di
+                    # SATURARE, non spalmare. Espone proiezione + spreco previsto.
+                    if weekly_pace.get("burn_mode"):
+                        weekly_pace_field += (
+                            f" BURN-MODE proj_final={weekly_pace['projected_final_pct']}%"
+                            f" spreco={weekly_pace['wasted_pct']}%"
+                        )
+                    # burst_transient (P3 fix-batch): SOPRA-PACE che sta SVANENDO
+                    # (rate recente << media 2h). Esposto perche' la Sentinella
+                    # (S-07) NON deve frenare duro su un burst gia' finito →
+                    # ripresa controllata invece di freeze.
+                    if weekly_pace.get("burst_transient"):
+                        weekly_pace_field += " burst_transient=true"
+                # DAILY (S-09/C-19): budget di giornata + consumo di oggi (% del
+                # WEEKLY). La Sentinella ANALIZZA e, su sforo (oggi>cap), ordina il
+                # coast al Capitano; NON arriva al Capitano diretto.
+                daily_pace_field = ""
+                _dbudget, _dconsumed = _daily_pacing_via_skill(
+                    entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+                if isinstance(_dbudget, (int, float)):
+                    _dcap = _dbudget + 5.0
+                    # Riserva serale: R% del budget, tenuta di giorno, bruciata/
+                    # rilasciata nelle ultime ~2h della finestra (anti front-load).
+                    _dnow = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+                    _dres = round(_dbudget * _RESERVE_FRAC, 1)
+                    _drel = _evening_release(_dnow)
+                    _res_field = (
+                        f" riserva={_dres:.1f}%→{'brucia' if _drel else 'tieni'}")
+                    if isinstance(_dconsumed, (int, float)):
+                        daily_pace_field = (
+                            f" daily: oggi={_dconsumed:.1f}% budget={_dbudget:.1f}%"
+                            f" cap={_dcap:.1f}%{_res_field}"
+                            + (" ⛔" if _dconsumed > _dcap else "")
+                        )
+                    else:
+                        daily_pace_field = (
+                            f" daily: budget={_dbudget:.1f}% cap={_dcap:.1f}%{_res_field}")
+                # TOOLS-HEALTH (dev2): segnale strutturato sui tool mission-critical.
+                # Il maintainer-sweep scrive logs/tools-health.json (output di
+                # tool_health.py); qui lo LEGGIAMO e segnaliamo SOLO se qualcosa è
+                # rotto → la Sentinella vede SUBITO un tool giù (es. browser/LinkedIn)
+                # invece di scoprirlo a valle dai report analisti (bug libatk).
+                tools_health_field = ""
+                try:
+                    th_path = DATA_JSONL.parent / "tools-health.json"
+                    if th_path.exists():
+                        th = json.loads(th_path.read_text(encoding="utf-8"))
+                        if th.get("any_broken") and th.get("broken"):
+                            tools_health_field = " TOOLS-HEALTH[BROKEN:" + ",".join(th["broken"]) + "]"
+                except (OSError, ValueError):
+                    pass
+                # MONTHLY-QUOTA (P5 fix-batch, dev2): tetto MENSILE Kimi (totalQuota)
+                # dal sample. Kimi-only (None su Codex) → mostrato solo se presente;
+                # alert sotto 15% perche' a esaurimento CONGELA Kimi Code finche' non
+                # si ricarica (oggi vediamo solo 5h+weekly, ciechi al mensile).
+                monthly_quota_field = ""
+                _mrp = parsed.get("monthly_remaining_pct")
+                if isinstance(_mrp, (int, float)):
+                    monthly_quota_field = f" MONTHLY-QUOTA rem={_mrp}%"
+                    if _mrp < 15:
+                        monthly_quota_field += " [ALERT<15%]"
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
-                    f"status={status} reset={reset}{tgt_field}{phase_field}{weekly_field} src=bridge."
+                    f"status={status} reset={reset}{tgt_field}{phase_field}"
+                    f"{weekly_field}{weekly_pace_field}{daily_pace_field}{tools_health_field}{monthly_quota_field} src=bridge."
                 )
                 state["last_sent_ts"] = now_ts
 
-            # Recovery se eravamo in failure streak
+            # Recovery se eravamo in failure streak (gate orario: zitto fuori finestra)
             if fail_streak >= FETCH_FAIL_THRESHOLD or capitano_alerted:
-                if session_exists(CAPITANO_SESSION):
+                if within_hours and session_exists(CAPITANO_SESSION):
                     jht_tmux_send(
                         CAPITANO_SESSION,
                         "[BRIDGE INFO] sorgente usage tornata responsiva, monitoraggio normale."
@@ -1168,17 +1651,17 @@ def main():
             fail_streak += 1
             print(f"[bridge V6] {now_h} FAIL #{fail_streak} reason={fail_reason}")
 
-            # Notifica Sentinella al primo fail dell'episodio
-            if fail_streak == 1 and session_exists(SENTINELLA_SESSION):
+            # Notifica Sentinella al primo fail dell'episodio (gate orario)
+            if fail_streak == 1 and within_hours and session_exists(SENTINELLA_SESSION):
                 jht_tmux_send(
                     SENTINELLA_SESSION,
                     f"[BRIDGE FAILURE] ts={now_h} fetch fallito (reason={fail_reason}). Esegui fallback come da prompt."
                 )
 
-            # Alert al Capitano al N° fail consecutivo
+            # Alert al Capitano al N° fail consecutivo (gate orario)
             if fail_streak == FETCH_FAIL_THRESHOLD and not capitano_alerted:
-                if session_exists(CAPITANO_SESSION):
-                    eff_min = _choose_tick_interval(state, override_min)
+                if within_hours and session_exists(CAPITANO_SESSION):
+                    eff_min = ANCHOR_TICK_MIN if override_min is None else override_min
                     jht_tmux_send(
                         CAPITANO_SESSION,
                         f"[BRIDGE ALERT] sorgente usage degraded da {FETCH_FAIL_THRESHOLD} tick "
@@ -1187,9 +1670,13 @@ def main():
                     )
                 capitano_alerted = True
 
-        # Tick interval V6: state machine basata sul g-spot.
-        next_tick_min = _choose_tick_interval(state, override_min)
-        sleep_sec = max(MIN_TICK_SECONDS, next_tick_min * 60)
+        # Tick ANCORATO all'orologio (lean-comms): prossimo confine di
+        # ANCHOR_TICK_MIN (x:00/05/10/...) → cadenza prevedibile e phase-locked
+        # (i quarti 0/15/30/45 sono un sottoinsieme → wake Sentinella ai quarti).
+        # Override esplicito (config) vince. Le fasi adattive FAST/CALM non
+        # guidano più lo sleep (restano solo info per lo state-file UI).
+        sleep_sec = _next_tick_sleep_sec(datetime.now().astimezone(), override_min)
+        next_tick_min = sleep_sec / 60.0
 
         # Pubblica lo stato corrente per la UI web (atomic write).
         # last_tick_at = inizio iterazione corrente; next_tick_at = quando
@@ -1215,7 +1702,25 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n[bridge V6] interrotto.")
+    # Supervisore in-process (difesa in profondità): una QUALSIASI eccezione non
+    # gestita nel loop di main() NON deve uccidere il bridge. Era il bug del
+    # 2026-06-27: TimeoutExpired su jht_tmux_send propagava fuori dal while-loop
+    # → processo morto e ZERO recovery (setsid detached, fuori dal respawn di
+    # pid1). Qui la cattura, logga e RI-ENTRA in main(). Layer complementari:
+    # (a) la guardia in jht_tmux_send degrada il caso noto a "tick saltato";
+    # (b) l'agent-watchdog (maybe_respawn_bridges) respawna il processo se muore
+    # del tutto (OOM/kill); (c) il Mantenitore fa il canary completo 1×/dì.
+    # Vedi docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md.
+    import time as _time
+    import traceback as _tb
+    while True:
+        try:
+            main()
+            break  # uscita normale (main() è un loop infinito → non dovrebbe capitare)
+        except KeyboardInterrupt:
+            print("\n[bridge V6] interrotto.")
+            break
+        except Exception as _e:  # noqa: BLE001 — catch-all VOLUTO: niente morte silenziosa
+            print(f"[bridge V6] FATAL nel loop: {_e} — riavvio in 5s", file=sys.stderr)
+            _tb.print_exc()
+            _time.sleep(5)

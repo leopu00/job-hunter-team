@@ -2,6 +2,1167 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "@/lib/use-locale";
+
+/* ── i18n inline ─────────────────────────────────────────────────── */
+
+const T: Record<string, Record<string, string>> = {
+  attach_title: {
+    it: "Allega CV, certificati o altri documenti",
+    en: "Attach CV, certificates or other documents",
+    hu: "CV, bizonyítványok vagy más dokumentumok csatolása",
+    es: "Adjunta CV, certificados u otros documentos",
+    de: "Lebenslauf, Zeugnisse oder andere Dokumente anhängen",
+    fr: "Joindre un CV, des certificats ou d'autres documents",
+    pt: "Anexar CV, certificados ou outros documentos",
+  },
+  attach_aria: {
+    it: "Allega file",
+    en: "Attach file",
+    hu: "Fájl csatolása",
+    es: "Adjuntar archivo",
+    de: "Datei anhängen",
+    fr: "Joindre un fichier",
+    pt: "Anexar ficheiro",
+  },
+  ph_name: {
+    it: "Mario Rossi",
+    en: "John Smith",
+    hu: "Kovács János",
+    es: "Juan Pérez",
+    de: "Max Mustermann",
+    fr: "Jean Dupont",
+    pt: "João Silva",
+  },
+  ph_experience: {
+    it: "Es. 5",
+    en: "E.g. 5",
+    hu: "Pl. 5",
+    es: "Ej. 5",
+    de: "Z. B. 5",
+    fr: "Ex. 5",
+    pt: "Ex. 5",
+  },
+  ph_email: {
+    it: "nome@example.com",
+    en: "name@example.com",
+    hu: "nev@example.com",
+    es: "nombre@example.com",
+    de: "name@example.com",
+    fr: "nom@example.com",
+    pt: "nome@example.com",
+  },
+  ph_phone: {
+    it: "+39 …",
+    en: "+1 …",
+    hu: "+36 …",
+    es: "+34 …",
+    de: "+49 …",
+    fr: "+33 …",
+    pt: "+351 …",
+  },
+  mic_title: {
+    it: "Microfono bloccato",
+    en: "Microphone blocked",
+    hu: "Mikrofon letiltva",
+    es: "Micrófono bloqueado",
+    de: "Mikrofon blockiert",
+    fr: "Microphone bloqué",
+    pt: "Microfone bloqueado",
+  },
+  mic_intro: {
+    it: "Per dettare a voce devi autorizzare Chrome a usare il microfono su questa pagina. Due modi rapidi:",
+    en: "To dictate by voice you must allow Chrome to use the microphone on this page. Two quick ways:",
+    hu: "A hangos diktáláshoz engedélyezned kell a Chrome számára a mikrofon használatát ezen az oldalon. Két gyors módszer:",
+    es: "Para dictar por voz debes autorizar a Chrome a usar el micrófono en esta página. Dos formas rápidas:",
+    de: "Um per Sprache zu diktieren, musst du Chrome erlauben, das Mikrofon auf dieser Seite zu verwenden. Zwei schnelle Wege:",
+    fr: "Pour dicter à la voix, vous devez autoriser Chrome à utiliser le microphone sur cette page. Deux moyens rapides :",
+    pt: "Para ditar por voz tens de autorizar o Chrome a usar o microfone nesta página. Duas formas rápidas:",
+  },
+  mic_step1: {
+    it: 'Clicca il <strong>lucchetto 🔒</strong> accanto a <code class="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">localhost:3000</code> nella barra indirizzi → <strong>Impostazioni sito</strong> → <strong>Microfono</strong> → <strong>Consenti</strong>.',
+    en: 'Click the <strong>padlock 🔒</strong> next to <code class="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">localhost:3000</code> in the address bar → <strong>Site settings</strong> → <strong>Microphone</strong> → <strong>Allow</strong>.',
+    hu: 'Kattints a <strong>lakatra 🔒</strong> a <code class="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">localhost:3000</code> mellett a címsorban → <strong>Webhely beállításai</strong> → <strong>Mikrofon</strong> → <strong>Engedélyezés</strong>.',
+    es: 'Haz clic en el <strong>candado 🔒</strong> junto a <code class="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">localhost:3000</code> en la barra de direcciones → <strong>Configuración del sitio</strong> → <strong>Micrófono</strong> → <strong>Permitir</strong>.',
+    de: 'Klicke auf das <strong>Schloss 🔒</strong> neben <code class="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">localhost:3000</code> in der Adressleiste → <strong>Website-Einstellungen</strong> → <strong>Mikrofon</strong> → <strong>Zulassen</strong>.',
+    fr: 'Cliquez sur le <strong>cadenas 🔒</strong> à côté de <code class="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">localhost:3000</code> dans la barre d\'adresse → <strong>Paramètres du site</strong> → <strong>Microphone</strong> → <strong>Autoriser</strong>.',
+    pt: 'Clica no <strong>cadeado 🔒</strong> ao lado de <code class="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">localhost:3000</code> na barra de endereços → <strong>Definições do site</strong> → <strong>Microfone</strong> → <strong>Permitir</strong>.',
+  },
+  mic_step2_pre: {
+    it: "In alternativa apri le impostazioni globali:",
+    en: "Alternatively open the global settings:",
+    hu: "Másik lehetőségként nyisd meg a globális beállításokat:",
+    es: "Como alternativa, abre la configuración global:",
+    de: "Alternativ öffne die globalen Einstellungen:",
+    fr: "Vous pouvez aussi ouvrir les paramètres globaux :",
+    pt: "Em alternativa, abre as definições globais:",
+  },
+  mic_step2_post: {
+    it: "e aggiungi",
+    en: "and add",
+    hu: "és add hozzá a",
+    es: "y añade",
+    de: "und füge",
+    fr: "et ajoutez",
+    pt: "e adiciona",
+  },
+  mic_step2_allow: {
+    it: "a <em>Consenti</em>.",
+    en: "to <em>Allow</em>.",
+    hu: "az <em>Engedélyezés</em> listához.",
+    es: "a <em>Permitir</em>.",
+    de: "zu <em>Zulassen</em> hinzu.",
+    fr: "à <em>Autoriser</em>.",
+    pt: "a <em>Permitir</em>.",
+  },
+  mic_step3: {
+    it: "Se hai anche il check a livello macOS: <strong>Impostazioni → Privacy → Microfono</strong> → spunta Chrome.",
+    en: "If you also have the macOS-level check: <strong>Settings → Privacy → Microphone</strong> → tick Chrome.",
+    hu: "Ha a macOS szintű ellenőrzés is aktív: <strong>Beállítások → Adatvédelem → Mikrofon</strong> → pipáld ki a Chrome-ot.",
+    es: "Si también tienes el control a nivel de macOS: <strong>Ajustes → Privacidad → Micrófono</strong> → marca Chrome.",
+    de: "Falls du auch die Prüfung auf macOS-Ebene hast: <strong>Einstellungen → Datenschutz → Mikrofon</strong> → Chrome ankreuzen.",
+    fr: "Si vous avez aussi le contrôle au niveau de macOS : <strong>Réglages → Confidentialité → Microphone</strong> → cochez Chrome.",
+    pt: "Se também tens o controlo ao nível do macOS: <strong>Definições → Privacidade → Microfone</strong> → marca o Chrome.",
+  },
+  mic_footer: {
+    it: "Fatto uno dei passaggi, ricarica la pagina o clicca <em>Riprova</em>: Chrome ti riproporrà il prompt del microfono.",
+    en: "Once you've done one of these steps, reload the page or click <em>Retry</em>: Chrome will show the microphone prompt again.",
+    hu: "Ha elvégezted az egyik lépést, töltsd újra az oldalt vagy kattints az <em>Újra</em> gombra: a Chrome újra felkínálja a mikrofon engedélyezését.",
+    es: "Tras realizar uno de los pasos, recarga la página o haz clic en <em>Reintentar</em>: Chrome volverá a mostrar el aviso del micrófono.",
+    de: "Wenn du einen der Schritte ausgeführt hast, lade die Seite neu oder klicke auf <em>Erneut versuchen</em>: Chrome zeigt die Mikrofon-Abfrage erneut an.",
+    fr: "Après avoir effectué l'une de ces étapes, rechargez la page ou cliquez sur <em>Réessayer</em> : Chrome réaffichera l'invite du microphone.",
+    pt: "Depois de fazer um dos passos, recarrega a página ou clica em <em>Tentar novamente</em>: o Chrome volta a mostrar o pedido do microfone.",
+  },
+  mic_close: {
+    it: "Chiudi",
+    en: "Close",
+    hu: "Bezárás",
+    es: "Cerrar",
+    de: "Schließen",
+    fr: "Fermer",
+    pt: "Fechar",
+  },
+  mic_retry: {
+    it: "Riprova 🎤",
+    en: "Retry 🎤",
+    hu: "Újra 🎤",
+    es: "Reintentar 🎤",
+    de: "Erneut versuchen 🎤",
+    fr: "Réessayer 🎤",
+    pt: "Tentar novamente 🎤",
+  },
+
+  /* ── Welcome (iniettato dal boot script, non più dal client) ───── */
+  welcome_text: {
+    it: "Ciao! Aiutami a configurare il mio profilo. Puoi farmi qualche domanda oppure dirmi come caricare il mio CV.",
+    en: "Hi! Help me set up my profile. You can ask me a few questions or tell me how to upload my CV.",
+    hu: "Szia! Segíts beállítani a profilomat. Tehetsz fel néhány kérdést, vagy elmondhatod, hogyan töltsem fel a CV-met.",
+    es: "¡Hola! Ayúdame a configurar mi perfil. Puedes hacerme algunas preguntas o decirme cómo subir mi CV.",
+    de: "Hallo! Hilf mir, mein Profil einzurichten. Du kannst mir ein paar Fragen stellen oder mir sagen, wie ich meinen Lebenslauf hochlade.",
+    fr: "Bonjour ! Aidez-moi à configurer mon profil. Vous pouvez me poser quelques questions ou m'expliquer comment téléverser mon CV.",
+    pt: "Olá! Ajuda-me a configurar o meu perfil. Podes fazer-me algumas perguntas ou dizer-me como carregar o meu CV.",
+  },
+
+  /* ── Header pagina ─────────────────────────────────────────────── */
+  page_h1_pre: {
+    it: "Configura il tuo ",
+    en: "Set up your ",
+    hu: "Állítsd be a ",
+    es: "Configura tu ",
+    de: "Richte dein ",
+    fr: "Configurez votre ",
+    pt: "Configura o teu ",
+  },
+  page_h1_accent: {
+    it: "profilo",
+    en: "profile",
+    hu: "profilodat",
+    es: "perfil",
+    de: "Profil ein",
+    fr: "profil",
+    pt: "perfil",
+  },
+  page_subtitle: {
+    it: "Costruisci il tuo profilo con l'aiuto dell'assistente a destra. Man mano che vi confrontate, il pannello a sinistra si aggiorna automaticamente.",
+    en: "Build your profile with the help of the assistant on the right. As you chat, the panel on the left updates automatically.",
+    hu: "Építsd fel a profilodat a jobb oldali asszisztens segítségével. Ahogy beszélgettek, a bal oldali panel automatikusan frissül.",
+    es: "Construye tu perfil con la ayuda del asistente a la derecha. A medida que conversáis, el panel de la izquierda se actualiza automáticamente.",
+    de: "Erstelle dein Profil mit Hilfe des Assistenten auf der rechten Seite. Während ihr euch austauscht, wird das Panel links automatisch aktualisiert.",
+    fr: "Construisez votre profil avec l'aide de l'assistant à droite. Au fil de vos échanges, le panneau de gauche se met à jour automatiquement.",
+    pt: "Constrói o teu perfil com a ajuda do assistente à direita. À medida que conversam, o painel à esquerda atualiza-se automaticamente.",
+  },
+
+  /* ── Header pannelli ───────────────────────────────────────────── */
+  panel_profile_config: {
+    it: "configurazione profilo",
+    en: "profile configuration",
+    hu: "profil beállítása",
+    es: "configuración del perfil",
+    de: "Profilkonfiguration",
+    fr: "configuration du profil",
+    pt: "configuração do perfil",
+  },
+  panel_assistant: {
+    it: "assistente",
+    en: "assistant",
+    hu: "asszisztens",
+    es: "asistente",
+    de: "Assistent",
+    fr: "assistant",
+    pt: "assistente",
+  },
+
+  /* ── Bottone procedi ───────────────────────────────────────────── */
+  go_to_dashboard: {
+    it: "Vai alla dashboard →",
+    en: "Go to dashboard →",
+    hu: "Irány az irányítópult →",
+    es: "Ir al panel →",
+    de: "Zum Dashboard →",
+    fr: "Aller au tableau de bord →",
+    pt: "Ir para o painel →",
+  },
+  waiting_assistant: {
+    it: "In attesa dell'assistente…",
+    en: "Waiting for the assistant…",
+    hu: "Várakozás az asszisztensre…",
+    es: "Esperando al asistente…",
+    de: "Warten auf den Assistenten…",
+    fr: "En attente de l'assistant…",
+    pt: "À espera do assistente…",
+  },
+
+  /* ── Stati chat ────────────────────────────────────────────────── */
+  close: {
+    it: "chiudi",
+    en: "close",
+    hu: "bezárás",
+    es: "cerrar",
+    de: "schließen",
+    fr: "fermer",
+    pt: "fechar",
+  },
+  assistant_starting: {
+    it: "Avvio dell'assistente in corso…",
+    en: "Starting the assistant…",
+    hu: "Az asszisztens indítása folyamatban…",
+    es: "Iniciando el asistente…",
+    de: "Assistent wird gestartet…",
+    fr: "Démarrage de l'assistant…",
+    pt: "A iniciar o assistente…",
+  },
+
+  /* ── Errori avvio ──────────────────────────────────────────────── */
+  start_failed_http: {
+    it: "avvio fallito (HTTP {status})",
+    en: "start failed (HTTP {status})",
+    hu: "az indítás sikertelen (HTTP {status})",
+    es: "fallo al iniciar (HTTP {status})",
+    de: "Start fehlgeschlagen (HTTP {status})",
+    fr: "échec du démarrage (HTTP {status})",
+    pt: "falha no arranque (HTTP {status})",
+  },
+  network_error: {
+    it: "errore di rete",
+    en: "network error",
+    hu: "hálózati hiba",
+    es: "error de red",
+    de: "Netzwerkfehler",
+    fr: "erreur réseau",
+    pt: "erro de rede",
+  },
+
+  /* ── Errori voce ───────────────────────────────────────────────── */
+  speech_unsupported: {
+    it: "SpeechRecognition non supportato da questo browser",
+    en: "SpeechRecognition not supported by this browser",
+    hu: "A SpeechRecognition nem támogatott ebben a böngészőben",
+    es: "SpeechRecognition no es compatible con este navegador",
+    de: "SpeechRecognition wird von diesem Browser nicht unterstützt",
+    fr: "SpeechRecognition n'est pas pris en charge par ce navigateur",
+    pt: "SpeechRecognition não é suportado por este navegador",
+  },
+  speech_mic_error: {
+    it: "Mic {name}: {msg}",
+    en: "Mic {name}: {msg}",
+    hu: "Mikrofon {name}: {msg}",
+    es: "Micrófono {name}: {msg}",
+    de: "Mikrofon {name}: {msg}",
+    fr: "Micro {name} : {msg}",
+    pt: "Microfone {name}: {msg}",
+  },
+  speech_init_error: {
+    it: "Errore init: {msg}",
+    en: "Init error: {msg}",
+    hu: "Inicializálási hiba: {msg}",
+    es: "Error de inicialización: {msg}",
+    de: "Init-Fehler: {msg}",
+    fr: "Erreur d'initialisation : {msg}",
+    pt: "Erro de inicialização: {msg}",
+  },
+  speech_mic_generic_error: {
+    it: "Errore mic: {msg}",
+    en: "Mic error: {msg}",
+    hu: "Mikrofonhiba: {msg}",
+    es: "Error de micrófono: {msg}",
+    de: "Mikrofonfehler: {msg}",
+    fr: "Erreur micro : {msg}",
+    pt: "Erro de microfone: {msg}",
+  },
+  speech_start_failed: {
+    it: "Start fallito: {msg}",
+    en: "Start failed: {msg}",
+    hu: "Az indítás sikertelen: {msg}",
+    es: "Fallo al iniciar: {msg}",
+    de: "Start fehlgeschlagen: {msg}",
+    fr: "Échec du démarrage : {msg}",
+    pt: "Falha no arranque: {msg}",
+  },
+
+  /* ── Microfono / input ─────────────────────────────────────────── */
+  mic_stop: {
+    it: "Ferma registrazione",
+    en: "Stop recording",
+    hu: "Felvétel leállítása",
+    es: "Detener grabación",
+    de: "Aufnahme stoppen",
+    fr: "Arrêter l'enregistrement",
+    pt: "Parar gravação",
+  },
+  mic_dictate: {
+    it: "Detta a voce ({lang})",
+    en: "Dictate by voice ({lang})",
+    hu: "Diktálás hanggal ({lang})",
+    es: "Dictar por voz ({lang})",
+    de: "Per Sprache diktieren ({lang})",
+    fr: "Dicter à la voix ({lang})",
+    pt: "Ditar por voz ({lang})",
+  },
+  mic_start_aria: {
+    it: "Avvia registrazione vocale",
+    en: "Start voice recording",
+    hu: "Hangfelvétel indítása",
+    es: "Iniciar grabación de voz",
+    de: "Sprachaufnahme starten",
+    fr: "Démarrer l'enregistrement vocal",
+    pt: "Iniciar gravação de voz",
+  },
+  input_files_attached_one: {
+    it: "{n} file allegato — aggiungi un messaggio…",
+    en: "{n} file attached — add a message…",
+    hu: "{n} fájl csatolva — adj hozzá egy üzenetet…",
+    es: "{n} archivo adjunto — añade un mensaje…",
+    de: "{n} Datei angehängt — füge eine Nachricht hinzu…",
+    fr: "{n} fichier joint — ajoutez un message…",
+    pt: "{n} ficheiro anexado — adiciona uma mensagem…",
+  },
+  input_files_attached_many: {
+    it: "{n} file allegati — aggiungi un messaggio…",
+    en: "{n} files attached — add a message…",
+    hu: "{n} fájl csatolva — adj hozzá egy üzenetet…",
+    es: "{n} archivos adjuntos — añade un mensaje…",
+    de: "{n} Dateien angehängt — füge eine Nachricht hinzu…",
+    fr: "{n} fichiers joints — ajoutez un message…",
+    pt: "{n} ficheiros anexados — adiciona uma mensagem…",
+  },
+  input_write_assistant: {
+    it: "Scrivi all'assistente…",
+    en: "Write to the assistant…",
+    hu: "Írj az asszisztensnek…",
+    es: "Escribe al asistente…",
+    de: "Schreibe dem Assistenten…",
+    fr: "Écrivez à l'assistant…",
+    pt: "Escreve ao assistente…",
+  },
+  send: {
+    it: "invia",
+    en: "send",
+    hu: "küldés",
+    es: "enviar",
+    de: "senden",
+    fr: "envoyer",
+    pt: "enviar",
+  },
+
+  /* ── Avatar aria ───────────────────────────────────────────────── */
+  avatar_you: {
+    it: "tu",
+    en: "you",
+    hu: "te",
+    es: "tú",
+    de: "du",
+    fr: "vous",
+    pt: "tu",
+  },
+
+  /* ── Sezioni profilo ───────────────────────────────────────────── */
+  sec_identity: {
+    it: "Identità",
+    en: "Identity",
+    hu: "Azonosság",
+    es: "Identidad",
+    de: "Identität",
+    fr: "Identité",
+    pt: "Identidade",
+  },
+  sec_contacts: {
+    it: "Contatti",
+    en: "Contacts",
+    hu: "Kapcsolatok",
+    es: "Contactos",
+    de: "Kontakte",
+    fr: "Contacts",
+    pt: "Contatos",
+  },
+  sec_skills: {
+    it: "Competenze",
+    en: "Skills",
+    hu: "Készségek",
+    es: "Habilidades",
+    de: "Fähigkeiten",
+    fr: "Compétences",
+    pt: "Competências",
+  },
+  sec_languages: {
+    it: "Lingue",
+    en: "Languages",
+    hu: "Nyelvek",
+    es: "Idiomas",
+    de: "Sprachen",
+    fr: "Langues",
+    pt: "Idiomas",
+  },
+  sec_experience: {
+    it: "Esperienza",
+    en: "Experience",
+    hu: "Tapasztalat",
+    es: "Experiencia",
+    de: "Erfahrung",
+    fr: "Expérience",
+    pt: "Experiência",
+  },
+  sec_sector_details: {
+    it: "Dettagli del settore",
+    en: "Sector details",
+    hu: "Ágazati részletek",
+    es: "Detalles del sector",
+    de: "Branchendetails",
+    fr: "Détails du secteur",
+    pt: "Detalhes do setor",
+  },
+  sec_projects: {
+    it: "Progetti",
+    en: "Projects",
+    hu: "Projektek",
+    es: "Proyectos",
+    de: "Projekte",
+    fr: "Projets",
+    pt: "Projetos",
+  },
+  sec_certifications: {
+    it: "Certificazioni",
+    en: "Certifications",
+    hu: "Tanúsítványok",
+    es: "Certificaciones",
+    de: "Zertifizierungen",
+    fr: "Certifications",
+    pt: "Certificações",
+  },
+  sec_education: {
+    it: "Titoli di studio",
+    en: "Education",
+    hu: "Végzettség",
+    es: "Formación",
+    de: "Ausbildung",
+    fr: "Formation",
+    pt: "Formação",
+  },
+  sec_work_prefs: {
+    it: "Preferenze di lavoro",
+    en: "Work preferences",
+    hu: "Munkavégzési preferenciák",
+    es: "Preferencias laborales",
+    de: "Arbeitspräferenzen",
+    fr: "Préférences de travail",
+    pt: "Preferências de trabalho",
+  },
+
+  /* ── Field label ───────────────────────────────────────────────── */
+  fld_name: {
+    it: "Nome",
+    en: "Name",
+    hu: "Név",
+    es: "Nombre",
+    de: "Name",
+    fr: "Nom",
+    pt: "Nome",
+  },
+  fld_target_role: {
+    it: "Ruolo target",
+    en: "Target role",
+    hu: "Cél pozíció",
+    es: "Puesto objetivo",
+    de: "Zielposition",
+    fr: "Poste visé",
+    pt: "Cargo-alvo",
+  },
+  fld_location: {
+    it: "Località",
+    en: "Location",
+    hu: "Helyszín",
+    es: "Ubicación",
+    de: "Standort",
+    fr: "Localisation",
+    pt: "Localização",
+  },
+  fld_years_experience: {
+    it: "Anni esperienza",
+    en: "Years of experience",
+    hu: "Évek tapasztalat",
+    es: "Años de experiencia",
+    de: "Jahre Erfahrung",
+    fr: "Années d'expérience",
+    pt: "Anos de experiência",
+  },
+  fld_email: {
+    it: "Email",
+    en: "Email",
+    hu: "E-mail",
+    es: "Email",
+    de: "E-Mail",
+    fr: "Email",
+    pt: "Email",
+  },
+  fld_phone: {
+    it: "Telefono",
+    en: "Phone",
+    hu: "Telefon",
+    es: "Teléfono",
+    de: "Telefon",
+    fr: "Téléphone",
+    pt: "Telefone",
+  },
+  fld_website: {
+    it: "Sito",
+    en: "Website",
+    hu: "Weboldal",
+    es: "Sitio web",
+    de: "Webseite",
+    fr: "Site web",
+    pt: "Site",
+  },
+  fld_work_mode: {
+    it: "Modalità",
+    en: "Mode",
+    hu: "Munkamód",
+    es: "Modalidad",
+    de: "Modus",
+    fr: "Mode",
+    pt: "Modalidade",
+  },
+  fld_relocation: {
+    it: "Trasferimento",
+    en: "Relocation",
+    hu: "Költözés",
+    es: "Traslado",
+    de: "Umzug",
+    fr: "Déménagement",
+    pt: "Mudança",
+  },
+  fld_salary: {
+    it: "Retribuzione",
+    en: "Salary",
+    hu: "Fizetés",
+    es: "Salario",
+    de: "Vergütung",
+    fr: "Rémunération",
+    pt: "Remuneração",
+  },
+
+  /* ── Valori / formattazioni ────────────────────────────────────── */
+  relocation_available: {
+    it: "disponibile",
+    en: "available",
+    hu: "elérhető",
+    es: "disponible",
+    de: "verfügbar",
+    fr: "disponible",
+    pt: "disponível",
+  },
+  relocation_unavailable: {
+    it: "non disponibile",
+    en: "not available",
+    hu: "nem elérhető",
+    es: "no disponible",
+    de: "nicht verfügbar",
+    fr: "non disponible",
+    pt: "indisponível",
+  },
+  year_singular: {
+    it: "anno",
+    en: "year",
+    hu: "év",
+    es: "año",
+    de: "Jahr",
+    fr: "an",
+    pt: "ano",
+  },
+  year_plural: {
+    it: "anni",
+    en: "years",
+    hu: "év",
+    es: "años",
+    de: "Jahre",
+    fr: "ans",
+    pt: "anos",
+  },
+  more_other_f: {
+    it: "+{n} altre",
+    en: "+{n} more",
+    hu: "+{n} további",
+    es: "+{n} más",
+    de: "+{n} weitere",
+    fr: "+{n} autres",
+    pt: "+{n} mais",
+  },
+  more_other_m: {
+    it: "+{n} altri",
+    en: "+{n} more",
+    hu: "+{n} további",
+    es: "+{n} más",
+    de: "+{n} weitere",
+    fr: "+{n} autres",
+    pt: "+{n} mais",
+  },
+
+  /* ── Placeholder fallback ──────────────────────────────────────── */
+  ph_languages: {
+    it: "Italiano C2 · Inglese B2",
+    en: "Italian C2 · English B2",
+    hu: "Olasz C2 · Angol B2",
+    es: "Italiano C2 · Inglés B2",
+    de: "Italienisch C2 · Englisch B2",
+    fr: "Italien C2 · Anglais B2",
+    pt: "Italiano C2 · Inglês B2",
+  },
+  ph_work_prefs: {
+    it: "Es. Remoto · Disponibile al trasferimento · 30–35k",
+    en: "E.g. Remote · Open to relocation · 30–35k",
+    hu: "Pl. Távmunka · Költözésre nyitott · 30–35k",
+    es: "Ej. Remoto · Disponible para traslado · 30–35k",
+    de: "Z. B. Remote · Umzugsbereit · 30–35k",
+    fr: "Ex. Télétravail · Ouvert au déménagement · 30–35k",
+    pt: "Ex. Remoto · Disponível para mudança · 30–35k",
+  },
+};
+
+/* ── Tag locale BCP-47 per Intl/date e nome lingua per dettatura ─── */
+const LOCALE_TAG: Record<string, string> = {
+  it: "it-IT",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  hu: "hu-HU",
+  pt: "pt-PT",
+};
+
+/* Placeholder per settore, per ogni lingua. Indice condiviso = stesso
+   settore tra ruoli / località / esperienza / titoli / competenze. */
+const PLACEHOLDERS: Record<
+  string,
+  {
+    roles: string[];
+    locations: string[];
+    experience: string[];
+    education: string[];
+    skills: string[][];
+  }
+> = {
+  it: {
+    roles: [
+      "Es. Sous chef",
+      "Es. Infermiere di reparto",
+      "Es. Avvocato civilista",
+      "Es. Graphic designer",
+      "Es. Insegnante di scuola primaria",
+      "Es. Project manager",
+      "Es. Estetista",
+      "Es. Elettricista specializzato",
+      "Es. Addetto vendita",
+      "Es. Full Stack Developer",
+    ],
+    locations: [
+      "Es. Bologna, IT",
+      "Es. Napoli, IT",
+      "Es. Palermo, IT",
+      "Es. Torino, IT",
+      "Es. Verona, IT",
+      "Es. Firenze, IT",
+      "Es. Bari, IT",
+      "Es. Genova, IT",
+      "Es. Cagliari, IT",
+      "Es. Milano, IT",
+    ],
+    experience: [
+      "Es. Capopartita · Ristorante Da Mario · 4 anni",
+      "Es. Infermiere · Ospedale San Raffaele · 6 anni",
+      "Es. Avvocato associato · Studio Rossi & C. · 3 anni",
+      "Es. Art director · Agenzia Pop · 5 anni",
+      "Es. Insegnante di sostegno · IC Verdi · 7 anni",
+      "Es. Project manager · Acme Srl · 4 anni",
+      "Es. Responsabile SPA · Hotel Terme · 3 anni",
+      "Es. Elettricista · Impianti Neri · 8 anni",
+      "Es. Commessa · Boutique Luna · 2 anni",
+      "Es. Senior Developer · Acme · 3 anni",
+    ],
+    education: [
+      "Es. Diploma Istituto Alberghiero · IPSAR Milano",
+      "Es. Laurea in Scienze Infermieristiche · Università di Bologna",
+      "Es. Laurea magistrale in Giurisprudenza · La Sapienza",
+      "Es. Diploma Accademia Belle Arti · Brera",
+      "Es. Laurea in Scienze della Formazione · Università di Padova",
+      "Es. Laurea in Economia · Bocconi",
+      "Es. Diploma tecnico · ITIS Fermi",
+      "Es. Qualifica professionale · CFP Salesiani",
+      "Es. Diploma scientifico · Liceo Galilei",
+      "Es. Laurea in Informatica · Università di …",
+    ],
+    skills: [
+      ["Cucina italiana", "Pasticceria", "Gestione magazzino", "…"],
+      ["Triage", "Assistenza post-op", "Medicazioni", "…"],
+      ["Diritto civile", "Stesura atti", "Udienze", "…"],
+      ["Photoshop", "Illustrazione", "Branding", "…"],
+      ["Didattica inclusiva", "Programmazione lezioni", "Valutazione", "…"],
+      ["Team leadership", "Budgeting", "Public speaking", "…"],
+      ["Massaggi", "Trattamenti viso", "Consulenza prodotto", "…"],
+      ["Impianti civili", "Quadri elettrici", "Sicurezza CEI", "…"],
+      ["Vendita assistita", "Visual merchandising", "Gestione cassa", "…"],
+      ["React", "Python", "PostgreSQL", "…"],
+    ],
+  },
+  en: {
+    roles: [
+      "E.g. Sous chef",
+      "E.g. Ward nurse",
+      "E.g. Civil lawyer",
+      "E.g. Graphic designer",
+      "E.g. Primary school teacher",
+      "E.g. Project manager",
+      "E.g. Beautician",
+      "E.g. Licensed electrician",
+      "E.g. Sales assistant",
+      "E.g. Full Stack Developer",
+    ],
+    locations: [
+      "E.g. Manchester, UK",
+      "E.g. Bristol, UK",
+      "E.g. Leeds, UK",
+      "E.g. Glasgow, UK",
+      "E.g. Liverpool, UK",
+      "E.g. Sheffield, UK",
+      "E.g. Cardiff, UK",
+      "E.g. Newcastle, UK",
+      "E.g. Edinburgh, UK",
+      "E.g. London, UK",
+    ],
+    experience: [
+      "E.g. Line cook · Da Mario Restaurant · 4 years",
+      "E.g. Nurse · St. Mary's Hospital · 6 years",
+      "E.g. Associate lawyer · Smith & Co. · 3 years",
+      "E.g. Art director · Pop Agency · 5 years",
+      "E.g. Support teacher · Green Primary · 7 years",
+      "E.g. Project manager · Acme Ltd · 4 years",
+      "E.g. Spa manager · Thermae Hotel · 3 years",
+      "E.g. Electrician · Bright Wiring · 8 years",
+      "E.g. Sales assistant · Luna Boutique · 2 years",
+      "E.g. Senior Developer · Acme · 3 years",
+    ],
+    education: [
+      "E.g. Catering College diploma · Milan IPSAR",
+      "E.g. BSc in Nursing · University of Bologna",
+      "E.g. Master's in Law · La Sapienza",
+      "E.g. Fine Arts Academy diploma · Brera",
+      "E.g. BA in Education · University of Padua",
+      "E.g. Degree in Economics · Bocconi",
+      "E.g. Technical diploma · Fermi Institute",
+      "E.g. Vocational qualification · Salesian VTC",
+      "E.g. Scientific diploma · Galilei High School",
+      "E.g. BSc in Computer Science · University of …",
+    ],
+    skills: [
+      ["Italian cuisine", "Pastry", "Inventory management", "…"],
+      ["Triage", "Post-op care", "Wound care", "…"],
+      ["Civil law", "Drafting documents", "Court hearings", "…"],
+      ["Photoshop", "Illustration", "Branding", "…"],
+      ["Inclusive teaching", "Lesson planning", "Assessment", "…"],
+      ["Team leadership", "Budgeting", "Public speaking", "…"],
+      ["Massage", "Facial treatments", "Product advice", "…"],
+      ["Domestic wiring", "Switchboards", "Electrical safety", "…"],
+      ["Assisted selling", "Visual merchandising", "Cash handling", "…"],
+      ["React", "Python", "PostgreSQL", "…"],
+    ],
+  },
+  es: {
+    roles: [
+      "Ej. Sous chef",
+      "Ej. Enfermero de planta",
+      "Ej. Abogado civilista",
+      "Ej. Diseñador gráfico",
+      "Ej. Maestro de primaria",
+      "Ej. Jefe de proyecto",
+      "Ej. Esteticista",
+      "Ej. Electricista especializado",
+      "Ej. Dependiente de ventas",
+      "Ej. Full Stack Developer",
+    ],
+    locations: [
+      "Ej. Valencia, ES",
+      "Ej. Sevilla, ES",
+      "Ej. Bilbao, ES",
+      "Ej. Zaragoza, ES",
+      "Ej. Málaga, ES",
+      "Ej. Granada, ES",
+      "Ej. Murcia, ES",
+      "Ej. Vigo, ES",
+      "Ej. Valladolid, ES",
+      "Ej. Madrid, ES",
+    ],
+    experience: [
+      "Ej. Cocinero de partida · Restaurante Da Mario · 4 años",
+      "Ej. Enfermero · Hospital San Rafael · 6 años",
+      "Ej. Abogado asociado · Bufete Rossi · 3 años",
+      "Ej. Director de arte · Agencia Pop · 5 años",
+      "Ej. Maestro de apoyo · CEIP Verdi · 7 años",
+      "Ej. Jefe de proyecto · Acme S.L. · 4 años",
+      "Ej. Responsable de SPA · Hotel Termas · 3 años",
+      "Ej. Electricista · Instalaciones Neri · 8 años",
+      "Ej. Dependiente · Boutique Luna · 2 años",
+      "Ej. Senior Developer · Acme · 3 años",
+    ],
+    education: [
+      "Ej. Diploma de Escuela de Hostelería · IPSAR Milán",
+      "Ej. Grado en Enfermería · Universidad de Bolonia",
+      "Ej. Máster en Derecho · La Sapienza",
+      "Ej. Diploma de Bellas Artes · Brera",
+      "Ej. Grado en Educación · Universidad de Padua",
+      "Ej. Grado en Economía · Bocconi",
+      "Ej. Diploma técnico · Instituto Fermi",
+      "Ej. Cualificación profesional · CFP Salesianos",
+      "Ej. Bachillerato científico · Liceo Galilei",
+      "Ej. Grado en Informática · Universidad de …",
+    ],
+    skills: [
+      ["Cocina italiana", "Pastelería", "Gestión de almacén", "…"],
+      ["Triaje", "Cuidados postoperatorios", "Curas", "…"],
+      ["Derecho civil", "Redacción de escritos", "Vistas", "…"],
+      ["Photoshop", "Ilustración", "Branding", "…"],
+      ["Enseñanza inclusiva", "Planificación de clases", "Evaluación", "…"],
+      ["Liderazgo de equipos", "Presupuestos", "Hablar en público", "…"],
+      ["Masajes", "Tratamientos faciales", "Asesoría de producto", "…"],
+      [
+        "Instalaciones domésticas",
+        "Cuadros eléctricos",
+        "Seguridad eléctrica",
+        "…",
+      ],
+      ["Venta asistida", "Visual merchandising", "Gestión de caja", "…"],
+      ["React", "Python", "PostgreSQL", "…"],
+    ],
+  },
+  fr: {
+    roles: [
+      "Ex. Sous-chef",
+      "Ex. Infirmier de service",
+      "Ex. Avocat civiliste",
+      "Ex. Graphiste",
+      "Ex. Professeur des écoles",
+      "Ex. Chef de projet",
+      "Ex. Esthéticienne",
+      "Ex. Électricien qualifié",
+      "Ex. Vendeur",
+      "Ex. Full Stack Developer",
+    ],
+    locations: [
+      "Ex. Lyon, FR",
+      "Ex. Marseille, FR",
+      "Ex. Toulouse, FR",
+      "Ex. Bordeaux, FR",
+      "Ex. Lille, FR",
+      "Ex. Nantes, FR",
+      "Ex. Strasbourg, FR",
+      "Ex. Nice, FR",
+      "Ex. Rennes, FR",
+      "Ex. Paris, FR",
+    ],
+    experience: [
+      "Ex. Chef de partie · Restaurant Da Mario · 4 ans",
+      "Ex. Infirmier · Hôpital Saint-Raphaël · 6 ans",
+      "Ex. Avocat collaborateur · Cabinet Rossi · 3 ans",
+      "Ex. Directeur artistique · Agence Pop · 5 ans",
+      "Ex. Enseignant spécialisé · École Verdi · 7 ans",
+      "Ex. Chef de projet · Acme SARL · 4 ans",
+      "Ex. Responsable SPA · Hôtel Thermal · 3 ans",
+      "Ex. Électricien · Installations Neri · 8 ans",
+      "Ex. Vendeuse · Boutique Luna · 2 ans",
+      "Ex. Senior Developer · Acme · 3 ans",
+    ],
+    education: [
+      "Ex. Diplôme d'école hôtelière · IPSAR Milan",
+      "Ex. Licence en sciences infirmières · Université de Bologne",
+      "Ex. Master en droit · La Sapienza",
+      "Ex. Diplôme des Beaux-Arts · Brera",
+      "Ex. Licence en sciences de l'éducation · Université de Padoue",
+      "Ex. Licence en économie · Bocconi",
+      "Ex. Diplôme technique · Institut Fermi",
+      "Ex. Qualification professionnelle · CFP Salésiens",
+      "Ex. Baccalauréat scientifique · Lycée Galilei",
+      "Ex. Licence en informatique · Université de …",
+    ],
+    skills: [
+      ["Cuisine italienne", "Pâtisserie", "Gestion des stocks", "…"],
+      ["Triage", "Soins post-opératoires", "Pansements", "…"],
+      ["Droit civil", "Rédaction d'actes", "Audiences", "…"],
+      ["Photoshop", "Illustration", "Branding", "…"],
+      ["Pédagogie inclusive", "Préparation des cours", "Évaluation", "…"],
+      ["Management d'équipe", "Budgétisation", "Prise de parole", "…"],
+      ["Massages", "Soins du visage", "Conseil produit", "…"],
+      [
+        "Installations domestiques",
+        "Tableaux électriques",
+        "Sécurité électrique",
+        "…",
+      ],
+      ["Vente assistée", "Merchandising visuel", "Tenue de caisse", "…"],
+      ["React", "Python", "PostgreSQL", "…"],
+    ],
+  },
+  de: {
+    roles: [
+      "Z. B. Sous-Chef",
+      "Z. B. Stationspfleger",
+      "Z. B. Zivilrechtsanwalt",
+      "Z. B. Grafikdesigner",
+      "Z. B. Grundschullehrer",
+      "Z. B. Projektmanager",
+      "Z. B. Kosmetiker",
+      "Z. B. Geprüfter Elektriker",
+      "Z. B. Verkäufer",
+      "Z. B. Full Stack Developer",
+    ],
+    locations: [
+      "Z. B. München, DE",
+      "Z. B. Hamburg, DE",
+      "Z. B. Köln, DE",
+      "Z. B. Frankfurt, DE",
+      "Z. B. Stuttgart, DE",
+      "Z. B. Düsseldorf, DE",
+      "Z. B. Leipzig, DE",
+      "Z. B. Dresden, DE",
+      "Z. B. Hannover, DE",
+      "Z. B. Berlin, DE",
+    ],
+    experience: [
+      "Z. B. Chef de Partie · Restaurant Da Mario · 4 Jahre",
+      "Z. B. Pfleger · St.-Raphael-Klinik · 6 Jahre",
+      "Z. B. Anwalt · Kanzlei Rossi · 3 Jahre",
+      "Z. B. Art Director · Agentur Pop · 5 Jahre",
+      "Z. B. Förderlehrer · Verdi-Schule · 7 Jahre",
+      "Z. B. Projektmanager · Acme GmbH · 4 Jahre",
+      "Z. B. Spa-Leiter · Thermenhotel · 3 Jahre",
+      "Z. B. Elektriker · Elektro Neri · 8 Jahre",
+      "Z. B. Verkäuferin · Boutique Luna · 2 Jahre",
+      "Z. B. Senior Developer · Acme · 3 Jahre",
+    ],
+    education: [
+      "Z. B. Diplom Hotelfachschule · IPSAR Mailand",
+      "Z. B. BSc Pflegewissenschaft · Universität Bologna",
+      "Z. B. Master in Rechtswissenschaft · La Sapienza",
+      "Z. B. Diplom Kunstakademie · Brera",
+      "Z. B. BA Erziehungswissenschaft · Universität Padua",
+      "Z. B. Studium der Wirtschaft · Bocconi",
+      "Z. B. Technisches Diplom · Fermi-Institut",
+      "Z. B. Berufsqualifikation · CFP Salesianer",
+      "Z. B. Naturwissenschaftliches Abitur · Galilei-Gymnasium",
+      "Z. B. BSc Informatik · Universität …",
+    ],
+    skills: [
+      ["Italienische Küche", "Patisserie", "Lagerverwaltung", "…"],
+      ["Triage", "Postoperative Pflege", "Wundversorgung", "…"],
+      ["Zivilrecht", "Schriftsatzerstellung", "Verhandlungen", "…"],
+      ["Photoshop", "Illustration", "Branding", "…"],
+      ["Inklusiver Unterricht", "Unterrichtsplanung", "Bewertung", "…"],
+      ["Teamführung", "Budgetierung", "Präsentation", "…"],
+      ["Massagen", "Gesichtsbehandlungen", "Produktberatung", "…"],
+      ["Hausinstallationen", "Schaltschränke", "Elektrosicherheit", "…"],
+      ["Beratungsverkauf", "Visual Merchandising", "Kassenführung", "…"],
+      ["React", "Python", "PostgreSQL", "…"],
+    ],
+  },
+  hu: {
+    roles: [
+      "Pl. Sous chef",
+      "Pl. Osztályos ápoló",
+      "Pl. Polgári jogi ügyvéd",
+      "Pl. Grafikus",
+      "Pl. Általános iskolai tanító",
+      "Pl. Projektmenedzser",
+      "Pl. Kozmetikus",
+      "Pl. Szakképzett villanyszerelő",
+      "Pl. Eladó",
+      "Pl. Full Stack Developer",
+    ],
+    locations: [
+      "Pl. Debrecen, HU",
+      "Pl. Szeged, HU",
+      "Pl. Miskolc, HU",
+      "Pl. Pécs, HU",
+      "Pl. Győr, HU",
+      "Pl. Nyíregyháza, HU",
+      "Pl. Kecskemét, HU",
+      "Pl. Székesfehérvár, HU",
+      "Pl. Szombathely, HU",
+      "Pl. Budapest, HU",
+    ],
+    experience: [
+      "Pl. Szakács · Da Mario Étterem · 4 év",
+      "Pl. Ápoló · Szent Rafael Kórház · 6 év",
+      "Pl. Ügyvéd · Rossi Ügyvédi Iroda · 3 év",
+      "Pl. Art director · Pop Ügynökség · 5 év",
+      "Pl. Fejlesztő pedagógus · Verdi Iskola · 7 év",
+      "Pl. Projektmenedzser · Acme Kft. · 4 év",
+      "Pl. SPA-vezető · Termál Hotel · 3 év",
+      "Pl. Villanyszerelő · Neri Villanyszerelés · 8 év",
+      "Pl. Eladó · Luna Butik · 2 év",
+      "Pl. Senior Developer · Acme · 3 év",
+    ],
+    education: [
+      "Pl. Vendéglátóipari oklevél · IPSAR Milánó",
+      "Pl. Ápolástudományi BSc · Bolognai Egyetem",
+      "Pl. Jogi mesterképzés · La Sapienza",
+      "Pl. Képzőművészeti oklevél · Brera",
+      "Pl. Neveléstudományi BA · Padovai Egyetem",
+      "Pl. Közgazdaságtan diploma · Bocconi",
+      "Pl. Technikusi oklevél · Fermi Intézet",
+      "Pl. Szakképzettség · Szalézi Szakképző",
+      "Pl. Reál érettségi · Galilei Gimnázium",
+      "Pl. Informatikai BSc · … Egyetem",
+    ],
+    skills: [
+      ["Olasz konyha", "Cukrászat", "Raktárkezelés", "…"],
+      ["Triázs", "Műtét utáni ellátás", "Kötözés", "…"],
+      ["Polgári jog", "Beadványok szerkesztése", "Tárgyalások", "…"],
+      ["Photoshop", "Illusztráció", "Branding", "…"],
+      ["Inkluzív oktatás", "Óratervezés", "Értékelés", "…"],
+      ["Csapatvezetés", "Költségvetés", "Nyilvános beszéd", "…"],
+      ["Masszázs", "Arckezelések", "Termék-tanácsadás", "…"],
+      [
+        "Háztartási szerelés",
+        "Kapcsolószekrények",
+        "Elektromos biztonság",
+        "…",
+      ],
+      [
+        "Asszisztált értékesítés",
+        "Visual merchandising",
+        "Pénztárkezelés",
+        "…",
+      ],
+      ["React", "Python", "PostgreSQL", "…"],
+    ],
+  },
+  pt: {
+    roles: [
+      "Ex. Sous chef",
+      "Ex. Enfermeiro de enfermaria",
+      "Ex. Advogado civil",
+      "Ex. Designer gráfico",
+      "Ex. Professor do 1.º ciclo",
+      "Ex. Gestor de projeto",
+      "Ex. Esteticista",
+      "Ex. Eletricista qualificado",
+      "Ex. Assistente de vendas",
+      "Ex. Full Stack Developer",
+    ],
+    locations: [
+      "Ex. Porto, PT",
+      "Ex. Braga, PT",
+      "Ex. Coimbra, PT",
+      "Ex. Faro, PT",
+      "Ex. Aveiro, PT",
+      "Ex. Funchal, PT",
+      "Ex. Setúbal, PT",
+      "Ex. Évora, PT",
+      "Ex. Leiria, PT",
+      "Ex. Lisboa, PT",
+    ],
+    experience: [
+      "Ex. Cozinheiro de partida · Restaurante Da Mario · 4 anos",
+      "Ex. Enfermeiro · Hospital São Rafael · 6 anos",
+      "Ex. Advogado associado · Escritório Rossi · 3 anos",
+      "Ex. Diretor de arte · Agência Pop · 5 anos",
+      "Ex. Professor de apoio · Escola Verdi · 7 anos",
+      "Ex. Gestor de projeto · Acme Lda · 4 anos",
+      "Ex. Responsável de SPA · Hotel Termas · 3 anos",
+      "Ex. Eletricista · Instalações Neri · 8 anos",
+      "Ex. Vendedora · Boutique Luna · 2 anos",
+      "Ex. Senior Developer · Acme · 3 anos",
+    ],
+    education: [
+      "Ex. Diploma de Escola de Hotelaria · IPSAR Milão",
+      "Ex. Licenciatura em Enfermagem · Universidade de Bolonha",
+      "Ex. Mestrado em Direito · La Sapienza",
+      "Ex. Diploma de Belas-Artes · Brera",
+      "Ex. Licenciatura em Educação · Universidade de Pádua",
+      "Ex. Licenciatura em Economia · Bocconi",
+      "Ex. Diploma técnico · Instituto Fermi",
+      "Ex. Qualificação profissional · CFP Salesianos",
+      "Ex. Curso científico · Liceu Galilei",
+      "Ex. Licenciatura em Informática · Universidade de …",
+    ],
+    skills: [
+      ["Cozinha italiana", "Pastelaria", "Gestão de armazém", "…"],
+      ["Triagem", "Cuidados pós-operatórios", "Pensos", "…"],
+      ["Direito civil", "Redação de peças", "Audiências", "…"],
+      ["Photoshop", "Ilustração", "Branding", "…"],
+      ["Ensino inclusivo", "Planeamento de aulas", "Avaliação", "…"],
+      ["Liderança de equipas", "Orçamentação", "Falar em público", "…"],
+      ["Massagens", "Tratamentos faciais", "Aconselhamento de produto", "…"],
+      [
+        "Instalações domésticas",
+        "Quadros elétricos",
+        "Segurança elétrica",
+        "…",
+      ],
+      ["Venda assistida", "Visual merchandising", "Gestão de caixa", "…"],
+      ["React", "Python", "PostgreSQL", "…"],
+    ],
+  },
+};
+
+function makeTr(locale: string) {
+  return (k: string, params?: Record<string, string | number>) => {
+    let s = T[k]?.[locale] ?? T[k]?.en ?? k;
+    if (params) {
+      for (const [pk, pv] of Object.entries(params)) {
+        s = s.replaceAll(`{${pk}}`, String(pv));
+      }
+    }
+    return s;
+  };
+}
+
+// Nome lingua corrente (per "Detta a voce (…)") nella lingua dell'UI.
+function languageDisplayName(locale: string): string {
+  try {
+    const dn = new Intl.DisplayNames([LOCALE_TAG[locale] ?? "en-US"], {
+      type: "language",
+    });
+    return dn.of(locale) ?? locale;
+  } catch {
+    return locale;
+  }
+}
 
 // `done` è opzionale per retrocompatibilità: messaggi vecchi senza il flag
 // vengono trattati come turno finito (done=true implicito). L'agente usa
@@ -78,13 +1239,12 @@ type Profile = {
   } | null;
 } | null;
 
-const WELCOME_TEXT =
-  "Ciao! Aiutami a configurare il mio profilo. Puoi farmi qualche domanda oppure dirmi come caricare il mio CV.";
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const locale = useLocale();
+  const tr = makeTr(locale);
 
   // Profilo (sinistra, polling YAML)
   const [profile, setProfile] = useState<Profile>(null);
@@ -123,7 +1283,7 @@ export default function OnboardingPage() {
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
     if (!SR) {
-      setSpeechError("SpeechRecognition non supportato da questo browser");
+      setSpeechError(tr("speech_unsupported"));
       return;
     }
     if (isRecording && recognitionRef.current) {
@@ -147,7 +1307,7 @@ export default function OnboardingPage() {
     } catch (err: any) {
       const name = err?.name || "Error";
       const msg = err?.message || String(err);
-      setSpeechError(`Mic ${name}: ${msg}`);
+      setSpeechError(tr("speech_mic_error", { name, msg }));
       console.error("[getUserMedia] failed", err);
       return;
     }
@@ -156,10 +1316,12 @@ export default function OnboardingPage() {
     try {
       rec = new SR();
     } catch (err: any) {
-      setSpeechError(`Errore init: ${err?.message ?? err}`);
+      setSpeechError(
+        tr("speech_init_error", { msg: err?.message ?? String(err) }),
+      );
       return;
     }
-    rec.lang = "it-IT";
+    rec.lang = LOCALE_TAG[locale] ?? "en-US";
     rec.continuous = true;
     rec.interimResults = false;
     rec.onstart = () => {
@@ -189,7 +1351,11 @@ export default function OnboardingPage() {
       // solo `{}`.
       const code = event?.error || event?.name || event?.type || "unknown";
       const msg = event?.message || "";
-      setSpeechError(`Errore mic: ${code}${msg ? " — " + msg : ""}`);
+      setSpeechError(
+        tr("speech_mic_generic_error", {
+          msg: `${code}${msg ? " — " + msg : ""}`,
+        }),
+      );
       console.error("[SpeechRecognition]", {
         error: event?.error,
         name: event?.name,
@@ -204,11 +1370,13 @@ export default function OnboardingPage() {
     try {
       rec.start();
     } catch (err: any) {
-      setSpeechError(`Start fallito: ${err?.message ?? err}`);
+      setSpeechError(
+        tr("speech_start_failed", { msg: err?.message ?? String(err) }),
+      );
       setIsRecording(false);
       recognitionRef.current = null;
     }
-  }, [isRecording]);
+  }, [isRecording, locale, tr]);
 
   // Boot progress bar — the agent's first turn in chat.jsonl typically
   // lands ~50–60s after page mount (container → tmux → kimi TUI → first
@@ -329,18 +1497,20 @@ export default function OnboardingPage() {
       };
       if (!res.ok || data.ok === false) {
         setStartError(
-          data.error ?? data.message ?? `avvio fallito (HTTP ${res.status})`,
+          data.error ??
+            data.message ??
+            tr("start_failed_http", { status: res.status }),
         );
         return false;
       }
       return true;
     } catch (err) {
-      setStartError(err instanceof Error ? err.message : "errore di rete");
+      setStartError(err instanceof Error ? err.message : tr("network_error"));
       return false;
     } finally {
       setStarting(false);
     }
-  }, []);
+  }, [tr]);
 
   // ── Invia messaggio ──────────────────────────────────────────────────────
   const sendText = useCallback(
@@ -501,13 +1671,13 @@ export default function OnboardingPage() {
     >
       <header className="mb-4">
         <h1 className="text-xl font-bold tracking-tight text-[var(--color-white)]">
-          Configura il tuo{" "}
-          <span className="text-[var(--color-green)]">profilo</span>
+          {tr("page_h1_pre")}
+          <span className="text-[var(--color-green)]">
+            {tr("page_h1_accent")}
+          </span>
         </h1>
         <p className="text-[10px] text-[var(--color-dim)] mt-0.5">
-          Costruisci il tuo profilo con l&apos;aiuto dell&apos;assistente a
-          destra. Man mano che vi confrontate, il pannello a sinistra si
-          aggiorna automaticamente.
+          {tr("page_subtitle")}
         </p>
       </header>
 
@@ -524,7 +1694,7 @@ export default function OnboardingPage() {
             <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
               <Avatar role="user" size={32} />
               <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">
-                configurazione profilo
+                {tr("panel_profile_config")}
               </span>
             </div>
             <ProfileLive
@@ -549,7 +1719,7 @@ export default function OnboardingPage() {
               cursor: canProceed ? "pointer" : "not-allowed",
             }}
           >
-            {canProceed ? "Vai alla dashboard →" : "In attesa dell’assistente…"}
+            {canProceed ? tr("go_to_dashboard") : tr("waiting_assistant")}
           </button>
         </aside>
 
@@ -564,7 +1734,7 @@ export default function OnboardingPage() {
           <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
             <Avatar role="assistant" size={32} />
             <span className="text-[11px] font-semibold tracking-widest uppercase text-[var(--color-muted)]">
-              assistente
+              {tr("panel_assistant")}
             </span>
             {startError && !speechError && (
               <span className="text-[9px] text-[var(--color-red)] truncate max-w-[260px] ml-auto">
@@ -598,7 +1768,7 @@ export default function OnboardingPage() {
                 className="text-[10px] underline opacity-70 hover:opacity-100"
                 type="button"
               >
-                chiudi
+                {tr("close")}
               </button>
             </div>
           )}
@@ -612,7 +1782,7 @@ export default function OnboardingPage() {
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
                 <div className="text-3xl mb-3 opacity-30">👨‍💼</div>
                 <p className="text-[11px] text-[var(--color-dim)] max-w-xs leading-relaxed mb-4">
-                  Avvio dell&apos;assistente in corso…
+                  {tr("assistant_starting")}
                 </p>
                 <div
                   className="w-full max-w-[240px] h-1 rounded-full overflow-hidden"
@@ -751,7 +1921,7 @@ export default function OnboardingPage() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={sending || !status?.active}
-              title="Allega CV, certificati o altri documenti"
+              title={tr("attach_title")}
               className="px-3 py-3 transition-colors cursor-pointer disabled:cursor-not-allowed"
               style={{
                 color:
@@ -759,7 +1929,7 @@ export default function OnboardingPage() {
                     ? "var(--color-green)"
                     : "var(--color-dim)",
               }}
-              aria-label="Allega file"
+              aria-label={tr("attach_aria")}
             >
               <svg
                 aria-hidden="true"
@@ -781,7 +1951,9 @@ export default function OnboardingPage() {
                 onClick={toggleRecording}
                 disabled={sending || !status?.active}
                 title={
-                  isRecording ? "Ferma registrazione" : "Detta a voce (it-IT)"
+                  isRecording
+                    ? tr("mic_stop")
+                    : tr("mic_dictate", { lang: languageDisplayName(locale) })
                 }
                 className="px-3 py-3 transition-colors cursor-pointer disabled:cursor-not-allowed"
                 style={{
@@ -790,11 +1962,7 @@ export default function OnboardingPage() {
                     ? "pulse-dot 1.4s ease-in-out infinite"
                     : undefined,
                 }}
-                aria-label={
-                  isRecording
-                    ? "Ferma registrazione"
-                    : "Avvia registrazione vocale"
-                }
+                aria-label={isRecording ? tr("mic_stop") : tr("mic_start_aria")}
               >
                 <svg
                   aria-hidden="true"
@@ -821,9 +1989,14 @@ export default function OnboardingPage() {
               placeholder={
                 status?.active
                   ? attached.length > 0
-                    ? `${attached.length} file allegat${attached.length === 1 ? "o" : "i"} — aggiungi un messaggio…`
-                    : "Scrivi all'assistente…"
-                  : "In attesa dell'assistente…"
+                    ? tr(
+                        attached.length === 1
+                          ? "input_files_attached_one"
+                          : "input_files_attached_many",
+                        { n: attached.length },
+                      )
+                    : tr("input_write_assistant")
+                  : tr("waiting_assistant")
               }
               // outline:none inline per battere la regola globale
               // `:focus-visible { outline: 2px solid green }` in globals.css
@@ -848,7 +2021,7 @@ export default function OnboardingPage() {
                     : "var(--color-green)",
               }}
             >
-              {sending ? "…" : "invia"}
+              {sending ? "…" : tr("send")}
             </button>
           </form>
         </section>
@@ -929,6 +2102,8 @@ function Avatar({
   size?: number;
 }) {
   const isUser = role === "user";
+  const locale = useLocale();
+  const tr = makeTr(locale);
   return (
     <div
       className="flex items-center justify-center shrink-0 rounded-full select-none"
@@ -939,7 +2114,7 @@ function Avatar({
         background: "var(--color-card)",
         border: "1px solid var(--color-border)",
       }}
-      aria-label={isUser ? "tu" : "assistente"}
+      aria-label={isUser ? tr("avatar_you") : tr("panel_assistant")}
     >
       {isUser ? "👤" : "👨‍💼"}
     </div>
@@ -1060,84 +2235,31 @@ function renderInline(s: string): React.ReactNode[] {
 // insegnanti, muratori, ecc. Uno casuale è scelto al mount così ogni avvio
 // l'utente vede un esempio diverso: niente bias verso il tech. Tutti i pool
 // hanno la stessa lunghezza semantica (indice condiviso = stesso settore).
-const PLACEHOLDER_ROLES = [
-  "Es. Sous chef",
-  "Es. Infermiere di reparto",
-  "Es. Avvocato civilista",
-  "Es. Graphic designer",
-  "Es. Insegnante di scuola primaria",
-  "Es. Project manager",
-  "Es. Estetista",
-  "Es. Elettricista specializzato",
-  "Es. Addetto vendita",
-  "Es. Full Stack Developer",
-];
-const PLACEHOLDER_LOCATIONS = [
-  "Es. Bologna, IT",
-  "Es. Napoli, IT",
-  "Es. Palermo, IT",
-  "Es. Torino, IT",
-  "Es. Verona, IT",
-  "Es. Firenze, IT",
-  "Es. Bari, IT",
-  "Es. Genova, IT",
-  "Es. Cagliari, IT",
-  "Es. Milano, IT",
-];
-const PLACEHOLDER_EXPERIENCE = [
-  "Es. Capopartita · Ristorante Da Mario · 4 anni",
-  "Es. Infermiere · Ospedale San Raffaele · 6 anni",
-  "Es. Avvocato associato · Studio Rossi & C. · 3 anni",
-  "Es. Art director · Agenzia Pop · 5 anni",
-  "Es. Insegnante di sostegno · IC Verdi · 7 anni",
-  "Es. Project manager · Acme Srl · 4 anni",
-  "Es. Responsabile SPA · Hotel Terme · 3 anni",
-  "Es. Elettricista · Impianti Neri · 8 anni",
-  "Es. Commessa · Boutique Luna · 2 anni",
-  "Es. Senior Developer · Acme · 3 anni",
-];
-const PLACEHOLDER_EDUCATION = [
-  "Es. Diploma Istituto Alberghiero · IPSAR Milano",
-  "Es. Laurea in Scienze Infermieristiche · Università di Bologna",
-  "Es. Laurea magistrale in Giurisprudenza · La Sapienza",
-  "Es. Diploma Accademia Belle Arti · Brera",
-  "Es. Laurea in Scienze della Formazione · Università di Padova",
-  "Es. Laurea in Economia · Bocconi",
-  "Es. Diploma tecnico · ITIS Fermi",
-  "Es. Qualifica professionale · CFP Salesiani",
-  "Es. Diploma scientifico · Liceo Galilei",
-  "Es. Laurea in Informatica · Università di …",
-];
-// Chips di competenze: array di 4 chip per settore misto. Niente doppi dev.
-const PLACEHOLDER_SKILL_SETS: string[][] = [
-  ["Cucina italiana", "Pasticceria", "Gestione magazzino", "…"],
-  ["Triage", "Assistenza post-op", "Medicazioni", "…"],
-  ["Diritto civile", "Stesura atti", "Udienze", "…"],
-  ["Photoshop", "Illustrazione", "Branding", "…"],
-  ["Didattica inclusiva", "Programmazione lezioni", "Valutazione", "…"],
-  ["Team leadership", "Budgeting", "Public speaking", "…"],
-  ["Massaggi", "Trattamenti viso", "Consulenza prodotto", "…"],
-  ["Impianti civili", "Quadri elettrici", "Sicurezza CEI", "…"],
-  ["Vendita assistita", "Visual merchandising", "Gestione cassa", "…"],
-  ["React", "Python", "PostgreSQL", "…"],
-];
+// I pool per lingua vivono in PLACEHOLDERS (vedi in cima al file).
+function placeholders(locale: string) {
+  return PLACEHOLDERS[locale] ?? PLACEHOLDERS.en;
+}
 // NB: non usare Math.random() all'init dello state perché SSR e client
 // calcolerebbero valori diversi → hydration mismatch. La randomizzazione
-// avviene dentro useEffect (vedi ProfileLive), lato client-only.
+// avviene dentro useEffect (vedi ProfileLive), lato client-only. Tutti i
+// pool hanno la stessa lunghezza (10), uso quella di `en` come riferimento.
 function pickIndex(): number {
-  return Math.floor(Math.random() * PLACEHOLDER_ROLES.length);
+  return Math.floor(Math.random() * PLACEHOLDERS.en.roles.length);
 }
 
 // Formatta il campo `years` di un'esperienza. Se è un numero o stringa
 // puramente numerica → "N anni". Se è già una frase ("2025 - in corso",
 // "gennaio 2022 - oggi", ecc.) la mostra tale e quale senza appendere
 // "anni" che porterebbe a cose tipo "2025 - in corso anni".
-function formatYears(raw: number | string | null | undefined): string {
+function formatYears(
+  raw: number | string | null | undefined,
+  tr: (k: string, p?: Record<string, string | number>) => string,
+): string {
   if (raw == null) return "";
   const s = String(raw).trim();
   if (!s) return "";
   return /^\d+(?:[.,]\d+)?$/.test(s)
-    ? `${s} ${Number(s) === 1 ? "anno" : "anni"}`
+    ? `${s} ${tr(Number(s) === 1 ? "year_singular" : "year_plural")}`
     : s;
 }
 
@@ -1171,6 +2293,9 @@ function ProfileLive({
   // ristorante / alberghiero — non tech, default neutro), poi dopo il mount
   // useEffect sceglie un settore casuale. Il flip è istantaneo all'occhio.
   const [phIdx, setPhIdx] = useState(0);
+  const locale = useLocale();
+  const tr = makeTr(locale);
+  const ph = placeholders(locale);
   useEffect(() => {
     setPhIdx(pickIndex());
   }, []);
@@ -1206,58 +2331,60 @@ function ProfileLive({
 
   return (
     <div className="px-4 py-4 flex flex-col gap-4 text-[11px]">
-      <Section label="Identità" icon="👤">
+      <Section label={tr("sec_identity")} icon="👤">
         <div className="grid grid-cols-2 gap-3">
           <Field
-            label="Nome"
+            label={tr("fld_name")}
             value={profile?.name}
-            placeholder="Mario Rossi"
+            placeholder={tr("ph_name")}
             highlight
           />
           <Field
-            label="Ruolo target"
+            label={tr("fld_target_role")}
             value={profile?.target_role}
-            placeholder={PLACEHOLDER_ROLES[phIdx]}
+            placeholder={ph.roles[phIdx]}
             highlight
           />
           <Field
-            label="Località"
+            label={tr("fld_location")}
             value={profile?.location}
-            placeholder={PLACEHOLDER_LOCATIONS[phIdx]}
+            placeholder={ph.locations[phIdx]}
           />
           <Field
-            label="Anni esperienza"
+            label={tr("fld_years_experience")}
             value={
               profile?.experience_years != null
                 ? String(profile.experience_years)
                 : null
             }
-            placeholder="Es. 5"
+            placeholder={tr("ph_experience")}
           />
         </div>
       </Section>
 
-      <Section label="Contatti" icon="📱">
+      <Section label={tr("sec_contacts")} icon="📱">
         <div className="grid grid-cols-2 gap-3">
           <Field
-            label="Email"
+            label={tr("fld_email")}
             value={profile?.email ?? contacts.email ?? null}
-            placeholder="nome@example.com"
+            placeholder={tr("ph_email")}
           />
           <Field
-            label="Telefono"
+            label={tr("fld_phone")}
             value={contacts.phone ?? null}
-            placeholder="+39 …"
+            placeholder={tr("ph_phone")}
           />
           {contacts.linkedin && (
             <Field label="LinkedIn" value={contacts.linkedin} />
           )}
           {contacts.github && <Field label="GitHub" value={contacts.github} />}
-          {contacts.website && <Field label="Sito" value={contacts.website} />}
+          {contacts.website && (
+            <Field label={tr("fld_website")} value={contacts.website} />
+          )}
         </div>
       </Section>
 
-      <Section label="Competenze" icon="🛠️">
+      <Section label={tr("sec_skills")} icon="🛠️">
         {skills.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {skills.slice(0, 30).map((s, i) => (
@@ -1280,11 +2407,11 @@ function ProfileLive({
             )}
           </div>
         ) : (
-          <PlaceholderChips items={PLACEHOLDER_SKILL_SETS[phIdx]} />
+          <PlaceholderChips items={ph.skills[phIdx]} />
         )}
       </Section>
 
-      <Section label="Lingue" icon="🌍">
+      <Section label={tr("sec_languages")} icon="🌍">
         {langs.length > 0 ? (
           <div className="flex flex-wrap gap-3">
             {langs.map((l, i) => (
@@ -1297,11 +2424,11 @@ function ProfileLive({
             ))}
           </div>
         ) : (
-          <PlaceholderChips items={["Italiano C2", "Inglese B2"]} />
+          <PlaceholderChips items={tr("ph_languages").split(" · ")} />
         )}
       </Section>
 
-      <Section label="Esperienza" icon="💼">
+      <Section label={tr("sec_experience")} icon="💼">
         {experience.length > 0 ? (
           <ul className="flex flex-col gap-1.5">
             {experience.slice(0, 4).map((e, i) => (
@@ -1319,26 +2446,26 @@ function ProfileLive({
                 {e.years ? (
                   <span className="text-[var(--color-dim)]">
                     {" "}
-                    · {formatYears(e.years)}
+                    · {formatYears(e.years, tr)}
                   </span>
                 ) : null}
               </li>
             ))}
             {experience.length > 4 && (
               <li className="text-[9.5px] text-[var(--color-dim)]">
-                +{experience.length - 4} altre
+                {tr("more_other_f", { n: experience.length - 4 })}
               </li>
             )}
           </ul>
         ) : (
           <div className="text-[10px] text-[var(--color-border)] italic">
-            {PLACEHOLDER_EXPERIENCE[phIdx]}
+            {ph.experience[phIdx]}
           </div>
         )}
       </Section>
 
       {sectorEntries.length > 0 && (
-        <Section label="Dettagli del settore" icon="🏢">
+        <Section label={tr("sec_sector_details")} icon="🏢">
           <ul className="flex flex-col gap-1">
             {sectorEntries.map(([k, v]) => (
               <li
@@ -1356,7 +2483,7 @@ function ProfileLive({
       )}
 
       {projects.length > 0 && (
-        <Section label="Progetti" icon="🚀">
+        <Section label={tr("sec_projects")} icon="🚀">
           <ul className="flex flex-col gap-1.5">
             {projects.slice(0, 4).map((p, i) => (
               <li
@@ -1373,7 +2500,7 @@ function ProfileLive({
             ))}
             {projects.length > 4 && (
               <li className="text-[9.5px] text-[var(--color-dim)]">
-                +{projects.length - 4} altri
+                {tr("more_other_m", { n: projects.length - 4 })}
               </li>
             )}
           </ul>
@@ -1381,7 +2508,7 @@ function ProfileLive({
       )}
 
       {certifications.length > 0 && (
-        <Section label="Certificazioni" icon="🏅">
+        <Section label={tr("sec_certifications")} icon="🏅">
           <ul className="flex flex-col gap-0.5">
             {certifications.slice(0, 5).map((c, i) => (
               <li
@@ -1401,7 +2528,7 @@ function ProfileLive({
         </Section>
       )}
 
-      <Section label="Titoli di studio" icon="🎓">
+      <Section label={tr("sec_education")} icon="🎓">
         {education.length > 0 ? (
           <ul className="flex flex-col gap-1">
             {education.slice(0, 3).map((e, i) => (
@@ -1421,7 +2548,7 @@ function ProfileLive({
           </ul>
         ) : (
           <div className="text-[10px] text-[var(--color-border)] italic">
-            {PLACEHOLDER_EDUCATION[phIdx]}
+            {ph.education[phIdx]}
           </div>
         )}
       </Section>
@@ -1443,27 +2570,30 @@ function ProfileLive({
            scrittori CV a valle li leggono via /api/profile/sources — al
            resto della UI l'utente non deve pensarci. */}
 
-      <Section label="Preferenze di lavoro" icon="🎯">
+      <Section label={tr("sec_work_prefs")} icon="🎯">
         {prefs ? (
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap gap-3">
               {prefs.work_mode && (
-                <Field label="Modalità" value={prefs.work_mode} />
+                <Field label={tr("fld_work_mode")} value={prefs.work_mode} />
               )}
               {prefs.relocation != null && (
                 <Field
-                  label="Trasferimento"
+                  label={tr("fld_relocation")}
                   value={
                     typeof prefs.relocation === "boolean"
                       ? prefs.relocation
-                        ? "disponibile"
-                        : "non disponibile"
+                        ? tr("relocation_available")
+                        : tr("relocation_unavailable")
                       : String(prefs.relocation)
                   }
                 />
               )}
               {prefs.salary_annual_eur && (
-                <Field label="Retribuzione" value={prefs.salary_annual_eur} />
+                <Field
+                  label={tr("fld_salary")}
+                  value={prefs.salary_annual_eur}
+                />
               )}
             </div>
             {prefs.work_mode_flexibility && (
@@ -1474,7 +2604,7 @@ function ProfileLive({
           </div>
         ) : (
           <div className="text-[10px] text-[var(--color-border)] italic">
-            Es. Remoto · Disponibile al trasferimento · 30–35k
+            {tr("ph_work_prefs")}
           </div>
         )}
       </Section>
@@ -1503,14 +2633,33 @@ function Section({
 }
 
 // Icona euristica per i summary dinamici (about, preferences, goals, …).
-// I titoli arrivano dall'assistente, quindi il match è fuzzy sulla keyword.
+// I titoli arrivano dall'assistente NELLA LINGUA DELL'UTENTE, quindi il match
+// è fuzzy su keyword di tutte e 7 le lingue supportate (it/en/es/fr/de/hu/pt).
 function iconForSummary(title: string): string {
   const t = title.toLowerCase();
-  if (/preferenz|desider/.test(t)) return "⚙️";
-  if (/obiett|goal|aspirazion/.test(t)) return "🎯";
-  if (/forza|strength|punti\s+forti/.test(t)) return "⭐";
-  if (/chi\s+sono|about|di\s+me|profilo/.test(t)) return "👋";
-  if (/stor|percorso/.test(t)) return "🧭";
+  // Preferenze / desideri
+  if (/preferenz|desider|prefer|deseo|souhait|wunsch|präferen|vágy/.test(t))
+    return "⚙️";
+  // Obiettivi / aspirazioni
+  if (/obiett|goal|aspiraz|objetiv|aspirac|objectif|ziel|cél/.test(t))
+    return "🎯";
+  // Punti di forza
+  if (
+    /forza|strength|punti\s+forti|fortaleza|fuerte|force|atout|stärke|erőss/.test(
+      t,
+    )
+  )
+    return "⭐";
+  // Chi sono / about
+  if (
+    /chi\s+sono|about|di\s+me|profilo|sobre|acerca|à\s+propos|moi|über\s+mich|rólam|profil/.test(
+      t,
+    )
+  )
+    return "👋";
+  // Storia / percorso
+  if (/stor|percorso|histor|trayector|parcours|werdegang|út|pálya/.test(t))
+    return "🧭";
   return "📝";
 }
 
@@ -1580,6 +2729,8 @@ function MicBlockedModal({
   // per security — l'utente deve cliccarlo manualmente. Forniamo il
   // link come <a> così il click diretto funziona.
   const chromeSettingsUrl = "chrome://settings/content/microphone";
+  const locale = useLocale();
+  const tr = makeTr(locale);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
@@ -1598,26 +2749,18 @@ function MicBlockedModal({
           <div className="text-2xl">🎤</div>
           <div>
             <h2 className="text-[14px] font-bold text-[var(--color-bright)] mb-1">
-              Microfono bloccato
+              {tr("mic_title")}
             </h2>
             <p className="text-[11.5px] text-[var(--color-muted)] leading-relaxed">
-              Per dettare a voce devi autorizzare Chrome a usare il microfono su
-              questa pagina. Due modi rapidi:
+              {tr("mic_intro")}
             </p>
           </div>
         </div>
 
         <ol className="text-[11.5px] text-[var(--color-bright)] space-y-3 pl-5 list-decimal mb-5">
+          <li dangerouslySetInnerHTML={{ __html: tr("mic_step1") }} />
           <li>
-            Clicca il <strong>lucchetto 🔒</strong> accanto a{" "}
-            <code className="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">
-              localhost:3000
-            </code>{" "}
-            nella barra indirizzi → <strong>Impostazioni sito</strong> →{" "}
-            <strong>Microfono</strong> → <strong>Consenti</strong>.
-          </li>
-          <li>
-            In alternativa apri le impostazioni globali:
+            {tr("mic_step2_pre")}
             <a
               href={chromeSettingsUrl}
               target="_blank"
@@ -1626,22 +2769,19 @@ function MicBlockedModal({
             >
               chrome://settings/content/microphone
             </a>{" "}
-            e aggiungi{" "}
+            {tr("mic_step2_post")}{" "}
             <code className="text-[10.5px] px-1 rounded bg-[var(--color-panel)]">
               http://localhost:3000
             </code>{" "}
-            a <em>Consenti</em>.
+            <span dangerouslySetInnerHTML={{ __html: tr("mic_step2_allow") }} />
           </li>
-          <li>
-            Se hai anche il check a livello macOS:{" "}
-            <strong>Impostazioni → Privacy → Microfono</strong> → spunta Chrome.
-          </li>
+          <li dangerouslySetInnerHTML={{ __html: tr("mic_step3") }} />
         </ol>
 
-        <p className="text-[10.5px] text-[var(--color-dim)] mb-4">
-          Fatto uno dei passaggi, ricarica la pagina o clicca <em>Riprova</em>:
-          Chrome ti riproporrà il prompt del microfono.
-        </p>
+        <p
+          className="text-[10.5px] text-[var(--color-dim)] mb-4"
+          dangerouslySetInnerHTML={{ __html: tr("mic_footer") }}
+        />
 
         <div className="flex gap-2 justify-end">
           <button
@@ -1653,7 +2793,7 @@ function MicBlockedModal({
               color: "var(--color-muted)",
             }}
           >
-            Chiudi
+            {tr("mic_close")}
           </button>
           <button
             onClick={onRetry}
@@ -1661,7 +2801,7 @@ function MicBlockedModal({
             className="px-4 py-2 rounded-md text-[11px] font-bold tracking-wide transition-opacity cursor-pointer"
             style={{ background: "var(--color-green)", color: "#000" }}
           >
-            Riprova 🎤
+            {tr("mic_retry")}
           </button>
         </div>
       </div>

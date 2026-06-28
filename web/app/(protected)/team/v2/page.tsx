@@ -3,6 +3,256 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import TeamOrgChart from "../_components/TeamOrgChart";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+type RelativeTime = {
+  now: string;
+  m: (n: number) => string;
+  h: (n: number) => string;
+  d: (n: number) => string;
+  mo: (n: number) => string;
+};
+
+const T: Record<
+  Locale,
+  {
+    rt: RelativeTime;
+    dashboard: string;
+    team: string;
+    backToV1: string;
+    latestPositions: string;
+    mostRecent: (n: number) => string;
+    noData: string;
+    loadingLower: string;
+    colUpdated: string;
+    colStatus: string;
+    colSource: string;
+    colActor: string;
+    colCompany: string;
+    colScore: string;
+    colVoto: string;
+    colTitle: string;
+    colLocation: string;
+    colSalary: string;
+    colRemote: string;
+    colFoundAt: string;
+    noPositionsYet: string;
+    loading: string;
+  }
+> = {
+  it: {
+    rt: {
+      now: "adesso",
+      m: (n) => `${n}m fa`,
+      h: (n) => `${n}h fa`,
+      d: (n) => `${n}g fa`,
+      mo: (n) => `${n}me fa`,
+    },
+    dashboard: "Dashboard",
+    team: "Team",
+    backToV1: "Torna alla pagina Team v1",
+    latestPositions: "Ultime posizioni",
+    mostRecent: (n) => `${n} più recenti`,
+    noData: "Nessun dato",
+    loadingLower: "Caricamento…",
+    colUpdated: "Aggiornato",
+    colStatus: "Stato",
+    colSource: "Fonte",
+    colActor: "Attore",
+    colCompany: "Azienda",
+    colScore: "Score",
+    colVoto: "Voto",
+    colTitle: "Titolo",
+    colLocation: "Località",
+    colSalary: "Stipendio",
+    colRemote: "Remote",
+    colFoundAt: "Trovata il",
+    noPositionsYet: "Nessuna posizione ancora.",
+    loading: "Caricamento…",
+  },
+  en: {
+    rt: {
+      now: "now",
+      m: (n) => `${n}m ago`,
+      h: (n) => `${n}h ago`,
+      d: (n) => `${n}d ago`,
+      mo: (n) => `${n}mo ago`,
+    },
+    dashboard: "Dashboard",
+    team: "Team",
+    backToV1: "Back to Team v1 page",
+    latestPositions: "Latest positions",
+    mostRecent: (n) => `${n} most recent`,
+    noData: "no data",
+    loadingLower: "loading…",
+    colUpdated: "Updated",
+    colStatus: "Status",
+    colSource: "Source",
+    colActor: "Actor",
+    colCompany: "Company",
+    colScore: "Score",
+    colVoto: "Score",
+    colTitle: "Title",
+    colLocation: "Location",
+    colSalary: "Salary",
+    colRemote: "Remote",
+    colFoundAt: "Found at",
+    noPositionsYet: "No positions yet.",
+    loading: "Loading…",
+  },
+  es: {
+    rt: {
+      now: "ahora",
+      m: (n) => `hace ${n}m`,
+      h: (n) => `hace ${n}h`,
+      d: (n) => `hace ${n}d`,
+      mo: (n) => `hace ${n} mes${n === 1 ? "" : "es"}`,
+    },
+    dashboard: "Panel",
+    team: "Equipo",
+    backToV1: "Volver a la página Equipo v1",
+    latestPositions: "Últimas posiciones",
+    mostRecent: (n) => `${n} más recientes`,
+    noData: "Sin datos",
+    loadingLower: "Cargando…",
+    colUpdated: "Actualizado",
+    colStatus: "Estado",
+    colSource: "Fuente",
+    colActor: "Actor",
+    colCompany: "Empresa",
+    colScore: "Score",
+    colVoto: "Nota",
+    colTitle: "Título",
+    colLocation: "Ubicación",
+    colSalary: "Salario",
+    colRemote: "Remoto",
+    colFoundAt: "Encontrada el",
+    noPositionsYet: "Aún no hay posiciones.",
+    loading: "Cargando…",
+  },
+  fr: {
+    rt: {
+      now: "maintenant",
+      m: (n) => `il y a ${n} min`,
+      h: (n) => `il y a ${n} h`,
+      d: (n) => `il y a ${n} j`,
+      mo: (n) => `il y a ${n} mois`,
+    },
+    dashboard: "Tableau de bord",
+    team: "Équipe",
+    backToV1: "Retour à la page Équipe v1",
+    latestPositions: "Derniers postes",
+    mostRecent: (n) => `${n} plus récents`,
+    noData: "Aucune donnée",
+    loadingLower: "Chargement…",
+    colUpdated: "Mis à jour",
+    colStatus: "Statut",
+    colSource: "Source",
+    colActor: "Acteur",
+    colCompany: "Entreprise",
+    colScore: "Score",
+    colVoto: "Note",
+    colTitle: "Titre",
+    colLocation: "Lieu",
+    colSalary: "Salaire",
+    colRemote: "À distance",
+    colFoundAt: "Trouvée le",
+    noPositionsYet: "Aucun poste pour l'instant.",
+    loading: "Chargement…",
+  },
+  de: {
+    rt: {
+      now: "jetzt",
+      m: (n) => `vor ${n} Min.`,
+      h: (n) => `vor ${n} Std.`,
+      d: (n) => `vor ${n} Tg.`,
+      mo: (n) => `vor ${n} Mon.`,
+    },
+    dashboard: "Dashboard",
+    team: "Team",
+    backToV1: "Zurück zur Team-v1-Seite",
+    latestPositions: "Neueste Positionen",
+    mostRecent: (n) => `${n} neueste`,
+    noData: "Keine Daten",
+    loadingLower: "Wird geladen…",
+    colUpdated: "Aktualisiert",
+    colStatus: "Status",
+    colSource: "Quelle",
+    colActor: "Akteur",
+    colCompany: "Unternehmen",
+    colScore: "Score",
+    colVoto: "Note",
+    colTitle: "Titel",
+    colLocation: "Standort",
+    colSalary: "Gehalt",
+    colRemote: "Remote",
+    colFoundAt: "Gefunden am",
+    noPositionsYet: "Noch keine Positionen.",
+    loading: "Wird geladen…",
+  },
+  hu: {
+    rt: {
+      now: "most",
+      m: (n) => `${n} perce`,
+      h: (n) => `${n} órája`,
+      d: (n) => `${n} napja`,
+      mo: (n) => `${n} hónapja`,
+    },
+    dashboard: "Irányítópult",
+    team: "Csapat",
+    backToV1: "Vissza a Csapat v1 oldalra",
+    latestPositions: "Legutóbbi pozíciók",
+    mostRecent: (n) => `${n} legutóbbi`,
+    noData: "Nincs adat",
+    loadingLower: "Betöltés…",
+    colUpdated: "Frissítve",
+    colStatus: "Állapot",
+    colSource: "Forrás",
+    colActor: "Szereplő",
+    colCompany: "Cég",
+    colScore: "Score",
+    colVoto: "Pontszám",
+    colTitle: "Cím",
+    colLocation: "Helyszín",
+    colSalary: "Fizetés",
+    colRemote: "Távmunka",
+    colFoundAt: "Megtalálva",
+    noPositionsYet: "Még nincs pozíció.",
+    loading: "Betöltés…",
+  },
+  pt: {
+    rt: {
+      now: "agora",
+      m: (n) => `há ${n}m`,
+      h: (n) => `há ${n}h`,
+      d: (n) => `há ${n}d`,
+      mo: (n) => `há ${n} mês${n === 1 ? "" : "es"}`,
+    },
+    dashboard: "Painel",
+    team: "Equipe",
+    backToV1: "Voltar à página Equipe v1",
+    latestPositions: "Últimas vagas",
+    mostRecent: (n) => `${n} mais recentes`,
+    noData: "Sem dados",
+    loadingLower: "Carregando…",
+    colUpdated: "Atualizado",
+    colStatus: "Status",
+    colSource: "Fonte",
+    colActor: "Ator",
+    colCompany: "Empresa",
+    colScore: "Score",
+    colVoto: "Nota",
+    colTitle: "Título",
+    colLocation: "Local",
+    colSalary: "Salário",
+    colRemote: "Remoto",
+    colFoundAt: "Encontrada em",
+    noPositionsYet: "Ainda não há vagas.",
+    loading: "Carregando…",
+  },
+};
 
 type AgentStatus = "running" | "stopped" | "pending";
 
@@ -71,25 +321,25 @@ const STATUS_COLORS: Record<string, string> = {
   response: "#facc15",
 };
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, rt: RelativeTime): string {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return "—";
   const diff = Date.now() - t;
-  if (diff < 60_000) return "just now";
+  if (diff < 60_000) return rt.now;
   const min = Math.floor(diff / 60_000);
-  if (min < 60) return `${min}m ago`;
+  if (min < 60) return rt.m(min);
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return rt.h(h);
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
+  if (d < 30) return rt.d(d);
   const mo = Math.floor(d / 30);
-  return `${mo}mo ago`;
+  return rt.mo(mo);
 }
 
 // Orario preciso (HH:MM:SS se oggi, altrimenti YYYY-MM-DD HH:MM) +
 // tempo trascorso tra parentesi. Risolve l'ambiguità di "2h ago" che
 // raggruppa righe trovate in momenti diversi nello stesso slot.
-function formatFoundAt(iso: string): string {
+function formatFoundAt(iso: string, rt: RelativeTime): string {
   const t = Date.parse(iso);
   if (!Number.isFinite(t)) return "—";
   const d = new Date(t);
@@ -103,10 +353,12 @@ function formatFoundAt(iso: string): string {
   const head = sameDay
     ? time
     : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return `${head} (${formatRelative(iso)})`;
+  return `${head} (${formatRelative(iso, rt)})`;
 }
 
 export default function TeamV2Page() {
+  const t = T[useLocale()];
+  const isCloud = useIsCloud();
   const [info, setInfo] = useState<Record<string, AgentInfo>>({});
   const [recent, setRecent] = useState<RecentPosition[]>([]);
   const [recentLoaded, setRecentLoaded] = useState(false);
@@ -159,17 +411,19 @@ export default function TeamV2Page() {
 
   useEffect(() => {
     fetchStatus();
-    const t = setInterval(fetchStatus, 3000);
-    return () => clearInterval(t);
-  }, [fetchStatus]);
+    if (isCloud) return;
+    const timer = setInterval(fetchStatus, 3000);
+    return () => clearInterval(timer);
+  }, [fetchStatus, isCloud]);
 
   useEffect(() => {
     fetchRecent();
+    if (isCloud) return;
     // Le posizioni nuove arrivano dagli Scout — refresh più rilassato
     // dello status agenti, evita di spammare la query DB.
-    const t = setInterval(fetchRecent, 10_000);
-    return () => clearInterval(t);
-  }, [fetchRecent]);
+    const timer = setInterval(fetchRecent, 10_000);
+    return () => clearInterval(timer);
+  }, [fetchRecent, isCloud]);
 
   // Polling /api/db/recent-writes per individuare quale agente ha
   // appena scritto. Quando un timestamp avanza rispetto all'ultimo
@@ -209,12 +463,17 @@ export default function TeamV2Page() {
     };
 
     poll();
-    const t = setInterval(poll, 2000);
+    if (isCloud) {
+      return () => {
+        cancelled = true;
+      };
+    }
+    const timer = setInterval(poll, 2000);
     return () => {
       cancelled = true;
-      clearInterval(t);
+      clearInterval(timer);
     };
-  }, [fetchRecent]);
+  }, [fetchRecent, isCloud]);
 
   const agentMeta = Object.fromEntries(
     Object.entries(COLORS).map(([id, color]) => [
@@ -246,7 +505,7 @@ export default function TeamV2Page() {
             href="/dashboard"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Dashboard
+            {t.dashboard}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -255,7 +514,7 @@ export default function TeamV2Page() {
             href="/team"
             className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
           >
-            Team
+            {t.team}
           </Link>
           <span className="text-[var(--color-border)]" aria-hidden="true">
             /
@@ -282,7 +541,7 @@ export default function TeamV2Page() {
               border: "1px dashed var(--color-border)",
               fontFamily: "inherit",
             }}
-            title="Torna alla pagina Team v1"
+            title={t.backToV1}
           >
             ← v1
           </Link>
@@ -303,14 +562,14 @@ export default function TeamV2Page() {
         <div className="mx-auto w-full max-w-[1280px]">
           <div className="flex items-baseline justify-between mb-3">
             <h2 className="text-[12px] uppercase tracking-[0.18em] text-[var(--color-muted)]">
-              Latest positions
+              {t.latestPositions}
             </h2>
             <span className="text-[10px] text-[var(--color-dim)]">
               {recent.length > 0
-                ? `${recent.length} most recent`
+                ? t.mostRecent(recent.length)
                 : recentLoaded
-                  ? "no data"
-                  : "loading…"}
+                  ? t.noData
+                  : t.loadingLower}
             </span>
           </div>
 
@@ -329,40 +588,40 @@ export default function TeamV2Page() {
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-[0.14em] text-[var(--color-dim)]">
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Updated
+                    {t.colUpdated}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Status
+                    {t.colStatus}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Source
+                    {t.colSource}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Actor
+                    {t.colActor}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Company
+                    {t.colCompany}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap text-right">
-                    Score
+                    {t.colScore}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap text-right">
-                    Voto
+                    {t.colVoto}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Title
+                    {t.colTitle}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Location
+                    {t.colLocation}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Salary
+                    {t.colSalary}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Remote
+                    {t.colRemote}
                   </th>
                   <th className="px-3 py-2 font-normal whitespace-nowrap">
-                    Found at
+                    {t.colFoundAt}
                   </th>
                 </tr>
               </thead>
@@ -373,7 +632,7 @@ export default function TeamV2Page() {
                       colSpan={12}
                       className="px-3 py-6 text-center text-[var(--color-dim)]"
                     >
-                      {recentLoaded ? "Nessuna posizione ancora." : "Loading…"}
+                      {recentLoaded ? t.noPositionsYet : t.loading}
                     </td>
                   </tr>
                 ) : (
@@ -400,7 +659,7 @@ export default function TeamV2Page() {
                         className="border-t border-[var(--color-border)] hover:bg-[rgba(255,255,255,0.03)]"
                       >
                         <td className="px-3 py-2 whitespace-nowrap text-[var(--color-dim)] font-mono tabular-nums">
-                          {formatFoundAt(updatedAt)}
+                          {formatFoundAt(updatedAt, t.rt)}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <span
@@ -457,7 +716,7 @@ export default function TeamV2Page() {
                           {p.remote_type ?? "—"}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap text-[var(--color-dim)] font-mono tabular-nums">
-                          {p.found_at ? formatFoundAt(p.found_at) : "—"}
+                          {p.found_at ? formatFoundAt(p.found_at, t.rt) : "—"}
                         </td>
                       </tr>
                     );

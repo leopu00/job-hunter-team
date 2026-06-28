@@ -87,8 +87,9 @@ export function formatMoneyCompact(n: number): string {
   if (a >= 1_000_000) {
     const m = n / 1_000_000;
     return (
-      (a >= 10_000_000 ? Math.round(m).toString() : m.toFixed(1).replace(/\.0$/, "")) +
-      "M"
+      (a >= 10_000_000
+        ? Math.round(m).toString()
+        : m.toFixed(1).replace(/\.0$/, "")) + "M"
     );
   }
   if (a >= 10_000) return `${Math.round(n / 1000)}k`;
@@ -101,11 +102,37 @@ export const CURRENCY_SYMBOL = SYMBOLS;
 
 // Fallback statico (ordine di grandezza giugno 2026) se il fetch fallisce.
 const FALLBACK: Rates = {
-  EUR: 1, USD: 1.16, GBP: 0.86, CHF: 0.92, HUF: 395, PLN: 4.3, SEK: 11.2,
-  NOK: 11.5, DKK: 7.46, CZK: 25, RON: 4.97, BGN: 1.96, JPY: 170, CAD: 1.6,
-  AUD: 1.78, CNY: 8.3, INR: 97, KRW: 1550, TRY: 38, BRL: 6.3, THB: 38,
-  PHP: 66, ILS: 4.3, HKD: 9.1, SGD: 1.5, MXN: 21, IDR: 18500, MYR: 5,
-  NZD: 1.9, ISK: 145, ZAR: 21,
+  EUR: 1,
+  USD: 1.16,
+  GBP: 0.86,
+  CHF: 0.92,
+  HUF: 395,
+  PLN: 4.3,
+  SEK: 11.2,
+  NOK: 11.5,
+  DKK: 7.46,
+  CZK: 25,
+  RON: 4.97,
+  BGN: 1.96,
+  JPY: 170,
+  CAD: 1.6,
+  AUD: 1.78,
+  CNY: 8.3,
+  INR: 97,
+  KRW: 1550,
+  TRY: 38,
+  BRL: 6.3,
+  THB: 38,
+  PHP: 66,
+  ILS: 4.3,
+  HKD: 9.1,
+  SGD: 1.5,
+  MXN: 21,
+  IDR: 18500,
+  MYR: 5,
+  NZD: 1.9,
+  ISK: 145,
+  ZAR: 21,
 };
 
 export async function getExchangeRates(): Promise<Rates> {

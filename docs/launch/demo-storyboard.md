@@ -1,4 +1,4 @@
-# JHT 30-second demo — storyboard + recording script
+# 🎬 JHT 30-second demo — storyboard + recording script
 
 Linked from [`BACKLOG.md`](../../BACKLOG.md) item **[JHT-LAUNCH-03]** (blocker
 for the launch). The recording itself isn't checked in here — this file is

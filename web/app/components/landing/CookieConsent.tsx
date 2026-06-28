@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useLandingI18n } from "./LandingI18n";
+import { isLocalDeploy } from "@/lib/deploy-mode";
 
 const STORAGE_KEY = "jht:cookie-consent";
 
@@ -25,14 +26,43 @@ const T = {
     decline: "Csak szükséges",
     privacy: "Adatvédelmi Irányelvek",
   },
+  es: {
+    text: "Este sitio utiliza cookies técnicas para el funcionamiento y cookies analíticas para mejorar tu experiencia.",
+    accept: "Aceptar",
+    decline: "Solo necesarias",
+    privacy: "Política de Privacidad",
+  },
+  de: {
+    text: "Diese Website verwendet technische Cookies für die Funktionalität und Analyse-Cookies, um deine Erfahrung zu verbessern.",
+    accept: "Akzeptieren",
+    decline: "Nur notwendige",
+    privacy: "Datenschutzerklärung",
+  },
+  fr: {
+    text: "Ce site utilise des cookies techniques pour le fonctionnement et des cookies analytiques pour améliorer votre expérience.",
+    accept: "Accepter",
+    decline: "Nécessaires uniquement",
+    privacy: "Politique de Confidentialité",
+  },
+  pt: {
+    text: "Este site utiliza cookies técnicos para o funcionamento e cookies analíticos para melhorar a sua experiência.",
+    accept: "Aceitar",
+    decline: "Apenas necessários",
+    privacy: "Política de Privacidade",
+  },
 };
 
 export default function CookieConsent() {
-  const { lang } = useLandingI18n();
+  const { lang, t: tr } = useLandingI18n();
   const t = T[lang as keyof typeof T] || T.en;
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // [JHT-DASHBOARD-SPLIT] Sul container LOCAL (dashboard embedded nell'app
+    // desktop) il banner cookie non ha senso: nessun analytics/tracking web,
+    // ed è uno degli "orpelli web" che danno la sensazione pagina-in-pagina.
+    // Su cloud (browser) resta.
+    if (isLocalDeploy()) return;
     try {
       if (!localStorage.getItem(STORAGE_KEY)) setVisible(true);
     } catch {
@@ -62,7 +92,7 @@ export default function CookieConsent() {
     >
       <div
         role="dialog"
-        aria-label="Cookie consent"
+        aria-label={tr("cookie_consent")}
         className="pointer-events-auto w-full max-w-sm rounded-xl px-5 py-4 flex flex-col gap-3"
         style={{
           background: "var(--color-panel)",

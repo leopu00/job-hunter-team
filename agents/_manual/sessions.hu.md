@@ -30,13 +30,15 @@ A JHT csapat tmux munkamenetek egyuttesekent fut a konteneren belul. A munkamene
 | `CRITICO` | Onallo Kritikus | Legacy — V5-ben a Kritikust az Irok dinamikusan hozzak letre (lasd alabb) |
 | `SENTINELLA` | Fogyasztas-watchdog | Edge-triggered, csak a `CAPITANO`-val kommunikal |
 | `ASSISTENTE` | Felhasznalo oldali copilot | A felhasznaloi kereseket parancsokka forditja |
-| `MENTOR` | Career-coach agens | Tervezett, jelenleg placeholder |
+| `MENTOR` | Career-coach agens | Aktiv — felhasznalo-orientalt, mindig aktiv, bootolaskor jon letre |
 
 ### Dinamikus munkamenetek
 
 | Munkamenet | Letrehozta | Elettartam |
 |---|---|---|
 | `CRITICO-S<N>` | `SCRITTORE-<N>` (minden felulvizsgalati korhoz egy uj Kritikus) | Egy felulvizsgalati keres → egy munkamenet, az Iro azonnal utana megszunteti |
+| `DOTTORE` | watchdog (napi idoeres) | Egyszer futo — agens-allapot ellenoerzes, jelent a `CAPITANO`-nak, majd oenmegsemmisul |
+| `MANTENITORE` | watchdog (napi idoeres) | Egyszer futo — infra-allapot ellenoerzes, jelent a `CAPITANO`-nak, majd oenmegsemmisul |
 
 Az Iro letrehozza a `CRITICO-S<N>` munkamenetet a sajat szamanak megfeleloen (`SCRITTORE-1` → `CRITICO-S1`), vegrehajtja a felulvizsgalatot, majd `tmux kill-session`. Minden egyes felulvizsgalati korhoz — a 3-bol **mindegyikhez** — uj Kritikus-peldany jon letre, soha nem kerul ujrafelhasznalasra.
 

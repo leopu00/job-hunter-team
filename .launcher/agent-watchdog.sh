@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
-# agent-watchdog.sh — controlla che le 3 sessioni tmux user-facing
-# (ASSISTENTE, CAPITANO, MENTOR) siano sempre attive. Se una manca,
-# la rilancia via `jht team start <role>`.
+# agent-watchdog.sh — controlla che le 4 sessioni tmux core
+# (ASSISTENTE, CAPITANO, MENTOR, SENTINELLA) siano sempre attive. Se una
+# manca, la rilancia via `jht team start <role>`.
 #
 # Pensato come daemon spawnato da pid1 al boot del container. NON
-# sostituisce il dottore (LLM ogni 30min, analisi alto livello), copre
-# solo il caso "session tmux morta o non partita".
+# sostituisce il dottore (context-refresh LLM degli agenti CON stato),
+# copre il caso "session tmux morta o non partita".
+#
+# La SENTINELLA ha in più un refresh-per-ETÀ deterministico (vedi
+# maybe_refresh_sentinella): è near-stateless — il suo stato operativo vive
+# nel bridge/config, non nella sua chat — quindi dopo molte ore il suo
+# context window si gonfia e ne degrada il giudizio di pace, e va ricreata
+# fresca oltre una soglia. È age-based, NON health-based: non re-introduce
+# il restart-loop del vecchio sentinel_health (V4 bug). Gli altri core hanno
+# stato e li rinfresca il Dottore (refresh ricco con resume).
 #
 # Loop interval: 30s (configurable via env JHT_AGENT_WATCHDOG_INTERVAL).
 # Idempotente: `jht team start` skippa session già attive.
@@ -19,12 +27,36 @@
 
 set -u
 
+# jht-tmux-send vive in /app/agents/_tools (come in start-agent.sh): serve per
+# l'escalation al Capitano in maybe_respawn_bridges. Best-effort se assente.
+export PATH="/app/agents/_tools:${PATH}"
+
 JHT_HOME="${JHT_HOME:-/jht_home}"
 CONFIG="$JHT_HOME/jht.config.json"
 JHT_BIN="/app/cli/bin/jht.js"
 INTERVAL_SEC="${JHT_AGENT_WATCHDOG_INTERVAL:-30}"
 LOG="$JHT_HOME/logs/agent-watchdog.log"
-AGENTS=(assistente capitano mentor)
+AGENTS=(assistente capitano mentor sentinella)
+# Soglia (ore) oltre cui la sessione SENTINELLA viene ricreata per ripulire
+# il context window accumulato. Refresh deterministico, near-stateless.
+SENTINELLA_MAX_CTX_AGE_H="${JHT_SENTINELLA_MAX_CTX_AGE_H:-24}"
+
+# ── Bridge suite supervision (2026-06-27) ──────────────────────────────
+# I bridge/daemon ausiliari sono lanciati `setsid` detached da start-agent.sh
+# → NON sono figli di pid1, quindi il respawn-on-crash di pid1 NON li copre.
+# Se uno muore (crash da eccezione, OOM-kill) resta giù finché non riparte il
+# container — è il buco che ha lasciato betaC cieco sull'usage per 8h il
+# 2026-06-27. Qui li risorvegliamo a ogni tick. **Anti-flap** (lezione del V4
+# restart-loop, per cui il self-restart del bridge fu RIMOSSO): oltre un cap di
+# respawn in finestra, NON rispawna più e ESCALA al Capitano — niente crash-loop.
+# Vedi docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md.
+BRIDGE_STATE_DIR="$JHT_HOME/logs"
+BRIDGE_FLAP_WINDOW_SEC="${JHT_BRIDGE_FLAP_WINDOW_SEC:-600}"   # 10 min
+BRIDGE_FLAP_CAP="${JHT_BRIDGE_FLAP_CAP:-3}"                   # max respawn/finestra
+BRIDGE_ESCALATE_COOLDOWN_SEC="${JHT_BRIDGE_ESCALATE_COOLDOWN_SEC:-3600}"
+# La liveness dei processi la calcola shared/skills/process_health.py (in Python,
+# senza self-match) — stessa fonte di verità del Mantenitore. La suite detached
+# riparabile da un solo `start-agent.sh bridge` è definita lì (gruppo bridge-suite).
 
 mkdir -p "$(dirname "$LOG")"
 
@@ -49,7 +81,9 @@ except Exception:
   sys.exit(1)
 prov = (d.get('active_provider') or '').strip().lower()
 markers = {
-  'kimi':   f'{jht_home}/.kimi/kimi.json',
+  # kimi-cli 1.47+ scrive le creds in .kimi/credentials/<plan>.json
+  # (es. kimi-code.json), non piu' .kimi/kimi.json (allineato a sentinel-bridge).
+  'kimi':   f'{jht_home}/.kimi/credentials/kimi-code.json',
   'claude': f'{jht_home}/.claude/.credentials.json',
   'codex':  f'{jht_home}/.codex/auth.json',
 }
@@ -100,7 +134,129 @@ ensure_agent() {
   fi
 }
 
-log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]}"
+session_age_h() {
+  # Età della sessione tmux in ore intere (now - session_created).
+  local session="$1" created now
+  created=$(tmux display-message -p -t "$session" '#{session_created}' 2>/dev/null) || return 1
+  [ -z "$created" ] && return 1
+  now=$(date -u +%s)
+  echo $(( (now - created) / 3600 ))
+}
+
+maybe_refresh_sentinella() {
+  # Refresh-per-ETÀ della SENTINELLA: near-stateless (stato nel bridge/config,
+  # non nella chat) → un context window vecchio di ore le fa "sbagliare" il
+  # giudizio di pace. Oltre la soglia la si ricrea fresca. age-based (NON
+  # health-based) → niente restart-loop V4. Killa qui: ensure_agent la ricrea
+  # nello stesso tick (subito sotto nel loop). Gli ALTRI core li rinfresca il
+  # Dottore (refresh ricco). Qui solo lei.
+  is_session_alive SENTINELLA || return 0   # se non viva, la (ri)crea ensure_agent
+  # Niente refresh fuori orario lavorativo: ricreare ora sprecherebbe un
+  # kick-off LLM di notte (allineato alla regola "no LLM fuori finestra").
+  python3 -c "import sys; sys.path.insert(0,'/app'); from shared.skills.working_hours import is_within_working_hours as f; sys.exit(0 if f() else 1)" 2>/dev/null || return 0
+  local age
+  age=$(session_age_h SENTINELLA) || return 0
+  if [ "$age" -ge "$SENTINELLA_MAX_CTX_AGE_H" ]; then
+    log "sentinella: context age ${age}h ≥ ${SENTINELLA_MAX_CTX_AGE_H}h — refresh (kill+recreate) per ripulire il contesto"
+    tmux kill-session -t SENTINELLA 2>/dev/null || true
+  fi
+}
+
+bridge_flap_ok() {
+  # 0 se sotto il cap di respawn nella finestra, 1 se il cap è superato.
+  local key="$1" f="$BRIDGE_STATE_DIR/bridge-flap-$1" now cutoff cnt
+  now=$(date -u +%s); cutoff=$((now - BRIDGE_FLAP_WINDOW_SEC))
+  [ -f "$f" ] || return 0
+  cnt=$(awk -v c="$cutoff" '$1+0>=c' "$f" 2>/dev/null | wc -l | tr -d ' ')
+  [ "${cnt:-0}" -lt "$BRIDGE_FLAP_CAP" ]
+}
+
+bridge_flap_record() {
+  # appende 'now' e pota i timestamp fuori finestra (rolling window).
+  local key="$1" f="$BRIDGE_STATE_DIR/bridge-flap-$1" now cutoff
+  now=$(date -u +%s); cutoff=$((now - BRIDGE_FLAP_WINDOW_SEC))
+  { [ -f "$f" ] && awk -v c="$cutoff" '$1+0>=c' "$f" 2>/dev/null; echo "$now"; } \
+    > "$f.tmp" 2>/dev/null && mv "$f.tmp" "$f" 2>/dev/null || true
+}
+
+bridge_escalate() {
+  # avvisa il Capitano UNA volta per finestra di cooldown (no spam), poi tace.
+  local what="$1" now ef last
+  now=$(date -u +%s)
+  ef="$BRIDGE_STATE_DIR/bridge-escalate.ts"
+  if [ -f "$ef" ]; then
+    last=$(cat "$ef" 2>/dev/null || echo 0)
+    [ $((now - last)) -lt "$BRIDGE_ESCALATE_COOLDOWN_SEC" ] && return 0
+  fi
+  echo "$now" > "$ef" 2>/dev/null || true
+  log "bridge-watchdog: FLAP CAP superato ($what) — STOP respawn, escalo al Capitano"
+  jht-tmux-send CAPITANO "[WATCHDOG] $what continua a morire (>${BRIDGE_FLAP_CAP} respawn in $((BRIDGE_FLAP_WINDOW_SEC/60))min). Ho FERMATO il respawn automatico per evitare un crash-loop. Serve diagnosi manuale: controlla /tmp/*-bridge.log. Il Mantenitore farà comunque un canary completo al prossimo sweep." >/dev/null 2>&1 || true
+}
+
+tg_bots_configured() {
+  # vero se almeno un bot Telegram ha un token (channels.telegram.bots.<role>).
+  python3 - "$CONFIG" 2>/dev/null <<'PYEOF'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(1)
+bots = (d.get("channels", {}) or {}).get("telegram", {}).get("bots", {}) or {}
+sys.exit(0 if any((b or {}).get("bot_token") for b in bots.values()) else 1)
+PYEOF
+}
+
+maybe_respawn_bridges() {
+  # Liveness via process_health.py (legge /proc in PYTHON → NIENTE self-match,
+  # a differenza di `grep MARKER /proc/*/cmdline` che trova il proprio argv e
+  # riporterebbe SEMPRE "vivo"). Unica fonte di verità, condivisa col Mantenitore
+  # (step 0 di maintainer-sweep). In steady-state: 1 call, tutti vivi, zero azione.
+  local plan PROC_DEAD_BRIDGE_SUITE="" PROC_DEAD_DEEP="" PROC_TG_ALIVE=0 PROC_ALL_OK=1
+  # NB: process_health.py esce 1 PROPRIO quando c'è un morto (è il caso che ci
+  # interessa) → NON gatare su `|| return` sull'exit code, sarebbe un no-op
+  # esattamente quando serve agire. Catturiamo l'output sempre; skip solo se vuoto
+  # (python assente/errore reale).
+  plan=$(python3 /app/shared/skills/process_health.py summary --shell 2>/dev/null)
+  [ -z "$plan" ] && return 0
+  eval "$plan" 2>/dev/null || return 0
+  [ "${PROC_ALL_OK:-1}" = "1" ] && [ -z "$PROC_DEAD_BRIDGE_SUITE" ] && [ "${PROC_TG_ALIVE:-9}" -ge 3 ] && return 0
+
+  # (1) bridge-suite morti → un solo `start-agent.sh bridge` li rispawna tutti
+  #     (idempotente kill+respawn). Anti-flap: oltre il cap, escala invece di loopare.
+  if [ -n "$PROC_DEAD_BRIDGE_SUITE" ]; then
+    if bridge_flap_ok bridge; then
+      log "bridge-watchdog: suite incompleta (morti: $PROC_DEAD_BRIDGE_SUITE) — respawn via start-agent.sh bridge"
+      JHT_HOME="$JHT_HOME" bash /app/.launcher/start-agent.sh bridge >>"$LOG" 2>&1 \
+        || log "bridge-watchdog: respawn bridge FAIL (rc=$?)"
+      bridge_flap_record bridge
+    else
+      bridge_escalate "suite bridge (morti: $PROC_DEAD_BRIDGE_SUITE)"
+    fi
+  fi
+
+  # (2) tg-bridge: canale Telegram OPZIONALE → respawn solo se i bot sono
+  #     configurati e mancano istanze (attese >=3 process: wrapper+python ×3).
+  if tg_bots_configured && [ "${PROC_TG_ALIVE:-0}" -lt 3 ]; then
+    if bridge_flap_ok tg-bridge; then
+      log "bridge-watchdog: tg-bridge incompleto (${PROC_TG_ALIVE}/3 process) — respawn via start-agent.sh tg-bridge"
+      JHT_HOME="$JHT_HOME" bash /app/.launcher/start-agent.sh tg-bridge >>"$LOG" 2>&1 \
+        || log "bridge-watchdog: respawn tg-bridge FAIL (rc=$?)"
+      bridge_flap_record tg-bridge
+    else
+      bridge_escalate "tg-bridge (${PROC_TG_ALIVE}/3)"
+    fi
+  fi
+
+  # (3) Process "profondi" morti (doctor-watchdog/auto-report/cloud-daemon/pid1):
+  #     dovrebbe rispawnarli pid1. Se restano morti è un problema più serio →
+  #     ESCALA (NON tentare il respawn da qui: li orfaneremmo). agent-watchdog
+  #     non comparirà mai qui (è il processo che gira questo check).
+  if [ -n "$PROC_DEAD_DEEP" ]; then
+    bridge_escalate "process pid1-managed morti: $PROC_DEAD_DEEP"
+  fi
+}
+
+log "watchdog start · interval=${INTERVAL_SEC}s · agents=${AGENTS[*]} · sentinella_max_ctx_age=${SENTINELLA_MAX_CTX_AGE_H}h · bridge_supervision=on (flap_cap=${BRIDGE_FLAP_CAP}/$((BRIDGE_FLAP_WINDOW_SEC/60))min)"
 
 # Loop principale: gate sulla config (può non essere ancora pronta al
 # primo boot del container — il wizard la scrive post-pairing). Sleep
@@ -135,9 +291,16 @@ while true; do
   fi
 
   if config_ready; then
+    # Refresh-per-età della Sentinella PRIMA del giro di ensure: se è troppo
+    # vecchia la killa, poi ensure_agent la ricrea fresca nello stesso tick.
+    maybe_refresh_sentinella
     for role in "${AGENTS[@]}"; do
       ensure_agent "$role"
     done
+    # Bridge/daemon detached (sentinel/pacing/capitano-bridge/window-ratio/
+    # codex-auth-healer + tg-bridge): respawn se morti, con anti-flap. Sono
+    # fuori dal respawn-on-crash di pid1 (setsid), questo è il loro recovery.
+    maybe_respawn_bridges
   else
     # Soft log: config non pronta = wizard non ancora finito. Aspettiamo
     # silenziosamente, niente spam.

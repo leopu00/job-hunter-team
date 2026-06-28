@@ -6,7 +6,355 @@ import { Tabs, Tab } from "../../components/Tabs";
 import { useToast } from "../../components/Toast";
 import SettingsProfile from "../../components/SettingsProfile";
 import WorkHoursPicker from "../../components/WorkHoursPicker";
+import { DarkModeToggle } from "@/app/theme-provider";
 import { AVAILABLE_CURRENCIES, BASE_CURRENCIES } from "@/lib/exchange-rates";
+import { useLocale } from "@/lib/use-locale";
+
+/* ── i18n inline ─────────────────────────────────────────────────── */
+const T: Record<string, Record<string, string>> = {
+  saving: {
+    it: "Salvataggio…",
+    en: "Saving…",
+    hu: "Mentés…",
+    es: "Guardando…",
+    de: "Wird gespeichert…",
+    fr: "Enregistrement…",
+    pt: "A guardar…",
+  },
+  save: {
+    it: "Salva",
+    en: "Save",
+    hu: "Mentés",
+    es: "Guardar",
+    de: "Speichern",
+    fr: "Enregistrer",
+    pt: "Guardar",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "A carregar…",
+  },
+  settings_saved: {
+    it: "Impostazioni salvate",
+    en: "Settings saved",
+    hu: "Beállítások mentve",
+    es: "Ajustes guardados",
+    de: "Einstellungen gespeichert",
+    fr: "Paramètres enregistrés",
+    pt: "Definições guardadas",
+  },
+  error: {
+    it: "Errore",
+    en: "Error",
+    hu: "Hiba",
+    es: "Error",
+    de: "Fehler",
+    fr: "Erreur",
+    pt: "Erro",
+  },
+  network_error: {
+    it: "Errore di rete",
+    en: "Network error",
+    hu: "Hálózati hiba",
+    es: "Error de red",
+    de: "Netzwerkfehler",
+    fr: "Erreur réseau",
+    pt: "Erro de rede",
+  },
+  action_done: {
+    it: "{label} completato",
+    en: "{label} completed",
+    hu: "{label} kész",
+    es: "{label} completado",
+    de: "{label} abgeschlossen",
+    fr: "{label} terminé",
+    pt: "{label} concluído",
+  },
+  dashboard: {
+    it: "Dashboard",
+    en: "Dashboard",
+    hu: "Vezérlőpult",
+    es: "Panel",
+    de: "Dashboard",
+    fr: "Tableau de bord",
+    pt: "Painel",
+  },
+  settings: {
+    it: "Impostazioni",
+    en: "Settings",
+    hu: "Beállítások",
+    es: "Ajustes",
+    de: "Einstellungen",
+    fr: "Paramètres",
+    pt: "Definições",
+  },
+  theme: {
+    it: "Tema",
+    en: "Theme",
+    hu: "Téma",
+    es: "Tema",
+    de: "Design",
+    fr: "Thème",
+    pt: "Tema",
+  },
+  tab_profile: {
+    it: "Profilo",
+    en: "Profile",
+    hu: "Profil",
+    es: "Perfil",
+    de: "Profil",
+    fr: "Profil",
+    pt: "Perfil",
+  },
+  tab_general: {
+    it: "Generale",
+    en: "General",
+    hu: "Általános",
+    es: "General",
+    de: "Allgemein",
+    fr: "Général",
+    pt: "Geral",
+  },
+  tab_working_hours: {
+    it: "Orari di lavoro",
+    en: "Working hours",
+    hu: "Munkaidő",
+    es: "Horario laboral",
+    de: "Arbeitszeiten",
+    fr: "Heures de travail",
+    pt: "Horário de trabalho",
+  },
+  tab_currencies: {
+    it: "Valute",
+    en: "Currencies",
+    hu: "Pénznemek",
+    es: "Monedas",
+    de: "Währungen",
+    fr: "Devises",
+    pt: "Moedas",
+  },
+  tab_notifications: {
+    it: "Notifiche",
+    en: "Notifications",
+    hu: "Értesítések",
+    es: "Notificaciones",
+    de: "Benachrichtigungen",
+    fr: "Notifications",
+    pt: "Notificações",
+  },
+  tab_security: {
+    it: "Sicurezza",
+    en: "Security",
+    hu: "Biztonság",
+    es: "Seguridad",
+    de: "Sicherheit",
+    fr: "Sécurité",
+    pt: "Segurança",
+  },
+  tab_danger: {
+    it: "Danger Zone",
+    en: "Danger Zone",
+    hu: "Veszélyzóna",
+    es: "Zona de peligro",
+    de: "Gefahrenzone",
+    fr: "Zone de danger",
+    pt: "Zona de perigo",
+  },
+  app_name: {
+    it: "Nome applicazione",
+    en: "Application name",
+    hu: "Alkalmazás neve",
+    es: "Nombre de la aplicación",
+    de: "Anwendungsname",
+    fr: "Nom de l'application",
+    pt: "Nome da aplicação",
+  },
+  default_language: {
+    it: "Lingua default",
+    en: "Default language",
+    hu: "Alapértelmezett nyelv",
+    es: "Idioma predeterminado",
+    de: "Standardsprache",
+    fr: "Langue par défaut",
+    pt: "Idioma padrão",
+  },
+  language: {
+    it: "Lingua",
+    en: "Language",
+    hu: "Nyelv",
+    es: "Idioma",
+    de: "Sprache",
+    fr: "Langue",
+    pt: "Idioma",
+  },
+  cur_intro_a: {
+    it: "Le valute selezionate appariranno nel selettore del grafico",
+    en: "The selected currencies will appear in the selector of the",
+    hu: "A kiválasztott pénznemek megjelennek a",
+    es: "Las monedas seleccionadas aparecerán en el selector del gráfico",
+    de: "Die ausgewählten Währungen erscheinen im Auswahlmenü des Diagramms",
+    fr: "Les devises sélectionnées apparaîtront dans le sélecteur du graphique",
+    pt: "As moedas selecionadas aparecerão no seletor do gráfico",
+  },
+  cur_intro_chart: {
+    it: "Distribuzione Stipendi",
+    en: "Salary Distribution",
+    hu: "Fizetéseloszlás",
+    es: "Distribución salarial",
+    de: "Gehaltsverteilung",
+    fr: "Répartition des salaires",
+    pt: "Distribuição salarial",
+  },
+  cur_intro_b: {
+    it: "chart. EUR, USD e GBP sono sempre disponibili; aggiungine altre (es. il fiorino ungherese) per convertire le stime nella valuta che preferisci.",
+    en: "chart. EUR, USD and GBP are always available; add others (e.g. the Hungarian forint) to convert estimates into the currency you prefer.",
+    hu: "diagram szelektorában. Az EUR, USD és GBP mindig elérhető; adj hozzá továbbiakat (pl. a magyar forintot), hogy a becsléseket a kívánt pénznemre váltsd át.",
+    es: "EUR, USD y GBP están siempre disponibles; añade otras (p. ej. el florín húngaro) para convertir las estimaciones a la moneda que prefieras.",
+    de: ". EUR, USD und GBP sind immer verfügbar; füge weitere hinzu (z. B. den ungarischen Forint), um die Schätzungen in die gewünschte Währung umzurechnen.",
+    fr: ". L'EUR, l'USD et la GBP sont toujours disponibles ; ajoutez-en d'autres (par ex. le forint hongrois) pour convertir les estimations dans la devise de votre choix.",
+    pt: ". EUR, USD e GBP estão sempre disponíveis; adicione outras (ex. o florim húngaro) para converter as estimativas na moeda que preferir.",
+  },
+  cur_search_ph: {
+    it: "Cerca valuta (codice o nome)…",
+    en: "Search currency (code or name)…",
+    hu: "Pénznem keresése (kód vagy név)…",
+    es: "Buscar moneda (código o nombre)…",
+    de: "Währung suchen (Code oder Name)…",
+    fr: "Rechercher une devise (code ou nom)…",
+    pt: "Procurar moeda (código ou nome)…",
+  },
+  cur_search_aria: {
+    it: "Cerca valuta",
+    en: "Search currency",
+    hu: "Pénznem keresése",
+    es: "Buscar moneda",
+    de: "Währung suchen",
+    fr: "Rechercher une devise",
+    pt: "Procurar moeda",
+  },
+  cur_always_available: {
+    it: "Sempre disponibile",
+    en: "Always available",
+    hu: "Mindig elérhető",
+    es: "Siempre disponible",
+    de: "Immer verfügbar",
+    fr: "Toujours disponible",
+    pt: "Sempre disponível",
+  },
+  cur_base: {
+    it: "base",
+    en: "base",
+    hu: "alap",
+    es: "base",
+    de: "Basis",
+    fr: "base",
+    pt: "base",
+  },
+  channels: {
+    it: "Canali",
+    en: "Channels",
+    hu: "Csatornák",
+    es: "Canales",
+    de: "Kanäle",
+    fr: "Canaux",
+    pt: "Canais",
+  },
+  notif_desktop: {
+    it: "Desktop (browser)",
+    en: "Desktop (browser)",
+    hu: "Asztali (böngésző)",
+    es: "Escritorio (navegador)",
+    de: "Desktop (Browser)",
+    fr: "Bureau (navigateur)",
+    pt: "Computador (navegador)",
+  },
+  new_password: {
+    it: "Nuova password",
+    en: "New password",
+    hu: "Új jelszó",
+    es: "Nueva contraseña",
+    de: "Neues Passwort",
+    fr: "Nouveau mot de passe",
+    pt: "Nova palavra-passe",
+  },
+  next_version: {
+    it: "Disponibile in una prossima versione",
+    en: "Available in a future version",
+    hu: "Egy következő verzióban lesz elérhető",
+    es: "Disponible en una próxima versión",
+    de: "In einer kommenden Version verfügbar",
+    fr: "Disponible dans une prochaine version",
+    pt: "Disponível numa versão futura",
+  },
+  coming_soon: {
+    it: "Presto disponibile",
+    en: "Coming soon",
+    hu: "Hamarosan",
+    es: "Próximamente",
+    de: "Demnächst verfügbar",
+    fr: "Bientôt disponible",
+    pt: "Em breve",
+  },
+  totp_hint: {
+    it: "2FA via TOTP (Google Authenticator)",
+    en: "2FA via TOTP (Google Authenticator)",
+    hu: "Kétlépcsős azonosítás TOTP-vel (Google Authenticator)",
+    es: "2FA mediante TOTP (Google Authenticator)",
+    de: "2FA über TOTP (Google Authenticator)",
+    fr: "2FA via TOTP (Google Authenticator)",
+    pt: "2FA via TOTP (Google Authenticator)",
+  },
+  danger_warning: {
+    it: "Attenzione — azioni irreversibili",
+    en: "Warning — irreversible actions",
+    hu: "Figyelem — visszafordíthatatlan műveletek",
+    es: "Atención — acciones irreversibles",
+    de: "Achtung — unwiderrufliche Aktionen",
+    fr: "Attention — actions irréversibles",
+    pt: "Atenção — ações irreversíveis",
+  },
+  reset_config_label: {
+    it: "Reset configurazione",
+    en: "Reset configuration",
+    hu: "Konfiguráció visszaállítása",
+    es: "Restablecer configuración",
+    de: "Konfiguration zurücksetzen",
+    fr: "Réinitialiser la configuration",
+    pt: "Repor configuração",
+  },
+  reset_config_desc: {
+    it: "Ripristina jht.config.json ai valori di default",
+    en: "Restore jht.config.json to default values",
+    hu: "A jht.config.json visszaállítása alapértékekre",
+    es: "Restaura jht.config.json a los valores predeterminados",
+    de: "Setzt jht.config.json auf die Standardwerte zurück",
+    fr: "Restaure jht.config.json aux valeurs par défaut",
+    pt: "Repõe jht.config.json para os valores padrão",
+  },
+  clear_cache_label: {
+    it: "Svuota cache",
+    en: "Clear cache",
+    hu: "Gyorsítótár ürítése",
+    es: "Vaciar caché",
+    de: "Cache leeren",
+    fr: "Vider le cache",
+    pt: "Limpar cache",
+  },
+  clear_cache_desc: {
+    it: "Elimina tutti i file in ~/.jht/cache/",
+    en: "Delete all files in ~/.jht/cache/",
+    hu: "Az összes fájl törlése a ~/.jht/cache/ mappából",
+    es: "Elimina todos los archivos en ~/.jht/cache/",
+    de: "Löscht alle Dateien in ~/.jht/cache/",
+    fr: "Supprime tous les fichiers dans ~/.jht/cache/",
+    pt: "Elimina todos os ficheiros em ~/.jht/cache/",
+  },
+};
 
 type NotifKey = "telegram" | "email" | "desktop";
 type Settings = {
@@ -100,7 +448,17 @@ function Toggle({
   );
 }
 
-function SaveBtn({ busy, onClick }: { busy: boolean; onClick: () => void }) {
+function SaveBtn({
+  busy,
+  onClick,
+  savingLabel,
+  saveLabel,
+}: {
+  busy: boolean;
+  onClick: () => void;
+  savingLabel: string;
+  saveLabel: string;
+}) {
   return (
     <button
       onClick={onClick}
@@ -112,7 +470,7 @@ function SaveBtn({ busy, onClick }: { busy: boolean; onClick: () => void }) {
         border: "none",
       }}
     >
-      {busy ? "Salvataggio…" : "Salva"}
+      {busy ? savingLabel : saveLabel}
     </button>
   );
 }
@@ -133,6 +491,8 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<TabId>("profile");
   const [curQuery, setCurQuery] = useState("");
   const { toast } = useToast();
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
 
   useEffect(() => {
     fetch("/api/settings")
@@ -171,10 +531,10 @@ export default function SettingsPage() {
       });
       const d = await r.json();
       d.ok
-        ? toast("Impostazioni salvate", "success")
-        : toast(d.error ?? "Errore", "error");
+        ? toast(tr("settings_saved"), "success")
+        : toast(d.error ?? tr("error"), "error");
     } catch {
-      toast("Errore di rete", "error");
+      toast(tr("network_error"), "error");
     } finally {
       setBusy(false);
     }
@@ -191,10 +551,10 @@ export default function SettingsPage() {
         });
         const d = await r.json();
         d.ok
-          ? toast(`${label} completato`, "success")
-          : toast(d.error ?? "Errore", "error");
+          ? toast(tr("action_done").replace("{label}", label), "success")
+          : toast(d.error ?? tr("error"), "error");
       } catch {
-        toast("Errore di rete", "error");
+        toast(tr("network_error"), "error");
       } finally {
         setBusy(false);
       }
@@ -206,19 +566,19 @@ export default function SettingsPage() {
     return (
       <main className="p-10" role="status" aria-live="polite">
         <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-          Caricamento…
+          {tr("loading")}
         </p>
       </main>
     );
 
   const TABS: Tab<TabId>[] = [
-    { id: "profile", label: "Profilo" },
-    { id: "general", label: "Generale" },
-    { id: "working-hours", label: "Orari di lavoro" },
-    { id: "currencies", label: "Valute" },
-    { id: "notifications", label: "Notifiche" },
-    { id: "security", label: "Sicurezza" },
-    { id: "danger", label: "Danger Zone" },
+    { id: "profile", label: tr("tab_profile") },
+    { id: "general", label: tr("tab_general") },
+    { id: "working-hours", label: tr("tab_working_hours") },
+    { id: "currencies", label: tr("tab_currencies") },
+    { id: "notifications", label: tr("tab_notifications") },
+    { id: "security", label: tr("tab_security") },
+    { id: "danger", label: tr("tab_danger") },
   ];
 
   return (
@@ -233,7 +593,7 @@ export default function SettingsPage() {
               href="/dashboard"
               className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
             >
-              Dashboard
+              {tr("dashboard")}
             </Link>
             <span className="text-[var(--color-border)]" aria-hidden="true">
               /
@@ -242,14 +602,14 @@ export default function SettingsPage() {
               className="text-[10px] text-[var(--color-muted)]"
               aria-current="page"
             >
-              Impostazioni
+              {tr("settings")}
             </span>
           </nav>
           <h1
             className="text-xl font-bold"
             style={{ color: "var(--color-white)" }}
           >
-            Impostazioni
+            {tr("settings")}
           </h1>
         </div>
 
@@ -260,30 +620,38 @@ export default function SettingsPage() {
 
           {tab === "general" && (
             <>
-              <Row label="Nome applicazione">
+              <Row label={tr("app_name")}>
                 <input
                   style={inp}
                   value={s.app_name}
                   onChange={(e) =>
                     setS((p) => ({ ...p, app_name: e.target.value }))
                   }
-                  aria-label="Nome applicazione"
+                  aria-label={tr("app_name")}
                 />
               </Row>
-              <Row label="Lingua default">
+              <Row label={tr("default_language")}>
                 <select
                   style={inp}
                   value={s.language}
                   onChange={(e) =>
                     setS((p) => ({ ...p, language: e.target.value }))
                   }
-                  aria-label="Lingua"
+                  aria-label={tr("language")}
                 >
                   <option value="it">Italiano</option>
                   <option value="en">English</option>
                 </select>
               </Row>
-              <SaveBtn busy={busy} onClick={save} />
+              <Row label={tr("theme")}>
+                <DarkModeToggle />
+              </Row>
+              <SaveBtn
+                busy={busy}
+                onClick={save}
+                savingLabel={tr("saving")}
+                saveLabel={tr("save")}
+              />
             </>
           )}
 
@@ -291,18 +659,20 @@ export default function SettingsPage() {
 
           {tab === "currencies" && (
             <>
-              <p className="text-[11px]" style={{ color: "var(--color-muted)" }}>
-                Le valute selezionate appariranno nel selettore del grafico
-                <strong> Distribuzione Stipendi</strong>. EUR, USD e GBP sono
-                sempre disponibili; aggiungine altre (es. il fiorino ungherese)
-                per convertire le stime nella valuta che preferisci.
+              <p
+                className="text-[11px]"
+                style={{ color: "var(--color-muted)" }}
+              >
+                {tr("cur_intro_a")}
+                <strong> {tr("cur_intro_chart")}</strong>
+                {tr("cur_intro_b")}
               </p>
               <input
                 style={{ ...inp, maxWidth: 320 }}
                 value={curQuery}
                 onChange={(e) => setCurQuery(e.target.value)}
-                placeholder="Cerca valuta (codice o nome)…"
-                aria-label="Cerca valuta"
+                placeholder={tr("cur_search_ph")}
+                aria-label={tr("cur_search_aria")}
               />
               <div className="flex flex-wrap gap-2">
                 {AVAILABLE_CURRENCIES.filter((c) => {
@@ -328,7 +698,7 @@ export default function SettingsPage() {
                             : [...p.currencies, c.code],
                         }))
                       }
-                      title={isBase ? "Sempre disponibile" : c.name}
+                      title={isBase ? tr("cur_always_available") : c.name}
                       className="flex items-center gap-2 px-3 py-2 rounded text-[11px] transition-colors"
                       style={{
                         border: `1px solid ${active ? "var(--color-green)" : "var(--color-border)"}`,
@@ -345,7 +715,9 @@ export default function SettingsPage() {
                       <span className="font-semibold tabular-nums">
                         {c.code}
                       </span>
-                      <span style={{ color: "var(--color-dim)" }}>{c.name}</span>
+                      <span style={{ color: "var(--color-dim)" }}>
+                        {c.name}
+                      </span>
                       {isBase && (
                         <span
                           className="text-[8px] uppercase tracking-wider px-1 py-0.5 rounded"
@@ -354,14 +726,19 @@ export default function SettingsPage() {
                             color: "var(--color-dim)",
                           }}
                         >
-                          base
+                          {tr("cur_base")}
                         </span>
                       )}
                     </button>
                   );
                 })}
               </div>
-              <SaveBtn busy={busy} onClick={save} />
+              <SaveBtn
+                busy={busy}
+                onClick={save}
+                savingLabel={tr("saving")}
+                saveLabel={tr("save")}
+              />
             </>
           )}
           {tab === "notifications" && (
@@ -370,7 +747,7 @@ export default function SettingsPage() {
                 className="text-[10px] font-bold uppercase tracking-widest"
                 style={{ color: "var(--color-dim)" }}
               >
-                Canali
+                {tr("channels")}
               </p>
               {(["telegram", "email", "desktop"] as NotifKey[]).map((k) => (
                 <Toggle
@@ -381,7 +758,7 @@ export default function SettingsPage() {
                       ? "Telegram"
                       : k === "email"
                         ? "Email"
-                        : "Desktop (browser)"
+                        : tr("notif_desktop")
                   }
                   onChange={(v) =>
                     setS((p) => ({
@@ -391,16 +768,18 @@ export default function SettingsPage() {
                   }
                 />
               ))}
-              <SaveBtn busy={busy} onClick={save} />
+              <SaveBtn
+                busy={busy}
+                onClick={save}
+                savingLabel={tr("saving")}
+                saveLabel={tr("save")}
+              />
             </>
           )}
 
           {tab === "security" && (
             <>
-              <Row
-                label="Nuova password"
-                hint="Disponibile in una prossima versione"
-              >
+              <Row label={tr("new_password")} hint={tr("next_version")}>
                 <input
                   type="password"
                   style={{ ...inp, opacity: 0.4, cursor: "not-allowed" }}
@@ -423,13 +802,13 @@ export default function SettingsPage() {
                     border: "1px solid rgba(255,196,0,0.2)",
                   }}
                 >
-                  Presto disponibile
+                  {tr("coming_soon")}
                 </span>
                 <p
                   className="text-[10px]"
                   style={{ color: "var(--color-dim)" }}
                 >
-                  2FA via TOTP (Google Authenticator)
+                  {tr("totp_hint")}
                 </p>
               </div>
             </>
@@ -448,19 +827,19 @@ export default function SettingsPage() {
                   className="text-[10px] font-bold"
                   style={{ color: "var(--color-red)" }}
                 >
-                  Attenzione — azioni irreversibili
+                  {tr("danger_warning")}
                 </p>
               </div>
               {[
                 {
                   act: "reset_config",
-                  label: "Reset configurazione",
-                  desc: "Ripristina jht.config.json ai valori di default",
+                  label: tr("reset_config_label"),
+                  desc: tr("reset_config_desc"),
                 },
                 {
                   act: "clear_cache",
-                  label: "Svuota cache",
-                  desc: "Elimina tutti i file in ~/.jht/cache/",
+                  label: tr("clear_cache_label"),
+                  desc: tr("clear_cache_desc"),
                 },
               ].map(({ act, label, desc }) => (
                 <div

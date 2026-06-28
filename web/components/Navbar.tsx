@@ -1,19 +1,32 @@
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import type { User } from '@supabase/supabase-js'
+import { type Locale } from '@/i18n/config'
 import LoginButton from './LoginButton'
 import NavLinks from './NavLinks'
 import NavbarMobile from './NavbarMobile'
-import SettingsMenu from './SettingsMenu'
 import UserMenu from './UserMenu'
 
 const LanguageSwitcher = dynamic(() => import('@/app/components/LanguageSwitcher'))
 
-interface NavbarProps {
-  user: User | null
+const T: Record<Locale, { navAria: string }> = {
+  it: { navAria: 'Navigazione app' },
+  en: { navAria: 'App navigation' },
+  es: { navAria: 'Navegación de la app' },
+  fr: { navAria: "Navigation de l'application" },
+  de: { navAria: 'App-Navigation' },
+  hu: { navAria: 'Alkalmazás navigáció' },
+  pt: { navAria: 'Navegação da app' },
 }
 
-export default function Navbar({ user }: NavbarProps) {
+interface NavbarProps {
+  user: User | null
+  locale: Locale
+}
+
+export default function Navbar({ user, locale }: NavbarProps) {
+  const t = T[locale]
+
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined
   const fullName  = user?.user_metadata?.full_name as string | undefined
   const email     = user?.email ?? ''
@@ -22,7 +35,7 @@ export default function Navbar({ user }: NavbarProps) {
     <header
       className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-panel)]"
     >
-      <nav aria-label="Navigazione app" className="px-5 sm:px-6 h-14 flex items-center gap-4">
+      <nav aria-label={t.navAria} className="px-5 sm:px-6 h-14 flex items-center gap-4">
 
         {/* Brand */}
         <Link
@@ -46,15 +59,13 @@ export default function Navbar({ user }: NavbarProps) {
 
         {/* User / Login */}
         {user ? (
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0 ml-auto md:ml-0">
             <LanguageSwitcher direction="down" />
-            <SettingsMenu />
             <UserMenu avatarUrl={avatarUrl} fullName={fullName} email={email} />
           </div>
         ) : (
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0 ml-auto md:ml-0">
             <LanguageSwitcher direction="down" />
-            <SettingsMenu />
             <LoginButton />
           </div>
         )}

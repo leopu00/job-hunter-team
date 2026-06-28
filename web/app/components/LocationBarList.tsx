@@ -1,6 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const MORE: Record<Locale, (n: number) => string> = {
+  it: (n) => `+${n} altri`,
+  en: (n) => `+${n} more`,
+  es: (n) => `+${n} más`,
+  fr: (n) => `+${n} autres`,
+  de: (n) => `+${n} weitere`,
+  hu: (n) => `+${n} további`,
+  pt: (n) => `+${n} mais`,
+};
 
 export type LocationBarItem = {
   // Chiave univoca (es. country, oppure "Country|City").
@@ -40,6 +52,7 @@ export default function LocationBarList({
   onToggle,
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
+  const more = MORE[useLocale()];
 
   const total = items.reduce((a, d) => a + d.count, 0);
   const hasSelection = selectedKeys.length > 0;
@@ -129,7 +142,7 @@ export default function LocationBarList({
           {rest.length > 0 && (
             <li className="grid grid-cols-[1fr_2.5rem_2.25rem] gap-3 items-center text-[10.5px] leading-tight px-1 -mx-1 py-0.5">
               <span className="truncate italic text-[var(--color-dim)]">
-                +{rest.length} altri
+                {more(rest.length)}
               </span>
               <span className="tabular-nums text-[var(--color-muted)] font-semibold text-right">
                 {restCount}

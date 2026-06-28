@@ -17,7 +17,8 @@ hardcoded (1, 1, 0, 0) ereditati da token-by-agent-series.
 
 Output:
   - stdout (catturato da /tmp/pacing-bridge.log)
-  - tmux send al CAPITANO via jht-tmux-send (single-line, parsabile dall'LLM)
+  - tmux send alla SENTINELLA via jht-tmux-send (analista del pacing; il Capitano
+    NON viene pingato — pull on-demand via rate-budget/agent-speed-table)
 
 Non scrive su sentinel-data.jsonl (non e' un sensore, e' un report).
 Singleton: kill processi pacing-bridge preesistenti gestito dallo
@@ -26,7 +27,7 @@ spawner in start-agent.sh.
 Override env:
   JHT_HOME                 (default /jht_home)
   JHT_PACING_TARGET_PCT    (default 92.0 — centro del band 90-95)
-  JHT_PACING_TARGET_SESSION (default CAPITANO)
+  JHT_PACING_TARGET_SESSION (default SENTINELLA)
   JHT_PACING_TICK_MIN      (default 15)
   JHT_PACING_MIN_PCT_H     (default 0.20 — soglia rumore per agente)
 
@@ -58,6 +59,10 @@ STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
 # tmux send fallisce con rc=3 (capitano in turno lungo, input non
 # accettato). Vedi shared/skills/bridge_mailbox.py per il drain.
 MAILBOX_FILE = LOGS_DIR / "bridge-mailbox.jsonl"
+# Tabella temporale per-agente (consumo kT per bucket 5min, ultime 2h) che la
+# Sentinella (S-07) legge per vedere i PATTERN (chi brucia, sbalzo vs deriva).
+# Scritta a ogni tick dal pacing-bridge (ha gia' tba). Redesign 2026-06-13.
+AGENT_TABLE_FILE = LOGS_DIR / "agent-usage-table.json"
 
 # Sotto questo numero di minuti effettivi nella finestra (dopo aver
 # isolato l'ultima session_id) il calcolo è troppo rumoroso. Salta tick.
@@ -113,12 +118,43 @@ def _resolve_target_band_center() -> float:
 
 
 TARGET_BAND_CENTER = _resolve_target_band_center()
-TARGET_SESSION = os.environ.get("JHT_PACING_TARGET_SESSION", "CAPITANO")
+# Destinatario del [BRIDGE PACING]: la SENTINELLA (analista del pacing), NON il
+# Capitano (2026-06-25, push→pull). Il Capitano non viene pingato ogni 15 min;
+# riceve solo gli ordini filtrati della Sentinella e pulla on-demand (rate-budget
+# / agent-speed-table) per verificare. Vedi
+# docs/internal/2026-06-25-bridge-to-sentinella-pull-model.md.
+TARGET_SESSION = os.environ.get("JHT_PACING_TARGET_SESSION", "SENTINELLA")
 TICK_MIN = int(os.environ.get("JHT_PACING_TICK_MIN", "15"))
 MIN_PCT_H = float(os.environ.get("JHT_PACING_MIN_PCT_H", "0.20"))
 
 # Soglia in %/h sotto la quale "ALLINEATO" — evita oscillazioni stupide.
 ALIGN_TOL = 0.20
+
+
+def _throttle_target_for_sforo(delta_pct_h):
+    """Throttle ASSOLUTO (secondi) gia' agganciato alla ladder (floor 5min),
+    scalato con lo sforo %/h.
+
+    BUG STORICO (fix 2026-06-26): gli increment vecchi (15/30/60/120) erano TUTTI
+    sotto il floor 300s della ladder (THROTTLE_LADDER, 2026-06-21) → `quantize()`
+    li collassava TUTTI a 300s. Risultato: il throttle NON scalava mai — un drift
+    2%/h e un runaway 18%/h prendevano lo STESSO 5min. Il +120 suggerito non
+    serviva a niente (sotto-floor) e la scalatura era una finzione.
+
+    Ora ogni valore e' un GRADINO REALE della ladder: piu' sfori, piu' alto il
+    gradino. La ladder governa comunque il cap a 1h. Il bridge emette il valore
+    ASSOLUTO (`set <agent> N`), non un increment `+N`: `set` e' sempre assoluto
+    (int('+120')==120) e il modello "increment per-tick" non ha mai funzionato."""
+    d = abs(delta_pct_h or 0.0)
+    if d <= 2:
+        return 300    # 5 min  (floor)
+    if d <= 5:
+        return 600    # 10 min
+    if d <= 10:
+        return 900    # 15 min
+    if d <= 20:
+        return 1200   # 20 min
+    return 1800       # 30 min
 
 
 def _path_import(p: Path, name: str):
@@ -485,6 +521,48 @@ def compute_tick(ast, tba, rb, now: datetime,
             and isinstance(proj, (int, float))
             and proj < STALL_PROJ_THRESHOLD
         ):
+            # Fix #4 (STALLED weekly-aware, postmortem runaway-scaling 2026-06-07
+            # Buco #1): il branch STALLED faceva return PRIMA di calcolare il
+            # target weekly-aware → tick weekly-blind che diceva "spawna SCOUT"
+            # anche con weekly quasi esaurito. Ora calcoliamo qui il budget
+            # weekly residuo e decidiamo COAST vs riaccensione.
+            h_to_reset_stall = hours_to_reset(
+                sample.get("reset_at"), now, sample.get("reset_at_unix")
+            )
+            weekly_used = sample.get("weekly_usage")
+            weekly_reset_unix = sample.get("weekly_reset_at_unix")
+            ti = _compute_dynamic_target(
+                wht, pcap, now, h_to_reset_stall,
+                weekly_used_pct=weekly_used if isinstance(weekly_used, (int, float)) else None,
+                weekly_reset_at_unix=weekly_reset_unix if isinstance(weekly_reset_unix, (int, float)) else None,
+            )
+            weekly_remaining_pct = ti.get("weekly_remaining_pct")
+            weekly_active_hours = ti.get("weekly_active_hours")
+            window_target_pct = ti.get("current_window_target_pct")
+            sustainable_burn = (
+                weekly_remaining_pct / weekly_active_hours
+                if isinstance(weekly_remaining_pct, (int, float))
+                and isinstance(weekly_active_hours, (int, float))
+                and weekly_active_hours > 0
+                else None
+            )
+            # COAST solo quando il target weekly-aware della finestra è già
+            # raggiunto dall'usage corrente (budget weekly di QUESTA finestra già
+            # speso — e solo se il target è davvero weekly-aware, non il fallback
+            # band-center). In COAST una coda vuota NON è undershoot da riempire
+            # con spawn: è coast (overspawn 2026-06-07).
+            # Correzione design fix#4 (2026-06-13): RIMOSSO il floor assoluto
+            # (weekly_remaining <= 8%). Obiettivo = saturare ~100% del weekly AL
+            # reset, non frenare su un livello assoluto a metà/fine settimana
+            # (incaglierebbe il budget). Il branch STALLED è under-pace per
+            # definizione: trigger-1 (pace-aware via work_hours_target) basta.
+            # Un solo freno weekly ovunque: vel_team vs vel_target.
+            weekly_coast = bool(
+                isinstance(window_target_pct, (int, float))
+                and isinstance(usage_now, (int, float))
+                and ti.get("target_source") not in (None, "band_center")
+                and usage_now >= window_target_pct
+            )
             return {
                 "ok": False,
                 "now": now,
@@ -493,11 +571,19 @@ def compute_tick(ast, tba, rb, now: datetime,
                 "team_kt": team_kt,
                 "usage_now": usage_now,
                 "proj": proj,
-                "h_to_reset": hours_to_reset(
-                    sample.get("reset_at"), now, sample.get("reset_at_unix")
+                "h_to_reset": h_to_reset_stall,
+                "weekly_remaining_pct": weekly_remaining_pct,
+                "weekly_active_hours": weekly_active_hours,
+                "window_target_pct": window_target_pct,
+                "sustainable_burn_pct_h": sustainable_burn,
+                "weekly_coast": weekly_coast,
+                "hint": (
+                    "PIPELINE STALLED + WEEKLY-AWARE → COAST: target weekly di "
+                    "finestra già raggiunto, coda vuota = coast, non spawnare."
+                    if weekly_coast else
+                    "PIPELINE STALLED — pochi token consumati e proj sotto "
+                    "target, weekly ha margine. Riaccendere pipeline da monte."
                 ),
-                "hint": "PIPELINE STALLED — pochi token consumati e proj "
-                        "sotto target. Riaccendere pipeline da monte.",
             }
         return {
             "ok": False,
@@ -659,16 +745,41 @@ def format_message(d: dict) -> str:
             proj_str = f"{proj:.0f}%" if isinstance(proj, (int, float)) else str(proj)
             h_to_reset = d.get("h_to_reset")
             h_str = f"{h_to_reset:.2f}h" if isinstance(h_to_reset, (int, float)) else "?"
+            wrem = d.get("weekly_remaining_pct")
+            wrem_str = f"{wrem:.0f}%" if isinstance(wrem, (int, float)) else "?"
+            wah = d.get("weekly_active_hours")
+            wah_str = f"{wah:.0f}h" if isinstance(wah, (int, float)) else "?"
+            sb = d.get("sustainable_burn_pct_h")
+            sb_str = f"{sb:.2f}%/h" if isinstance(sb, (int, float)) else "?"
+            weekly_line = (
+                f"weekly_remaining={wrem_str} weekly_active_hours={wah_str} "
+                f"sustainable_burn={sb_str}"
+            )
+            # Fix #4: a coda vuota con weekly binding la mossa è COAST, non spawn
+            # (overspawn 2026-06-07). Il verbo del nudge cambia in base al weekly.
+            if d.get("weekly_coast"):
+                return (
+                    f"[BRIDGE PACING] PIPELINE STALLED + WEEKLY-BIND → COAST — "
+                    f"usage={usage_now}% proj={proj_str} reset_in={h_str} "
+                    f"team_kt={d.get('team_kt', 0):.1f} {weekly_line}. Coda vuota MA "
+                    f"weekly quasi esaurito: a coda vuota la mossa è COAST, non spawn. "
+                    f"NON spawnare worker per 'riempire la coda' — è esattamente "
+                    f"l'overspawn del 2026-06-07. Lascia scorrere la coda residua col "
+                    f"team attuale, tieni il throttle; se un worker è zombie al dialog "
+                    f"rate-limit fai kill+respawn (C-12), non spawn. Riapri la pipeline "
+                    f"piena solo dopo il reset weekly o quando weekly_remaining risale."
+                )
             return (
                 f"[BRIDGE PACING] PIPELINE STALLED — usage={usage_now}% "
                 f"proj={proj_str} reset_in={h_str} team_kt={d.get('team_kt', 0):.1f} "
-                f"(praticamente zero consumo nei 15m). Applica regola "
-                f"PIPELINE VUOTA + UNDERSHOOT ORA: (1) db_query.py next-for-scrittore "
-                f"per coda residua e promozioni 40-49; (2) spawna SCOUT se range "
-                f"vuoto; (3) ANALISTA per companies non analizzate; (4) SCORER per "
-                f"unscored; (5) SCRITTORE quando coda scored>=50 si riempie. "
-                f"NON aspettare prossimo tick valido — bridge non puo' calcolare "
-                f"ratio senza consumo, e tu non puoi aspettare tick senza pipeline."
+                f"{weekly_line} (praticamente zero consumo nei 15m, weekly ha margine). "
+                f"Applica regola PIPELINE VUOTA + UNDERSHOOT ORA: (1) db_query.py "
+                f"next-for-scrittore per coda residua e promozioni 40-49; (2) spawna "
+                f"SCOUT se range vuoto; (3) ANALISTA per companies non analizzate; "
+                f"(4) SCORER per unscored; (5) SCRITTORE quando coda scored>=50 si "
+                f"riempie. NON aspettare prossimo tick valido — bridge non puo' "
+                f"calcolare ratio senza consumo, e tu non puoi aspettare tick senza "
+                f"pipeline."
             )
         extra = ""
         if "delta_usage" in d:
@@ -715,6 +826,34 @@ def format_message(d: dict) -> str:
         )
     else:
         parts.append("vel_target=N/D")
+
+    # Vincolo WEEKLY parallelo alla finestra 5h (fix #4 — contratto C-09/S-06):
+    # esponi weekly_remaining_pct e weekly_active_hours nel tick così Capitano e
+    # Sentinella possono calcolare il burn sostenibile (%/h ATTIVO) e proj_weekly
+    # senza inventarsi i numeri. Senza questo il primary 5h sembra ok mentre il
+    # weekly brucia silenziosamente (scenario HALT-WEEKLY 2026-05-21 / 2026-06-07).
+    wrem = d.get("weekly_remaining_pct")
+    if isinstance(wrem, (int, float)):
+        wah = d.get("weekly_active_hours")
+        wah_str = f"{wah:.0f}h" if isinstance(wah, (int, float)) else "?"
+        sb = (
+            wrem / wah
+            if isinstance(wah, (int, float)) and wah > 0
+            else None
+        )
+        sb_str = f"{sb:.2f}%/h attivo" if isinstance(sb, (int, float)) else "?"
+        parts.append(
+            f"weekly_remaining={wrem:.0f}% weekly_active_hours={wah_str} "
+            f"(burn sostenibile {sb_str}) — vincolo WEEKLY parallelo, "
+            f"binda anche in Phase 1 (S-06/C-09)"
+        )
+
+    # NB: il dato weekly_pace (rate weekly reale vs sostenibile + lockout
+    # anticipato) NON va in questo messaggio al CAPITANO: andrebbe a bypassare
+    # il ruolo analitico della Sentinella (il bug stesso dell'indagine). Va nel
+    # [BRIDGE TICK] alla Sentinella (S-07) che lo elabora e CONSIGLIA il Capitano.
+    # Qui il pacing-tick resta sul primary 5h. Il campo `weekly_pace` e' comunque
+    # nel tick-dict + stato (lo legge il sentinel-bridge per la Sentinella).
 
     parts.append(
         f"ratio={d['ratio']:.1f}kT/% "
@@ -764,6 +903,7 @@ def format_message(d: dict) -> str:
         "sentinella", "sentinella-worker", "capitano", "mentor", "?unknown",
     }
     top_consumer = None
+    top_agent = None
     if d.get("agents"):
         productive = [a for a in d["agents"] if a.get("name") not in NON_PRODUCTIVE]
         # Se NON ci sono agenti produttivi, top_consumer resta None — il
@@ -774,23 +914,49 @@ def format_message(d: dict) -> str:
             sorted_agents = sorted(
                 productive, key=lambda a: a.get("share", 0) or 0, reverse=True,
             )
-            top_consumer = sorted_agents[0].get("name")
+            top_agent = sorted_agents[0]
+            top_consumer = top_agent.get("name")
     top_hint = f" (top consumer: {top_consumer})" if top_consumer else ""
+    # Burner NON produttivo: cadenza ~0 + share alto = brucia senza check utili
+    # (es. Dottore one-shot liveness — 35%/0-check nell'incidente; scout a vuoto).
+    # Throttllarlo NON serve (e' one-shot/non-loop): meglio kill+respawn (C-12).
+    non_producing = (
+        top_agent is not None
+        and (top_agent.get("cadence_per_min") or 0) < 0.02
+        and (top_agent.get("share") or 0) >= 25
+    )
     if v["kind"] == "SFORO":
-        cmd = (
-            f"jht-throttle.py set {top_consumer} +10"
-            if top_consumer else
-            "jht-throttle.py set <top-consumer-produttivo> +10"
-        )
+        thr = _throttle_target_for_sforo(v["delta"])
+        if top_consumer and non_producing:
+            # P4 (2026-06-13): cadenza~0 + share alto NON e' sempre "stuck" — puo'
+            # essere UN task lungo/costoso in corso (es. enrichment di 1 posizione:
+            # HTTP+JD+geocoding+salary, minuti senza checkpoint). NON KILLare al
+            # primo rilevamento: KILL solo se persiste (ancora cadenza~0 al tick
+            # successivo) = davvero stuck. Evita il falso positivo del KILL+respawn.
+            cmd = (
+                f"VERIFICA {top_consumer}: brucia {top_agent.get('share', 0):.0f}% "
+                f"con cadenza ~0. Se e' su UN task lungo (enrichment) lascialo "
+                f"finire; se al PROSSIMO tick e' ANCORA cadenza~0 = stuck → "
+                f"KILL+respawn (C-12, il throttle non lo ferma)"
+            )
+        elif top_consumer:
+            cmd = f"throttle-config.py set {top_consumer} {thr}"
+        else:
+            cmd = f"throttle-config.py set <top-consumer-produttivo> {thr}"
         parts.append(
             f"VERDETTO: SFORO +{v['delta']:.2f}%/h → -{cap_pct:.0f}%"
             f"{top_hint} | CMD: {cmd} | NO global reset, NO throttle a tutti"
         )
     elif v["kind"] == "MARGINE":
+        # Sotto-pace: TOGLI il freno (set 0). Il vecchio `-{thr}` era rotto:
+        # `set` e' assoluto e rifiuta i negativi → il comando suggerito andava in
+        # errore. Per scendere di UN gradino serve il valore corrente (che il
+        # bridge non legge): la mossa onesta a coda lenta e' azzerare il throttle
+        # del top consumer (o spawnare 1 agente). Decide il Capitano.
         cmd = (
-            f"jht-throttle.py set {top_consumer} -10"
+            f"throttle-config.py set {top_consumer} 0"
             if top_consumer else
-            "jht-throttle.py set <top-consumer-produttivo> -10"
+            "throttle-config.py set <top-consumer-produttivo> 0"
         )
         parts.append(
             f"VERDETTO: MARGINE -{v['delta']:.2f}%/h → +{cap_pct:.0f}%"
@@ -1098,6 +1264,8 @@ def loop():
             # consegnato e il prossimo countdown già aggiornato.
             write_state(d, next_quarter(now + timedelta(seconds=1)), msg,
                         wht=wht, pcap=pcap)
+            # Tabella temporale per-agente (2h/5min) per la Sentinella (S-07).
+            write_agent_usage_table(tba, now)
         except Exception as e:
             # Non vogliamo che un errore di un tick affossi il loop.
             print(f"[pacing-bridge] errore tick {now.isoformat()}: {e}",
@@ -1125,6 +1293,42 @@ def once(do_send: bool):
     append_to_mailbox(msg, delivered_via_tmux=delivered, kind=kind)
 
 
+def write_agent_usage_table(tba, now):
+    """Scrive AGENT_TABLE_FILE: consumo kT per-agente per bucket 5min nelle ultime
+    2h (DELTA per bucket, non cumulativo → la Sentinella vede direttamente chi
+    brucia in ogni finestra: sbalzo isolato vs deriva). Parte 3/3 redesign
+    usage-monitoring: dato grezzo che la Sentinella (S-07) elabora per i pattern,
+    prima di consigliare il Capitano. Failsafe: un errore non affossa il tick."""
+    try:
+        now_ts = now.timestamp()
+        since_ts = now_ts - 2 * 3600.0
+        bucket = 300  # 5 min
+        by_agent = tba.collect_events(since_ts)
+        agents, series = tba.build_series(by_agent, since_ts, now_ts, bucket)
+        deltas = []
+        prev = {a: 0.0 for a in agents}
+        for row in series:
+            drow = {"ts": row.get("ts")}
+            for a in agents:
+                cur = row.get(a, 0.0) or 0.0
+                drow[a] = round(cur - prev.get(a, 0.0), 1)
+                prev[a] = cur
+            deltas.append(drow)
+        payload = {
+            "generated_at": now.isoformat(),
+            "bucket_sec": bucket,
+            "window_h": 2,
+            "agents": agents,
+            "series_kt_per_bucket": deltas,
+        }
+        tmp = AGENT_TABLE_FILE.with_name(AGENT_TABLE_FILE.name + ".tmp")
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        tmp.replace(AGENT_TABLE_FILE)
+    except Exception as e:
+        print(f"[pacing-bridge] WARN agent-usage-table: {e}",
+              file=sys.stderr, flush=True)
+
+
 def main():
     args = sys.argv[1:]
     if "--once" in args:
@@ -1134,4 +1338,22 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Supervisore in-process (difesa in profondità, gemello del sentinel-bridge):
+    # il loop ha già un try/except per-tick, ma un'eccezione FUORI dal tick (es.
+    # next_quarter/sleep) ucciderebbe comunque il processo, senza recovery (setsid
+    # detached). Qui qualsiasi eccezione → log + ri-entro in main(). Con --once
+    # main() ritorna subito → break. Vedi 2026-06-27-betaC-sentinel-bridge-crash.md.
+    import time as _time
+    import traceback as _tb
+    while True:
+        try:
+            main()
+            break
+        except KeyboardInterrupt:
+            print("\n[pacing-bridge] interrotto.", file=sys.stderr)
+            break
+        except Exception as _e:  # noqa: BLE001 — catch-all VOLUTO
+            print(f"[pacing-bridge] FATAL nel loop: {_e} — riavvio in 5s",
+                  file=sys.stderr, flush=True)
+            _tb.print_exc()
+            _time.sleep(5)

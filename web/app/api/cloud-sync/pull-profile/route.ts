@@ -40,19 +40,35 @@ export async function GET(req: NextRequest) {
   }
 
   const list = (table: string) =>
-    admin.from(table).select("*").eq("user_id", userId).order("ord", { ascending: true });
+    admin
+      .from(table)
+      .select("*")
+      .eq("user_id", userId)
+      .order("ord", { ascending: true });
 
-  const [skills, languages, experiences, education, workAuth, locationPrefs, blocks, contacts] =
-    await Promise.all([
-      list("candidate_skills"),
-      list("candidate_languages"),
-      list("candidate_experiences"),
-      list("candidate_education"),
-      list("candidate_work_authorization"),
-      list("candidate_location_preferences"),
-      list("candidate_blocks"),
-      admin.from("candidate_contacts").select("*").eq("user_id", userId).maybeSingle(),
-    ]);
+  const [
+    skills,
+    languages,
+    experiences,
+    education,
+    workAuth,
+    locationPrefs,
+    blocks,
+    contacts,
+  ] = await Promise.all([
+    list("candidate_skills"),
+    list("candidate_languages"),
+    list("candidate_experiences"),
+    list("candidate_education"),
+    list("candidate_work_authorization"),
+    list("candidate_location_preferences"),
+    list("candidate_blocks"),
+    admin
+      .from("candidate_contacts")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
 
   const canonical = reconstructCanonicalProfile({
     profile,

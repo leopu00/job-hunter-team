@@ -1,16 +1,21 @@
+import type { Locale } from "@/i18n/config";
+import { t, apikeyPrefixMsg } from "./setup-i18n";
+
 export type ProviderName = "claude" | "openai" | "kimi";
 export type AuthMethod = "api_key" | "subscription";
 
 export interface ModelOption {
   value: string;
   label: string;
-  hint: string;
+  /** Chiave i18n (vedi setup-i18n.ts) risolta a runtime con la locale. */
+  hintKey: string;
 }
 
 export interface ProviderDef {
   value: ProviderName;
   label: string;
-  hint: string;
+  /** Chiave i18n (vedi setup-i18n.ts) risolta a runtime con la locale. */
+  hintKey: string;
   keyPrefix: string;
   keyPlaceholder: string;
   authMethods: AuthMethod[];
@@ -21,7 +26,7 @@ export const PROVIDERS: ProviderDef[] = [
   {
     value: "claude",
     label: "Anthropic — Claude",
-    hint: "consigliato",
+    hintKey: "hint_recommended",
     keyPrefix: "sk-ant-",
     keyPlaceholder: "sk-ant-api03-...",
     authMethods: ["api_key"],
@@ -29,24 +34,24 @@ export const PROVIDERS: ProviderDef[] = [
       {
         value: "claude-sonnet-4-6",
         label: "Claude Sonnet 4.6",
-        hint: "veloce e capace — consigliato",
+        hintKey: "hint_fast_capable",
       },
       {
         value: "claude-opus-4-6",
         label: "Claude Opus 4.6",
-        hint: "massima qualità",
+        hintKey: "hint_max_quality",
       },
       {
         value: "claude-haiku-4-5",
         label: "Claude Haiku 4.5",
-        hint: "economico e veloce",
+        hintKey: "hint_cheap_fast",
       },
     ],
   },
   {
     value: "openai",
     label: "OpenAI — GPT",
-    hint: "GPT-4o, o3, o4-mini",
+    hintKey: "hint_openai_models",
     keyPrefix: "sk-",
     keyPlaceholder: "sk-proj-...",
     authMethods: ["api_key"],
@@ -54,16 +59,16 @@ export const PROVIDERS: ProviderDef[] = [
       {
         value: "gpt-4o",
         label: "GPT-4o",
-        hint: "veloce e capace — consigliato",
+        hintKey: "hint_fast_capable",
       },
-      { value: "o3", label: "o3", hint: "ragionamento avanzato" },
-      { value: "o4-mini", label: "o4-mini", hint: "economico" },
+      { value: "o3", label: "o3", hintKey: "hint_advanced_reasoning" },
+      { value: "o4-mini", label: "o4-mini", hintKey: "hint_cheap" },
     ],
   },
   {
     value: "kimi",
     label: "Kimi",
-    hint: "alternativa economica",
+    hintKey: "hint_cheap_alt",
     keyPrefix: "",
     keyPlaceholder: "eyJ...",
     authMethods: ["api_key", "subscription"],
@@ -71,9 +76,9 @@ export const PROVIDERS: ProviderDef[] = [
       {
         value: "kimi-k2-0905-preview",
         label: "Kimi-01",
-        hint: "modello principale",
+        hintKey: "hint_main_model",
       },
-      { value: "abab6.5s", label: "ABAB 6.5s", hint: "economico" },
+      { value: "abab6.5s", label: "ABAB 6.5s", hintKey: "hint_cheap" },
     ],
   },
 ];
@@ -81,32 +86,42 @@ export const PROVIDERS: ProviderDef[] = [
 export function validateApiKey(
   provider: ProviderDef,
   value: string,
+  locale: Locale,
 ): string | undefined {
   const v = value.trim();
-  if (!v) return "La API key non può essere vuota";
-  if (v.length < 10) return "La API key sembra troppo corta";
+  if (!v) return t("v_apikey_empty", locale);
+  if (v.length < 10) return t("v_apikey_short", locale);
   if (provider.keyPrefix && !v.startsWith(provider.keyPrefix))
-    return `La key per ${provider.label} dovrebbe iniziare con "${provider.keyPrefix}"`;
+    return apikeyPrefixMsg(provider.label, provider.keyPrefix, locale);
   return undefined;
 }
 
-export function validateEmail(value: string): string | undefined {
+export function validateEmail(
+  value: string,
+  locale: Locale,
+): string | undefined {
   const v = value.trim();
-  if (!v) return "L'email non può essere vuota";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "Email non valida";
+  if (!v) return t("v_email_empty", locale);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))
+    return t("v_email_invalid", locale);
   return undefined;
 }
 
-export function validateTelegramToken(value: string): string | undefined {
+export function validateTelegramToken(
+  value: string,
+  locale: Locale,
+): string | undefined {
   const v = value.trim();
-  if (!v) return "Il token non può essere vuoto";
-  if (!/^\d+:[A-Za-z0-9_-]+$/.test(v))
-    return "Formato non valido (es. 123456:ABCdef...)";
+  if (!v) return t("v_token_empty", locale);
+  if (!/^\d+:[A-Za-z0-9_-]+$/.test(v)) return t("v_token_invalid", locale);
   return undefined;
 }
 
-export function validateChatId(value: string): string | undefined {
+export function validateChatId(
+  value: string,
+  locale: Locale,
+): string | undefined {
   if (value.trim() && !/^-?\d+$/.test(value.trim()))
-    return "Il chat ID deve essere un numero";
+    return t("v_chatid_number", locale);
   return undefined;
 }

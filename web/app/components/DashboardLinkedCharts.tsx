@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocale } from "@/lib/use-locale";
 import {
   aggregateRoleFamilies,
   UNCATEGORIZED_LABEL,
@@ -18,6 +19,7 @@ import SalaryBars from "@/app/components/SalaryBars";
 import {
   convertCurrency,
   currencySymbol,
+  formatMoneyCompact,
   type Rates,
 } from "@/lib/exchange-rates";
 
@@ -49,6 +51,56 @@ type Props = {
   tableLimit?: number;
 };
 
+// Stringhe UI hardcoded localizzate (le altre arrivano già tradotte via
+// `labels` dal server component).
+const T: Record<string, Record<string, string>> = {
+  no_country: {
+    it: "Senza paese",
+    en: "No country",
+    hu: "Nincs ország",
+    es: "Sin país",
+    de: "Ohne Land",
+    fr: "Sans pays",
+    pt: "Sem país",
+  },
+  no_city: {
+    it: "Senza città",
+    en: "No city",
+    hu: "Nincs város",
+    es: "Sin ciudad",
+    de: "Ohne Stadt",
+    fr: "Sans ville",
+    pt: "Sem cidade",
+  },
+  reset_all: {
+    it: "Rimuovi tutti i filtri",
+    en: "Clear all filters",
+    hu: "Összes szűrő törlése",
+    es: "Quitar todos los filtros",
+    de: "Alle Filter entfernen",
+    fr: "Supprimer tous les filtres",
+    pt: "Remover todos os filtros",
+  },
+  filters_label: {
+    it: "Filtri",
+    en: "Filters",
+    hu: "Szűrők",
+    es: "Filtros",
+    de: "Filter",
+    fr: "Filtres",
+    pt: "Filtros",
+  },
+  score_prefix: {
+    it: "Score",
+    en: "Score",
+    hu: "Score",
+    es: "Score",
+    de: "Score",
+    fr: "Score",
+    pt: "Score",
+  },
+};
+
 const SCORE_BIN = 5;
 const SALARY_BIN = 20000;
 const UNKNOWN = "(unknown)";
@@ -69,6 +121,8 @@ export default function DashboardLinkedCharts({
   currencies,
   tableLimit = 15,
 }: Props) {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   // La dashboard ragiona sull'universo "attivo" (la query già esclude le
   // scartate, ma teniamo il filtro per robustezza anche in demo).
   const rows = useMemo(
@@ -82,6 +136,10 @@ export default function DashboardLinkedCharts({
   const [selectedScoreBins, setSelectedScoreBins] = useState<number[]>([]);
   const [selectedSalaryBins, setSelectedSalaryBins] = useState<number[]>([]);
   const [displayCurrency, setDisplayCurrency] = useState<string>("EUR");
+
+  // Banner "Filtri · N": apre/chiude la lista dei filtri attivi rimovibili.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersRef = useRef<HTMLDivElement>(null);
 
   // Punto medio del range stipendio, SEMPRE normalizzato in EUR. Binning e
   // filtro lavorano in EUR così la forma dell'istogramma non dipende dalla
@@ -121,6 +179,61 @@ export default function DashboardLinkedCharts({
     setSelectedSalaryBins([]);
   }
 
+  // Chiudi il banner cliccando fuori, o quando non restano più filtri.
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (filtersRef.current && !filtersRef.current.contains(e.target as Node))
+        setFiltersOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [filtersOpen]);
+  useEffect(() => {
+    if (totalActive === 0) setFiltersOpen(false);
+  }, [totalActive]);
+
+  // Etichetta compatta di un bin stipendio (bordi in EUR → valuta scelta).
+  const salaryBinLabel = (lo: number) => {
+    const sym = currencySymbol(displayCurrency);
+    const f = (n: number) =>
+      formatMoneyCompact(convertCurrency(n, "EUR", displayCurrency, rates));
+    return `${sym}${f(lo)}–${f(lo + SALARY_BIN)}`;
+  };
+
+  // Lista piatta dei filtri attivi (label + rimozione singola), una voce per
+  // ogni valore selezionato in ciascuna dimensione.
+  const activeFilters: { id: string; label: string; remove: () => void }[] = [
+    ...selectedFamilies.map((v) => ({
+      id: `fam:${v}`,
+      label: v,
+      remove: () => setSelectedFamilies((c) => c.filter((x) => x !== v)),
+    })),
+    ...selectedCountries.map((v) => ({
+      id: `cty:${v}`,
+      label: v === UNKNOWN ? tr("no_country") : v,
+      remove: () => setSelectedCountries((c) => c.filter((x) => x !== v)),
+    })),
+    ...selectedCities.map((v) => {
+      const [country, city] = v.split("|");
+      return {
+        id: `cit:${v}`,
+        label: city === COUNTRY_ONLY ? `${country} · ${tr("no_city")}` : city,
+        remove: () => setSelectedCities((c) => c.filter((x) => x !== v)),
+      };
+    }),
+    ...selectedScoreBins.map((lo) => ({
+      id: `sco:${lo}`,
+      label: `${tr("score_prefix")} ${lo}–${lo + SCORE_BIN}`,
+      remove: () => setSelectedScoreBins((c) => c.filter((x) => x !== lo)),
+    })),
+    ...selectedSalaryBins.map((lo) => ({
+      id: `sal:${lo}`,
+      label: salaryBinLabel(lo),
+      remove: () => setSelectedSalaryBins((c) => c.filter((x) => x !== lo)),
+    })),
+  ];
+
   // ── Predicati cross-filter (mirror di MapCharts / sidebar /positions) ──
   const locationActive =
     selectedCountries.length > 0 || selectedCities.length > 0;
@@ -129,14 +242,22 @@ export default function DashboardLinkedCharts({
     selectedFamilies.includes(familyKey(p.role_family));
   const passLocation = (p: DashboardPosition) => {
     if (!locationActive) return true;
-    if (selectedCities.includes(cityKey(p.loc_country, p.loc_city))) return true;
+    if (selectedCities.includes(cityKey(p.loc_country, p.loc_city)))
+      return true;
     if (selectedCountries.includes(countryKey(p.loc_country))) return true;
     return false;
   };
+  // Paese↔città sono gerarchici: la lista Città è ristretta ai paesi
+  // selezionati (ma NON alle città già scelte, così puoi sceglierne altre).
+  const passSelectedCountry = (p: DashboardPosition) =>
+    selectedCountries.length === 0 ||
+    selectedCountries.includes(countryKey(p.loc_country));
   const passScore = (score: number | null) => {
     if (selectedScoreBins.length === 0) return true;
     if (score == null || score <= 0) return false;
-    return selectedScoreBins.some((lo) => score >= lo && score < lo + SCORE_BIN);
+    return selectedScoreBins.some(
+      (lo) => score >= lo && score < lo + SCORE_BIN,
+    );
   };
   const passSalary = (p: DashboardPosition) => {
     if (selectedSalaryBins.length === 0) return true;
@@ -151,10 +272,20 @@ export default function DashboardLinkedCharts({
       (p) => passLocation(p) && passScore(p.score) && passSalary(p),
     );
     return aggregateRoleFamilies(
-      pool.map((p) => ({ role_family: p.role_family, score: p.score, critic: null })),
+      pool.map((p) => ({
+        role_family: p.role_family,
+        score: p.score,
+        critic: null,
+      })),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedCountries, selectedCities, selectedScoreBins, selectedSalaryBins]);
+  }, [
+    rows,
+    selectedCountries,
+    selectedCities,
+    selectedScoreBins,
+    selectedSalaryBins,
+  ]);
 
   // Paesi: scope per family + score (esclude la dimensione location).
   const countryItems = useMemo(() => {
@@ -176,20 +307,26 @@ export default function DashboardLinkedCharts({
     if (unknown > 0)
       real.push({
         key: UNKNOWN,
-        label: "Senza paese",
+        label: tr("no_country"),
         count: unknown,
         muted: true,
       });
     return { items: real, distinct: byCountry.size - (unknown > 0 ? 1 : 0) };
+    // locale: la label "Senza paese" passa da tr() → va ricalcolata al cambio
+    // lingua (useLocale parte da 'it' e flippa dopo il mount).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedFamilies, selectedScoreBins, selectedSalaryBins]);
+  }, [rows, selectedFamilies, selectedScoreBins, selectedSalaryBins, locale]);
 
   // Città: scope per family + score. Il paese resta come sublabel per
   // disambiguare città omonime; le "country-only" confluiscono in una riga
   // aggregata non filtrabile.
   const cityItems = useMemo(() => {
     const pool = rows.filter(
-      (p) => passFamily(p) && passScore(p.score) && passSalary(p),
+      (p) =>
+        passFamily(p) &&
+        passScore(p.score) &&
+        passSalary(p) &&
+        passSelectedCountry(p),
     );
     const byCity = new Map<string, { count: number; country: string }>();
     let noCity = 0;
@@ -200,7 +337,10 @@ export default function DashboardLinkedCharts({
         continue;
       }
       const k = cityKey(p.loc_country, p.loc_city);
-      const cur = byCity.get(k) ?? { count: 0, country: countryKey(p.loc_country) };
+      const cur = byCity.get(k) ?? {
+        count: 0,
+        country: countryKey(p.loc_country),
+      };
       cur.count++;
       byCity.set(k, cur);
     }
@@ -216,14 +356,22 @@ export default function DashboardLinkedCharts({
     if (noCity > 0)
       items.push({
         key: "(no-city)",
-        label: "Senza città",
+        label: tr("no_city"),
         count: noCity,
         muted: true,
         selectable: false,
       });
     return { items, distinct: real.length };
+    // locale: la label "Senza città" passa da tr() → ricalcola al cambio lingua.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedFamilies, selectedScoreBins, selectedSalaryBins]);
+  }, [
+    rows,
+    selectedFamilies,
+    selectedScoreBins,
+    selectedSalaryBins,
+    selectedCountries,
+    locale,
+  ]);
 
   // Score: scope per location + family (esclude la propria dimensione).
   const scoreData = useMemo(() => {
@@ -234,10 +382,17 @@ export default function DashboardLinkedCharts({
       .map((p) => p.score)
       .filter((s): s is number => typeof s === "number" && s > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, selectedCountries, selectedCities, selectedFamilies, selectedSalaryBins]);
+  }, [
+    rows,
+    selectedCountries,
+    selectedCities,
+    selectedFamilies,
+    selectedSalaryBins,
+  ]);
 
-  // Stipendi: distribuzione del subset che soddisfa TUTTI i filtri attivi.
-  // Non è una dimensione di filtro (solo visualizzazione reattiva).
+  // Stipendi: scope per family + location + score (esclude la PROPRIA
+  // dimensione, come gli altri grafici-filtro, così selezionare una fascia
+  // non fa sparire le altre). È a tutti gli effetti una dimensione di filtro.
   const salaryData = useMemo(
     () =>
       rows
@@ -245,7 +400,13 @@ export default function DashboardLinkedCharts({
         .map(salaryValueEur)
         .filter((v): v is number => v != null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rows, selectedFamilies, selectedCountries, selectedCities, selectedScoreBins],
+    [
+      rows,
+      selectedFamilies,
+      selectedCountries,
+      selectedCities,
+      selectedScoreBins,
+    ],
   );
 
   // Tabella: posizioni che soddisfano TUTTI i filtri attivi, già ordinate
@@ -272,21 +433,95 @@ export default function DashboardLinkedCharts({
 
   return (
     <div>
-      {/* Riga reset ad altezza FISSA: il bottone appare/scompare ma lo
-      spazio è sempre riservato, così i grafici non si spostano. */}
-      <div className="flex items-center justify-end mb-2 h-[16px]">
-        <button
-          type="button"
-          onClick={resetAll}
-          className="text-[9px] font-semibold tracking-[0.12em] uppercase cursor-pointer text-[var(--color-dim)] hover:text-[var(--color-bright)] transition-colors"
-          title="Rimuovi tutti i filtri"
-          style={{
-            visibility: totalActive > 0 ? "visible" : "hidden",
-            pointerEvents: totalActive > 0 ? "auto" : "none",
-          }}
-        >
-          ✕ {labels.reset} · {totalActive}
-        </button>
+      {/* Riga filtri ad altezza FISSA: pill "Filtri · N" centrata che apre un
+      banner coi filtri attivi (ognuno rimovibile). Spazio sempre riservato,
+      così i grafici non si spostano. */}
+      <div
+        ref={filtersRef}
+        className="relative flex items-center justify-center mb-2 h-[26px]"
+      >
+        {totalActive > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((o) => !o)}
+              aria-expanded={filtersOpen}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-semibold tracking-[0.12em] uppercase cursor-pointer transition-colors"
+              style={{
+                borderColor: "var(--color-border)",
+                color: "var(--color-base)",
+                background: filtersOpen ? "var(--color-card)" : "transparent",
+              }}
+            >
+              {tr("filters_label")} · {totalActive}
+              <svg
+                width="9"
+                height="9"
+                viewBox="0 0 10 10"
+                fill="none"
+                aria-hidden="true"
+                style={{
+                  opacity: 0.6,
+                  transform: filtersOpen ? "rotate(180deg)" : "",
+                  transition: "transform 0.15s",
+                }}
+              >
+                <path
+                  d="M2 4L5 7L8 4"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+
+            {filtersOpen && (
+              <div
+                className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 w-[min(92vw,460px)] rounded-lg border p-3"
+                style={{
+                  background: "var(--color-panel)",
+                  borderColor: "var(--color-border)",
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+                }}
+              >
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {activeFilters.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={f.remove}
+                      title={f.label}
+                      className="group inline-flex items-center gap-1.5 max-w-full px-2 py-1 rounded-full border text-[10px] cursor-pointer transition-colors hover:border-[var(--color-red)]"
+                      style={{
+                        borderColor: "var(--color-border)",
+                        color: "var(--color-base)",
+                      }}
+                    >
+                      <span className="truncate max-w-[200px] normal-case">
+                        {f.label}
+                      </span>
+                      <span className="text-[var(--color-dim)] group-hover:text-[var(--color-red)]">
+                        ✕
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetAll();
+                    setFiltersOpen(false);
+                  }}
+                  className="w-full text-[10px] font-semibold tracking-[0.12em] uppercase py-1.5 rounded border cursor-pointer text-[var(--color-muted)] hover:text-[var(--color-bright)] hover:border-[var(--color-border-glow)] transition-colors"
+                  style={{ borderColor: "var(--color-border)" }}
+                >
+                  ✕ {tr("reset_all")}
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
       {/* Riga 1: donut Tipologie a tutta larghezza. */}
       <div className="mb-4">
@@ -294,7 +529,7 @@ export default function DashboardLinkedCharts({
           data={typeData}
           title={labels.types}
           emptyLabel={labels.noData}
-          size={300}
+          size={360}
           selectedTypes={selectedFamilies}
           onToggleType={(f) => toggle(setSelectedFamilies, f)}
         />

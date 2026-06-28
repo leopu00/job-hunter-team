@@ -1,5 +1,60 @@
 "use client";
 
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<Locale, Record<string, string>> = {
+  it: {
+    critical_error: "errore critico",
+    title: "Qualcosa è andato storto",
+    fallback: "Errore imprevisto durante il caricamento dell'applicazione.",
+    retry: "Riprova",
+    back_home: "Torna alla home",
+  },
+  en: {
+    critical_error: "critical error",
+    title: "Something went wrong",
+    fallback: "Unexpected error loading the application.",
+    retry: "Retry",
+    back_home: "Back to home",
+  },
+  es: {
+    critical_error: "error crítico",
+    title: "Algo salió mal",
+    fallback: "Error inesperado al cargar la aplicación.",
+    retry: "Reintentar",
+    back_home: "Volver al inicio",
+  },
+  fr: {
+    critical_error: "erreur critique",
+    title: "Une erreur s'est produite",
+    fallback: "Erreur inattendue lors du chargement de l'application.",
+    retry: "Réessayer",
+    back_home: "Retour à l'accueil",
+  },
+  de: {
+    critical_error: "kritischer Fehler",
+    title: "Etwas ist schiefgelaufen",
+    fallback: "Unerwarteter Fehler beim Laden der Anwendung.",
+    retry: "Wiederholen",
+    back_home: "Zur Startseite",
+  },
+  hu: {
+    critical_error: "kritikus hiba",
+    title: "Valami hiba történt",
+    fallback: "Váratlan hiba az alkalmazás betöltése közben.",
+    retry: "Újra",
+    back_home: "Vissza a főoldalra",
+  },
+  pt: {
+    critical_error: "erro crítico",
+    title: "Algo correu mal",
+    fallback: "Erro inesperado ao carregar a aplicação.",
+    retry: "Tentar novamente",
+    back_home: "Voltar ao início",
+  },
+};
+
 export default function GlobalError({
   error,
   reset,
@@ -7,8 +62,12 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // useLocale è privo di provider/context: legge solo document.cookie
+  // (NEXT_LOCALE), quindi è sicuro qui dove i provider Next non sono montati.
+  const locale = useLocale();
+  const tr = (k: string) => T[locale]?.[k] ?? T.en[k] ?? k;
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body
         style={{
           margin: 0,
@@ -65,7 +124,7 @@ export default function GlobalError({
                 color: "#f44336",
               }}
             >
-              critical error
+              {tr("critical_error")}
             </span>
           </div>
 
@@ -78,7 +137,7 @@ export default function GlobalError({
               marginBottom: 8,
             }}
           >
-            Something went wrong
+            {tr("title")}
           </h1>
           <p
             style={{
@@ -88,7 +147,7 @@ export default function GlobalError({
               marginBottom: 24,
             }}
           >
-            {error.message || "Unexpected error loading the application."}
+            {error.message || tr("fallback")}
           </p>
 
           {error.digest && (
@@ -144,7 +203,7 @@ export default function GlobalError({
                 cursor: "pointer",
               }}
             >
-              Retry
+              {tr("retry")}
             </button>
             <button
               onClick={() => {
@@ -161,7 +220,7 @@ export default function GlobalError({
                 cursor: "pointer",
               }}
             >
-              Back to home
+              {tr("back_home")}
             </button>
           </div>
         </div>

@@ -389,11 +389,28 @@ Fora da pipeline. Corre continuamente em paralelo.
             ▼             ▼             ▼
        👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
-       copilot                       (planned)
+       copilot                       (always-on)
 ```
 
 - **👨‍💼 Assistant** — `tier: smart`. Traduz pedidos nao tecnicos do utilizador em ordens para o Captain. Esconde detalhes de implementacao do chat orientado ao utilizador.
-- **🧙‍♂️ Mentor** — `tier: expert`, planeado. Futuro career coach: analisa a lacuna perfil/resultados, produz um plano de acao. Pasta: `agents/mentor/`.
+- **🧙‍♂️ Mentor** — `tier: expert`, **ativo** (basico ja entregue, otimizacao em curso). Career coach: analisa a lacuna perfil/resultados, produz um plano de acao, check-ins estrategicos. Orientado ao utilizador, sempre ativo, criado no boot. Pasta: `agents/mentor/`.
+
+---
+
+## 🩺 Side-channel — Saude & manutencao
+
+Fora da pipeline. Agentes **agendados one-shot**: o watchdog cria cada um no seu slot diario; executam uma varredura, reportam ao Captain e depois auto-destroem-se.
+
+```
+   ┌────────────┐  daily slot  ┌──────────────┐  report  ┌────────────┐
+   │ watchdog   │ ───────────► │ 🩺 Dottore   │ ───────► │ 👨‍✈️ Captain│
+   │ (scheduler)│              │ 👷‍♂️ Mantenitore│  findings │            │
+   └────────────┘              └──────────────┘          └────────────┘
+                                  one-shot → self-destruct
+```
+
+- **🩺 Dottore** — **saude dos agentes**. Refresh periodico de contexto + retrospetiva: deteta sessoes de agentes presas/zombie e reinicia-as com contexto fresco (threads de longa duracao que queimam contexto causam colapso silencioso do throughput). Pasta: `agents/dottore/`.
+- **👷‍♂️ Mantenitore** — **saude da infra**. Varredura de manutencao diaria no container/VPS: smoke-test das ferramentas criticas para a missao (canary browser/Playwright), padronizacao de dependencias (`jht-install`), tendencia de disco/RAM, GC de orfaos. Uma ferramenta crucial avariada e um P1. Pasta: `agents/mantenitore/`.
 
 ---
 

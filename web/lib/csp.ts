@@ -10,9 +10,9 @@
  * SSR of those branches.
  */
 
-import { headers } from 'next/headers'
+import { headers } from "next/headers";
 
 export async function getNonce(): Promise<string | undefined> {
-  const h = await headers()
-  return h.get('x-nonce') ?? undefined
+  const h = await headers();
+  return h.get("x-nonce") ?? undefined;
 }

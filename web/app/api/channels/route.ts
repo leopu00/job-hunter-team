@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireLocalWrite } from "@/lib/auth";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -213,6 +214,8 @@ export async function GET(req: NextRequest) {
 
 /** PUT — toggle enable/disable canale */
 export async function PUT(req: NextRequest) {
+  const ro = await requireLocalWrite();
+  if (ro) return ro;
   try {
     const body = await req.json();
     const { id, enabled: val } = body as { id: string; enabled: boolean };

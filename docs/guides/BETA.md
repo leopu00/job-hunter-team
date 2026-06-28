@@ -1,4 +1,4 @@
-# Beta Tester Program
+# 🧪 Beta Tester Program
 
 JHT is in active beta. We're looking for a small group of real job-seekers who are willing to run the team against their actual job search and tell us what breaks.
 
@@ -27,7 +27,7 @@ Public users will ask: *"does it work for my role? on my provider? at my cost?"*
 
 - 📝 Use JHT for your real job search for **at least 2 weeks**
 - 📊 Share your **numbers** at the end (offers analyzed, CVs sent, interviews — see the [`RESULTS.md`](../about/RESULTS.md) template)
-- 🐛 File **issues** for everything that confused, broke, or surprised you — the workflow is in [`docs/feedback-ticketing.md`](feedback-ticketing.md)
+- 🐛 File **issues** for everything that confused, broke, or surprised you — the workflow is in [`docs/FEEDBACK-TICKETING.md`](FEEDBACK-TICKETING.md)
 - 🗣️ Be available for a **30-minute call** at the end of the test period
 - 🧪 **No cherry-picking** — report failures and rate-limit incidents too. Bad cells matter as much as good ones.
 
@@ -68,7 +68,7 @@ We will reply within a few days.
 
 Before signing up, set expectations:
 
-- ✅ The 8-agent team runs end-to-end (pipeline + Assistant)
+- ✅ The agent team runs end-to-end (pipeline + Assistant)
 - ✅ Web dashboard, CLI, Telegram, Desktop launcher all work
 - ✅ Claude Max x20 is rock-solid
 - ✅ macOS installer is signed + notarized (no Gatekeeper warning)
@@ -83,4 +83,4 @@ If "rough edges" doesn't scare you, you're the kind of beta tester we need.
 - [`STORY.md`](../about/STORY.md) — why this project exists
 - [`RESULTS.md`](../about/RESULTS.md) — case study template + published results
 - [`MONITORING.md`](../about/MONITORING.md) — Bridge/Sentinel monitoring stack (architecture + test data)
-- [`docs/feedback-ticketing.md`](feedback-ticketing.md) — how to file useful feedback
+- [`docs/FEEDBACK-TICKETING.md`](FEEDBACK-TICKETING.md) — how to file useful feedback

@@ -11,6 +11,9 @@ interface PositionIn {
   id: number;
   title: string;
   company: string;
+  // FK locale (companies.id int) → risolta a companies.id UUID cloud via
+  // companyLegacyToUuid prima dell'upsert. Alimenta la Company card del dettaglio.
+  company_id?: number | null;
   url?: string | null;
   location?: string | null;
   remote_type?: string | null;
@@ -23,6 +26,36 @@ interface PositionIn {
   found_at?: string | null;
   deadline?: string | null;
   last_checked?: string | null;
+  // Istanza dell'ultimo agente che ha agito (es. analista-4). Il team la scrive
+  // in SQLite positions.last_actor; senza questo campo l'Analista resta generico
+  // sul cloud. Mig Supabase 039.
+  last_actor?: string | null;
+  // Metadati location/categoria (Parte B sync, 2026-06-14): prodotti
+  // dall'analista, alimentano i grafici categoria/mappa della dashboard
+  // (che esiste già). Colonne cloud già presenti — nessuna migration.
+  role_family?: string | null;
+  loc_city?: string | null;
+  loc_region?: string | null;
+  loc_country?: string | null;
+  loc_country_code?: string | null;
+  loc_continent?: string | null;
+  work_mode?: string | null;
+  work_country?: string | null;
+  work_country_code?: string | null;
+  location_notes?: string | null;
+  office_address?: string | null;
+  office_lat?: number | null;
+  office_lon?: number | null;
+  // SQLite invia 0|1 integer; Supabase ha BOOLEAN — coerce sul payload
+  // (stesso pattern di write_requested/geocode_requested).
+  is_multi_location?: number | boolean | null;
+  office_geocoded?: number | boolean | null;
+  office_verified?: number | boolean | null;
+  // Expiry/lifecycle (mig 038): is_open BOOLEAN (SQLite 0|1, default TRUE),
+  // expires_at DATE, last_open_check TIMESTAMPTZ. Alimenta "Scadute/Archivio".
+  expires_at?: string | null;
+  is_open?: number | boolean | null;
+  last_open_check?: string | null;
   salary_declared_min?: number | null;
   salary_declared_max?: number | null;
   salary_declared_currency?: string | null;
@@ -39,6 +72,14 @@ interface PositionIn {
   // precision. Mig Supabase 027. Stesso pattern di write_requested.
   geocode_requested?: number | boolean | null;
   geocode_requested_at?: string | null;
+  // Recheck on-demand (mig 042). Flag user-driven, default FALSE.
+  recheck_requested?: number | boolean | null;
+  recheck_requested_at?: string | null;
+  // Salary-precise on-demand (V9, mig 040): flag user-driven (0|1→bool) +
+  // timestamp + risultato testuale. Cross-device (push qui + pull-desired-state).
+  salary_precise_requested?: number | boolean | null;
+  salary_precise_requested_at?: string | null;
+  salary_precise?: string | null;
 }
 
 interface ScoreIn {
@@ -131,13 +172,61 @@ interface TombstoneIn {
   deleted_at: string; // ISO timestamp client-side (preserva il "quando")
 }
 
+// Event-log per-istanza (SQLite position_state_transitions → cloud
+// position_transitions, mig 044). Mostra CHI (scout-1, analista-2…) ha fatto
+// cosa e quando — le colonne *_by su positions/scores tengono solo "ultimo
+// attore" e perdono l'attribuzione intermedia. Append-only lato locale: la
+// chiave verso le posizioni è `position_legacy_id` (l'int stabile == positions.legacy_id),
+// non l'uuid per-account, così le righe sono portabili tra account/mirror.
+interface PositionTransitionIn {
+  position_legacy_id: number;
+  from_state?: string | null;
+  to_state: string;
+  ts: string;
+  by_agent: string;
+  notes?: string | null;
+}
+
+// Companies (mig 046): finora escluse dal sync ("Scope MVP"). `id` è l'int
+// locale (→ legacy_id cloud); i nomi colonna sono quelli SQLite locali —
+// notare `hq_country` locale che mappa su `hq` cloud (schemi disallineati,
+// mig 001/003). L'upsert usa (user_id, legacy_id) e popola companyLegacyToUuid
+// per risolvere positions.company_id.
+interface CompanyIn {
+  id: number;
+  name: string;
+  website?: string | null;
+  hq_country?: string | null;
+  sector?: string | null;
+  size?: string | null;
+  glassdoor_rating?: number | null;
+  red_flags?: string | null;
+  culture_notes?: string | null;
+  analyzed_by?: string | null;
+  analyzed_at?: string | null;
+  verdict?: string | null;
+}
+
+// Position highlights (mig 046): pro/contro del dettaglio posizione. `id` è
+// l'int locale (→ legacy_id cloud); `position_id` è l'int locale risolto a
+// UUID cloud via legacyToUuid (come scores/applications).
+interface HighlightIn {
+  id: number;
+  position_id: number;
+  type: string;
+  text: string;
+}
+
 interface PushBody {
   positions?: PositionIn[];
   scores?: ScoreIn[];
   applications?: ApplicationIn[];
+  companies?: CompanyIn[];
+  position_highlights?: HighlightIn[];
   pending_user_messages?: PendingMessageIn[];
   sentinel_ticks?: SentinelTickIn[];
   tombstones?: TombstoneIn[];
+  position_transitions?: PositionTransitionIn[];
   profile?: ProfileIn;
 }
 
@@ -167,6 +256,9 @@ const ALLOWED_MESSAGE_KIND = new Set([
   "alert",
 ]);
 const ALLOWED_DELIVERED_VIA = new Set(["telegram", "web"]);
+// position_highlights.type ha CHECK (pro|con) sul cloud (mig 003): scartiamo
+// le righe con type fuori enum per non far fallire l'intero batch upsert.
+const ALLOWED_HIGHLIGHT_TYPE = new Set(["pro", "con"]);
 
 function normalizePositionStatus(s: string | null | undefined): string {
   if (!s) return "new";
@@ -277,6 +369,10 @@ export async function POST(req: NextRequest) {
   const applications = Array.isArray(body.applications)
     ? body.applications
     : [];
+  const companies = Array.isArray(body.companies) ? body.companies : [];
+  const highlights = Array.isArray(body.position_highlights)
+    ? body.position_highlights
+    : [];
   const pendingMessages = Array.isArray(body.pending_user_messages)
     ? body.pending_user_messages
     : [];
@@ -286,17 +382,97 @@ export async function POST(req: NextRequest) {
   const tombstones = Array.isArray(body.tombstones)
     ? body.tombstones.slice(0, 1000)
     : [];
+  // Event-log: cap generoso (20k) come solo guard anti-abuso. Il daemon manda
+  // delta piccoli; il first-push manda l'intero log (centinaia/migliaia di
+  // righe), che per qualsiasi log realistico sta sotto il cap → nessun
+  // troncamento silenzioso.
+  const positionTransitions = Array.isArray(body.position_transitions)
+    ? body.position_transitions.slice(-20000)
+    : [];
 
   let positionsUpserted = 0;
   let scoresUpserted = 0;
   let applicationsUpserted = 0;
+  let companiesUpserted = 0;
+  let highlightsUpserted = 0;
   let pendingMessagesUpserted = 0;
   let sentinelTicksUpserted = 0;
   let tombstonesApplied = 0;
+  let positionTransitionsUpserted = 0;
   const legacyToUuid = new Map<number, string>();
+  // companies.id locale (int) → companies.id cloud (UUID). Popolata
+  // dall'upsert companies, consumata dal mapping positions.company_id.
+  const companyLegacyToUuid = new Map<number, string>();
+
+  // 0. Upsert companies via (user_id, legacy_id) — PRIMA delle positions, così
+  // companyLegacyToUuid è pronta per risolvere positions.company_id. Mapping
+  // colonne: nomi SQLite locali → cloud, con hq_country → hq (schemi disallineati).
+  if (companies.length > 0) {
+    const payload = companies
+      .filter((c) => typeof c.id === "number" && cleanText(c.name))
+      .map((c) => ({
+        user_id: userId,
+        legacy_id: c.id,
+        name: c.name,
+        website: c.website ?? null,
+        hq: c.hq_country ?? null,
+        sector: c.sector ?? null,
+        size: c.size ?? null,
+        glassdoor_rating: finiteNumber(c.glassdoor_rating),
+        red_flags: c.red_flags ?? null,
+        culture_notes: c.culture_notes ?? null,
+        analyzed_by: c.analyzed_by ?? null,
+        analyzed_at: c.analyzed_at ?? null,
+        verdict: c.verdict ?? null,
+      }));
+
+    if (payload.length > 0) {
+      const { data: upserted, error } = await admin
+        .from("companies")
+        .upsert(payload, { onConflict: "user_id,legacy_id" })
+        .select("id, legacy_id");
+
+      if (error) {
+        return NextResponse.json(
+          { error: `companies upsert: ${error.message}` },
+          { status: 500 },
+        );
+      }
+      companiesUpserted = upserted?.length ?? 0;
+      for (const row of upserted ?? []) {
+        if (row.legacy_id != null)
+          companyLegacyToUuid.set(row.legacy_id, row.id);
+      }
+    }
+  }
 
   // 1. Upsert positions via (user_id, legacy_id)
   if (positions.length > 0) {
+    // Risolvi company_id (int locale) → UUID cloud. Riusa companyLegacyToUuid
+    // dall'upsert companies; per i company_id referenziati da una position ma
+    // NON presenti nel batch (delta dove la company non è cambiata), lookup
+    // esplicito su companies.legacy_id (stesso pattern dei tombstones).
+    const companyNeedsLookup = new Set<number>();
+    for (const p of positions) {
+      if (
+        typeof p.company_id === "number" &&
+        !companyLegacyToUuid.has(p.company_id)
+      ) {
+        companyNeedsLookup.add(p.company_id);
+      }
+    }
+    if (companyNeedsLookup.size > 0) {
+      const { data: rows } = await admin
+        .from("companies")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(companyNeedsLookup));
+      for (const r of rows ?? []) {
+        if (r.legacy_id != null)
+          companyLegacyToUuid.set(r.legacy_id, r.id as string);
+      }
+    }
+
     const payload = positions
       .filter((p) => typeof p.id === "number" && p.title && p.company)
       .map((p) => ({
@@ -304,6 +480,13 @@ export async function POST(req: NextRequest) {
         legacy_id: p.id,
         title: p.title,
         company: p.company,
+        // company_id (UUID cloud) risolto via companyLegacyToUuid; null se la
+        // company non è ancora sul cloud (degrada a "no Company card", si
+        // popola al prossimo push completo).
+        company_id:
+          p.company_id != null
+            ? (companyLegacyToUuid.get(p.company_id) ?? null)
+            : null,
         url: p.url ?? null,
         location: p.location ?? null,
         remote_type: p.remote_type ?? null,
@@ -316,6 +499,50 @@ export async function POST(req: NextRequest) {
         found_at: p.found_at ?? null,
         deadline: p.deadline ?? null,
         last_checked: p.last_checked ?? null,
+        last_actor: p.last_actor ?? null,
+        // Metadati location/categoria (Parte B sync) — alimentano i grafici
+        // categoria/mappa della dashboard. Text/numeric: passthrough.
+        role_family: p.role_family ?? null,
+        loc_city: p.loc_city ?? null,
+        loc_region: p.loc_region ?? null,
+        loc_country: p.loc_country ?? null,
+        loc_country_code: p.loc_country_code ?? null,
+        loc_continent: p.loc_continent ?? null,
+        work_mode: p.work_mode ?? null,
+        work_country: p.work_country ?? null,
+        work_country_code: p.work_country_code ?? null,
+        location_notes: p.location_notes ?? null,
+        office_address: p.office_address ?? null,
+        office_lat: p.office_lat ?? null,
+        office_lon: p.office_lon ?? null,
+        // boolean: SQLite 0|1 → BOOLEAN (default false se assente), come write_requested.
+        is_multi_location:
+          p.is_multi_location == null
+            ? false
+            : typeof p.is_multi_location === "boolean"
+              ? p.is_multi_location
+              : p.is_multi_location === 1,
+        office_geocoded:
+          p.office_geocoded == null
+            ? false
+            : typeof p.office_geocoded === "boolean"
+              ? p.office_geocoded
+              : p.office_geocoded === 1,
+        office_verified:
+          p.office_verified == null
+            ? false
+            : typeof p.office_verified === "boolean"
+              ? p.office_verified
+              : p.office_verified === 1,
+        // Expiry/lifecycle (mig 038). is_open default TRUE (NOT NULL DEFAULT TRUE).
+        expires_at: p.expires_at ?? null,
+        is_open:
+          p.is_open == null
+            ? true
+            : typeof p.is_open === "boolean"
+              ? p.is_open
+              : p.is_open === 1,
+        last_open_check: p.last_open_check ?? null,
         salary_declared_min: p.salary_declared_min ?? null,
         salary_declared_max: p.salary_declared_max ?? null,
         salary_declared_currency: p.salary_declared_currency ?? null,
@@ -340,6 +567,23 @@ export async function POST(req: NextRequest) {
               ? p.geocode_requested
               : p.geocode_requested === 1,
         geocode_requested_at: p.geocode_requested_at ?? null,
+        // Recheck on-demand (mig 042). Flag user-driven default FALSE.
+        recheck_requested:
+          p.recheck_requested == null
+            ? false
+            : typeof p.recheck_requested === "boolean"
+              ? p.recheck_requested
+              : p.recheck_requested === 1,
+        recheck_requested_at: p.recheck_requested_at ?? null,
+        // Salary-precise on-demand (V9, mig 040). Flag user-driven default FALSE.
+        salary_precise_requested:
+          p.salary_precise_requested == null
+            ? false
+            : typeof p.salary_precise_requested === "boolean"
+              ? p.salary_precise_requested
+              : p.salary_precise_requested === 1,
+        salary_precise_requested_at: p.salary_precise_requested_at ?? null,
+        salary_precise: p.salary_precise ?? null,
       }));
 
     const { data: upserted, error } = await admin
@@ -444,6 +688,66 @@ export async function POST(req: NextRequest) {
         );
       }
       applicationsUpserted = upserted?.length ?? 0;
+    }
+  }
+
+  // 3a. Upsert position_highlights via (user_id, legacy_id). FK position_id
+  // (int locale) → UUID cloud via legacyToUuid; per i delta dove la position
+  // non è nel batch positions, lookup esplicito su positions.legacy_id (stesso
+  // pattern di scores/applications). type validato (pro|con), righe fuori enum
+  // scartate per non far fallire l'intero upsert.
+  if (highlights.length > 0) {
+    const hlNeedsLookup = new Set<number>();
+    for (const h of highlights) {
+      if (typeof h.position_id === "number" && !legacyToUuid.has(h.position_id))
+        hlNeedsLookup.add(h.position_id);
+    }
+    if (hlNeedsLookup.size > 0) {
+      const { data: rows } = await admin
+        .from("positions")
+        .select("id, legacy_id")
+        .eq("user_id", userId)
+        .in("legacy_id", Array.from(hlNeedsLookup));
+      for (const r of rows ?? []) {
+        if (r.legacy_id != null) legacyToUuid.set(r.legacy_id, r.id as string);
+      }
+    }
+
+    const payload = highlights
+      .map((h) => {
+        const uuid = legacyToUuid.get(h.position_id);
+        const type = (h.type ?? "").trim().toLowerCase();
+        const text = cleanText(h.text);
+        if (
+          typeof h.id !== "number" ||
+          !uuid ||
+          !ALLOWED_HIGHLIGHT_TYPE.has(type) ||
+          !text
+        )
+          return null;
+        return {
+          user_id: userId,
+          legacy_id: h.id,
+          position_id: uuid,
+          type,
+          text,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    if (payload.length > 0) {
+      const { data: upserted, error } = await admin
+        .from("position_highlights")
+        .upsert(payload, { onConflict: "user_id,legacy_id" })
+        .select("id");
+
+      if (error) {
+        return NextResponse.json(
+          { error: `position_highlights upsert: ${error.message}` },
+          { status: 500 },
+        );
+      }
+      highlightsUpserted = upserted?.length ?? 0;
     }
   }
 
@@ -644,6 +948,50 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 3e. Position transitions (event-log per-istanza → feed "Attività recente").
+  // Append-only: insert-if-new via UNIQUE (user_id, position_legacy_id, ts,
+  // by_agent, to_state). `ignoreDuplicates` = ON CONFLICT DO NOTHING → un
+  // re-push (cursor reset / overlap col backfill manuale) NON duplica, e il
+  // count riflette solo le righe davvero nuove. `position_legacy_id` è l'int
+  // locale stabile: nessun lookup UUID necessario (a differenza di scores/apps).
+  if (positionTransitions.length > 0) {
+    const payload = positionTransitions
+      .filter(
+        (t) =>
+          typeof t.position_legacy_id === "number" &&
+          !!t.to_state &&
+          !!t.ts &&
+          !!t.by_agent,
+      )
+      .map((t) => ({
+        user_id: userId,
+        position_legacy_id: t.position_legacy_id,
+        from_state: t.from_state ?? null,
+        to_state: t.to_state,
+        ts: t.ts,
+        by_agent: t.by_agent,
+        notes: t.notes ?? null,
+      }));
+
+    if (payload.length > 0) {
+      const { data: upserted, error } = await admin
+        .from("position_transitions")
+        .upsert(payload, {
+          onConflict: "user_id,position_legacy_id,ts,by_agent,to_state",
+          ignoreDuplicates: true,
+        })
+        .select("id");
+
+      if (error) {
+        return NextResponse.json(
+          { error: `position_transitions upsert: ${error.message}` },
+          { status: 500 },
+        );
+      }
+      positionTransitionsUpserted = upserted?.length ?? 0;
+    }
+  }
+
   // 4. Profile upsert (opzionale, indipendente da positions/scores/apps)
   let profileUpserted = false;
   let profileError: string | null = null;
@@ -713,9 +1061,12 @@ export async function POST(req: NextRequest) {
     positions: { upserted: positionsUpserted },
     scores: { upserted: scoresUpserted },
     applications: { upserted: applicationsUpserted },
+    companies: { upserted: companiesUpserted },
+    position_highlights: { upserted: highlightsUpserted },
     pending_user_messages: { upserted: pendingMessagesUpserted },
     sentinel_ticks: { upserted: sentinelTicksUpserted },
     tombstones: { applied: tombstonesApplied },
+    position_transitions: { upserted: positionTransitionsUpserted },
     profile: { upserted: profileUpserted, error: profileError },
   });
 }

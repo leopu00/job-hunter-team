@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import { enqueueIfRemote } from "@/lib/team-bus";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,17 @@ export async function POST(req: NextRequest) {
     );
   }
   const normalizedPayload = { ...rawPayload, target };
+
+  // [JHT-WEB-READONLY] — il controllo del team è desktop-only: dal cloud questo
+  // dispatch al bus team_commands è 403 (coerente con start-all/stop-all/bridge,
+  // che già usano enqueueIfRemote). Via tunnel SSH (Host=localhost) enqueueIfRemote
+  // ritorna null → enqueue normale, eseguito dal poller VPS. Senza questo gate un
+  // browser cloud loggato poteva accodare start/stop/restart bypassando il read-only.
+  const remote = await enqueueIfRemote(
+    action as "start" | "stop" | "restart",
+    target,
+  );
+  if (remote) return remote;
 
   const { data, error } = await supabase
     .from("team_commands")

@@ -21,6 +21,13 @@ bash /app/.launcher/start-agent.sh analista 1    # ANALISTA-1
 bash /app/.launcher/start-agent.sh critico       # CRITICO (singleton, no number)
 ```
 
+**Instance number — roll the die (scalable workers, 2026-06-13).** For `scout` / `analista` / `scorer` / `scrittore`, do **NOT** pick the number sequentially: the work always piled up on `-1`/`-2` while `-4` did almost nothing. Roll a free random number first, then pass it:
+```bash
+N=$(python3 /app/shared/skills/roll_worker_number.py scout) && \
+  bash /app/.launcher/start-agent.sh scout "$N"
+```
+`roll_worker_number.py` rolls a **d6 excluding the numbers already in use** (existing `SCOUT-N` sessions) → never a collision, and the workload spreads across instance numbers instead of always hitting `-1`. Applies to **NEW spawns only**; singletons (Critico / Sentinella / Dottore / Assistente / Mentor) keep no number, and the Dottore's session-refresh recreates the **same** number (it does not roll).
+
 The launcher does, atomically:
 - creates the tmux session with the canonical name (`SCOUT-2`, `ANALISTA-1`, …)
 - sets `cwd` to `$JHT_HOME/agents/<role>[-N]/`
@@ -97,6 +104,7 @@ bash /app/.launcher/start-agent.sh <role> <N>
 - ❌ Spawning multiple agents in a tight loop without 1-tick pacing — see `pipeline-triage` for scaling rules (1 spawn per Sentinel tick, ~5 min apart).
 - ❌ Re-spawning blindly after a crash without reading `db_query.py` to recover the last task state — the new agent starts from scratch and duplicates work.
 - ❌ Using this skill to "restart" a working agent because it looks slow. Slow ≠ dead. Long turns with visible token output are not a spawn case — they are a `liveness-check` case (Dottore).
+- ❌ Spawning a replacement because `jht-tmux-send` failed to deliver. **`exit 4` = the target TUI is mid-turn (`Working … esc to interrupt`) → the agent is ALIVE, just busy.** The message was NOT delivered synchronously: retry the send later, never spawn a clone. Only `exit 3` (text never appeared AND the pane is not busy → bare shell / stuck modal) is a possible-dead signal, and even then the verdict belongs to the **Dottore** (`liveness-check`), not a reflex spawn. Spawning on a busy agent is exactly the 2026-06-07 overspawn bug (`docs/internal/2026-06-11-overspawn-rootcause.md`): the clone takes over while the original keeps burning budget as a zombie.
 - ❌ Spawning a Critic. The Writer spawns its own `CRITICO-S<N>` autonomously — the Captain never touches the Critic directly.
 
 ## See also

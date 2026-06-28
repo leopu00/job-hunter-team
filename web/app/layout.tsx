@@ -11,6 +11,46 @@ import dynamic from "next/dynamic";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getNonce } from "@/lib/csp";
+import { cookies } from "next/headers";
+import { locales, defaultLocale, type Locale } from "@/i18n/config";
+
+const LAYOUT_T: Record<Locale, { noscript: string; skip: string }> = {
+  it: {
+    noscript:
+      "Job Hunter Team richiede JavaScript per funzionare. Abilitalo nel tuo browser per continuare.",
+    skip: "Vai al contenuto principale",
+  },
+  en: {
+    noscript:
+      "Job Hunter Team requires JavaScript to run. Please enable it in your browser to continue.",
+    skip: "Skip to main content",
+  },
+  es: {
+    noscript:
+      "Job Hunter Team necesita JavaScript para funcionar. Actívalo en tu navegador para continuar.",
+    skip: "Saltar al contenido principal",
+  },
+  fr: {
+    noscript:
+      "Job Hunter Team nécessite JavaScript pour fonctionner. Activez-le dans votre navigateur pour continuer.",
+    skip: "Aller au contenu principal",
+  },
+  de: {
+    noscript:
+      "Job Hunter Team benötigt JavaScript. Bitte aktivieren Sie es in Ihrem Browser, um fortzufahren.",
+    skip: "Zum Hauptinhalt springen",
+  },
+  hu: {
+    noscript:
+      "A Job Hunter Team JavaScriptet igényel a működéshez. A folytatáshoz engedélyezze a böngészőjében.",
+    skip: "Ugrás a fő tartalomra",
+  },
+  pt: {
+    noscript:
+      "O Job Hunter Team requer JavaScript para funcionar. Ative-o no seu navegador para continuar.",
+    skip: "Saltar para o conteúdo principal",
+  },
+};
 
 const GlobalSearch = dynamic(() =>
   import("./components/GlobalSearch").then((m) => m.GlobalSearch),
@@ -94,8 +134,18 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const nonce = await getNonce();
+  const cookieStore = await cookies();
+  const cookieLocale = cookieStore.get("NEXT_LOCALE")?.value;
+  const locale: Locale = (locales as string[]).includes(cookieLocale ?? "")
+    ? (cookieLocale as Locale)
+    : defaultLocale;
+  const t = LAYOUT_T[locale];
   return (
-    <html lang="en" className={jetbrainsMono.variable} suppressHydrationWarning>
+    <html
+      lang={locale}
+      className={jetbrainsMono.variable}
+      suppressHydrationWarning
+    >
       <head>
         {/* suppressHydrationWarning: il browser spoglia l'attributo nonce dagli
             script dopo il parse (HTML spec), quindi React legge "" sul client.
@@ -123,10 +173,7 @@ export default async function RootLayout({
               justifyContent: "center",
             }}
           >
-            <p>
-              Job Hunter Team requires JavaScript to run. Please enable it in
-              your browser to continue.
-            </p>
+            <p>{t.noscript}</p>
           </div>
         </noscript>
         <a
@@ -137,7 +184,7 @@ export default async function RootLayout({
             color: "var(--color-void)",
           }}
         >
-          Skip to main content
+          {t.skip}
         </a>
         <ThemeProvider>
           <DashboardI18nProvider>

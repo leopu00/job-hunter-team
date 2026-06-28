@@ -1,6 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const T: Record<
+  Locale,
+  { show: string; showLabel: (label: string) => string }
+> = {
+  it: { show: "Mostra", showLabel: (label) => `Mostra ${label}` },
+  en: { show: "Show", showLabel: (label) => `Show ${label}` },
+  es: { show: "Mostrar", showLabel: (label) => `Mostrar ${label}` },
+  fr: { show: "Afficher", showLabel: (label) => `Afficher ${label}` },
+  de: { show: "Anzeigen", showLabel: (label) => `${label} anzeigen` },
+  hu: { show: "Megjelenítés", showLabel: (label) => `${label} megjelenítése` },
+  pt: { show: "Mostrar", showLabel: (label) => `Mostrar ${label}` },
+};
 
 /**
  * Riga contatto con PII mascherata (reveal-on-click). Stesso look di ContactRow
@@ -12,7 +27,9 @@ function maskValue(value: string): string {
   const visible = 3;
   return value
     .split("")
-    .map((ch, i) => (i >= value.length - visible || ch === " " || ch === "+" ? ch : "•"))
+    .map((ch, i) =>
+      i >= value.length - visible || ch === " " || ch === "+" ? ch : "•",
+    )
     .join("");
 }
 
@@ -28,6 +45,7 @@ export default function RevealableContactRow({
   hrefPrefix?: string;
 }) {
   const [revealed, setRevealed] = useState(false);
+  const t = T[useLocale()];
 
   const rowClass =
     "flex items-center gap-3 px-3 py-2 rounded bg-[var(--color-panel)] border border-[var(--color-border)] transition-colors hover:border-[var(--color-border-glow)]";
@@ -66,7 +84,11 @@ export default function RevealableContactRow({
       <a
         href={`${hrefPrefix}${value}`}
         className={`${rowClass} no-underline`}
-        target={hrefPrefix.startsWith("tel:") || hrefPrefix.startsWith("mailto:") ? undefined : "_blank"}
+        target={
+          hrefPrefix.startsWith("tel:") || hrefPrefix.startsWith("mailto:")
+            ? undefined
+            : "_blank"
+        }
         rel="noopener noreferrer"
       >
         {iconSvg}
@@ -79,13 +101,13 @@ export default function RevealableContactRow({
     <button
       type="button"
       onClick={() => setRevealed(true)}
-      aria-label={`Mostra ${label}`}
+      aria-label={t.showLabel(label)}
       className={`${rowClass} w-full text-left cursor-pointer`}
     >
       {iconSvg}
       {body}
       <span className="text-[9px] font-semibold tracking-[0.1em] uppercase text-[var(--color-dim)] flex-shrink-0 border border-[var(--color-border)] rounded px-1.5 py-0.5">
-        Mostra
+        {t.show}
       </span>
     </button>
   );

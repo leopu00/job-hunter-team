@@ -45,7 +45,9 @@ export const OPERATOR_TRUSTED_PRIVATE_POLICY: SsrFPolicy = {
  * strict policy, short timeout, capped redirects, audit-context tag for
  * the security log.
  */
-export function userControlledFetchOptions(auditContext: string): SafeFetchOptions {
+export function userControlledFetchOptions(
+  auditContext: string,
+): SafeFetchOptions {
   return {
     policy: STRICT_PUBLIC_POLICY,
     maxRedirects: 3,

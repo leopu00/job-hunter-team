@@ -30,13 +30,15 @@ L'equipe JHT fonctionne comme un ensemble de sessions tmux a l'interieur du cont
 | `CRITICO` | Critique autonome | Legacy — en V5 le Critique est cree dynamiquement par les Redacteurs (voir ci-dessous) |
 | `SENTINELLA` | Watchdog de consommation | Edge-triggered, communique uniquement avec `CAPITANO` |
 | `ASSISTENTE` | Copilote cote utilisateur | Traduit les demandes de l'utilisateur en ordres |
-| `MENTOR` | Agent career-coach | Prevu, actuellement un placeholder |
+| `MENTOR` | Agent career-coach | Actif — oriente utilisateur, toujours actif, cree au boot (bases livrees, optimisation en cours) |
 
 ### Sessions dynamiques
 
 | Session | Creee par | Duree de vie |
 |---|---|---|
 | `CRITICO-S<N>` | `SCRITTORE-<N>` (un Critique neuf par cycle de revision) | Une demande de revision → une session, supprimee par le Redacteur immediatement apres |
+| `DOTTORE` | watchdog (creneau quotidien) | One-shot — balayage sante des agents, rapport au `CAPITANO`, puis autodestruction |
+| `MANTENITORE` | watchdog (creneau quotidien) | One-shot — balayage sante de l'infra, rapport au `CAPITANO`, puis autodestruction |
 
 Le Redacteur cree `CRITICO-S<N>` avec le meme numero (`SCRITTORE-1` → `CRITICO-S1`), execute la revision, puis `tmux kill-session`. Une nouvelle instance du Critique est creee pour **chacun** des 3 cycles de revision — jamais reutilisee.
 

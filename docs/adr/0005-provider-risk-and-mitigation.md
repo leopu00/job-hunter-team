@@ -32,7 +32,7 @@ JHT acknowledges provider risk **explicitly** and ships a layered mitigation, no
 - ✅ **Sentinel is load-bearing** — it is not just a cost-tracking nicety; it is the mechanism that keeps the team's behavior inside the envelope each provider tolerates.
 - ✅ **Honesty is a feature** — contributors, beta testers, and reviewers see provider risk documented openly. This builds trust and frames future incidents as known-risk-materialized, not surprises.
 - ⚠️ **Adds permanent engineering surface** — three providers must stay supported in parallel; dropping one without a replacement re-creates the single-point-of-failure.
-- ⚠️ **Quality variance** — Kimi oscillates ±10-15% vs Claude's ±5% (mitigated by 88% target). Validated over 75h + 10-day beta runs (557 positions, 264 scored). Codex benchmarked at ~€100 tier (131 positions in 48h). Parity is functional, not identical.
+- ⚠️ **Quality variance** — Kimi oscillates ±10-15% vs Claude's ±5% (mitigated by 88% target). Validated over 75h + 10-day beta runs (557 positions, 264 scored). Codex benchmarked at ~€100 tier (206 positions in 35h). Parity is functional, not identical.
 - ⚠️ **No insurance against simultaneous tightening** — if all three providers move against agentic use in the same quarter, only the local-LLM fallback remains, and it is not production-ready today.
 
 ## Alternatives considered

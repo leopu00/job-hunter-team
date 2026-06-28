@@ -11,6 +11,128 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { colorForAgent as colorFor } from "./agent-colors";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
+
+const T: Record<string, Record<string, string>> = {
+  title: {
+    it: "Throttle per agente",
+    en: "Throttle per agent",
+    hu: "Throttle ügynökönként",
+    es: "Throttle por agente",
+    de: "Throttle pro Agent",
+    fr: "Throttle par agent",
+    pt: "Throttle por agente",
+  },
+  descCumulative: {
+    it: "Secondi di pausa cumulativi (skill `throttle`). Aggiornamento ogni 30s.",
+    en: "Cumulative pause seconds (skill `throttle`). Refresh every 30s.",
+    hu: "Kumulatív szünet-másodpercek (skill `throttle`). Frissítés 30 másodpercenként.",
+    es: "Segundos de pausa acumulativos (skill `throttle`). Actualización cada 30s.",
+    de: "Kumulative Pausensekunden (skill `throttle`). Aktualisierung alle 30s.",
+    fr: "Secondes de pause cumulées (skill `throttle`). Actualisation toutes les 30s.",
+    pt: "Segundos de pausa cumulativos (skill `throttle`). Atualização a cada 30s.",
+  },
+  descRate: {
+    it: "Eventi throttle nel tempo: altezza = secondi richiesti, picco = momento della chiamata.",
+    en: "Throttle events over time: height = requested seconds, peak = moment of the call.",
+    hu: "Throttle események az időben: magasság = kért másodpercek, csúcs = a hívás pillanata.",
+    es: "Eventos throttle en el tiempo: altura = segundos solicitados, pico = momento de la llamada.",
+    de: "Throttle-Ereignisse im Zeitverlauf: Höhe = angeforderte Sekunden, Spitze = Moment des Aufrufs.",
+    fr: "Événements throttle dans le temps : hauteur = secondes demandées, pic = moment de l'appel.",
+    pt: "Eventos throttle ao longo do tempo: altura = segundos solicitados, pico = momento da chamada.",
+  },
+  modeCumulative: {
+    it: "Cumulativo",
+    en: "Cumulative",
+    hu: "Kumulatív",
+    es: "Acumulativo",
+    de: "Kumulativ",
+    fr: "Cumulé",
+    pt: "Cumulativo",
+  },
+  modeEvents: {
+    it: "Eventi",
+    en: "Events",
+    hu: "Események",
+    es: "Eventos",
+    de: "Ereignisse",
+    fr: "Événements",
+    pt: "Eventos",
+  },
+  cumulativeTag: {
+    it: "cumulativo",
+    en: "cumulative",
+    hu: "kumulatív",
+    es: "acumulativo",
+    de: "kumulativ",
+    fr: "cumulé",
+    pt: "cumulativo",
+  },
+  invalidResponse: {
+    it: "Risposta non valida",
+    en: "Invalid response",
+    hu: "Érvénytelen válasz",
+    es: "Respuesta no válida",
+    de: "Ungültige Antwort",
+    fr: "Réponse non valide",
+    pt: "Resposta inválida",
+  },
+  loading: {
+    it: "Caricamento…",
+    en: "Loading…",
+    hu: "Betöltés…",
+    es: "Cargando…",
+    de: "Wird geladen…",
+    fr: "Chargement…",
+    pt: "Carregando…",
+  },
+  event: {
+    it: "evento",
+    en: "event",
+    hu: "esemény",
+    es: "evento",
+    de: "Ereignis",
+    fr: "événement",
+    pt: "evento",
+  },
+  orphan: {
+    it: "orfano",
+    en: "orphan",
+    hu: "árva",
+    es: "huérfano",
+    de: "verwaist",
+    fr: "orphelin",
+    pt: "órfão",
+  },
+  interrupted: {
+    it: "interrotto",
+    en: "interrupted",
+    hu: "megszakítva",
+    es: "interrumpido",
+    de: "unterbrochen",
+    fr: "interrompu",
+    pt: "interrompido",
+  },
+  start: {
+    it: "inizio",
+    en: "start",
+    hu: "kezdés",
+    es: "inicio",
+    de: "Start",
+    fr: "début",
+    pt: "início",
+  },
+  end: {
+    it: "fine",
+    en: "end",
+    hu: "vége",
+    es: "fin",
+    de: "Ende",
+    fr: "fin",
+    pt: "fim",
+  },
+};
 
 type Series = Record<string, number | string>;
 
@@ -55,12 +177,15 @@ function formatSec(s: number): string {
 }
 
 export default function ThrottleChart() {
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<RangeId>("3h");
   const [mode, setMode] = useState<Mode>("cumulative");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const isCloud = useIsCloud();
 
   useEffect(() => {
     let cancelled = false;
@@ -76,7 +201,7 @@ export default function ThrottleChart() {
       .then((d: Payload) => {
         if (cancelled) return;
         if (!d.ok) {
-          setError("Risposta non valida");
+          setError(tr("invalidResponse"));
           setData(null);
         } else {
           setData(d);
@@ -96,6 +221,9 @@ export default function ThrottleChart() {
   }, [range]);
 
   useEffect(() => {
+    // Su cloud niente polling continuo: i dati appaiono all'apertura (fetch
+    // iniziale nell'useEffect su [range]) e si rinfrescano solo on-demand.
+    if (isCloud) return;
     const id = setInterval(() => {
       const minutes = RANGES.find((r) => r.id === range)?.minutes ?? 180;
       const bucketSec = Math.max(1, Math.round((minutes * 60) / 120));
@@ -109,19 +237,17 @@ export default function ThrottleChart() {
         .catch(() => {});
     }, 30_000);
     return () => clearInterval(id);
-  }, [range]);
+  }, [range, isCloud]);
 
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-sm font-semibold text-[var(--color-bright)]">
-            Throttle per agente
+            {tr("title")}
           </h2>
           <p className="text-[10px] text-[var(--color-dim)] mt-0.5">
-            {mode === "cumulative"
-              ? "Secondi di pausa cumulativi (skill `throttle`). Aggiornamento ogni 30s."
-              : "Eventi throttle nel tempo: altezza = secondi richiesti, picco = momento della chiamata."}
+            {mode === "cumulative" ? tr("descCumulative") : tr("descRate")}
           </p>
         </div>
         <div className="flex gap-1">
@@ -147,8 +273,8 @@ export default function ThrottleChart() {
       <div className="mb-3 flex gap-1">
         {(
           [
-            { id: "cumulative", label: "Cumulativo" },
-            { id: "rate", label: "Eventi" },
+            { id: "cumulative", label: tr("modeCumulative") },
+            { id: "rate", label: tr("modeEvents") },
           ] as const
         ).map((m) => (
           <button
@@ -170,7 +296,7 @@ export default function ThrottleChart() {
 
       {loading && !data && (
         <div className="h-[280px] flex items-center justify-center text-[11px] text-[var(--color-dim)]">
-          loading…
+          {tr("loading")}
         </div>
       )}
       {error && !data && (
@@ -184,6 +310,7 @@ export default function ThrottleChart() {
           mode={mode}
           hoverIdx={hoverIdx}
           onHover={setHoverIdx}
+          tr={tr}
         />
       )}
     </div>
@@ -195,11 +322,13 @@ function Chart({
   mode,
   hoverIdx,
   onHover,
+  tr,
 }: {
   data: Payload;
   mode: Mode;
   hoverIdx: number | null;
   onHover: (i: number | null) => void;
+  tr: (k: string) => string;
 }) {
   const W = 900;
   const H = 320;
@@ -583,7 +712,7 @@ function Chart({
           >
             <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">
               {new Date(hoverTs).toLocaleTimeString()}
-              <span className="ml-1 opacity-60">· cumulativo</span>
+              <span className="ml-1 opacity-60">· {tr("cumulativeTag")}</span>
             </div>
             <div className="mt-1.5 grid gap-1 text-[11px] font-mono">
               {hoverActive.map(({ agent, v }) => (
@@ -624,10 +753,10 @@ function Chart({
           }}
         >
           <div className="text-[10px] text-[var(--color-dim)] uppercase tracking-wide">
-            evento · {formatSec(hoverBar.v)}
+            {tr("event")} · {formatSec(hoverBar.v)}
             {(hoverBar.interrupted || hoverBar.orphan) && (
               <span className="ml-1 opacity-70">
-                · {hoverBar.orphan ? "orfano" : "interrotto"}
+                · {hoverBar.orphan ? tr("orphan") : tr("interrupted")}
               </span>
             )}
           </div>
@@ -644,9 +773,12 @@ function Chart({
             <span className="text-[var(--color-bright)]">{hoverBar.agent}</span>
           </div>
           <div className="mt-1 text-[10px] text-[var(--color-dim)] font-mono">
-            <div>start: {new Date(hoverBar.tsStart).toLocaleTimeString()}</div>
             <div>
-              end:&nbsp;&nbsp; {new Date(hoverBar.tsEnd).toLocaleTimeString()}
+              {tr("start")}: {new Date(hoverBar.tsStart).toLocaleTimeString()}
+            </div>
+            <div>
+              {tr("end")}:&nbsp;&nbsp;{" "}
+              {new Date(hoverBar.tsEnd).toLocaleTimeString()}
             </div>
           </div>
         </div>

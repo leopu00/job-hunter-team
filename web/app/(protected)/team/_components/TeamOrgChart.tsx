@@ -2,8 +2,345 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useIsCloud } from "@/app/hooks/useIsCloud";
+import { useLocale } from "@/lib/use-locale";
 
 type AgentStatus = "running" | "stopped" | "pending";
+
+// Dizionario i18n locale (pattern TokenBreakdown.tsx). Risolto via tr(key).
+// Tecnicismi/sigle (kT, ratio, usage, proj, samples, T1/T2, chk/min, PASS,
+// SFORO/MARGINE/ALLINEATO sono enum interni del verdetto → tradotti come
+// label utente) restano nelle stringhe dove non sono prosa.
+const T: Record<string, Record<string, string>> = {
+  // ── Descrizioni agenti ──
+  descCaptain: {
+    it: "Coordina il team e assegna le priorità operative.",
+    en: "Coordinates the team and assigns operational priorities.",
+    es: "Coordina el equipo y asigna las prioridades operativas.",
+    fr: "Coordonne l'équipe et attribue les priorités opérationnelles.",
+    de: "Koordiniert das Team und vergibt operative Prioritäten.",
+    hu: "Koordinálja a csapatot és kiosztja az operatív prioritásokat.",
+    pt: "Coordena a equipe e atribui as prioridades operacionais.",
+  },
+  descSentinel: {
+    it: "Monitora usage e salute del rate-limit, allerta il Capitano in caso di degrado.",
+    en: "Monitors usage and rate-limit health, alerts the Captain on degradations.",
+    es: "Monitorea el usage y la salud del rate-limit, alerta al Capitán ante degradaciones.",
+    fr: "Surveille l'usage et la santé du rate-limit, alerte le Capitaine en cas de dégradation.",
+    de: "Überwacht Usage und Rate-Limit-Zustand, alarmiert den Kapitän bei Verschlechterungen.",
+    hu: "Figyeli az usage-t és a rate-limit állapotát, riasztja a Kapitányt romlás esetén.",
+    pt: "Monitora o usage e a saúde do rate-limit, alerta o Capitão em degradações.",
+  },
+  descBridge: {
+    it: "Sonda elettronica — ogni 5 min legge l'usage dal provider e fa il tick alla Sentinella.",
+    en: "Electronic probe — every 5 min reads usage from the provider and ticks the Sentinel.",
+    es: "Sonda electrónica — cada 5 min lee el usage del proveedor y hace tick al Centinela.",
+    fr: "Sonde électronique — toutes les 5 min lit l'usage du fournisseur et envoie un tick à la Sentinelle.",
+    de: "Elektronische Sonde — liest alle 5 Min. den Usage vom Anbieter und tickt die Wache.",
+    hu: "Elektronikus szonda — 5 percenként kiolvassa az usage-t a szolgáltatótól és tickel az Őrszemnek.",
+    pt: "Sonda eletrônica — a cada 5 min lê o usage do provedor e faz tick na Sentinela.",
+  },
+  descPacing: {
+    it: "Tick ogni 15 min — invia il report di pacing al Capitano (%/h per agente, velocità target, verdetto).",
+    en: "Tick every 15 min — sends pacing report to the Captain (per-agent %/h, target speed, verdict).",
+    es: "Tick cada 15 min — envía el informe de pacing al Capitán (%/h por agente, velocidad objetivo, veredicto).",
+    fr: "Tick toutes les 15 min — envoie le rapport de pacing au Capitaine (%/h par agent, vitesse cible, verdict).",
+    de: "Tick alle 15 Min. — sendet den Pacing-Report an den Kapitän (%/h pro Agent, Zielgeschwindigkeit, Urteil).",
+    hu: "Tick 15 percenként — elküldi a pacing-jelentést a Kapitánynak (%/h ügynökönként, célsebesség, ítélet).",
+    pt: "Tick a cada 15 min — envia o relatório de pacing ao Capitão (%/h por agente, velocidade alvo, veredito).",
+  },
+  descDoctor: {
+    it: "Health-check on demand — ogni 30 min pinga ogni agente, riavvia quelli bloccati, poi si auto-distrugge.",
+    en: "Health-check on demand — every 30 min pings each agent, restarts the stuck ones, then self-destructs.",
+    es: "Health-check bajo demanda — cada 30 min hace ping a cada agente, reinicia los bloqueados y luego se autodestruye.",
+    fr: "Health-check à la demande — toutes les 30 min ping chaque agent, redémarre les bloqués, puis s'autodétruit.",
+    de: "Health-Check auf Abruf — pingt alle 30 Min. jeden Agenten, startet die blockierten neu und zerstört sich dann selbst.",
+    hu: "Health-check igény szerint — 30 percenként pingeli az ügynököket, újraindítja az elakadtakat, majd önmegsemmisít.",
+    pt: "Health-check sob demanda — a cada 30 min faz ping em cada agente, reinicia os travados e depois se autodestrói.",
+  },
+  descDb: {
+    it: "Database condiviso — qui atterrano le scritture della pipeline.",
+    en: "Shared database — pipeline writes land here.",
+    es: "Base de datos compartida — aquí aterrizan las escrituras de la pipeline.",
+    fr: "Base de données partagée — les écritures de la pipeline arrivent ici.",
+    de: "Geteilte Datenbank — hier landen die Schreibvorgänge der Pipeline.",
+    hu: "Megosztott adatbázis — ide érkeznek a pipeline írásai.",
+    pt: "Banco de dados compartilhado — as escritas da pipeline chegam aqui.",
+  },
+  descScout: {
+    it: "Cerca nuove opportunità sui canali di lavoro.",
+    en: "Searches for new opportunities on job channels.",
+    es: "Busca nuevas oportunidades en los canales de empleo.",
+    fr: "Recherche de nouvelles opportunités sur les canaux d'emploi.",
+    de: "Sucht neue Möglichkeiten auf den Job-Kanälen.",
+    hu: "Új lehetőségeket keres az állás-csatornákon.",
+    pt: "Busca novas oportunidades nos canais de emprego.",
+  },
+  descAnalyst: {
+    it: "Legge i requisiti e valuta la corrispondenza col profilo.",
+    en: "Reads requirements and evaluates fit with profile.",
+    es: "Lee los requisitos y evalúa la afinidad con el perfil.",
+    fr: "Lit les exigences et évalue l'adéquation avec le profil.",
+    de: "Liest die Anforderungen und bewertet die Passung zum Profil.",
+    hu: "Elolvassa a követelményeket és értékeli a profillal való illeszkedést.",
+    pt: "Lê os requisitos e avalia a compatibilidade com o perfil.",
+  },
+  descScorer: {
+    it: "Calcola la priorità e il punteggio di corrispondenza delle offerte.",
+    en: "Calculates priority and match score of offers.",
+    es: "Calcula la prioridad y la puntuación de afinidad de las ofertas.",
+    fr: "Calcule la priorité et le score de correspondance des offres.",
+    de: "Berechnet Priorität und Match-Score der Angebote.",
+    hu: "Kiszámítja az ajánlatok prioritását és illeszkedési pontszámát.",
+    pt: "Calcula a prioridade e a pontuação de compatibilidade das ofertas.",
+  },
+  descWriter: {
+    it: "Prepara CV e lettera di presentazione su misura.",
+    en: "Prepares tailored CV and cover letter.",
+    es: "Prepara un CV y una carta de presentación a medida.",
+    fr: "Prépare un CV et une lettre de motivation sur mesure.",
+    de: "Erstellt maßgeschneiderten Lebenslauf und Anschreiben.",
+    hu: "Személyre szabott önéletrajzot és motivációs levelet készít.",
+    pt: "Prepara CV e carta de apresentação personalizados.",
+  },
+  descCritic: {
+    it: "Rivede i materiali e segnala cosa va corretto.",
+    en: "Reviews materials and flags what needs correction.",
+    es: "Revisa los materiales y señala lo que hay que corregir.",
+    fr: "Relit les documents et signale ce qui doit être corrigé.",
+    de: "Prüft die Unterlagen und markiert, was korrigiert werden muss.",
+    hu: "Átnézi az anyagokat és jelzi, mit kell javítani.",
+    pt: "Revisa os materiais e sinaliza o que precisa ser corrigido.",
+  },
+  // ── Popover status / azioni ──
+  online: {
+    it: "Online",
+    en: "Online",
+    es: "En línea",
+    fr: "En ligne",
+    de: "Online",
+    hu: "Online",
+    pt: "Online",
+  },
+  starting: {
+    it: "Avvio...",
+    en: "Starting...",
+    es: "Iniciando...",
+    fr: "Démarrage...",
+    de: "Wird gestartet...",
+    hu: "Indítás...",
+    pt: "Iniciando...",
+  },
+  offline: {
+    it: "Offline",
+    en: "Offline",
+    es: "Desconectado",
+    fr: "Hors ligne",
+    de: "Offline",
+    hu: "Offline",
+    pt: "Offline",
+  },
+  wait: {
+    it: "Attendi...",
+    en: "Wait...",
+    es: "Espera...",
+    fr: "Patientez...",
+    de: "Warten...",
+    hu: "Várj...",
+    pt: "Aguarde...",
+  },
+  stop: {
+    it: "Ferma",
+    en: "Stop",
+    es: "Detener",
+    fr: "Arrêter",
+    de: "Stoppen",
+    hu: "Leállítás",
+    pt: "Parar",
+  },
+  start: {
+    it: "Avvia",
+    en: "Start",
+    es: "Iniciar",
+    fr: "Démarrer",
+    de: "Starten",
+    hu: "Indítás",
+    pt: "Iniciar",
+  },
+  close: {
+    it: "Chiudi",
+    en: "Close",
+    es: "Cerrar",
+    fr: "Fermer",
+    de: "Schließen",
+    hu: "Bezárás",
+    pt: "Fechar",
+  },
+  detailsAria: {
+    it: "Dettagli {name}",
+    en: "{name} details",
+    es: "Detalles de {name}",
+    fr: "Détails de {name}",
+    de: "Details zu {name}",
+    hu: "{name} részletei",
+    pt: "Detalhes de {name}",
+  },
+  stopAria: {
+    it: "Ferma {name}",
+    en: "Stop {name}",
+    es: "Detener {name}",
+    fr: "Arrêter {name}",
+    de: "{name} stoppen",
+    hu: "{name} leállítása",
+    pt: "Parar {name}",
+  },
+  startAria: {
+    it: "Avvia {name}",
+    en: "Start {name}",
+    es: "Iniciar {name}",
+    fr: "Démarrer {name}",
+    de: "{name} starten",
+    hu: "{name} indítása",
+    pt: "Iniciar {name}",
+  },
+  instancesAria: {
+    it: "{count} istanze",
+    en: "{count} instances",
+    es: "{count} instancias",
+    fr: "{count} instances",
+    de: "{count} Instanzen",
+    hu: "{count} példány",
+    pt: "{count} instâncias",
+  },
+  // ── Countdown ──
+  nextTick: {
+    it: "next tick {label}",
+    en: "next tick {label}",
+    es: "next tick {label}",
+    fr: "next tick {label}",
+    de: "next tick {label}",
+    hu: "next tick {label}",
+    pt: "next tick {label}",
+  },
+  nextBridgeTickAria: {
+    it: "Prossimo tick del bridge tra {s} secondi",
+    en: "Next bridge tick in {s} seconds",
+    es: "Próximo tick del bridge en {s} segundos",
+    fr: "Prochain tick du bridge dans {s} secondes",
+    de: "Nächster Bridge-Tick in {s} Sekunden",
+    hu: "Következő bridge tick {s} másodperc múlva",
+    pt: "Próximo tick do bridge em {s} segundos",
+  },
+  nextPacingTickAria: {
+    it: "Prossimo tick del pacing tra {s} secondi",
+    en: "Next pacing tick in {s} seconds",
+    es: "Próximo tick del pacing en {s} segundos",
+    fr: "Prochain tick du pacing dans {s} secondes",
+    de: "Nächster Pacing-Tick in {s} Sekunden",
+    hu: "Következő pacing tick {s} másodperc múlva",
+    pt: "Próximo tick do pacing em {s} segundos",
+  },
+  // ── PacingReport ──
+  noTickYet: {
+    it: "Nessun tick ricevuto ancora. Il bridge esegue il primo calcolo al prossimo quarto d'ora pieno (:00 / :15 / :30 / :45 UTC).",
+    en: "No tick received yet. The bridge runs its first calculation at the next full quarter-hour (:00 / :15 / :30 / :45 UTC).",
+    es: "Aún no se ha recibido ningún tick. El bridge ejecuta el primer cálculo en el próximo cuarto de hora en punto (:00 / :15 / :30 / :45 UTC).",
+    fr: "Aucun tick reçu pour le moment. Le bridge effectue son premier calcul au prochain quart d'heure pile (:00 / :15 / :30 / :45 UTC).",
+    de: "Noch kein Tick empfangen. Der Bridge führt die erste Berechnung zur nächsten vollen Viertelstunde aus (:00 / :15 / :30 / :45 UTC).",
+    hu: "Még nem érkezett tick. A bridge a következő egész negyedórakor végzi az első számítást (:00 / :15 / :30 / :45 UTC).",
+    pt: "Nenhum tick recebido ainda. O bridge executa o primeiro cálculo no próximo quarto de hora cheio (:00 / :15 / :30 / :45 UTC).",
+  },
+  tickSkipped: {
+    it: "Tick saltato:",
+    en: "Tick skipped:",
+    es: "Tick omitido:",
+    fr: "Tick ignoré :",
+    de: "Tick übersprungen:",
+    hu: "Tick kihagyva:",
+    pt: "Tick ignorado:",
+  },
+  verdictSforo: {
+    it: "SFORO +{delta}%/h → riduci {frac}%",
+    en: "OVERRUN +{delta}%/h → reduce {frac}%",
+    es: "EXCESO +{delta}%/h → reduce {frac}%",
+    fr: "DÉPASSEMENT +{delta}%/h → réduis {frac}%",
+    de: "ÜBERSCHREITUNG +{delta}%/h → reduziere {frac}%",
+    hu: "TÚLLÉPÉS +{delta}%/h → csökkents {frac}%",
+    pt: "EXCESSO +{delta}%/h → reduza {frac}%",
+  },
+  verdictMargine: {
+    it: "MARGINE −{delta}%/h → puoi salire {frac}%",
+    en: "MARGIN −{delta}%/h → you can raise {frac}%",
+    es: "MARGEN −{delta}%/h → puedes subir {frac}%",
+    fr: "MARGE −{delta}%/h → tu peux monter {frac}%",
+    de: "SPIELRAUM −{delta}%/h → du kannst um {frac}% erhöhen",
+    hu: "TARTALÉK −{delta}%/h → emelhetsz {frac}%",
+    pt: "MARGEM −{delta}%/h → você pode subir {frac}%",
+  },
+  verdictAligned: {
+    it: "ALLINEATO al target",
+    en: "ALIGNED with target",
+    es: "ALINEADO con el objetivo",
+    fr: "ALIGNÉ sur la cible",
+    de: "AUSGERICHTET auf Ziel",
+    hu: "CÉLHOZ IGAZÍTVA",
+    pt: "ALINHADO com o alvo",
+  },
+  verdictNd: {
+    it: "target N/D",
+    en: "target N/A",
+    es: "objetivo N/D",
+    fr: "cible N/D",
+    de: "Ziel N/V",
+    hu: "cél N/A",
+    pt: "alvo N/D",
+  },
+  perAgent: {
+    it: "per agente",
+    en: "per agent",
+    es: "por agente",
+    fr: "par agent",
+    de: "pro Agent",
+    hu: "ügynökönként",
+    pt: "por agente",
+  },
+  noneAboveThreshold: {
+    it: "nessuno sopra soglia",
+    en: "none above threshold",
+    es: "ninguno sobre el umbral",
+    fr: "aucun au-dessus du seuil",
+    de: "keiner über der Schwelle",
+    hu: "egyik sem a küszöb felett",
+    pt: "nenhum acima do limite",
+  },
+  belowThreshold: {
+    it: "sotto soglia: {list}",
+    en: "below threshold: {list}",
+    es: "bajo el umbral: {list}",
+    fr: "sous le seuil : {list}",
+    de: "unter der Schwelle: {list}",
+    hu: "küszöb alatt: {list}",
+    pt: "abaixo do limite: {list}",
+  },
+  thAgent: {
+    it: "agente",
+    en: "agent",
+    es: "agente",
+    fr: "agent",
+    de: "Agent",
+    hu: "ügynök",
+    pt: "agente",
+  },
+  chkPerMinTitle: {
+    it: "Checkpoint per minuto (eventi loggati da jht-throttle nella finestra). Serve al Capitano per calibrare la durata in config: throttle_eff = cadenza × durata_sec / 60",
+    en: "Checkpoints per minute (events logged by jht-throttle in the window). Used by the Captain to calibrate duration in config: throttle_eff = cadence × duration_sec / 60",
+    es: "Checkpoints por minuto (eventos registrados por jht-throttle en la ventana). El Capitán lo usa para calibrar la duración en config: throttle_eff = cadencia × duration_sec / 60",
+    fr: "Checkpoints par minute (événements loggés par jht-throttle dans la fenêtre). Sert au Capitaine pour calibrer la durée en config : throttle_eff = cadence × duration_sec / 60",
+    de: "Checkpoints pro Minute (von jht-throttle im Fenster geloggte Events). Vom Kapitän genutzt, um die Dauer in der Config zu kalibrieren: throttle_eff = Kadenz × duration_sec / 60",
+    hu: "Checkpointok percenként (a jht-throttle által az ablakban naplózott események). A Kapitány a config időtartam kalibrálásához használja: throttle_eff = kadencia × duration_sec / 60",
+    pt: "Checkpoints por minuto (eventos registrados pelo jht-throttle na janela). Usado pelo Capitão para calibrar a duração na config: throttle_eff = cadência × duration_sec / 60",
+  },
+};
 
 type AgentMeta = {
   status: AgentStatus;
@@ -16,12 +353,14 @@ type AgentMeta = {
   instances?: number;
 };
 
-// roleId: id lato API (cli/web). name: label mostrato nel chart (EN).
+// roleId: id lato API (cli/web). name: label mostrato nel chart (EN, \u00E8 un
+// nome di ruolo brand-like \u2192 resta in EN). descKey: chiave i18n risolta via
+// tr() nel componente.
 const CAPTAIN_AGENT = {
   roleId: "capitano",
   emoji: "\u{1F468}\u200D\u2708\uFE0F",
   name: "Captain",
-  desc: "Coordinates the team and assigns operational priorities.",
+  descKey: "descCaptain",
 };
 
 // Sentinel: agente di sicurezza che presidia il monitoring usage. Non
@@ -31,7 +370,7 @@ const SENTINEL_AGENT = {
   roleId: "sentinella",
   emoji: "💂",
   name: "Sentinel",
-  desc: "Monitors usage and rate-limit health, alerts the Captain on degradations.",
+  descKey: "descSentinel",
 };
 
 // Bridge: strumento elettronico (non agente LLM) che ogni 5 min interroga
@@ -43,7 +382,7 @@ const BRIDGE_NODE = {
   roleId: "bridge",
   emoji: "📡",
   name: "Bridge",
-  desc: "Electronic probe — every 5 min reads usage from the provider and ticks the Sentinel.",
+  descKey: "descBridge",
 };
 
 // Pacing Bridge: secondo strumento elettronico, simmetrico al Bridge ma
@@ -57,7 +396,7 @@ const PACING_NODE = {
   roleId: "pacing",
   emoji: "⏱️",
   name: "Pacing",
-  desc: "Tick every 15 min — sends pacing report to the Captain (per-agent %/h, target speed, verdict).",
+  descKey: "descPacing",
 };
 
 // Dottore: agente health-check spawnato ogni 30 min dal watchdog. Pinga
@@ -69,7 +408,7 @@ const DOCTOR_AGENT = {
   roleId: "dottore",
   emoji: "👨‍⚕️",
   name: "Doctor",
-  desc: "Health-check on demand — every 30 min pings each agent, restarts the stuck ones, then self-destructs.",
+  descKey: "descDoctor",
 };
 
 // Database: non è un agente né un processo, è il bersaglio condiviso di
@@ -80,7 +419,7 @@ const DB_NODE = {
   roleId: "database",
   emoji: "🗄️",
   name: "DB",
-  desc: "Shared database — pipeline writes land here.",
+  descKey: "descDb",
 };
 
 const PIPELINE_AGENTS = [
@@ -88,42 +427,48 @@ const PIPELINE_AGENTS = [
     roleId: "scout",
     emoji: "\uD83D\uDD75\uFE0F",
     name: "Scout",
-    desc: "Searches for new opportunities on job channels.",
+    descKey: "descScout",
   },
   {
     roleId: "analista",
     emoji: "\u{1F468}\u200D\uD83D\uDD2C",
     name: "Analyst",
-    desc: "Reads requirements and evaluates fit with profile.",
+    descKey: "descAnalyst",
   },
   {
     roleId: "scorer",
     emoji: "\u{1F468}\u200D\uD83D\uDCBB",
     name: "Scorer",
-    desc: "Calculates priority and match score of offers.",
+    descKey: "descScorer",
   },
   {
     roleId: "scrittore",
     emoji: "\u{1F468}\u200D\uD83C\uDFEB",
     name: "Writer",
-    desc: "Prepares tailored CV and cover letter.",
+    descKey: "descWriter",
   },
   {
     roleId: "critico",
     emoji: "\u{1F468}\u200D\u2696\uFE0F",
     name: "Critic",
-    desc: "Reviews materials and flags what needs correction.",
+    descKey: "descCritic",
   },
 ];
 
 // Badge "×N" mostrato sui nodi che rappresentano un ruolo con più istanze
 // attive (es. 2 SCOUT, 2 ANALISTA). Posizionato in alto a sinistra
 // dell'emoji, simmetrico al LED running che sta in alto a destra.
-function InstanceBadge({ count }: { count: number }) {
+function InstanceBadge({
+  count,
+  tr,
+}: {
+  count: number;
+  tr: (k: string) => string;
+}) {
   if (count <= 1) return null;
   return (
     <span
-      aria-label={`${count} instances`}
+      aria-label={tr("instancesAria").replace("{count}", String(count))}
       style={{
         position: "absolute",
         bottom: -4,
@@ -148,11 +493,17 @@ function InstanceBadge({ count }: { count: number }) {
   );
 }
 
-function ActiveLed({ active }: { active: boolean }) {
+function ActiveLed({
+  active,
+  tr,
+}: {
+  active: boolean;
+  tr: (k: string) => string;
+}) {
   if (!active) return null;
   return (
     <span
-      aria-label="online"
+      aria-label={tr("online")}
       className="team-orgchart-led"
       style={{
         position: "absolute",
@@ -216,6 +567,7 @@ function AgentPopover({
   placement,
   extraContent,
   wide,
+  tr,
 }: {
   extraContent?: React.ReactNode;
   roleId: string;
@@ -229,6 +581,7 @@ function AgentPopover({
   placement: "above" | "below";
   /** Larghezza extra per popover con extraContent denso (es. Pacing report). */
   wide?: boolean;
+  tr: (k: string) => string;
 }) {
   const status: AgentStatus = meta?.status ?? "stopped";
   const color = meta?.color ?? "#ffc107";
@@ -237,10 +590,10 @@ function AgentPopover({
   const disabled = loading || isPending;
 
   const statusText = isRunning
-    ? "Online"
+    ? tr("online")
     : isPending
-      ? "Starting..."
-      : "Offline";
+      ? tr("starting")
+      : tr("offline");
   const statusColor = isRunning
     ? "#22c55e"
     : isPending
@@ -256,7 +609,7 @@ function AgentPopover({
     <div
       onClick={(e) => e.stopPropagation()}
       role="dialog"
-      aria-label={`${name} details`}
+      aria-label={tr("detailsAria").replace("{name}", name)}
       className={`absolute left-1/2 z-30 ${wide ? "w-80" : "w-64"} -translate-x-1/2 rounded-xl p-3.5 shadow-2xl`}
       style={{
         ...posStyle,
@@ -268,7 +621,7 @@ function AgentPopover({
     >
       <button
         onClick={onClose}
-        aria-label="Close"
+        aria-label={tr("close")}
         className="absolute top-2 right-2 text-[var(--color-dim)] hover:text-[var(--color-bright)]"
         style={{
           fontSize: 14,
@@ -357,7 +710,11 @@ function AgentPopover({
           <button
             onClick={() => onAction(roleId, isRunning ? "stop" : "start")}
             disabled={disabled}
-            aria-label={isRunning ? `Stop ${name}` : `Start ${name}`}
+            aria-label={
+              isRunning
+                ? tr("stopAria").replace("{name}", name)
+                : tr("startAria").replace("{name}", name)
+            }
             className="px-3 py-1.5 rounded-lg text-[10.5px] font-semibold transition-all"
             style={{
               background: disabled
@@ -377,12 +734,12 @@ function AgentPopover({
           >
             {loading ? (
               <span className="inline-flex items-center gap-1">
-                <MiniSpinner size={10} /> Wait...
+                <MiniSpinner size={10} /> {tr("wait")}
               </span>
             ) : isRunning ? (
-              "\u25A0 Stop"
+              `\u25A0 ${tr("stop")}`
             ) : (
-              "\u25B6 Start"
+              `\u25B6 ${tr("start")}`
             )}
           </button>
         )}
@@ -419,7 +776,9 @@ type Props = {
 // risultante. Stesso shape dell'API /api/team/pacing-bridge.
 function PacingReport({
   report,
+  tr,
 }: {
+  tr: (k: string) => string;
   report: {
     ok: boolean;
     ts: string;
@@ -458,8 +817,7 @@ function PacingReport({
         className="text-[10.5px] leading-relaxed"
         style={{ color: "var(--color-muted)" }}
       >
-        Nessun tick ricevuto ancora. Il bridge esegue il primo calcolo al
-        prossimo quarto d&apos;ora pieno (:00 / :15 / :30 / :45 UTC).
+        {tr("noTickYet")}
       </div>
     );
   }
@@ -469,7 +827,7 @@ function PacingReport({
         className="text-[10.5px] leading-relaxed"
         style={{ color: "var(--color-muted)" }}
       >
-        Tick saltato:{" "}
+        {tr("tickSkipped")}{" "}
         <span className="font-mono">{report.error ?? "unknown"}</span>
         {report.hint && <div className="opacity-75 mt-1">{report.hint}</div>}
       </div>
@@ -485,12 +843,16 @@ function PacingReport({
           : "#94a3b8";
   const verdictLabel =
     report.verdict.kind === "SFORO"
-      ? `SFORO +${report.verdict.delta?.toFixed(2)}%/h → riduci ${report.verdict.frac_pct?.toFixed(0)}%`
+      ? tr("verdictSforo")
+          .replace("{delta}", report.verdict.delta?.toFixed(2) ?? "")
+          .replace("{frac}", report.verdict.frac_pct?.toFixed(0) ?? "")
       : report.verdict.kind === "MARGINE"
-        ? `MARGINE −${report.verdict.delta?.toFixed(2)}%/h → puoi salire ${report.verdict.frac_pct?.toFixed(0)}%`
+        ? tr("verdictMargine")
+            .replace("{delta}", report.verdict.delta?.toFixed(2) ?? "")
+            .replace("{frac}", report.verdict.frac_pct?.toFixed(0) ?? "")
         : report.verdict.kind === "ALLINEATO"
-          ? "ALLINEATO al target"
-          : "target N/D";
+          ? tr("verdictAligned")
+          : tr("verdictNd");
   const tsLocal = (() => {
     try {
       return new Date(report.ts).toLocaleTimeString([], {
@@ -544,15 +906,15 @@ function PacingReport({
         className="font-semibold uppercase tracking-wide text-[9px] mb-1"
         style={{ color: "var(--color-bright)" }}
       >
-        per agente
+        {tr("perAgent")}
       </div>
       {report.agents.length === 0 ? (
-        <div className="opacity-60">nessuno sopra soglia</div>
+        <div className="opacity-60">{tr("noneAboveThreshold")}</div>
       ) : (
         <table className="w-full font-mono text-[9.5px]">
           <thead>
             <tr style={{ color: "var(--color-dim)" }}>
-              <th className="text-left font-normal pb-0.5">agente</th>
+              <th className="text-left font-normal pb-0.5">{tr("thAgent")}</th>
               <th className="text-right font-normal pb-0.5">
                 kT/{report.effective_window_min.toFixed(0)}m
               </th>
@@ -560,7 +922,7 @@ function PacingReport({
               <th className="text-right font-normal pb-0.5">share</th>
               <th
                 className="text-right font-normal pb-0.5"
-                title="Checkpoint per minuto (eventi loggati da jht-throttle nella finestra). Serve al Capitano per calibrare la durata in config: throttle_eff = cadenza × durata_sec / 60"
+                title={tr("chkPerMinTitle")}
               >
                 chk/min
               </th>
@@ -589,7 +951,7 @@ function PacingReport({
       )}
       {report.skipped.length > 0 && (
         <div className="mt-1.5 text-[9px] opacity-60">
-          sotto soglia: {report.skipped.join(", ")}
+          {tr("belowThreshold").replace("{list}", report.skipped.join(", "))}
         </div>
       )}
       <div
@@ -636,6 +998,12 @@ export default function TeamOrgChart({
   hideStopped,
   dbWriteSignal,
 }: Props) {
+  // Su CLOUD (Vercel/Supabase) il polling continuo va SPENTO: i dati appaiono
+  // all'apertura (chiamata iniziale) ma niente setInterval che scala coi tab.
+  // In locale/desktop il polling resta pieno (teatro live del team).
+  const isCloud = useIsCloud();
+  const locale = useLocale();
+  const tr = (k: string) => T[k]?.[locale] ?? T[k]?.en ?? k;
   const desktopFlowRef = useRef<HTMLDivElement | null>(null);
   const captainNameRef = useRef<HTMLSpanElement | null>(null);
   const captainEmojiRef = useRef<HTMLSpanElement | null>(null);
@@ -812,6 +1180,8 @@ export default function TeamOrgChart({
       }
     };
     check();
+    // Su cloud: solo la fetch iniziale, niente polling continuo.
+    if (isCloud) return;
     // 15s (era 3s): bridge/pacing status non cambia frequentemente. Riduce
     // req/min su /api/bridge/status + /api/team/pacing-bridge (40→8 totale).
     const interval = setInterval(check, 15_000);
@@ -819,7 +1189,7 @@ export default function TeamOrgChart({
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [isCloud]);
 
   const handleBridgeAction = async (_id: string, action: "start" | "stop") => {
     setBridgePending(true);
@@ -906,6 +1276,8 @@ export default function TeamOrgChart({
       }
     };
     check();
+    // Su cloud: solo la fetch iniziale, niente polling continuo.
+    if (isCloud) return;
     // 15s (era 3s): bridge/pacing status non cambia frequentemente. Riduce
     // req/min su /api/bridge/status + /api/team/pacing-bridge (40→8 totale).
     const interval = setInterval(check, 15_000);
@@ -913,7 +1285,7 @@ export default function TeamOrgChart({
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [isCloud]);
 
   const isActive = (roleId: string) => {
     if (agents) return agents[roleId]?.status === "running";
@@ -1277,6 +1649,8 @@ export default function TeamOrgChart({
       }
     };
     poll();
+    // Su cloud: solo la fetch iniziale, niente polling continuo.
+    if (isCloud) return;
     // 5000ms (era 1500ms): le animazioni delle frecce restano OK con
     // questa cadenza (un messaggio passa in ~2s sulla freccia comunque).
     // Riduce req/min su /api/team/messages da ~40 a 12 — taglio principale
@@ -1288,6 +1662,7 @@ export default function TeamOrgChart({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    isCloud,
     arrowOverlay.bridgePath,
     arrowOverlay.pacingPath,
     arrowOverlay.sentinelToCaptainPath,
@@ -1332,6 +1707,8 @@ export default function TeamOrgChart({
       }
     };
     poll();
+    // Su cloud: solo la fetch iniziale, niente polling continuo.
+    if (isCloud) return;
     // 10s (era 2.5s): queue state per throttle/pallini queued non richiede
     // alta frequenza. Riduce req/min su /api/team/queue (24→6).
     const interval = setInterval(poll, 10_000);
@@ -1339,7 +1716,7 @@ export default function TeamOrgChart({
       cancelled = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [isCloud]);
 
   // Watcher: quando il throttle di un role scade (l'entry esce da
   // queueState), tutti i pallini queued con destRole = quel role
@@ -1741,7 +2118,7 @@ export default function TeamOrgChart({
                 }
               }}
               aria-expanded={selected === BRIDGE_NODE.roleId}
-              aria-label={`${BRIDGE_NODE.name} details`}
+              aria-label={tr("detailsAria").replace("{name}", BRIDGE_NODE.name)}
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-1 cursor-pointer outline-none"
               style={
                 hideStopped && !isVisible(BRIDGE_NODE.roleId)
@@ -1762,7 +2139,7 @@ export default function TeamOrgChart({
                     è inizializzato). Per ora è legato al demo cyclic locale
                     — quando collegheremo il vero stato del process Python
                     bastera' sostituire la condizione con il flag dal backend. */}
-                <ActiveLed active={bridgeRunning} />
+                <ActiveLed active={bridgeRunning} tr={tr} />
               </span>
               <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">
                 {BRIDGE_NODE.name}
@@ -1781,9 +2158,12 @@ export default function TeamOrgChart({
                     <span
                       className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tabular-nums leading-tight"
                       style={{ color: "var(--color-dim)" }}
-                      aria-label={`Next bridge tick in ${bridgeCountdown} seconds`}
+                      aria-label={tr("nextBridgeTickAria").replace(
+                        "{s}",
+                        String(bridgeCountdown),
+                      )}
                     >
-                      next tick {label}
+                      {tr("nextTick").replace("{label}", label)}
                     </span>
                   );
                 })()}
@@ -1793,14 +2173,15 @@ export default function TeamOrgChart({
                   roleId={BRIDGE_NODE.roleId}
                   emoji={BRIDGE_NODE.emoji}
                   name={BRIDGE_NODE.name}
-                  desc={BRIDGE_NODE.desc}
+                  desc={tr(BRIDGE_NODE.descKey)}
+                  tr={tr}
                   meta={{
                     status: bridgeRunning ? "running" : "stopped",
                     color: AGENT_COLORS.bridge,
                     role: "Bridge",
                   }}
                   loading={bridgePending}
-                  onAction={handleBridgeAction}
+                  onAction={isCloud === true ? undefined : handleBridgeAction}
                   onClose={() => setSelected(null)}
                   placement="below"
                 />
@@ -1821,7 +2202,10 @@ export default function TeamOrgChart({
                 }
               }}
               aria-expanded={selected === SENTINEL_AGENT.roleId}
-              aria-label={`${SENTINEL_AGENT.name} details`}
+              aria-label={tr("detailsAria").replace(
+                "{name}",
+                SENTINEL_AGENT.name,
+              )}
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-2 cursor-pointer outline-none"
               style={
                 hideStopped && !isVisible(SENTINEL_AGENT.roleId)
@@ -1838,9 +2222,10 @@ export default function TeamOrgChart({
                 >
                   {SENTINEL_AGENT.emoji}
                 </span>
-                <ActiveLed active={isActive(SENTINEL_AGENT.roleId)} />
+                <ActiveLed active={isActive(SENTINEL_AGENT.roleId)} tr={tr} />
                 <InstanceBadge
                   count={agents?.[SENTINEL_AGENT.roleId]?.instances ?? 0}
+                  tr={tr}
                 />
               </span>
               <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">
@@ -1852,7 +2237,8 @@ export default function TeamOrgChart({
                   roleId={SENTINEL_AGENT.roleId}
                   emoji={SENTINEL_AGENT.emoji}
                   name={SENTINEL_AGENT.name}
-                  desc={SENTINEL_AGENT.desc}
+                  desc={tr(SENTINEL_AGENT.descKey)}
+                  tr={tr}
                   meta={agents?.[SENTINEL_AGENT.roleId]}
                   loading={actionLoading === SENTINEL_AGENT.roleId}
                   onAction={onAction}
@@ -1876,7 +2262,10 @@ export default function TeamOrgChart({
                 }
               }}
               aria-expanded={selected === CAPTAIN_AGENT.roleId}
-              aria-label={`${CAPTAIN_AGENT.name} details`}
+              aria-label={tr("detailsAria").replace(
+                "{name}",
+                CAPTAIN_AGENT.name,
+              )}
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-3 cursor-pointer outline-none"
               style={
                 hideStopped && !isVisible(CAPTAIN_AGENT.roleId)
@@ -1893,9 +2282,10 @@ export default function TeamOrgChart({
                 >
                   {CAPTAIN_AGENT.emoji}
                 </span>
-                <ActiveLed active={isActive(CAPTAIN_AGENT.roleId)} />
+                <ActiveLed active={isActive(CAPTAIN_AGENT.roleId)} tr={tr} />
                 <InstanceBadge
                   count={agents?.[CAPTAIN_AGENT.roleId]?.instances ?? 0}
+                  tr={tr}
                 />
               </span>
               <span
@@ -1910,7 +2300,8 @@ export default function TeamOrgChart({
                   roleId={CAPTAIN_AGENT.roleId}
                   emoji={CAPTAIN_AGENT.emoji}
                   name={CAPTAIN_AGENT.name}
-                  desc={CAPTAIN_AGENT.desc}
+                  desc={tr(CAPTAIN_AGENT.descKey)}
+                  tr={tr}
                   meta={agents?.[CAPTAIN_AGENT.roleId]}
                   loading={actionLoading === CAPTAIN_AGENT.roleId}
                   onAction={onAction}
@@ -1937,7 +2328,7 @@ export default function TeamOrgChart({
                 }
               }}
               aria-expanded={selected === PACING_NODE.roleId}
-              aria-label={`${PACING_NODE.name} details`}
+              aria-label={tr("detailsAria").replace("{name}", PACING_NODE.name)}
               className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 col-start-4 cursor-pointer outline-none"
               style={
                 hideStopped && !isVisible(PACING_NODE.roleId)
@@ -1954,7 +2345,7 @@ export default function TeamOrgChart({
                 >
                   {PACING_NODE.emoji}
                 </span>
-                <ActiveLed active={pacingRunning} />
+                <ActiveLed active={pacingRunning} tr={tr} />
               </span>
               <span className="text-[12px] md:text-[13px] font-semibold tracking-wide text-[var(--color-bright)]">
                 {PACING_NODE.name}
@@ -1970,9 +2361,12 @@ export default function TeamOrgChart({
                     <span
                       className="pointer-events-none absolute left-1/2 top-full mt-1 -translate-x-1/2 whitespace-nowrap font-mono text-[10px] tabular-nums leading-tight"
                       style={{ color: "var(--color-dim)" }}
-                      aria-label={`Next pacing tick in ${pacingCountdown} seconds`}
+                      aria-label={tr("nextPacingTickAria").replace(
+                        "{s}",
+                        String(pacingCountdown),
+                      )}
                     >
-                      next tick {label}
+                      {tr("nextTick").replace("{label}", label)}
                     </span>
                   );
                 })()}
@@ -1982,7 +2376,8 @@ export default function TeamOrgChart({
                   roleId={PACING_NODE.roleId}
                   emoji={PACING_NODE.emoji}
                   name={PACING_NODE.name}
-                  desc={PACING_NODE.desc}
+                  desc={tr(PACING_NODE.descKey)}
+                  tr={tr}
                   meta={{
                     status: pacingRunning ? "running" : "stopped",
                     color: AGENT_COLORS.pacing,
@@ -1992,7 +2387,9 @@ export default function TeamOrgChart({
                   onClose={() => setSelected(null)}
                   placement="below"
                   wide
-                  extraContent={<PacingReport report={pacingLastReport} />}
+                  extraContent={
+                    <PacingReport report={pacingLastReport} tr={tr} />
+                  }
                 />
               )}
             </div>
@@ -2023,7 +2420,7 @@ export default function TeamOrgChart({
                   }
                 }}
                 aria-expanded={selected === agent.roleId}
-                aria-label={`${agent.name} details`}
+                aria-label={tr("detailsAria").replace("{name}", agent.name)}
                 className="relative inline-flex select-none flex-col items-center gap-2 shrink-0 min-w-[72px] cursor-pointer outline-none"
                 // In hideStopped + flex layout, gli agenti non running spariscono
                 // dal flusso (display:none) così quelli rimasti si centrano da
@@ -2044,9 +2441,10 @@ export default function TeamOrgChart({
                   >
                     {agent.emoji}
                   </span>
-                  <ActiveLed active={isActive(agent.roleId)} />
+                  <ActiveLed active={isActive(agent.roleId)} tr={tr} />
                   <InstanceBadge
                     count={agents?.[agent.roleId]?.instances ?? 0}
+                    tr={tr}
                   />
                 </span>
                 <span className="text-[11px] md:text-[12px] font-semibold tracking-wide text-[var(--color-bright)] text-center">
@@ -2058,7 +2456,8 @@ export default function TeamOrgChart({
                     roleId={agent.roleId}
                     emoji={agent.emoji}
                     name={agent.name}
-                    desc={agent.desc}
+                    desc={tr(agent.descKey)}
+                    tr={tr}
                     meta={agents?.[agent.roleId]}
                     loading={actionLoading === agent.roleId}
                     onAction={onAction}

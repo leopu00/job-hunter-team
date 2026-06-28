@@ -25,11 +25,19 @@ sentinel-orders
 bridge-pacing
 bridge-mailbox
 pipeline-triage
+# Calibrazione graduale del roster: quanti worker + che throttle per centrare
+# la velocità-target, con piano a scaglioni (C-02, anti ACCELERARE→marathon).
+scaling-calc
 
 # Emergency: spawn fresh DOTTORE on-demand quando serve health-check
 # subito (post-mortem 2026-05-18: tra cicli auto il DOTTORE è bash
 # residua, scrivergli è inutile, va spawnato ex-novo).
 spawn-doctor
+
+# Emergency: agente sospettato BLOCCATO IN LOOP attivo (vivo+ripete senza
+# produrre) — crepa fra C-08 (morto) e C-12 (cadenza 0.00). Rileva deterministico
+# (capture-pane diff + 0 avanzamento DB) -> Dottore-first -> kill (C-14).
+agent-emergency
 
 # Throttle config + on-demand rate-budget probe (rare, for ad-hoc diagnosis)
 throttle
