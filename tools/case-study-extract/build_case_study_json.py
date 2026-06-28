@@ -254,6 +254,35 @@ for hr in sorted(hour_acts):
         _last_cum = hour_cum[hr]
     hourly.append({"hour": hr, "counts": hour_acts[hr], "cum": round(_last_cum, 1)})
 
+# ── funnel TROVATE → ESCLUSE / TENUTE (per giorno + totali) ──────────
+# Per ogni giorno di found_at: quante posizioni trovate e come sono finite
+# (status attuale). "tenute" = non escluse. Serve a mostrare la proporzione
+# escluse vs tenute giorno per giorno (e in totale, per il donut).
+fd_rows = Q(
+    "SELECT substr(found_at,1,10) d, status, COUNT(*) "
+    "FROM positions WHERE found_at IS NOT NULL AND TRIM(found_at)<>'' "
+    "GROUP BY 1, 2")
+fd = collections.OrderedDict()  # day -> {status: n}
+for d, st, n in fd_rows:
+    fd.setdefault(d, {})[(st or "?")] = n
+funnel_daily = []
+for d in sorted(fd):
+    sm = fd[d]
+    excl = sm.get("excluded", 0)
+    found = sum(sm.values())
+    funnel_daily.append({
+        "day": d, "found": found, "excluded": excl, "kept": found - excl,
+        "scored": sm.get("scored", 0), "ready": sm.get("ready", 0),
+    })
+status_tot = {(st or "?"): n for st, n in Q(
+    "SELECT status, COUNT(*) FROM positions GROUP BY status")}
+_excl_tot = status_tot.get("excluded", 0)
+_found_tot = sum(status_tot.values())
+funnel_totals = {
+    "found": _found_tot, "excluded": _excl_tot, "kept": _found_tot - _excl_tot,
+    "scored": status_tot.get("scored", 0), "ready": status_tot.get("ready", 0),
+}
+
 out = {
     "source": "betaC-codex",
     "tsRange": [ts_min, ts_max],
@@ -271,6 +300,8 @@ out = {
     "agents": agents,
     "events": events,
     "hourly": hourly,
+    "funnelDaily": funnel_daily,
+    "funnelTotals": funnel_totals,
     "usage": usage,
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))
