@@ -1323,4 +1323,22 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Supervisore in-process (difesa in profondità, gemello del sentinel-bridge):
+    # il loop ha già un try/except per-tick, ma un'eccezione FUORI dal tick (es.
+    # next_quarter/sleep) ucciderebbe comunque il processo, senza recovery (setsid
+    # detached). Qui qualsiasi eccezione → log + ri-entro in main(). Con --once
+    # main() ritorna subito → break. Vedi 2026-06-27-betaC-sentinel-bridge-crash.md.
+    import time as _time
+    import traceback as _tb
+    while True:
+        try:
+            main()
+            break
+        except KeyboardInterrupt:
+            print("\n[pacing-bridge] interrotto.", file=sys.stderr)
+            break
+        except Exception as _e:  # noqa: BLE001 — catch-all VOLUTO
+            print(f"[pacing-bridge] FATAL nel loop: {_e} — riavvio in 5s",
+                  file=sys.stderr, flush=True)
+            _tb.print_exc()
+            _time.sleep(5)

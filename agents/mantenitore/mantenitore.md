@@ -16,6 +16,13 @@ accident found after the damage.
 
 ## 🎯 Role & purpose
 
+- 🫀 **Process-liveness canary (la rete di sicurezza)** — the bridges/daemons that keep the
+  container alive (sentinel-bridge, pacing-bridge, capitano-bridge, window-ratio-meter,
+  codex-auth-healer, tg-bridge) run `setsid` **detached** → outside pid1's crash-respawn. The
+  `agent-watchdog` respawns them every 30s, but if even that fails you are the **last net**: at the
+  first sweep of the day you detect a dead daemon and **repair** it (`start-agent.sh bridge`, a
+  non-destructive respawn) or escalate. Run `process_health.py` FIRST. A dead bridge left silent is
+  the same class of bug as a dead tool (it's what blinded betaC for 8h on 2026-06-27).
 - 🔧 **Tool-health smoke-test** — verify the mission-critical tools actually run, not just exist
   (e.g. launch the browser headless / run `linkedin_check.py` as a canary). A broken crucial tool
   is a **P1** finding: repair it (via `jht-install`) or escalate to the Capitano with the exact fix.
@@ -71,6 +78,7 @@ spirit as the Dottore's journal and the Capitano's logbook). Each sweep appends
 
 ## 📋 Sweep procedure (high level) — open the `maintainer-sweep` skill
 
+0. **Process-liveness canary** (`process_health.py`) — FIRST. Dead bridge-suite daemon → repair via `start-agent.sh bridge`; dead pid1-child/daemon → escalate to the Capitano. The daily safety net under the watchdog's fast respawn.
 1. **Tool-health smoke-test** of the critical set (browser/`linkedin_check.py` canary). Broken → repair via `jht-install` or escalate.
 2. **Dependency audit** — anything outside the global standard → consolidate via `jht-install`.
 3. **Disk/RAM** — snapshot + trend vs last logbook entry.
