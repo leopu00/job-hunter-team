@@ -230,6 +230,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Description du poste",
     pt: "Descrição da vaga",
   },
+  summary: {
+    it: "Riassunto",
+    en: "Summary",
+    hu: "Összefoglaló",
+    es: "Resumen",
+    de: "Zusammenfassung",
+    fr: "Résumé",
+    pt: "Resumo",
+  },
   requirements: {
     it: "Requisiti",
     en: "Requirements",
@@ -588,6 +597,92 @@ function ScoreBar({
         {value ?? "—"}
         <span className="text-[var(--color-dim)] font-normal">/{max}</span>
       </span>
+    </div>
+  );
+}
+
+// Inline-bold (**testo**) dentro una riga del riassunto.
+function renderInlineBold(text: string, kp: string) {
+  return text.split(/(\*\*[^*]+\*\*)/).map((seg, i) =>
+    seg.startsWith("**") && seg.endsWith("**") ? (
+      <strong key={`${kp}-${i}`}>{seg.slice(2, -2)}</strong>
+    ) : (
+      <span key={`${kp}-${i}`}>{seg}</span>
+    ),
+  );
+}
+
+// Renderer leggero per il riassunto dell'Analista: titolo `## `, intestazioni
+// di sezione `**...**` su riga propria, bullet `- `, paragrafi. Niente
+// dipendenza markdown esterna — il formato e' vincolato dal prompt analista
+// (RULE-04bis). Difensivo sulle escape letterali \n/\t come normalizeBody.
+type SummaryBlock =
+  | { t: "h"; text: string }
+  | { t: "sub"; text: string }
+  | { t: "ul"; items: string[] }
+  | { t: "p"; text: string };
+
+function SummaryMarkdown({ text }: { text: string }) {
+  const norm = text.replace(/\\r\\n|\\n/g, "\n").replace(/\\t/g, "\t");
+  const blocks: SummaryBlock[] = [];
+  for (const raw of norm.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith("## ")) {
+      blocks.push({ t: "h", text: line.slice(3) });
+    } else if (line.startsWith("- ") || line.startsWith("* ")) {
+      const last = blocks[blocks.length - 1];
+      if (last && last.t === "ul") last.items.push(line.slice(2));
+      else blocks.push({ t: "ul", items: [line.slice(2)] });
+    } else if (/^\*\*[^*]+\*\*$/.test(line)) {
+      blocks.push({ t: "sub", text: line.slice(2, -2) });
+    } else {
+      blocks.push({ t: "p", text: line });
+    }
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      {blocks.map((b, i) => {
+        if (b.t === "h")
+          return (
+            <div
+              key={i}
+              className="text-[13px] font-bold text-[var(--color-bright)] mb-0.5"
+            >
+              {renderInlineBold(b.text, `h${i}`)}
+            </div>
+          );
+        if (b.t === "sub")
+          return (
+            <div
+              key={i}
+              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mt-1.5"
+            >
+              {b.text}
+            </div>
+          );
+        if (b.t === "ul")
+          return (
+            <ul key={i} className="list-disc pl-4 flex flex-col gap-0.5 m-0">
+              {b.items.map((it, j) => (
+                <li
+                  key={j}
+                  className="text-[11px] text-[var(--color-muted)] leading-relaxed"
+                >
+                  {renderInlineBold(it, `li${i}-${j}`)}
+                </li>
+              ))}
+            </ul>
+          );
+        return (
+          <p
+            key={i}
+            className="text-[11px] text-[var(--color-muted)] leading-relaxed m-0"
+          >
+            {renderInlineBold(b.text, `p${i}`)}
+          </p>
+        );
+      })}
     </div>
   );
 }
@@ -987,32 +1082,12 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Job description */}
-          {(position.jd_text || position.requirements) && (
+          {/* Riassunto offerta — prodotto dall'Analista nella lingua utente.
+              Sostituisce la JD grezza: jd_text/requirements NON sono piu' mostrati. */}
+          {position.summary && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
-              <div className="section-label mb-3">{t("job_description")}</div>
-              {position.requirements && (
-                <div className="mb-4">
-                  <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                    {t("requirements")}
-                  </div>
-                  <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
-                    {position.requirements.slice(0, 2000)}
-                    {position.requirements.length > 2000 ? "…" : ""}
-                  </pre>
-                </div>
-              )}
-              {position.jd_text && (
-                <div>
-                  <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                    {t("full_description")}
-                  </div>
-                  <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
-                    {position.jd_text.slice(0, 3000)}
-                    {position.jd_text.length > 3000 ? "…" : ""}
-                  </pre>
-                </div>
-              )}
+              <div className="section-label mb-3">{t("summary")}</div>
+              <SummaryMarkdown text={position.summary} />
             </div>
           )}
         </div>
