@@ -53,6 +53,8 @@ const homeDom = {
   btnStart: document.getElementById('home-btn-start'),
   btnOpen: document.getElementById('home-btn-open'),
   btnStop: document.getElementById('home-btn-stop'),
+  autostartRow: document.getElementById('home-team-autostart-row'),
+  autostart: document.getElementById('home-team-autostart'),
   providerName: document.getElementById('home-provider-name'),
   providerPlan: document.getElementById('home-provider-plan'),
   providerAuth: document.getElementById('home-provider-auth'),
@@ -485,6 +487,26 @@ if (homeDom.btnAccountSignout) {
   homeDom.btnAccountSignout.addEventListener('click', () => signOut())
 }
 
+// Checkbox "auto-start del team al boot" (opt-in, default OFF — consuma token
+// a ogni apertura). Stato persistito nella pref `autoStartTeam` (preferences.json
+// host-side), letta al boot dal main (maybeAutoStartTeam). Idratata in local
+// mode; il change handler si registra una sola volta.
+let autostartWired = false
+async function hydrateAutostartToggle() {
+  if (!homeDom.autostartRow || !homeDom.autostart) return
+  homeDom.autostartRow.hidden = false
+  try {
+    const cur = window.prefsApi?.get ? await window.prefsApi.get('autoStartTeam') : null
+    homeDom.autostart.checked = cur === true
+  } catch { /* default unchecked */ }
+  if (!autostartWired) {
+    autostartWired = true
+    homeDom.autostart.addEventListener('change', () => {
+      try { window.prefsApi?.set?.('autoStartTeam', !!homeDom.autostart.checked) } catch { /* no-op */ }
+    })
+  }
+}
+
 function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
   const mode = status?.mode
   // In VPS mode il team gira sulla VPS remota, sempre "running" dal punto
@@ -520,8 +542,12 @@ function renderHomeTeamStatus(status, { vps = false, vpsIp = null } = {}) {
     // Docker warning del Team panel: in VPS mode il Docker e' remoto,
     // niente da segnalare lato launcher.
     if (homeDom.teamDockerWarning) homeDom.teamDockerWarning.hidden = true
+    // Auto-start è una scelta locale (il team VPS è già su) → nascondi.
+    if (homeDom.autostartRow) homeDom.autostartRow.hidden = true
     return
   }
+  // Local mode: mostra e idrata la checkbox "auto-start al boot" (opt-in).
+  hydrateAutostartToggle()
   const running = !!status?.running && (mode === 'running' || mode === 'external')
   const starting = mode === 'starting' || mode === 'warming'
   const errored = mode === 'error'

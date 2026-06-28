@@ -2145,6 +2145,21 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
   flex-wrap: wrap;
 }
 
+/* Toggle opt-in "auto-start del team al boot" sotto le azioni del Team. */
+.home__autostart {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-muted, #8a8a92);
+  cursor: pointer;
+  user-select: none;
+}
+.home__autostart input {
+  cursor: pointer;
+}
+
 .home__content .lang-select { max-width: 280px; }
 
 .home__card-text {

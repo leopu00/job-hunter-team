@@ -74,11 +74,24 @@ Causa: la lingua si salvava in `localStorage`, ma l'HTML è caricato via `file:/
 `stopRuntime()`. Quindi ogni restart di Electron (per caricare una modifica al main
 process) **uccide il team** → si deve ricliccare "Start" e attendere ~40s.
 
-### Da valutare (follow-up, NON fatto — rischioso a caldo)
-- **Container detached** (`docker run -d`): sopravvive ai restart dell'app. Cambia
-  però la semantica "chiudo l'app = fermo il team" (che per il locale è voluta).
-- **Auto-start team al boot** quando setup completo: niente più click "Start"
-  (consuma token ad ogni apertura → opt-in).
+### ✅ IMPLEMENTATO (2026-06-28)
+- **Container detached** (`docker run -d`): il container vive nel daemon, non più
+  come processo figlio di Electron → sopravvive ai restart dell'app (riapri il
+  launcher e il team è già su, niente ri-spawn / token). `--rm` resta (rimozione
+  allo Stop/crash → niente zombie). Il runtime non traccia più un `state.child` in
+  container mode: lo stato è dato da `docker ps` (`isContainerRunning`), `managed`
+  resta true (lo Stop usa `docker rm -f`). `startRuntime` **adotta** un container
+  già running invece di rilanciarlo; `getStatus` lo riconosce dopo un restart;
+  `before-quit` chiama `shutdownForQuit()` che LASCIA vivere il container (lo Stop
+  esplicito resta su "Ferma team"). Log via `docker logs -f` riversati nel file.
+- **Auto-start team al boot** (opt-in, default OFF — consuma token): pref
+  `autoStartTeam`; al boot `maybeAutoStartTeam()` avvia il team se abilitato +
+  setup completo + non-VPS + container non già su. Toggle nel pannello Team della
+  home (i18n 7 lingue). Riuso di `startTeamRuntime()` (estratto da `launcher:start`).
+- ⚠️ **Da verificare con un run reale sul Mac** (non testabile headless): adozione
+  post-restart, Stop esplicito, e il caso "immagine `:latest` aggiornata mentre un
+  container vecchio è adottato" (adopt salta il pull → codice stale finché non si
+  ferma e rilancia).
 
 Gotcha collegato: quando `docker run -p 3000:3000` fallisce (es. port-forward
 ancora occupato dopo un `docker rm -f` ravvicinato → "port already allocated"),
@@ -198,7 +211,9 @@ ha il **contesto del canale**.
 - [x] **Agent awareness canale + auto-sufficienza (FIXED 2026-06-28).** Nella skill
       `chat-web` (vedi §5): era in EN+IT, portato anche in es/fr/de/hu/pt. I 3 agenti
       user-facing la caricano su ogni `[CHAT]`.
-- [ ] Container detached + auto-start team (§3).
+- [x] **Container detached + auto-start team (FIXED 2026-06-28, §3).** `docker run -d`
+      (sopravvive ai restart, adozione del container già su) + auto-start opt-in
+      (pref `autoStartTeam` + toggle home). ⚠️ Da validare con un run reale sul Mac.
 - [ ] `pull desired-state: unknown option '--silent'` e `ticket-sync: no such table
       position_tickets` (warning non-fatali nel bootstrap team).
 - [ ] OAuth Gmail / vault master-password (BACKLOG `[JHT-EMAIL-OAUTH]`, `[JHT-LOCAL-VAULT]`).
