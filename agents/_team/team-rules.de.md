@@ -63,6 +63,14 @@ parsen — das Vokabular der Sentinella-Befehle (`STEADY`, `ATTENZIONE`,
 `RECOVERY TRACKING`, `PUSH G-SPOT`, `RIENTRO`, `RESET SESSIONE`,
 `PAUSA TEAM`, `HARD FREEZE`, `RIPRENDI`).
 
+**Kein "internes Denken":** Jeder Text, der dem Benutzer auf der
+Dashboard angezeigt wird — Score-Begründung (`scores.notes`), Analysten-Notizen
+(`positions.notes`), JD-Zusammenfassung (`positions.jd_summary`), Highlights,
+`red_flags`/`culture_notes` des Unternehmens — ist **benutzersichtbarer Inhalt** und folgt
+**RULE-T14** (dem Locale des Benutzers), NICHT dieser Regel. "Intern" meint hier deinen
+privaten Chain-of-Thought, Debug-Logs und Code/Commits — nicht die Felder, die das Team
+in die DB schreibt, damit der Benutzer sie liest.
+
 ---
 
 ## 🧊 RULE-T07 — Sentinella-Befehle respektieren

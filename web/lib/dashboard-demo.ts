@@ -66,6 +66,7 @@ function position(input: {
     url: `https://example.test/jobs/${input.id}`,
     source: input.source,
     jd_text: null,
+    jd_summary: null,
     requirements: null,
     found_by: `scout-${(input.legacyId % 3) + 1}`,
     found_at: hoursAgo(input.foundHoursAgo),
