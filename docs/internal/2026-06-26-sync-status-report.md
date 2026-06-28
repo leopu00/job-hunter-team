@@ -42,8 +42,31 @@ Tutte e 7 le tappe sono implementate su `dev3`, dietro il flag
 - Canali `team-state` + `tickets` **SUBSCRIBED**, refresh_token valido (nessun errore auth).
 - **Sync now end-to-end: 1,6s** (trigger `sync_requested_at` → evento websocket → push → ack `sync_completed_at`).
 - 🐛 **BUG TROVATO E FIXATO live** (`90447acf4`): postgres_changes con RLS non consegnava nulla (canale SUBSCRIBED ma 0 eventi) perché il socket Realtime usava l'**anon key** invece dello **user-JWT** (l'auto-wiring del token in supabase-js è async e arrivava DOPO la subscribe). Fix: `client.realtime.setAuth(access_token)` forzato PRIMA delle subscribe.
-- ⚠️ **L'immagine NON ha ancora il fix setAuth** (committato dopo la build): betaC gira col file **patchato a mano** (`docker cp`). Per renderlo permanente serve **merge dev3→master + rebuild :latest + redeploy**. Finché non si rifà l'immagine, NON fare `docker compose up -d` su betaC (perderebbe la patch).
+- ✅ **PERMANENTE (2026-06-26 15:18)**: dopo merge dev3→master, rebuild `:latest` (`280e46c0072a`, fix setAuth nativo) → `docker compose pull` + `up -d` su betaC (verificato che l'immagine contenga il fix prima di ricreare). Niente più patch a mano. Ri-validato: Sync now **2,0s**, heartbeat 80s (online).
 - ⏳ Non ancora stress-testato: recupero a socket caduto (paracadute, validato per design) e dual-auth supabase-direct+realtime nel tempo (nessun errore finora).
+
+### 🔮 Lavoro futuro — robustezza & scaling Realtime (`[JHT-REALTIME-SCALE]`)
+NON urgente ora (1 VPS attivo, margine enorme). Da affrontare crescendo a molti clienti — il design **degrada con grazia** (col Realtime totalmente giù il floor è il solo paracadute ≈ ~56 q/h/utente = -94% vs il vecchio, nessun dato perso), quindi sono ottimizzazioni di scala, non blocchi:
+- **Monitor del rate di riconnessione** per-VPS (contare `CHANNEL_ERROR`/`SUBSCRIBED` nei log + alert se il socket cade spesso) → accorgersene prima dai log, non dai clienti.
+- **Tetto connessioni Realtime Supabase** (~500 concorrenti su Pro): è il **muro di scala vero**, più dei singoli drop → pianificare bump del tier / sharding man mano che gli utenti crescono.
+- **Thundering herd**: a un riavvio del server Realtime tutti gli N socket cadono+riconnettono insieme (auth refresh + re-subscribe ×N) → valutare jitter/backoff extra oltre a quello dell'SDK.
+- **Unificare l'auth**: REST diretto + websocket usano lo STESSO `refresh_token` → 2 sessioni che ruotano in parallelo; a scala + riconnessioni frequenti può dare race di rotazione token (0 finora). Fix pulito = una sola sessione auth condivisa.
+- **Paracadute come leva**: se il Realtime fosse inaffidabile su larga scala, abbassare `JHT_PARACHUTE_SEC` (5min→2-3min) per recupero più stretto.
+
+### 💸 Decisione: posizione Vercel — NON inseguire lo "zero Vercel" (2026-06-27)
+**Verificato live su betaC:** in idle il daemon fa **0 chiamate a Vercel in 6 min** (letture/heartbeat su Supabase diretto, eventi via websocket). Il **polling sempre-attivo** — che scalava col n° di utenti ed era il vero driver di costo — è **eliminato**.
+
+**Cosa resta su Vercel (e va bene così):**
+- **Push dati** (`handlePush` → `${base_url}/api/cloud-sync/push`, `cloud.js:989`): **on-demand** (solo su "Sync now"), + push risoluzione ticket (`/api/cloud-sync/tickets`). User-driven, bounded.
+- **Sito/dashboard** `jobhunterteam.ai` (Next.js su Vercel): hosting web inerente, consuma **solo quando un utente naviga** (read-only). Non si toglie spostando il push.
+- Auth/login + bootstrap/restore: rari.
+
+**Decisione: si tiene il push su Vercel, NON si fa la "Fase 3" (push diretto a Supabase).** Motivi:
+1. Il progetto Vercel serve comunque (ci gira il sito) → daemon 100% vs ~99% Vercel-free non cambia se paghi/usi Vercel.
+2. Il push è on-demand (pochi click/giorno/utente) → **non è un costo di scala**; il driver di scala (polling) è già morto.
+3. Spostare il push = refactor vero e rischioso (upsert su molte tabelle dal VPS: positions/scores/applications/companies/highlights, RLS, mapping `legacy_id`, conflitti) per **guadagno ~zero** (bolletta già al canone base $20, polling già eliminato).
+
+**Regola:** l'obiettivo non era "zero Vercel" (impossibile finché c'è il sito + inutile), era **"Vercel non scala col daemon sempre-attivo"** → CENTRATO. Se un domani il costo Vercel crescesse con gli utenti, sarà il **traffico del sito**, non il push → leva giusta = ottimizzare l'app Next (caching/ISR, render statico, alleggerire le API di lettura), NON azzerare il push del daemon.
 
 **Nota sul lavoro parallelo:** la divisione in 3 (Part A/B/C) ha dato in pratica solo la
 **mig 048** (consegnata duplicata da due branch, non costruita sulla fondazione). Il
