@@ -1648,7 +1648,25 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n[bridge V6] interrotto.")
+    # Supervisore in-process (difesa in profondità): una QUALSIASI eccezione non
+    # gestita nel loop di main() NON deve uccidere il bridge. Era il bug del
+    # 2026-06-27: TimeoutExpired su jht_tmux_send propagava fuori dal while-loop
+    # → processo morto e ZERO recovery (setsid detached, fuori dal respawn di
+    # pid1). Qui la cattura, logga e RI-ENTRA in main(). Layer complementari:
+    # (a) la guardia in jht_tmux_send degrada il caso noto a "tick saltato";
+    # (b) l'agent-watchdog (maybe_respawn_bridges) respawna il processo se muore
+    # del tutto (OOM/kill); (c) il Mantenitore fa il canary completo 1×/dì.
+    # Vedi docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md.
+    import time as _time
+    import traceback as _tb
+    while True:
+        try:
+            main()
+            break  # uscita normale (main() è un loop infinito → non dovrebbe capitare)
+        except KeyboardInterrupt:
+            print("\n[bridge V6] interrotto.")
+            break
+        except Exception as _e:  # noqa: BLE001 — catch-all VOLUTO: niente morte silenziosa
+            print(f"[bridge V6] FATAL nel loop: {_e} — riavvio in 5s", file=sys.stderr)
+            _tb.print_exc()
+            _time.sleep(5)
