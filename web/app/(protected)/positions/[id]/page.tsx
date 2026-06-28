@@ -864,31 +864,56 @@ export default async function PositionDetailPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Job description */}
-          {(position.jd_text || position.requirements) && (
+          {/* Job description — sintesi ottimizzata dell'Analista (jd_summary,
+              markdown, lingua utente). Fallback al testo grezzo per le
+              posizioni legacy non ancora ri-analizzate. */}
+          {(position.jd_summary ||
+            position.jd_text ||
+            position.requirements) && (
             <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg p-5 hover:border-[var(--color-border-glow)] transition-colors">
               <div className="section-label mb-3">{t("job_description")}</div>
-              {position.requirements && (
-                <div className="mb-4">
-                  <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                    {t("requirements")}
-                  </div>
-                  <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
-                    {position.requirements.slice(0, 2000)}
-                    {position.requirements.length > 2000 ? "…" : ""}
-                  </pre>
-                </div>
-              )}
-              {position.jd_text && (
-                <div>
-                  <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
-                    {t("full_description")}
-                  </div>
-                  <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
-                    {position.jd_text.slice(0, 3000)}
-                    {position.jd_text.length > 3000 ? "…" : ""}
-                  </pre>
-                </div>
+              {position.jd_summary ? (
+                <>
+                  <MarkdownLite
+                    text={position.jd_summary}
+                    className="text-[12px] text-[var(--color-base)] leading-relaxed"
+                  />
+                  {position.url && (
+                    <a
+                      href={position.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex items-center gap-1 text-[10px] font-semibold text-[var(--color-blue)] hover:text-[var(--color-bright)] no-underline transition-colors"
+                    >
+                      {t("original_listing")} ↗
+                    </a>
+                  )}
+                </>
+              ) : (
+                <>
+                  {position.requirements && (
+                    <div className="mb-4">
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("requirements")}
+                      </div>
+                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
+                        {position.requirements.slice(0, 2000)}
+                        {position.requirements.length > 2000 ? "…" : ""}
+                      </pre>
+                    </div>
+                  )}
+                  {position.jd_text && (
+                    <div>
+                      <div className="text-[9.5px] font-semibold tracking-widest uppercase text-[var(--color-dim)] mb-2">
+                        {t("full_description")}
+                      </div>
+                      <pre className="text-[11px] text-[var(--color-muted)] leading-relaxed whitespace-pre-wrap font-sans">
+                        {position.jd_text.slice(0, 3000)}
+                        {position.jd_text.length > 3000 ? "…" : ""}
+                      </pre>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
