@@ -189,6 +189,10 @@ Check sistematico dei `*.py` citati nei prompt agenti vs realmente esistenti:
 
 I punti 1+2 sono architetturali (toccano `sentinel-bridge.py` + prompt Sentinella + test) e vanno progettati a parte: insieme porterebbero il consumo Sentinella da ~31% a una frazione, eliminando sia i turni inutili sia il contesto trascinato.
 
+**Stato (2026-06-28):**
+- Il **gate no-op** (punto 1) **esisteva già** come *lean-comms* (`_should_notify_sentinella`, dal 2026-06-15): il bridge tace quando `on_pace`, sveglia la Sentinella solo sull'edge calma→attuabile e poi ai quarti col cooldown. **Raffinato** ora: durante un episodio attuabile **a regime invariato** (`status` uguale), la re-conferma è posticipata fino al cap `SENTINELLA_RECONFIRM_MIN` (45min) invece di ogni quarto — è il caso betaD (sforo/sottoutilizzo stabile per ore). Un cambio di regime la sveglia subito. Backward-safe (`status=None` → legacy). Test: 9 casi.
+- Il **contesto** (punto 2) è ora mitigato dal fix #2 (il Dottore **compatta** la Sentinella a ogni giro). Un tick *davvero* stateless (la Sentinella ricostruisce tutto dai file a ogni wake) resta un miglioramento futuro più invasivo, non incluso qui.
+
 ---
 
 *Stato team al momento dell'indagine: SANO e produttivo — 39 posizioni, 21 scorate (avg 69, max 95), offerte tutte centrate sul profilo luxury hospitality di Roma, comunicazione utente di qualità (digest Capitano + alert Assistente via web). L'unico tema aperto è il pacing descritto sopra.*
