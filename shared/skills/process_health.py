@@ -42,6 +42,7 @@ EXPECTED = [
     ("doctor-watchdog",    "doctor-watchdog.sh",    "pid1-child"),
     ("auto-report-loop",   "auto-report-loop.sh",   "pid1-child"),
     ("cloud-daemon",       "cloud daemon",          "daemon"),
+    ("dashboard",          "jht.js dashboard",      "daemon"),
     ("pid1",               "jht.js pid1",           "core"),
 ]
 TG_MARKER = "tg-bridge.py"
