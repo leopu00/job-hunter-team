@@ -94,7 +94,17 @@ export function parseAnalysisNotes(
   };
   if (!notes || !notes.trim()) return empty;
 
-  const text = notes.replace(/\r\n/g, "\n");
+  // Normalizza i newline. Oltre ai veri `\r\n`, converte le sequenze di
+  // escape LETTERALI (`\n`, `\r\n`, `\t` come due caratteri backslash+lettera):
+  // alcuni run hanno salvato le note con `\n` letterale perché il prompt
+  // mostrava `--notes "...\n..."` dentro doppi apici bash (dove `\n` NON è un
+  // a-capo). Senza questa conversione i metadati restano saldati su una riga
+  // sola ("1 year\nEXPERIENCE_TYPE: ...") e il parser non li separa.
+  const text = notes
+    .replace(/\r\n/g, "\n")
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t");
 
   // 1) Estrae EXCLUDED / NOTE_MISMATCH (anche inline a metà prosa) e li
   //    rimuove dal testo, sostituendoli con un newline per non saldare parole.
