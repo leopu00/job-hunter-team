@@ -183,6 +183,7 @@ def _week_key(day_iso):  # giovedì di riferimento (settimana di budget)
 
 SENTINEL = "/root/.jht/logs/sentinel-data.jsonl"
 usage = None
+hour_cum = {}  # "YYYY-MM-DDTHH" -> budget cumulato % (ultimo sample dell'ora)
 if os.path.exists(SENTINEL):
     samples = []  # (ts, weekly_usage)
     provider = "codex"
@@ -201,6 +202,8 @@ if os.path.exists(SENTINEL):
         if e.get("provider"):
             provider = e["provider"]
     samples.sort()
+    for ts, wu in samples:  # budget cum per ORA (ultimo sample dell'ora vince)
+        hour_cum[ts[:13]] = wu
     day_last = collections.OrderedDict()  # day -> weekly_usage di fine giornata
     for ts, wu in samples:
         day_last[ts[:10]] = wu  # l'ultimo sample del giorno sovrascrive
@@ -233,6 +236,24 @@ if os.path.exists(SENTINEL):
     usage = {"provider": provider, "unit": "weekly_budget_pct",
              "daily": daily, "workingHours": working_hours}
 
+# ── attività + budget per ORA (per viste intraday su fasi corte, es. burst free-run) ──
+# Solo le ore con almeno una transizione (compatto). Ogni bucket:
+# {hour:"YYYY-MM-DDTHH", counts:{ruolo:n}, cum: budget% a quell'ora}. Il cum è
+# riportato in avanti dall'ultimo sample noto, così le ore senza sample budget
+# non azzerano la linea.
+hour_acts = collections.OrderedDict()  # hour -> {role: n}
+for e in events:
+    hr = e["ts"][:13]  # "YYYY-MM-DDTHH"
+    role = e["agent"].split("-")[0]
+    b = hour_acts.setdefault(hr, {})
+    b[role] = b.get(role, 0) + 1
+hourly = []
+_last_cum = 0.0
+for hr in sorted(hour_acts):
+    if hr in hour_cum:
+        _last_cum = hour_cum[hr]
+    hourly.append({"hour": hr, "counts": hour_acts[hr], "cum": round(_last_cum, 1)})
+
 out = {
     "source": "betaC-codex",
     "tsRange": [ts_min, ts_max],
@@ -249,6 +270,7 @@ out = {
     "salary": salary,
     "agents": agents,
     "events": events,
+    "hourly": hourly,
     "usage": usage,
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))

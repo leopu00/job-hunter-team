@@ -17514,6 +17514,1104 @@
       "action": "checked"
     }
   ],
+  "hourly": [
+    {
+      "hour": "2026-05-19T20",
+      "counts": {
+        "scout": 15,
+        "analista": 15,
+        "scorer": 14,
+        "scrittore": 4
+      },
+      "cum": 2
+    },
+    {
+      "hour": "2026-05-19T21",
+      "counts": {
+        "scout": 13,
+        "analista": 13,
+        "scrittore": 8,
+        "scorer": 13
+      },
+      "cum": 6
+    },
+    {
+      "hour": "2026-05-19T22",
+      "counts": {
+        "scrittore": 7
+      },
+      "cum": 8
+    },
+    {
+      "hour": "2026-05-19T23",
+      "counts": {
+        "scrittore": 11
+      },
+      "cum": 10
+    },
+    {
+      "hour": "2026-05-20T00",
+      "counts": {
+        "scrittore": 10
+      },
+      "cum": 13
+    },
+    {
+      "hour": "2026-05-20T01",
+      "counts": {
+        "scrittore": 12,
+        "scout": 4,
+        "analista": 4,
+        "scorer": 4
+      },
+      "cum": 16
+    },
+    {
+      "hour": "2026-05-20T02",
+      "counts": {
+        "scrittore": 10,
+        "scout": 5,
+        "analista": 5,
+        "scorer": 5
+      },
+      "cum": 19
+    },
+    {
+      "hour": "2026-05-20T03",
+      "counts": {
+        "scrittore": 10,
+        "scout": 5,
+        "analista": 5,
+        "scorer": 5
+      },
+      "cum": 22
+    },
+    {
+      "hour": "2026-05-20T04",
+      "counts": {
+        "scout": 3,
+        "analista": 3,
+        "scorer": 3,
+        "scrittore": 8
+      },
+      "cum": 24
+    },
+    {
+      "hour": "2026-05-20T05",
+      "counts": {
+        "scout": 5,
+        "analista": 5,
+        "scorer": 5,
+        "scrittore": 11
+      },
+      "cum": 27
+    },
+    {
+      "hour": "2026-05-20T06",
+      "counts": {
+        "scout": 19,
+        "analista": 19,
+        "scorer": 9,
+        "scrittore": 7
+      },
+      "cum": 29
+    },
+    {
+      "hour": "2026-05-20T07",
+      "counts": {
+        "scorer": 19,
+        "scrittore": 2,
+        "scout": 10,
+        "analista": 10
+      },
+      "cum": 32
+    },
+    {
+      "hour": "2026-05-20T08",
+      "counts": {
+        "scout": 9,
+        "analista": 9,
+        "scorer": 8
+      },
+      "cum": 33
+    },
+    {
+      "hour": "2026-05-20T09",
+      "counts": {
+        "scout": 18,
+        "analista": 13,
+        "scorer": 13
+      },
+      "cum": 35
+    },
+    {
+      "hour": "2026-05-20T10",
+      "counts": {
+        "analista": 13,
+        "scorer": 9,
+        "scout": 8
+      },
+      "cum": 37
+    },
+    {
+      "hour": "2026-05-20T11",
+      "counts": {
+        "scout": 21,
+        "analista": 21,
+        "scorer": 20
+      },
+      "cum": 41
+    },
+    {
+      "hour": "2026-05-20T12",
+      "counts": {
+        "scout": 2,
+        "analista": 2,
+        "scorer": 2
+      },
+      "cum": 42
+    },
+    {
+      "hour": "2026-05-20T13",
+      "counts": {
+        "scout": 21,
+        "analista": 19,
+        "scorer": 16,
+        "scrittore": 1
+      },
+      "cum": 45
+    },
+    {
+      "hour": "2026-05-20T14",
+      "counts": {
+        "analista": 21,
+        "scorer": 21,
+        "scout": 22
+      },
+      "cum": 48
+    },
+    {
+      "hour": "2026-05-20T15",
+      "counts": {
+        "analista": 17,
+        "scorer": 18,
+        "scout": 14
+      },
+      "cum": 51
+    },
+    {
+      "hour": "2026-05-20T16",
+      "counts": {
+        "scrittore": 15,
+        "scout": 3,
+        "analista": 3,
+        "scorer": 3
+      },
+      "cum": 54
+    },
+    {
+      "hour": "2026-05-20T17",
+      "counts": {
+        "scout": 3,
+        "scrittore": 5,
+        "analista": 3,
+        "scorer": 3
+      },
+      "cum": 56
+    },
+    {
+      "hour": "2026-05-20T18",
+      "counts": {
+        "scrittore": 18
+      },
+      "cum": 60
+    },
+    {
+      "hour": "2026-05-20T19",
+      "counts": {
+        "scrittore": 18
+      },
+      "cum": 63
+    },
+    {
+      "hour": "2026-05-20T20",
+      "counts": {
+        "scrittore": 13
+      },
+      "cum": 67
+    },
+    {
+      "hour": "2026-05-20T21",
+      "counts": {
+        "scrittore": 9
+      },
+      "cum": 69
+    },
+    {
+      "hour": "2026-05-20T22",
+      "counts": {
+        "scrittore": 17
+      },
+      "cum": 73
+    },
+    {
+      "hour": "2026-05-20T23",
+      "counts": {
+        "scrittore": 18
+      },
+      "cum": 78
+    },
+    {
+      "hour": "2026-05-21T00",
+      "counts": {
+        "scrittore": 16
+      },
+      "cum": 82
+    },
+    {
+      "hour": "2026-05-21T02",
+      "counts": {
+        "scout": 6,
+        "scrittore": 6,
+        "analista": 6
+      },
+      "cum": 83
+    },
+    {
+      "hour": "2026-05-21T03",
+      "counts": {
+        "scrittore": 13
+      },
+      "cum": 89
+    },
+    {
+      "hour": "2026-05-21T04",
+      "counts": {
+        "scrittore": 12
+      },
+      "cum": 92
+    },
+    {
+      "hour": "2026-05-21T05",
+      "counts": {
+        "scrittore": 6
+      },
+      "cum": 94
+    },
+    {
+      "hour": "2026-05-21T06",
+      "counts": {
+        "scrittore": 8
+      },
+      "cum": 96
+    },
+    {
+      "hour": "2026-05-21T07",
+      "counts": {
+        "scrittore": 2
+      },
+      "cum": 96
+    },
+    {
+      "hour": "2026-06-13T03",
+      "counts": {
+        "scorer": 5,
+        "scout": 14,
+        "analista": 9
+      },
+      "cum": 6
+    },
+    {
+      "hour": "2026-06-13T04",
+      "counts": {
+        "scout": 27,
+        "analista": 32,
+        "scorer": 37
+      },
+      "cum": 18
+    },
+    {
+      "hour": "2026-06-13T05",
+      "counts": {
+        "scout": 6,
+        "analista": 6,
+        "scorer": 6
+      },
+      "cum": 21
+    },
+    {
+      "hour": "2026-06-13T06",
+      "counts": {
+        "scout": 9,
+        "analista": 9
+      },
+      "cum": 26
+    },
+    {
+      "hour": "2026-06-13T07",
+      "counts": {
+        "scout": 3,
+        "analista": 3
+      },
+      "cum": 28
+    },
+    {
+      "hour": "2026-06-13T09",
+      "counts": {
+        "scorer": 12
+      },
+      "cum": 33
+    },
+    {
+      "hour": "2026-06-13T14",
+      "counts": {
+        "scout": 14,
+        "analista": 11
+      },
+      "cum": 39
+    },
+    {
+      "hour": "2026-06-13T15",
+      "counts": {
+        "analista": 11,
+        "scout": 7,
+        "scorer": 10
+      },
+      "cum": 48
+    },
+    {
+      "hour": "2026-06-13T16",
+      "counts": {
+        "analista": 5
+      },
+      "cum": 49
+    },
+    {
+      "hour": "2026-06-13T17",
+      "counts": {
+        "analista": 5,
+        "scorer": 9
+      },
+      "cum": 53
+    },
+    {
+      "hour": "2026-06-13T18",
+      "counts": {
+        "scout": 14,
+        "analista": 12,
+        "scorer": 10
+      },
+      "cum": 61
+    },
+    {
+      "hour": "2026-06-13T19",
+      "counts": {
+        "analista": 1
+      },
+      "cum": 64
+    },
+    {
+      "hour": "2026-06-13T20",
+      "counts": {
+        "scorer": 1,
+        "analista": 3,
+        "scout": 2
+      },
+      "cum": 68
+    },
+    {
+      "hour": "2026-06-13T21",
+      "counts": {
+        "scout": 1
+      },
+      "cum": 70
+    },
+    {
+      "hour": "2026-06-13T22",
+      "counts": {
+        "analista": 3
+      },
+      "cum": 72
+    },
+    {
+      "hour": "2026-06-13T23",
+      "counts": {
+        "scout": 34,
+        "analista": 34,
+        "scorer": 16
+      },
+      "cum": 78
+    },
+    {
+      "hour": "2026-06-14T00",
+      "counts": {
+        "scout": 5,
+        "analista": 5,
+        "scorer": 2
+      },
+      "cum": 80
+    },
+    {
+      "hour": "2026-06-14T01",
+      "counts": {
+        "scout": 14,
+        "analista": 12,
+        "scorer": 4
+      },
+      "cum": 83
+    },
+    {
+      "hour": "2026-06-14T02",
+      "counts": {
+        "scout": 28,
+        "analista": 30,
+        "scorer": 3
+      },
+      "cum": 86
+    },
+    {
+      "hour": "2026-06-14T03",
+      "counts": {
+        "scout": 1,
+        "analista": 1
+      },
+      "cum": 89
+    },
+    {
+      "hour": "2026-06-14T09",
+      "counts": {
+        "scout": 50,
+        "analista": 45,
+        "scorer": 1
+      },
+      "cum": 99
+    },
+    {
+      "hour": "2026-06-14T10",
+      "counts": {
+        "analista": 4
+      },
+      "cum": 100
+    },
+    {
+      "hour": "2026-06-14T17",
+      "counts": {
+        "analista": 2,
+        "scout": 4
+      },
+      "cum": 5
+    },
+    {
+      "hour": "2026-06-14T18",
+      "counts": {
+        "analista": 4,
+        "scorer": 3
+      },
+      "cum": 10
+    },
+    {
+      "hour": "2026-06-14T19",
+      "counts": {
+        "scout": 2,
+        "analista": 1
+      },
+      "cum": 14
+    },
+    {
+      "hour": "2026-06-14T20",
+      "counts": {
+        "analista": 6,
+        "scout": 6
+      },
+      "cum": 17
+    },
+    {
+      "hour": "2026-06-14T21",
+      "counts": {
+        "scout": 5,
+        "analista": 6
+      },
+      "cum": 21
+    },
+    {
+      "hour": "2026-06-14T22",
+      "counts": {
+        "scorer": 15,
+        "scout": 3,
+        "analista": 3
+      },
+      "cum": 24
+    },
+    {
+      "hour": "2026-06-15T03",
+      "counts": {
+        "scout": 1,
+        "analista": 1,
+        "scorer": 1
+      },
+      "cum": 32
+    },
+    {
+      "hour": "2026-06-15T18",
+      "counts": {
+        "scout": 41,
+        "analista": 44,
+        "scorer": 25
+      },
+      "cum": 48
+    },
+    {
+      "hour": "2026-06-15T23",
+      "counts": {
+        "scout": 19,
+        "analista": 23,
+        "scorer": 15
+      },
+      "cum": 61
+    },
+    {
+      "hour": "2026-06-16T00",
+      "counts": {
+        "scout": 37,
+        "analista": 47,
+        "scorer": 13
+      },
+      "cum": 74
+    },
+    {
+      "hour": "2026-06-16T03",
+      "counts": {
+        "scout": 1,
+        "analista": 1,
+        "scorer": 1
+      },
+      "cum": 78
+    },
+    {
+      "hour": "2026-06-16T04",
+      "counts": {
+        "scout": 3,
+        "analista": 3,
+        "scorer": 3
+      },
+      "cum": 85
+    },
+    {
+      "hour": "2026-06-16T14",
+      "counts": {
+        "scout": 5,
+        "analista": 2,
+        "scorer": 2
+      },
+      "cum": 93
+    },
+    {
+      "hour": "2026-06-16T15",
+      "counts": {
+        "analista": 3,
+        "scorer": 1
+      },
+      "cum": 95
+    },
+    {
+      "hour": "2026-06-16T18",
+      "counts": {
+        "scorer": 2,
+        "scout": 2,
+        "analista": 1
+      },
+      "cum": 100
+    },
+    {
+      "hour": "2026-06-21T18",
+      "counts": {
+        "analista": 12,
+        "scorer": 1,
+        "scout": 18
+      },
+      "cum": 4
+    },
+    {
+      "hour": "2026-06-21T19",
+      "counts": {
+        "analista": 14,
+        "scorer": 11,
+        "scout": 7
+      },
+      "cum": 9
+    },
+    {
+      "hour": "2026-06-21T21",
+      "counts": {
+        "scorer": 21
+      },
+      "cum": 12
+    },
+    {
+      "hour": "2026-06-21T22",
+      "counts": {
+        "scout": 25,
+        "analista": 25,
+        "scorer": 9
+      },
+      "cum": 18
+    },
+    {
+      "hour": "2026-06-21T23",
+      "counts": {
+        "scout": 5
+      },
+      "cum": 21
+    },
+    {
+      "hour": "2026-06-22T00",
+      "counts": {
+        "analista": 16,
+        "scorer": 8,
+        "scout": 16
+      },
+      "cum": 29
+    },
+    {
+      "hour": "2026-06-22T01",
+      "counts": {
+        "scorer": 3,
+        "analista": 6,
+        "scout": 9
+      },
+      "cum": 34
+    },
+    {
+      "hour": "2026-06-22T02",
+      "counts": {
+        "scout": 1,
+        "analista": 9
+      },
+      "cum": 38
+    },
+    {
+      "hour": "2026-06-22T04",
+      "counts": {
+        "scorer": 21,
+        "scout": 6,
+        "analista": 8
+      },
+      "cum": 44
+    },
+    {
+      "hour": "2026-06-22T05",
+      "counts": {
+        "scout": 7,
+        "analista": 7,
+        "scorer": 7
+      },
+      "cum": 51
+    },
+    {
+      "hour": "2026-06-22T18",
+      "counts": {
+        "scout": 87,
+        "analista": 82,
+        "scorer": 25
+      },
+      "cum": 66
+    },
+    {
+      "hour": "2026-06-22T19",
+      "counts": {
+        "analista": 14,
+        "scout": 3
+      },
+      "cum": 71
+    },
+    {
+      "hour": "2026-06-22T20",
+      "counts": {
+        "scorer": 15,
+        "scout": 14,
+        "analista": 14
+      },
+      "cum": 76
+    },
+    {
+      "hour": "2026-06-22T21",
+      "counts": {
+        "scout": 11,
+        "analista": 9
+      },
+      "cum": 79
+    },
+    {
+      "hour": "2026-06-22T22",
+      "counts": {
+        "scorer": 21
+      },
+      "cum": 83
+    },
+    {
+      "hour": "2026-06-23T00",
+      "counts": {
+        "scout": 4,
+        "analista": 4
+      },
+      "cum": 87
+    },
+    {
+      "hour": "2026-06-23T05",
+      "counts": {
+        "scout": 10,
+        "analista": 5
+      },
+      "cum": 92
+    },
+    {
+      "hour": "2026-06-23T06",
+      "counts": {
+        "scout": 27,
+        "analista": 30,
+        "scorer": 18
+      },
+      "cum": 97
+    },
+    {
+      "hour": "2026-06-23T07",
+      "counts": {
+        "scout": 12
+      },
+      "cum": 97
+    },
+    {
+      "hour": "2026-06-23T08",
+      "counts": {
+        "scout": 5,
+        "analista": 19,
+        "scorer": 10
+      },
+      "cum": 98
+    },
+    {
+      "hour": "2026-06-23T09",
+      "counts": {
+        "scorer": 5
+      },
+      "cum": 99
+    },
+    {
+      "hour": "2026-06-24T18",
+      "counts": {
+        "scout": 25,
+        "analista": 25
+      },
+      "cum": 4
+    },
+    {
+      "hour": "2026-06-24T19",
+      "counts": {
+        "scout": 13,
+        "analista": 13
+      },
+      "cum": 8
+    },
+    {
+      "hour": "2026-06-24T20",
+      "counts": {
+        "scout": 4
+      },
+      "cum": 8
+    },
+    {
+      "hour": "2026-06-24T21",
+      "counts": {
+        "analista": 4
+      },
+      "cum": 9
+    },
+    {
+      "hour": "2026-06-24T22",
+      "counts": {
+        "scorer": 16
+      },
+      "cum": 11
+    },
+    {
+      "hour": "2026-06-24T23",
+      "counts": {
+        "scout": 16,
+        "analista": 16,
+        "scorer": 3
+      },
+      "cum": 16
+    },
+    {
+      "hour": "2026-06-25T03",
+      "counts": {
+        "scout": 14,
+        "analista": 7,
+        "scorer": 6
+      },
+      "cum": 21
+    },
+    {
+      "hour": "2026-06-25T04",
+      "counts": {
+        "scorer": 1,
+        "analista": 7,
+        "scout": 7
+      },
+      "cum": 24
+    },
+    {
+      "hour": "2026-06-25T05",
+      "counts": {
+        "scorer": 12,
+        "analista": 7
+      },
+      "cum": 26
+    },
+    {
+      "hour": "2026-06-25T06",
+      "counts": {
+        "scorer": 1
+      },
+      "cum": 26
+    },
+    {
+      "hour": "2026-06-25T17",
+      "counts": {
+        "scout": 17,
+        "analista": 6,
+        "scorer": 1
+      },
+      "cum": 29
+    },
+    {
+      "hour": "2026-06-25T18",
+      "counts": {
+        "analista": 29,
+        "scout": 25,
+        "scorer": 18
+      },
+      "cum": 34
+    },
+    {
+      "hour": "2026-06-25T19",
+      "counts": {
+        "analista": 13
+      },
+      "cum": 36
+    },
+    {
+      "hour": "2026-06-25T20",
+      "counts": {
+        "scorer": 8,
+        "scout": 5
+      },
+      "cum": 38
+    },
+    {
+      "hour": "2026-06-25T21",
+      "counts": {
+        "analista": 48,
+        "scout": 43
+      },
+      "cum": 43
+    },
+    {
+      "hour": "2026-06-25T22",
+      "counts": {
+        "scout": 1,
+        "analista": 2,
+        "scorer": 1
+      },
+      "cum": 45
+    },
+    {
+      "hour": "2026-06-25T23",
+      "counts": {
+        "analista": 2,
+        "scorer": 2
+      },
+      "cum": 47
+    },
+    {
+      "hour": "2026-06-26T02",
+      "counts": {
+        "analista": 5
+      },
+      "cum": 50
+    },
+    {
+      "hour": "2026-06-26T03",
+      "counts": {
+        "analista": 6
+      },
+      "cum": 51
+    },
+    {
+      "hour": "2026-06-26T04",
+      "counts": {
+        "analista": 4,
+        "scorer": 13,
+        "scout": 1
+      },
+      "cum": 53
+    },
+    {
+      "hour": "2026-06-26T05",
+      "counts": {
+        "scorer": 1
+      },
+      "cum": 55
+    },
+    {
+      "hour": "2026-06-26T10",
+      "counts": {
+        "scout": 3,
+        "analista": 3
+      },
+      "cum": 60
+    },
+    {
+      "hour": "2026-06-26T11",
+      "counts": {
+        "scorer": 3
+      },
+      "cum": 61
+    },
+    {
+      "hour": "2026-06-26T17",
+      "counts": {
+        "scout": 5
+      },
+      "cum": 69
+    },
+    {
+      "hour": "2026-06-26T18",
+      "counts": {
+        "analista": 8,
+        "scout": 12
+      },
+      "cum": 72
+    },
+    {
+      "hour": "2026-06-26T19",
+      "counts": {
+        "analista": 6,
+        "scorer": 9
+      },
+      "cum": 73
+    },
+    {
+      "hour": "2026-06-26T20",
+      "counts": {
+        "analista": 3,
+        "scorer": 1
+      },
+      "cum": 74
+    },
+    {
+      "hour": "2026-06-26T22",
+      "counts": {
+        "scout": 17,
+        "analista": 17,
+        "scorer": 8
+      },
+      "cum": 80
+    },
+    {
+      "hour": "2026-06-27T03",
+      "counts": {
+        "scout": 1,
+        "analista": 1
+      },
+      "cum": 82
+    },
+    {
+      "hour": "2026-06-27T04",
+      "counts": {
+        "scorer": 1
+      },
+      "cum": 83
+    },
+    {
+      "hour": "2026-06-27T06",
+      "counts": {
+        "scout": 1,
+        "analista": 1,
+        "scorer": 1
+      },
+      "cum": 85
+    },
+    {
+      "hour": "2026-06-27T07",
+      "counts": {
+        "scout": 1,
+        "analista": 1,
+        "scorer": 1
+      },
+      "cum": 86
+    },
+    {
+      "hour": "2026-06-27T10",
+      "counts": {
+        "scout": 1,
+        "analista": 1
+      },
+      "cum": 88
+    },
+    {
+      "hour": "2026-06-27T12",
+      "counts": {
+        "scout": 1,
+        "analista": 1
+      },
+      "cum": 89
+    },
+    {
+      "hour": "2026-06-27T13",
+      "counts": {
+        "scorer": 1
+      },
+      "cum": 90
+    },
+    {
+      "hour": "2026-06-27T16",
+      "counts": {
+        "scout": 7,
+        "analista": 1
+      },
+      "cum": 98
+    },
+    {
+      "hour": "2026-06-27T17",
+      "counts": {
+        "analista": 1
+      },
+      "cum": 98
+    },
+    {
+      "hour": "2026-06-27T18",
+      "counts": {
+        "scorer": 1,
+        "analista": 1
+      },
+      "cum": 98
+    },
+    {
+      "hour": "2026-06-27T19",
+      "counts": {
+        "analista": 1
+      },
+      "cum": 99
+    },
+    {
+      "hour": "2026-06-27T20",
+      "counts": {
+        "analista": 1
+      },
+      "cum": 99
+    }
+  ],
   "usage": {
     "provider": "kimi",
     "unit": "weekly_budget_pct",
