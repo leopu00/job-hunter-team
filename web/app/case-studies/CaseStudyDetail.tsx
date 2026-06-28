@@ -6,8 +6,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import type { CaseStudyProfile } from "@/lib/case-studies";
-import type { CaseStudyRun } from "@/lib/case-study";
+import type { CaseStudyProfile, CaseStudyPhase } from "@/lib/case-studies";
+import type { CaseStudyRun, CaseStudyUsage } from "@/lib/case-study";
 import type { TeamActivity } from "@/lib/team-activity";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
@@ -23,6 +23,7 @@ export interface PreparedCase {
   tagline: string;
   subscription: { provider: string; plan: string; price: string };
   profile: CaseStudyProfile;
+  phases?: CaseStudyPhase[];
   run: CaseStudyRun; // events alleggeriti
   activity: TeamActivity;
 }
@@ -334,7 +335,7 @@ export default function CaseStudyDetail({
   const locale = useLocale();
   const t = T[locale];
   const [menuOpen, setMenuOpen] = useState(false);
-  const { run, activity, profile } = current;
+  const { run, activity, profile, phases } = current;
 
   const activeDays = activity.roleDaily.filter((d) =>
     Object.values(d.counts).some((n) => n > 0),
@@ -568,14 +569,61 @@ export default function CaseStudyDetail({
             </strong>{" "}
             {t.workBudgetProse2}
           </p>
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-            <WorkBudgetChart
-              usage={run.usage}
-              roleDaily={activity.roleDaily}
-              roles={activeRoles}
-              workingHoursText={whText}
-            />
-          </div>
+          {phases && phases.length > 0 ? (
+            // Run multi-fase (es. Codex poi Kimi): un grafico PER FASE, così non si
+            // mescolano sessioni con modello/abbonamento/modalità diversi.
+            <div className="space-y-8">
+              {phases.map((ph) => {
+                const within = (d: string) =>
+                  d >= ph.from && (ph.to == null || d <= ph.to);
+                const u: CaseStudyUsage = {
+                  ...run.usage!,
+                  daily: run.usage!.daily.filter((x) => within(x.day)),
+                };
+                const rd = activity.roleDaily.filter((x) => within(x.date));
+                if (u.daily.length === 0) return null;
+                return (
+                  <div key={ph.key}>
+                    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 mb-2.5">
+                      <span className="text-[13px] font-bold text-[var(--color-white)]">
+                        {ph.label}
+                      </span>
+                      <span
+                        className="text-[10px] font-semibold rounded-md px-2 py-0.5"
+                        style={{
+                          background:
+                            "color-mix(in srgb, var(--color-blue) 14%, transparent)",
+                          color: "var(--color-blue)",
+                        }}
+                      >
+                        {ph.price}
+                      </span>
+                      <span className="text-[10px] text-[var(--color-dim)]">
+                        {ph.note}
+                      </span>
+                    </div>
+                    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+                      <WorkBudgetChart
+                        usage={u}
+                        roleDaily={rd}
+                        roles={activeRoles}
+                        workingHoursText={ph.to == null ? whText : null}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+              <WorkBudgetChart
+                usage={run.usage}
+                roleDaily={activity.roleDaily}
+                roles={activeRoles}
+                workingHoursText={whText}
+              />
+            </div>
+          )}
         </section>
       )}
 
