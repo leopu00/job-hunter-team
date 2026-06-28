@@ -17,6 +17,8 @@ import IntradayBudgetChart from "./IntradayBudgetChart";
 import SourcesScoreChart from "./SourcesScoreChart";
 import SourcesAvgScoreChart from "./SourcesAvgScoreChart";
 import SourcesDonutChart from "./SourcesDonutChart";
+import PositionsFunnelChart from "./PositionsFunnelChart";
+import ExcludedDonut from "./ExcludedDonut";
 
 export interface PreparedCase {
   id: string;
@@ -107,6 +109,10 @@ const T: Record<
     sourcesScoreTitle: string; // titolo grafico fonti volume+score nel tempo
     sourcesScoreCaption: string; // didascalia grafico fonti + score medio
     sourcesAvgCaption: string; // didascalia grafico score medio per fonte
+    funnelTitle: string; // titolo sezione funnel trovate→escluse/tenute
+    funnelProse: string; // didascalia sezione funnel
+    funnelChartTitle: string; // titolo grafico funnel giornaliero
+    funnelDonutTitle: string; // titolo donut tenute vs escluse
   }
 > = {
   it: {
@@ -138,6 +144,11 @@ const T: Record<
       "Lo score medio e la quota per fonte, sulle posizioni valutate (quelle con uno score): a sinistra la qualità media, a destra la distribuzione % delle fonti.",
     sourcesProse1: "Le fonti da cui lo Scout ha trovato le",
     sourcesProse2: "posizioni: job board, ATS e pagine carriera aziendali.",
+    funnelTitle: "Quante posizioni vengono tenute",
+    funnelProse:
+      "Di tutte le posizioni trovate, quante superano i filtri (località, work-auth, pertinenza) e quante vengono escluse — giorno per giorno e in totale.",
+    funnelChartTitle: "Trovate: tenute vs escluse · giorno per giorno",
+    funnelDonutTitle: "Tenute vs escluse · totale",
   },
   en: {
     caseStudies: "Case studies",
@@ -168,6 +179,11 @@ const T: Record<
       "Average score and share by source, over scored positions (those with a score): on the left the average quality, on the right the % distribution of sources.",
     sourcesProse1: "The sources where the Scout found the",
     sourcesProse2: "positions: job boards, ATS and company career pages.",
+    funnelTitle: "How many positions are kept",
+    funnelProse:
+      "Of all the positions found, how many pass the filters (location, work authorization, relevance) and how many are excluded — day by day and overall.",
+    funnelChartTitle: "Found: kept vs excluded · day by day",
+    funnelDonutTitle: "Kept vs excluded · total",
   },
   es: {
     caseStudies: "Casos de estudio",
@@ -199,6 +215,11 @@ const T: Record<
     sourcesProse1: "Las fuentes donde el Scout encontró las",
     sourcesProse2:
       "posiciones: portales de empleo, ATS y páginas de carrera de las empresas.",
+    funnelTitle: "Cuántas posiciones se conservan",
+    funnelProse:
+      "De todas las posiciones encontradas, cuántas pasan los filtros (ubicación, autorización de trabajo, relevancia) y cuántas se excluyen — día a día y en total.",
+    funnelChartTitle: "Encontradas: conservadas vs excluidas · día a día",
+    funnelDonutTitle: "Conservadas vs excluidas · total",
   },
   fr: {
     caseStudies: "Études de cas",
@@ -230,6 +251,11 @@ const T: Record<
     sourcesProse1: "Les sources où le Scout a trouvé les",
     sourcesProse2:
       "postes : sites d’emploi, ATS et pages carrières des entreprises.",
+    funnelTitle: "Combien de postes sont conservés",
+    funnelProse:
+      "Sur tous les postes trouvés, combien passent les filtres (localisation, autorisation de travail, pertinence) et combien sont exclus — jour par jour et au total.",
+    funnelChartTitle: "Trouvés : conservés vs exclus · jour par jour",
+    funnelDonutTitle: "Conservés vs exclus · total",
   },
   de: {
     caseStudies: "Fallstudien",
@@ -261,6 +287,11 @@ const T: Record<
     sourcesProse1: "Die Quellen, in denen der Scout die",
     sourcesProse2:
       "Positionen gefunden hat: Jobbörsen, ATS und Karriereseiten von Unternehmen.",
+    funnelTitle: "Wie viele Positionen behalten werden",
+    funnelProse:
+      "Von allen gefundenen Positionen: wie viele die Filter passieren (Ort, Arbeitserlaubnis, Relevanz) und wie viele ausgeschlossen werden — Tag für Tag und insgesamt.",
+    funnelChartTitle: "Gefunden: behalten vs. ausgeschlossen · Tag für Tag",
+    funnelDonutTitle: "Behalten vs. ausgeschlossen · gesamt",
   },
   hu: {
     caseStudies: "Esettanulmányok",
@@ -292,6 +323,11 @@ const T: Record<
     sourcesProse1: "A források, ahol a Scout megtalálta a",
     sourcesProse2:
       "pozíciókat: állásportálok, ATS és vállalati karrieroldalak.",
+    funnelTitle: "Hány pozíciót tartunk meg",
+    funnelProse:
+      "Az összes megtalált pozícióból hány megy át a szűrőkön (helyszín, munkavállalási engedély, relevancia) és hány kerül kizárásra — naponta és összesen.",
+    funnelChartTitle: "Találatok: megtartott vs. kizárt · naponta",
+    funnelDonutTitle: "Megtartott vs. kizárt · összesen",
   },
   pt: {
     caseStudies: "Estudos de caso",
@@ -323,6 +359,11 @@ const T: Record<
     sourcesProse1: "As fontes onde o Scout encontrou as",
     sourcesProse2:
       "posições: portais de emprego, ATS e páginas de carreira das empresas.",
+    funnelTitle: "Quantas posições são mantidas",
+    funnelProse:
+      "De todas as posições encontradas, quantas passam os filtros (localização, autorização de trabalho, relevância) e quantas são excluídas — dia a dia e no total.",
+    funnelChartTitle: "Encontradas: mantidas vs excluídas · dia a dia",
+    funnelDonutTitle: "Mantidas vs excluídas · total",
   },
 };
 
@@ -687,6 +728,33 @@ export default function CaseStudyDetail({
             )}
           </section>
         )}
+
+      {/* ── Funnel: trovate → tenute vs escluse (sezione nuova) ──────── */}
+      {run.funnelDaily && run.funnelDaily.length > 0 && run.funnelTotals && (
+        <section className="pt-10 border-t border-[var(--color-border)]">
+          <div className="section-label mb-1">🪣 {t.funnelTitle}</div>
+          <p className="text-[11px] text-[var(--color-dim)] mb-6">
+            {t.funnelProse}
+          </p>
+          <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6 items-stretch">
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+              <div className="text-[12px] font-semibold text-[var(--color-base)] mb-4">
+                {t.funnelChartTitle}
+              </div>
+              <PositionsFunnelChart daily={run.funnelDaily} />
+            </div>
+            <div className="flex flex-col">
+              <div className="text-[12px] font-semibold text-[var(--color-base)] mb-4">
+                {t.funnelDonutTitle}
+              </div>
+              <ExcludedDonut
+                kept={run.funnelTotals.kept}
+                excluded={run.funnelTotals.excluded}
+              />
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
