@@ -18733,44 +18733,6 @@
     "scored": 403,
     "ready": 105
   },
-  "exclusionReasons": [
-    {
-      "key": "skills",
-      "count": 194
-    },
-    {
-      "key": "language",
-      "count": 168
-    },
-    {
-      "key": "location",
-      "count": 84
-    },
-    {
-      "key": "education",
-      "count": 30
-    },
-    {
-      "key": "deadlink",
-      "count": 23
-    },
-    {
-      "key": "other",
-      "count": 20
-    },
-    {
-      "key": "experience",
-      "count": 10
-    },
-    {
-      "key": "scam",
-      "count": 6
-    },
-    {
-      "key": "salary",
-      "count": 4
-    }
-  ],
   "usage": {
     "provider": "kimi",
     "unit": "weekly_budget_pct",

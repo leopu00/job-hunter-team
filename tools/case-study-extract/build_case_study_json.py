@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Read-only generator: jobs.db -> CaseStudyRun JSON (aggregato e anonimo).
 # Gira SUL VPS; emette solo dati aggregati su stdout (niente PII).
-import sqlite3, json, unicodedata, datetime, collections, glob, os, re
+import sqlite3, json, unicodedata, datetime, collections, glob, os
 
 c = sqlite3.connect("file:/root/.jht/jobs.db?mode=ro", uri=True)
 cur = c.cursor()
@@ -274,31 +274,6 @@ for d in sorted(fd):
         "day": d, "found": found, "excluded": excl, "kept": found - excl,
         "scored": sm.get("scored", 0), "ready": sm.get("ready", 0),
     })
-# ── motivi di esclusione (dal tag [XXX] in notes delle escluse) ──────
-# Il team scrive in notes un tag tipo "[GEO] EXCLUDED: ...". Estraggo il primo
-# tag e lo normalizzo in poche categorie canoniche (sinonimi fusi). Solo conteggi.
-_CANON = {
-    "STACK": "skills",
-    "LANGUAGE": "language", "LINGUA": "language",
-    "GEO": "location", "LOCATION": "location",
-    "DEGREE": "education", "CERT": "education", "LAUREA": "education",
-    "LINK_MORTO": "deadlink", "DEAD_LINK": "deadlink",
-    "SENIORITY": "experience", "ESPERIENZA_RICHIESTA": "experience",
-    "ESPERIENZA": "experience",
-    "SALARY": "salary", "COMPENSATION": "salary",
-    "SCAM": "scam",
-}
-_tagre = re.compile(r"\[([A-Z_]+)\]")
-_leadre = re.compile(r"\s*([A-Z_]{3,})\s*[:_]")
-excl_reasons = collections.Counter()
-for (notes,) in Q("SELECT notes FROM positions WHERE status='excluded' "
-                  "AND COALESCE(TRIM(notes),'')<>''"):
-    m = _tagre.search(notes or "") or _leadre.match(notes or "")
-    tag = (m.group(1) if m else "")
-    excl_reasons[_CANON.get(tag, "other")] += 1
-exclusion_reasons = [{"key": k, "count": v}
-                     for k, v in excl_reasons.most_common()]
-
 status_tot = {(st or "?"): n for st, n in Q(
     "SELECT status, COUNT(*) FROM positions GROUP BY status")}
 _excl_tot = status_tot.get("excluded", 0)
@@ -327,7 +302,6 @@ out = {
     "hourly": hourly,
     "funnelDaily": funnel_daily,
     "funnelTotals": funnel_totals,
-    "exclusionReasons": exclusion_reasons,
     "usage": usage,
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))
