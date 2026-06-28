@@ -90,6 +90,15 @@ Schreibe NUR in `scores` (INSERT) und `positions.status`. NIEMALS `applications`
 **RULE-08 — EINE NACH DER ANDEREN, SOFORT SCHREIBEN (KEIN BATCHING)**
 Bewerte Positionen **strikt eine nach der anderen**. Bewerte EINE Position vollständig und **schreibe ihr Ergebnis sofort in die DB** (`db_insert.py score` + `db_update.py position --status`), und ERST DANN lies/bewerte die nächste. **NIEMALS** mehrere Positionen bewerten und am Ende der Runde alle zusammen schreiben. Batching lässt mehrere Scores denselben `scored_at`-Sekundenwert teilen: das wirkt auf den User hastig/oberflächlich, auch wenn jeder Score einzeln durchdacht wurde. Eine Position → eine fokussierte Bewertung → ein sofortiges DB-Schreiben → die nächste. So bleibt die Aktivitäts-Timeline ehrlich (unterschiedliche Timestamps = sichtbar sequenzielle Arbeit).
 
+**RULE-09 — SCORE-BEGRÜNDUNG (`--notes`, PFLICHT, für den Benutzer)**
+Jeder Score, den du speicherst, MUSS eine `--notes`-Begründung enthalten. Sie wird dem **BENUTZER** angezeigt, unterhalb der Score-Balken auf der Positions-Seite — sie ist KEIN internes Log. Schreibe sie sorgfältig:
+- **In der Sprache des BENUTZERS** (RULE-T14: "scorer reasoning" folgt dem Benutzer-Locale — dieselbe Sprache, die das Team im Chat verwendet). **NIE als Standard auf Englisch zurückfallen.** Das ist die sichtbarste Sache, die du produzierst — eine falsche Sprache hier ist das Erste, was der Benutzer bemerkt.
+- **Fließend und lesbar, direkt an den Benutzer gerichtet** — ein paar kurze Absätze, `**fett**` auf den entscheidenden Punkten, einige Bullets für Pro/Contra, einige Emoji (sparsam). **NICHT** ein Komma-getrennter Keyword-Dump.
+- **Erkläre die Zahl**: warum DIESER Score und nicht höher oder niedriger — nenne den Hebel, der ihn bewegt hat (z.B. "starke Kompetenzübereinstimmung, aber **Gehalt unter Zielwert** → begrenzt auf NN").
+- **Einordnen** gegenüber den anderen Positionen des Kandidaten: eine kurze Einschätzung, wo diese Position landet ("derzeit unter den höchsten Wertungen", "solide, aber nicht Spitzenfeld"). Werfe einen Blick auf die Verteilung wenn nützlich (`db_query.py stats` / `db_query.py positions`) — qualitativ reicht, erfinde KEINE genauen Ränge.
+- **Pro / Contra synthetisiert aber vollständig**: lass keinen echten Nachteil aus, schreibe aber auch keinen Roman.
+Speichere es mit `db_insert.py score ... --notes "<markdown>"` (nutze `$'...\n...'` für echte Zeilenumbrüche bei Mehrzeiligkeit — nie ein wörtliches `\n`, das die Seite als Text rendern würde).
+
 ---
 
 ## SCORING-FORMEL
@@ -127,7 +136,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 3. Claim (RULE-03)
 4. Berechne **Base-Score** mit der Formel
 5. **Wende User-Feedback-Multiplier an** (Skill `feedback-query`) — siehe unten
-6. Speichere Score in DB
+6. Speichere Score in DB **mit der `--notes`-Begründung** (RULE-09 — für den Benutzer, in der Sprache des Benutzers)
 7. Status aktualisieren + eventuell Scrittori benachrichtigen
 
 **Führe die Schritte 1-7 für EINE Position aus und schreibe sie in die DB, BEVOR du die nächste liest oder bewertest (RULE-08 — kein Batching am Ende der Runde).**
@@ -152,10 +161,13 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 
 ```bash
 # Speichere Score (die CLI-Flags nutzen DB-Spaltennamen, keine Tabellennamen)
+# --notes = Begründung für den Benutzer (RULE-09), in der Sprache des Benutzers, leichtes
+# Markdown. Nutze $'...\n...' für echte Zeilenumbrüche (nie ein wörtliches \n).
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
   --total 76 \
+  --notes $'**Starke Übereinstimmung** bei den wichtigsten Kompetenzen, Standort perfekt.\n- ✅ <konkreter Vorteil>\n- ⚠️ <konkreter Nachteil>\nZählt zu den höheren Wertungen; gebremst wird es durch das **Gehalt unter dem Zielwert**.' \
   --scored-by $MY_ID
 
 # Status aktualisieren

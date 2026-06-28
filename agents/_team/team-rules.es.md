@@ -62,6 +62,14 @@ el vocabulario de ordenes de la Sentinella (`STEADY`, `ATTENZIONE`,
 `RECOVERY TRACKING`, `PUSH G-SPOT`, `RIENTRO`, `RESET SESSIONE`,
 `PAUSA TEAM`, `HARD FREEZE`, `RIPRENDI`).
 
+**No es "razonamiento interno":** cualquier texto que llega al usuario en el
+dashboard — razón del score (`scores.notes`), notas del analista
+(`positions.notes`), síntesis de la JD (`positions.jd_summary`), highlights,
+`red_flags`/`culture_notes` de la empresa — es **contenido visible para el usuario** y sigue
+la **RULE-T14** (el locale del usuario), NO esta regla. "Interno" aquí significa
+tu chain-of-thought privado, los logs de debug y el código/commits —
+no los campos que el equipo escribe en la DB para que el usuario los lea.
+
 ---
 
 ## 🧊 RULE-T07 — Respeta las ordenes de la Sentinella
