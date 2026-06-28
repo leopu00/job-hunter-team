@@ -41,9 +41,19 @@ match = {
 }
 
 # ── categorie (role_family emerse) ───────────────────────────────────
-categories = [{"name": name, "count": cnt} for name, cnt in Q(
-    "SELECT COALESCE(NULLIF(TRIM(role_family),''),'Non categorizzato') rf,COUNT(*) "
-    "FROM positions GROUP BY rf ORDER BY 2 DESC, rf")]
+# count = posizioni nella famiglia; scored = quante hanno uno score;
+# avg = media total_score sulle scorate (None se nessuna). LEFT JOIN così le
+# famiglie senza posizioni scorate restano in lista con avg=None.
+categories = [
+    {"name": name, "count": cnt, "scored": scored,
+     "avg": round(avg, 1) if avg is not None else None}
+    for name, cnt, scored, avg in Q(
+        "SELECT COALESCE(NULLIF(TRIM(p.role_family),''),'Non categorizzato') rf,"
+        "COUNT(DISTINCT p.id) cnt,"
+        "COUNT(s.total_score) scored,"
+        "AVG(s.total_score) avg_score "
+        "FROM positions p LEFT JOIN scores s ON s.position_id=p.id "
+        "GROUP BY rf ORDER BY 2 DESC, rf")]
 
 # ── fonti (job board / ATS / pagine carriera) ────────────────────────
 # Normalizzate (lower/trim, '_'→'-' per fondere company_careers/company-careers);

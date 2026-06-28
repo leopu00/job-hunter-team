@@ -27,6 +27,9 @@ const T: Record<
     legendBudget: string;
     cumWeek: string;
     dayConsumption: string;
+    paused: string;
+    budgetExhausted: string;
+    teamOff: string;
   }
 > = {
   it: {
@@ -38,6 +41,9 @@ const T: Record<
     legendBudget: "Budget % (asse dx)",
     cumWeek: "cumulato settimana",
     dayConsumption: "consumo del giorno",
+    paused: "team in pausa",
+    budgetExhausted: "budget esaurito",
+    teamOff: "team fermo",
   },
   en: {
     workingHours: "Working hours",
@@ -48,6 +54,9 @@ const T: Record<
     legendBudget: "Budget % (right axis)",
     cumWeek: "cumulative week",
     dayConsumption: "day consumption",
+    paused: "team paused",
+    budgetExhausted: "budget used up",
+    teamOff: "team off",
   },
   es: {
     workingHours: "Horario de trabajo",
@@ -58,6 +67,9 @@ const T: Record<
     legendBudget: "Presupuesto % (eje derecho)",
     cumWeek: "acumulado semana",
     dayConsumption: "consumo del día",
+    paused: "equipo en pausa",
+    budgetExhausted: "presupuesto agotado",
+    teamOff: "equipo parado",
   },
   fr: {
     workingHours: "Horaires de travail",
@@ -68,6 +80,9 @@ const T: Record<
     legendBudget: "Budget % (axe droit)",
     cumWeek: "cumulé semaine",
     dayConsumption: "consommation du jour",
+    paused: "équipe en pause",
+    budgetExhausted: "budget épuisé",
+    teamOff: "équipe arrêtée",
   },
   de: {
     workingHours: "Arbeitszeit",
@@ -78,6 +93,9 @@ const T: Record<
     legendBudget: "Budget % (rechte Achse)",
     cumWeek: "kumuliert Woche",
     dayConsumption: "Tagesverbrauch",
+    paused: "Team pausiert",
+    budgetExhausted: "Budget aufgebraucht",
+    teamOff: "Team gestoppt",
   },
   hu: {
     workingHours: "Munkaidő",
@@ -88,6 +106,9 @@ const T: Record<
     legendBudget: "Költségkeret % (jobb tengely)",
     cumWeek: "halmozott hét",
     dayConsumption: "napi felhasználás",
+    paused: "csapat szünetel",
+    budgetExhausted: "keret kimerült",
+    teamOff: "csapat leállt",
   },
   pt: {
     workingHours: "Horário de trabalho",
@@ -98,6 +119,9 @@ const T: Record<
     legendBudget: "Orçamento % (eixo direito)",
     cumWeek: "acumulado semana",
     dayConsumption: "consumo do dia",
+    paused: "equipa em pausa",
+    budgetExhausted: "orçamento esgotado",
+    teamOff: "equipa parada",
   },
 };
 
@@ -143,13 +167,36 @@ export default function WorkBudgetChart({
     return () => ro.disconnect();
   }, []);
 
-  // Join usage.daily (budget) con roleDaily (azioni) per giorno.
-  const byDate = new Map(roleDaily.map((d) => [d.date, d.counts]));
-  const days = usage.daily.map((u) => {
-    const counts = byDate.get(u.day);
+  // Asse CALENDARIO CONTINUO: ogni giorno tra il primo e l'ultimo ha il suo slot,
+  // anche se il team era fermo (nessun campione budget) o idle (0 azioni). Così
+  // l'asse temporale non "mente" collassando i giorni mancanti e la durata reale
+  // del downtime resta visibile. I giorni senza campione budget = "off".
+  const sampleByDay = new Map(usage.daily.map((u) => [u.day, u]));
+  const actByDay = new Map(roleDaily.map((d) => [d.date, d.counts]));
+  const span = [...new Set([...sampleByDay.keys(), ...actByDay.keys()])].sort();
+  const cal: string[] = [];
+  if (span.length) {
+    const cursor = new Date(`${span[0]}T00:00:00Z`);
+    const stop = new Date(`${span[span.length - 1]}T00:00:00Z`);
+    while (cursor <= stop) {
+      cal.push(cursor.toISOString().slice(0, 10));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+  }
+  const days = cal.map((day) => {
+    const u = sampleByDay.get(day);
+    const counts = actByDay.get(day);
     const get = (r: TeamActivityRole) => counts?.[r] ?? 0;
     const total = roles.reduce((s, r) => s + get(r), 0);
-    return { day: u.day, week: u.week, pct: u.pct, cum: u.cum, get, total };
+    return {
+      day,
+      week: u?.week ?? null,
+      pct: u?.pct ?? null,
+      cum: u?.cum ?? null,
+      hasSample: !!u,
+      get,
+      total,
+    };
   });
 
   const n = Math.max(1, days.length);
@@ -171,16 +218,54 @@ export default function WorkBudgetChart({
   const yL = (v: number) => padT + plotH - (v / axisMax) * plotH; // azioni
   const yR = (pct: number) => padT + plotH - (pct / 100) * plotH; // %
 
-  // Linea cumulata: spezzata per settimana (reset giovedì).
+  // Linea cumulata: spezzata per settimana (reset giovedì) E sui giorni "off"
+  // (nessun campione) — niente segmenti finti sopra il downtime.
   const cumSegs: { x: number; y: number }[][] = [];
   days.forEach((d, i) => {
-    const pt = { x: xc(i), y: yR(d.cum) };
+    if (!d.hasSample) return;
+    const pt = { x: xc(i), y: yR(d.cum as number) };
+    const prev = days[i - 1];
     const seg = cumSegs[cumSegs.length - 1];
-    if (seg && days[i - 1] && days[i - 1].week === d.week) seg.push(pt);
+    if (seg && prev && prev.hasSample && prev.week === d.week) seg.push(pt);
     else cumSegs.push([pt]);
   });
-  // Linea consumo giornaliero: continua su tutto il range.
-  const dailyLine = days.map((d, i) => `${xc(i)},${yR(d.pct)}`).join(" ");
+  // Linea consumo giornaliero: spezzata anch'essa sui giorni off.
+  const dailySegs: { x: number; y: number }[][] = [];
+  days.forEach((d, i) => {
+    if (!d.hasSample) return;
+    const pt = { x: xc(i), y: yR(d.pct as number) };
+    const prev = days[i - 1];
+    const seg = dailySegs[dailySegs.length - 1];
+    if (seg && prev && prev.hasSample) seg.push(pt);
+    else dailySegs.push([pt]);
+  });
+
+  // Bande di INATTIVITÀ: run di giorni consecutivi con 0 azioni (≥3 gg). Etichetta
+  // data-driven sui run ≥4 gg: budget alto (≥90%) = "budget esaurito" (coast a fine
+  // settimana), altrimenti "team in pausa" (spento/idle). Rende auto-esplicativi i
+  // vuoti, distinguendoli da dati mancanti.
+  const gaps: { start: number; end: number; label: string | null }[] = [];
+  for (let i = 0; i < days.length; ) {
+    if (days[i].total === 0) {
+      let j = i;
+      while (j + 1 < days.length && days[j + 1].total === 0) j++;
+      const len = j - i + 1;
+      if (len >= 3) {
+        let rep: number | null = null;
+        for (let k = i; k <= j; k++) {
+          const c = days[k].cum;
+          if (c != null) rep = rep == null ? c : Math.max(rep, c);
+        }
+        const isCoast = rep != null && rep >= 90;
+        gaps.push({
+          start: i,
+          end: j,
+          label: len >= 4 ? (isCoast ? t.budgetExhausted : t.paused) : null,
+        });
+      }
+      i = j + 1;
+    } else i++;
+  }
 
   const leftTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(axisMax * f));
   const rightTicks = [0, 25, 50, 75, 100];
@@ -249,6 +334,36 @@ export default function WorkBudgetChart({
           </text>
         ))}
 
+        {/* bande di inattività (team in pausa / budget esaurito) — dietro tutto */}
+        {gaps.map((g) => {
+          const x = padL + band * g.start;
+          const wBand = band * (g.end - g.start + 1);
+          return (
+            <g key={`gap${g.start}`}>
+              <rect
+                x={x}
+                y={padT}
+                width={wBand}
+                height={plotH}
+                fill="var(--color-muted)"
+                opacity={0.06}
+              />
+              {g.label && wBand > 46 && (
+                <text
+                  x={x + wBand / 2}
+                  y={padT + 12}
+                  textAnchor="middle"
+                  fontSize={8.5}
+                  fontStyle="italic"
+                  fill="var(--color-dim)"
+                >
+                  {g.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
+
         {/* barre impilate: azioni per ruolo */}
         {days.map((d, i) => {
           if (d.total <= 0) return null;
@@ -278,28 +393,44 @@ export default function WorkBudgetChart({
           );
         })}
 
-        {/* linea: budget consumato quel giorno (tratteggiata) */}
-        <polyline
-          className="cs-budget-stroke"
-          points={dailyLine}
-          fill="none"
-          strokeWidth={1.5}
-          strokeDasharray="4 3"
-          opacity={0.55}
-          vectorEffect="non-scaling-stroke"
-        />
-        {/* linea: budget cumulato settimanale (piena) */}
-        {cumSegs.map((seg, si) => (
+        {/* linea: budget consumato quel giorno (tratteggiata), spezzata sui giorni off */}
+        {dailySegs.map((seg, si) => (
           <polyline
-            key={si}
+            key={`day${si}`}
             className="cs-budget-stroke"
             points={seg.map((p) => `${p.x},${p.y}`).join(" ")}
             fill="none"
-            strokeWidth={2}
-            opacity={0.95}
+            strokeWidth={1.5}
+            strokeDasharray="4 3"
+            opacity={0.55}
             vectorEffect="non-scaling-stroke"
           />
         ))}
+        {/* linea: budget cumulato settimanale (piena) */}
+        {cumSegs.map((seg, si) =>
+          seg.length === 1 ? (
+            // punto isolato (settimana di 1 giorno tra due "off"): la polyline non
+            // disegna nulla → un pallino lo rende visibile.
+            <circle
+              key={si}
+              className="cs-budget-fill"
+              cx={seg[0].x}
+              cy={seg[0].y}
+              r={1.8}
+              opacity={0.95}
+            />
+          ) : (
+            <polyline
+              key={si}
+              className="cs-budget-stroke"
+              points={seg.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="none"
+              strokeWidth={2}
+              opacity={0.95}
+              vectorEffect="non-scaling-stroke"
+            />
+          ),
+        )}
 
         {/* x labels + bande hover */}
         {days.map((d, i) => (
@@ -364,7 +495,12 @@ export default function WorkBudgetChart({
           <div className="mt-1 pt-1 border-t border-[var(--color-border)] flex items-center gap-1.5">
             <span className="cs-budget-bg inline-block w-2 h-2 rounded-sm" />
             <span className="text-[var(--color-muted)]">
-              {t.budgetTooltip(Math.round(hd.pct), Math.round(hd.cum))}
+              {hd.hasSample
+                ? t.budgetTooltip(
+                    Math.round(hd.pct ?? 0),
+                    Math.round(hd.cum ?? 0),
+                  )
+                : t.teamOff}
             </span>
           </div>
         </div>
