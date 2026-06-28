@@ -998,7 +998,12 @@ def _weekly_pace_via_skill(entry, now_dt, now_ts):
             cfg = None
         wreset_dt = datetime.fromtimestamp(wreset_unix, tz=timezone.utc)
         wah = wht.active_hours_in_range(now_dt, wreset_dt, cfg)
-        return wp.weekly_pace_assessment(str(DATA_JSONL), now_ts, wrem, wah)
+        # Ore attive dell'INTERO ciclo (per il debito cumulativo, 2026-06-28):
+        # il ciclo weekly e' di 7 giorni che terminano al reset → start = reset-7d.
+        # Cosi' weekly_pace puo' calcolare ideal_used e debt_pct (saldo vs retta).
+        wtot = wht.active_hours_in_range(wreset_dt - timedelta(days=7), wreset_dt, cfg)
+        return wp.weekly_pace_assessment(str(DATA_JSONL), now_ts, wrem, wah,
+                                         weekly_total_active_hours=wtot)
     except Exception:
         return None
 
@@ -1553,6 +1558,14 @@ def main():
                         f" ratio={weekly_pace['ratio']}x"
                         + (f" early_lockout={el}h" if el else "")
                     )
+                    # debt (2026-06-28): saldo cumulativo vs retta ideale. >0 =
+                    # speso troppo presto (front-load) → in debito la Sentinella
+                    # (S-07) usa tolleranza 1.0x e scala il freno anche sul debito,
+                    # non solo sul runway. Espone debt anche quando kind=ALLINEATO
+                    # (e' il caso che il rate da solo mascherava).
+                    dbt = weekly_pace.get("debt_pct")
+                    if isinstance(dbt, (int, float)):
+                        weekly_pace_field += f" debt={dbt:+.0f}pp"
                     # burn_mode (duale di early_lockout): SOTTO-PACE + vicino al
                     # reset + spreco alto → la Sentinella deve consigliare di
                     # SATURARE, non spalmare. Espone proiezione + spreco previsto.

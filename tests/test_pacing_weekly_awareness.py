@@ -16,8 +16,12 @@ Guard: a QUALUNQUE livello weekly, lo status dipende SOLO dal primary 5h.
 """
 from datetime import datetime, timezone, timedelta
 
+import json
+import os
+import tempfile
+
 from shared.skills.compute_metrics import compute_metrics
-from shared.skills.weekly_pace import is_weekly_binding
+from shared.skills.weekly_pace import is_weekly_binding, weekly_pace_assessment
 
 
 def _parsed(usage, weekly_usage):
@@ -95,3 +99,99 @@ def test_binding_degrada_in_sicurezza():
     # Dato assente/malformato → False (= comportamento attuale, zero rischio).
     assert is_weekly_binding(None) is False
     assert is_weekly_binding({}) is False
+
+
+# ── Debito cumulativo (2026-06-28): il binding scatta anche quando il RATE
+# istantaneo dice ALLINEATO ma il SALDO è in debito (front-load del boot). In
+# debito la tolleranza scende da 1.2x a 1.0x; il debito è immune al rumore di
+# quantizzazione perché cumulativo, non a finestra.
+
+def test_binding_su_debito_anche_se_rate_allineato():
+    # Caso live: kind ALLINEATO (rate a finestra ingannevole) ma debito 17pp e
+    # ratio reale (de-noised) > 1.0 → binding (non stai recuperando il debito).
+    assert is_weekly_binding(
+        {"kind": "ALLINEATO", "ratio": 1.7, "debt_pct": 17.0,
+         "early_lockout_h": None, "burst_transient": False}) is True
+
+
+def test_no_binding_in_debito_ma_in_recupero():
+    # In debito MA ratio<=1.0 (sotto il sostenibile ridotto) = stai recuperando
+    # → NON binding (altrimenti freneresti chi si sta già correggendo).
+    assert is_weekly_binding(
+        {"kind": "SOTTO-PACE", "ratio": 0.7, "debt_pct": 17.0,
+         "burst_transient": False}) is False
+
+
+def test_no_binding_debito_sotto_soglia():
+    # Debito piccolo (< DEBT_BIND_PCT=8) e ratio appena sopra 1 = variazione
+    # naturale, niente front-load → NON binding.
+    assert is_weekly_binding(
+        {"kind": "ALLINEATO", "ratio": 1.05, "debt_pct": 2.0,
+         "burst_transient": False}) is False
+
+
+def test_debito_mai_binding_su_burst():
+    # Anche con debito alto, un picco in esaurimento (burst_transient) NON binda:
+    # frenare un burst finito = over-brake (vale per entrambi i rami).
+    assert is_weekly_binding(
+        {"kind": "SOPRA-PACE", "ratio": 2.0, "debt_pct": 17.0,
+         "early_lockout_h": 20.0, "burst_transient": True}) is False
+
+
+# ── Finestra ADATTIVA + debito end-to-end (file reale): il caso che il rate a
+# finestra fissa 2h leggeva come "ALLINEATO 1.07x" e che ora viene smascherato.
+
+def _write_jsonl(samples):
+    f = tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False)
+    for s in samples:
+        f.write(json.dumps(s) + "\n")
+    f.close()
+    return f.name
+
+
+def _series(now_ts, rate_pct_h, hours, end_pct):
+    """Storia weekly INTERA (quantizzata a 1%) a `rate_pct_h`, terminante a end_pct."""
+    out = []
+    t = now_ts - hours * 3600.0
+    while t <= now_ts:
+        h_ago = (now_ts - t) / 3600.0
+        out.append({"ts": _iso(t), "weekly_usage": max(0, round(end_pct - rate_pct_h * h_ago))})
+        t += 300.0
+    return out
+
+
+def _iso(ts):
+    return datetime.fromtimestamp(ts, timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def test_finestra_adattiva_smaschera_overpace_lento():
+    # Over-pace lento 0.75%/h: su finestra fissa 2h il delta intero è ~1 punto →
+    # 0.5%/h → "ALLINEATO" (il bug). La finestra adattiva allarga finché il delta
+    # è affidabile → vel ~0.88%/h, ratio>1.2 = SOPRA-PACE.
+    now = 1_800_000_000.0
+    fn = _series(now, 0.75, 8.0, 28)
+    path = _write_jsonl(fn)
+    try:
+        r = weekly_pace_assessment(path, now, 72.0, 150.0, weekly_total_active_hours=168.0)
+    finally:
+        os.unlink(path)
+    assert r is not None
+    assert r["rate_window_h"] > 2.0, "la finestra non si è adattata"
+    assert r["kind"] == "SOPRA-PACE", f"rate non smascherato: {r['kind']} ratio={r['ratio']}"
+    # debito ~17pp (28% speso vs ~10.7% ideale dopo 18h attive)
+    assert r["debt_pct"] > 10.0
+    assert r["binding"] is True
+
+
+def test_debito_none_se_manca_total_active_hours():
+    # Caller legacy (senza weekly_total_active_hours) → debito None, binding ricade
+    # SOLO sul rate classico (zero rischio di regressione).
+    now = 1_800_000_000.0
+    path = _write_jsonl(_series(now, 0.75, 8.0, 28))
+    try:
+        r = weekly_pace_assessment(path, now, 72.0, 150.0)
+    finally:
+        os.unlink(path)
+    assert r is not None
+    assert r["debt_pct"] is None
+    assert r["ideal_used_pct"] is None
