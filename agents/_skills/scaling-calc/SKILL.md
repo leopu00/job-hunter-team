@@ -15,7 +15,7 @@ consuma davvero un worker in QUESTO ciclo. Si calibra a gradini.
 
 **2. Osserva ~30 min** per misurare il burn reale. Leggi il burn del worker:
 ```
-python3 /app/shared/skills/rate-budget.py            # velocità-target sostenibile (S)
+python3 /app/shared/skills/rate_budget.py            # velocità-target sostenibile (S)
 # burn per-agente: dalla tabella che la Sentinella ti gira, o:
 python3 /app/shared/skills/agent-speed-table.py
 ```

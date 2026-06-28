@@ -24,7 +24,7 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 ```bash
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
-- **Sorrend**: a worker-munkamenetek ELŐSZÖR (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), a felhasználó felé néző munkamenetek UTOLJÁRA és óvatosan (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). Soha ne frissítsd a `DOTTORE` / `DOCTOR-WATCHDOG` munkamenetet (saját magadat / az ütemezőt).
+- **Sorrend**: a worker-munkamenetek ELŐSZÖR (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), a koordinátorok UTOLJÁRA és óvatosan (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). Az „óvatosan" azt jelenti, hogy **jól fogd be az állapotukat és tömörítsd őket — NE hagyd ki őket** (ők a legnagyobb fogyasztók; lásd a Szabályokat). Soha ne frissítsd a `DOTTORE` / `DOCTOR-WATCHDOG` munkamenetet (saját magadat / az ütemezőt).
 - **FRESH kihagyás**: `age = now - session_created`. Ha `age < 40 min` → teljesen KIHAGYNI (még nincs mit összefoglalni, és a frissítés eldobna egy épp elindult munkamenetet). Naplózd: `action=skipped_fresh`.
 
 ## Step 2 — munkamenetenként: capture (széles + lényegi)
@@ -92,6 +92,8 @@ sleep 8
 
 ## Szabályok
 - **Egy Dottore intézi az összes munkamenetet ebben a körben** (felhasználói sorrend: egyelőre egyetlen Dottore). Használd a fájlalapú capture + grep megoldást, hogy soha ne robbantsd fel a saját kontextusablakodat.
-- **Soha** ne hozd újra létre könnyelműen a `CAPITANO`/`SENTINELLA` munkameneteket — ezek az orkesztráció/szívverés; csak akkor frissítsd őket, ha a kontextusuk egyértelműen felduzzadt, előzetes figyelmeztetés után, a sorrendben utolsóként.
+- **A `CAPITANO` és a `SENTINELLA` a LEGNAGYOBB token-fogyasztók** (a kontextusuk szinte mindig felduzzadt — a Sentinella ~15 percenként tickel, a Capitano folyamatosan koordinál). NEM kivételek: **tömörítsd őket minden körben** (utolsóként, a workerek után). **Tömöríts, ne resetelj** — a sűrű szintézisű frissítés megőrzi a folytonosságot, egy nyers kill elveszíti azt.
+- **CAPITANO**: koordinátor in-flight állapottal (worker-beosztások, aktív throttle-konfiguráció, utolsó pacing-utasítás, függőben lévő döntések). Az interjúban (Step 5) explicit módon fogd be ezt a koordinációs állapotot, és tedd a seedbe (Step 7). UTOLSÓKÉNT csináld; ha épp egy élő EMERGENZA-t kezel, előbb hagyd stabilizálódni, egyébként tömörítsd.
+- **SENTINELLA**: **majdnem állapotmentes** — az állapota a bridge-ben/configban és a sentinel-data.jsonl-ben él, nem a chatjében. Ezért **a legbiztonságosabb és a legnagyobb értékű tömöríteni**: frissítsd minden körben, utolsóként, minimális seeddel. Az agent-watchdog kor-alapú újra létrehozása (a JHT_SENTINELLA_MAX_CTX_AGE_H, alapból 24h után) csak **fallbackként** marad meg arra az esetre, ha a Dottore nem fut; mivel most minden körben tömöríted, nem éri el azt a kort — nincs versenyhelyzet.
 - **Soha** ne `tmux new-session` kézzel — mindig `start-agent.sh` (lásd `spawn-agent`).
 - Naplózz minden műveletet a naplóban (`recreated`/`skipped_parked`/`skipped_fresh`) — a napló az audit-nyom, és minden nap bővül.
