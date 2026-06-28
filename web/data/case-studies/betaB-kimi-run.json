@@ -18612,6 +18612,127 @@
       "cum": 99
     }
   ],
+  "funnelDaily": [
+    {
+      "day": "2026-05-19",
+      "found": 28,
+      "excluded": 5,
+      "kept": 23,
+      "scored": 1,
+      "ready": 22
+    },
+    {
+      "day": "2026-05-20",
+      "found": 172,
+      "excluded": 57,
+      "kept": 115,
+      "scored": 32,
+      "ready": 83
+    },
+    {
+      "day": "2026-05-21",
+      "found": 6,
+      "excluded": 3,
+      "kept": 3,
+      "scored": 3,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-13",
+      "found": 131,
+      "excluded": 52,
+      "kept": 79,
+      "scored": 79,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-14",
+      "found": 118,
+      "excluded": 92,
+      "kept": 26,
+      "scored": 26,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-15",
+      "found": 61,
+      "excluded": 22,
+      "kept": 39,
+      "scored": 39,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-16",
+      "found": 48,
+      "excluded": 33,
+      "kept": 15,
+      "scored": 15,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-21",
+      "found": 55,
+      "excluded": 28,
+      "kept": 27,
+      "scored": 27,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-22",
+      "found": 153,
+      "excluded": 89,
+      "kept": 64,
+      "scored": 64,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-23",
+      "found": 58,
+      "excluded": 27,
+      "kept": 31,
+      "scored": 31,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-24",
+      "found": 58,
+      "excluded": 36,
+      "kept": 22,
+      "scored": 22,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-25",
+      "found": 112,
+      "excluded": 70,
+      "kept": 42,
+      "scored": 42,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-26",
+      "found": 38,
+      "excluded": 19,
+      "kept": 19,
+      "scored": 19,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-27",
+      "found": 12,
+      "excluded": 6,
+      "kept": 6,
+      "scored": 3,
+      "ready": 0
+    }
+  ],
+  "funnelTotals": {
+    "found": 1050,
+    "excluded": 539,
+    "kept": 511,
+    "scored": 403,
+    "ready": 105
+  },
   "usage": {
     "provider": "kimi",
     "unit": "weekly_budget_pct",
