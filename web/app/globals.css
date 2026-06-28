@@ -30,8 +30,10 @@
   --color-orange: #ff8c42;
   --color-purple: #a855f7;
 
-  /* Font */
-  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  /* Font — prima il JetBrains Mono self-hosted di next/font (var iniettata su
+     <html>), poi i fallback. Senza questo riferimento il sito cadeva su Courier
+     New (J col trattino), che NON combacia con la favicon (vera JetBrains Mono). */
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', 'Courier New', monospace;
 
   /* Scoped tokens (override per-theme dove serve, non toccano --color-*). */
   --sync-warn: #d4a85a;
