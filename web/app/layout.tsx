@@ -60,11 +60,7 @@ const FloatingChat = dynamic(() => import("./components/FloatingChat"));
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
-  // Nome DISTINTO da --font-mono: il token Tailwind (@theme in globals.css) lo
-  // referenzia come prima scelta. Se usassimo --font-mono qui, il token del tema
-  // lo sovrascriverebbe con la stringa letterale 'JetBrains Mono' (non installata
-  // → fallback Courier New, la "J" col trattino) invece del font self-hosted.
-  variable: "--font-jetbrains-mono",
+  variable: "--font-mono",
   display: "swap",
 });
 
