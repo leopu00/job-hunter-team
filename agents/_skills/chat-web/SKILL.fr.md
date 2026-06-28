@@ -23,49 +23,48 @@ Vous n'écrivez pas le JSON. Le wrapper `jht-send` le fait pour vous, avec horod
 
 > ⚠️ Mode de défaillance courant la première fois que vous voyez ceci : vous lisez le préfixe et pensez "je vais répondre via `jht-tmux-send` à l'utilisateur". `jht-tmux-send UTENTE ...` retourne `exit 2` (session inexistante). Ne commencez pas à déboguer — rappelez-vous simplement que `[CHAT]` ⇒ `jht-send`. Toujours.
 
-## ⚠️ L'utilisateur n'est PAS TECHNIQUE — pas de terminal, pas de CLI, pas de slash-commandes
+## ⚠️ L'utilisateur N'EST PAS technique — pas de terminal, pas de CLI, pas de slash-commands
 
-Un message `[CHAT]` arrive depuis l'**app de bureau** (ou Telegram). L'utilisateur
-n'a **pas** de terminal, ni la CLI de Claude Code, ni `/mcp`, ni slash-commandes,
-ni accès aux fichiers. Ce n'est pas un développeur. **JAMAIS** lui demander de :
+Un message `[CHAT]` arrive depuis l'**app desktop** (ou Telegram). L'utilisateur
+**n'a pas** de terminal, ni la CLI de Claude Code, ni `/mcp`, ni slash-commands, ni
+accès aux fichiers. Ce n'est pas un développeur. **JAMAIS** lui dire de :
 
-- exécuter `/mcp`, `/config` ou une slash-commande quelconque,
+- exécuter `/mcp`, `/config` ou n'importe quelle slash-command,
 - ouvrir un terminal / lancer une commande CLI / éditer un fichier / "autoriser un outil",
-- faire quoi que ce soit que vous pourriez faire vous-même.
+- faire quelque chose que tu pourrais faire toi-même.
 
-Dire à un utilisateur de bureau "tape `/mcp` dans le terminal" est une impasse — il
-ne peut pas. Si une tâche nécessite une capacité que vous n'avez pas câblée,
-**résolvez-la vous-même avec du code** au lieu de renvoyer le travail à
-l'utilisateur. Vous êtes l'équipe ; l'utilisateur est le client. Débrouillez-vous.
+Dire à un utilisateur desktop « tape `/mcp` dans le terminal » est une impasse — il
+ne peut pas. Si une tâche requiert une capacité que tu n'as pas câblée, **résous-la
+toi-même avec du code** au lieu de renvoyer le travail à l'utilisateur. Tu es
+l'équipe ; l'utilisateur est le client. Débrouille-toi.
 
-### Exemple : envoyer un e-mail — vous n'avez PAS besoin d'un outil MCP/Gmail
-L'équipe a déjà des identifiants e-mail dans
-`$JHT_HOME/credentials/email_monitor.json` (un mot de passe d'application Gmail —
-valable aussi pour SMTP). Écrivez un petit script Python et envoyez-le :
+### Exemple : envoyer un e-mail — tu n'as PAS besoin d'un outil MCP/Gmail
+L'équipe a déjà les identifiants e-mail dans
+`$JHT_HOME/credentials/email_monitor.json` (un app-password Gmail — valable aussi
+pour le SMTP). Écris un petit script Python et envoie :
 
 ```python
 import os, json, smtplib, ssl
 from email.message import EmailMessage
 c = json.load(open(os.path.join(os.environ["JHT_HOME"], "credentials", "email_monitor.json")))
 m = EmailMessage()
-m["From"], m["To"], m["Subject"] = c["user"], "<recipient>", "<subject>"
-m.set_content("<body>")
-# Gmail: smtp.gmail.com:465. For another provider derive smtp.<domain> or map it.
+m["From"], m["To"], m["Subject"] = c["user"], "<destinataire>", "<objet>"
+m.set_content("<corps>")
+# Gmail : smtp.gmail.com:465. Pour un autre fournisseur, dérive smtp.<domaine> ou mappe-le.
 with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl.create_default_context()) as s:
     s.login(c["user"], c["password"]); s.send_message(m)
 ```
 
-Répondez ensuite "Fait, envoyé ✅" — jamais "va autoriser Gmail".
+Puis réponds « C'est fait, envoyé ✅ » — jamais « va autoriser Gmail ».
 
-### Si vous avez vraiment besoin d'une slash-commande / d'un outil dans VOTRE session
-Vous pouvez piloter votre propre session — ne le demandez pas à l'utilisateur :
+### Si tu as vraiment besoin d'une slash-command / d'un outil dans TA session
+Tu peux piloter ta propre session — ne le demande pas à l'utilisateur :
 
-- **Auto-injectez**-la dans votre propre session tmux :
-  `jht-tmux-send <VOTRE_SESSION> '/mcp'` (puis un Entrée séparé), ou
-- **demandez à un autre agent** de l'injecter pour vous : p. ex. l'Assistant demande
+- **Auto-injecte**-la dans ta propre session tmux :
+  `jht-tmux-send <TA_SESSION> '/mcp'` (puis un Enter séparé), ou
+- **demande à un autre agent** de l'injecter pour toi : p. ex. l'Assistant demande
   au Capitaine (`jht-tmux-send CAPITANO '...injecte /mcp dans ASSISTENTE...'`) et le
-  Capitaine exécute `jht-tmux-send ASSISTENTE '/mcp'`. L'utilisateur n'est jamais
-  impliqué.
+  Capitaine exécute `jht-tmux-send ASSISTENTE '/mcp'`. L'utilisateur n'est jamais impliqué.
 
 ## Commandes de réponse
 

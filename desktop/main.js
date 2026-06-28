@@ -55,6 +55,7 @@ const sync = require('./sync')
 const vps = require('./vps')
 const tunnel = require('./vps/tunnel')
 const telegram = require('./telegram')
+const remoteConfig = require('./vps/remote-config')
 const emailVerify = require('./email-verify')
 const { freeBytes, formatBytes } = require('./disk-space')
 
@@ -172,6 +173,57 @@ function ensureTeamStarted() {
     child.on('exit', (code) => log.info('[team] start exec exit', { code }))
   } catch (err) {
     log.warn('[team] start crashed', { err: String(err) })
+  }
+}
+
+// Avvia il runtime locale (container/dashboard) + il team completo. Estratto
+// dall'handler `launcher:start` così lo riusa anche l'auto-start al boot.
+// runtime.startRuntime è idempotente: adotta un container detached già su
+// (sopravvissuto a un restart) invece di rilanciarlo.
+async function startTeamRuntime(options = {}) {
+  try {
+    syncJhtConfig()
+  } catch (error) {
+    // Non-fatal: l'agent-boot ha un fallback Claude-subscription, quindi un
+    // config mancante/parziale fa solo cadere l'utente sul provider di default.
+    broadcastContainerLog(`syncJhtConfig failed: ${error?.message ?? error}`)
+  }
+  const status = await runtime.startRuntime(options)
+  // Container/dashboard pronto → avvia il team completo (il container parte in
+  // modalità dashboard: senza questo si vedrebbe solo l'Assistente). Fire-and-
+  // forget: gli agenti salgono in ~30s, la pagina Agents li mostra man mano.
+  if (status && (status.mode === 'running' || status.mode === 'external')) {
+    ensureTeamStarted()
+  }
+  return status
+}
+
+// Setup completo = un provider salvato (stesso criterio del renderer
+// isSetupComplete: providers.saved>0). Niente provider → l'app è ancora nel
+// wizard, non auto-avviare nulla.
+function isSetupCompleteMain() {
+  try {
+    const sel = providerStore.readSelection(app.getPath('userData'))
+    return !!(sel && sel.provider)
+  } catch {
+    return false
+  }
+}
+
+// [autostart] Opt-in: al boot, se l'utente l'ha abilitato (pref autoStartTeam,
+// default OFF perché consuma token) e il setup è completo, avvia il team senza
+// click su "Start". Skip in VPS mode (il team gira sulla VPS) e se un container
+// è già su (detached sopravvissuto al restart → la home lo adotta da sola).
+async function maybeAutoStartTeam() {
+  try {
+    if (readPref('location') === 'vps') return
+    if (readPref('autoStartTeam') !== true) return
+    if (!isSetupCompleteMain()) return
+    if (containerRuntime.isContainerRunning()) return
+    log.info('autostart.starting')
+    await startTeamRuntime({})
+  } catch (err) {
+    log.warn('autostart.failed', { err: String(err) })
   }
 }
 
@@ -311,6 +363,25 @@ function getUserUploadsDir() {
   const userDir =
     process.env.JHT_USER_DIR_HOST || path.join(home, 'Documents', 'Job Hunter Team')
   return path.join(userDir, 'allegati')
+}
+
+// Normalizzazione difensiva degli orari di lavoro scelti nel wizard.
+// Accetta null/{} (=24/7) o {timezone, windows:[{days,start,end}]} e ritorna
+// { timezone, windows } | null. Condivisa fra il save locale (~/.jht) e
+// quello VPS (jht.config.json remoto via SSH) così le due strade producono
+// lo stesso schema che legge working_hours.py al boot.
+function normalizeWorkingHours(working_hours) {
+  if (!working_hours || typeof working_hours !== 'object') return null
+  const tz = typeof working_hours.timezone === 'string' && working_hours.timezone
+    ? working_hours.timezone
+    : 'UTC'
+  const windows = Array.isArray(working_hours.windows)
+    ? working_hours.windows
+        .filter((w) => w && Array.isArray(w.days) && w.days.length &&
+          typeof w.start === 'string' && typeof w.end === 'string')
+        .map((w) => ({ days: w.days, start: w.start, end: w.end }))
+    : []
+  return { timezone: tz, windows }
 }
 
 // Salva i 3 bot Telegram nel jht.config.json LOCALE (channels.telegram.bots),
@@ -909,7 +980,7 @@ app.whenReady().then(() => {
   // L'agente risponde via la skill chat-web scrivendo in chat.jsonl, che il poll
   // della UI rilegge via GET /api/<agent>/chat (requireAuth col token → ok).
   const CHAT_SESSIONS = { capitano: 'CAPITANO', assistente: 'ASSISTENTE' }
-  ipcMain.handle('chat:send', (_event, { agent, text } = {}) => {
+  ipcMain.handle('chat:send', async (_event, { agent, text } = {}) => {
     const session = CHAT_SESSIONS[agent]
     if (!session) return { ok: false, error: 'invalid-agent' }
     const t = typeof text === 'string' ? text.trim() : ''
@@ -917,16 +988,60 @@ app.whenReady().then(() => {
     const name = containerRuntime.DEFAULT_CONTAINER_NAME || 'jht'
     const payload = `[@utente -> @${agent}] [CHAT] ${t}`
     const ts = Date.now() / 1000
-    // Persisti il messaggio utente in chat.jsonl (bind ~/.jht/agents/<agent>/):
-    // così sopravvive al ri-render della UI (cambio tab) invece di restare solo
-    // un echo temporaneo. Il renderer userà `ts` per allineare lastTs ed evitare
-    // il doppione con l'echo ottimistico. Stesso formato che scrive la skill
-    // chat-web. Best-effort: se fallisce, l'invio tmux procede comunque.
+    const jsonLine = JSON.stringify({ role: 'user', text: t, ts }) + '\n'
+    // Path di chat.jsonl DENTRO il container (JHT_HOME=/jht_home, sia locale
+    // che VPS). In locale è bind su ~/.jht; in VPS vive solo sul container
+    // remoto → si scrive via docker exec.
+    const remoteChatFile = `/jht_home/agents/${agent}/chat.jsonl`
+
+    // VPS mode: il container è REMOTO → tmux/persist via SSH+docker exec, non
+    // docker exec locale (che fallisce: nessun container `jht` sul Mac). Era il
+    // motivo per cui la chat non funzionava in VPS mode (setup b3).
+    const vpsIp = readPref('location') === 'vps' ? readPref('vpsIp') : null
+    if (vpsIp) {
+      const SshExec = require('./vps/ssh-exec')
+      try {
+        // 1) Persisti il msg utente in chat.jsonl (docker exec -i → cat >>):
+        // l'input via stdin evita ogni quoting del testo utente, e il file
+        // resta con l'owner del container. Best-effort.
+        const persist = SshExec.run(
+          vpsIp,
+          `docker exec -i ${name} sh -c 'cat >> ${remoteChatFile}'`,
+          { input: jsonLine, timeout: 15000 },
+        )
+        if (!persist.ok) log.warn('[chat] vps persist failed', { stderr: persist.stderr })
+        // 2) Invia il messaggio alla sessione tmux. load-buffer da stdin +
+        // paste-buffer evita il quoting del payload attraverso la shell remota
+        // (send-keys -- payload via SSH sarebbe a rischio escaping).
+        const load = SshExec.run(
+          vpsIp,
+          `docker exec -i ${name} tmux load-buffer -`,
+          { input: payload, timeout: 15000 },
+        )
+        if (!load.ok) return { ok: false, error: load.stderr || 'vps-load-buffer-failed' }
+        const paste = SshExec.run(
+          vpsIp,
+          `docker exec ${name} tmux paste-buffer -t ${session} && docker exec ${name} tmux send-keys -t ${session} Enter`,
+          { timeout: 15000 },
+        )
+        if (!paste.ok) return { ok: false, error: paste.stderr || 'vps-send-failed' }
+        log.info('[chat] sent (vps)', { agent })
+        return { ok: true, ts }
+      } catch (err) {
+        return { ok: false, error: err && (err.message || String(err)) }
+      }
+    }
+
+    // Local mode: persisti il messaggio utente in chat.jsonl (bind
+    // ~/.jht/agents/<agent>/) così sopravvive al ri-render della UI (cambio
+    // tab) invece di restare solo un echo temporaneo. Il renderer userà `ts`
+    // per allineare lastTs ed evitare il doppione con l'echo ottimistico.
+    // Stesso formato che scrive la skill chat-web. Best-effort.
     try {
       const fs = require('node:fs')
       const chatFile = path.join(getBindHomeDir(), 'agents', agent, 'chat.jsonl')
       fs.mkdirSync(path.dirname(chatFile), { recursive: true })
-      fs.appendFileSync(chatFile, JSON.stringify({ role: 'user', text: t, ts }) + '\n', 'utf8')
+      fs.appendFileSync(chatFile, jsonLine, 'utf8')
     } catch (e) {
       log.warn('[chat] persist-user-msg failed', { err: e && (e.message || String(e)) })
     }
@@ -1004,20 +1119,7 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('team:set-working-hours', (_event, working_hours) => {
     try {
-      // Normalizzazione difensiva: accetta null/{} (=24-7) o {timezone, windows}.
-      let value = null
-      if (working_hours && typeof working_hours === 'object') {
-        const tz = typeof working_hours.timezone === 'string' && working_hours.timezone
-          ? working_hours.timezone
-          : 'UTC'
-        const windows = Array.isArray(working_hours.windows)
-          ? working_hours.windows
-              .filter((w) => w && Array.isArray(w.days) && w.days.length &&
-                typeof w.start === 'string' && typeof w.end === 'string')
-              .map((w) => ({ days: w.days, start: w.start, end: w.end }))
-          : []
-        value = { timezone: tz, windows }
-      }
+      const value = normalizeWorkingHours(working_hours)
       const cfg = readJhtConfig()
       cfg.team = { ...(cfg.team && typeof cfg.team === 'object' ? cfg.team : {}), working_hours: value }
       writeJhtConfig(cfg)
@@ -1027,6 +1129,18 @@ app.whenReady().then(() => {
       return { ok: false, error: err && (err.message || String(err)) }
     }
   })
+
+  // ── Onboarding VPS: orari di lavoro sul container REMOTO ──────────────
+  // Stessi dati del ramo locale ma scritti in /root/.jht/jht.config.json
+  // sulla VPS via SSH (read→merge→atomic-write + chown 1001). Il wizard in
+  // modalità VPS instrada qui invece che su team:set-working-hours, così
+  // l'utente non salta mai la scelta degli orari (gap b3, 2026-06-27).
+  ipcMain.handle('team:get-working-hours-vps', (_event, { vpsIp } = {}) =>
+    remoteConfig.getWorkingHoursFromVps(vpsIp),
+  )
+  ipcMain.handle('team:set-working-hours-vps', (_event, { vpsIp, working_hours } = {}) =>
+    remoteConfig.saveWorkingHoursToVps(vpsIp, normalizeWorkingHours(working_hours)),
+  )
 
   // ── Onboarding: upload documenti del profilo (CV + obiettivi) ─────────
   // File-picker nativo → copia i file nella drop-zone allegati (bind su
@@ -1082,6 +1196,35 @@ app.whenReady().then(() => {
     }
   })
 
+  // ── Onboarding VPS: upload documenti del profilo sul container REMOTO ──
+  // File-picker nativo (lato Mac) → legge i file come Buffer → li scrive
+  // nella drop-zone allegati REMOTA via SSH (/root/Documents/Job Hunter
+  // Team/allegati, bind /jht_user/allegati). L'Assistente li ingerisce al
+  // boot del team sulla VPS. Speculare a profile:upload-docs locale.
+  ipcMain.handle('profile:upload-docs-vps', async (_event, { vpsIp } = {}) => {
+    if (!vpsIp) return { ok: false, error: 'vpsIp required', files: [] }
+    try {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Carica il tuo CV e i documenti del profilo',
+        buttonLabel: 'Carica',
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: 'Documenti', extensions: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf', 'odt', 'pages'] },
+          { name: 'Tutti i file', extensions: ['*'] },
+        ],
+      })
+      if (result.canceled || !Array.isArray(result.filePaths) || !result.filePaths.length) {
+        return { ok: true, files: [] }
+      }
+      return await remoteConfig.uploadDocsToVps(vpsIp, result.filePaths)
+    } catch (err) {
+      return { ok: false, error: err && (err.message || String(err)), files: [] }
+    }
+  })
+  ipcMain.handle('profile:list-docs-vps', (_event, { vpsIp } = {}) =>
+    remoteConfig.listDocsOnVps(vpsIp),
+  )
+
   // [JHT-VPS-TUNNEL] Cockpit VPS via tunnel SSH.
   ipcMain.handle('tunnel:open', (_event, { ip } = {}) => {
     const allow = assertKnownVpsIp(ip)
@@ -1091,25 +1234,7 @@ app.whenReady().then(() => {
   ipcMain.handle('tunnel:close', () => tunnel.closeTunnel())
   ipcMain.handle('tunnel:status', () => tunnel.getStatus())
   ipcMain.handle('vps:open-cockpit', (_event, { ip } = {}) => openVpsCockpit(ip))
-  ipcMain.handle('launcher:start', async (_event, options) => {
-    try {
-      syncJhtConfig()
-    } catch (error) {
-      // Non-fatal: the agent-boot script has a Claude-subscription
-      // fallback, so a missing or partial config just means the user
-      // drops into the default provider.
-      broadcastContainerLog(`syncJhtConfig failed: ${error?.message ?? error}`)
-    }
-    const status = await runtime.startRuntime(options)
-    // Una volta che il container/dashboard è pronto, avvia il team completo.
-    // Senza questo si vedeva solo l'Assistente (il container parte in modalità
-    // dashboard). Fire-and-forget: gli agenti salgono in ~30s, la pagina Agents
-    // li mostra man mano. Solo runtime locale pronto.
-    if (status && (status.mode === 'running' || status.mode === 'external')) {
-      ensureTeamStarted()
-    }
-    return status
-  })
+  ipcMain.handle('launcher:start', async (_event, options) => startTeamRuntime(options))
   ipcMain.handle('launcher:stop', () => {
     // [JHT-DASHBOARD-SPLIT] Stop team = il server localhost cade → chiudi la
     // finestra dashboard per non lasciare un "connessione rifiutata" appeso.
@@ -2162,6 +2287,10 @@ app.whenReady().then(() => {
 
   createWindow()
 
+  // [autostart] Dopo che la finestra è su, valuta l'auto-start del team
+  // (opt-in via pref). Non blocca il boot: fire-and-forget.
+  maybeAutoStartTeam()
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
@@ -2170,7 +2299,11 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
-  if (runtime) runtime.stopRuntime().catch(() => {})
+  // Container detached: NON fermare il team alla chiusura dell'app — sopravvive
+  // così riaprendo il launcher è già su (niente ri-spawn / token). Lo stop
+  // esplicito resta su "Stop team" (launcher:stop → runtime.stopRuntime).
+  // Dev/non-container: shutdownForQuit ferma comunque il processo figlio.
+  if (runtime) Promise.resolve(runtime.shutdownForQuit()).catch(() => {})
   tunnel.closeTunnel().catch(() => {})
   terminal.killAll()
 })

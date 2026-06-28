@@ -98,6 +98,10 @@ contextBridge.exposeInMainWorld('dashboardApi', {
 contextBridge.exposeInMainWorld('teamApi', {
   getWorkingHours: () => ipcRenderer.invoke('team:get-working-hours'),
   setWorkingHours: (wh) => ipcRenderer.invoke('team:set-working-hours', wh),
+  // VPS mode: stessi orari ma sul container remoto via SSH. args = { vpsIp,
+  // working_hours }. Usato dal wizard quando location === 'vps'.
+  getWorkingHoursVps: (args) => ipcRenderer.invoke('team:get-working-hours-vps', args),
+  setWorkingHoursVps: (args) => ipcRenderer.invoke('team:set-working-hours-vps', args),
 })
 
 // [ONBOARDING] Upload documenti del profilo (CV + obiettivi). Il main apre il
@@ -106,6 +110,10 @@ contextBridge.exposeInMainWorld('teamApi', {
 contextBridge.exposeInMainWorld('profileApi', {
   uploadDocs: () => ipcRenderer.invoke('profile:upload-docs'),
   listDocs: () => ipcRenderer.invoke('profile:list-docs'),
+  // VPS mode: file-picker locale → upload nella drop-zone allegati REMOTA
+  // via SSH. args = { vpsIp }. → { ok, files:[{name,size}], error? }.
+  uploadDocsVps: (args) => ipcRenderer.invoke('profile:upload-docs-vps', args),
+  listDocsVps: (args) => ipcRenderer.invoke('profile:list-docs-vps', args),
 })
 
 // [chat] Invio messaggio a un agente (capitano/assistente) via docker exec
