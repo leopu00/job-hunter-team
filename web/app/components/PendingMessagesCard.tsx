@@ -31,6 +31,15 @@ const KIND_LABEL: Record<PendingMessageKind, string> = {
   alert: "ALERT",
 };
 
+// Alcuni messaggi salvati prima del fix in jht-notify-user contengono le
+// escape LETTERALI `\n`/`\t` (l'agente le scrive come separatori di paragrafo
+// in una stringa singola). pre-wrap rende solo i newline VERI, quindi senza
+// questa normalizzazione si vedrebbe il testo "\n\n". Difensivo e idempotente:
+// i newline gia' veri restano invariati.
+function normalizeBody(s: string): string {
+  return s.replace(/\\r\\n|\\n/g, "\n").replace(/\\t/g, "\t");
+}
+
 function fmtRelative(iso: string): string {
   const ts = new Date(
     iso.includes("T") ? iso : iso.replace(" ", "T") + "Z",
@@ -73,6 +82,24 @@ export default function PendingMessagesCard({ initialMessages }: Props) {
     });
   }
 
+  async function handleAckAll() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/pending-messages/ack-all`, {
+          method: "POST",
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
+        setMessages([]);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    });
+  }
+
   async function handleReply(id: string) {
     const reply = replyText.trim();
     if (!reply) {
@@ -104,9 +131,21 @@ export default function PendingMessagesCard({ initialMessages }: Props) {
     <div className="mb-8" style={{ animation: "fade-in 0.35s ease both" }}>
       <div className="flex items-center justify-between mb-4">
         <span className="section-label">Messaggi dal team</span>
-        <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-          {messages.length} non letti
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
+            {messages.length} non letti
+          </span>
+          {messages.length > 1 && (
+            <button
+              type="button"
+              onClick={handleAckAll}
+              disabled={pending}
+              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors disabled:opacity-50"
+            >
+              Segna tutti come letti
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -172,7 +211,7 @@ export default function PendingMessagesCard({ initialMessages }: Props) {
                     className="text-[12px] text-[var(--color-base)] m-0 mb-2 leading-relaxed"
                     style={{ whiteSpace: "pre-wrap" }}
                   >
-                    {m.body}
+                    {normalizeBody(m.body)}
                   </p>
                   {m.related_position_id && (
                     <Link
