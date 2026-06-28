@@ -38,6 +38,19 @@ def resolve_db_path() -> str:
     return os.path.join(jht_home, "jobs.db")
 
 
+def interpret_escapes(text: str) -> str:
+    """Converte le escape letterali \\n \\t \\r in caratteri veri.
+
+    Gli agenti (LLM) scrivono `\\n\\n` come separatore di paragrafi in una
+    stringa singola, confidando che venga interpretato. `jht-telegram-send`
+    fa gia' questa conversione (vedi commento li', screenshot 2026-05-16);
+    senza la stessa conversione qui il body finiva in pending_user_messages
+    — e quindi in dashboard — coi 4 caratteri letterali `\\`, `n`, `\\`, `n`.
+    Interpretiamo solo le escape comuni, mai un decode generico fragile.
+    """
+    return text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r")
+
+
 def _is_off_hours() -> bool:
     """True se la config ha working_hours e l'orario corrente e' fuori finestra.
 
@@ -164,6 +177,10 @@ def main() -> int:
         print("jht-notify-user: body vuoto", file=sys.stderr)
         return 1
 
+    # Normalizza una sola volta: il body interpretato finisce sia in DB
+    # (e quindi in dashboard web via cloud push) sia in Telegram, coerente.
+    body = interpret_escapes(args.body)
+
     db_path = resolve_db_path()
     if not os.path.exists(db_path):
         print(f"jht-notify-user: DB non trovato: {db_path}", file=sys.stderr)
@@ -173,7 +190,7 @@ def main() -> int:
         row_id = insert_pending(
             db_path,
             agent=args.agent,
-            body=args.body,
+            body=body,
             kind=args.kind,
             related_position_id=args.position_id,
         )
@@ -183,7 +200,7 @@ def main() -> int:
 
     delivered_via = "web"
     off_hours = _is_off_hours()
-    if not args.no_telegram and not off_hours and try_telegram(args.agent, args.body):
+    if not args.no_telegram and not off_hours and try_telegram(args.agent, body):
         delivered_via = "telegram"
     if off_hours:
         print(
