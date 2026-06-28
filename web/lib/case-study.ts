@@ -93,5 +93,7 @@ export interface CaseStudyRun {
     scored: number;
     ready: number;
   };
+  // Motivi di esclusione normalizzati (skills/language/location/...). Opzionale.
+  exclusionReasons?: { key: string; count: number }[];
   usage?: CaseStudyUsage | null;
 }
