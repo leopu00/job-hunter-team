@@ -745,13 +745,13 @@ export default function CaseStudyDetail({
           <p className="text-[11px] text-[var(--color-dim)] mb-6">
             {t.funnelProse}
           </p>
-          <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6 items-start">
-            {/* sinistra: grafico giornaliero — titolo SOPRA la card */}
-            <div>
+          <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6 items-stretch">
+            {/* sinistra: grafico giornaliero — titolo SOPRA la card, card riempita */}
+            <div className="flex flex-col">
               <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
                 {t.funnelChartTitle}
               </div>
-              <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+              <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 flex-1 flex flex-col">
                 <PositionsFunnelChart daily={run.funnelDaily} />
               </div>
             </div>

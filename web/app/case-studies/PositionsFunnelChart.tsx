@@ -45,15 +45,21 @@ export default function PositionsFunnelChart({
   const locale = useLocale();
   const t = T[locale];
   const wrapRef = useRef<HTMLDivElement>(null);
+  const svgWrapRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
+  const [hgt, setHgt] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const u = () => setW(el.clientWidth);
+    const u = () => {
+      setW(el.clientWidth);
+      if (svgWrapRef.current) setHgt(svgWrapRef.current.clientHeight);
+    };
     u();
     const ro = new ResizeObserver(u);
     ro.observe(el);
+    if (svgWrapRef.current) ro.observe(svgWrapRef.current);
     return () => ro.disconnect();
   }, []);
 
@@ -65,7 +71,7 @@ export default function PositionsFunnelChart({
   const maxDown = Math.max(1, ...daily.map((d) => d.excluded));
   const span = maxUp + maxDown;
 
-  const H = 380;
+  const H = Math.max(240, hgt || 360); // riempie l'altezza della card
   const padL = 28;
   const padR = 14;
   const padT = 16;
@@ -84,8 +90,9 @@ export default function PositionsFunnelChart({
   const hd = hover != null ? daily[hover] : null;
 
   return (
-    <div ref={wrapRef} className="relative">
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+    <div ref={wrapRef} className="relative flex flex-col h-full">
+      <div ref={svgWrapRef} className="flex-1 min-h-0" style={{ minHeight: 240 }}>
+      <svg width="100%" height="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block" }}>
         {/* tick conteggi su/giù */}
         {[maxUp, Math.round(maxUp / 2), maxDown, Math.round(maxDown / 2)].map((v, idx) => {
           const up = idx < 2;
@@ -126,6 +133,7 @@ export default function PositionsFunnelChart({
           </g>
         ))}
       </svg>
+      </div>
 
       {/* tooltip */}
       {hd && (
@@ -148,7 +156,7 @@ export default function PositionsFunnelChart({
       )}
 
       {/* legenda */}
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[var(--color-border)] pt-3">
+      <div className="mt-4 shrink-0 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-[var(--color-border)] pt-3">
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: KEPT }} />
           <span className="text-[10px] text-[var(--color-muted)]">{t.legendKept}</span>
