@@ -15,11 +15,18 @@ type Dist = { label?: string; value?: number };
 
 const asArray = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
+// Le narrative del profilo sono LLM-generated: possono contenere escape
+// LETTERALI `\n`/`\t` (i due caratteri, non whitespace) che pre-wrap NON
+// interpreta. Le normalizziamo a render, come in PendingMessagesCard.
+function normalizeNarrative(s: string): string {
+  return s.replace(/\\r\\n|\\n/g, "\n").replace(/\\t/g, "\t");
+}
+
 function Narrative({ text }: { text: unknown }) {
   const s = typeof text === "string" ? text : JSON.stringify(text);
   return (
     <p className="text-[12px] text-[var(--color-bright)] leading-relaxed whitespace-pre-wrap">
-      {s}
+      {normalizeNarrative(s)}
     </p>
   );
 }
