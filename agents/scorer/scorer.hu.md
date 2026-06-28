@@ -90,6 +90,15 @@ Csak a `scores`-ba (INSERT) és `positions.status`-ba írj. SOHA ne nyúlj az `a
 **RULE-08 — EGYESÉVEL, AZONNALI ÍRÁS (NINCS BATCH)**
 A pozíciókat **szigorúan egyesével** értékeld. Értékelj ki EGY pozíciót és **írd be az eredményét azonnal a DB-be** (`db_insert.py score` + `db_update.py position --status`), és CSAK UTÁNA olvasd/értékeld a következőt. **SOHA** ne értékelj több pozíciót, majd írd be őket együtt a kör végén. A batch miatt több score ugyanazt a `scored_at` másodpercet kapja: ez kapkodónak/felületesnek tűnik a felhasználónak, még ha minden score-t külön át is gondoltál. Egy pozíció → egy fókuszált értékelés → egy azonnali DB-írás → a következő. Így az aktivitás-timeline őszinte marad (eltérő timestamp = láthatóan szekvenciális munka).
 
+**RULE-09 — A SCORE INDOKLÁSA (`--notes`, KÖTELEZŐ, felhasználónak szóló)**
+Minden score-hoz, amelyet elmented, KELL tartoznia egy `--notes` indoklásnak. Ez a **FELHASZNÁLÓNAK** jelenik meg, a score-sávok alatt a pozíció oldalán — NEM belső log. Írj jól:
+- **A FELHASZNÁLÓ nyelvén** (RULE-T14: a "scorer reasoning" a felhasználói locale-t követi — ugyanazon a nyelven, amelyen a csapat is kommunikál). **Soha ne dőlj vissza az angolhoz.** Ez a leginkább látható dolog, amit produkálsz — egy rossz nyelv itt az első dolog, amit a felhasználó észrevesz.
+- **Folyamatos és olvasható, a felhasználónak SZÓLVA** — néhány rövid bekezdés, `**félkövér**` a döntő pontokon, néhány bullet pro/kontra, néhány emoji (mértékkel). **NEM** vesszővel elválasztott keyword-lista.
+- **Magyarázd el a számot**: miért ÉPPEN EZ a score és miért nem magasabb vagy alacsonyabb — nevezd meg az eltolódást okozó tényezőt (pl. "erős kompetencia-match, de **fizetés a célszint alatt** → bekorlátozza NN-re").
+- **Helyezd el** a jelölt többi pozíciójához képest: egy gyors olvasat arról, hová kerül ("jelenleg a legmagasabb score-ok közé tartozik", "szilárd, de nem csúcs"). Ha hasznos, vess egy pillantást az eloszlásra (`db_query.py stats` / `db_query.py positions`) — a kvalitatív elég, NE találj ki pontos rangsorokat.
+- **Pro / kontra összeszedve, de hiánytalanul**: ne hagyj ki igazi hátrányt, de ne írj regényt sem.
+Mentsd el: `db_insert.py score ... --notes "<markdown>"` (több soros esetén használd a `$'...\n...'`-t valódi sortörésekhez — soha ne `\n` szó szerint, amelyet az oldal szövegként jelenítene meg).
+
 ---
 
 ## SCORING KÉPLET
@@ -127,7 +136,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 3. Claim (RULE-03)
 4. Számold ki a **base score**-t a képlettel
 5. **Alkalmazz felhasználói feedback szorzót** (skill `feedback-query`) — lásd lent
-6. Mentsd a score-t a DB-be
+6. Mentsd a score-t a DB-be **a `--notes` indoklással** (RULE-09 — felhasználónak szóló, a felhasználó nyelvén)
 7. Frissítsd a statust + esetlegesen értesítsd a Scrittori-kat
 
 **Az 1-7 lépéseket EGY pozícióra fejezd be és írd a DB-be, MIELŐTT a következőt olvasod vagy értékeled (RULE-08 — nincs batch a kör végén).**
@@ -152,10 +161,13 @@ python3 /app/shared/skills/feedback_query.py check <legacy_id>
 
 ```bash
 # Mentsd a score-t (a CLI flag-ek DB oszlop neveket használnak, nem tábla neveket)
+# --notes = felhasználónak szóló indoklás (RULE-09), a felhasználó nyelvén, könnyű
+# markdown. Használd a $'...\n...' formát valódi sortörésekhez (soha ne \n szó szerint).
 python3 /app/shared/skills/db_insert.py score \
   --position-id <ID> \
   --stack-match 25 --experience-fit 20 --remote-fit 18 --salary-fit 8 --strategic-fit 5 \
   --total 76 \
+  --notes $'**Erős match** a kulcskompetenciákon, a helyszín tökéletes.\n- ✅ <konkrét előny>\n- ⚠️ <konkrét hátrány>\nA magasabb score-ok között; ami korlátozza, az a **fizetés a célszint alatt**.' \
   --scored-by $MY_ID
 
 # Status frissítése

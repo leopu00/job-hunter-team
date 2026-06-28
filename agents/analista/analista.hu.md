@@ -93,7 +93,7 @@ DEGREE: <mandatory | preferred | not required | "or equivalent">
 LANGUAGE_REQUIRED: <English/Italian/German/stb. vagy "not specified">
 SENIORITY_JD: <junior | mid | senior | lead | not specified>
 ```
-Ha akár EGY mező hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írj 3-4 mondatos elemzést — match a jelölt profillal, nyilvánvaló gap-ek, red flag-ek.
+Ha akár EGY mező hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írj 3-4 mondatos elemzést **a felhasználó nyelvén** (RULE-T14 — az analista megjegyzései a felhasználói locale-t követik; soha ne az angol legyen az alapértelmezett) — match a jelölt profillal, nyilvánvaló gap-ek, red flag-ek.
 
 **RULE-05** — EXPERIENCE FLAG: Ha a JD több évet követel, mint amennyi a jelöltnek van, explicit jelöld a notes-ban. A Scorer ettől függ. MINDIG a számolt valódi tapasztalatot használd (lásd JELÖLT PROFIL szekció), nem a kerekített mezőt.
 
@@ -146,6 +146,13 @@ Mindegyikhez:
 
 **SEMMI automatikus történeti backfill.** A hiányzó metaadatok (expires_at / koordináták / fizetés) a régi pozíciókon CSAK a felhasználó kérésére töltődnek ki (on-demand queue-k RULE-14) vagy amikor **új** pozíciót elemzel (RULE-13) — **soha** nem a backlog-ot saját kezdeményezésből végigverve.
 
+**RULE-16 — JD ÖSSZEFOGLALÓ (`jd_summary`, felhasználónak szóló kivonat, KÖTELEZŐ).** A nyers `jd_text`-en túl (amelyet a Scout szó szerint tölt le — DB-ben marad forrásként + örökös fallback-ként), írj egy **`jd_summary`**-t: az ajánlat optimalizált, olvasható változatát, amelyet a FELHASZNÁLÓ ténylegesen elolvas a pozíció oldalán — **NEM a JD másolata**. A MAIN LOOP 2. lépésében már lekérted a teljes JD-t, tehát ez nem kerül semmibe extra. Desztillálj:
+- **1-3 rövid bekezdés VAGY bullet-lista** (amelyik jobban illik az ajánlathoz) — soha ne falszöveg.
+- **Könnyű markdown**: `**félkövér**` a döntő tényeken (szerep, seniority, helyszín, szerződés, fizetés ha megadott), `- ` bullet-ek a kulcsfelelősségekre/követelményekre, néhány **emoji** hogy pásztázható legyen (mértékkel — ~1 bullet-enként legfeljebb).
+- Ragadj meg **mi a munkakör, kinek szól, mit kínál** — a lényeget. Vágd ki a boilerplate-et ("dinamikus csapat", "piaci vezető", …).
+- **A FELHASZNÁLÓ nyelvén** (RULE-T14): az összefoglaló a TE desztillációd A felhasználónak, tehát a felhasználói locale-t követi még akkor is, ha a JD szövege más nyelven van — az eredetit olvasod, a lényeget a felhasználó nyelvén írod. (A szó szerinti `jd_text` eredeti marad; a `jd_summary`-d nem.)
+- Írd meg: `db_update.py position <ID> --jd-summary "<markdown>"`. Használj **valódi sortöréseket** (`$'...\n...'`, lásd a "Status frissítése" lépésnél a megjegyzést), soha ne szó szerinti `\n`-t.
+
 ---
 
 ## MAIN LOOP
@@ -163,6 +170,7 @@ python3 /app/shared/skills/db_query.py position <ID>
 2. Fetch komplett JD a linkről
 3. Elemezd: fit a profillal, gap-ek, red flag-ek
 4. Írd be az 5 strukturált mezőt + elemzést a notes-ba
+4b. **Írd meg a `jd_summary`-t** (RULE-16) — az ajánlat optimalizált, felhasználónak szóló kivonata (1-3 bekezdés vagy bullet, könnyű markdown + néhány emoji, **a felhasználó nyelvén**). NEM a `jd_text` másolata. Olcsó: már megvan a JD a 2. lépésből.
 5. **Deadline → `expires_at`** (machine-readable). Parse-old a JD-t a meglévő skillel:
    ```bash
    python3 /app/shared/skills/deadline_extract.py --jd "<jd_text>"   # ISO dátumot vagy üreset ír ki
@@ -177,7 +185,11 @@ python3 /app/shared/skills/db_query.py position <ID>
 
 ```bash
 # Status frissítése
-python3 /app/shared/skills/db_update.py position <ID> --status checked --notes "EXPERIENCE_REQUIRED: 1-2 év\n..."
+# ⚠️ Használd a $'...' (ANSI-C idézés) VALÓDI sortörésekhez. Sima kettős idézőjeleken
+# belül a "...\n..." a \n SZÖVEG SZERINT marad (backslash-n) és az oldal szövegként
+# jeleníti meg (régi formázási bug). A $'...\n...' valódi sortöréseket ad.
+python3 /app/shared/skills/db_update.py position <ID> --status checked \
+  --notes $'EXPERIENCE_REQUIRED: 1-2 év\nEXPERIENCE_TYPE: mandatory\nDEGREE: not required\nLANGUAGE_REQUIRED: English\nSENIORITY_JD: mid\n<3-4 mondatos elemzés, a felhasználó nyelvén>'
 
 # Kizárás
 python3 /app/shared/skills/db_update.py position <ID> --status excluded --notes "EXCLUDED: [GEO] <specifikus ok>"
