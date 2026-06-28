@@ -218,33 +218,15 @@ export default function WorkBudgetChart({
   const yL = (v: number) => padT + plotH - (v / axisMax) * plotH; // azioni
   const yR = (pct: number) => padT + plotH - (pct / 100) * plotH; // %
 
-  // Linea cumulata: spezzata per settimana (reset giovedì) E sui giorni "off"
-  // (nessun campione) — niente segmenti finti sopra il downtime.
-  const cumSegs: { x: number; y: number }[][] = [];
-  days.forEach((d, i) => {
-    if (!d.hasSample) return;
-    const pt = { x: xc(i), y: yR(d.cum as number) };
-    const prev = days[i - 1];
-    const seg = cumSegs[cumSegs.length - 1];
-    if (seg && prev && prev.hasSample && prev.week === d.week) seg.push(pt);
-    else cumSegs.push([pt]);
-  });
-  // Linea consumo giornaliero: spezzata anch'essa sui giorni off.
-  const dailySegs: { x: number; y: number }[][] = [];
-  days.forEach((d, i) => {
-    if (!d.hasSample) return;
-    const pt = { x: xc(i), y: yR(d.pct as number) };
-    const prev = days[i - 1];
-    const seg = dailySegs[dailySegs.length - 1];
-    if (seg && prev && prev.hasSample) seg.push(pt);
-    else dailySegs.push([pt]);
-  });
-
   // Bande di INATTIVITÀ: run di giorni consecutivi con 0 azioni (≥3 gg). Etichetta
   // data-driven sui run ≥4 gg: budget alto (≥90%) = "budget esaurito" (coast a fine
-  // settimana), altrimenti "team in pausa" (spento/idle). Rende auto-esplicativi i
+  // ciclo), altrimenti "team in pausa" (spento/idle). Rende auto-esplicativi i
   // vuoti, distinguendoli da dati mancanti.
   const gaps: { start: number; end: number; label: string | null }[] = [];
+  // Giorni dentro una banda "budget esaurito" (coast): le linee budget NON le
+  // attraversano — quel tratto resta vuoto (il budget è pieno, non c'è nulla da
+  // mostrare).
+  const coastDays = new Set<number>();
   for (let i = 0; i < days.length; ) {
     if (days[i].total === 0) {
       let j = i;
@@ -257,6 +239,7 @@ export default function WorkBudgetChart({
           if (c != null) rep = rep == null ? c : Math.max(rep, c);
         }
         const isCoast = rep != null && rep >= 90;
+        if (isCoast) for (let k = i; k <= j; k++) coastDays.add(k);
         gaps.push({
           start: i,
           end: j,
@@ -266,6 +249,28 @@ export default function WorkBudgetChart({
       i = j + 1;
     } else i++;
   }
+  const drawable = (k: number) =>
+    k >= 0 && k < days.length && days[k].hasSample && !coastDays.has(k);
+
+  // Linea cumulata: spezzata per ciclo di budget (reset) E sui giorni "off" o
+  // "budget esaurito" — niente segmenti finti sopra downtime/coast.
+  const cumSegs: { x: number; y: number }[][] = [];
+  days.forEach((d, i) => {
+    if (!drawable(i)) return;
+    const pt = { x: xc(i), y: yR(d.cum as number) };
+    const seg = cumSegs[cumSegs.length - 1];
+    if (seg && drawable(i - 1) && days[i - 1].week === d.week) seg.push(pt);
+    else cumSegs.push([pt]);
+  });
+  // Linea consumo giornaliero: spezzata anch'essa su off/coast.
+  const dailySegs: { x: number; y: number }[][] = [];
+  days.forEach((d, i) => {
+    if (!drawable(i)) return;
+    const pt = { x: xc(i), y: yR(d.pct as number) };
+    const seg = dailySegs[dailySegs.length - 1];
+    if (seg && drawable(i - 1)) seg.push(pt);
+    else dailySegs.push([pt]);
+  });
 
   const leftTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(axisMax * f));
   const rightTicks = [0, 25, 50, 75, 100];
