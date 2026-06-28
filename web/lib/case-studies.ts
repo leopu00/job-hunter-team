@@ -49,6 +49,8 @@ export interface CaseStudyPhase {
   note: string; // descrizione breve della modalità (IT, come il profilo)
   from: string; // "2026-05-19"
   to: string | null; // "2026-06-04"; null = fase corrente
+  /** "hourly" = grafico intraday (ora per ora) invece che giornaliero; per fasi corte */
+  detail?: "hourly";
 }
 
 export interface CaseStudyMeta {
@@ -164,7 +166,8 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
         price: "~€100/mese",
         note: "primo test — agenti liberi, senza monitor, fino a esaurire il budget",
         from: "2026-05-19",
-        to: "2026-06-04",
+        to: "2026-05-21",
+        detail: "hourly",
       },
       {
         key: "kimi",
