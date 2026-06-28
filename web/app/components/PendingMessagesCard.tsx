@@ -145,6 +145,15 @@ const T: Record<string, Record<string, string>> = {
     fr: "Marquer comme lu",
     pt: "Marcar como lido",
   },
+  mark_all_read: {
+    it: "Segna tutti come letti",
+    en: "Mark all as read",
+    hu: "Összes megjelölése olvasottként",
+    es: "Marcar todo como leído",
+    de: "Alle als gelesen markieren",
+    fr: "Tout marquer comme lu",
+    pt: "Marcar tudo como lido",
+  },
   reply: {
     it: "Rispondi →",
     en: "Reply →",
@@ -227,6 +236,15 @@ const KIND_LABEL_KEY: Record<PendingMessageKind, string> = {
   alert: "kind_alert",
 };
 
+// Alcuni messaggi salvati prima del fix in jht-notify-user contengono le
+// escape LETTERALI `\n`/`\t` (l'agente le scrive come separatori di paragrafo
+// in una stringa singola). pre-wrap rende solo i newline VERI, quindi senza
+// questa normalizzazione si vedrebbe il testo "\n\n". Difensivo e idempotente:
+// i newline gia' veri restano invariati.
+function normalizeBody(s: string): string {
+  return s.replace(/\\r\\n|\\n/g, "\n").replace(/\\t/g, "\t");
+}
+
 export default function PendingMessagesCard({ initialMessages }: Props) {
   // L'array e' state interno: ack/reply rimuovono il messaggio dalla lista
   // senza dover ricaricare la pagina. Il polling per nuove notifiche verra'
@@ -273,6 +291,24 @@ export default function PendingMessagesCard({ initialMessages }: Props) {
     });
   }
 
+  async function handleAckAll() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/pending-messages/ack-all`, {
+          method: "POST",
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
+        setMessages([]);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    });
+  }
+
   async function handleReply(id: string) {
     const reply = replyText.trim();
     if (!reply) {
@@ -304,9 +340,21 @@ export default function PendingMessagesCard({ initialMessages }: Props) {
     <div className="mb-8" style={{ animation: "fade-in 0.35s ease both" }}>
       <div className="flex items-center justify-between mb-4">
         <span className="section-label">{tr("section_title")}</span>
-        <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
-          {tr("unread").replace("{n}", String(messages.length))}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-dim)]">
+            {tr("unread").replace("{n}", String(messages.length))}
+          </span>
+          {messages.length > 1 && (
+            <button
+              type="button"
+              onClick={handleAckAll}
+              disabled={pending}
+              className="text-[10px] font-semibold tracking-widest uppercase text-[var(--color-muted)] hover:text-[var(--color-bright)] transition-colors disabled:opacity-50"
+            >
+              {tr("mark_all_read")}
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -377,7 +425,7 @@ export default function PendingMessagesCard({ initialMessages }: Props) {
                     className="text-[12px] text-[var(--color-base)] m-0 mb-2 leading-relaxed"
                     style={{ whiteSpace: "pre-wrap" }}
                   >
-                    {m.body}
+                    {normalizeBody(m.body)}
                   </p>
                   {m.related_position_id && (
                     <Link

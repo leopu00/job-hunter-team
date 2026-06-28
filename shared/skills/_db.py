@@ -119,6 +119,7 @@ def ensure_schema(conn: sqlite3.Connection):
         source TEXT,
         jd_text TEXT,
         requirements TEXT,
+        jd_summary TEXT,
         found_by TEXT,
         found_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         deadline TEXT,
