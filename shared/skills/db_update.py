@@ -112,6 +112,10 @@ def update_position(args):
         updates.append("jd_text = ?")
         params.append(args.jd_text)
         changed.append("jd_text")
+    if args.jd_summary:
+        updates.append("jd_summary = ?")
+        params.append(args.jd_summary)
+        changed.append("jd_summary")
     if args.requirements:
         updates.append("requirements = ?")
         params.append(args.requirements)
@@ -529,6 +533,7 @@ def main():
     p.add_argument('--status', choices=['new', 'checked', 'excluded', 'scored', 'writing', 'review', 'ready', 'applied', 'response'])
     p.add_argument('--notes')
     p.add_argument('--jd-text')
+    p.add_argument('--jd-summary', help="Sintesi JD per l'utente (markdown leggero, lingua utente) — scritta dall'Analista, mostrata nella pagina posizione al posto del testo grezzo")
     p.add_argument('--requirements')
     p.add_argument('--location')
     p.add_argument('--remote-type', choices=['full_remote', 'hybrid', 'onsite'])

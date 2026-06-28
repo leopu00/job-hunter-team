@@ -28,6 +28,7 @@ export interface Position {
   url: string | null;
   source: string | null;
   jd_text: string | null;
+  jd_summary: string | null;
   requirements: string | null;
   found_by: string | null;
   found_at: string;

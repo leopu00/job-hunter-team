@@ -80,6 +80,7 @@ def ensure_schema(conn: sqlite3.Connection):
     _migrate_positions_role_family_proposed(conn)
     _migrate_positions_user_excluded(conn)
     _migrate_positions_recheck_requested(conn)
+    _migrate_positions_jd_summary(conn)
     _migrate_role_family_registry(conn)
     _migrate_position_tickets_cloud_id(conn)
     conn.executescript("""
@@ -932,6 +933,21 @@ def _migrate_positions_office_geocoding(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_positions_office_geocoded "
         "ON positions(office_geocoded) WHERE office_geocoded = 1"
     )
+
+
+def _migrate_positions_jd_summary(conn: sqlite3.Connection) -> None:
+    """Aggiunge `positions.jd_summary` (text, nullable).
+
+    Sintesi della JD scritta dall'Analista PER l'utente (1-3 paragrafi o
+    bullet, lingua dell'utente, markdown leggero: grassetto/bullet/emoji) —
+    è la versione ottimizzata e leggibile che la pagina posizione mostra al
+    posto del dump grezzo di `jd_text`. Allinea SQLite a Supabase mig 049.
+    """
+    if not _table_exists(conn, 'positions'):
+        return
+    if _column_exists(conn, 'positions', 'jd_summary'):
+        return
+    conn.execute("ALTER TABLE positions ADD COLUMN jd_summary TEXT")
 
 
 def _migrate_position_tickets_cloud_id(conn: sqlite3.Connection) -> None:
