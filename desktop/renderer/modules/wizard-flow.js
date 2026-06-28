@@ -497,8 +497,9 @@ if (dom.tgIntroLink) {
 // Telegram intro sits after provider-login in the new sequence
 // (2026-05-19). Back goes to provider-login.
 if (dom.btnTgIntroBack) dom.btnTgIntroBack.addEventListener('click', () => {
-  // Locale: lo step precedente è l'email. VPS: resta provider-login.
-  if (state.location === LOCATION_VPS) enterProviderLogin()
+  // Lo step precedente è l'email in locale, l'upload CV in VPS (l'email è
+  // saltata in VPS: working-hours + CV ora precedono Telegram, gap b3).
+  if (state.location === LOCATION_VPS) enterProfileUpload()
   else enterEmailSetup()
 })
 // Intro Continue jumps straight to the unified tokens step — there
@@ -1172,6 +1173,22 @@ function updateHoursContinueState() {
   dom.btnHoursContinue.disabled = !hoursIsAlwaysOn() && hoursSelectedDays.size === 0
 }
 
+// Risolve l'IP della VPS: state in-memory, con fallback sulle prefs
+// (vpsIp si perde a un restart Electron ma la VPS resta su). I save VPS-aware
+// (orari + upload) lo richiedono per fare SSH; senza, niente target remoto.
+async function resolveVpsIp() {
+  if (state.vps?.ip) return state.vps.ip
+  try {
+    const saved = window.prefsApi?.get ? await window.prefsApi.get('vpsIp') : null
+    if (saved) {
+      state.vps = state.vps || {}
+      state.vps.ip = saved
+      return saved
+    }
+  } catch { /* no-op */ }
+  return null
+}
+
 export async function enterWorkingHours() {
   showStep(STEP_WORKING_HOURS)
   if (dom.hoursStatus) dom.hoursStatus.hidden = true
@@ -1180,9 +1197,18 @@ export async function enterWorkingHours() {
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { /* keep UTC */ }
   state.hoursTimezone = tz
   if (dom.hoursTz) dom.hoursTz.textContent = t('hours.tz', { tz })
-  // Ripristina una scelta salvata in precedenza (relaunch).
+  // Ripristina una scelta salvata in precedenza (relaunch). VPS mode: legge
+  // team.working_hours dal config REMOTO via SSH; locale: da ~/.jht.
   try {
-    const res = window.teamApi?.getWorkingHours ? await window.teamApi.getWorkingHours() : null
+    let res = null
+    if (state.location === LOCATION_VPS) {
+      const vpsIp = await resolveVpsIp()
+      res = vpsIp && window.teamApi?.getWorkingHoursVps
+        ? await window.teamApi.getWorkingHoursVps({ vpsIp })
+        : null
+    } else {
+      res = window.teamApi?.getWorkingHours ? await window.teamApi.getWorkingHours() : null
+    }
     const wh = res && res.ok ? res.working_hours : null
     if (wh && Array.isArray(wh.windows) && wh.windows.length && Array.isArray(wh.windows[0].days)) {
       hoursSelectedDays.clear()
@@ -1211,7 +1237,22 @@ async function saveWorkingHours() {
     }
   } // else null → 24/7 (windows vuoto lato main)
   try {
-    const res = window.teamApi?.setWorkingHours ? await window.teamApi.setWorkingHours(payload) : { ok: true }
+    // VPS mode: scrive team.working_hours nel jht.config.json REMOTO via SSH;
+    // locale: in ~/.jht. Senza questo il team VPS girava 24/7 (gap b3).
+    let res
+    if (state.location === LOCATION_VPS) {
+      const vpsIp = await resolveVpsIp()
+      if (!vpsIp) {
+        log.warn('working-hours.vps.no-ip')
+        if (dom.hoursStatus) { dom.hoursStatus.textContent = t('hours.saveError'); dom.hoursStatus.hidden = false }
+        return false
+      }
+      res = window.teamApi?.setWorkingHoursVps
+        ? await window.teamApi.setWorkingHoursVps({ vpsIp, working_hours: payload })
+        : { ok: true }
+    } else {
+      res = window.teamApi?.setWorkingHours ? await window.teamApi.setWorkingHours(payload) : { ok: true }
+    }
     if (!res?.ok) {
       log.warn('working-hours.save.failed', { err: res?.error })
       if (dom.hoursStatus) { dom.hoursStatus.textContent = t('hours.saveError'); dom.hoursStatus.hidden = false }
@@ -1270,7 +1311,16 @@ export async function enterProfileUpload() {
   showStep(STEP_PROFILE_UPLOAD)
   let files = []
   try {
-    const res = window.profileApi?.listDocs ? await window.profileApi.listDocs() : null
+    // VPS mode: ls della drop-zone allegati REMOTA; locale: ~/Documents.
+    let res = null
+    if (state.location === LOCATION_VPS) {
+      const vpsIp = await resolveVpsIp()
+      res = vpsIp && window.profileApi?.listDocsVps
+        ? await window.profileApi.listDocsVps({ vpsIp })
+        : null
+    } else {
+      res = window.profileApi?.listDocs ? await window.profileApi.listDocs() : null
+    }
     if (res?.ok && Array.isArray(res.files)) files = res.files
   } catch { /* empty */ }
   renderUploadList(files)
@@ -1278,13 +1328,31 @@ export async function enterProfileUpload() {
 
 if (dom.btnUploadPick) {
   dom.btnUploadPick.addEventListener('click', async () => {
-    if (!window.profileApi?.uploadDocs) return
+    const isVps = state.location === LOCATION_VPS
+    if (isVps ? !window.profileApi?.uploadDocsVps : !window.profileApi?.uploadDocs) return
     dom.btnUploadPick.disabled = true
     try {
-      const res = await window.profileApi.uploadDocs()
+      // VPS mode: file-picker locale → upload nella drop-zone REMOTA via SSH;
+      // locale: copia in ~/Documents. Stesso re-list per il merge.
+      let res
+      if (isVps) {
+        const vpsIp = await resolveVpsIp()
+        if (!vpsIp) { log.warn('profile-upload.vps.no-ip'); return }
+        res = await window.profileApi.uploadDocsVps({ vpsIp })
+      } else {
+        res = await window.profileApi.uploadDocs()
+      }
       if (res?.ok) {
         // Ri-leggo l'elenco completo della cartella (merge upload precedenti).
-        const listed = window.profileApi.listDocs ? await window.profileApi.listDocs() : null
+        let listed = null
+        if (isVps) {
+          const vpsIp = await resolveVpsIp()
+          listed = vpsIp && window.profileApi.listDocsVps
+            ? await window.profileApi.listDocsVps({ vpsIp })
+            : null
+        } else {
+          listed = window.profileApi.listDocs ? await window.profileApi.listDocs() : null
+        }
         renderUploadList(listed?.ok ? listed.files : res.files)
       } else {
         log.warn('profile-upload.failed', { err: res?.error })
@@ -1298,7 +1366,11 @@ if (dom.btnUploadBack) dom.btnUploadBack.addEventListener('click', () => enterWo
 if (dom.btnUploadContinue) {
   dom.btnUploadContinue.addEventListener('click', () => {
     if (dom.btnUploadContinue.disabled) return
-    enterEmailSetup()
+    // VPS mode: salta lo step email (le credenziali email_monitor.json sono
+    // solo locali, gap a parte) e va dritto a Telegram → ready(home). Locale:
+    // email → telegram come prima.
+    if (state.location === LOCATION_VPS) enterTelegramIntro()
+    else enterEmailSetup()
   })
 }
 

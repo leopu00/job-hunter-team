@@ -2,7 +2,7 @@ import { state, dom, showStep } from './state.js'
 import { t } from './i18n.js'
 import { STEP_PROVIDER_CHOOSE, STEP_PROVIDER_LOGIN, STEP_READY, PROVIDER_OPTIONS, LOCATION_VPS } from './constants.js'
 import { camelId } from './docker-card.js'
-import { enterReady, enterTelegramIntro, enterWorkingHours } from './wizard-flow.js'
+import { enterReady, enterWorkingHours } from './wizard-flow.js'
 
 // Logger renderer → main (preload espone window.jhtLog).
 const log = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
@@ -40,15 +40,13 @@ dom.btnLoginContinue.addEventListener('click', () => {
     return
   }
   state.loginOrigin = null
-  // VPS mode: after provider-login completes, route to Telegram setup
-  // (the LAST wizard step, moved here 2026-05-19 so the user can chat
-  // with bot 1 during BotFather rate-limit cooldown on bots 2/3).
-  // Local mode: working hours → profile upload → ready (2026-06-23).
-  if (state.location === LOCATION_VPS) {
-    enterTelegramIntro()
-  } else {
-    enterWorkingHours()
-  }
+  // Dopo il provider-login entrambi i rami passano per working-hours →
+  // upload CV (VPS-aware: scrivono sul container remoto via SSH). Prima il
+  // ramo VPS saltava dritto a Telegram, e l'utente non sceglieva MAI gli
+  // orari né caricava il CV (gap b3, 2026-06-27). Da working-hours in poi:
+  //   VPS:    working-hours → upload → telegram → ready(home)
+  //   locale: working-hours → upload → email → telegram → ready(summary)
+  enterWorkingHours()
 })
 
 if (dom.btnReadyManageLogin) {
