@@ -150,4 +150,45 @@ Metrica "fatturato": somma per-turno di `input_other + input_cache_creation + ou
 
 ---
 
+## 7. ✅ Fix applicati (2026-06-28, branch `dev7`)
+
+| # | Fix | File |
+|---|---|---|
+| 1 | **Bug "resume"**: il fallback `[TAG]` dell'estrazione nome è ora validato contro i ruoli canonici (`VALID_AGENT_ROLES`). Un `[RESUME]` nudo → `None` (→ fallback al wire / `?unknown`), non più un agente fantasma. | `shared/skills/token-by-agent-series.py`, `shared/skills/token_metrics_lib.py`, test `tests/test_session_to_agent.py` (30 casi, verde) |
+| 2 | **Compattare i coordinatori**: rimosso lo skip della Sentinella ("managed by watchdog") e la cautela eccessiva sul Capitano ("never recreate lightly"). Il Dottore ora **compatta** Capitano + Sentinella a ogni giro, per ultimi, catturando lo stato in-flight nel seed (Sentinella near-stateless → seed minimo). | `agents/dottore/dottore.md` + 6 lingue, `agents/_skills/session-refresh/SKILL.md` + 6 lingue |
+
+`agent-watchdog.sh` lasciato **invariato**: il suo reset per-età della Sentinella resta come *fallback* per quando il Dottore non gira (nessun race — il Dottore ora la compatta prima dei 24h).
+
+## 8. 🐛 Finding residui — tool "fantasma" nei prompt
+
+Check sistematico dei `*.py` citati nei prompt agenti vs realmente esistenti:
+
+| Tool citato | Stato | Impatto |
+|---|---|---|
+| `scaling_calc.py` | ✅ esiste (`agents/_skills/scaling-calc/`) — falso positivo | — |
+| `rate-budget.py` | refuso: esiste `rate_budget.py` (underscore), 1 file (`scaling-calc/SKILL.md`) | basso (comando) |
+| `jht-throttle.py` | refuso in **prosa** (nome reale `throttle.py`/`throttle-config.py`), 7 file `sentinella.<lang>.md` | basso (descrittivo) |
+| ⭐ `scout_dedup.py` | **MAI IMPLEMENTATO**, comando reale in 14 file (scout + email-monitor × 7 lingue) | **alto — budget** |
+
+`scout_dedup.py` è il più rilevante: il prompt ne specifica l'interfaccia (`check --url --company --title --location` → `{action:insert|skip}`) e documenta il danno ("Canonical comparso 14× in 21h sprecando ~50% di una finestra Kimi"). La logica di dedup esiste già in `db_insert.py` → sarebbe un wrapper CLI. **Raccomandato implementarlo** (riduce spreco budget da duplicati), ma è una feature separata da decidere.
+
+## 9. 🛡️ Analisi Sentinella — perché consuma e come ridurre
+
+**Perché è il 31% del fatturato:**
+- Fa un turno LLM **ogni ~15 min** (il bridge la sveglia con `BRIDGE PACING` + `BRIDGE TICK`) → ~40 turni/giorno in una finestra di 10h.
+- Ogni turno re-invia il contesto cresciuto (fino a ~190k): 29.55M cache-read + 2.15M full-price su 236 turni. La cache (93%) sconta ma il **volume** resta.
+- Il messaggio del bridge stesso è verboso (~500+ token/tick: la pacing line con i calcoli per-agente).
+- Il contesto non veniva mai snellito tra i refresh (ora il fix #2 lo compatta 2×/finestra — miglioramento **parziale**).
+
+**Come ridurlo (in ordine di impatto):**
+
+1. ⭐ **No-op tick senza turno LLM** (leva più grossa): il bridge calcola GIÀ `vel_team` vs `target` (MARGINE/SFORO/coast). Svegliare l'LLM Sentinella **solo** quando serve un giudizio (cambio di regime, sforo del cap, decisione non banale); per i tick "tutto in banda" il bridge mantiene la decisione corrente **senza** turno del modello. Taglia il *numero* di turni.
+2. ⭐ **Tick leggero / stateless**: la Sentinella è near-stateless (stato in `sentinel-data.jsonl` + config). Ogni turno LLM dovrebbe partire da un contesto **compatto** (legge lo stato dai file) invece di accumulare la storia nella chat. Taglia il *costo per turno* (da ~190k a ~15-20k di base).
+3. **Compattazione regolare** (fix #2, già applicato): tiene il contesto più basso tra i tick.
+4. **Accorciare il messaggio bridge** per-tick e/o ridurre la frequenza dei tick LLM-facing.
+
+I punti 1+2 sono architetturali (toccano `sentinel-bridge.py` + prompt Sentinella + test) e vanno progettati a parte: insieme porterebbero il consumo Sentinella da ~31% a una frazione, eliminando sia i turni inutili sia il contesto trascinato.
+
+---
+
 *Stato team al momento dell'indagine: SANO e produttivo — 39 posizioni, 21 scorate (avg 69, max 95), offerte tutte centrate sul profilo luxury hospitality di Roma, comunicazione utente di qualità (digest Capitano + alert Assistente via web). L'unico tema aperto è il pacing descritto sopra.*
