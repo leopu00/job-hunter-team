@@ -24,7 +24,7 @@ JOURNAL=/jht_home/logs/doctor-retrospective.jsonl
 ```bash
 tmux list-sessions -F '#{session_name}|#{session_created}'
 ```
-- **Ordine**: PRIMA le sessioni worker (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), per ULTIME e con cura quelle rivolte all'utente (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). Non rinfrescare mai `DOTTORE` / `DOCTOR-WATCHDOG` (te stesso / lo scheduler).
+- **Ordine**: PRIMA le sessioni worker (`SCOUT-N · ANALISTA-N · SCORER-N · SCRITTORE-N · CRITICO-S*`), i coordinatori per ULTIMI e con cura (`ASSISTENTE · MENTOR · SENTINELLA · CAPITANO`). "Con cura" significa **catturane bene lo stato e compattali — NON saltarli** (sono i top consumer; vedi Regole). Non rinfrescare mai `DOTTORE` / `DOCTOR-WATCHDOG` (te stesso / lo scheduler).
 - **Salto FRESH**: `age = now - session_created`. Se `age < 40 min` → SALTA del tutto (non c'e' ancora nulla da riassumere, e rinfrescarla butterebbe via una sessione appena partita). Logga `action=skipped_fresh`.
 
 ## Step 2 — per sessione: cattura (ampia + saliente)
@@ -92,6 +92,8 @@ Imposta `resume_msg_sent=True` nella voce del giornale. Poi passa alla sessione 
 
 ## Regole
 - **Un solo Dottore fa tutte le sessioni in questo round** (ordine dell'utente: per ora un solo Dottore). Usa la cattura su file + grep cosi' da non far mai esplodere la tua finestra di contesto.
-- **Mai** ricreare `CAPITANO`/`SENTINELLA` alla leggera — sono l'orchestrazione/heartbeat; rinfrescali solo se il loro contesto e' chiaramente gonfio e dopo un preavviso, per ultimi nell'ordine.
+- **CAPITANO e SENTINELLA sono i TOP consumer di token** (il loro contesto è quasi sempre gonfio — la Sentinella ticchetta ogni ~15min, il Capitano coordina in continuazione). NON sono esenti: **compattali ogni giro** (per ultimi, dopo i worker). **Compatta, non resettare** — il refresh con sintesi densa preserva la continuità, un kill secco la perde.
+- **CAPITANO**: è il coordinatore con stato in-flight (assegnazioni worker, throttle attivo, ultimo ordine di pacing, decisioni pendenti). Nell'intervista (Step 5) cattura esplicitamente quello stato di coordinamento e mettilo nel seed (Step 7) così non perde il filo. Fallo per ULTIMO; se sta gestendo un'EMERGENZA dal vivo (orchestrazione visibile nel pane proprio ora), lascia che si stabilizzi prima, altrimenti compattalo.
+- **SENTINELLA**: è **near-stateless** — il suo stato operativo vive nel bridge/config e in `sentinel-data.jsonl`, non nella sua chat. Questo la rende la **più sicura e di maggior valore da compattare**: rinfrescala ogni giro, per ultima, con un seed minimo: `[RESUME] sei la Sentinella; il tuo stato vive nel bridge + sentinel-data.jsonl — riprendi il monitoraggio del pacing dal prossimo tick.` Il recreate per-età dell'`agent-watchdog` (oltre `JHT_SENTINELLA_MAX_CTX_AGE_H`, default 24h) resta solo come **fallback** per quando il Dottore non gira; dato che ora la compatti ogni giro non raggiungerà quell'età, quindi nessun race.
 - **Mai** `tmux new-session` a mano — sempre `start-agent.sh` (vedi `spawn-agent`).
 - Logga ogni azione nel giornale (`recreated`/`skipped_parked`/`skipped_fresh`) — il giornale e' la traccia d'audit e cresce ogni giorno.
