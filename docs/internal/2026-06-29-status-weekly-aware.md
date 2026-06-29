@@ -115,10 +115,18 @@ Da notare: il ratio active-hours di betaC è **0.86** (in pari), non i **325** d
 
 ## ⚠️ Residui prima di un eventuale deploy
 
-1. **Consumatori downstream devono imparare `SOPRA-PACE-WEEKLY`:** il prompt della
-   Sentinella (S-07) + l'eventuale mappa colori della UI parsano `status`. Vanno estesi a
-   trattare il nuovo valore come «FRENA / non scalare» (semantica vicina a `ATTENZIONE`).
-   Lo `STEADY` invece riusa un enum esistente → nessuna azione.
+1. **Consumatori downstream — FATTO (baseline EN + UI) 2026-06-29:**
+   - `capitano.md` (C-09): `status=SOPRA-PACE-WEEKLY`/`binding_axis=weekly` collegato
+     alla logica SOPRA-PACE esistente (throttle-to-pace, niente nuovi spawn) + ⚠️ «NON
+     leggerlo come SOTTOUTILIZZO, non scalare».
+   - `sentinella.md` (S-06): nota che il bridge ora compone il `status` con l'asse weekly
+     (conferma del suo assessment S-07, non un segnale nuovo).
+   - UI: `STATUS_COLOR` + union type in `sentinella/page.tsx`, `api/sentinella/data/route.ts`,
+     `UsageChart.tsx`, `UsageTokensChart.tsx` (aggiunti anche `STEADY` e `LOCKED`, prima non
+     mappati). Esposti i nuovi campi `status_5h`/`binding_axis`/`weekly_pace_kind`/`ratio`.
+   - **Residuo:** le 6 varianti i18n per lingua di capitano.md/sentinella.md
+     (de/es/fr/hu/pt/it). Le VPS attuali girano in EN → baseline EN sufficiente per la
+     flotta; le i18n servono solo per deployment non-EN.
 2. **Soglie** (0.8 / 1.2 sul ratio weekly) ereditate da `weekly_pace.py` — da validare su
    più giorni se vogliamo renderle più/meno aggressive.
 3. **Doppio calcolo weekly_pace per tick** (uno per lo status, uno per il messaggio

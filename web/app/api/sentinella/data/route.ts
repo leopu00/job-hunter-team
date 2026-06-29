@@ -28,9 +28,16 @@ type Entry = {
     | "ATTENZIONE"
     | "CRITICO"
     | "SOTTOUTILIZZO"
+    | "STEADY"
+    | "SOPRA-PACE-WEEKLY"
+    | "LOCKED"
     | "RESET"
     | "ANOMALIA"
     | string;
+  status_5h?: string;
+  binding_axis?: "5h" | "weekly" | string;
+  weekly_pace_kind?: string;
+  weekly_pace_ratio?: number;
   throttle?: number;
   reset_at?: string;
   weekly_usage?: number;

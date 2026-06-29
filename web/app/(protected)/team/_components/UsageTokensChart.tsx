@@ -395,9 +395,12 @@ type Entry = {
 
 const STATUS_COLOR: Record<string, string> = {
   OK: "#4ade80",
+  STEADY: "#22c55e",
   SOTTOUTILIZZO: "#60a5fa",
+  "SOPRA-PACE-WEEKLY": "#f97316",
   ATTENZIONE: "#facc15",
   CRITICO: "#f87171",
+  LOCKED: "#dc2626",
   RESET: "#a78bfa",
   ANOMALIA: "#fb923c",
 };
