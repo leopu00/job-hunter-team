@@ -47,6 +47,10 @@ from pathlib import Path
 
 CAPITANO_SESSION = os.environ.get("JHT_TARGET_SESSION", "CAPITANO")
 SENTINELLA_SESSION = "SENTINELLA"
+# Off-hours hard-stop (2026-06-29): ogni quanti secondi RI-mandare il
+# work_phase=OFF al Capitano se il team brucia ancora fuori orario (oltre la
+# transizione ON→OFF). Evita lo spam ma re-asserisce se il primo OFF non ha preso.
+OFFHOURS_REASSERT_SEC = int(os.environ.get("JHT_OFFHOURS_REASSERT_SEC", "1800"))
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
 CONFIG_PATH = JHT_HOME / "jht.config.json"
@@ -973,9 +977,10 @@ def acquire_singleton_lock():
 
 # ── Helper: chiama compute_metrics skill per scrivere sample ────────────
 
-def _compute_metrics_via_skill(parsed, last, history):
+def _compute_metrics_via_skill(parsed, last, history, weekly_axis=None):
     """Path-import della skill compute_metrics per centralizzare il calcolo
     delle metriche derivate (velocity_smooth, projection τ-aware, status).
+    `weekly_axis` (verdetto weekly_pace, opzionale) compone lo status bi-dim.
     Se la skill non esiste (config rotta), fallback a sample minimale."""
     skill_path = Path("/app/shared/skills/compute_metrics.py")
     if not skill_path.exists():
@@ -996,7 +1001,7 @@ def _compute_metrics_via_skill(parsed, last, history):
     spec = importlib.util.spec_from_file_location("compute_metrics", skill_path)
     cm = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cm)
-    return cm.compute_metrics(parsed, last, history=history)
+    return cm.compute_metrics(parsed, last, history=history, weekly_axis=weekly_axis)
 
 
 def _weekly_pace_via_skill(entry, now_dt, now_ts):
@@ -1136,6 +1141,38 @@ def _pace_verdict_line(weekly_pace, wk_remaining_pct):
                 else " WEEKLY-PACE→ACCELERA-SATURA: budget a rischio spreco")
     goal = (f" (~{sust:.2f}%/h)" if isinstance(sust, (int, float)) else "")
     return f" WEEKLY-PACE→MANTIENI{goal}{leash}"
+
+
+def _maybe_offhours_stop(state, now_ts, vel_team):
+    """Off-hours hard-stop: il 'silenzio' del gate NON ferma gli agenti — i worker
+    self-loopano e, senza un work_phase=OFF esplicito, il Capitano continua ad
+    assegnare → burn oltre la chiusura (caso reale 2026-06-29: betaC +4h, b3, betaB).
+
+    Manda al Capitano UN work_phase=OFF alla transizione ON→OFF; lo RI-manda
+    (cooldown OFFHOURS_REASSERT_SEC) se il team brucia ancora fuori orario (bridge
+    riavviato / Capitano in turno lungo che ha mancato il primo OFF). Il Capitano
+    applica la regola 11 (stop spawn/assegnazioni, niente 'Continua' → i worker
+    finiscono il task e vanno IDLE). Il RESUME è la via esistente (tick in-orario
+    con work_phase=ON alla riapertura) — qui aggiungiamo solo la metà mancante.
+    Unica deroga al lean-comms: 1 messaggio al confine. Idempotente."""
+    transition = state.get("last_within_hours") is True
+    burning = isinstance(vel_team, (int, float)) and vel_team > 0
+    last_dir = state.get("offhours_stop_ts") or 0
+    if not (transition or (burning and (now_ts - last_dir) > OFFHOURS_REASSERT_SEC)):
+        return
+    if not session_exists(CAPITANO_SESSION):
+        return
+    msg = (
+        "[BRIDGE] work_phase=OFF — fuori orario di lavoro. Applica la regola 11: "
+        "NON spawnare nuovi agenti, NON dare nuove assegnazioni, NON rilanciare i "
+        "worker (niente 'Continua'). I worker in corso finiscono il task corrente e "
+        "poi restano IDLE. Le risposte Telegram all'utente restano attive. Riprendi "
+        "normalmente all'apertura della finestra (prossimo tick con work_phase=ON)."
+    )
+    if jht_tmux_send(CAPITANO_SESSION, msg):
+        state["offhours_stop_ts"] = now_ts
+        print(f"[bridge V6] off-hours STOP -> CAPITANO (transition={transition} "
+              f"burning={burning})")
 
 
 def _daily_pacing_via_skill(entry, now_dt, now_ts):
@@ -1469,7 +1506,22 @@ def main():
                     history = []
                 else:
                     history = load_recent_samples(30)
-            entry = _compute_metrics_via_skill(parsed, last, history)
+            # Verdetto weekly (rate active-hours) PRIMA del compute, così lo
+            # status persistito è già composto bi-dimensionale (2026-06-29).
+            # weekly_pace legge la storia dal JSONL (≤ tick precedente) + il
+            # weekly_remaining corrente: il sample odierno non serve per il rate.
+            _wk_axis = None
+            _wu = parsed.get("weekly_usage")
+            if (isinstance(_wu, (int, float))
+                    and isinstance(parsed.get("weekly_reset_at_unix"), (int, float))):
+                _nts = time.time()
+                _ndt = datetime.fromtimestamp(_nts, tz=timezone.utc)
+                _pre = {
+                    "weekly_remaining_pct": max(0.0, 100.0 - _wu),
+                    "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
+                }
+                _wk_axis = _weekly_pace_via_skill(_pre, _ndt, _nts)
+            entry = _compute_metrics_via_skill(parsed, last, history, weekly_axis=_wk_axis)
             entry["source"] = "bridge"
             write_jsonl(entry)
             write_log(entry)
@@ -1563,6 +1615,10 @@ def main():
                 state["last_sent_ts"] = None
                 state["last_status"] = None
                 should_notify = False
+                # Off-hours hard-stop: manda al Capitano work_phase=OFF (regola 11)
+                # alla transizione / se brucia ancora. Il 'silenzio' da solo non
+                # ferma i worker che self-loopano.
+                _maybe_offhours_stop(state, now_ts, vel_team_s)
             elif weekly_locked:
                 # A2 lockout-resilience: a weekly esaurito NON ha senso pacare-veloce
                 # né spammare la Sentinella. Cadenza CALMA (effective_on_pace=True) + UN
@@ -1582,6 +1638,12 @@ def main():
                     effective_on_pace, state, now_ts, is_quarter, status=status
                 )
                 state["last_status"] = status
+
+            # Traccia within_hours per la transizione off-hours (sopra); al rientro
+            # in finestra resetta il cooldown così la prossima chiusura ri-avvisa.
+            if within_hours:
+                state["offhours_stop_ts"] = 0
+            state["last_within_hours"] = within_hours
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""

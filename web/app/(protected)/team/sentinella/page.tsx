@@ -353,9 +353,16 @@ type Entry = {
     | "ATTENZIONE"
     | "CRITICO"
     | "SOTTOUTILIZZO"
+    | "STEADY"
+    | "SOPRA-PACE-WEEKLY"
+    | "LOCKED"
     | "RESET"
     | "ANOMALIA"
     | string;
+  status_5h?: string;
+  binding_axis?: "5h" | "weekly" | string;
+  weekly_pace_kind?: string;
+  weekly_pace_ratio?: number;
   throttle?: number;
   reset_at?: string;
   source?: string; // 'bridge' | 'capitano' | 'sentinella-api' | 'sentinella-worker' | 'manual'
@@ -365,9 +372,12 @@ type OpStatus = { active: boolean; output: string };
 
 const STATUS_COLOR: Record<string, string> = {
   OK: "#4ade80",
+  STEADY: "#22c55e",
   SOTTOUTILIZZO: "#60a5fa",
+  "SOPRA-PACE-WEEKLY": "#f97316",
   ATTENZIONE: "#facc15",
   CRITICO: "#f87171",
+  LOCKED: "#dc2626",
   RESET: "#a78bfa",
   ANOMALIA: "#fb923c",
 };

@@ -212,6 +212,13 @@ il budget a metà settimana, l'opposto dell'obiettivo.
 - Il tuo compito weekly = **AWARENESS**: porta `weekly_remaining_pct` /
   `weekly_active_hours` nel `[BRIDGE TICK]` al Capitano (così sa quanto budget resta),
   MA non emettere un ordine di freno sul **solo** livello weekly.
+- **`status` bi-dimensionale (dal 2026-06-29).** Il bridge ora compone il `status`
+  del tick con l'asse weekly (lo STESSO `weekly_pace` active-hours, non un doppione):
+  `status=SOPRA-PACE-WEEKLY` (`binding_axis=weekly`) = 5h basso MA weekly sopra-pace;
+  `status=STEADY` con `binding_axis=weekly` = 5h sotto ma weekly in pari. È
+  **conferma** del tuo assessment S-07, non un segnale nuovo o contraddittorio:
+  quando lo vedi, è il caso in cui il vecchio `SOTTOUTILIZZO` ti avrebbe ingannato.
+  Continua a girare al Capitano il consiglio WEEKLY-PACE (C-09) come sempre.
 - Se `vel_team > vel_target` (bruci più veloce del pace che atterra a 100% al reset)
   → suggerisci throttle-to-pace (S-05) per spalmare — **MA** se il tick porta
   `burst_transient=true` il sopra-pace sta già rientrando da solo: niente freno duro,
