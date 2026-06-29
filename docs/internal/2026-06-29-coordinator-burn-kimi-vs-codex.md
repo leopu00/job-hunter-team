@@ -150,15 +150,24 @@ Questo motiva la scelta di NON spegnere il thinking al Capitano.
   · venturebeat (K2.7-Code cuts thinking tokens 30%) · datacamp kimi-k2-thinking-guide.
 
 ## Decisione e implementazione (2026-06-29)
-**Kimi: `--no-thinking` per TUTTI i ruoli TRANNE il Capitano.** Cablato in
-`.launcher/start-agent.sh`, ramo `kimi|moonshot)`: `if [ "$ROLE" != "capitano" ];
-then CLI_ARGS="$CLI_ARGS --no-thinking"; fi`. Codex/Claude non toccati. Il Capitano
-resta thinking-ON (unico decisore multi-fattore). Deploy via immagine
-(master→CI→`:latest`→`jht upgrade` sulle VPS Kimi: betaB, betaD). Atteso: taglio
-~20%+ del burn TOTALE del team Kimi, con il budget risparmiato dirottato sul lavoro
-(Scout/Analista) invece che sull'overhead → aiuta l'obiettivo "durare 1 settimana".
-Da osservare post-deploy: che il Capitano (thinking ON) NON diventi il nuovo collo
-di bottiglia, e che la qualità decisionale del team regga nel tempo (n grande).
+**Kimi: `--no-thinking` per TUTTI i ruoli (Capitano incluso).** Cablato in
+`.launcher/start-agent.sh`, ramo `kimi|moonshot)`:
+`CLI_ARGS="--yolo --max-steps-per-turn 100 --no-thinking"`. Codex/Claude non toccati.
+Deploy via immagine (master→CI→`:latest`→`jht upgrade` sulle VPS Kimi: betaB, betaD).
+
+**Perché anche il Capitano (revisione della scelta iniziale).** Prima il Capitano era
+escluso (è il decisore multi-fattore). Ma misurando betaD a team CONGELATO è emerso
+il paradosso: *budget che sale senza nessuno che lavora*. Causa = il Capitano,
+**unico agente thinking-ON**, bruciava da solo **~35 kT/h (74 kT in 2h, il maggiore
+consumatore)** per ri-deliberare ogni ciclo "resto in coast" — e aveva pure abbassato
+il proprio throttle 3600→900s (delibera più spesso = brucia di più). Su 5 giorni fino
+al reset, ~35 kT/h idle erodono il budget residuo senza produrre nulla. Il thinking
+sul decisore in idle non vale il costo; il ragionamento resta comunque VISIBILE nella
+risposta anche con `--no-thinking` (commuta in "Instant mode"), quindi auditabile.
+Da osservare post-deploy: che la qualità decisionale del Capitano regga (è l'unico
+non ancora validato A/B con no-thinking — la Sentinella sì, −78% senza degrado).
+Atteso: taglio ~50%+ del burn TOTALE del team Kimi (i coordinatori erano ~76%),
+budget dirottato sul lavoro → leva diretta per "durare 1 settimana intera".
 
 ## Metodo (riproducibile, sola lettura)
 - `agent-usage-table.json` = serie kT/agente per bucket 5m, finestra 2h (la fonte).
