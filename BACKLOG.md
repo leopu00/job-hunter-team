@@ -184,6 +184,17 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 
 ---
 
+### 🃏 [JHT-POSITIONS-SWIPE-TRIAGE] Triage rapido posizioni — swipe destra/sinistra (NEW 2026-06-29)
+
+⬜ **Sezione/modalità "swipe" (stile Tinder) per fare un triage veloce delle posizioni e scartare subito quelle sicuramente da evitare.** Idea utente 2026-06-29 mentre lavoriamo al redesign delle pagine posizione (vedi memoria `[[project_position_page_content_redesign]]`). Da fare DOPO il perfezionamento delle pagine posizione.
+
+- **UX**: una card per posizione (titolo, azienda, score, sintesi JD breve); **swipe sinistra = scarta** (sicuramente da evitare), **swipe destra = tieni/interessa**; supporto anche frecce tastiera/bottoni per desktop. Pensata per smaltire in fretta il backlog di posizioni "ready"/"scored" senza aprirle una a una.
+- **Backend già pronto**: l'azione di esclusione utente esiste — la route `user-exclude` scrive `last_actor='user'` + `user_excluded_at` + transizione, e `pull-desired-state` la propaga NARROW cloud→VPS così il team smette di lavorarci (vedi `[JHT-DATA-SYNC]` "Follow-up categorizzazione azioni utente"). Lo swipe sarebbe un nuovo *front-end* su quell'azione, più un'azione "tieni/like" (`position_feedback`).
+- **Vincolo read-only/sicurezza**: la scrittura (escludi/tieni) deve passare da desktop/local (`requireLocalWrite`) **oppure** dalla corsia richieste async cloud — come like/ticket, che restano cloud (vedi `[[feedback_web_readonly_is_security]]`). Quindi lo swipe può vivere anche sul web cloud purché usi la corsia async, non la scrittura diretta.
+- **Aperto**: dove collocarlo (pagina dedicata `/positions/triage` vs modalità della lista); se filtrare per soglia score; se mostrare solo le non-ancora-triate; gesture mobile vs desktop.
+
+---
+
 ### 1️⃣ PHASE 1 — Web Platform Consolidation (current sprint)
 
 #### 🔴 HIGH PRIORITY
