@@ -47,6 +47,10 @@ from pathlib import Path
 
 CAPITANO_SESSION = os.environ.get("JHT_TARGET_SESSION", "CAPITANO")
 SENTINELLA_SESSION = "SENTINELLA"
+# Off-hours hard-stop (2026-06-29): ogni quanti secondi RI-mandare il
+# work_phase=OFF al Capitano se il team brucia ancora fuori orario (oltre la
+# transizione ON→OFF). Evita lo spam ma re-asserisce se il primo OFF non ha preso.
+OFFHOURS_REASSERT_SEC = int(os.environ.get("JHT_OFFHOURS_REASSERT_SEC", "1800"))
 
 JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
 CONFIG_PATH = JHT_HOME / "jht.config.json"
@@ -1054,6 +1058,38 @@ def _evening_release(now_dt):
     return False
 
 
+def _maybe_offhours_stop(state, now_ts, vel_team):
+    """Off-hours hard-stop: il 'silenzio' del gate NON ferma gli agenti — i worker
+    self-loopano e, senza un work_phase=OFF esplicito, il Capitano continua ad
+    assegnare → burn oltre la chiusura (caso reale 2026-06-29: betaC +4h, b3, betaB).
+
+    Manda al Capitano UN work_phase=OFF alla transizione ON→OFF; lo RI-manda
+    (cooldown OFFHOURS_REASSERT_SEC) se il team brucia ancora fuori orario (bridge
+    riavviato / Capitano in turno lungo che ha mancato il primo OFF). Il Capitano
+    applica la regola 11 (stop spawn/assegnazioni, niente 'Continua' → i worker
+    finiscono il task e vanno IDLE). Il RESUME è la via esistente (tick in-orario
+    con work_phase=ON alla riapertura) — qui aggiungiamo solo la metà mancante.
+    Unica deroga al lean-comms: 1 messaggio al confine. Idempotente."""
+    transition = state.get("last_within_hours") is True
+    burning = isinstance(vel_team, (int, float)) and vel_team > 0
+    last_dir = state.get("offhours_stop_ts") or 0
+    if not (transition or (burning and (now_ts - last_dir) > OFFHOURS_REASSERT_SEC)):
+        return
+    if not session_exists(CAPITANO_SESSION):
+        return
+    msg = (
+        "[BRIDGE] work_phase=OFF — fuori orario di lavoro. Applica la regola 11: "
+        "NON spawnare nuovi agenti, NON dare nuove assegnazioni, NON rilanciare i "
+        "worker (niente 'Continua'). I worker in corso finiscono il task corrente e "
+        "poi restano IDLE. Le risposte Telegram all'utente restano attive. Riprendi "
+        "normalmente all'apertura della finestra (prossimo tick con work_phase=ON)."
+    )
+    if jht_tmux_send(CAPITANO_SESSION, msg):
+        state["offhours_stop_ts"] = now_ts
+        print(f"[bridge V6] off-hours STOP -> CAPITANO (transition={transition} "
+              f"burning={burning})")
+
+
 def _daily_pacing_via_skill(entry, now_dt, now_ts):
     """Budget GIORNALIERO adattivo + consumo nella finestra di lavoro corrente
     (regole S-09/C-19). Tutto in % del WEEKLY: budget = weekly_remaining /
@@ -1493,6 +1529,10 @@ def main():
                 state["last_sent_ts"] = None
                 state["last_status"] = None
                 should_notify = False
+                # Off-hours hard-stop: manda al Capitano work_phase=OFF (regola 11)
+                # alla transizione / se brucia ancora. Il 'silenzio' da solo non
+                # ferma i worker che self-loopano.
+                _maybe_offhours_stop(state, now_ts, vel_team_s)
             elif weekly_locked:
                 # A2 lockout-resilience: a weekly esaurito NON ha senso pacare-veloce
                 # né spammare la Sentinella. Cadenza CALMA (effective_on_pace=True) + UN
@@ -1512,6 +1552,12 @@ def main():
                     effective_on_pace, state, now_ts, is_quarter
                 )
                 state["last_status"] = status
+
+            # Traccia within_hours per la transizione off-hours (sopra); al rientro
+            # in finestra resetta il cooldown così la prossima chiusura ri-avvisa.
+            if within_hours:
+                state["offhours_stop_ts"] = 0
+            state["last_within_hours"] = within_hours
 
             target_dbg = f"target={dyn_target:.0f}%" if dyn_target else "target=band"
             phase_dbg = f" phase={work_phase}" if work_phase else ""
