@@ -110,6 +110,56 @@ LUNGHEZZA del turno, non la verbosità del singolo step.
 4. Far sì che il `top-consumer` del verdetto pacing possa indicare anche i coordinatori
    (oggi punta solo ai worker throttlabili → segnale fuorviante).
 
+## Esperimento live su betaD (2026-06-29) — VALIDATO
+Manopola scoperta nel launcher: la CLI Kimi espone `--thinking / --no-thinking`
+(default ON). L'`effort` calcolato per ruolo NON viene passato a Kimi (solo
+`--max-steps-per-turn 100`). Test: rilanciata SOLO la Sentinella su betaD
+(`203.0.113.40`, Kimi) con `--no-thinking`.
+
+**Risultato spesa:** Sentinella **86–87 kT/h → ~18 kT/h = −78%**, stabile su ~2h.
+Controllo di fase: gli altri agenti nello stesso intervallo sono andati SU (scout,
+analista, scorer) → non è un calo di carico, è il flag. Indicatore CLI `●→○`.
+
+**Risultato qualità decisionale (il punto critico):** in ~2h la Sentinella
+no-thinking ha gestito 2 incidenti reali — (1) worker zombie + CPU 100% → diagnosi
+corretta + KILL+respawn (C-12), non freeze globale; (2) conflitto bridge-vs-Capitano
++ weekly debt +35pp → ha applicato la gerarchia AGENTS.md ("io consiglio, lui
+decide"), pesato weekly-debt vs pipeline, e raccomandato coast/zero-spawn, EVITANDO
+un overspawn. Test oggettivo: **il Capitano non ha MAI respinto/corretto un suo
+ordine**; anzi *"We should trust the Sentinella's weekly assessment over the bridge's
+instantaneous view"*. Ragionamento ancora **visibile** nel pane (scritto in risposta,
+non in thinking nascosto) → auditabile. Limiti onesti: n=2 incidenti, ~2h, nessun
+A/B, entrambe decisioni conservative.
+
+**Insight architetturale:** il sistema regge perché una **Sentinella economica
+(monitor/segnale)** alimenta un **Capitano che ragiona (decisore, thinking ON)**.
+Questo motiva la scelta di NON spegnere il thinking al Capitano.
+
+## Evidenza esterna (letteratura K2, nov 2025–giu 2026)
+- Moonshot ha tagliato i thinking-token del **~30%** in K2.7-Code per combattere
+  l'**overthinking** → loro stessi riconoscono che il thinking spesso è overhead.
+- Analisi indipendenti: alcuni modelli (incl. **Kimi K2.5**) NON beneficiano del
+  thinking (overthinking); per query semplici/classificazione la raccomandazione è
+  **disabilitarlo**. Critica nota: *"thinking mode sometimes wraps a simple bug fix
+  in an unsolicited architectural overhaul"*.
+- ⚠️ Contraddizione: un articolo dice che in K2.7 il thinking è "mandatory, cannot be
+  disabled" → vale per l'**API**, NON per la **CLI**: il flag `--no-thinking` funziona
+  (lo abbiamo misurato) e con ogni probabilità commuta in **"Instant mode"** (temp 0.6,
+  risposte dirette). Il dato empirico batte l'articolo per il nostro setup.
+- Fonti: artificialanalysis.ai/models/kimi-k2-thinking · flowtivity.ai/blog/kimi-k2-7-complete-review
+  · venturebeat (K2.7-Code cuts thinking tokens 30%) · datacamp kimi-k2-thinking-guide.
+
+## Decisione e implementazione (2026-06-29)
+**Kimi: `--no-thinking` per TUTTI i ruoli TRANNE il Capitano.** Cablato in
+`.launcher/start-agent.sh`, ramo `kimi|moonshot)`: `if [ "$ROLE" != "capitano" ];
+then CLI_ARGS="$CLI_ARGS --no-thinking"; fi`. Codex/Claude non toccati. Il Capitano
+resta thinking-ON (unico decisore multi-fattore). Deploy via immagine
+(master→CI→`:latest`→`jht upgrade` sulle VPS Kimi: betaB, betaD). Atteso: taglio
+~20%+ del burn TOTALE del team Kimi, con il budget risparmiato dirottato sul lavoro
+(Scout/Analista) invece che sull'overhead → aiuta l'obiettivo "durare 1 settimana".
+Da osservare post-deploy: che il Capitano (thinking ON) NON diventi il nuovo collo
+di bottiglia, e che la qualità decisionale del team regga nel tempo (n grande).
+
 ## Metodo (riproducibile, sola lettura)
 - `agent-usage-table.json` = serie kT/agente per bucket 5m, finestra 2h (la fonte).
 - `pacing-bridge-state.json` = `last_report` con `agents[].kt/share` per il tick 15m.
