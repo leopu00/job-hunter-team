@@ -48,6 +48,35 @@ EXPECTED = [
 ]
 TG_MARKER = "tg-bridge.py"
 TG_EXPECTED = 3  # assistente / capitano / mentor
+# Processi che pid1 avvia SOLO se ci sono bot Telegram configurati (come tg-bridge):
+# senza Telegram pid1 li SKIPPA apposta (pid1.js `hasBots`, riga ~595-598) → su una
+# VPS senza Telegram NON sono un "morto da rianimare", sono correttamente assenti.
+# Senza questo gate il canary escalava al Capitano ~1×/h un falso allarme su betaD
+# e VPS Telegram-less (deploy 2026-06-29). auto-report-loop = panoramica Telegram+PNG/2h.
+TELEGRAM_GATED = {"auto-report-loop"}
+
+
+def _telegram_bots_configured():
+    """True se almeno un bot Telegram ha un `bot_token` non vuoto in jht.config.json.
+
+    Stessa logica di pid1 (`hasTelegramBotsConfigured`, cli/src/commands/pid1.js):
+    `channels.telegram.bots.*.bot_token`. Determina se i processi TELEGRAM_GATED
+    (auto-report-loop) sono attesi: senza Telegram pid1 li skippa → assenti ≠ morti.
+    """
+    home = os.environ.get("JHT_HOME", "/jht_home")
+    try:
+        with open(os.path.join(home, "jht.config.json"), encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (OSError, ValueError):
+        return False
+    try:
+        bots = cfg["channels"]["telegram"]["bots"]
+    except (KeyError, TypeError):
+        return False
+    if not isinstance(bots, dict):
+        return False
+    return any(isinstance(b, dict) and isinstance(b.get("bot_token"), str)
+               and b["bot_token"].strip() for b in bots.values())
 
 
 def _cloud_daemon_expected():
@@ -103,6 +132,14 @@ def scan():
         "name": "tg-bridge", "group": "tg-bridge", "alive": tg > 0,
         "count": tg, "expected": TG_EXPECTED, "optional": True,
     })
+
+    # Gate Telegram: i processi TELEGRAM_GATED non sono attesi senza bot configurati
+    # (pid1 li skippa). Su VPS Telegram-less diventano opzionali → fuori da `dead`.
+    if not _telegram_bots_configured():
+        for r in rows:
+            if r["name"] in TELEGRAM_GATED:
+                r["optional"] = True
+                r["gated"] = "telegram-off"
 
     # "dead" = non vivo E non opzionale. Gruppo per guidare la riparazione.
     dead = [r for r in rows if not r["alive"] and not r.get("optional")]
