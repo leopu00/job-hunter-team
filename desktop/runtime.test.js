@@ -272,10 +272,14 @@ test('runtime manager in container mode skips web setup and uses docker spawn sp
           stdio: ['ignore', 'pipe', 'pipe'],
         },
       }
-      // Use a real long-running node process so spawnFn doesn't crash.
+      // `docker run -d` stampa l'ID del container ed ESCE subito con 0 (il
+      // container resta nel daemon, detached). Il mock deve fare lo stesso:
+      // un processo che termina con 0, non un long-running. Con setInterval
+      // il processo non usciva mai e `await child.once('exit')` in container
+      // mode (runtime.js) restava appeso → `node --test` non terminava.
       return {
         command: process.execPath,
-        args: ['-e', 'setInterval(() => {}, 1000)'],
+        args: ['-e', 'process.exit(0)'],
         options: {
           env: process.env,
           stdio: ['ignore', 'pipe', 'pipe'],
