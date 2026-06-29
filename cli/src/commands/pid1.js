@@ -226,8 +226,15 @@ async function startUserFacingAgents() {
         resolve();
       });
     });
-    // Pre-delay 3s tra agenti per stabilizzare tmux + kimi CLI boot.
-    await new Promise((r) => setTimeout(r, 3000));
+    // Stagger tra agenti (2026-06-29): i 4 cold-start delle TUI (kimi/codex) si
+    // sovrapponevano sulla fase di init CPU-pesante e su 2 core saturavano → la
+    // 4ª in coda (la Sentinella) poteva INCANTARSI durante l'init (wedge reale
+    // 2026-06-29: pane non ricettivo, recuperato poi dall'escalation). 3s non
+    // bastavano: start-agent.sh ritorna appena LANCIA la TUI, ma l'init vero dura
+    // ~15-30s. Distanziali di più così ogni TUI supera l'init pesante prima della
+    // successiva. Configurabile (JHT_AUTOSTART_STAGGER_SEC); boot ~36s con 4 core.
+    const staggerMs = (Number(process.env.JHT_AUTOSTART_STAGGER_SEC) || 12) * 1000;
+    await new Promise((r) => setTimeout(r, staggerMs));
   }
 }
 

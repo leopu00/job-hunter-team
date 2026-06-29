@@ -99,6 +99,26 @@ def _cloud_daemon_expected():
     return cfg.get("enabled") is True and isinstance(cfg.get("token"), str)
 
 
+def _telegram_configured():
+    """True se c'è almeno un bot Telegram con bot_token in jht.config.json.
+
+    Stesso predicato di pid1 (`hasTelegramBotsConfigured`) e agent-watchdog.sh:
+    `channels.telegram.bots.*.bot_token`. pid1 avvia `auto-report-loop` (e i
+    `tg-bridge`) SOLO se Telegram è configurato → su istanze senza Telegram il
+    loop NON parte e va trattato come opzionale, altrimenti il canary lo segna
+    morto e il watchdog escala al Capitano ~1×/h a vuoto (falso positivo, stessa
+    classe del cloud-daemon). Default prudente: False se config manca/illeggibile.
+    """
+    home = os.environ.get("JHT_HOME") or os.path.expanduser("~")
+    try:
+        with open(os.path.join(home, "jht.config.json"), encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return False
+    bots = (((cfg.get("channels") or {}).get("telegram") or {}).get("bots")) or {}
+    return any((b or {}).get("bot_token", "").strip() for b in bots.values())
+
+
 def _cmdlines():
     out = []
     for p in glob.glob("/proc/[0-9]*/cmdline"):
@@ -117,6 +137,7 @@ def scan():
         return sum(1 for c in cmds if marker in c)
 
     cloud_expected = _cloud_daemon_expected()
+    tg_configured = _telegram_configured()
     rows = []
     for name, marker, group in EXPECTED:
         n = count(marker)
@@ -125,6 +146,10 @@ def scan():
         # pairing disabilitato è opzionale → non conta come 'dead' (no falso
         # positivo del watchdog).
         if name == "cloud-daemon" and not cloud_expected:
+            row["optional"] = True
+        # auto-report-loop: pid1 lo avvia solo con Telegram configurato (come
+        # tg-bridge). Senza Telegram è opzionale → niente falso 'morto'.
+        elif name == "auto-report-loop" and not tg_configured:
             row["optional"] = True
         rows.append(row)
     tg = count(TG_MARKER)
