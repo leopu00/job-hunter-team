@@ -14,6 +14,26 @@ function writeFile(targetPath, contents) {
   fs.writeFileSync(targetPath, contents)
 }
 
+// Fake child-process ERMETICO: niente binari reali. Serve al test container
+// (che altrimenti, via lo spawn reale, lancia `docker logs -f`: su una macchina
+// SENZA docker — es. il runner macOS della CI — la `.kill()` su quel child
+// ENOENT restava appesa → `node --test` non terminava mai). Emula `docker run
+// -d` che stampa l'ID ed ESCE subito: emette `exit 0` al primo tick. `.kill()`
+// è un no-op che non può bloccarsi.
+const { EventEmitter } = require('node:events')
+function makeFakeChild({ exitCode = 0 } = {}) {
+  const child = new EventEmitter()
+  child.stdout = new EventEmitter()
+  child.stderr = new EventEmitter()
+  child.pid = 4242
+  child.kill = () => true
+  setImmediate(() => {
+    child.emit('exit', exitCode, null)
+    child.emit('close', exitCode, null)
+  })
+  return child
+}
+
 test('resolveRepoRoot prefers payloadDir when it contains a web/ entry', () => {
   const dir = makeTempRepo()
   const payloadDir = path.join(dir, 'app-payload')
@@ -259,9 +279,11 @@ test('runtime manager in container mode skips web setup and uses docker spawn sp
     ensureContainerFn: () => {
       containerEnsured = true
     },
-    spawnFn: (command, args, options) => {
+    spawnFn: () => {
       portOpen = true
-      return require('node:child_process').spawn(command, args, options)
+      // Fake child: il container è detached (docker run -d esce subito) e lo
+      // stream `docker logs -f` non deve diventare un processo reale.
+      return makeFakeChild()
     },
     containerSpawnSpecFactory: ({ port }) => {
       lastSpec = {
