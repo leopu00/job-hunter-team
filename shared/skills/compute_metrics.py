@@ -123,7 +123,7 @@ def cumulative_delta_last_hour(history, now=None):
     return total
 
 
-def compute_metrics(parsed, last, history=None):
+def compute_metrics(parsed, last, history=None, weekly_axis=None):
     """Deriva tutte le metriche da un dato fresco + storia.
 
     Vedi modulo doc per il contratto. Output dict pronto per JSONL.
@@ -367,6 +367,37 @@ def compute_metrics(parsed, last, history=None):
         elif p > PROJ_HIGH:  # 95-100 zona ATTENZIONE soft
             suggested_throttle_s = 60
 
+    # ── Composizione bi-dimensionale dello status (2026-06-29) ──────────────
+    # Lo `status` calcolato sopra è SOLO l'asse rate-limit 5h. Quando l'asse
+    # WEEKLY (rate active-hours, da weekly_pace.py — già de-rumorato e
+    # time-aware) è il vincolo PIÙ STRETTO, lo status deve rifletterlo: altrimenti
+    # un "SOTTOUTILIZZO 5h" invita il Capitano a SCALARE mentre il weekly corre
+    # (front-loading → lockout pre-reset). NON è un halt a soglia (design
+    # awareness-only 2026-06-13 invariato): è il segnale rate-based weekly già
+    # calcolato dal bridge, portato dentro il SINGOLO status team-facing invece
+    # di restare scollegato. NON usa `proj_weekly` (calendario, sovra-proietta):
+    # usa `weekly_axis` = dict da weekly_pace_assessment ({kind: SOPRA-PACE |
+    # SOTTO-PACE | ALLINEATO | ND, ratio, ...}) o None (→ comportamento invariato).
+    status_5h = status
+    binding_axis = "5h"
+    weekly_pace_kind = None
+    weekly_pace_ratio = None
+    if isinstance(weekly_axis, dict):
+        weekly_pace_kind = weekly_axis.get("kind")
+        _r = weekly_axis.get("ratio")
+        weekly_pace_ratio = round(_r, 2) if isinstance(_r, (int, float)) else None
+        # L'asse weekly "vince" (bind) solo quando è più stretto del 5h, e solo
+        # fuori dagli stati 5h già allertati (ATTENZIONE) o transitori (RESET).
+        if weekly_pace_kind == "SOPRA-PACE" and status not in ("ATTENZIONE", "RESET"):
+            # weekly sopra il sostenibile → FRENA, non scalare (anche se 5h è basso)
+            status = "SOPRA-PACE-WEEKLY"
+            binding_axis = "weekly"
+        elif weekly_pace_kind == "ALLINEATO" and status == "SOTTOUTILIZZO":
+            # 5h sotto ma weekly in pari → NON è vero sotto-utilizzo da saturare:
+            # il Capitano non deve scalare "per riempire" un weekly già a target.
+            status = "STEADY"
+            binding_axis = "weekly"
+
     return {
         "ts": ts,
         "provider": provider,
@@ -380,6 +411,13 @@ def compute_metrics(parsed, last, history=None):
         "projection_naive": round(projection_naive, 2) if projection_naive is not None else None,
         "velocity_decreasing": velocity_decreasing,
         "status": status,
+        # Composizione bi-dimensionale (2026-06-29): status_5h = l'asse 5h grezzo
+        # (per trasparenza/audit); binding_axis = quale asse vincola ("5h"|"weekly");
+        # weekly_pace_kind/ratio = verdetto weekly active-hours usato per comporre.
+        "status_5h": status_5h,
+        "binding_axis": binding_axis,
+        "weekly_pace_kind": weekly_pace_kind,
+        "weekly_pace_ratio": weekly_pace_ratio,
         "throttle": throttle,
         # Bug #24: scala throttle continua + fase (1/2/3). Sentinella e
         # Capitano leggono questi due campi per separare le responsabilità

@@ -947,9 +947,10 @@ def acquire_singleton_lock():
 
 # ── Helper: chiama compute_metrics skill per scrivere sample ────────────
 
-def _compute_metrics_via_skill(parsed, last, history):
+def _compute_metrics_via_skill(parsed, last, history, weekly_axis=None):
     """Path-import della skill compute_metrics per centralizzare il calcolo
     delle metriche derivate (velocity_smooth, projection τ-aware, status).
+    `weekly_axis` (verdetto weekly_pace, opzionale) compone lo status bi-dim.
     Se la skill non esiste (config rotta), fallback a sample minimale."""
     skill_path = Path("/app/shared/skills/compute_metrics.py")
     if not skill_path.exists():
@@ -970,7 +971,7 @@ def _compute_metrics_via_skill(parsed, last, history):
     spec = importlib.util.spec_from_file_location("compute_metrics", skill_path)
     cm = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(cm)
-    return cm.compute_metrics(parsed, last, history=history)
+    return cm.compute_metrics(parsed, last, history=history, weekly_axis=weekly_axis)
 
 
 def _weekly_pace_via_skill(entry, now_dt, now_ts):
@@ -1383,7 +1384,22 @@ def main():
                     history = []
                 else:
                     history = load_recent_samples(30)
-            entry = _compute_metrics_via_skill(parsed, last, history)
+            # Verdetto weekly (rate active-hours) PRIMA del compute, così lo
+            # status persistito è già composto bi-dimensionale (2026-06-29).
+            # weekly_pace legge la storia dal JSONL (≤ tick precedente) + il
+            # weekly_remaining corrente: il sample odierno non serve per il rate.
+            _wk_axis = None
+            _wu = parsed.get("weekly_usage")
+            if (isinstance(_wu, (int, float))
+                    and isinstance(parsed.get("weekly_reset_at_unix"), (int, float))):
+                _nts = time.time()
+                _ndt = datetime.fromtimestamp(_nts, tz=timezone.utc)
+                _pre = {
+                    "weekly_remaining_pct": max(0.0, 100.0 - _wu),
+                    "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
+                }
+                _wk_axis = _weekly_pace_via_skill(_pre, _ndt, _nts)
+            entry = _compute_metrics_via_skill(parsed, last, history, weekly_axis=_wk_axis)
             entry["source"] = "bridge"
             write_jsonl(entry)
             write_log(entry)
