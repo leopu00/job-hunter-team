@@ -310,8 +310,7 @@ export default async function CaseStudiesIndexPage() {
       </LandingI18nProvider>
       <div aria-hidden="true" className="h-14" />
 
-      <div className="mx-auto max-w-6xl px-6 py-12">
-        <CaseStudiesShell testers={testers}>
+      <CaseStudiesShell testers={testers}>
           {/* ── Hero / cos'è ──────────────────────────────────────── */}
           <header className="mb-12">
             <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[var(--color-dim)]">
@@ -479,8 +478,7 @@ export default async function CaseStudiesIndexPage() {
               </a>
             </div>
           </section>
-        </CaseStudiesShell>
-      </div>
+      </CaseStudiesShell>
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
         {t.footer}
