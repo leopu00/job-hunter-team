@@ -486,17 +486,22 @@ case "$PROVIDER" in
     # steps reached" e ASPETTA input (max_ralph=0, niente auto-continue): è il
     # Capitano a sbloccarlo con un "Continua" (regola C-08 ter). Trasforma i
     # runaway in checkpoint controllabili invece che in burn cieco.
-    # --no-thinking (2026-06-29): K2.7-Code ha il "thinking" (catena di reasoning
+    # --no-thinking (#5, 2026-06-30): K2.7-Code ha il "thinking" (catena di reasoning
     # fatturata come output) ON di default; è la causa del coordinator-burn — i
-    # coordinatori Kimi costavano ~7-12x un tick di Codex e si mangiavano ~76% del
-    # budget settimanale (vedi docs/internal/2026-06-29-coordinator-burn-kimi-vs-codex.md).
-    # Lo spegniamo per TUTTI i ruoli Kimi. Validato live su betaD: Sentinella -78%
-    # token con qualità decisionale intatta (il Capitano non ha mai respinto un suo
-    # ordine). Inizialmente il Capitano era escluso, ma a team CONGELATO bruciava da
-    # solo ~35 kT/h (74 kT in 2h, il maggiore consumatore) per ri-deliberare "resto
-    # in coast" → l'idle-burn del thinking sul decisore non vale il costo. Il flag
-    # commuta in "Instant mode"; il ragionamento resta visibile nella risposta.
-    CLI_ARGS="--yolo --max-steps-per-turn 100 --no-thinking"
+    # coordinatori Kimi costavano ~7-12x un tick di Codex (vedi
+    # docs/internal/2026-06-29-coordinator-burn-kimi-vs-codex.md). Lo spegniamo SOLO
+    # per i COORDINATORI (Capitano + Sentinella): il loro lavoro non è user-facing,
+    # lì il thinking è idle-burn puro (il Capitano congelato bruciava ~35 kT/h solo
+    # per ri-deliberare "resto in coast"). I WORKER (Scout/Analista/Scorer/Scrittore/
+    # Critico) e gli user-facing (Assistente/Mentor) LO TENGONO: a loro serve
+    # l'intelligenza per trovare e valutare offerte (a thinking spento il team betaB
+    # non trovava nulla). Revisione mirata del "tutti off" del 2026-06-29; il flag
+    # commuta in "Instant mode", il ragionamento resta visibile nella risposta.
+    THINKING_FLAG=""
+    case "$(printf '%s' "$ROLE" | tr 'A-Z' 'a-z')" in
+      capitano|sentinella) THINKING_FLAG=" --no-thinking" ;;
+    esac
+    CLI_ARGS="--yolo --max-steps-per-turn 100${THINKING_FLAG}"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then
       CLI_ENV_PREFIX="MOONSHOT_API_KEY='${API_KEY}' "
     fi
