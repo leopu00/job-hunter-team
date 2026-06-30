@@ -43,6 +43,10 @@ STATE_FILE = LOGS_DIR / "capitano-bridge-state.json"
 # Daily hard-stop (#2): flag scritto dal sentinel-bridge a cap giornaliero sforato.
 # Lo leggiamo (sola lettura): a team in standby l'heartbeat orario tace.
 DAILY_HALT_FLAG = LOGS_DIR / "daily-halt.flag"
+# work_phase AUTOREVOLE (#4): il pacing-bridge la calcola dalle working hours e la
+# scrive qui. Il sentinel-data grezzo la lascia spesso a None → l'heartbeat era
+# cieco al giorno/notte e sparava nudge in piena notte.
+PACING_STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
 TARGET = os.environ.get("JHT_CAPITANO_HEARTBEAT_SESSION", "CAPITANO")
 DB_QUERY = "/app/shared/skills/db_query.py"
 
@@ -131,6 +135,17 @@ def _live_sessions():
         return []
 
 
+def _work_phase():
+    """Fase di lavoro autorevole, letta dal pacing-bridge-state. Ritorna
+    "ON"/"OFF", oppure None se non determinabile o nessun orario configurato
+    (team 24/7) → in quel caso NON si silenzia."""
+    try:
+        wp = json.loads(PACING_STATE_FILE.read_text(encoding="utf-8")).get("work_phase")
+        return wp if wp in ("ON", "OFF") else None
+    except (OSError, ValueError):
+        return None
+
+
 def choose_nudge(state, hour, last_theme):
     """Sceglie il nudge PIÙ RILEVANTE adesso (deterministico, vario). Ritorna
     (theme, message) o (None, None) per tacere. Priorità: condizioni anomale
@@ -145,34 +160,33 @@ def choose_nudge(state, hour, last_theme):
     #    osservato: Capitano incagliato a pipeline vuota). Priorità massima.
     if qa == 0 and qs == 0 and not scouts_live:
         return ("pipeline-ferma",
-                f"[HEARTBEAT] Code VUOTE (analista={qa}, scorer={qs}) e NESSUNO Scout "
-                f"attivo → il sourcing è fermo. weekly={wk}%. Se hai margine di budget, "
-                f"perché non stai sorgendo? Verifica (pipeline-triage / rate-budget) e "
-                f"decidi se spawnare uno Scout. (nudge orario, decidi tu)")
+                f"[HEARTBEAT] Code VUOTE (analista={qa}, scorer={qs}), nessuno Scout "
+                f"attivo → sourcing fermo. weekly={wk}%. (segnale: pipeline a secco "
+                f"con budget; uno Scout la riempirebbe)")
 
     # 2) WORKER CALDO: top-consumer con share alto e cadenza ~0 = sospetto
-    #    rabbit-hole/stuck → fai verificare al Capitano (non killare tu).
+    #    rabbit-hole/stuck → un segnale, non un ordine: il Capitano non killa al buio.
     if top and top[1] >= 50 and (top[2] is None or top[2] < 0.05):
         return ("worker-caldo",
                 f"[HEARTBEAT] {top[0]} brucia ~{top[1]:.0f}% del team con cadenza ~0 "
-                f"nell'ultima finestra → potrebbe essere un task lungo o un rabbit-hole. "
-                f"Dagli un'occhiata (capture-pane / agent-speed-table): se non produce, "
-                f"valuta Continua o KILL. (nudge orario, decidi tu)")
+                f"nell'ultima finestra → possibile task lungo o stuck. (segnale: "
+                f"worker caldo)")
 
     # 3) BACKLOG: code profonde → forse servono più worker.
     if (qa or 0) >= 15 or (qs or 0) >= 15:
         return ("backlog",
-                f"[HEARTBEAT] Coda profonda (analista={qa}, scorer={qs}). Se il budget "
-                f"regge, valuta se scalare i worker sul collo di bottiglia. (decidi tu)")
+                f"[HEARTBEAT] Coda profonda (analista={qa}, scorer={qs}). (segnale: "
+                f"collo di bottiglia; più worker se il budget regge)")
 
     # 4) Rotazione leggera per non ripetere lo stesso tema; a volte SILENZIO.
+    # NB (#3): nessun "(decidi tu)" né "fai pipeline-triage". Il nudge consegna
+    # un DATO; come reagire lo dice il prompt (C-20). L'imperativo a "decidere"
+    # costava un turno di deliberazione (spesso uno spawn di subagente) a vuoto.
     rota = [
         ("pacing-check",
-         f"[HEARTBEAT] Stato: weekly={wk}% status={state.get('status')}. Sei nella "
-         f"banda di pace giusta? Se in dubbio, tira rate-budget e ricalibra. (decidi tu)"),
+         f"[HEARTBEAT] weekly={wk}% status={state.get('status')}. (segnale di pace orario)"),
         ("code-check",
-         f"[HEARTBEAT] Code: analista={qa}, scorer={qs}. Pipeline sana? Un giro di "
-         f"pipeline-triage se qualcosa non ti torna. (decidi tu)"),
+         f"[HEARTBEAT] code analista={qa}, scorer={qs}. (segnale pipeline orario)"),
         (None, None),   # un'ora su tre: silenzio
     ]
     theme, msg = rota[hour % len(rota)]
@@ -215,6 +229,11 @@ def tick(now, send):
     # battito orario tace — niente nudge "(decidi tu)" mentre il team è in pausa.
     if DAILY_HALT_FLAG.exists():
         _log(f"{now:%H:%M} daily-halt: heartbeat soppresso (team in standby)")
+        return
+    # Off-hours gate (#4): fuori dall'orario di lavoro il team riposa → niente
+    # battito. (work_phase=None = nessun orario configurato, team 24/7 → si batte.)
+    if _work_phase() == "OFF":
+        _log(f"{now:%H:%M} off-hours (work_phase=OFF): heartbeat soppresso")
         return
     st = gather_state()
     persisted = _read_state()
