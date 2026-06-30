@@ -21,7 +21,7 @@ Sortie typique :
 ```
 === Rate Budget — claude ===
   Usage:            53%
-  Reset:            13:49 (in 2h 34m)
+  Reset:            tra 2h 34m (2026-04-24 15:49 CEST)
   Measured velocity:+0.39%/h (EMA)
   Target velocity:  11.38%/h (to close at 92% by reset)
   Reset projection: 56%
@@ -46,7 +46,7 @@ Sortie typique :
 
 ```bash
 python3 /app/shared/skills/rate_budget.py status
-# → provider=claude usage=55% status=OK throttle=T0 reset=13:49 (in 2h 34m)
+# → provider=claude usage=55% status=OK throttle=0 reset_in=2h 34m (at 2026-04-24 15:49 CEST)
 ```
 
 Utile pour des logs rapides ou des vérifications en cours de boucle.
