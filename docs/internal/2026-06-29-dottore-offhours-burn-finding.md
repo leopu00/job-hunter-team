@@ -1,6 +1,13 @@
-# 🌙 Dottore brucia budget in off-hours (one-shot non gated) — finding
+# 🌙 Dottore brucia budget in off-hours — ❌ FINDING ERRATO (misdiagnosi, chiuso)
 
-**Data:** 2026-06-29 · **VPS:** betaB (`203.0.113.20`, Kimi, user `22a8e78c`) · **Tipo:** osservazione read-only, NON intervenuto. **Severità:** minore (~2% del weekly su ~8h off).
+> ## ⚠️ CORREZIONE 2026-06-30 — questo finding era SBAGLIATO
+> Verificando il codice: lo **scheduled-Dottore È GIÀ gated** sulle working-hours, **identico al Mantenitore** (entrambi via `shared/skills/doctor_schedule.py`). In `.launcher/doctor-watchdog.sh`: `doctor_schedule.py check` ritorna **`OFF` fuori finestra** → il watchdog logga *"fuori working hours — scheduling sospeso"* e **NON spawna** (righe 105-111); spawna solo su slot `T30|MID` **dentro** la finestra. Il fallback ~6h che bypassa il gate vale **solo** per le VPS `NOWINDOW` (24/7, senza finestra), non per betaB (20-08). → La "asimmetria Dottore-non-gated vs Mantenitore-gated" qui sotto è **falsa**.
+>
+> **Cos'era davvero il +2% off-hours:** (1) **churn dei worker su coda vuota** (~49 cicli di analista-1) = il grosso, **già fixato** col protocollo Scout-esausto + `C-05b` (commit 2026-06-30); (2) un **Dottore in standby** (non si autodistrugge) **risvegliato on-demand** = il path di sicurezza (liveness/zombie-rescue) che vogliamo **preservare**.
+>
+> **Conclusione: niente da implementare.** Voce BACKLOG `[PACING-DOTTORE-OFFHOURS-GATE]` chiusa come misdiagnosi. Il testo sotto resta solo come storico (premessa errata).
+
+**Data:** 2026-06-29 · **VPS:** betaB (`203.0.113.20`, Kimi, user `22a8e78c`) · **Tipo:** osservazione read-only, NON intervenuto. **Severità:** ~~minore~~ → **nulla (finding errato)**.
 
 ---
 

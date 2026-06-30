@@ -143,6 +143,21 @@ def local_reset_display(reset_hhmm, reset_at_unix=None):
     return text  # già data-completa
 
 
+def weekly_reset_remaining(unix_ts):
+    """weekly_reset_at_unix → 'Ng Mh' remaining. Il weekly e' a GIORNI, non ore:
+    HH:MM (come il 5h) non basta, serve il delta in giorni per non scambiarlo col 5h."""
+    if not isinstance(unix_ts, (int, float)):
+        return None
+    now = datetime.now(timezone.utc)
+    target = datetime.fromtimestamp(unix_ts, tz=timezone.utc)
+    total_min = int((target - now).total_seconds() // 60)
+    if total_min < 0:
+        return None
+    d, rem = total_min // 1440, total_min % 1440
+    h, m = rem // 60, rem % 60
+    return f"{d}g {h}h" if d > 0 else (f"{h}h {m}m" if h > 0 else f"{m}m")
+
+
 def status_line(entry):
     if not entry:
         return "NO_DATA: nessun sample del bridge (il bridge non e' ancora partito o non ha ancora pollato)"
@@ -153,10 +168,24 @@ def status_line(entry):
     reset_at = entry.get("reset_at", "-")
     reset_unix = entry.get("reset_at_unix")
     remaining = hours_minutes_until(reset_at, reset_unix) or "-"
-    return (
+    line = (
         f"provider={provider} usage={usage}% status={status} throttle={throttle} "
         f"reset_in={remaining} (at {local_reset_display(reset_at, reset_unix)})"
     )
+    # DIMENSIONE WEEKLY ESPLICITA (fix confusione-reset 2026-06-30): `reset_in` qui
+    # e' SOLO il 5h (ore). Quando il vincolo e' weekly (es. status SOPRA-PACE-WEEKLY)
+    # il reset che conta e' quello settimanale (GIORNI), NON il 5h. Mostrarlo sempre
+    # accanto evita che il Capitano scambi il reset 5h per quello weekly e si aspetti
+    # un sollievo che al reset 5h non arriva (osservato betaB/Kimi 2026-06-29).
+    wk_usage = entry.get("weekly_usage")
+    wk_rem = weekly_reset_remaining(entry.get("weekly_reset_at_unix"))
+    if isinstance(wk_usage, (int, float)) or wk_rem:
+        wk_unix = entry.get("weekly_reset_at_unix")
+        at = (datetime.fromtimestamp(wk_unix, tz=timezone.utc).strftime("%d/%m %H:%M")
+              if isinstance(wk_unix, (int, float)) else (entry.get("weekly_reset_at") or "?"))
+        used = f"{wk_usage}% used" if isinstance(wk_usage, (int, float)) else "?"
+        line += f" | weekly={used}, reset_weekly={wk_rem or '?'} (at {at} UTC)"
+    return line
 
 
 def plan(entry):

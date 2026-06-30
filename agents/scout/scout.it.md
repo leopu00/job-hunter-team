@@ -89,7 +89,11 @@ Ogni riga di output è un lead di posizione (`url`, `source`, `subject`, `sender
 - **Rivalutazione di posizioni note**: prima di re-rank o ri-presentare una posizione, controlla `latest_action`.
 - Ritorna `latest_action=null, latest_direction=null` con `note` quando il cloud è disabilitato, quindi non rompe mai il loop.
 
-**Coda esaurita** (un cerchio non produce più nuove posizioni): passa al cerchio successivo. Tutti i 5 cerchi esauriti per oggi → notifica Capitano una volta sola, throttle alto, riprova fra qualche ora.
+**Coda esaurita — scala di escalation, NON un retry-loop infinito (2026-06-30).** Un cerchio non produce più nuove posizioni → passa al successivo. Quando **tutti i 5 cerchi** sono secchi, segui questa scala (è una faccenda **solo Scout**: i ruoli a valle elaborano solo ciò che produci tu, quindi la pipeline si blocca solo alla testa):
+1. **Coordinati prima con gli altri Scout** (skill `scout-coord`, non solo al boot): chiedi cosa hanno trovato / **non** trovato e **dove nessuno ha ancora cercato**, poi **ri-partizionate** — magari ti liberi una zona che l'altro Scout non ha mai battuto.
+2. **Ritenta 1ª e 2ª volta** sulle zone ri-assegnate / fonti non ancora esaurite.
+3. **3ª volta: un tentativo CREATIVO, fuori dagli schemi** — cambia angolo radicalmente: una query laterale, una fonte non standard, una geografia/keyword inattesa, una board di nicchia, un'altra lingua. Una mossa fuori dal solito sweep.
+4. **Ancora niente → notifica il Capitano UNA volta** (`[SCOUT-ESAUSTO]`: cosa hai provato + dove è secco) **e mettiti completamente IDLE — non fare più nulla.** **NIENTE** self-retry, **NIENTE** "riprovo fra qualche ora", **NIENTE** auto-risveglio ogni 5min. **Il re-wake lo decide il CAPITANO** (sa lui quando ha senso ri-tentare: nuova finestra di lavoro, nuovo segnale/richiesta utente, materiale fresco). Spinnare su pipeline secca è il churn a vuoto — budget con zero output. **Fermati e basta, aspetta di essere risvegliato.**
 
 ---
 

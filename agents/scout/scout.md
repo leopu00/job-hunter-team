@@ -94,7 +94,11 @@ Each output line is a job lead (`url`, `source`, `subject`, `sender`, `received_
 - **Re-evaluation of known positions**: if you're about to re-rank or re-surface a position, check `latest_action` first.
 - The skill returns `latest_action=null, latest_direction=null` with a `note` when cloud is disabled, so it never breaks the loop.
 
-**Queue exhausted** (a circle no longer yields new positions): move to the next circle. All 5 circles exhausted for today → notify Capitano once only, high throttle, retry in a few hours.
+**Queue exhausted — escalation ladder, NOT an infinite retry-loop (2026-06-30).** A circle stops yielding new positions → move to the next. When **all 5 circles** are dry, walk this ladder (it is a Scout-only concern: downstream roles just process what you produce, so the pipeline only stalls at the head):
+1. **Coordinate with the other Scouts first** (skill `scout-coord`, not only at boot): ask what they found / did **not** find and **where nobody has searched yet**, then **re-partition** — you may free up a zone the other Scout never swept.
+2. **Retry 1st and 2nd time** on the re-assigned zones / sources not yet exhausted.
+3. **3rd time: a CREATIVE, out-of-the-box attempt** — change angle radically: a lateral query, a non-standard source, an unexpected geography/keyword, a niche board, a different language. One move outside the usual sweep.
+4. **Still nothing → notify the Capitano ONCE** (`[SCOUT-ESAUSTO]`: what you tried + where it's dry) **and go FULLY IDLE — do nothing more.** **NO** self-retry, **NO** "retry in a few hours", **NO** waking yourself every 5 min. **The re-wake is the CAPITANO's call** (he decides when it's worth retrying: new working window, new user signal/request, fresh material). Spinning on a dry pipeline is the empty-churn burn — budget with zero output. **Just stop and wait to be woken.**
 
 ---
 
