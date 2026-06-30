@@ -68,7 +68,7 @@ const T: Record<
     heroTitleEmph: "davvero",
     heroTitlePost: " un team Job Hunter",
     heroLeadPre:
-      "Job Hunter è un team di agenti AI che cerca lavoro al posto tuo: trova posizioni, le analizza, le valuta sul tuo profilo e prepara le candidature. Qui mostriamo cosa ha prodotto su ",
+      "Job Hunter Team è una squadra di agenti AI autonomi che cerca lavoro per te: trova posizioni, le analizza, le valuta sul tuo profilo e prepara le candidature. Qui mostriamo cosa ha prodotto su ",
     heroLeadStrong: "profili candidato reali",
     heroLeadPost:
       " — dati aggregati e anonimi, nessuna informazione personale.",
@@ -101,7 +101,7 @@ const T: Record<
     heroTitleEmph: "really",
     heroTitlePost: " does",
     heroLeadPre:
-      "Job Hunter is a team of AI agents that looks for work in your place: it finds positions, analyzes them, scores them against your profile and prepares the applications. Here we show what it produced on ",
+      "Job Hunter Team is a team of autonomous AI agents that looks for work on your behalf: it finds positions, analyzes them, scores them against your profile and prepares the applications. Here we show what it produced on ",
     heroLeadStrong: "real candidate profiles",
     heroLeadPost: " — aggregated, anonymous data, no personal information.",
     heroSub:
