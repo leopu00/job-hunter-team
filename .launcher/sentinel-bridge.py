@@ -72,6 +72,11 @@ PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
 # Source-of-truth del prossimo tick: il bridge calcola e pubblica qui;
 # la UI legge senza ricostruire la logica (che cambierebbe ogni V*).
 STATE_FILE = LOGS_DIR / "sentinel-bridge-state.json"
+# Daily hard-stop (#2): flag CONDIVISO. Quando il consumo di oggi sfora il cap
+# giornaliero, questo bridge lo crea e mette il team in standby; pacing-bridge e
+# capitano-bridge lo leggono e tacciono. Rimosso da questo stesso bridge quando il
+# budget rientra (inizio finestra di lavoro del giorno dopo / reset weekly).
+DAILY_HALT_FLAG = LOGS_DIR / "daily-halt.flag"
 STATE_VERSION = 7
 
 DEFAULT_TICK_MINUTES = 5               # default se config mancante
@@ -437,6 +442,32 @@ def jht_tmux_send(session, text):
     except (subprocess.TimeoutExpired, OSError) as e:
         print(f"[bridge V6] WARN jht_tmux_send({session}): {e}", file=sys.stderr)
         return False
+
+
+def _daily_halt_active():
+    """True se il team è in standby per sforo del cap giornaliero (#2)."""
+    return DAILY_HALT_FLAG.exists()
+
+
+def _esc_all_sessions():
+    """Manda un ESC a ogni sessione tmux: interrompe il turno in corso senza
+    uccidere il processo — una pausa pulita, non un kill. Best-effort: qualunque
+    errore degrada a 'sessione non messa in pausa', mai un'eccezione che abbatte
+    il bridge. Ritorna l'elenco delle sessioni a cui l'ESC è stato inviato."""
+    try:
+        out = subprocess.run(["tmux", "ls", "-F", "#{session_name}"],
+                             capture_output=True, text=True, timeout=10).stdout
+    except (subprocess.SubprocessError, OSError):
+        return []
+    paused = []
+    for s in (l.strip() for l in out.splitlines() if l.strip()):
+        try:
+            subprocess.run(["tmux", "send-keys", "-t", s, "Escape"],
+                           capture_output=True, timeout=10)
+            paused.append(s)
+        except (subprocess.SubprocessError, OSError):
+            pass
+    return paused
 
 
 def _sample_vitals_and_maybe_alert():
@@ -1456,6 +1487,58 @@ def main():
                     entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
                 if isinstance(weekly_pace, dict) and weekly_pace.get("binding"):
                     weekly_binding = True
+
+            # ── Daily hard-stop (#2): enforcement fisico del cap giornaliero ──
+            # Lo sforo del cap (oggi > budget+5%) non resta un avviso: ferma il
+            # team. Valutato QUI, prima e a prescindere da `should_notify`, perché
+            # in pausa il team è on-pace (should_notify=False) e non rivedremmo mai
+            # il rientro. Una skill-call in più al tick: costo trascurabile.
+            daily_halted = False
+            _hb, _hc = _daily_pacing_via_skill(
+                entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+            if isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
+                _hcap = _hb + 5.0
+                _over_cap = _hc > _hcap
+                if _daily_halt_active():
+                    # Già in standby: si esce SOLO quando oggi rientra sotto il cap
+                    # — accade da sé all'inizio della finestra di lavoro del giorno
+                    # dopo (baseline del consumo azzerata) o al reset weekly.
+                    if not _over_cap:
+                        try:
+                            DAILY_HALT_FLAG.unlink()
+                        except OSError:
+                            pass
+                        if within_hours:
+                            for _s in (SENTINELLA_SESSION, CAPITANO_SESSION):
+                                if session_exists(_s):
+                                    jht_tmux_send(_s, f"[BRIDGE INFO] ▶️ Budget giornaliero rientrato (oggi={_hc:.1f}% ≤ cap={_hcap:.1f}%): team riattivabile, riprendo i tick.")
+                        print(f"[bridge V6] {now_h} DAILY-HALT rientrato (oggi={_hc:.1f}% ≤ cap={_hcap:.1f}%)")
+                    else:
+                        daily_halted = True  # resta in pausa → questo tick non sveglia nessuno
+                elif within_hours and _over_cap:
+                    # Primo sforo: ultimo messaggio ai coordinatori, 30s per
+                    # elaborarlo, poi ESC a tutte le sessioni (standby, NO kill).
+                    daily_halted = True
+                    _alert = (f"⛔ DAILY-CAP SFORATO: oggi={_hc:.1f}% > cap={_hcap:.1f}% "
+                              f"(budget={_hb:.1f}%). ULTIMO messaggio prima dello stop: "
+                              f"METTO IL TEAM IN STANDBY tra 30s — ESC a tutte le sessioni, "
+                              f"NESSUN kill. Riprendo alla finestra di lavoro del giorno dopo.")
+                    for _s in (SENTINELLA_SESSION, CAPITANO_SESSION):
+                        if session_exists(_s):
+                            jht_tmux_send(_s, f"[BRIDGE ALERT] {_alert}")
+                    print(f"[bridge V6] {now_h} DAILY-CAP HIT oggi={_hc:.1f}% cap={_hcap:.1f}% → ESC a tutto il team tra 30s")
+                    time.sleep(30)
+                    _paused = _esc_all_sessions()
+                    try:
+                        DAILY_HALT_FLAG.write_text(json.dumps({
+                            "halted_at": datetime.now(timezone.utc).isoformat(),
+                            "consumed_pct": _hc, "cap_pct": _hcap, "budget_pct": _hb,
+                            "sessions": _paused,
+                        }), encoding="utf-8")
+                    except OSError:
+                        pass
+                    print(f"[bridge V6] {now_h} DAILY-HALT attivo: ESC a {len(_paused)} sessioni; bridge in silenzio fino al giorno dopo")
+
             if not within_hours:
                 # GATE ORARIO ASSOLUTO (lean-comms): fuori finestra NESSUNA LLM
                 # svegliata. Il bridge ha già scritto il sample (monitoring puro)
@@ -1499,7 +1582,7 @@ def main():
                 f"notify={should_notify}"
             )
 
-            if should_notify and session_exists(SENTINELLA_SESSION):
+            if should_notify and not daily_halted and session_exists(SENTINELLA_SESSION):
                 # Includi il target nel tick così la Sentinella sa contro
                 # quale soglia confrontare proj/usage senza dover leggere
                 # un secondo file. Quando dyn_target è None il messaggio
