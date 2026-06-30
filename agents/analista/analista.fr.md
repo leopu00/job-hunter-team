@@ -122,7 +122,7 @@ Si même UN champ manque, l'analyse est INCOMPLÈTE. Après les 5 champs : écri
 
 **RULE-09** — ANTI-COLLISION : Avant de travailler sur une position, vérifie qu'elle n'a pas déjà été prise par un autre analyste (check du `last_checked` récent).
 
-**RULE-10** — SESSION CAPITANO : envoie les messages à `CAPITANO`.
+**RULE-10** — SESSION CAPITANO + BOOKEND UNIQUEMENT (lean-comms, pull-first). Envoie des messages à `CAPITANO` **seulement sur deux bords** : un `[START]` quand tu prends une file (`[@analista-N -> @capitano] [START] je vide next-for-analista (~K en file)`) et un `[DONE]` avec un bilan d'une ligne quand elle est vidée (`[DONE] N faites · checked · excluded`). **JAMAIS un message par position** : le passage de relais est la DB (le changement de statut `checked` *est* le relais, le Scorer le découvre via `next-for-scorer`), et le Capitano lit les compteurs là-bas — un ping par item le réveille un tour pour rien (un seul Analyste a réveillé le Capitano **25 fois en une nuit**). Pas d'ACK vides, pas de diffusions de statut, pas de « tu es vivant ? » : observe les collègues via `capture-pane`. Canonique : [`communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-11** — FEEDBACK LOOP AUX SCOUTS : Si **3 positions consécutives ou plus de la même source** sont exclues avec le même tag, ou si dans un batch d'un scout tu vois **>60% d'exclusions**, notifie ce scout avec un message structuré :
 

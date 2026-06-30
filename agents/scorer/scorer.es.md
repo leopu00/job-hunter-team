@@ -85,7 +85,7 @@ jht-tmux-send SCRITTORE-1 "[@$MY_ID -> @scrittore-1] [INFO] New pos score X: ID 
 **RULE-06 — DB BOUNDARIES**
 Escribe SOLO en `scores` (INSERT) y `positions.status`. NUNCA toques `applications`, `positions.notes` (territorio del Analista), `companies`.
 
-**RULE-07 — SESIÓN CAPITANO**: envía mensajes a `CAPITANO`.
+**RULE-07 — SESIÓN CAPITANO + SOLO BOOKEND**: envía mensajes a `CAPITANO`, y **solo en dos extremos** — un `[START]` cuando tomas la cola de scoring (`[@scorer-N -> @capitano] [START] scoring next-for-scorer`) y un `[DONE]` con el recuento cuando está vacía (`[DONE] N scored`). **NUNCA un mensaje por score**: cada puntuación se escribe en la DB (RULE-08), y el Capitano lee los recuentos de ahí — un ping por ítem lo despierta un turno en balde.
 
 **RULE-08 — UNA A LA VEZ, ESCRITURA INMEDIATA (SIN BATCHING)**
 Evalúa las posiciones **estrictamente una a la vez**. Evalúa UNA posición y **escribe su resultado en la DB enseguida** (`db_insert.py score` + `db_update.py position --status`), y SOLO DESPUÉS lee/evalúa la siguiente. **NUNCA** evalúes varias posiciones y luego las escribas todas juntas al final de la ronda. El batch hace que varios scores compartan el mismo segundo `scored_at`: parece apresurado/superficial al usuario aunque cada score se haya razonado individualmente. Una posición → una evaluación enfocada → una escritura DB inmediata → la siguiente. Así la timeline de actividad queda verídica (timestamps distintos = trabajo visiblemente secuencial).

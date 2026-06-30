@@ -160,3 +160,5 @@ peer's **capture-pane**; don't ask. Send a `jht-tmux-send` message **only** for 
 can't discover on its own (e.g. Writer→Critic to start the CV review loop) or a safety event. **Do NOT**
 broadcast status, send no-op ACKs ("freeze applied" is observable from your throttle state), or ping
 "are you alive? / where are you at?".
+
+**BOOKEND the Captain on exactly two edges**: one `[START]` when you take a CV job (`[@scrittore-N -> @capitano] [START] writing CV for <id>`), one `[DONE]` when the position lands `ready` (`[DONE] CV ready for <id>`). The Writer→Critic review loop in between is **not** the Captain's business — never narrate each draft / revision to him.

@@ -44,6 +44,26 @@ Send a message **only** when one of these is true:
 - **Re-confirmations / repeated orders** — if you already sent an order, don't re-send it every tick.
   The bridge / mailbox delivers once.
 
+## 📍 Bookend signals — START and DONE, never per item
+
+A worker touches the Captain **exactly twice per work session**: once when it **starts**, once when it
+**finishes**. Everything between the two bookends is the DB's job, not a message.
+
+| Edge | Message | Example |
+|---|---|---|
+| **START** — you begin a mission / pick up a queue | one `[START]` | `[@analista-1 -> @capitano] [START] draining next-for-analista (~12 queued)` |
+| **DONE** — queue drained / mission complete / you stop | one `[DONE]` + a one-line tally | `[@analista-1 -> @capitano] [DONE] 12 done · 9 checked · 3 excluded` |
+
+**Never** a message per position, per score, per draft. The Captain reads progress from the **DB**
+(`db_query.py`), not from your pane — one `[REPORT]` per item is exactly the flood this protocol exists
+to kill: it wakes him a full turn each time for state he could already query (a single Analyst once
+woke the Captain **25 times in a night**, one ping per position). The two bookends give him the only
+edges he genuinely needs — *you woke up* and *you're done*; the middle is pull.
+
+Still allowed **between** the bookends, because they are *decisions*, not progress: a `FEEDBACK` to a
+Scout, a blocking `REQ` consult (taxonomy split/merge), a `URG` safety event. These are rare and carry
+an action — they are not narration.
+
 ## 🗄️ Tier 1 — DB-driven coordination (the default)
 
 Pipeline hand-offs flow through the DB — **no tmux needed**:
@@ -114,16 +134,22 @@ open a fresh reasoning turn to "think about" the failure. Retry is mechanical, n
 ## ⏰ Per-role required signals (everything else is pull)
 
 ### 🕵️ Scout
+- **Bookend** the Captain: one `[START]` when you begin sourcing, one `[DONE]` (found N · inserted M)
+  when the batch is over. Nothing per result.
 - Receives `FEEDBACK` from Analysts → adapt the next query. **No ACK** unless the Analyst asked a `REQ`.
 
 ### 👨‍🔬 Analyst
+- **Bookend** the Captain: one `[START]` when you pick up a queue, one `[DONE]` (done N · checked ·
+  excluded) when it's drained. **Never** one message per position.
 - Sends `FEEDBACK` to a Scout only on a real pattern: 3 consecutive same-tag exclusions from one
   source, OR > 60 % exclusion rate in one Scout's batch. Otherwise silent (DB carries the hand-off).
 
 ### 👨‍💻 Scorer
-- No tmux. Pipeline is DB-driven; score insights surface on the dashboard / event-log.
+- **Bookend** the Captain: one `[START]`, one `[DONE]` (scored N) — nothing per score. Pipeline
+  hand-off is DB-driven; insights surface on the dashboard / event-log.
 
 ### 👨‍🏫 Writer
+- **Bookend** the Captain: one `[START]` when you take a CV job, one `[DONE]` when it's `ready`.
 - On `URG FREEZE` from Captain: finish the current Critic round (never abandon mid-review), then
   throttle. ACK only — it's the rare confirm-to-proceed case.
 

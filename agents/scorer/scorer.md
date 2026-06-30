@@ -84,7 +84,7 @@ see [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)
 **RULE-06 — DB BOUNDARIES**
 Write ONLY in `scores` (INSERT) and `positions.status`. NEVER touch `applications`, `positions.notes` (Analista territory), `companies`.
 
-**RULE-07 — CAPITANO SESSION**: send messages to `CAPITANO`.
+**RULE-07 — CAPITANO SESSION + BOOKEND ONLY**: send messages to `CAPITANO`, and **only on two edges** — one `[START]` when you pick up the scoring queue (`[@scorer-N -> @capitano] [START] scoring next-for-scorer`), one `[DONE]` with a tally when it's empty (`[DONE] scored N`). **Never** a message per score: each score is written to the DB (RULE-08), and the Captain reads counts from there — a per-item ping just wakes him a turn for nothing.
 
 **RULE-08 — ONE AT A TIME, WRITE IMMEDIATELY (NO BATCHING)**
 Score positions **strictly one at a time**. Fully evaluate ONE position and **write its result to the DB right away** (`db_insert.py score` + `db_update.py position --status`), and ONLY THEN read/evaluate the next one. **NEVER** evaluate several positions and then write them all together at the end of the round. Batching the writes makes multiple scores share the exact same `scored_at` second, which looks rushed/superficial to the user even when each score was reasoned individually. One position → one focused evaluation → one immediate DB write → next. This also keeps the activity timeline truthful (distinct timestamps = visibly sequential work).
