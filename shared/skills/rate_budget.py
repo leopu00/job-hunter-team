@@ -376,18 +376,38 @@ def _record_sample_via_skill(parsed, source):
     return sample
 
 
+def show_tick():
+    """Stampa l'ULTIMO messaggio del bridge — lo STESSO identico testo (3
+    sezioni: 5h / oggi / settimana + consiglio) che riceve la Sentinella.
+    Il bridge lo renderizza ad ogni tick e lo scrive in logs/last-tick.txt;
+    qui lo rileggiamo (zero chiamate al provider, zero ricalcolo divergente)."""
+    path = JHT_HOME / "logs" / "last-tick.txt"
+    try:
+        msg = path.read_text(encoding="utf-8").strip()
+    except (OSError, FileNotFoundError):
+        msg = ""
+    if not msg:
+        print("NO_DATA: il bridge non ha ancora scritto un tick "
+              "(non ancora partito, o fuori orario di lavoro). Riprova tra 1-2 min.")
+        return
+    print(msg)
+
+
 def main():
-    cmd = (sys.argv[1] if len(sys.argv) > 1 else "status").lower()
+    cmd = (sys.argv[1] if len(sys.argv) > 1 else "tick").lower()
     if cmd == "live":
         live()
+        return
+    if cmd in ("tick", ""):
+        show_tick()
         return
     entry = load_last_sample()
     if cmd == "plan":
         plan(entry)
-    elif cmd in ("status", ""):
+    elif cmd == "status":
         print(status_line(entry))
     else:
-        print(f"rate_budget: comando '{cmd}' sconosciuto. Usa: status | plan | live", file=sys.stderr)
+        print(f"rate_budget: comando '{cmd}' sconosciuto. Usa: tick | status | plan | live", file=sys.stderr)
         sys.exit(2)
 
 
