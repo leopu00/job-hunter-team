@@ -585,7 +585,7 @@ def fetch_codex_rollout():
         reset_at_unix = None
         resets_unix = primary.get("resets_at")
         if isinstance(resets_unix, (int, float)):
-            reset_at = datetime.fromtimestamp(resets_unix, timezone.utc).astimezone().strftime("%H:%M")
+            reset_at = _fmt_reset(resets_unix)  # DATA completa, mai ora-nuda
             reset_at_unix = float(resets_unix)
         # Weekly window reset (bug #19A): se il rate-limit secondary espone
         # un proprio resets_at (rolling-7d Codex), lo registriamo. Capitano
@@ -595,7 +595,7 @@ def fetch_codex_rollout():
         weekly_reset_at_unix = None
         weekly_resets_unix = secondary.get("resets_at")
         if isinstance(weekly_resets_unix, (int, float)):
-            weekly_reset_at = datetime.fromtimestamp(weekly_resets_unix, timezone.utc).astimezone().strftime("%H:%M")
+            weekly_reset_at = _fmt_reset(weekly_resets_unix)  # DATA completa
             weekly_reset_at_unix = float(weekly_resets_unix)
         return {
             "usage": usage,
@@ -757,13 +757,16 @@ def fetch_claude_api():
         return None
     return {
         "usage": usage_5h,
-        "reset_at": _iso_to_hhmm(five_h.get("resets_at")),
+        # DATA completa dall'epoch (fallback HH:MM solo se l'ISO manca).
+        "reset_at": _fmt_reset(_iso_to_unix(five_h.get("resets_at")),
+                               _iso_to_hhmm(five_h.get("resets_at"))),
         "reset_at_unix": _iso_to_unix(five_h.get("resets_at")),
         "weekly_usage": weekly,
         # Weekly reset (bug #19A): /oauth/usage espone seven_day.resets_at
         # come ISO timestamp del prossimo reset weekly. Era già nei dati,
         # mancava solo la riesposizione downstream.
-        "weekly_reset_at": _iso_to_hhmm(seven_d.get("resets_at")),
+        "weekly_reset_at": _fmt_reset(_iso_to_unix(seven_d.get("resets_at")),
+                                      _iso_to_hhmm(seven_d.get("resets_at"))),
         "weekly_reset_at_unix": _iso_to_unix(seven_d.get("resets_at")),
     }
 
@@ -891,10 +894,13 @@ def fetch_kimi_api():
         monthly_remaining = None
     return {
         "usage": usage_5h,
-        "reset_at": _iso_to_hhmm(five_h.get("resetTime")),
+        # DATA completa dall'epoch (fallback HH:MM solo se l'ISO manca).
+        "reset_at": _fmt_reset(_iso_to_unix(five_h.get("resetTime")),
+                               _iso_to_hhmm(five_h.get("resetTime"))),
         "reset_at_unix": _iso_to_unix(five_h.get("resetTime")),
         "weekly_usage": weekly_used,
-        "weekly_reset_at": _iso_to_hhmm(weekly_reset_iso),
+        "weekly_reset_at": _fmt_reset(_iso_to_unix(weekly_reset_iso),
+                                      _iso_to_hhmm(weekly_reset_iso)),
         "weekly_reset_at_unix": _iso_to_unix(weekly_reset_iso),
         "monthly_remaining_pct": monthly_remaining,
     }
