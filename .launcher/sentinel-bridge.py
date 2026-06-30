@@ -846,6 +846,126 @@ def _fmt_reset(unix_ts, fallback=None):
     return fallback
 
 
+# ── Messaggio UNICO del tick: renderer condiviso (bridge_message) ────────
+# Stesso testo per SENTINELLA (push) e skill rate-budget del CAPITANO (pull).
+def _load_bridge_message_mod():
+    for cand in (Path("/app/shared/skills/bridge_message.py"),
+                 Path(__file__).resolve().parent.parent / "shared" / "skills" / "bridge_message.py"):
+        try:
+            if not cand.exists():
+                continue
+            spec = importlib.util.spec_from_file_location("bridge_message", cand)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+        except (OSError, ImportError, AttributeError):
+            continue
+    return None
+
+
+_BM_MOD = _load_bridge_message_mod()
+LAST_TICK_FILE = LOGS_DIR / "last-tick.txt"
+
+
+def _humanize_dur(hours):
+    """Ore (float) → 'Xg Yh' / 'Xh Ymm' / 'Xm'. None se non valido."""
+    if not isinstance(hours, (int, float)) or hours < 0:
+        return None
+    total_min = int(round(hours * 60))
+    d, rem = divmod(total_min, 1440)
+    h, m = divmod(rem, 60)
+    if d > 0:
+        return f"{d}g {h}h"
+    if h > 0:
+        return f"{h}h {m:02d}m"
+    return f"{m}m"
+
+
+def _write_last_tick(msg):
+    """Persiste l'ultimo tick renderizzato → la skill rate-budget lo rilegge."""
+    try:
+        LAST_TICK_FILE.write_text(msg, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_target,
+                        work_phase, weekly_pace, weekly_locked, now_h, now_ts):
+    """Costruisce il dict-valori 3-sezioni (5h/oggi/settimana) + extras e lo
+    renderizza via bridge_message.render. Velocità = media cumulativa
+    (usage/tempo) vs target (quanto manca / tempo che resta)."""
+    target5 = float(dyn_target) if isinstance(dyn_target, (int, float)) and dyn_target else 92.0
+    reset_unix = entry.get("reset_at_unix")
+    vel_now5 = vel_tgt5 = reset_in5 = None
+    if isinstance(reset_unix, (int, float)):
+        elapsed_h = (now_ts - (reset_unix - 5 * 3600)) / 3600.0   # finestra 5h
+        if elapsed_h > 0 and isinstance(usage, (int, float)):
+            vel_now5 = round(usage / elapsed_h, 1)
+        rem_h = (reset_unix - now_ts) / 3600.0
+        if rem_h > 0:
+            base_u = usage if isinstance(usage, (int, float)) else 0
+            vel_tgt5 = round(max(0.0, target5 - base_u) / rem_h, 1)
+            reset_in5 = _humanize_dur(rem_h)
+    fivehh = {
+        "usage": usage,
+        "proj": round(proj) if isinstance(proj, (int, float)) else proj,
+        "target": round(target5),
+        "status": status,
+        "reset_str": reset_str if (reset_str and reset_str != "?") else (entry.get("reset_at") or "?"),
+        "reset_in": reset_in5, "vel_now": vel_now5, "vel_target": vel_tgt5,
+    }
+    now_dt = datetime.fromtimestamp(now_ts, tz=timezone.utc)
+    daily = None
+    if not weekly_locked:
+        d = _daily_pacing_via_skill(entry, now_dt, now_ts)
+        if isinstance(d, dict) and d.get("budget") is not None:
+            cap = round(d["budget"] + 5.0, 1)
+            cons = d.get("consumed")
+            daily = {
+                "consumed": cons, "budget": d.get("budget"), "cap": cap,
+                "over": isinstance(cons, (int, float)) and cons > cap,
+                "vel_now": d.get("vel_now"), "vel_target": d.get("vel_target"),
+            }
+    weekly = None
+    wk_usage = entry.get("weekly_usage")
+    if isinstance(wk_usage, (int, float)):
+        wp = weekly_pace if isinstance(weekly_pace, dict) else {}
+        wru = entry.get("weekly_reset_at_unix")
+        kind = wp.get("kind")
+        weekly = {
+            "used": wk_usage, "remaining": entry.get("weekly_remaining_pct"),
+            "reset_str": _fmt_reset(wru, entry.get("weekly_reset_at")),
+            "reset_in": _humanize_dur((wru - now_ts) / 3600.0) if isinstance(wru, (int, float)) else None,
+            "vel_now": wp.get("vel_weekly_pct_h"), "sustainable": wp.get("sustainable_pct_h"),
+            "ratio": wp.get("ratio"), "kind": kind if kind not in (None, "ND") else None,
+            "debt": wp.get("debt_pct"), "early_lockout": wp.get("early_lockout_h"),
+            "burn_mode": bool(wp.get("burn_mode")),
+        }
+    extras = {}
+    mrp = parsed.get("monthly_remaining_pct") if isinstance(parsed, dict) else None
+    if isinstance(mrp, (int, float)):
+        extras["monthly_rem"] = mrp
+    try:
+        th_path = DATA_JSONL.parent / "tools-health.json"
+        if th_path.exists():
+            th = json.loads(th_path.read_text(encoding="utf-8"))
+            if th.get("any_broken") and th.get("broken"):
+                extras["tools_broken"] = th["broken"]
+    except (OSError, ValueError):
+        pass
+    v = {"ts_now": now_h, "provider": entry.get("provider"),
+         "work_phase": work_phase or "ON", "fivehh": fivehh, "daily": daily,
+         "weekly": weekly, "extras": extras}
+    if _BM_MOD is not None:
+        try:
+            return _BM_MOD.render(v)
+        except Exception:
+            pass
+    # Fallback monoriga se il renderer non è caricabile.
+    return (f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% status={status} "
+            f"reset={fivehh['reset_str']} weekly={wk_usage}% src=bridge.")
+
+
 def fetch_kimi_api():
     token = _read_kimi_token()
     if not token:
@@ -1143,7 +1263,9 @@ def _daily_pacing_via_skill(entry, now_dt, now_ts):
     corrente (durante le ore OFF il weekly è piatto → baseline). La Sentinella lo
     riceve nel [BRIDGE TICK] (S-09), ANALIZZA e ordina il coast al Capitano (C-19)
     — NON va al Capitano diretto (stesso principio di _weekly_pace_via_skill).
-    Ritorna (budget_pct, consumato_pct) o (None, None)."""
+    Ritorna dict {budget, consumed, vel_now, vel_target} (valori None se non
+    calcolabili). vel_now = consumato / ore-attive-trascorse; vel_target =
+    budget / ore-attive-del-giorno (media cumulativa, stessa unità %/h)."""
     try:
         wrem = entry.get("weekly_remaining_pct")
         wreset_unix = entry.get("weekly_reset_at_unix")
@@ -1179,6 +1301,7 @@ def _daily_pacing_via_skill(entry, now_dt, now_ts):
         windows_left = max(1.0, wah / daily_active_h)
         budget = wrem / windows_left
         consumed = None
+        elapsed_active = None
         try:
             ints = wht._build_intervals(
                 cfg, now_dt - timedelta(days=1), now_dt + timedelta(minutes=1))
@@ -1189,6 +1312,12 @@ def _daily_pacing_via_skill(entry, now_dt, now_ts):
                     break
             if ws is None and ints:
                 ws = ints[-1][0]
+            if ws is not None:
+                # Ore ATTIVE trascorse da inizio finestra di lavoro di oggi →
+                # denominatore della velocità giornaliera (consumato / tempo).
+                ea = wht.active_hours_in_range(ws, now_dt, cfg)
+                if isinstance(ea, (int, float)) and ea > 0:
+                    elapsed_active = ea
             if ws is not None and isinstance(wusage, (int, float)):
                 ws_ts = ws.timestamp()
                 base = None
@@ -1218,10 +1347,20 @@ def _daily_pacing_via_skill(entry, now_dt, now_ts):
                     consumed = max(0.0, wusage - base)
         except Exception:
             consumed = None
-        return (round(budget, 1),
-                round(consumed, 1) if consumed is not None else None)
+        # Velocità giornaliera (media cumulativa): attuale = consumato / ore-attive
+        # trascorse; target = budget / ore-attive del giorno. Stessa unità %/h.
+        vel_now = (round(consumed / elapsed_active, 2)
+                   if (consumed is not None and elapsed_active) else None)
+        vel_target = (round(budget / daily_active_h, 2)
+                      if daily_active_h else None)
+        return {
+            "budget": round(budget, 1),
+            "consumed": round(consumed, 1) if consumed is not None else None,
+            "vel_now": vel_now,
+            "vel_target": vel_target,
+        }
     except Exception:
-        return (None, None)
+        return {"budget": None, "consumed": None, "vel_now": None, "vel_target": None}
 
 
 # ── Claude TUI parser (libreria importata da check_usage) ──────────────
@@ -1612,136 +1751,19 @@ def main():
                 f"notify={should_notify}"
             )
 
-            if should_notify and session_exists(SENTINELLA_SESSION):
-                # Includi il target nel tick così la Sentinella sa contro
-                # quale soglia confrontare proj/usage senza dover leggere
-                # un secondo file. Quando dyn_target è None il messaggio
-                # NON menziona target (Sentinella usa il 92 storico dalla
-                # skill decision-throttle).
-                tgt_field = f" target={dyn_target:.0f}%" if dyn_target else ""
-                phase_field = f" work_phase={work_phase}" if work_phase else ""
-                # P7: propaga SEMPRE il vincolo weekly nel tick. Prima il tick
-                # portava solo la finestra primary 5h (usage/proj/reset), quindi
-                # la Sentinella non vedeva mai il cap settimanale né un cambio di
-                # reset weekly. weekly_usage/weekly_reset_at sono già nell'entry.
-                wk_usage = entry.get("weekly_usage")
-                # HH:MM da solo è ambiguo — non distingue un salto di GIORNI (il
-                # caso reale 7giu->11giu al rinnovo ciclo). DATA completa da
-                # weekly_reset_at_unix così WEEKLY RESET DETECTED vede lo
-                # spostamento; fallback alla stringa (già data-completa).
-                wk_reset = _fmt_reset(
-                    entry.get("weekly_reset_at_unix"), entry.get("weekly_reset_at"))
-                # Fix #4: propaga weekly_remaining_pct (calcolato in codice da
-                # compute_metrics) e, quando il weekly è binding, un marcatore
-                # ATTENZIONE-WEEKLY esplicito → la Sentinella (S-06) emette
-                # l'ordine autoritativo verso il Capitano (C-09) senza doverlo
-                # dedurre dal solo primary.
-                wk_remaining = entry.get("weekly_remaining_pct")
-                wk_remaining_field = (
-                    f" weekly_remaining={wk_remaining}%"
-                    if wk_remaining is not None
-                    else ""
-                )
-                weekly_binding_field = " ATTENZIONE-WEEKLY" if weekly_binding else ""
-                weekly_field = (
-                    f" weekly={wk_usage}% weekly_reset={wk_reset}"
-                    f"{wk_remaining_field}{weekly_binding_field}"
-                    if wk_usage is not None
-                    else ""
-                )
-                # WEEKLY-PACE: dato grezzo per la Sentinella (S-07) — rate weekly
-                # REALE (2h) vs sostenibile + lockout anticipato. La Sentinella lo
-                # ELABORA e consiglia il Capitano; NON arriva al Capitano diretto.
-                if weekly_pace is None:  # non già calcolato sopra (es. ramo LOCKED)
-                    weekly_pace = _weekly_pace_via_skill(
-                        entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
-                weekly_pace_field = ""
-                if (isinstance(weekly_pace, dict)
-                        and weekly_pace.get("kind") not in (None, "ND")):
-                    el = weekly_pace.get("early_lockout_h")
-                    weekly_pace_field = (
-                        f" WEEKLY-PACE[{weekly_pace['kind']}]"
-                        f" vel_weekly={weekly_pace['vel_weekly_pct_h']}%/h"
-                        f" sost={weekly_pace['sustainable_pct_h']}%/h"
-                        f" ratio={weekly_pace['ratio']}x"
-                        + (f" early_lockout={el}h" if el else "")
-                    )
-                    # debt (2026-06-28): saldo cumulativo vs retta ideale. >0 =
-                    # speso troppo presto (front-load) → in debito la Sentinella
-                    # (S-07) usa tolleranza 1.0x e scala il freno anche sul debito,
-                    # non solo sul runway. Espone debt anche quando kind=ALLINEATO
-                    # (e' il caso che il rate da solo mascherava).
-                    dbt = weekly_pace.get("debt_pct")
-                    if isinstance(dbt, (int, float)):
-                        weekly_pace_field += f" debt={dbt:+.0f}pp"
-                    # burn_mode (duale di early_lockout): SOTTO-PACE + vicino al
-                    # reset + spreco alto → la Sentinella deve consigliare di
-                    # SATURARE, non spalmare. Espone proiezione + spreco previsto.
-                    if weekly_pace.get("burn_mode"):
-                        weekly_pace_field += (
-                            f" BURN-MODE proj_final={weekly_pace['projected_final_pct']}%"
-                            f" spreco={weekly_pace['wasted_pct']}%"
-                        )
-                    # burst_transient (P3 fix-batch): SOPRA-PACE che sta SVANENDO
-                    # (rate recente << media 2h). Esposto perche' la Sentinella
-                    # (S-07) NON deve frenare duro su un burst gia' finito →
-                    # ripresa controllata invece di freeze.
-                    if weekly_pace.get("burst_transient"):
-                        weekly_pace_field += " burst_transient=true"
-                # DAILY (S-09/C-19): budget di giornata + consumo di oggi (% del
-                # WEEKLY). La Sentinella ANALIZZA e, su sforo (oggi>cap), ordina il
-                # coast al Capitano; NON arriva al Capitano diretto.
-                daily_pace_field = ""
-                _dbudget, _dconsumed = _daily_pacing_via_skill(
+            # ── Messaggio UNICO del tick (renderer condiviso) ──────────────
+            # Costruito ad OGNI tick in-orario e scritto su last-tick.txt (il
+            # Capitano lo rilegge on-demand via skill rate-budget); INVIATO alla
+            # Sentinella solo su edge azionabile (should_notify).
+            if weekly_pace is None and not weekly_locked:
+                weekly_pace = _weekly_pace_via_skill(
                     entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
-                if isinstance(_dbudget, (int, float)):
-                    _dcap = _dbudget + 5.0
-                    # Riserva serale: R% del budget, tenuta di giorno, bruciata/
-                    # rilasciata nelle ultime ~2h della finestra (anti front-load).
-                    _dnow = datetime.fromtimestamp(now_ts, tz=timezone.utc)
-                    _dres = round(_dbudget * _RESERVE_FRAC, 1)
-                    _drel = _evening_release(_dnow)
-                    _res_field = (
-                        f" riserva={_dres:.1f}%→{'brucia' if _drel else 'tieni'}")
-                    if isinstance(_dconsumed, (int, float)):
-                        daily_pace_field = (
-                            f" daily: oggi={_dconsumed:.1f}% budget={_dbudget:.1f}%"
-                            f" cap={_dcap:.1f}%{_res_field}"
-                            + (" ⛔" if _dconsumed > _dcap else "")
-                        )
-                    else:
-                        daily_pace_field = (
-                            f" daily: budget={_dbudget:.1f}% cap={_dcap:.1f}%{_res_field}")
-                # TOOLS-HEALTH (dev2): segnale strutturato sui tool mission-critical.
-                # Il maintainer-sweep scrive logs/tools-health.json (output di
-                # tool_health.py); qui lo LEGGIAMO e segnaliamo SOLO se qualcosa è
-                # rotto → la Sentinella vede SUBITO un tool giù (es. browser/LinkedIn)
-                # invece di scoprirlo a valle dai report analisti (bug libatk).
-                tools_health_field = ""
-                try:
-                    th_path = DATA_JSONL.parent / "tools-health.json"
-                    if th_path.exists():
-                        th = json.loads(th_path.read_text(encoding="utf-8"))
-                        if th.get("any_broken") and th.get("broken"):
-                            tools_health_field = " TOOLS-HEALTH[BROKEN:" + ",".join(th["broken"]) + "]"
-                except (OSError, ValueError):
-                    pass
-                # MONTHLY-QUOTA (P5 fix-batch, dev2): tetto MENSILE Kimi (totalQuota)
-                # dal sample. Kimi-only (None su Codex) → mostrato solo se presente;
-                # alert sotto 15% perche' a esaurimento CONGELA Kimi Code finche' non
-                # si ricarica (oggi vediamo solo 5h+weekly, ciechi al mensile).
-                monthly_quota_field = ""
-                _mrp = parsed.get("monthly_remaining_pct")
-                if isinstance(_mrp, (int, float)):
-                    monthly_quota_field = f" MONTHLY-QUOTA rem={_mrp}%"
-                    if _mrp < 15:
-                        monthly_quota_field += " [ALERT<15%]"
-                jht_tmux_send(
-                    SENTINELLA_SESSION,
-                    f"[BRIDGE TICK] ts={now_h} usage={usage}% proj={proj}% "
-                    f"status={status} reset={reset}{tgt_field}{phase_field}"
-                    f"{weekly_field}{weekly_pace_field}{daily_pace_field}{tools_health_field}{monthly_quota_field} src=bridge."
-                )
+            tick_msg = _build_tick_message(
+                entry, parsed, status, proj, usage, reset, dyn_target,
+                work_phase, weekly_pace, weekly_locked, now_h, now_ts)
+            _write_last_tick(tick_msg)
+            if should_notify and session_exists(SENTINELLA_SESSION):
+                jht_tmux_send(SENTINELLA_SESSION, tick_msg)
                 state["last_sent_ts"] = now_ts
 
             # Recovery se eravamo in failure streak (gate orario: zitto fuori finestra)
