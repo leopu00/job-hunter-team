@@ -109,7 +109,7 @@ const ROLES: Role[] = [
     },
     en: {
       title: "The Analyst",
-      p1: "The Analyst is the cold verifier. It reads each posting in full, checks the company is real and the link alive, and extracts what matters: years required, seniority, languages, education — and pinpoints the office's exact location.",
+      p1: "The Analyst is the cold verifier. It reads each posting in full, confirms the role is genuine and still open, and extracts what matters: years required, seniority, languages, education — and pinpoints the office's exact location.",
       p2: "It discards only when sure (a dead link, a country you can't work in, a language you don't speak); everything else moves on, even an imperfect match. Along the way it researches the likely salary online and builds the company dossier — ratings, red flags, culture.",
     },
     es: {
@@ -349,8 +349,8 @@ const ROLES: Role[] = [
     },
     en: {
       title: "The Maintainer",
-      p1: "The Maintainer is the Doctor's twin: while the Doctor looks after the agents, he looks after the infrastructure. Once a day he walks the container and the machine — checking that mission-critical tools work, that dependencies are in order, that disk and memory aren't running out.",
-      p2: "He repairs what he can (reinstalling, consolidating, tidying up) and proposes the more delicate clean-ups to the Coordinator, never deleting on his own. A broken tool is an emergency to him. Once the round is done he stays on standby, ready when called.",
+      p1: "The Maintainer is the Doctor's twin: while the Doctor looks after the agents, it looks after the infrastructure. Once a day it walks the container and the machine — checking that mission-critical tools work, that dependencies are in order, that disk and memory aren't running out.",
+      p2: "It repairs what it can (reinstalling, consolidating, tidying up) and proposes the more delicate clean-ups to the Coordinator, never deleting on its own. A broken tool is an emergency to it. Once the round is done it stays on standby, ready when called.",
     },
     es: {
       title: "El Mantenedor",
@@ -471,7 +471,7 @@ const PAGE: Record<Lang, PageCopy> = {
   it: {
     title: "Il Team",
     subtitle:
-      "Dietro Job Hunter Team non c'è un solo assistente, ma una squadra di agenti AI specializzati. Ognuno ha un compito, e lo fa bene.",
+      "Dietro Job Hunter Team non c'è un solo assistente, ma una squadra di agenti AI specializzati e autonomi. Ognuno ha un compito, e lo fa bene.",
     closing:
       "Insieme trasformano la ricerca di lavoro da compito solitario e frustrante a campagna strutturata, veloce e umana.",
     back: "← Torna alla home",
@@ -479,7 +479,7 @@ const PAGE: Record<Lang, PageCopy> = {
   en: {
     title: "The Team",
     subtitle:
-      "Behind Job Hunter Team there isn't a single assistant, but a team of specialized AI agents. Each has one job, and does it well.",
+      "Behind Job Hunter Team there isn't a single assistant, but a team of specialized, autonomous AI agents. Each has one job, and does it well.",
     closing:
       "Together they turn the job hunt from a lonely, draining chore into a structured, fast and human campaign.",
     back: "← Back to home",
