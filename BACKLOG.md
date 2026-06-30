@@ -309,11 +309,10 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - **Fix:** sopprimere il trigger emergenza `proj>200` quando `reset_in≈0` (o `burst_transient=true`). Punti: skill `agents/sentinella/_skills/emergency-handling/SKILL.md` (×7 lingue) — aggiungere la guardia "ignora proj se reset_in < ~0.1h / burst_transient"; e `shared/skills/compute_metrics.py:357` (lo stesso `proj>200` guida `suggested_throttle_s`). Idealmente il bridge non emette nemmeno un `proj` valido a reset_in≈0 (sopprimilo o marcalo `EDGE`).
 - **Priorità:** 🔴 media-alta — è un'azione distruttiva su falso positivo, ma a basso danno (auto-riaperto al reset). Da fare nel prossimo giro pacing.
 
-##### 🌙 [PACING-DOTTORE-OFFHOURS-GATE] Dottore brucia budget in off-hours (one-shot non gated) 🟢 (NEW 2026-06-29)
+##### ~~🌙 [PACING-DOTTORE-OFFHOURS-GATE] Dottore brucia budget in off-hours~~ — ❌ CHIUSO (misdiagnosi, 2026-06-30)
 
-- **Osservato (betaB/Kimi, 2026-06-29):** in off-hours (turno 20:00→08:00 Roma) il weekly è salito +2% mentre i worker erano fermi, col 5h che ticcava 4-8% = consumo reale. Causa: il **Dottore** (one-shot context-refresher) gira sul suo schedule ~2h (`doctor_schedule.py`) e **NON è working-hours-gated**, a differenza del Mantenitore che lo è (`mantenitore.md` §"Working-hours gate — OFF = stop"). Il gate orario ferma i loop dei worker, non i one-shot LLM. Residuo off ~0.25%/h vs ~2%/h attivo (gate funziona ma non azzera).
-- **Fix:** gatare il **refresh schedulato** del Dottore sulle working-hours come il Mantenitore (in off-hours i coordinatori sono idle → refresh a basso valore). **Preservare** lo zombie-rescue ON-DEMAND anche in off-hours (sicurezza, non refresh decorativo) → gatare `doctor_schedule.py`, non la rianimazione on-demand.
-- **Priorità:** 🟢 minore (~2% weekly su ~8h off; rilevante soprattutto su Kimi per spremere il budget). Dettaglio + dati: `docs/internal/2026-06-29-dottore-offhours-burn-finding.md`.
+- **❌ FINDING ERRATO.** Verificato il codice: lo scheduled-Dottore **È GIÀ gated** sulle working-hours, identico al Mantenitore (entrambi via `doctor_schedule.py`; `doctor-watchdog.sh` ritorna `OFF` fuori finestra → niente spawn; il fallback 6h è solo per VPS `NOWINDOW`/24-7). L'asimmetria "Dottore non gated" era falsa.
+- **Cos'era il +2% off-hours:** (1) **churn dei worker su coda vuota** → **già fixato** (protocollo Scout-esausto + `C-05b`, 2026-06-30); (2) Dottore **in standby risvegliato on-demand** = path di sicurezza da preservare. **Niente da implementare.** Dettaglio: `docs/internal/2026-06-29-dottore-offhours-burn-finding.md` (con correzione in cima).
 
 ##### 🔐 [JHT-ACCESS-CREDENTIALS-GAPS] Access & credentials — gap doc vs codice (NEW 2026-05-26)
 
