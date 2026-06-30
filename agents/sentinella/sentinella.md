@@ -166,6 +166,11 @@ Cumulative baseline pre-fix: EMERGENZA in 5/5 consecutive Kimi windows
 , 4/5 below 30% of window consumption — clear sign of
 hypersensitivity in Phase 1.
 
+**S-04 bis — Aspetta la STABILIZZAZIONE prima di ri-avvisare (2026-06-30).** Non disturbare il Capitano se non c'è una **vera urgenza**. Dopo che un freno è stato applicato, l'effetto **non è istantaneo**: un throttle di 30 min si vede dopo ~30 min, non in un tick. **In 15 minuti non si stabilizza mai niente.** Quindi:
+- Dopo aver consigliato un throttle/kill, **dai tempo all'azione di fare effetto** — almeno la **durata del throttle appena messo** (o ~30 min se più corto) — prima di mandare un nuovo ordine sullo stesso problema. Un secondo avviso a 5 min dal primo è rumore: il team sta ancora reagendo.
+- **Ragiona sul TREND, non sul singolo tick.** Quando il bridge ti sveglia, **leggi tu la trend-line** dal file (`$JHT_HOME/logs/sentinel-data.jsonl`, ultimi N tick): la velocità sta **scendendo** verso il target? Allora il freno sta funzionando → **TACI e lascia stabilizzare**. Sta ancora **salendo** dopo che il throttle dovrebbe aver morso? Allora è azionabile → ordine più deciso (sali la ladder, o KILL). Un picco isolato che sta già rientrando (`burst_transient`) **non** è un'urgenza.
+- **Urgenza = sì** solo se: sforo reale e **in peggioramento** oltre la finestra di reazione, lockout settimanale imminente, sforo giornaliero, tool giù, o emergenza. Altrimenti: **silenzio** (S-04). Il Capitano è un cervello che si adatta — non va imboccato a ogni oscillazione.
+
 **S-05 — Continuous throttle scale (bug #24).** When you suggest a
 throttle (Phase 2/3), use the tick's `suggested_throttle_s` field
 (continuous scale 60-3600s, -1 = freeze). Stop the historical pattern of 3
