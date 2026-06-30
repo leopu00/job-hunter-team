@@ -145,11 +145,14 @@ Scrivi **SOLO** in:
 
 | Destinatario | Quando | Come |
 |---|---|---|
-| `ANALISTA-N` | post-batch (3-5 inserts) | `[INFO] Batch N posizioni inserite (IDs: X-Y)` |
 | `CAPITANO` | bias sistematico irrisolvibile cambiando fonte | `[REQ] feedback persistente: [TAG] su <fonte>, suggerisco riassegnamento` |
 | Altri `SCOUT-N` | re-negotiate (vedi skill `scout-coord` triggers) | `[REQ] proposta ridivisione cerchi/fonti` |
 
-**Listening**: ACK `[FEEDBACK]` da Analisti con tag ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adatta queries nel prossimo batch (skill `circles-and-sources`).
+> L'hand-off Scout→Analista **non è un messaggio**: l'INSERT (`status=new`) si scopre via `next-for-analista`. Il vecchio `[INFO]` post-batch all'Analista è **tagliato** (push senza azione).
+
+**BOOKEND del Capitano su due soli estremi**: un `[START]` quando inizi il sourcing (`[@scout-N -> @capitano] [START] sourcing <cerchio/fonte>`), un `[DONE]` con il conteggio a fine batch (`[DONE] trovate N · inserite M`). **MAI** un messaggio per singolo risultato in mezzo — gli INSERT sono l'hand-off, il Capitano legge i conteggi dal DB.
+
+**Listening**: su `[FEEDBACK]` dagli Analisti con tag ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adatta le query nel prossimo batch (skill `circles-and-sources`). **Niente ACK** se l'Analista non ha mandato un `[REQ]`.
 
 ---
 

@@ -146,11 +146,14 @@ A jelölt **adaptálható** szomszédos szerepekre. Ne zárj ki nem-primary stac
 
 | Címzett | Mikor | Hogyan |
 |---|---|---|
-| `ANALISTA-N` | post-batch (3-5 insert) | `[INFO] Batch N positions inserted (IDs: X-Y)` |
 | `CAPITANO` | szisztematikus bias source-cserével megoldhatatlan | `[REQ] tartós feedback: [TAG] <source>-on, reassignment javasolt` |
 | Más `SCOUT-N` | újratárgyalás (lásd `scout-coord` trigger-eket) | `[REQ] javaslat re-split circles/sources-re` |
 
-**Figyelés**: ACK `[FEEDBACK]` az Analisti-tól tag-ekkel ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → alkalmazd a query-ket a következő batch-ben (skill `circles-and-sources`).
+> A Scout→Analyst átadás **nem üzenet**: az INSERT (`status=new`) a `next-for-analista`-val derül ki. A régi `[INFO]` post-batch az Analyst-nak **törölve** (push akció nélkül).
+
+**A Capitano BOOKEND-je csak két szélen**: egy `[START]`, amikor elkezded a sourcingot (`[@scout-N -> @capitano] [START] sourcing <circle/source>`), egy `[DONE]` a számlálóval a batch végén (`[DONE] talált N · beszúrt M`). **SOHA** ne küldj üzenetet eredményenként közben — az INSERT-ek az átadás, a Capitano a DB-ből olvassa a számokat.
+
+**Figyelés**: `[FEEDBACK]`-re az Analisti-tól tag-ekkel ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → alkalmazd a query-ket a következő batch-ben (skill `circles-and-sources`). **Nincs ACK**, hacsak az Analyst nem küldött `[REQ]`-et.
 
 ---
 

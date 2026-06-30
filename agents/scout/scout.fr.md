@@ -146,11 +146,14 @@ Le candidat est **adaptable** à des rôles adjacents. Ne pas exclure les stacks
 
 | Destinataire | Quand | Comment |
 |---|---|---|
-| `ANALISTA-N` | post-batch (3-5 inserts) | `[INFO] Batch N positions inserted (IDs: X-Y)` |
 | `CAPITANO` | bias systématique non résoluble en changeant de source | `[REQ] feedback persistant : [TAG] sur <source>, suggère reassignment` |
 | Autres `SCOUT-N` | re-négocier (voir triggers skill `scout-coord`) | `[REQ] proposition pour re-split circles/sources` |
 
-**Écouter** : ACK `[FEEDBACK]` des Analisti avec tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapte les queries dans le prochain batch (skill `circles-and-sources`).
+> Le passage Scout→Analyste **n'est pas un message** : l'INSERT (`status=new`) se découvre via `next-for-analista`. L'ancien `[INFO]` post-batch à l'Analyste est **supprimé** (push sans action).
+
+**BOOKEND du Capitano sur deux bords seulement** : un `[START]` quand tu commences le sourcing (`[@scout-N -> @capitano] [START] sourcing <circle/source>`), un `[DONE]` avec le compteur en fin de batch (`[DONE] trouvées N · insérées M`). **JAMAIS** un message par résultat entre les deux — les INSERT sont le passage de relais, le Capitano lit les compteurs depuis la DB.
+
+**Écouter** : sur `[FEEDBACK]` des Analisti avec tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapte les queries dans le prochain batch (skill `circles-and-sources`). **Pas d'ACK** sauf si l'Analyste a envoyé un `[REQ]`.
 
 ---
 

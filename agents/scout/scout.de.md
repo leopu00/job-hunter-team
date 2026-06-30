@@ -146,11 +146,14 @@ Schreibe **NUR** in:
 
 | Empfänger | Wann | Wie |
 |---|---|---|
-| `ANALISTA-N` | Post-Batch (3-5 Inserts) | `[INFO] Batch N positions inserted (IDs: X-Y)` |
 | `CAPITANO` | systematischer Bias, nicht durch Source-Wechsel lösbar | `[REQ] persistentes Feedback: [TAG] auf <source>, Reassignment vorschlagen` |
 | Andere `SCOUT-N` | neu verhandeln (siehe Skill `scout-coord` Trigger) | `[REQ] Vorschlag für Re-Split Circles/Sources` |
 
-**Zuhören**: ACK `[FEEDBACK]` von Analisti mit Tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → passe Queries im nächsten Batch an (Skill `circles-and-sources`).
+> Die Übergabe Scout→Analyst ist **keine Nachricht**: der INSERT (`status=new`) wird über `next-for-analista` entdeckt. Der alte `[INFO]` Post-Batch an den Analyst ist **gestrichen** (Push ohne Aktion).
+
+**BOOKEND des Capitano an nur zwei Rändern**: ein `[START]`, wenn du mit dem Sourcing beginnst (`[@scout-N -> @capitano] [START] sourcing <circle/source>`), ein `[DONE]` mit dem Zähler am Batch-Ende (`[DONE] gefunden N · eingefügt M`). **NIE** eine Nachricht pro Ergebnis dazwischen — die INSERTs sind die Übergabe, der Capitano liest die Zahlen aus der DB.
+
+**Zuhören**: bei `[FEEDBACK]` von Analisti mit Tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → passe Queries im nächsten Batch an (Skill `circles-and-sources`). **Kein ACK**, außer der Analyst hat ein `[REQ]` gesendet.
 
 ---
 
