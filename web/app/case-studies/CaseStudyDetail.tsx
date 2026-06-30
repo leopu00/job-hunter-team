@@ -770,9 +770,13 @@ export default function CaseStudyDetail({
                 <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
                   {t.conversionTitle}
                 </div>
+                {/* found/scored dal funnel = POSIZIONI distinte nella pipeline
+                    (così "Valutate" non supera mai "Tenute"); strong/excellent
+                    dal match = soglie di qualità sui punteggi. match.scored
+                    conta le valutazioni coi ri-score → non usarlo qui. */}
                 <ConversionFunnelCard
-                  found={run.totals.positions}
-                  scored={run.match.scored}
+                  found={run.funnelTotals.found}
+                  scored={run.funnelTotals.scored}
                   strong70={run.match.strong70}
                   strong80={run.match.strong80}
                 />

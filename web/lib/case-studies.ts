@@ -14,6 +14,7 @@ import {
 } from "@/lib/team-activity";
 import betaCRun from "@/data/case-studies/betaC-codex-run.json";
 import betaBRun from "@/data/case-studies/betaB-kimi-run.json";
+import betaDRun from "@/data/case-studies/betaD-kimi-run.json";
 
 // Link contribute (doc reali sul repo GitHub).
 export const GITHUB_REPO = "https://github.com/leopu00/job-hunter-team";
@@ -88,10 +89,10 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       badge: "B1",
       headline: "Professionista finance, inizio carriera",
       summary:
-        "Analista con circa 2 anni di esperienza in credit risk e due diligence in una banca d'investimento internazionale. Vuole spostarsi verso ruoli front-office — investment management, restructuring, transaction advisory — in grandi città europee.",
+        "Analista all'inizio della carriera in credit risk e due diligence in una banca d'investimento internazionale. Vuole spostarsi verso ruoli front-office — investment management, restructuring, transaction advisory — in grandi città europee.",
       facts: [
         { label: "Settore", value: "Finance · investment & credit risk" },
-        { label: "Esperienza", value: "~2 anni · early-career" },
+        { label: "Esperienza", value: "Early-career" },
         { label: "Formazione", value: "Laurea in Business & Economics" },
         { label: "Lingue", value: "Ungherese · Inglese (C1) · Tedesco (base)" },
         {
@@ -134,11 +135,11 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       badge: "B2",
       headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
       summary:
-        "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta circa 10 anni di esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, falegnameria, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
+        "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
       facts: [
         { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
-        { label: "Esperienza", value: "~10 anni cross-domain · industria + lingue" },
-        { label: "Background", value: "Manifattura · CAD/CAM/CNC · falegnameria · traduzione/interpretariato" },
+        { label: "Esperienza", value: "Cross-domain · industria + lingue" },
+        { label: "Background", value: "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato" },
         { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
         { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
       ],
@@ -179,6 +180,58 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       },
     ],
     run: betaBRun as unknown as CaseStudyRun,
+  },
+  {
+    id: "beta-3",
+    label: "Beta tester 3",
+    tagline: "Luxury hospitality · guest experience · cabin crew",
+    category: "Luxury Hospitality",
+    seniority: "Inizio-media carriera",
+    geos: ["Italia", "Europa", "Emirati"],
+    model: "Kimi",
+    subscription: {
+      provider: "Moonshot Kimi",
+      plan: "Kimi Code",
+      price: "~€40/mese",
+    },
+    profile: {
+      badge: "B3",
+      headline: "Professionista luxury hospitality & guest experience",
+      summary:
+        "Profilo di inizio-media carriera nell'hospitality e nella ristorazione di lusso: accoglienza e guest relations per ospiti VIP in brand internazionali, con coordinamento eventi, gestione delle prenotazioni e problem solving in servizi ad alta affluenza. Punta a ruoli di guest experience, VIP relations e front office nel segmento luxury, con interesse per il cabin crew di compagnie aeree premium. Profilo multilingue.",
+      facts: [
+        {
+          label: "Ruoli target",
+          value: "Luxury hospitality · guest experience · VIP relations · cabin crew",
+        },
+        { label: "Esperienza", value: "Inizio-media carriera" },
+        { label: "Settore", value: "Hôtellerie 5★ · ristorazione di lusso · eventi" },
+        { label: "Formazione", value: "Ambito turistico-alberghiero" },
+        {
+          label: "Lingue",
+          value: "Profilo multilingue (quattro lingue, incl. italiano e inglese)",
+        },
+        {
+          label: "Mobilità",
+          value: "Lavora in Italia · per alcune mete estere serve verifica di visto/sponsorship",
+        },
+      ],
+      locationNote:
+        "L'hospitality di lusso si concentra in poche piazze: le grandi mete del turismo italiano e gli hub internazionali dell'accoglienza premium. Tra i mercati target:",
+      targetCities: [
+        "Milano",
+        "Roma",
+        "Venezia",
+        "Firenze",
+        "Dubai",
+        "Abu Dhabi",
+        "Doha",
+        "Madrid",
+      ],
+      why: "Ecco perché i numeri vengono così: il profilo punta a luxury hospitality e guest experience, con interesse per il cabin crew premium — perciò il team ha cercato soprattutto hôtellerie 5★, guest relations VIP ed eventi, con un ramo dedicato al cabin crew dei vettori del Golfo (Emirates, Wizz Air). Le famiglie di ruolo dominanti sono Luxury Hospitality Operations, hostess/eventi e cabin crew. Quasi tutto arriva da LinkedIn e da job board specializzate dell'hospitality (hosco, resortwork) e delle compagnie aeree; il mercato del lusso italiano fa da baricentro, mentre il requisito di lavorabilità spiega perché diverse posizioni fuori dall'Italia richiedono la verifica di visto/sponsorship.",
+    },
+    // Run mono-fase: solo Kimi (budget settimanale monitorato), ~3 giorni.
+    run: betaDRun as unknown as CaseStudyRun,
   },
 ];
 
