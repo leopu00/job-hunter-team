@@ -38,7 +38,7 @@ type Copy = {
 const it: Copy = {
   title: "Il progetto",
   subtitle:
-    "Un team di agenti AI che cerca lavoro per te e ti aiuta a orientarti tra le offerte.",
+    "Una squadra di agenti AI autonomi che cerca lavoro per te e ti aiuta a orientarti tra le offerte.",
   badge: "open source",
   imageAlt:
     "Illustrazione: un cubo di vetro che racchiude un ufficio in miniatura con il team di agenti al lavoro, osservato da fuori da due persone che prendono appunti.",
@@ -49,7 +49,7 @@ const it: Copy = {
     {
       h: "Cosa fa",
       p: [
-        "Job Hunter Team è una squadra di agenti AI che cerca lavoro per te. Anziché inviare candidature a tappeto, individua le offerte più affini al tuo profilo, le valuta una per una e ti indica dove conviene concentrarti e quali aspetti rafforzare.",
+        "Job Hunter Team è una squadra di agenti AI autonomi che cerca lavoro per te. Autonomi significa che lavorano da soli: una volta che indichi la rotta, continuano a cercare, analizzare e preparare senza sosta — non devi guidare ogni passaggio. Anziché inviare candidature a tappeto, individua le offerte più affini al tuo profilo, le valuta una per una e ti indica dove conviene concentrarti e quali aspetti rafforzare.",
         "Poche candidature, ma mirate. La decisione finale — quando e a chi inviare — resta sempre tua.",
       ],
     },
@@ -97,7 +97,7 @@ const it: Copy = {
 const en: Copy = {
   title: "The project",
   subtitle:
-    "An AI agent team that searches for work on your behalf and helps you navigate the market.",
+    "A team of autonomous AI agents that searches for work on your behalf and helps you navigate the market.",
   badge: "open source",
   imageAlt:
     "Illustration: a glass cube holding a miniature office with the team of agents at work, watched from outside by two people taking notes.",
@@ -108,7 +108,7 @@ const en: Copy = {
     {
       h: "What it does",
       p: [
-        "Job Hunter Team is a team of AI agents that searches for work on your behalf. Rather than submitting applications indiscriminately, it identifies the openings best suited to your profile, evaluates each one, and shows you where to focus and what to strengthen.",
+        "Job Hunter Team is a team of autonomous AI agents that searches for work on your behalf. Autonomous means they work on their own: once you set the direction, they keep searching, analyzing and preparing around the clock — you don't have to drive each step. Rather than submitting applications indiscriminately, it identifies the openings best suited to your profile, evaluates each one, and shows you where to focus and what to strengthen.",
         "Fewer applications, but targeted ones. The final decision — when and where to apply — always remains yours.",
       ],
     },
