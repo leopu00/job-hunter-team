@@ -22,7 +22,48 @@ e scrivere il sample finale.
 """
 
 import math
+import importlib.util
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+
+# ─── format_time (helper sorella) — fmt_reset: data+ora completa ───────
+# Carica la skill sorella format_time.py per fmt_reset(). Il reset non deve
+# MAI essere esposto come ora-nuda: la stringa human (reset_at/weekly_reset_at)
+# va sempre derivata dall'epoch (_unix) con la DATA di calendario completa.
+# Loader fail-open: se format_time non è caricabile, fallback inline che
+# almeno aggiunge la data (UTC) — meglio del solo HH:MM.
+def _load_format_time():
+    for cand in (Path("/app/shared/skills/format_time.py"),
+                 Path(__file__).resolve().parent / "format_time.py"):
+        try:
+            if not cand.exists():
+                continue
+            spec = importlib.util.spec_from_file_location("format_time", cand)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+        except (OSError, ImportError, AttributeError):
+            continue
+    return None
+
+
+_FT = _load_format_time()
+
+
+def _fmt_reset(unix_ts, fallback=None):
+    """Epoch → 'YYYY-MM-DD HH:MM TZ' (mai ora-nuda). fallback se non derivabile."""
+    if isinstance(unix_ts, (int, float)) and not isinstance(unix_ts, bool):
+        if _FT is not None:
+            out = _FT.fmt_reset(unix_ts)
+            if out:
+                return out
+        try:  # fallback inline: data completa in UTC, mai solo HH:MM
+            return datetime.fromtimestamp(
+                float(unix_ts), timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        except (OverflowError, OSError, ValueError):
+            pass
+    return fallback
 
 
 # ─── Costanti modello (in sync col bridge) ─────────────────────────────
@@ -425,16 +466,19 @@ def compute_metrics(parsed, last, history=None, weekly_axis=None):
         # comanda). Vedi sentinella.md S-04/S-05 + capitano.md C-07.
         "phase": phase,
         "suggested_throttle_s": suggested_throttle_s,
-        "reset_at": parsed.get("reset_at"),
-        # Finestra 5h come epoch: l'HH:MM nudo (`reset_at`) è ambiguo a cavallo
-        # di mezzanotte e non distingue uno slittamento di giorno. Il bridge
-        # popola `reset_at_unix` (HTTP nativo, o ricostruito da `_ensure_reset_unix`
-        # sul path worker TUI) → propaghiamolo come per il weekly.
+        # CHOKE POINT data-completa (2026-06-30): reset_at/weekly_reset_at sono
+        # le stringhe human che leggono Capitano/Sentinella/UI. Le derivo SEMPRE
+        # dall'epoch (_unix) con la DATA di calendario completa — un solo punto
+        # per TUTTI i provider (Codex/Claude/Kimi convergono qui). Mai ora-nuda:
+        # "03:00" è ambiguo su giorno e su mezzanotte (era il bug del rinnovo
+        # ciclo settimanale). Fallback al valore grezzo solo se l'unix manca.
+        "reset_at": _fmt_reset(parsed.get("reset_at_unix"), parsed.get("reset_at")),
         "reset_at_unix": parsed.get("reset_at_unix"),
         "weekly_usage": parsed.get("weekly_usage"),
         # Bug #19A: reset weekly disponibile per Capitano/Sentinella senza
         # grep nei sorgenti del bridge. None se il provider non lo espone.
-        "weekly_reset_at": parsed.get("weekly_reset_at"),
+        "weekly_reset_at": _fmt_reset(
+            parsed.get("weekly_reset_at_unix"), parsed.get("weekly_reset_at")),
         "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
         # Fix #4 (runaway-scaling 2026-06-07) + correzione design 2026-06-13:
         # campi weekly esposti come AWARENESS (INFO) per C-09/C-12/S-06, NON

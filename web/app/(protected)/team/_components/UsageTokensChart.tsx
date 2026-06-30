@@ -388,6 +388,7 @@ type Entry = {
   status: string;
   throttle?: number;
   reset_at?: string;
+  reset_at_unix?: number;
   host?: { cpu_pct?: number; ram_pct?: number } | null;
   host_level?: string;
   source?: string; // 'bridge' | 'capitano' | 'sentinella-api' | 'sentinella-worker' | 'manual'
@@ -1174,44 +1175,36 @@ function LegendToggle({
   );
 }
 
-/** UTC "HH:MM" → "reset tra 2h 14m (19:30 Europe/Rome)". Se tra <60m, solo minuti. */
+/** Epoch (reset_at_unix) → "reset tra 2h 14m (2026-06-30 15:00 CEST)".
+ *  Istante ancorato all'epoch non ambiguo; reset_at e' gia' data-completa.
+ *  MAI ricostruire la data da un HH:MM nudo. */
+function resetEpochMs(
+  reset_at: string | null | undefined,
+  reset_at_unix: number | null | undefined,
+): number | null {
+  if (typeof reset_at_unix === "number" && Number.isFinite(reset_at_unix)) {
+    return reset_at_unix * 1000;
+  }
+  if (reset_at) {
+    const p = Date.parse(reset_at);
+    if (Number.isFinite(p)) return p;
+  }
+  return null;
+}
+
 function formatResetDisplay(
   reset_at: string | null | undefined,
+  reset_at_unix: number | null | undefined,
   tr: (k: string) => string,
 ): string {
-  if (!reset_at) return "";
-  const [hStr, mStr] = reset_at.split(":");
-  const h = Number(hStr),
-    m = Number(mStr);
-  if (!Number.isFinite(h) || !Number.isFinite(m)) return "";
-  const now = new Date();
-  const resetUTC = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      h,
-      m,
-      0,
-    ),
-  );
-  if (resetUTC.getTime() <= now.getTime()) {
-    resetUTC.setUTCDate(resetUTC.getUTCDate() + 1);
-  }
-  const deltaMin = Math.max(
-    0,
-    Math.round((resetUTC.getTime() - now.getTime()) / 60000),
-  );
+  const epochMs = resetEpochMs(reset_at, reset_at_unix);
+  if (epochMs == null) return reset_at ?? "";
+  const deltaMin = Math.max(0, Math.round((epochMs - Date.now()) / 60000));
   const hh = Math.floor(deltaMin / 60);
   const mm = deltaMin % 60;
   const remaining = hh > 0 ? `${hh}h ${mm}m` : `${mm}m`;
-  const localHHMM = resetUTC.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return tr("resetIn")
-    .replace("{remaining}", remaining)
-    .replace("{time}", localHHMM);
+  const abs = reset_at ?? new Date(epochMs).toLocaleString();
+  return tr("resetIn").replace("{remaining}", remaining).replace("{time}", abs);
 }
 
 function nearestByTs<T extends { tsMs: number }>(
@@ -2025,28 +2018,14 @@ export default function UsageTokensChart() {
   const { etaTo100Ms, etaResetMs } = useMemo(() => {
     let etaTo100Ms: number | null = null;
     let etaResetMs: number | null = null;
-    // ETA reset: dal sample bridge più recente che ha reset_at
+    // ETA reset: dal sample bridge più recente, ancorata all'epoch non
+    // ambiguo (reset_at_unix); fallback al parse della stringa data-completa.
     for (let i = entries.length - 1; i >= 0; i--) {
-      const r = entries[i].reset_at;
-      if (!r) continue;
-      const [hStr, mStr] = r.split(":");
-      const h = Number(hStr),
-        m = Number(mStr);
-      if (!Number.isFinite(h) || !Number.isFinite(m)) break;
-      const now = new Date();
-      const target = new Date(
-        Date.UTC(
-          now.getUTCFullYear(),
-          now.getUTCMonth(),
-          now.getUTCDate(),
-          h,
-          m,
-          0,
-        ),
-      );
-      if (target.getTime() <= now.getTime())
-        target.setUTCDate(target.getUTCDate() + 1);
-      etaResetMs = target.getTime() - now.getTime();
+      const e = entries[i];
+      if (!e.reset_at && e.reset_at_unix == null) continue;
+      const epochMs = resetEpochMs(e.reset_at, e.reset_at_unix);
+      if (epochMs == null) break;
+      etaResetMs = epochMs - Date.now();
       break;
     }
     // ETA al 100%: serve budget e ratio attuale
@@ -2147,9 +2126,9 @@ export default function UsageTokensChart() {
               >
                 {last.status}
               </span>
-              {last.reset_at && (
+              {(last.reset_at || last.reset_at_unix) && (
                 <span className="text-[10px] text-[var(--color-dim)]">
-                  {formatResetDisplay(last.reset_at, tr)}
+                  {formatResetDisplay(last.reset_at, last.reset_at_unix, tr)}
                 </span>
               )}
             </>

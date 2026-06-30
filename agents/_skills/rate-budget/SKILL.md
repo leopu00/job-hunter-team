@@ -8,47 +8,59 @@ allowed-tools: Bash(python3 *)
 
 The monitoring bridge (`.launcher/sentinel-bridge.py`) polls the active provider every 1–10 min (dynamic — more often under pressure) and writes each sample to `/jht_home/logs/sentinel-data.jsonl`. This skill reads only the **latest sample** that's already been written — no extra provider call.
 
-## At Captain startup
+## Primary: the SAME tick the Sentinella gets
 
-Before spawning any agent, run:
-
-```bash
-python3 /app/shared/skills/rate_budget.py plan
-```
-
-Typical output:
-```
-=== Rate Budget — claude ===
-  Usage:            53%
-  Reset:            13:49 (in 2h 34m)
-  Measured velocity:+0.39%/h (EMA)
-  Target velocity:  11.38%/h (to close at 92% by reset)
-  Reset projection: 56%
-  Status:           OK
-  Throttle:         T0 full speed
-  Host:             cpu=4.7% ram=9.8% (OK)
-
-  Recommended policy: Spawn freely in parallel — keep normal pace.
-  Margin to 92% target: 39%
-  Last tick:        2026-04-24T10:23:18.705062+00:00
-```
-
-**Captain interpretation** (usa `Measured velocity` vs `Target velocity` — NON `Reset projection`, che è INFO volatile):
-- `Throttle T0–T1` + `Measured velocity` ben sotto `Target velocity` (under-pace) → full spawn (Scout + Analyst + Scorer + Writer + Critic)
-- `Throttle T1–T2` + `Measured` ≈ `Target` (on-pace) → reduced spawn (one instance per role)
-- `Throttle T2+` or `Measured velocity` sopra `Target velocity` (burning) → **no spawn**, wait for the bridge to clear the throttle
-- `Reset projection` è solo INFO (estrapolazione volatile a fine finestra) — non basare lo spawn su quello.
-
-**If output is `NO_DATA`:** the bridge hasn't polled yet. Wait 1–2 min and retry. Do not start the team without this signal — you risk saturating the rate-limit blind.
-
-## One-liner version (scriptable)
+Run with no argument (or `tick`):
 
 ```bash
-python3 /app/shared/skills/rate_budget.py status
-# → provider=claude usage=55% status=OK throttle=T0 reset=13:49 (in 2h 34m)
+python3 /app/shared/skills/rate_budget.py tick
 ```
 
-Useful for quick logs or mid-loop checks.
+You get the **exact same message** the bridge sends to the Sentinella — the
+bridge renders it every tick into `logs/last-tick.txt` and this reads it back
+(zero provider calls, zero divergence). Three airy sections + a bridge hint:
+
+```
+── BRIDGE TICK · 12:45:03 · codex · ON ──
+
+⏱  FINESTRA 5H
+   usage 51%        target 92%  →  chiusura 2026-06-30 16:45 CEST (tra 4h 00m)
+   velocità  11.5 %/h   ·   target  10.2 %/h     [+12% sopra]
+   → ATTENZIONE   ·   proj 97%
+
+📅  OGGI  (budget giornaliero)
+   consumato 4.2% / budget 9.0% (cap 14.0%)   ✅
+   velocità  1.1 %/h   ·   target  0.8 %/h     [+38% sopra]
+
+📆  SETTIMANA
+   usato 16%   ·   rimane 84%   ·   reset 2026-07-07 05:00 CEST (tra 6g 16h)
+   velocità  3.4 %/h   ·   sostenibile  1.1 %/h     [+209% sopra]   ratio 3.09×
+   SOPRA-PACE   ·   debito +6pp   ·   lockout ~58h
+
+🧭  CONSIGLIO BRIDGE
+   Sopra-pace: throttle-to-pace + STOP nuovi spawn finché rientri. ...
+src=bridge.
+```
+
+**Read it like this — la velocità è IL segnale** (proj è solo INFO volatile):
+- ogni sezione ha **velocità attuale** (usage consumato / tempo trascorso) vs **target** (quanto manca / tempo che resta), stessa unità %/h. Lo scarto `[+X%/-X%]` è il giudizio.
+- **5h** = il soffitto del provider (lock a 100% prima del reset). **Oggi** = il budget del giorno. **Settimana** = budget + debito.
+- velocità **sotto** target su tutte → c'è margine → spawn graduale (C-02). Velocità **sopra** target → frena / non spawnare. Segui il `🧭 CONSIGLIO`, ma **decidi tu** (C-01).
+
+**If output is `NO_DATA`:** the bridge hasn't written a tick yet (not started, or off-hours). Wait 1–2 min and retry.
+
+## Other modes
+
+```bash
+python3 /app/shared/skills/rate_budget.py plan     # scheda dettagliata (velocity EMA, host, policy)
+python3 /app/shared/skills/rate_budget.py status   # one-liner scriptable
+python3 /app/shared/skills/rate_budget.py live      # FORZA un fetch fresco al provider (costa) — solo per dubbi gravi
+```
+
+`status` one-liner:
+```
+# → provider=claude usage=55% status=OK throttle=0 reset_in=2h 34m (at 2026-04-24 15:49 CEST)
+```
 
 ## When NOT to use it
 

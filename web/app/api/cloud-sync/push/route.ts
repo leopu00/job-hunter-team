@@ -155,6 +155,9 @@ interface SentinelTickIn {
   status?: string | null;
   throttle?: number | null;
   reset_at?: string | null;
+  reset_at_unix?: number | null;
+  weekly_reset_at?: string | null;
+  weekly_reset_at_unix?: number | null;
   weekly_usage?: number | null;
   source?: string | null;
   session_id?: string | null;
@@ -845,6 +848,10 @@ export async function POST(req: NextRequest) {
           status: cleanText(t.status, "OK"),
           throttle: finiteInteger(t.throttle),
           reset_at: cleanText(t.reset_at),
+          // Epoch dei reset (data completa, no ora-nuda lato UI/cloud).
+          reset_at_unix: finiteNumber(t.reset_at_unix),
+          weekly_reset_at: cleanText(t.weekly_reset_at),
+          weekly_reset_at_unix: finiteNumber(t.weekly_reset_at_unix),
           weekly_usage: finiteNumber(t.weekly_usage),
           source,
           session_id: sessionId,
