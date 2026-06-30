@@ -2,19 +2,19 @@
   "source": "betaB-kimi",
   "tsRange": [
     "2026-05-19 20:29:58",
-    "2026-06-27 20:51:47"
+    "2026-06-30 18:14:51"
   ],
   "totals": {
-    "positions": 1050,
-    "scored": 403,
-    "excluded": 539
+    "positions": 1107,
+    "scored": 427,
+    "excluded": 575
   },
   "match": {
-    "scored": 562,
-    "avg": 61.0,
+    "scored": 586,
+    "avg": 61.1,
     "min": 25,
     "max": 94,
-    "strong70": 168,
+    "strong70": 178,
     "strong80": 59,
     "buckets": [
       {
@@ -23,15 +23,15 @@
       },
       {
         "label": "40-59",
-        "n": 243
+        "n": 253
       },
       {
         "label": "60-69",
-        "n": 128
+        "n": 132
       },
       {
         "label": "70-79",
-        "n": 109
+        "n": 119
       },
       {
         "label": "80-100",
@@ -42,27 +42,27 @@
       {
         "key": "stack",
         "label": "Competenze",
-        "avg": 17.9
+        "avg": 17.7
       },
       {
         "key": "exp",
         "label": "Esperienza",
-        "avg": 7.4
+        "avg": 7.5
       },
       {
         "key": "strategic",
         "label": "Fit strategico",
-        "avg": 6.0
+        "avg": 5.9
       },
       {
         "key": "remote",
         "label": "Modalita",
-        "avg": 14.0
+        "avg": 13.9
       },
       {
         "key": "salary",
         "label": "Retribuzione",
-        "avg": 10.0
+        "avg": 9.9
       }
     ],
     "scores": [
@@ -105,6 +105,7 @@
       41,
       41,
       41,
+      41,
       42,
       42,
       42,
@@ -168,6 +169,7 @@
       46,
       46,
       46,
+      46,
       47,
       47,
       47,
@@ -179,6 +181,9 @@
       47,
       47,
       47,
+      47,
+      47,
+      48,
       48,
       48,
       48,
@@ -209,6 +214,7 @@
       50,
       50,
       50,
+      50,
       51,
       51,
       51,
@@ -231,6 +237,7 @@
       52,
       52,
       52,
+      52,
       53,
       53,
       53,
@@ -243,6 +250,7 @@
       53,
       53,
       53,
+      53,
       54,
       54,
       54,
@@ -264,6 +272,7 @@
       54,
       54,
       54,
+      55,
       55,
       55,
       55,
@@ -332,6 +341,7 @@
       59,
       59,
       59,
+      59,
       60,
       60,
       60,
@@ -358,6 +368,8 @@
       61,
       61,
       61,
+      61,
+      62,
       62,
       62,
       62,
@@ -406,6 +418,7 @@
       65,
       65,
       65,
+      65,
       66,
       66,
       66,
@@ -413,6 +426,7 @@
       66,
       66,
       66,
+      67,
       67,
       67,
       67,
@@ -485,6 +499,9 @@
       71,
       71,
       71,
+      71,
+      71,
+      71,
       72,
       72,
       72,
@@ -517,6 +534,7 @@
       74,
       74,
       74,
+      74,
       75,
       75,
       75,
@@ -525,6 +543,8 @@
       75,
       75,
       75,
+      75,
+      76,
       76,
       76,
       76,
@@ -548,6 +568,7 @@
       77,
       77,
       77,
+      77,
       78,
       78,
       78,
@@ -559,6 +580,9 @@
       78,
       78,
       78,
+      78,
+      79,
+      79,
       79,
       79,
       79,
@@ -633,15 +657,21 @@
   "categories": [
     {
       "name": "Technical Writing / Hardware, Industrial & Manufacturing",
-      "count": 136,
-      "scored": 79,
-      "avg": 64.9
+      "count": 145,
+      "scored": 82,
+      "avg": 64.8
     },
     {
       "name": "Technical Writing / Software, API & Developer Documentation",
-      "count": 117,
-      "scored": 96,
-      "avg": 64.7
+      "count": 127,
+      "scored": 102,
+      "avg": 65.2
+    },
+    {
+      "name": "Localization & Translation",
+      "count": 101,
+      "scored": 49,
+      "avg": 62.4
     },
     {
       "name": "Engineering (Other)",
@@ -650,26 +680,20 @@
       "avg": 71.1
     },
     {
-      "name": "Localization & Translation",
-      "count": 89,
-      "scored": 44,
-      "avg": 63.1
-    },
-    {
       "name": "Technical Writing / General & Product",
-      "count": 83,
-      "scored": 57,
-      "avg": 66.0
+      "count": 88,
+      "scored": 62,
+      "avg": 65.6
     },
     {
       "name": "Content & UX Writing",
-      "count": 78,
-      "scored": 35,
-      "avg": 53.9
+      "count": 83,
+      "scored": 37,
+      "avg": 54.0
     },
     {
       "name": "Content Writing / E-Learning",
-      "count": 52,
+      "count": 54,
       "scored": 32,
       "avg": 57.2
     },
@@ -681,9 +705,9 @@
     },
     {
       "name": "Documentation Control / Quality",
-      "count": 38,
-      "scored": 21,
-      "avg": 58.2
+      "count": 39,
+      "scored": 22,
+      "avg": 57.7
     },
     {
       "name": "Technical Writing / Documentation Engineering & CMS",
@@ -693,15 +717,21 @@
     },
     {
       "name": "Other",
-      "count": 34,
+      "count": 36,
       "scored": 7,
       "avg": 52.4
     },
     {
       "name": "Technical Writing / Medical, Scientific & Regulatory",
-      "count": 33,
-      "scored": 8,
-      "avg": 57.4
+      "count": 35,
+      "scored": 9,
+      "avg": 59.7
+    },
+    {
+      "name": "Data / AI Operations",
+      "count": 32,
+      "scored": 11,
+      "avg": 47.6
     },
     {
       "name": "QA & Testing",
@@ -710,22 +740,22 @@
       "avg": 41.9
     },
     {
-      "name": "Data / AI Operations",
-      "count": 31,
-      "scored": 11,
-      "avg": 47.6
-    },
-    {
       "name": "Knowledge Management",
-      "count": 29,
+      "count": 30,
       "scored": 19,
       "avg": 55.6
     },
     {
       "name": "Customer & Technical Support",
-      "count": 19,
+      "count": 20,
       "scored": 14,
       "avg": 60.2
+    },
+    {
+      "name": "Business Analysis",
+      "count": 16,
+      "scored": 2,
+      "avg": 52.0
     },
     {
       "name": "Localization QA",
@@ -734,26 +764,14 @@
       "avg": 60.1
     },
     {
-      "name": "Business Analysis",
-      "count": 10,
-      "scored": 1,
-      "avg": 49.0
-    },
-    {
       "name": "Engineering (Other) / Quality, Regulatory & Validation Engineering",
-      "count": 7,
+      "count": 8,
       "scored": 1,
       "avg": 58.0
     },
     {
       "name": "Interpretation / Telephone",
-      "count": 7,
-      "scored": 0,
-      "avg": null
-    },
-    {
-      "name": "Non categorizzato",
-      "count": 5,
+      "count": 8,
       "scored": 0,
       "avg": null
     },
@@ -795,6 +813,12 @@
     },
     {
       "name": "Localization / Content Operations",
+      "count": 3,
+      "scored": 0,
+      "avg": null
+    },
+    {
+      "name": "Non categorizzato",
       "count": 3,
       "scored": 0,
       "avg": null
@@ -953,11 +977,11 @@
   "sources": [
     {
       "name": "linkedin",
-      "count": 845
+      "count": 884
     },
     {
       "name": "linkedin-guest",
-      "count": 32
+      "count": 47
     },
     {
       "name": "ashby",
@@ -965,7 +989,7 @@
     },
     {
       "name": "euremotejobs",
-      "count": 18
+      "count": 19
     },
     {
       "name": "remoterocketship",
@@ -973,7 +997,7 @@
     },
     {
       "name": "greenhouse",
-      "count": 15
+      "count": 16
     },
     {
       "name": "lever",
@@ -1001,7 +1025,7 @@
     },
     {
       "name": "Altre",
-      "count": 47
+      "count": 48
     }
   ],
   "sourcesDaily": [
@@ -1117,6 +1141,28 @@
       "counts": {
         "linkedin": 5,
         "linkedin-guest": 7
+      }
+    },
+    {
+      "day": "2026-06-28",
+      "counts": {
+        "linkedin": 33,
+        "Altre": 1,
+        "greenhouse": 1
+      }
+    },
+    {
+      "day": "2026-06-29",
+      "counts": {
+        "euremotejobs": 1,
+        "linkedin": 6,
+        "linkedin-guest": 5
+      }
+    },
+    {
+      "day": "2026-06-30",
+      "counts": {
+        "linkedin-guest": 10
       }
     }
   ],
@@ -1240,7 +1286,27 @@
       "day": "2026-06-27",
       "score": {
         "linkedin": 48.0,
-        "linkedin-guest": 43.0
+        "linkedin-guest": 58.8
+      }
+    },
+    {
+      "day": "2026-06-28",
+      "score": {
+        "linkedin": 65.9,
+        "Altre": 77.0
+      }
+    },
+    {
+      "day": "2026-06-29",
+      "score": {
+        "euremotejobs": 71.0,
+        "linkedin-guest": 50.0
+      }
+    },
+    {
+      "day": "2026-06-30",
+      "score": {
+        "linkedin-guest": 59.2
       }
     }
   ],
@@ -1267,23 +1333,23 @@
     },
     {
       "name": "Altre",
-      "avg": 67.8,
-      "n": 61
+      "avg": 67.9,
+      "n": 62
     },
     {
       "name": "euremotejobs",
-      "avg": 67.1,
-      "n": 11
-    },
-    {
-      "name": "linkedin-guest",
-      "avg": 59.5,
-      "n": 8
+      "avg": 67.4,
+      "n": 12
     },
     {
       "name": "linkedin",
-      "avg": 59.0,
-      "n": 421
+      "avg": 59.2,
+      "n": 431
+    },
+    {
+      "name": "linkedin-guest",
+      "avg": 58.6,
+      "n": 20
     },
     {
       "name": "remoterocketship",
@@ -1295,22 +1361,27 @@
     {
       "name": "Italy",
       "code": "IT",
-      "count": 147
+      "count": 149
     },
     {
       "name": "Hungary",
       "code": "HU",
-      "count": 46
+      "count": 49
     },
     {
       "name": "Spain",
       "code": "ES",
-      "count": 32
+      "count": 34
     },
     {
       "name": "United Kingdom",
       "code": "GB",
-      "count": 27
+      "count": 29
+    },
+    {
+      "name": "Ireland",
+      "code": "IE",
+      "count": 26
     },
     {
       "name": "Poland",
@@ -1318,24 +1389,24 @@
       "count": 25
     },
     {
-      "name": "Ireland",
-      "code": "IE",
-      "count": 22
-    },
-    {
       "name": "Netherlands",
       "code": "NL",
-      "count": 22
+      "count": 24
     },
     {
       "name": "Portugal",
       "code": "PT",
-      "count": 17
+      "count": 19
     },
     {
       "name": "Germany",
       "code": "DE",
-      "count": 16
+      "count": 17
+    },
+    {
+      "name": "France",
+      "code": "FR",
+      "count": 9
     },
     {
       "name": "Romania",
@@ -1345,11 +1416,6 @@
     {
       "name": "Czechia",
       "code": "CZ",
-      "count": 8
-    },
-    {
-      "name": "France",
-      "code": "FR",
       "count": 8
     },
     {
@@ -1433,8 +1499,23 @@
       "count": 1
     },
     {
+      "name": "Mexico",
+      "code": "MX",
+      "count": 1
+    },
+    {
       "name": "Slovenia",
       "code": "SI",
+      "count": 1
+    },
+    {
+      "name": "Ukraine",
+      "code": "UA",
+      "count": 1
+    },
+    {
+      "name": "United States",
+      "code": "US",
       "count": 1
     }
   ],
@@ -2050,9 +2131,9 @@
     }
   ],
   "salary": {
-    "n": 76,
-    "avgMin": 34066,
-    "avgMax": 44000
+    "n": 78,
+    "avgMin": 33885,
+    "avgMax": 43692
   },
   "agents": [
     "analista-1",
@@ -17618,6 +17699,736 @@
       "ts": "2026-06-27T20:51:47Z",
       "agent": "analista-1",
       "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T21:02:24Z",
+      "agent": "analista-6",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T21:03:18Z",
+      "agent": "analista-6",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T21:04:10Z",
+      "agent": "analista-6",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T21:11:09Z",
+      "agent": "scorer-5",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-28T21:21:32Z",
+      "agent": "scorer-5",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-28T21:31:53Z",
+      "agent": "scorer-5",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-28T22:09:06Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:10:05Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:10:42Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:11:52Z",
+      "agent": "analista-6",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T22:12:43Z",
+      "agent": "analista-6",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T22:13:22Z",
+      "agent": "analista-6",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T22:34:26Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T22:35:04Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-28T22:35:27Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-28T22:35:46Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:35:47Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:35:48Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:35:50Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:35:53Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:37:17Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-28T22:38:14Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:38:16Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:38:18Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:38:19Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:38:20Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:39:12Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:39:14Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:39:18Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:39:20Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:39:24Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:47:35Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-28T22:54:42Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:58:17Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T22:59:06Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:00:40Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:01:03Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:01:04Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:01:07Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:01:12Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:02:35Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:08:49Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T23:14:10Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:15:15Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:15:24Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:15:26Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:15:38Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:16:26Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:19:25Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-28T23:30:00Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T23:33:55Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:36:30Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:37:49Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T23:40:41Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-28T23:51:09Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T00:01:39Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T00:09:22Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T00:14:33Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T00:25:33Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T00:46:14Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T01:03:31Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T01:07:01Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T01:14:44Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T01:17:37Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T01:25:38Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T01:29:10Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T01:40:27Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T01:41:37Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T01:51:34Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T01:57:36Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T02:04:24Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T02:10:15Z",
+      "agent": "analista-4",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T02:18:39Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T02:21:16Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T02:32:32Z",
+      "agent": "analista-4",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T02:39:23Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T03:18:21Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T03:26:06Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T03:31:38Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T03:32:49Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T03:37:04Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T03:38:43Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T03:39:54Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T03:45:10Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T03:50:25Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T03:55:39Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T04:13:43Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T04:54:59Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T05:36:18Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T05:47:11Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T09:03:06Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T09:14:55Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T09:25:48Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T16:04:39Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T16:06:02Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T16:07:04Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T16:08:08Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T16:08:35Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T16:09:05Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T16:12:11Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T16:13:02Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T16:14:02Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T16:14:57Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T18:01:05Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T18:01:40Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T21:02:49Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T21:07:30Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T21:19:29Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T21:25:28Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T22:01:18Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T22:01:36Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T22:01:55Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T22:03:14Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T22:04:20Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T22:05:19Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T00:14:23Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T00:17:13Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T01:30:23Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T01:37:42Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T01:43:29Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T02:18:20Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T02:20:26Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T02:31:18Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T03:02:39Z",
+      "agent": "scorer-6",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T03:06:47Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T03:08:00Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T03:09:41Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T03:13:29Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T03:14:03Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T03:16:00Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T03:20:02Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T03:20:02Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T03:29:01Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T03:31:23Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T03:34:28Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T03:34:39Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T03:35:04Z",
+      "agent": "scorer-6",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T03:44:14Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T03:46:21Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T03:46:28Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T18:04:59Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T18:06:20Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T18:10:15Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T18:12:09Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T18:13:54Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T18:14:51Z",
+      "agent": "scorer-6",
+      "action": "scored"
     }
   ],
   "hourly": [
@@ -18716,6 +19527,153 @@
         "analista": 1
       },
       "cum": 99
+    },
+    {
+      "hour": "2026-06-28T21",
+      "counts": {
+        "analista": 3,
+        "scorer": 3
+      },
+      "cum": 1
+    },
+    {
+      "hour": "2026-06-28T22",
+      "counts": {
+        "scout": 20,
+        "analista": 9
+      },
+      "cum": 6
+    },
+    {
+      "hour": "2026-06-28T23",
+      "counts": {
+        "scout": 15,
+        "analista": 5
+      },
+      "cum": 7
+    },
+    {
+      "hour": "2026-06-29T00",
+      "counts": {
+        "analista": 4,
+        "scout": 1
+      },
+      "cum": 10
+    },
+    {
+      "hour": "2026-06-29T01",
+      "counts": {
+        "analista": 10
+      },
+      "cum": 11
+    },
+    {
+      "hour": "2026-06-29T02",
+      "counts": {
+        "analista": 6
+      },
+      "cum": 13
+    },
+    {
+      "hour": "2026-06-29T03",
+      "counts": {
+        "scorer": 9,
+        "analista": 1
+      },
+      "cum": 16
+    },
+    {
+      "hour": "2026-06-29T04",
+      "counts": {
+        "analista": 2
+      },
+      "cum": 17
+    },
+    {
+      "hour": "2026-06-29T05",
+      "counts": {
+        "analista": 2
+      },
+      "cum": 17
+    },
+    {
+      "hour": "2026-06-29T09",
+      "counts": {
+        "scorer": 3
+      },
+      "cum": 19
+    },
+    {
+      "hour": "2026-06-29T16",
+      "counts": {
+        "scout": 6,
+        "analista": 4
+      },
+      "cum": 23
+    },
+    {
+      "hour": "2026-06-29T18",
+      "counts": {
+        "analista": 2
+      },
+      "cum": 25
+    },
+    {
+      "hour": "2026-06-29T21",
+      "counts": {
+        "scout": 2,
+        "analista": 2
+      },
+      "cum": 27
+    },
+    {
+      "hour": "2026-06-29T22",
+      "counts": {
+        "scout": 3,
+        "analista": 3
+      },
+      "cum": 29
+    },
+    {
+      "hour": "2026-06-30T00",
+      "counts": {
+        "scorer": 2
+      },
+      "cum": 34
+    },
+    {
+      "hour": "2026-06-30T01",
+      "counts": {
+        "scorer": 1,
+        "scout": 2
+      },
+      "cum": 37
+    },
+    {
+      "hour": "2026-06-30T02",
+      "counts": {
+        "scout": 2,
+        "analista": 1
+      },
+      "cum": 39
+    },
+    {
+      "hour": "2026-06-30T03",
+      "counts": {
+        "scorer": 6,
+        "scout": 4,
+        "analista": 7
+      },
+      "cum": 42
+    },
+    {
+      "hour": "2026-06-30T18",
+      "counts": {
+        "scout": 2,
+        "analista": 2,
+        "scorer": 2
+      },
+      "cum": 51
     }
   ],
   "funnelDaily": [
@@ -18828,15 +19786,39 @@
       "found": 12,
       "excluded": 6,
       "kept": 6,
-      "scored": 3,
+      "scored": 6,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-28",
+      "found": 35,
+      "excluded": 24,
+      "kept": 11,
+      "scored": 11,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-29",
+      "found": 12,
+      "excluded": 8,
+      "kept": 4,
+      "scored": 4,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-30",
+      "found": 10,
+      "excluded": 4,
+      "kept": 6,
+      "scored": 6,
       "ready": 0
     }
   ],
   "funnelTotals": {
-    "found": 1050,
-    "excluded": 539,
-    "kept": 511,
-    "scored": 403,
+    "found": 1107,
+    "excluded": 575,
+    "kept": 532,
+    "scored": 427,
     "ready": 105
   },
   "usage": {
@@ -19031,9 +20013,21 @@
       },
       {
         "day": "2026-06-28",
-        "pct": 1,
-        "cum": 100,
-        "week": "2026-06-24"
+        "pct": 7.0,
+        "cum": 7,
+        "week": "2026-06-28"
+      },
+      {
+        "day": "2026-06-29",
+        "pct": 22,
+        "cum": 29,
+        "week": "2026-06-28"
+      },
+      {
+        "day": "2026-06-30",
+        "pct": 22,
+        "cum": 51,
+        "week": "2026-06-28"
       }
     ],
     "workingHours": {
@@ -19049,8 +20043,8 @@
             "sat",
             "sun"
           ],
-          "start": "16:00",
-          "end": "20:00"
+          "start": "20:00",
+          "end": "08:00"
         }
       ]
     }
