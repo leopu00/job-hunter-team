@@ -40,6 +40,9 @@ type Entry = {
   weekly_pace_ratio?: number;
   throttle?: number;
   reset_at?: string;
+  reset_at_unix?: number;
+  weekly_reset_at?: string;
+  weekly_reset_at_unix?: number;
   weekly_usage?: number;
   projection_naive?: number;
   velocity_decreasing?: boolean;
@@ -115,6 +118,9 @@ export async function GET() {
           "status",
           "throttle",
           "reset_at",
+          "reset_at_unix",
+          "weekly_reset_at",
+          "weekly_reset_at_unix",
           "weekly_usage",
           "source",
           "session_id",
@@ -153,6 +159,9 @@ export async function GET() {
         status: row.status,
         throttle: numberOrUndefined(row.throttle),
         reset_at: row.reset_at ?? undefined,
+        reset_at_unix: numberOrUndefined(row.reset_at_unix),
+        weekly_reset_at: row.weekly_reset_at ?? undefined,
+        weekly_reset_at_unix: numberOrUndefined(row.weekly_reset_at_unix),
         weekly_usage: numberOrUndefined(row.weekly_usage),
         source: row.source ?? undefined,
         session_id: row.session_id ?? undefined,

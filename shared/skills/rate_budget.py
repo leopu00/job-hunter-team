@@ -36,6 +36,40 @@ JHT_HOME = Path(os.environ.get("JHT_HOME", str(Path.home() / ".jht")))
 DATA_JSONL = JHT_HOME / "logs" / "sentinel-data.jsonl"
 
 
+# ── Reset → DATA+ORA completa (mai ora-nuda) ────────────────────────────
+def _load_format_time_mod():
+    for cand in (Path("/app/shared/skills/format_time.py"),
+                 Path(__file__).resolve().parent / "format_time.py"):
+        try:
+            if not cand.exists():
+                continue
+            spec = importlib.util.spec_from_file_location("format_time", cand)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+        except (OSError, ImportError, AttributeError):
+            continue
+    return None
+
+
+_FT_MOD = _load_format_time_mod()
+
+
+def _fmt_reset(unix_ts, fallback=None):
+    """Epoch → 'YYYY-MM-DD HH:MM TZ' (mai ora-nuda). fallback se non derivabile."""
+    if isinstance(unix_ts, (int, float)) and not isinstance(unix_ts, bool):
+        if _FT_MOD is not None:
+            out = _FT_MOD.fmt_reset(unix_ts)
+            if out:
+                return out
+        try:
+            return datetime.fromtimestamp(
+                float(unix_ts), timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        except (OverflowError, OSError, ValueError):
+            pass
+    return fallback
+
+
 THROTTLE_POLICY = {
     0: ("OK", "Proiezione dentro o sotto la finestra ottimale. Procedi col piano, spawna liberamente se hai coda."),
     1: ("ATTENZIONE", "Proiezione > 95% al reset: stai bruciando troppo. Blocca nuovi spawn, allunga gli sleep degli agenti attivi fino a rientrare. Il bridge te lo ripeterà ogni minuto finché sei fuori zona."),
@@ -59,25 +93,28 @@ def load_last_sample():
         return None
 
 
-def hours_minutes_until(reset_hhmm):
-    """HH:MM (UTC, come lo scrive il bridge) → '2h 34m' remaining.
-
-    Il reset_at nel JSONL e' sempre in UTC (fetch_codex_rollout usa
-    datetime.astimezone() con TZ=UTC del container). Calcoliamo
-    remaining in UTC per essere coerenti con lo storage.
+def hours_minutes_until(reset_hhmm, reset_at_unix=None):
+    """Remaining '2h 34m' al reset. Ancorato all'EPOCH (reset_at_unix) — non
+    ambiguo su mezzanotte né su slittamento di giorno. Il parse HH:MM resta
+    solo come fallback legacy (sample senza unix): in quel caso assume "il
+    prossimo HH:MM" (oggi o domani) come faceva prima.
     """
-    if not reset_hhmm:
+    target = None
+    if isinstance(reset_at_unix, (int, float)) and not isinstance(reset_at_unix, bool):
+        target = datetime.fromtimestamp(float(reset_at_unix), timezone.utc)
+    elif reset_hhmm:
+        try:
+            h, m = map(int, str(reset_hhmm).split(":"))
+        except ValueError:
+            return None  # stringa data-completa senza unix → niente HH:MM da indovinare
+        now = datetime.now(timezone.utc)
+        target = now.replace(hour=h, minute=m, second=0, microsecond=0)
+        if target <= now:
+            from datetime import timedelta
+            target = target + timedelta(days=1)
+    if target is None:
         return None
-    try:
-        h, m = map(int, reset_hhmm.split(":"))
-    except ValueError:
-        return None
-    now = datetime.now(timezone.utc)
-    target = now.replace(hour=h, minute=m, second=0, microsecond=0)
-    if target <= now:
-        from datetime import timedelta
-        target = target + timedelta(days=1)
-    delta = target - now
+    delta = target - datetime.now(timezone.utc)
     total_min = int(delta.total_seconds() // 60)
     if total_min < 0:
         return None
@@ -86,32 +123,24 @@ def hours_minutes_until(reset_hhmm):
     return f"{h_rem}h {m_rem}m" if h_rem > 0 else f"{m_rem}m"
 
 
-def local_reset_display(reset_hhmm):
-    """Converte HH:MM UTC in 'HH:MM local (HH:MM UTC)' per display user-facing.
+def local_reset_display(reset_hhmm, reset_at_unix=None):
+    """Display user-facing del reset, SEMPRE con DATA di calendario completa.
 
-    Container di default gira in UTC, ma l'utente legge orari in local
-    (CEST/CET in Italia). Mostrare entrambi evita l'ambiguita' tipica
-    "reset alle 13:49" dove il numero e' UTC e l'utente lo scambia per
-    ora italiana, calcolando remaining errato.
+    Ancorato all'epoch (reset_at_unix) → 'YYYY-MM-DD HH:MM TZ' nel fuso utente.
+    Se l'epoch manca: la stringa reset_at è già data-completa (choke point del
+    bridge) e la si mostra così com'è; solo un legacy HH:MM nudo riceve il
+    suffisso UTC esplicito (mai un orario senza contesto).
     """
+    s = _fmt_reset(reset_at_unix)
+    if s:
+        return s
     if not reset_hhmm:
         return "-"
-    try:
-        h, m = map(int, reset_hhmm.split(":"))
-    except ValueError:
-        return reset_hhmm
-    now_utc = datetime.now(timezone.utc)
-    target_utc = now_utc.replace(hour=h, minute=m, second=0, microsecond=0)
-    if target_utc <= now_utc:
-        from datetime import timedelta
-        target_utc = target_utc + timedelta(days=1)
-    target_local = target_utc.astimezone()
-    local_hhmm = target_local.strftime("%H:%M")
-    if local_hhmm == reset_hhmm:
-        # Container e' in UTC e pure il "local" risolve a UTC (TZ unset),
-        # oppure l'offset e' 0 — mostra solo UTC senza duplicare.
-        return f"{reset_hhmm} UTC"
-    return f"{local_hhmm} local ({reset_hhmm} UTC)"
+    text = str(reset_hhmm)
+    # Legacy: HH:MM nudo (solo cifre e un ':') → marca almeno UTC.
+    if text.count(":") == 1 and text.replace(":", "").isdigit():
+        return f"{text} UTC"
+    return text  # già data-completa
 
 
 def status_line(entry):
@@ -122,10 +151,11 @@ def status_line(entry):
     status = entry.get("status", "-")
     throttle = entry.get("throttle", "-")
     reset_at = entry.get("reset_at", "-")
-    remaining = hours_minutes_until(reset_at) or "-"
+    reset_unix = entry.get("reset_at_unix")
+    remaining = hours_minutes_until(reset_at, reset_unix) or "-"
     return (
         f"provider={provider} usage={usage}% status={status} throttle={throttle} "
-        f"reset_in={remaining} (at {local_reset_display(reset_at)})"
+        f"reset_in={remaining} (at {local_reset_display(reset_at, reset_unix)})"
     )
 
 
@@ -143,7 +173,8 @@ def plan(entry):
     status = entry.get("status", "-")
     throttle = entry.get("throttle", 0)
     reset_at = entry.get("reset_at", "-")
-    remaining = hours_minutes_until(reset_at) or "-"
+    reset_unix = entry.get("reset_at_unix")
+    remaining = hours_minutes_until(reset_at, reset_unix) or "-"
     velocity_smooth = entry.get("velocity_smooth") or 0
     velocity_ideal = entry.get("velocity_ideal")
     projection = entry.get("projection")
@@ -154,7 +185,7 @@ def plan(entry):
 
     print(f"=== Rate Budget - {provider} ===")
     print(f"  Utilizzo:         {usage}%")
-    print(f"  Reset:            tra {remaining} ({local_reset_display(reset_at)})")
+    print(f"  Reset:            tra {remaining} ({local_reset_display(reset_at, reset_unix)})")
     print(f"  Velocity misurata:{velocity_smooth:+g}%/h (EMA)")
     if velocity_ideal is not None:
         print(f"  Velocity target:  {velocity_ideal:g}%/h (per chiudere a 95% al reset)")
@@ -252,8 +283,9 @@ def live():
 
     usage = sample.get("usage")
     reset_at = sample.get("reset_at")
+    reset_unix = sample.get("reset_at_unix")
     weekly = sample.get("weekly_usage")
-    remaining = hours_minutes_until(reset_at) or "-"
+    remaining = hours_minutes_until(reset_at, reset_unix) or "-"
 
     # Auto-registra il sample nel JSONL del bridge marcando il source
     # in base a chi sta eseguendo la skill. Permette al grafico di
@@ -266,6 +298,11 @@ def live():
         recorded_sample = _record_sample_via_skill({
             "usage": usage,
             "reset_at": reset_at,
+            # Propaga gli epoch così il choke point (compute_metrics) può
+            # produrre reset_at/weekly_reset_at con la DATA completa.
+            "reset_at_unix": reset_unix,
+            "weekly_reset_at": sample.get("weekly_reset_at"),
+            "weekly_reset_at_unix": sample.get("weekly_reset_at_unix"),
             "provider": provider,
             "weekly_usage": weekly,
         }, source=detected_source)
@@ -291,7 +328,7 @@ def live():
         parts.append(f"status={status}")
     parts += [
         f"reset_in={remaining}",
-        f"reset_at={local_reset_display(reset_at)}",
+        f"reset_at={local_reset_display(reset_at, reset_unix)}",
         f"source={detected_source}",
     ]
     if weekly is not None:
@@ -339,18 +376,38 @@ def _record_sample_via_skill(parsed, source):
     return sample
 
 
+def show_tick():
+    """Stampa l'ULTIMO messaggio del bridge — lo STESSO identico testo (3
+    sezioni: 5h / oggi / settimana + consiglio) che riceve la Sentinella.
+    Il bridge lo renderizza ad ogni tick e lo scrive in logs/last-tick.txt;
+    qui lo rileggiamo (zero chiamate al provider, zero ricalcolo divergente)."""
+    path = JHT_HOME / "logs" / "last-tick.txt"
+    try:
+        msg = path.read_text(encoding="utf-8").strip()
+    except (OSError, FileNotFoundError):
+        msg = ""
+    if not msg:
+        print("NO_DATA: il bridge non ha ancora scritto un tick "
+              "(non ancora partito, o fuori orario di lavoro). Riprova tra 1-2 min.")
+        return
+    print(msg)
+
+
 def main():
-    cmd = (sys.argv[1] if len(sys.argv) > 1 else "status").lower()
+    cmd = (sys.argv[1] if len(sys.argv) > 1 else "tick").lower()
     if cmd == "live":
         live()
+        return
+    if cmd in ("tick", ""):
+        show_tick()
         return
     entry = load_last_sample()
     if cmd == "plan":
         plan(entry)
-    elif cmd in ("status", ""):
+    elif cmd == "status":
         print(status_line(entry))
     else:
-        print(f"rate_budget: comando '{cmd}' sconosciuto. Usa: status | plan | live", file=sys.stderr)
+        print(f"rate_budget: comando '{cmd}' sconosciuto. Usa: tick | status | plan | live", file=sys.stderr)
         sys.exit(2)
 
 

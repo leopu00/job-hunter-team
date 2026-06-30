@@ -101,28 +101,28 @@ def _fmt_local_time() -> str:
         return _now().strftime("%H:%M UTC")
 
 
-def _fmt_hhmm_user(hhmm_utc: str | None) -> str:
-    """Bug #15: converti 'HH:MM' UTC dal bridge nel fuso utente.
+def _fmt_reset_user(unix_ts, fallback: str | None = None) -> str:
+    """Reset → 'YYYY-MM-DD HH:MM TZ' (DATA completa) nel fuso utente.
 
-    Se l'orario UTC è già passato oggi, assumiamo domani (i reset
-    sliding-window non scadono nello stesso giorno calendario UTC).
+    Ancorato all'epoch (reset_at_unix), MAI ora-nuda: un reset mostrato
+    come solo orario è ambiguo a cavallo di mezzanotte e non distingue lo
+    slittamento di giorno. fallback = stringa reset_at grezza se l'epoch
+    manca (già data-completa dal choke point del bridge).
     """
-    if not hhmm_utc or ":" not in hhmm_utc:
-        return hhmm_utc or "?"
     try:
-        hh, mm = [int(x) for x in hhmm_utc.strip().split(":")[:2]]
-    except (ValueError, TypeError):
-        return hhmm_utc
-    from datetime import timedelta
-    now = _now()  # tz=UTC
-    target = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
-    if target < now:
-        target = target + timedelta(days=1)
-    try:
-        from format_time import fmt_user_with_utc  # type: ignore
-        return fmt_user_with_utc(target, "%H:%M")
+        from format_time import fmt_reset  # type: ignore
+        out = fmt_reset(unix_ts)
+        if out:
+            return out
     except Exception:
-        return target.strftime("%H:%M UTC")
+        pass
+    if isinstance(unix_ts, (int, float)) and not isinstance(unix_ts, bool):
+        try:
+            return datetime.fromtimestamp(
+                float(unix_ts), timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        except (OverflowError, OSError, ValueError):
+            pass
+    return fallback or "?"
 
 
 def _read_pipeline() -> dict:
@@ -222,8 +222,10 @@ def build_panorama_text(pipeline: dict, bridge: dict, tmux_n: int,
     phase = bridge.get("phase")
     status = bridge.get("status", "?")
     reset_at = bridge.get("reset_at", "?")
+    reset_at_unix = bridge.get("reset_at_unix")
     weekly = bridge.get("weekly_usage")
     weekly_reset = bridge.get("weekly_reset_at")
+    weekly_reset_unix = bridge.get("weekly_reset_at_unix")
 
     lines = [
         f"📊 <b>Pipeline panorama</b> — {when}",
@@ -245,11 +247,12 @@ def build_panorama_text(pipeline: dict, bridge: dict, tmux_n: int,
         budget_label = _i18n_t("auto_report.budget_label")
         proj_label = _i18n_t("auto_report.proj_label")
         lines.append(f"⏱️ {budget_label}     {usage}% ({proj_label} {proj_s} · {phase_s} · {_html_escape(str(status))})")
-        # Bug #15: converti reset HH:MM UTC → fuso utente.
-        reset_user = _html_escape(_fmt_hhmm_user(reset_at))
+        # Reset con DATA completa nel fuso utente (mai ora-nuda), epoch-ancorato.
+        reset_user = _html_escape(_fmt_reset_user(reset_at_unix, reset_at))
         lines.append(f"📅 {_i18n_t('auto_report.reset_window')} {reset_user}")
         if weekly is not None:
-            wr_user = _fmt_hhmm_user(weekly_reset) if weekly_reset else ""
+            wr_user = (_fmt_reset_user(weekly_reset_unix, weekly_reset)
+                       if (weekly_reset or weekly_reset_unix is not None) else "")
             wr = f" · reset {wr_user}" if wr_user else ""
             lines.append(f"📆 {_i18n_t('auto_report.week_label')}  {weekly}%{_html_escape(wr)}")
 
