@@ -14,7 +14,17 @@ import type {
 } from "@/lib/team-activity";
 import { ROLE_META } from "@/lib/team-activity-meta";
 import { useLocale } from "@/lib/use-locale";
+import { useTheme } from "@/app/theme-provider";
 import type { Locale } from "@/i18n/config";
+
+// Colore "linea/asse budget AI": giallo su dark, ambra scuro in light. Tenuto
+// come LITERAL hex applicato direttamente agli attributi SVG (stroke/fill) e
+// agli style inline — NON via classe CSS né var(): la build (Tailwind v4 /
+// Lightning CSS) prunava sia la var sia le regole .cs-budget-* → le linee
+// sparivano (stroke=none). Un hex letterale nel bundle JS non è prunabile.
+// ⚠️ NON spostare questo colore nel CSS (classi o var): è proprio ciò che si
+// rompe a ogni rebuild della pagina.
+const BUDGET_LINE = { dark: "#ffd600", light: "#a16207" } as const;
 
 const T: Record<
   Locale,
@@ -125,10 +135,8 @@ const T: Record<
   },
 };
 
-// Colore "budget" (theme-aware: giallo su dark, ambra in light) applicato via
-// classi .cs-budget-* di globals.css — NON via var() inline negli attributi
-// SVG, che il minificatore CSS prunava insieme alla variabile (vedi nota in
-// globals.css). Distinto dai colori dei ruoli.
+// Il colore "budget" (theme-aware) è la const BUDGET_LINE sopra, applicata come
+// LITERAL hex agli attributi SVG / style inline — vedi nota in testa al file.
 
 function dm(day: string) {
   return `${day.slice(8, 10)}/${day.slice(5, 7)}`;
@@ -154,6 +162,8 @@ export default function WorkBudgetChart({
 }) {
   const locale = useLocale();
   const t = T[locale];
+  const { resolvedTheme } = useTheme();
+  const budgetColor = BUDGET_LINE[resolvedTheme] ?? BUDGET_LINE.dark;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
@@ -328,7 +338,7 @@ export default function WorkBudgetChart({
         {rightTicks.map((t) => (
           <text
             key={`r${t}`}
-            className="cs-budget-fill"
+            fill={budgetColor}
             x={padL + plotW + 5}
             y={yR(t) + 3}
             textAnchor="start"
@@ -402,7 +412,7 @@ export default function WorkBudgetChart({
         {dailySegs.map((seg, si) => (
           <polyline
             key={`day${si}`}
-            className="cs-budget-stroke"
+            stroke={budgetColor}
             points={seg.map((p) => `${p.x},${p.y}`).join(" ")}
             fill="none"
             strokeWidth={1.5}
@@ -418,7 +428,7 @@ export default function WorkBudgetChart({
             // disegna nulla → un pallino lo rende visibile.
             <circle
               key={si}
-              className="cs-budget-fill"
+              fill={budgetColor}
               cx={seg[0].x}
               cy={seg[0].y}
               r={1.8}
@@ -427,7 +437,7 @@ export default function WorkBudgetChart({
           ) : (
             <polyline
               key={si}
-              className="cs-budget-stroke"
+              stroke={budgetColor}
               points={seg.map((p) => `${p.x},${p.y}`).join(" ")}
               fill="none"
               strokeWidth={2}
@@ -498,7 +508,10 @@ export default function WorkBudgetChart({
               </div>
             ))}
           <div className="mt-1 pt-1 border-t border-[var(--color-border)] flex items-center gap-1.5">
-            <span className="cs-budget-bg inline-block w-2 h-2 rounded-sm" />
+            <span
+              className="inline-block w-2 h-2 rounded-sm"
+              style={{ backgroundColor: budgetColor }}
+            />
             <span className="text-[var(--color-muted)]">
               {hd.hasSample
                 ? t.budgetTooltip(
@@ -531,15 +544,18 @@ export default function WorkBudgetChart({
           {t.legendBudget}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="cs-budget-bg inline-block w-4 h-0.5" />
+          <span
+            className="inline-block w-4 h-0.5"
+            style={{ backgroundColor: budgetColor }}
+          />
           <span className="text-[10px] text-[var(--color-muted)]">
             {t.cumWeek}
           </span>
         </span>
         <span className="flex items-center gap-1.5">
           <span
-            className="cs-budget-dash inline-block w-4 h-0"
-            style={{ opacity: 0.7 }}
+            className="inline-block w-4 h-0"
+            style={{ opacity: 0.7, borderTop: `2px dashed ${budgetColor}` }}
           />
           <span className="text-[10px] text-[var(--color-muted)]">
             {t.dayConsumption}

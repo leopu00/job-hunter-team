@@ -37,23 +37,14 @@
   --sync-warn: #d4a85a;
 }
 
-/* Colore "linea/asse budget AI" dei grafici case-studies (giallo su dark,
-   ambra scuro #a16207 in light). Applicato via CLASSI .cs-budget-* (usate in
-   WorkBudgetChart), NON via una CSS-var passata inline negli attributi SVG.
-   ⚠️ Storia: era una var --budget-line consumata solo via var() in JS/SVG → la
-   build (Tailwind v4 / Lightning) prunava sia la variabile sia le regole che la
-   referenziavano (la var non risultava "usata" nel CSS) → stroke=none (linee
-   sparite), background=trasparente (swatch), fill=nero (etichette). Qui i colori
-   sono HARDCODED nelle classi (come .badge-*): niente var da prunare, robusto a
-   build/minificatore. NON reintrodurre una var passata inline via var(). */
-.cs-budget-stroke { stroke: #ffd600; }
-.cs-budget-fill   { fill: #ffd600; }
-.cs-budget-bg     { background-color: #ffd600; }
-.cs-budget-dash   { border-top: 2px dashed #ffd600; }
-html[data-theme="light"] .cs-budget-stroke { stroke: #a16207; }
-html[data-theme="light"] .cs-budget-fill   { fill: #a16207; }
-html[data-theme="light"] .cs-budget-bg     { background-color: #a16207; }
-html[data-theme="light"] .cs-budget-dash   { border-top-color: #a16207; }
+/* Colore "linea/asse budget AI" dei grafici case-studies (giallo su dark, ambra
+   scuro in light): NON vive più qui. Era prima una var --budget-line (pruned),
+   poi classi .cs-budget-* hardcoded: ENTRAMBE venivano rimosse dalla build
+   (Tailwind v4 / Lightning CSS) → le linee budget sparivano (stroke=none) a ogni
+   rebuild della pagina. Ora il colore è un LITERAL hex nel JS, applicato
+   direttamente agli attributi SVG (stroke/fill) e agli style inline dentro
+   WorkBudgetChart.tsx / IntradayBudgetChart.tsx (const BUDGET_LINE, via
+   useTheme). Immune al minificatore CSS. ⚠️ NON reintrodurre classi o var qui. */
 
 /* ── Light theme overrides ───────────────────────────────────────── */
 html[data-theme="light"] {
