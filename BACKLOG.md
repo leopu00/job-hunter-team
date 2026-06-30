@@ -314,6 +314,12 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - **❌ FINDING ERRATO.** Verificato il codice: lo scheduled-Dottore **È GIÀ gated** sulle working-hours, identico al Mantenitore (entrambi via `doctor_schedule.py`; `doctor-watchdog.sh` ritorna `OFF` fuori finestra → niente spawn; il fallback 6h è solo per VPS `NOWINDOW`/24-7). L'asimmetria "Dottore non gated" era falsa.
 - **Cos'era il +2% off-hours:** (1) **churn dei worker su coda vuota** → **già fixato** (protocollo Scout-esausto + `C-05b`, 2026-06-30); (2) Dottore **in standby risvegliato on-demand** = path di sicurezza da preservare. **Niente da implementare.** Dettaglio: `docs/internal/2026-06-29-dottore-offhours-burn-finding.md` (con correzione in cima).
 
+##### 💭 [B1-DETERMINISTIC-PACING] Pacing deterministico nel bridge (idea parcheggiata) ⚪ (NEW 2026-06-30)
+
+- **Idea (non decisa):** spostare la pacing di routine da giudizio-LLM a codice deterministico nel `pacing-bridge` (`thr = ladder(v_team − v*)` + isteresi) per uccidere il thrash bang-bang (~198 frenate/notte su betaB/Kimi) e il coordinator-self-burn. Obiettivo vero = togliere il **consumo** dell'LLM dal bridge, NON l'intelligenza.
+- **Tensione aperta (riserva utente):** "tutto a uno script" perde l'adattività dell'LLM sui casi anomali → direzione promettente = **ibrido** (script ATTUA il pacing, LLM **supervisiona/analizza i risultati** e interviene solo su anomalie, da decisore-continuo a revisore-a-campione).
+- **Stato:** ⚪ **parcheggiata, NON si fa ora.** Se si riprende: shadow-log prima (la base del Passo B esiste già) + disegnare il ruolo-supervisore dell'LLM. Doc: `docs/internal/2026-06-30-B1-deterministic-pacing-idea.md`.
+
 ##### 🔐 [JHT-ACCESS-CREDENTIALS-GAPS] Access & credentials — gap doc vs codice (NEW 2026-05-26)
 
 - **Context:** sessione di consolidamento doc 2026-05-26 (`docs/internal/ops/access-and-credentials.md`) ha riallineato la storia "dove vivono le credenziali" e rivelato 6 punti dove la doc promette qualcosa che il codice non implementa ancora.
