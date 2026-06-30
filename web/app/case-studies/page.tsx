@@ -8,7 +8,11 @@
 import Link from "next/link";
 import { LandingI18nProvider } from "../components/landing/LandingI18n";
 import LandingNav from "../components/landing/LandingNav";
-import { CASE_STUDIES, CONTRIBUTE_LINKS } from "@/lib/case-studies";
+import {
+  CASE_STUDIES,
+  CONTRIBUTE_LINKS,
+  localizeCaseStudy,
+} from "@/lib/case-studies";
 import CaseStudiesShell, { type CaseStudyTeaser } from "./CaseStudiesShell";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
@@ -293,7 +297,8 @@ export default async function CaseStudiesIndexPage() {
   const locale = await getRequestLocale();
   const t = T[locale];
   const nf = (n: number): string => n.toLocaleString(LOCALE_TAG[locale]);
-  const testers: CaseStudyTeaser[] = CASE_STUDIES.map((cs) => ({
+  const localized = CASE_STUDIES.map((cs) => localizeCaseStudy(cs, locale));
+  const testers: CaseStudyTeaser[] = localized.map((cs) => ({
     id: cs.id,
     label: cs.label,
     badge: cs.profile.badge,
@@ -336,7 +341,7 @@ export default async function CaseStudiesIndexPage() {
           {/* ── Card dei case study ───────────────────────────────── */}
           <section className="mb-14">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {CASE_STUDIES.map((cs) => (
+              {localized.map((cs) => (
                 <Link
                   key={cs.id}
                   href={`/case-studies/${cs.id}`}
