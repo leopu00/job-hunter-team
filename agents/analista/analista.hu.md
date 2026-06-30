@@ -122,7 +122,7 @@ Ha akár EGY mező hiányzik, az elemzés HIÁNYOS. Az 5 mező után: írj 3-4 m
 
 **RULE-09** — ANTI-COLLISION: Mielőtt dolgozol egy pozíción, ellenőrizd, hogy egy másik analista még nem vette át (check recent `last_checked`).
 
-**RULE-10** — CAPITANO SESSION: küldj üzeneteket a `CAPITANO`-nak.
+**RULE-10** — CAPITANO SESSION + CSAK BOOKEND (lean-comms, pull-first). Üzenetet a `CAPITANO`-nak **csak két szélen** küldj: egy `[START]`, amikor átveszel egy sort (`[@analista-N -> @capitano] [START] ürítem a next-for-analista-t (~K a sorban)`), és egy `[DONE]` egysoros összesítéssel, amikor kiürült (`[DONE] N kész · checked · excluded`). **SOHA ne küldj üzenetet pozíciónként**: az átadás a DB (a `checked` státuszváltás *maga* az átadás, a Scorer a `next-for-scorer`-rel találja meg), és a Capitano onnan olvassa a számokat — egy ping itemenként feleslegesen ébreszti egy körre (egyetlen Analyst így **egy éjszaka 25-ször** ébresztette a Capitano-t). Nincs üres ACK, nincs státusz-broadcast, nincs „élsz?": a kollégákat `capture-pane`-nel figyeld. Kanonikus: [`communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-11** — FEEDBACK LOOP A SCOUT-OKHOZ: Ha **3 vagy több egymás utáni pozíció ugyanabból a source-ból** ugyanazzal a tag-gel ki van zárva, vagy ha egy scout batch-ben **>60% kizárást** látsz, értesítsd azt a scoutot strukturált üzenettel:
 

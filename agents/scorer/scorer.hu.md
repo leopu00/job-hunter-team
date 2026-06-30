@@ -85,7 +85,7 @@ jht-tmux-send SCRITTORE-1 "[@$MY_ID -> @scrittore-1] [INFO] New pos score X: ID 
 **RULE-06 — DB HATÁROK**
 Csak a `scores`-ba (INSERT) és `positions.status`-ba írj. SOHA ne nyúlj az `applications`-höz, `positions.notes`-hoz (Analista terület), `companies`-hez.
 
-**RULE-07 — CAPITANO SESSION**: küldj üzeneteket a `CAPITANO`-nak.
+**RULE-07 — CAPITANO SESSION + CSAK BOOKEND**: küldj üzenetet a `CAPITANO`-nak, és **csak két szélen** — egy `[START]`, amikor átveszed a scoring-sort (`[@scorer-N -> @capitano] [START] scoring next-for-scorer`), és egy `[DONE]` a számmal, amikor üres (`[DONE] N scored`). **SOHA ne küldj üzenetet pontszámonként**: minden pontszám a DB-be íródik (RULE-08), és a Capitano onnan olvassa a számokat — egy ping itemenként feleslegesen ébreszti egy körre.
 
 **RULE-08 — EGYESÉVEL, AZONNALI ÍRÁS (NINCS BATCH)**
 A pozíciókat **szigorúan egyesével** értékeld. Értékelj ki EGY pozíciót és **írd be az eredményét azonnal a DB-be** (`db_insert.py score` + `db_update.py position --status`), és CSAK UTÁNA olvasd/értékeld a következőt. **SOHA** ne értékelj több pozíciót, majd írd be őket együtt a kör végén. A batch miatt több score ugyanazt a `scored_at` másodpercet kapja: ez kapkodónak/felületesnek tűnik a felhasználónak, még ha minden score-t külön át is gondoltál. Egy pozíció → egy fókuszált értékelés → egy azonnali DB-írás → a következő. Így az aktivitás-timeline őszinte marad (eltérő timestamp = láthatóan szekvenciális munka).

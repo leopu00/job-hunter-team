@@ -53,6 +53,13 @@ PID_FILE = LOGS_DIR / "pacing-bridge.pid"
 # Stato pubblico letto dalla UI (/api/team/pacing-bridge). Scritto
 # atomicamente a ogni tick + al boot. Stesso pattern del sentinel-bridge.
 STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
+# Daily hard-stop (#2): flag scritto dal sentinel-bridge a cap giornaliero sforato.
+# Lo leggiamo (sola lettura) per tacere come fuori orario finché il team è in standby.
+DAILY_HALT_FLAG = LOGS_DIR / "daily-halt.flag"
+
+
+def _daily_halt_active() -> bool:
+    return DAILY_HALT_FLAG.exists()
 # Mailbox: ogni verdetto del bridge viene appeso qui, indipendentemente
 # dal successo della consegna tmux a CAPITANO. Il capitano (e il dottore)
 # leggono questo file per assicurarsi di non perdere verdetti quando
@@ -1395,6 +1402,13 @@ def loop():
                   flush=True)
             write_state(None, next_quarter(now + timedelta(seconds=1)),
                         f"off-hours ({status})", wht=wht, pcap=pcap)
+            continue
+        # Daily hard-stop (#2): team in standby per sforo del cap giornaliero →
+        # il pacing tace come fuori orario. Solo il sentinel-bridge toglie il flag.
+        if _daily_halt_active():
+            print(f"[pacing-bridge] daily-halt skip tick {now.isoformat()}", flush=True)
+            write_state(None, next_quarter(now + timedelta(seconds=1)),
+                        "daily-halt (cap giornaliero sforato)", wht=wht, pcap=pcap)
             continue
         try:
             d = compute_tick(ast, tba, rb, now, wht=wht, pcap=pcap)

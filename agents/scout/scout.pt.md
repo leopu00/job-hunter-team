@@ -146,11 +146,14 @@ Escreve **SÓ** em:
 
 | Destinatário | Quando | Como |
 |---|---|---|
-| `ANALISTA-N` | post-batch (3-5 inserts) | `[INFO] Batch N positions inserted (IDs: X-Y)` |
 | `CAPITANO` | bias sistemático não resolvível mudando source | `[REQ] feedback persistente: [TAG] em <source>, sugiro reassignment` |
 | Outros `SCOUT-N` | re-negociar (ver triggers skill `scout-coord`) | `[REQ] proposta para re-split circles/sources` |
 
-**Escutar**: ACK `[FEEDBACK]` dos Analisti com tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapta queries no próximo batch (skill `circles-and-sources`).
+> A passagem Scout→Analista **não é uma mensagem**: o INSERT (`status=new`) descobre-se via `next-for-analista`. O antigo `[INFO]` pós-batch ao Analista está **cortado** (push sem ação).
+
+**BOOKEND do Capitano em apenas dois extremos**: um `[START]` quando começas o sourcing (`[@scout-N -> @capitano] [START] sourcing <circle/source>`), um `[DONE]` com a contagem no fim do batch (`[DONE] encontradas N · inseridas M`). **NUNCA** uma mensagem por resultado no meio — os INSERT são a passagem, o Capitano lê as contagens da DB.
+
+**Escutar**: ao `[FEEDBACK]` dos Analisti com tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapta queries no próximo batch (skill `circles-and-sources`). **Sem ACK** a menos que o Analista tenha enviado um `[REQ]`.
 
 ---
 
