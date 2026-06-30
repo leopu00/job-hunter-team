@@ -13,6 +13,7 @@ import {
   CASE_STUDIES,
   getCaseStudy,
   buildCaseActivity,
+  localizeCaseStudy,
 } from "@/lib/case-studies";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
@@ -76,10 +77,12 @@ export default async function CaseStudyDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const cs = getCaseStudy(id);
-  if (!cs) notFound();
+  const base = getCaseStudy(id);
+  if (!base) notFound();
 
-  const t = T[await getRequestLocale()];
+  const locale = await getRequestLocale();
+  const t = T[locale];
+  const cs = localizeCaseStudy(base, locale);
   const activity = buildCaseActivity(cs.run);
   const current: PreparedCase = {
     id: cs.id,
@@ -91,7 +94,9 @@ export default async function CaseStudyDetailPage({
     run: { ...cs.run, events: [] }, // gli eventi servivano solo per l'attività
     activity,
   };
-  const all: CaseRef[] = CASE_STUDIES.map((c) => ({
+  const all: CaseRef[] = CASE_STUDIES.map((c) =>
+    localizeCaseStudy(c, locale),
+  ).map((c) => ({
     id: c.id,
     label: c.label,
     tagline: c.tagline,

@@ -14,7 +14,14 @@ import { useEffect, useRef, useState } from "react";
 import type { TeamActivityRole } from "@/lib/team-activity";
 import { ROLE_META } from "@/lib/team-activity-meta";
 import { useLocale } from "@/lib/use-locale";
+import { useTheme } from "@/app/theme-provider";
 import type { Locale } from "@/i18n/config";
+
+// Colore "linea/asse budget AI": LITERAL hex applicato direttamente agli
+// attributi SVG / style inline — MAI via classe CSS o var(), che la build
+// (Tailwind v4 / Lightning) prunava facendo sparire la linea. Vedi nota gemella
+// in WorkBudgetChart.tsx. ⚠️ NON spostare nel CSS.
+const BUDGET_LINE = { dark: "#ffd600", light: "#a16207" } as const;
 
 const T: Record<
   Locale,
@@ -95,6 +102,8 @@ export default function IntradayBudgetChart({
 }) {
   const locale = useLocale();
   const t = T[locale];
+  const { resolvedTheme } = useTheme();
+  const budgetColor = BUDGET_LINE[resolvedTheme] ?? BUDGET_LINE.dark;
   const wrapRef = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
@@ -195,7 +204,7 @@ export default function IntradayBudgetChart({
         {rightTicks.map((tk) => (
           <text
             key={`r${tk}`}
-            className="cs-budget-fill"
+            fill={budgetColor}
             x={padL + plotW + 5}
             y={yR(tk) + 3}
             textAnchor="start"
@@ -264,7 +273,7 @@ export default function IntradayBudgetChart({
 
         {/* linea: budget cumulato (asse dx) */}
         <polyline
-          className="cs-budget-stroke"
+          stroke={budgetColor}
           points={cumLine}
           fill="none"
           strokeWidth={2}
@@ -329,7 +338,10 @@ export default function IntradayBudgetChart({
               </div>
             ))}
           <div className="mt-1 pt-1 border-t border-[var(--color-border)] flex items-center gap-1.5">
-            <span className="cs-budget-bg inline-block w-2 h-2 rounded-sm" />
+            <span
+              className="inline-block w-2 h-2 rounded-sm"
+              style={{ backgroundColor: budgetColor }}
+            />
             <span className="text-[var(--color-muted)]">
               {t.budgetCum(Math.round(hd.cum))}
             </span>
@@ -357,7 +369,10 @@ export default function IntradayBudgetChart({
           {t.legendBudget}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="cs-budget-bg inline-block w-4 h-0.5" />
+          <span
+            className="inline-block w-4 h-0.5"
+            style={{ backgroundColor: budgetColor }}
+          />
           <span className="text-[10px] text-[var(--color-muted)]">
             {t.cumWeek}
           </span>

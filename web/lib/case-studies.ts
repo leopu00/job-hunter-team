@@ -15,6 +15,8 @@ import {
 import betaCRun from "@/data/case-studies/betaC-codex-run.json";
 import betaBRun from "@/data/case-studies/betaB-kimi-run.json";
 import betaDRun from "@/data/case-studies/betaD-kimi-run.json";
+import PROFILES_I18N from "@/data/case-studies/profiles-i18n.json";
+import type { Locale } from "@/i18n/config";
 
 // Link contribute (doc reali sul repo GitHub).
 export const GITHUB_REPO = "https://github.com/leopu00/job-hunter-team";
@@ -237,6 +239,62 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
 
 export function getCaseStudy(id: string): CaseStudyMeta | undefined {
   return CASE_STUDIES.find((c) => c.id === id);
+}
+
+// ── i18n del contenuto editoriale ──────────────────────────────────────
+// L'italiano è la sorgente inline qui sopra (CASE_STUDIES); il file JSON tiene
+// le altre 6 lingue. `localizeCaseStudy()` sovrappone la lingua scelta sui
+// campi editoriali del meta IT (profilo, tagline, categoria, geo, prezzi, note
+// delle fasi). I campi non testuali (id, badge, modello, città, run) restano
+// condivisi. Risolvere SEMPRE lato server (page.tsx, [id]/page.tsx) col locale
+// della richiesta, prima di passare ai componenti.
+interface CaseI18nContent {
+  tagline: string;
+  category: string;
+  seniority: string;
+  geos: string[];
+  subscriptionPrice: string;
+  headline: string;
+  summary: string;
+  facts: { label: string; value: string }[];
+  locationNote: string;
+  why: string;
+  phaseNotes?: { price: string; note: string }[];
+}
+
+const CASE_I18N = PROFILES_I18N as Partial<
+  Record<Locale, Record<string, CaseI18nContent>>
+>;
+
+/** Case study coi campi editoriali nella lingua richiesta (fallback: italiano,
+ *  che è la sorgente inline → 'it' e lingue mancanti tornano il meta IT). */
+export function localizeCaseStudy(
+  meta: CaseStudyMeta,
+  locale: Locale,
+): CaseStudyMeta {
+  const tr = CASE_I18N[locale]?.[meta.id];
+  if (!tr) return meta;
+  return {
+    ...meta,
+    tagline: tr.tagline,
+    category: tr.category,
+    seniority: tr.seniority,
+    geos: tr.geos,
+    subscription: { ...meta.subscription, price: tr.subscriptionPrice },
+    phases: meta.phases?.map((p, i) => ({
+      ...p,
+      price: tr.phaseNotes?.[i]?.price ?? p.price,
+      note: tr.phaseNotes?.[i]?.note ?? p.note,
+    })),
+    profile: {
+      ...meta.profile,
+      headline: tr.headline,
+      summary: tr.summary,
+      facts: tr.facts,
+      locationNote: tr.locationNote,
+      why: tr.why,
+    },
+  };
 }
 
 // Da event-log dello snapshot all'attività aggregata (per i grafici attività).

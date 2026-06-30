@@ -2,20 +2,20 @@
   "source": "betaC-codex",
   "tsRange": [
     "2026-06-03 13:43:14",
-    "2026-06-28 19:03:44"
+    "2026-06-30 17:55:26"
   ],
   "totals": {
-    "positions": 605,
-    "scored": 417,
-    "excluded": 188
+    "positions": 641,
+    "scored": 442,
+    "excluded": 199
   },
   "match": {
-    "scored": 482,
-    "avg": 70.6,
+    "scored": 507,
+    "avg": 71.0,
     "min": 27,
     "max": 94,
-    "strong70": 279,
-    "strong80": 150,
+    "strong70": 298,
+    "strong80": 164,
     "buckets": [
       {
         "label": "0-39",
@@ -23,26 +23,26 @@
       },
       {
         "label": "40-59",
-        "n": 89
+        "n": 90
       },
       {
         "label": "60-69",
-        "n": 101
+        "n": 106
       },
       {
         "label": "70-79",
-        "n": 129
+        "n": 134
       },
       {
         "label": "80-100",
-        "n": 150
+        "n": 164
       }
     ],
     "composition": [
       {
         "key": "stack",
         "label": "Competenze",
-        "avg": 21.7
+        "avg": 21.5
       },
       {
         "key": "exp",
@@ -57,7 +57,7 @@
       {
         "key": "remote",
         "label": "Modalita",
-        "avg": 16.8
+        "avg": 16.7
       },
       {
         "key": "salary",
@@ -153,6 +153,7 @@
       57,
       57,
       57,
+      57,
       58,
       58,
       58,
@@ -168,6 +169,7 @@
       59,
       59,
       59,
+      60,
       60,
       60,
       60,
@@ -177,6 +179,7 @@
       61,
       61,
       61,
+      61,
       62,
       62,
       62,
@@ -201,6 +204,7 @@
       63,
       63,
       63,
+      64,
       64,
       64,
       64,
@@ -229,6 +233,8 @@
       66,
       66,
       66,
+      66,
+      67,
       67,
       67,
       67,
@@ -353,6 +359,7 @@
       76,
       76,
       76,
+      76,
       77,
       77,
       77,
@@ -363,6 +370,10 @@
       77,
       77,
       77,
+      77,
+      78,
+      78,
+      78,
       78,
       78,
       78,
@@ -398,6 +409,8 @@
       79,
       79,
       79,
+      80,
+      80,
       80,
       80,
       80,
@@ -418,6 +431,9 @@
       81,
       81,
       81,
+      81,
+      82,
+      82,
       82,
       82,
       82,
@@ -469,6 +485,8 @@
       84,
       84,
       84,
+      84,
+      84,
       85,
       85,
       85,
@@ -503,6 +521,10 @@
       86,
       86,
       86,
+      86,
+      87,
+      87,
+      87,
       87,
       87,
       87,
@@ -527,6 +549,9 @@
       88,
       88,
       88,
+      88,
+      88,
+      89,
       89,
       89,
       89,
@@ -553,9 +578,9 @@
   "categories": [
     {
       "name": "Private Equity & Venture Capital",
-      "count": 88,
-      "scored": 68,
-      "avg": 76.6
+      "count": 94,
+      "scored": 73,
+      "avg": 76.7
     },
     {
       "name": "Corporate Finance / FP&A",
@@ -565,45 +590,45 @@
     },
     {
       "name": "Investment Banking / M&A Advisory",
-      "count": 69,
-      "scored": 58,
-      "avg": 78.5
-    },
-    {
-      "name": "Risk, Compliance & Valuation",
-      "count": 57,
-      "scored": 44,
-      "avg": 63.1
+      "count": 73,
+      "scored": 62,
+      "avg": 78.7
     },
     {
       "name": "Credit & Private Debt",
-      "count": 56,
-      "scored": 48,
-      "avg": 79.3
+      "count": 63,
+      "scored": 50,
+      "avg": 79.5
     },
     {
       "name": "Other",
-      "count": 55,
-      "scored": 44,
-      "avg": 66.1
+      "count": 60,
+      "scored": 48,
+      "avg": 67.0
     },
     {
       "name": "Infrastructure / Real Assets Investment",
+      "count": 59,
+      "scored": 51,
+      "avg": 79.2
+    },
+    {
+      "name": "Risk, Compliance & Valuation",
+      "count": 59,
+      "scored": 45,
+      "avg": 63.0
+    },
+    {
+      "name": "Investment Operations & Fund Services",
       "count": 52,
-      "scored": 46,
-      "avg": 78.7
+      "scored": 50,
+      "avg": 61.3
     },
     {
       "name": "Public Markets & Investment Research",
       "count": 52,
       "scored": 47,
       "avg": 71.6
-    },
-    {
-      "name": "Investment Operations & Fund Services",
-      "count": 50,
-      "scored": 48,
-      "avg": 61.2
     },
     {
       "name": "Non categorizzato",
@@ -613,13 +638,13 @@
     },
     {
       "name": "Corporate Strategy / Corporate Development",
-      "count": 9,
-      "scored": 7,
-      "avg": 74.3
+      "count": 11,
+      "scored": 9,
+      "avg": 74.9
     },
     {
       "name": "Commodities Research",
-      "count": 4,
+      "count": 5,
       "scored": 1,
       "avg": 68.0
     }
@@ -627,11 +652,11 @@
   "sources": [
     {
       "name": "linkedin",
-      "count": 212
+      "count": 230
     },
     {
       "name": "greenhouse",
-      "count": 66
+      "count": 68
     },
     {
       "name": "workday",
@@ -663,19 +688,19 @@
     },
     {
       "name": "efinancialcareers",
-      "count": 10
+      "count": 11
+    },
+    {
+      "name": "jobteaser",
+      "count": 7
     },
     {
       "name": "recruitee",
       "count": 7
     },
     {
-      "name": "bnpparibas-careers",
-      "count": 6
-    },
-    {
       "name": "Altre",
-      "count": 112
+      "count": 126
     }
   ],
   "sourcesDaily": [
@@ -884,7 +909,23 @@
       "day": "2026-06-28",
       "counts": {
         "Altre": 12,
-        "linkedin": 2
+        "linkedin": 5
+      }
+    },
+    {
+      "day": "2026-06-29",
+      "counts": {
+        "linkedin": 13,
+        "greenhouse": 1,
+        "Altre": 2
+      }
+    },
+    {
+      "day": "2026-06-30",
+      "counts": {
+        "Altre": 14,
+        "linkedin": 2,
+        "greenhouse": 1
       }
     }
   ],
@@ -1100,7 +1141,22 @@
       "day": "2026-06-28",
       "score": {
         "Altre": 80.4,
-        "linkedin": 78.5
+        "linkedin": 80.5
+      }
+    },
+    {
+      "day": "2026-06-29",
+      "score": {
+        "linkedin": 76.2,
+        "Altre": 71.0
+      }
+    },
+    {
+      "day": "2026-06-30",
+      "score": {
+        "Altre": 78.7,
+        "linkedin": 89.0,
+        "greenhouse": 81.0
       }
     }
   ],
@@ -1117,18 +1173,18 @@
     },
     {
       "name": "linkedin",
+      "avg": 73.6,
+      "n": 181
+    },
+    {
+      "name": "Altre",
       "avg": 73.2,
-      "n": 168
+      "n": 138
     },
     {
       "name": "company-careers",
       "avg": 73.0,
       "n": 30
-    },
-    {
-      "name": "Altre",
-      "avg": 72.8,
-      "n": 127
     },
     {
       "name": "workday",
@@ -1137,8 +1193,8 @@
     },
     {
       "name": "greenhouse",
-      "avg": 62.8,
-      "n": 54
+      "avg": 63.2,
+      "n": 55
     },
     {
       "name": "ashby",
@@ -1155,32 +1211,32 @@
     {
       "name": "Portugal",
       "code": "PT",
-      "count": 71
+      "count": 75
     },
     {
       "name": "Switzerland",
       "code": "CH",
-      "count": 59
+      "count": 62
     },
     {
       "name": "Ireland",
       "code": "IE",
-      "count": 57
+      "count": 58
     },
     {
       "name": "Spain",
       "code": "ES",
-      "count": 37
-    },
-    {
-      "name": "Germany",
-      "code": "DE",
-      "count": 26
+      "count": 39
     },
     {
       "name": "Italy",
       "code": "IT",
-      "count": 26
+      "count": 32
+    },
+    {
+      "name": "Germany",
+      "code": "DE",
+      "count": 28
     },
     {
       "name": "Luxembourg",
@@ -1190,7 +1246,7 @@
     {
       "name": "Netherlands",
       "code": "NL",
-      "count": 22
+      "count": 23
     },
     {
       "name": "Austria",
@@ -1203,6 +1259,11 @@
       "count": 12
     },
     {
+      "name": "Sweden",
+      "code": "SE",
+      "count": 7
+    },
+    {
       "name": "Hungary",
       "code": "HU",
       "count": 6
@@ -1213,11 +1274,6 @@
       "count": 5
     },
     {
-      "name": "Sweden",
-      "code": "SE",
-      "count": 5
-    },
-    {
       "name": "Belgium",
       "code": "BE",
       "count": 3
@@ -1225,7 +1281,7 @@
     {
       "name": "Denmark",
       "code": "DK",
-      "count": 2
+      "count": 3
     },
     {
       "name": "Latvia",
@@ -1255,6 +1311,11 @@
     {
       "name": "Greece",
       "code": "GR",
+      "count": 1
+    },
+    {
+      "name": "Lithuania",
+      "code": "LT",
       "count": 1
     },
     {
@@ -1504,9 +1565,9 @@
     }
   ],
   "salary": {
-    "n": 31,
-    "avgMin": 44523,
-    "avgMax": 58887
+    "n": 40,
+    "avgMin": 43719,
+    "avgMax": 57410
   },
   "agents": [
     "analista-1",
@@ -10373,6 +10434,501 @@
       "ts": "2026-06-28T19:03:44Z",
       "agent": "scorer-6",
       "action": "scored"
+    },
+    {
+      "ts": "2026-06-28T21:04:17Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T21:04:17Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T21:04:17Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-28T22:04:47Z",
+      "agent": "analista-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-28T22:04:48Z",
+      "agent": "analista-5",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T22:04:48Z",
+      "agent": "analista-5",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T22:19:27Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-28T22:19:27Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T00:03:15Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T00:03:55Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T01:05:57Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T01:05:57Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T01:05:57Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T03:04:05Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T03:04:05Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T03:04:05Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T04:01:47Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T04:02:28Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T06:06:35Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T06:06:35Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T06:06:35Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T06:45:42Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T06:45:42Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T06:45:42Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T06:49:34Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T06:50:19Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T07:55:25Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T08:02:27Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T11:18:47Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T11:18:48Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T11:18:49Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T11:33:11Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T11:33:11Z",
+      "agent": "analista-1",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-29T11:33:11Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T11:46:54Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T11:47:34Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T12:06:44Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T12:06:45Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T12:27:19Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T12:45:24Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T13:47:35Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T13:48:17Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T17:03:32Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T17:03:33Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T17:18:10Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T17:18:10Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T18:01:58Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T18:02:34Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T18:37:45Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-29T19:03:17Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-29T21:03:15Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-29T22:02:35Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T00:02:35Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T00:03:07Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T00:03:28Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T00:03:42Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T01:03:35Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T01:03:37Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T01:05:24Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T01:14:56Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T01:17:29Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T01:26:13Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T01:29:04Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T01:29:35Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T03:03:01Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T03:03:25Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T04:02:32Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T04:03:52Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T04:04:28Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T04:04:29Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T04:06:22Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T04:06:37Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T04:15:48Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T04:17:57Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T04:22:07Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T04:24:00Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T04:24:46Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T06:03:11Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T06:03:53Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T06:08:22Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T08:20:57Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T08:20:57Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T09:04:14Z",
+      "agent": "analista-3",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T09:04:14Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T09:07:54Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T09:13:49Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T09:16:02Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T09:18:00Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T09:21:09Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T09:24:36Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T09:26:42Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T09:31:37Z",
+      "agent": "scout-1",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T09:40:19Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T09:44:13Z",
+      "agent": "analista-3",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T10:03:39Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-06-30T10:04:02Z",
+      "agent": "scorer-4",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T17:48:52Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T17:52:05Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T17:55:26Z",
+      "agent": "scorer-4",
+      "action": "scored"
     }
   ],
   "hourly": [
@@ -12138,6 +12694,206 @@
         "scorer": 2
       },
       "cum": 77
+    },
+    {
+      "hour": "2026-06-28T21",
+      "counts": {
+        "scout": 3
+      },
+      "cum": 78
+    },
+    {
+      "hour": "2026-06-28T22",
+      "counts": {
+        "analista": 5
+      },
+      "cum": 79
+    },
+    {
+      "hour": "2026-06-29T00",
+      "counts": {
+        "scorer": 2
+      },
+      "cum": 0
+    },
+    {
+      "hour": "2026-06-29T01",
+      "counts": {
+        "scout": 3
+      },
+      "cum": 1
+    },
+    {
+      "hour": "2026-06-29T03",
+      "counts": {
+        "analista": 3
+      },
+      "cum": 1
+    },
+    {
+      "hour": "2026-06-29T04",
+      "counts": {
+        "scorer": 2
+      },
+      "cum": 1
+    },
+    {
+      "hour": "2026-06-29T06",
+      "counts": {
+        "scout": 3,
+        "analista": 3,
+        "scorer": 2
+      },
+      "cum": 4
+    },
+    {
+      "hour": "2026-06-29T07",
+      "counts": {
+        "scout": 1
+      },
+      "cum": 4
+    },
+    {
+      "hour": "2026-06-29T08",
+      "counts": {
+        "analista": 1
+      },
+      "cum": 6
+    },
+    {
+      "hour": "2026-06-29T11",
+      "counts": {
+        "scout": 3,
+        "analista": 3,
+        "scorer": 2
+      },
+      "cum": 9
+    },
+    {
+      "hour": "2026-06-29T12",
+      "counts": {
+        "scout": 2,
+        "analista": 2
+      },
+      "cum": 13
+    },
+    {
+      "hour": "2026-06-29T13",
+      "counts": {
+        "scorer": 2
+      },
+      "cum": 14
+    },
+    {
+      "hour": "2026-06-29T17",
+      "counts": {
+        "scout": 2,
+        "analista": 2
+      },
+      "cum": 16
+    },
+    {
+      "hour": "2026-06-29T18",
+      "counts": {
+        "scorer": 2,
+        "scout": 1
+      },
+      "cum": 17
+    },
+    {
+      "hour": "2026-06-29T19",
+      "counts": {
+        "analista": 1
+      },
+      "cum": 17
+    },
+    {
+      "hour": "2026-06-29T21",
+      "counts": {
+        "scorer": 1
+      },
+      "cum": 17
+    },
+    {
+      "hour": "2026-06-29T22",
+      "counts": {
+        "scout": 1
+      },
+      "cum": 18
+    },
+    {
+      "hour": "2026-06-30T00",
+      "counts": {
+        "scout": 3,
+        "analista": 1
+      },
+      "cum": 19
+    },
+    {
+      "hour": "2026-06-30T01",
+      "counts": {
+        "analista": 3,
+        "scorer": 3,
+        "scout": 2
+      },
+      "cum": 21
+    },
+    {
+      "hour": "2026-06-30T03",
+      "counts": {
+        "analista": 2
+      },
+      "cum": 1
+    },
+    {
+      "hour": "2026-06-30T04",
+      "counts": {
+        "scout": 5,
+        "scorer": 3,
+        "analista": 3
+      },
+      "cum": 4
+    },
+    {
+      "hour": "2026-06-30T06",
+      "counts": {
+        "analista": 2,
+        "scorer": 1
+      },
+      "cum": 8
+    },
+    {
+      "hour": "2026-06-30T08",
+      "counts": {
+        "scout": 2
+      },
+      "cum": 9
+    },
+    {
+      "hour": "2026-06-30T09",
+      "counts": {
+        "analista": 5,
+        "scorer": 3,
+        "scout": 4
+      },
+      "cum": 14
+    },
+    {
+      "hour": "2026-06-30T10",
+      "counts": {
+        "analista": 1,
+        "scorer": 1
+      },
+      "cum": 17
+    },
+    {
+      "hour": "2026-06-30T17",
+      "counts": {
+        "scout": 1,
+        "analista": 1,
+        "scorer": 1
+      },
+      "cum": 22
     }
   ],
   "funnelDaily": [
@@ -12319,18 +13075,34 @@
     },
     {
       "day": "2026-06-28",
-      "found": 14,
-      "excluded": 2,
+      "found": 17,
+      "excluded": 3,
+      "kept": 14,
+      "scored": 14,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-29",
+      "found": 16,
+      "excluded": 4,
       "kept": 12,
       "scored": 12,
+      "ready": 0
+    },
+    {
+      "day": "2026-06-30",
+      "found": 17,
+      "excluded": 6,
+      "kept": 11,
+      "scored": 11,
       "ready": 0
     }
   ],
   "funnelTotals": {
-    "found": 605,
-    "excluded": 188,
-    "kept": 417,
-    "scored": 417,
+    "found": 641,
+    "excluded": 199,
+    "kept": 442,
+    "scored": 442,
     "ready": 0
   },
   "usage": {
@@ -12483,9 +13255,21 @@
       },
       {
         "day": "2026-06-28",
-        "pct": 18,
-        "cum": 77,
+        "pct": 20,
+        "cum": 79,
         "week": "2026-06-25"
+      },
+      {
+        "day": "2026-06-29",
+        "pct": 18.0,
+        "cum": 18,
+        "week": "2026-06-29"
+      },
+      {
+        "day": "2026-06-30",
+        "pct": 4,
+        "cum": 22,
+        "week": "2026-06-29"
       }
     ],
     "workingHours": {
