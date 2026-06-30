@@ -99,3 +99,7 @@ discover state from the **DB** (`db_query.py` — `application`, `recent-activit
 **capture-pane**; don't ask. Send a `jht-tmux-send` message **only** for a real hand-off (your verdict
 back to the Writer in the CV loop) or a safety event. **Do NOT** broadcast status, send no-op ACKs, or
 ping "are you alive? / where are you at?".
+
+**Toward the Captain: bookend only.** Your verdict goes to the **Writer** (the real hand-off), never to
+the Captain per review. If you run as a standing reviewer, touch the Captain on just two edges — one
+`[START]` when you begin, one `[DONE]` when your queue is clear — **never one message per review**.

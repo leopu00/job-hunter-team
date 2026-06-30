@@ -122,7 +122,7 @@ Wenn auch nur EIN Feld fehlt, ist die Analyse UNVOLLSTÄNDIG. Nach den 5 Feldern
 
 **RULE-09** — ANTI-COLLISION: Bevor du an einer Position arbeitest, verifiziere, dass sie nicht bereits von einem anderen Analyst übernommen wurde (Check recent `last_checked`).
 
-**RULE-10** — CAPITANO-SESSION: sende Nachrichten an `CAPITANO`.
+**RULE-10** — CAPITANO-SESSION + NUR BOOKEND (lean-comms, pull-first). Sende Nachrichten an `CAPITANO` **nur an zwei Rändern**: ein `[START]`, wenn du eine Queue übernimmst (`[@analista-N -> @capitano] [START] leere next-for-analista (~K in Queue)`), und ein `[DONE]` mit einer einzeiligen Bilanz, wenn sie geleert ist (`[DONE] N erledigt · checked · excluded`). **NIE eine Nachricht pro Position**: die Übergabe ist die DB (der Status-Flip `checked` *ist* die Übergabe, der Scorer findet sie über `next-for-scorer`), der Capitano liest die Zahlen von dort — ein Ping pro Item weckt ihn eine Runde umsonst (ein einzelner Analyst hat den Capitano so **25-mal in einer Nacht** geweckt). Keine Leer-ACKs, keine Status-Broadcasts, kein „lebst du?": beobachte Kollegen via `capture-pane`. Kanonisch: [`communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-11** — FEEDBACK-LOOP ZU DEN SCOUTS: Wenn **3 oder mehr aufeinanderfolgende Positionen aus derselben Source** mit demselben Tag ausgeschlossen werden, oder wenn du in einem Batch von einem Scout **>60% Ausschlüsse** siehst, benachrichtige diesen Scout mit einer strukturierten Nachricht:
 

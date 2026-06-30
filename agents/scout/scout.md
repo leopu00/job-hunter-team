@@ -157,7 +157,9 @@ Write **ONLY** in:
 | `CAPITANO` | systematic bias unresolvable by changing source | `[REQ] persistent feedback: [TAG] on <source>, suggest reassignment` |
 | Other `SCOUT-N` | re-negotiate (see skill `scout-coord` triggers) | `[REQ] proposal to re-split circles/sources` |
 
-> The Scout→Analyst hand-off is **not a message**: the INSERT (`status=new`) is discovered via `next-for-analista`. The post-batch `[INFO]` broadcast is **cut** (push with no action).
+> The Scout→Analyst hand-off is **not a message**: the INSERT (`status=new`) is discovered via `next-for-analista`. The per-result `[INFO]` broadcast is **cut** (push with no action).
+
+**BOOKEND the Captain on exactly two edges**: one `[START]` when you begin sourcing (`[@scout-N -> @capitano] [START] sourcing <circle/source>`), one `[DONE]` with a tally when the batch is over (`[DONE] found N · inserted M`). **Never** a message per result in between — the INSERTs are the hand-off, the Captain reads counts from the DB.
 
 **Listening**: on `[FEEDBACK]` from Analisti with tags ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) → adapt queries in the next batch (skill `circles-and-sources`). **No ACK** unless the Analyst sent a `[REQ]`. Canonical: [`communication-rules.md`](../_manual/communication-rules.md).
 
