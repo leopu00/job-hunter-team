@@ -186,7 +186,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
     label: "Beta tester 3",
     tagline: "Luxury hospitality · guest experience · cabin crew",
     category: "Luxury Hospitality",
-    seniority: "Mid-level",
+    seniority: "Inizio-media carriera",
     geos: ["Italia", "Europa", "Emirati"],
     model: "Kimi",
     subscription: {
@@ -198,36 +198,37 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       badge: "B3",
       headline: "Professionista luxury hospitality & guest experience",
       summary:
-        "Profilo mid-level (~3 anni) nell'hôtellerie e nella ristorazione di lusso: hostess e guest relations per ospiti VIP in brand internazionali del lusso a Roma, con coordinamento eventi, gestione prenotazioni (Opera, SevenRooms, Simphony) e problem solving in servizi ad alta affluenza. Punta a ruoli di guest experience, VIP relations e front office nel segmento luxury, con un forte interesse per il cabin crew di compagnie aeree premium. Multilingue, base a Roma con apertura agli hub internazionali dell'hospitality.",
+        "Profilo di inizio-media carriera nell'hospitality e nella ristorazione di lusso: accoglienza e guest relations per ospiti VIP in brand internazionali, con coordinamento eventi, gestione delle prenotazioni e problem solving in servizi ad alta affluenza. Punta a ruoli di guest experience, VIP relations e front office nel segmento luxury, con interesse per il cabin crew di compagnie aeree premium. Profilo multilingue.",
       facts: [
         {
           label: "Ruoli target",
           value: "Luxury hospitality · guest experience · VIP relations · cabin crew",
         },
-        { label: "Esperienza", value: "~3 anni · mid-level" },
+        { label: "Esperienza", value: "Inizio-media carriera" },
         { label: "Settore", value: "Hôtellerie 5★ · ristorazione di lusso · eventi" },
+        { label: "Formazione", value: "Ambito turistico-alberghiero" },
         {
           label: "Lingue",
-          value: "Spagnolo (madrelingua) · Italiano (C2) · Inglese (C1) · Francese (C1)",
+          value: "Profilo multilingue (quattro lingue, incl. italiano e inglese)",
         },
         {
           label: "Mobilità",
-          value: "Base Roma · cittadina extra-UE (visto/sponsorship per l'estero)",
+          value: "Lavora in Italia · per alcune mete estere serve verifica di visto/sponsorship",
         },
       ],
       locationNote:
-        "Priorità a Roma e all'Italia (i poli del lusso e degli eventi), con apertura agli hub internazionali dell'hospitality premium e alle compagnie aeree del Golfo. Tra le città target:",
+        "L'hospitality di lusso si concentra in poche piazze: le grandi mete del turismo italiano e gli hub internazionali dell'accoglienza premium. Tra i mercati target:",
       targetCities: [
-        "Roma",
         "Milano",
+        "Roma",
         "Venezia",
         "Firenze",
         "Dubai",
         "Abu Dhabi",
+        "Doha",
         "Madrid",
-        "Barcellona",
       ],
-      why: "Ecco perché i numeri vengono così: il candidato punta a luxury hospitality e guest experience, con interesse per il cabin crew premium — perciò il team ha cercato soprattutto hôtellerie 5★, guest relations VIP ed eventi, con un ramo dedicato al cabin crew dei vettori del Golfo (Emirates, Wizz Air). Le famiglie di ruolo dominanti sono Luxury Hospitality Operations, hostess/eventi e cabin crew. Quasi tutto arriva da LinkedIn e da job board specializzate dell'hospitality (hosco, resortwork) e delle compagnie aeree; l'Italia (Roma) in testa rispecchia la base e il mercato locale del lusso, mentre la cittadinanza extra-UE spiega perché diverse posizioni all'estero richiedono la verifica di visto/sponsorship.",
+      why: "Ecco perché i numeri vengono così: il profilo punta a luxury hospitality e guest experience, con interesse per il cabin crew premium — perciò il team ha cercato soprattutto hôtellerie 5★, guest relations VIP ed eventi, con un ramo dedicato al cabin crew dei vettori del Golfo (Emirates, Wizz Air). Le famiglie di ruolo dominanti sono Luxury Hospitality Operations, hostess/eventi e cabin crew. Quasi tutto arriva da LinkedIn e da job board specializzate dell'hospitality (hosco, resortwork) e delle compagnie aeree; il mercato del lusso italiano fa da baricentro, mentre il requisito di lavorabilità spiega perché diverse posizioni fuori dall'Italia richiedono la verifica di visto/sponsorship.",
     },
     // Run mono-fase: solo Kimi (budget settimanale monitorato), ~3 giorni.
     run: betaDRun as unknown as CaseStudyRun,
