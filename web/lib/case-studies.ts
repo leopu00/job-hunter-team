@@ -14,6 +14,7 @@ import {
 } from "@/lib/team-activity";
 import betaCRun from "@/data/case-studies/betaC-codex-run.json";
 import betaBRun from "@/data/case-studies/betaB-kimi-run.json";
+import betaDRun from "@/data/case-studies/betaD-kimi-run.json";
 
 // Link contribute (doc reali sul repo GitHub).
 export const GITHUB_REPO = "https://github.com/leopu00/job-hunter-team";
@@ -179,6 +180,57 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       },
     ],
     run: betaBRun as unknown as CaseStudyRun,
+  },
+  {
+    id: "beta-3",
+    label: "Beta tester 3",
+    tagline: "Luxury hospitality · guest experience · cabin crew",
+    category: "Luxury Hospitality",
+    seniority: "Mid-level",
+    geos: ["Italia", "Europa", "Emirati"],
+    model: "Kimi",
+    subscription: {
+      provider: "Moonshot Kimi",
+      plan: "Kimi Code",
+      price: "~€40/mese",
+    },
+    profile: {
+      badge: "B3",
+      headline: "Professionista luxury hospitality & guest experience",
+      summary:
+        "Profilo mid-level (~3 anni) nell'hôtellerie e nella ristorazione di lusso: hostess e guest relations per ospiti VIP in brand internazionali del lusso a Roma, con coordinamento eventi, gestione prenotazioni (Opera, SevenRooms, Simphony) e problem solving in servizi ad alta affluenza. Punta a ruoli di guest experience, VIP relations e front office nel segmento luxury, con un forte interesse per il cabin crew di compagnie aeree premium. Multilingue, base a Roma con apertura agli hub internazionali dell'hospitality.",
+      facts: [
+        {
+          label: "Ruoli target",
+          value: "Luxury hospitality · guest experience · VIP relations · cabin crew",
+        },
+        { label: "Esperienza", value: "~3 anni · mid-level" },
+        { label: "Settore", value: "Hôtellerie 5★ · ristorazione di lusso · eventi" },
+        {
+          label: "Lingue",
+          value: "Spagnolo (madrelingua) · Italiano (C2) · Inglese (C1) · Francese (C1)",
+        },
+        {
+          label: "Mobilità",
+          value: "Base Roma · cittadina extra-UE (visto/sponsorship per l'estero)",
+        },
+      ],
+      locationNote:
+        "Priorità a Roma e all'Italia (i poli del lusso e degli eventi), con apertura agli hub internazionali dell'hospitality premium e alle compagnie aeree del Golfo. Tra le città target:",
+      targetCities: [
+        "Roma",
+        "Milano",
+        "Venezia",
+        "Firenze",
+        "Dubai",
+        "Abu Dhabi",
+        "Madrid",
+        "Barcellona",
+      ],
+      why: "Ecco perché i numeri vengono così: il candidato punta a luxury hospitality e guest experience, con interesse per il cabin crew premium — perciò il team ha cercato soprattutto hôtellerie 5★, guest relations VIP ed eventi, con un ramo dedicato al cabin crew dei vettori del Golfo (Emirates, Wizz Air). Le famiglie di ruolo dominanti sono Luxury Hospitality Operations, hostess/eventi e cabin crew. Quasi tutto arriva da LinkedIn e da job board specializzate dell'hospitality (hosco, resortwork) e delle compagnie aeree; l'Italia (Roma) in testa rispecchia la base e il mercato locale del lusso, mentre la cittadinanza extra-UE spiega perché diverse posizioni all'estero richiedono la verifica di visto/sponsorship.",
+    },
+    // Run mono-fase: solo Kimi (budget settimanale monitorato), ~3 giorni.
+    run: betaDRun as unknown as CaseStudyRun,
   },
 ];
 

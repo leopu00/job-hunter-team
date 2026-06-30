@@ -517,6 +517,9 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
       </section>
 
       {/* ════════ DOVE — MAPPA EUROPA ════════════════ (order-1) ═══ */}
+      {/* Solo con città geocodificate: su run brevi la geocodifica
+          (office_lat/lon) può non essere ancora passata → niente mappa vuota. */}
+      {cities.length > 0 && (
       <section className="order-1">
         <div className="section-label mb-1">{t.whereLabel}</div>
         <p className="text-[11px] text-[var(--color-dim)] mb-4">
@@ -694,6 +697,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           </div>
         </div>
       </section>
+      )}
 
       {/* ════════ CATEGORIE — DONUT ══════════════════ (order-3) ═══ */}
       <section className="order-3">
