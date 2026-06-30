@@ -40,6 +40,9 @@ SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 AGENT_TABLE_FILE = LOGS_DIR / "agent-usage-table.json"
 DB_PATH = JHT_HOME / "jobs.db"
 STATE_FILE = LOGS_DIR / "capitano-bridge-state.json"
+# Daily hard-stop (#2): flag scritto dal sentinel-bridge a cap giornaliero sforato.
+# Lo leggiamo (sola lettura): a team in standby l'heartbeat orario tace.
+DAILY_HALT_FLAG = LOGS_DIR / "daily-halt.flag"
 TARGET = os.environ.get("JHT_CAPITANO_HEARTBEAT_SESSION", "CAPITANO")
 DB_QUERY = "/app/shared/skills/db_query.py"
 
@@ -208,6 +211,11 @@ def _write_state(d):
 
 
 def tick(now, send):
+    # Daily hard-stop (#2): a team in standby (cap giornaliero sforato) anche il
+    # battito orario tace — niente nudge "(decidi tu)" mentre il team è in pausa.
+    if DAILY_HALT_FLAG.exists():
+        _log(f"{now:%H:%M} daily-halt: heartbeat soppresso (team in standby)")
+        return
     st = gather_state()
     persisted = _read_state()
     theme, msg = choose_nudge(st, now.hour, persisted.get("last_theme"))
