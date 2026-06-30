@@ -86,18 +86,18 @@ const translations = {
     hu: "az álláskereséshez",
   },
   hero_desc_short: {
-    it: "Una squadra di agenti AI per la ricerca lavoro.",
-    en: "An AI agent team for your job search.",
+    it: "Una squadra di agenti AI autonomi per la tua ricerca di lavoro.",
+    en: "An autonomous AI agent team for your job search.",
     hu: "AI ügynök csapat az álláskeresésedhez.",
   },
   hero_desc: {
-    it: "Un sistema multi-agente che automatizza ogni fase della ricerca: dalla scansione delle offerte alla candidatura personalizzata. Tu decidi la strategia, gli agenti eseguono.",
-    en: "A multi-agent system that automates every step of your job search: from scanning listings to personalized applications. You set the strategy, the agents execute.",
+    it: "Un sistema multi-agente autonomo che gestisce ogni fase della ricerca: dalla scansione delle offerte alla candidatura personalizzata. Tu decidi la strategia, gli agenti eseguono.",
+    en: "An autonomous multi-agent system that handles every step of your job search: from scanning listings to personalized applications. You set the strategy, the agents execute.",
     hu: "Egy multi-ügynök rendszer, amely automatizálja az álláskeresés minden lépését: az ajánlatok keresésétől a személyre szabott jelentkezésekig. Te döntesz a stratégiáról, az ügynökök végrehajtják.",
   },
   home_intro: {
-    it: "Job Hunter Team è una squadra di agenti AI che conduce per te la ricerca di lavoro. Senza sosta perlustrano il mercato, vagliano ogni offerta, la valutano su ciò che desideri davvero e preparano CV e lettere su misura — lasciando sempre a te l'ultima parola. Tu indichi la rotta, loro fanno il lavoro: gira in modo privato sulla tua macchina e ti consegna una rosa di occasioni che vale il tuo tempo, non una casella piena di rumore.",
-    en: "Job Hunter Team is a team of AI agents that runs your job search for you. Around the clock they scan the market, vet every opening, score it against what you truly want, and draft tailored CVs and cover letters — always leaving the final word to you. You set the direction, they do the legwork: it runs privately on your own machine and hands you a shortlist worth your time, not an inbox full of noise.",
+    it: "Job Hunter Team è una squadra di agenti AI autonomi che porta avanti la tua ricerca di lavoro. Ogni agente è uno specialista — c'è chi trova le offerte, chi le verifica, chi le valuta su ciò che cerchi davvero, chi ti scrive il CV — e non si fermano mai: il lavoro continua anche quando ti fermi tu. Tu indichi la rotta e tieni l'ultima parola; il resto lo fanno loro. Gira in modo privato sulla tua macchina e ti consegna una rosa di occasioni che vale il tuo tempo, non una casella piena di rumore.",
+    en: "Job Hunter Team is a team of autonomous AI agents that runs your job search from start to shortlist. Each agent is a specialist — one finds openings, one vets them, one scores them against what you truly want, one drafts your CV — working around the clock so the search keeps moving even when you step away. You set the direction and keep the final word; they do the work. It runs privately on your own machine and hands you a shortlist worth your time, not an inbox full of noise.",
   },
   hero_cta: { it: "Inizia qui", en: "Start here", hu: "Kezdj itt" },
   hero_cta2: {
@@ -172,7 +172,7 @@ const translations = {
   },
   feat_4_desc: {
     it: "Metriche, analytics e stato di ogni candidatura. Tutto in una vista: token, costi, latenza, pipeline completa.",
-    en: "Metrics, analytics and status of every application. All in one view: tokens, costs, latency, full pipeline.",
+    en: "Metrics, analytics and status of every application. All in one view: progress, costs and the full pipeline at a glance.",
     hu: "Metrikák, analitika és minden jelentkezés állapota. Minden egy nézetben: tokenek, költségek, késleltetés, teljes folyamat.",
   },
   feat_5_title: {
@@ -366,8 +366,8 @@ const translations = {
     hu: "Job Hunter Team",
   },
   footer_brand_desc: {
-    it: "Un team di agenti AI che cercano lavoro per te. Open source, locale, privato.",
-    en: "An AI agent team that job-hunts for you. Open source, local, private.",
+    it: "Una squadra di agenti AI autonomi che cercano lavoro per te. Open source, locale, privato.",
+    en: "A team of autonomous AI agents that job-hunts for you. Open source, local, private.",
     hu: "Egy AI ügynök csapat, amely állást keres helyetted. Nyílt forráskódú, helyi, privát.",
   },
   footer_product: { it: "Prodotto", en: "Product", hu: "Termék" },
@@ -997,8 +997,8 @@ const translations = {
     hu: "a szolgálatodban",
   },
   about_intro: {
-    it: "Job Hunter Team e un progetto open-source che automatizza la ricerca di lavoro con un sistema multi-agente. Ogni agente ha un ruolo preciso, e insieme formano una pipeline completa: dalla scoperta delle offerte alla candidatura finale.",
-    en: "Job Hunter Team is an open-source project that automates job hunting with a multi-agent system. Each agent has a precise role, and together they form a complete pipeline: from discovering listings to the final application.",
+    it: "Job Hunter Team è un progetto open-source che automatizza la ricerca di lavoro con una squadra di agenti AI autonomi. Ogni agente ha un ruolo preciso, e insieme formano una pipeline completa: dalla scoperta delle offerte alla candidatura finale.",
+    en: "Job Hunter Team is an open-source project that automates job hunting with a team of autonomous AI agents. Each agent has a precise role, and together they form a complete pipeline: from discovering listings to the final application.",
     hu: "A Job Hunter Team egy nyílt forráskódú projekt, amely automatizálja az álláskeresést egy multi-ügynök rendszerrel. Minden ügynöknek pontos szerepe van, és együtt egy teljes folyamatot alkotnak: az ajánlatok felfedezésétől a végső jelentkezésig.",
   },
 
@@ -1045,7 +1045,7 @@ const translations = {
   about_agent_alfa_name: { it: "Capitano", en: "Captain", hu: "Kapitány" },
   about_agent_alfa_desc: {
     it: "Il coordinatore del team. Riceve le direttive dall'utente, assegna i task agli agenti, monitora il progresso e garantisce che la pipeline funzioni senza intoppi. E il punto di contatto tra te e il team.",
-    en: "The team coordinator. Receives directives from the user, assigns tasks to agents, monitors progress and ensures the pipeline runs smoothly. He's the point of contact between you and the team.",
+    en: "The team coordinator. Receives directives from the user, assigns tasks to agents, monitors progress and ensures the pipeline runs smoothly. It's the point of contact between you and the team.",
     hu: "A csapat koordinátora. Fogadja a felhasználói utasításokat, kiosztja a feladatokat az ügynököknek, figyeli az előrehaladást és biztosítja, hogy a folyamat zökkenőmentesen működjön. Ő a kapcsolattartó közted és a csapat között.",
   },
   about_agent_scout_name: { it: "Scout", en: "Scout", hu: "Felfedező" },
@@ -1085,7 +1085,7 @@ const translations = {
   },
   about_agent_sentinella_desc: {
     it: "Il guardiano. Monitora i costi API, il consumo di token, la latenza e la salute del sistema. Ti avvisa se qualcosa non va e garantisce che il team operi entro i limiti di budget impostati.",
-    en: "The guardian. Monitors API costs, token consumption, latency and system health. Alerts you if something goes wrong and ensures the team operates within your budget limits.",
+    en: "The guardian. Monitors API costs, usage, response times and system health. Alerts you if something goes wrong and ensures the team operates within your budget limits.",
     hu: "A őrző. Figyeli az API költségeket, token fogyasztást, késleltetést és a rendszer egészségét. Figyelmeztet, ha valami nem stimmel, és biztosítja, hogy a csapat a beállított költségvetési kereteken belül működjön.",
   },
   about_agent_assistente_name: {
@@ -1095,7 +1095,7 @@ const translations = {
   },
   about_agent_assistente_desc: {
     it: "Il supporto. Risponde alle tue domande, ti guida nella configurazione, spiega le decisioni degli altri agenti. E il tuo punto di riferimento quando hai bisogno di aiuto o vuoi capire cosa sta succedendo.",
-    en: "The support. Answers your questions, guides you through configuration, explains other agents' decisions. He's your go-to when you need help or want to understand what's happening.",
+    en: "The helper. Answers your questions, guides you through configuration, explains other agents' decisions. It's your go-to when you need help or want to understand what's happening.",
     hu: "A támogató. Válaszol a kérdéseidre, végigvezet a konfiguráción, elmagyarázza más ügynökök döntéseit. Ő a kapcsolattartód, amikor segítségre van szükséged, vagy meg akarod érteni, mi történik.",
   },
 
@@ -1492,8 +1492,8 @@ const translations = {
     hu: "Egy csapat, nem egyetlen bot",
   },
   home_team_body: {
-    it: "Dietro Job Hunter Team c'è una squadra di agenti AI specializzati: chi cerca le offerte, chi le verifica, chi le valuta, chi scrive il tuo CV e chi lo critica senza pietà. Ognuno fa una cosa, e la fa bene.",
-    en: "Behind Job Hunter Team is a team of specialized AI agents: one finds the openings, one vets them, one scores them, one writes your CV and one critiques it without mercy. Each does one thing, and does it well.",
+    it: "Un chatbot da solo si disperde su tutto e non padroneggia niente. Qui ogni agente ha un compito solo e va in profondità — e niente di ciò che produce resta senza controllo: ogni passaggio è rivisto da quello dopo. La cura di uno specialista a ogni stadio, non un tuttofare che fa le cose a metà.",
+    en: "A single chatbot spreads itself thin and masters nothing. Here every agent has one job and goes deep — and nothing one produces goes unchecked: each step is reviewed by the next. The focus of a specialist at every stage, not one generalist cutting corners.",
     hu: "A Job Hunter Team mögött specializált AI ügynökök csapata áll: az egyik megtalálja az ajánlatokat, egy másik ellenőrzi, egy pontozza, egy megírja az önéletrajzodat és egy kíméletlenül bírálja. Mindegyik egy dolgot csinál, és jól csinálja.",
   },
   home_team_cta: {
