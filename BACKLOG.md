@@ -1459,4 +1459,12 @@ Bug specifico Windows dev mode, non blocker pre-launch (Vercel deploy funziona, 
 - **Effort:** investigation breakdown ~1h, low-hanging fix ~2-3h, refactor app-payload separato ~1 giorno.
 - **Feedback originale:** beta tester (giro 2026-05-20).
 
+### 🆕 [GEOCODE-NEW-VPS] La VPS nuova non popola `office_lat/lon` (mappa case-study vuota) — DA INDAGARE (NEW 2026-06-30)
+
+- **Sintomo:** sul run di **beta-3 / betaD** (VPS `fsn1-b3` `203.0.113.40`) **0/59** posizioni hanno `office_lat`/`office_lon`, mentre `loc_city`/`loc_country` ci sono (Rome, Venice, Milan… · Italia/UAE/Spagna). Lo snapshot case-study esce con `cities: []` → la mappa Europa resterebbe vuota.
+- **Mitigazione già in piedi:** guard in `web/app/case-studies/CaseStudyOverview.tsx` che **nasconde la sezione mappa** quando `cities.length === 0` (beta-1/betaB invariati, hanno le coordinate). Workaround grafico, non risolve la causa.
+- **Da capire:** è solo questione di tempo (geocoding più a valle nella pipeline, run di soli 3 giorni) **oppure** un agente/step di geocoding non gira / config Kimi diversa sulla VPS nuova? betaC e betaB geocodificano, quindi è specifico del setup recente.
+- **Prossimi passi:** (1) individuare il punto della pipeline che scrive `office_lat/lon` (geocoder) e verificare se è attivo su `203.0.113.40`; (2) confrontare la config con betaB/betaC; (3) a fix avvenuto, ri-eseguire `tools/case-study-extract/build_case_study_json.py` → la mappa di beta-3 compare da sola (nessuna modifica web).
+- **Vincoli:** osservazione = **sola lettura** sulla VPS, niente intervento sul team live.
+
 Operational info (Supabase access, Vercel env vars, OAuth setup, security review status, contact) lives in [`docs/internal/ops/MAINTAINERS.md`](docs/internal/ops/MAINTAINERS.md).
