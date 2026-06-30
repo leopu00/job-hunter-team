@@ -219,13 +219,16 @@ PROVIDER_WINDOW_HOURS = {
 
 
 def _parse_reset_hhmm(reset_str, now_local):
-    """Converte "HH:MM" del bridge in datetime locale del prossimo reset.
+    """LEGACY: parse di un "HH:MM" nudo da stato bridge pre-data-completa.
 
-    Il bridge formatta reset_at come HH:MM in local TZ (vedi _iso_to_hhmm in
-    sentinel-bridge.py). Per disambiguare oggi vs domani, se l'orario è
-    già passato lo proiettiamo al giorno successivo.
+    Dal 2026-06-30 il bridge scrive reset_at come DATA+ORA completa e
+    `last_reset_at_unix` (epoch) è la fonte autoritativa — vedi
+    compute_window_start_ts path 1. Questa funzione resta solo come
+    fallback per stati bridge vecchi che portavano il solo HH:MM; su una
+    stringa data-completa ritorna None (e si usa l'epoch). Per disambiguare
+    oggi vs domani, se l'orario è già passato lo proietta al giorno dopo.
 
-    Ritorna datetime aware in TZ locale, o None se la stringa non è valida.
+    Ritorna datetime aware in TZ locale, o None se la stringa non è un HH:MM.
     """
     if not isinstance(reset_str, str) or ":" not in reset_str:
         return None

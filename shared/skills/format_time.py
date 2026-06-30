@@ -168,6 +168,40 @@ def fmt_user_long(dt_utc: datetime) -> str:
     return fmt_user(dt_utc, "%a %d %b, %H:%M")
 
 
+def fmt_reset(value, *, with_utc: bool = False) -> str | None:
+    """Reset/deadline → 'YYYY-MM-DD HH:MM TZ' nel fuso utente. MAI ora-nuda.
+
+    Regola ferrea del progetto: un timestamp di reset/scadenza non deve MAI
+    essere esposto come solo orario ("03:00") — è ambiguo a cavallo di
+    mezzanotte e non distingue uno slittamento di giorno (il caso reale del
+    rinnovo ciclo settimanale). Qui la DATA di calendario completa è sempre
+    inclusa, ancorata all'epoch — la fonte di verità non ambigua.
+
+    Accetta:
+      - epoch UTC (int/float)
+      - datetime (naive=UTC oppure aware)
+      - None / non interpretabile → ritorna None (il chiamante tiene il fallback)
+
+    Con `with_utc=True` aggiunge '(YYYY-MM-DD HH:MM UTC)' di fianco.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool):  # bool è int: escludilo esplicitamente
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            dt = datetime.fromtimestamp(float(value), timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
+    elif isinstance(value, datetime):
+        dt = value
+    else:
+        return None
+    if with_utc:
+        return fmt_user_with_utc(dt, "%Y-%m-%d %H:%M")
+    return fmt_user(dt, "%Y-%m-%d %H:%M")
+
+
 def main(argv: list[str]) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     g = p.add_mutually_exclusive_group(required=True)

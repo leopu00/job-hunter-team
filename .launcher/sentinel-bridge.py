@@ -806,6 +806,43 @@ def _iso_to_unix(ts):
         return None
 
 
+# ── Reset → DATA+ORA completa (mai ora-nuda) ────────────────────────────
+# Regola del progetto: ogni reset/scadenza esposto a Capitano/Sentinella/UI
+# porta la DATA di calendario completa, ancorata all'epoch (_unix). Loader
+# della skill sorella format_time.py; fallback inline (data UTC) se assente.
+def _load_format_time_mod():
+    for cand in (Path("/app/shared/skills/format_time.py"),
+                 Path(__file__).resolve().parent.parent / "shared" / "skills" / "format_time.py"):
+        try:
+            if not cand.exists():
+                continue
+            spec = importlib.util.spec_from_file_location("format_time", cand)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+            return m
+        except (OSError, ImportError, AttributeError):
+            continue
+    return None
+
+
+_FT_MOD = _load_format_time_mod()
+
+
+def _fmt_reset(unix_ts, fallback=None):
+    """Epoch → 'YYYY-MM-DD HH:MM TZ' (mai ora-nuda). fallback se non derivabile."""
+    if isinstance(unix_ts, (int, float)) and not isinstance(unix_ts, bool):
+        if _FT_MOD is not None:
+            out = _FT_MOD.fmt_reset(unix_ts)
+            if out:
+                return out
+        try:
+            return datetime.fromtimestamp(
+                float(unix_ts), timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        except (OverflowError, OSError, ValueError):
+            pass
+    return fallback
+
+
 def fetch_kimi_api():
     token = _read_kimi_token()
     if not token:
@@ -965,10 +1002,12 @@ def _compute_metrics_via_skill(parsed, last, history, weekly_axis=None):
             "ts": datetime.now(timezone.utc).isoformat(),
             "provider": parsed.get("provider"),
             "usage": parsed.get("usage"),
-            "reset_at": parsed.get("reset_at"),
+            # Data-completa anche nel fallback (skill non caricabile).
+            "reset_at": _fmt_reset(parsed.get("reset_at_unix"), parsed.get("reset_at")),
             "reset_at_unix": parsed.get("reset_at_unix"),
             "weekly_usage": parsed.get("weekly_usage"),
-            "weekly_reset_at": parsed.get("weekly_reset_at"),
+            "weekly_reset_at": _fmt_reset(
+                parsed.get("weekly_reset_at_unix"), parsed.get("weekly_reset_at")),
             "weekly_reset_at_unix": parsed.get("weekly_reset_at_unix"),
             "status": "OK",
         }
@@ -1462,15 +1501,10 @@ def main():
             )
             if weekly_locked:
                 status = "LOCKED"
-            # Reset 5h: come per il weekly, preferiamo DATA+ORARIO da reset_at_unix
-            # (HH:MM nudo è ambiguo a cavallo di mezzanotte); fallback all'HH:MM.
-            reset_unix = entry.get("reset_at_unix")
-            if isinstance(reset_unix, (int, float)):
-                reset = datetime.fromtimestamp(
-                    reset_unix, timezone.utc
-                ).astimezone().strftime("%d/%m %H:%M")
-            else:
-                reset = entry.get("reset_at") or "?"
+            # Reset 5h: DATA+ORA completa da reset_at_unix (HH:MM nudo è ambiguo
+            # a cavallo di mezzanotte e non distingue lo slittamento di giorno);
+            # fallback alla stringa reset_at (già data-completa dal choke point).
+            reset = _fmt_reset(entry.get("reset_at_unix"), entry.get("reset_at")) or "?"
 
             # V6: aggiorna state machine del tick interval e decide se
             # svegliare la Sentinella. Il bridge scrive SEMPRE il sample
@@ -1585,17 +1619,12 @@ def main():
                 # la Sentinella non vedeva mai il cap settimanale né un cambio di
                 # reset weekly. weekly_usage/weekly_reset_at sono già nell'entry.
                 wk_usage = entry.get("weekly_usage")
-                # FLAG dev3: HH:MM da solo e ambiguo — non distingue un salto di
-                # GIORNI (il caso reale 7giu->11giu al rinnovo ciclo). Usa la DATA
-                # completa da weekly_reset_at_unix cosi WEEKLY RESET DETECTED puo
-                # vedere lo spostamento del reset; fallback a HH:MM se l'unix manca.
-                wk_reset_unix = entry.get("weekly_reset_at_unix")
-                if isinstance(wk_reset_unix, (int, float)):
-                    wk_reset = datetime.fromtimestamp(
-                        wk_reset_unix, timezone.utc
-                    ).astimezone().strftime("%d/%m %H:%M")
-                else:
-                    wk_reset = entry.get("weekly_reset_at")
+                # HH:MM da solo è ambiguo — non distingue un salto di GIORNI (il
+                # caso reale 7giu->11giu al rinnovo ciclo). DATA completa da
+                # weekly_reset_at_unix così WEEKLY RESET DETECTED vede lo
+                # spostamento; fallback alla stringa (già data-completa).
+                wk_reset = _fmt_reset(
+                    entry.get("weekly_reset_at_unix"), entry.get("weekly_reset_at"))
                 # Fix #4: propaga weekly_remaining_pct (calcolato in codice da
                 # compute_metrics) e, quando il weekly è binding, un marcatore
                 # ATTENZIONE-WEEKLY esplicito → la Sentinella (S-06) emette

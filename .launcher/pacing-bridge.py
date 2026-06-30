@@ -798,7 +798,7 @@ def format_message(d: dict) -> str:
             extra = f" delta_usage={d['delta_usage']} team_kt={d.get('team_kt', '?')}"
         return f"[BRIDGE PACING] tick saltato reason={why}{extra}."
 
-    ts = d["now"].strftime("%H:%M UTC")
+    ts = d["now"].strftime("%Y-%m-%d %H:%M UTC")
     usage_now = d["usage_now"]
     proj = d["proj"] if d["proj"] is not None else "?"
     reset_at = d["reset_at"] or "?"
@@ -813,7 +813,7 @@ def format_message(d: dict) -> str:
     )
     parts = [
         f"[BRIDGE PACING] {ts} window={eff_str} samples={d['n_samples']}",
-        f"usage={usage_now}% reset_in={h_str} reset_at={reset_at}UTC "
+        f"usage={usage_now}% reset_in={h_str} reset_at={reset_at} "
         f"(proj={proj}% — INFO, segnale secondario volatile: NON guida le "
         f"decisioni, usa vel_team vs vel_target)",
         f"vel_team={d['vel_team']:.2f}%/h",
