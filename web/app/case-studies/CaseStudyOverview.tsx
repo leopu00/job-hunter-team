@@ -413,9 +413,16 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
   // Etichette città (solo le grandi) con anti-collisione verticale: se due
   // cadono vicine (es. Zurigo/Ginevra), la seconda va sotto la bolla.
   const cityLabels = useMemo(() => {
-    const labeled = cities
-      .filter((c) => c.count >= 14)
-      .sort((a, b) => b.count - a.count);
+    // Etichetta le città più grandi (top N), non con una soglia assoluta: i
+    // profili a coda lunga (full-remote, molte città da poche posizioni — es.
+    // beta-2 con la città top a 11) non supererebbero una soglia fissa e la
+    // mappa resterebbe senza nomi. Floor a 2 per non etichettare i singoli;
+    // l'anti-collisione qui sotto gestisce le sovrapposizioni.
+    const MAX_LABELS = 7;
+    const labeled = [...cities]
+      .filter((c) => c.count >= 2)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, MAX_LABELS);
     const placed: { x: number; y: number }[] = [];
     const collide = (x: number, y: number) =>
       placed.some((p) => Math.abs(p.x - x) < 56 && Math.abs(p.y - y) < 13);
@@ -510,183 +517,187 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
       </section>
 
       {/* ════════ DOVE — MAPPA EUROPA ════════════════ (order-1) ═══ */}
-      <section className="order-1">
-        <div className="section-label mb-1">{t.whereLabel}</div>
-        <p className="text-[11px] text-[var(--color-dim)] mb-4">
-          {t.whereIntro(
-            nf(
-              cities.reduce((s, c) => s + c.count, 0),
-              tag,
-            ),
-            countries.length,
-            cities.length,
-          )}
-        </p>
+      {/* Solo con città geocodificate: su run brevi la geocodifica
+          (office_lat/lon) può non essere ancora passata → niente mappa vuota. */}
+      {cities.length > 0 && (
+        <section className="order-1">
+          <div className="section-label mb-1">{t.whereLabel}</div>
+          <p className="text-[11px] text-[var(--color-dim)] mb-4">
+            {t.whereIntro(
+              nf(
+                cities.reduce((s, c) => s + c.count, 0),
+                tag,
+              ),
+              countries.length,
+              cities.length,
+            )}
+          </p>
 
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-center">
-          {/* Mappa a bolle */}
-          <div className="overflow-hidden">
-            <svg
-              viewBox={`0 0 ${mapW} ${mapH}`}
-              width="100%"
-              style={{ maxHeight: 520 }}
-              preserveAspectRatio="xMidYMid meet"
-            >
-              {/* terra · coste Europa (outline reale semplificato) */}
-              {landPaths.map((d, i) => (
-                <path
-                  key={`land${i}`}
-                  d={d}
-                  fill="color-mix(in srgb, var(--color-muted) 8%, transparent)"
-                  stroke="color-mix(in srgb, var(--color-muted) 42%, transparent)"
-                  strokeWidth={0.7}
-                  strokeLinejoin="round"
-                />
-              ))}
-              {/* graticola (tenue) */}
-              {[-10, 0, 10, 20, 30].map((lon) => {
-                const { x } = projectEU(50, lon, mapW, mapH);
-                return (
-                  <line
-                    key={`v${lon}`}
-                    x1={x}
-                    x2={x}
-                    y1={0}
-                    y2={mapH}
-                    stroke="var(--color-border)"
-                    strokeWidth={0.5}
-                    opacity={0.18}
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-center">
+            {/* Mappa a bolle */}
+            <div className="overflow-hidden">
+              <svg
+                viewBox={`0 0 ${mapW} ${mapH}`}
+                width="100%"
+                style={{ maxHeight: 520 }}
+                preserveAspectRatio="xMidYMid meet"
+              >
+                {/* terra · coste Europa (outline reale semplificato) */}
+                {landPaths.map((d, i) => (
+                  <path
+                    key={`land${i}`}
+                    d={d}
+                    fill="color-mix(in srgb, var(--color-muted) 8%, transparent)"
+                    stroke="color-mix(in srgb, var(--color-muted) 42%, transparent)"
+                    strokeWidth={0.7}
+                    strokeLinejoin="round"
                   />
-                );
-              })}
-              {[40, 45, 50, 55, 60].map((lat) => {
-                const { y } = projectEU(lat, 0, mapW, mapH);
-                return (
-                  <line
-                    key={`h${lat}`}
-                    x1={0}
-                    x2={mapW}
-                    y1={y}
-                    y2={y}
-                    stroke="var(--color-border)"
-                    strokeWidth={0.5}
-                    opacity={0.18}
-                  />
-                );
-              })}
-              {/* bolle (grandi sotto, così le etichette restano leggibili) */}
-              {[...cities]
-                .sort((a, b) => b.count - a.count)
-                .map((c) => {
-                  const { x, y } = projectEU(c.lat, c.lon, mapW, mapH);
-                  const r = 4 + 22 * Math.sqrt(c.count / maxCity);
+                ))}
+                {/* graticola (tenue) */}
+                {[-10, 0, 10, 20, 30].map((lon) => {
+                  const { x } = projectEU(50, lon, mapW, mapH);
                   return (
-                    <circle
-                      key={`${c.city}-${c.lat}`}
-                      cx={x}
-                      cy={y}
-                      r={r}
-                      fill={BLUE}
-                      fillOpacity={0.4}
-                      stroke={BLUE}
-                      strokeOpacity={0.95}
-                      strokeWidth={1.2}
-                      className="cursor-default"
-                      onMouseEnter={(e) =>
-                        showTip(
-                          e,
-                          `${c.city}${c.country ? " · " + c.country : ""}`,
-                          [
-                            {
-                              color: BLUE,
-                              label: t.positions,
-                              value: nf(c.count, tag),
-                            },
-                          ],
-                        )
-                      }
-                      onMouseMove={moveTip}
-                      onMouseLeave={hideTip}
+                    <line
+                      key={`v${lon}`}
+                      x1={x}
+                      x2={x}
+                      y1={0}
+                      y2={mapH}
+                      stroke="var(--color-border)"
+                      strokeWidth={0.5}
+                      opacity={0.18}
                     />
                   );
                 })}
-              {/* etichette: solo le città grandi, con alone scuro per leggibilità */}
-              {cityLabels.map((l) => (
-                <text
-                  key={`l${l.city}`}
-                  x={l.x}
-                  y={l.y}
-                  textAnchor="middle"
-                  className="fill-[var(--color-white)] pointer-events-none"
-                  style={
-                    {
-                      fontSize: 10,
-                      fontWeight: 700,
-                      paintOrder: "stroke",
-                      stroke: "var(--color-panel)",
-                      strokeWidth: 3,
-                    } as React.CSSProperties
-                  }
-                >
-                  {l.city}
-                </text>
-              ))}
-            </svg>
-          </div>
-
-          {/* Top paesi */}
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mb-3">
-              {t.topCountries}
-            </div>
-            <div className="space-y-2">
-              {topCountries.map((c) => (
-                <div
-                  key={c.name}
-                  className="flex items-center gap-2.5"
-                  onMouseEnter={(e) =>
-                    showTip(e, `${flag(c.code)} ${c.name}`, [
-                      {
-                        color: BLUE,
-                        label: t.positions,
-                        value: nf(c.count, tag),
-                      },
-                    ])
-                  }
-                  onMouseMove={moveTip}
-                  onMouseLeave={hideTip}
-                >
-                  <span className="text-[13px] w-5 shrink-0 text-center">
-                    {flag(c.code)}
-                  </span>
-                  <span className="text-[11px] text-[var(--color-muted)] w-24 shrink-0 truncate">
-                    {c.name}
-                  </span>
-                  <div
-                    className="flex-1 h-1.5 rounded-full overflow-hidden"
-                    style={{ background: "var(--color-border)" }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${(c.count / maxCountry) * 100}%`,
-                        background: BLUE,
-                        opacity: 0.8,
-                      }}
+                {[40, 45, 50, 55, 60].map((lat) => {
+                  const { y } = projectEU(lat, 0, mapW, mapH);
+                  return (
+                    <line
+                      key={`h${lat}`}
+                      x1={0}
+                      x2={mapW}
+                      y1={y}
+                      y2={y}
+                      stroke="var(--color-border)"
+                      strokeWidth={0.5}
+                      opacity={0.18}
                     />
-                  </div>
-                  <span
-                    className="text-[11px] font-bold tabular-nums w-7 text-right"
-                    style={{ color: BLUE }}
+                  );
+                })}
+                {/* bolle (grandi sotto, così le etichette restano leggibili) */}
+                {[...cities]
+                  .sort((a, b) => b.count - a.count)
+                  .map((c) => {
+                    const { x, y } = projectEU(c.lat, c.lon, mapW, mapH);
+                    const r = 4 + 22 * Math.sqrt(c.count / maxCity);
+                    return (
+                      <circle
+                        key={`${c.city}-${c.lat}`}
+                        cx={x}
+                        cy={y}
+                        r={r}
+                        fill={BLUE}
+                        fillOpacity={0.4}
+                        stroke={BLUE}
+                        strokeOpacity={0.95}
+                        strokeWidth={1.2}
+                        className="cursor-default"
+                        onMouseEnter={(e) =>
+                          showTip(
+                            e,
+                            `${c.city}${c.country ? " · " + c.country : ""}`,
+                            [
+                              {
+                                color: BLUE,
+                                label: t.positions,
+                                value: nf(c.count, tag),
+                              },
+                            ],
+                          )
+                        }
+                        onMouseMove={moveTip}
+                        onMouseLeave={hideTip}
+                      />
+                    );
+                  })}
+                {/* etichette: solo le città grandi, con alone scuro per leggibilità */}
+                {cityLabels.map((l) => (
+                  <text
+                    key={`l${l.city}`}
+                    x={l.x}
+                    y={l.y}
+                    textAnchor="middle"
+                    className="fill-[var(--color-white)] pointer-events-none"
+                    style={
+                      {
+                        fontSize: 10,
+                        fontWeight: 700,
+                        paintOrder: "stroke",
+                        stroke: "var(--color-panel)",
+                        strokeWidth: 3,
+                      } as React.CSSProperties
+                    }
                   >
-                    {c.count}
-                  </span>
-                </div>
-              ))}
+                    {l.city}
+                  </text>
+                ))}
+              </svg>
+            </div>
+
+            {/* Top paesi */}
+            <div>
+              <div className="text-[10px] uppercase tracking-wide text-[var(--color-dim)] mb-3">
+                {t.topCountries}
+              </div>
+              <div className="space-y-2">
+                {topCountries.map((c) => (
+                  <div
+                    key={c.name}
+                    className="flex items-center gap-2.5"
+                    onMouseEnter={(e) =>
+                      showTip(e, `${flag(c.code)} ${c.name}`, [
+                        {
+                          color: BLUE,
+                          label: t.positions,
+                          value: nf(c.count, tag),
+                        },
+                      ])
+                    }
+                    onMouseMove={moveTip}
+                    onMouseLeave={hideTip}
+                  >
+                    <span className="text-[13px] w-5 shrink-0 text-center">
+                      {flag(c.code)}
+                    </span>
+                    <span className="text-[11px] text-[var(--color-muted)] w-24 shrink-0 truncate">
+                      {c.name}
+                    </span>
+                    <div
+                      className="flex-1 h-1.5 rounded-full overflow-hidden"
+                      style={{ background: "var(--color-border)" }}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${(c.count / maxCountry) * 100}%`,
+                          background: BLUE,
+                          opacity: 0.8,
+                        }}
+                      />
+                    </div>
+                    <span
+                      className="text-[11px] font-bold tabular-nums w-7 text-right"
+                      style={{ color: BLUE }}
+                    >
+                      {c.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* ════════ CATEGORIE — DONUT ══════════════════ (order-3) ═══ */}
       <section className="order-3">
