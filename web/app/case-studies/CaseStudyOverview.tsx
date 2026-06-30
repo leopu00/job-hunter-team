@@ -413,9 +413,16 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
   // Etichette città (solo le grandi) con anti-collisione verticale: se due
   // cadono vicine (es. Zurigo/Ginevra), la seconda va sotto la bolla.
   const cityLabels = useMemo(() => {
-    const labeled = cities
-      .filter((c) => c.count >= 14)
-      .sort((a, b) => b.count - a.count);
+    // Etichetta le città più grandi (top N), non con una soglia assoluta: i
+    // profili a coda lunga (full-remote, molte città da poche posizioni — es.
+    // beta-2 con la città top a 11) non supererebbero una soglia fissa e la
+    // mappa resterebbe senza nomi. Floor a 2 per non etichettare i singoli;
+    // l'anti-collisione qui sotto gestisce le sovrapposizioni.
+    const MAX_LABELS = 7;
+    const labeled = [...cities]
+      .filter((c) => c.count >= 2)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, MAX_LABELS);
     const placed: { x: number; y: number }[] = [];
     const collide = (x: number, y: number) =>
       placed.some((p) => Math.abs(p.x - x) < 56 && Math.abs(p.y - y) < 13);
