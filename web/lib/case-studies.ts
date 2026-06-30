@@ -89,10 +89,10 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       badge: "B1",
       headline: "Professionista finance, inizio carriera",
       summary:
-        "Analista con circa 2 anni di esperienza in credit risk e due diligence in una banca d'investimento internazionale. Vuole spostarsi verso ruoli front-office — investment management, restructuring, transaction advisory — in grandi città europee.",
+        "Analista all'inizio della carriera in credit risk e due diligence in una banca d'investimento internazionale. Vuole spostarsi verso ruoli front-office — investment management, restructuring, transaction advisory — in grandi città europee.",
       facts: [
         { label: "Settore", value: "Finance · investment & credit risk" },
-        { label: "Esperienza", value: "~2 anni · early-career" },
+        { label: "Esperienza", value: "Early-career" },
         { label: "Formazione", value: "Laurea in Business & Economics" },
         { label: "Lingue", value: "Ungherese · Inglese (C1) · Tedesco (base)" },
         {
@@ -135,11 +135,11 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       badge: "B2",
       headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
       summary:
-        "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta circa 10 anni di esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, falegnameria, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
+        "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
       facts: [
         { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
-        { label: "Esperienza", value: "~10 anni cross-domain · industria + lingue" },
-        { label: "Background", value: "Manifattura · CAD/CAM/CNC · falegnameria · traduzione/interpretariato" },
+        { label: "Esperienza", value: "Cross-domain · industria + lingue" },
+        { label: "Background", value: "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato" },
         { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
         { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
       ],
