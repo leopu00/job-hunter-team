@@ -11,7 +11,6 @@ import LandingNav from "../components/landing/LandingNav";
 import {
   CASE_STUDIES,
   CONTRIBUTE_LINKS,
-  caseMonthlyProjection,
   caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
@@ -625,24 +624,30 @@ export default async function CaseStudiesIndexPage() {
     ),
   };
 
-  // DASHBOARD unica — proiezione a un mese in base al BUDGET consumato da ogni run
-  // (caseMonthlyProjection), NON "giorni × 30". Motivo: una run intensiva che ha
-  // bruciato ~un mese di budget in poche settimane produrrebbe una proiezione
-  // giornaliera×30 irreale (raddoppierebbe il budget); col budget-based chi ha già
-  // speso ~un mese resta ~invariato e le run brevi (es. beta-3) vengono proiettate
-  // in modo sostenibile. Esclude il free-run. Conteggi arrotondati; costo coi cent.
+  // DASHBOARD unica — ogni run SCALATA A UN MESE DI BUDGET. Un mese ≈ 4,345 budget
+  // settimanali; se una run ne ha consumati W producendo X, in un mese ne produce
+  // X × 4,345/W. È il dato onesto "output per un mese di abbonamento", e coincide
+  // con "media giornaliera × 30" QUANDO il ritmo è sostenibile: "giorni × 30" grezzo
+  // invece sovrastima le run intensive (es. 909 posizioni in 15 giorni ha già speso
+  // ~un mese di budget → il suo mese ≈ 900, non 1818, che vorrebbe ~2 mesi di sub).
+  // Le run brevi (es. beta-3, 5 giorni) restano proiettate correttamente. Esclude il
+  // free-run. Conteggi arrotondati; costo coi centesimi.
+  const WEEKS_PER_MONTH = 4.345;
   const MONTH_DAYS = 30;
   const dashStudies = localized
     .filter((cs) => !cs.freeRun && cs.run.conversion)
     .map((cs) => {
-      const { multiplier } = caseMonthlyProjection(
-        cs.run,
-        caseRunInfo(cs.run, locale).days,
-      );
+      const budgetWeeks =
+        (cs.run.usage?.daily ?? []).reduce((s, d) => s + (d.pct ?? 0), 0) / 100;
+      // scala al budget di un mese; fallback ai giorni se manca l'usage.
+      const mult =
+        budgetWeeks > 0.1
+          ? WEEKS_PER_MONTH / budgetWeeks
+          : MONTH_DAYS / Math.max(1, caseRunInfo(cs.run, locale).days);
       const c = cs.run.conversion!;
-      const monthlyExc = c.strong80 * multiplier; // eccellenti ≥80 al mese
+      const monthlyExc = c.strong80 * mult; // eccellenti ≥80 in un mese di budget
       return {
-        monthlyPositions: c.found * multiplier,
+        monthlyPositions: c.found * mult,
         excPerDay: monthlyExc / MONTH_DAYS,
         costPerExc:
           cs.subscription.monthlyEur != null && monthlyExc > 0
