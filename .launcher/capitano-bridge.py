@@ -14,8 +14,11 @@ sceglie il nudge PIÙ RILEVANTE adesso, variando il tema. A volte tace (se tutto
 è palesemente in regola e ha già nudgeato di recente) — un battito non è un
 obbligo a scrivere.
 
-NON decide al posto del Capitano: pone una domanda / segnala una condizione e
-lascia che sia LUI a verificare (con le sue skill) e decidere.
+Due registri (2026-07-01): sulle condizioni di ROUTINE resta un SEGNALE — pone
+una condizione e lascia che sia il Capitano a decidere. Sulle ANOMALIE che lo
+lasciavano passivo — su tutte il SOURCING FERMO (nessuno Scout attivo) — consegna
+invece il VERDETTO deterministico come ORDINE (spawna 1 Scout, C-05), perché il
+"segnale morbido" veniva razionalizzato via e la finestra chiusa a vuoto.
 
 Output:
   - stdout (→ /tmp/capitano-bridge.log)
@@ -47,6 +50,16 @@ DAILY_HALT_FLAG = LOGS_DIR / "daily-halt.flag"
 # scrive qui. Il sentinel-data grezzo la lascia spesso a None → l'heartbeat era
 # cieco al giorno/notte e sparava nudge in piena notte.
 PACING_STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
+# Anti-quiescenza (#1/#2, 2026-07-01): il registro dei messaggi inter-agente. Lo
+# leggiamo per sapere se uno Scout ha GIÀ dichiarato [SCOUT-ESAUSTO] di recente:
+# in quel caso il mercato è secco e la quiescenza è VOLUTA (C-05b) → l'heartbeat
+# NON deve ri-ordinare uno Scout che ciclerebbe a vuoto. La finestra di look-back
+# è una finestra di lavoro (default 12h): oltre, al nuovo window il re-wake torna
+# lecito (il re-wake resta del Capitano — vedi scout.md § idle).
+MESSAGES_JSONL = LOGS_DIR / "messages.jsonl"
+SCOUT_EXHAUST_LOOKBACK_H = float(
+    os.environ.get("JHT_CAPITANO_SCOUT_EXHAUST_LOOKBACK_H", "12")
+)
 TARGET = os.environ.get("JHT_CAPITANO_HEARTBEAT_SESSION", "CAPITANO")
 DB_QUERY = "/app/shared/skills/db_query.py"
 
@@ -146,23 +159,70 @@ def _work_phase():
         return None
 
 
-def choose_nudge(state, hour, last_theme):
+def _scout_exhausted_recently(now):
+    """True se uno Scout ha dichiarato [SCOUT-ESAUSTO] nell'ultima finestra di
+    lavoro (SCOUT_EXHAUST_LOOKBACK_H). In quel caso le fonti sono DAVVERO secche e
+    la quiescenza è voluta (C-05b): l'heartbeat non deve ordinare un altro Scout
+    che ripasserebbe le stesse fonti esaurite. Il re-wake resta del Capitano al
+    prossimo window. Robusto: file assente / righe non-JSON / ts illeggibile → non
+    blocca (ritorna False = 'nessun esaurimento noto', l'ordine può partire)."""
+    from collections import deque
+    cutoff = now - timedelta(hours=SCOUT_EXHAUST_LOOKBACK_H)
+    try:
+        with open(MESSAGES_JSONL, encoding="utf-8") as f:
+            tail = deque(f, maxlen=2000)  # basta la coda: un window è ~poche centinaia
+    except OSError:
+        return False
+    for line in tail:
+        if "ESAUSTO" not in line:  # filtro a buon mercato prima del parse
+            continue
+        try:
+            m = json.loads(line)
+        except ValueError:
+            continue
+        if "SCOUT-ESAUSTO" not in json.dumps(m, ensure_ascii=False):
+            continue
+        try:
+            t = datetime.fromisoformat(str(m.get("ts")).replace("Z", "+00:00"))
+        except (TypeError, ValueError):
+            continue
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        if t >= cutoff:
+            return True
+    return False
+
+
+def choose_nudge(state, now, last_theme):
     """Sceglie il nudge PIÙ RILEVANTE adesso (deterministico, vario). Ritorna
     (theme, message) o (None, None) per tacere. Priorità: condizioni anomale
-    prima, poi rotazione a tema per non ripetersi."""
+    prima, poi rotazione a tema per non ripetersi. Le ANOMALIE vengono consegnate
+    come ORDINE (verdetto deterministico); la rotazione resta un SEGNALE."""
+    hour = now.hour
     sessions = [s.upper() for s in _live_sessions()]
     scouts_live = [s for s in sessions if s.startswith("SCOUT")]
     qa, qs = state.get("q_analista"), state.get("q_scorer")
     top = state.get("top")
     wk = state.get("weekly")
 
-    # 1) PIPELINE FERMA: code vuote + nessuno Scout → sourcing fermo (lo scenario
-    #    osservato: Capitano incagliato a pipeline vuota). Priorità massima.
-    if qa == 0 and qs == 0 and not scouts_live:
-        return ("pipeline-ferma",
-                f"[HEARTBEAT] Code VUOTE (analista={qa}, scorer={qs}), nessuno Scout "
-                f"attivo → sourcing fermo. weekly={wk}%. (segnale: pipeline a secco "
-                f"con budget; uno Scout la riempirebbe)")
+    # 1) SOURCING FERMO — priorità massima (fix #1/#2, 2026-07-01).
+    #    Trigger: NESSUNO Scout attivo = nessuno sorge, a prescindere da 1-2 residui
+    #    a valle. Il vecchio `qa==0 and qs==0` si spegneva per una singola posizione
+    #    NEW rimasta: la notte del 30/06 il Capitano è restato fermo ~7h con qa=1,
+    #    0 Scout, chiudendo la finestra a vuoto. Due eccezioni corrette:
+    #      (a) [SCOUT-ESAUSTO] recente → mercato secco, quiescenza VOLUTA (C-05b):
+    #          non ri-ordinare uno Scout che ciclerebbe sulle stesse fonti;
+    #      (b) backlog a valle profondo (≥15) → il collo di bottiglia è downstream,
+    #          non il sourcing: lo gestisce il ramo (3).
+    #    E non è più un sussurro: è il VERDETTO (spawna Scout) consegnato come ORDINE.
+    downstream_deep = (qa or 0) >= 15 or (qs or 0) >= 15
+    if not scouts_live and not downstream_deep and not _scout_exhausted_recently(now):
+        return ("sourcing-fermo",
+                f"[HEARTBEAT] Nessuno Scout attivo e nessun [SCOUT-ESAUSTO] oggi "
+                f"(analista={qa}, scorer={qs}, weekly={wk}%) → il sourcing è FERMO. "
+                f"ORDINE (C-05): apri `pipeline-triage` e spawna 1 Scout ORA, poi scala "
+                f"a squadra coordinata (C-21). NON chiudere la finestra di lavoro senza "
+                f"aver fatto girare gli Scout fino al loro [SCOUT-ESAUSTO].")
 
     # 2) WORKER CALDO: top-consumer con share alto e cadenza ~0 = sospetto
     #    rabbit-hole/stuck → un segnale, non un ordine: il Capitano non killa al buio.
@@ -237,7 +297,7 @@ def tick(now, send):
         return
     st = gather_state()
     persisted = _read_state()
-    theme, msg = choose_nudge(st, now.hour, persisted.get("last_theme"))
+    theme, msg = choose_nudge(st, now, persisted.get("last_theme"))
     if not msg:
         _log(f"{now:%H:%M} silent (theme={theme}) state={st}")
         return
