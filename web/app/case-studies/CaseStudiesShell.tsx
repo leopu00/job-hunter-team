@@ -101,9 +101,12 @@ export interface CaseStudyTeaser {
 export default function CaseStudiesShell({
   testers,
   children,
+  activeId,
 }: {
   testers: CaseStudyTeaser[];
   children: React.ReactNode;
+  /** id del tester corrente (nelle pagine di dettaglio): la sua voce è evidenziata */
+  activeId?: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const t = T[useLocale()];
@@ -142,11 +145,26 @@ export default function CaseStudiesShell({
             </div>
 
             <nav className="grid grid-cols-1 auto-rows-fr gap-2.5">
-              {testers.map((t) => (
+              {testers.map((t) => {
+                const active = t.id === activeId;
+                return (
                 <Link
                   key={t.id}
                   href={`/case-studies/${t.id}`}
-                  className="group flex h-full flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3.5 py-3 no-underline transition-colors hover:border-[var(--color-blue)]"
+                  aria-current={active ? "page" : undefined}
+                  className={`group flex h-full flex-col rounded-xl border ${
+                    active
+                      ? "border-[var(--color-blue)]"
+                      : "border-[var(--color-border)]"
+                  } bg-[var(--color-card)] px-3.5 py-3 no-underline transition-colors hover:border-[var(--color-blue)]`}
+                  style={
+                    active
+                      ? {
+                          background:
+                            "color-mix(in srgb, var(--color-blue) 10%, var(--color-card))",
+                        }
+                      : undefined
+                  }
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -191,7 +209,8 @@ export default function CaseStudiesShell({
                     </div>
                   </div>
                 </Link>
-              ))}
+                );
+              })}
             </nav>
           </div>
         </aside>

@@ -440,7 +440,9 @@ export default function CaseStudyDetail({
           </span>
         </nav>
 
-        <div className="relative shrink-0">
+        {/* Switcher a tendina: solo su mobile — su desktop (lg+) c'è la sidebar
+            collassabile dei tester, quindi qui sarebbe ridondante. */}
+        <div className="relative shrink-0 lg:hidden">
           <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}

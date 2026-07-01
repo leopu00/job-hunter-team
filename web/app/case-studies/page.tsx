@@ -342,10 +342,9 @@ export default async function CaseStudiesIndexPage() {
         <section className="mb-14">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {localized.map((cs) => (
-              <Link
+              <div
                 key={cs.id}
-                href={`/case-studies/${cs.id}`}
-                className="group block rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5 transition-colors hover:border-[var(--color-blue)] no-underline"
+                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5"
               >
                 <div className="flex items-center gap-3 mb-4">
                   <span
@@ -359,16 +358,26 @@ export default async function CaseStudiesIndexPage() {
                     {cs.profile.badge}
                   </span>
                   <div className="min-w-0">
-                    <div className="text-[14px] font-bold text-[var(--color-white)]">
-                      {cs.label}
-                    </div>
+                    {/* Solo il TITOLO è il link (sottolineato): il resto della card
+                        resta testo selezionabile, non un unico blocco cliccabile. */}
+                    <Link
+                      href={`/case-studies/${cs.id}`}
+                      className="group/title inline-flex items-baseline gap-1 w-fit text-[14px] font-bold text-[var(--color-white)] no-underline hover:text-[var(--color-blue)] transition-colors"
+                    >
+                      <span className="underline decoration-1 underline-offset-[3px]">
+                        {cs.label}
+                      </span>
+                      <span
+                        aria-hidden
+                        className="opacity-0 group-hover/title:opacity-100 transition-opacity"
+                      >
+                        →
+                      </span>
+                    </Link>
                     <div className="text-[11px] text-[var(--color-dim)] truncate">
                       {cs.tagline}
                     </div>
                   </div>
-                  <span className="ml-auto text-[var(--color-dim)] group-hover:text-[var(--color-blue)] transition-colors">
-                    →
-                  </span>
                 </div>
                 <p className="text-[12px] text-[var(--color-muted)] leading-relaxed line-clamp-2 mb-4">
                   {cs.profile.headline} · {cs.profile.summary}
@@ -408,7 +417,7 @@ export default async function CaseStudiesIndexPage() {
                     </div>
                   </div>
                 </div>
-              </Link>
+              </div>
             ))}
 
             {/* placeholder: altri in arrivo */}
