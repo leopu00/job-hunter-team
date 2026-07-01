@@ -1822,8 +1822,14 @@ def main():
             # in pausa il team è on-pace (should_notify=False) e non rivedremmo mai
             # il rientro. Una skill-call in più al tick: costo trascurabile.
             daily_halted = False
-            _hb, _hc = _daily_pacing_via_skill(
+            # _daily_pacing_via_skill ritorna un dict {budget, consumed, ...}
+            # (o (None, None) nei path non calcolabili). NON spacchettare a tupla:
+            # su dict a >2 chiavi Python solleva "too many values to unpack" e il
+            # loop va in FATAL→restart ogni 5s (crash-loop). Estrai per chiave.
+            _dp = _daily_pacing_via_skill(
                 entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+            _hb = _dp.get("budget") if isinstance(_dp, dict) else None
+            _hc = _dp.get("consumed") if isinstance(_dp, dict) else None
             if isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
                 _hcap = _hb + 5.0
                 _over_cap = _hc > _hcap
