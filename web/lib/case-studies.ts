@@ -344,3 +344,49 @@ export function buildCaseActivity(run: CaseStudyRun): TeamActivity {
     run.tsRange[1].slice(0, 10),
   );
 }
+
+// ── periodo di lavoro (finestra del run + giorni attivi) ────────────────────
+// `days` = giorni con attività del team (stessa definizione della pagina di
+// dettaglio). Formattazione locale-aware, risolta server-side col locale della
+// richiesta (come gli altri campi editoriali della scheda). `label` è pronto da
+// mostrare: es. "19 mag → 30 giu (34 giorni)".
+const RUN_LOCALE_TAG: Record<Locale, string> = {
+  it: "it-IT",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  hu: "hu-HU",
+  pt: "pt-PT",
+};
+const DAYS_WORD: Record<Locale, (n: number) => string> = {
+  it: (n) => `${n} giorn${n === 1 ? "o" : "i"}`,
+  en: (n) => `${n} day${n === 1 ? "" : "s"}`,
+  es: (n) => `${n} día${n === 1 ? "" : "s"}`,
+  fr: (n) => `${n} jour${n === 1 ? "" : "s"}`,
+  de: (n) => `${n} Tag${n === 1 ? "" : "e"}`,
+  hu: (n) => `${n} nap`,
+  pt: (n) => `${n} dia${n === 1 ? "" : "s"}`,
+};
+function fmtRunDay(locale: Locale, iso: string): string {
+  return new Intl.DateTimeFormat(RUN_LOCALE_TAG[locale], {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${iso}T00:00:00Z`));
+}
+export function caseRunInfo(
+  run: CaseStudyRun,
+  locale: Locale,
+): { range: string; days: number; daysWord: string; label: string } {
+  const activity = buildCaseActivity(run);
+  const days = activity.roleDaily.filter((d) =>
+    Object.values(d.counts).some((n) => n > 0),
+  ).length;
+  const range = `${fmtRunDay(locale, run.tsRange[0].slice(0, 10))} → ${fmtRunDay(
+    locale,
+    run.tsRange[1].slice(0, 10),
+  )}`;
+  const daysWord = DAYS_WORD[locale](days);
+  return { range, days, daysWord, label: `${range} (${daysWord})` };
+}

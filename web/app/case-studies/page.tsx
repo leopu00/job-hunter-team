@@ -11,6 +11,7 @@ import LandingNav from "../components/landing/LandingNav";
 import {
   CASE_STUDIES,
   CONTRIBUTE_LINKS,
+  caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
 import CaseStudiesShell, { type CaseStudyTeaser } from "./CaseStudiesShell";
@@ -306,6 +307,7 @@ export default async function CaseStudiesIndexPage() {
     seniority: cs.seniority,
     geos: cs.geos,
     model: cs.model,
+    period: caseRunInfo(cs.run, locale).label,
   }));
 
   return (

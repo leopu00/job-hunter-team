@@ -98,8 +98,8 @@ const T: Record<
     onlyExpense: string;
     whereSearches: string;
     runRealPrefix: string;
-    runRealMiddle: string; // tra finestra e "giorni di lavoro"
-    runRealSuffix: string;
+    runRealDays: string; // parola "giorni di lavoro" (mostrata tra parentesi)
+    runRealSuffix: string; // coda: nota di anonimato
     everyDay: string;
     monFri: string;
     workBudgetTitle: string;
@@ -130,8 +130,8 @@ const T: Record<
     onlyExpense: "È l’unica spesa: la piattaforma è gratis.",
     whereSearches: "Dove cerca lavoro",
     runRealPrefix: "Run reale del team su questo profilo · finestra",
-    runRealMiddle: "·",
-    runRealSuffix: "giorni di lavoro · ogni dato è aggregato e anonimo.",
+    runRealDays: "giorni di lavoro",
+    runRealSuffix: "ogni dato è aggregato e anonimo.",
     everyDay: "tutti i giorni",
     monFri: "lun–ven",
     workBudgetTitle: "Lavoro e budget AI nel tempo",
@@ -166,8 +166,8 @@ const T: Record<
     onlyExpense: "It’s the only expense: the platform is free.",
     whereSearches: "Where they search for work",
     runRealPrefix: "Real team run on this profile · window",
-    runRealMiddle: "·",
-    runRealSuffix: "working days · every figure is aggregated and anonymous.",
+    runRealDays: "working days",
+    runRealSuffix: "every figure is aggregated and anonymous.",
     everyDay: "every day",
     monFri: "Mon–Fri",
     workBudgetTitle: "Work and AI budget over time",
@@ -202,8 +202,8 @@ const T: Record<
     onlyExpense: "Es el único gasto: la plataforma es gratis.",
     whereSearches: "Dónde busca trabajo",
     runRealPrefix: "Ejecución real del equipo sobre este perfil · ventana",
-    runRealMiddle: "·",
-    runRealSuffix: "días de trabajo · cada dato está agregado y es anónimo.",
+    runRealDays: "días de trabajo",
+    runRealSuffix: "cada dato está agregado y es anónimo.",
     everyDay: "todos los días",
     monFri: "lun–vie",
     workBudgetTitle: "Trabajo y presupuesto de AI a lo largo del tiempo",
@@ -239,8 +239,8 @@ const T: Record<
     onlyExpense: "C’est la seule dépense : la plateforme est gratuite.",
     whereSearches: "Où il cherche du travail",
     runRealPrefix: "Exécution réelle de l’équipe sur ce profil · fenêtre",
-    runRealMiddle: "·",
-    runRealSuffix: "jours de travail · chaque donnée est agrégée et anonyme.",
+    runRealDays: "jours de travail",
+    runRealSuffix: "chaque donnée est agrégée et anonyme.",
     everyDay: "tous les jours",
     monFri: "lun–ven",
     workBudgetTitle: "Travail et budget AI au fil du temps",
@@ -276,8 +276,8 @@ const T: Record<
     onlyExpense: "Es ist die einzige Ausgabe: Die Plattform ist kostenlos.",
     whereSearches: "Wo nach Arbeit gesucht wird",
     runRealPrefix: "Echter Team-Lauf für dieses Profil · Zeitfenster",
-    runRealMiddle: "·",
-    runRealSuffix: "Arbeitstage · jeder Wert ist aggregiert und anonym.",
+    runRealDays: "Arbeitstage",
+    runRealSuffix: "jeder Wert ist aggregiert und anonym.",
     everyDay: "jeden Tag",
     monFri: "Mo–Fr",
     workBudgetTitle: "Arbeit und AI-Budget im Zeitverlauf",
@@ -313,8 +313,8 @@ const T: Record<
     onlyExpense: "Ez az egyetlen költség: a platform ingyenes.",
     whereSearches: "Hol keres munkát",
     runRealPrefix: "Valódi csapatfuttatás ezen a profilon · időablak",
-    runRealMiddle: "·",
-    runRealSuffix: "munkanap · minden adat összesített és névtelen.",
+    runRealDays: "munkanap",
+    runRealSuffix: "minden adat összesített és névtelen.",
     everyDay: "minden nap",
     monFri: "hét–pén",
     workBudgetTitle: "Munka és AI-keret az idő során",
@@ -350,8 +350,8 @@ const T: Record<
     onlyExpense: "É a única despesa: a plataforma é gratuita.",
     whereSearches: "Onde procura trabalho",
     runRealPrefix: "Execução real da equipa sobre este perfil · janela",
-    runRealMiddle: "·",
-    runRealSuffix: "dias de trabalho · cada dado é agregado e anónimo.",
+    runRealDays: "dias de trabalho",
+    runRealSuffix: "cada dado é agregado e anónimo.",
     everyDay: "todos os dias",
     monFri: "seg–sex",
     workBudgetTitle: "Trabalho e orçamento de AI ao longo do tempo",
@@ -610,12 +610,12 @@ export default function CaseStudyDetail({
           </div>
         </div>
 
-        <p className="mt-3 text-[11px] text-[var(--color-dim)] px-1">
+        <p className="mt-4 text-[12px] text-[var(--color-muted)] px-1">
           {t.runRealPrefix}{" "}
-          <strong>
+          <strong className="text-[var(--color-base)]">
             {dayLabel(locale, fromKey)} → {dayLabel(locale, toKey)}
           </strong>{" "}
-          {t.runRealMiddle} {activeDays} {t.runRealSuffix}
+          ({activeDays} {t.runRealDays}) · {t.runRealSuffix}
         </p>
       </header>
 
