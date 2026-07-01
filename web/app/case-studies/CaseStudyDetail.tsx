@@ -25,10 +25,7 @@ import PositionsFunnelChart from "./PositionsFunnelChart";
 import ExcludedDonut from "./ExcludedDonut";
 import ConversionFunnelCard from "./ConversionFunnelCard";
 import CostPerOutcome from "./CostPerOutcome";
-
-// Il costo per risultato ha senso solo su run lunghe circa un ciclo mensile
-// (l'abbonamento è mensile): sotto questa soglia di giorni attivi non si mostra.
-const COST_MIN_DAYS = 20;
+import { caseMonthlyProjection } from "@/lib/case-studies";
 
 export interface PreparedCase {
   id: string;
@@ -412,24 +409,9 @@ export default function CaseStudyDetail({
     Object.values(d.counts).some((n) => n > 0),
   ).length;
 
-  // Costo per risultato: MISURATO se la run copre ~un mese (finance), altrimenti
-  // STIMATO proiettando l'output a un mese in base al BUDGET consumato (Σ % dei
-  // consumi giornalieri = settimane-budget; un mese ≈ 4,345 settimane). NON
-  // "giorni × 30": le run brevi bruciano in fretta il budget e lo sovrastimerebbe.
-  const costEstimated = activeDays < COST_MIN_DAYS;
-  const budgetWeeks =
-    (run.usage?.daily ?? []).reduce((s, d) => s + (d.pct ?? 0), 0) / 100;
-  let costMultiplier = 1;
-  if (costEstimated) {
-    const WEEKS_PER_MONTH = 4.345;
-    costMultiplier =
-      budgetWeeks >= 0.4
-        ? WEEKS_PER_MONTH / budgetWeeks
-        : activeDays > 0
-          ? 30 / activeDays
-          : 1;
-    costMultiplier = Math.max(1, Math.min(costMultiplier, 12));
-  }
+  // Costo per risultato: misurato (run ~mensile) o stimato (proiezione a un mese).
+  const { estimated: costEstimated, multiplier: costMultiplier } =
+    caseMonthlyProjection(run, activeDays);
 
   const fromKey = run.tsRange[0].slice(0, 10);
   const toKey = run.tsRange[1].slice(0, 10);

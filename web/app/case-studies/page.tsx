@@ -11,6 +11,7 @@ import LandingNav from "../components/landing/LandingNav";
 import {
   CASE_STUDIES,
   CONTRIBUTE_LINKS,
+  caseMonthlyProjection,
   caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
@@ -37,6 +38,9 @@ const LOCALE_TAG: Record<Locale, string> = {
   pt: "pt-PT",
 };
 
+// Colori dei livelli (coerenti col funnel e con CostPerOutcome).
+const TIER_COLORS = ["#3B82F6", "#0EA5A4", "#22C55E", "#F59E0B"];
+
 const T: Record<
   Locale,
   {
@@ -61,6 +65,15 @@ const T: Record<
     cumScoreTitle: string;
     cumScoreEmpty: string;
     cumFunnelTitle: string;
+    priceTitle: string;
+    priceEstimate: string;
+    priceLead: string;
+    pricePosition: string;
+    priceScored: string;
+    priceStrong: string;
+    priceExcellent: string;
+    priceChartTitle: string;
+    priceCaption: string;
     moreComingTitle: string;
     moreComingSub: string;
     contributeTitle: string;
@@ -100,6 +113,17 @@ const T: Record<
     cumScoreTitle: "Distribuzione dei match · tutti i profili",
     cumScoreEmpty: "Ancora nessuno score",
     cumFunnelTitle: "Dal trovato al match forte · media per studio",
+    priceTitle: "Prezzo medio per risultato",
+    priceEstimate: "stima",
+    priceLead:
+      "Media del costo per risultato sui case study (canone mensile ÷ output del mese). Mescola abbonamenti da €100 (Codex) e €40 (Kimi) ed è in gran parte stimata (solo finance è ~un mese reale) → valore indicativo.",
+    pricePosition: "per posizione trovata",
+    priceScored: "per posizione valutata",
+    priceStrong: "per match forte ≥70",
+    priceExcellent: "per match eccellente ≥80",
+    priceChartTitle: "Prezzo medio per risultato · per livello di qualità",
+    priceCaption:
+      "Più alto è il livello di qualità richiesto, più sale il costo per singolo risultato.",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "📥 Contribuisci con i tuoi dati",
@@ -141,6 +165,17 @@ const T: Record<
     cumScoreTitle: "Match distribution · all profiles",
     cumScoreEmpty: "No scores yet",
     cumFunnelTitle: "From found to strong match · average per study",
+    priceTitle: "Average price per result",
+    priceEstimate: "estimate",
+    priceLead:
+      "Average cost per result across the case studies (monthly fee ÷ the month's output). It blends €100 (Codex) and €40 (Kimi) subscriptions and is mostly estimated (only finance is ~a real month) → indicative.",
+    pricePosition: "per position found",
+    priceScored: "per position scored",
+    priceStrong: "per strong match ≥70",
+    priceExcellent: "per excellent match ≥80",
+    priceChartTitle: "Average price per result · by quality tier",
+    priceCaption:
+      "The higher the quality bar, the higher the cost per single result.",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "📥 Contribute your data",
@@ -182,6 +217,17 @@ const T: Record<
     cumScoreTitle: "Distribución de match · todos los perfiles",
     cumScoreEmpty: "Aún no hay puntuaciones",
     cumFunnelTitle: "De encontrada a match fuerte · promedio por estudio",
+    priceTitle: "Precio medio por resultado",
+    priceEstimate: "estimación",
+    priceLead:
+      "Coste medio por resultado en los casos de estudio (cuota mensual ÷ output del mes). Mezcla suscripciones de €100 (Codex) y €40 (Kimi) y es en gran parte estimado (solo finance es ~un mes real) → indicativo.",
+    pricePosition: "por posición encontrada",
+    priceScored: "por posición evaluada",
+    priceStrong: "por match fuerte ≥70",
+    priceExcellent: "por match excelente ≥80",
+    priceChartTitle: "Precio medio por resultado · por nivel de calidad",
+    priceCaption:
+      "Cuanto mayor es el nivel de calidad exigido, más sube el coste por resultado.",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "📥 Contribuye con tus datos",
@@ -224,6 +270,17 @@ const T: Record<
     cumScoreTitle: "Distribution des matchs · tous les profils",
     cumScoreEmpty: "Pas encore de score",
     cumFunnelTitle: "De trouvée à match fort · moyenne par étude",
+    priceTitle: "Prix moyen par résultat",
+    priceEstimate: "estimation",
+    priceLead:
+      "Coût moyen par résultat sur les études de cas (abonnement mensuel ÷ output du mois). Il mêle des abonnements à €100 (Codex) et €40 (Kimi) et est en grande partie estimé (seul finance est ~un mois réel) → indicatif.",
+    pricePosition: "par poste trouvé",
+    priceScored: "par poste évalué",
+    priceStrong: "par match fort ≥70",
+    priceExcellent: "par match excellent ≥80",
+    priceChartTitle: "Prix moyen par résultat · par niveau de qualité",
+    priceCaption:
+      "Plus le niveau de qualité exigé est élevé, plus le coût par résultat augmente.",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "📥 Contribue avec tes données",
@@ -266,6 +323,17 @@ const T: Record<
     cumScoreTitle: "Match-Verteilung · alle Profile",
     cumScoreEmpty: "Noch keine Scores",
     cumFunnelTitle: "Von gefunden zu starkem Match · Schnitt pro Studie",
+    priceTitle: "Durchschnittspreis pro Ergebnis",
+    priceEstimate: "Schätzung",
+    priceLead:
+      "Durchschnittliche Kosten pro Ergebnis über die Fallstudien (Monatsgebühr ÷ Monats-Output). Mischt Abos zu €100 (Codex) und €40 (Kimi) und ist überwiegend geschätzt (nur Finance ist ~ein echter Monat) → indikativ.",
+    pricePosition: "pro gefundener Stelle",
+    priceScored: "pro bewerteter Stelle",
+    priceStrong: "pro starkem Match ≥70",
+    priceExcellent: "pro exzellentem Match ≥80",
+    priceChartTitle: "Durchschnittspreis pro Ergebnis · nach Qualitätsstufe",
+    priceCaption:
+      "Je höher die geforderte Qualität, desto höher die Kosten pro einzelnem Ergebnis.",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "📥 Steuere deine Daten bei",
@@ -308,6 +376,17 @@ const T: Record<
     cumScoreTitle: "Match-eloszlás · minden profil",
     cumScoreEmpty: "Még nincs pontszám",
     cumFunnelTitle: "A találattól az erős matchig · átlag tanulmányonként",
+    priceTitle: "Átlagár eredményenként",
+    priceEstimate: "becslés",
+    priceLead:
+      "Az eredményenkénti költség átlaga az esettanulmányokon (havi díj ÷ havi output). Vegyíti a €100 (Codex) és €40 (Kimi) előfizetéseket, és nagyrészt becsült (csak a finance ~egy valós hónap) → irányadó.",
+    pricePosition: "talált pozíciónként",
+    priceScored: "értékelt pozíciónként",
+    priceStrong: "erős match ≥70",
+    priceExcellent: "kiváló match ≥80",
+    priceChartTitle: "Átlagár eredményenként · minőségi szint szerint",
+    priceCaption:
+      "Minél magasabb a megkövetelt minőség, annál nagyobb az egy eredményre jutó költség.",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "📥 Járulj hozzá az adataiddal",
@@ -349,6 +428,17 @@ const T: Record<
     cumScoreTitle: "Distribuição de match · todos os perfis",
     cumScoreEmpty: "Ainda sem pontuações",
     cumFunnelTitle: "De encontrada a match forte · média por estudo",
+    priceTitle: "Preço médio por resultado",
+    priceEstimate: "estimativa",
+    priceLead:
+      "Custo médio por resultado nos estudos de caso (mensalidade ÷ output do mês). Mistura subscrições de €100 (Codex) e €40 (Kimi) e é em grande parte estimado (só finance é ~um mês real) → indicativo.",
+    pricePosition: "por posição encontrada",
+    priceScored: "por posição avaliada",
+    priceStrong: "por match forte ≥70",
+    priceExcellent: "por match excelente ≥80",
+    priceChartTitle: "Preço médio por resultado · por nível de qualidade",
+    priceCaption:
+      "Quanto maior o nível de qualidade exigido, maior o custo por resultado.",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "📥 Contribui com os teus dados",
@@ -407,6 +497,40 @@ export default async function CaseStudiesIndexPage() {
     strong80: Math.round(cum.strong80 / nStudies),
     days: Math.round(cum.days / nStudies),
   };
+
+  // Prezzo MEDIO per risultato: media (sui case study con canone noto) del costo
+  // mensile per posizione / valutata / forte≥70 / eccellente≥80. Finance è
+  // misurato, gli altri stimati (proiezione a un mese, stessa logica del
+  // dettaglio). Mescola canoni €100 (Codex) e €40 (Kimi) → media indicativa.
+  const pricedStudies = localized
+    .map((cs) => ({
+      cs,
+      mult: caseMonthlyProjection(cs.run, caseRunInfo(cs.run, locale).days)
+        .multiplier,
+    }))
+    .filter((s) => s.cs.subscription.monthlyEur != null && s.cs.run.conversion);
+  const avgCostOf = (key: "found" | "scored" | "strong70" | "strong80") => {
+    if (pricedStudies.length === 0) return 0;
+    const total = pricedStudies.reduce((acc, s) => {
+      const monthly = s.cs.run.conversion![key] * s.mult;
+      return acc + (monthly > 0 ? s.cs.subscription.monthlyEur! / monthly : 0);
+    }, 0);
+    return total / pricedStudies.length;
+  };
+  const eurFmt = (n: number) =>
+    new Intl.NumberFormat(LOCALE_TAG[locale], {
+      style: "currency",
+      currency: "EUR",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(n);
+  const priceTiers = [
+    { v: avgCostOf("found"), l: t.pricePosition, c: TIER_COLORS[0] },
+    { v: avgCostOf("scored"), l: t.priceScored, c: TIER_COLORS[1] },
+    { v: avgCostOf("strong70"), l: t.priceStrong, c: TIER_COLORS[2] },
+    { v: avgCostOf("strong80"), l: t.priceExcellent, c: TIER_COLORS[3] },
+  ];
+  const maxPrice = Math.max(...priceTiers.map((x) => x.v), 0.0001);
 
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
@@ -495,6 +619,86 @@ export default async function CaseStudiesIndexPage() {
                 thresholdReady={70}
                 thresholdLabel="≥ 70"
               />
+            </div>
+          </div>
+        </section>
+
+        {/* ── Prezzo medio per risultato (media tra gli studi) ───── */}
+        <section className="mb-14">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold tracking-tight">{t.priceTitle}</h2>
+            <span
+              className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
+              style={{
+                background: "color-mix(in srgb, #F59E0B 16%, transparent)",
+                color: "#F59E0B",
+              }}
+            >
+              {t.priceEstimate}
+            </span>
+          </div>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[var(--color-muted)]">
+            {t.priceLead}
+          </p>
+
+          {/* Card: prezzo medio per livello */}
+          <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {priceTiers.map((tier) => (
+              <div
+                key={tier.l}
+                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
+              >
+                <div
+                  className="text-[22px] font-extrabold tabular-nums leading-none"
+                  style={{ color: tier.c }}
+                >
+                  ≈ {eurFmt(tier.v)}
+                </div>
+                <div className="mt-1.5 text-[10px] leading-snug text-[var(--color-muted)]">
+                  {tier.l}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Grafico a barre del prezzo medio */}
+          <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+            <div className="text-[12px] font-semibold text-[var(--color-base)] mb-4">
+              {t.priceChartTitle}
+            </div>
+            <div className="flex flex-col gap-3">
+              {priceTiers.map((tier) => (
+                <div key={tier.l}>
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <span
+                      className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                      style={{ background: tier.c }}
+                    />
+                    <span className="text-[11px] text-[var(--color-muted)] flex-1 truncate">
+                      {tier.l}
+                    </span>
+                    <span className="text-[13px] font-bold tabular-nums text-[var(--color-base)]">
+                      ≈ {eurFmt(tier.v)}
+                    </span>
+                  </div>
+                  <div
+                    className="h-2 rounded-full overflow-hidden"
+                    style={{ background: "var(--color-border)" }}
+                  >
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.max(2, (tier.v / maxPrice) * 100)}%`,
+                        background: tier.c,
+                        opacity: 0.85,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)]">
+              {t.priceCaption}
             </div>
           </div>
         </section>
