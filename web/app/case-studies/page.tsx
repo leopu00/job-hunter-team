@@ -14,7 +14,8 @@ import {
   caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
-import CaseStudiesShell, { type CaseStudyTeaser } from "./CaseStudiesShell";
+import ScoreDistribution from "@/app/components/ScoreDistribution";
+import ConversionFunnelCard from "./ConversionFunnelCard";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 
@@ -52,6 +53,13 @@ const T: Record<
     positions: string;
     avgMatch: string;
     strongMatch: string;
+    cumTitle: string;
+    cumLead: string;
+    cumDays: string;
+    cumCases: string;
+    cumScoreTitle: string;
+    cumScoreEmpty: string;
+    cumFunnelTitle: string;
     moreComingTitle: string;
     moreComingSub: string;
     contributeTitle: string;
@@ -82,6 +90,14 @@ const T: Record<
     positions: "posizioni",
     avgMatch: "match medio",
     strongMatch: "match forti",
+    cumTitle: "Il team su tutti i case study",
+    cumLead:
+      "I numeri messi insieme: quanto ha prodotto il team sommando tutte le run monitorate.",
+    cumDays: "giorni di lavoro",
+    cumCases: "case study",
+    cumScoreTitle: "Distribuzione dei match · tutti i profili",
+    cumScoreEmpty: "Ancora nessuno score",
+    cumFunnelTitle: "Dal trovato al match forte · totale",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "📥 Contribuisci con i tuoi dati",
@@ -114,6 +130,14 @@ const T: Record<
     positions: "positions",
     avgMatch: "average match",
     strongMatch: "strong matches",
+    cumTitle: "The team across all case studies",
+    cumLead:
+      "The numbers put together: what the team produced across all monitored runs.",
+    cumDays: "working days",
+    cumCases: "case studies",
+    cumScoreTitle: "Match distribution · all profiles",
+    cumScoreEmpty: "No scores yet",
+    cumFunnelTitle: "From found to strong match · total",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "📥 Contribute your data",
@@ -146,6 +170,14 @@ const T: Record<
     positions: "puestos",
     avgMatch: "coincidencia media",
     strongMatch: "coincidencias fuertes",
+    cumTitle: "El equipo en todos los casos de estudio",
+    cumLead:
+      "Los números en conjunto: lo que produjo el equipo sumando todas las ejecuciones monitorizadas.",
+    cumDays: "días de trabajo",
+    cumCases: "casos de estudio",
+    cumScoreTitle: "Distribución de match · todos los perfiles",
+    cumScoreEmpty: "Aún no hay puntuaciones",
+    cumFunnelTitle: "De encontrada a match fuerte · total",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "📥 Contribuye con tus datos",
@@ -179,6 +211,14 @@ const T: Record<
     positions: "postes",
     avgMatch: "correspondance moyenne",
     strongMatch: "correspondances fortes",
+    cumTitle: "L'équipe sur toutes les études de cas",
+    cumLead:
+      "Les chiffres réunis : ce que l'équipe a produit sur l'ensemble des runs suivis.",
+    cumDays: "jours de travail",
+    cumCases: "études de cas",
+    cumScoreTitle: "Distribution des matchs · tous les profils",
+    cumScoreEmpty: "Pas encore de score",
+    cumFunnelTitle: "De trouvée à match fort · total",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "📥 Contribue avec tes données",
@@ -212,6 +252,14 @@ const T: Record<
     positions: "Stellen",
     avgMatch: "durchschnittlicher Match",
     strongMatch: "starke Matches",
+    cumTitle: "Das Team über alle Fallstudien",
+    cumLead:
+      "Die Zahlen zusammen: was das Team über alle beobachteten Läufe hinweg produziert hat.",
+    cumDays: "Arbeitstage",
+    cumCases: "Fallstudien",
+    cumScoreTitle: "Match-Verteilung · alle Profile",
+    cumScoreEmpty: "Noch keine Scores",
+    cumFunnelTitle: "Von gefunden zu starkem Match · gesamt",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "📥 Steuere deine Daten bei",
@@ -245,6 +293,14 @@ const T: Record<
     positions: "pozíció",
     avgMatch: "átlagos egyezés",
     strongMatch: "erős egyezések",
+    cumTitle: "A csapat az összes esettanulmányon",
+    cumLead:
+      "A számok együtt: mit produkált a csapat az összes megfigyelt futás összegében.",
+    cumDays: "munkanap",
+    cumCases: "esettanulmány",
+    cumScoreTitle: "Match-eloszlás · minden profil",
+    cumScoreEmpty: "Még nincs pontszám",
+    cumFunnelTitle: "A találattól az erős matchig · összesen",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "📥 Járulj hozzá az adataiddal",
@@ -277,6 +333,14 @@ const T: Record<
     positions: "posições",
     avgMatch: "correspondência média",
     strongMatch: "correspondências fortes",
+    cumTitle: "A equipa em todos os estudos de caso",
+    cumLead:
+      "Os números em conjunto: o que a equipa produziu somando todas as execuções monitorizadas.",
+    cumDays: "dias de trabalho",
+    cumCases: "estudos de caso",
+    cumScoreTitle: "Distribuição de match · todos os perfis",
+    cumScoreEmpty: "Ainda sem pontuações",
+    cumFunnelTitle: "De encontrada a match forte · total",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "📥 Contribui com os teus dados",
@@ -299,16 +363,31 @@ export default async function CaseStudiesIndexPage() {
   const t = T[locale];
   const nf = (n: number): string => n.toLocaleString(LOCALE_TAG[locale]);
   const localized = CASE_STUDIES.map((cs) => localizeCaseStudy(cs, locale));
-  const testers: CaseStudyTeaser[] = localized.map((cs) => ({
-    id: cs.id,
-    label: cs.label,
-    badge: cs.profile.badge,
-    category: cs.category,
-    seniority: cs.seniority,
-    geos: cs.geos,
-    model: cs.model,
-    period: caseRunInfo(cs.run, locale).label,
-  }));
+
+  // Numeri cumulativi su TUTTE le run monitorate (sezione in cima all'indice).
+  const runs = localized.map((cs) => cs.run);
+  const allScores = runs.flatMap((r) => r.match.scores ?? []);
+  const cum = {
+    cases: localized.length,
+    positions: runs.reduce(
+      (s, r) =>
+        s + (r.conversion?.found ?? r.funnelTotals?.found ?? r.totals.positions),
+      0,
+    ),
+    scored: runs.reduce((s, r) => s + (r.conversion?.scored ?? 0), 0),
+    strong70: runs.reduce(
+      (s, r) => s + (r.conversion?.strong70 ?? r.match.strong70),
+      0,
+    ),
+    strong80: runs.reduce(
+      (s, r) => s + (r.conversion?.strong80 ?? r.match.strong80),
+      0,
+    ),
+    days: localized.reduce((s, cs) => s + caseRunInfo(cs.run, locale).days, 0),
+    avg: allScores.length
+      ? Math.round(allScores.reduce((s, n) => s + n, 0) / allScores.length)
+      : 0,
+  };
 
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
@@ -317,7 +396,9 @@ export default async function CaseStudiesIndexPage() {
       </LandingI18nProvider>
       <div aria-hidden="true" className="h-14" />
 
-      <CaseStudiesShell testers={testers}>
+      {/* Indice SENZA sidebar: il menu laterale dei tester serve solo nel
+          dettaglio (/case-studies/[id]). Qui contenuto centrato a piena pagina. */}
+      <div className="mx-auto max-w-6xl px-6 sm:px-10 py-12">
         {/* ── Hero / cos'è ──────────────────────────────────────── */}
         <header className="mb-12">
           <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[var(--color-dim)]">
@@ -339,6 +420,65 @@ export default async function CaseStudiesIndexPage() {
             {t.heroSub}
           </p>
         </header>
+
+        {/* ── Numeri cumulativi (tutti i case study insieme) ─────── */}
+        <section className="mb-14">
+          <h2 className="text-xl font-bold tracking-tight">{t.cumTitle}</h2>
+          <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[var(--color-muted)]">
+            {t.cumLead}
+          </p>
+
+          {/* KPI headline */}
+          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { v: nf(cum.cases), l: t.cumCases, c: "var(--color-white)" },
+              { v: nf(cum.positions), l: t.positions, c: "var(--color-blue)" },
+              { v: nf(cum.avg), l: t.avgMatch, c: "#00e676" },
+              { v: nf(cum.days), l: t.cumDays, c: "var(--color-white)" },
+            ].map((k) => (
+              <div
+                key={k.l}
+                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
+              >
+                <div
+                  className="text-[22px] font-extrabold tabular-nums leading-none"
+                  style={{ color: k.c }}
+                >
+                  {k.v}
+                </div>
+                <div className="mt-1.5 text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                  {k.l}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Grafici cumulativi: conversione complessiva + distribuzione match */}
+          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+            <div className="flex flex-col">
+              <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
+                {t.cumFunnelTitle}
+              </div>
+              <div className="flex-1">
+                <ConversionFunnelCard
+                  found={cum.positions}
+                  scored={cum.scored}
+                  strong70={cum.strong70}
+                  strong80={cum.strong80}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col">
+              <ScoreDistribution
+                scores={allScores}
+                title={t.cumScoreTitle}
+                emptyLabel={t.cumScoreEmpty}
+                thresholdReady={70}
+                thresholdLabel="≥ 70"
+              />
+            </div>
+          </div>
+        </section>
 
         {/* ── Card dei case study ───────────────────────────────── */}
         <section className="mb-14">
@@ -494,7 +634,7 @@ export default async function CaseStudiesIndexPage() {
             </a>
           </div>
         </section>
-      </CaseStudiesShell>
+      </div>
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
         {t.footer}
