@@ -16,6 +16,7 @@ type Provider = {
   plan: string;
   price: string;
   url: string;
+  beta?: boolean;
 } & Record<Lang, string>;
 
 const PROVIDERS: Provider[] = [
@@ -24,7 +25,8 @@ const PROVIDERS: Provider[] = [
     plan: "Moonshot · Pro",
     price: "~€40",
     url: "https://www.kimi.com/code",
-    it: "Il più economico, validato per l'uso quotidiano: in un test reale ha lavorato giorni interi trovando centinaia di posizioni. Ottimo punto di partenza.",
+    beta: true,
+    it: "Output paragonabile agli altri due ma a una frazione del prezzo: il miglior rapporto prezzo/risultato. Il modello è ancora in rifinitura sulla gestione del budget giornaliero.",
     en: "The most affordable, validated for everyday use: in a real test it ran for days, finding hundreds of openings. A great starting point.",
     es: "El más económico, validado para el uso diario: en una prueba real trabajó durante días enteros encontrando cientos de posiciones. Un excelente punto de partida.",
     fr: "Le plus économique, validé pour un usage quotidien : lors d'un test réel, il a travaillé des journées entières en trouvant des centaines d'offres. Un excellent point de départ.",
@@ -37,7 +39,7 @@ const PROVIDERS: Provider[] = [
     plan: "Anthropic · Max",
     price: "~€90",
     url: "https://www.anthropic.com/pricing",
-    it: "La massima precisione, il migliore per valutare le offerte e scrivere i CV. Per chi vuole il risultato migliore possibile.",
+    it: "Un po' meno output di Codex, ma il più preciso e il più intelligente: la scelta migliore per valutare le offerte e scrivere i CV con cura.",
     en: "The highest precision, best for evaluating jobs and writing CVs. For those who want the very best result.",
     es: "La máxima precisión, el mejor para evaluar las ofertas y escribir los CV. Para quien quiere el mejor resultado posible.",
     fr: "La précision maximale, le meilleur pour évaluer les offres et rédiger les CV. Pour qui veut le meilleur résultat possible.",
@@ -50,7 +52,7 @@ const PROVIDERS: Provider[] = [
     plan: "OpenAI · Plus / Pro",
     price: "~€100",
     url: "https://openai.com/chatgpt/pricing",
-    it: "Equilibrio tra qualità e costo. Testato su server: 131 posizioni elaborate in 48 ore.",
+    it: "Il più completo: provato a fondo in ogni scenario, offre l'output migliore per qualità e quantità. La scelta più solida se vuoi il massimo dal team.",
     en: "A balance of quality and cost. Tested on a server: 131 openings processed in 48 hours.",
     es: "Equilibrio entre calidad y coste. Probado en servidor: 131 posiciones procesadas en 48 horas.",
     fr: "Un équilibre entre qualité et coût. Testé sur serveur : 131 offres traitées en 48 heures.",
@@ -283,9 +285,14 @@ function PricingContent() {
             {PROVIDERS.map((prov) => (
               <div
                 key={prov.name}
-                className="flex flex-col border border-[var(--color-border)] p-6"
+                className="relative flex flex-col border border-[var(--color-border)] p-6"
                 style={{ background: "var(--color-panel)" }}
               >
+                {prov.beta && (
+                  <span className="absolute top-5 right-5 text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
+                    beta
+                  </span>
+                )}
                 <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-muted)] mb-2">
                   {prov.plan}
                 </span>
