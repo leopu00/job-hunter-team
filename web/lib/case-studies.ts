@@ -25,6 +25,7 @@ export const CONTRIBUTE_LINKS = {
   repo: GITHUB_REPO,
   results: `${GITHUB_REPO}/blob/master/docs/about/RESULTS.md`,
   contributing: `${GITHUB_REPO}/blob/master/.github/CONTRIBUTING.md`,
+  beta: `${GITHUB_REPO}/blob/master/docs/guides/BETA.md`,
   install: `${GITHUB_REPO}#installation`,
 };
 
