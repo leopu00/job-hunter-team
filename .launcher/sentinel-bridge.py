@@ -997,6 +997,11 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
             "ratio": wp.get("ratio"), "kind": kind if kind not in (None, "ND") else None,
             "debt": wp.get("debt_pct"), "early_lockout": wp.get("early_lockout_h"),
             "burn_mode": bool(wp.get("burn_mode")),
+            # Verdetto imperativo Passo A (RALLENTA ~X%/ACCELERA-SATURA/...): la
+            # CONCLUSIONE pronta per un modello debole (Kimi), non solo i numeri.
+            # Il renderer lo mostra come headline della sezione SETTIMANA.
+            "verdict": (_pace_verdict_line(
+                wp, entry.get("weekly_remaining_pct")) or "").strip() or None,
         }
     extras = {}
     mrp = parsed.get("monthly_remaining_pct") if isinstance(parsed, dict) else None
@@ -1822,10 +1827,14 @@ def main():
             # in pausa il team è on-pace (should_notify=False) e non rivedremmo mai
             # il rientro. Una skill-call in più al tick: costo trascurabile.
             daily_halted = False
-            _hd = _daily_pacing_via_skill(
+            # _daily_pacing_via_skill ritorna un dict {budget, consumed, ...}
+            # (o (None, None) nei path non calcolabili). NON spacchettare a tupla:
+            # su dict a >2 chiavi Python solleva "too many values to unpack" e il
+            # loop va in FATAL→restart ogni 5s (crash-loop). Estrai per chiave.
+            _dp = _daily_pacing_via_skill(
                 entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
-            _hb = _hd.get("budget") if isinstance(_hd, dict) else None
-            _hc = _hd.get("consumed") if isinstance(_hd, dict) else None
+            _hb = _dp.get("budget") if isinstance(_dp, dict) else None
+            _hc = _dp.get("consumed") if isinstance(_dp, dict) else None
             if isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
                 _hcap = _hb + 5.0
                 _over_cap = _hc > _hcap
