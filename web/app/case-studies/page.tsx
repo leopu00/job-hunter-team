@@ -401,7 +401,7 @@ export default async function CaseStudiesIndexPage() {
                       className="text-[18px] font-extrabold tabular-nums"
                       style={{ color: "#00e676" }}
                     >
-                      {nf(cs.run.match.strong70)}
+                      {nf(cs.run.conversion?.strong70 ?? cs.run.match.strong70)}
                     </div>
                     <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
                       {t.strongMatch}
