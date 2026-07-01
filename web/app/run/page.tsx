@@ -194,108 +194,138 @@ const PAGE = {
   en: {
     title: "How to run it",
     subtitle:
-      "Choose where the team runs and manage it however you like — desktop app, terminal, or both together. You're never locked into a single tool.",
+      "The team works for you day and night, so it needs a computer that's always on: yours, a dedicated one, or a cloud server.",
+    setupNote:
+      "It all starts from the desktop app: that's where you configure and command the team. You install it on a computer within reach and manage everything from there, whether the team runs on that same machine or on a remote VPS.",
     ctrlTitle: "How you control it",
     ctrlIntro:
-      "You're not tied to one tool: desktop app, terminal, or both together — same runtime, same features.",
+      "You're not tied to one tool: manage the team from the desktop app, the terminal, or both together — same runtime, same features. And if you log in and sync your data to the cloud, you'll find it on the web too: open the dashboard and check it from your phone or any browser, without staying at the computer it runs on.",
     ctrlDesktopLabel: "Desktop app",
     ctrlDesktopBody:
       "The graphical remote control: it installs Docker, starts and stops the team, shows its status in real time, and connects to a VPS too.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
-      "The same things from the command line, to switch with the desktop app whenever you like.",
-    ctrlAssistant:
-      "And it's not either/or: while you use the desktop interface, you can also talk to your personal AI assistant — like Claude Code or OpenClaw — which manages the team for you from the terminal.",
+      "The same features from the command line. You can also hand them to your personal AI assistant, like Claude Code or OpenClaw.",
+    ctrlBrowserLabel: "Browser",
+    ctrlBrowserBody:
+      "With login, open the dashboard from any browser, even your phone, and follow the team wherever you are.",
+    ctrlWeb:
+      "Login always stays optional: if you prefer, your data stays only on your computer, with no cloud at all.",
     ctaDownload: "Download the app →",
     back: "← Back to home",
   },
   es: {
     title: "Cómo se inicia",
     subtitle:
-      "Elige dónde hacer funcionar el equipo y gestiónalo como prefieras — app de escritorio, terminal, o ambos a la vez. No estás atado a una sola herramienta.",
+      "El equipo trabaja para ti día y noche, por eso necesita un ordenador siempre encendido: el tuyo, uno dedicado, o un servidor en la nube.",
+    setupNote:
+      "Todo parte de la app de escritorio: desde ahí configuras y comandas el equipo. La instalas en un ordenador a mano y desde ahí gestionas todo, tanto si el equipo corre en esa misma máquina como en una VPS remota.",
     ctrlTitle: "Cómo lo controlas",
     ctrlIntro:
-      "No estás atado a una sola herramienta: app de escritorio, terminal, o ambos a la vez — mismo runtime, mismas funciones.",
+      "No estás atado a una sola herramienta: gestionas el equipo desde la app de escritorio, el terminal, o ambos a la vez, con el mismo runtime y las mismas funciones. Y si inicias sesión y sincronizas los datos en la nube, lo tienes también en la web: abres la dashboard y la consultas desde el móvil o cualquier navegador, sin tener que quedarte en el ordenador donde corre.",
     ctrlDesktopLabel: "App de escritorio",
     ctrlDesktopBody:
       "El mando a distancia con interfaz gráfica: instala Docker, inicia y detiene el equipo, muestra su estado en tiempo real y también conecta una VPS.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
-      "Las mismas cosas desde la línea de comandos, para alternar con la app de escritorio cuando quieras.",
-    ctrlAssistant:
-      "Y no es uno u otro: mientras usas la interfaz gráfica de escritorio, también puedes hablar con tu asistente de IA personal — como Claude Code u OpenClaw — que desde el terminal gestiona el equipo en tu lugar.",
+      "Las mismas funciones desde la línea de comandos. También puedes confiárselas a tu asistente de IA personal, como Claude Code u OpenClaw.",
+    ctrlBrowserLabel: "Navegador",
+    ctrlBrowserBody:
+      "Con el inicio de sesión abres la dashboard desde cualquier navegador, incluso desde el móvil, y sigues al equipo estés donde estés.",
+    ctrlWeb:
+      "El inicio de sesión siempre es opcional: si lo prefieres, tus datos se quedan solo en tu ordenador, sin ninguna nube.",
     ctaDownload: "Descarga la app →",
     back: "← Volver al inicio",
   },
   fr: {
     title: "Comment le lancer",
     subtitle:
-      "Choisissez où faire tourner l'équipe et gérez-la comme vous le souhaitez — app de bureau, terminal, ou les deux ensemble. Vous n'êtes lié à aucun outil unique.",
+      "L'équipe travaille pour vous jour et nuit, elle a donc besoin d'un ordinateur toujours allumé : le vôtre, un dédié, ou un serveur dans le cloud.",
+    setupNote:
+      "Tout part de l'app de bureau : c'est là que vous configurez et pilotez l'équipe. Vous l'installez sur un ordinateur à portée de main et gérez tout depuis là, que l'équipe tourne sur cette même machine ou sur un VPS distant.",
     ctrlTitle: "Comment vous le contrôlez",
     ctrlIntro:
-      "Vous n'êtes pas lié à un seul outil : app de bureau, terminal, ou les deux ensemble — même runtime, mêmes fonctions.",
+      "Vous n'êtes lié à aucun outil unique : vous gérez l'équipe depuis l'app de bureau, le terminal, ou les deux ensemble, avec le même runtime et les mêmes fonctions. Et si vous vous connectez et synchronisez vos données dans le cloud, vous la retrouvez aussi sur le web : ouvrez la dashboard et consultez-la depuis votre téléphone ou n'importe quel navigateur, sans rester à l'ordinateur où elle tourne.",
     ctrlDesktopLabel: "App de bureau",
     ctrlDesktopBody:
       "La télécommande à interface graphique : elle installe Docker, démarre et arrête l'équipe, affiche son état en temps réel et connecte aussi un VPS.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
-      "Les mêmes choses depuis la ligne de commande, à alterner avec l'app de bureau quand vous le voulez.",
-    ctrlAssistant:
-      "Et ce n'est pas l'un ou l'autre : pendant que vous utilisez l'interface graphique de bureau, vous pouvez aussi parler à votre assistant d'IA personnel — comme Claude Code ou OpenClaw — qui, depuis le terminal, gère l'équipe à votre place.",
+      "Les mêmes fonctions depuis la ligne de commande. Vous pouvez aussi les confier à votre assistant d'IA personnel, comme Claude Code ou OpenClaw.",
+    ctrlBrowserLabel: "Navigateur",
+    ctrlBrowserBody:
+      "Avec la connexion, ouvrez la dashboard depuis n'importe quel navigateur, même votre téléphone, et suivez l'équipe où que vous soyez.",
+    ctrlWeb:
+      "La connexion reste toujours facultative : si vous préférez, vos données restent uniquement sur votre ordinateur, sans aucun cloud.",
     ctaDownload: "Téléchargez l'app →",
     back: "← Retour à l'accueil",
   },
   de: {
     title: "So wird es gestartet",
     subtitle:
-      "Wähle, wo das Team läuft, und verwalte es, wie du möchtest — Desktop-App, Terminal oder beides zusammen. Du bist an kein einzelnes Werkzeug gebunden.",
+      "Das Team arbeitet Tag und Nacht für dich, also braucht es einen Computer, der immer läuft: deinen, einen eigenen oder einen Cloud-Server.",
+    setupNote:
+      "Alles beginnt mit der Desktop-App: Von dort aus konfigurierst und steuerst du das Team. Du installierst sie auf einem Computer in Reichweite und verwaltest von dort aus alles — egal, ob das Team auf derselben Maschine oder auf einem entfernten VPS läuft.",
     ctrlTitle: "So steuerst du es",
     ctrlIntro:
-      "Du bist nicht an ein einziges Werkzeug gebunden: Desktop-App, Terminal oder beides zusammen — gleiche Laufzeitumgebung, gleiche Funktionen.",
+      "Du bist an kein einzelnes Werkzeug gebunden: Du verwaltest das Team über die Desktop-App, das Terminal oder beides zusammen — gleiche Laufzeitumgebung, gleiche Funktionen. Und wenn du dich anmeldest und deine Daten in die Cloud synchronisierst, findest du es auch im Web: Öffne die Dashboard und sieh sie dir vom Handy oder jedem Browser aus an, ohne am Computer bleiben zu müssen, auf dem es läuft.",
     ctrlDesktopLabel: "Desktop-App",
     ctrlDesktopBody:
       "Die Fernbedienung mit grafischer Oberfläche: Sie installiert Docker, startet und stoppt das Team, zeigt seinen Status in Echtzeit und verbindet auch einen VPS.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
-      "Dasselbe über die Kommandozeile, um nach Belieben mit der Desktop-App zu wechseln.",
-    ctrlAssistant:
-      "Und es ist kein Entweder-oder: Während du die grafische Desktop-Oberfläche nutzt, kannst du auch mit deinem persönlichen KI-Assistenten sprechen — wie Claude Code oder OpenClaw — der vom Terminal aus das Team für dich verwaltet.",
+      "Dieselben Funktionen über die Kommandozeile. Du kannst sie auch deinem persönlichen KI-Assistenten überlassen, wie Claude Code oder OpenClaw.",
+    ctrlBrowserLabel: "Browser",
+    ctrlBrowserBody:
+      "Mit Anmeldung öffnest du die Dashboard von jedem Browser aus, sogar vom Handy, und verfolgst das Team, wo immer du bist.",
+    ctrlWeb:
+      "Die Anmeldung bleibt immer optional: Wenn du möchtest, bleiben deine Daten nur auf deinem Computer, ganz ohne Cloud.",
     ctaDownload: "App herunterladen →",
     back: "← Zurück zur Startseite",
   },
   hu: {
     title: "Hogyan indítható",
     subtitle:
-      "Válaszd ki, hol fusson a csapat, és kezeld úgy, ahogy szeretnéd — asztali app, terminál, vagy a kettő együtt. Soha nem vagy egyetlen eszközhöz kötve.",
+      "A csapat éjjel-nappal dolgozik érted, ezért egy mindig bekapcsolt számítógépre van szüksége: a tiédre, egy dedikáltra, vagy egy felhőszerverre.",
+    setupNote:
+      "Minden az asztali appból indul: onnan állítod be és irányítod a csapatot. Egy kéznél lévő számítógépre telepíted, és onnan kezelsz mindent, akár ugyanazon a gépen fut a csapat, akár egy távoli VPS-en.",
     ctrlTitle: "Hogyan vezérled",
     ctrlIntro:
-      "Nem vagy egyetlen eszközhöz kötve: asztali app, terminál, vagy a kettő együtt — ugyanaz a futtatókörnyezet, ugyanazok a funkciók.",
+      "Nem vagy egyetlen eszközhöz kötve: az asztali appból, a terminálból, vagy a kettőből együtt kezeled a csapatot, ugyanazzal a futtatókörnyezettel és ugyanazokkal a funkciókkal. És ha bejelentkezel és a felhőbe szinkronizálod az adatokat, a weben is megtalálod: megnyitod a dashboardot, és a telefonodról vagy bármelyik böngészőből megnézed, anélkül hogy annál a gépnél kellene maradnod, amelyen fut.",
     ctrlDesktopLabel: "Asztali app",
     ctrlDesktopBody:
       "A grafikus felületű távirányító: telepíti a Dockert, elindítja és leállítja a csapatot, valós időben mutatja az állapotát, és VPS-hez is csatlakozik.",
     ctrlTerminalLabel: "Terminál (CLI / TUI)",
     ctrlTerminalBody:
-      "Ugyanazok a dolgok a parancssorból, hogy tetszés szerint válts az asztali appal.",
-    ctrlAssistant:
-      "És nem vagy-vagy: miközben az asztali grafikus felületet használod, beszélgethetsz is a személyes AI-asszisztenseddel — mint a Claude Code vagy az OpenClaw —, amely a terminálból helyetted kezeli a csapatot.",
+      "Ugyanazok a funkciók a parancssorból. Rá is bízhatod őket a személyes AI-asszisztensedre, mint a Claude Code vagy az OpenClaw.",
+    ctrlBrowserLabel: "Böngésző",
+    ctrlBrowserBody:
+      "Bejelentkezéssel bármelyik böngészőből megnyitod a dashboardot, akár a telefonodról is, és bárhol követheted a csapatot.",
+    ctrlWeb:
+      "A bejelentkezés mindig opcionális marad: ha úgy szeretnéd, az adataid csak a saját gépeden maradnak, felhő nélkül.",
     ctaDownload: "Töltsd le az appot →",
     back: "← Vissza a főoldalra",
   },
   pt: {
     title: "Como se inicia",
     subtitle:
-      "Escolhe onde a equipa funciona e gere-a como preferires — app de ambiente de trabalho, terminal, ou ambos juntos. Nunca ficas preso a uma única ferramenta.",
+      "A equipa trabalha para ti dia e noite, por isso precisa de um computador sempre ligado: o teu, um dedicado, ou um servidor na nuvem.",
+    setupNote:
+      "Tudo parte da app de ambiente de trabalho: é dali que configuras e comandas a equipa. Instala-la num computador à mão e geres tudo a partir daí, quer a equipa corra nessa mesma máquina, quer num VPS remoto.",
     ctrlTitle: "Como a controlas",
     ctrlIntro:
-      "Não estás preso a uma só ferramenta: app de ambiente de trabalho, terminal, ou ambos juntos — mesmo runtime, mesmas funções.",
+      "Não estás preso a uma só ferramenta: geres a equipa a partir da app de ambiente de trabalho, do terminal, ou de ambos juntos, com o mesmo runtime e as mesmas funções. E se iniciares sessão e sincronizares os dados na nuvem, encontra-la também na web: abres a dashboard e consulta-la a partir do telemóvel ou de qualquer navegador, sem teres de ficar no computador onde corre.",
     ctrlDesktopLabel: "App de ambiente de trabalho",
     ctrlDesktopBody:
       "O comando à distância com interface gráfica: instala o Docker, inicia e para a equipa, mostra o seu estado em tempo real e também liga um VPS.",
     ctrlTerminalLabel: "Terminal (CLI / TUI)",
     ctrlTerminalBody:
-      "As mesmas coisas a partir da linha de comandos, para alternar com a app de ambiente de trabalho quando quiseres.",
-    ctrlAssistant:
-      "E não é um ou outro: enquanto usas a interface gráfica de ambiente de trabalho, também podes falar com o teu assistente de IA pessoal — como o Claude Code ou o OpenClaw — que, a partir do terminal, gere a equipa por ti.",
+      "As mesmas funções a partir da linha de comandos. Também podes confiá-las ao teu assistente de IA pessoal, como o Claude Code ou o OpenClaw.",
+    ctrlBrowserLabel: "Navegador",
+    ctrlBrowserBody:
+      "Com o início de sessão abres a dashboard a partir de qualquer navegador, até do telemóvel, e acompanhas a equipa onde quer que estejas.",
+    ctrlWeb:
+      "O início de sessão é sempre opcional: se preferires, os teus dados ficam só no teu computador, sem qualquer nuvem.",
     ctaDownload: "Transfere a app →",
     back: "← Voltar ao início",
   },
