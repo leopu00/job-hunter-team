@@ -36,7 +36,7 @@ import sys
 EXPECTED = [
     ("sentinel-bridge",    "sentinel-bridge.py",    "bridge-suite"),
     ("pacing-bridge",      "pacing-bridge.py",      "bridge-suite"),
-    ("capitano-bridge",    "capitano-bridge.py",    "bridge-suite"),
+    ("heartbeat-bridge",   "heartbeat-bridge.py",   "bridge-suite"),
     ("window-ratio-meter", "window_ratio_meter.py", "bridge-suite"),
     ("codex-auth-healer",  "codex-auth-healer.sh",  "bridge-suite"),
     ("agent-watchdog",     "agent-watchdog.sh",     "pid1-child"),

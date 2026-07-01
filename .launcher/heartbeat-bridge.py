@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
-capitano-bridge.py — heartbeat ORARIO al Capitano (2026-06-26).
+heartbeat-bridge.py — heartbeat ORARIO al Capitano (2026-06-26; ex capitano-bridge.py).
+
+── ROLE-MAP dei bridge deterministici (vedi docs/internal/architecture/bridges.md) ──
+  sentinel-bridge.py  → SENSORE usage: fetch provider ~2-10min (adattivo), scrive
+                        sentinel-data.jsonl, ticka la SENTINELLA ([BRIDGE TICK]).
+  pacing-bridge.py    → REPORT pacing: ogni 15min manda velocità/verdetto alla
+                        SENTINELLA ([BRIDGE PACING]). Il Capitano NON è pingato.
+  heartbeat-bridge.py → QUESTO: nudge orario al CAPITANO ([HEARTBEAT]); off-hours tace.
+  Due dei tre parlano alla SENTINELLA; solo questo parla al CAPITANO.
 
 Perché esiste: col push→pull (bridge→Sentinella) il Capitano non riceve più il
 [BRIDGE PACING] ogni 15 min, e si è osservato che resta INCAGLIATO quando la
@@ -21,13 +29,13 @@ invece il VERDETTO deterministico come ORDINE (spawna 1 Scout, C-05), perché il
 "segnale morbido" veniva razionalizzato via e la finestra chiusa a vuoto.
 
 Output:
-  - stdout (→ /tmp/capitano-bridge.log)
+  - stdout (→ /tmp/heartbeat-bridge.log)
   - tmux send al CAPITANO via jht-tmux-send (single-line)
 
 Modi:
-  python3 capitano-bridge.py            # loop orario allineato a :00
-  python3 capitano-bridge.py --once     # un colpo, stampa, niente send
-  python3 capitano-bridge.py --once --send
+  python3 heartbeat-bridge.py            # loop orario allineato a :00
+  python3 heartbeat-bridge.py --once     # un colpo, stampa, niente send
+  python3 heartbeat-bridge.py --once --send
 """
 import json
 import os
@@ -42,7 +50,7 @@ LOGS_DIR = JHT_HOME / "logs"
 SENTINEL_JSONL = LOGS_DIR / "sentinel-data.jsonl"
 AGENT_TABLE_FILE = LOGS_DIR / "agent-usage-table.json"
 DB_PATH = JHT_HOME / "jobs.db"
-STATE_FILE = LOGS_DIR / "capitano-bridge-state.json"
+STATE_FILE = LOGS_DIR / "heartbeat-bridge-state.json"
 # Daily hard-stop (#2): flag scritto dal sentinel-bridge a cap giornaliero sforato.
 # Lo leggiamo (sola lettura): a team in standby l'heartbeat orario tace.
 DAILY_HALT_FLAG = LOGS_DIR / "daily-halt.flag"
@@ -58,14 +66,14 @@ PACING_STATE_FILE = LOGS_DIR / "pacing-bridge-state.json"
 # lecito (il re-wake resta del Capitano — vedi scout.md § idle).
 MESSAGES_JSONL = LOGS_DIR / "messages.jsonl"
 SCOUT_EXHAUST_LOOKBACK_H = float(
-    os.environ.get("JHT_CAPITANO_SCOUT_EXHAUST_LOOKBACK_H", "12")
+    os.environ.get("JHT_HEARTBEAT_SCOUT_EXHAUST_LOOKBACK_H", "12")
 )
-TARGET = os.environ.get("JHT_CAPITANO_HEARTBEAT_SESSION", "CAPITANO")
+TARGET = os.environ.get("JHT_HEARTBEAT_SESSION", "CAPITANO")
 DB_QUERY = "/app/shared/skills/db_query.py"
 
 
 def _log(msg):
-    print(f"[capitano-bridge] {msg}", file=sys.stdout, flush=True)
+    print(f"[heartbeat-bridge] {msg}", file=sys.stdout, flush=True)
 
 
 def _db_count(cmd):

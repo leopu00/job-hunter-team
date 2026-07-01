@@ -297,7 +297,7 @@ while true; do
     for role in "${AGENTS[@]}"; do
       ensure_agent "$role"
     done
-    # Bridge/daemon detached (sentinel/pacing/capitano-bridge/window-ratio/
+    # Bridge/daemon detached (sentinel/pacing/heartbeat-bridge/window-ratio/
     # codex-auth-healer + tg-bridge): respawn se morti, con anti-flap. Sono
     # fuori dal respawn-on-crash di pid1 (setsid), questo è il loro recovery.
     maybe_respawn_bridges
