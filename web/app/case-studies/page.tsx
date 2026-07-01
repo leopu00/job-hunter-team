@@ -140,7 +140,7 @@ const T: Record<
     dailyChartTitle: "Media al giorno · per profilo",
     dailyUnit: "giorno",
     dailyCaption:
-      "Ritmo sostenibile: output mensile stimato ÷ giorni del mese; la quota ≥80 è evidenziata in verde vivo.",
+      "Ritmo sostenibile: output mensile stimato ÷ giorni del mese, esclusa la sessione free-run senza monitor (troppo breve per essere rappresentativa); la quota ≥80 è evidenziata in verde vivo.",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "📥 Contribuisci con i tuoi dati",
@@ -201,7 +201,7 @@ const T: Record<
     dailyChartTitle: "Average per day · by profile",
     dailyUnit: "day",
     dailyCaption:
-      "Sustainable pace: estimated monthly output ÷ days in a month; the ≥80 share is highlighted in bright green.",
+      "Sustainable pace: estimated monthly output ÷ days in a month, excluding the unmonitored free-run session (too short to be representative); the ≥80 share is highlighted in bright green.",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "📥 Contribute your data",
@@ -262,7 +262,7 @@ const T: Record<
     dailyChartTitle: "Media al día · por perfil",
     dailyUnit: "día",
     dailyCaption:
-      "Ritmo sostenible: output mensual estimado ÷ días del mes; la cuota ≥80 está resaltada en verde vivo.",
+      "Ritmo sostenible: output mensual estimado ÷ días del mes, excluida la sesión free-run sin monitor (demasiado corta para ser representativa); la cuota ≥80 está resaltada en verde vivo.",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "📥 Contribuye con tus datos",
@@ -324,7 +324,7 @@ const T: Record<
     dailyChartTitle: "Moyenne par jour · par profil",
     dailyUnit: "jour",
     dailyCaption:
-      "Rythme soutenable : output mensuel estimé ÷ jours du mois ; la part ≥80 est mise en évidence en vert vif.",
+      "Rythme soutenable : output mensuel estimé ÷ jours du mois, hors session free-run sans monitor (trop courte pour être représentative) ; la part ≥80 est mise en évidence en vert vif.",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "📥 Contribue avec tes données",
@@ -386,7 +386,7 @@ const T: Record<
     dailyChartTitle: "Durchschnitt pro Tag · je Profil",
     dailyUnit: "Tag",
     dailyCaption:
-      "Nachhaltiges Tempo: geschätzter Monats-Output ÷ Tage im Monat; der ≥80-Anteil ist in kräftigem Grün hervorgehoben.",
+      "Nachhaltiges Tempo: geschätzter Monats-Output ÷ Tage im Monat, ohne die unüberwachte Free-Run-Session (zu kurz, um repräsentativ zu sein); der ≥80-Anteil ist in kräftigem Grün hervorgehoben.",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "📥 Steuere deine Daten bei",
@@ -448,7 +448,7 @@ const T: Record<
     dailyChartTitle: "Napi átlag · profilonként",
     dailyUnit: "nap",
     dailyCaption:
-      "Fenntartható tempó: becsült havi output ÷ a hónap napjai; a ≥80 hányad élénkzölddel kiemelve.",
+      "Fenntartható tempó: becsült havi output ÷ a hónap napjai, a monitor nélküli free-run munkamenet kizárva (túl rövid ahhoz, hogy reprezentatív legyen); a ≥80 hányad élénkzölddel kiemelve.",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "📥 Járulj hozzá az adataiddal",
@@ -509,7 +509,7 @@ const T: Record<
     dailyChartTitle: "Média por dia · por perfil",
     dailyUnit: "dia",
     dailyCaption:
-      "Ritmo sustentável: output mensal estimado ÷ dias do mês; a quota ≥80 está destacada em verde vivo.",
+      "Ritmo sustentável: output mensal estimado ÷ dias do mês, excluída a sessão free-run sem monitor (demasiado curta para ser representativa); a quota ≥80 está destacada em verde vivo.",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "📥 Contribui com os teus dados",
@@ -612,7 +612,9 @@ export default async function CaseStudiesIndexPage() {
   const dailyStudies = localized
     .map((cs) => {
       const sd = cs.run.scoreDaily ?? [];
-      if (sd.length === 0) return null;
+      // Escludi le sessioni free-run (burst di pochi giorni): il tasso giornaliero
+      // non sarebbe rappresentativo (es. Technical Writing · Codex, ~3 giorni).
+      if (cs.freeRun || sd.length === 0) return null;
       const { multiplier } = caseMonthlyProjection(
         cs.run,
         caseRunInfo(cs.run, locale).days,

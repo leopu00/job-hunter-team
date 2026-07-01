@@ -77,6 +77,10 @@ export interface CaseStudyMeta {
   profile: CaseStudyProfile;
   /** fasi del run con modello diverso (opzionale); se assente = run mono-fase */
   phases?: CaseStudyPhase[];
+  /** sessione free-run senza monitor del budget (burst di pochi giorni che ha
+   *  bruciato una settimana di budget): esclusa dalle statistiche di tasso
+   *  giornaliero, dove pochi giorni non sono rappresentativi. */
+  freeRun?: boolean;
   run: CaseStudyRun;
 }
 
@@ -145,6 +149,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
         detail: "hourly",
       },
     ],
+    freeRun: true, // burst senza monitor: escluso dai tassi giornalieri
     run: betaBCodexRun as unknown as CaseStudyRun,
   },
   // ── Beta tester 2 · finance, inizio carriera (Codex) ────────────────────
