@@ -1822,8 +1822,10 @@ def main():
             # in pausa il team è on-pace (should_notify=False) e non rivedremmo mai
             # il rientro. Una skill-call in più al tick: costo trascurabile.
             daily_halted = False
-            _hb, _hc = _daily_pacing_via_skill(
+            _hd = _daily_pacing_via_skill(
                 entry, datetime.fromtimestamp(now_ts, tz=timezone.utc), now_ts)
+            _hb = _hd.get("budget") if isinstance(_hd, dict) else None
+            _hc = _hd.get("consumed") if isinstance(_hd, dict) else None
             if isinstance(_hb, (int, float)) and isinstance(_hc, (int, float)):
                 _hcap = _hb + 5.0
                 _over_cap = _hc > _hcap
