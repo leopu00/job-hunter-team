@@ -411,7 +411,7 @@ export const es: Record<string, string> = {
   home_setup_kicker: "Ejecútalo",
   home_setup_title: "Como quieras, donde quieras",
   home_setup_body:
-    "En tu PC con Docker, en un ordenador dedicado siempre encendido o en una VPS económica que trabaja para ti día y noche. Todo se gestiona desde la app de escritorio: inicia, detén y vigila al equipo con un clic.",
+    "Funciona en un ordenador dedicado siempre encendido o en una VPS económica, y trabaja para ti día y noche. Lo gestionas desde la app de escritorio: inicias, detienes y vigilas al equipo con un clic. Y no estás atado a ese ordenador: desde la web puedes seguir los resultados y hablar con el equipo también desde otro PC o el móvil.",
   home_setup_cta: "Cómo ejecutarlo →",
   home_pricing_kicker: "Precios",
   home_pricing_title: "Código abierto. La plataforma es gratis.",
