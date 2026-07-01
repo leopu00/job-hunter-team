@@ -2,6 +2,13 @@
 // base it/en/hu; le chiavi assenti ripiegano automaticamente su `en`.
 // Le chiavi array (ta()) non passano dall'overlay: vivono solo nella base.
 export const fr: Record<string, string> = {
+  // Chiavi aggiunte (allineamento i18n)
+  home_intro: "Job Hunter Team est une équipe d'agents IA autonomes qui cherchent un emploi pour vous, sans relâche. Chaque agent est un spécialiste : l'un repère les offres, un autre les analyse en détail et un autre attribue à chacune une note, selon sa proximité avec ce qui compte vraiment pour vous. Sur votre demande, ils préparent aussi le CV pour votre candidature. Et quand les candidatures envoyées ne suffisent pas à trouver un emploi, un agent dédié vous accompagne : il vous aide à vous orienter sur le marché du travail et à vous rapprocher du poste que vous désirez. C'est vous qui donnez la direction et gardez le dernier mot ; le reste, l'équipe s'en charge, en privé, sur votre propre machine.",
+  theme_system: "système",
+  theme_dark: "nuit",
+  theme_light: "jour",
+  nav_run: "Comment le lancer",
+  home_pricing_alt: "Un cadenas ouvert entouré de quelques pièces, une verte lumineuse : la plateforme est gratuite et open source, vous ne payez que le fournisseur d'IA.",
   // Nav
   nav_features: "Fonctionnalités",
   nav_how: "Comment ça marche",
@@ -21,9 +28,9 @@ export const fr: Record<string, string> = {
   hero_badge: "bêta publique",
   hero_title_1: "Votre équipe d'agents IA",
   hero_title_2: "pour trouver un emploi",
-  hero_desc_short: "Une équipe d'agents IA pour votre recherche d'emploi.",
+  hero_desc_short: "Une équipe d'agents IA autonomes pour votre recherche d'emploi.",
   hero_desc:
-    "Un système multi-agent qui automatise chaque étape de votre recherche : du scan des offres à la candidature personnalisée. Vous définissez la stratégie, les agents l'exécutent.",
+    "Un système multi-agent autonome qui prend en charge chaque étape de votre recherche : du scan des offres à la candidature personnalisée. Vous définissez la stratégie, les agents l'exécutent.",
   hero_cta: "Commencez ici",
   hero_cta2: "Découvrez comment ça marche",
   hero_project_cta: "GitHub",
@@ -48,7 +55,7 @@ export const fr: Record<string, string> = {
     "Chaque offre est analysée et évaluée selon votre profil, vos compétences et vos préférences. Concentrez-vous sur l'essentiel.",
   feat_4_title: "Tableau de Bord en Temps Réel",
   feat_4_desc:
-    "Métriques, analytics et statut de chaque candidature. Tout en une vue : tokens, coûts, latence, pipeline complet.",
+    "Métriques, analytics et statut de chaque candidature. Tout en une vue : progression, coûts et le pipeline complet d'un coup d'œil.",
   feat_5_title: "Vous aux Commandes",
   feat_5_desc:
     "Les agents proposent, vous décidez. Chaque candidature requiert votre validation avant l'envoi.",
@@ -119,7 +126,7 @@ export const fr: Record<string, string> = {
   // Footer
   footer_jht: "Job Hunter Team",
   footer_brand_desc:
-    "Une équipe d'agents IA qui cherche un emploi pour vous. Open source, local, privé.",
+    "Une équipe d'agents IA autonomes qui cherche un emploi pour vous. Open source, local, privé.",
   footer_product: "Produit",
   footer_stats: "Projet",
   footer_report: "Rapports",
@@ -228,7 +235,7 @@ export const fr: Record<string, string> = {
   about_title_1: "Une équipe d'agents IA",
   about_title_2: "à votre service",
   about_intro:
-    "Job Hunter Team est un projet open-source qui automatise la recherche d'emploi avec un système multi-agent. Chaque agent a un rôle précis, et ensemble ils forment un pipeline complet : de la découverte des offres à la candidature finale.",
+    "Job Hunter Team est un projet open-source qui automatise la recherche d'emploi avec une équipe d'agents IA autonomes. Chaque agent a un rôle précis, et ensemble ils forment un pipeline complet : de la découverte des offres à la candidature finale.",
   about_story_label: "l'histoire",
   about_story_title: "Comment le projet est né",
   about_story_desc:
@@ -261,7 +268,7 @@ export const fr: Record<string, string> = {
     "Le relecteur. Il examine d'un œil critique chaque document produit par le Rédacteur : cohérence, erreurs, mots-clés manquants, ton inadéquat. Si nécessaire, il renvoie le travail au Rédacteur avec un retour précis.",
   about_agent_sentinella_name: "Sentinelle",
   about_agent_sentinella_desc:
-    "Le gardien. Il surveille les coûts API, la consommation de tokens, la latence et la santé du système. Il vous alerte si quelque chose ne va pas et garantit que l'équipe opère dans les limites de budget définies.",
+    "Le gardien. Il surveille les coûts API, l'utilisation, les temps de réponse et la santé du système. Il vous alerte si quelque chose ne va pas et garantit que l'équipe opère dans les limites de budget définies.",
   about_agent_assistente_name: "Assistant",
   about_agent_assistente_desc:
     "Le support. Il répond à vos questions, vous guide dans la configuration, explique les décisions des autres agents. Il est votre référent quand vous avez besoin d'aide ou que vous voulez comprendre ce qui se passe.",
@@ -393,7 +400,7 @@ export const fr: Record<string, string> = {
   home_team_kicker: "L'équipe",
   home_team_title: "Une équipe, pas un seul bot",
   home_team_body:
-    "Derrière Job Hunter Team se trouve une équipe d'agents IA spécialisés : l'un trouve les offres, l'autre les vérifie, l'autre les note, l'autre rédige votre CV et l'autre le critique sans pitié. Chacun fait une chose, et la fait bien.",
+    "Un seul chatbot doit tout faire lui-même et n'excelle en rien. Une équipe, non : chaque agent a une tâche précise et la mène à fond, et le travail de chacun passe au crible du suivant. Ainsi chaque étape est confiée à celui qui sait le mieux la faire, et ce qui vous parvient a déjà été vérifié plusieurs fois.",
   home_team_cta: "Découvrez l'équipe →",
   home_dashboard_kicker: "Votre tableau de bord",
   home_dashboard_title: "Tout sous contrôle, depuis le web",

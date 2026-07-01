@@ -89,16 +89,17 @@ const translations = {
   hero_desc_short: {
     it: "Una squadra di agenti AI autonomi per la tua ricerca di lavoro.",
     en: "An autonomous AI agent team for your job search.",
-    hu: "AI ügynök csapat az álláskeresésedhez.",
+    hu: "Autonóm AI-ügynökök csapata az álláskeresésedhez.",
   },
   hero_desc: {
     it: "Un sistema multi-agente autonomo che gestisce ogni fase della ricerca: dalla scansione delle offerte alla candidatura personalizzata. Tu decidi la strategia, gli agenti eseguono.",
     en: "An autonomous multi-agent system that handles every step of your job search: from scanning listings to personalized applications. You set the strategy, the agents execute.",
-    hu: "Egy multi-ügynök rendszer, amely automatizálja az álláskeresés minden lépését: az ajánlatok keresésétől a személyre szabott jelentkezésekig. Te döntesz a stratégiáról, az ügynökök végrehajtják.",
+    hu: "Autonóm multi-ügynök rendszer, amely az álláskeresés minden lépését elvégzi: az ajánlatok keresésétől a személyre szabott jelentkezésekig. Te döntesz a stratégiáról, az ügynökök végrehajtják.",
   },
   home_intro: {
     it: "Job Hunter Team è una squadra di agenti AI autonomi che cercano lavoro per te, di continuo. Ogni agente è uno specialista: c'è chi individua le offerte, chi le analizza nel dettaglio e chi assegna a ciascuna un punteggio, in base a quanto è vicina a ciò che conta davvero per te. Su tua richiesta preparano anche il CV per candidarti. E quando le candidature inviate non bastano a trovare lavoro, un agente dedicato ti affianca: ti aiuta a orientarti nel mercato del lavoro e ad avvicinarti al ruolo che desideri. La direzione la dai tu e l'ultima parola resta sempre tua; il resto lo porta avanti il team, in privato, sulla tua macchina.",
     en: "Job Hunter Team is a team of autonomous AI agents that runs your job search from start to shortlist. Each agent is a specialist — one finds openings, one vets them, one scores them against what you truly want, one drafts your CV — working around the clock so the search keeps moving even when you step away. You set the direction and keep the final word; they do the work. It runs privately on your own machine and hands you a shortlist worth your time, not an inbox full of noise.",
+    hu: "A Job Hunter Team autonóm AI-ügynökök csapata, amely folyamatosan állást keres neked. Minden ügynök szakember: az egyik megtalálja az ajánlatokat, egy másik részletesen elemzi őket, egy pedig pontszámot ad mindegyiknek aszerint, mennyire áll közel ahhoz, ami igazán számít neked. Kérésedre az önéletrajzot is elkészítik a jelentkezéshez. És amikor az elküldött jelentkezések nem elegendők az álláshoz, egy dedikált ügynök áll melléd: segít eligazodni a munkaerőpiacon, és közelebb kerülni az áhított szerephez. Az irányt te adod meg, és a végső szó mindig a tiéd; a többit a csapat viszi tovább, privát módon, a saját gépeden.",
   },
   hero_cta: { it: "Inizia qui", en: "Start here", hu: "Kezdj itt" },
   hero_cta2: {
@@ -172,9 +173,9 @@ const translations = {
     hu: "Valós Idejű Irányítópult",
   },
   feat_4_desc: {
-    it: "Metriche, analytics e stato di ogni candidatura. Tutto in una vista: token, costi, latenza, pipeline completa.",
+    it: "Metriche, analytics e stato di ogni candidatura. Tutto in una vista: avanzamento, costi e pipeline completa.",
     en: "Metrics, analytics and status of every application. All in one view: progress, costs and the full pipeline at a glance.",
-    hu: "Metrikák, analitika és minden jelentkezés állapota. Minden egy nézetben: tokenek, költségek, késleltetés, teljes folyamat.",
+    hu: "Metrikák, analitika és minden jelentkezés állapota. Minden egy nézetben: előrehaladás, költségek és a teljes folyamat egy pillantással.",
   },
   feat_5_title: {
     it: "Tu al Comando",
@@ -369,7 +370,7 @@ const translations = {
   footer_brand_desc: {
     it: "Una squadra di agenti AI autonomi che cercano lavoro per te. Open source, locale, privato.",
     en: "A team of autonomous AI agents that job-hunts for you. Open source, local, private.",
-    hu: "Egy AI ügynök csapat, amely állást keres helyetted. Nyílt forráskódú, helyi, privát.",
+    hu: "Autonóm AI-ügynökök csapata, amely állást keres helyetted. Nyílt forráskódú, helyi, privát.",
   },
   footer_product: { it: "Prodotto", en: "Product", hu: "Termék" },
   footer_stats: { it: "Progetto", en: "Project", hu: "Projekt" },
@@ -404,9 +405,9 @@ const translations = {
     en: "Open Source under MIT License",
     hu: "Nyílt forráskód MIT licenc alatt",
   },
-  theme_system: { it: "sistema", en: "system" },
-  theme_dark: { it: "notte", en: "night" },
-  theme_light: { it: "giorno", en: "day" },
+  theme_system: { it: "sistema", en: "system", hu: "rendszer" },
+  theme_dark: { it: "notte", en: "night", hu: "éjszaka" },
+  theme_light: { it: "giorno", en: "day", hu: "nappal" },
 
   // Download page
   dl_desc: {
@@ -1000,7 +1001,7 @@ const translations = {
   about_intro: {
     it: "Job Hunter Team è un progetto open-source che automatizza la ricerca di lavoro con una squadra di agenti AI autonomi. Ogni agente ha un ruolo preciso, e insieme formano una pipeline completa: dalla scoperta delle offerte alla candidatura finale.",
     en: "Job Hunter Team is an open-source project that automates job hunting with a team of autonomous AI agents. Each agent has a precise role, and together they form a complete pipeline: from discovering listings to the final application.",
-    hu: "A Job Hunter Team egy nyílt forráskódú projekt, amely automatizálja az álláskeresést egy multi-ügynök rendszerrel. Minden ügynöknek pontos szerepe van, és együtt egy teljes folyamatot alkotnak: az ajánlatok felfedezésétől a végső jelentkezésig.",
+    hu: "A Job Hunter Team egy nyílt forráskódú projekt, amely autonóm AI-ügynökök csapatával automatizálja az álláskeresést. Minden ügynöknek pontos szerepe van, és együtt teljes folyamatot alkotnak: az ajánlatok felfedezésétől a végső jelentkezésig.",
   },
 
   about_story_label: { it: "la storia", en: "the story", hu: "a történet" },
@@ -1085,9 +1086,9 @@ const translations = {
     hu: "Őrszem",
   },
   about_agent_sentinella_desc: {
-    it: "Il guardiano. Monitora i costi API, il consumo di token, la latenza e la salute del sistema. Ti avvisa se qualcosa non va e garantisce che il team operi entro i limiti di budget impostati.",
+    it: "Il guardiano. Monitora i costi API, i consumi, i tempi di risposta e la salute del sistema. Ti avvisa se qualcosa non va e garantisce che il team operi entro i limiti di budget impostati.",
     en: "The guardian. Monitors API costs, usage, response times and system health. Alerts you if something goes wrong and ensures the team operates within your budget limits.",
-    hu: "A őrző. Figyeli az API költségeket, token fogyasztást, késleltetést és a rendszer egészségét. Figyelmeztet, ha valami nem stimmel, és biztosítja, hogy a csapat a beállított költségvetési kereteken belül működjön.",
+    hu: "Az őrző. Figyeli az API-költségeket, a használatot, a válaszidőket és a rendszer egészségét. Figyelmeztet, ha valami nem stimmel, és biztosítja, hogy a csapat a beállított költségvetési kereteken belül működjön.",
   },
   about_agent_assistente_name: {
     it: "Assistente",
@@ -1495,7 +1496,7 @@ const translations = {
   home_team_body: {
     it: "Un solo chatbot deve fare tutto da sé e non eccelle in niente. Una squadra no: ogni agente ha un compito preciso e lo porta a fondo, e il lavoro di ciascuno passa al vaglio di quello successivo. Così ogni fase è curata da chi la sa fare meglio, e quello che arriva a te è già stato controllato più volte.",
     en: "A single chatbot spreads itself thin and masters nothing. Here every agent has one job and goes deep — and nothing one produces goes unchecked: each step is reviewed by the next. The focus of a specialist at every stage, not one generalist cutting corners.",
-    hu: "A Job Hunter Team mögött specializált AI ügynökök csapata áll: az egyik megtalálja az ajánlatokat, egy másik ellenőrzi, egy pontozza, egy megírja az önéletrajzodat és egy kíméletlenül bírálja. Mindegyik egy dolgot csinál, és jól csinálja.",
+    hu: "Egyetlen chatbotnak mindent magának kell csinálnia, és semmiben sem jeleskedik. Egy csapatnál ez másképp van: minden ügynöknek egy pontos feladata van, amelyet alaposan elvégez, és mindegyikük munkáját a következő ellenőrzi. Így minden szakaszt az gondoz, aki a legjobban ért hozzá, és ami hozzád eljut, azt már többször ellenőrizték.",
   },
   home_team_cta: {
     it: "Scopri il team →",
