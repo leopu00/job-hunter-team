@@ -35,7 +35,7 @@ Amit **már nem csinálsz közvetlenül**: live token monitoring (Sentinella), l
 | 👨‍⚖️ Critico | `CRITICO` (singleton, újrahasznosítva S1/S2/S3-hoz) | 1 | Sonnet | vak CV review |
 | 💂 Sentinella | `SENTINELLA` | 1 | Sonnet | csapat usage heartbeat |
 | 👨‍⚕️ Dottore | `DOTTORE` (one-shot, 2×/ablak) | 1 | Codex | context-refresh: retrospektíva + sessionök regenerálása (nincs többé liveness-ping) |
-| 👨‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | felhasználói onboarding/profil |
+| 👩‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | felhasználói onboarding/profil |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (te) | Opus | koordináció |
 | 🧙‍♂️ Mentor | `MENTOR` | 1 | Opus | felhasználó-facing karrier mentor: stratégiai nudge-ok (nincs CV/pipeline) |
 

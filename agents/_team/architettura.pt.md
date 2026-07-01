@@ -11,7 +11,7 @@ O JHT atribui cada funcao a um de **quatro niveis**, listados do mais alto ao ma
 |---|---|---|---|---|---|
 | 🥇 **very smart** | 👨‍✈️ Captain | `opus-4-7` · effort `high` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Decisoes criticas e irreversiveis — profundidade maxima de raciocinio |
 | 🥈 **expert** | 👨‍🏫 Writer · 👨‍⚖️ Critic · 🧙‍♂️ Mentor | `opus-4-7` · effort `medium` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Pattern-matching contra templates conhecidos (CV, revisao cega, analise de lacunas) |
-| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👨‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Pesquisa, scraping, scoring, chat com o utilizador |
+| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👩‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Pesquisa, scraping, scoring, chat com o utilizador |
 | 🎖️ **medium** | 💂 Sentinel | `sonnet-4-6` · effort `medium` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Watchdog leve — regras if-then, sem raciocinio profundo |
 
 **Niveis de effort disponiveis (para referencia):**
@@ -387,12 +387,12 @@ Fora da pipeline. Corre continuamente em paralelo.
                           │
             ┌─────────────┼─────────────┐
             ▼             ▼             ▼
-       👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
+       👩‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
        copilot                       (always-on)
 ```
 
-- **👨‍💼 Assistant** — `tier: smart`. Traduz pedidos nao tecnicos do utilizador em ordens para o Captain. Esconde detalhes de implementacao do chat orientado ao utilizador.
+- **👩‍💼 Assistant** — `tier: smart`. Traduz pedidos nao tecnicos do utilizador em ordens para o Captain. Esconde detalhes de implementacao do chat orientado ao utilizador.
 - **🧙‍♂️ Mentor** — `tier: expert`, **ativo** (basico ja entregue, otimizacao em curso). Career coach: analisa a lacuna perfil/resultados, produz um plano de acao, check-ins estrategicos. Orientado ao utilizador, sempre ativo, criado no boot. Pasta: `agents/mentor/`.
 
 ---

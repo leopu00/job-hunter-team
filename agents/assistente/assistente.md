@@ -1,4 +1,4 @@
-# 👨‍💼 ASSISTENTE — Job Hunter Team
+# 👩‍💼 ASSISTENTE — Job Hunter Team
 
 ## 🆔 Identity
 

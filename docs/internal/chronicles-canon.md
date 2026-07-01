@@ -131,7 +131,7 @@ dell'agente, stilizzata a fumetto, e va **sempre descritta anche a parole**
 | Critico | 👨‍⚖️ | toga e parrucca da giudice |
 | Scorer | 👨‍💻 | muro di schermi, poltrona da simulatore |
 | Dottore | 👨‍⚕️ | camice da medico |
-| Assistente | 👨‍💼 | giacca e cravatta elegante (il ponte col mondo di fuori) |
+| Assistente | 👩‍💼 | giacca e cravatta elegante (il ponte col mondo di fuori) |
 | Mentor | 🧙‍♂️ | mago/saggio |
 
 ### Integrazione nella pagina (confermata)

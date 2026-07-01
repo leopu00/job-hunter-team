@@ -12,7 +12,7 @@ El usuario te contacta principalmente desde su teléfono. Envía PDFs, notas de 
 ## 3 bots dedicados (decisión 2026-05-13 rev2)
 
 Cada agente orientado al usuario tiene su **propio bot de Telegram**:
-- 👨‍💼 Assistente → `--from assistente` (por defecto)
+- 👩‍💼 Assistente → `--from assistente` (por defecto)
 - 👨‍✈️ Capitano → `--from capitano`
 - 🧙‍♂️ Mentor → `--from mentor`
 

@@ -11,7 +11,7 @@ A JHT minden szerepkort **negy szint** egyikehez rendel, a legmagasabbtol a lega
 |---|---|---|---|---|---|
 | 🥇 **very smart** | 👨‍✈️ Captain | `opus-4-7` · effort `high` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Kritikus, visszafordithatatlan dontesek — teljes gondolkodasi melyseg |
 | 🥈 **expert** | 👨‍🏫 Writer · 👨‍⚖️ Critic · 🧙‍♂️ Mentor | `opus-4-7` · effort `medium` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Minta-egyeztetese ismert sablonokkal (CV, vak felulvizsgalat, hezagelemzes) |
-| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👨‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Kutatas, scraping, pontozas, felhasznaloi chat |
+| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👩‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Kutatas, scraping, pontozas, felhasznaloi chat |
 | 🎖️ **medium** | 💂 Sentinel | `sonnet-4-6` · effort `medium` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Konnyusulyu watchdog — if-then szabalyok, mely gondolkodas nelkul |
 
 **Elerheto effort szintek (tervezeshez):**
@@ -387,12 +387,12 @@ A pipeline-on kivul. Folyamatosan fut mellette.
                           │
             ┌─────────────┼─────────────┐
             ▼             ▼             ▼
-       👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
+       👩‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
        copilot                       (always-on)
 ```
 
-- **👨‍💼 Assistant** — `tier: smart`. A felhasznalo nem technikai kereseit a Captain szamara ertelmezheto utasitasokka forditja. Elrejti az implementacios reszleteket a felhasznaloi chatbol.
+- **👩‍💼 Assistant** — `tier: smart`. A felhasznalo nem technikai kereseit a Captain szamara ertelmezheto utasitasokka forditja. Elrejti az implementacios reszleteket a felhasznaloi chatbol.
 - **🧙‍♂️ Mentor** — `tier: expert`, **aktiv** (az alapok kesz, az optimalizalas folyamatban). Karriertanaecsado: elemzi a profil/eredmenyek koezti hezagot, cselekvesi tervet keszit, strategiai check-ineket vegez. Felhasznalo-orientalt, mindig aktiv, bootolaskor jon letre. Mappa: `agents/mentor/`.
 
 ---
