@@ -354,6 +354,26 @@ conversion = {
     "strong80": sum(1 for (m,) in _best if m >= 80),
 }
 
+# ── per-giorno (found_at): match forti/eccellenti prodotti ────────────
+# Per ogni giorno di found_at: quante posizioni hanno il MIGLIOR punteggio
+# ≥70 (forti) e ≥80 (eccellenti). Serve al grafico temporale "score alto al
+# giorno". Bucket per giorno di scoperta, coerente con funnelDaily/sourcesDaily.
+_bd = Q("SELECT substr(p.found_at,1,10) d, MAX(s.total_score) best "
+        "FROM positions p JOIN scores s ON s.position_id=p.id "
+        "WHERE p.found_at IS NOT NULL AND TRIM(p.found_at)<>'' "
+        "AND s.total_score IS NOT NULL GROUP BY p.id")
+_sd = collections.OrderedDict()
+for d, best in _bd:
+    b = _sd.setdefault(d, {"scored": 0, "strong70": 0, "strong80": 0})
+    b["scored"] += 1
+    if best >= 70:
+        b["strong70"] += 1
+    if best >= 80:
+        b["strong80"] += 1
+score_daily = [{"day": d, "scored": _sd[d]["scored"],
+                "strong70": _sd[d]["strong70"], "strong80": _sd[d]["strong80"]}
+               for d in sorted(_sd)]
+
 out = {
     "source": SOURCE,
     "tsRange": [ts_min, ts_max],
@@ -374,6 +394,7 @@ out = {
     "funnelDaily": funnel_daily,
     "funnelTotals": funnel_totals,
     "conversion": conversion,
+    "scoreDaily": score_daily,
     "usage": usage,
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))

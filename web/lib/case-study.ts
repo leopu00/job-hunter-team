@@ -108,5 +108,14 @@ export interface CaseStudyRun {
     strong70: number;
     strong80: number;
   };
+  // Per-giorno (found_at): match forti/eccellenti prodotti quel giorno (best-score
+  // per posizione ≥70 / ≥80). Per il grafico temporale "score alto al giorno".
+  // Opzionale: assente negli snapshot precedenti all'aggiunta.
+  scoreDaily?: {
+    day: string;
+    scored: number;
+    strong70: number;
+    strong80: number;
+  }[];
   usage?: CaseStudyUsage | null;
 }

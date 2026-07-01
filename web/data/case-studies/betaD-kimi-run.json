@@ -1842,6 +1842,32 @@
     "strong70": 17,
     "strong80": 9
   },
+  "scoreDaily": [
+    {
+      "day": "2026-06-27",
+      "scored": 14,
+      "strong70": 9,
+      "strong80": 5
+    },
+    {
+      "day": "2026-06-28",
+      "scored": 12,
+      "strong70": 5,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-29",
+      "scored": 12,
+      "strong70": 3,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-30",
+      "scored": 2,
+      "strong70": 0,
+      "strong80": 0
+    }
+  ],
   "usage": {
     "provider": "kimi",
     "unit": "weekly_budget_pct",
