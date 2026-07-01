@@ -1,254 +1,740 @@
 {
   "en": {
-    "beta-1": {
-      "tagline": "Finance · early-career · Europe",
-      "category": "Finance",
-      "seniority": "Early career",
-      "geos": ["Europe"],
-      "subscriptionPrice": "~€100/mo",
-      "headline": "Finance professional, early career",
-      "summary": "Analyst with around 2 years of experience in credit risk and due diligence at an international investment bank. Looking to move toward front-office roles — investment management, restructuring, transaction advisory — in major European cities.",
-      "facts": [
-        {"label": "Sector", "value": "Finance · investment & credit risk"},
-        {"label": "Experience", "value": "~2 years · early-career"},
-        {"label": "Education", "value": "Degree in Business & Economics"},
-        {"label": "Languages", "value": "Hungarian · English (C1) · German (basic)"},
-        {"label": "Mobility", "value": "EU citizen · Switzerland ok · UK with sponsorship"}
-      ],
-      "locationNote": "Open to major international European cities with plenty of opportunities — Western Europe preferred, Nordic countries for the strongest roles. Among the priority cities:",
-      "why": "Here's why the numbers come out this way: searching for finance and investment roles in major European cities, the team focused the search on financial hubs (London, Zurich, Geneva, Luxembourg, Dublin), and nearly all the positions fall into business & finance categories — exactly the candidate's profile."
-    },
-    "beta-2": {
-      "tagline": "Technical writing · translation · localization",
+    "beta-1-codex": {
+      "tagline": "Codex session · Technical writing · translation · localization",
       "category": "Technical Writing",
       "seniority": "Senior · cross-domain",
-      "geos": ["Hungary", "Italy", "Europe"],
-      "subscriptionPrice": "~€40/mo",
+      "geos": [
+        "Hungary",
+        "Italy",
+        "Europe"
+      ],
+      "subscriptionPrice": "~€100/mo",
       "headline": "Technical writer & technical translator — bridging industry and languages",
       "summary": "Candidate targeting roles in technical writing, technical translation, and localization/LQA-UAT (Hungarian/Italian/English). Brings around 10 years of cross-domain experience that combines industrial and manufacturing trades — manufacturing, CAD/CAM/CNC, woodworking, trade-show fit-outs — with multilingual translation and interpreting: their strength is precisely the bridge between hands-on industry expertise and language skills. Prefers fully remote; priority on Hungary, then Italy, then the rest of Europe.",
       "facts": [
-        {"label": "Target roles", "value": "Technical writer · technical translator · localization/LQA"},
-        {"label": "Experience", "value": "~10 years cross-domain · industry + languages"},
-        {"label": "Background", "value": "Manufacturing · CAD/CAM/CNC · woodworking · translation/interpreting"},
-        {"label": "Languages", "value": "Hungarian and Italian (native) · English (C1-C2) · German (basic)"},
-        {"label": "Mobility", "value": "EU citizen · fully remote preferred · Hungary → Italy → Europe"}
+        {
+          "label": "Target roles",
+          "value": "Technical writer · technical translator · localization/LQA"
+        },
+        {
+          "label": "Experience",
+          "value": "~10 years cross-domain · industry + languages"
+        },
+        {
+          "label": "Background",
+          "value": "Manufacturing · CAD/CAM/CNC · woodworking · translation/interpreting"
+        },
+        {
+          "label": "Languages",
+          "value": "Hungarian and Italian (native) · English (C1-C2) · German (basic)"
+        },
+        {
+          "label": "Mobility",
+          "value": "EU citizen · fully remote preferred · Hungary → Italy → Europe"
+        }
       ],
       "locationNote": "Priority on fully remote; geographically Hungary first, then Italy, then the rest of Europe, with openness to European tech hubs. Among the cities that recur in the search:",
       "why": "Here's why the numbers come out this way: the candidate targets technical writing, technical translation, and localization, but with a strong industrial background — so the team searched mainly for industrial and software technical documentation, and the dominant role families are hardware/manufacturing technical writing, software/API docs, and localization (with a few touches of CAD/CAM/CNC, reflecting their sector past). Nearly everything comes from LinkedIn and specialized job boards; Hungary and Italy at the top mirror the geographic priority and the native languages.",
       "phaseNotes": [
-        {"price": "~€100/mo", "note": "first test — agents running free, no monitor, until the budget runs out"},
-        {"price": "~€40/mo", "note": "current run — weekly budget monitored and metered (pacing)"}
+        {
+          "price": "~€100/mo",
+          "note": "first test — agents running free, no monitor, until the budget runs out"
+        }
       ]
+    },
+    "beta-1-kimi": {
+      "tagline": "Kimi session · Technical writing · translation · localization",
+      "category": "Technical Writing",
+      "seniority": "Senior · cross-domain",
+      "geos": [
+        "Hungary",
+        "Italy",
+        "Europe"
+      ],
+      "subscriptionPrice": "~€40/mo",
+      "headline": "Technical writer & technical translator — bridging industry and languages",
+      "summary": "Candidate targeting roles in technical writing, technical translation, and localization/LQA-UAT (Hungarian/Italian/English). Brings around 10 years of cross-domain experience that combines industrial and manufacturing trades — manufacturing, CAD/CAM/CNC, woodworking, trade-show fit-outs — with multilingual translation and interpreting: their strength is precisely the bridge between hands-on industry expertise and language skills. Prefers fully remote; priority on Hungary, then Italy, then the rest of Europe.",
+      "facts": [
+        {
+          "label": "Target roles",
+          "value": "Technical writer · technical translator · localization/LQA"
+        },
+        {
+          "label": "Experience",
+          "value": "~10 years cross-domain · industry + languages"
+        },
+        {
+          "label": "Background",
+          "value": "Manufacturing · CAD/CAM/CNC · woodworking · translation/interpreting"
+        },
+        {
+          "label": "Languages",
+          "value": "Hungarian and Italian (native) · English (C1-C2) · German (basic)"
+        },
+        {
+          "label": "Mobility",
+          "value": "EU citizen · fully remote preferred · Hungary → Italy → Europe"
+        }
+      ],
+      "locationNote": "Priority on fully remote; geographically Hungary first, then Italy, then the rest of Europe, with openness to European tech hubs. Among the cities that recur in the search:",
+      "why": "Here's why the numbers come out this way: the candidate targets technical writing, technical translation, and localization, but with a strong industrial background — so the team searched mainly for industrial and software technical documentation, and the dominant role families are hardware/manufacturing technical writing, software/API docs, and localization (with a few touches of CAD/CAM/CNC, reflecting their sector past). Nearly everything comes from LinkedIn and specialized job boards; Hungary and Italy at the top mirror the geographic priority and the native languages.",
+      "phaseNotes": [
+        {
+          "price": "~€40/mo",
+          "note": "current run — weekly budget monitored and metered (pacing)"
+        }
+      ]
+    },
+    "beta-2": {
+      "tagline": "Finance · early-career · Europe",
+      "category": "Finance",
+      "seniority": "Early career",
+      "geos": [
+        "Europe"
+      ],
+      "subscriptionPrice": "~€100/mo",
+      "headline": "Finance professional, early career",
+      "summary": "Analyst with around 2 years of experience in credit risk and due diligence at an international investment bank. Looking to move toward front-office roles — investment management, restructuring, transaction advisory — in major European cities.",
+      "facts": [
+        {
+          "label": "Sector",
+          "value": "Finance · investment & credit risk"
+        },
+        {
+          "label": "Experience",
+          "value": "~2 years · early-career"
+        },
+        {
+          "label": "Education",
+          "value": "Degree in Business & Economics"
+        },
+        {
+          "label": "Languages",
+          "value": "Hungarian · English (C1) · German (basic)"
+        },
+        {
+          "label": "Mobility",
+          "value": "EU citizen · Switzerland ok · UK with sponsorship"
+        }
+      ],
+      "locationNote": "Open to major international European cities with plenty of opportunities — Western Europe preferred, Nordic countries for the strongest roles. Among the priority cities:",
+      "why": "Here's why the numbers come out this way: searching for finance and investment roles in major European cities, the team focused the search on financial hubs (London, Zurich, Geneva, Luxembourg, Dublin), and nearly all the positions fall into business & finance categories — exactly the candidate's profile."
     }
   },
   "es": {
-    "beta-1": {
-      "tagline": "Finance · early-career · Europa",
-      "category": "Finanzas",
-      "seniority": "Inicio de carrera",
-      "geos": ["Europa"],
-      "subscriptionPrice": "~€100/mes",
-      "headline": "Profesional de finanzas, inicio de carrera",
-      "summary": "Analista con unos 2 años de experiencia en credit risk y due diligence en un banco de inversión internacional. Quiere dar el salto a roles de front-office —investment management, restructuring, transaction advisory— en grandes ciudades europeas.",
-      "facts": [
-        {"label": "Sector", "value": "Finanzas · investment & credit risk"},
-        {"label": "Experiencia", "value": "~2 años · inicio de carrera"},
-        {"label": "Formación", "value": "Grado en Business & Economics"},
-        {"label": "Idiomas", "value": "Húngaro · Inglés (C1) · Alemán (básico)"},
-        {"label": "Movilidad", "value": "Ciudadano UE · Suiza ok · UK con sponsorship"}
-      ],
-      "locationNote": "Abierto a grandes ciudades internacionales europeas con muchas oportunidades —Europa occidental preferida, países nórdicos para los roles más fuertes. Entre las ciudades prioritarias:",
-      "why": "Esta es la razón por la que los números salen así: al buscar roles de finanzas e investment en grandes ciudades europeas, el equipo ha concentrado la búsqueda en los hubs financieros (Londres, Zúrich, Ginebra, Luxemburgo, Dublín) y casi todas las posiciones caen en categorías de business & finance —exactamente el perfil del candidato."
-    },
-    "beta-2": {
-      "tagline": "Technical writing · traducción · localización",
+    "beta-1-codex": {
+      "tagline": "Sesión Codex · Technical writing · traducción · localización",
       "category": "Technical Writing",
       "seniority": "Senior · cross-domain",
-      "geos": ["Hungría", "Italia", "Europa"],
-      "subscriptionPrice": "~€40/mes",
+      "geos": [
+        "Hungría",
+        "Italia",
+        "Europa"
+      ],
+      "subscriptionPrice": "~€100/mes",
       "headline": "Technical writer y traductor técnico — puente entre industria e idiomas",
       "summary": "Candidato que apunta a roles de technical writing, traducción técnica y localización/LQA-UAT (húngaro/italiano/inglés). Aporta unos 10 años de experiencia cross-domain que combina oficios industriales y manufactureros —manufactura, CAD/CAM/CNC, carpintería, montajes feriales— con traducción e interpretación multilingüe: su punto fuerte es precisamente el puente entre la competencia hands-on del sector y la competencia lingüística. Prefiere el full remote; prioridad Hungría, luego Italia, luego el resto de Europa.",
       "facts": [
-        {"label": "Roles objetivo", "value": "Technical writer · traductor técnico · localización/LQA"},
-        {"label": "Experiencia", "value": "~10 años cross-domain · industria + idiomas"},
-        {"label": "Trayectoria", "value": "Manufactura · CAD/CAM/CNC · carpintería · traducción/interpretación"},
-        {"label": "Idiomas", "value": "Húngaro e Italiano (nativo) · Inglés (C1-C2) · Alemán (básico)"},
-        {"label": "Movilidad", "value": "Ciudadano UE · full remote preferido · Hungría → Italia → Europa"}
+        {
+          "label": "Roles objetivo",
+          "value": "Technical writer · traductor técnico · localización/LQA"
+        },
+        {
+          "label": "Experiencia",
+          "value": "~10 años cross-domain · industria + idiomas"
+        },
+        {
+          "label": "Trayectoria",
+          "value": "Manufactura · CAD/CAM/CNC · carpintería · traducción/interpretación"
+        },
+        {
+          "label": "Idiomas",
+          "value": "Húngaro e Italiano (nativo) · Inglés (C1-C2) · Alemán (básico)"
+        },
+        {
+          "label": "Movilidad",
+          "value": "Ciudadano UE · full remote preferido · Hungría → Italia → Europa"
+        }
       ],
       "locationNote": "Prioridad al full remote; geográficamente primero Hungría, luego Italia, luego el resto de Europa, con apertura a los hubs tech europeos. Entre las ciudades recurrentes en la búsqueda:",
       "why": "Esta es la razón por la que los números salen así: el candidato apunta a technical writing, traducción técnica y localización, pero con una fuerte trayectoria industrial —por eso el equipo ha buscado sobre todo documentación técnica industrial y de software, y las familias de roles dominantes son technical writing de hardware/manufactura, software/API docs y localización (con alguna incursión en CAD/CAM/CNC, reflejo de su pasado en el sector). Casi todo llega desde LinkedIn y desde job boards especializadas; Hungría e Italia en cabeza reflejan la prioridad geográfica y las lenguas nativas.",
       "phaseNotes": [
-        {"price": "~€100/mes", "note": "primer test — agentes libres, sin monitor, hasta agotar el presupuesto"},
-        {"price": "~€40/mes", "note": "run actual — presupuesto semanal monitorizado y dosificado (pacing)"}
+        {
+          "price": "~€100/mes",
+          "note": "primer test — agentes libres, sin monitor, hasta agotar el presupuesto"
+        }
       ]
+    },
+    "beta-1-kimi": {
+      "tagline": "Sesión Kimi · Technical writing · traducción · localización",
+      "category": "Technical Writing",
+      "seniority": "Senior · cross-domain",
+      "geos": [
+        "Hungría",
+        "Italia",
+        "Europa"
+      ],
+      "subscriptionPrice": "~€40/mes",
+      "headline": "Technical writer y traductor técnico — puente entre industria e idiomas",
+      "summary": "Candidato que apunta a roles de technical writing, traducción técnica y localización/LQA-UAT (húngaro/italiano/inglés). Aporta unos 10 años de experiencia cross-domain que combina oficios industriales y manufactureros —manufactura, CAD/CAM/CNC, carpintería, montajes feriales— con traducción e interpretación multilingüe: su punto fuerte es precisamente el puente entre la competencia hands-on del sector y la competencia lingüística. Prefiere el full remote; prioridad Hungría, luego Italia, luego el resto de Europa.",
+      "facts": [
+        {
+          "label": "Roles objetivo",
+          "value": "Technical writer · traductor técnico · localización/LQA"
+        },
+        {
+          "label": "Experiencia",
+          "value": "~10 años cross-domain · industria + idiomas"
+        },
+        {
+          "label": "Trayectoria",
+          "value": "Manufactura · CAD/CAM/CNC · carpintería · traducción/interpretación"
+        },
+        {
+          "label": "Idiomas",
+          "value": "Húngaro e Italiano (nativo) · Inglés (C1-C2) · Alemán (básico)"
+        },
+        {
+          "label": "Movilidad",
+          "value": "Ciudadano UE · full remote preferido · Hungría → Italia → Europa"
+        }
+      ],
+      "locationNote": "Prioridad al full remote; geográficamente primero Hungría, luego Italia, luego el resto de Europa, con apertura a los hubs tech europeos. Entre las ciudades recurrentes en la búsqueda:",
+      "why": "Esta es la razón por la que los números salen así: el candidato apunta a technical writing, traducción técnica y localización, pero con una fuerte trayectoria industrial —por eso el equipo ha buscado sobre todo documentación técnica industrial y de software, y las familias de roles dominantes son technical writing de hardware/manufactura, software/API docs y localización (con alguna incursión en CAD/CAM/CNC, reflejo de su pasado en el sector). Casi todo llega desde LinkedIn y desde job boards especializadas; Hungría e Italia en cabeza reflejan la prioridad geográfica y las lenguas nativas.",
+      "phaseNotes": [
+        {
+          "price": "~€40/mes",
+          "note": "run actual — presupuesto semanal monitorizado y dosificado (pacing)"
+        }
+      ]
+    },
+    "beta-2": {
+      "tagline": "Finance · early-career · Europa",
+      "category": "Finanzas",
+      "seniority": "Inicio de carrera",
+      "geos": [
+        "Europa"
+      ],
+      "subscriptionPrice": "~€100/mes",
+      "headline": "Profesional de finanzas, inicio de carrera",
+      "summary": "Analista con unos 2 años de experiencia en credit risk y due diligence en un banco de inversión internacional. Quiere dar el salto a roles de front-office —investment management, restructuring, transaction advisory— en grandes ciudades europeas.",
+      "facts": [
+        {
+          "label": "Sector",
+          "value": "Finanzas · investment & credit risk"
+        },
+        {
+          "label": "Experiencia",
+          "value": "~2 años · inicio de carrera"
+        },
+        {
+          "label": "Formación",
+          "value": "Grado en Business & Economics"
+        },
+        {
+          "label": "Idiomas",
+          "value": "Húngaro · Inglés (C1) · Alemán (básico)"
+        },
+        {
+          "label": "Movilidad",
+          "value": "Ciudadano UE · Suiza ok · UK con sponsorship"
+        }
+      ],
+      "locationNote": "Abierto a grandes ciudades internacionales europeas con muchas oportunidades —Europa occidental preferida, países nórdicos para los roles más fuertes. Entre las ciudades prioritarias:",
+      "why": "Esta es la razón por la que los números salen así: al buscar roles de finanzas e investment en grandes ciudades europeas, el equipo ha concentrado la búsqueda en los hubs financieros (Londres, Zúrich, Ginebra, Luxemburgo, Dublín) y casi todas las posiciones caen en categorías de business & finance —exactamente el perfil del candidato."
     }
   },
   "fr": {
-    "beta-1": {
-      "tagline": "Finance · début de carrière · Europe",
-      "category": "Finance",
-      "seniority": "Début de carrière",
-      "geos": ["Europe"],
-      "subscriptionPrice": "~€100/mois",
-      "headline": "Professionnel de la finance, début de carrière",
-      "summary": "Analyste avec environ 2 ans d'expérience en credit risk et due diligence dans une banque d'investissement internationale. Il souhaite évoluer vers des rôles front-office — investment management, restructuring, transaction advisory — dans les grandes villes européennes.",
-      "facts": [
-        {"label": "Secteur", "value": "Finance · investment & credit risk"},
-        {"label": "Expérience", "value": "~2 ans · début de carrière"},
-        {"label": "Formation", "value": "Licence en Business & Economics"},
-        {"label": "Langues", "value": "Hongrois · Anglais (C1) · Allemand (notions)"},
-        {"label": "Mobilité", "value": "Citoyen UE · Suisse ok · UK avec sponsorship"}
-      ],
-      "locationNote": "Ouvert aux grandes villes internationales européennes offrant de nombreuses opportunités — Europe de l'Ouest privilégiée, pays nordiques pour les rôles les plus solides. Parmi les villes prioritaires :",
-      "why": "Voici pourquoi les chiffres se présentent ainsi : en cherchant des rôles finance et investment dans les grandes villes européennes, l'équipe a concentré la recherche sur les hubs financiers (Londres, Zurich, Genève, Luxembourg, Dublin), et presque toutes les positions relèvent des catégories business & finance — exactement le profil du candidat."
-    },
-    "beta-2": {
-      "tagline": "Technical writing · traduction · localisation",
+    "beta-1-codex": {
+      "tagline": "Session Codex · Technical writing · traduction · localisation",
       "category": "Technical Writing",
       "seniority": "Senior · cross-domain",
-      "geos": ["Hongrie", "Italie", "Europe"],
-      "subscriptionPrice": "~€40/mois",
+      "geos": [
+        "Hongrie",
+        "Italie",
+        "Europe"
+      ],
+      "subscriptionPrice": "~€100/mois",
       "headline": "Technical writer & traducteur technique — passerelle entre industrie et langues",
       "summary": "Candidat visant des rôles de technical writing, de traduction technique et de localisation/LQA-UAT (hongrois/italien/anglais). Il apporte environ 10 ans d'expérience cross-domain qui réunit des métiers industriels et manufacturiers — fabrication, CAD/CAM/CNC, menuiserie, aménagement de stands de salons — avec la traduction et l'interprétariat multilingue : son atout est justement la passerelle entre une compétence hands-on de terrain et une compétence linguistique. Il préfère le full remote ; priorité à la Hongrie, puis à l'Italie, puis au reste de l'Europe.",
       "facts": [
-        {"label": "Rôles visés", "value": "Technical writer · traducteur technique · localisation/LQA"},
-        {"label": "Expérience", "value": "~10 ans cross-domain · industrie + langues"},
-        {"label": "Parcours", "value": "Fabrication · CAD/CAM/CNC · menuiserie · traduction/interprétariat"},
-        {"label": "Langues", "value": "Hongrois et Italien (langue maternelle) · Anglais (C1-C2) · Allemand (notions)"},
-        {"label": "Mobilité", "value": "Citoyen UE · full remote privilégié · Hongrie → Italie → Europe"}
+        {
+          "label": "Rôles visés",
+          "value": "Technical writer · traducteur technique · localisation/LQA"
+        },
+        {
+          "label": "Expérience",
+          "value": "~10 ans cross-domain · industrie + langues"
+        },
+        {
+          "label": "Parcours",
+          "value": "Fabrication · CAD/CAM/CNC · menuiserie · traduction/interprétariat"
+        },
+        {
+          "label": "Langues",
+          "value": "Hongrois et Italien (langue maternelle) · Anglais (C1-C2) · Allemand (notions)"
+        },
+        {
+          "label": "Mobilité",
+          "value": "Citoyen UE · full remote privilégié · Hongrie → Italie → Europe"
+        }
       ],
       "locationNote": "Priorité au full remote ; géographiquement d'abord la Hongrie, puis l'Italie, puis le reste de l'Europe, avec une ouverture aux hubs tech européens. Parmi les villes récurrentes dans la recherche :",
       "why": "Voici pourquoi les chiffres se présentent ainsi : le candidat vise le technical writing, la traduction technique et la localisation, mais avec un solide background industriel — c'est pourquoi l'équipe a surtout cherché de la documentation technique industrielle et logicielle, et les familles de rôles dominantes sont le technical writing hardware/manufacturier, les software/API docs et la localisation (avec quelques incursions sur le CAD/CAM/CNC, reflet de son passé dans le secteur). Presque tout provient de LinkedIn et de job boards spécialisés ; la Hongrie et l'Italie en tête reflètent la priorité géographique et les langues natives.",
       "phaseNotes": [
-        {"price": "~€100/mois", "note": "premier test — agents libres, sans monitoring, jusqu'à épuisement du budget"},
-        {"price": "~€40/mois", "note": "run actuel — budget hebdomadaire surveillé et dosé (pacing)"}
+        {
+          "price": "~€100/mois",
+          "note": "premier test — agents libres, sans monitoring, jusqu'à épuisement du budget"
+        }
       ]
+    },
+    "beta-1-kimi": {
+      "tagline": "Session Kimi · Technical writing · traduction · localisation",
+      "category": "Technical Writing",
+      "seniority": "Senior · cross-domain",
+      "geos": [
+        "Hongrie",
+        "Italie",
+        "Europe"
+      ],
+      "subscriptionPrice": "~€40/mois",
+      "headline": "Technical writer & traducteur technique — passerelle entre industrie et langues",
+      "summary": "Candidat visant des rôles de technical writing, de traduction technique et de localisation/LQA-UAT (hongrois/italien/anglais). Il apporte environ 10 ans d'expérience cross-domain qui réunit des métiers industriels et manufacturiers — fabrication, CAD/CAM/CNC, menuiserie, aménagement de stands de salons — avec la traduction et l'interprétariat multilingue : son atout est justement la passerelle entre une compétence hands-on de terrain et une compétence linguistique. Il préfère le full remote ; priorité à la Hongrie, puis à l'Italie, puis au reste de l'Europe.",
+      "facts": [
+        {
+          "label": "Rôles visés",
+          "value": "Technical writer · traducteur technique · localisation/LQA"
+        },
+        {
+          "label": "Expérience",
+          "value": "~10 ans cross-domain · industrie + langues"
+        },
+        {
+          "label": "Parcours",
+          "value": "Fabrication · CAD/CAM/CNC · menuiserie · traduction/interprétariat"
+        },
+        {
+          "label": "Langues",
+          "value": "Hongrois et Italien (langue maternelle) · Anglais (C1-C2) · Allemand (notions)"
+        },
+        {
+          "label": "Mobilité",
+          "value": "Citoyen UE · full remote privilégié · Hongrie → Italie → Europe"
+        }
+      ],
+      "locationNote": "Priorité au full remote ; géographiquement d'abord la Hongrie, puis l'Italie, puis le reste de l'Europe, avec une ouverture aux hubs tech européens. Parmi les villes récurrentes dans la recherche :",
+      "why": "Voici pourquoi les chiffres se présentent ainsi : le candidat vise le technical writing, la traduction technique et la localisation, mais avec un solide background industriel — c'est pourquoi l'équipe a surtout cherché de la documentation technique industrielle et logicielle, et les familles de rôles dominantes sont le technical writing hardware/manufacturier, les software/API docs et la localisation (avec quelques incursions sur le CAD/CAM/CNC, reflet de son passé dans le secteur). Presque tout provient de LinkedIn et de job boards spécialisés ; la Hongrie et l'Italie en tête reflètent la priorité géographique et les langues natives.",
+      "phaseNotes": [
+        {
+          "price": "~€40/mois",
+          "note": "run actuel — budget hebdomadaire surveillé et dosé (pacing)"
+        }
+      ]
+    },
+    "beta-2": {
+      "tagline": "Finance · début de carrière · Europe",
+      "category": "Finance",
+      "seniority": "Début de carrière",
+      "geos": [
+        "Europe"
+      ],
+      "subscriptionPrice": "~€100/mois",
+      "headline": "Professionnel de la finance, début de carrière",
+      "summary": "Analyste avec environ 2 ans d'expérience en credit risk et due diligence dans une banque d'investissement internationale. Il souhaite évoluer vers des rôles front-office — investment management, restructuring, transaction advisory — dans les grandes villes européennes.",
+      "facts": [
+        {
+          "label": "Secteur",
+          "value": "Finance · investment & credit risk"
+        },
+        {
+          "label": "Expérience",
+          "value": "~2 ans · début de carrière"
+        },
+        {
+          "label": "Formation",
+          "value": "Licence en Business & Economics"
+        },
+        {
+          "label": "Langues",
+          "value": "Hongrois · Anglais (C1) · Allemand (notions)"
+        },
+        {
+          "label": "Mobilité",
+          "value": "Citoyen UE · Suisse ok · UK avec sponsorship"
+        }
+      ],
+      "locationNote": "Ouvert aux grandes villes internationales européennes offrant de nombreuses opportunités — Europe de l'Ouest privilégiée, pays nordiques pour les rôles les plus solides. Parmi les villes prioritaires :",
+      "why": "Voici pourquoi les chiffres se présentent ainsi : en cherchant des rôles finance et investment dans les grandes villes européennes, l'équipe a concentré la recherche sur les hubs financiers (Londres, Zurich, Genève, Luxembourg, Dublin), et presque toutes les positions relèvent des catégories business & finance — exactement le profil du candidat."
     }
   },
   "de": {
-    "beta-1": {
-      "tagline": "Finance · Berufseinstieg · Europa",
-      "category": "Finance",
-      "seniority": "Berufseinstieg",
-      "geos": ["Europa"],
-      "subscriptionPrice": "~€100/Monat",
-      "headline": "Finance-Profi am Karriereanfang",
-      "summary": "Analyst mit rund 2 Jahren Erfahrung in credit risk und due diligence bei einer internationalen Investmentbank. Will in front-office-Rollen wechseln — investment management, restructuring, transaction advisory — in europäischen Großstädten.",
-      "facts": [
-        {"label": "Branche", "value": "Finance · investment & credit risk"},
-        {"label": "Erfahrung", "value": "~2 Jahre · Berufseinstieg"},
-        {"label": "Ausbildung", "value": "Studienabschluss in Business & Economics"},
-        {"label": "Sprachen", "value": "Ungarisch · Englisch (C1) · Deutsch (Grundkenntnisse)"},
-        {"label": "Mobilität", "value": "EU-Bürger · Schweiz ok · UK mit Sponsorship"}
-      ],
-      "locationNote": "Offen für große, internationale europäische Städte mit vielen Möglichkeiten — Westeuropa bevorzugt, nordische Länder für die stärksten Rollen. Zu den priorisierten Städten gehören:",
-      "why": "Deshalb sehen die Zahlen so aus: Bei der Suche nach finance- und investment-Rollen in europäischen Großstädten hat das Team die Suche auf die Finanzzentren konzentriert (London, Zürich, Genf, Luxemburg, Dublin), und fast alle Stellen fallen in die Kategorien business & finance — genau das Profil des Kandidaten."
-    },
-    "beta-2": {
-      "tagline": "Technical Writing · Übersetzung · Lokalisierung",
+    "beta-1-codex": {
+      "tagline": "Codex-Sitzung · Technical Writing · Übersetzung · Lokalisierung",
       "category": "Technical Writing",
       "seniority": "Senior · cross-domain",
-      "geos": ["Ungarn", "Italien", "Europa"],
-      "subscriptionPrice": "~€40/Monat",
+      "geos": [
+        "Ungarn",
+        "Italien",
+        "Europa"
+      ],
+      "subscriptionPrice": "~€100/Monat",
       "headline": "Technical Writer & technischer Übersetzer — Brücke zwischen Industrie und Sprachen",
       "summary": "Kandidat, der auf Rollen in technical writing, technischer Übersetzung und Lokalisierung/LQA-UAT (Ungarisch/Italienisch/Englisch) abzielt. Er bringt rund 10 Jahre cross-domain-Erfahrung mit, die industrielle und produzierende Berufe — Fertigung, CAD/CAM/CNC, Tischlerei, Messebau — mit mehrsprachiger Übersetzung und Dolmetschen verbindet: Seine Stärke ist genau die Brücke zwischen praktischer (hands-on) Branchenkompetenz und sprachlicher Kompetenz. Er bevorzugt Full Remote; Priorität Ungarn, dann Italien, dann der Rest Europas.",
       "facts": [
-        {"label": "Zielrollen", "value": "Technical Writer · technischer Übersetzer · Lokalisierung/LQA"},
-        {"label": "Erfahrung", "value": "~10 Jahre cross-domain · Industrie + Sprachen"},
-        {"label": "Hintergrund", "value": "Fertigung · CAD/CAM/CNC · Tischlerei · Übersetzung/Dolmetschen"},
-        {"label": "Sprachen", "value": "Ungarisch und Italienisch (Muttersprache) · Englisch (C1-C2) · Deutsch (Grundkenntnisse)"},
-        {"label": "Mobilität", "value": "EU-Bürger · Full Remote bevorzugt · Ungarn → Italien → Europa"}
+        {
+          "label": "Zielrollen",
+          "value": "Technical Writer · technischer Übersetzer · Lokalisierung/LQA"
+        },
+        {
+          "label": "Erfahrung",
+          "value": "~10 Jahre cross-domain · Industrie + Sprachen"
+        },
+        {
+          "label": "Hintergrund",
+          "value": "Fertigung · CAD/CAM/CNC · Tischlerei · Übersetzung/Dolmetschen"
+        },
+        {
+          "label": "Sprachen",
+          "value": "Ungarisch und Italienisch (Muttersprache) · Englisch (C1-C2) · Deutsch (Grundkenntnisse)"
+        },
+        {
+          "label": "Mobilität",
+          "value": "EU-Bürger · Full Remote bevorzugt · Ungarn → Italien → Europa"
+        }
       ],
       "locationNote": "Priorität auf Full Remote; geografisch zuerst Ungarn, dann Italien, dann der Rest Europas, mit Offenheit für europäische Tech-Hubs. Zu den in der Suche wiederkehrenden Städten gehören:",
       "why": "Deshalb sehen die Zahlen so aus: Der Kandidat zielt auf technical writing, technische Übersetzung und Lokalisierung, aber mit einem starken industriellen Hintergrund — deshalb hat das Team vor allem nach industrieller und Software-bezogener technischer Dokumentation gesucht, und die dominierenden Rollenfamilien sind technical writing für Hardware/Fertigung, software/API docs und Lokalisierung (mit einigen Berührungspunkten zu CAD/CAM/CNC, ein Spiegel seiner Branchenvergangenheit). Fast alles kommt von LinkedIn und von spezialisierten Jobbörsen; Ungarn und Italien an der Spitze spiegeln die geografische Priorität und die Muttersprachen wider.",
       "phaseNotes": [
-        {"price": "~€100/Monat", "note": "erster Test — Agenten frei, ohne Monitor, bis das Budget aufgebraucht ist"},
-        {"price": "~€40/Monat", "note": "aktueller Run — wöchentliches Budget überwacht und dosiert (Pacing)"}
+        {
+          "price": "~€100/Monat",
+          "note": "erster Test — Agenten frei, ohne Monitor, bis das Budget aufgebraucht ist"
+        }
       ]
+    },
+    "beta-1-kimi": {
+      "tagline": "Kimi-Sitzung · Technical Writing · Übersetzung · Lokalisierung",
+      "category": "Technical Writing",
+      "seniority": "Senior · cross-domain",
+      "geos": [
+        "Ungarn",
+        "Italien",
+        "Europa"
+      ],
+      "subscriptionPrice": "~€40/Monat",
+      "headline": "Technical Writer & technischer Übersetzer — Brücke zwischen Industrie und Sprachen",
+      "summary": "Kandidat, der auf Rollen in technical writing, technischer Übersetzung und Lokalisierung/LQA-UAT (Ungarisch/Italienisch/Englisch) abzielt. Er bringt rund 10 Jahre cross-domain-Erfahrung mit, die industrielle und produzierende Berufe — Fertigung, CAD/CAM/CNC, Tischlerei, Messebau — mit mehrsprachiger Übersetzung und Dolmetschen verbindet: Seine Stärke ist genau die Brücke zwischen praktischer (hands-on) Branchenkompetenz und sprachlicher Kompetenz. Er bevorzugt Full Remote; Priorität Ungarn, dann Italien, dann der Rest Europas.",
+      "facts": [
+        {
+          "label": "Zielrollen",
+          "value": "Technical Writer · technischer Übersetzer · Lokalisierung/LQA"
+        },
+        {
+          "label": "Erfahrung",
+          "value": "~10 Jahre cross-domain · Industrie + Sprachen"
+        },
+        {
+          "label": "Hintergrund",
+          "value": "Fertigung · CAD/CAM/CNC · Tischlerei · Übersetzung/Dolmetschen"
+        },
+        {
+          "label": "Sprachen",
+          "value": "Ungarisch und Italienisch (Muttersprache) · Englisch (C1-C2) · Deutsch (Grundkenntnisse)"
+        },
+        {
+          "label": "Mobilität",
+          "value": "EU-Bürger · Full Remote bevorzugt · Ungarn → Italien → Europa"
+        }
+      ],
+      "locationNote": "Priorität auf Full Remote; geografisch zuerst Ungarn, dann Italien, dann der Rest Europas, mit Offenheit für europäische Tech-Hubs. Zu den in der Suche wiederkehrenden Städten gehören:",
+      "why": "Deshalb sehen die Zahlen so aus: Der Kandidat zielt auf technical writing, technische Übersetzung und Lokalisierung, aber mit einem starken industriellen Hintergrund — deshalb hat das Team vor allem nach industrieller und Software-bezogener technischer Dokumentation gesucht, und die dominierenden Rollenfamilien sind technical writing für Hardware/Fertigung, software/API docs und Lokalisierung (mit einigen Berührungspunkten zu CAD/CAM/CNC, ein Spiegel seiner Branchenvergangenheit). Fast alles kommt von LinkedIn und von spezialisierten Jobbörsen; Ungarn und Italien an der Spitze spiegeln die geografische Priorität und die Muttersprachen wider.",
+      "phaseNotes": [
+        {
+          "price": "~€40/Monat",
+          "note": "aktueller Run — wöchentliches Budget überwacht und dosiert (Pacing)"
+        }
+      ]
+    },
+    "beta-2": {
+      "tagline": "Finance · Berufseinstieg · Europa",
+      "category": "Finance",
+      "seniority": "Berufseinstieg",
+      "geos": [
+        "Europa"
+      ],
+      "subscriptionPrice": "~€100/Monat",
+      "headline": "Finance-Profi am Karriereanfang",
+      "summary": "Analyst mit rund 2 Jahren Erfahrung in credit risk und due diligence bei einer internationalen Investmentbank. Will in front-office-Rollen wechseln — investment management, restructuring, transaction advisory — in europäischen Großstädten.",
+      "facts": [
+        {
+          "label": "Branche",
+          "value": "Finance · investment & credit risk"
+        },
+        {
+          "label": "Erfahrung",
+          "value": "~2 Jahre · Berufseinstieg"
+        },
+        {
+          "label": "Ausbildung",
+          "value": "Studienabschluss in Business & Economics"
+        },
+        {
+          "label": "Sprachen",
+          "value": "Ungarisch · Englisch (C1) · Deutsch (Grundkenntnisse)"
+        },
+        {
+          "label": "Mobilität",
+          "value": "EU-Bürger · Schweiz ok · UK mit Sponsorship"
+        }
+      ],
+      "locationNote": "Offen für große, internationale europäische Städte mit vielen Möglichkeiten — Westeuropa bevorzugt, nordische Länder für die stärksten Rollen. Zu den priorisierten Städten gehören:",
+      "why": "Deshalb sehen die Zahlen so aus: Bei der Suche nach finance- und investment-Rollen in europäischen Großstädten hat das Team die Suche auf die Finanzzentren konzentriert (London, Zürich, Genf, Luxemburg, Dublin), und fast alle Stellen fallen in die Kategorien business & finance — genau das Profil des Kandidaten."
     }
   },
   "hu": {
-    "beta-1": {
-      "tagline": "Pénzügy · pályakezdő · Európa",
-      "category": "Pénzügy",
-      "seniority": "Pályakezdő",
-      "geos": ["Európa"],
-      "subscriptionPrice": "~€100/hó",
-      "headline": "Pénzügyi szakember, pályakezdő",
-      "summary": "Elemző körülbelül 2 év tapasztalattal credit risk és due diligence területén egy nemzetközi befektetési banknál. Front-office szerepkörök felé szeretne elmozdulni — investment management, restructuring, transaction advisory — nagy európai városokban.",
-      "facts": [
-        {"label": "Szektor", "value": "Pénzügy · investment & credit risk"},
-        {"label": "Tapasztalat", "value": "~2 év · pályakezdő"},
-        {"label": "Végzettség", "value": "Business & Economics diploma"},
-        {"label": "Nyelvek", "value": "Magyar · Angol (C1) · Német (alapszint)"},
-        {"label": "Mobilitás", "value": "EU-állampolgár · Svájc rendben · UK szponzorációval"}
-      ],
-      "locationNote": "Nyitott a sok lehetőséget kínáló nagy nemzetközi európai városokra — Nyugat-Európa előnyben, az északi országok a legerősebb szerepkörökért. A kiemelt városok között:",
-      "why": "Ezért alakulnak így a számok: pénzügyi és investment szerepköröket keresve a nagy európai városokban a csapat a pénzügyi hubokra (London, Zürich, Genf, Luxemburg, Dublin) koncentrálta a keresést, és szinte minden pozíció a business & finance kategóriákba esik — pontosan a jelölt profilja."
-    },
-    "beta-2": {
-      "tagline": "Technical writing · fordítás · lokalizáció",
+    "beta-1-codex": {
+      "tagline": "Codex munkamenet · Technical writing · fordítás · lokalizáció",
       "category": "Technical Writing",
       "seniority": "Senior · cross-domain",
-      "geos": ["Magyarország", "Olaszország", "Európa"],
-      "subscriptionPrice": "~€40/hó",
+      "geos": [
+        "Magyarország",
+        "Olaszország",
+        "Európa"
+      ],
+      "subscriptionPrice": "~€100/hó",
       "headline": "Technical writer és műszaki fordító — híd az ipar és a nyelvek között",
       "summary": "Olyan jelölt, aki technical writing, műszaki fordítás és lokalizáció/LQA-UAT szerepkörökre pályázik (magyar/olasz/angol). Körülbelül 10 év cross-domain tapasztalatot hoz, amely az ipari és gyártási szakmákat — gyártás, CAD/CAM/CNC, asztalosság, kiállításépítés — ötvözi a többnyelvű fordítással és tolmácsolással: épp az az erőssége, hogy hidat ver a hands-on szakmai tudás és a nyelvi kompetencia között. A full remote munkát részesíti előnyben; prioritás Magyarország, majd Olaszország, majd Európa többi része.",
       "facts": [
-        {"label": "Célszerepkörök", "value": "Technical writer · műszaki fordító · lokalizáció/LQA"},
-        {"label": "Tapasztalat", "value": "~10 év cross-domain · ipar + nyelvek"},
-        {"label": "Háttér", "value": "Gyártás · CAD/CAM/CNC · asztalosság · fordítás/tolmácsolás"},
-        {"label": "Nyelvek", "value": "Magyar és olasz (anyanyelv) · Angol (C1-C2) · Német (alapszint)"},
-        {"label": "Mobilitás", "value": "EU-állampolgár · full remote előnyben · Magyarország → Olaszország → Európa"}
+        {
+          "label": "Célszerepkörök",
+          "value": "Technical writer · műszaki fordító · lokalizáció/LQA"
+        },
+        {
+          "label": "Tapasztalat",
+          "value": "~10 év cross-domain · ipar + nyelvek"
+        },
+        {
+          "label": "Háttér",
+          "value": "Gyártás · CAD/CAM/CNC · asztalosság · fordítás/tolmácsolás"
+        },
+        {
+          "label": "Nyelvek",
+          "value": "Magyar és olasz (anyanyelv) · Angol (C1-C2) · Német (alapszint)"
+        },
+        {
+          "label": "Mobilitás",
+          "value": "EU-állampolgár · full remote előnyben · Magyarország → Olaszország → Európa"
+        }
       ],
       "locationNote": "A full remote az elsődleges; földrajzilag először Magyarország, majd Olaszország, majd Európa többi része, nyitottsággal az európai tech hubok felé. A keresésben visszatérő városok között:",
       "why": "Ezért alakulnak így a számok: a jelölt technical writing, műszaki fordítás és lokalizáció felé orientálódik, de erős ipari háttérrel — ezért a csapat főként ipari és szoftveres műszaki dokumentációt keresett, és a domináns szerepkörcsaládok a hardveres/gyártási technical writing, a szoftver/API docs és a lokalizáció (némi kitekintéssel a CAD/CAM/CNC-re, ami az ágazati múltját tükrözi). Szinte minden a LinkedInről és specializált job boardokról érkezik; Magyarország és Olaszország az élen a földrajzi prioritást és az anyanyelveket tükrözi.",
       "phaseNotes": [
-        {"price": "~€100/hó", "note": "első teszt — szabad ügynökök, monitor nélkül, a keret kimerüléséig"},
-        {"price": "~€40/hó", "note": "jelenlegi run — heti keret figyelve és adagolva (pacing)"}
+        {
+          "price": "~€100/hó",
+          "note": "első teszt — szabad ügynökök, monitor nélkül, a keret kimerüléséig"
+        }
       ]
+    },
+    "beta-1-kimi": {
+      "tagline": "Kimi munkamenet · Technical writing · fordítás · lokalizáció",
+      "category": "Technical Writing",
+      "seniority": "Senior · cross-domain",
+      "geos": [
+        "Magyarország",
+        "Olaszország",
+        "Európa"
+      ],
+      "subscriptionPrice": "~€40/hó",
+      "headline": "Technical writer és műszaki fordító — híd az ipar és a nyelvek között",
+      "summary": "Olyan jelölt, aki technical writing, műszaki fordítás és lokalizáció/LQA-UAT szerepkörökre pályázik (magyar/olasz/angol). Körülbelül 10 év cross-domain tapasztalatot hoz, amely az ipari és gyártási szakmákat — gyártás, CAD/CAM/CNC, asztalosság, kiállításépítés — ötvözi a többnyelvű fordítással és tolmácsolással: épp az az erőssége, hogy hidat ver a hands-on szakmai tudás és a nyelvi kompetencia között. A full remote munkát részesíti előnyben; prioritás Magyarország, majd Olaszország, majd Európa többi része.",
+      "facts": [
+        {
+          "label": "Célszerepkörök",
+          "value": "Technical writer · műszaki fordító · lokalizáció/LQA"
+        },
+        {
+          "label": "Tapasztalat",
+          "value": "~10 év cross-domain · ipar + nyelvek"
+        },
+        {
+          "label": "Háttér",
+          "value": "Gyártás · CAD/CAM/CNC · asztalosság · fordítás/tolmácsolás"
+        },
+        {
+          "label": "Nyelvek",
+          "value": "Magyar és olasz (anyanyelv) · Angol (C1-C2) · Német (alapszint)"
+        },
+        {
+          "label": "Mobilitás",
+          "value": "EU-állampolgár · full remote előnyben · Magyarország → Olaszország → Európa"
+        }
+      ],
+      "locationNote": "A full remote az elsődleges; földrajzilag először Magyarország, majd Olaszország, majd Európa többi része, nyitottsággal az európai tech hubok felé. A keresésben visszatérő városok között:",
+      "why": "Ezért alakulnak így a számok: a jelölt technical writing, műszaki fordítás és lokalizáció felé orientálódik, de erős ipari háttérrel — ezért a csapat főként ipari és szoftveres műszaki dokumentációt keresett, és a domináns szerepkörcsaládok a hardveres/gyártási technical writing, a szoftver/API docs és a lokalizáció (némi kitekintéssel a CAD/CAM/CNC-re, ami az ágazati múltját tükrözi). Szinte minden a LinkedInről és specializált job boardokról érkezik; Magyarország és Olaszország az élen a földrajzi prioritást és az anyanyelveket tükrözi.",
+      "phaseNotes": [
+        {
+          "price": "~€40/hó",
+          "note": "jelenlegi run — heti keret figyelve és adagolva (pacing)"
+        }
+      ]
+    },
+    "beta-2": {
+      "tagline": "Pénzügy · pályakezdő · Európa",
+      "category": "Pénzügy",
+      "seniority": "Pályakezdő",
+      "geos": [
+        "Európa"
+      ],
+      "subscriptionPrice": "~€100/hó",
+      "headline": "Pénzügyi szakember, pályakezdő",
+      "summary": "Elemző körülbelül 2 év tapasztalattal credit risk és due diligence területén egy nemzetközi befektetési banknál. Front-office szerepkörök felé szeretne elmozdulni — investment management, restructuring, transaction advisory — nagy európai városokban.",
+      "facts": [
+        {
+          "label": "Szektor",
+          "value": "Pénzügy · investment & credit risk"
+        },
+        {
+          "label": "Tapasztalat",
+          "value": "~2 év · pályakezdő"
+        },
+        {
+          "label": "Végzettség",
+          "value": "Business & Economics diploma"
+        },
+        {
+          "label": "Nyelvek",
+          "value": "Magyar · Angol (C1) · Német (alapszint)"
+        },
+        {
+          "label": "Mobilitás",
+          "value": "EU-állampolgár · Svájc rendben · UK szponzorációval"
+        }
+      ],
+      "locationNote": "Nyitott a sok lehetőséget kínáló nagy nemzetközi európai városokra — Nyugat-Európa előnyben, az északi országok a legerősebb szerepkörökért. A kiemelt városok között:",
+      "why": "Ezért alakulnak így a számok: pénzügyi és investment szerepköröket keresve a nagy európai városokban a csapat a pénzügyi hubokra (London, Zürich, Genf, Luxemburg, Dublin) koncentrálta a keresést, és szinte minden pozíció a business & finance kategóriákba esik — pontosan a jelölt profilja."
     }
   },
   "pt": {
-    "beta-1": {
-      "tagline": "Finanças · início de carreira · Europa",
-      "category": "Finanças",
-      "seniority": "Início de carreira",
-      "geos": ["Europa"],
-      "subscriptionPrice": "~€100/mês",
-      "headline": "Profissional de finanças, início de carreira",
-      "summary": "Analista com cerca de 2 anos de experiência em credit risk e due diligence num banco de investimento internacional. Quer mudar para funções front-office — investment management, restructuring, transaction advisory — em grandes cidades europeias.",
-      "facts": [
-        {"label": "Setor", "value": "Finanças · investment & credit risk"},
-        {"label": "Experiência", "value": "~2 anos · início de carreira"},
-        {"label": "Formação", "value": "Licenciatura em Business & Economics"},
-        {"label": "Línguas", "value": "Húngaro · Inglês (C1) · Alemão (básico)"},
-        {"label": "Mobilidade", "value": "Cidadão UE · Suíça ok · Reino Unido com sponsorship"}
-      ],
-      "locationNote": "Aberto a grandes cidades internacionais europeias com muitas oportunidades — Europa Ocidental preferida, países nórdicos para as funções mais fortes. Entre as cidades prioritárias:",
-      "why": "É por isto que os números saem assim: ao procurar funções de finanças e investment em grandes cidades europeias, a equipa concentrou a pesquisa nos hubs financeiros (Londres, Zurique, Genebra, Luxemburgo, Dublin) e quase todas as posições caem em categorias business & finance — exatamente o perfil do candidato."
-    },
-    "beta-2": {
-      "tagline": "Technical writing · tradução · localização",
+    "beta-1-codex": {
+      "tagline": "Sessão Codex · Technical writing · tradução · localização",
       "category": "Technical Writing",
       "seniority": "Sénior · cross-domain",
-      "geos": ["Hungria", "Itália", "Europa"],
-      "subscriptionPrice": "~€40/mês",
+      "geos": [
+        "Hungria",
+        "Itália",
+        "Europa"
+      ],
+      "subscriptionPrice": "~€100/mês",
       "headline": "Technical writer & tradutor técnico — ponte entre indústria e línguas",
       "summary": "Candidato que aponta a funções de technical writing, tradução técnica e localização/LQA-UAT (húngaro/italiano/inglês). Traz cerca de 10 anos de experiência cross-domain que une ofícios industriais e de manufatura — manufatura, CAD/CAM/CNC, carpintaria, montagem de stands de feiras — com tradução e interpretação multilingue: o seu ponto forte é precisamente a ponte entre competência hands-on do setor e competência linguística. Prefere o full remote; prioridade à Hungria, depois Itália, depois resto da Europa.",
       "facts": [
-        {"label": "Funções-alvo", "value": "Technical writer · tradutor técnico · localização/LQA"},
-        {"label": "Experiência", "value": "~10 anos cross-domain · indústria + línguas"},
-        {"label": "Background", "value": "Manufatura · CAD/CAM/CNC · carpintaria · tradução/interpretação"},
-        {"label": "Línguas", "value": "Húngaro e Italiano (língua materna) · Inglês (C1-C2) · Alemão (básico)"},
-        {"label": "Mobilidade", "value": "Cidadão UE · full remote preferido · Hungria → Itália → Europa"}
+        {
+          "label": "Funções-alvo",
+          "value": "Technical writer · tradutor técnico · localização/LQA"
+        },
+        {
+          "label": "Experiência",
+          "value": "~10 anos cross-domain · indústria + línguas"
+        },
+        {
+          "label": "Background",
+          "value": "Manufatura · CAD/CAM/CNC · carpintaria · tradução/interpretação"
+        },
+        {
+          "label": "Línguas",
+          "value": "Húngaro e Italiano (língua materna) · Inglês (C1-C2) · Alemão (básico)"
+        },
+        {
+          "label": "Mobilidade",
+          "value": "Cidadão UE · full remote preferido · Hungria → Itália → Europa"
+        }
       ],
       "locationNote": "Prioridade ao full remote; geograficamente primeiro a Hungria, depois a Itália, depois o resto da Europa, com abertura aos hubs tech europeus. Entre as cidades recorrentes na pesquisa:",
       "why": "É por isto que os números saem assim: o candidato aponta a technical writing, tradução técnica e localização, mas com um forte background industrial — por isso a equipa procurou sobretudo documentação técnica industrial e de software, e as famílias de funções dominantes são technical writing hardware/manufatura, software/API docs e localização (com alguns toques de CAD/CAM/CNC, reflexo do seu passado de setor). Quase tudo vem do LinkedIn e de job boards especializadas; Hungria e Itália no topo refletem a prioridade geográfica e as línguas nativas.",
       "phaseNotes": [
-        {"price": "~€100/mês", "note": "primeiro teste — agentes livres, sem monitor, até esgotar o orçamento"},
-        {"price": "~€40/mês", "note": "run atual — orçamento semanal monitorizado e doseado (pacing)"}
+        {
+          "price": "~€100/mês",
+          "note": "primeiro teste — agentes livres, sem monitor, até esgotar o orçamento"
+        }
       ]
+    },
+    "beta-1-kimi": {
+      "tagline": "Sessão Kimi · Technical writing · tradução · localização",
+      "category": "Technical Writing",
+      "seniority": "Sénior · cross-domain",
+      "geos": [
+        "Hungria",
+        "Itália",
+        "Europa"
+      ],
+      "subscriptionPrice": "~€40/mês",
+      "headline": "Technical writer & tradutor técnico — ponte entre indústria e línguas",
+      "summary": "Candidato que aponta a funções de technical writing, tradução técnica e localização/LQA-UAT (húngaro/italiano/inglês). Traz cerca de 10 anos de experiência cross-domain que une ofícios industriais e de manufatura — manufatura, CAD/CAM/CNC, carpintaria, montagem de stands de feiras — com tradução e interpretação multilingue: o seu ponto forte é precisamente a ponte entre competência hands-on do setor e competência linguística. Prefere o full remote; prioridade à Hungria, depois Itália, depois resto da Europa.",
+      "facts": [
+        {
+          "label": "Funções-alvo",
+          "value": "Technical writer · tradutor técnico · localização/LQA"
+        },
+        {
+          "label": "Experiência",
+          "value": "~10 anos cross-domain · indústria + línguas"
+        },
+        {
+          "label": "Background",
+          "value": "Manufatura · CAD/CAM/CNC · carpintaria · tradução/interpretação"
+        },
+        {
+          "label": "Línguas",
+          "value": "Húngaro e Italiano (língua materna) · Inglês (C1-C2) · Alemão (básico)"
+        },
+        {
+          "label": "Mobilidade",
+          "value": "Cidadão UE · full remote preferido · Hungria → Itália → Europa"
+        }
+      ],
+      "locationNote": "Prioridade ao full remote; geograficamente primeiro a Hungria, depois a Itália, depois o resto da Europa, com abertura aos hubs tech europeus. Entre as cidades recorrentes na pesquisa:",
+      "why": "É por isto que os números saem assim: o candidato aponta a technical writing, tradução técnica e localização, mas com um forte background industrial — por isso a equipa procurou sobretudo documentação técnica industrial e de software, e as famílias de funções dominantes são technical writing hardware/manufatura, software/API docs e localização (com alguns toques de CAD/CAM/CNC, reflexo do seu passado de setor). Quase tudo vem do LinkedIn e de job boards especializadas; Hungria e Itália no topo refletem a prioridade geográfica e as línguas nativas.",
+      "phaseNotes": [
+        {
+          "price": "~€40/mês",
+          "note": "run atual — orçamento semanal monitorizado e doseado (pacing)"
+        }
+      ]
+    },
+    "beta-2": {
+      "tagline": "Finanças · início de carreira · Europa",
+      "category": "Finanças",
+      "seniority": "Início de carreira",
+      "geos": [
+        "Europa"
+      ],
+      "subscriptionPrice": "~€100/mês",
+      "headline": "Profissional de finanças, início de carreira",
+      "summary": "Analista com cerca de 2 anos de experiência em credit risk e due diligence num banco de investimento internacional. Quer mudar para funções front-office — investment management, restructuring, transaction advisory — em grandes cidades europeias.",
+      "facts": [
+        {
+          "label": "Setor",
+          "value": "Finanças · investment & credit risk"
+        },
+        {
+          "label": "Experiência",
+          "value": "~2 anos · início de carreira"
+        },
+        {
+          "label": "Formação",
+          "value": "Licenciatura em Business & Economics"
+        },
+        {
+          "label": "Línguas",
+          "value": "Húngaro · Inglês (C1) · Alemão (básico)"
+        },
+        {
+          "label": "Mobilidade",
+          "value": "Cidadão UE · Suíça ok · Reino Unido com sponsorship"
+        }
+      ],
+      "locationNote": "Aberto a grandes cidades internacionais europeias com muitas oportunidades — Europa Ocidental preferida, países nórdicos para as funções mais fortes. Entre as cidades prioritárias:",
+      "why": "É por isto que os números saem assim: ao procurar funções de finanças e investment em grandes cidades europeias, a equipa concentrou a pesquisa nos hubs financeiros (Londres, Zurique, Genebra, Luxemburgo, Dublin) e quase todas as posições caem em categorias business & finance — exatamente o perfil do candidato."
     }
   }
 }

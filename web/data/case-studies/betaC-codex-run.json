@@ -2,20 +2,20 @@
   "source": "betaC-codex",
   "tsRange": [
     "2026-06-03 13:43:14",
-    "2026-06-30 17:55:26"
+    "2026-07-01 16:22:49"
   ],
   "totals": {
-    "positions": 641,
-    "scored": 442,
-    "excluded": 199
+    "positions": 649,
+    "scored": 448,
+    "excluded": 201
   },
   "match": {
-    "scored": 507,
+    "scored": 513,
     "avg": 71.0,
     "min": 27,
     "max": 94,
-    "strong70": 298,
-    "strong80": 164,
+    "strong70": 303,
+    "strong80": 166,
     "buckets": [
       {
         "label": "0-39",
@@ -23,7 +23,7 @@
       },
       {
         "label": "40-59",
-        "n": 90
+        "n": 91
       },
       {
         "label": "60-69",
@@ -31,18 +31,18 @@
       },
       {
         "label": "70-79",
-        "n": 134
+        "n": 137
       },
       {
         "label": "80-100",
-        "n": 164
+        "n": 166
       }
     ],
     "composition": [
       {
         "key": "stack",
         "label": "Competenze",
-        "avg": 21.5
+        "avg": 21.6
       },
       {
         "key": "exp",
@@ -169,6 +169,7 @@
       59,
       59,
       59,
+      59,
       60,
       60,
       60,
@@ -360,6 +361,7 @@
       76,
       76,
       76,
+      76,
       77,
       77,
       77,
@@ -398,6 +400,8 @@
       78,
       78,
       78,
+      78,
+      79,
       79,
       79,
       79,
@@ -522,6 +526,7 @@
       86,
       86,
       86,
+      86,
       87,
       87,
       87,
@@ -539,6 +544,7 @@
       87,
       87,
       87,
+      88,
       88,
       88,
       88,
@@ -578,9 +584,9 @@
   "categories": [
     {
       "name": "Private Equity & Venture Capital",
-      "count": 94,
-      "scored": 73,
-      "avg": 76.7
+      "count": 98,
+      "scored": 76,
+      "avg": 77.0
     },
     {
       "name": "Corporate Finance / FP&A",
@@ -590,7 +596,7 @@
     },
     {
       "name": "Investment Banking / M&A Advisory",
-      "count": 73,
+      "count": 74,
       "scored": 62,
       "avg": 78.7
     },
@@ -601,16 +607,16 @@
       "avg": 79.5
     },
     {
-      "name": "Other",
-      "count": 60,
-      "scored": 48,
-      "avg": 67.0
+      "name": "Infrastructure / Real Assets Investment",
+      "count": 61,
+      "scored": 53,
+      "avg": 79.1
     },
     {
-      "name": "Infrastructure / Real Assets Investment",
-      "count": 59,
-      "scored": 51,
-      "avg": 79.2
+      "name": "Other",
+      "count": 61,
+      "scored": 49,
+      "avg": 66.8
     },
     {
       "name": "Risk, Compliance & Valuation",
@@ -652,7 +658,7 @@
   "sources": [
     {
       "name": "linkedin",
-      "count": 230
+      "count": 231
     },
     {
       "name": "greenhouse",
@@ -672,7 +678,7 @@
     },
     {
       "name": "lever",
-      "count": 30
+      "count": 31
     },
     {
       "name": "official-careers-direct",
@@ -700,7 +706,7 @@
     },
     {
       "name": "Altre",
-      "count": 126
+      "count": 132
     }
   ],
   "sourcesDaily": [
@@ -926,6 +932,14 @@
         "Altre": 14,
         "linkedin": 2,
         "greenhouse": 1
+      }
+    },
+    {
+      "day": "2026-07-01",
+      "counts": {
+        "linkedin": 1,
+        "lever": 1,
+        "Altre": 6
       }
     }
   ],
@@ -1158,6 +1172,14 @@
         "linkedin": 89.0,
         "greenhouse": 81.0
       }
+    },
+    {
+      "day": "2026-07-01",
+      "score": {
+        "linkedin": 78.0,
+        "lever": 59.0,
+        "Altre": 82.2
+      }
     }
   ],
   "sourcesScore": [
@@ -1174,12 +1196,12 @@
     {
       "name": "linkedin",
       "avg": 73.6,
-      "n": 181
+      "n": 182
     },
     {
       "name": "Altre",
-      "avg": 73.2,
-      "n": 138
+      "avg": 73.4,
+      "n": 142
     },
     {
       "name": "company-careers",
@@ -1204,19 +1226,19 @@
     {
       "name": "lever",
       "avg": 59.5,
-      "n": 19
+      "n": 20
     }
   ],
   "countries": [
     {
       "name": "Portugal",
       "code": "PT",
-      "count": 75
+      "count": 76
     },
     {
       "name": "Switzerland",
       "code": "CH",
-      "count": 62
+      "count": 64
     },
     {
       "name": "Ireland",
@@ -1231,7 +1253,7 @@
     {
       "name": "Italy",
       "code": "IT",
-      "count": 32
+      "count": 33
     },
     {
       "name": "Germany",
@@ -1246,12 +1268,12 @@
     {
       "name": "Netherlands",
       "code": "NL",
-      "count": 23
+      "count": 24
     },
     {
       "name": "Austria",
       "code": "AT",
-      "count": 19
+      "count": 20
     },
     {
       "name": "France",
@@ -1565,9 +1587,9 @@
     }
   ],
   "salary": {
-    "n": 40,
-    "avgMin": 43719,
-    "avgMax": 57410
+    "n": 43,
+    "avgMin": 44041,
+    "avgMax": 57707
   },
   "agents": [
     "analista-1",
@@ -10929,6 +10951,116 @@
       "ts": "2026-06-30T17:55:26Z",
       "agent": "scorer-4",
       "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T06:57:22Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T07:00:57Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T07:10:09Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T13:02:24Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T13:05:05Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T13:12:53Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T15:45:28Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T15:45:39Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T15:45:49Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T15:50:32Z",
+      "agent": "analista-5",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T15:50:32Z",
+      "agent": "analista-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T15:50:32Z",
+      "agent": "analista-5",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T15:54:28Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T16:00:46Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T16:02:59Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T16:05:07Z",
+      "agent": "analista-5",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T16:08:16Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T16:10:43Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T16:13:29Z",
+      "agent": "analista-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T16:16:06Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T16:20:43Z",
+      "agent": "analista-5",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T16:22:49Z",
+      "agent": "scorer-1",
+      "action": "scored"
     }
   ],
   "hourly": [
@@ -12894,6 +13026,48 @@
         "scorer": 1
       },
       "cum": 22
+    },
+    {
+      "hour": "2026-07-01T06",
+      "counts": {
+        "scout": 1
+      },
+      "cum": 24
+    },
+    {
+      "hour": "2026-07-01T07",
+      "counts": {
+        "analista": 1,
+        "scorer": 1
+      },
+      "cum": 25
+    },
+    {
+      "hour": "2026-07-01T13",
+      "counts": {
+        "scout": 1,
+        "analista": 1,
+        "scorer": 1
+      },
+      "cum": 28
+    },
+    {
+      "hour": "2026-07-01T15",
+      "counts": {
+        "scout": 3,
+        "analista": 3,
+        "scorer": 1
+      },
+      "cum": 29
+    },
+    {
+      "hour": "2026-07-01T16",
+      "counts": {
+        "scorer": 3,
+        "scout": 3,
+        "analista": 3
+      },
+      "cum": 32
     }
   ],
   "funnelDaily": [
@@ -13096,15 +13270,187 @@
       "kept": 11,
       "scored": 11,
       "ready": 0
+    },
+    {
+      "day": "2026-07-01",
+      "found": 8,
+      "excluded": 2,
+      "kept": 6,
+      "scored": 6,
+      "ready": 0
     }
   ],
   "funnelTotals": {
-    "found": 641,
-    "excluded": 199,
-    "kept": 442,
-    "scored": 442,
+    "found": 649,
+    "excluded": 201,
+    "kept": 448,
+    "scored": 448,
     "ready": 0
   },
+  "conversion": {
+    "found": 649,
+    "scored": 513,
+    "strong70": 303,
+    "strong80": 166
+  },
+  "scoreDaily": [
+    {
+      "day": "2026-06-03",
+      "scored": 22,
+      "strong70": 20,
+      "strong80": 17
+    },
+    {
+      "day": "2026-06-04",
+      "scored": 49,
+      "strong70": 39,
+      "strong80": 23
+    },
+    {
+      "day": "2026-06-05",
+      "scored": 46,
+      "strong70": 20,
+      "strong80": 11
+    },
+    {
+      "day": "2026-06-06",
+      "scored": 24,
+      "strong70": 15,
+      "strong80": 5
+    },
+    {
+      "day": "2026-06-07",
+      "scored": 32,
+      "strong70": 17,
+      "strong80": 8
+    },
+    {
+      "day": "2026-06-11",
+      "scored": 16,
+      "strong70": 6,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-12",
+      "scored": 5,
+      "strong70": 3,
+      "strong80": 1
+    },
+    {
+      "day": "2026-06-13",
+      "scored": 19,
+      "strong70": 7,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-14",
+      "scored": 17,
+      "strong70": 11,
+      "strong80": 8
+    },
+    {
+      "day": "2026-06-15",
+      "scored": 24,
+      "strong70": 12,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-16",
+      "scored": 21,
+      "strong70": 10,
+      "strong80": 3
+    },
+    {
+      "day": "2026-06-17",
+      "scored": 12,
+      "strong70": 4,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-18",
+      "scored": 15,
+      "strong70": 5,
+      "strong80": 3
+    },
+    {
+      "day": "2026-06-19",
+      "scored": 9,
+      "strong70": 6,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-20",
+      "scored": 13,
+      "strong70": 4,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-21",
+      "scored": 15,
+      "strong70": 10,
+      "strong80": 7
+    },
+    {
+      "day": "2026-06-22",
+      "scored": 12,
+      "strong70": 9,
+      "strong80": 7
+    },
+    {
+      "day": "2026-06-23",
+      "scored": 23,
+      "strong70": 12,
+      "strong80": 6
+    },
+    {
+      "day": "2026-06-24",
+      "scored": 12,
+      "strong70": 8,
+      "strong80": 5
+    },
+    {
+      "day": "2026-06-25",
+      "scored": 24,
+      "strong70": 14,
+      "strong80": 7
+    },
+    {
+      "day": "2026-06-26",
+      "scored": 37,
+      "strong70": 19,
+      "strong80": 8
+    },
+    {
+      "day": "2026-06-27",
+      "scored": 23,
+      "strong70": 16,
+      "strong80": 9
+    },
+    {
+      "day": "2026-06-28",
+      "scored": 14,
+      "strong70": 14,
+      "strong80": 7
+    },
+    {
+      "day": "2026-06-29",
+      "scored": 12,
+      "strong70": 8,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-30",
+      "scored": 11,
+      "strong70": 9,
+      "strong80": 9
+    },
+    {
+      "day": "2026-07-01",
+      "scored": 6,
+      "strong70": 5,
+      "strong80": 2
+    }
+  ],
   "usage": {
     "provider": "codex",
     "unit": "weekly_budget_pct",
@@ -13269,6 +13615,12 @@
         "day": "2026-06-30",
         "pct": 4,
         "cum": 22,
+        "week": "2026-06-29"
+      },
+      {
+        "day": "2026-07-01",
+        "pct": 11,
+        "cum": 33,
         "week": "2026-06-29"
       }
     ],
