@@ -1,6 +1,6 @@
 ---
 name: cv-structure
-description: Write the CV markdown that will be PDF'd and reviewed by the Critico. Six fixed sections, max 2 pages, every claim traceable to `candidate_profile.yml` (zero invenzioni — T10). Bullets follow the "metric in bold + tech in parens" pattern; tone matches the JD's company type (startup/corporate/fintech); Cover Letter only if the JD explicitly asks. Owned by the Scrittore. Pair with `application-flow` (claim + path) and `critic-loop` (review iterations).
+description: Write the CV markdown that will be PDF'd and reviewed by the Critico. First read the user's ORIGINAL CV in `$JHT_HOME/profile/sources/` to mirror their voice and match the register to the industry (the tech defaults — "Technical Skills: Python", metric+tech-in-parens — are wrong for hospitality/sales/care/creative). Six fixed sections, max 2 pages, every claim traceable to `candidate_profile.yml`/sources (zero invenzioni — T10). Languages appear ONCE (Header only). Cover Letter only if the JD explicitly asks, with its own "Cover Letter" title (never "CV"). Owned by the Scrittore. Pair with `application-flow` (claim + path) and `critic-loop` (review iterations).
 allowed-tools: Bash(pandoc *)
 ---
 
@@ -9,6 +9,22 @@ allowed-tools: Bash(pandoc *)
 Output goes to `$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.md` (then PDF via pandoc/typst). Path rule: `application-flow` skill — never write the final CV under `$JHT_AGENT_DIR` (that's scratch only, T11).
 
 `<Candidato>` = `Nome_Cognome` from the profile. `<Company>` = company name normalised PascalCase, no spaces or slashes (e.g. `Acme_Corp` → `AcmeCorp`).
+
+## Before you write: read the source, match the register (W-05, 2026-07-01)
+
+`candidate_profile.yml` is flattened **data, not voice**. Before drafting, **read the user's original CV** in `$JHT_HOME/profile/sources/` (the PDF/doc they uploaded) plus `$JHT_HOME/profile/summaries/`. Two reasons:
+
+- **Voice & distinctive detail.** The original carries what makes the candidate *them* — the story, the named context, the human register. A CV rebuilt from the `.yml` alone comes out cold and interchangeable. Mirror their phrasing and keep the concrete details that give weight (not a bare "VIP guest handling" but the Nobu / De Niro–founded context behind it).
+- **Register by industry.** Read `industry` + `seniority_target` from the profile. This skill's defaults (metric-in-bold + **tech**-in-parens, a "Technical Skills" table with `Python, Go, Bash`) are tuned for **tech / engineering** roles. For **client-facing / non-tech** profiles they are WRONG — they sterilise the exact warmth that sells the candidate. Adapt:
+
+| Profile family | Section 4 name | Bullet style | About Me |
+|---|---|---|---|
+| Tech / engineering | **Technical Skills** (Languages, Backend, Data, Infra) | metric in bold + **tech** in parens | factual, numbers |
+| Client-facing / hospitality / retail / care | **Skills & Strengths** (NO programming languages) | concrete result + **context** in parens (place, scale, clientele); warmth allowed | credible + a human touch, mirroring the original |
+| Sales / business | **Core Skills** | metric in bold (revenue, targets) + tools in parens | outcome-driven |
+| Creative / design | **Skills & Tools** + portfolio link | outcome + medium in parens | voice-forward |
+
+Never put a "Technical Skills / Languages: Python…" table on a hospitality, sales or care CV. Tone is set by **both** the JD (company type, below) **and** the candidate's industry register.
 
 ## The 6 sections (fixed order, max 2 pages)
 
@@ -31,6 +47,8 @@ Output goes to `$JHT_USER_DIR/cv/CV_<Candidato>_<Company>.md` (then PDF via pand
 ```
 
 Adapt the role title: if the JD says "Backend Engineer (Python)" use that, not the generic profile target. Stay truthful — never claim a seniority you don't have.
+
+**Languages appear ONCE.** Put spoken languages on the Header `🗣` line and **nowhere else** — do NOT restate them at the end of About Me and do NOT add a "Languages" row in the Skills table. (The beta-3 betaD CVs listed the 4 languages **3× on one page**: Header + About + Skills. One place only.) Exception: if the JD makes a *specific* language a core selected requirement, keep it in Skills and drop the generic list from the Header — still one place.
 
 ## Section 2 — About Me
 
@@ -71,9 +89,11 @@ Bullet rules:
 
 Banned verbs signal a junior/uncertain voice. Use the active list even when the role was junior — focus on what you *delivered*, not what you *did*.
 
-## Section 4 — Technical Skills
+## Section 4 — Skills (name + content by register)
 
-A 2-column markdown table that mirrors the JD's keyword list. **Only tech the profile actually documents.** Inventing a tool you don't know is an instant fail in the Critic's review (and a real-world recruiter kill).
+**The section title and contents depend on the profile family — see "read the source, match the register" above.** Tech role → **Technical Skills** (table example below). Client-facing / non-tech → rename it (Skills & Strengths / Core Skills) and **never list programming languages**.
+
+A 2-column markdown table that mirrors the JD's keyword list. **Only skills/tech the profile actually documents.** Inventing a tool you don't know is an instant fail in the Critic's review (and a real-world recruiter kill). The `Python, Go, Bash` example below is **tech-only** — do not paste it onto a non-tech CV.
 
 ```markdown
 | Area              | Stack                                                  |
@@ -126,6 +146,16 @@ Don't overdo it — tone is a colour, not a costume. The bullets stay factual ei
 Default: **don't write one**. Token + time saved. Write it ONLY if the JD explicitly mentions it ("please include a cover letter", "tell us why you want this role").
 
 Length: 250-400 words. Path: `$JHT_USER_DIR/allegati/CoverLetter_<Candidato>_<Company>.{md,pdf}`.
+
+**PDF title: "Cover Letter", NEVER "CV".** The cover letter is its own document — generate it with its own title metadata. Do NOT reuse the CV pandoc command (which hardcodes `--metadata title="CV …"`): that is exactly the bug that shipped 31 beta-3 cover letters whose document title read **"CV betaD Olivar"**.
+
+```bash
+pandoc "$COVER_MD" -o "$COVER_PDF" \
+       --pdf-engine=wkhtmltopdf \
+       --metadata title="Cover Letter $CANDIDATO"
+```
+
+The `# <Nome Cognome>` heading at the top of the cover-letter markdown is the candidate's name (not "CV") — keep it, and let the title metadata above say "Cover Letter".
 
 ```markdown
 Opening (direct, NOT "I am writing to express my interest"):
@@ -277,6 +307,9 @@ esac
 ## Hard rules
 
 - **Zero invenzioni.** Every metric, every tech, every project must trace back to `candidate_profile.yml` or the user-provided sources. Inventing fails the Critic and is a fireable offense in real life. T10.
+- **Read the original first.** Before writing, read the user's uploaded CV in `$JHT_HOME/profile/sources/` and mirror voice + register + distinctive detail. The `.yml` is data, not voice — a CV built from it alone comes out cold.
+- **Register fits the industry.** A hospitality / sales / care / creative CV must NOT read like a dev CV — no "Technical Skills: Python", no sterile metric-only bullets where warmth is the selling point. See the register table.
+- **Languages once.** Header only, never also in About + Skills.
 - **Tailor per JD.** The same candidate gets a different CV per role: different About, different Experience emphasis, different Skills order. Generic CVs fail the score gate.
 - **One requirement → one experience block.** If the JD has 5 requirements and your Experience section maps to 2, you're not telling the right story.
 - **Max 2 pages.** Recruiters skim. If page 3 exists, cut.
@@ -288,6 +321,10 @@ esac
 - ❌ Apologising for missing degree / years — signals weakness.
 - ❌ Same CV across multiple JDs — score gate punishes generic CVs.
 - ❌ Cover letter when not asked — wasted tokens, longer review cycle, no value.
+- ❌ Cover letter whose PDF title reads "CV …" — reused the CV pandoc command; use `--metadata title="Cover Letter $CANDIDATO"`.
+- ❌ Same fact repeated across sections (languages in Header **and** About **and** Skills) — pick one place.
+- ❌ Dev-style CV on a non-tech profile ("Technical Skills: Python, Go"; cold metric-only bullets) — wrong register, kills the warmth that sells hospitality/sales/care candidates.
+- ❌ Rebuilding only from `candidate_profile.yml` without reading the original CV — produces cold, interchangeable output.
 - ❌ More than 5 bullets per experience — recruiters skim, you lose the lead bullet's impact.
 
 ## See also
