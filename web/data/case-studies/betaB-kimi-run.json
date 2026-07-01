@@ -1,48 +1,48 @@
 {
   "source": "betaB-kimi",
   "tsRange": [
-    "2026-05-19 20:29:58",
-    "2026-06-30 18:14:51"
+    "2026-06-13 03:32:51",
+    "2026-07-01 18:39:43"
   ],
   "totals": {
-    "positions": 1107,
-    "scored": 427,
-    "excluded": 575
+    "positions": 909,
+    "scored": 392,
+    "excluded": 513
   },
   "match": {
-    "scored": 586,
-    "avg": 61.1,
+    "scored": 404,
+    "avg": 59.4,
     "min": 25,
-    "max": 94,
-    "strong70": 178,
-    "strong80": 59,
+    "max": 93,
+    "strong70": 96,
+    "strong80": 28,
     "buckets": [
       {
         "label": "0-39",
-        "n": 23
+        "n": 11
       },
       {
         "label": "40-59",
-        "n": 253
+        "n": 203
       },
       {
         "label": "60-69",
-        "n": 132
+        "n": 94
       },
       {
         "label": "70-79",
-        "n": 119
+        "n": 68
       },
       {
         "label": "80-100",
-        "n": 59
+        "n": 28
       }
     ],
     "composition": [
       {
         "key": "stack",
         "label": "Competenze",
-        "avg": 17.7
+        "avg": 13.7
       },
       {
         "key": "exp",
@@ -52,17 +52,17 @@
       {
         "key": "strategic",
         "label": "Fit strategico",
-        "avg": 5.9
+        "avg": 4.2
       },
       {
         "key": "remote",
         "label": "Modalita",
-        "avg": 13.9
+        "avg": 12.1
       },
       {
         "key": "salary",
         "label": "Retribuzione",
-        "avg": 9.9
+        "avg": 8.7
       }
     ],
     "scores": [
@@ -74,20 +74,8 @@
       30,
       30,
       31,
-      33,
       34,
-      34,
-      35,
-      35,
-      36,
-      37,
-      37,
       38,
-      38,
-      38,
-      38,
-      38,
-      39,
       39,
       40,
       40,
@@ -105,7 +93,6 @@
       41,
       41,
       41,
-      41,
       42,
       42,
       42,
@@ -113,12 +100,6 @@
       42,
       42,
       42,
-      42,
-      43,
-      43,
-      43,
-      43,
-      43,
       43,
       43,
       43,
@@ -139,15 +120,6 @@
       44,
       44,
       44,
-      44,
-      44,
-      44,
-      44,
-      44,
-      45,
-      45,
-      45,
-      45,
       45,
       45,
       45,
@@ -168,8 +140,6 @@
       46,
       46,
       46,
-      46,
-      46,
       47,
       47,
       47,
@@ -182,11 +152,6 @@
       47,
       47,
       47,
-      47,
-      48,
-      48,
-      48,
-      48,
       48,
       48,
       48,
@@ -205,8 +170,6 @@
       49,
       49,
       49,
-      49,
-      49,
       50,
       50,
       50,
@@ -215,6 +178,7 @@
       50,
       50,
       50,
+      50,
       51,
       51,
       51,
@@ -225,7 +189,6 @@
       51,
       51,
       51,
-      51,
       52,
       52,
       52,
@@ -235,9 +198,6 @@
       52,
       52,
       52,
-      52,
-      52,
-      52,
       53,
       53,
       53,
@@ -247,11 +207,6 @@
       53,
       53,
       53,
-      53,
-      53,
-      53,
-      53,
-      54,
       54,
       54,
       54,
@@ -284,7 +239,6 @@
       55,
       55,
       55,
-      55,
       56,
       56,
       56,
@@ -294,13 +248,6 @@
       56,
       56,
       56,
-      56,
-      56,
-      56,
-      56,
-      56,
-      57,
-      57,
       57,
       57,
       57,
@@ -321,11 +268,6 @@
       58,
       58,
       58,
-      58,
-      58,
-      58,
-      58,
-      58,
       59,
       59,
       59,
@@ -338,13 +280,6 @@
       59,
       59,
       59,
-      59,
-      59,
-      59,
-      59,
-      60,
-      60,
-      60,
       60,
       60,
       60,
@@ -364,17 +299,6 @@
       61,
       61,
       61,
-      61,
-      61,
-      61,
-      61,
-      61,
-      62,
-      62,
-      62,
-      62,
-      62,
-      62,
       62,
       62,
       62,
@@ -395,12 +319,6 @@
       63,
       63,
       63,
-      63,
-      63,
-      64,
-      64,
-      64,
-      64,
       64,
       64,
       64,
@@ -417,12 +335,6 @@
       65,
       65,
       65,
-      65,
-      65,
-      66,
-      66,
-      66,
-      66,
       66,
       66,
       66,
@@ -444,17 +356,6 @@
       67,
       67,
       67,
-      67,
-      67,
-      67,
-      67,
-      67,
-      68,
-      68,
-      68,
-      68,
-      68,
-      68,
       68,
       68,
       68,
@@ -473,16 +374,6 @@
       69,
       69,
       69,
-      69,
-      70,
-      70,
-      70,
-      70,
-      70,
-      70,
-      70,
-      70,
-      70,
       70,
       70,
       70,
@@ -500,15 +391,6 @@
       71,
       71,
       71,
-      71,
-      71,
-      72,
-      72,
-      72,
-      72,
-      72,
-      72,
-      72,
       72,
       72,
       72,
@@ -518,15 +400,6 @@
       73,
       73,
       73,
-      73,
-      73,
-      73,
-      73,
-      74,
-      74,
-      74,
-      74,
-      74,
       74,
       74,
       74,
@@ -540,18 +413,6 @@
       75,
       75,
       75,
-      75,
-      75,
-      75,
-      75,
-      76,
-      76,
-      76,
-      76,
-      76,
-      76,
-      76,
-      76,
       76,
       76,
       76,
@@ -565,17 +426,6 @@
       77,
       77,
       77,
-      77,
-      77,
-      77,
-      77,
-      78,
-      78,
-      78,
-      78,
-      78,
-      78,
-      78,
       78,
       78,
       78,
@@ -592,11 +442,6 @@
       79,
       79,
       79,
-      79,
-      80,
-      80,
-      80,
-      80,
       80,
       80,
       80,
@@ -604,14 +449,6 @@
       80,
       81,
       81,
-      81,
-      81,
-      81,
-      82,
-      82,
-      82,
-      82,
-      82,
       82,
       82,
       82,
@@ -621,75 +458,50 @@
       83,
       83,
       83,
-      83,
-      84,
-      84,
-      84,
-      84,
       84,
       84,
       84,
       85,
       85,
       85,
-      85,
-      85,
-      86,
-      86,
-      86,
-      87,
       87,
       88,
       88,
-      88,
-      88,
-      88,
-      89,
-      89,
       90,
-      90,
-      91,
       92,
-      93,
-      94
+      93
     ]
   },
   "categories": [
     {
       "name": "Technical Writing / Hardware, Industrial & Manufacturing",
-      "count": 145,
-      "scored": 82,
-      "avg": 64.8
+      "count": 124,
+      "scored": 59,
+      "avg": 65.1
     },
     {
       "name": "Technical Writing / Software, API & Developer Documentation",
-      "count": 127,
-      "scored": 102,
-      "avg": 65.2
+      "count": 93,
+      "scored": 70,
+      "avg": 63.0
     },
     {
       "name": "Localization & Translation",
-      "count": 101,
-      "scored": 49,
-      "avg": 62.4
-    },
-    {
-      "name": "Engineering (Other)",
-      "count": 100,
-      "scored": 49,
-      "avg": 71.1
-    },
-    {
-      "name": "Technical Writing / General & Product",
-      "count": 88,
-      "scored": 62,
-      "avg": 65.6
+      "count": 90,
+      "scored": 38,
+      "avg": 58.9
     },
     {
       "name": "Content & UX Writing",
-      "count": 83,
-      "scored": 37,
-      "avg": 54.0
+      "count": 77,
+      "scored": 30,
+      "avg": 53.6
+    },
+    {
+      "name": "Technical Writing / General & Product",
+      "count": 74,
+      "scored": 49,
+      "avg": 66.2
     },
     {
       "name": "Content Writing / E-Learning",
@@ -704,52 +516,46 @@
       "avg": 53.4
     },
     {
-      "name": "Documentation Control / Quality",
+      "name": "Engineering (Other)",
       "count": 39,
-      "scored": 22,
-      "avg": 57.7
+      "scored": 0,
+      "avg": null
     },
     {
-      "name": "Technical Writing / Documentation Engineering & CMS",
-      "count": 38,
-      "scored": 26,
-      "avg": 57.5
+      "name": "Documentation Control / Quality",
+      "count": 37,
+      "scored": 20,
+      "avg": 59.0
     },
     {
       "name": "Other",
-      "count": 36,
+      "count": 37,
       "scored": 7,
       "avg": 52.4
     },
     {
       "name": "Technical Writing / Medical, Scientific & Regulatory",
-      "count": 35,
-      "scored": 9,
-      "avg": 59.7
+      "count": 33,
+      "scored": 6,
+      "avg": 55.3
     },
     {
       "name": "Data / AI Operations",
-      "count": 32,
-      "scored": 11,
-      "avg": 47.6
+      "count": 30,
+      "scored": 9,
+      "avg": 47.7
     },
     {
-      "name": "QA & Testing",
-      "count": 32,
-      "scored": 18,
-      "avg": 41.9
+      "name": "Technical Writing / Documentation Engineering & CMS",
+      "count": 29,
+      "scored": 17,
+      "avg": 55.2
     },
     {
       "name": "Knowledge Management",
-      "count": 30,
-      "scored": 19,
-      "avg": 55.6
-    },
-    {
-      "name": "Customer & Technical Support",
-      "count": 20,
-      "scored": 14,
-      "avg": 60.2
+      "count": 25,
+      "scored": 15,
+      "avg": 54.5
     },
     {
       "name": "Business Analysis",
@@ -764,14 +570,26 @@
       "avg": 60.1
     },
     {
-      "name": "Engineering (Other) / Quality, Regulatory & Validation Engineering",
-      "count": 8,
-      "scored": 1,
-      "avg": 58.0
+      "name": "QA & Testing",
+      "count": 15,
+      "scored": 5,
+      "avg": 37.0
     },
     {
       "name": "Interpretation / Telephone",
       "count": 8,
+      "scored": 0,
+      "avg": null
+    },
+    {
+      "name": "Customer & Technical Support",
+      "count": 7,
+      "scored": 2,
+      "avg": 71.0
+    },
+    {
+      "name": "Engineering (Other) / Quality, Regulatory & Validation Engineering",
+      "count": 7,
       "scored": 0,
       "avg": null
     },
@@ -870,12 +688,6 @@
       "count": 1,
       "scored": 0,
       "avg": null
-    },
-    {
-      "name": "Design",
-      "count": 1,
-      "scored": 1,
-      "avg": 62.0
     },
     {
       "name": "DevOps / SRE / Platform",
@@ -977,15 +789,11 @@
   "sources": [
     {
       "name": "linkedin",
-      "count": 884
+      "count": 762
     },
     {
       "name": "linkedin-guest",
-      "count": 47
-    },
-    {
-      "name": "ashby",
-      "count": 25
+      "count": 48
     },
     {
       "name": "euremotejobs",
@@ -996,23 +804,15 @@
       "count": 17
     },
     {
-      "name": "greenhouse",
-      "count": 16
-    },
-    {
-      "name": "lever",
-      "count": 12
-    },
-    {
       "name": "workingincontent",
       "count": 12
     },
     {
-      "name": "profession",
-      "count": 10
+      "name": "greenhouse",
+      "count": 9
     },
     {
-      "name": "company-careers",
+      "name": "lever",
       "count": 7
     },
     {
@@ -1024,41 +824,29 @@
       "count": 4
     },
     {
+      "name": "webresearch",
+      "count": 4
+    },
+    {
+      "name": "weloveproduct",
+      "count": 3
+    },
+    {
+      "name": "localization-boards",
+      "count": 2
+    },
+    {
       "name": "Altre",
-      "count": 48
+      "count": 16
     }
   ],
   "sourcesDaily": [
     {
-      "day": "2026-05-19",
-      "counts": {
-        "linkedin": 28
-      }
-    },
-    {
-      "day": "2026-05-20",
-      "counts": {
-        "linkedin": 97,
-        "Altre": 39,
-        "ashby": 24,
-        "lever": 5,
-        "greenhouse": 7
-      }
-    },
-    {
-      "day": "2026-05-21",
-      "counts": {
-        "linkedin": 3,
-        "Altre": 3
-      }
-    },
-    {
       "day": "2026-06-13",
       "counts": {
         "linkedin": 105,
-        "ashby": 1,
+        "Altre": 7,
         "greenhouse": 3,
-        "Altre": 6,
         "workingincontent": 5,
         "remoterocketship": 11
       }
@@ -1068,7 +856,8 @@
       "counts": {
         "linkedin": 104,
         "remoterocketship": 6,
-        "Altre": 5,
+        "Altre": 4,
+        "remoteok": 1,
         "workingincontent": 1,
         "greenhouse": 2
       }
@@ -1076,8 +865,9 @@
     {
       "day": "2026-06-15",
       "counts": {
-        "Altre": 5,
-        "linkedin": 56
+        "Altre": 2,
+        "linkedin": 56,
+        "remoteok": 3
       }
     },
     {
@@ -1126,14 +916,15 @@
       "counts": {
         "linkedin": 106,
         "euremotejobs": 5,
-        "Altre": 1
+        "remoteok": 1
       }
     },
     {
       "day": "2026-06-26",
       "counts": {
         "linkedin": 35,
-        "Altre": 3
+        "Altre": 2,
+        "remoteok": 1
       }
     },
     {
@@ -1162,52 +953,35 @@
     {
       "day": "2026-06-30",
       "counts": {
-        "linkedin-guest": 10
+        "linkedin-guest": 11,
+        "Altre": 1
+      }
+    },
+    {
+      "day": "2026-07-01",
+      "counts": {
+        "linkedin": 6
       }
     }
   ],
   "sourcesDailyKeys": [
     "linkedin",
     "linkedin-guest",
-    "ashby",
     "euremotejobs",
     "remoterocketship",
+    "workingincontent",
     "greenhouse",
     "lever",
-    "workingincontent",
+    "remoteok",
     "Altre"
   ],
   "sourcesScoreDaily": [
     {
-      "day": "2026-05-19",
-      "score": {
-        "linkedin": 69.5
-      }
-    },
-    {
-      "day": "2026-05-20",
-      "score": {
-        "linkedin": 61.3,
-        "Altre": 69.4,
-        "ashby": 68.8,
-        "lever": 66.0,
-        "greenhouse": 62.7
-      }
-    },
-    {
-      "day": "2026-05-21",
-      "score": {
-        "linkedin": 48.5,
-        "Altre": 53.0
-      }
-    },
-    {
       "day": "2026-06-13",
       "score": {
         "linkedin": 52.9,
-        "ashby": 66.0,
+        "Altre": 69.3,
         "greenhouse": 76.3,
-        "Altre": 69.8,
         "workingincontent": 71.0,
         "remoterocketship": 52.2
       }
@@ -1217,7 +991,8 @@
       "score": {
         "linkedin": 49.4,
         "remoterocketship": 59.4,
-        "Altre": 58.0,
+        "Altre": 47.5,
+        "remoteok": 79.0,
         "workingincontent": 63.0,
         "greenhouse": 75.0
       }
@@ -1225,8 +1000,9 @@
     {
       "day": "2026-06-15",
       "score": {
-        "Altre": 71.0,
-        "linkedin": 66.4
+        "Altre": 52.0,
+        "linkedin": 66.4,
+        "remoteok": 80.5
       }
     },
     {
@@ -1306,15 +1082,25 @@
     {
       "day": "2026-06-30",
       "score": {
-        "linkedin-guest": 59.2
+        "linkedin-guest": 57.9
       }
     }
   ],
   "sourcesScore": [
     {
+      "name": "remoteok",
+      "avg": 80.0,
+      "n": 3
+    },
+    {
+      "name": "greenhouse",
+      "avg": 74.4,
+      "n": 7
+    },
+    {
       "name": "lever",
-      "avg": 71.9,
-      "n": 10
+      "avg": 74.4,
+      "n": 7
     },
     {
       "name": "workingincontent",
@@ -1322,34 +1108,24 @@
       "n": 3
     },
     {
-      "name": "ashby",
-      "avg": 68.7,
-      "n": 24
-    },
-    {
-      "name": "greenhouse",
-      "avg": 68.6,
-      "n": 14
-    },
-    {
-      "name": "Altre",
-      "avg": 67.9,
-      "n": 62
-    },
-    {
       "name": "euremotejobs",
       "avg": 67.4,
       "n": 12
     },
     {
-      "name": "linkedin",
-      "avg": 59.2,
-      "n": 431
+      "name": "Altre",
+      "avg": 64.7,
+      "n": 24
     },
     {
       "name": "linkedin-guest",
-      "avg": 58.6,
-      "n": 20
+      "avg": 58.2,
+      "n": 21
+    },
+    {
+      "name": "linkedin",
+      "avg": 57.9,
+      "n": 317
     },
     {
       "name": "remoterocketship",
@@ -1361,52 +1137,47 @@
     {
       "name": "Italy",
       "code": "IT",
-      "count": 149
+      "count": 100
     },
     {
       "name": "Hungary",
       "code": "HU",
-      "count": 49
+      "count": 34
     },
     {
       "name": "Spain",
       "code": "ES",
-      "count": 34
+      "count": 27
     },
     {
       "name": "United Kingdom",
       "code": "GB",
-      "count": 29
-    },
-    {
-      "name": "Ireland",
-      "code": "IE",
-      "count": 26
+      "count": 24
     },
     {
       "name": "Poland",
       "code": "PL",
-      "count": 25
+      "count": 21
+    },
+    {
+      "name": "Ireland",
+      "code": "IE",
+      "count": 17
     },
     {
       "name": "Netherlands",
       "code": "NL",
-      "count": 24
+      "count": 16
     },
     {
       "name": "Portugal",
       "code": "PT",
-      "count": 19
+      "count": 16
     },
     {
       "name": "Germany",
       "code": "DE",
-      "count": 17
-    },
-    {
-      "name": "France",
-      "code": "FR",
-      "count": 9
+      "count": 13
     },
     {
       "name": "Romania",
@@ -1416,22 +1187,12 @@
     {
       "name": "Czechia",
       "code": "CZ",
-      "count": 8
-    },
-    {
-      "name": "Switzerland",
-      "code": "CH",
       "count": 7
     },
     {
-      "name": "Austria",
-      "code": "AT",
-      "count": 6
-    },
-    {
-      "name": "Bulgaria",
-      "code": "BG",
-      "count": 6
+      "name": "France",
+      "code": "FR",
+      "count": 7
     },
     {
       "name": "Lithuania",
@@ -1439,33 +1200,28 @@
       "count": 6
     },
     {
-      "name": "Belgium",
-      "code": "BE",
+      "name": "Switzerland",
+      "code": "CH",
+      "count": 6
+    },
+    {
+      "name": "Bulgaria",
+      "code": "BG",
+      "count": 5
+    },
+    {
+      "name": "Austria",
+      "code": "AT",
       "count": 4
     },
     {
       "name": "Greece",
       "code": "GR",
-      "count": 4
+      "count": 3
     },
     {
       "name": "Norway",
       "code": "NO",
-      "count": 4
-    },
-    {
-      "name": "Croatia",
-      "code": "HR",
-      "count": 3
-    },
-    {
-      "name": "Denmark",
-      "code": "DK",
-      "count": 3
-    },
-    {
-      "name": "Estonia",
-      "code": "EE",
       "count": 3
     },
     {
@@ -1474,9 +1230,24 @@
       "count": 3
     },
     {
-      "name": "Sweden",
-      "code": "SE",
-      "count": 3
+      "name": "Belgium",
+      "code": "BE",
+      "count": 2
+    },
+    {
+      "name": "Croatia",
+      "code": "HR",
+      "count": 2
+    },
+    {
+      "name": "Denmark",
+      "code": "DK",
+      "count": 2
+    },
+    {
+      "name": "Estonia",
+      "code": "EE",
+      "count": 2
     },
     {
       "name": "Latvia",
@@ -1484,8 +1255,8 @@
       "count": 2
     },
     {
-      "name": "Malta",
-      "code": "MT",
+      "name": "Sweden",
+      "code": "SE",
       "count": 2
     },
     {
@@ -1496,6 +1267,11 @@
     {
       "name": "Luxembourg",
       "code": "LU",
+      "count": 1
+    },
+    {
+      "name": "Malta",
+      "code": "MT",
       "count": 1
     },
     {
@@ -1523,29 +1299,15 @@
     {
       "city": "Budapest",
       "country": "Hungary",
-      "lat": 47.4973,
-      "lon": 19.0416,
-      "count": 11
+      "lat": 47.4968,
+      "lon": 19.0427,
+      "count": 6
     },
     {
       "city": "Milan",
       "country": "Italy",
-      "lat": 45.4764,
-      "lon": 9.1688,
-      "count": 7
-    },
-    {
-      "city": "Amsterdam",
-      "country": "Netherlands",
-      "lat": 52.3611,
-      "lon": 4.8716,
-      "count": 5
-    },
-    {
-      "city": "Dublin",
-      "country": "Ireland",
-      "lat": 53.3305,
-      "lon": -6.2425,
+      "lat": 45.4812,
+      "lon": 9.1605,
       "count": 5
     },
     {
@@ -1554,6 +1316,13 @@
       "lat": 40.4662,
       "lon": -3.6984,
       "count": 4
+    },
+    {
+      "city": "Amsterdam",
+      "country": "Netherlands",
+      "lat": 52.374,
+      "lon": 4.9037,
+      "count": 3
     },
     {
       "city": "Bucharest",
@@ -1570,27 +1339,6 @@
       "count": 3
     },
     {
-      "city": "Székesfehérvár",
-      "country": "Hungary",
-      "lat": 47.191,
-      "lon": 18.4108,
-      "count": 3
-    },
-    {
-      "city": "Warsaw",
-      "country": "Poland",
-      "lat": 52.2341,
-      "lon": 21.0142,
-      "count": 3
-    },
-    {
-      "city": "Caronno Pertusella",
-      "country": "Italy",
-      "lat": 45.5971,
-      "lon": 9.0509,
-      "count": 2
-    },
-    {
       "city": "Geleen",
       "country": "Netherlands",
       "lat": 50.97,
@@ -1605,24 +1353,10 @@
       "count": 2
     },
     {
-      "city": "Orzinuovi",
-      "country": "Italy",
-      "lat": 45.4059,
-      "lon": 9.9312,
-      "count": 2
-    },
-    {
-      "city": "San Daniele del Friuli",
-      "country": "Italy",
-      "lat": 46.1601,
-      "lon": 13.0106,
-      "count": 2
-    },
-    {
-      "city": "Sesto Calende",
-      "country": "Italy",
-      "lat": 45.7261,
-      "lon": 8.6353,
+      "city": "Warsaw",
+      "country": "Poland",
+      "lat": 52.2234,
+      "lon": 20.998,
       "count": 2
     },
     {
@@ -1640,45 +1374,10 @@
       "count": 1
     },
     {
-      "city": "Amadora",
-      "country": "Portugal",
-      "lat": 38.759,
-      "lon": -9.2365,
-      "count": 1
-    },
-    {
-      "city": "Athens",
-      "country": "Greece",
-      "lat": 37.9919,
-      "lon": 23.7098,
-      "count": 1
-    },
-    {
-      "city": "Borgo San Dalmazzo",
-      "country": "Italy",
-      "lat": 44.327,
-      "lon": 7.4695,
-      "count": 1
-    },
-    {
-      "city": "Bristol",
-      "country": "United Kingdom",
-      "lat": 51.4538,
-      "lon": -2.5973,
-      "count": 1
-    },
-    {
       "city": "Brno",
       "country": "Czechia",
       "lat": 49.1819,
       "lon": 16.606,
-      "count": 1
-    },
-    {
-      "city": "Bruck an der Mur",
-      "country": "Austria",
-      "lat": 47.4122,
-      "lon": 15.2722,
       "count": 1
     },
     {
@@ -1689,38 +1388,17 @@
       "count": 1
     },
     {
+      "city": "Caronno Pertusella",
+      "country": "Italy",
+      "lat": 45.5971,
+      "lon": 9.0509,
+      "count": 1
+    },
+    {
       "city": "Como",
       "country": "Italy",
       "lat": 45.9395,
       "lon": 9.1494,
-      "count": 1
-    },
-    {
-      "city": "Correggio",
-      "country": "Italy",
-      "lat": 44.7557,
-      "lon": 10.7628,
-      "count": 1
-    },
-    {
-      "city": "Dendermonde",
-      "country": "Belgium",
-      "lat": 51.0312,
-      "lon": 4.0981,
-      "count": 1
-    },
-    {
-      "city": "Eindhoven",
-      "country": "Netherlands",
-      "lat": 51.4569,
-      "lon": 5.3999,
-      "count": 1
-    },
-    {
-      "city": "Fossombrone",
-      "country": "Italy",
-      "lat": 43.6579,
-      "lon": 12.8038,
       "count": 1
     },
     {
@@ -1731,31 +1409,10 @@
       "count": 1
     },
     {
-      "city": "Geilenkirchen",
-      "country": "Germany",
-      "lat": 50.9636,
-      "lon": 6.12,
-      "count": 1
-    },
-    {
       "city": "Genoa",
       "country": "Italy",
       "lat": 44.4073,
       "lon": 8.9339,
-      "count": 1
-    },
-    {
-      "city": "Giussano",
-      "country": "Italy",
-      "lat": 45.6994,
-      "lon": 9.2097,
-      "count": 1
-    },
-    {
-      "city": "Gorgonzola",
-      "country": "Italy",
-      "lat": 45.5316,
-      "lon": 9.4047,
       "count": 1
     },
     {
@@ -1766,31 +1423,10 @@
       "count": 1
     },
     {
-      "city": "Hatvan",
-      "country": "Hungary",
-      "lat": 47.6684,
-      "lon": 19.6744,
-      "count": 1
-    },
-    {
       "city": "Helsinki",
       "country": "Finland",
       "lat": 60.1666,
       "lon": 24.9435,
-      "count": 1
-    },
-    {
-      "city": "Horten",
-      "country": "Norway",
-      "lat": 59.4102,
-      "lon": 10.4437,
-      "count": 1
-    },
-    {
-      "city": "Katowice",
-      "country": "Poland",
-      "lat": 50.2137,
-      "lon": 19.0059,
       "count": 1
     },
     {
@@ -1808,31 +1444,10 @@
       "count": 1
     },
     {
-      "city": "La Spezia",
-      "country": "Italy",
-      "lat": 44.2384,
-      "lon": 9.6912,
-      "count": 1
-    },
-    {
-      "city": "Latina",
-      "country": "Italy",
-      "lat": 41.4595,
-      "lon": 13.0126,
-      "count": 1
-    },
-    {
       "city": "Lisbon",
       "country": "Portugal",
       "lat": 38.7078,
       "lon": -9.1366,
-      "count": 1
-    },
-    {
-      "city": "London",
-      "country": "United Kingdom",
-      "lat": 51.5074,
-      "lon": -0.1278,
       "count": 1
     },
     {
@@ -1850,20 +1465,6 @@
       "count": 1
     },
     {
-      "city": "Marcignago",
-      "country": "Italy",
-      "lat": 45.2547,
-      "lon": 9.0779,
-      "count": 1
-    },
-    {
-      "city": "Montecalvo Irpino",
-      "country": "Italy",
-      "lat": 41.194,
-      "lon": 15.0329,
-      "count": 1
-    },
-    {
       "city": "Munich",
       "country": "Germany",
       "lat": 48.1371,
@@ -1878,31 +1479,10 @@
       "count": 1
     },
     {
-      "city": "Novara",
+      "city": "Orzinuovi",
       "country": "Italy",
-      "lat": 45.5842,
-      "lon": 8.546,
-      "count": 1
-    },
-    {
-      "city": "Osijek",
-      "country": "Croatia",
-      "lat": 45.5549,
-      "lon": 18.6954,
-      "count": 1
-    },
-    {
-      "city": "Parma",
-      "country": "Italy",
-      "lat": 44.6952,
-      "lon": 10.098,
-      "count": 1
-    },
-    {
-      "city": "Peveragno",
-      "country": "Italy",
-      "lat": 44.3096,
-      "lon": 7.6209,
+      "lat": 45.4095,
+      "lon": 9.9384,
       "count": 1
     },
     {
@@ -1910,20 +1490,6 @@
       "country": "Portugal",
       "lat": 41.1502,
       "lon": -8.6103,
-      "count": 1
-    },
-    {
-      "city": "Pécs",
-      "country": "Hungary",
-      "lat": 46.0765,
-      "lon": 18.228,
-      "count": 1
-    },
-    {
-      "city": "Rapolano Terme",
-      "country": "Italy",
-      "lat": 43.2865,
-      "lon": 11.6045,
       "count": 1
     },
     {
@@ -1941,62 +1507,6 @@
       "count": 1
     },
     {
-      "city": "Rome",
-      "country": "Italy",
-      "lat": 41.8933,
-      "lon": 12.4829,
-      "count": 1
-    },
-    {
-      "city": "Saint-Michel-sur-Orge",
-      "country": "France",
-      "lat": 48.6303,
-      "lon": 2.3027,
-      "count": 1
-    },
-    {
-      "city": "Salerno",
-      "country": "Italy",
-      "lat": 40.4194,
-      "lon": 15.3106,
-      "count": 1
-    },
-    {
-      "city": "San Pietro di Morubio",
-      "country": "Italy",
-      "lat": 45.2413,
-      "lon": 11.2292,
-      "count": 1
-    },
-    {
-      "city": "Schaijk",
-      "country": "Netherlands",
-      "lat": 51.7464,
-      "lon": 5.6315,
-      "count": 1
-    },
-    {
-      "city": "Schiedam",
-      "country": "Netherlands",
-      "lat": 51.9075,
-      "lon": 4.3811,
-      "count": 1
-    },
-    {
-      "city": "Seveso",
-      "country": "Italy",
-      "lat": 45.6374,
-      "lon": 9.1656,
-      "count": 1
-    },
-    {
-      "city": "Silea",
-      "country": "Italy",
-      "lat": 45.6498,
-      "lon": 12.3053,
-      "count": 1
-    },
-    {
       "city": "Sviadnov",
       "country": "Czechia",
       "lat": 49.696,
@@ -2004,10 +1514,10 @@
       "count": 1
     },
     {
-      "city": "Taranto",
-      "country": "Italy",
-      "lat": 40.5488,
-      "lon": 17.0806,
+      "city": "Székesfehérvár",
+      "country": "Hungary",
+      "lat": 47.191,
+      "lon": 18.4108,
       "count": 1
     },
     {
@@ -2018,13 +1528,6 @@
       "count": 1
     },
     {
-      "city": "The Hague",
-      "country": "Netherlands",
-      "lat": 52.08,
-      "lon": 4.3113,
-      "count": 1
-    },
-    {
       "city": "Trento",
       "country": "Italy",
       "lat": 46.1137,
@@ -2032,80 +1535,10 @@
       "count": 1
     },
     {
-      "city": "Treviso",
-      "country": "Italy",
-      "lat": 45.8067,
-      "lon": 12.2063,
-      "count": 1
-    },
-    {
-      "city": "Vedelago",
-      "country": "Italy",
-      "lat": 45.6868,
-      "lon": 12.0188,
-      "count": 1
-    },
-    {
-      "city": "Vienna",
-      "country": "Austria",
-      "lat": 48.2084,
-      "lon": 16.3725,
-      "count": 1
-    },
-    {
-      "city": "Villesse",
-      "country": "Italy",
-      "lat": 45.8604,
-      "lon": 13.4364,
-      "count": 1
-    },
-    {
-      "city": "Vilnius",
-      "country": "Lithuania",
-      "lat": 54.687,
-      "lon": 25.2829,
-      "count": 1
-    },
-    {
-      "city": "Viseu",
-      "country": "Portugal",
-      "lat": 40.6575,
-      "lon": -7.9139,
-      "count": 1
-    },
-    {
-      "city": "Vittorio Veneto",
-      "country": "Italy",
-      "lat": 45.9979,
-      "lon": 12.2965,
-      "count": 1
-    },
-    {
-      "city": "Västerås",
-      "country": "Sweden",
-      "lat": 59.6111,
-      "lon": 16.5464,
-      "count": 1
-    },
-    {
       "city": "Warwick",
       "country": "United Kingdom",
       "lat": 52.2792,
       "lon": -1.5787,
-      "count": 1
-    },
-    {
-      "city": "Wrocław",
-      "country": "Poland",
-      "lat": 51.1263,
-      "lon": 16.9782,
-      "count": 1
-    },
-    {
-      "city": "Zalaegerszeg",
-      "country": "Hungary",
-      "lat": 46.8416,
-      "lon": 16.8456,
       "count": 1
     },
     {
@@ -2121,19 +1554,12 @@
       "lat": 63.2836,
       "lon": 18.7338,
       "count": 1
-    },
-    {
-      "city": "Østbirk",
-      "country": "Denmark",
-      "lat": 55.9679,
-      "lon": 9.7458,
-      "count": 1
     }
   ],
   "salary": {
-    "n": 78,
-    "avgMin": 33885,
-    "avgMax": 43692
+    "n": 59,
+    "avgMin": 32275,
+    "avgMax": 41341
   },
   "agents": [
     "analista-1",
@@ -2154,4407 +1580,9 @@
     "scout-4",
     "scout-5",
     "scout-6",
-    "scout-7",
-    "scrittore-1",
-    "scrittore-2",
-    "scrittore-3"
+    "scout-7"
   ],
   "events": [
-    {
-      "ts": "2026-05-19T20:29:58Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:29:58Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:29:58Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:29:58Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:29:59Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:34:09Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:34:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:34:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:34:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:34:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:34:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:34:21Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:34:34Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-19T20:34:49Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:35:05Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:36:11Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:36:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:36:38Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:36:53Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:37:06Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:41:53Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:41:53Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:41:53Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:41:53Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:41:53Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T20:43:17Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:43:17Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:43:17Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:43:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:43:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:43:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:43:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:43:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:43:19Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:43:26Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:43:40Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:43:53Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:44:08Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:44:22Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T20:45:30Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T20:47:31Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:47:31Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:47:31Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:47:31Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:47:31Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T20:51:40Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T20:58:24Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T20:59:24Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T21:03:21Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:03:21Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:03:21Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:03:21Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:03:21Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:04:57Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:05:22Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:05:46Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:06:11Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:06:23Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T21:07:06Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:13:16Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:17:17Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:18:25Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T21:21:17Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:21:57Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T21:25:29Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T21:25:36Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-19T21:28:05Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:34:46Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:34:46Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:34:46Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:34:46Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:36:42Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:36:43Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:36:43Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:36:43Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:39:08Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:39:08Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:39:08Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:39:08Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:39:57Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:39:57Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:39:57Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:39:57Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-19T21:42:32Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T21:43:33Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:43:33Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:43:34Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:43:34Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-19T21:45:45Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:45:45Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-19T21:45:45Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-19T21:45:45Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-19T21:47:13Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T21:47:40Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T21:52:32Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T22:20:52Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T22:25:57Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T22:26:01Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T22:32:03Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T22:49:23Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T22:54:19Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T22:58:55Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T23:04:44Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T23:10:56Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T23:15:46Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T23:22:25Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T23:26:49Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T23:32:18Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T23:37:07Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T23:42:38Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T23:47:02Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-19T23:54:11Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-19T23:59:11Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T00:02:10Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T00:07:02Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T00:16:18Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T00:21:12Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T00:22:42Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T00:27:06Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T00:37:48Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T00:42:33Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T00:42:34Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T00:46:58Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T01:00:55Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T01:02:30Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T01:05:29Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T01:06:57Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T01:21:47Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T01:23:59Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T01:29:30Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T01:29:30Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T01:29:30Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T01:29:30Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T01:31:23Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T01:31:23Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T01:31:23Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T01:31:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T01:33:47Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T01:33:47Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T01:33:47Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T01:33:47Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T01:34:31Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T01:35:17Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T01:51:29Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T01:52:37Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T01:54:01Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T01:55:08Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T02:04:55Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T02:05:45Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T02:41:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T02:41:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T02:41:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T02:41:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T02:41:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T02:43:41Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T02:43:41Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T02:43:42Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T02:43:42Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T02:43:42Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T02:45:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T02:45:52Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T02:45:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T02:45:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T02:45:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T02:46:32Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T02:47:13Z",
-      "agent": "scrittore-2",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T02:47:13Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T02:47:16Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T02:55:00Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T02:55:27Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T02:55:32Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T02:56:06Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T03:04:20Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T03:04:23Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T03:24:10Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T03:24:10Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T03:24:10Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T03:24:10Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T03:24:10Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T03:26:35Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T03:26:36Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T03:26:36Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T03:26:36Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T03:26:36Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T03:28:36Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T03:28:37Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T03:28:37Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T03:28:37Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T03:28:37Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T03:29:19Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T03:29:41Z",
-      "agent": "scrittore-2",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T03:29:57Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T03:30:11Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T03:37:58Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T03:38:31Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T03:39:33Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T03:46:37Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T04:00:31Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T04:00:32Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T04:00:32Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T04:01:55Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T04:01:55Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T04:01:55Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T04:04:09Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T04:04:09Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T04:04:10Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T04:04:58Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T04:05:19Z",
-      "agent": "scrittore-2",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T04:05:33Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T04:05:37Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T04:13:01Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T04:13:25Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T04:15:15Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T04:23:08Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T05:13:40Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T05:13:40Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T05:13:40Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T05:13:40Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T05:13:40Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T05:16:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T05:16:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T05:16:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T05:16:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T05:16:25Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T05:19:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T05:19:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T05:19:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T05:19:19Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T05:19:19Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T05:19:58Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T05:20:35Z",
-      "agent": "scrittore-2",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T05:20:52Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T05:28:17Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T05:28:57Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T05:28:59Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T05:29:28Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T05:37:23Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T05:38:01Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T05:38:41Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T05:47:14Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T06:38:47Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:38:47Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:38:48Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:38:48Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:38:48Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:41:19Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:41:19Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:41:19Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:41:19Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:41:20Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:42:10Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:42:11Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:42:11Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:42:11Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:43:54Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T06:43:54Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T06:43:54Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T06:43:54Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T06:43:54Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T06:44:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:44:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:44:25Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:44:25Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:44:42Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T06:45:09Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T06:47:20Z",
-      "agent": "scrittore-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T06:47:24Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T06:47:52Z",
-      "agent": "scrittore-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T06:47:52Z",
-      "agent": "scrittore-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T06:47:52Z",
-      "agent": "scrittore-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T06:48:52Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T06:48:52Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T06:48:53Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T06:48:53Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T06:49:58Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:49:58Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:49:59Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:49:59Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:49:59Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:52:31Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:52:31Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:52:31Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:52:31Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:52:31Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T06:53:38Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:53:39Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:53:39Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:57:01Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:57:01Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:57:01Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:57:01Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:57:01Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:57:01Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T06:57:01Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:00:51Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:00:51Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:00:51Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:00:51Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:00:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:00:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:00:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:00:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:00:52Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T07:00:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:01:56Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T07:12:27Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T07:45:46Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:45:46Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:45:46Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:45:46Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:45:46Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:47:53Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:47:53Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:47:53Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:47:53Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:47:53Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T07:50:10Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:50:10Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:50:10Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:50:10Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:51:01Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:51:01Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:51:01Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:51:01Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:51:01Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T07:54:33Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:54:33Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:54:33Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:54:33Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:54:33Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T07:56:55Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:56:55Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:56:55Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:56:55Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T07:56:55Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T08:42:26Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T08:42:26Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T08:42:26Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T08:42:26Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T08:44:01Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T08:44:01Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T08:44:01Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T08:44:01Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T08:44:02Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T08:44:22Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T08:44:22Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T08:44:22Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T08:44:22Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T08:46:23Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T08:46:23Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T08:46:23Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T08:46:23Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T08:46:34Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T08:46:34Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T08:46:34Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T08:46:34Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T08:46:34Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T08:48:26Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T08:48:27Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T08:48:27Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T08:48:27Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:18:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:18:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:18:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:18:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:18:23Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:20:41Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:20:41Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:20:41Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:20:41Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:20:41Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:22:36Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:22:36Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:22:36Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:22:36Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:22:37Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:27:58Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:28:08Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:28:19Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:28:30Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:30:26Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:30:26Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:30:26Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:30:26Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:32:20Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:32:20Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:32:20Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:32:20Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:41:41Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:41:41Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:41:41Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:41:42Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:43:28Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:43:28Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:43:28Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:43:28Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T09:45:19Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:45:19Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:45:20Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:45:20Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T09:58:28Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:58:29Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:58:29Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:58:30Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T09:58:30Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T10:00:31Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T10:00:31Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T10:00:32Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T10:00:32Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T10:00:32Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T10:02:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T10:03:02Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T10:03:13Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T10:03:22Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T10:19:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T10:19:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T10:19:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T10:19:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T10:21:21Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T10:21:21Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T10:21:21Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T10:21:21Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T10:21:35Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T10:21:35Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T10:21:36Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T10:21:36Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T10:22:41Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T10:23:51Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T10:23:51Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T10:23:51Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T10:23:51Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T10:25:26Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T10:25:35Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T10:25:47Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T10:25:58Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:05:16Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:05:16Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:05:16Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:05:16Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:07:46Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:07:46Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:07:46Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:07:46Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:08:45Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:08:45Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:08:45Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:08:45Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:09:13Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:09:24Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:09:32Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:09:42Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:11:00Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:11:00Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:11:00Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:11:00Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:12:33Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:12:41Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:12:53Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:13:02Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:39:36Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:39:36Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:39:36Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:39:36Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:39:36Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:42:07Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:42:07Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:42:07Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:42:07Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:42:07Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:42:39Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:42:39Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:42:39Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:42:39Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:43:58Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:44:16Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:44:34Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:44:47Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:44:50Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:44:50Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:44:50Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:44:50Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:45:09Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:46:52Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:47:08Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:47:24Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:47:36Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:50:36Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:50:36Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:50:37Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:50:37Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T11:53:39Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:53:39Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:53:40Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T11:53:40Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T11:55:33Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:55:43Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T11:56:06Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T12:03:10Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T12:03:10Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T12:04:14Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T12:04:14Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T12:05:55Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T12:06:05Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:11:20Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:11:20Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:11:20Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:11:20Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:13:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:13:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:13:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:13:24Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T13:15:25Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:15:39Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:16:07Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:31:22Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:31:22Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:31:22Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:31:22Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:33:45Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:33:45Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:33:45Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:33:45Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:36:22Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:36:33Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:36:43Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:36:58Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:37:00Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T13:37:18Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:37:18Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:37:18Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:37:18Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:37:18Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:42:36Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:43:23Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:44:04Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:44:38Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:45:25Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:45:53Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:45:54Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:45:55Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:45:56Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:45:57Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:47:26Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:47:36Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:47:51Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:48:04Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:49:39Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:50:28Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:51:07Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:51:39Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:52:16Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T13:52:53Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:52:53Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:54:20Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:54:20Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:54:20Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T13:56:04Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:56:04Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:56:04Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T13:59:36Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:00:36Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:01:27Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:05:17Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:05:17Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T14:05:17Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:09:39Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:09:40Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:09:41Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:09:42Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:09:43Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:12:12Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:13:07Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:14:06Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:14:49Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:15:50Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:17:01Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:17:01Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:17:01Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:17:01Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:17:54Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:24:32Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:24:32Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:24:33Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:26:16Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:27:10Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:27:55Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:30:31Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:30:31Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:30:32Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:32:54Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:32:55Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:32:58Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:32:59Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:33:00Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:35:16Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:35:53Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:36:49Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:37:46Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:38:38Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:42:21Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:42:21Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:42:21Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:42:21Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:42:21Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T14:48:14Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:48:15Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:48:16Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:48:17Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:48:18Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:50:01Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:50:34Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:51:11Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:51:54Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:52:44Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T14:55:14Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:55:14Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:55:14Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T14:55:14Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:55:14Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T14:58:06Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:58:07Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:58:09Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:58:10Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T14:59:55Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:00:26Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:00:58Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:01:27Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:01:32Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:03:00Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T15:03:00Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:03:00Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:07:04Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:07:05Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:07:06Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:07:08Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:09:00Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:09:35Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:10:05Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:10:37Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:12:44Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:12:44Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T15:12:44Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T15:12:44Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:15:56Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:15:57Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:15:58Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:16:01Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:16:22Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:18:21Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:18:54Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:19:29Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:20:04Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:20:42Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:22:58Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:22:58Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T15:22:58Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:22:58Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T15:22:58Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:28:03Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:28:04Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:28:05Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:28:06Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:28:06Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T15:31:33Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:31:47Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:32:00Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:32:14Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:32:24Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T15:34:24Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:34:24Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T15:34:24Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T15:34:24Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T15:34:24Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T16:02:09Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T16:14:18Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T16:15:06Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T16:24:15Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T16:24:40Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T16:25:48Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T16:26:05Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T16:26:34Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T16:26:49Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T16:33:40Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T16:34:35Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T16:42:15Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T16:42:36Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T16:43:04Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T16:43:05Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T16:43:06Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T16:45:39Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T16:45:51Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T16:46:05Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T16:47:53Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T16:47:53Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T16:47:53Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T16:48:41Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T16:49:07Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T17:14:25Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T17:14:26Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T17:14:26Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-20T17:30:32Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T17:37:15Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T17:42:04Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T17:42:39Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T17:42:52Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T17:43:04Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-20T17:45:18Z",
-      "agent": "scorer-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T17:45:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T17:45:18Z",
-      "agent": "scorer-1",
-      "action": "scored"
-    },
-    {
-      "ts": "2026-05-20T17:54:49Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T17:55:26Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T18:00:23Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T18:04:31Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T18:05:19Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T18:13:40Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T18:13:41Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T18:14:40Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T18:23:06Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T18:24:06Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T18:33:41Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T18:34:25Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T18:35:27Z",
-      "agent": "scrittore-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T18:35:58Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T18:36:47Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T18:43:36Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T18:44:49Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T18:45:27Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T18:53:31Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T18:54:22Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T19:02:57Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T19:03:55Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T19:06:35Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T19:13:08Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T19:14:08Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T19:17:05Z",
-      "agent": "scrittore-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T19:18:05Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T19:25:52Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T19:27:34Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T19:28:32Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T19:37:01Z",
-      "agent": "scrittore-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T19:38:06Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T19:46:04Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T19:47:04Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T19:51:39Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T19:55:12Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T19:56:21Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T19:59:54Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T20:02:03Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T20:06:31Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T20:09:03Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T20:11:39Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T20:12:32Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T20:17:18Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T20:31:54Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T20:37:23Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T20:38:21Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T20:42:06Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T20:43:05Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T20:47:47Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T20:59:20Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T21:47:25Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T21:49:24Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T21:53:16Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T21:53:59Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T21:57:51Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T21:57:52Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T21:58:20Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T21:59:18Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T21:59:48Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T22:01:06Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T22:02:15Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T22:06:31Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T22:06:40Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T22:07:13Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T22:34:23Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T22:34:53Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T22:35:34Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T22:36:15Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T22:40:32Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T22:41:06Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T22:41:46Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T22:42:24Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T22:48:48Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T22:49:32Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T22:50:52Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T22:52:46Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T23:07:41Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T23:08:17Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T23:16:03Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T23:16:32Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T23:20:20Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T23:20:52Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T23:21:14Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T23:21:31Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T23:24:09Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T23:34:34Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T23:45:16Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T23:45:53Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T23:48:16Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T23:48:48Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T23:53:13Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-20T23:54:47Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-20T23:56:37Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-20T23:57:18Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T00:01:42Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T00:02:18Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T00:04:22Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T00:04:47Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T00:07:59Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T00:20:11Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T00:34:03Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T00:34:35Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T00:41:02Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T00:41:32Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T00:47:14Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T00:47:42Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T00:50:07Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T00:50:41Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T00:51:26Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T00:51:52Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T02:53:40Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-21T02:53:41Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-21T02:53:42Z",
-      "agent": "scout-1",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-21T02:54:02Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T02:54:33Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T02:55:39Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-21T02:55:52Z",
-      "agent": "analista-1",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T02:56:09Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-21T02:57:48Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-21T02:57:49Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-21T02:57:50Z",
-      "agent": "scout-2",
-      "action": "new"
-    },
-    {
-      "ts": "2026-05-21T02:58:02Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T02:58:30Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T02:59:04Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T02:59:26Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-21T02:59:27Z",
-      "agent": "scrittore-1",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T02:59:42Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-21T02:59:55Z",
-      "agent": "analista-1",
-      "action": "checked"
-    },
-    {
-      "ts": "2026-05-21T03:00:29Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T03:01:01Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T03:11:58Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T03:12:36Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T03:14:20Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T03:14:55Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T03:29:22Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T03:29:54Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T03:31:57Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T03:33:07Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T03:42:32Z",
-      "agent": "scrittore-1",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T03:42:54Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T03:43:24Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T04:07:51Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T04:08:30Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T04:14:25Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T04:14:50Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T04:15:24Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T04:37:03Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T04:44:25Z",
-      "agent": "scrittore-2",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T04:45:04Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T04:47:07Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T04:47:34Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T04:50:50Z",
-      "agent": "scrittore-2",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T04:51:16Z",
-      "agent": "scrittore-2",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T05:03:09Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T05:03:35Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T05:22:09Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T05:27:13Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T05:44:21Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T05:49:31Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T06:06:57Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T06:12:20Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T06:32:20Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T06:35:13Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T06:35:40Z",
-      "agent": "scrittore-3",
-      "action": "excluded"
-    },
-    {
-      "ts": "2026-05-21T06:38:20Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T06:56:05Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T06:59:00Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
-    {
-      "ts": "2026-05-21T07:17:02Z",
-      "agent": "scrittore-3",
-      "action": "ready"
-    },
-    {
-      "ts": "2026-05-21T07:20:05Z",
-      "agent": "scrittore-3",
-      "action": "writing"
-    },
     {
       "ts": "2026-06-13T03:32:51Z",
       "agent": "scorer-1",
@@ -18429,306 +13457,94 @@
       "ts": "2026-06-30T18:14:51Z",
       "agent": "scorer-6",
       "action": "scored"
+    },
+    {
+      "ts": "2026-06-30T22:02:09Z",
+      "agent": "scout-5",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T22:07:39Z",
+      "agent": "analista-1",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-06-30T22:12:38Z",
+      "agent": "scout-2",
+      "action": "new"
+    },
+    {
+      "ts": "2026-06-30T22:13:14Z",
+      "agent": "scorer-6",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T18:22:31Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:23:06Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:23:19Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:23:36Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:27:30Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T18:29:19Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:30:21Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T18:31:09Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T18:31:54Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:32:01Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T18:32:54Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T18:39:08Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T18:39:43Z",
+      "agent": "analista-2",
+      "action": "excluded"
     }
   ],
   "hourly": [
-    {
-      "hour": "2026-05-19T20",
-      "counts": {
-        "scout": 15,
-        "analista": 15,
-        "scorer": 14,
-        "scrittore": 4
-      },
-      "cum": 2
-    },
-    {
-      "hour": "2026-05-19T21",
-      "counts": {
-        "scout": 13,
-        "analista": 13,
-        "scrittore": 8,
-        "scorer": 13
-      },
-      "cum": 6
-    },
-    {
-      "hour": "2026-05-19T22",
-      "counts": {
-        "scrittore": 7
-      },
-      "cum": 8
-    },
-    {
-      "hour": "2026-05-19T23",
-      "counts": {
-        "scrittore": 11
-      },
-      "cum": 10
-    },
-    {
-      "hour": "2026-05-20T00",
-      "counts": {
-        "scrittore": 10
-      },
-      "cum": 13
-    },
-    {
-      "hour": "2026-05-20T01",
-      "counts": {
-        "scrittore": 12,
-        "scout": 4,
-        "analista": 4,
-        "scorer": 4
-      },
-      "cum": 16
-    },
-    {
-      "hour": "2026-05-20T02",
-      "counts": {
-        "scrittore": 10,
-        "scout": 5,
-        "analista": 5,
-        "scorer": 5
-      },
-      "cum": 19
-    },
-    {
-      "hour": "2026-05-20T03",
-      "counts": {
-        "scrittore": 10,
-        "scout": 5,
-        "analista": 5,
-        "scorer": 5
-      },
-      "cum": 22
-    },
-    {
-      "hour": "2026-05-20T04",
-      "counts": {
-        "scout": 3,
-        "analista": 3,
-        "scorer": 3,
-        "scrittore": 8
-      },
-      "cum": 24
-    },
-    {
-      "hour": "2026-05-20T05",
-      "counts": {
-        "scout": 5,
-        "analista": 5,
-        "scorer": 5,
-        "scrittore": 11
-      },
-      "cum": 27
-    },
-    {
-      "hour": "2026-05-20T06",
-      "counts": {
-        "scout": 19,
-        "analista": 19,
-        "scorer": 9,
-        "scrittore": 7
-      },
-      "cum": 29
-    },
-    {
-      "hour": "2026-05-20T07",
-      "counts": {
-        "scorer": 19,
-        "scrittore": 2,
-        "scout": 10,
-        "analista": 10
-      },
-      "cum": 32
-    },
-    {
-      "hour": "2026-05-20T08",
-      "counts": {
-        "scout": 9,
-        "analista": 9,
-        "scorer": 8
-      },
-      "cum": 33
-    },
-    {
-      "hour": "2026-05-20T09",
-      "counts": {
-        "scout": 18,
-        "analista": 13,
-        "scorer": 13
-      },
-      "cum": 35
-    },
-    {
-      "hour": "2026-05-20T10",
-      "counts": {
-        "analista": 13,
-        "scorer": 9,
-        "scout": 8
-      },
-      "cum": 37
-    },
-    {
-      "hour": "2026-05-20T11",
-      "counts": {
-        "scout": 21,
-        "analista": 21,
-        "scorer": 20
-      },
-      "cum": 41
-    },
-    {
-      "hour": "2026-05-20T12",
-      "counts": {
-        "scout": 2,
-        "analista": 2,
-        "scorer": 2
-      },
-      "cum": 42
-    },
-    {
-      "hour": "2026-05-20T13",
-      "counts": {
-        "scout": 21,
-        "analista": 19,
-        "scorer": 16,
-        "scrittore": 1
-      },
-      "cum": 45
-    },
-    {
-      "hour": "2026-05-20T14",
-      "counts": {
-        "analista": 21,
-        "scorer": 21,
-        "scout": 22
-      },
-      "cum": 48
-    },
-    {
-      "hour": "2026-05-20T15",
-      "counts": {
-        "analista": 17,
-        "scorer": 18,
-        "scout": 14
-      },
-      "cum": 51
-    },
-    {
-      "hour": "2026-05-20T16",
-      "counts": {
-        "scrittore": 15,
-        "scout": 3,
-        "analista": 3,
-        "scorer": 3
-      },
-      "cum": 54
-    },
-    {
-      "hour": "2026-05-20T17",
-      "counts": {
-        "scout": 3,
-        "scrittore": 5,
-        "analista": 3,
-        "scorer": 3
-      },
-      "cum": 56
-    },
-    {
-      "hour": "2026-05-20T18",
-      "counts": {
-        "scrittore": 18
-      },
-      "cum": 60
-    },
-    {
-      "hour": "2026-05-20T19",
-      "counts": {
-        "scrittore": 18
-      },
-      "cum": 63
-    },
-    {
-      "hour": "2026-05-20T20",
-      "counts": {
-        "scrittore": 13
-      },
-      "cum": 67
-    },
-    {
-      "hour": "2026-05-20T21",
-      "counts": {
-        "scrittore": 9
-      },
-      "cum": 69
-    },
-    {
-      "hour": "2026-05-20T22",
-      "counts": {
-        "scrittore": 17
-      },
-      "cum": 73
-    },
-    {
-      "hour": "2026-05-20T23",
-      "counts": {
-        "scrittore": 18
-      },
-      "cum": 78
-    },
-    {
-      "hour": "2026-05-21T00",
-      "counts": {
-        "scrittore": 16
-      },
-      "cum": 82
-    },
-    {
-      "hour": "2026-05-21T02",
-      "counts": {
-        "scout": 6,
-        "scrittore": 6,
-        "analista": 6
-      },
-      "cum": 83
-    },
-    {
-      "hour": "2026-05-21T03",
-      "counts": {
-        "scrittore": 13
-      },
-      "cum": 89
-    },
-    {
-      "hour": "2026-05-21T04",
-      "counts": {
-        "scrittore": 12
-      },
-      "cum": 92
-    },
-    {
-      "hour": "2026-05-21T05",
-      "counts": {
-        "scrittore": 6
-      },
-      "cum": 94
-    },
-    {
-      "hour": "2026-05-21T06",
-      "counts": {
-        "scrittore": 8
-      },
-      "cum": 96
-    },
-    {
-      "hour": "2026-05-21T07",
-      "counts": {
-        "scrittore": 2
-      },
-      "cum": 96
-    },
     {
       "hour": "2026-06-13T03",
       "counts": {
@@ -19674,33 +14490,26 @@
         "scorer": 2
       },
       "cum": 51
+    },
+    {
+      "hour": "2026-06-30T22",
+      "counts": {
+        "scout": 2,
+        "analista": 1,
+        "scorer": 1
+      },
+      "cum": 56
+    },
+    {
+      "hour": "2026-07-01T18",
+      "counts": {
+        "scout": 6,
+        "analista": 7
+      },
+      "cum": 62
     }
   ],
   "funnelDaily": [
-    {
-      "day": "2026-05-19",
-      "found": 28,
-      "excluded": 5,
-      "kept": 23,
-      "scored": 1,
-      "ready": 22
-    },
-    {
-      "day": "2026-05-20",
-      "found": 172,
-      "excluded": 57,
-      "kept": 115,
-      "scored": 32,
-      "ready": 83
-    },
-    {
-      "day": "2026-05-21",
-      "found": 6,
-      "excluded": 3,
-      "kept": 3,
-      "scored": 3,
-      "ready": 0
-    },
     {
       "day": "2026-06-13",
       "found": 131,
@@ -19807,120 +14616,124 @@
     },
     {
       "day": "2026-06-30",
-      "found": 10,
-      "excluded": 4,
-      "kept": 6,
-      "scored": 6,
+      "found": 12,
+      "excluded": 5,
+      "kept": 7,
+      "scored": 7,
+      "ready": 0
+    },
+    {
+      "day": "2026-07-01",
+      "found": 6,
+      "excluded": 2,
+      "kept": 4,
+      "scored": 0,
       "ready": 0
     }
   ],
   "funnelTotals": {
-    "found": 1107,
-    "excluded": 575,
-    "kept": 532,
-    "scored": 427,
-    "ready": 105
+    "found": 909,
+    "excluded": 513,
+    "kept": 396,
+    "scored": 392,
+    "ready": 0
   },
+  "conversion": {
+    "found": 909,
+    "scored": 404,
+    "strong70": 96,
+    "strong80": 28
+  },
+  "scoreDaily": [
+    {
+      "day": "2026-06-13",
+      "scored": 79,
+      "strong70": 10,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-14",
+      "scored": 27,
+      "strong70": 6,
+      "strong80": 1
+    },
+    {
+      "day": "2026-06-15",
+      "scored": 41,
+      "strong70": 20,
+      "strong80": 8
+    },
+    {
+      "day": "2026-06-16",
+      "scored": 22,
+      "strong70": 6,
+      "strong80": 3
+    },
+    {
+      "day": "2026-06-21",
+      "scored": 28,
+      "strong70": 12,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-22",
+      "scored": 64,
+      "strong70": 6,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-23",
+      "scored": 31,
+      "strong70": 4,
+      "strong80": 3
+    },
+    {
+      "day": "2026-06-24",
+      "scored": 22,
+      "strong70": 9,
+      "strong80": 1
+    },
+    {
+      "day": "2026-06-25",
+      "scored": 42,
+      "strong70": 9,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-26",
+      "scored": 20,
+      "strong70": 4,
+      "strong80": 0
+    },
+    {
+      "day": "2026-06-27",
+      "scored": 6,
+      "strong70": 1,
+      "strong80": 0
+    },
+    {
+      "day": "2026-06-28",
+      "scored": 11,
+      "strong70": 6,
+      "strong80": 0
+    },
+    {
+      "day": "2026-06-29",
+      "scored": 4,
+      "strong70": 1,
+      "strong80": 0
+    },
+    {
+      "day": "2026-06-30",
+      "scored": 7,
+      "strong70": 2,
+      "strong80": 0
+    }
+  ],
   "usage": {
     "provider": "kimi",
     "unit": "weekly_budget_pct",
     "daily": [
-      {
-        "day": "2026-05-19",
-        "pct": 10.0,
-        "cum": 10,
-        "week": "2026-05-19"
-      },
-      {
-        "day": "2026-05-20",
-        "pct": 68,
-        "cum": 78,
-        "week": "2026-05-19"
-      },
-      {
-        "day": "2026-05-21",
-        "pct": 18,
-        "cum": 96,
-        "week": "2026-05-19"
-      },
-      {
-        "day": "2026-05-23",
-        "pct": 0.0,
-        "cum": 0,
-        "week": "2026-05-23"
-      },
-      {
-        "day": "2026-05-24",
-        "pct": 0,
-        "cum": 0,
-        "week": "2026-05-23"
-      },
-      {
-        "day": "2026-05-25",
-        "pct": 1,
-        "cum": 1,
-        "week": "2026-05-23"
-      },
-      {
-        "day": "2026-05-26",
-        "pct": 0,
-        "cum": 1,
-        "week": "2026-05-23"
-      },
-      {
-        "day": "2026-05-27",
-        "pct": 1,
-        "cum": 2,
-        "week": "2026-05-23"
-      },
-      {
-        "day": "2026-05-28",
-        "pct": 0,
-        "cum": 2,
-        "week": "2026-05-23"
-      },
-      {
-        "day": "2026-05-29",
-        "pct": 1,
-        "cum": 3,
-        "week": "2026-05-23"
-      },
-      {
-        "day": "2026-05-30",
-        "pct": 0.0,
-        "cum": 0,
-        "week": "2026-05-30"
-      },
-      {
-        "day": "2026-05-31",
-        "pct": 0,
-        "cum": 0,
-        "week": "2026-05-30"
-      },
-      {
-        "day": "2026-06-01",
-        "pct": 1,
-        "cum": 1,
-        "week": "2026-05-30"
-      },
-      {
-        "day": "2026-06-02",
-        "pct": 1,
-        "cum": 2,
-        "week": "2026-05-30"
-      },
-      {
-        "day": "2026-06-03",
-        "pct": 0,
-        "cum": 2,
-        "week": "2026-05-30"
-      },
-      {
-        "day": "2026-06-04",
-        "pct": 0,
-        "cum": 2,
-        "week": "2026-05-30"
-      },
       {
         "day": "2026-06-13",
         "pct": 78.0,
@@ -20025,8 +14838,14 @@
       },
       {
         "day": "2026-06-30",
-        "pct": 22,
-        "cum": 51,
+        "pct": 28,
+        "cum": 57,
+        "week": "2026-06-28"
+      },
+      {
+        "day": "2026-07-01",
+        "pct": 6,
+        "cum": 63,
         "week": "2026-06-28"
       }
     ],
