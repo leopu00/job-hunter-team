@@ -63,39 +63,39 @@ const ROLES: Role[] = [
     promptId: "team.scout",
     img: "/agents-scouts.png",
     it: {
-      title: "Gli Scout",
-      p1: "Gli Scout sono i segugi che battono il mondo in cerca di offerte: job board, pagine carriere, LinkedIn, canali dei recruiter. Ogni posizione che trovano entra nel sistema, pronta per essere verificata.",
-      p2: "Sono un setaccio generoso, pensato per la quantità: catturano tutto ciò che può essere interessante e lasciano il giudizio a chi viene dopo. Imparano dove cercare e affinano la rotta in base ai riscontri degli analisti.",
+      title: "Lo Scout",
+      p1: "Lo Scout è il segugio che perlustra il web in cerca di offerte: job board, pagine carriere, LinkedIn, canali dei recruiter. Ogni posizione che trova entra nel sistema, pronta per essere verificata.",
+      p2: "È un setaccio generoso, pensato per la quantità: cattura tutto ciò che può essere interessante e lascia il giudizio all'Analista. Impara dove cercare e affina la rotta in base ai suoi riscontri.",
     },
     en: {
-      title: "The Scouts",
-      p1: "The Scouts are the hounds that comb the world for openings — job boards, career pages, LinkedIn, recruiter channels. Everything they find enters the system, ready to be vetted.",
-      p2: "A generous sieve built for volume: they catch anything that might fit and leave judgment to those downstream, refining their hunt from the analysts' feedback.",
+      title: "The Scout",
+      p1: "The Scout is the hound that scours the web for openings — job boards, career pages, LinkedIn, recruiter channels. Everything it finds enters the system, ready to be vetted.",
+      p2: "A generous sieve built for volume: it catches anything that might fit and leaves the judgment to the Analyst. It learns where to look and sharpens its course based on that feedback.",
     },
     es: {
-      title: "Los Scouts",
-      p1: "Los Scouts son los sabuesos que rastrean el mundo en busca de ofertas: portales de empleo, páginas de carreras, LinkedIn, canales de los reclutadores. Cada posición que encuentran entra en el sistema, lista para ser verificada.",
-      p2: "Son un tamiz generoso, pensado para la cantidad: capturan todo lo que pueda interesar y dejan el juicio a quien viene después. Aprenden dónde buscar y afinan el rumbo según las respuestas de los analistas.",
+      title: "El Scout",
+      p1: "El Scout es el sabueso que rastrea la web en busca de ofertas: portales de empleo, páginas de carreras, LinkedIn, canales de los reclutadores. Cada posición que encuentra entra en el sistema, lista para ser verificada.",
+      p2: "Es un tamiz generoso, pensado para la cantidad: captura todo lo que pueda interesar y deja el juicio al Analista. Aprende dónde buscar y afina el rumbo según sus respuestas.",
     },
     fr: {
-      title: "Les Scouts",
-      p1: "Les Scouts sont les limiers qui parcourent le monde à la recherche d'offres : sites d'emploi, pages carrières, LinkedIn, canaux des recruteurs. Chaque poste qu'ils trouvent entre dans le système, prêt à être vérifié.",
-      p2: "Un tamis généreux, pensé pour le volume : ils captent tout ce qui pourrait convenir et laissent le jugement à ceux qui suivent. Ils apprennent où chercher et affinent leur trajectoire selon les retours des analystes.",
+      title: "Le Scout",
+      p1: "Le Scout est le limier qui parcourt le web à la recherche d'offres : sites d'emploi, pages carrières, LinkedIn, canaux des recruteurs. Chaque poste qu'il trouve entre dans le système, prêt à être vérifié.",
+      p2: "Un tamis généreux, pensé pour le volume : il capte tout ce qui pourrait convenir et laisse le jugement à l'Analyste. Il apprend où chercher et affine sa trajectoire selon ses retours.",
     },
     de: {
-      title: "Die Scouts",
-      p1: "Die Scouts sind die Spürhunde, die die Welt nach Stellen durchkämmen — Jobbörsen, Karriereseiten, LinkedIn, Recruiter-Kanäle. Jede Position, die sie finden, gelangt ins System, bereit zur Prüfung.",
-      p2: "Ein großzügiges Sieb, auf Menge ausgelegt: Sie fangen alles ein, was passen könnte, und überlassen das Urteil den Nachfolgenden. Sie lernen, wo sie suchen müssen, und verfeinern ihren Kurs anhand der Rückmeldungen der Analysten.",
+      title: "Der Scout",
+      p1: "Der Scout ist der Spürhund, der das Web nach Stellen durchkämmt — Jobbörsen, Karriereseiten, LinkedIn, Recruiter-Kanäle. Jede Position, die er findet, gelangt ins System, bereit zur Prüfung.",
+      p2: "Ein großzügiges Sieb, auf Menge ausgelegt: Er fängt alles ein, was passen könnte, und überlässt das Urteil dem Analysten. Er lernt, wo er suchen muss, und verfeinert seinen Kurs anhand von dessen Rückmeldungen.",
     },
     pt: {
-      title: "Os Scouts",
-      p1: "Os Scouts são os sabujos que vasculham o mundo em busca de vagas: portais de emprego, páginas de carreiras, LinkedIn, canais dos recrutadores. Cada posição que encontram entra no sistema, pronta para ser verificada.",
-      p2: "São uma peneira generosa, pensada para a quantidade: capturam tudo o que possa interessar e deixam o julgamento para quem vem depois. Aprendem onde procurar e ajustam o rumo conforme as respostas dos analistas.",
+      title: "O Scout",
+      p1: "O Scout é o sabujo que vasculha a web em busca de vagas: portais de emprego, páginas de carreiras, LinkedIn, canais dos recrutadores. Cada posição que encontra entra no sistema, pronta para ser verificada.",
+      p2: "É uma peneira generosa, pensada para a quantidade: captura tudo o que possa interessar e deixa o julgamento ao Analista. Aprende onde procurar e ajusta o rumo conforme o retorno dele.",
     },
     hu: {
-      title: "A Felderítők",
-      p1: "A Felderítők azok a kopók, akik a világot fésülik át álláshirdetésekért: állásportálok, karrieroldalak, LinkedIn, toborzói csatornák. Minden pozíció, amit megtalálnak, bekerül a rendszerbe, készen az ellenőrzésre.",
-      p2: "Bőkezű szita, mennyiségre tervezve: elkapnak mindent, ami érdekes lehet, és az ítéletet az utánuk következőkre bízzák. Megtanulják, hol keressenek, és az elemzők visszajelzései alapján finomítják az irányt.",
+      title: "A Felderítő",
+      p1: "A Felderítő az a kopó, aki a webet fésüli át álláshirdetésekért: állásportálok, karrieroldalak, LinkedIn, toborzói csatornák. Minden pozíció, amit megtalál, bekerül a rendszerbe, készen az ellenőrzésre.",
+      p2: "Bőkezű szita, mennyiségre tervezve: elkap mindent, ami érdekes lehet, és az ítéletet az Elemzőre bízza. Megtanulja, hol keressen, és annak visszajelzései alapján finomítja az irányt.",
     },
   },
   {
@@ -104,38 +104,38 @@ const ROLES: Role[] = [
     img: "/agents-analyst.png",
     it: {
       title: "L'Analista",
-      p1: "L'Analista è il verificatore freddo. Legge per intero ogni offerta, controlla che l'azienda sia reale e il link valido, ed estrae i dati che contano: anni richiesti, seniority, lingue, istruzione — e individua la sede esatta dell'ufficio.",
-      p2: "Scarta solo quando è certo (link morto, paese non lavorabile, lingua che non parli); tutto il resto passa avanti, anche se il match non è perfetto. Intanto indaga sul web lo stipendio probabile e costruisce lo schedario delle aziende — recensioni, bandiere rosse, cultura.",
+      p1: "L'Analista è chi verifica e approfondisce le posizioni trovate dallo Scout. Prende ogni offerta ancora grezza, controlla che sia valida e ne estrae i dati che contano, trasformandola in una scheda completa e affidabile.",
+      p2: "Non si ferma a ciò che c'è scritto nell'annuncio: indaga sul web le informazioni che mancano — a partire dallo stipendio probabile — e aggiunge a ogni posizione il contesto utile a giudicarla. Così, quando tocca allo Scorer, non resta altro da cercare: bastano il tuo profilo e i dati raccolti per dare un voto.",
     },
     en: {
       title: "The Analyst",
-      p1: "The Analyst is the cold verifier. It reads each posting in full, confirms the role is genuine and still open, and extracts what matters: years required, seniority, languages, education — and pinpoints the office's exact location.",
-      p2: "It discards only when sure (a dead link, a country you can't work in, a language you don't speak); everything else moves on, even an imperfect match. Along the way it researches the likely salary online and builds the company dossier — ratings, red flags, culture.",
+      p1: "The Analyst is the one who verifies and deepens the positions the Scout found. It takes each still-raw opening, checks that it's valid and pulls out the data that matters, turning it into a complete, reliable profile.",
+      p2: "It doesn't stop at what the ad says: it researches the missing pieces online — starting with the likely salary — and adds to every position the context needed to judge it. So when it's the Scorer's turn, there's nothing left to look up: your profile and the gathered data are enough to give a score.",
     },
     es: {
       title: "El Analista",
-      p1: "El Analista es el verificador frío. Lee por entero cada oferta, comprueba que la empresa sea real y el enlace válido, y extrae los datos que importan: años requeridos, seniority, idiomas, formación — y localiza la sede exacta de la oficina.",
-      p2: "Descarta solo cuando está seguro (enlace muerto, país donde no puedes trabajar, idioma que no hablas); todo lo demás sigue adelante, aunque el encaje no sea perfecto. Mientras tanto indaga en la web el salario probable y construye el archivo de las empresas — reseñas, banderas rojas, cultura.",
+      p1: "El Analista es quien verifica y profundiza las posiciones que encontró el Scout. Toma cada oferta aún en bruto, comprueba que sea válida y extrae los datos que importan, convirtiéndola en una ficha completa y fiable.",
+      p2: "No se queda con lo que dice el anuncio: investiga en la web lo que falta —empezando por el salario probable— y añade a cada posición el contexto necesario para juzgarla. Así, cuando le toca al Scorer, no queda nada por buscar: bastan tu perfil y los datos reunidos para dar una nota.",
     },
     fr: {
       title: "L'Analyste",
-      p1: "L'Analyste est le vérificateur froid. Il lit chaque offre en entier, contrôle que l'entreprise est réelle et le lien valide, et extrait les données qui comptent : années requises, séniorité, langues, formation — et localise l'emplacement exact du bureau.",
-      p2: "Il n'écarte que lorsqu'il est certain (lien mort, pays où tu ne peux pas travailler, langue que tu ne parles pas) ; tout le reste avance, même si la correspondance n'est pas parfaite. En chemin, il recherche sur le web le salaire probable et bâtit le dossier des entreprises — avis, signaux d'alerte, culture.",
+      p1: "L'Analyste est celui qui vérifie et approfondit les positions trouvées par le Scout. Il prend chaque offre encore brute, s'assure qu'elle est valide et en extrait les données qui comptent, la transformant en une fiche complète et fiable.",
+      p2: "Il ne s'arrête pas à ce que dit l'annonce : il recherche sur le web ce qui manque — à commencer par le salaire probable — et ajoute à chaque position le contexte utile pour la juger. Ainsi, quand vient le tour de l'Évaluateur, il n'y a plus rien à chercher : ton profil et les données réunies suffisent à donner une note.",
     },
     de: {
       title: "Der Analyst",
-      p1: "Der Analyst ist der nüchterne Prüfer. Er liest jede Anzeige vollständig, prüft, ob das Unternehmen echt und der Link gültig ist, und extrahiert, was zählt: geforderte Jahre, Seniorität, Sprachen, Ausbildung — und ermittelt den genauen Standort des Büros.",
-      p2: "Er verwirft nur, wenn er sicher ist (toter Link, Land, in dem du nicht arbeiten darfst, Sprache, die du nicht sprichst); alles andere geht weiter, selbst bei unvollkommener Übereinstimmung. Dabei recherchiert er online das wahrscheinliche Gehalt und baut das Unternehmensdossier auf — Bewertungen, Warnzeichen, Kultur.",
+      p1: "Der Analyst ist derjenige, der die vom Scout gefundenen Stellen prüft und vertieft. Er nimmt jede noch rohe Anzeige, stellt sicher, dass sie gültig ist, und zieht die Daten heraus, die zählen — und macht daraus ein vollständiges, verlässliches Profil.",
+      p2: "Er bleibt nicht bei dem, was in der Anzeige steht: Er recherchiert im Web, was fehlt — angefangen beim wahrscheinlichen Gehalt — und ergänzt jede Stelle um den Kontext, der zur Beurteilung nötig ist. Wenn dann der Bewerter an der Reihe ist, gibt es nichts mehr nachzuschlagen: Dein Profil und die gesammelten Daten genügen, um eine Note zu vergeben.",
     },
     pt: {
       title: "O Analista",
-      p1: "O Analista é o verificador frio. Lê cada oferta por inteiro, confere se a empresa é real e o link válido, e extrai os dados que importam: anos exigidos, senioridade, idiomas, formação — e localiza a sede exata do escritório.",
-      p2: "Descarta apenas quando tem certeza (link morto, país onde você não pode trabalhar, idioma que você não fala); todo o resto segue adiante, mesmo que o encaixe não seja perfeito. Enquanto isso, pesquisa na web o salário provável e constrói o arquivo das empresas — avaliações, bandeiras vermelhas, cultura.",
+      p1: "O Analista é quem verifica e aprofunda as posições encontradas pelo Scout. Pega cada oferta ainda bruta, confere que seja válida e extrai os dados que importam, transformando-a numa ficha completa e confiável.",
+      p2: "Não fica no que diz o anúncio: pesquisa na web o que falta — a começar pelo salário provável — e acrescenta a cada posição o contexto necessário para julgá-la. Assim, quando chega a vez do Scorer, não resta nada a procurar: bastam o seu perfil e os dados reunidos para dar uma nota.",
     },
     hu: {
       title: "Az Elemző",
-      p1: "Az Elemző a hideg ellenőr. Minden hirdetést teljes egészében elolvas, ellenőrzi, hogy a cég valódi és a link él-e, és kinyeri, ami számít: szükséges évek, szenioritás, nyelvek, végzettség — és pontosan meghatározza az iroda helyét.",
-      p2: "Csak akkor utasít el, ha biztos (halott link, ország, ahol nem dolgozhatsz, nyelv, amelyet nem beszélsz); minden más továbbhalad, még ha a találat nem is tökéletes. Közben az interneten kikutatja a valószínű fizetést, és felépíti a cégek dossziéját — értékelések, piros zászlók, kultúra.",
+      p1: "Az Elemző az, aki ellenőrzi és elmélyíti a Felderítő által talált pozíciókat. Fogja az egyes, még nyers hirdetéseket, meggyőződik róla, hogy érvényesek, és kiszedi a fontos adatokat, teljes és megbízható adatlappá alakítva őket.",
+      p2: "Nem áll meg annál, ami a hirdetésben szerepel: a hiányzó információknak — kezdve a valószínű fizetéssel — utánanéz a weben, és minden pozícióhoz hozzáadja a megítéléséhez szükséges kontextust. Így mire a Pontozóra kerül a sor, nincs már mit keresni: elég összevetnie az adatokat a profiloddal, és megszülethet a pontszám.",
     },
   },
   {
@@ -144,38 +144,38 @@ const ROLES: Role[] = [
     img: "/agents-scorer.png",
     it: {
       title: "Lo Scorer",
-      p1: "Lo Scorer dà un voto a ogni offerta, da 0 a 100: quanto si adatta davvero al tuo profilo, alle competenze, alla seniority, al luogo che preferisci — e allo stipendio che può offrire.",
-      p2: "Tiene conto anche di te: se segnali «questa mi piace» il voto sale, se dici «mai» scende. Le offerte deboli si fermano qui; le migliori salgono in cima alla tua lista. Il suo voto è il verdetto finale che chiude la pipeline principale: tutto ciò che gli Scout hanno trovato e gli Analisti verificato diventa un unico numero su misura.",
+      p1: "Lo Scorer dà a ogni offerta un voto da 0 a 100: quanto si avvicina davvero a ciò che cerchi. Non guarda solo profilo, competenze, luogo e stipendio, ma anche i tuoi obiettivi e le tue ambizioni — il lavoro che vorresti davvero. Il suo compito è trovare, tra tutte, le posizioni più vicine a quello che desideri.",
+      p2: "Impara dai tuoi riscontri: quando segnali «questa mi piace» o «questa mai», ricalibra il punteggio di conseguenza. Il suo voto è il verdetto finale su quanto quell'offerta è giusta per te: le più deboli restano in fondo, le migliori salgono in cima alla tua lista.",
     },
     en: {
       title: "The Scorer",
-      p1: "The Scorer rates every opening from 0 to 100: how well it truly fits your profile, skills, seniority and preferred location — and the salary it's likely to pay.",
-      p2: "It listens to you too: mark one “I like this” and its score rises, “never” and it falls. Weak ones stop here; the best rise to the top of your list — its score is the final verdict that closes the main pipeline, turning everything the Scouts found and the Analysts checked into one tailored number.",
+      p1: "The Scorer gives every opening a score from 0 to 100: how close it really is to what you're after. It weighs not just your profile, skills, location and salary, but also your goals and ambitions — the job you'd truly want. Its task is to find, among them all, the positions closest to what you're looking for.",
+      p2: "It learns from your feedback: when you mark one “I like this” or “never”, it recalibrates the score accordingly. Its score is the final verdict on how right an opening is for you: the weakest stay at the bottom, the best rise to the top of your list.",
     },
     es: {
       title: "El Scorer",
-      p1: "El Scorer da una nota a cada oferta, de 0 a 100: cuánto encaja de verdad con tu perfil, tus competencias, tu seniority y el lugar que prefieres — y el salario que podría ofrecer.",
-      p2: "También te tiene en cuenta: si marcas «esta me gusta» la nota sube, si dices «nunca» baja. Las ofertas débiles se detienen aquí; las mejores suben a lo alto de tu lista. Su nota es el veredicto final que cierra la pipeline principal: todo lo que los Scouts encontraron y los Analistas verificaron se convierte en un único número a medida.",
+      p1: "El Scorer da a cada oferta una nota de 0 a 100: cuánto se acerca de verdad a lo que buscas. No mira solo tu perfil, tus competencias, el lugar y el salario, sino también tus objetivos y tus ambiciones — el trabajo que de verdad querrías. Su tarea es encontrar, entre todas, las posiciones más cercanas a lo que deseas.",
+      p2: "Aprende de tus valoraciones: cuando marcas «esta me gusta» o «esta nunca», recalibra la nota en consecuencia. Su nota es el veredicto final sobre cuánto encaja esa oferta contigo: las más débiles se quedan al fondo, las mejores suben a lo alto de tu lista.",
     },
     fr: {
       title: "L'Évaluateur",
-      p1: "L'Évaluateur attribue une note à chaque offre, de 0 à 100 : à quel point elle correspond vraiment à ton profil, à tes compétences, à ta séniorité, au lieu que tu préfères — et au salaire qu'elle pourrait offrir.",
-      p2: "Il tient compte de toi aussi : si tu signales « celle-ci me plaît » la note monte, si tu dis « jamais » elle baisse. Les offres faibles s'arrêtent ici ; les meilleures remontent en tête de ta liste. Sa note est le verdict final qui clôt la pipeline principale : tout ce que les Scouts ont trouvé et les Analystes vérifié devient un seul chiffre sur mesure.",
+      p1: "L'Évaluateur attribue à chaque offre une note de 0 à 100 : à quel point elle se rapproche vraiment de ce que tu cherches. Il ne regarde pas seulement ton profil, tes compétences, le lieu et le salaire, mais aussi tes objectifs et tes ambitions — le travail que tu voudrais vraiment. Sa tâche est de trouver, parmi toutes, les positions les plus proches de ce que tu désires.",
+      p2: "Il apprend de tes retours : quand tu signales « celle-ci me plaît » ou « jamais », il recalibre la note en conséquence. Sa note est le verdict final sur à quel point cette offre est faite pour toi : les plus faibles restent en bas, les meilleures remontent en tête de ta liste.",
     },
     de: {
       title: "Der Bewerter",
-      p1: "Der Bewerter vergibt jeder Stelle eine Note von 0 bis 100: wie gut sie wirklich zu deinem Profil, deinen Fähigkeiten, deiner Seniorität und deinem bevorzugten Ort passt — und zum Gehalt, das sie wahrscheinlich bietet.",
-      p2: "Er berücksichtigt auch dich: Markierst du eine mit „die gefällt mir“, steigt die Note, sagst du „nie“, sinkt sie. Schwache Stellen enden hier; die besten steigen an die Spitze deiner Liste. Seine Note ist das Endurteil, das die Haupt-Pipeline abschließt: Alles, was die Scouts gefunden und die Analysten geprüft haben, wird zu einer einzigen, maßgeschneiderten Zahl.",
+      p1: "Der Bewerter gibt jeder Stelle eine Note von 0 bis 100: wie nah sie wirklich an dem ist, was du suchst. Er betrachtet nicht nur dein Profil, deine Fähigkeiten, den Ort und das Gehalt, sondern auch deine Ziele und Ambitionen — den Job, den du dir wirklich wünschst. Seine Aufgabe ist es, unter allen die Stellen zu finden, die dem am nächsten kommen, was du willst.",
+      p2: "Er lernt aus deinen Rückmeldungen: Markierst du eine mit „die gefällt mir“ oder „nie“, kalibriert er die Note entsprechend neu. Seine Note ist das endgültige Urteil darüber, wie gut eine Stelle zu dir passt: die schwächsten bleiben unten, die besten steigen an die Spitze deiner Liste.",
     },
     pt: {
       title: "O Scorer",
-      p1: "O Scorer dá uma nota a cada oferta, de 0 a 100: o quanto ela realmente se encaixa no seu perfil, nas competências, na senioridade e no lugar que você prefere — e no salário que provavelmente oferece.",
-      p2: "Ele também leva você em conta: se marcar «esta eu gosto» a nota sobe, se disser «nunca» ela desce. As ofertas fracas param aqui; as melhores sobem ao topo da sua lista. A sua nota é o veredito final que fecha o pipeline principal: tudo o que os Scouts encontraram e os Analistas verificaram vira um único número sob medida.",
+      p1: "O Scorer dá a cada oferta uma nota de 0 a 100: o quanto ela realmente se aproxima do que você procura. Não olha só o seu perfil, as competências, o lugar e o salário, mas também os seus objetivos e ambições — o trabalho que você realmente gostaria. A sua tarefa é encontrar, entre todas, as posições mais próximas do que você deseja.",
+      p2: "Aprende com os seus retornos: quando marca «esta eu gosto» ou «esta nunca», recalibra a nota de acordo. A sua nota é o veredito final sobre o quanto aquela oferta é certa para você: as mais fracas ficam no fim, as melhores sobem ao topo da sua lista.",
     },
     hu: {
       title: "A Pontozó",
-      p1: "A Pontozó minden ajánlatot 0-tól 100-ig osztályoz: mennyire illik valóban a profilodhoz, a készségeidhez, a szenioritásodhoz és az általad preferált helyhez — és a fizetéshez, amelyet valószínűleg kínál.",
-      p2: "Téged is figyelembe vesz: ha jelzed, hogy „ez tetszik”, a pontszám emelkedik, ha azt mondod, „soha”, csökken. A gyenge ajánlatok itt megállnak; a legjobbak a listád élére kerülnek. A pontszáma a végső ítélet, amely lezárja a fő folyamatot: mindaz, amit a Felderítők találtak és az Elemzők ellenőriztek, egyetlen, személyre szabott számmá válik.",
+      p1: "A Pontozó minden ajánlatnak 0-tól 100-ig ad pontszámot: mennyire áll közel valójában ahhoz, amit keresel. Nemcsak a profilodat, a készségeidet, a helyet és a fizetést nézi, hanem a céljaidat és az ambícióidat is — azt a munkát, amelyet igazán szeretnél. A feladata, hogy mind közül megtalálja azokat a pozíciókat, amelyek a legközelebb állnak ahhoz, amit szeretnél.",
+      p2: "Tanul a visszajelzéseidből: amikor azt jelzed, „ez tetszik” vagy „soha”, ennek megfelelően igazítja a pontszámot. A pontszáma a végső ítélet arról, mennyire való neked az adott ajánlat: a leggyengébbek a lista aljára kerülnek, a legjobbak a tetejére.",
     },
   },
   {
@@ -304,38 +304,38 @@ const ROLES: Role[] = [
     img: "/agents-doctor.png",
     it: {
       title: "Il Dottore",
-      p1: "Il Dottore veglia sulla salute degli agenti. Più volte durante la giornata fa il giro della squadra: chi lavora da ore accumula contesto e comincia a rallentare o a perdere il filo, e lui lo rimette in sesto — lo riavvia con tutta la sua memoria, senza perdere lavoro.",
-      p2: "È selettivo: lascia stare chi è appena partito o è fermo, e interviene solo su chi ne ha davvero bisogno. A ogni giro annota un breve resoconto. Si occupa della lucidità della squadra, non della strategia.",
+      p1: "Il Dottore veglia sulla salute degli agenti. Più volte al giorno fa il giro della squadra: chi lavora da ore si stanca e inizia a rallentare o a perdere il filo, e lui lo rimette in sesto.",
+      p2: "È selettivo: interviene solo su chi ne ha davvero bisogno. A ogni giro annota un breve resoconto, e si occupa della lucidità della squadra.",
     },
     en: {
       title: "The Doctor",
-      p1: "The Doctor looks after the agents' health. A few times through the day it does a round of the team: those that have worked for hours pile up context and start to slow down or lose the thread, so it gets them back in shape — restarting them with their full memory, losing no work.",
-      p2: "It's selective: it leaves the freshly started or idle ones alone and steps in only where it's truly needed. Each round it notes a short recap. It tends to the team's clarity, not its strategy.",
+      p1: "The Doctor looks after the agents' health. A few times a day it does a round of the team: those that have worked for hours get tired and start to slow down or lose the thread, so it gets them back in shape.",
+      p2: "It's selective: it steps in only where it's truly needed. Each round it notes a short recap, and it tends to the team's clarity.",
     },
     es: {
       title: "El Doctor",
-      p1: "El Doctor cuida la salud de los agentes. Varias veces al día hace la ronda del equipo: quien lleva horas trabajando acumula contexto y empieza a ralentizarse o a perder el hilo, y él lo pone a punto — lo reinicia con toda su memoria, sin perder trabajo.",
-      p2: "Es selectivo: deja en paz a quien acaba de empezar o está parado, e interviene solo donde de verdad hace falta. En cada ronda anota un breve resumen. Se ocupa de la lucidez del equipo, no de la estrategia.",
+      p1: "El Doctor cuida la salud de los agentes. Varias veces al día hace la ronda del equipo: quien lleva horas trabajando se cansa y empieza a ralentizarse o a perder el hilo, y él lo pone a punto.",
+      p2: "Es selectivo: interviene solo donde de verdad hace falta. En cada ronda anota un breve resumen, y se ocupa de la lucidez del equipo.",
     },
     fr: {
       title: "Le Docteur",
-      p1: "Le Docteur veille sur la santé des agents. Plusieurs fois dans la journée, il fait la ronde de l'équipe : ceux qui travaillent depuis des heures accumulent du contexte et commencent à ralentir ou à perdre le fil, alors il les remet d'aplomb — il les redémarre avec toute leur mémoire, sans perdre de travail.",
-      p2: "Il est sélectif : il laisse tranquilles ceux qui viennent de démarrer ou sont à l'arrêt, et n'intervient que là où c'est vraiment nécessaire. À chaque ronde, il note un bref compte rendu. Il veille à la lucidité de l'équipe, pas à sa stratégie.",
+      p1: "Le Docteur veille sur la santé des agents. Plusieurs fois par jour, il fait la ronde de l'équipe : ceux qui travaillent depuis des heures se fatiguent et commencent à ralentir ou à perdre le fil, alors il les remet d'aplomb.",
+      p2: "Il est sélectif : il n'intervient que là où c'est vraiment nécessaire. À chaque ronde, il note un bref compte rendu, et il veille à la lucidité de l'équipe.",
     },
     de: {
       title: "Der Doktor",
-      p1: "Der Doktor wacht über die Gesundheit der Agenten. Mehrmals am Tag macht er die Runde durchs Team: Wer seit Stunden arbeitet, häuft Kontext an und wird langsamer oder verliert den Faden — also bringt er ihn wieder in Form und startet ihn mit seinem vollen Gedächtnis neu, ohne Arbeit zu verlieren.",
-      p2: "Er geht selektiv vor: Wer gerade erst gestartet oder im Leerlauf ist, bleibt unberührt; er greift nur dort ein, wo es wirklich nötig ist. Nach jeder Runde hält er eine kurze Zusammenfassung fest. Er sorgt für die Klarheit des Teams, nicht für die Strategie.",
+      p1: "Der Doktor wacht über die Gesundheit der Agenten. Mehrmals am Tag macht er die Runde durchs Team: Wer seit Stunden arbeitet, ermüdet und wird langsamer oder verliert den Faden, also bringt er ihn wieder in Form.",
+      p2: "Er geht selektiv vor: Er greift nur dort ein, wo es wirklich nötig ist. Nach jeder Runde hält er eine kurze Zusammenfassung fest und sorgt für die Klarheit des Teams.",
     },
     pt: {
       title: "O Doutor",
-      p1: "O Doutor cuida da saúde dos agentes. Várias vezes ao dia faz a ronda da equipe: quem trabalha há horas acumula contexto e começa a ficar lento ou a perder o fio, e ele o recoloca em forma — reinicia-o com toda a sua memória, sem perder trabalho.",
-      p2: "É seletivo: deixa em paz quem acabou de começar ou está parado, e intervém só onde é realmente preciso. A cada ronda anota um breve resumo. Cuida da lucidez da equipe, não da estratégia.",
+      p1: "O Doutor cuida da saúde dos agentes. Várias vezes ao dia faz a ronda da equipe: quem trabalha há horas se cansa e começa a ficar lento ou a perder o fio, e ele o recoloca em forma.",
+      p2: "É seletivo: intervém só onde é realmente preciso. A cada ronda anota um breve resumo, e cuida da lucidez da equipe.",
     },
     hu: {
       title: "A Doktor",
-      p1: "A Doktor az ügynökök egészségére ügyel. Naponta többször körbejárja a csapatot: aki órák óta dolgozik, kontextust halmoz fel, és lassulni kezd vagy elveszti a fonalat, ő pedig rendbe hozza — teljes emlékezetével indítja újra, munka elvesztése nélkül.",
-      p2: "Válogatós: békén hagyja azt, aki most indult vagy tétlen, és csak ott lép közbe, ahol valóban szükség van rá. Minden körben rövid összefoglalót készít. A csapat tisztánlátására ügyel, nem a stratégiára.",
+      p1: "A Doktor az ügynökök egészségére ügyel. Naponta többször körbejárja a csapatot: aki órák óta dolgozik, elfárad, és lassulni kezd vagy elveszti a fonalat, ő pedig rendbe hozza.",
+      p2: "Válogatós: csak ott lép közbe, ahol valóban szükség van rá. Minden körben rövid összefoglalót készít, és a csapat tisztánlátására ügyel.",
     },
   },
   {
@@ -344,38 +344,38 @@ const ROLES: Role[] = [
     img: "/agents-maintainer.png",
     it: {
       title: "Il Mantenitore",
-      p1: "Il Mantenitore è il gemello del Dottore: mentre il Dottore cura gli agenti, lui cura l'infrastruttura. Una volta al giorno fa il giro del container e della macchina — controlla che gli strumenti critici funzionino, che le dipendenze siano a posto, che disco e memoria non siano al limite.",
-      p2: "Ripara ciò che può (reinstalla, consolida, sistema) e propone al Coordinatore le pulizie più delicate, senza mai cancellare di testa sua. Uno strumento rotto per lui è un'emergenza. Finito il giro resta in standby, pronto al richiamo.",
+      p1: "Il Mantenitore cura l'infrastruttura del team. Una volta al giorno fa un giro di controllo: verifica che il contenitore su cui gira il team sia in buona salute, che tutti gli strumenti siano a posto e che non si sia accumulato disordine — spazio che si riempie, file di troppo.",
+      p2: "Ripara ciò che può — reinstalla, consolida, sistema — e propone al Coordinatore le pulizie più delicate, senza mai cancellare di testa sua. Uno strumento rotto, per lui, è un'emergenza.",
     },
     en: {
       title: "The Maintainer",
-      p1: "The Maintainer is the Doctor's twin: while the Doctor looks after the agents, it looks after the infrastructure. Once a day it walks the container and the machine — checking that mission-critical tools work, that dependencies are in order, that disk and memory aren't running out.",
-      p2: "It repairs what it can (reinstalling, consolidating, tidying up) and proposes the more delicate clean-ups to the Coordinator, never deleting on its own. A broken tool is an emergency to it. Once the round is done it stays on standby, ready when called.",
+      p1: "The Maintainer looks after the team's infrastructure. Once a day it does a check-up round: it makes sure the container the team runs on is healthy, that every tool is in order and that no clutter has built up — space filling up, stray files.",
+      p2: "It repairs what it can — reinstalling, consolidating, tidying up — and proposes the more delicate clean-ups to the Coordinator, never deleting on its own. A broken tool, to it, is an emergency.",
     },
     es: {
       title: "El Mantenedor",
-      p1: "El Mantenedor es el gemelo del Doctor: mientras el Doctor cuida de los agentes, él cuida de la infraestructura. Una vez al día recorre el contenedor y la máquina — comprueba que las herramientas críticas funcionen, que las dependencias estén en orden, que el disco y la memoria no estén al límite.",
-      p2: "Repara lo que puede (reinstala, consolida, ordena) y propone al Coordinador las limpiezas más delicadas, sin borrar nunca por su cuenta. Una herramienta rota es para él una emergencia. Terminada la ronda queda en espera, listo para cuando se le llame.",
+      p1: "El Mantenedor cuida la infraestructura del equipo. Una vez al día hace una ronda de control: comprueba que el contenedor en el que corre el equipo esté sano, que todas las herramientas estén en orden y que no se haya acumulado desorden — espacio que se llena, archivos de más.",
+      p2: "Repara lo que puede — reinstala, consolida, ordena — y propone al Coordinador las limpiezas más delicadas, sin borrar nunca por su cuenta. Una herramienta rota, para él, es una emergencia.",
     },
     fr: {
       title: "Le Mainteneur",
-      p1: "Le Mainteneur est le jumeau du Docteur : tandis que le Docteur s'occupe des agents, lui s'occupe de l'infrastructure. Une fois par jour, il parcourt le conteneur et la machine — il vérifie que les outils critiques fonctionnent, que les dépendances sont en ordre, que le disque et la mémoire ne sont pas à la limite.",
-      p2: "Il répare ce qu'il peut (réinstalle, consolide, range) et propose au Coordinateur les nettoyages les plus délicats, sans jamais supprimer de lui-même. Un outil cassé est pour lui une urgence. La ronde terminée, il reste en veille, prêt à être rappelé.",
+      p1: "Le Mainteneur s'occupe de l'infrastructure de l'équipe. Une fois par jour, il fait une ronde de contrôle : il vérifie que le conteneur sur lequel tourne l'équipe est en bonne santé, que tous les outils sont en ordre et qu'aucun désordre ne s'est accumulé — espace qui se remplit, fichiers en trop.",
+      p2: "Il répare ce qu'il peut — réinstalle, consolide, range — et propose au Coordinateur les nettoyages les plus délicats, sans jamais supprimer de lui-même. Un outil cassé, pour lui, est une urgence.",
     },
     de: {
       title: "Der Instandhalter",
-      p1: "Der Instandhalter ist der Zwilling des Doktors: Während der Doktor sich um die Agenten kümmert, kümmert er sich um die Infrastruktur. Einmal am Tag geht er den Container und die Maschine durch — er prüft, ob die kritischen Werkzeuge funktionieren, ob die Abhängigkeiten in Ordnung sind, ob Festplatte und Speicher nicht am Limit sind.",
-      p2: "Er repariert, was er kann (neu installieren, konsolidieren, aufräumen) und schlägt dem Koordinator die heikleren Aufräumarbeiten vor, ohne je eigenmächtig zu löschen. Ein kaputtes Werkzeug ist für ihn ein Notfall. Nach der Runde bleibt er in Bereitschaft, bereit auf Abruf.",
+      p1: "Der Instandhalter kümmert sich um die Infrastruktur des Teams. Einmal am Tag macht er eine Kontrollrunde: Er stellt sicher, dass der Container, auf dem das Team läuft, gesund ist, dass alle Werkzeuge in Ordnung sind und dass sich keine Unordnung angesammelt hat — Speicher, der sich füllt, überflüssige Dateien.",
+      p2: "Er repariert, was er kann — neu installieren, konsolidieren, aufräumen — und schlägt dem Koordinator die heikleren Aufräumarbeiten vor, ohne je eigenmächtig zu löschen. Ein kaputtes Werkzeug ist für ihn ein Notfall.",
     },
     pt: {
       title: "O Mantenedor",
-      p1: "O Mantenedor é o gêmeo do Doutor: enquanto o Doutor cuida dos agentes, ele cuida da infraestrutura. Uma vez por dia percorre o contêiner e a máquina — verifica se as ferramentas críticas funcionam, se as dependências estão em ordem, se o disco e a memória não estão no limite.",
-      p2: "Repara o que pode (reinstala, consolida, arruma) e propõe ao Coordenador as limpezas mais delicadas, sem nunca apagar por conta própria. Uma ferramenta quebrada é para ele uma emergência. Terminada a ronda, fica em espera, pronto para quando for chamado.",
+      p1: "O Mantenedor cuida da infraestrutura da equipe. Uma vez por dia faz uma ronda de controle: verifica se o contêiner em que a equipe roda está saudável, se todas as ferramentas estão em ordem e se não se acumulou desordem — espaço que enche, arquivos a mais.",
+      p2: "Repara o que pode — reinstala, consolida, arruma — e propõe ao Coordenador as limpezas mais delicadas, sem nunca apagar por conta própria. Uma ferramenta quebrada, para ele, é uma emergência.",
     },
     hu: {
       title: "A Karbantartó",
-      p1: "A Karbantartó a Doktor ikertestvére: míg a Doktor az ügynökökre vigyáz, ő az infrastruktúrára. Naponta egyszer körbejárja a konténert és a gépet — ellenőrzi, hogy a kritikus eszközök működnek-e, hogy a függőségek rendben vannak-e, hogy a lemez és a memória nincs-e a határon.",
-      p2: "Megjavítja, amit tud (újratelepít, összevon, rendet rak), a kényesebb takarításokat pedig a Koordinátornak javasolja, sosem törölve a saját szakállára. Egy elromlott eszköz számára vészhelyzet. A kör végeztével készenlétben marad, hívásra készen.",
+      p1: "A Karbantartó a csapat infrastruktúrájára ügyel. Naponta egyszer ellenőrző kört tesz: megnézi, hogy a konténer, amelyen a csapat fut, egészséges-e, hogy minden eszköz rendben van-e, és hogy nem gyűlt-e fel rendetlenség — telítődő hely, fölösleges fájlok.",
+      p2: "Megjavítja, amit tud — újratelepít, összevon, rendet rak —, a kényesebb takarításokat pedig a Koordinátornak javasolja, sosem törölve a saját szakállára. Egy elromlott eszköz számára vészhelyzet.",
     },
   },
   {
@@ -384,38 +384,38 @@ const ROLES: Role[] = [
     img: "/agents-mentor.png",
     it: {
       title: "Il Mentor",
-      p1: "Il Mentor è la voce saggia che parla di rado, ma pesa. Non scrive CV né valuta singole offerte: legge le tendenze e, quando coglie qualcosa che dovresti sapere, te lo dice diretto.",
-      p2: "«Il mercato chiede sempre più cloud, ma tu sei ancora sul backend classico.» Una volta a settimana ti manda un breve resoconto di ciò che il mondo ha mostrato. Parla solo con dati solidi in mano.",
+      p1: "Il Mentor è la voce che ti aiuta a scegliere la direzione giusta. Osserva come si muove il mercato e ti restituisce il quadro: cosa offri tu e cosa chiede il mercato, quali lacune conviene colmare, perché certe candidature non vanno a segno.",
+      p2: "Ti manda un breve resoconto quando ha raccolto abbastanza dati, o quando glielo chiedi tu — niente opinioni vaghe, solo ciò che le tendenze dicono davvero.",
     },
     en: {
       title: "The Mentor",
-      p1: "The Mentor is the wise voice that speaks seldom but carries weight. It writes no CVs and rates no single job: it reads the trends and, when it spots something you should know, tells you straight.",
-      p2: "“The market keeps asking for cloud, but you're still on classic backend.” Once a week it sends a short digest of what the world revealed. It only speaks with solid data in hand.",
+      p1: "The Mentor is the voice that helps you choose the right direction. It watches how the market moves and gives you the picture: what you offer versus what the market wants, which gaps are worth closing, why some applications don't land.",
+      p2: "It sends you a short recap once it has gathered enough data, or whenever you ask — no vague opinions, just what the trends actually show.",
     },
     es: {
       title: "El Mentor",
-      p1: "El Mentor es la voz sabia que habla rara vez, pero pesa. No escribe CV ni valora ofertas concretas: lee las tendencias y, cuando capta algo que deberías saber, te lo dice directo.",
-      p2: "«El mercado pide cada vez más cloud, pero tú sigues en el backend clásico.» Una vez por semana te envía un breve resumen de lo que el mundo ha mostrado. Solo habla con datos sólidos en la mano.",
+      p1: "El Mentor es la voz que te ayuda a elegir la dirección correcta. Observa cómo se mueve el mercado y te devuelve el panorama: lo que ofreces tú frente a lo que pide el mercado, qué lagunas conviene cerrar, por qué algunas candidaturas no cuajan.",
+      p2: "Te envía un breve resumen cuando ha reunido suficientes datos, o cuando se lo pides — nada de opiniones vagas, solo lo que las tendencias dicen de verdad.",
     },
     fr: {
       title: "Le Mentor",
-      p1: "Le Mentor est la voix sage qui parle rarement, mais qui pèse. Il n'écrit pas de CV et n'évalue aucune offre en particulier : il lit les tendances et, lorsqu'il repère quelque chose que tu devrais savoir, il te le dit franchement.",
-      p2: "« Le marché demande de plus en plus de cloud, mais tu es encore sur du backend classique. » Une fois par semaine, il t'envoie un bref résumé de ce que le monde a révélé. Il ne parle qu'avec des données solides en main.",
+      p1: "Le Mentor est la voix qui t'aide à choisir la bonne direction. Il observe comment le marché évolue et te renvoie le tableau : ce que tu offres face à ce que le marché demande, quelles lacunes il vaut la peine de combler, pourquoi certaines candidatures n'aboutissent pas.",
+      p2: "Il t'envoie un bref résumé quand il a réuni assez de données, ou quand tu le lui demandes — pas d'opinions vagues, seulement ce que les tendances montrent vraiment.",
     },
     de: {
       title: "Der Mentor",
-      p1: "Der Mentor ist die weise Stimme, die selten spricht, aber Gewicht hat. Er schreibt keine Lebensläufe und bewertet keine einzelne Stelle: Er liest die Trends und sagt es dir direkt, wenn er etwas erkennt, das du wissen solltest.",
-      p2: "„Der Markt verlangt immer mehr Cloud, aber du bist noch beim klassischen Backend.“ Einmal pro Woche schickt er dir eine kurze Zusammenfassung dessen, was die Welt gezeigt hat. Er spricht nur mit soliden Daten in der Hand.",
+      p1: "Der Mentor ist die Stimme, die dir hilft, die richtige Richtung zu wählen. Er beobachtet, wie sich der Markt bewegt, und gibt dir das Gesamtbild: was du bietest im Vergleich zu dem, was der Markt verlangt, welche Lücken sich zu schließen lohnen, warum manche Bewerbungen nicht ankommen.",
+      p2: "Er schickt dir eine kurze Zusammenfassung, wenn er genug Daten gesammelt hat, oder wann immer du ihn darum bittest — keine vagen Meinungen, nur das, was die Trends wirklich zeigen.",
     },
     pt: {
       title: "O Mentor",
-      p1: "O Mentor é a voz sábia que fala raramente, mas pesa. Não escreve CVs nem avalia ofertas específicas: lê as tendências e, quando percebe algo que você deveria saber, diz diretamente.",
-      p2: "«O mercado pede cada vez mais cloud, mas você ainda está no backend clássico.» Uma vez por semana envia um breve resumo do que o mundo mostrou. Só fala com dados sólidos na mão.",
+      p1: "O Mentor é a voz que te ajuda a escolher a direção certa. Observa como o mercado se move e te devolve o panorama: o que você oferece em comparação com o que o mercado pede, quais lacunas vale a pena preencher, por que algumas candidaturas não vingam.",
+      p2: "Envia um breve resumo quando reuniu dados suficientes, ou quando você pede — nada de opiniões vagas, apenas o que as tendências realmente mostram.",
     },
     hu: {
       title: "A Mentor",
-      p1: "A Mentor a bölcs hang, amely ritkán szólal meg, de súlya van. Nem ír önéletrajzot, és nem értékel egyetlen ajánlatot sem: a trendeket olvassa, és amikor olyat vesz észre, amit tudnod kellene, egyenesen megmondja.",
-      p2: "„A piac egyre több cloudot kér, te viszont még a klasszikus backendnél tartasz.” Hetente egyszer rövid összefoglalót küld arról, amit a világ megmutatott. Csak szilárd adatokkal a kezében szólal meg.",
+      p1: "A Mentor az a hang, amely segít a helyes irány kiválasztásában. Figyeli, hogyan mozog a piac, és megmutatja a képet: mit kínálsz te, és mit kér a piac, mely hiányosságokat érdemes pótolni, miért nem célba érnek egyes jelentkezések.",
+      p2: "Rövid összefoglalót küld, amikor elég adatot gyűjtött össze, vagy amikor te kéred — semmi ködös vélemény, csak az, amit a trendek valóban mutatnak.",
     },
   },
   {
@@ -473,7 +473,7 @@ const PAGE: Record<Lang, PageCopy> = {
     subtitle:
       "Dietro Job Hunter Team non c'è un solo assistente, ma una squadra di agenti AI specializzati e autonomi. Ognuno ha un compito, e lo fa bene.",
     closing:
-      "Insieme trasformano la ricerca di lavoro da compito solitario e frustrante a campagna strutturata, veloce e umana.",
+      "Insieme trasformano la ricerca di lavoro da compito solitario e frustrante a campagna strutturata e veloce, in cui non sei più solo.",
     back: "← Torna alla home",
   },
   en: {
@@ -481,7 +481,7 @@ const PAGE: Record<Lang, PageCopy> = {
     subtitle:
       "Behind Job Hunter Team there isn't a single assistant, but a team of specialized, autonomous AI agents. Each has one job, and does it well.",
     closing:
-      "Together they turn the job hunt from a lonely, draining chore into a structured, fast and human campaign.",
+      "Together they turn the job hunt from a lonely, draining chore into a structured, fast campaign in which you're no longer alone.",
     back: "← Back to home",
   },
   es: {
@@ -489,7 +489,7 @@ const PAGE: Record<Lang, PageCopy> = {
     subtitle:
       "Detrás de Job Hunter Team no hay un solo asistente, sino un equipo de agentes de IA especializados. Cada uno tiene una tarea, y la hace bien.",
     closing:
-      "Juntos transforman la búsqueda de empleo de una tarea solitaria y frustrante en una campaña estructurada, rápida y humana.",
+      "Juntos transforman la búsqueda de empleo de una tarea solitaria y frustrante en una campaña estructurada y rápida en la que ya no estás solo.",
     back: "← Volver al inicio",
   },
   fr: {
@@ -497,7 +497,7 @@ const PAGE: Record<Lang, PageCopy> = {
     subtitle:
       "Derrière Job Hunter Team, il n'y a pas un seul assistant, mais une équipe d'agents IA spécialisés. Chacun a une mission, et il l'accomplit bien.",
     closing:
-      "Ensemble, ils transforment la recherche d'emploi d'une tâche solitaire et épuisante en une campagne structurée, rapide et humaine.",
+      "Ensemble, ils transforment la recherche d'emploi d'une tâche solitaire et épuisante en une campagne structurée et rapide où tu n'es plus seul.",
     back: "← Retour à l'accueil",
   },
   de: {
@@ -505,7 +505,7 @@ const PAGE: Record<Lang, PageCopy> = {
     subtitle:
       "Hinter Job Hunter Team steht nicht ein einzelner Assistent, sondern ein Team spezialisierter KI-Agenten. Jeder hat eine Aufgabe und erledigt sie gut.",
     closing:
-      "Gemeinsam verwandeln sie die Jobsuche von einer einsamen, zermürbenden Pflicht in eine strukturierte, schnelle und menschliche Kampagne.",
+      "Gemeinsam verwandeln sie die Jobsuche von einer einsamen, zermürbenden Pflicht in eine strukturierte, schnelle Kampagne, in der du nicht mehr allein bist.",
     back: "← Zurück zur Startseite",
   },
   pt: {
@@ -513,7 +513,7 @@ const PAGE: Record<Lang, PageCopy> = {
     subtitle:
       "Por trás do Job Hunter Team não há um único assistente, mas uma equipe de agentes de IA especializados. Cada um tem uma tarefa, e a faz bem.",
     closing:
-      "Juntos transformam a busca de emprego de uma tarefa solitária e frustrante em uma campanha estruturada, rápida e humana.",
+      "Juntos transformam a busca de emprego de uma tarefa solitária e frustrante em uma campanha estruturada e rápida em que você já não está sozinho.",
     back: "← Voltar ao início",
   },
   hu: {
@@ -521,7 +521,7 @@ const PAGE: Record<Lang, PageCopy> = {
     subtitle:
       "A Job Hunter Team mögött nem egyetlen asszisztens áll, hanem szakosodott MI-ügynökök csapata. Mindegyiknek egy feladata van, és azt jól végzi.",
     closing:
-      "Együtt a magányos és frusztráló feladatból strukturált, gyors és emberi kampánnyá alakítják az álláskeresést.",
+      "Együtt a magányos és frusztráló feladatból strukturált és gyors kampánnyá alakítják az álláskeresést, amelyben már nem vagy egyedül.",
     back: "← Vissza a kezdőlapra",
   },
 };
