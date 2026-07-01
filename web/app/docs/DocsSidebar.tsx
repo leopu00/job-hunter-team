@@ -20,9 +20,9 @@ export default function DocsSidebar() {
   const { lang } = useLandingI18n();
   const nav = getDocsNav(lang as DocLocale);
   return (
-    <aside className="hidden md:block w-48 shrink-0">
+    <aside className="hidden md:block fixed top-0 left-0 bottom-0 w-[21rem] z-40 overflow-y-auto border-r border-[var(--color-border)] pt-32 pb-16 pl-6 pr-5">
       <nav
-        className="sticky top-28 space-y-6"
+        className="space-y-6"
         aria-label={ARIA_LABEL[lang as DocLocale] ?? ARIA_LABEL.en}
       >
         {nav.map((section) => (
@@ -38,7 +38,7 @@ export default function DocsSidebar() {
                     <Link
                       href={item.href}
                       aria-current={active ? "page" : undefined}
-                      className={`block text-[12px] no-underline transition-colors ${
+                      className={`block whitespace-nowrap text-[11px] no-underline transition-colors ${
                         active
                           ? "text-[var(--color-white)] font-semibold"
                           : "text-[var(--color-muted)] hover:text-[var(--color-white)]"
