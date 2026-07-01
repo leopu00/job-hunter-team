@@ -554,14 +554,14 @@ export default async function CaseStudiesIndexPage() {
             <span style={{ color: "#00e676" }}>{t.heroTitleEmph}</span>
             {t.heroTitlePost}
           </h1>
-          <p className="mt-5 max-w-3xl text-[15px] leading-relaxed text-[var(--color-muted)]">
+          <p className="mt-5 text-[15px] leading-relaxed text-[var(--color-muted)]">
             {t.heroLeadPre}
             <strong className="text-[var(--color-white)]">
               {t.heroLeadStrong}
             </strong>
             {t.heroLeadPost}
           </p>
-          <p className="mt-2 max-w-3xl text-[12px] leading-relaxed text-[var(--color-dim)]">
+          <p className="mt-2 text-[12px] leading-relaxed text-[var(--color-dim)]">
             {t.heroSub}
           </p>
         </header>
@@ -569,7 +569,7 @@ export default async function CaseStudiesIndexPage() {
         {/* ── Numeri cumulativi (tutti i case study insieme) ─────── */}
         <section className="mb-14">
           <h2 className="text-xl font-bold tracking-tight">{t.cumTitle}</h2>
-          <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--color-muted)]">
+          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
             {t.cumLead}
           </p>
 
@@ -639,7 +639,7 @@ export default async function CaseStudiesIndexPage() {
               {t.priceEstimate}
             </span>
           </div>
-          <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--color-muted)]">
+          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
             {t.priceLead}
           </p>
 
@@ -807,7 +807,7 @@ export default async function CaseStudiesIndexPage() {
           <h2 className="text-xl font-bold tracking-tight">
             {t.contributeTitle}
           </h2>
-          <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--color-muted)]">
+          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
             {t.contributeLead}
           </p>
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
