@@ -11,6 +11,7 @@ import LandingNav from "../components/landing/LandingNav";
 import {
   CASE_STUDIES,
   CONTRIBUTE_LINKS,
+  caseMonthlyProjection,
   caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
@@ -145,12 +146,12 @@ const T: Record<
       "Ritmo sostenibile: output mensile stimato ÷ giorni del mese, esclusa la sessione free-run senza monitor (troppo breve per essere rappresentativa); la quota ≥80 è evidenziata in verde vivo.",
     dashTitle: "La media, per utente",
     dashLead:
-      "I numeri distillati per un mese di abbonamento: dal ritmo giornaliero di ogni caso, proiettato su un mese — così una run breve (es. beta-3, ~5 giorni) non abbassa la media. Esclude la sessione free-run.",
+      "I numeri distillati per un mese di abbonamento: l'output di ogni caso proiettato su un mese in base al budget consumato — così una run breve non abbassa la media, né una intensiva la gonfia. Esclude il free-run.",
     dashExcellent: "match eccellenti ≥80 / giorno",
     dashCostExcellent: "costo / match eccellente ≥80",
     dashPositions: "posizioni / mese",
     dashCaption:
-      "Output giornaliero medio × giorni del mese (escluso il free-run); conteggi arrotondati, costo per match eccellente.",
+      "Proiezione a un mese in base al budget consumato da ogni run (escluso il free-run); conteggi arrotondati, costo per match eccellente.",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "📥 Contribuisci con i tuoi dati",
@@ -215,12 +216,12 @@ const T: Record<
       "Sustainable pace: estimated monthly output ÷ days in a month, excluding the unmonitored free-run session (too short to be representative); the ≥80 share is highlighted in bright green.",
     dashTitle: "On average, per user",
     dashLead:
-      "The numbers distilled for one month of subscription: from each case's daily pace, projected over a month — so a short run (e.g. beta-3, ~5 days) doesn't drag the average down. The free-run session is excluded.",
+      "The numbers distilled for one month of subscription: each case's output projected over a month based on the budget it used — so a short run doesn't drag the average down, nor an intensive one inflate it. Free-run excluded.",
     dashExcellent: "excellent ≥80 matches / day",
     dashCostExcellent: "cost / excellent ≥80 match",
     dashPositions: "positions / month",
     dashCaption:
-      "Average daily output × days in a month (free-run excluded); counts rounded, cost per excellent match.",
+      "Projected to a month from the budget each run used (free-run excluded); counts rounded, cost per excellent match.",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "📥 Contribute your data",
@@ -285,12 +286,12 @@ const T: Record<
       "Ritmo sostenible: output mensual estimado ÷ días del mes, excluida la sesión free-run sin monitor (demasiado corta para ser representativa); la cuota ≥80 está resaltada en verde vivo.",
     dashTitle: "En promedio, por usuario",
     dashLead:
-      "Los números destilados para un mes de suscripción: a partir del ritmo diario de cada caso, proyectado sobre un mes — así una ejecución corta (p. ej. beta-3, ~5 días) no baja la media. Se excluye la sesión free-run.",
+      "Los números destilados para un mes de suscripción: el output de cada caso proyectado sobre un mes según el presupuesto usado — así una ejecución corta no baja la media, ni una intensiva la infla. Free-run excluido.",
     dashExcellent: "match excelentes ≥80 / día",
     dashCostExcellent: "coste / match excelente ≥80",
     dashPositions: "posiciones / mes",
     dashCaption:
-      "Output diario medio × días del mes (free-run excluido); conteos redondeados, coste por match excelente.",
+      "Proyección a un mes según el presupuesto usado por cada ejecución (free-run excluido); conteos redondeados, coste por match excelente.",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "📥 Contribuye con tus datos",
@@ -356,12 +357,12 @@ const T: Record<
       "Rythme soutenable : output mensuel estimé ÷ jours du mois, hors session free-run sans monitor (trop courte pour être représentative) ; la part ≥80 est mise en évidence en vert vif.",
     dashTitle: "En moyenne, par utilisateur",
     dashLead:
-      "Les chiffres distillés pour un mois d'abonnement : à partir du rythme quotidien de chaque cas, projeté sur un mois — ainsi un run court (ex. beta-3, ~5 jours) ne fait pas baisser la moyenne. La session free-run est exclue.",
+      "Les chiffres distillés pour un mois d'abonnement : l'output de chaque cas projeté sur un mois selon le budget consommé — ainsi un run court ne fait pas baisser la moyenne, ni un run intensif ne la gonfle. Free-run exclu.",
     dashExcellent: "matchs excellents ≥80 / jour",
     dashCostExcellent: "coût / match excellent ≥80",
     dashPositions: "postes / mois",
     dashCaption:
-      "Output quotidien moyen × jours du mois (free-run exclu) ; comptes arrondis, coût par match excellent.",
+      "Projeté sur un mois selon le budget consommé par chaque run (free-run exclu) ; comptes arrondis, coût par match excellent.",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "📥 Contribue avec tes données",
@@ -427,12 +428,12 @@ const T: Record<
       "Nachhaltiges Tempo: geschätzter Monats-Output ÷ Tage im Monat, ohne die unüberwachte Free-Run-Session (zu kurz, um repräsentativ zu sein); der ≥80-Anteil ist in kräftigem Grün hervorgehoben.",
     dashTitle: "Im Schnitt, pro Nutzer",
     dashLead:
-      "Die Zahlen destilliert für einen Abo-Monat: aus dem Tagestempo jedes Falls, auf einen Monat projiziert — so drückt ein kurzer Lauf (z. B. beta-3, ~5 Tage) den Schnitt nicht. Die Free-Run-Session ist ausgeschlossen.",
+      "Die Zahlen destilliert für einen Abo-Monat: der Output jedes Falls auf einen Monat projiziert anhand des verbrauchten Budgets — so drückt ein kurzer Lauf den Schnitt nicht und ein intensiver bläht ihn nicht auf. Free-Run ausgeschlossen.",
     dashExcellent: "exzellente ≥80 Matches / Tag",
     dashCostExcellent: "Kosten / exzellenter ≥80 Match",
     dashPositions: "Stellen / Monat",
     dashCaption:
-      "Durchschnittlicher Tages-Output × Tage im Monat (Free-Run ausgeschlossen); Zahlen gerundet, Kosten pro exzellentem Match.",
+      "Auf einen Monat projiziert anhand des von jedem Lauf verbrauchten Budgets (Free-Run ausgeschlossen); Zahlen gerundet, Kosten pro exzellentem Match.",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "📥 Steuere deine Daten bei",
@@ -498,12 +499,12 @@ const T: Record<
       "Fenntartható tempó: becsült havi output ÷ a hónap napjai, a monitor nélküli free-run munkamenet kizárva (túl rövid ahhoz, hogy reprezentatív legyen); a ≥80 hányad élénkzölddel kiemelve.",
     dashTitle: "Átlagosan, felhasználónként",
     dashLead:
-      "A számok egy előfizetési hónapra desztillálva: minden eset napi tempójából, egy hónapra vetítve — így egy rövid futás (pl. beta-3, ~5 nap) nem húzza le az átlagot. A free-run munkamenet kizárva.",
+      "A számok egy előfizetési hónapra desztillálva: minden eset outputja egy hónapra vetítve az elhasznált budget alapján — így egy rövid futás nem húzza le az átlagot, egy intenzív pedig nem fújja fel. A free-run kizárva.",
     dashExcellent: "kiváló ≥80 találat / nap",
     dashCostExcellent: "költség / kiváló ≥80 találat",
     dashPositions: "pozíció / hó",
     dashCaption:
-      "Átlagos napi output × a hónap napjai (free-run kizárva); a számok kerekítve, költség kiváló találatonként.",
+      "Egy hónapra vetítve az egyes futások elhasznált budgetje alapján (free-run kizárva); a számok kerekítve, költség kiváló találatonként.",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "📥 Járulj hozzá az adataiddal",
@@ -568,12 +569,12 @@ const T: Record<
       "Ritmo sustentável: output mensal estimado ÷ dias do mês, excluída a sessão free-run sem monitor (demasiado curta para ser representativa); a quota ≥80 está destacada em verde vivo.",
     dashTitle: "Em média, por utilizador",
     dashLead:
-      "Os números destilados para um mês de subscrição: a partir do ritmo diário de cada caso, projetado sobre um mês — assim uma execução curta (ex. beta-3, ~5 dias) não baixa a média. A sessão free-run é excluída.",
+      "Os números destilados para um mês de subscrição: o output de cada caso projetado sobre um mês com base no orçamento usado — assim uma execução curta não baixa a média, nem uma intensiva a infla. Free-run excluído.",
     dashExcellent: "matches excelentes ≥80 / dia",
     dashCostExcellent: "custo / match excelente ≥80",
     dashPositions: "posições / mês",
     dashCaption:
-      "Output diário médio × dias do mês (free-run excluído); contagens arredondadas, custo por match excelente.",
+      "Projetado para um mês com base no orçamento usado por cada execução (free-run excluído); contagens arredondadas, custo por match excelente.",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "📥 Contribui com os teus dados",
@@ -624,24 +625,28 @@ export default async function CaseStudiesIndexPage() {
     ),
   };
 
-  // DASHBOARD unica — proiezione a un mese dal RITMO GIORNALIERO (output ÷ giorni
-  // lavorati × giorni del mese), NON dai totali: così una run breve (es. beta-3,
-  // ~5 giorni) non abbassa la media (l'abbonamento è mensile → contiamo un mese).
-  // Esclude il free-run (burst insostenibile). Conteggi arrotondati; il costo
-  // tiene i centesimi.
+  // DASHBOARD unica — proiezione a un mese in base al BUDGET consumato da ogni run
+  // (caseMonthlyProjection), NON "giorni × 30". Motivo: una run intensiva che ha
+  // bruciato ~un mese di budget in poche settimane produrrebbe una proiezione
+  // giornaliera×30 irreale (raddoppierebbe il budget); col budget-based chi ha già
+  // speso ~un mese resta ~invariato e le run brevi (es. beta-3) vengono proiettate
+  // in modo sostenibile. Esclude il free-run. Conteggi arrotondati; costo coi cent.
   const MONTH_DAYS = 30;
   const dashStudies = localized
     .filter((cs) => !cs.freeRun && cs.run.conversion)
     .map((cs) => {
-      const days = Math.max(1, caseRunInfo(cs.run, locale).days);
+      const { multiplier } = caseMonthlyProjection(
+        cs.run,
+        caseRunInfo(cs.run, locale).days,
+      );
       const c = cs.run.conversion!;
-      const excPerDay = c.strong80 / days;
+      const monthlyExc = c.strong80 * multiplier; // eccellenti ≥80 al mese
       return {
-        monthlyPositions: (c.found / days) * MONTH_DAYS,
-        excPerDay,
+        monthlyPositions: c.found * multiplier,
+        excPerDay: monthlyExc / MONTH_DAYS,
         costPerExc:
-          cs.subscription.monthlyEur != null && excPerDay > 0
-            ? cs.subscription.monthlyEur / (excPerDay * MONTH_DAYS)
+          cs.subscription.monthlyEur != null && monthlyExc > 0
+            ? cs.subscription.monthlyEur / monthlyExc
             : null,
       };
     });
