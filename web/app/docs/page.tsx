@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { getDocsNav, type DocLocale } from "./docs-nav";
-import { REPO } from "./DocKit";
+import { REPO } from "./repo";
 import { useLandingI18n } from "../components/landing/LandingI18n";
 
 const T: Record<
