@@ -11,7 +11,7 @@ JHT ordnet jede Rolle einer von **vier Stufen** zu, aufgelistet von der hoechste
 |---|---|---|---|---|---|
 | 🥇 **very smart** | 👨‍✈️ Captain | `opus-4-7` · effort `high` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Kritische, irreversible Entscheidungen — volle Reasoning-Tiefe |
 | 🥈 **expert** | 👨‍🏫 Writer · 👨‍⚖️ Critic · 🧙‍♂️ Mentor | `opus-4-7` · effort `medium` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Pattern-Matching gegen bekannte Vorlagen (CV, Blind Review, Gap-Analyse) |
-| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👨‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Recherche, Scraping, Scoring, User-Chat |
+| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👩‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Recherche, Scraping, Scoring, User-Chat |
 | 🎖️ **medium** | 💂 Sentinel | `sonnet-4-6` · effort `medium` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Leichter Watchdog — If-then-Regeln, kein tiefes Denken |
 
 **Verfuegbare Effort-Stufen (zur Referenz):**
@@ -387,12 +387,12 @@ Ausserhalb der Pipeline. Laeuft kontinuierlich parallel dazu.
                           │
             ┌─────────────┼─────────────┐
             ▼             ▼             ▼
-       👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
+       👩‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
        copilot                       (always-on)
 ```
 
-- **👨‍💼 Assistant** — `tier: smart`. Uebersetzt nicht-technische Benutzeranfragen in Befehle fuer den Captain. Verbirgt Implementierungsdetails vor dem benutzerseitigen Chat.
+- **👩‍💼 Assistant** — `tier: smart`. Uebersetzt nicht-technische Benutzeranfragen in Befehle fuer den Captain. Verbirgt Implementierungsdetails vor dem benutzerseitigen Chat.
 - **🧙‍♂️ Mentor** — `tier: expert`, **aktiv** (Grundlagen ausgeliefert, Optimierung laufend). Karriere-Coach: analysiert die Profil/Ergebnis-Luecke, erstellt einen Aktionsplan, strategische Check-ins. Benutzerorientiert always-on, beim Boot erzeugt. Ordner: `agents/mentor/`.
 
 ---
