@@ -7,6 +7,7 @@ import { CopyButton } from "../components/CopyButton";
 import {
   LandingI18nProvider,
   useLandingI18n,
+  type Lang,
 } from "../components/landing/LandingI18n";
 import LandingNav from "../components/landing/LandingNav";
 import { LandingFooter } from "../components/landing/LandingCTA";
@@ -80,6 +81,77 @@ function PlatformIcon({ id }: { id: PlatformId }) {
 
 const CLI_SETUP_CMD = `curl -fsSL https://jobhunterteam.ai/install.sh | bash`;
 
+type ReqOs = {
+  reqTitle: string;
+  reqRows: [string, string][];
+};
+
+const REQ_OS: Record<Lang, ReqOs> = {
+  it: {
+    reqTitle: "Requisiti minimi",
+    reqRows: [
+      ["Docker", "Obbligatorio — l'unica vera dipendenza"],
+      ["RAM", "4 GB minimo · 8 GB consigliati"],
+      ["CPU", "2 core minimo · 4 consigliati"],
+      ["Disco", "~35 GB liberi"],
+    ],
+  },
+  en: {
+    reqTitle: "Minimum requirements",
+    reqRows: [
+      ["Docker", "Required — the only real dependency"],
+      ["RAM", "4 GB minimum · 8 GB recommended"],
+      ["CPU", "2 cores minimum · 4 recommended"],
+      ["Disk", "~35 GB free"],
+    ],
+  },
+  es: {
+    reqTitle: "Requisitos mínimos",
+    reqRows: [
+      ["Docker", "Obligatorio — la única dependencia real"],
+      ["RAM", "4 GB mínimo · 8 GB recomendado"],
+      ["CPU", "2 núcleos mínimo · 4 recomendado"],
+      ["Disco", "~35 GB libres"],
+    ],
+  },
+  fr: {
+    reqTitle: "Configuration minimale",
+    reqRows: [
+      ["Docker", "Obligatoire — la seule vraie dépendance"],
+      ["RAM", "4 Go minimum · 8 Go recommandés"],
+      ["CPU", "2 cœurs minimum · 4 recommandés"],
+      ["Disque", "~35 Go libres"],
+    ],
+  },
+  de: {
+    reqTitle: "Mindestanforderungen",
+    reqRows: [
+      ["Docker", "Erforderlich — die einzige echte Abhängigkeit"],
+      ["RAM", "4 GB minimum · 8 GB empfohlen"],
+      ["CPU", "2 Kerne minimum · 4 empfohlen"],
+      ["Festplatte", "~35 GB frei"],
+    ],
+  },
+  pt: {
+    reqTitle: "Requisitos mínimos",
+    reqRows: [
+      ["Docker", "Obrigatório — a única dependência real"],
+      ["RAM", "4 GB mínimo · 8 GB recomendado"],
+      ["CPU", "2 núcleos mínimo · 4 recomendado"],
+      ["Disco", "~35 GB livres"],
+    ],
+  },
+  hu: {
+    reqTitle: "Minimális követelmények",
+    reqRows: [
+      ["Docker", "Kötelező — az egyetlen valódi függőség"],
+      ["RAM", "4 GB minimum · 8 GB ajánlott"],
+      ["CPU", "2 mag minimum · 4 ajánlott"],
+      ["Lemez", "~35 GB szabad hely"],
+    ],
+  },
+};
+
 function DownloadContent({
   version,
   releasesUrl,
@@ -87,11 +159,12 @@ function DownloadContent({
   others,
   releaseAvailable,
 }: DownloadClientProps) {
-  const { t } = useLandingI18n();
+  const { t, lang } = useLandingI18n();
   const [installMode, setInstallMode] = useState<InstallMode>("desktop");
   const [showOthers, setShowOthers] = useState(false);
 
   const terminalCommand = CLI_SETUP_CMD;
+  const ro = REQ_OS[(REQ_OS[lang as Lang] ? lang : "en") as Lang];
 
   return (
     <>
@@ -251,6 +324,28 @@ function DownloadContent({
               </p>
             </div>
           )}
+
+          {/* Requisiti minimi (spostati da /run) */}
+          <section className="mt-4 mb-8">
+            <h2 className="text-lg md:text-xl font-bold text-[var(--color-white)] tracking-tight mb-5">
+              {ro.reqTitle}
+            </h2>
+            <div className="flex flex-col">
+              {ro.reqRows.map(([k, v]) => (
+                <div
+                  key={k}
+                  className="flex items-baseline justify-between gap-4 py-2.5 border-b border-[var(--color-border)]"
+                >
+                  <span className="text-[12px] font-semibold tracking-wide text-[var(--color-white)]">
+                    {k}
+                  </span>
+                  <span className="text-[12px] text-[var(--color-muted)] text-right">
+                    {v}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
 
           {/* Aiuto: dove/come installarlo → guida /run */}
           <div className="mt-2 border border-[var(--color-border)] bg-[var(--color-panel)] px-4 py-3 text-center">
