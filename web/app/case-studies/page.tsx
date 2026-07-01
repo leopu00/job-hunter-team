@@ -134,13 +134,13 @@ const T: Record<
       "Più alto è il livello di qualità richiesto, più sale il costo per singolo risultato.",
     dailyTitle: "Match ad alto score al giorno",
     dailyLead:
-      "In media, quante posizioni ad alto score (≥70) ed eccellente (≥80) produce il team ogni giorno di lavoro — e come varia tra i profili.",
+      "In media, quante posizioni ad alto score (≥70) ed eccellente (≥80) produce il team al giorno — distribuendo l'output sul budget di un mese, così le run brevi che hanno bruciato una settimana di budget in pochi giorni non risultano gonfiate.",
     dailyAvgStrong: "≥70 / giorno (media)",
     dailyAvgExcellent: "≥80 / giorno (media)",
     dailyChartTitle: "Media al giorno · per profilo",
     dailyUnit: "giorno",
     dailyCaption:
-      "Media per giorno lavorato; la quota ≥80 è evidenziata in verde vivo.",
+      "Ritmo sostenibile: output mensile stimato ÷ giorni del mese; la quota ≥80 è evidenziata in verde vivo.",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "📥 Contribuisci con i tuoi dati",
@@ -195,13 +195,13 @@ const T: Record<
       "The higher the quality bar, the higher the cost per single result.",
     dailyTitle: "High-score matches per day",
     dailyLead:
-      "On average, how many high-score (≥70) and excellent (≥80) positions the team produces each working day — and how it varies across profiles.",
+      "On average, how many high-score (≥70) and excellent (≥80) positions the team produces per day — spreading the output over a month of budget, so short runs that burned a week of budget in a few days aren't inflated.",
     dailyAvgStrong: "≥70 / day (avg)",
     dailyAvgExcellent: "≥80 / day (avg)",
     dailyChartTitle: "Average per day · by profile",
     dailyUnit: "day",
     dailyCaption:
-      "Average per working day; the ≥80 share is highlighted in bright green.",
+      "Sustainable pace: estimated monthly output ÷ days in a month; the ≥80 share is highlighted in bright green.",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "📥 Contribute your data",
@@ -256,13 +256,13 @@ const T: Record<
       "Cuanto mayor es el nivel de calidad exigido, más sube el coste por resultado.",
     dailyTitle: "Match de score alto al día",
     dailyLead:
-      "De media, cuántas posiciones de score alto (≥70) y excelente (≥80) produce el equipo cada día de trabajo — y cómo varía entre perfiles.",
+      "De media, cuántas posiciones de score alto (≥70) y excelente (≥80) produce el equipo al día — repartiendo el output sobre un mes de presupuesto, para que las ejecuciones cortas que gastaron una semana de presupuesto en pocos días no salgan infladas.",
     dailyAvgStrong: "≥70 / día (media)",
     dailyAvgExcellent: "≥80 / día (media)",
     dailyChartTitle: "Media al día · por perfil",
     dailyUnit: "día",
     dailyCaption:
-      "Media por día trabajado; la cuota ≥80 está resaltada en verde vivo.",
+      "Ritmo sostenible: output mensual estimado ÷ días del mes; la cuota ≥80 está resaltada en verde vivo.",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "📥 Contribuye con tus datos",
@@ -318,13 +318,13 @@ const T: Record<
       "Plus le niveau de qualité exigé est élevé, plus le coût par résultat augmente.",
     dailyTitle: "Matchs à score élevé par jour",
     dailyLead:
-      "En moyenne, combien de postes à score élevé (≥70) et excellent (≥80) l'équipe produit chaque jour de travail — et comment cela varie selon les profils.",
+      "En moyenne, combien de postes à score élevé (≥70) et excellent (≥80) l'équipe produit par jour — en répartissant l'output sur un mois de budget, pour que les runs courts ayant consommé une semaine de budget en quelques jours ne soient pas gonflés.",
     dailyAvgStrong: "≥70 / jour (moy.)",
     dailyAvgExcellent: "≥80 / jour (moy.)",
     dailyChartTitle: "Moyenne par jour · par profil",
     dailyUnit: "jour",
     dailyCaption:
-      "Moyenne par jour travaillé ; la part ≥80 est mise en évidence en vert vif.",
+      "Rythme soutenable : output mensuel estimé ÷ jours du mois ; la part ≥80 est mise en évidence en vert vif.",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "📥 Contribue avec tes données",
@@ -380,13 +380,13 @@ const T: Record<
       "Je höher die geforderte Qualität, desto höher die Kosten pro einzelnem Ergebnis.",
     dailyTitle: "Hoch bewertete Matches pro Tag",
     dailyLead:
-      "Im Schnitt, wie viele hoch (≥70) und exzellent (≥80) bewertete Positionen das Team pro Arbeitstag produziert — und wie es je Profil variiert.",
+      "Im Schnitt, wie viele hoch (≥70) und exzellent (≥80) bewertete Positionen das Team pro Tag produziert — verteilt über einen Monat Budget, damit kurze Läufe, die eine Budgetwoche in wenigen Tagen verbraucht haben, nicht überhöht wirken.",
     dailyAvgStrong: "≥70 / Tag (Ø)",
     dailyAvgExcellent: "≥80 / Tag (Ø)",
     dailyChartTitle: "Durchschnitt pro Tag · je Profil",
     dailyUnit: "Tag",
     dailyCaption:
-      "Durchschnitt pro Arbeitstag; der ≥80-Anteil ist in kräftigem Grün hervorgehoben.",
+      "Nachhaltiges Tempo: geschätzter Monats-Output ÷ Tage im Monat; der ≥80-Anteil ist in kräftigem Grün hervorgehoben.",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "📥 Steuere deine Daten bei",
@@ -442,13 +442,13 @@ const T: Record<
       "Minél magasabb a megkövetelt minőség, annál nagyobb az egy eredményre jutó költség.",
     dailyTitle: "Magas pontszámú találatok naponta",
     dailyLead:
-      "Átlagosan hány magas (≥70) és kiváló (≥80) pontszámú pozíciót termel a csapat munkanaponta — és hogyan változik profilonként.",
+      "Átlagosan hány magas (≥70) és kiváló (≥80) pontszámú pozíciót termel a csapat naponta — az outputot egy havi budgetre elosztva, hogy a rövid futások (amelyek egy heti budgetet néhány nap alatt égettek el) ne tűnjenek felfújtnak.",
     dailyAvgStrong: "≥70 / nap (átlag)",
     dailyAvgExcellent: "≥80 / nap (átlag)",
     dailyChartTitle: "Napi átlag · profilonként",
     dailyUnit: "nap",
     dailyCaption:
-      "Átlag munkanaponként; a ≥80 hányad élénkzölddel kiemelve.",
+      "Fenntartható tempó: becsült havi output ÷ a hónap napjai; a ≥80 hányad élénkzölddel kiemelve.",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "📥 Járulj hozzá az adataiddal",
@@ -503,13 +503,13 @@ const T: Record<
       "Quanto maior o nível de qualidade exigido, maior o custo por resultado.",
     dailyTitle: "Matches de score alto por dia",
     dailyLead:
-      "Em média, quantas posições de score alto (≥70) e excelente (≥80) a equipa produz por dia de trabalho — e como varia entre perfis.",
+      "Em média, quantas posições de score alto (≥70) e excelente (≥80) a equipa produz por dia — distribuindo o output por um mês de orçamento, para que execuções curtas que gastaram uma semana de orçamento em poucos dias não fiquem infladas.",
     dailyAvgStrong: "≥70 / dia (média)",
     dailyAvgExcellent: "≥80 / dia (média)",
     dailyChartTitle: "Média por dia · por perfil",
     dailyUnit: "dia",
     dailyCaption:
-      "Média por dia trabalhado; a quota ≥80 está destacada em verde vivo.",
+      "Ritmo sustentável: output mensal estimado ÷ dias do mês; a quota ≥80 está destacada em verde vivo.",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "📥 Contribui com os teus dados",
@@ -603,22 +603,31 @@ export default async function CaseStudiesIndexPage() {
   ];
   const maxPrice = Math.max(...priceTiers.map((x) => x.v), 0.0001);
 
-  // Match ad alto score AL GIORNO: per ogni studio il tasso giornaliero medio di
-  // posizioni ≥70 (forti) e ≥80 (eccellenti); poi la media tra gli studi + il
-  // confronto per profilo. Tassi reali (conteggi giornalieri ÷ giorni), non
-  // proiezioni.
+  // Match ad alto score AL GIORNO, tasso SOSTENIBILE: NON i conteggi grezzi ÷
+  // giorni di calendario (una run breve che ha bruciato una settimana di budget
+  // in 3 giorni risulterebbe gonfiata), ma l'output mensile proiettato ÷ giorni
+  // del mese. Usa la STESSA proiezione per-budget di costo/prezzo (raw ×
+  // multiplier = output mensile; per finance, misurato, multiplier = 1).
+  const MONTH_DAYS = 30.4;
   const dailyStudies = localized
     .map((cs) => {
       const sd = cs.run.scoreDaily ?? [];
-      const days = sd.length;
+      if (sd.length === 0) return null;
+      const { multiplier } = caseMonthlyProjection(
+        cs.run,
+        caseRunInfo(cs.run, locale).days,
+      );
+      const s70 = sd.reduce((s, d) => s + d.strong70, 0);
+      const s80 = sd.reduce((s, d) => s + d.strong80, 0);
       return {
         label: `${cs.category} · ${cs.model}`,
-        r70: days ? sd.reduce((s, d) => s + d.strong70, 0) / days : 0,
-        r80: days ? sd.reduce((s, d) => s + d.strong80, 0) / days : 0,
-        has: days > 0,
+        r70: (s70 * multiplier) / MONTH_DAYS,
+        r80: (s80 * multiplier) / MONTH_DAYS,
       };
     })
-    .filter((s) => s.has);
+    .filter(
+      (s): s is { label: string; r70: number; r80: number } => s !== null,
+    );
   const dailyAvg70 = dailyStudies.length
     ? dailyStudies.reduce((s, x) => s + x.r70, 0) / dailyStudies.length
     : 0;
