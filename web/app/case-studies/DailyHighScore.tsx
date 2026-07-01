@@ -7,8 +7,13 @@
 // eccellenti/giorno. Serve a legare i GIORNI di lavoro all'OUTPUT di candidature
 // di qualità.
 
+import { useRef } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
+import {
+  TooltipLayer,
+  type TooltipHandle,
+} from "@/app/components/ChartTooltip";
 
 const LOCALE_TAG: Record<Locale, string> = {
   it: "it-IT",
@@ -117,6 +122,7 @@ export default function DailyHighScore({
   const t = T[locale];
   const tag = LOCALE_TAG[locale];
   const nf = (n: number) => n.toLocaleString(tag);
+  const tipRef = useRef<TooltipHandle>(null);
   const dayLabel = (iso: string) =>
     new Intl.DateTimeFormat(tag, {
       day: "numeric",
@@ -190,8 +196,20 @@ export default function DailyHighScore({
             return (
               <div
                 key={d.day}
-                className="flex-1 min-w-[2px] relative"
-                title={`${dayLabel(d.day)} · ${nf(d.strong70)} ≥70 · ${nf(d.strong80)} ≥80`}
+                className="flex-1 min-w-[2px] relative cursor-default"
+                onMouseEnter={(e) =>
+                  tipRef.current?.show(
+                    e.clientX,
+                    e.clientY,
+                    `${dayLabel(d.day)} · ${nf(d.strong70)} ≥70`,
+                    [
+                      { color: EXCELLENT, label: t.legendExcellent, value: nf(d.strong80) },
+                      { color: STRONG, label: t.legendStrong, value: nf(d.strong70 - d.strong80) },
+                    ],
+                  )
+                }
+                onMouseMove={(e) => tipRef.current?.move(e.clientX, e.clientY)}
+                onMouseLeave={() => tipRef.current?.hide()}
               >
                 <div
                   className="absolute bottom-0 inset-x-0 rounded-t-sm"
@@ -201,6 +219,8 @@ export default function DailyHighScore({
                   className="absolute bottom-0 inset-x-0"
                   style={{ height: `${excPct}%`, background: EXCELLENT }}
                 />
+                {/* zona hover a piena altezza: prendibile anche sopra la barra */}
+                <div className="absolute inset-0" />
               </div>
             );
           })}
@@ -214,6 +234,7 @@ export default function DailyHighScore({
           {t.caption}
         </div>
       </div>
+      <TooltipLayer ref={tipRef} />
     </>
   );
 }

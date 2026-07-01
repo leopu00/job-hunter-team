@@ -17,6 +17,7 @@ import {
 } from "@/lib/case-studies";
 import ScoreDistribution from "@/app/components/ScoreDistribution";
 import ConversionFunnelCard from "./ConversionFunnelCard";
+import DailyAvgBars from "./DailyAvgBars";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 
@@ -854,43 +855,11 @@ export default async function CaseStudiesIndexPage() {
                 </span>
               </span>
             </div>
-            <div className="flex flex-col gap-3">
-              {dailyStudies.map((s) => (
-                <div key={s.label}>
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-[11px] text-[var(--color-muted)] flex-1 truncate">
-                      {s.label}
-                    </span>
-                    <span className="text-[13px] font-bold tabular-nums text-[var(--color-base)]">
-                      {fmt1(s.r70)}
-                      <span className="text-[10px] font-normal text-[var(--color-dim)]">
-                        {" "}
-                        / {t.dailyUnit}
-                      </span>
-                    </span>
-                  </div>
-                  <div
-                    className="relative h-2 rounded-full overflow-hidden"
-                    style={{ background: "var(--color-border)" }}
-                  >
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full"
-                      style={{
-                        width: `${Math.max(2, (s.r70 / dailyMax) * 100)}%`,
-                        background: "#15803d",
-                      }}
-                    />
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full"
-                      style={{
-                        width: `${(s.r80 / dailyMax) * 100}%`,
-                        background: "#22c55e",
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <DailyAvgBars
+              bars={dailyStudies}
+              max={dailyMax}
+              unit={t.dailyUnit}
+            />
             <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)]">
               {t.dailyCaption}
             </div>
