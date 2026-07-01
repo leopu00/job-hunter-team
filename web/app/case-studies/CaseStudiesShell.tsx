@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { rememberCurrentSection } from "@/lib/case-study-scroll";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 
@@ -152,9 +153,11 @@ export default function CaseStudiesShell({
                   key={t.id}
                   href={`/case-studies/${t.id}`}
                   // Su una pagina di dettaglio (activeId presente) non riportare in
-                  // cima: così cambiando tester si resta alla stessa altezza e si
-                  // vede il grafico equivalente. Dall'indice invece si entra in cima.
+                  // cima: ricordiamo la sezione corrente e la riallineiamo sul nuovo
+                  // tester (restoreSection nel dettaglio). Dall'indice invece si entra
+                  // in cima alla pagina scelta.
                   scroll={!activeId}
+                  onClick={activeId ? rememberCurrentSection : undefined}
                   aria-current={active ? "page" : undefined}
                   className={`group flex h-full flex-col rounded-xl border ${
                     active
