@@ -7,6 +7,8 @@
 
 ---
 
+> ⚠️ **NOTA 2026-07-02 (correzione):** il punto 3 del TL;DR ("il vero motore del consumo sono i coordinatori, 42%") è un **artefatto di coast** — la finestra osservata era già in throttling/idle. La misura pulita full-history (546 betaB / 626 betaC) ribalta la tesi: i coordinatori pesano **~20% e ~uguale su Kimi e Codex** (Capitano ~13,6% su entrambi); il "70%" è coast su ENTRAMBI i modelli; il vero limite di Kimi è la **dimensione del budget** (~17× costo-per-azione in %). Vedi [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](./2026-06-29-coordinator-burn-kimi-vs-codex.md). *(I fix che ne derivarono restano validi come riduzione-costo generica, non come "cura del problema-Kimi".)*
+
 ## 🎯 TL;DR
 
 1. **Il 39%/giorno è reale** (letto dall'API Kimi, non gonfiato). A ritmo di punta la proiezione settimanale era 510–628% → il settimanale durerebbe ~2,5 giorni invece di 7.
