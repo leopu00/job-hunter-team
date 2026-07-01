@@ -71,7 +71,7 @@ Before signing up, set expectations:
 - ✅ The agent team runs end-to-end (pipeline + Assistant)
 - ✅ Web dashboard, CLI, Telegram, Desktop launcher all work
 - ✅ Claude Max x20 is rock-solid
-- ✅ macOS installer is signed + notarized (no Gatekeeper warning)
+- 🟠 macOS installer is not notarized yet — Gatekeeper shows an "unverified developer" warning at first launch; right-click the app → Open (or run `xattr -dr com.apple.quarantine <app>`) to bypass it. Notarization is planned post-launch.
 - 🟡 Kimi €40 works but token monitoring still has rough edges (see [`MONITORING.md`](../about/MONITORING.md))
 - 🟠 Onboarding wizard still has rough edges — expect to ask for help once or twice
 - 🔴 Windows / Linux installers are **not signed yet** — your OS will show a "publisher unknown" warning at first launch
