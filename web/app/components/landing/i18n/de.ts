@@ -158,7 +158,7 @@ export const de: Record<string, string> = {
   dl_copy_prompt: "Prompt kopieren",
   dl_prompt_note:
     "Der KI-Assistent braucht Zugriff auf deinen Computer — Terminal und Dateien (z. B. Claude Code, Cursor, Codex CLI).",
-  dl_help_text: "Du weißt nicht, wo oder wie du es installieren sollst?",
+  dl_help_text: "Du weißt nicht, wo du es installieren sollst?",
   dl_help_link: "Lies die Anleitung",
   dl_instructions: "Anweisungen",
   dl_close: "Schließen",

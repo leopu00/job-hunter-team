@@ -158,7 +158,7 @@ export const fr: Record<string, string> = {
   dl_copy_prompt: "Copier le prompt",
   dl_prompt_note:
     "L'assistant IA doit avoir accès à votre ordinateur — terminal et fichiers (p. ex. Claude Code, Cursor, Codex CLI).",
-  dl_help_text: "Vous ne savez pas où ni comment l'installer ?",
+  dl_help_text: "Vous ne savez pas où l'installer ?",
   dl_help_link: "Lire le guide",
   dl_instructions: "Instructions",
   dl_close: "Fermer",
