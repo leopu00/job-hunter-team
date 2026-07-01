@@ -540,8 +540,10 @@ export default async function CaseStudiesIndexPage() {
       <div aria-hidden="true" className="h-14" />
 
       {/* Indice SENZA sidebar: il menu laterale dei tester serve solo nel
-          dettaglio (/case-studies/[id]). Qui contenuto centrato a piena pagina. */}
-      <div className="mx-auto max-w-6xl px-6 sm:px-10 py-12">
+          dettaglio (/case-studies/[id]). Colonna centrata alla stessa larghezza
+          del dettaglio (max-w-5xl): il canvas è già scalato da body{zoom:1.15},
+          quindi max-w-6xl risultava troppo largo e il testo sembrava sparso. */}
+      <div className="mx-auto max-w-5xl px-6 sm:px-10 py-12">
         {/* ── Hero / cos'è ──────────────────────────────────────── */}
         <header className="mb-12">
           <span className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[var(--color-dim)]">
@@ -552,14 +554,14 @@ export default async function CaseStudiesIndexPage() {
             <span style={{ color: "#00e676" }}>{t.heroTitleEmph}</span>
             {t.heroTitlePost}
           </h1>
-          <p className="mt-5 max-w-4xl text-[15px] leading-relaxed text-[var(--color-muted)]">
+          <p className="mt-5 max-w-3xl text-[15px] leading-relaxed text-[var(--color-muted)]">
             {t.heroLeadPre}
             <strong className="text-[var(--color-white)]">
               {t.heroLeadStrong}
             </strong>
             {t.heroLeadPost}
           </p>
-          <p className="mt-2 max-w-4xl text-[12px] leading-relaxed text-[var(--color-dim)]">
+          <p className="mt-2 max-w-3xl text-[12px] leading-relaxed text-[var(--color-dim)]">
             {t.heroSub}
           </p>
         </header>
@@ -567,7 +569,7 @@ export default async function CaseStudiesIndexPage() {
         {/* ── Numeri cumulativi (tutti i case study insieme) ─────── */}
         <section className="mb-14">
           <h2 className="text-xl font-bold tracking-tight">{t.cumTitle}</h2>
-          <p className="mt-2 max-w-4xl text-[13px] leading-relaxed text-[var(--color-muted)]">
+          <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--color-muted)]">
             {t.cumLead}
           </p>
 
@@ -637,7 +639,7 @@ export default async function CaseStudiesIndexPage() {
               {t.priceEstimate}
             </span>
           </div>
-          <p className="mt-2 max-w-4xl text-[13px] leading-relaxed text-[var(--color-muted)]">
+          <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--color-muted)]">
             {t.priceLead}
           </p>
 
@@ -805,7 +807,7 @@ export default async function CaseStudiesIndexPage() {
           <h2 className="text-xl font-bold tracking-tight">
             {t.contributeTitle}
           </h2>
-          <p className="mt-2 max-w-4xl text-[13px] leading-relaxed text-[var(--color-muted)]">
+          <p className="mt-2 max-w-3xl text-[13px] leading-relaxed text-[var(--color-muted)]">
             {t.contributeLead}
           </p>
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
