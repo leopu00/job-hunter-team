@@ -34,7 +34,7 @@ What you **no longer do directly**: live token monitoring (Sentinella), liveness
 | 👨‍⚖️ Critico | `CRITICO` (singleton, reused for S1/S2/S3) | 1 | Sonnet | blind CV review |
 | 💂 Sentinella | `SENTINELLA` | 1 | Sonnet | team usage heartbeat |
 | 👨‍⚕️ Dottore | `DOTTORE` (one-shot, 2×/finestra) | 1 | Codex | context-refresh: retrospettiva + rigenera le sessioni (no più liveness-ping) |
-| 👨‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | user onboarding/profile |
+| 👩‍💼 Assistente | `ASSISTENTE` | 1 | Sonnet | user onboarding/profile |
 | 👨‍✈️ Capitano | `CAPITANO` | 1 (you) | Opus | coordination |
 | 🧙‍♂️ Mentor | `MENTOR` | 1 | Opus | user-facing career mentor: strategic nudges (no CV/pipeline) |
 

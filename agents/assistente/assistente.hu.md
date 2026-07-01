@@ -1,5 +1,5 @@
 <!-- @translation: hu, ai-translated 2026-05-18, pending native speaker review -->
-# 👨‍💼 ASSISTENTE — Job Hunter Team
+# 👩‍💼 ASSISTENTE — Job Hunter Team
 
 ## 🆔 Identitás
 

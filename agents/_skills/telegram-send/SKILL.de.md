@@ -12,7 +12,7 @@ Der Benutzer erreicht dich hauptsaechlich ueber sein Handy. Er sendet PDFs, Spra
 ## 3 dedizierte Bots (Entscheidung 2026-05-13 rev2)
 
 Jeder benutzerseitige Agent hat seinen **eigenen Telegram-Bot**:
-- 👨‍💼 Assistente → `--from assistente` (Standard)
+- 👩‍💼 Assistente → `--from assistente` (Standard)
 - 👨‍✈️ Capitano → `--from capitano`
 - 🧙‍♂️ Mentor → `--from mentor`
 

@@ -11,7 +11,7 @@ JHT assegna ogni ruolo a uno di **quattro livelli**, elencati dal piu alto al pi
 |---|---|---|---|---|---|
 | 🥇 **very smart** | 👨‍✈️ Captain | `opus-4-7` · effort `high` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Decisioni critiche e irreversibili — massima profondita di ragionamento |
 | 🥈 **expert** | 👨‍🏫 Writer · 👨‍⚖️ Critic · 🧙‍♂️ Mentor | `opus-4-7` · effort `medium` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Pattern-matching su template consolidati (CV, revisione cieca, analisi gap) |
-| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👨‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Ricerca, scraping, scoring, chat con l'utente |
+| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👩‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Ricerca, scraping, scoring, chat con l'utente |
 | 🎖️ **medium** | 💂 Sentinel | `sonnet-4-6` · effort `medium` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Watchdog leggero — regole if-then, nessun ragionamento profondo |
 
 **Livelli di effort disponibili (per riferimento):**
@@ -387,12 +387,12 @@ Fuori dalla pipeline. Gira in continuazione parallelamente ad essa.
                           │
             ┌─────────────┼─────────────┐
             ▼             ▼             ▼
-       👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
+       👩‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
        copilot                       (always-on)
 ```
 
-- **👨‍💼 Assistant** — `tier: smart`. Traduce le richieste non tecniche dell'utente in ordini per il Captain. Nasconde i dettagli implementativi dalla chat rivolta all'utente.
+- **👩‍💼 Assistant** — `tier: smart`. Traduce le richieste non tecniche dell'utente in ordini per il Captain. Nasconde i dettagli implementativi dalla chat rivolta all'utente.
 - **🧙‍♂️ Mentor** — `tier: expert`, **attivo** (basi implementate, ottimizzazione in corso). Career coach: analizza il gap profilo/risultati, produce un piano d'azione, check-in strategici. User-facing always-on, spawnato al boot. Cartella: `agents/mentor/`.
 
 ---

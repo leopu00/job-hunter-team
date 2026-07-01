@@ -12,7 +12,7 @@ L'utente ti raggiunge principalmente dal telefono. Invia PDF, note vocali, messa
 ## 3 bot dedicati (decisione 2026-05-13 rev2)
 
 Ogni agente rivolto all'utente ha il **proprio bot Telegram**:
-- 👨‍💼 Assistente → `--from assistente` (predefinito)
+- 👩‍💼 Assistente → `--from assistente` (predefinito)
 - 👨‍✈️ Capitano → `--from capitano`
 - 🧙‍♂️ Mentor → `--from mentor`
 
