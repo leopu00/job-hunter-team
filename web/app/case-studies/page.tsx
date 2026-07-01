@@ -57,6 +57,7 @@ const T: Record<
     cumLead: string;
     cumDays: string;
     cumCases: string;
+    cumPositions: string;
     cumScoreTitle: string;
     cumScoreEmpty: string;
     cumFunnelTitle: string;
@@ -90,14 +91,15 @@ const T: Record<
     positions: "posizioni",
     avgMatch: "match medio",
     strongMatch: "match forti",
-    cumTitle: "Il team su tutti i case study",
+    cumTitle: "In media, per case study",
     cumLead:
-      "I numeri messi insieme: quanto ha prodotto il team sommando tutte le run monitorate.",
-    cumDays: "giorni di lavoro",
+      "Non la somma, ma la MEDIA sui case study monitorati: cosa produce una run tipo. Le run hanno durate diverse, quindi è un valore indicativo — per dati mensili accurati servono run da un mese intero.",
+    cumDays: "giorni / studio",
     cumCases: "case study",
+    cumPositions: "posizioni / studio",
     cumScoreTitle: "Distribuzione dei match · tutti i profili",
     cumScoreEmpty: "Ancora nessuno score",
-    cumFunnelTitle: "Dal trovato al match forte · totale",
+    cumFunnelTitle: "Dal trovato al match forte · media per studio",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "📥 Contribuisci con i tuoi dati",
@@ -130,14 +132,15 @@ const T: Record<
     positions: "positions",
     avgMatch: "average match",
     strongMatch: "strong matches",
-    cumTitle: "The team across all case studies",
+    cumTitle: "On average, per case study",
     cumLead:
-      "The numbers put together: what the team produced across all monitored runs.",
-    cumDays: "working days",
+      "Not the sum, but the AVERAGE across the monitored case studies: what a typical run produces. Runs have different lengths, so it's indicative — accurate monthly figures need full-month runs.",
+    cumDays: "days / study",
     cumCases: "case studies",
+    cumPositions: "positions / study",
     cumScoreTitle: "Match distribution · all profiles",
     cumScoreEmpty: "No scores yet",
-    cumFunnelTitle: "From found to strong match · total",
+    cumFunnelTitle: "From found to strong match · average per study",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "📥 Contribute your data",
@@ -170,14 +173,15 @@ const T: Record<
     positions: "puestos",
     avgMatch: "coincidencia media",
     strongMatch: "coincidencias fuertes",
-    cumTitle: "El equipo en todos los casos de estudio",
+    cumTitle: "En promedio, por caso de estudio",
     cumLead:
-      "Los números en conjunto: lo que produjo el equipo sumando todas las ejecuciones monitorizadas.",
-    cumDays: "días de trabajo",
+      "No la suma, sino el PROMEDIO de los casos de estudio monitorizados: lo que produce una ejecución típica. Las ejecuciones tienen duraciones distintas, así que es indicativo — para datos mensuales precisos hacen falta ejecuciones de un mes completo.",
+    cumDays: "días / estudio",
     cumCases: "casos de estudio",
+    cumPositions: "posiciones / estudio",
     cumScoreTitle: "Distribución de match · todos los perfiles",
     cumScoreEmpty: "Aún no hay puntuaciones",
-    cumFunnelTitle: "De encontrada a match fuerte · total",
+    cumFunnelTitle: "De encontrada a match fuerte · promedio por estudio",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "📥 Contribuye con tus datos",
@@ -211,14 +215,15 @@ const T: Record<
     positions: "postes",
     avgMatch: "correspondance moyenne",
     strongMatch: "correspondances fortes",
-    cumTitle: "L'équipe sur toutes les études de cas",
+    cumTitle: "En moyenne, par étude de cas",
     cumLead:
-      "Les chiffres réunis : ce que l'équipe a produit sur l'ensemble des runs suivis.",
-    cumDays: "jours de travail",
+      "Non pas la somme, mais la MOYENNE sur les études de cas suivies : ce que produit un run type. Les runs ont des durées différentes, c'est donc indicatif — des chiffres mensuels précis nécessitent des runs d'un mois entier.",
+    cumDays: "jours / étude",
     cumCases: "études de cas",
+    cumPositions: "postes / étude",
     cumScoreTitle: "Distribution des matchs · tous les profils",
     cumScoreEmpty: "Pas encore de score",
-    cumFunnelTitle: "De trouvée à match fort · total",
+    cumFunnelTitle: "De trouvée à match fort · moyenne par étude",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "📥 Contribue avec tes données",
@@ -252,14 +257,15 @@ const T: Record<
     positions: "Stellen",
     avgMatch: "durchschnittlicher Match",
     strongMatch: "starke Matches",
-    cumTitle: "Das Team über alle Fallstudien",
+    cumTitle: "Im Schnitt, pro Fallstudie",
     cumLead:
-      "Die Zahlen zusammen: was das Team über alle beobachteten Läufe hinweg produziert hat.",
-    cumDays: "Arbeitstage",
+      "Nicht die Summe, sondern der DURCHSCHNITT über die beobachteten Fallstudien: was ein typischer Lauf produziert. Läufe haben unterschiedliche Längen, daher ist es indikativ — genaue Monatszahlen brauchen Läufe über einen vollen Monat.",
+    cumDays: "Tage / Studie",
     cumCases: "Fallstudien",
+    cumPositions: "Stellen / Studie",
     cumScoreTitle: "Match-Verteilung · alle Profile",
     cumScoreEmpty: "Noch keine Scores",
-    cumFunnelTitle: "Von gefunden zu starkem Match · gesamt",
+    cumFunnelTitle: "Von gefunden zu starkem Match · Schnitt pro Studie",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "📥 Steuere deine Daten bei",
@@ -293,14 +299,15 @@ const T: Record<
     positions: "pozíció",
     avgMatch: "átlagos egyezés",
     strongMatch: "erős egyezések",
-    cumTitle: "A csapat az összes esettanulmányon",
+    cumTitle: "Átlagosan, esettanulmányonként",
     cumLead:
-      "A számok együtt: mit produkált a csapat az összes megfigyelt futás összegében.",
-    cumDays: "munkanap",
+      "Nem az összeg, hanem az ÁTLAG a megfigyelt esettanulmányokon: mit produkál egy tipikus futás. A futások eltérő hosszúságúak, ezért ez irányadó — pontos havi adatokhoz teljes hónapos futások kellenek.",
+    cumDays: "nap / tanulmány",
     cumCases: "esettanulmány",
+    cumPositions: "pozíció / tanulmány",
     cumScoreTitle: "Match-eloszlás · minden profil",
     cumScoreEmpty: "Még nincs pontszám",
-    cumFunnelTitle: "A találattól az erős matchig · összesen",
+    cumFunnelTitle: "A találattól az erős matchig · átlag tanulmányonként",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "📥 Járulj hozzá az adataiddal",
@@ -333,14 +340,15 @@ const T: Record<
     positions: "posições",
     avgMatch: "correspondência média",
     strongMatch: "correspondências fortes",
-    cumTitle: "A equipa em todos os estudos de caso",
+    cumTitle: "Em média, por estudo de caso",
     cumLead:
-      "Os números em conjunto: o que a equipa produziu somando todas as execuções monitorizadas.",
-    cumDays: "dias de trabalho",
+      "Não a soma, mas a MÉDIA dos estudos de caso monitorizados: o que produz uma execução típica. As execuções têm durações diferentes, por isso é indicativo — dados mensais precisos exigem execuções de um mês inteiro.",
+    cumDays: "dias / estudo",
     cumCases: "estudos de caso",
+    cumPositions: "posições / estudo",
     cumScoreTitle: "Distribuição de match · todos os perfis",
     cumScoreEmpty: "Ainda sem pontuações",
-    cumFunnelTitle: "De encontrada a match forte · total",
+    cumFunnelTitle: "De encontrada a match forte · média por estudo",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "📥 Contribui com os teus dados",
@@ -388,6 +396,17 @@ export default async function CaseStudiesIndexPage() {
       ? Math.round(allScores.reduce((s, n) => s + n, 0) / allScores.length)
       : 0,
   };
+  // MEDIA per case study (una run tipo), non la somma: le run hanno durate
+  // diverse quindi è indicativo — per dati mensili accurati servono run da un
+  // mese intero (vedi beta tester 2 · finance, ~26 giorni).
+  const nStudies = Math.max(1, cum.cases);
+  const per = {
+    positions: Math.round(cum.positions / nStudies),
+    scored: Math.round(cum.scored / nStudies),
+    strong70: Math.round(cum.strong70 / nStudies),
+    strong80: Math.round(cum.strong80 / nStudies),
+    days: Math.round(cum.days / nStudies),
+  };
 
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
@@ -432,9 +451,9 @@ export default async function CaseStudiesIndexPage() {
           <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
               { v: nf(cum.cases), l: t.cumCases, c: "var(--color-white)" },
-              { v: nf(cum.positions), l: t.positions, c: "var(--color-blue)" },
+              { v: nf(per.positions), l: t.cumPositions, c: "var(--color-blue)" },
               { v: nf(cum.avg), l: t.avgMatch, c: "#00e676" },
-              { v: nf(cum.days), l: t.cumDays, c: "var(--color-white)" },
+              { v: nf(per.days), l: t.cumDays, c: "var(--color-white)" },
             ].map((k) => (
               <div
                 key={k.l}
@@ -461,10 +480,10 @@ export default async function CaseStudiesIndexPage() {
               </div>
               <div className="flex-1">
                 <ConversionFunnelCard
-                  found={cum.positions}
-                  scored={cum.scored}
-                  strong70={cum.strong70}
-                  strong80={cum.strong80}
+                  found={per.positions}
+                  scored={per.scored}
+                  strong70={per.strong70}
+                  strong80={per.strong80}
                 />
               </div>
             </div>
