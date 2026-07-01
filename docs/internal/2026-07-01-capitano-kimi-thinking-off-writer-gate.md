@@ -10,7 +10,7 @@
 
 ## 1. Contesto
 
-Il 2026-06-30 (coordinator-burn remediation, fix #5) abbiamo spento il "thinking" di K2.7-Code **solo per i coordinatori** (Capitano + Sentinella), perché la catena di reasoning è fatturata come output e i coordinatori Kimi costavano ~7-12× un tick di Codex a ri-deliberare "resto in coast" (vedi `2026-06-29-coordinator-burn-kimi-vs-codex.md`). I worker e gli user-facing lo tenevano ON.
+Il 2026-06-30 (coordinator-burn remediation, fix #5) abbiamo spento il "thinking" di K2.7-Code **solo per i coordinatori** (Capitano + Sentinella), perché la catena di reasoning è fatturata come output. *(All'epoca si riteneva che i coordinatori Kimi costassero molto più di Codex; **stima poi corretta** dalla misura pulita full-history del 2026-07-02, che mostra quote coordinatori ~uguali tra i due modelli — vedi `2026-06-29-coordinator-burn-kimi-vs-codex.md`.)* I worker e gli user-facing tenevano il thinking ON.
 
 Config: `.launcher/start-agent.sh`, ramo provider `kimi`:
 ```sh

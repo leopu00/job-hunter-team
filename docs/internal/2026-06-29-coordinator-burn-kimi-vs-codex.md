@@ -1,47 +1,73 @@
-# Coordinator-burn su Kimi — analisi consolidata (Kimi vs Codex)
+# Coordinator-burn Kimi vs Codex — analisi consolidata
 
-> **Ultimo aggiornamento: 2026-07-01.** Documento canonico consolidato: unisce la misura
-> di coordinator-burn (2026-06-29) e l'incidente writer-gate (2026-07-01) in una sola
-> narrazione + decisione + stato. Il **dettaglio forense** dell'incidente resta in
+> **Ultimo aggiornamento: 2026-07-02** — ⚠️ **REVISIONE IMPORTANTE.** La misura pulita
+> su tutto lo storico (tutti i tick pacing parsati) **ribalta la tesi originale**: i
+> coordinatori NON pesano più su Kimi che su Codex. Vedi *Misura pulita*. Le sezioni
+> "vecchie" restano per traccia ma sono superate dove indicato. Dettaglio forense
+> dell'incidente writer-gate in
 > [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](./2026-07-01-capitano-kimi-thinking-off-writer-gate.md).
 
-## TL;DR
+## TL;DR (corretto)
 
-Sui team **Kimi** i due coordinatori (Capitano + Sentinella) si mangiano una **quota
-dominante** del budget settimanale — molto più che su **Codex** — perché K2.7-Code ragiona
-in catene verbose (fatturate come output) anche per decisioni banali. Non è il design del
-team: è il **modello**. Leva scoperta: la CLI Kimi espone `--thinking / --no-thinking`.
+- **I coordinatori (Capitano+Sentinella) pesano ~UGUALE su Kimi e Codex**: ~**20% del
+  budget** su entrambi, misurato su tutto lo storico (Capitano ~13,6% su entrambi,
+  identico). **Non è un difetto di Kimi.**
+- La vecchia lettura **"Kimi 76% vs Codex 20%" era un confronto di FASI sbagliato**: una
+  finestra *coast* (team idle) di Kimi contro una finestra *attiva* di Codex. A parità di
+  fase sono uguali.
+- Il **"monitoraggio >70%" è reale ma vale per ENTRAMBI**, e solo in **coast**: quando i
+  worker sono fermi i coordinatori sono ~95% del (poco) budget bruciato — è fisico, non
+  dipende dal modello.
+- **Il vero problema di Kimi è la dimensione del budget**: servono ~20 kT per muovere 1%
+  di settimanale su Kimi contro ~340 kT/1% su Codex → **ogni azione costa ~17× di più in
+  percentuale**. Il costo per-tick in token è simile; è il budget che è ~17× più piccolo.
+- La decisione sui flag thinking (Sentinella `--no-thinking`, Capitano `--thinking ON`)
+  **resta valida** (per correttezza, non per il burn), ma attacca una quota ~20% =
+  **leva secondaria**, non il "70%".
 
-**Stato attuale** (deploy `13057f2a`):
-- **Sentinella → `--no-thinking`**: compito stretto (watchdog di soglie sopra il bridge
-  deterministico); netto calo di spesa senza degrado decisionale osservato.
-- **Capitano → `--thinking ON`**: a thinking-OFF ha invertito il gate writer-on-demand e
-  ordinato CV non richiesti (vedi sotto) → il ragionamento gli è **necessario**.
+## Misura pulita (2026-07-02) — la fonte di verità
 
-> ⚠️ **La distribuzione del budget del Capitano NON è ancora un dato stabile.** Le misure
-> fatte finora sono *snapshot* di singole finestre e non vanno lette come "il prezzo".
-> Dopo le nuove implementazioni va **ri-caratterizzata su una finestra lunga** prima di
-> trarne conclusioni o cifre di riferimento. Vedi *Stato / da monitorare*.
+Aggregando **tutti** i tick pacing dal `bridge-mailbox.jsonl` (546 betaB / 626 betaC,
+maggio→luglio), quota-coordinatori (cap+sent kT / tot kT del team) **per settimana**:
 
-## Il fenomeno (qualitativo)
+```
+              W24    W25    W26    W27      STORICO (tutto)
+Kimi (betaB)  25,9%  25,0%  33,8%  35,5%    20,2%  (cap 13,6 + sent 6,5)
+Codex(betaC) 24,3%  19,2%  20,8%  27,8%    19,2%  (cap 13,6 + sent 5,6)
+```
 
-- Su **Kimi** i coordinatori dominano il budget; su **Codex** il grosso va al lavoro utile
-  (scout/analista/scorer). Stesso prompt, stessa architettura → la differenza è il modello:
-  Sentinella/Capitano su Codex sono asciutti, su Kimi deliberano in monologhi lunghi anche
-  prima di un'azione banale.
-- Un tick di solo-coordinamento (ogni 15 min) su Kimi costa **parecchie volte** più che su
-  Codex. In fase **COAST** (worker idle) diventa idle-burn puro: budget che sale senza che
-  nessuno lavori.
-- **Anti-pattern del pacing (da correggere):** il verdetto del bridge indica come
-  `top consumer` un worker *throttlabile* (es. l'analista) e ordina di frenarlo, mentre il
-  vero hog è il **coordinatore** (Capitano/Sentinella), che `throttle-config.py` non può
-  frenare → si rallenta il lavoro utile mentre i veri consumatori restano.
+- **Storico ~uguale**: 20,2% vs 19,2%. Capitano **13,6% su entrambi**.
+- **Trend in leggera salita su ENTRAMBI** (Kimi 26→35%, Codex 24→28%): NON è un
+  peggioramento dei coordinatori, è che i **dataset maturano** (betaB ha ~1100 posizioni,
+  Scout spesso esausto) → i worker fanno meno → i coordinatori pesano di più *in
+  proporzione*. Stesso effetto su Codex.
+- **Finestre coast (worker ≈ 0)**: coordinatori **~95% su entrambi** (Kimi 96–98%, Codex
+  91–99%). È qui che nasce il "70%", ed è model-independent.
+- **Costo per-tick simile** tra i modelli (~35–55 kT Kimi, ~27–78 kT Codex). La differenza
+  vera è la conversione in %-budget (vedi sotto).
 
-*(Le misure granulari originali — kT/tick e share per-agente del 2026-06-29 — erano snapshot
-di finestra e NON sono riportate qui come cifre di riferimento; la procedura per ri-misurarle
-è in "Metodo". La versione con le tabelle numeriche resta nella git history.)*
+Grafico: `docs/internal/assets/2026-07-02-coord-weekly.svg` (se presente) o rigenerabile
+col *Metodo*.
 
-## Cosa abbiamo provato — evoluzione della decisione
+## Il vero problema di Kimi: dimensione del budget (non il monitoraggio)
+
+Dai tick: **ratio ~20 kT/% su Kimi vs ~340 kT/% su Codex**. Cioè lo stesso lavoro (stesso
+numero di token) mangia **~17× più budget settimanale in percentuale** su Kimi. Il
+settimanale di Kimi è piccolo in token: si esaurisce prima **a parità di lavoro**, e questo
+fa *sembrare* che "il monitoraggio lo mangi" — quando in realtà è **tutto il team** a
+costare tanto in %. Questa, non la quota coordinatori, è la leva strutturale per la scelta
+modello/beta.
+
+## ~~Il fenomeno (vecchia lettura, SUPERATA)~~
+
+> ⚠️ Superata dalla *Misura pulita*. Si era osservato che "su Kimi i coordinatori dominano
+> il budget molto più che su Codex" e "un tick di coordinamento costa 7–12× più". Errore di
+> metodo: le due misure confrontavano fasi diverse (coast Kimi vs attivo Codex) e finestre
+> singole. Resta valido solo l'**anti-pattern del pacing**: il verdetto indica come
+> `top consumer` un worker throttlabile mentre in coast il vero hog è il coordinatore (non
+> throttlabile) → segnale fuorviante da correggere.
+
+## Cosa abbiamo provato — evoluzione della decisione thinking
 
 | commit | cambiamento |
 |---|---|
@@ -53,63 +79,55 @@ di finestra e NON sono riportate qui come cifre di riferimento; la procedura per
 
 Prova sul campo su **beta-3** (betaD, Kimi): col Capitano a thinking-OFF ha **invertito la
 regola C-10** (writer-on-demand), mis-citando il prompt dello Scrittore *("il filtro è
-score≥50, non `write_requested`")*, e ha ordinato la scrittura di **~30 CV+CL che nessun
-utente aveva richiesto**, spingendo il team in `SOPRA-PACE-WEEKLY` su lavoro fantasma. Il
-prompt del Capitano vietava esattamente questo in più punti (C-10, anti-pattern V6,
-"notifica l'utente, non auto-promuovere"): a **thinking spento** Kimi collassa su una
-scorciatoia plausibile-ma-sbagliata, senza la catena che l'avrebbe corretta. Sui **modelli
-forti** lo stesso gate regge (betaC/Codex rifiuta correttamente lo Scrittore senza
-`write_requested`).
+score≥50, non `write_requested`")*, e ha ordinato **~30 CV+CL che nessun utente aveva
+richiesto**, spingendo il team in `SOPRA-PACE-WEEKLY` su lavoro fantasma. A **thinking
+spento** Kimi collassa su una scorciatoia plausibile-ma-sbagliata; su **modelli forti** lo
+stesso gate regge (betaC/Codex rifiuta correttamente). ➡️ **Su Kimi il Capitano NON può
+girare a thinking-OFF.** Dettaglio (timeline, DB, regole violate) nell'annex forense.
 
-➡️ **Il coordinamento è un compito di ragionamento: su Kimi il Capitano NON può girare a
-thinking-OFF.** Timeline, stato DB, regole violate e costo puntuale nell'annex forense.
-
-*(Nota: quei ~30 CV non richiesti sono lo stesso over-burn che ha poi fatto scattare il
-daily hard-stop su beta-3 — vedi [`2026-07-01-betaD-daily-hardstop-validated.md`](./2026-07-01-betaD-daily-hardstop-validated.md).)*
+*(Nota: quei ~30 CV non richiesti sono lo stesso over-burn che ha fatto scattare il daily
+hard-stop su beta-3 — vedi [`2026-07-01-betaD-daily-hardstop-validated.md`](./2026-07-01-betaD-daily-hardstop-validated.md).)*
+NB: questa scelta è di **correttezza**, non di burn — attacca una quota ~20%, non un 70%.
 
 ## La Sentinella resta no-thinking
 
-Compito più stretto e meno esposto a errori di deliberazione strutturale. Il flag ha ridotto
-nettamente la sua spesa **senza degrado decisionale osservato** (in test ha gestito incidenti
-reali — worker zombie/CPU, conflitto bridge-vs-Capitano — applicando la gerarchia "io
-consiglio, lui decide" senza mai essere corretta dal Capitano). Il ragionamento resta
-**visibile** nella risposta (Instant mode) → auditabile. Da confermare che regga sul lungo.
+Compito più stretto (watchdog di soglie), meno esposto a errori di deliberazione. Il flag ha
+ridotto nettamente la sua spesa senza degrado decisionale osservato; il ragionamento resta
+visibile nella risposta (Instant mode) → auditabile. Da confermare sul lungo.
 
-## Stato / da monitorare (il punto aperto)
+## Stato / da monitorare
 
-Con le nuove implementazioni deployate (`13057f2a`: Capitano thinking-ON + heartbeat-bridge +
-daily hard-stop), la priorità è **caratterizzare su una finestra LUNGA come si distribuisce
-davvero il budget del Capitano** — non da singoli snapshot. Solo dopo ha senso decidere se
-serve un'altra leva. Candidate (se il costo del Capitano resta alto):
-
-1. **Tick coordinatori meno frequenti in COAST** — a worker idle non serve ri-deliberare ogni 15 min.
-2. **`top-consumer` del pacing capace di nominare anche i coordinatori** (oggi punta solo ai
-   worker throttlabili → segnale fuorviante).
-3. **Deliberazioni del Capitano più corte** (via prompt), senza spegnere il thinking.
+- La quota coordinatori (~20% storico, in salita ~28–35% per maturazione dataset) è ormai
+  un dato **stabile e misurabile** su entrambi i modelli — non più uno snapshot volatile.
+- Le migliorie Kimi (Sentinella no-thinking dal 30/6, Capitano auto-throttle osservato 1/7)
+  sono **recenti**: rimisurare la quota tra qualche settimana per vedere se l'auto-throttle
+  del Capitano abbassa la sua fetta.
+- Leve residue (per abbassare comunque il ~20%): **tick coordinatori meno frequenti in
+  COAST**; **`top-consumer` del pacing capace di nominare i coordinatori** (oggi solo worker).
+- Leva strutturale (la più impattante): il **costo-per-azione in %-budget su Kimi (~17×)** —
+  è questo, non il monitoraggio, il criterio per la decisione beta.
 
 ## Le manopole nel codice (`.launcher/start-agent.sh`, ramo `kimi`)
 
 - `THINKING_FLAG`: oggi `sentinella) --no-thinking`; il Capitano **non** è nella lista →
   thinking ON. Indicatore live nella pane Kimi: **`○` = OFF** (Instant mode), **`●` = ON**.
-- Kimi non riceve l'`effort` calcolato (solo `--max-steps-per-turn 100`, guardia anti
-  rabbit-hole): l'unica manopola di verbosità è `--thinking / --no-thinking`.
-- Codex: `-c model_reasoning_effort=$effort` (coordinatori forzati a `high`, restano comunque
-  asciutti → la differenza con Kimi è il **modello**, non il setting).
-
-## Evidenza esterna (letteratura K2, sintesi qualitativa)
-
-Moonshot stessa ha ridotto i thinking-token in K2.7-Code per combattere l'**overthinking**;
-analisi indipendenti raccomandano di **disabilitare il thinking** per task
-semplici/classificazione (dove "wrappa un fix banale in un rework architetturale"). Il flag
-CLI `--no-thinking` funziona (commuta in "Instant mode") — verificato sul campo, indipendente
-dall'articolo che lo dà per "non disattivabile" (vale per l'API, non per la CLI).
+- Kimi non riceve l'`effort` (solo `--max-steps-per-turn 100`): unica manopola di verbosità
+  è `--thinking / --no-thinking`.
+- Codex: `-c model_reasoning_effort=$effort` (coordinatori a `high`).
 
 ## Metodo (riproducibile, sola lettura)
 
-- `agent-usage-table.json` = serie kT/agente per bucket 5m, finestra 2h (la fonte).
-- `pacing-bridge-state.json` = `last_report.agents[].kt/share` per il tick 15m.
-- Pane: `docker exec jht tmux capture-pane -t SENTINELLA|CAPITANO -p -S -260`.
-- DB aperto `mode=ro`; nessun intervento sui team (osservazione).
+- **Fonte primaria** (quella corretta, full-history): i messaggi `kind=tick` in
+  `bridge-mailbox.jsonl` contengono il breakdown per-agente `nome=…%/h [NkT/Xm …]`.
+  Regex `([A-Za-z][\w-]*)=[\d.]+%/h \[([\d.]+)kT/\d+m` — nota `\d+m` (il formato vecchio
+  usa finestre variabili `11m`, non solo `15m`: la regex fissa su `15m` perdeva metà storico).
+  Somma per-agente per settimana → quota = (capitano+sentinella)/totale.
+- `agent-usage-table.json` = serie kT/agente per bucket 5m su finestra 2h (solo recente).
+- `pacing-bridge-state.json` = `last_report.agents[].kt/share` per l'ultimo tick.
+- Caveat: i tick coprono le finestre con breakdown; le finestre `skip` (insufficient_samples,
+  spesso idle) non sono attribuite → la quota "vera" a team molto idle è un po' più alta, ma
+  il **confronto Kimi vs Codex resta valido** (stesso bias su entrambi).
+- Nessun intervento sui team (osservazione, DB `mode=ro`).
 
 ## Correlati
 
