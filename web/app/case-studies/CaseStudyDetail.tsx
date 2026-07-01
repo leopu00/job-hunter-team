@@ -471,6 +471,7 @@ export default function CaseStudyDetail({
                     <Link
                       key={c.id}
                       href={`/case-studies/${c.id}`}
+                      scroll={false}
                       onClick={() => setMenuOpen(false)}
                       className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 no-underline transition-colors hover:bg-[var(--color-bg)]"
                       style={{
