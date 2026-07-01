@@ -2,20 +2,20 @@
   "source": "betaC-codex",
   "tsRange": [
     "2026-06-03 13:43:14",
-    "2026-07-01 15:50:32"
+    "2026-07-01 16:22:49"
   ],
   "totals": {
-    "positions": 646,
-    "scored": 444,
-    "excluded": 200
+    "positions": 649,
+    "scored": 448,
+    "excluded": 201
   },
   "match": {
-    "scored": 509,
-    "avg": 70.9,
+    "scored": 513,
+    "avg": 71.0,
     "min": 27,
     "max": 94,
-    "strong70": 299,
-    "strong80": 164,
+    "strong70": 303,
+    "strong80": 166,
     "buckets": [
       {
         "label": "0-39",
@@ -31,18 +31,18 @@
       },
       {
         "label": "70-79",
-        "n": 135
+        "n": 137
       },
       {
         "label": "80-100",
-        "n": 164
+        "n": 166
       }
     ],
     "composition": [
       {
         "key": "stack",
         "label": "Competenze",
-        "avg": 21.5
+        "avg": 21.6
       },
       {
         "key": "exp",
@@ -361,6 +361,7 @@
       76,
       76,
       76,
+      76,
       77,
       77,
       77,
@@ -400,6 +401,7 @@
       78,
       78,
       78,
+      79,
       79,
       79,
       79,
@@ -524,6 +526,7 @@
       86,
       86,
       86,
+      86,
       87,
       87,
       87,
@@ -541,6 +544,7 @@
       87,
       87,
       87,
+      88,
       88,
       88,
       88,
@@ -580,9 +584,9 @@
   "categories": [
     {
       "name": "Private Equity & Venture Capital",
-      "count": 95,
-      "scored": 73,
-      "avg": 76.7
+      "count": 98,
+      "scored": 76,
+      "avg": 77.0
     },
     {
       "name": "Corporate Finance / FP&A",
@@ -605,7 +609,7 @@
     {
       "name": "Infrastructure / Real Assets Investment",
       "count": 61,
-      "scored": 52,
+      "scored": 53,
       "avg": 79.1
     },
     {
@@ -702,7 +706,7 @@
     },
     {
       "name": "Altre",
-      "count": 129
+      "count": 132
     }
   ],
   "sourcesDaily": [
@@ -935,7 +939,7 @@
       "counts": {
         "linkedin": 1,
         "lever": 1,
-        "Altre": 3
+        "Altre": 6
       }
     }
   ],
@@ -1173,7 +1177,8 @@
       "day": "2026-07-01",
       "score": {
         "linkedin": 78.0,
-        "lever": 59.0
+        "lever": 59.0,
+        "Altre": 82.2
       }
     }
   ],
@@ -1195,8 +1200,8 @@
     },
     {
       "name": "Altre",
-      "avg": 73.2,
-      "n": 138
+      "avg": 73.4,
+      "n": 142
     },
     {
       "name": "company-careers",
@@ -1263,12 +1268,12 @@
     {
       "name": "Netherlands",
       "code": "NL",
-      "count": 23
+      "count": 24
     },
     {
       "name": "Austria",
       "code": "AT",
-      "count": 19
+      "count": 20
     },
     {
       "name": "France",
@@ -1582,9 +1587,9 @@
     }
   ],
   "salary": {
-    "n": 41,
-    "avgMin": 43507,
-    "avgMax": 56985
+    "n": 43,
+    "avgMin": 44041,
+    "avgMax": 57707
   },
   "agents": [
     "analista-1",
@@ -11006,6 +11011,56 @@
       "ts": "2026-07-01T15:50:32Z",
       "agent": "analista-5",
       "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T15:54:28Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T16:00:46Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T16:02:59Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T16:05:07Z",
+      "agent": "analista-5",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T16:08:16Z",
+      "agent": "scorer-1",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T16:10:43Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T16:13:29Z",
+      "agent": "analista-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T16:16:06Z",
+      "agent": "scout-3",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T16:20:43Z",
+      "agent": "analista-5",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T16:22:49Z",
+      "agent": "scorer-1",
+      "action": "scored"
     }
   ],
   "hourly": [
@@ -13000,9 +13055,19 @@
       "hour": "2026-07-01T15",
       "counts": {
         "scout": 3,
-        "analista": 3
+        "analista": 3,
+        "scorer": 1
       },
       "cum": 29
+    },
+    {
+      "hour": "2026-07-01T16",
+      "counts": {
+        "scorer": 3,
+        "scout": 3,
+        "analista": 3
+      },
+      "cum": 32
     }
   ],
   "funnelDaily": [
@@ -13208,26 +13273,184 @@
     },
     {
       "day": "2026-07-01",
-      "found": 5,
-      "excluded": 1,
-      "kept": 4,
-      "scored": 2,
+      "found": 8,
+      "excluded": 2,
+      "kept": 6,
+      "scored": 6,
       "ready": 0
     }
   ],
   "funnelTotals": {
-    "found": 646,
-    "excluded": 200,
-    "kept": 446,
-    "scored": 444,
+    "found": 649,
+    "excluded": 201,
+    "kept": 448,
+    "scored": 448,
     "ready": 0
   },
   "conversion": {
-    "found": 646,
-    "scored": 509,
-    "strong70": 299,
-    "strong80": 164
+    "found": 649,
+    "scored": 513,
+    "strong70": 303,
+    "strong80": 166
   },
+  "scoreDaily": [
+    {
+      "day": "2026-06-03",
+      "scored": 22,
+      "strong70": 20,
+      "strong80": 17
+    },
+    {
+      "day": "2026-06-04",
+      "scored": 49,
+      "strong70": 39,
+      "strong80": 23
+    },
+    {
+      "day": "2026-06-05",
+      "scored": 46,
+      "strong70": 20,
+      "strong80": 11
+    },
+    {
+      "day": "2026-06-06",
+      "scored": 24,
+      "strong70": 15,
+      "strong80": 5
+    },
+    {
+      "day": "2026-06-07",
+      "scored": 32,
+      "strong70": 17,
+      "strong80": 8
+    },
+    {
+      "day": "2026-06-11",
+      "scored": 16,
+      "strong70": 6,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-12",
+      "scored": 5,
+      "strong70": 3,
+      "strong80": 1
+    },
+    {
+      "day": "2026-06-13",
+      "scored": 19,
+      "strong70": 7,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-14",
+      "scored": 17,
+      "strong70": 11,
+      "strong80": 8
+    },
+    {
+      "day": "2026-06-15",
+      "scored": 24,
+      "strong70": 12,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-16",
+      "scored": 21,
+      "strong70": 10,
+      "strong80": 3
+    },
+    {
+      "day": "2026-06-17",
+      "scored": 12,
+      "strong70": 4,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-18",
+      "scored": 15,
+      "strong70": 5,
+      "strong80": 3
+    },
+    {
+      "day": "2026-06-19",
+      "scored": 9,
+      "strong70": 6,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-20",
+      "scored": 13,
+      "strong70": 4,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-21",
+      "scored": 15,
+      "strong70": 10,
+      "strong80": 7
+    },
+    {
+      "day": "2026-06-22",
+      "scored": 12,
+      "strong70": 9,
+      "strong80": 7
+    },
+    {
+      "day": "2026-06-23",
+      "scored": 23,
+      "strong70": 12,
+      "strong80": 6
+    },
+    {
+      "day": "2026-06-24",
+      "scored": 12,
+      "strong70": 8,
+      "strong80": 5
+    },
+    {
+      "day": "2026-06-25",
+      "scored": 24,
+      "strong70": 14,
+      "strong80": 7
+    },
+    {
+      "day": "2026-06-26",
+      "scored": 37,
+      "strong70": 19,
+      "strong80": 8
+    },
+    {
+      "day": "2026-06-27",
+      "scored": 23,
+      "strong70": 16,
+      "strong80": 9
+    },
+    {
+      "day": "2026-06-28",
+      "scored": 14,
+      "strong70": 14,
+      "strong80": 7
+    },
+    {
+      "day": "2026-06-29",
+      "scored": 12,
+      "strong70": 8,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-30",
+      "scored": 11,
+      "strong70": 9,
+      "strong80": 9
+    },
+    {
+      "day": "2026-07-01",
+      "scored": 6,
+      "strong70": 5,
+      "strong80": 2
+    }
+  ],
   "usage": {
     "provider": "codex",
     "unit": "weekly_budget_pct",
@@ -13396,8 +13619,8 @@
       },
       {
         "day": "2026-07-01",
-        "pct": 7,
-        "cum": 29,
+        "pct": 11,
+        "cum": 33,
         "week": "2026-06-29"
       }
     ],

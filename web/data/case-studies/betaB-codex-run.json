@@ -5780,6 +5780,26 @@
     "strong70": 82,
     "strong80": 31
   },
+  "scoreDaily": [
+    {
+      "day": "2026-05-19",
+      "scored": 24,
+      "strong70": 12,
+      "strong80": 5
+    },
+    {
+      "day": "2026-05-20",
+      "scored": 156,
+      "strong70": 70,
+      "strong80": 26
+    },
+    {
+      "day": "2026-05-21",
+      "scored": 3,
+      "strong70": 0,
+      "strong80": 0
+    }
+  ],
   "usage": {
     "provider": "codex",
     "unit": "weekly_budget_pct",

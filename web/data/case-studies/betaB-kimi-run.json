@@ -2,12 +2,12 @@
   "source": "betaB-kimi",
   "tsRange": [
     "2026-06-13 03:32:51",
-    "2026-06-30 22:13:14"
+    "2026-07-01 18:39:43"
   ],
   "totals": {
-    "positions": 903,
+    "positions": 909,
     "scored": 392,
-    "excluded": 510
+    "excluded": 513
   },
   "match": {
     "scored": 404,
@@ -475,7 +475,7 @@
   "categories": [
     {
       "name": "Technical Writing / Hardware, Industrial & Manufacturing",
-      "count": 122,
+      "count": 124,
       "scored": 59,
       "avg": 65.1
     },
@@ -493,7 +493,7 @@
     },
     {
       "name": "Content & UX Writing",
-      "count": 75,
+      "count": 77,
       "scored": 30,
       "avg": 53.6
     },
@@ -529,13 +529,13 @@
     },
     {
       "name": "Other",
-      "count": 36,
+      "count": 37,
       "scored": 7,
       "avg": 52.4
     },
     {
       "name": "Technical Writing / Medical, Scientific & Regulatory",
-      "count": 31,
+      "count": 33,
       "scored": 6,
       "avg": 55.3
     },
@@ -600,12 +600,6 @@
       "avg": null
     },
     {
-      "name": "Non categorizzato",
-      "count": 4,
-      "scored": 0,
-      "avg": null
-    },
-    {
       "name": "Retail / Operations",
       "count": 4,
       "scored": 0,
@@ -637,6 +631,12 @@
     },
     {
       "name": "Localization / Content Operations",
+      "count": 3,
+      "scored": 0,
+      "avg": null
+    },
+    {
+      "name": "Non categorizzato",
       "count": 3,
       "scored": 0,
       "avg": null
@@ -789,7 +789,7 @@
   "sources": [
     {
       "name": "linkedin",
-      "count": 756
+      "count": 762
     },
     {
       "name": "linkedin-guest",
@@ -955,6 +955,12 @@
       "counts": {
         "linkedin-guest": 11,
         "Altre": 1
+      }
+    },
+    {
+      "day": "2026-07-01",
+      "counts": {
+        "linkedin": 6
       }
     }
   ],
@@ -1131,7 +1137,7 @@
     {
       "name": "Italy",
       "code": "IT",
-      "count": 97
+      "count": 100
     },
     {
       "name": "Hungary",
@@ -1551,9 +1557,9 @@
     }
   ],
   "salary": {
-    "n": 57,
-    "avgMin": 32320,
-    "avgMax": 41388
+    "n": 59,
+    "avgMin": 32275,
+    "avgMax": 41341
   },
   "agents": [
     "analista-1",
@@ -13471,6 +13477,71 @@
       "ts": "2026-06-30T22:13:14Z",
       "agent": "scorer-6",
       "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T18:22:31Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:23:06Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:23:19Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:23:36Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:27:30Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T18:29:19Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:30:21Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T18:31:09Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T18:31:54Z",
+      "agent": "scout-4",
+      "action": "new"
+    },
+    {
+      "ts": "2026-07-01T18:32:01Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T18:32:54Z",
+      "agent": "analista-2",
+      "action": "checked"
+    },
+    {
+      "ts": "2026-07-01T18:39:08Z",
+      "agent": "analista-2",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T18:39:43Z",
+      "agent": "analista-2",
+      "action": "excluded"
     }
   ],
   "hourly": [
@@ -14428,6 +14499,14 @@
         "scorer": 1
       },
       "cum": 56
+    },
+    {
+      "hour": "2026-07-01T18",
+      "counts": {
+        "scout": 6,
+        "analista": 7
+      },
+      "cum": 62
     }
   ],
   "funnelDaily": [
@@ -14538,25 +14617,119 @@
     {
       "day": "2026-06-30",
       "found": 12,
-      "excluded": 4,
-      "kept": 8,
+      "excluded": 5,
+      "kept": 7,
       "scored": 7,
+      "ready": 0
+    },
+    {
+      "day": "2026-07-01",
+      "found": 6,
+      "excluded": 2,
+      "kept": 4,
+      "scored": 0,
       "ready": 0
     }
   ],
   "funnelTotals": {
-    "found": 903,
-    "excluded": 510,
-    "kept": 393,
+    "found": 909,
+    "excluded": 513,
+    "kept": 396,
     "scored": 392,
     "ready": 0
   },
   "conversion": {
-    "found": 903,
+    "found": 909,
     "scored": 404,
     "strong70": 96,
     "strong80": 28
   },
+  "scoreDaily": [
+    {
+      "day": "2026-06-13",
+      "scored": 79,
+      "strong70": 10,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-14",
+      "scored": 27,
+      "strong70": 6,
+      "strong80": 1
+    },
+    {
+      "day": "2026-06-15",
+      "scored": 41,
+      "strong70": 20,
+      "strong80": 8
+    },
+    {
+      "day": "2026-06-16",
+      "scored": 22,
+      "strong70": 6,
+      "strong80": 3
+    },
+    {
+      "day": "2026-06-21",
+      "scored": 28,
+      "strong70": 12,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-22",
+      "scored": 64,
+      "strong70": 6,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-23",
+      "scored": 31,
+      "strong70": 4,
+      "strong80": 3
+    },
+    {
+      "day": "2026-06-24",
+      "scored": 22,
+      "strong70": 9,
+      "strong80": 1
+    },
+    {
+      "day": "2026-06-25",
+      "scored": 42,
+      "strong70": 9,
+      "strong80": 4
+    },
+    {
+      "day": "2026-06-26",
+      "scored": 20,
+      "strong70": 4,
+      "strong80": 0
+    },
+    {
+      "day": "2026-06-27",
+      "scored": 6,
+      "strong70": 1,
+      "strong80": 0
+    },
+    {
+      "day": "2026-06-28",
+      "scored": 11,
+      "strong70": 6,
+      "strong80": 0
+    },
+    {
+      "day": "2026-06-29",
+      "scored": 4,
+      "strong70": 1,
+      "strong80": 0
+    },
+    {
+      "day": "2026-06-30",
+      "scored": 7,
+      "strong70": 2,
+      "strong80": 0
+    }
+  ],
   "usage": {
     "provider": "kimi",
     "unit": "weekly_budget_pct",
@@ -14671,8 +14844,8 @@
       },
       {
         "day": "2026-07-01",
-        "pct": 1,
-        "cum": 58,
+        "pct": 6,
+        "cum": 63,
         "week": "2026-06-28"
       }
     ],
