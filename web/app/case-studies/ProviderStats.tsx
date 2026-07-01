@@ -67,6 +67,7 @@ const T: Record<
     caseOne: string;
     caseMany: string;
     footer: string;
+    disclaimer: string;
   }
 > = {
   it: {
@@ -81,6 +82,8 @@ const T: Record<
     caseMany: "casi",
     footer:
       "Media dei casi del provider, proiettata su un mese di budget (free-run escluso). Al giorno = totale del mese ÷ 30; prezzo = canone mensile ÷ output del mese.",
+    disclaimer:
+      "I numeri dipendono molto dal profilo: la difficoltà del mercato di riferimento pesa spesso più del provider. I casi aggregati per ciascun provider hanno profili e mercati diversi — un mercato ricco di offerte produce un output più alto a prescindere dal modello — quindi il confronto non è a parità di condizioni: vanno letti come ordini di grandezza indicativi, non come una classifica dei provider.",
   },
   en: {
     title: "From found to excellent · by provider",
@@ -94,6 +97,8 @@ const T: Record<
     caseMany: "cases",
     footer:
       "Average of the provider's cases, projected over a month of budget (free-run excluded). Per day = monthly total ÷ 30; price = monthly plan ÷ monthly output.",
+    disclaimer:
+      "The figures depend heavily on the profile: the difficulty of the target job market often matters more than the provider. The cases aggregated under each provider have different profiles and markets — an opportunity-rich market yields higher output regardless of the model — so the comparison isn't like-for-like: read them as indicative orders of magnitude, not as a ranking of providers.",
   },
   es: {
     title: "De encontrada a excelente · por proveedor",
@@ -107,6 +112,8 @@ const T: Record<
     caseMany: "casos",
     footer:
       "Media de los casos del proveedor, proyectada sobre un mes de presupuesto (sin el free-run). Al día = total del mes ÷ 30; precio = cuota mensual ÷ output del mes.",
+    disclaimer:
+      "Los números dependen mucho del perfil: la dificultad del mercado objetivo suele pesar más que el proveedor. Los casos agregados en cada proveedor tienen perfiles y mercados distintos — un mercado con muchas ofertas da un output más alto sin importar el modelo — así que la comparación no es en igualdad de condiciones: léelos como órdenes de magnitud indicativos, no como una clasificación de proveedores.",
   },
   fr: {
     title: "De trouvé à excellent · par fournisseur",
@@ -120,6 +127,8 @@ const T: Record<
     caseMany: "cas",
     footer:
       "Moyenne des cas du fournisseur, projetée sur un mois de budget (free-run exclu). Par jour = total du mois ÷ 30 ; prix = abonnement mensuel ÷ output du mois.",
+    disclaimer:
+      "Les chiffres dépendent fortement du profil : la difficulté du marché ciblé pèse souvent plus que le fournisseur. Les cas agrégés par fournisseur ont des profils et des marchés différents — un marché riche en offres donne un output plus élevé quel que soit le modèle — donc la comparaison n'est pas à conditions égales : à lire comme des ordres de grandeur indicatifs, pas comme un classement des fournisseurs.",
   },
   de: {
     title: "Von gefunden zu exzellent · nach Provider",
@@ -133,6 +142,8 @@ const T: Record<
     caseMany: "Fälle",
     footer:
       "Durchschnitt der Provider-Fälle, auf einen Monat Budget projiziert (ohne Free-Run). Pro Tag = Monatssumme ÷ 30; Preis = Monatsabo ÷ Monatsoutput.",
+    disclaimer:
+      "Die Zahlen hängen stark vom Profil ab: die Schwierigkeit des Zielmarkts wiegt oft schwerer als der Provider. Die je Provider aggregierten Fälle haben unterschiedliche Profile und Märkte — ein angebotsreicher Markt liefert unabhängig vom Modell höheren Output — daher ist der Vergleich nicht gleichwertig: als grobe Größenordnungen zu lesen, nicht als Rangliste der Provider.",
   },
   hu: {
     title: "A találattól a kiválóig · providerenként",
@@ -146,6 +157,8 @@ const T: Record<
     caseMany: "eset",
     footer:
       "A provider eseteinek átlaga, egy hónap budgetre vetítve (free-run nélkül). Naponta = havi összeg ÷ 30; ár = havi előfizetés ÷ havi output.",
+    disclaimer:
+      "A számok erősen függnek a profiltól: a célpiac nehézsége gyakran többet nyom a latban, mint a provider. Az egyes providerekhez összesített esetek eltérő profilúak és piacúak — egy ajánlatokban gazdag piac a modelltől függetlenül magasabb outputot ad —, így az összehasonlítás nem azonos feltételek mellett történik: nagyságrendi tájékoztató értékként olvasd, nem a providerek rangsoraként.",
   },
   pt: {
     title: "De encontrada a excelente · por fornecedor",
@@ -159,6 +172,8 @@ const T: Record<
     caseMany: "casos",
     footer:
       "Média dos casos do fornecedor, projetada sobre um mês de orçamento (sem o free-run). Por dia = total do mês ÷ 30; preço = mensalidade ÷ output do mês.",
+    disclaimer:
+      "Os números dependem muito do perfil: a dificuldade do mercado-alvo pesa muitas vezes mais do que o fornecedor. Os casos agregados por fornecedor têm perfis e mercados diferentes — um mercado rico em ofertas dá um output mais alto independentemente do modelo — por isso a comparação não é em igualdade de condições: lê-os como ordens de grandeza indicativas, não como uma classificação de fornecedores.",
   },
 };
 
@@ -279,8 +294,9 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
             );
           })}
         </div>
-        <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)]">
-          {t.footer}
+        <div className="mt-4 pt-2 border-t border-[var(--color-border)] space-y-2 text-[10px] leading-relaxed text-[var(--color-dim)]">
+          <p>{t.footer}</p>
+          <p className="italic">{t.disclaimer}</p>
         </div>
       </div>
     </section>
