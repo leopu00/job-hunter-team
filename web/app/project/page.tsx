@@ -167,7 +167,7 @@ const es: Copy = {
     {
       h: "Qué hace",
       p: [
-        "Job Hunter Team es un equipo de agentes de IA que busca trabajo por ti. En lugar de enviar candidaturas a diestro y siniestro, identifica las ofertas más afines a tu perfil, las evalúa una por una y te indica dónde conviene concentrarte y qué aspectos reforzar.",
+        "Job Hunter Team es un equipo de agentes de IA autónomos que busca trabajo por ti. Autónomos significa que trabajan solos: una vez que marcas el rumbo, siguen buscando, analizando y preparando sin descanso — no tienes que guiar cada paso. En lugar de enviar candidaturas a diestro y siniestro, identifica las ofertas más afines a tu perfil, las evalúa una por una y te indica dónde conviene concentrarte y qué aspectos reforzar.",
         "Pocas candidaturas, pero certeras. La decisión final — cuándo y a quién enviar — sigue siendo siempre tuya.",
       ],
     },
@@ -226,7 +226,7 @@ const fr: Copy = {
     {
       h: "Ce qu'il fait",
       p: [
-        "Job Hunter Team est une équipe d'agents IA qui cherche du travail pour toi. Plutôt que d'envoyer des candidatures à tout-va, il repère les offres les plus proches de ton profil, les évalue une par une et t'indique où il vaut la peine de te concentrer et quels aspects renforcer.",
+        "Job Hunter Team est une équipe d'agents IA autonomes qui cherche du travail pour toi. Autonomes signifie qu'ils travaillent seuls : une fois que tu indiques le cap, ils continuent à chercher, analyser et préparer sans relâche — tu n'as pas à guider chaque étape. Plutôt que d'envoyer des candidatures à tout-va, il repère les offres les plus proches de ton profil, les évalue une par une et t'indique où il vaut la peine de te concentrer et quels aspects renforcer.",
         "Peu de candidatures, mais ciblées. La décision finale — quand et à qui envoyer — reste toujours la tienne.",
       ],
     },
@@ -285,7 +285,7 @@ const de: Copy = {
     {
       h: "Was es macht",
       p: [
-        "Job Hunter Team ist ein Team aus KI-Agenten, das für dich nach Arbeit sucht. Statt wahllos Bewerbungen zu verschicken, findet es die Stellen, die am besten zu deinem Profil passen, bewertet jede einzeln und zeigt dir, worauf du dich konzentrieren und welche Aspekte du stärken solltest.",
+        "Job Hunter Team ist ein Team aus autonomen KI-Agenten, das für dich nach Arbeit sucht. Autonom bedeutet, dass sie eigenständig arbeiten: Sobald du die Richtung vorgibst, suchen, analysieren und bereiten sie unablässig weiter — du musst nicht jeden Schritt lenken. Statt wahllos Bewerbungen zu verschicken, findet es die Stellen, die am besten zu deinem Profil passen, bewertet jede einzeln und zeigt dir, worauf du dich konzentrieren und welche Aspekte du stärken solltest.",
         "Wenige Bewerbungen, dafür gezielte. Die endgültige Entscheidung — wann und an wen du sendest — bleibt immer deine.",
       ],
     },
@@ -344,7 +344,7 @@ const pt: Copy = {
     {
       h: "O que faz",
       p: [
-        "Job Hunter Team é uma equipe de agentes de IA que procura trabalho por você. Em vez de enviar candidaturas em massa, identifica as ofertas mais afins ao seu perfil, avalia-as uma a uma e indica onde vale a pena se concentrar e quais aspectos reforçar.",
+        "Job Hunter Team é uma equipe de agentes de IA autónomos que procura trabalho por você. Autónomos significa que trabalham sozinhos: uma vez que você indica o rumo, continuam a procurar, analisar e preparar sem parar — você não precisa guiar cada passo. Em vez de enviar candidaturas em massa, identifica as ofertas mais afins ao seu perfil, avalia-as uma a uma e indica onde vale a pena se concentrar e quais aspectos reforçar.",
         "Poucas candidaturas, mas certeiras. A decisão final — quando e para quem enviar — continua sendo sempre sua.",
       ],
     },
@@ -403,7 +403,7 @@ const hu: Copy = {
     {
       h: "Mit csinál",
       p: [
-        "A Job Hunter Team MI-ügynökök csapata, amely munkát keres helyetted. Ahelyett, hogy válogatás nélkül küldözgetne jelentkezéseket, megtalálja a profilodhoz legjobban illő ajánlatokat, egyenként értékeli őket, és megmutatja, hol érdemes összpontosítanod, és mely szempontokat kell erősítened.",
+        "A Job Hunter Team autonóm MI-ügynökök csapata, amely munkát keres helyetted. Az autonóm azt jelenti, hogy önállóan dolgoznak: amint megadod az irányt, szünet nélkül keresnek, elemeznek és készítenek elő — nem kell minden lépést irányítanod. Ahelyett, hogy válogatás nélkül küldözgetne jelentkezéseket, megtalálja a profilodhoz legjobban illő ajánlatokat, egyenként értékeli őket, és megmutatja, hol érdemes összpontosítanod, és mely szempontokat kell erősítened.",
         "Kevés jelentkezés, de célzott. A végső döntés — mikor és kinek küldj — mindig a tiéd marad.",
       ],
     },
