@@ -10,8 +10,8 @@ import {
   Code,
   Pre,
   GitHubMore,
-  repoFile,
 } from "../../DocKit";
+import { repoFile } from "../../repo";
 import type { Locale } from "@/i18n/config";
 import { getRequestLocale } from "@/lib/request-locale";
 
