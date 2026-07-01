@@ -217,7 +217,7 @@ const AGENT_META: Record<
   },
   assistente: {
     labelKey: "agent_assistente",
-    emoji: "👨‍💼",
+    emoji: "👩‍💼",
     color: "var(--color-blue)",
   },
 };

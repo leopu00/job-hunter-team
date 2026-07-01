@@ -607,7 +607,7 @@ export default function AssistentePage() {
           </span>
         </nav>
         <div className="mt-4 flex items-start gap-5">
-          <div className="text-5xl leading-none select-none">👨‍💼</div>
+          <div className="text-5xl leading-none select-none">👩‍💼</div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-white)]">
               {t.assistant}
@@ -846,7 +846,7 @@ export default function AssistentePage() {
                       >
                         {messages.length === 0 && (
                           <div className="flex flex-col items-center justify-center h-full text-center">
-                            <div className="text-3xl mb-3 opacity-30">👨‍💼</div>
+                            <div className="text-3xl mb-3 opacity-30">👩‍💼</div>
                             <p className="text-[var(--color-dim)] text-[11px]">
                               {t.writeToStart}
                             </p>
@@ -1127,7 +1127,7 @@ export default function AssistentePage() {
       {/* Empty state */}
       {!isActive && status != null && !startBanner && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="text-4xl mb-4 opacity-30">👨‍💼</div>
+          <div className="text-4xl mb-4 opacity-30">👩‍💼</div>
           <p className="text-[var(--color-muted)] text-[13px]">{t.notActive}</p>
           <p className="text-[var(--color-dim)] text-[11px] mt-1">
             {t.pressStartPrefix}
