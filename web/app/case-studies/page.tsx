@@ -11,13 +11,10 @@ import LandingNav from "../components/landing/LandingNav";
 import {
   CASE_STUDIES,
   CONTRIBUTE_LINKS,
-  caseMonthlyProjection,
   caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
-import ScoreDistribution from "@/app/components/ScoreDistribution";
 import ConversionFunnelCard from "./ConversionFunnelCard";
-import DailyAvgBars from "./DailyAvgBars";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 
@@ -38,9 +35,6 @@ const LOCALE_TAG: Record<Locale, string> = {
   hu: "hu-HU",
   pt: "pt-PT",
 };
-
-// Colori dei livelli (coerenti col funnel e con CostPerOutcome).
-const TIER_COLORS = ["#3B82F6", "#0EA5A4", "#22C55E", "#F59E0B"];
 
 const T: Record<
   Locale,
@@ -82,6 +76,12 @@ const T: Record<
     dailyChartTitle: string;
     dailyUnit: string;
     dailyCaption: string;
+    dashTitle: string;
+    dashLead: string;
+    dashExcellent: string;
+    dashCostExcellent: string;
+    dashPositions: string;
+    dashCaption: string;
     moreComingTitle: string;
     moreComingSub: string;
     contributeTitle: string;
@@ -141,6 +141,14 @@ const T: Record<
     dailyUnit: "giorno",
     dailyCaption:
       "Ritmo sostenibile: output mensile stimato ÷ giorni del mese, esclusa la sessione free-run senza monitor (troppo breve per essere rappresentativa); la quota ≥80 è evidenziata in verde vivo.",
+    dashTitle: "La media, per utente",
+    dashLead:
+      "I numeri distillati per un mese di abbonamento: dal ritmo giornaliero di ogni caso, proiettato su un mese — così una run breve (es. beta-3, ~5 giorni) non abbassa la media. Esclude la sessione free-run.",
+    dashExcellent: "match eccellenti ≥80 / giorno",
+    dashCostExcellent: "costo / match eccellente ≥80",
+    dashPositions: "posizioni / mese",
+    dashCaption:
+      "Output giornaliero medio × giorni del mese (escluso il free-run); conteggi arrotondati, costo per match eccellente.",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "📥 Contribuisci con i tuoi dati",
@@ -202,6 +210,14 @@ const T: Record<
     dailyUnit: "day",
     dailyCaption:
       "Sustainable pace: estimated monthly output ÷ days in a month, excluding the unmonitored free-run session (too short to be representative); the ≥80 share is highlighted in bright green.",
+    dashTitle: "On average, per user",
+    dashLead:
+      "The numbers distilled for one month of subscription: from each case's daily pace, projected over a month — so a short run (e.g. beta-3, ~5 days) doesn't drag the average down. The free-run session is excluded.",
+    dashExcellent: "excellent ≥80 matches / day",
+    dashCostExcellent: "cost / excellent ≥80 match",
+    dashPositions: "positions / month",
+    dashCaption:
+      "Average daily output × days in a month (free-run excluded); counts rounded, cost per excellent match.",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "📥 Contribute your data",
@@ -263,6 +279,14 @@ const T: Record<
     dailyUnit: "día",
     dailyCaption:
       "Ritmo sostenible: output mensual estimado ÷ días del mes, excluida la sesión free-run sin monitor (demasiado corta para ser representativa); la cuota ≥80 está resaltada en verde vivo.",
+    dashTitle: "En promedio, por usuario",
+    dashLead:
+      "Los números destilados para un mes de suscripción: a partir del ritmo diario de cada caso, proyectado sobre un mes — así una ejecución corta (p. ej. beta-3, ~5 días) no baja la media. Se excluye la sesión free-run.",
+    dashExcellent: "match excelentes ≥80 / día",
+    dashCostExcellent: "coste / match excelente ≥80",
+    dashPositions: "posiciones / mes",
+    dashCaption:
+      "Output diario medio × días del mes (free-run excluido); conteos redondeados, coste por match excelente.",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "📥 Contribuye con tus datos",
@@ -325,6 +349,14 @@ const T: Record<
     dailyUnit: "jour",
     dailyCaption:
       "Rythme soutenable : output mensuel estimé ÷ jours du mois, hors session free-run sans monitor (trop courte pour être représentative) ; la part ≥80 est mise en évidence en vert vif.",
+    dashTitle: "En moyenne, par utilisateur",
+    dashLead:
+      "Les chiffres distillés pour un mois d'abonnement : à partir du rythme quotidien de chaque cas, projeté sur un mois — ainsi un run court (ex. beta-3, ~5 jours) ne fait pas baisser la moyenne. La session free-run est exclue.",
+    dashExcellent: "matchs excellents ≥80 / jour",
+    dashCostExcellent: "coût / match excellent ≥80",
+    dashPositions: "postes / mois",
+    dashCaption:
+      "Output quotidien moyen × jours du mois (free-run exclu) ; comptes arrondis, coût par match excellent.",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "📥 Contribue avec tes données",
@@ -387,6 +419,14 @@ const T: Record<
     dailyUnit: "Tag",
     dailyCaption:
       "Nachhaltiges Tempo: geschätzter Monats-Output ÷ Tage im Monat, ohne die unüberwachte Free-Run-Session (zu kurz, um repräsentativ zu sein); der ≥80-Anteil ist in kräftigem Grün hervorgehoben.",
+    dashTitle: "Im Schnitt, pro Nutzer",
+    dashLead:
+      "Die Zahlen destilliert für einen Abo-Monat: aus dem Tagestempo jedes Falls, auf einen Monat projiziert — so drückt ein kurzer Lauf (z. B. beta-3, ~5 Tage) den Schnitt nicht. Die Free-Run-Session ist ausgeschlossen.",
+    dashExcellent: "exzellente ≥80 Matches / Tag",
+    dashCostExcellent: "Kosten / exzellenter ≥80 Match",
+    dashPositions: "Stellen / Monat",
+    dashCaption:
+      "Durchschnittlicher Tages-Output × Tage im Monat (Free-Run ausgeschlossen); Zahlen gerundet, Kosten pro exzellentem Match.",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "📥 Steuere deine Daten bei",
@@ -449,6 +489,14 @@ const T: Record<
     dailyUnit: "nap",
     dailyCaption:
       "Fenntartható tempó: becsült havi output ÷ a hónap napjai, a monitor nélküli free-run munkamenet kizárva (túl rövid ahhoz, hogy reprezentatív legyen); a ≥80 hányad élénkzölddel kiemelve.",
+    dashTitle: "Átlagosan, felhasználónként",
+    dashLead:
+      "A számok egy előfizetési hónapra desztillálva: minden eset napi tempójából, egy hónapra vetítve — így egy rövid futás (pl. beta-3, ~5 nap) nem húzza le az átlagot. A free-run munkamenet kizárva.",
+    dashExcellent: "kiváló ≥80 találat / nap",
+    dashCostExcellent: "költség / kiváló ≥80 találat",
+    dashPositions: "pozíció / hó",
+    dashCaption:
+      "Átlagos napi output × a hónap napjai (free-run kizárva); a számok kerekítve, költség kiváló találatonként.",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "📥 Járulj hozzá az adataiddal",
@@ -510,6 +558,14 @@ const T: Record<
     dailyUnit: "dia",
     dailyCaption:
       "Ritmo sustentável: output mensal estimado ÷ dias do mês, excluída a sessão free-run sem monitor (demasiado curta para ser representativa); a quota ≥80 está destacada em verde vivo.",
+    dashTitle: "Em média, por utilizador",
+    dashLead:
+      "Os números destilados para um mês de subscrição: a partir do ritmo diário de cada caso, projetado sobre um mês — assim uma execução curta (ex. beta-3, ~5 dias) não baixa a média. A sessão free-run é excluída.",
+    dashExcellent: "matches excelentes ≥80 / dia",
+    dashCostExcellent: "custo / match excelente ≥80",
+    dashPositions: "posições / mês",
+    dashCaption:
+      "Output diário médio × dias do mês (free-run excluído); contagens arredondadas, custo por match excelente.",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "📥 Contribui com os teus dados",
@@ -533,61 +589,65 @@ export default async function CaseStudiesIndexPage() {
   const nf = (n: number): string => n.toLocaleString(LOCALE_TAG[locale]);
   const localized = CASE_STUDIES.map((cs) => localizeCaseStudy(cs, locale));
 
-  // Numeri cumulativi su TUTTE le run monitorate (sezione in cima all'indice).
   const runs = localized.map((cs) => cs.run);
-  const allScores = runs.flatMap((r) => r.match.scores ?? []);
-  const cum = {
-    cases: localized.length,
-    positions: runs.reduce(
-      (s, r) =>
-        s + (r.conversion?.found ?? r.funnelTotals?.found ?? r.totals.positions),
-      0,
-    ),
-    scored: runs.reduce((s, r) => s + (r.conversion?.scored ?? 0), 0),
-    strong70: runs.reduce(
-      (s, r) => s + (r.conversion?.strong70 ?? r.match.strong70),
-      0,
-    ),
-    strong80: runs.reduce(
-      (s, r) => s + (r.conversion?.strong80 ?? r.match.strong80),
-      0,
-    ),
-    days: localized.reduce((s, cs) => s + caseRunInfo(cs.run, locale).days, 0),
-    avg: allScores.length
-      ? Math.round(allScores.reduce((s, n) => s + n, 0) / allScores.length)
-      : 0,
-  };
-  // MEDIA per case study (una run tipo), non la somma: le run hanno durate
-  // diverse quindi è indicativo — per dati mensili accurati servono run da un
-  // mese intero (vedi beta tester 2 · finance, ~26 giorni).
-  const nStudies = Math.max(1, cum.cases);
+
+  // Funnel di conversione, MEDIA per studio: nel funnel contano i TASSI, quindi
+  // la media dei totali va bene (found → scored → forti ≥70 → eccellenti ≥80).
+  const nStudies = Math.max(1, localized.length);
   const per = {
-    positions: Math.round(cum.positions / nStudies),
-    scored: Math.round(cum.scored / nStudies),
-    strong70: Math.round(cum.strong70 / nStudies),
-    strong80: Math.round(cum.strong80 / nStudies),
-    days: Math.round(cum.days / nStudies),
+    positions: Math.round(
+      runs.reduce(
+        (s, r) =>
+          s +
+          (r.conversion?.found ?? r.funnelTotals?.found ?? r.totals.positions),
+        0,
+      ) / nStudies,
+    ),
+    scored: Math.round(
+      runs.reduce((s, r) => s + (r.conversion?.scored ?? 0), 0) / nStudies,
+    ),
+    strong70: Math.round(
+      runs.reduce((s, r) => s + (r.conversion?.strong70 ?? r.match.strong70), 0) /
+        nStudies,
+    ),
+    strong80: Math.round(
+      runs.reduce((s, r) => s + (r.conversion?.strong80 ?? r.match.strong80), 0) /
+        nStudies,
+    ),
   };
 
-  // Prezzo MEDIO per risultato: media (sui case study con canone noto) del costo
-  // mensile per posizione / valutata / forte≥70 / eccellente≥80. Finance è
-  // misurato, gli altri stimati (proiezione a un mese, stessa logica del
-  // dettaglio). Mescola canoni €100 (Codex) e €40 (Kimi) → media indicativa.
-  const pricedStudies = localized
-    .map((cs) => ({
-      cs,
-      mult: caseMonthlyProjection(cs.run, caseRunInfo(cs.run, locale).days)
-        .multiplier,
-    }))
-    .filter((s) => s.cs.subscription.monthlyEur != null && s.cs.run.conversion);
-  const avgCostOf = (key: "found" | "scored" | "strong70" | "strong80") => {
-    if (pricedStudies.length === 0) return 0;
-    const total = pricedStudies.reduce((acc, s) => {
-      const monthly = s.cs.run.conversion![key] * s.mult;
-      return acc + (monthly > 0 ? s.cs.subscription.monthlyEur! / monthly : 0);
-    }, 0);
-    return total / pricedStudies.length;
-  };
+  // DASHBOARD unica — proiezione a un mese dal RITMO GIORNALIERO (output ÷ giorni
+  // lavorati × giorni del mese), NON dai totali: così una run breve (es. beta-3,
+  // ~5 giorni) non abbassa la media (l'abbonamento è mensile → contiamo un mese).
+  // Esclude il free-run (burst insostenibile). Conteggi arrotondati; il costo
+  // tiene i centesimi.
+  const MONTH_DAYS = 30;
+  const dashStudies = localized
+    .filter((cs) => !cs.freeRun && cs.run.conversion)
+    .map((cs) => {
+      const days = Math.max(1, caseRunInfo(cs.run, locale).days);
+      const c = cs.run.conversion!;
+      const excPerDay = c.strong80 / days;
+      return {
+        monthlyPositions: (c.found / days) * MONTH_DAYS,
+        excPerDay,
+        costPerExc:
+          cs.subscription.monthlyEur != null && excPerDay > 0
+            ? cs.subscription.monthlyEur / (excPerDay * MONTH_DAYS)
+            : null,
+      };
+    });
+  const mean = (xs: number[]) =>
+    xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+  const dashExcPerDay = Math.round(mean(dashStudies.map((s) => s.excPerDay)));
+  const dashPositionsMonth = Math.round(
+    mean(dashStudies.map((s) => s.monthlyPositions)),
+  );
+  const dashCostExc = mean(
+    dashStudies
+      .map((s) => s.costPerExc)
+      .filter((v): v is number => v != null),
+  );
   const eurFmt = (n: number) =>
     new Intl.NumberFormat(LOCALE_TAG[locale], {
       style: "currency",
@@ -595,50 +655,6 @@ export default async function CaseStudiesIndexPage() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(n);
-  const priceTiers = [
-    { v: avgCostOf("found"), l: t.pricePosition, c: TIER_COLORS[0] },
-    { v: avgCostOf("scored"), l: t.priceScored, c: TIER_COLORS[1] },
-    { v: avgCostOf("strong70"), l: t.priceStrong, c: TIER_COLORS[2] },
-    { v: avgCostOf("strong80"), l: t.priceExcellent, c: TIER_COLORS[3] },
-  ];
-  const maxPrice = Math.max(...priceTiers.map((x) => x.v), 0.0001);
-
-  // Match ad alto score AL GIORNO, tasso SOSTENIBILE: NON i conteggi grezzi ÷
-  // giorni di calendario (una run breve che ha bruciato una settimana di budget
-  // in 3 giorni risulterebbe gonfiata), ma l'output mensile proiettato ÷ giorni
-  // del mese. Usa la STESSA proiezione per-budget di costo/prezzo (raw ×
-  // multiplier = output mensile; per finance, misurato, multiplier = 1).
-  const MONTH_DAYS = 30.4;
-  const dailyStudies = localized
-    .map((cs) => {
-      const sd = cs.run.scoreDaily ?? [];
-      // Escludi le sessioni free-run (burst di pochi giorni): il tasso giornaliero
-      // non sarebbe rappresentativo (es. Technical Writing · Codex, ~3 giorni).
-      if (cs.freeRun || sd.length === 0) return null;
-      const { multiplier } = caseMonthlyProjection(
-        cs.run,
-        caseRunInfo(cs.run, locale).days,
-      );
-      const s70 = sd.reduce((s, d) => s + d.strong70, 0);
-      const s80 = sd.reduce((s, d) => s + d.strong80, 0);
-      return {
-        label: `${cs.category} · ${cs.model}`,
-        r70: (s70 * multiplier) / MONTH_DAYS,
-        r80: (s80 * multiplier) / MONTH_DAYS,
-      };
-    })
-    .filter(
-      (s): s is { label: string; r70: number; r80: number } => s !== null,
-    );
-  const dailyAvg70 = dailyStudies.length
-    ? dailyStudies.reduce((s, x) => s + x.r70, 0) / dailyStudies.length
-    : 0;
-  const dailyAvg80 = dailyStudies.length
-    ? dailyStudies.reduce((s, x) => s + x.r80, 0) / dailyStudies.length
-    : 0;
-  const dailyMax = Math.max(...dailyStudies.map((x) => x.r70), 0.001);
-  const fmt1 = (n: number) =>
-    n.toLocaleString(LOCALE_TAG[locale], { maximumFractionDigits: 1 });
 
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
@@ -674,207 +690,63 @@ export default async function CaseStudiesIndexPage() {
           </p>
         </header>
 
-        {/* ── Numeri cumulativi (tutti i case study insieme) ─────── */}
+        {/* ── Conversione: dal trovato al match forte (media per studio) ── */}
         <section className="mb-14">
-          <h2 className="text-xl font-bold tracking-tight">{t.cumTitle}</h2>
+          <h2 className="text-xl font-bold tracking-tight">
+            {t.cumFunnelTitle}
+          </h2>
           <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
             {t.cumLead}
           </p>
+          <div className="mt-6">
+            <ConversionFunnelCard
+              found={per.positions}
+              scored={per.scored}
+              strong70={per.strong70}
+              strong80={per.strong80}
+            />
+          </div>
+        </section>
 
-          {/* KPI headline */}
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* ── Dashboard unica: eccellenti/giorno · costo · posizioni/mese ── */}
+        <section className="mb-14">
+          <h2 className="text-xl font-bold tracking-tight">{t.dashTitle}</h2>
+          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
+            {t.dashLead}
+          </p>
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
-              { v: nf(cum.cases), l: t.cumCases, c: "var(--color-white)" },
-              { v: nf(per.positions), l: t.cumPositions, c: "var(--color-blue)" },
-              { v: nf(cum.avg), l: t.avgMatch, c: "#00e676" },
-              { v: nf(per.days), l: t.cumDays, c: "var(--color-white)" },
+              { v: nf(dashExcPerDay), l: t.dashExcellent, c: "#22c55e" },
+              {
+                v: eurFmt(dashCostExc),
+                l: t.dashCostExcellent,
+                c: "var(--color-white)",
+              },
+              {
+                v: nf(dashPositionsMonth),
+                l: t.dashPositions,
+                c: "var(--color-blue)",
+              },
             ].map((k) => (
               <div
                 key={k.l}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
+                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-5"
               >
                 <div
-                  className="text-[22px] font-extrabold tabular-nums leading-none"
+                  className="text-[26px] font-extrabold tabular-nums leading-none"
                   style={{ color: k.c }}
                 >
                   {k.v}
                 </div>
-                <div className="mt-1.5 text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                <div className="mt-2 text-[10px] uppercase tracking-wide text-[var(--color-dim)]">
                   {k.l}
                 </div>
               </div>
             ))}
           </div>
-
-          {/* Grafici cumulativi: conversione complessiva + distribuzione match */}
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-            <div className="flex flex-col">
-              <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
-                {t.cumFunnelTitle}
-              </div>
-              <div className="flex-1">
-                <ConversionFunnelCard
-                  found={per.positions}
-                  scored={per.scored}
-                  strong70={per.strong70}
-                  strong80={per.strong80}
-                />
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <ScoreDistribution
-                scores={allScores}
-                title={t.cumScoreTitle}
-                emptyLabel={t.cumScoreEmpty}
-                thresholdReady={70}
-                thresholdLabel="≥ 70"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* ── Prezzo medio per risultato (media tra gli studi) ───── */}
-        <section className="mb-14">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight">{t.priceTitle}</h2>
-            <span
-              className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
-              style={{
-                background: "color-mix(in srgb, #F59E0B 16%, transparent)",
-                color: "#F59E0B",
-              }}
-            >
-              {t.priceEstimate}
-            </span>
-          </div>
-          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
-            {t.priceLead}
+          <p className="mt-4 text-[10px] text-[var(--color-dim)]">
+            {t.dashCaption}
           </p>
-
-          {/* Card: prezzo medio per livello */}
-          <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {priceTiers.map((tier) => (
-              <div
-                key={tier.l}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
-              >
-                <div
-                  className="text-[22px] font-extrabold tabular-nums leading-none"
-                  style={{ color: tier.c }}
-                >
-                  ≈ {eurFmt(tier.v)}
-                </div>
-                <div className="mt-1.5 text-[10px] leading-snug text-[var(--color-muted)]">
-                  {tier.l}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Grafico a barre del prezzo medio */}
-          <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-            <div className="text-[12px] font-semibold text-[var(--color-base)] mb-4">
-              {t.priceChartTitle}
-            </div>
-            <div className="flex flex-col gap-3">
-              {priceTiers.map((tier) => (
-                <div key={tier.l}>
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span
-                      className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
-                      style={{ background: tier.c }}
-                    />
-                    <span className="text-[11px] text-[var(--color-muted)] flex-1 truncate">
-                      {tier.l}
-                    </span>
-                    <span className="text-[13px] font-bold tabular-nums text-[var(--color-base)]">
-                      ≈ {eurFmt(tier.v)}
-                    </span>
-                  </div>
-                  <div
-                    className="h-2 rounded-full overflow-hidden"
-                    style={{ background: "var(--color-border)" }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.max(2, (tier.v / maxPrice) * 100)}%`,
-                        background: tier.c,
-                        opacity: 0.85,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)]">
-              {t.priceCaption}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Match ad alto score al giorno (media tra gli studi) ── */}
-        <section className="mb-14">
-          <h2 className="text-xl font-bold tracking-tight">{t.dailyTitle}</h2>
-          <p className="text-[13px] leading-relaxed text-[var(--color-muted)] mt-2">
-            {t.dailyLead}
-          </p>
-
-          {/* KPI: media ≥70/giorno e ≥80/giorno tra gli studi */}
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            {[
-              { v: dailyAvg70, l: t.dailyAvgStrong, c: "#15803d" },
-              { v: dailyAvg80, l: t.dailyAvgExcellent, c: "#22c55e" },
-            ].map((k) => (
-              <div
-                key={k.l}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
-              >
-                <div
-                  className="text-[22px] font-extrabold tabular-nums leading-none"
-                  style={{ color: k.c }}
-                >
-                  {fmt1(k.v)}
-                </div>
-                <div className="mt-1.5 text-[10px] leading-snug text-[var(--color-muted)]">
-                  {k.l}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Confronto per profilo: tasso giornaliero, ≥80 evidenziato */}
-          <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-              <span className="text-[12px] font-semibold text-[var(--color-base)]">
-                {t.dailyChartTitle}
-              </span>
-              <span className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm"
-                    style={{ background: "#22c55e" }}
-                  />
-                  ≥80
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm"
-                    style={{ background: "#15803d" }}
-                  />
-                  ≥70
-                </span>
-              </span>
-            </div>
-            <DailyAvgBars
-              bars={dailyStudies}
-              max={dailyMax}
-              unit={t.dailyUnit}
-            />
-            <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)]">
-              {t.dailyCaption}
-            </div>
-          </div>
         </section>
 
         {/* ── Card dei case study ───────────────────────────────── */}
