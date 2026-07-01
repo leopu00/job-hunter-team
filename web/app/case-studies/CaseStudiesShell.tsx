@@ -151,6 +151,10 @@ export default function CaseStudiesShell({
                 <Link
                   key={t.id}
                   href={`/case-studies/${t.id}`}
+                  // Su una pagina di dettaglio (activeId presente) non riportare in
+                  // cima: così cambiando tester si resta alla stessa altezza e si
+                  // vede il grafico equivalente. Dall'indice invece si entra in cima.
+                  scroll={!activeId}
                   aria-current={active ? "page" : undefined}
                   className={`group flex h-full flex-col rounded-xl border ${
                     active
