@@ -40,6 +40,8 @@ For the actual numbers we measured during testing, see [`MONITORING.md`](MONITOR
 - ✅ ~~User-defined work hours~~ — **Done**. Config + gate in pacing-bridge, UI in CLI + web + wizard.
 - ⚡ **Lower Sentinel token consumption** — the Sentinel itself eats too many tokens today; reducing this is the key to making the €20 base tier viable
 
+  > ⚠️ **Note (2026-07-02, correction):** A full-history measurement resized the coordinators (Sentinel+Captain) to ~20% of the budget — roughly *equal* on Kimi and Codex — a **secondary** lever, not "the key". The real blocker for cheap tiers is the **budget size** (on Kimi each action costs ~17× more as a % of the weekly quota than on Codex). See [`docs/internal/2026-06-29-coordinator-burn-kimi-vs-codex.md`](../internal/2026-06-29-coordinator-burn-kimi-vs-codex.md).
+
 ## 💸 What about pay-per-use?
 
 Not yet. Future possibility: you give the team a budget + a deadline, the team auto-coordinates within that envelope. But subscription tokens cost ~5x less, so the subscription model wins on every economic axis as long as we can monitor the window precisely.

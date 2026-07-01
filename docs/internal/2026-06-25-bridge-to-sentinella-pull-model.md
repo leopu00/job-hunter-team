@@ -3,6 +3,8 @@
 **Data:** 2026-06-25 · **Branch:** dev2 · **Stato:** progettato + implementato (gated: merge utente → redeploy)
 **Movente:** il Capitano è top-consumer **perché viene pingato**, non perché il suo lavoro è difficile.
 
+> ⚠️ **NOTA 2026-07-02 (correzione):** la premessa "il Capitano è top-consumer" su Kimi è stata ridimensionata dalla misura pulita full-history: i coordinatori pesano ~20% del budget, **~uguale su Kimi e Codex** (Capitano ~13,6%), non dominano. Il redesign push→pull **resta sensato** per ridurre i ping di routine, ma NON perché "il monitoraggio si mangia il budget". Vedi [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](./2026-06-29-coordinator-burn-kimi-vs-codex.md).
+
 ## 🩻 Il problema (misurato su betaB)
 
 Sull'inbox del Capitano (ultimi 500 messaggi), **234 = 47%** sono `[BRIDGE PACING]`: il

@@ -55,6 +55,8 @@ A single agent working at modest pace burns through this tier well before the wi
 
 2. **🛡️ Sentinel itself consumes tokens** — the Sentinel intervenes too often today, and each intervention costs LLM calls. This is *the* reason the €20 base tier is currently unusable. Reducing Sentinel intervention frequency is the highest-leverage optimization left.
 
+   > ⚠️ **Note (2026-07-02, correction):** "*the* reason / highest-leverage" is superseded. A clean full-history measurement shows the coordinators at ~20% of the budget (Captain ~13.6%, **equal on Kimi and Codex**); the "70%" is a coast/idle artifact present on *both* models, not Kimi-specific. Reducing the Sentinel is a ~20% (secondary) lever; the structural blocker is the **budget size** (~17× cost-per-action on Kimi). See [`docs/internal/2026-06-29-coordinator-burn-kimi-vs-codex.md`](../internal/2026-06-29-coordinator-burn-kimi-vs-codex.md).
+
 3. ~~**⏰ No work-hours scheduling yet**~~ — **shipped 2026-05-26**. Users now define when the team works (CLI / desktop wizard / web UI). The Bridge distributes the weekly budget only across active hours and computes the per-window target dynamically. See **🗓️ Work hours** below.
 
 ## 🗓️ Work hours — team as employee
