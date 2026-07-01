@@ -1,5 +1,9 @@
 # 🚨 Il Capitano Kimi a thinking-OFF viola il gate writer-on-demand (beta-3, 2026-07-01)
 
+> 📎 **Narrazione consolidata (fenomeno + decisione + stato)** in
+> [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](./2026-06-29-coordinator-burn-kimi-vs-codex.md).
+> Questo file resta come **record forense dettagliato** dell'incidente.
+
 **TL;DR** — Con il `--no-thinking` applicato al Capitano Kimi (fix coordinator-burn #5 del 2026-06-30), il Capitano di **beta-3** (profilo betaD Olivar, provider **Kimi K2.7-Code**) ha **invertito la regola C-10** e ordinato allo Scrittore di scrivere **30 CV+CL che nessun utente aveva richiesto**, bruciando **~11 punti di quota settimanale** in 2 ore e spingendo il team in `SOPRA-PACE-WEEKLY` (88%). È la prova sul campo che **il Capitano Kimi NON può girare a thinking OFF**: senza catena di reasoning delibera male sui gate e fa danni gravi. **Decisione: Capitano → thinking ON; Sentinella → resta OFF** (osservazione nei prossimi giorni).
 
 ---
@@ -88,6 +92,6 @@ esac
 
 ## 7. Stato / gating
 
-- Modifica su **dev2** (branch di lavoro). **GATED sul redeploy utente**: merge → master → `jht upgrade` + `docker image prune -f` sulle VPS Kimi (beta-3, betaB).
+- ✅ **DEPLOYATO 2026-07-01** (immagine `13057f2a`, `jht upgrade` su beta-3 e betaB): `start-agent.sh` ramo `kimi` → `sentinella) --no-thinking`, Capitano thinking-ON. (Era su `dev2`, poi mergiato in master.)
 - Team **NON toccato a runtime** (regola: simulazione = sola lettura). L'osservazione dello stato attuale (violazione + costo) è essa stessa il dato.
 - Fix distinto e dello stesso giorno: `2026-07-01-reset-*` / crash-loop del bridge (`1ca2a8b36`), non correlato a questa vicenda.
