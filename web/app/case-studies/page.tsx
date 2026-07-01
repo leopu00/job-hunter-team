@@ -52,6 +52,7 @@ const T: Record<
     positions: string;
     avgMatch: string;
     strongMatch: string;
+    cardDays: string;
     cumTitle: string;
     cumLead: string;
     cumDays: string;
@@ -112,6 +113,7 @@ const T: Record<
     positions: "posizioni",
     avgMatch: "match medio",
     strongMatch: "match forti",
+    cardDays: "giorni lavorati",
     cumTitle: "In media, per case study",
     cumLead:
       "Non la somma, ma la MEDIA sui case study monitorati: cosa produce una run tipo. Le run hanno durate diverse, quindi è un valore indicativo — per dati mensili accurati servono run da un mese intero.",
@@ -181,6 +183,7 @@ const T: Record<
     positions: "positions",
     avgMatch: "average match",
     strongMatch: "strong matches",
+    cardDays: "working days",
     cumTitle: "On average, per case study",
     cumLead:
       "Not the sum, but the AVERAGE across the monitored case studies: what a typical run produces. Runs have different lengths, so it's indicative — accurate monthly figures need full-month runs.",
@@ -250,6 +253,7 @@ const T: Record<
     positions: "puestos",
     avgMatch: "coincidencia media",
     strongMatch: "coincidencias fuertes",
+    cardDays: "días trabajados",
     cumTitle: "En promedio, por caso de estudio",
     cumLead:
       "No la suma, sino el PROMEDIO de los casos de estudio monitorizados: lo que produce una ejecución típica. Las ejecuciones tienen duraciones distintas, así que es indicativo — para datos mensuales precisos hacen falta ejecuciones de un mes completo.",
@@ -320,6 +324,7 @@ const T: Record<
     positions: "postes",
     avgMatch: "correspondance moyenne",
     strongMatch: "correspondances fortes",
+    cardDays: "jours travaillés",
     cumTitle: "En moyenne, par étude de cas",
     cumLead:
       "Non pas la somme, mais la MOYENNE sur les études de cas suivies : ce que produit un run type. Les runs ont des durées différentes, c'est donc indicatif — des chiffres mensuels précis nécessitent des runs d'un mois entier.",
@@ -390,6 +395,7 @@ const T: Record<
     positions: "Stellen",
     avgMatch: "durchschnittlicher Match",
     strongMatch: "starke Matches",
+    cardDays: "Arbeitstage",
     cumTitle: "Im Schnitt, pro Fallstudie",
     cumLead:
       "Nicht die Summe, sondern der DURCHSCHNITT über die beobachteten Fallstudien: was ein typischer Lauf produziert. Läufe haben unterschiedliche Längen, daher ist es indikativ — genaue Monatszahlen brauchen Läufe über einen vollen Monat.",
@@ -460,6 +466,7 @@ const T: Record<
     positions: "pozíció",
     avgMatch: "átlagos egyezés",
     strongMatch: "erős egyezések",
+    cardDays: "munkanap",
     cumTitle: "Átlagosan, esettanulmányonként",
     cumLead:
       "Nem az összeg, hanem az ÁTLAG a megfigyelt esettanulmányokon: mit produkál egy tipikus futás. A futások eltérő hosszúságúak, ezért ez irányadó — pontos havi adatokhoz teljes hónapos futások kellenek.",
@@ -529,6 +536,7 @@ const T: Record<
     positions: "posições",
     avgMatch: "correspondência média",
     strongMatch: "correspondências fortes",
+    cardDays: "dias trabalhados",
     cumTitle: "Em média, por estudo de caso",
     cumLead:
       "Não a soma, mas a MÉDIA dos estudos de caso monitorizados: o que produz uma execução típica. As execuções têm durações diferentes, por isso é indicativo — dados mensais precisos exigem execuções de um mês inteiro.",
@@ -793,7 +801,7 @@ export default async function CaseStudiesIndexPage() {
                 <p className="text-[12px] text-[var(--color-muted)] leading-relaxed line-clamp-2 mb-4">
                   {cs.profile.headline} · {cs.profile.summary}
                 </p>
-                <div className="grid grid-cols-3 gap-2 border-t border-[var(--color-border)] pt-3">
+                <div className="grid grid-cols-4 gap-2 border-t border-[var(--color-border)] pt-3">
                   <div>
                     <div
                       className="text-[18px] font-extrabold tabular-nums"
@@ -825,6 +833,17 @@ export default async function CaseStudiesIndexPage() {
                     </div>
                     <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
                       {t.strongMatch}
+                    </div>
+                  </div>
+                  <div>
+                    <div
+                      className="text-[18px] font-extrabold tabular-nums"
+                      style={{ color: "var(--color-white)" }}
+                    >
+                      {nf(caseRunInfo(cs.run, locale).days)}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                      {t.cardDays}
                     </div>
                   </div>
                 </div>
