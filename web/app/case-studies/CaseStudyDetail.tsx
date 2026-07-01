@@ -531,7 +531,7 @@ export default function CaseStudyDetail({
       </div>
 
       {/* ── Profilo ───────────────────────────────────────────── */}
-      <header id="cs-profile" data-cs-anchor="profile" className="scroll-mt-[72px]">
+      <header id="cs-profile" data-cs-anchor="profile">
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8">
           {/* Riga alta: testo a sinistra (piena larghezza) + abbonamento a destra */}
           <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
@@ -624,7 +624,7 @@ export default function CaseStudyDetail({
 
       {/* ── Lavoro e budget nel tempo (grafico unico, doppio asse) ── */}
       {run.usage && run.usage.daily.length > 0 && (
-        <section id="cs-budget" data-cs-anchor="budget" className="scroll-mt-[72px]">
+        <section id="cs-budget" data-cs-anchor="budget">
           <div className="section-label mb-1">📈 {t.workBudgetTitle}</div>
           <p className="text-[11px] text-[var(--color-dim)] mb-4">
             <strong className="text-[var(--color-muted)]">
@@ -714,7 +714,7 @@ export default function CaseStudyDetail({
           <section
             id="cs-sources"
             data-cs-anchor="sources"
-            className="pt-10 border-t border-[var(--color-border)] scroll-mt-[72px]"
+            className="pt-10 border-t border-[var(--color-border)]"
           >
             <div className="section-label mb-1">📥 {t.sourcesTitle}</div>
             <p className="text-[11px] text-[var(--color-dim)] mb-6">
@@ -763,7 +763,7 @@ export default function CaseStudyDetail({
         <section
           id="cs-funnel"
           data-cs-anchor="funnel"
-          className="pt-10 border-t border-[var(--color-border)] scroll-mt-[72px]"
+          className="pt-10 border-t border-[var(--color-border)]"
         >
           <div className="section-label mb-1">🪣 {t.funnelTitle}</div>
           <p className="text-[11px] text-[var(--color-dim)] mb-6">
