@@ -154,6 +154,11 @@ def render(v):
         wrin_s = f" (tra {wrin})" if wrin else ""
         lines.append(f"   usato {wk.get('used')}%   ·   rimane {wk.get('remaining')}%   ·   "
                      f"reset {wclose}{wrin_s}")
+        # Verdetto imperativo (Passo A): headline azionabile, non solo numeri.
+        # Assente sul path skill→Capitano che non lo popola → si salta pulito.
+        vd = wk.get("verdict")
+        if vd:
+            lines.append(f"   ➤ {vd}")
         ratio = wk.get("ratio")
         ratio_s = f"   ratio {ratio}×" if isinstance(ratio, (int, float)) else ""
         lines.append(_vel_block("sostenibile", wk.get("vel_now"), wk.get("sustainable")) + ratio_s)
