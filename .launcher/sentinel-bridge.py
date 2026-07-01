@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """
-Sentinel Bridge V5 — orologio + fetch + tick alla Sentinella.
+Sentinel Bridge V5 — orologio + fetch + tick alla Sentinella (SENSORE usage).
+
+── ROLE-MAP dei bridge deterministici (vedi docs/internal/architecture/bridges.md) ──
+  sentinel-bridge.py  → QUESTO: SENSORE usage — fetch provider ~2-10min (adattivo),
+                        scrive sentinel-data.jsonl, ticka la SENTINELLA ([BRIDGE TICK]).
+  pacing-bridge.py    → report pacing ogni 15min alla SENTINELLA ([BRIDGE PACING]).
+  heartbeat-bridge.py → nudge orario al CAPITANO ([HEARTBEAT]); off-hours tace.
 
 Architettura V5 (post-incident 2026-04-25):
   • ogni 5 min: fetch del provider attivo (codex JSONL / kimi HTTP / claude HTTP)
@@ -78,7 +84,7 @@ PID_FILE = LOGS_DIR / "sentinel-bridge.pid"
 STATE_FILE = LOGS_DIR / "sentinel-bridge-state.json"
 # Daily hard-stop (#2): flag CONDIVISO. Quando il consumo di oggi sfora il cap
 # giornaliero, questo bridge lo crea e mette il team in standby; pacing-bridge e
-# capitano-bridge lo leggono e tacciono. Rimosso da questo stesso bridge quando il
+# heartbeat-bridge lo leggono e tacciono. Rimosso da questo stesso bridge quando il
 # budget rientra (inizio finestra di lavoro del giorno dopo / reset weekly).
 DAILY_HALT_FLAG = LOGS_DIR / "daily-halt.flag"
 STATE_VERSION = 7
