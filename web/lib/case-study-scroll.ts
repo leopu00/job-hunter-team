@@ -8,6 +8,10 @@
 // data-cs-anchor) e (b) di quanti px la linea di riferimento è ENTRATA in quella
 // sezione. Sul nuovo tester riportiamo la stessa sezione allo stesso offset.
 //
+// Se la sezione ricordata NON esiste sul tester di destinazione (es. la mappa
+// "Dove" è assente quando non ci sono ancora città geocodificate), si torna
+// ALL'INIZIO — alla card di presentazione del profilo — non alla sezione vicina.
+//
 // Dettagli che contano (imparati a caro prezzo):
 //  - globals.css: `html { scroll-behavior:smooth; scroll-padding-top:72px }`. Lo
 //    smooth farebbe ANIMARE lo scroll (misure a metà volo): forziamo scrollTo
@@ -20,19 +24,6 @@
 //
 // Lo stato vive a livello di modulo: sopravvive alla navigazione soft di Next
 // (stessa scheda) e si azzera al reload completo (ingresso pulito in cima).
-
-// Ordine VISIVO delle sezioni (la panoramica le riordina con `order-N`). Serve
-// SOLO al fallback quando la sezione manca sul tester di destinazione (es. la
-// mappa "Dove" è assente se non ci sono ancora città geocodificate).
-export const CS_SECTIONS = [
-  "profile",
-  "where",
-  "match",
-  "roles",
-  "budget",
-  "sources",
-  "funnel",
-] as const;
 
 // Deve combaciare con `scroll-padding-top` in globals.css (nav fissa + respiro).
 const OFFSET = 72;
@@ -71,26 +62,6 @@ export function rememberCurrentSection(): void {
   };
 }
 
-function findAnchor(key: string): HTMLElement | null {
-  const exact = document.querySelector<HTMLElement>(`[data-cs-anchor="${key}"]`);
-  if (exact) return exact;
-  // Fallback: la sezione manca sul tester di destinazione → la più vicina per
-  // ordine visivo (prima la successiva, poi la precedente).
-  const idx = (CS_SECTIONS as readonly string[]).indexOf(key);
-  if (idx < 0) return null;
-  for (let d = 1; d < CS_SECTIONS.length; d++) {
-    for (const j of [idx + d, idx - d]) {
-      if (j >= 0 && j < CS_SECTIONS.length) {
-        const el = document.querySelector<HTMLElement>(
-          `[data-cs-anchor="${CS_SECTIONS[j]}"]`,
-        );
-        if (el) return el;
-      }
-    }
-  }
-  return null;
-}
-
 /** Riporta il viewport alla sezione + offset ricordati sul nuovo tester. Da
  *  chiamare al montaggio / cambio di tester. No-op se non c'è nulla in sospeso. */
 export function restoreSection(): void {
@@ -116,13 +87,24 @@ export function restoreSection(): void {
   let frames = 0;
   const tick = () => {
     if (aborted) return cleanup();
-    const el = findAnchor(target.key);
+    const exact = document.querySelector<HTMLElement>(
+      `[data-cs-anchor="${target.key}"]`,
+    );
+    // Fallback: sezione assente su questo tester → si torna alla presentazione
+    // del profilo (in cima), senza offset.
+    const el =
+      exact ?? document.querySelector<HTMLElement>('[data-cs-anchor="profile"]');
     if (el) {
       const top = Math.round(absTop(el)); // ASSOLUTA: cambia solo col layout
-      // offset clampato all'altezza della sezione di destinazione (che può
-      // differire): non si sconfina nella sezione successiva.
-      const off = Math.min(target.offset, Math.max(0, el.offsetHeight - 8));
-      window.scrollTo({ top: Math.max(0, top - OFFSET + off), behavior: "instant" as ScrollBehavior });
+      // offset solo se la sezione esiste davvero, clampato alla sua altezza
+      // (che può differire): non si sconfina nella sezione successiva.
+      const off = exact
+        ? Math.min(target.offset, Math.max(0, el.offsetHeight - 8))
+        : 0;
+      window.scrollTo({
+        top: Math.max(0, top - OFFSET + off),
+        behavior: "instant" as ScrollBehavior,
+      });
       if (top === last) stable += 1;
       else {
         stable = 0;
