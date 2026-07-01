@@ -30,7 +30,7 @@
 
 ---
 
-Point the system at your profile, start the team, and only review applications that clear the quality bar. Each agent specializes in one task: Scout finds positions, Analyst evaluates them, Scorer ranks them, Writer prepares documents, and Critic reviews everything before submission.
+Point the system at your profile, start the team, and only review applications that clear the quality bar. The **worker** agents each specialize in one task — Scout finds positions, Analyst evaluates them, Scorer ranks them, Writer prepares documents, Critic reviews everything — all orchestrated by a **Captain**, with a support core alongside (see [The Team](#the-team) below).
 
 The whole pipeline runs **locally in a container**, on your machine or your VPS — your profile, your data, your provider account. JHT never bills you: you only pay the LLM subscription of the provider you choose. **AI on the side of workers, not against them.**
 
