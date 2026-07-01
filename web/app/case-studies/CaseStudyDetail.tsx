@@ -24,12 +24,22 @@ import SourcesDonutChart from "./SourcesDonutChart";
 import PositionsFunnelChart from "./PositionsFunnelChart";
 import ExcludedDonut from "./ExcludedDonut";
 import ConversionFunnelCard from "./ConversionFunnelCard";
+import CostPerOutcome from "./CostPerOutcome";
+
+// Il costo per risultato ha senso solo su run lunghe circa un ciclo mensile
+// (l'abbonamento è mensile): sotto questa soglia di giorni attivi non si mostra.
+const COST_MIN_DAYS = 20;
 
 export interface PreparedCase {
   id: string;
   label: string;
   tagline: string;
-  subscription: { provider: string; plan: string; price: string };
+  subscription: {
+    provider: string;
+    plan: string;
+    price: string;
+    monthlyEur?: number;
+  };
   profile: CaseStudyProfile;
   phases?: CaseStudyPhase[];
   run: CaseStudyRun; // events alleggeriti
@@ -811,6 +821,22 @@ export default function CaseStudyDetail({
           </div>
         </section>
       )}
+
+      {/* ── Costo per risultato (solo run ~mensili, con canone noto) ──── */}
+      {current.subscription.monthlyEur != null &&
+        activeDays >= COST_MIN_DAYS &&
+        run.conversion && (
+          <section className="pt-10 border-t border-[var(--color-border)]">
+            <CostPerOutcome
+              monthlyEur={current.subscription.monthlyEur}
+              found={run.conversion.found}
+              scored={run.conversion.scored}
+              strong70={run.conversion.strong70}
+              strong80={run.conversion.strong80}
+              days={activeDays}
+            />
+          </section>
+        )}
     </div>
   );
 }

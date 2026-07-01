@@ -67,7 +67,13 @@ export interface CaseStudyMeta {
   geos: string[]; // aree geografiche, es. ["Europa"]
   model: string; // modello LLM usato dal team, es. "Codex"
   /** abbonamento AI usato per questo run (l'unica spesa reale) */
-  subscription: { provider: string; plan: string; price: string };
+  subscription: {
+    provider: string;
+    plan: string;
+    price: string;
+    /** costo mensile in € (numerico) per il calcolo del costo per risultato */
+    monthlyEur?: number;
+  };
   profile: CaseStudyProfile;
   /** fasi del run con modello diverso (opzionale); se assente = run mono-fase */
   phases?: CaseStudyPhase[];
@@ -123,6 +129,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       provider: "OpenAI Codex",
       plan: "Pro",
       price: "~€100/mese",
+      monthlyEur: 100,
     },
     profile: TW_PROFILE,
     // Fase unica = l'UNICA sessione di questa pagina (Codex free-run, ~3 giorni):
@@ -153,6 +160,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       provider: "OpenAI Codex",
       plan: "Pro",
       price: "~€100/mese",
+      monthlyEur: 100,
     },
     profile: {
       badge: "B2",
@@ -200,6 +208,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       provider: "Moonshot Kimi",
       plan: "Kimi Code",
       price: "~€40/mese",
+      monthlyEur: 40,
     },
     profile: TW_PROFILE,
     // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
@@ -228,6 +237,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       provider: "Moonshot Kimi",
       plan: "Kimi Code",
       price: "~€40/mese",
+      monthlyEur: 40,
     },
     profile: {
       badge: "B3",
