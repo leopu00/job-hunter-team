@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { rememberCurrentSection } from "@/lib/case-study-scroll";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
 
@@ -96,14 +97,19 @@ export interface CaseStudyTeaser {
   seniority: string;
   geos: string[];
   model: string;
+  /** periodo di lavoro già formattato: es. "19 mag → 30 giu (34 giorni)" */
+  period: string;
 }
 
 export default function CaseStudiesShell({
   testers,
   children,
+  activeId,
 }: {
   testers: CaseStudyTeaser[];
   children: React.ReactNode;
+  /** id del tester corrente (nelle pagine di dettaglio): la sua voce è evidenziata */
+  activeId?: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const t = T[useLocale()];
@@ -142,11 +148,32 @@ export default function CaseStudiesShell({
             </div>
 
             <nav className="grid grid-cols-1 auto-rows-fr gap-2.5">
-              {testers.map((t) => (
+              {testers.map((t) => {
+                const active = t.id === activeId;
+                return (
                 <Link
                   key={t.id}
                   href={`/case-studies/${t.id}`}
-                  className="group flex h-full flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] px-3.5 py-3 no-underline transition-colors hover:border-[var(--color-blue)]"
+                  // Su una pagina di dettaglio (activeId presente) non riportare in
+                  // cima: ricordiamo la sezione corrente e la riallineiamo sul nuovo
+                  // tester (restoreSection nel dettaglio). Dall'indice invece si entra
+                  // in cima alla pagina scelta.
+                  scroll={!activeId}
+                  onClick={activeId ? rememberCurrentSection : undefined}
+                  aria-current={active ? "page" : undefined}
+                  className={`group flex h-full flex-col rounded-xl border ${
+                    active
+                      ? "border-[var(--color-blue)]"
+                      : "border-[var(--color-border)]"
+                  } bg-[var(--color-card)] px-3.5 py-3 no-underline transition-colors hover:border-[var(--color-blue)]`}
+                  style={
+                    active
+                      ? {
+                          background:
+                            "color-mix(in srgb, var(--color-blue) 10%, var(--color-card))",
+                        }
+                      : undefined
+                  }
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -189,9 +216,15 @@ export default function CaseStudiesShell({
                         {t.model}
                       </span>
                     </div>
+
+                    {/* periodo di lavoro (finestra + giorni), breve */}
+                    <div className="mt-2 text-[9px] tabular-nums text-[var(--color-dim)]">
+                      {t.period}
+                    </div>
                   </div>
                 </Link>
-              ))}
+                );
+              })}
             </nav>
           </div>
         </aside>

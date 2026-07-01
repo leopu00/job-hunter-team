@@ -4,8 +4,12 @@
 // come ha lavorato. In cima uno switcher COLLASSABILE (non una sidebar fissa)
 // per saltare a un altro case study.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  rememberCurrentSection,
+  restoreSection,
+} from "@/lib/case-study-scroll";
 import type { CaseStudyProfile, CaseStudyPhase } from "@/lib/case-studies";
 import type { CaseStudyRun, CaseStudyUsage } from "@/lib/case-study";
 import type { TeamActivity } from "@/lib/team-activity";
@@ -20,12 +24,20 @@ import SourcesDonutChart from "./SourcesDonutChart";
 import PositionsFunnelChart from "./PositionsFunnelChart";
 import ExcludedDonut from "./ExcludedDonut";
 import ConversionFunnelCard from "./ConversionFunnelCard";
+import CostPerOutcome from "./CostPerOutcome";
+import DailyHighScore from "./DailyHighScore";
+import { caseMonthlyProjection } from "@/lib/case-studies";
 
 export interface PreparedCase {
   id: string;
   label: string;
   tagline: string;
-  subscription: { provider: string; plan: string; price: string };
+  subscription: {
+    provider: string;
+    plan: string;
+    price: string;
+    monthlyEur?: number;
+  };
   profile: CaseStudyProfile;
   phases?: CaseStudyPhase[];
   run: CaseStudyRun; // events alleggeriti
@@ -94,8 +106,8 @@ const T: Record<
     onlyExpense: string;
     whereSearches: string;
     runRealPrefix: string;
-    runRealMiddle: string; // tra finestra e "giorni di lavoro"
-    runRealSuffix: string;
+    runRealDays: string; // parola "giorni di lavoro" (mostrata tra parentesi)
+    runRealSuffix: string; // coda: nota di anonimato
     everyDay: string;
     monFri: string;
     workBudgetTitle: string;
@@ -126,8 +138,8 @@ const T: Record<
     onlyExpense: "È l’unica spesa: la piattaforma è gratis.",
     whereSearches: "Dove cerca lavoro",
     runRealPrefix: "Run reale del team su questo profilo · finestra",
-    runRealMiddle: "·",
-    runRealSuffix: "giorni di lavoro · ogni dato è aggregato e anonimo.",
+    runRealDays: "giorni di lavoro",
+    runRealSuffix: "ogni dato è aggregato e anonimo.",
     everyDay: "tutti i giorni",
     monFri: "lun–ven",
     workBudgetTitle: "Lavoro e budget AI nel tempo",
@@ -162,8 +174,8 @@ const T: Record<
     onlyExpense: "It’s the only expense: the platform is free.",
     whereSearches: "Where they search for work",
     runRealPrefix: "Real team run on this profile · window",
-    runRealMiddle: "·",
-    runRealSuffix: "working days · every figure is aggregated and anonymous.",
+    runRealDays: "working days",
+    runRealSuffix: "every figure is aggregated and anonymous.",
     everyDay: "every day",
     monFri: "Mon–Fri",
     workBudgetTitle: "Work and AI budget over time",
@@ -198,8 +210,8 @@ const T: Record<
     onlyExpense: "Es el único gasto: la plataforma es gratis.",
     whereSearches: "Dónde busca trabajo",
     runRealPrefix: "Ejecución real del equipo sobre este perfil · ventana",
-    runRealMiddle: "·",
-    runRealSuffix: "días de trabajo · cada dato está agregado y es anónimo.",
+    runRealDays: "días de trabajo",
+    runRealSuffix: "cada dato está agregado y es anónimo.",
     everyDay: "todos los días",
     monFri: "lun–vie",
     workBudgetTitle: "Trabajo y presupuesto de AI a lo largo del tiempo",
@@ -235,8 +247,8 @@ const T: Record<
     onlyExpense: "C’est la seule dépense : la plateforme est gratuite.",
     whereSearches: "Où il cherche du travail",
     runRealPrefix: "Exécution réelle de l’équipe sur ce profil · fenêtre",
-    runRealMiddle: "·",
-    runRealSuffix: "jours de travail · chaque donnée est agrégée et anonyme.",
+    runRealDays: "jours de travail",
+    runRealSuffix: "chaque donnée est agrégée et anonyme.",
     everyDay: "tous les jours",
     monFri: "lun–ven",
     workBudgetTitle: "Travail et budget AI au fil du temps",
@@ -272,8 +284,8 @@ const T: Record<
     onlyExpense: "Es ist die einzige Ausgabe: Die Plattform ist kostenlos.",
     whereSearches: "Wo nach Arbeit gesucht wird",
     runRealPrefix: "Echter Team-Lauf für dieses Profil · Zeitfenster",
-    runRealMiddle: "·",
-    runRealSuffix: "Arbeitstage · jeder Wert ist aggregiert und anonym.",
+    runRealDays: "Arbeitstage",
+    runRealSuffix: "jeder Wert ist aggregiert und anonym.",
     everyDay: "jeden Tag",
     monFri: "Mo–Fr",
     workBudgetTitle: "Arbeit und AI-Budget im Zeitverlauf",
@@ -309,8 +321,8 @@ const T: Record<
     onlyExpense: "Ez az egyetlen költség: a platform ingyenes.",
     whereSearches: "Hol keres munkát",
     runRealPrefix: "Valódi csapatfuttatás ezen a profilon · időablak",
-    runRealMiddle: "·",
-    runRealSuffix: "munkanap · minden adat összesített és névtelen.",
+    runRealDays: "munkanap",
+    runRealSuffix: "minden adat összesített és névtelen.",
     everyDay: "minden nap",
     monFri: "hét–pén",
     workBudgetTitle: "Munka és AI-keret az idő során",
@@ -346,8 +358,8 @@ const T: Record<
     onlyExpense: "É a única despesa: a plataforma é gratuita.",
     whereSearches: "Onde procura trabalho",
     runRealPrefix: "Execução real da equipa sobre este perfil · janela",
-    runRealMiddle: "·",
-    runRealSuffix: "dias de trabalho · cada dado é agregado e anónimo.",
+    runRealDays: "dias de trabalho",
+    runRealSuffix: "cada dado é agregado e anónimo.",
     everyDay: "todos os dias",
     monFri: "seg–sex",
     workBudgetTitle: "Trabalho e orçamento de AI ao longo do tempo",
@@ -388,9 +400,20 @@ export default function CaseStudyDetail({
   const [menuOpen, setMenuOpen] = useState(false);
   const { run, activity, profile, phases } = current;
 
+  // Cambiando tester (stesso componente, nuovo id) riallinea alla stessa sezione
+  // ricordata dal menu; al primo ingresso non c'è nulla in sospeso → resta in cima.
+  useEffect(() => {
+    restoreSection();
+  }, [current.id]);
+
   const activeDays = activity.roleDaily.filter((d) =>
     Object.values(d.counts).some((n) => n > 0),
   ).length;
+
+  // Costo per risultato: misurato (run ~mensile) o stimato (proiezione a un mese).
+  const { estimated: costEstimated, multiplier: costMultiplier } =
+    caseMonthlyProjection(run, activeDays);
+
   const fromKey = run.tsRange[0].slice(0, 10);
   const toKey = run.tsRange[1].slice(0, 10);
 
@@ -440,7 +463,9 @@ export default function CaseStudyDetail({
           </span>
         </nav>
 
-        <div className="relative shrink-0">
+        {/* Switcher a tendina: solo su mobile — su desktop (lg+) c'è la sidebar
+            collassabile dei tester, quindi qui sarebbe ridondante. */}
+        <div className="relative shrink-0 lg:hidden">
           <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}
@@ -469,7 +494,11 @@ export default function CaseStudyDetail({
                     <Link
                       key={c.id}
                       href={`/case-studies/${c.id}`}
-                      onClick={() => setMenuOpen(false)}
+                      scroll={false}
+                      onClick={() => {
+                        rememberCurrentSection();
+                        setMenuOpen(false);
+                      }}
                       className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 no-underline transition-colors hover:bg-[var(--color-bg)]"
                       style={{
                         background: active
@@ -515,7 +544,7 @@ export default function CaseStudyDetail({
       </div>
 
       {/* ── Profilo ───────────────────────────────────────────── */}
-      <header>
+      <header id="cs-profile" data-cs-anchor="profile">
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8">
           {/* Riga alta: testo a sinistra (piena larghezza) + abbonamento a destra */}
           <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
@@ -594,12 +623,12 @@ export default function CaseStudyDetail({
           </div>
         </div>
 
-        <p className="mt-3 text-[11px] text-[var(--color-dim)] px-1">
+        <p className="mt-4 text-[12px] text-[var(--color-muted)] px-1">
           {t.runRealPrefix}{" "}
-          <strong>
+          <strong className="text-[var(--color-base)]">
             {dayLabel(locale, fromKey)} → {dayLabel(locale, toKey)}
           </strong>{" "}
-          {t.runRealMiddle} {activeDays} {t.runRealSuffix}
+          ({activeDays} {t.runRealDays}) · {t.runRealSuffix}
         </p>
       </header>
 
@@ -608,7 +637,7 @@ export default function CaseStudyDetail({
 
       {/* ── Lavoro e budget nel tempo (grafico unico, doppio asse) ── */}
       {run.usage && run.usage.daily.length > 0 && (
-        <section>
+        <section id="cs-budget" data-cs-anchor="budget">
           <div className="section-label mb-1">📈 {t.workBudgetTitle}</div>
           <p className="text-[11px] text-[var(--color-dim)] mb-4">
             <strong className="text-[var(--color-muted)]">
@@ -695,7 +724,11 @@ export default function CaseStudyDetail({
         run.sourcesScoreDaily.length > 0 &&
         run.sourcesDailyKeys &&
         run.sourcesDailyKeys.length > 0 && (
-          <section className="pt-10 border-t border-[var(--color-border)]">
+          <section
+            id="cs-sources"
+            data-cs-anchor="sources"
+            className="pt-10 border-t border-[var(--color-border)]"
+          >
             <div className="section-label mb-1">📥 {t.sourcesTitle}</div>
             <p className="text-[11px] text-[var(--color-dim)] mb-6">
               {t.sourcesProse1} {nf(locale, run.totals.positions)}{" "}
@@ -740,7 +773,11 @@ export default function CaseStudyDetail({
 
       {/* ── Funnel: trovate → tenute vs escluse (sezione nuova) ──────── */}
       {run.funnelDaily && run.funnelDaily.length > 0 && run.funnelTotals && (
-        <section className="pt-10 border-t border-[var(--color-border)]">
+        <section
+          id="cs-funnel"
+          data-cs-anchor="funnel"
+          className="pt-10 border-t border-[var(--color-border)]"
+        >
           <div className="section-label mb-1">🪣 {t.funnelTitle}</div>
           <p className="text-[11px] text-[var(--color-dim)] mb-6">
             {t.funnelProse}
@@ -770,19 +807,44 @@ export default function CaseStudyDetail({
                 <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
                   {t.conversionTitle}
                 </div>
-                {/* found/scored dal funnel = POSIZIONI distinte nella pipeline
-                    (così "Valutate" non supera mai "Tenute"); strong/excellent
-                    dal match = soglie di qualità sui punteggi. match.scored
-                    conta le valutazioni coi ri-score → non usarlo qui. */}
+                {/* Imbuto a POSIZIONI DISTINTE, monotòno per costruzione (vedi
+                    run.conversion nel generatore): found ≥ valutate ≥ forti ≥
+                    eccellenti, soglia sul miglior punteggio per posizione. Così
+                    "Forti≥70" non supera mai "Valutate" nemmeno quando molte
+                    posizioni avanzano a 'ready'. Fallback per gli snapshot vecchi
+                    senza il campo (funnel per lo stato + match per gli eventi). */}
                 <ConversionFunnelCard
-                  found={run.funnelTotals.found}
-                  scored={run.funnelTotals.scored}
-                  strong70={run.match.strong70}
-                  strong80={run.match.strong80}
+                  found={run.conversion?.found ?? run.funnelTotals.found}
+                  scored={run.conversion?.scored ?? run.funnelTotals.scored}
+                  strong70={run.conversion?.strong70 ?? run.match.strong70}
+                  strong80={run.conversion?.strong80 ?? run.match.strong80}
                 />
               </div>
             </div>
           </div>
+        </section>
+      )}
+
+      {/* ── Costo per risultato (solo run ~mensili, con canone noto) ──── */}
+      {/* ── Match ad alto score, giorno per giorno ──────────────── */}
+      {run.scoreDaily && run.scoreDaily.length > 0 && (
+        <section className="pt-10 border-t border-[var(--color-border)]">
+          <DailyHighScore daily={run.scoreDaily} />
+        </section>
+      )}
+
+      {current.subscription.monthlyEur != null && run.conversion && (
+        <section className="pt-10 border-t border-[var(--color-border)]">
+          <CostPerOutcome
+            monthlyEur={current.subscription.monthlyEur}
+            found={run.conversion.found}
+            scored={run.conversion.scored}
+            strong70={run.conversion.strong70}
+            strong80={run.conversion.strong80}
+            days={activeDays}
+            multiplier={costMultiplier}
+            estimated={costEstimated}
+          />
         </section>
       )}
     </div>
