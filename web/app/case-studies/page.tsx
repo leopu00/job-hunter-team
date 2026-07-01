@@ -74,6 +74,13 @@ const T: Record<
     priceExcellent: string;
     priceChartTitle: string;
     priceCaption: string;
+    dailyTitle: string;
+    dailyLead: string;
+    dailyAvgStrong: string;
+    dailyAvgExcellent: string;
+    dailyChartTitle: string;
+    dailyUnit: string;
+    dailyCaption: string;
     moreComingTitle: string;
     moreComingSub: string;
     contributeTitle: string;
@@ -124,6 +131,15 @@ const T: Record<
     priceChartTitle: "Prezzo medio per risultato · per livello di qualità",
     priceCaption:
       "Più alto è il livello di qualità richiesto, più sale il costo per singolo risultato.",
+    dailyTitle: "Match ad alto score al giorno",
+    dailyLead:
+      "In media, quante posizioni ad alto score (≥70) ed eccellente (≥80) produce il team ogni giorno di lavoro — e come varia tra i profili.",
+    dailyAvgStrong: "≥70 / giorno (media)",
+    dailyAvgExcellent: "≥80 / giorno (media)",
+    dailyChartTitle: "Media al giorno · per profilo",
+    dailyUnit: "giorno",
+    dailyCaption:
+      "Media per giorno lavorato; la quota ≥80 è evidenziata in verde vivo.",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "📥 Contribuisci con i tuoi dati",
@@ -176,6 +192,15 @@ const T: Record<
     priceChartTitle: "Average price per result · by quality tier",
     priceCaption:
       "The higher the quality bar, the higher the cost per single result.",
+    dailyTitle: "High-score matches per day",
+    dailyLead:
+      "On average, how many high-score (≥70) and excellent (≥80) positions the team produces each working day — and how it varies across profiles.",
+    dailyAvgStrong: "≥70 / day (avg)",
+    dailyAvgExcellent: "≥80 / day (avg)",
+    dailyChartTitle: "Average per day · by profile",
+    dailyUnit: "day",
+    dailyCaption:
+      "Average per working day; the ≥80 share is highlighted in bright green.",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "📥 Contribute your data",
@@ -228,6 +253,15 @@ const T: Record<
     priceChartTitle: "Precio medio por resultado · por nivel de calidad",
     priceCaption:
       "Cuanto mayor es el nivel de calidad exigido, más sube el coste por resultado.",
+    dailyTitle: "Match de score alto al día",
+    dailyLead:
+      "De media, cuántas posiciones de score alto (≥70) y excelente (≥80) produce el equipo cada día de trabajo — y cómo varía entre perfiles.",
+    dailyAvgStrong: "≥70 / día (media)",
+    dailyAvgExcellent: "≥80 / día (media)",
+    dailyChartTitle: "Media al día · por perfil",
+    dailyUnit: "día",
+    dailyCaption:
+      "Media por día trabajado; la cuota ≥80 está resaltada en verde vivo.",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "📥 Contribuye con tus datos",
@@ -281,6 +315,15 @@ const T: Record<
     priceChartTitle: "Prix moyen par résultat · par niveau de qualité",
     priceCaption:
       "Plus le niveau de qualité exigé est élevé, plus le coût par résultat augmente.",
+    dailyTitle: "Matchs à score élevé par jour",
+    dailyLead:
+      "En moyenne, combien de postes à score élevé (≥70) et excellent (≥80) l'équipe produit chaque jour de travail — et comment cela varie selon les profils.",
+    dailyAvgStrong: "≥70 / jour (moy.)",
+    dailyAvgExcellent: "≥80 / jour (moy.)",
+    dailyChartTitle: "Moyenne par jour · par profil",
+    dailyUnit: "jour",
+    dailyCaption:
+      "Moyenne par jour travaillé ; la part ≥80 est mise en évidence en vert vif.",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "📥 Contribue avec tes données",
@@ -334,6 +377,15 @@ const T: Record<
     priceChartTitle: "Durchschnittspreis pro Ergebnis · nach Qualitätsstufe",
     priceCaption:
       "Je höher die geforderte Qualität, desto höher die Kosten pro einzelnem Ergebnis.",
+    dailyTitle: "Hoch bewertete Matches pro Tag",
+    dailyLead:
+      "Im Schnitt, wie viele hoch (≥70) und exzellent (≥80) bewertete Positionen das Team pro Arbeitstag produziert — und wie es je Profil variiert.",
+    dailyAvgStrong: "≥70 / Tag (Ø)",
+    dailyAvgExcellent: "≥80 / Tag (Ø)",
+    dailyChartTitle: "Durchschnitt pro Tag · je Profil",
+    dailyUnit: "Tag",
+    dailyCaption:
+      "Durchschnitt pro Arbeitstag; der ≥80-Anteil ist in kräftigem Grün hervorgehoben.",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "📥 Steuere deine Daten bei",
@@ -387,6 +439,15 @@ const T: Record<
     priceChartTitle: "Átlagár eredményenként · minőségi szint szerint",
     priceCaption:
       "Minél magasabb a megkövetelt minőség, annál nagyobb az egy eredményre jutó költség.",
+    dailyTitle: "Magas pontszámú találatok naponta",
+    dailyLead:
+      "Átlagosan hány magas (≥70) és kiváló (≥80) pontszámú pozíciót termel a csapat munkanaponta — és hogyan változik profilonként.",
+    dailyAvgStrong: "≥70 / nap (átlag)",
+    dailyAvgExcellent: "≥80 / nap (átlag)",
+    dailyChartTitle: "Napi átlag · profilonként",
+    dailyUnit: "nap",
+    dailyCaption:
+      "Átlag munkanaponként; a ≥80 hányad élénkzölddel kiemelve.",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "📥 Járulj hozzá az adataiddal",
@@ -439,6 +500,15 @@ const T: Record<
     priceChartTitle: "Preço médio por resultado · por nível de qualidade",
     priceCaption:
       "Quanto maior o nível de qualidade exigido, maior o custo por resultado.",
+    dailyTitle: "Matches de score alto por dia",
+    dailyLead:
+      "Em média, quantas posições de score alto (≥70) e excelente (≥80) a equipa produz por dia de trabalho — e como varia entre perfis.",
+    dailyAvgStrong: "≥70 / dia (média)",
+    dailyAvgExcellent: "≥80 / dia (média)",
+    dailyChartTitle: "Média por dia · por perfil",
+    dailyUnit: "dia",
+    dailyCaption:
+      "Média por dia trabalhado; a quota ≥80 está destacada em verde vivo.",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "📥 Contribui com os teus dados",
@@ -531,6 +601,32 @@ export default async function CaseStudiesIndexPage() {
     { v: avgCostOf("strong80"), l: t.priceExcellent, c: TIER_COLORS[3] },
   ];
   const maxPrice = Math.max(...priceTiers.map((x) => x.v), 0.0001);
+
+  // Match ad alto score AL GIORNO: per ogni studio il tasso giornaliero medio di
+  // posizioni ≥70 (forti) e ≥80 (eccellenti); poi la media tra gli studi + il
+  // confronto per profilo. Tassi reali (conteggi giornalieri ÷ giorni), non
+  // proiezioni.
+  const dailyStudies = localized
+    .map((cs) => {
+      const sd = cs.run.scoreDaily ?? [];
+      const days = sd.length;
+      return {
+        label: `${cs.category} · ${cs.model}`,
+        r70: days ? sd.reduce((s, d) => s + d.strong70, 0) / days : 0,
+        r80: days ? sd.reduce((s, d) => s + d.strong80, 0) / days : 0,
+        has: days > 0,
+      };
+    })
+    .filter((s) => s.has);
+  const dailyAvg70 = dailyStudies.length
+    ? dailyStudies.reduce((s, x) => s + x.r70, 0) / dailyStudies.length
+    : 0;
+  const dailyAvg80 = dailyStudies.length
+    ? dailyStudies.reduce((s, x) => s + x.r80, 0) / dailyStudies.length
+    : 0;
+  const dailyMax = Math.max(...dailyStudies.map((x) => x.r70), 0.001);
+  const fmt1 = (n: number) =>
+    n.toLocaleString(LOCALE_TAG[locale], { maximumFractionDigits: 1 });
 
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
@@ -701,6 +797,102 @@ export default async function CaseStudiesIndexPage() {
             </div>
             <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)]">
               {t.priceCaption}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Match ad alto score al giorno (media tra gli studi) ── */}
+        <section className="mb-14">
+          <h2 className="text-xl font-bold tracking-tight">{t.dailyTitle}</h2>
+          <p className="text-[13px] leading-relaxed text-[var(--color-muted)] mt-2">
+            {t.dailyLead}
+          </p>
+
+          {/* KPI: media ≥70/giorno e ≥80/giorno tra gli studi */}
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            {[
+              { v: dailyAvg70, l: t.dailyAvgStrong, c: "#15803d" },
+              { v: dailyAvg80, l: t.dailyAvgExcellent, c: "#22c55e" },
+            ].map((k) => (
+              <div
+                key={k.l}
+                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
+              >
+                <div
+                  className="text-[22px] font-extrabold tabular-nums leading-none"
+                  style={{ color: k.c }}
+                >
+                  {fmt1(k.v)}
+                </div>
+                <div className="mt-1.5 text-[10px] leading-snug text-[var(--color-muted)]">
+                  {k.l}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Confronto per profilo: tasso giornaliero, ≥80 evidenziato */}
+          <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+              <span className="text-[12px] font-semibold text-[var(--color-base)]">
+                {t.dailyChartTitle}
+              </span>
+              <span className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm"
+                    style={{ background: "#22c55e" }}
+                  />
+                  ≥80
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm"
+                    style={{ background: "#15803d" }}
+                  />
+                  ≥70
+                </span>
+              </span>
+            </div>
+            <div className="flex flex-col gap-3">
+              {dailyStudies.map((s) => (
+                <div key={s.label}>
+                  <div className="flex items-baseline gap-2 mb-1">
+                    <span className="text-[11px] text-[var(--color-muted)] flex-1 truncate">
+                      {s.label}
+                    </span>
+                    <span className="text-[13px] font-bold tabular-nums text-[var(--color-base)]">
+                      {fmt1(s.r70)}
+                      <span className="text-[10px] font-normal text-[var(--color-dim)]">
+                        {" "}
+                        / {t.dailyUnit}
+                      </span>
+                    </span>
+                  </div>
+                  <div
+                    className="relative h-2 rounded-full overflow-hidden"
+                    style={{ background: "var(--color-border)" }}
+                  >
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full"
+                      style={{
+                        width: `${Math.max(2, (s.r70 / dailyMax) * 100)}%`,
+                        background: "#15803d",
+                      }}
+                    />
+                    <div
+                      className="absolute left-0 top-0 h-full rounded-full"
+                      style={{
+                        width: `${(s.r80 / dailyMax) * 100}%`,
+                        background: "#22c55e",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)]">
+              {t.dailyCaption}
             </div>
           </div>
         </section>

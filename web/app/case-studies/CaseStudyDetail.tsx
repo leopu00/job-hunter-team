@@ -25,6 +25,7 @@ import PositionsFunnelChart from "./PositionsFunnelChart";
 import ExcludedDonut from "./ExcludedDonut";
 import ConversionFunnelCard from "./ConversionFunnelCard";
 import CostPerOutcome from "./CostPerOutcome";
+import DailyHighScore from "./DailyHighScore";
 import { caseMonthlyProjection } from "@/lib/case-studies";
 
 export interface PreparedCase {
@@ -825,6 +826,13 @@ export default function CaseStudyDetail({
       )}
 
       {/* ── Costo per risultato (solo run ~mensili, con canone noto) ──── */}
+      {/* ── Match ad alto score, giorno per giorno ──────────────── */}
+      {run.scoreDaily && run.scoreDaily.length > 0 && (
+        <section className="pt-10 border-t border-[var(--color-border)]">
+          <DailyHighScore daily={run.scoreDaily} />
+        </section>
+      )}
+
       {current.subscription.monthlyEur != null && run.conversion && (
         <section className="pt-10 border-t border-[var(--color-border)]">
           <CostPerOutcome
