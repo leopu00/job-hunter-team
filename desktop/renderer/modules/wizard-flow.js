@@ -332,7 +332,7 @@ const TG_CREATE_ROLES = ['assistente', 'capitano', 'mentor']
 // Used both as the bot display name prefix in BotFather and as the
 // section header for each row.
 const TG_ROLE_EMOJI = {
-  assistente: '\u{1F468}\u200D\u{1F4BC}', // 👨‍💼
+  assistente: '\u{1F469}\u200D\u{1F4BC}', // 👩‍💼
   capitano:   '\u{1F468}\u200D\u2708\uFE0F', // 👨‍✈️
   mentor:     '\u{1F9D9}\u200D\u2642\uFE0F', // 🧙‍♂️
 }

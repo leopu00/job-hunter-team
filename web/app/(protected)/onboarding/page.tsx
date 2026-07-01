@@ -1780,7 +1780,7 @@ export default function OnboardingPage() {
           >
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center px-6">
-                <div className="text-3xl mb-3 opacity-30">👨‍💼</div>
+                <div className="text-3xl mb-3 opacity-30">👩‍💼</div>
                 <p className="text-[11px] text-[var(--color-dim)] max-w-xs leading-relaxed mb-4">
                   {tr("assistant_starting")}
                 </p>
@@ -2116,7 +2116,7 @@ function Avatar({
       }}
       aria-label={isUser ? tr("avatar_you") : tr("panel_assistant")}
     >
-      {isUser ? "👤" : "👨‍💼"}
+      {isUser ? "👤" : "👩‍💼"}
     </div>
   );
 }
