@@ -17,7 +17,7 @@ accident found after the damage.
 ## 🎯 Role & purpose
 
 - 🫀 **Process-liveness canary (la rete di sicurezza)** — the bridges/daemons that keep the
-  container alive (sentinel-bridge, pacing-bridge, capitano-bridge, window-ratio-meter,
+  container alive (sentinel-bridge, pacing-bridge, heartbeat-bridge, window-ratio-meter,
   codex-auth-healer, tg-bridge) run `setsid` **detached** → outside pid1's crash-respawn. The
   `agent-watchdog` respawns them every 30s, but if even that fails you are the **last net**: at the
   first sweep of the day you detect a dead daemon and **repair** it (`start-agent.sh bridge`, a
