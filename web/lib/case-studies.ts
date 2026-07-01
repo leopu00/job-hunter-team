@@ -400,3 +400,29 @@ export function caseRunInfo(
   const daysWord = DAYS_WORD[locale](days);
   return { range, days, daysWord, label: `${range} (${daysWord})` };
 }
+
+// ── proiezione a un mese per il costo per risultato ─────────────────────────
+// Sopra questa soglia di giorni attivi la run copre ~un ciclo mensile → il costo
+// è MISURATO (multiplier 1). Sotto → STIMATO proiettando l'output a un mese in
+// base al BUDGET consumato (Σ % dei consumi giornalieri = settimane-budget; un
+// mese ≈ 4,345 settimane). NON "giorni × 30": le run brevi bruciano in fretta il
+// budget settimanale e lo sovrastimerebbe (fallback a giorni×30 solo se manca il
+// dato di budget). Usato sia dal dettaglio sia dalla media in home.
+export const COST_MIN_DAYS = 20;
+export function caseMonthlyProjection(
+  run: CaseStudyRun,
+  days: number,
+): { estimated: boolean; multiplier: number } {
+  if (days >= COST_MIN_DAYS) return { estimated: false, multiplier: 1 };
+  const budgetWeeks =
+    (run.usage?.daily ?? []).reduce((s, d) => s + (d.pct ?? 0), 0) / 100;
+  const WEEKS_PER_MONTH = 4.345;
+  let m =
+    budgetWeeks >= 0.4
+      ? WEEKS_PER_MONTH / budgetWeeks
+      : days > 0
+        ? 30 / days
+        : 1;
+  m = Math.max(1, Math.min(m, 12));
+  return { estimated: true, multiplier: m };
+}
