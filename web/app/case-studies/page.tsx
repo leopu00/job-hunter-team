@@ -15,6 +15,7 @@ import {
   localizeCaseStudy,
 } from "@/lib/case-studies";
 import ConversionFunnelCard from "./ConversionFunnelCard";
+import MetricFunnelCard from "./MetricFunnelCard";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 
@@ -83,6 +84,12 @@ const T: Record<
     dashCostExcellent: string;
     dashPositions: string;
     dashCaption: string;
+    tierTitle: string;
+    tierLead: string;
+    matchDayCardTitle: string;
+    matchDayCaption: string;
+    costCardTitle: string;
+    costCaption: string;
     moreComingTitle: string;
     moreComingSub: string;
     contributeTitle: string;
@@ -151,6 +158,15 @@ const T: Record<
     dashPositions: "posizioni / mese",
     dashCaption:
       "Proiezione a un mese in base al budget consumato da ogni run (escluso il free-run); conteggi arrotondati, costo per match eccellente.",
+    tierTitle: "Resa e prezzo per livello di qualità",
+    tierLead:
+      "Quanti match al giorno il team produce a ogni livello e quanto costa in media ogni singolo risultato. Media sui tre casi, proiettata su un mese di budget (free-run escluso).",
+    matchDayCardTitle: "📈 Match al giorno · per livello",
+    matchDayCaption:
+      "Match/giorno in media, proiettati su un mese di budget. La riga ≥80 coincide con gli eccellenti/giorno del riepilogo qui sopra.",
+    costCardTitle: "💶 Prezzo medio per risultato · per livello di qualità",
+    costCaption:
+      "Più alto è il livello di qualità richiesto, più sale il costo per singolo risultato. La riga ≥80 coincide con il costo per eccellente del riepilogo qui sopra.",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "📥 Contribuisci con i tuoi dati",
@@ -221,6 +237,15 @@ const T: Record<
     dashPositions: "positions / month",
     dashCaption:
       "Projected to a month from the budget each run used (free-run excluded); counts rounded, cost per excellent match.",
+    tierTitle: "Yield and price per quality level",
+    tierLead:
+      "How many matches per day the team produces at each level, and how much each single result costs on average. Averaged over the three cases, projected over a month of budget (free-run excluded).",
+    matchDayCardTitle: "📈 Matches per day · by level",
+    matchDayCaption:
+      "Matches/day on average, projected over a month of budget. The ≥80 row equals the excellent/day figure in the summary above.",
+    costCardTitle: "💶 Average price per result · by quality level",
+    costCaption:
+      "The higher the quality bar, the higher the cost per single result. The ≥80 row equals the cost per excellent in the summary above.",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "📥 Contribute your data",
@@ -291,6 +316,15 @@ const T: Record<
     dashPositions: "posiciones / mes",
     dashCaption:
       "Proyección a un mes según el presupuesto usado por cada ejecución (free-run excluido); conteos redondeados, coste por match excelente.",
+    tierTitle: "Rendimiento y precio por nivel de calidad",
+    tierLead:
+      "Cuántos match al día produce el equipo en cada nivel y cuánto cuesta de media cada resultado. Media sobre los tres casos, proyectada sobre un mes de presupuesto (sin el free-run).",
+    matchDayCardTitle: "📈 Match al día · por nivel",
+    matchDayCaption:
+      "Match/día de media, proyectados sobre un mes de presupuesto. La fila ≥80 coincide con los excelentes/día del resumen de arriba.",
+    costCardTitle: "💶 Precio medio por resultado · por nivel de calidad",
+    costCaption:
+      "Cuanto más alto es el nivel de calidad exigido, más sube el coste por resultado. La fila ≥80 coincide con el coste por excelente del resumen de arriba.",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "📥 Contribuye con tus datos",
@@ -362,6 +396,15 @@ const T: Record<
     dashPositions: "postes / mois",
     dashCaption:
       "Projeté sur un mois selon le budget consommé par chaque run (free-run exclu) ; comptes arrondis, coût par match excellent.",
+    tierTitle: "Rendement et prix par niveau de qualité",
+    tierLead:
+      "Combien de matchs par jour l'équipe produit à chaque niveau, et combien coûte en moyenne chaque résultat. Moyenne sur les trois cas, projetée sur un mois de budget (free-run exclu).",
+    matchDayCardTitle: "📈 Matchs par jour · par niveau",
+    matchDayCaption:
+      "Matchs/jour en moyenne, projetés sur un mois de budget. La ligne ≥80 correspond aux excellents/jour du récapitulatif ci-dessus.",
+    costCardTitle: "💶 Prix moyen par résultat · par niveau de qualité",
+    costCaption:
+      "Plus le niveau de qualité exigé est élevé, plus le coût par résultat augmente. La ligne ≥80 correspond au coût par excellent du récapitulatif ci-dessus.",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "📥 Contribue avec tes données",
@@ -433,6 +476,15 @@ const T: Record<
     dashPositions: "Stellen / Monat",
     dashCaption:
       "Auf einen Monat projiziert anhand des von jedem Lauf verbrauchten Budgets (Free-Run ausgeschlossen); Zahlen gerundet, Kosten pro exzellentem Match.",
+    tierTitle: "Ertrag und Preis je Qualitätsstufe",
+    tierLead:
+      "Wie viele Matches pro Tag das Team je Stufe produziert und was jedes einzelne Ergebnis im Schnitt kostet. Gemittelt über die drei Fälle, auf einen Monat Budget projiziert (ohne Free-Run).",
+    matchDayCardTitle: "📈 Matches pro Tag · nach Stufe",
+    matchDayCaption:
+      "Matches/Tag im Schnitt, auf einen Monat Budget projiziert. Die Zeile ≥80 entspricht den exzellenten/Tag in der Übersicht oben.",
+    costCardTitle: "💶 Durchschnittspreis pro Ergebnis · nach Qualitätsstufe",
+    costCaption:
+      "Je höher die geforderte Qualität, desto höher die Kosten pro Ergebnis. Die Zeile ≥80 entspricht den Kosten je exzellentem Match in der Übersicht oben.",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "📥 Steuere deine Daten bei",
@@ -504,6 +556,15 @@ const T: Record<
     dashPositions: "pozíció / hó",
     dashCaption:
       "Egy hónapra vetítve az egyes futások elhasznált budgetje alapján (free-run kizárva); a számok kerekítve, költség kiváló találatonként.",
+    tierTitle: "Hozam és ár minőségi szintenként",
+    tierLead:
+      "Hány találatot termel a csapat naponta az egyes szinteken, és mennyibe kerül átlagosan egy-egy eredmény. A három eset átlaga, egy hónap budgetre vetítve (free-run nélkül).",
+    matchDayCardTitle: "📈 Találatok naponta · szintenként",
+    matchDayCaption:
+      "Találat/nap átlagosan, egy hónap budgetre vetítve. A ≥80 sor megegyezik a fenti összegzés kiváló/nap értékével.",
+    costCardTitle: "💶 Átlagár eredményenként · minőségi szintenként",
+    costCaption:
+      "Minél magasabb az elvárt minőség, annál nagyobb az egy eredményre jutó költség. A ≥80 sor megegyezik a fenti összegzés kiváló találat költségével.",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "📥 Járulj hozzá az adataiddal",
@@ -574,6 +635,15 @@ const T: Record<
     dashPositions: "posições / mês",
     dashCaption:
       "Projetado para um mês com base no orçamento usado por cada execução (free-run excluído); contagens arredondadas, custo por match excelente.",
+    tierTitle: "Rendimento e preço por nível de qualidade",
+    tierLead:
+      "Quantos matches por dia a equipa produz em cada nível e quanto custa em média cada resultado. Média sobre os três casos, projetada sobre um mês de orçamento (sem o free-run).",
+    matchDayCardTitle: "📈 Matches por dia · por nível",
+    matchDayCaption:
+      "Matches/dia em média, projetados sobre um mês de orçamento. A linha ≥80 coincide com os excelentes/dia do resumo acima.",
+    costCardTitle: "💶 Preço médio por resultado · por nível de qualidade",
+    costCaption:
+      "Quanto mais alto o nível de qualidade exigido, mais sobe o custo por resultado. A linha ≥80 coincide com o custo por excelente do resumo acima.",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "📥 Contribui com os teus dados",
@@ -674,6 +744,45 @@ export default async function CaseStudiesIndexPage() {
       maximumFractionDigits: 2,
     }).format(n);
 
+  // Grafici "per livello": due imbuti a scaglioni sulla STESSA base budget-scaled
+  // della dashboard (così la riga ≥80 combacia coi KPI qui sopra). MATCH AL GIORNO
+  // per soglia di score, dall'array `scores` (uno per posizione); PREZZO per
+  // risultato lungo le tappe del funnel (trovate → valutate → forti ≥70 →
+  // eccellenti ≥80). Media sui casi non free-run.
+  const tierSource = localized.filter((cs) => !cs.freeRun && cs.run.conversion);
+  const tierMult = (cs: (typeof tierSource)[number]) => {
+    const budgetWeeks =
+      (cs.run.usage?.daily ?? []).reduce((s, d) => s + (d.pct ?? 0), 0) / 100;
+    return budgetWeeks > 0.1
+      ? WEEKS_PER_MONTH / budgetWeeks
+      : MONTH_DAYS / Math.max(1, caseRunInfo(cs.run, locale).days);
+  };
+  const MATCH_TIERS = [80, 70, 60, 50];
+  const MATCH_KEYS = ["t80", "t70", "t60", "t50"];
+  const matchDayRows = MATCH_TIERS.map((thr, i) => ({
+    key: MATCH_KEYS[i],
+    value: mean(
+      tierSource.map((cs) => {
+        const cnt = (cs.run.match?.scores ?? []).filter((s) => s >= thr).length;
+        return (cnt * tierMult(cs)) / MONTH_DAYS;
+      }),
+    ),
+  }));
+  const COST_STAGES = ["found", "scored", "strong70", "strong80"] as const;
+  const costRows = COST_STAGES.map((stage) => ({
+    key: stage as string,
+    value: mean(
+      tierSource
+        .map((cs) => {
+          const monthly = (cs.run.conversion![stage] ?? 0) * tierMult(cs);
+          return cs.subscription.monthlyEur != null && monthly > 0
+            ? cs.subscription.monthlyEur / monthly
+            : null;
+        })
+        .filter((v): v is number => v != null),
+    ),
+  }));
+
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
       <LandingI18nProvider>
@@ -765,6 +874,28 @@ export default async function CaseStudiesIndexPage() {
           <p className="mt-4 text-[10px] text-[var(--color-dim)]">
             {t.dashCaption}
           </p>
+        </section>
+
+        {/* ── Resa e prezzo per livello di qualità ──────────────── */}
+        <section className="mb-14">
+          <h2 className="text-xl font-bold tracking-tight">{t.tierTitle}</h2>
+          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
+            {t.tierLead}
+          </p>
+          <div className="mt-6 flex flex-col gap-4">
+            <MetricFunnelCard
+              title={t.matchDayCardTitle}
+              caption={t.matchDayCaption}
+              variant="perDay"
+              rows={matchDayRows}
+            />
+            <MetricFunnelCard
+              title={t.costCardTitle}
+              caption={t.costCaption}
+              variant="cost"
+              rows={costRows}
+            />
+          </div>
         </section>
 
         {/* ── Card dei case study ───────────────────────────────── */}
