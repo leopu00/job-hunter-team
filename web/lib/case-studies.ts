@@ -13,7 +13,8 @@ import {
   type TeamActivityRole,
 } from "@/lib/team-activity";
 import betaCRun from "@/data/case-studies/betaC-codex-run.json";
-import betaBRun from "@/data/case-studies/betaB-kimi-run.json";
+import betaBCodexRun from "@/data/case-studies/betaB-codex-run.json";
+import betaBKimiRun from "@/data/case-studies/betaB-kimi-run.json";
 import betaDRun from "@/data/case-studies/betaD-kimi-run.json";
 import PROFILES_I18N from "@/data/case-studies/profiles-i18n.json";
 import type { Locale } from "@/i18n/config";
@@ -73,10 +74,99 @@ export interface CaseStudyMeta {
   run: CaseStudyRun;
 }
 
+// Profilo condiviso dalle DUE pagine del beta tester 1 (technical writer): stesso
+// candidato, testato in due sessioni distinte — prima Codex (free-run), poi Kimi
+// (monitorato) — tenute su pagine SEPARATE, così match/categorie/fonti/funnel non
+// mescolano modelli e periodi diversi.
+const TW_PROFILE: CaseStudyProfile = {
+  badge: "B1",
+  headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
+  summary:
+    "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
+  facts: [
+    { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
+    { label: "Esperienza", value: "Cross-domain · industria + lingue" },
+    { label: "Background", value: "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato" },
+    { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
+    { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
+  ],
+  locationNote:
+    "Priorità al full remote; geograficamente prima l'Ungheria, poi l'Italia, poi il resto d'Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
+  targetCities: [
+    "Budapest",
+    "Milano",
+    "Dublino",
+    "Amsterdam",
+    "Madrid",
+    "Barcellona",
+    "Varsavia",
+    "Lisbona",
+  ],
+  why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
+};
+
 export const CASE_STUDIES: CaseStudyMeta[] = [
+  // ── Beta tester 1 · technical writer — DUE sessioni, DUE pagine ──────────
   {
-    id: "beta-1",
+    id: "beta-1-codex",
     label: "Beta tester 1",
+    tagline: "Sessione Codex · Technical writing · traduzione · localizzazione",
+    category: "Technical Writing",
+    seniority: "Senior · cross-domain",
+    geos: ["Ungheria", "Italia", "Europa"],
+    model: "Codex",
+    subscription: {
+      provider: "OpenAI Codex",
+      plan: "Pro",
+      price: "~€100/mese",
+    },
+    profile: TW_PROFILE,
+    // Fase unica = l'UNICA sessione di questa pagina (Codex free-run, ~3 giorni):
+    // dettaglio ora-per-ora, per mostrare il burst intraday senza monitor.
+    phases: [
+      {
+        key: "codex",
+        label: "Codex",
+        price: "~€100/mese",
+        note: "primo test — agenti liberi, senza monitor, fino a esaurire il budget",
+        from: "2026-05-19",
+        to: "2026-05-21",
+        detail: "hourly",
+      },
+    ],
+    run: betaBCodexRun as unknown as CaseStudyRun,
+  },
+  {
+    id: "beta-1-kimi",
+    label: "Beta tester 1",
+    tagline: "Sessione Kimi · Technical writing · traduzione · localizzazione",
+    category: "Technical Writing",
+    seniority: "Senior · cross-domain",
+    geos: ["Ungheria", "Italia", "Europa"],
+    model: "Kimi",
+    subscription: {
+      provider: "Moonshot Kimi",
+      plan: "Kimi Code",
+      price: "~€40/mese",
+    },
+    profile: TW_PROFILE,
+    // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
+    phases: [
+      {
+        key: "kimi",
+        label: "Kimi",
+        price: "~€40/mese",
+        note: "run monitorato — budget settimanale dosato (pacing)",
+        from: "2026-06-13",
+        to: null,
+      },
+    ],
+    run: betaBKimiRun as unknown as CaseStudyRun,
+  },
+  // ── Beta tester 2 · finance, inizio carriera (Codex) ────────────────────
+  {
+    id: "beta-2",
+    label: "Beta tester 2",
     tagline: "Finance · early-career · Europa",
     category: "Finance",
     seniority: "Early career",
@@ -88,7 +178,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       price: "~€100/mese",
     },
     profile: {
-      badge: "B1",
+      badge: "B2",
       headline: "Professionista finance, inizio carriera",
       summary:
         "Analista all'inizio della carriera in credit risk e due diligence in una banca d'investimento internazionale. Vuole spostarsi verso ruoli front-office — investment management, restructuring, transaction advisory — in grandi città europee.",
@@ -119,69 +209,6 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       why: "Ecco perché i numeri vengono così: cercando ruoli finance e investment in grandi città europee, il team ha concentrato la ricerca negli hub finanziari (Londra, Zurigo, Ginevra, Lussemburgo, Dublino) e quasi tutte le posizioni ricadono in categorie business & finance — esattamente il profilo del candidato.",
     },
     run: betaCRun as unknown as CaseStudyRun,
-  },
-  {
-    id: "beta-2",
-    label: "Beta tester 2",
-    tagline: "Technical writing · traduzione · localizzazione",
-    category: "Technical Writing",
-    seniority: "Senior · cross-domain",
-    geos: ["Ungheria", "Italia", "Europa"],
-    model: "Kimi",
-    subscription: {
-      provider: "Moonshot Kimi",
-      plan: "Kimi Code",
-      price: "~€40/mese",
-    },
-    profile: {
-      badge: "B2",
-      headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
-      summary:
-        "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
-      facts: [
-        { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
-        { label: "Esperienza", value: "Cross-domain · industria + lingue" },
-        { label: "Background", value: "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato" },
-        { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
-        { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
-      ],
-      locationNote:
-        "Priorità al full remote; geograficamente prima l'Ungheria, poi l'Italia, poi il resto d'Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
-      targetCities: [
-        "Budapest",
-        "Milano",
-        "Dublino",
-        "Amsterdam",
-        "Madrid",
-        "Barcellona",
-        "Varsavia",
-        "Lisbona",
-      ],
-      why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
-    },
-    // Due sessioni distinte sullo STESSO candidato: prima un test con Codex (agenti
-    // liberi, senza monitor del budget), poi il run attuale con Kimi (monitorato).
-    // Il buco 05-12/06 tra le due è downtime e non appartiene a nessuna fase.
-    phases: [
-      {
-        key: "codex",
-        label: "Codex",
-        price: "~€100/mese",
-        note: "primo test — agenti liberi, senza monitor, fino a esaurire il budget",
-        from: "2026-05-19",
-        to: "2026-05-21",
-        detail: "hourly",
-      },
-      {
-        key: "kimi",
-        label: "Kimi",
-        price: "~€40/mese",
-        note: "run attuale — budget settimanale monitorato e dosato (pacing)",
-        from: "2026-06-13",
-        to: null,
-      },
-    ],
-    run: betaBRun as unknown as CaseStudyRun,
   },
   {
     id: "beta-3",
