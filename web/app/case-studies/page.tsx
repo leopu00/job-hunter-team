@@ -14,8 +14,7 @@ import {
   caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
-import ConversionFunnelCard from "./ConversionFunnelCard";
-import MetricFunnelCard from "./MetricFunnelCard";
+import ProviderStats from "./ProviderStats";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 
@@ -667,121 +666,55 @@ export default async function CaseStudiesIndexPage() {
   const nf = (n: number): string => n.toLocaleString(LOCALE_TAG[locale]);
   const localized = CASE_STUDIES.map((cs) => localizeCaseStudy(cs, locale));
 
-  const runs = localized.map((cs) => cs.run);
-
-  // Funnel di conversione, MEDIA per studio: nel funnel contano i TASSI, quindi
-  // la media dei totali va bene (found → scored → forti ≥70 → eccellenti ≥80).
-  const nStudies = Math.max(1, localized.length);
-  const per = {
-    positions: Math.round(
-      runs.reduce(
-        (s, r) =>
-          s +
-          (r.conversion?.found ?? r.funnelTotals?.found ?? r.totals.positions),
-        0,
-      ) / nStudies,
-    ),
-    scored: Math.round(
-      runs.reduce((s, r) => s + (r.conversion?.scored ?? 0), 0) / nStudies,
-    ),
-    strong70: Math.round(
-      runs.reduce((s, r) => s + (r.conversion?.strong70 ?? r.match.strong70), 0) /
-        nStudies,
-    ),
-    strong80: Math.round(
-      runs.reduce((s, r) => s + (r.conversion?.strong80 ?? r.match.strong80), 0) /
-        nStudies,
-    ),
-  };
-
-  // DASHBOARD unica — ogni run SCALATA A UN MESE DI BUDGET. Un mese ≈ 4,345 budget
-  // settimanali; se una run ne ha consumati W producendo X, in un mese ne produce
-  // X × 4,345/W. È il dato onesto "output per un mese di abbonamento", e coincide
-  // con "media giornaliera × 30" QUANDO il ritmo è sostenibile: "giorni × 30" grezzo
-  // invece sovrastima le run intensive (es. 909 posizioni in 15 giorni ha già speso
-  // ~un mese di budget → il suo mese ≈ 900, non 1818, che vorrebbe ~2 mesi di sub).
-  // Le run brevi (es. beta-3, 5 giorni) restano proiettate correttamente. Esclude il
-  // free-run. Conteggi arrotondati; costo coi centesimi.
+  // ── Statistiche PER PROVIDER ────────────────────────────────────────────
+  // Kimi (~€40) e Codex (~€100) NON si mediano insieme: prezzi diversi. Raggruppo
+  // i casi per provider (model) e proietto ogni run su un mese di budget: un mese
+  // ≈ 4,345 budget settimanali, quindi una run che ne ha consumati W producendo X
+  // rende X × 4,345/W al mese ("giorni × 30" grezzo sovrastima le run intensive).
+  // Per ogni tappa del funnel: totale/mese, al giorno (÷30) e prezzo medio per
+  // risultato (canone ÷ output/mese). Free-run escluso. La riga ≥80 dà eccellenti/
+  // giorno e €/eccellente; Trovate dà posizioni/mese.
   const WEEKS_PER_MONTH = 4.345;
   const MONTH_DAYS = 30;
-  const dashStudies = localized
-    .filter((cs) => !cs.freeRun && cs.run.conversion)
-    .map((cs) => {
+  const PROVIDER_ORDER = ["Kimi", "Codex"];
+  const STAGES = ["strong80", "strong70", "scored", "found"] as const;
+  const eligible = localized.filter((cs) => !cs.freeRun && cs.run.conversion);
+  const providers = PROVIDER_ORDER.map((id) => {
+    const group = eligible.filter((cs) => cs.model === id);
+    if (group.length === 0) return null;
+    const perRun = group.map((cs) => {
       const budgetWeeks =
         (cs.run.usage?.daily ?? []).reduce((s, d) => s + (d.pct ?? 0), 0) / 100;
-      // scala al budget di un mese; fallback ai giorni se manca l'usage.
+      // proietta al budget di un mese; fallback ai giorni se manca l'usage.
       const mult =
         budgetWeeks > 0.1
           ? WEEKS_PER_MONTH / budgetWeeks
           : MONTH_DAYS / Math.max(1, caseRunInfo(cs.run, locale).days);
-      const c = cs.run.conversion!;
-      const monthlyExc = c.strong80 * mult; // eccellenti ≥80 in un mese di budget
-      return {
-        monthlyPositions: c.found * mult,
-        excPerDay: monthlyExc / MONTH_DAYS,
-        costPerExc:
-          cs.subscription.monthlyEur != null && monthlyExc > 0
-            ? cs.subscription.monthlyEur / monthlyExc
-            : null,
-      };
+      return { mult, eur: cs.subscription.monthlyEur ?? null, c: cs.run.conversion! };
     });
-  const mean = (xs: number[]) =>
-    xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
-  const dashExcPerDay = Math.round(mean(dashStudies.map((s) => s.excPerDay)));
-  const dashPositionsMonth = Math.round(
-    mean(dashStudies.map((s) => s.monthlyPositions)),
-  );
-  const dashCostExc = mean(
-    dashStudies
-      .map((s) => s.costPerExc)
-      .filter((v): v is number => v != null),
-  );
-  const eurFmt = (n: number) =>
-    new Intl.NumberFormat(LOCALE_TAG[locale], {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n);
-
-  // Grafici "per livello": due imbuti a scaglioni sulla STESSA base budget-scaled
-  // della dashboard (così la riga ≥80 combacia coi KPI qui sopra). MATCH AL GIORNO
-  // per soglia di score, dall'array `scores` (uno per posizione); PREZZO per
-  // risultato lungo le tappe del funnel (trovate → valutate → forti ≥70 →
-  // eccellenti ≥80). Media sui casi non free-run.
-  const tierSource = localized.filter((cs) => !cs.freeRun && cs.run.conversion);
-  const tierMult = (cs: (typeof tierSource)[number]) => {
-    const budgetWeeks =
-      (cs.run.usage?.daily ?? []).reduce((s, d) => s + (d.pct ?? 0), 0) / 100;
-    return budgetWeeks > 0.1
-      ? WEEKS_PER_MONTH / budgetWeeks
-      : MONTH_DAYS / Math.max(1, caseRunInfo(cs.run, locale).days);
-  };
-  const MATCH_TIERS = [80, 70, 60, 50];
-  const MATCH_KEYS = ["t80", "t70", "t60", "t50"];
-  const matchDayRows = MATCH_TIERS.map((thr, i) => ({
-    key: MATCH_KEYS[i],
-    value: mean(
-      tierSource.map((cs) => {
-        const cnt = (cs.run.match?.scores ?? []).filter((s) => s >= thr).length;
-        return (cnt * tierMult(cs)) / MONTH_DAYS;
-      }),
-    ),
-  }));
-  const COST_STAGES = ["found", "scored", "strong70", "strong80"] as const;
-  const costRows = COST_STAGES.map((stage) => ({
-    key: stage as string,
-    value: mean(
-      tierSource
-        .map((cs) => {
-          const monthly = (cs.run.conversion![stage] ?? 0) * tierMult(cs);
-          return cs.subscription.monthlyEur != null && monthly > 0
-            ? cs.subscription.monthlyEur / monthly
-            : null;
+    const mean = (fn: (r: (typeof perRun)[number]) => number) =>
+      perRun.reduce((s, r) => s + fn(r), 0) / perRun.length;
+    const meanPrice = (stage: (typeof STAGES)[number]) => {
+      const xs = perRun
+        .map((r) => {
+          const m = r.c[stage] * r.mult;
+          return r.eur != null && m > 0 ? r.eur / m : null;
         })
-        .filter((v): v is number => v != null),
-    ),
-  }));
+        .filter((v): v is number => v != null);
+      return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+    };
+    return {
+      id,
+      monthlyEur: perRun[0].eur,
+      nCases: group.length,
+      rows: STAGES.map((stage) => ({
+        key: stage as string,
+        count: mean((r) => r.c[stage] * r.mult),
+        perDay: mean((r) => (r.c[stage] * r.mult) / MONTH_DAYS),
+        price: meanPrice(stage),
+      })),
+    };
+  }).filter((p): p is NonNullable<typeof p> => p != null);
 
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
@@ -817,86 +750,8 @@ export default async function CaseStudiesIndexPage() {
           </p>
         </header>
 
-        {/* ── Conversione: dal trovato al match forte (media per studio) ── */}
-        <section className="mb-14">
-          <h2 className="text-xl font-bold tracking-tight">
-            {t.cumFunnelTitle}
-          </h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
-            {t.cumLead}
-          </p>
-          <div className="mt-6">
-            <ConversionFunnelCard
-              found={per.positions}
-              scored={per.scored}
-              strong70={per.strong70}
-              strong80={per.strong80}
-            />
-          </div>
-        </section>
-
-        {/* ── Dashboard unica: eccellenti/giorno · costo · posizioni/mese ── */}
-        <section className="mb-14">
-          <h2 className="text-xl font-bold tracking-tight">{t.dashTitle}</h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
-            {t.dashLead}
-          </p>
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {[
-              { v: nf(dashExcPerDay), l: t.dashExcellent, c: "#22c55e" },
-              {
-                v: eurFmt(dashCostExc),
-                l: t.dashCostExcellent,
-                c: "var(--color-white)",
-              },
-              {
-                v: nf(dashPositionsMonth),
-                l: t.dashPositions,
-                c: "var(--color-blue)",
-              },
-            ].map((k) => (
-              <div
-                key={k.l}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-5 py-5"
-              >
-                <div
-                  className="text-[26px] font-extrabold tabular-nums leading-none"
-                  style={{ color: k.c }}
-                >
-                  {k.v}
-                </div>
-                <div className="mt-2 text-[10px] uppercase tracking-wide text-[var(--color-dim)]">
-                  {k.l}
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-[10px] text-[var(--color-dim)]">
-            {t.dashCaption}
-          </p>
-        </section>
-
-        {/* ── Resa e prezzo per livello di qualità ──────────────── */}
-        <section className="mb-14">
-          <h2 className="text-xl font-bold tracking-tight">{t.tierTitle}</h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
-            {t.tierLead}
-          </p>
-          <div className="mt-6 flex flex-col gap-4">
-            <MetricFunnelCard
-              title={t.matchDayCardTitle}
-              caption={t.matchDayCaption}
-              variant="perDay"
-              rows={matchDayRows}
-            />
-            <MetricFunnelCard
-              title={t.costCardTitle}
-              caption={t.costCaption}
-              variant="cost"
-              rows={costRows}
-            />
-          </div>
-        </section>
+        {/* ── Statistiche per provider · una tabella-imbuto ─────── */}
+        <ProviderStats providers={providers} />
 
         {/* ── Card dei case study ───────────────────────────────── */}
         <section className="mb-14">
