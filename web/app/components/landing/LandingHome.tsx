@@ -4,11 +4,10 @@ import Link from "next/link";
 import { LandingI18nProvider, useLandingI18n } from "./LandingI18n";
 import LandingCTA, { LandingFooter } from "./LandingCTA";
 import LandingNav from "./LandingNav";
-import DashboardMockup from "./DashboardMockup";
 
 // Landing pubblica — nuova struttura.
 // Header (nav) + hero (titolo + immagine + intro) + sezioni di anteprima
-// (Team, Dashboard, Avvio, Prezzi) ognuna con un rimando alla pagina
+// (Team, Avvio, Prezzi) ognuna con un rimando alla pagina
 // dedicata, + footer. Il vecchio sito pubblico resta nei suoi file, non
 // importato qui, pronto da archiviare in futuro.
 export default function LandingHome() {
@@ -116,13 +115,6 @@ function Sections() {
     body: t("home_team_body"),
     cta: t("home_team_cta"),
   };
-  const dashboard: SectionCopy = {
-    kicker: t("home_dashboard_kicker"),
-    title: t("home_dashboard_title"),
-    body: t("home_dashboard_body"),
-    cta: t("home_dashboard_cta"),
-    note: t("home_dashboard_note"),
-  };
   const setup: SectionCopy = {
     kicker: t("home_setup_kicker"),
     title: t("home_setup_title"),
@@ -153,14 +145,9 @@ function Sections() {
         }
       />
       <Block
-        copy={dashboard}
-        href="/?login=true"
-        visual={<DashboardMockup />}
-        reverse
-      />
-      <Block
         copy={setup}
         href="/run"
+        reverse
         visual={
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -175,7 +162,6 @@ function Sections() {
       <Block
         copy={pricing}
         href="/pricing"
-        reverse
         visual={
           // eslint-disable-next-line @next/next/no-img-element
           <img

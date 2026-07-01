@@ -57,6 +57,7 @@ const translations = {
   nav_how: { it: "Come funziona", en: "How it works", hu: "Hogyan működik" },
   nav_github: { it: "GitHub", en: "GitHub", hu: "GitHub" },
   nav_download: { it: "Download", en: "Download", hu: "Letöltés" },
+  nav_run: { it: "Come si avvia", en: "How to run it", hu: "Hogyan indítható" },
   nav_team: { it: "Team", en: "Team", hu: "Csapat" },
   nav_pricing: { it: "Prezzi", en: "Pricing", hu: "Árak" },
   nav_case_studies: {
@@ -96,7 +97,7 @@ const translations = {
     hu: "Egy multi-ügynök rendszer, amely automatizálja az álláskeresés minden lépését: az ajánlatok keresésétől a személyre szabott jelentkezésekig. Te döntesz a stratégiáról, az ügynökök végrehajtják.",
   },
   home_intro: {
-    it: "Job Hunter Team è una squadra di agenti AI autonomi che porta avanti la tua ricerca di lavoro. Ogni agente è uno specialista — c'è chi trova le offerte, chi le verifica, chi le valuta su ciò che cerchi davvero, chi ti scrive il CV — e non si fermano mai: il lavoro continua anche quando ti fermi tu. Tu indichi la rotta e tieni l'ultima parola; il resto lo fanno loro. Gira in modo privato sulla tua macchina e ti consegna una rosa di occasioni che vale il tuo tempo, non una casella piena di rumore.",
+    it: "Job Hunter Team è una squadra di agenti AI autonomi che cercano lavoro per te, di continuo. Ogni agente è uno specialista: c'è chi individua le offerte, chi le analizza nel dettaglio e chi assegna a ciascuna un punteggio, in base a quanto è vicina a ciò che conta davvero per te. Su tua richiesta preparano anche il CV per candidarti. E quando le candidature inviate non bastano a trovare lavoro, un agente dedicato ti affianca: ti aiuta a orientarti nel mercato del lavoro e ad avvicinarti al ruolo che desideri. La direzione la dai tu e l'ultima parola resta sempre tua; il resto lo porta avanti il team, in privato, sulla tua macchina.",
     en: "Job Hunter Team is a team of autonomous AI agents that runs your job search from start to shortlist. Each agent is a specialist — one finds openings, one vets them, one scores them against what you truly want, one drafts your CV — working around the clock so the search keeps moving even when you step away. You set the direction and keep the final word; they do the work. It runs privately on your own machine and hands you a shortlist worth your time, not an inbox full of noise.",
   },
   hero_cta: { it: "Inizia qui", en: "Start here", hu: "Kezdj itt" },
@@ -480,9 +481,9 @@ const translations = {
     hu: "Az AI asszisztensnek hozzá kell férnie a számítógépedhez — terminál és fájlok (pl. Claude Code, Cursor, Codex CLI).",
   },
   dl_help_text: {
-    it: "Non sai dove o come installarlo?",
-    en: "Not sure where or how to install it?",
-    hu: "Nem tudod, hová vagy hogyan telepítsd?",
+    it: "Non sai dove installarlo?",
+    en: "Not sure where to install it?",
+    hu: "Nem tudod, hová telepítsd?",
   },
   dl_help_link: {
     it: "Leggi la guida",
@@ -1492,7 +1493,7 @@ const translations = {
     hu: "Egy csapat, nem egyetlen bot",
   },
   home_team_body: {
-    it: "Un chatbot da solo si disperde su tutto e non padroneggia niente. Qui ogni agente ha un compito solo e va in profondità — e niente di ciò che produce resta senza controllo: ogni passaggio è rivisto da quello dopo. La cura di uno specialista a ogni stadio, non un tuttofare che fa le cose a metà.",
+    it: "Un solo chatbot deve fare tutto da sé e non eccelle in niente. Una squadra no: ogni agente ha un compito preciso e lo porta a fondo, e il lavoro di ciascuno passa al vaglio di quello successivo. Così ogni fase è curata da chi la sa fare meglio, e quello che arriva a te è già stato controllato più volte.",
     en: "A single chatbot spreads itself thin and masters nothing. Here every agent has one job and goes deep — and nothing one produces goes unchecked: each step is reviewed by the next. The focus of a specialist at every stage, not one generalist cutting corners.",
     hu: "A Job Hunter Team mögött specializált AI ügynökök csapata áll: az egyik megtalálja az ajánlatokat, egy másik ellenőrzi, egy pontozza, egy megírja az önéletrajzodat és egy kíméletlenül bírálja. Mindegyik egy dolgot csinál, és jól csinálja.",
   },
@@ -1533,7 +1534,7 @@ const translations = {
     hu: "Ahogy és ahol szeretnéd",
   },
   home_setup_body: {
-    it: "Sul tuo PC con Docker, su un computer dedicato sempre acceso o su una VPS economica che lavora per te giorno e notte. Tutto si gestisce dall'app desktop: avvii, fermi e tieni d'occhio la squadra con un clic.",
+    it: "Gira su un computer dedicato sempre acceso o su una VPS economica, e lavora per te giorno e notte. Lo gestisci dall'app desktop: avvii, fermi e tieni d'occhio la squadra con un clic. E non sei costretto a stare al computer: dal web puoi seguire i risultati e parlare con il team anche da un altro PC o dal telefono.",
     en: "On your PC with Docker, on an always-on dedicated computer, or on an affordable VPS that works for you day and night. It's all managed from the desktop app: start, stop and keep an eye on the team with one click.",
     hu: "A PC-den Dockerrel, egy mindig bekapcsolt dedikált számítógépen, vagy egy megfizethető VPS-en, amely éjjel-nappal dolgozik érted. Minden az asztali appból kezelhető: indítsd, állítsd le és tartsd szemmel a csapatot egyetlen kattintással.",
   },
