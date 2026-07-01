@@ -7,6 +7,37 @@ c = sqlite3.connect("file:/root/.jht/jobs.db?mode=ro", uri=True)
 cur = c.cursor()
 Q = lambda s, *a: cur.execute(s, a).fetchall()
 
+# ── finestra opzionale di sessione (per NON mescolare run diversi) ──────
+# Env:
+#   JHT_CS_SOURCE   etichetta della sorgente nello snapshot (default: betaC-codex)
+#   JHT_CS_FROM     inizio finestra inclusivo "YYYY-MM-DD" (vuoto = dall'inizio)
+#   JHT_CS_TO       fine finestra ESCLUSIVA "YYYY-MM-DD"   (vuoto = fino a oggi)
+#   JHT_CS_PROVIDER forza il provider del budget (es. codex/kimi); vuoto = dai dati
+# La finestra filtra positions.found_at, position_state_transitions.ts e i sample
+# di budget. È realizzata con TEMP TABLE che SHADOWANO le tabelle reali: in SQLite
+# il nome non qualificato risolve prima sulla TEMP, quindi TUTTE le query sotto
+# restano identiche. Il DB principale resta read-only (le TEMP vivono nello store
+# temporaneo, separato). Senza env → copie integrali = comportamento invariato.
+SOURCE = os.environ.get("JHT_CS_SOURCE", "").strip() or "betaC-codex"
+FROM = os.environ.get("JHT_CS_FROM", "").strip()
+TO = os.environ.get("JHT_CS_TO", "").strip()
+
+def _win(col):
+    conds, params = [], []
+    if FROM:
+        conds.append(f"{col} >= ?"); params.append(FROM)
+    if TO:
+        conds.append(f"{col} < ?"); params.append(TO)
+    return (" AND " + " AND ".join(conds)) if conds else "", params
+
+_pf, _pp = _win("found_at")
+cur.execute(f"CREATE TEMP TABLE positions AS SELECT * FROM main.positions WHERE 1=1{_pf}", _pp)
+cur.execute("CREATE TEMP TABLE scores AS SELECT * FROM main.scores "
+            "WHERE position_id IN (SELECT id FROM positions)")
+_ef, _ep = _win("ts")
+cur.execute("CREATE TEMP TABLE position_state_transitions AS "
+            f"SELECT * FROM main.position_state_transitions WHERE 1=1{_ef}", _ep)
+
 # ── totals ────────────────────────────────────────────────────────────
 positions = Q("SELECT COUNT(*) FROM positions")[0][0]
 scored_status = Q("SELECT COUNT(*) FROM positions WHERE status='scored'")[0][0]
@@ -207,6 +238,10 @@ if os.path.exists(SENTINEL):
         ts = e.get("ts", "")
         if not ts or e.get("weekly_usage") is None:
             continue
+        if FROM and ts[:10] < FROM:   # stessa finestra di sessione delle positions
+            continue
+        if TO and ts[:10] >= TO:
+            continue
         samples.append((ts, e["weekly_usage"]))
         if e.get("provider"):
             provider = e["provider"]
@@ -251,6 +286,7 @@ if os.path.exists(SENTINEL):
                 }
         except Exception:
             pass
+    provider = os.environ.get("JHT_CS_PROVIDER", "").strip() or provider
     usage = {"provider": provider, "unit": "weekly_budget_pct",
              "daily": daily, "workingHours": working_hours}
 
@@ -301,8 +337,25 @@ funnel_totals = {
     "scored": status_tot.get("scored", 0), "ready": status_tot.get("ready", 0),
 }
 
+# ── imbuto di conversione (POSIZIONI DISTINTE, monotòno) ──────────────
+# La card di conversione (trovate → valutate → forti≥70 → eccellenti≥80) deve
+# decrescere step-su-step. Perciò NON usa funnelTotals.scored (posizioni nello
+# stato 'scored' → sottostima quando avanzano a 'ready') né match.strong70/80
+# (che contano gli EVENTI di score, ri-score inclusi → sovrastima). Qui ogni
+# stadio è una POSIZIONE DISTINTA, con la soglia sul MIGLIOR punteggio ricevuto.
+conv_scored = Q("SELECT COUNT(DISTINCT position_id) FROM scores "
+                "WHERE total_score IS NOT NULL")[0][0]
+_best = Q("SELECT MAX(total_score) FROM scores WHERE total_score IS NOT NULL "
+          "GROUP BY position_id")
+conversion = {
+    "found": _found_tot,
+    "scored": conv_scored,
+    "strong70": sum(1 for (m,) in _best if m >= 70),
+    "strong80": sum(1 for (m,) in _best if m >= 80),
+}
+
 out = {
-    "source": "betaC-codex",
+    "source": SOURCE,
     "tsRange": [ts_min, ts_max],
     "totals": {"positions": positions, "scored": scored_status, "excluded": excluded_status},
     "match": match,
@@ -320,6 +373,7 @@ out = {
     "hourly": hourly,
     "funnelDaily": funnel_daily,
     "funnelTotals": funnel_totals,
+    "conversion": conversion,
     "usage": usage,
 }
 print(json.dumps(out, ensure_ascii=False, indent=2))

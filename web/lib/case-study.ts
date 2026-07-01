@@ -96,5 +96,17 @@ export interface CaseStudyRun {
     scored: number;
     ready: number;
   };
+  // Imbuto di conversione a POSIZIONI DISTINTE (monotòno): found ≥ scored ≥
+  // strong70 ≥ strong80, con la soglia sul MIGLIOR punteggio per posizione.
+  // Da preferire, per la card di conversione, a funnelTotals.scored (che conta
+  // lo stato 'scored' → sottostima quando le posizioni avanzano a 'ready') e a
+  // match.strong70/80 (che contano gli EVENTI di score → sovrastima coi
+  // ri-score). Opzionale: assente negli snapshot precedenti all'aggiunta.
+  conversion?: {
+    found: number;
+    scored: number;
+    strong70: number;
+    strong80: number;
+  };
   usage?: CaseStudyUsage | null;
 }

@@ -770,15 +770,17 @@ export default function CaseStudyDetail({
                 <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
                   {t.conversionTitle}
                 </div>
-                {/* found/scored dal funnel = POSIZIONI distinte nella pipeline
-                    (così "Valutate" non supera mai "Tenute"); strong/excellent
-                    dal match = soglie di qualità sui punteggi. match.scored
-                    conta le valutazioni coi ri-score → non usarlo qui. */}
+                {/* Imbuto a POSIZIONI DISTINTE, monotòno per costruzione (vedi
+                    run.conversion nel generatore): found ≥ valutate ≥ forti ≥
+                    eccellenti, soglia sul miglior punteggio per posizione. Così
+                    "Forti≥70" non supera mai "Valutate" nemmeno quando molte
+                    posizioni avanzano a 'ready'. Fallback per gli snapshot vecchi
+                    senza il campo (funnel per lo stato + match per gli eventi). */}
                 <ConversionFunnelCard
-                  found={run.funnelTotals.found}
-                  scored={run.funnelTotals.scored}
-                  strong70={run.match.strong70}
-                  strong80={run.match.strong80}
+                  found={run.conversion?.found ?? run.funnelTotals.found}
+                  scored={run.conversion?.scored ?? run.funnelTotals.scored}
+                  strong70={run.conversion?.strong70 ?? run.match.strong70}
+                  strong80={run.conversion?.strong80 ?? run.match.strong80}
                 />
               </div>
             </div>
