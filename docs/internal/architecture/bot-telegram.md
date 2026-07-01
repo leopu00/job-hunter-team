@@ -27,7 +27,7 @@
 
 ## 👥 Agenti utente-facing
 
-- 👨‍💼 **Assistente** — onboarding profilo, tech support, drop-zone documenti
+- 👩‍💼 **Assistente** — onboarding profilo, tech support, drop-zone documenti
 - 👨‍✈️ **Capitano** — direzione team, fine-tuning ricerca/scoring, priorità candidature
 - 🧙‍♂️ **Mentor** — mentore di crescita, posizionamento strategico
 

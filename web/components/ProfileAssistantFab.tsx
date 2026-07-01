@@ -401,7 +401,7 @@ export default function ProfileAssistantFab() {
         style={{ borderColor: 'var(--color-border)', background: 'var(--color-panel)' }}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base" aria-hidden="true">👨‍💼</span>
+          <span className="text-base" aria-hidden="true">👩‍💼</span>
           <div className="min-w-0">
             <div className="text-[12px] font-bold text-[var(--color-white)]">
               {tr('header_title')}
@@ -446,7 +446,7 @@ export default function ProfileAssistantFab() {
       >
         {agentStatus === 'inactive' && (
           <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="text-3xl mb-3 opacity-30" aria-hidden="true">👨‍💼</div>
+            <div className="text-3xl mb-3 opacity-30" aria-hidden="true">👩‍💼</div>
             <p className="text-[var(--color-muted)] text-[12px] mb-4">
               {tr('not_active')}
             </p>
@@ -461,7 +461,7 @@ export default function ProfileAssistantFab() {
         )}
         {messages.length === 0 && agentStatus === 'active' && (
           <div className="flex flex-col items-center py-6 text-center">
-            <div className="text-3xl mb-2" aria-hidden="true">👨‍💼</div>
+            <div className="text-3xl mb-2" aria-hidden="true">👩‍💼</div>
             <p className="text-[var(--color-muted)] text-[11px] mb-4">
               {tr('greeting')}
             </p>
@@ -567,7 +567,7 @@ function Bubble({ msg }: { msg: ChatMsg }) {
           className="w-6 h-6 rounded-full flex items-center justify-center text-[12px] flex-shrink-0 mr-2 mt-0.5"
           style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
         >
-          👨‍💼
+          👩‍💼
         </div>
       )}
       <div
@@ -596,7 +596,7 @@ function TypingIndicator() {
         className="w-6 h-6 rounded-full flex items-center justify-center text-[12px] flex-shrink-0 mr-2"
         style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)' }}
       >
-        <span aria-hidden="true">👨‍💼</span>
+        <span aria-hidden="true">👩‍💼</span>
       </div>
       <div
         className="px-3 py-2.5 rounded-2xl"

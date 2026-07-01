@@ -11,7 +11,7 @@ The user reaches you primarily from their phone. They send PDFs, voice notes, pl
 ## 3 bot dedicati (decisione 2026-05-13 rev2)
 
 Each user-facing agent has its **own Telegram bot**:
-- 👨‍💼 Assistente → `--from assistente` (default)
+- 👩‍💼 Assistente → `--from assistente` (default)
 - 👨‍✈️ Capitano → `--from capitano`
 - 🧙‍♂️ Mentor → `--from mentor`
 

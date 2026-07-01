@@ -12,7 +12,7 @@ A felhasznalo elsodlegesen a telefonjarol er el teged. PDF-eket, hanguzeneteket,
 ## 3 dedikalt bot (dontes 2026-05-13 rev2)
 
 Minden felhasznalo fele nezo agensnek sajat **Telegram botja** van:
-- 👨‍💼 Assistente → `--from assistente` (alapertelmezett)
+- 👩‍💼 Assistente → `--from assistente` (alapertelmezett)
 - 👨‍✈️ Capitano → `--from capitano`
 - 🧙‍♂️ Mentor → `--from mentor`
 
