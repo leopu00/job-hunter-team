@@ -18,10 +18,12 @@ export default function DocsLayout({
       <ScrollToTop />
       <main style={{ position: "relative", zIndex: 1 }}>
         <LandingNav />
-        <DocsSidebar />
-        <div className="md:pl-[21rem]">
-          <div className="max-w-3xl mx-auto min-w-0 px-6 md:px-12 pt-32 pb-20">
-            {children}
+        <div className="flex">
+          <DocsSidebar />
+          <div className="flex-1 min-w-0">
+            <div className="max-w-3xl mx-auto px-6 md:px-12 pt-32 pb-20">
+              {children}
+            </div>
           </div>
         </div>
       </main>
