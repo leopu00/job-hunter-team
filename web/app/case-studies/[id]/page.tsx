@@ -14,6 +14,7 @@ import {
   CASE_STUDIES,
   getCaseStudy,
   buildCaseActivity,
+  caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
 import { getRequestLocale } from "@/lib/request-locale";
@@ -111,6 +112,7 @@ export default async function CaseStudyDetailPage({
     seniority: c.seniority,
     geos: c.geos,
     model: c.model,
+    period: caseRunInfo(c.run, locale).label,
   }));
 
   return (

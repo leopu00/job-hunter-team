@@ -97,6 +97,8 @@ export interface CaseStudyTeaser {
   seniority: string;
   geos: string[];
   model: string;
+  /** periodo di lavoro già formattato: es. "19 mag → 30 giu (34 giorni)" */
+  period: string;
 }
 
 export default function CaseStudiesShell({
@@ -213,6 +215,11 @@ export default function CaseStudiesShell({
                       >
                         {t.model}
                       </span>
+                    </div>
+
+                    {/* periodo di lavoro (finestra + giorni), breve */}
+                    <div className="mt-2 text-[9px] tabular-nums text-[var(--color-dim)]">
+                      {t.period}
                     </div>
                   </div>
                 </Link>
