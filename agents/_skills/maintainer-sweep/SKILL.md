@@ -16,7 +16,7 @@ Il Mantenitore **ripara** l'infra (installa deps mancanti, consolida, sistema). 
 ## Lo sweep (7 step, in ordine)
 
 ### 0. 🫀 Liveness canary dei processi salva-vita (la rete di sicurezza)
-**PRIMO step, prima di tutto.** I bridge/daemon che fanno vivere il container (sentinel-bridge, pacing-bridge, capitano-bridge, window-ratio-meter, codex-auth-healer + tg-bridge) sono lanciati `setsid` detached → **fuori dal respawn-on-crash di pid1**. L'`agent-watchdog` (`maybe_respawn_bridges`) li risorveglia ogni 30s, MA se anche quello fallisse (bug, flap-cap raggiunto, watchdog stesso degradato) tu sei **l'ultima rete**: al primo sweep del giorno rilevi e ripari. Senza questo canary, un daemon morto resta invisibile per ore (è esattamente com'è successo al sentinel-bridge su betaC il 2026-06-27 → 8h ciechi sull'usage).
+**PRIMO step, prima di tutto.** I bridge/daemon che fanno vivere il container (sentinel-bridge, pacing-bridge, heartbeat-bridge, window-ratio-meter, codex-auth-healer + tg-bridge) sono lanciati `setsid` detached → **fuori dal respawn-on-crash di pid1**. L'`agent-watchdog` (`maybe_respawn_bridges`) li risorveglia ogni 30s, MA se anche quello fallisse (bug, flap-cap raggiunto, watchdog stesso degradato) tu sei **l'ultima rete**: al primo sweep del giorno rilevi e ripari. Senza questo canary, un daemon morto resta invisibile per ore (è esattamente com'è successo al sentinel-bridge su betaC il 2026-06-27 → 8h ciechi sull'usage).
 ```bash
 python3 /app/shared/skills/process_health.py summary
 ```
