@@ -20,9 +20,9 @@ export default function DocsSidebar() {
   const { lang } = useLandingI18n();
   const nav = getDocsNav(lang as DocLocale);
   return (
-    <aside className="hidden md:block fixed top-0 left-0 bottom-0 w-[21rem] z-40 overflow-y-auto border-r border-[var(--color-border)] pt-32 pb-16 pl-6 pr-5">
+    <aside className="hidden md:block self-stretch w-[21rem] shrink-0 border-r border-[var(--color-border)] pt-32 pb-16 pl-6 pr-5">
       <nav
-        className="space-y-6"
+        className="sticky top-28 space-y-6"
         aria-label={ARIA_LABEL[lang as DocLocale] ?? ARIA_LABEL.en}
       >
         {nav.map((section) => (
