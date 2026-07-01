@@ -4,8 +4,12 @@
 // come ha lavorato. In cima uno switcher COLLASSABILE (non una sidebar fissa)
 // per saltare a un altro case study.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  rememberCurrentSection,
+  restoreSection,
+} from "@/lib/case-study-scroll";
 import type { CaseStudyProfile, CaseStudyPhase } from "@/lib/case-studies";
 import type { CaseStudyRun, CaseStudyUsage } from "@/lib/case-study";
 import type { TeamActivity } from "@/lib/team-activity";
@@ -388,6 +392,12 @@ export default function CaseStudyDetail({
   const [menuOpen, setMenuOpen] = useState(false);
   const { run, activity, profile, phases } = current;
 
+  // Cambiando tester (stesso componente, nuovo id) riallinea alla stessa sezione
+  // ricordata dal menu; al primo ingresso non c'è nulla in sospeso → resta in cima.
+  useEffect(() => {
+    restoreSection();
+  }, [current.id]);
+
   const activeDays = activity.roleDaily.filter((d) =>
     Object.values(d.counts).some((n) => n > 0),
   ).length;
@@ -472,7 +482,10 @@ export default function CaseStudyDetail({
                       key={c.id}
                       href={`/case-studies/${c.id}`}
                       scroll={false}
-                      onClick={() => setMenuOpen(false)}
+                      onClick={() => {
+                        rememberCurrentSection();
+                        setMenuOpen(false);
+                      }}
                       className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 no-underline transition-colors hover:bg-[var(--color-bg)]"
                       style={{
                         background: active
@@ -518,7 +531,7 @@ export default function CaseStudyDetail({
       </div>
 
       {/* ── Profilo ───────────────────────────────────────────── */}
-      <header>
+      <header id="cs-profile" data-cs-anchor="profile" className="scroll-mt-[72px]">
         <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8">
           {/* Riga alta: testo a sinistra (piena larghezza) + abbonamento a destra */}
           <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
@@ -611,7 +624,7 @@ export default function CaseStudyDetail({
 
       {/* ── Lavoro e budget nel tempo (grafico unico, doppio asse) ── */}
       {run.usage && run.usage.daily.length > 0 && (
-        <section>
+        <section id="cs-budget" data-cs-anchor="budget" className="scroll-mt-[72px]">
           <div className="section-label mb-1">📈 {t.workBudgetTitle}</div>
           <p className="text-[11px] text-[var(--color-dim)] mb-4">
             <strong className="text-[var(--color-muted)]">
@@ -698,7 +711,11 @@ export default function CaseStudyDetail({
         run.sourcesScoreDaily.length > 0 &&
         run.sourcesDailyKeys &&
         run.sourcesDailyKeys.length > 0 && (
-          <section className="pt-10 border-t border-[var(--color-border)]">
+          <section
+            id="cs-sources"
+            data-cs-anchor="sources"
+            className="pt-10 border-t border-[var(--color-border)] scroll-mt-[72px]"
+          >
             <div className="section-label mb-1">📥 {t.sourcesTitle}</div>
             <p className="text-[11px] text-[var(--color-dim)] mb-6">
               {t.sourcesProse1} {nf(locale, run.totals.positions)}{" "}
@@ -743,7 +760,11 @@ export default function CaseStudyDetail({
 
       {/* ── Funnel: trovate → tenute vs escluse (sezione nuova) ──────── */}
       {run.funnelDaily && run.funnelDaily.length > 0 && run.funnelTotals && (
-        <section className="pt-10 border-t border-[var(--color-border)]">
+        <section
+          id="cs-funnel"
+          data-cs-anchor="funnel"
+          className="pt-10 border-t border-[var(--color-border)] scroll-mt-[72px]"
+        >
           <div className="section-label mb-1">🪣 {t.funnelTitle}</div>
           <p className="text-[11px] text-[var(--color-dim)] mb-6">
             {t.funnelProse}
