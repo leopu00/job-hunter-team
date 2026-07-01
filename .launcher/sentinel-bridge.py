@@ -997,6 +997,11 @@ def _build_tick_message(entry, parsed, status, proj, usage, reset_str, dyn_targe
             "ratio": wp.get("ratio"), "kind": kind if kind not in (None, "ND") else None,
             "debt": wp.get("debt_pct"), "early_lockout": wp.get("early_lockout_h"),
             "burn_mode": bool(wp.get("burn_mode")),
+            # Verdetto imperativo Passo A (RALLENTA ~X%/ACCELERA-SATURA/...): la
+            # CONCLUSIONE pronta per un modello debole (Kimi), non solo i numeri.
+            # Il renderer lo mostra come headline della sezione SETTIMANA.
+            "verdict": (_pace_verdict_line(
+                wp, entry.get("weekly_remaining_pct")) or "").strip() or None,
         }
     extras = {}
     mrp = parsed.get("monthly_remaining_pct") if isinstance(parsed, dict) else None
