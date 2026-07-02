@@ -52,7 +52,10 @@ const NAV_SKELETON: NavSkeletonSection[] = [
   },
   {
     groupKey: "good_to_know",
-    items: [{ href: "/docs/guides/faq", emoji: "❓" }],
+    items: [
+      { href: "/docs/guides/faq", emoji: "❓" },
+      { href: "/docs/guides/privacy-and-security", emoji: "🔒" },
+    ],
   },
 ];
 
@@ -352,6 +355,41 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
       title: "Perguntas frequentes",
       description:
         "Respostas rápidas antes de começar: custos, dados, provedores e como funciona.",
+    },
+  },
+  "/docs/guides/privacy-and-security": {
+    it: {
+      title: "Privacy e sicurezza",
+      description:
+        "Dove finiscono i tuoi dati, le chiavi e i CV — spiegato semplice.",
+    },
+    en: {
+      title: "Privacy & security",
+      description: "Where your data, keys and CVs live — in plain words.",
+    },
+    es: {
+      title: "Privacidad y seguridad",
+      description:
+        "Dónde viven tus datos, claves y CV — explicado de forma clara.",
+    },
+    fr: {
+      title: "Confidentialité & sécurité",
+      description: "Où vivent vos données, clés et CV — expliqué simplement.",
+    },
+    de: {
+      title: "Datenschutz & Sicherheit",
+      description:
+        "Wo deine Daten, Schlüssel und Lebensläufe liegen — einfach erklärt.",
+    },
+    hu: {
+      title: "Adatvédelem és biztonság",
+      description:
+        "Hol vannak az adataid, a kulcsaid és az önéletrajzaid — közérthetően.",
+    },
+    pt: {
+      title: "Privacidade e segurança",
+      description:
+        "Onde ficam os teus dados, chaves e CVs — explicado de forma simples.",
     },
   },
   "/docs/guides/cli": {
