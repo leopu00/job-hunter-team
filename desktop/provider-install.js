@@ -256,13 +256,25 @@ function inspectInstalledProviders({ bindHomeDir } = {}) {
   const path = require('node:path')
   const home = bindHomeDir || path.join(resolveHome(), '.jht')
   const binDir = path.join(home, '.npm-global', 'bin')
-  // lstatSync (not existsSync) so dead-from-the-host symlinks still
-  // count as "present". Kimi's uv install uses an absolute symlink
-  // pointing inside the container (/jht_home/.local/share/uv/…),
-  // which the host sees as a broken link — but from inside the
-  // container it resolves fine, and that's the only place the binary
-  // ever actually runs.
-  const exists = (p) => {
+  // Detect by directory ENTRY NAME first (readdir), then fall back to
+  // lstat. Two host quirks make an lstat-only probe unreliable:
+  //   • macOS/Linux: the CLIs are symlinks; Kimi's uv install points at
+  //     an absolute path inside the container, so the host sees a dead
+  //     link — lstatSync still succeeds there, which is why we used it.
+  //   • Windows + Docker Desktop (WSL2): the in-container npm symlinks
+  //     surface through the bind mount as LX reparse points. The host
+  //     can readdir them but fs.lstatSync THROWS (EACCES) and readlink
+  //     throws EINVAL — so lstat-alone reports "nothing installed",
+  //     leaving the whole provider-login step empty and wrongly
+  //     skippable. readdir sees the entries on every platform.
+  let entries = []
+  try {
+    entries = fs.readdirSync(binDir)
+  } catch {
+    // bin dir missing → nothing installed yet.
+  }
+  const entrySet = new Set(entries)
+  const lstatExists = (p) => {
     try {
       fs.lstatSync(p)
       return true
@@ -270,11 +282,13 @@ function inspectInstalledProviders({ bindHomeDir } = {}) {
       return false
     }
   }
+  const present = (name) =>
+    entrySet.has(name) || lstatExists(path.join(binDir, name))
   const installed = []
   for (const [id, meta] of Object.entries(PROVIDERS)) {
     const binary = meta.binary
     if (!binary) continue
-    if (exists(path.join(binDir, binary)) || exists(path.join(binDir, `${binary}.cmd`))) {
+    if (present(binary) || present(`${binary}.cmd`)) {
       installed.push(id)
     }
   }
