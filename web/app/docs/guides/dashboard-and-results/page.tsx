@@ -61,18 +61,21 @@ const T: Record<
       "Once the team is running it produces a steady stream of positions, each verified and scored against your profile. This page explains what you see and how the numbers work.",
     flowH2: "🔄 How a position flows",
     flowP:
-      "Every job moves through the pipeline before it reaches you. The score is the key signal:",
-    flowPre: `🕵️  Scout    finds a position           → new
-🔬  Analyst  verifies the role + company → checked
-💯  Scorer   scores it 0–100 vs you      → scored
-              ├─ score < 40  → set aside
-              └─ score ≥ 50  → handed to the Writer
+      "The team runs on its own up to the score. Writing the CV is the one step you trigger — it never happens automatically:",
+    flowPre: `🕵️  Scout    finds a position             → new
+🔬  Analyst  verifies the role + company  → checked
+💯  Scorer   scores it 0–100 for you      → scored
+
+   ↓  every scored position lands in your list, sorted by score
+   ↓  the team stops here — no CV is written on its own
+
+👤  You      open a position and press "Write CV"  (or /cv on Telegram)
 ✍️  Writer   drafts a tailored CV + letter
-⚖️  Critic   blind-reviews it (3 rounds)  → ready
-👤  You      review and decide what to send`,
+⚖️  Critic   blind-reviews it · 3 rounds  → ready
+👤  You      review it and send it yourself`,
     calloutScoreStrong: "The score is a compatibility estimate, not a verdict.",
     calloutScoreRest:
-      "It ranks how well a posting matches your profile — you stay the judge of what's worth pursuing. Nothing is ever submitted on your behalf.",
+      "It ranks how well a posting matches your profile — you stay the judge of what's worth pursuing. A CV is drafted only when you ask, and nothing is ever submitted on your behalf.",
     whereH2: "🖥️ Where to read it",
     webH3: "The web dashboard",
     webP: "From a browser you get the full picture:",
@@ -103,7 +106,7 @@ jht stats                 # found / scored / applied counts`,
       " for safety. Anything that changes your team or your data happens from the desktop app or the CLI, on your machine.",
     outputH2: "📄 The output you act on",
     outputRest1:
-      "Approved applications land as ready-to-send packages (CV + cover letter) in your ",
+      "Each CV you request comes back as a ready-to-send package (CV + cover letter) in your ",
     outputReady: '"Ready to submit"',
     outputRest2:
       " documents folder, marked %READY%. You open, review and send them yourself.",
@@ -116,19 +119,22 @@ jht stats                 # found / scored / applied counts`,
       "Una volta avviato, il team produce un flusso costante di posizioni, ciascuna verificata e valutata rispetto al tuo profilo. Questa pagina spiega cosa vedi e come funzionano i numeri.",
     flowH2: "🔄 Come scorre una posizione",
     flowP:
-      "Ogni offerta attraversa la pipeline prima di arrivare a te. Il punteggio è il segnale chiave:",
-    flowPre: `🕵️  Scout    trova una posizione         → new
-🔬  Analista verifica ruolo + azienda    → checked
-💯  Scorer   la valuta 0–100 vs te       → scored
-              ├─ score < 40  → messa da parte
-              └─ score ≥ 50  → passata allo Scrittore
-✍️  Scrittore prepara CV + lettera su misura
-⚖️  Critico  la rivede alla cieca (3 round) → ready
-👤  Tu       rivedi e decidi cosa inviare`,
+      "Il team lavora da solo fino al punteggio. Scrivere il CV è l'unico passo che avvii tu — non avviene mai in automatico:",
+    flowPre: `🕵️  Scout      trova una posizione             → new
+🔬  Analista   verifica ruolo + azienda        → checked
+💯  Scorer     la valuta 0–100 per te          → scored
+
+   ↓  ogni posizione valutata entra nella tua lista, ordinata per punteggio
+   ↓  il team si ferma qui: nessun CV viene scritto da solo
+
+👤  Tu         apri una posizione e premi "Scrivi CV"  (o /cv su Telegram)
+✍️  Scrittore  prepara un CV + lettera su misura
+⚖️  Critico    lo rivede alla cieca · 3 round  → ready
+👤  Tu         rivedi e lo invii tu`,
     calloutScoreStrong:
       "Il punteggio è una stima di compatibilità, non un verdetto.",
     calloutScoreRest:
-      "Indica quanto un annuncio corrisponde al tuo profilo — sei tu a decidere cosa vale la pena perseguire. Nulla viene mai inviato a tuo nome.",
+      "Indica quanto un annuncio corrisponde al tuo profilo — sei tu a decidere cosa vale la pena perseguire. Il CV viene scritto solo quando lo chiedi tu e nulla viene mai inviato a tuo nome.",
     whereH2: "🖥️ Dove leggerlo",
     webH3: "La dashboard web",
     webP: "Da un browser hai il quadro completo:",
@@ -159,7 +165,7 @@ jht stats                 # conteggi trovate / valutate / candidate`,
       " per sicurezza. Tutto ciò che modifica il tuo team o i tuoi dati avviene dall'app desktop o dalla CLI, sulla tua macchina.",
     outputH2: "📄 Il risultato su cui agisci",
     outputRest1:
-      "Le candidature approvate arrivano come pacchetti pronti all'invio (CV + lettera di presentazione) nella tua cartella documenti ",
+      "Ogni CV che richiedi torna come pacchetto pronto all'invio (CV + lettera di presentazione) nella tua cartella documenti ",
     outputReady: '"Pronto da inviare"',
     outputRest2:
       ", contrassegnati come %READY%. Li apri, li rivedi e li invii tu stesso.",
@@ -172,19 +178,22 @@ jht stats                 # conteggi trovate / valutate / candidate`,
       "Una vez en marcha, el equipo produce un flujo constante de posiciones, cada una verificada y puntuada según tu perfil. Esta página explica qué ves y cómo funcionan los números.",
     flowH2: "🔄 Cómo fluye una posición",
     flowP:
-      "Cada oferta pasa por el pipeline antes de llegarte. La puntuación es la señal clave:",
-    flowPre: `🕵️  Scout    encuentra una posición      → new
-🔬  Analista verifica el puesto + empresa → checked
-💯  Scorer   la puntúa 0–100 vs ti       → scored
-              ├─ score < 40  → apartada
-              └─ score ≥ 50  → pasada al Redactor
-✍️  Redactor redacta un CV + carta a medida
-⚖️  Crítico  la revisa a ciegas (3 rondas) → ready
-👤  Tú       revisas y decides qué enviar`,
+      "El equipo trabaja solo hasta la puntuación. Escribir el CV es el único paso que activas tú — nunca ocurre automáticamente:",
+    flowPre: `🕵️  Scout     encuentra una posición         → new
+🔬  Analista  verifica el puesto + empresa   → checked
+💯  Scorer    la puntúa 0–100 para ti        → scored
+
+   ↓  cada posición puntuada entra en tu lista, ordenada por puntuación
+   ↓  el equipo se detiene aquí: no se escribe ningún CV por su cuenta
+
+👤  Tú        abre una posición y pulsa "Escribir CV"  (o /cv en Telegram)
+✍️  Redactor  redacta un CV + carta a medida
+⚖️  Crítico   lo revisa a ciegas · 3 rondas  → ready
+👤  Tú        lo revisas y lo envías tú`,
     calloutScoreStrong:
       "La puntuación es una estimación de compatibilidad, no un veredicto.",
     calloutScoreRest:
-      "Indica cómo de bien encaja un anuncio con tu perfil — tú sigues siendo quien decide qué vale la pena perseguir. Nunca se envía nada en tu nombre.",
+      "Indica cómo de bien encaja un anuncio con tu perfil — tú sigues siendo quien decide qué vale la pena perseguir. El CV se escribe solo cuando lo pides y nunca se envía nada en tu nombre.",
     whereH2: "🖥️ Dónde leerlo",
     webH3: "El panel web",
     webP: "Desde un navegador tienes la imagen completa:",
@@ -215,7 +224,7 @@ jht stats                 # recuentos de encontradas / puntuadas / aplicadas`,
       " por seguridad. Todo lo que cambia tu equipo o tus datos ocurre desde la app de escritorio o la CLI, en tu máquina.",
     outputH2: "📄 El resultado sobre el que actúas",
     outputRest1:
-      "Las candidaturas aprobadas llegan como paquetes listos para enviar (CV + carta de presentación) en tu carpeta de documentos ",
+      "Cada CV que pides vuelve como paquete listo para enviar (CV + carta de presentación) en tu carpeta de documentos ",
     outputReady: '"Listo para enviar"',
     outputRest2:
       ", marcados como %READY%. Tú los abres, los revisas y los envías.",
@@ -228,19 +237,22 @@ jht stats                 # recuentos de encontradas / puntuadas / aplicadas`,
       "Une fois lancée, l'équipe produit un flux constant de postes, chacun vérifié et noté par rapport à votre profil. Cette page explique ce que vous voyez et comment fonctionnent les chiffres.",
     flowH2: "🔄 Comment circule un poste",
     flowP:
-      "Chaque offre traverse le pipeline avant de vous parvenir. Le score est le signal clé :",
-    flowPre: `🕵️  Scout    trouve un poste             → new
-🔬  Analyste vérifie le rôle + l'entreprise → checked
-💯  Scorer   le note 0–100 vs vous       → scored
-              ├─ score < 40  → mis de côté
-              └─ score ≥ 50  → transmis au Rédacteur
-✍️  Rédacteur rédige un CV + une lettre sur mesure
-⚖️  Critique le relit à l'aveugle (3 tours) → ready
-👤  Vous     relisez et décidez quoi envoyer`,
+      "L'équipe travaille seule jusqu'au score. Rédiger le CV est la seule étape que vous déclenchez — elle n'a jamais lieu automatiquement :",
+    flowPre: `🕵️  Scout      trouve un poste                 → new
+🔬  Analyste   vérifie le rôle + l'entreprise  → checked
+💯  Scorer     le note 0–100 pour vous         → scored
+
+   ↓  chaque poste noté arrive dans votre liste, trié par score
+   ↓  l'équipe s'arrête ici : aucun CV n'est écrit tout seul
+
+👤  Vous       ouvrez un poste et appuyez sur "Rédiger le CV"  (ou /cv sur Telegram)
+✍️  Rédacteur  rédige un CV + lettre sur mesure
+⚖️  Critique   le relit à l'aveugle · 3 tours  → ready
+👤  Vous       vous le relisez et l'envoyez`,
     calloutScoreStrong:
       "Le score est une estimation de compatibilité, pas un verdict.",
     calloutScoreRest:
-      "Il indique à quel point une annonce correspond à votre profil — c'est vous qui restez juge de ce qui vaut la peine d'être poursuivi. Rien n'est jamais envoyé en votre nom.",
+      "Il indique à quel point une annonce correspond à votre profil — c'est vous qui restez juge de ce qui vaut la peine d'être poursuivi. Le CV n'est rédigé que lorsque vous le demandez et rien n'est jamais envoyé en votre nom.",
     whereH2: "🖥️ Où le lire",
     webH3: "Le tableau de bord web",
     webP: "Depuis un navigateur, vous avez la vue d'ensemble :",
@@ -272,7 +284,7 @@ jht stats                 # nombres trouvés / notés / postulés`,
       " par sécurité. Tout ce qui modifie votre équipe ou vos données se fait depuis l'application de bureau ou la CLI, sur votre machine.",
     outputH2: "📄 Le résultat sur lequel vous agissez",
     outputRest1:
-      "Les candidatures approuvées arrivent sous forme de dossiers prêts à envoyer (CV + lettre de motivation) dans votre dossier de documents ",
+      "Chaque CV que vous demandez revient sous forme de dossier prêt à envoyer (CV + lettre de motivation) dans votre dossier de documents ",
     outputReady: "« Prêt à envoyer »",
     outputRest2:
       ", marqués %READY%. Vous les ouvrez, les relisez et les envoyez vous-même.",
@@ -285,19 +297,22 @@ jht stats                 # nombres trouvés / notés / postulés`,
       "Sobald das Team läuft, produziert es einen stetigen Strom an Stellen, jede gegen dein Profil geprüft und bewertet. Diese Seite erklärt, was du siehst und wie die Zahlen funktionieren.",
     flowH2: "🔄 Wie eine Stelle durchläuft",
     flowP:
-      "Jede Stelle durchläuft die Pipeline, bevor sie dich erreicht. Der Score ist das entscheidende Signal:",
-    flowPre: `🕵️  Scout    findet eine Stelle          → new
-🔬  Analyst  prüft Rolle + Unternehmen   → checked
-💯  Scorer   bewertet sie 0–100 vs. dir  → scored
-              ├─ score < 40  → beiseitegelegt
-              └─ score ≥ 50  → an den Schreiber übergeben
-✍️  Schreiber entwirft einen passenden Lebenslauf + Brief
-⚖️  Kritiker prüft sie blind (3 Runden)  → ready
-👤  Du       prüfst und entscheidest, was du sendest`,
+      "Das Team arbeitet bis zum Score von selbst. Den CV zu schreiben ist der einzige Schritt, den du auslöst — er passiert nie automatisch:",
+    flowPre: `🕵️  Scout      findet eine Stelle           → new
+🔬  Analyst    prüft Rolle + Unternehmen    → checked
+💯  Scorer     bewertet sie 0–100 für dich  → scored
+
+   ↓  jede bewertete Stelle landet in deiner Liste, nach Score sortiert
+   ↓  das Team stoppt hier — kein CV wird von selbst geschrieben
+
+👤  Du         öffne eine Stelle und drücke "CV schreiben"  (oder /cv auf Telegram)
+✍️  Schreiber  entwirft einen passenden CV + Brief
+⚖️  Kritiker   prüft ihn blind · 3 Runden   → ready
+👤  Du         prüfst ihn und sendest ihn selbst`,
     calloutScoreStrong:
       "Der Score ist eine Kompatibilitätsschätzung, kein Urteil.",
     calloutScoreRest:
-      "Er bewertet, wie gut eine Anzeige zu deinem Profil passt — du bleibst der Richter darüber, was sich zu verfolgen lohnt. Nichts wird je in deinem Namen abgeschickt.",
+      "Er bewertet, wie gut eine Anzeige zu deinem Profil passt — du bleibst der Richter darüber, was sich zu verfolgen lohnt. Ein CV wird nur geschrieben, wenn du es verlangst, und nichts wird je in deinem Namen abgeschickt.",
     whereH2: "🖥️ Wo du es liest",
     webH3: "Das Web-Dashboard",
     webP: "Im Browser bekommst du das vollständige Bild:",
@@ -329,7 +344,7 @@ jht stats                 # Zähler gefunden / bewertet / beworben`,
       ". Alles, was dein Team oder deine Daten ändert, geschieht über die Desktop-App oder die CLI, auf deinem Rechner.",
     outputH2: "📄 Das Ergebnis, auf das du reagierst",
     outputRest1:
-      "Genehmigte Bewerbungen landen als versandfertige Pakete (Lebenslauf + Anschreiben) in deinem Dokumentenordner ",
+      "Jeder CV, den du anforderst, kommt als versandfertiges Paket (Lebenslauf + Anschreiben) in deinem Dokumentenordner ",
     outputReady: "„Bereit zum Absenden“",
     outputRest2:
       ", markiert mit %READY%. Du öffnest, prüfst und versendest sie selbst.",
@@ -342,18 +357,21 @@ jht stats                 # Zähler gefunden / bewertet / beworben`,
       "Amint a csapat elindul, pozíciók folyamatos áramát állítja elő, mindegyiket ellenőrizve és a profilodhoz pontozva. Ez az oldal elmagyarázza, mit látsz és hogyan működnek a számok.",
     flowH2: "🔄 Hogyan halad egy pozíció",
     flowP:
-      "Minden állás végighalad a folyamaton, mielőtt hozzád érne. A pontszám a kulcsjelzés:",
-    flowPre: `🕵️  Felderítő talál egy pozíciót          → new
-🔬  Elemző   ellenőrzi a szerepet + céget  → checked
-💯  Pontozó  0–100-ra pontozza hozzád képest → scored
-              ├─ score < 40  → félretéve
-              └─ score ≥ 50  → átadva az Írónak
-✍️  Író      személyre szabott önéletrajzot + levelet ír
-⚖️  Kritikus vakon átnézi (3 kör)          → ready
-👤  Te       átnézed és eldöntöd, mit küldj`,
+      "A csapat a pontszámig magától dolgozik. A CV megírása az egyetlen lépés, amelyet te indítasz el — soha nem történik automatikusan:",
+    flowPre: `🕵️  Felderítő  talál egy pozíciót            → new
+🔬  Elemző     ellenőrzi a szerepet + céget  → checked
+💯  Pontozó    0–100-ra pontozza neked       → scored
+
+   ↓  minden pontozott pozíció a listádba kerül, pontszám szerint rendezve
+   ↓  a csapat itt megáll — magától egyetlen CV sem készül
+
+👤  Te         nyiss meg egy pozíciót és nyomd meg: "CV írása"  (vagy /cv Telegramon)
+✍️  Író        személyre szabott CV-t + levelet ír
+⚖️  Kritikus   vakon átnézi · 3 kör          → ready
+👤  Te         átnézed és te küldöd el`,
     calloutScoreStrong: "A pontszám kompatibilitási becslés, nem ítélet.",
     calloutScoreRest:
-      "Azt mutatja, mennyire illik egy hirdetés a profilodhoz — te maradsz a bíró afelett, mit érdemes követni. Soha semmit nem küldünk el a nevedben.",
+      "Azt mutatja, mennyire illik egy hirdetés a profilodhoz — te maradsz a bíró afelett, mit érdemes követni. CV csak akkor készül, ha kéred, és soha semmit nem küldünk el a nevedben.",
     whereH2: "🖥️ Hol olvasd",
     webH3: "A webes irányítópult",
     webP: "Böngészőből a teljes képet kapod:",
@@ -384,7 +402,7 @@ jht stats                 # talált / pontozott / jelentkezett darabszámok`,
       ". Minden, ami a csapatodat vagy az adataidat módosítja, az asztali alkalmazásból vagy a CLI-ből történik, a saját gépeden.",
     outputH2: "📄 Az eredmény, amire reagálsz",
     outputRest1:
-      "A jóváhagyott jelentkezések küldésre kész csomagokként (önéletrajz + kísérőlevél) érkeznek a ",
+      "Minden kért CV küldésre kész csomagként (önéletrajz + kísérőlevél) érkezik vissza a ",
     outputReady: "„Küldésre kész”",
     outputRest2:
       " dokumentummappádba, %READY% megjelöléssel. Te nyitod meg, nézed át és küldöd el őket.",
@@ -397,19 +415,22 @@ jht stats                 # talált / pontozott / jelentkezett darabszámok`,
       "Assim que a equipa está em funcionamento, produz um fluxo constante de posições, cada uma verificada e pontuada em relação ao teu perfil. Esta página explica o que vês e como os números funcionam.",
     flowH2: "🔄 Como flui uma posição",
     flowP:
-      "Cada vaga passa pelo pipeline antes de chegar até ti. A pontuação é o sinal-chave:",
-    flowPre: `🕵️  Scout    encontra uma posição        → new
-🔬  Analista verifica o cargo + empresa  → checked
-💯  Scorer   pontua-a 0–100 vs ti        → scored
-              ├─ score < 40  → posta de lado
-              └─ score ≥ 50  → entregue ao Redator
-✍️  Redator  redige um CV + carta à medida
-⚖️  Crítico  revê-a às cegas (3 rondas)   → ready
-👤  Tu       revês e decides o que enviar`,
+      "A equipa trabalha sozinha até à pontuação. Escrever o CV é o único passo que activas tu — nunca acontece automaticamente:",
+    flowPre: `🕵️  Scout     encontra uma posição        → new
+🔬  Analista  verifica o cargo + empresa  → checked
+💯  Scorer    pontua-a 0–100 para ti      → scored
+
+   ↓  cada posição pontuada entra na tua lista, ordenada por pontuação
+   ↓  a equipa para aqui: nenhum CV é escrito sozinho
+
+👤  Tu        abre uma posição e carrega em "Escrever CV"  (ou /cv no Telegram)
+✍️  Redator   redige um CV + carta à medida
+⚖️  Crítico   revê-o às cegas · 3 rondas  → ready
+👤  Tu        revês e envias tu`,
     calloutScoreStrong:
       "A pontuação é uma estimativa de compatibilidade, não um veredicto.",
     calloutScoreRest:
-      "Indica o quão bem um anúncio corresponde ao teu perfil — continuas a ser tu a decidir o que vale a pena perseguir. Nada é jamais enviado em teu nome.",
+      "Indica o quão bem um anúncio corresponde ao teu perfil — continuas a ser tu a decidir o que vale a pena perseguir. O CV só é escrito quando o pedes e nada é jamais enviado em teu nome.",
     whereH2: "🖥️ Onde o ler",
     webH3: "O painel web",
     webP: "A partir de um navegador, tens o quadro completo:",
@@ -440,7 +461,7 @@ jht stats                 # contagens encontradas / pontuadas / candidatadas`,
       " por segurança. Tudo o que altera a tua equipa ou os teus dados acontece a partir da app de ambiente de trabalho ou da CLI, na tua máquina.",
     outputH2: "📄 O resultado sobre o qual ages",
     outputRest1:
-      "As candidaturas aprovadas chegam como pacotes prontos a enviar (CV + carta de apresentação) na tua pasta de documentos ",
+      "Cada CV que pedes volta como pacote pronto a enviar (CV + carta de apresentação) na tua pasta de documentos ",
     outputReady: '"Pronto a enviar"',
     outputRest2:
       ", marcadas como %READY%. Abre-las, revê-las e envia-las tu mesmo.",
