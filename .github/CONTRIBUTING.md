@@ -4,6 +4,7 @@ Thanks for considering a contribution. Bug reports, feature ideas, documentation
 
 ## Ways to help
 
+- **Pick a mission** — the [contributor missions](../docs/about/ROADMAP.md#-where-you-can-help--contributor-missions) (M1–M8) are the bigger directions we'd love a hand with; each breaks into smaller `good first issue` entry-points. Comment on an issue to claim it.
 - **Report bugs and ideas** — use the [Bug Report](ISSUE_TEMPLATE/bug_report.md) and [Feature Request](ISSUE_TEMPLATE/feature_request.md) templates
 - **Improve docs** — PRs against `docs/`, the README, or the ADRs are always appreciated
 - **Fix a bug / ship a feature** — follow the PR flow below
