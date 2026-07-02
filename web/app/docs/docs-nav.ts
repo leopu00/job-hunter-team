@@ -50,6 +50,10 @@ const NAV_SKELETON: NavSkeletonSection[] = [
       { href: "/docs/guides/cli", emoji: "⌨️" },
     ],
   },
+  {
+    groupKey: "good_to_know",
+    items: [{ href: "/docs/guides/faq", emoji: "❓" }],
+  },
 ];
 
 // Nomi dei gruppi della sidebar/indice, per lingua.
@@ -71,6 +75,15 @@ const GROUP_LABELS: Record<string, Record<DocLocale, string>> = {
     de: "Das Team nutzen",
     hu: "A csapat használata",
     pt: "Usar a equipa",
+  },
+  good_to_know: {
+    it: "Buono a sapersi",
+    en: "Good to know",
+    es: "Bueno saberlo",
+    fr: "Bon à savoir",
+    de: "Gut zu wissen",
+    hu: "Jó tudni",
+    pt: "Bom saber",
   },
 };
 
@@ -302,6 +315,43 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
       title: "O teu painel e resultados",
       description:
         "Lê posições, pontuações e candidaturas — início de sessão opcional, possível só localmente.",
+    },
+  },
+  "/docs/guides/faq": {
+    it: {
+      title: "Domande frequenti",
+      description:
+        "Risposte veloci prima di iniziare: costi, dati, provider e come funziona.",
+    },
+    en: {
+      title: "FAQ",
+      description:
+        "Quick answers before you start: costs, data, providers and how it works.",
+    },
+    es: {
+      title: "Preguntas frecuentes",
+      description:
+        "Respuestas rápidas antes de empezar: costes, datos, proveedores y cómo funciona.",
+    },
+    fr: {
+      title: "FAQ",
+      description:
+        "Réponses rapides avant de commencer : coûts, données, fournisseurs et fonctionnement.",
+    },
+    de: {
+      title: "FAQ",
+      description:
+        "Schnelle Antworten vor dem Start: Kosten, Daten, Anbieter und Funktionsweise.",
+    },
+    hu: {
+      title: "GYIK",
+      description:
+        "Gyors válaszok, mielőtt belekezdesz: költségek, adatok, szolgáltatók és működés.",
+    },
+    pt: {
+      title: "Perguntas frequentes",
+      description:
+        "Respostas rápidas antes de começar: custos, dados, provedores e como funciona.",
     },
   },
   "/docs/guides/cli": {
