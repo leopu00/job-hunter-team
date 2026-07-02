@@ -5,6 +5,8 @@
 //
 // Stages reported back so the renderer can show targeted hints:
 //   brew-missing        → Homebrew is not on PATH; we won't install it.
+//   brew-not-writable   → Homebrew belongs to another user (multi-account Mac);
+//                         the current user can't `brew install` into it.
 //   brew-install        → `brew install colima docker` failed.
 //   colima-start        → install ok but `colima start` failed.
 //   daemon-unreachable  → start exited 0 but `docker ps` still doesn't respond.
@@ -91,6 +93,41 @@ async function isBrewPresent({ env } = {}) {
     return true
   } catch {
     return false
+  }
+}
+
+// Homebrew installs into a single prefix (/opt/homebrew on Apple Silicon,
+// /usr/local on Intel) owned by whoever installed it first. On a Mac with
+// more than one account a second user can't write there, so `brew install`
+// fails halfway with permission errors ("change the ownership of these
+// directories to your user"). Probe the prefix and the dirs brew must write
+// to during an install, up front, so we can surface a clear message instead
+// of a mid-install crash. Non-blocking on uncertainty: if we can't determine
+// the prefix, assume writable and let the install proceed.
+async function isBrewWritable({ env } = {}) {
+  try {
+    const { stdout } = await execFileAsync('brew', ['--prefix'], {
+      env: env || brewEnv(),
+      timeout: 5000,
+    })
+    const prefix = stdout.trim()
+    if (!prefix) return { ok: true }
+    const candidates = [
+      prefix,
+      path.join(prefix, 'Cellar'),
+      path.join(prefix, 'var', 'homebrew', 'locks'),
+    ]
+    for (const dir of candidates) {
+      if (!fs.existsSync(dir)) continue
+      try {
+        fs.accessSync(dir, fs.constants.W_OK)
+      } catch {
+        return { ok: false, prefix, dir }
+      }
+    }
+    return { ok: true, prefix }
+  } catch {
+    return { ok: true }
   }
 }
 
@@ -370,6 +407,7 @@ async function installColimaOnDarwin({
   onStage = () => {},
   run = runStreamed,
   brewCheck = isBrewPresent,
+  brewWritable = isBrewWritable,
   dockerCheck = isDockerResponsive,
   brewInstaller = installHomebrew,
   qemuImgCheck = isQemuImgPresent,
@@ -401,6 +439,22 @@ async function installColimaOnDarwin({
         stage: 'brew-install-homebrew',
         error: 'Homebrew installer finished but brew not found on PATH',
       }
+    }
+  }
+  // brew is now present (pre-existing or freshly installed). If the prefix
+  // belongs to a DIFFERENT user (multi-account Mac) the upcoming
+  // `brew install` would die with permission errors — catch it here with a
+  // clear, actionable message instead of a cryptic mid-install failure.
+  const writable = await brewWritable({ env })
+  if (!writable.ok) {
+    onStage('homebrew', 'fail')
+    return {
+      ok: false,
+      stage: 'brew-not-writable',
+      error:
+        `Homebrew (${writable.prefix || '/opt/homebrew'}) appartiene a un altro ` +
+        `utente del Mac e non è scrivibile dal tuo account. Homebrew funziona per ` +
+        `un solo utente: usa l'account che l'ha installato, oppure scegli Docker Desktop.`,
     }
   }
   onStage('homebrew', 'ok')
@@ -504,6 +558,7 @@ async function installDocker({
   onStage = () => {},
   run = runStreamed,
   brewCheck = isBrewPresent,
+  brewWritable = isBrewWritable,
   dockerCheck = isDockerResponsive,
   brewInstaller = installHomebrew,
   qemuImgCheck = isQemuImgPresent,
@@ -516,6 +571,7 @@ async function installDocker({
     onStage,
     run,
     brewCheck,
+    brewWritable,
     dockerCheck,
     brewInstaller,
     qemuImgCheck,
@@ -528,6 +584,7 @@ module.exports = {
   _internal: {
     runStreamed,
     isBrewPresent,
+    isBrewWritable,
     isDockerResponsive,
     isColimaInstalled,
     isQemuImgPresent,
