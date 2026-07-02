@@ -5,6 +5,11 @@
 > [`architecture/kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md) — se
 > leggi per decidere, leggi quello. Questo file è il *come ci siamo arrivati*, congelato.
 > **Modalità:** sola lettura sui team live (nessun intervento).
+>
+> ⚠️ **Superato in precisione (stessa giornata)** da
+> [`2026-07-02-kimi-codex-exact-token-forensics.md`](2026-07-02-kimi-codex-exact-token-forensics.md):
+> quella misura usa i **token esatti** dei log CLI (qui invece il **token-meter** euristico del
+> bridge). La direzione (coordinatori ~uguali, budget ~2×→2,7×, €/token ≈ pari) è confermata.
 
 ## Cosa ha ribaltato
 
@@ -19,7 +24,7 @@ Due affermazioni precedenti sono cadute nello stesso giorno, entrambe per lo ste
 
 ## Dati grezzi
 
-- Fonte: `bridge-mailbox.jsonl` (554 tick betaB/Kimi, 631 betaC/Codex, mag→lug) +
+- Fonte: `bridge-mailbox.jsonl` (554 tick Kimi, 631 Codex, mag→lug) +
   `sentinel-data.jsonl` (`weekly_usage`, `source=bridge`).
 - **Quota coordinatori** (Σ cap+sent kT / Σ team kT): Kimi 20,5% · Codex 19,2%.
 - **Budget** (`Σ team_kT / Σ Δusage`, per-tick `ratio=X kT/%`):
