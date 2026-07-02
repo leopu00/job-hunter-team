@@ -10,7 +10,7 @@ JHT pins each role to one of **four tiers**, listed from highest to lowest. The 
 |---|---|---|---|---|---|
 | 🥇 **very smart** | 👨‍✈️ Captain | `opus-4-7` · effort `high` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Critical, irreversible decisions — full reasoning depth |
 | 🥈 **expert** | 👨‍🏫 Writer · 👨‍⚖️ Critic · 🧙‍♂️ Mentor | `opus-4-7` · effort `medium` | `gpt-5.5` · reasoning `high` | `k2.6` · `standard` | Pattern-matching against well-known templates (CV, blind review, gap analysis) |
-| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👨‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Research, scraping, scoring, user chat |
+| 🥉 **smart** | 🕵️ Scout · 👨‍🔬 Analyst · 👨‍💻 Scorer · 👩‍💼 Assistant | `sonnet-4-6` · effort `high` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Research, scraping, scoring, user chat |
 | 🎖️ **medium** | 💂 Sentinel | `sonnet-4-6` · effort `medium` | `gpt-5.5` · reasoning `medium` | `k2.6` · `standard` | Light watchdog — if-then rules, no deep thinking |
 
 **Available effort levels (for reference):**
@@ -386,12 +386,12 @@ Out of the pipeline. Runs continuously alongside it.
                           │
             ┌─────────────┼─────────────┐
             ▼             ▼             ▼
-       👨‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
+       👩‍💼 Assistant  👨‍✈️ Captain   🧙‍♂️ Mentor
        platform      team commander  career coach
        copilot                       (always-on)
 ```
 
-- **👨‍💼 Assistant** — `tier: smart`. Translates non-technical user requests into orders for the Captain. Hides implementation details from the user-facing chat.
+- **👩‍💼 Assistant** — `tier: smart`. Translates non-technical user requests into orders for the Captain. Hides implementation details from the user-facing chat.
 - **🧙‍♂️ Mentor** — `tier: expert`, **active** (basics shipped, optimization ongoing). Career coach: analyzes the profile/results gap, produces an action plan, strategic check-ins. User-facing always-on, spawned at boot. Folder: `agents/mentor/`.
 
 ---

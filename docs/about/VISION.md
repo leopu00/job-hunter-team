@@ -25,7 +25,7 @@ The goal is the *opposite* of "enterprise productivity software". Closer to: a D
 | 👨‍💻 | **Scorer** | The judge. Numbers, no sentiment. |
 | 👨‍🏫 | **Writer** | The craftsman. Cares about the comma. |
 | 👨‍⚖️ | **Critic** | The blind reviewer. Doesn't know who wrote what. |
-| 👨‍💼 | **Assistant** | The copilot. Walks you through the platform. |
+| 👩‍💼 | **Assistant** | The copilot. Walks you through the platform. |
 | 🧙‍♂️ | **Mentor** | The career coach. Sees the bigger picture. |
 | 🩺 | **Dottore** | The medic. One-shot rounds — refreshes long-running agents' context so they don't drift. |
 | 👷‍♂️ | **Mantenitore** | The janitor. Keeps the infra (container, tools, disk) healthy. |
@@ -47,7 +47,7 @@ The Mentor is the only agent that has the right to tell the user *"stop applying
 
 See [`agents/mentor/mentor.md`](../../agents/mentor/mentor.md) for the spec.
 
-### 👨‍💼 The Assistant — the copilot
+### 👩‍💼 The Assistant — the copilot
 
 The platform is large. The Assistant exists so that no user gets lost. It lives in every interface (web, Telegram, CLI) and answers questions like *"how do I add a new agent?"*, *"what does this score mean?"*, *"why is the team idle right now?"*.
 

@@ -52,7 +52,7 @@ The team has **no fixed headcount**: a stable core of always-on agents plus a **
 |---|-------|------|
 | 👨‍✈️ | **Captain** | Coordinates the pipeline and handles anti-collision between agents |
 | 💂 | **Sentinel** | Event-driven watcher — intervenes on the Captain when usage drifts toward the window limit |
-| 👨‍💼 | **Assistant** | Platform copilot — helps the user navigate every interface |
+| 👩‍💼 | **Assistant** | Platform copilot — helps the user navigate every interface |
 | 🧙‍♂️ | **Mentor** | Career coach — analyzes goals, gaps, market signals to keep your strategy aligned |
 
 **Dynamic worker pool** — the Captain spins up 1..N of each, scaling with load:
@@ -80,7 +80,7 @@ The team has **no fixed headcount**: a stable core of always-on agents plus a **
                                        👤 User
                        ┌─────────────────┼─────────────────┐
                        ▼                 ▼                 ▼
-               🧙‍♂️ Mentor       👨‍💼 Assistant      👨‍✈️ Captain ◀··intervene·· 💂 Sentinel ◀──notify── 📡 Bridge
+               🧙‍♂️ Mentor       👩‍💼 Assistant      👨‍✈️ Captain ◀··intervene·· 💂 Sentinel ◀──notify── 📡 Bridge
                (career coach)    (platform copilot)        │       (event-driven)         (usage clock)
                                                            │      🩺 Dottore ····agent-health··· ▲
                                                            │      👷‍♂️ Mantenitore ··infra-health·· │
@@ -94,7 +94,7 @@ The team has **no fixed headcount**: a stable core of always-on agents plus a **
                                                                    (3 blind rounds)
 ```
 
-The user has three entry points: **🧙‍♂️ Mentor** for career advice, **👨‍💼 Assistant** as a copilot to navigate the platform, and **👨‍✈️ Captain** to drive the actual job-hunting pipeline. The Captain dispatches orders to the dynamic worker pool (Scout, Analyst, Scorer, Writer — 1..N instances each, scaled to load) and tracks state. Data flows left-to-right: Scout finds positions, Analyst verifies them, Scorer ranks them, Writer produces CV + cover letter. Writer bounces with Critic through 3 blind review rounds; Critic isn't commanded by the Captain — it's a peer reviewer triggered only by Writer, by design, to keep the review independent. Once approved, Writer emits the application as "Ready to submit".
+The user has three entry points: **🧙‍♂️ Mentor** for career advice, **👩‍💼 Assistant** as a copilot to navigate the platform, and **👨‍✈️ Captain** to drive the actual job-hunting pipeline. The Captain dispatches orders to the dynamic worker pool (Scout, Analyst, Scorer, Writer — 1..N instances each, scaled to load) and tracks state. Data flows left-to-right: Scout finds positions, Analyst verifies them, Scorer ranks them, Writer produces CV + cover letter. Writer bounces with Critic through 3 blind review rounds; Critic isn't commanded by the Captain — it's a peer reviewer triggered only by Writer, by design, to keep the review independent. Once approved, Writer emits the application as "Ready to submit".
 
 Token usage is governed by a two-component monitoring stack: **📡 Bridge** runs on a fixed clock, fetches usage samples from the provider, and notifies the **💂 Sentinel**; the Sentinel stays event-driven and intervenes on the Captain only when the projection drifts toward the window limit. See [`docs/about/MONITORING.md`](docs/about/MONITORING.md).
 
