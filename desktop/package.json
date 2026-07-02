@@ -41,6 +41,15 @@
     "productName": "JHT Desktop",
     "npmRebuild": false,
     "afterSign": "./build/after-sign.js",
+    "electronLanguages": [
+      "en",
+      "it",
+      "es",
+      "de",
+      "fr",
+      "pt",
+      "hu"
+    ],
     "files": [
       "main.js",
       "preload.js",
@@ -52,6 +61,7 @@
       "deps.js",
       "payload.js",
       "disk-space.js",
+      "email-verify.js",
       "provider-install.js",
       "provider-store.js",
       "provider-auth.js",
@@ -63,6 +73,7 @@
       "docker-installer/**/*.js",
       "win-installer/**/*.js",
       "!**/*.test.js",
+      "!**/*.map",
       "node_modules/@xterm/xterm/lib/**/*",
       "node_modules/@xterm/xterm/css/**/*",
       "node_modules/@xterm/addon-fit/lib/**/*",
