@@ -224,6 +224,10 @@ export const TRANSLATIONS = {
     'winSuccess.body':
       'Restart your computer now to activate WSL and Git. The wizard will pick up where it left off.',
     'docker.action.restartNow': 'Restart now',
+    'docker.action.continue': 'Continue',
+    'winSuccessNoReboot.title': 'All set — no restart needed',
+    'winSuccessNoReboot.body':
+      'WSL, Git and Docker were already installed. Nothing to reboot — you can continue.',
     'docker.action.openDesktop': 'Open Docker Desktop',
     'docker.action.startColima': 'Start Colima',
     'docker.action.startDockerDesktop': 'Start Docker Desktop',
@@ -747,6 +751,10 @@ export const TRANSLATIONS = {
     'winSuccess.body':
       'Riavvia il computer ora per attivare WSL e Git. Il wizard riprenderà da dove hai interrotto.',
     'docker.action.restartNow': 'Riavvia ora',
+    'docker.action.continue': 'Continua',
+    'winSuccessNoReboot.title': 'Tutto pronto — nessun riavvio necessario',
+    'winSuccessNoReboot.body':
+      'WSL, Git e Docker erano già installati. Niente da riavviare — puoi continuare.',
     'docker.action.openDesktop': 'Apri Docker Desktop',
     'docker.action.startColima': 'Avvia Colima',
     'docker.action.startDockerDesktop': 'Avvia Docker Desktop',
