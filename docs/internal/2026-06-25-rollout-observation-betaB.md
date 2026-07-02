@@ -6,6 +6,8 @@
 pacing-bridge target=SENTINELLA via hotfix (codice committato `5ee54f910` per il rebuild).
 **Modalità:** osservazione (no intervento).
 
+> ⚠️ **NOTA 2026-07-02 (correzione):** più giù l'inciso "capitano … (ancora top-consumer)" riflette la vecchia tesi coordinator-burn, ridimensionata dalla misura pulita full-history: su Kimi il Capitano pesa ~13,6% (≈ Codex), non è il consumatore dominante; l'alta quota coordinatori di quella notte è coast/idle. Living doc: [`architecture/kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md). *(Resta valida l'attribuzione del burn allo scout-5 rabbit-hole.)*
+
 ## ✅ Cosa funziona (confermato dal vivo)
 
 1. **push→pull**: ogni `[BRIDGE PACING]` va a `to=sentinella` (mai più al Capitano). Confermato
