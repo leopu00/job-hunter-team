@@ -12,8 +12,8 @@ import {
   Code,
   Pre,
   GitHubMore,
-  repoFile,
 } from "../../DocKit";
+import { repoFile } from "../../repo";
 
 const T: Record<
   Locale,

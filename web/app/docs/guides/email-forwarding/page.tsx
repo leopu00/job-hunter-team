@@ -572,9 +572,9 @@ const T: Record<Locale, Strings> = {
       </>
     ),
     stepsTitle: "🗺️ I tre passaggi",
-    stepsCode: `1. Create a dedicated inbox for the team   →  e.g. yourname.jht@gmail.com
-2. Share it with the team (desktop app)    →  email + app-password, saved locally
-3. Auto-forward your job alerts into it    →  from LinkedIn + any platform`,
+    stepsCode: `1. Crea una casella dedicata per il team       →  es. tuonome.jht@gmail.com
+2. Condividila con il team (app desktop)       →  email + app-password, salvate in locale
+3. Inoltra qui i tuoi job alert in automatico  →  da LinkedIn e da qualsiasi piattaforma`,
     step1Title: "1️⃣ Crea una casella dedicata",
     step1Body: (
       <>
@@ -958,9 +958,9 @@ const T: Record<Locale, Strings> = {
       </>
     ),
     stepsTitle: "🗺️ Los tres pasos",
-    stepsCode: `1. Create a dedicated inbox for the team   →  e.g. yourname.jht@gmail.com
-2. Share it with the team (desktop app)    →  email + app-password, saved locally
-3. Auto-forward your job alerts into it    →  from LinkedIn + any platform`,
+    stepsCode: `1. Crea un buzón dedicado para el equipo            →  p. ej. tunombre.jht@gmail.com
+2. Compártelo con el equipo (app de escritorio)     →  email + contraseña de app, guardados en local
+3. Reenvía ahí tus alertas de empleo en automático  →  desde LinkedIn y cualquier plataforma`,
     step1Title: "1️⃣ Crea un buzón dedicado",
     step1Body: (
       <>
@@ -1352,9 +1352,9 @@ const T: Record<Locale, Strings> = {
       </>
     ),
     stepsTitle: "🗺️ Les trois étapes",
-    stepsCode: `1. Create a dedicated inbox for the team   →  e.g. yourname.jht@gmail.com
-2. Share it with the team (desktop app)    →  email + app-password, saved locally
-3. Auto-forward your job alerts into it    →  from LinkedIn + any platform`,
+    stepsCode: `1. Créez une boîte dédiée pour l’équipe            →  ex. votrenom.jht@gmail.com
+2. Partagez-la avec l’équipe (app de bureau)       →  email + mot de passe d’application, en local
+3. Transférez-y vos alertes emploi en automatique  →  depuis LinkedIn et toute plateforme`,
     step1Title: "1️⃣ Créez une boîte dédiée",
     step1Body: (
       <>
@@ -1752,9 +1752,9 @@ const T: Record<Locale, Strings> = {
       </>
     ),
     stepsTitle: "🗺️ Die drei Schritte",
-    stepsCode: `1. Create a dedicated inbox for the team   →  e.g. yourname.jht@gmail.com
-2. Share it with the team (desktop app)    →  email + app-password, saved locally
-3. Auto-forward your job alerts into it    →  from LinkedIn + any platform`,
+    stepsCode: `1. Erstelle ein dediziertes Postfach fürs Team  →  z. B. deinname.jht@gmail.com
+2. Teile es mit dem Team (Desktop-App)          →  E-Mail + App-Passwort, lokal gespeichert
+3. Leite deine Job-Alerts automatisch dorthin   →  von LinkedIn und jeder Plattform`,
     step1Title: "1️⃣ Erstelle ein eigenes Postfach",
     step1Body: (
       <>
@@ -2142,9 +2142,9 @@ const T: Record<Locale, Strings> = {
       </>
     ),
     stepsTitle: "🗺️ A három lépés",
-    stepsCode: `1. Create a dedicated inbox for the team   →  e.g. yourname.jht@gmail.com
-2. Share it with the team (desktop app)    →  email + app-password, saved locally
-3. Auto-forward your job alerts into it    →  from LinkedIn + any platform`,
+    stepsCode: `1. Hozz létre dedikált postafiókot a csapatnak        →  pl. nev.jht@gmail.com
+2. Oszd meg a csapattal (asztali app)                 →  e-mail + alkalmazásjelszó, helyben mentve
+3. Továbbítsd ide az állásértesítőidet automatikusan  →  LinkedInről és bármely platformról`,
     step1Title: "1️⃣ Hozz létre egy dedikált postafiókot",
     step1Body: (
       <>
@@ -2525,9 +2525,9 @@ const T: Record<Locale, Strings> = {
       </>
     ),
     stepsTitle: "🗺️ Os três passos",
-    stepsCode: `1. Create a dedicated inbox for the team   →  e.g. yourname.jht@gmail.com
-2. Share it with the team (desktop app)    →  email + app-password, saved locally
-3. Auto-forward your job alerts into it    →  from LinkedIn + any platform`,
+    stepsCode: `1. Cria uma caixa dedicada para a equipa        →  ex. oteunome.jht@gmail.com
+2. Partilha-a com a equipa (app de computador)  →  email + palavra-passe de app, em local
+3. Reencaminha aí os teus alertas de emprego    →  do LinkedIn e de qualquer plataforma`,
     step1Title: "1️⃣ Crie uma caixa de entrada dedicada",
     step1Body: (
       <>

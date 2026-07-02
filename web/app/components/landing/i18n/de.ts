@@ -2,6 +2,13 @@
 // base it/en/hu; le chiavi assenti ripiegano automaticamente su `en`.
 // Le chiavi array (ta()) non passano dall'overlay: vivono solo nella base.
 export const de: Record<string, string> = {
+  // Chiavi aggiunte (allineamento i18n)
+  home_intro: "Job Hunter Team ist ein Team autonomer KI-Agenten, die ununterbrochen für dich nach Arbeit suchen. Jeder Agent ist ein Spezialist: Einer spürt die Stellen auf, einer analysiert sie im Detail und einer vergibt jeder eine Bewertung, je nachdem, wie nah sie an dem ist, was dir wirklich wichtig ist. Auf Wunsch erstellen sie auch den Lebenslauf für deine Bewerbung. Und wenn die versendeten Bewerbungen nicht ausreichen, um Arbeit zu finden, steht dir ein eigener Agent zur Seite: Er hilft dir, dich auf dem Arbeitsmarkt zu orientieren und dich der gewünschten Rolle zu nähern. Du gibst die Richtung vor und behältst das letzte Wort; den Rest übernimmt das Team, privat, auf deiner eigenen Maschine.",
+  theme_system: "System",
+  theme_dark: "Nacht",
+  theme_light: "Tag",
+  nav_run: "Wie man es startet",
+  home_pricing_alt: "Ein offenes Vorhängeschloss, umgeben von wenigen Münzen, eine leuchtend grün: Die Plattform ist kostenlos und Open Source, du zahlst nur den KI-Anbieter.",
   // Nav
   nav_features: "Funktionen",
   nav_how: "So funktioniert's",
@@ -21,9 +28,9 @@ export const de: Record<string, string> = {
   hero_badge: "öffentliche Beta",
   hero_title_1: "Dein KI-Agententeam",
   hero_title_2: "für die Jobsuche",
-  hero_desc_short: "Ein KI-Agententeam für deine Jobsuche.",
+  hero_desc_short: "Ein autonomes KI-Agententeam für deine Jobsuche.",
   hero_desc:
-    "Ein Multi-Agenten-System, das jeden Schritt deiner Jobsuche automatisiert: vom Durchsuchen der Stellen bis zur personalisierten Bewerbung. Du gibst die Strategie vor, die Agenten setzen sie um.",
+    "Ein autonomes Multi-Agenten-System, das jeden Schritt deiner Jobsuche übernimmt: vom Durchsuchen der Stellen bis zur personalisierten Bewerbung. Du gibst die Strategie vor, die Agenten führen sie aus.",
   hero_cta: "Hier starten",
   hero_cta2: "So funktioniert's",
   hero_project_cta: "GitHub",
@@ -48,7 +55,7 @@ export const de: Record<string, string> = {
     "Jede Stelle wird auf Basis deines Profils, deiner Fähigkeiten und Präferenzen analysiert und bewertet. Fokus auf das Wesentliche.",
   feat_4_title: "Echtzeit-Dashboard",
   feat_4_desc:
-    "Metriken, Analysen und Status jeder Bewerbung. Alles in einer Ansicht: Tokens, Kosten, Latenz, vollständige Pipeline.",
+    "Metriken, Analysen und Status jeder Bewerbung. Alles in einer Ansicht: Fortschritt, Kosten und die vollständige Pipeline auf einen Blick.",
   feat_5_title: "Du hast die Kontrolle",
   feat_5_desc:
     "Die Agenten schlagen vor, du entscheidest. Jede Bewerbung erfordert deine Freigabe vor dem Versand.",
@@ -119,7 +126,7 @@ export const de: Record<string, string> = {
   // Footer
   footer_jht: "Job Hunter Team",
   footer_brand_desc:
-    "Ein KI-Agententeam, das für dich auf Jobsuche geht. Open Source, lokal, privat.",
+    "Ein autonomes KI-Agententeam, das für dich auf Jobsuche geht. Open Source, lokal, privat.",
   footer_product: "Produkt",
   footer_stats: "Projekt",
   footer_report: "Berichte",
@@ -228,7 +235,7 @@ export const de: Record<string, string> = {
   about_title_1: "Ein KI-Agententeam",
   about_title_2: "zu deinen Diensten",
   about_intro:
-    "Job Hunter Team ist ein Open-Source-Projekt, das die Jobsuche mit einem Multi-Agenten-System automatisiert. Jeder Agent hat eine genaue Rolle, und gemeinsam bilden sie eine komplette Pipeline: von der Entdeckung der Stellen bis zur finalen Bewerbung.",
+    "Job Hunter Team ist ein Open-Source-Projekt, das die Jobsuche mit einem Team autonomer KI-Agenten automatisiert. Jeder Agent hat eine genaue Rolle, und gemeinsam bilden sie eine vollständige Pipeline: vom Entdecken der Stellen bis zur finalen Bewerbung.",
   about_story_label: "die Geschichte",
   about_story_title: "Wie das Projekt entstand",
   about_story_desc:
@@ -261,7 +268,7 @@ export const de: Record<string, string> = {
     "Der Prüfer. Er untersucht jedes vom Schreiber erstellte Dokument mit kritischem Blick: Kohärenz, Fehler, fehlende Keywords, unpassender Ton. Wenn nötig, schickt er die Arbeit mit präzisem Feedback an den Schreiber zurück.",
   about_agent_sentinella_name: "Wächter",
   about_agent_sentinella_desc:
-    "Der Hüter. Er überwacht die API-Kosten, den Token-Verbrauch, die Latenz und die Systemgesundheit. Er warnt dich, wenn etwas schiefläuft, und stellt sicher, dass das Team innerhalb der festgelegten Budgetgrenzen arbeitet.",
+    "Der Hüter. Er überwacht die API-Kosten, die Nutzung, die Antwortzeiten und die Systemgesundheit. Er warnt dich, wenn etwas schiefläuft, und stellt sicher, dass das Team innerhalb der festgelegten Budgetgrenzen arbeitet.",
   about_agent_assistente_name: "Assistent",
   about_agent_assistente_desc:
     "Die Unterstützung. Er beantwortet deine Fragen, führt dich durch die Konfiguration, erklärt die Entscheidungen der anderen Agenten. Er ist deine Anlaufstelle, wenn du Hilfe brauchst oder verstehen willst, was gerade passiert.",
@@ -394,7 +401,7 @@ export const de: Record<string, string> = {
   home_team_kicker: "Das Team",
   home_team_title: "Ein Team, kein einzelner Bot",
   home_team_body:
-    "Hinter Job Hunter Team steht ein Team spezialisierter KI-Agenten: einer findet die Stellen, einer prüft sie, einer bewertet sie, einer schreibt deinen Lebenslauf und einer kritisiert ihn gnadenlos. Jeder macht eine Sache, und macht sie gut.",
+    "Ein einzelner Chatbot muss alles allein machen und glänzt in nichts. Ein Team nicht: Jeder Agent hat eine genaue Aufgabe und führt sie gründlich aus, und die Arbeit jedes Einzelnen wird vom Nächsten geprüft. So kümmert sich um jede Phase, wer sie am besten beherrscht, und was bei dir ankommt, wurde bereits mehrfach kontrolliert.",
   home_team_cta: "Lerne das Team kennen →",
   home_dashboard_kicker: "Dein Dashboard",
   home_dashboard_title: "Alles im Blick, vom Web aus",
@@ -406,7 +413,7 @@ export const de: Record<string, string> = {
   home_setup_kicker: "Starte es",
   home_setup_title: "Wie du willst, wo du willst",
   home_setup_body:
-    "Auf deinem PC mit Docker, auf einem dauerhaft eingeschalteten dedizierten Computer oder auf einer günstigen VPS, die Tag und Nacht für dich arbeitet. Alles wird über die Desktop-App verwaltet: starte, stoppe und behalte das Team mit einem Klick im Auge.",
+    "Es läuft auf einem dauerhaft eingeschalteten dedizierten Computer oder einem günstigen VPS und arbeitet Tag und Nacht für dich. Du verwaltest es über die Desktop-App: starten, stoppen und das Team mit einem Klick im Blick behalten. Und du bist nicht an diesen Computer gebunden: Über das Web kannst du die Ergebnisse verfolgen und mit dem Team auch von einem anderen PC oder deinem Handy sprechen.",
   home_setup_cta: "Wie man es startet →",
   home_pricing_kicker: "Preise",
   home_pricing_title: "Open Source. Die Plattform ist kostenlos.",

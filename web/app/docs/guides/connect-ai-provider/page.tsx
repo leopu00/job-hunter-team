@@ -10,8 +10,8 @@ import {
   Code,
   Pre,
   GitHubMore,
-  repoFile,
 } from "../../DocKit";
+import { repoFile } from "../../repo";
 import type { Locale } from "@/i18n/config";
 import { getRequestLocale } from "@/lib/request-locale";
 
@@ -56,7 +56,7 @@ const T: Record<Locale, Copy> = {
     kimi: "(Moonshot Pro, ~€40/mo) — cheapest, validated on multi-day runs. The mass-market starting point.",
     codex: "(OpenAI Plus/Pro, ~€100/mo) — balanced quality and cost.",
     claude:
-      "(Anthropic Max x20, ~€200/mo) — top precision for scoring and CV writing.",
+      "(Anthropic Max, ~€90/mo) — top precision for scoring and CV writing.",
     dedicatedStrong: "Use a dedicated subscription.",
     dedicatedRest:
       "Sharing the account you use for personal AI drains the same weekly quota twice and the team will hit rate limits. See the",
@@ -91,7 +91,7 @@ const T: Record<Locale, Copy> = {
     kimi: "(Moonshot Pro, ~40€/mese) — il più economico, validato su run di più giorni. Il punto di partenza per il grande pubblico.",
     codex: "(OpenAI Plus/Pro, ~100€/mese) — equilibrio tra qualità e costo.",
     claude:
-      "(Anthropic Max x20, ~200€/mese) — massima precisione per scoring e scrittura del CV.",
+      "(Anthropic Max, ~90€/mese) — massima precisione per scoring e scrittura del CV.",
     dedicatedStrong: "Usa un abbonamento dedicato.",
     dedicatedRest:
       "Condividere l'account che usi per l'AI personale consuma due volte la stessa quota settimanale e il team raggiungerà i limiti di rate. Consulta la",
@@ -126,7 +126,7 @@ const T: Record<Locale, Copy> = {
     kimi: "(Moonshot Pro, ~40 €/mes) — el más barato, validado en ejecuciones de varios días. El punto de partida para el gran público.",
     codex: "(OpenAI Plus/Pro, ~100 €/mes) — equilibrio entre calidad y coste.",
     claude:
-      "(Anthropic Max x20, ~200 €/mes) — máxima precisión para la puntuación y la redacción del CV.",
+      "(Anthropic Max, ~90 €/mes) — máxima precisión para la puntuación y la redacción del CV.",
     dedicatedStrong: "Usa una suscripción dedicada.",
     dedicatedRest:
       "Compartir la cuenta que usas para tu IA personal agota la misma cuota semanal dos veces y el equipo alcanzará los límites de tasa. Consulta la",
@@ -163,7 +163,7 @@ const T: Record<Locale, Copy> = {
     kimi: "(Moonshot Pro, ~40 €/mois) — le moins cher, validé sur des exécutions de plusieurs jours. Le point de départ grand public.",
     codex: "(OpenAI Plus/Pro, ~100 €/mois) — équilibre entre qualité et coût.",
     claude:
-      "(Anthropic Max x20, ~200 €/mois) — précision maximale pour le scoring et la rédaction du CV.",
+      "(Anthropic Max, ~90 €/mois) — précision maximale pour le scoring et la rédaction du CV.",
     dedicatedStrong: "Utilisez un abonnement dédié.",
     dedicatedRest:
       "Partager le compte que vous utilisez pour votre IA personnelle épuise deux fois le même quota hebdomadaire et l'équipe atteindra les limites de débit. Consultez la",
@@ -201,7 +201,7 @@ const T: Record<Locale, Copy> = {
     codex:
       "(OpenAI Plus/Pro, ~100 €/Monat) — ausgewogen in Qualität und Kosten.",
     claude:
-      "(Anthropic Max x20, ~200 €/Monat) — höchste Präzision für Scoring und Lebenslauf-Erstellung.",
+      "(Anthropic Max, ~90 €/Monat) — höchste Präzision für Scoring und Lebenslauf-Erstellung.",
     dedicatedStrong: "Verwende ein eigenes Abonnement.",
     dedicatedRest:
       "Das Teilen des Kontos, das du für deine persönliche KI nutzt, verbraucht dasselbe wöchentliche Kontingent doppelt, und das Team läuft in Rate-Limits. Siehe die",
@@ -239,7 +239,7 @@ const T: Record<Locale, Copy> = {
     codex:
       "(OpenAI Plus/Pro, ~100 €/hó) — kiegyensúlyozott minőség és költség.",
     claude:
-      "(Anthropic Max x20, ~200 €/hó) — csúcspontosság a pontozáshoz és az önéletrajz-íráshoz.",
+      "(Anthropic Max, ~90 €/hó) — csúcspontosság a pontozáshoz és az önéletrajz-íráshoz.",
     dedicatedStrong: "Használj dedikált előfizetést.",
     dedicatedRest:
       "Ha a személyes AI-hoz használt fiókot osztod meg, az kétszer meríti ki ugyanazt a heti keretet, és a csapat eléri a sebességkorlátokat. Lásd az",
@@ -276,7 +276,7 @@ const T: Record<Locale, Copy> = {
     codex:
       "(OpenAI Plus/Pro, ~100 €/mês) — equilíbrio entre qualidade e custo.",
     claude:
-      "(Anthropic Max x20, ~200 €/mês) — precisão máxima para pontuação e redação de CV.",
+      "(Anthropic Max, ~90 €/mês) — precisão máxima para pontuação e redação de CV.",
     dedicatedStrong: "Use uma assinatura dedicada.",
     dedicatedRest:
       "Compartilhar a conta que você usa para sua IA pessoal esgota a mesma cota semanal duas vezes e a equipe atingirá os limites de taxa. Veja a",
@@ -361,8 +361,8 @@ jht providers update kimi    # install its CLI inside the container`}
 
       <H3>{t.step3}</H3>
       <Pre>
-        {`jht providers current   # active provider + model
-jht providers check     # confirm the CLI is installed and reachable
+        {`jht providers current   # the active provider
+jht providers check     # provider CLIs with an update available
 jht doctor              # full health check — must exit 0`}
       </Pre>
 

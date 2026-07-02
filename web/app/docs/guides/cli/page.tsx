@@ -8,8 +8,8 @@ import {
   Code,
   Pre,
   GitHubMore,
-  repoFile,
 } from "../../DocKit";
+import { repoFile } from "../../repo";
 
 const T: Record<
   Locale,
@@ -84,7 +84,7 @@ const T: Record<
     setupSetup: "interactive wizard: provider, OAuth, team start",
     setupDoctor: "check Docker / Node / auth / DB — must exit 0",
     setupHealth: "granular service health",
-    setupStatus: "container + agent process summary",
+    setupStatus: "container status",
     h2Providers: "🧠 Providers",
     providersList: "claude | codex | kimi",
     providersCurrent: "active provider + model",
@@ -136,7 +136,7 @@ const T: Record<
     setupSetup: "wizard interattivo: provider, OAuth, avvio del team",
     setupDoctor: "controlla Docker / Node / auth / DB — deve uscire con 0",
     setupHealth: "salute granulare dei servizi",
-    setupStatus: "riepilogo container + processi degli agenti",
+    setupStatus: "stato del container",
     h2Providers: "🧠 Provider",
     providersList: "claude | codex | kimi",
     providersCurrent: "provider + modello attivi",
@@ -191,7 +191,7 @@ const T: Record<
     setupSetup: "asistente interactivo: proveedor, OAuth, inicio del equipo",
     setupDoctor: "comprueba Docker / Node / auth / DB — debe salir con 0",
     setupHealth: "salud granular de los servicios",
-    setupStatus: "resumen del contenedor + procesos de los agentes",
+    setupStatus: "estado del contenedor",
     h2Providers: "🧠 Proveedores",
     providersList: "claude | codex | kimi",
     providersCurrent: "proveedor + modelo activos",
@@ -248,7 +248,7 @@ const T: Record<
     setupSetup: "assistant interactif : provider, OAuth, démarrage de l'équipe",
     setupDoctor: "vérifie Docker / Node / auth / DB — doit sortir avec 0",
     setupHealth: "santé granulaire des services",
-    setupStatus: "résumé du conteneur + processus des agents",
+    setupStatus: "état du conteneur",
     h2Providers: "🧠 Providers",
     providersList: "claude | codex | kimi",
     providersCurrent: "provider + modèle actifs",
@@ -302,7 +302,7 @@ const T: Record<
     setupSetup: "interaktiver Assistent: Provider, OAuth, Team-Start",
     setupDoctor: "Docker / Node / Auth / DB prüfen — muss mit 0 beenden",
     setupHealth: "granularer Service-Zustand",
-    setupStatus: "Container- + Agentenprozess-Übersicht",
+    setupStatus: "Container-Status",
     h2Providers: "🧠 Provider",
     providersList: "claude | codex | kimi",
     providersCurrent: "aktiver Provider + Modell",
@@ -355,7 +355,7 @@ const T: Record<
     setupSetup: "interaktív varázsló: provider, OAuth, csapat indítása",
     setupDoctor: "Docker / Node / auth / DB ellenőrzése — 0-val kell kilépnie",
     setupHealth: "részletes szolgáltatás-állapot",
-    setupStatus: "konténer + ügynök-folyamatok összefoglalója",
+    setupStatus: "konténer állapota",
     h2Providers: "🧠 Providerek",
     providersList: "claude | codex | kimi",
     providersCurrent: "aktív provider + modell",
@@ -408,7 +408,7 @@ const T: Record<
     setupSetup: "assistente interativo: provider, OAuth, início da equipe",
     setupDoctor: "verifica Docker / Node / auth / DB — deve sair com 0",
     setupHealth: "saúde granular dos serviços",
-    setupStatus: "resumo do container + processos dos agentes",
+    setupStatus: "estado do container",
     h2Providers: "🧠 Providers",
     providersList: "claude | codex | kimi",
     providersCurrent: "provider + modelo ativos",
@@ -529,7 +529,7 @@ jht team stop --all && jht team start
 jht status && jht doctor
 
 # ${t.olReset}
-jht reset full`}
+jht reset --scope full`}
       </Pre>
 
       <GitHubMore href={repoFile("docs/guides/CLI-REFERENCE.md")}>

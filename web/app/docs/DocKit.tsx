@@ -70,11 +70,6 @@ const KIT_T: Record<
 // actionable. The full technical detail lives in the public repository — so
 // every guide ends with a link back to the source.
 
-export const REPO = "https://github.com/leopu00/job-hunter-team";
-/** Build a link into the repo (file or folder) on the master branch. */
-export const repoFile = (path: string) => `${REPO}/blob/master/${path}`;
-export const repoTree = (path: string) => `${REPO}/tree/master/${path}`;
-
 export const P_CLS =
   "text-[12px] text-[var(--color-muted)] leading-relaxed mb-3";
 export const LI_CLS = "text-[12px] text-[var(--color-muted)] leading-relaxed";
