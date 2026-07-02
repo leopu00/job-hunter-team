@@ -50,13 +50,35 @@ test('returns unsupported-platform on linux', async () => {
   assert.equal(result.error, 'unsupported-platform')
 })
 
-test('ok=true + rebootRequired when result file says OK and exit 0', async () => {
+test('ok=true + NO reboot when result file says OK (nothing installed) and exit 0', async () => {
   const fakeFs = makeFakeFs()
   const child = makeFakeChild()
   const spawnFn = () => {
-    // Simulate the elevated script writing OK to the result file.
+    // Plain OK = WSL/Git were already present, nothing installed → no reboot.
     setImmediate(() => {
       fakeFs.writeFileSync(FAKE_PATHS.result, 'OK\n')
+      child.emit('close', 0)
+    })
+    return child
+  }
+
+  const result = await installWindowsStack({
+    platform: 'win32',
+    paths: FAKE_PATHS,
+    spawnFn,
+    fsApi: fakeFs,
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.rebootRequired, false)
+})
+
+test('ok=true + rebootRequired when result file says OK_REBOOT (WSL freshly installed)', async () => {
+  const fakeFs = makeFakeFs()
+  const child = makeFakeChild()
+  const spawnFn = () => {
+    // OK_REBOOT = wsl --install actually ran → reboot genuinely required.
+    setImmediate(() => {
+      fakeFs.writeFileSync(FAKE_PATHS.result, 'OK_REBOOT\n')
       child.emit('close', 0)
     })
     return child

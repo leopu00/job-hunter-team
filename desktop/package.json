@@ -66,6 +66,7 @@
       "provider-store.js",
       "provider-auth.js",
       "terminal.js",
+      "email-verify.js",
       "auth/**/*.js",
       "sync/**/*.js",
       "vps/**/*.js",

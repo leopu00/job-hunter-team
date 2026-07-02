@@ -571,27 +571,44 @@ function markWinStepsAllOk() {
   if (dom.winStepDockerAction) clearChildren(dom.winStepDockerAction)
 }
 
-function showWinSuccessBanner() {
+function showWinSuccessBanner(rebootRequired = true) {
   if (!dom.winInstallActions) return
   clearChildren(dom.winInstallActions)
   // Big prominent green card instead of a small "Restart now" button
   // tucked under a log. The user explicitly asked for this — "avvisarlo
   // meglio che deve riavviare il computer".
+  //
+  // When nothing was actually installed (WSL/Git/Docker already present)
+  // no reboot is needed: show a "you're all set" variant with a Continue
+  // button instead of falsely telling the user to restart.
   const banner = document.createElement('div')
   banner.className = 'win-success'
   banner.innerHTML =
     '<div class="win-success__title">' +
-    t('winSuccess.title') + '</div>' +
+    t(rebootRequired ? 'winSuccess.title' : 'winSuccessNoReboot.title') + '</div>' +
     '<div class="win-success__body">' +
-    t('winSuccess.body') + '</div>'
+    t(rebootRequired ? 'winSuccess.body' : 'winSuccessNoReboot.body') + '</div>'
   const btn = document.createElement('button')
   btn.className = 'btn btn--primary btn--large'
-  btn.textContent = t('docker.action.restartNow')
-  btn.addEventListener('click', onRebootNow)
+  if (rebootRequired) {
+    btn.textContent = t('docker.action.restartNow')
+    btn.addEventListener('click', onRebootNow)
+  } else {
+    btn.textContent = t('docker.action.continue')
+    btn.addEventListener('click', onContinueNoReboot)
+  }
   banner.appendChild(btn)
   dom.winInstallActions.appendChild(banner)
   showIf(dom.winInstallActions, true)
   showIf(dom.winInstallLog, false)
+}
+
+// No-reboot path: prerequisites were already present, so just re-check
+// Docker status and let the wizard advance exactly as it would after a
+// post-reboot resume (no OS restart necessary).
+async function onContinueNoReboot() {
+  showIf(dom.winInstallActions, false)
+  await refreshDockerStatus()
 }
 
 export async function onInstallWindowsStack() {
@@ -599,9 +616,13 @@ export async function onInstallWindowsStack() {
   winShowLog(t('docker.install.windowsRunning'))
   try {
     const result = await window.setupApi.installWindowsStack()
-    if (result?.ok && result.rebootRequired) {
+    if (result?.ok) {
+      // Success either way. Only show the "restart" banner when a reboot
+      // is genuinely required (WSL freshly installed); otherwise show the
+      // "all set, no reboot" variant — previously we always asked to
+      // restart even when nothing was installed.
       markWinStepsAllOk()
-      showWinSuccessBanner()
+      showWinSuccessBanner(result.rebootRequired)
       return
     }
     const stage = result?.stage || 'unknown'

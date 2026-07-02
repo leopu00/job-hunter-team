@@ -1,6 +1,9 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { installProvider, installProviders, PROVIDERS, resolveHome } = require('./provider-install')
+const { installProvider, installProviders, PROVIDERS, resolveHome, inspectInstalledProviders } = require('./provider-install')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
 function recordingRun(plan) {
   const calls = []
@@ -328,6 +331,32 @@ test('_stepToRemoteCmd: env value adversariale non rompe il quoting', () => {
   // in single-quote il ; rm -rf / # e' tutto letterale).
   const trailing = cmd.endsWith("'echo $FOO'")
   assert.ok(trailing, "il comando deve terminare con il sh -c arg, non col payload adversariale")
+})
+
+test('inspectInstalledProviders detects a provider by bin-dir entry NAME (readdir path)', () => {
+  // Regression: on Windows + Docker Desktop (WSL2) the in-container npm
+  // symlinks surface as LX reparse points the host can readdir but NOT
+  // lstat (EACCES). Detection must key off the directory entry name so
+  // the provider-login step is not left empty and wrongly skippable.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jht-inspect-'))
+  const binDir = path.join(home, '.npm-global', 'bin')
+  fs.mkdirSync(binDir, { recursive: true })
+  // A plain entry named after a provider binary, as readdir would report
+  // it (even when a per-file lstat would throw on the real host).
+  const claudeBinary = PROVIDERS.claude.binary
+  fs.writeFileSync(path.join(binDir, claudeBinary), '')
+
+  const { installed } = inspectInstalledProviders({ bindHomeDir: home })
+  assert.ok(installed.includes('claude'), 'claude must be detected from the bin entry')
+  assert.ok(!installed.includes('codex'), 'codex must NOT be detected when absent')
+  fs.rmSync(home, { recursive: true, force: true })
+})
+
+test('inspectInstalledProviders reports nothing when the bin dir is missing', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'jht-inspect-empty-'))
+  const { installed } = inspectInstalledProviders({ bindHomeDir: home })
+  assert.deepEqual(installed, [])
+  fs.rmSync(home, { recursive: true, force: true })
 })
 
 
