@@ -13,7 +13,7 @@ import {
   type TeamActivityRole,
 } from "@/lib/team-activity";
 import betaCRun from "@/data/case-studies/betaC-codex-run.json";
-import betaBRun from "@/data/case-studies/betaB-kimi-run.json";
+import betaBKimiRun from "@/data/case-studies/betaB-kimi-run.json";
 import betaDRun from "@/data/case-studies/betaD-kimi-run.json";
 import PROFILES_I18N from "@/data/case-studies/profiles-i18n.json";
 import type { Locale } from "@/i18n/config";
@@ -66,17 +66,90 @@ export interface CaseStudyMeta {
   geos: string[]; // aree geografiche, es. ["Europa"]
   model: string; // modello LLM usato dal team, es. "Codex"
   /** abbonamento AI usato per questo run (l'unica spesa reale) */
-  subscription: { provider: string; plan: string; price: string };
+  subscription: {
+    provider: string;
+    plan: string;
+    price: string;
+    /** costo mensile in € (numerico) per il calcolo del costo per risultato */
+    monthlyEur?: number;
+  };
   profile: CaseStudyProfile;
   /** fasi del run con modello diverso (opzionale); se assente = run mono-fase */
   phases?: CaseStudyPhase[];
+  /** sessione free-run senza monitor del budget (burst di pochi giorni che ha
+   *  bruciato una settimana di budget): esclusa dalle statistiche di tasso
+   *  giornaliero, dove pochi giorni non sono rappresentativi. */
+  freeRun?: boolean;
   run: CaseStudyRun;
 }
 
+// Profilo del beta tester 1 (technical writer). La sessione free-run Codex è
+// stata rimossa (~3 giorni senza monitor, sporcava le medie): resta la sessione
+// Kimi monitorata.
+const TW_PROFILE: CaseStudyProfile = {
+  badge: "B1",
+  headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
+  summary:
+    "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
+  facts: [
+    { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
+    { label: "Esperienza", value: "Cross-domain · industria + lingue" },
+    { label: "Background", value: "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato" },
+    { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
+    { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
+  ],
+  locationNote:
+    "Priorità al full remote; geograficamente prima l'Ungheria, poi l'Italia, poi il resto d'Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
+  targetCities: [
+    "Budapest",
+    "Milano",
+    "Dublino",
+    "Amsterdam",
+    "Madrid",
+    "Barcellona",
+    "Varsavia",
+    "Lisbona",
+  ],
+  why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
+};
+
+// Tre beta tester, in ordine di etichetta. La sessione free-run Codex del
+// technical writer è stata TOLTA: ~3 giorni senza monitor del budget, sporcava
+// tutte le medie. Resta la sua sessione Kimi (monitorata) come beta tester 1.
 export const CASE_STUDIES: CaseStudyMeta[] = [
+  // ── Beta tester 1 · technical writer (Kimi, run monitorato) ─────────────
   {
-    id: "beta-1",
+    id: "beta-1-kimi",
     label: "Beta tester 1",
+    tagline: "Technical writing · traduzione · localizzazione",
+    category: "Technical Writing",
+    seniority: "Senior · cross-domain",
+    geos: ["Ungheria", "Italia", "Europa"],
+    model: "Kimi",
+    subscription: {
+      provider: "Moonshot Kimi",
+      plan: "Kimi Code",
+      price: "~€40/mese",
+      monthlyEur: 40,
+    },
+    profile: TW_PROFILE,
+    // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
+    phases: [
+      {
+        key: "kimi",
+        label: "Kimi",
+        price: "~€40/mese",
+        note: "run monitorato — budget settimanale dosato (pacing)",
+        from: "2026-06-13",
+        to: null,
+      },
+    ],
+    run: betaBKimiRun as unknown as CaseStudyRun,
+  },
+  // ── Beta tester 2 · finance, inizio carriera (Codex) ────────────────────
+  {
+    id: "beta-2",
+    label: "Beta tester 2",
     tagline: "Finance · early-career · Europa",
     category: "Finance",
     seniority: "Early career",
@@ -86,9 +159,10 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       provider: "OpenAI Codex",
       plan: "Pro",
       price: "~€100/mese",
+      monthlyEur: 100,
     },
     profile: {
-      badge: "B1",
+      badge: "B2",
       headline: "Professionista finance, inizio carriera",
       summary:
         "Analista all'inizio della carriera in credit risk e due diligence in una banca d'investimento internazionale. Vuole spostarsi verso ruoli front-office — investment management, restructuring, transaction advisory — in grandi città europee.",
@@ -120,69 +194,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
     },
     run: betaCRun as unknown as CaseStudyRun,
   },
-  {
-    id: "beta-2",
-    label: "Beta tester 2",
-    tagline: "Technical writing · traduzione · localizzazione",
-    category: "Technical Writing",
-    seniority: "Senior · cross-domain",
-    geos: ["Ungheria", "Italia", "Europa"],
-    model: "Kimi",
-    subscription: {
-      provider: "Moonshot Kimi",
-      plan: "Kimi Code",
-      price: "~€40/mese",
-    },
-    profile: {
-      badge: "B2",
-      headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
-      summary:
-        "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
-      facts: [
-        { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
-        { label: "Esperienza", value: "Cross-domain · industria + lingue" },
-        { label: "Background", value: "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato" },
-        { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
-        { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
-      ],
-      locationNote:
-        "Priorità al full remote; geograficamente prima l'Ungheria, poi l'Italia, poi il resto d'Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
-      targetCities: [
-        "Budapest",
-        "Milano",
-        "Dublino",
-        "Amsterdam",
-        "Madrid",
-        "Barcellona",
-        "Varsavia",
-        "Lisbona",
-      ],
-      why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
-    },
-    // Due sessioni distinte sullo STESSO candidato: prima un test con Codex (agenti
-    // liberi, senza monitor del budget), poi il run attuale con Kimi (monitorato).
-    // Il buco 05-12/06 tra le due è downtime e non appartiene a nessuna fase.
-    phases: [
-      {
-        key: "codex",
-        label: "Codex",
-        price: "~€100/mese",
-        note: "primo test — agenti liberi, senza monitor, fino a esaurire il budget",
-        from: "2026-05-19",
-        to: "2026-05-21",
-        detail: "hourly",
-      },
-      {
-        key: "kimi",
-        label: "Kimi",
-        price: "~€40/mese",
-        note: "run attuale — budget settimanale monitorato e dosato (pacing)",
-        from: "2026-06-13",
-        to: null,
-      },
-    ],
-    run: betaBRun as unknown as CaseStudyRun,
-  },
+  // ── Beta tester 3 · luxury hospitality (Kimi) ───────────────────────────
   {
     id: "beta-3",
     label: "Beta tester 3",
@@ -195,6 +207,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       provider: "Moonshot Kimi",
       plan: "Kimi Code",
       price: "~€40/mese",
+      monthlyEur: 40,
     },
     profile: {
       badge: "B3",
@@ -310,4 +323,76 @@ export function buildCaseActivity(run: CaseStudyRun): TeamActivity {
     run.tsRange[0].slice(0, 10),
     run.tsRange[1].slice(0, 10),
   );
+}
+
+// ── periodo di lavoro (finestra del run + giorni attivi) ────────────────────
+// `days` = giorni con attività del team (stessa definizione della pagina di
+// dettaglio). Formattazione locale-aware, risolta server-side col locale della
+// richiesta (come gli altri campi editoriali della scheda). `label` è pronto da
+// mostrare: es. "19 mag → 30 giu (34 giorni)".
+const RUN_LOCALE_TAG: Record<Locale, string> = {
+  it: "it-IT",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  hu: "hu-HU",
+  pt: "pt-PT",
+};
+const DAYS_WORD: Record<Locale, (n: number) => string> = {
+  it: (n) => `${n} giorn${n === 1 ? "o" : "i"}`,
+  en: (n) => `${n} day${n === 1 ? "" : "s"}`,
+  es: (n) => `${n} día${n === 1 ? "" : "s"}`,
+  fr: (n) => `${n} jour${n === 1 ? "" : "s"}`,
+  de: (n) => `${n} Tag${n === 1 ? "" : "e"}`,
+  hu: (n) => `${n} nap`,
+  pt: (n) => `${n} dia${n === 1 ? "" : "s"}`,
+};
+function fmtRunDay(locale: Locale, iso: string): string {
+  return new Intl.DateTimeFormat(RUN_LOCALE_TAG[locale], {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${iso}T00:00:00Z`));
+}
+export function caseRunInfo(
+  run: CaseStudyRun,
+  locale: Locale,
+): { range: string; days: number; daysWord: string; label: string } {
+  const activity = buildCaseActivity(run);
+  const days = activity.roleDaily.filter((d) =>
+    Object.values(d.counts).some((n) => n > 0),
+  ).length;
+  const range = `${fmtRunDay(locale, run.tsRange[0].slice(0, 10))} → ${fmtRunDay(
+    locale,
+    run.tsRange[1].slice(0, 10),
+  )}`;
+  const daysWord = DAYS_WORD[locale](days);
+  return { range, days, daysWord, label: `${range} (${daysWord})` };
+}
+
+// ── proiezione a un mese per il costo per risultato ─────────────────────────
+// Sopra questa soglia di giorni attivi la run copre ~un ciclo mensile → il costo
+// è MISURATO (multiplier 1). Sotto → STIMATO proiettando l'output a un mese in
+// base al BUDGET consumato (Σ % dei consumi giornalieri = settimane-budget; un
+// mese ≈ 4,345 settimane). NON "giorni × 30": le run brevi bruciano in fretta il
+// budget settimanale e lo sovrastimerebbe (fallback a giorni×30 solo se manca il
+// dato di budget). Usato sia dal dettaglio sia dalla media in home.
+export const COST_MIN_DAYS = 20;
+export function caseMonthlyProjection(
+  run: CaseStudyRun,
+  days: number,
+): { estimated: boolean; multiplier: number } {
+  if (days >= COST_MIN_DAYS) return { estimated: false, multiplier: 1 };
+  const budgetWeeks =
+    (run.usage?.daily ?? []).reduce((s, d) => s + (d.pct ?? 0), 0) / 100;
+  const WEEKS_PER_MONTH = 4.345;
+  let m =
+    budgetWeeks >= 0.4
+      ? WEEKS_PER_MONTH / budgetWeeks
+      : days > 0
+        ? 30 / days
+        : 1;
+  m = Math.max(1, Math.min(m, 12));
+  return { estimated: true, multiplier: m };
 }

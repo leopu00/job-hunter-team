@@ -9,10 +9,12 @@ import CaseStudyDetail, {
   type PreparedCase,
   type CaseRef,
 } from "../CaseStudyDetail";
+import CaseStudiesShell, { type CaseStudyTeaser } from "../CaseStudiesShell";
 import {
   CASE_STUDIES,
   getCaseStudy,
   buildCaseActivity,
+  caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
 import { getRequestLocale } from "@/lib/request-locale";
@@ -94,13 +96,23 @@ export default async function CaseStudyDetailPage({
     run: { ...cs.run, events: [] }, // gli eventi servivano solo per l'attività
     activity,
   };
-  const all: CaseRef[] = CASE_STUDIES.map((c) =>
-    localizeCaseStudy(c, locale),
-  ).map((c) => ({
+  const localizedAll = CASE_STUDIES.map((c) => localizeCaseStudy(c, locale));
+  const all: CaseRef[] = localizedAll.map((c) => ({
     id: c.id,
     label: c.label,
     tagline: c.tagline,
     badge: c.profile.badge,
+  }));
+  // Stessa lista della pagina indice, per la sidebar collassabile dei tester.
+  const testers: CaseStudyTeaser[] = localizedAll.map((c) => ({
+    id: c.id,
+    label: c.label,
+    badge: c.profile.badge,
+    category: c.category,
+    seniority: c.seniority,
+    geos: c.geos,
+    model: c.model,
+    period: caseRunInfo(c.run, locale).label,
   }));
 
   return (
@@ -110,9 +122,9 @@ export default async function CaseStudyDetailPage({
       </LandingI18nProvider>
       <div aria-hidden="true" className="h-14" />
 
-      <div className="mx-auto max-w-6xl px-6 py-8">
+      <CaseStudiesShell testers={testers} activeId={cs.id}>
         <CaseStudyDetail current={current} all={all} />
-      </div>
+      </CaseStudiesShell>
 
       <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
         {t.footer}

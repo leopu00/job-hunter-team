@@ -451,7 +451,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
   return (
     <div className="flex flex-col gap-12">
       {/* ════════ IL MATCH ═══════════════════════════ (order-2) ═══ */}
-      <section className="order-2">
+      <section id="cs-match" data-cs-anchor="match" className="order-2">
         <div className="section-label mb-1">{t.matchLabel}</div>
         <p className="text-[11px] text-[var(--color-dim)] mb-4">
           {t.matchIntro}
@@ -520,7 +520,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
       {/* Solo con città geocodificate: su run brevi la geocodifica
           (office_lat/lon) può non essere ancora passata → niente mappa vuota. */}
       {cities.length > 0 && (
-        <section className="order-1">
+        <section id="cs-where" data-cs-anchor="where" className="order-1">
           <div className="section-label mb-1">{t.whereLabel}</div>
           <p className="text-[11px] text-[var(--color-dim)] mb-4">
             {t.whereIntro(
@@ -700,7 +700,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
       )}
 
       {/* ════════ CATEGORIE — DONUT ══════════════════ (order-3) ═══ */}
-      <section className="order-3">
+      <section id="cs-roles" data-cs-anchor="roles" className="order-3">
         <div className="section-label mb-1">{t.rolesLabel}</div>
         <p className="text-[11px] text-[var(--color-dim)] mb-4">
           {t.rolesIntro(categories.length)}

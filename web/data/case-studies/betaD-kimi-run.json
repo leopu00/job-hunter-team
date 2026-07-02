@@ -2,12 +2,12 @@
   "source": "betaD-kimi",
   "tsRange": [
     "2026-06-27 16:45:11",
-    "2026-06-30 14:25:12"
+    "2026-07-01 10:21:09"
   ],
   "totals": {
     "positions": 59,
-    "scored": 39,
-    "excluded": 20
+    "scored": 8,
+    "excluded": 21
   },
   "match": {
     "scored": 40,
@@ -316,7 +316,7 @@
     {
       "name": "Italy",
       "code": "IT",
-      "count": 31
+      "count": 30
     },
     {
       "name": "Italia",
@@ -352,7 +352,8 @@
     "scout-2",
     "scout-3",
     "scout-4",
-    "scout-6"
+    "scout-6",
+    "scrittore-5"
   ],
   "events": [
     {
@@ -1164,6 +1165,386 @@
       "ts": "2026-06-30T14:25:12Z",
       "agent": "analista-3",
       "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T08:25:27Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T08:26:22Z",
+      "agent": "scrittore-5",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T08:26:28Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T08:30:49Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T08:31:51Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T08:35:44Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T08:35:45Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T08:39:46Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T08:39:47Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T08:44:18Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T08:44:18Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T08:47:36Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T08:47:37Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T08:51:28Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T08:51:28Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T08:55:13Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T08:55:13Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:00:15Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:00:15Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:03:57Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:03:57Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:08:53Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T09:08:53Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:12:49Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:12:50Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:18:33Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:18:34Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:21:49Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:21:50Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:25:57Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:25:57Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:28:56Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:28:57Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:32:38Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:32:39Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:36:24Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:36:24Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:38:20Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:41:05Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:41:06Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:41:47Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:41:47Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T09:41:47Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:44:33Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:44:33Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:45:08Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T09:45:08Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T09:45:09Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:47:55Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:47:56Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:50:21Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:50:22Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T09:50:22Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:50:58Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T09:50:59Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:53:49Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T09:53:50Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T09:53:50Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:55:17Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:55:18Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T09:57:34Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T09:58:18Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T10:02:51Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T10:03:38Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T10:04:31Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T10:05:17Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T10:06:43Z",
+      "agent": "scrittore-5",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T10:06:44Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T10:09:47Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T10:09:47Z",
+      "agent": "scrittore-5",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T10:09:47Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T10:13:53Z",
+      "agent": "scrittore-5",
+      "action": "ready"
+    },
+    {
+      "ts": "2026-07-01T10:13:53Z",
+      "agent": "scrittore-5",
+      "action": "scored"
+    },
+    {
+      "ts": "2026-07-01T10:13:53Z",
+      "agent": "scrittore-5",
+      "action": "writing"
+    },
+    {
+      "ts": "2026-07-01T10:18:55Z",
+      "agent": "scrittore-5",
+      "action": "excluded"
+    },
+    {
+      "ts": "2026-07-01T10:21:09Z",
+      "agent": "scrittore-5",
+      "action": "ready"
     }
   ],
   "hourly": [
@@ -1391,6 +1772,27 @@
         "analista": 1
       },
       "cum": 72
+    },
+    {
+      "hour": "2026-07-01T08",
+      "counts": {
+        "scrittore": 17
+      },
+      "cum": 79
+    },
+    {
+      "hour": "2026-07-01T09",
+      "counts": {
+        "scrittore": 45
+      },
+      "cum": 85
+    },
+    {
+      "hour": "2026-07-01T10",
+      "counts": {
+        "scrittore": 14
+      },
+      "cum": 87
     }
   ],
   "funnelDaily": [
@@ -1399,41 +1801,73 @@
       "found": 28,
       "excluded": 15,
       "kept": 13,
-      "scored": 13,
-      "ready": 0
+      "scored": 1,
+      "ready": 12
     },
     {
       "day": "2026-06-28",
       "found": 12,
       "excluded": 0,
       "kept": 12,
-      "scored": 12,
-      "ready": 0
+      "scored": 2,
+      "ready": 10
     },
     {
       "day": "2026-06-29",
       "found": 14,
-      "excluded": 2,
-      "kept": 12,
-      "scored": 12,
-      "ready": 0
+      "excluded": 3,
+      "kept": 11,
+      "scored": 4,
+      "ready": 7
     },
     {
       "day": "2026-06-30",
       "found": 5,
       "excluded": 3,
       "kept": 2,
-      "scored": 2,
-      "ready": 0
+      "scored": 1,
+      "ready": 1
     }
   ],
   "funnelTotals": {
     "found": 59,
-    "excluded": 20,
-    "kept": 39,
-    "scored": 39,
-    "ready": 0
+    "excluded": 21,
+    "kept": 38,
+    "scored": 8,
+    "ready": 30
   },
+  "conversion": {
+    "found": 59,
+    "scored": 40,
+    "strong70": 17,
+    "strong80": 9
+  },
+  "scoreDaily": [
+    {
+      "day": "2026-06-27",
+      "scored": 14,
+      "strong70": 9,
+      "strong80": 5
+    },
+    {
+      "day": "2026-06-28",
+      "scored": 12,
+      "strong70": 5,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-29",
+      "scored": 12,
+      "strong70": 3,
+      "strong80": 2
+    },
+    {
+      "day": "2026-06-30",
+      "scored": 2,
+      "strong70": 0,
+      "strong80": 0
+    }
+  ],
   "usage": {
     "provider": "kimi",
     "unit": "weekly_budget_pct",
@@ -1460,6 +1894,12 @@
         "day": "2026-06-30",
         "pct": 12,
         "cum": 74,
+        "week": "2026-06-27"
+      },
+      {
+        "day": "2026-07-01",
+        "pct": 15,
+        "cum": 89,
         "week": "2026-06-27"
       }
     ],
