@@ -84,6 +84,11 @@ function buildScript({
     ``,
     `Set-Content -Path $logPath -Value ""`,
     `Set-Content -Path $resultPath -Value 'RUNNING'`,
+    // Track whether we ACTUALLY installed WSL fresh — the only step that
+    // needs a reboot. When WSL/Git are already present we skip them and
+    // must NOT tell the user to reboot (previously the final message and
+    // the OK result hardcoded "reboot required" even on a no-op run).
+    `$rebootNeeded = $false`,
     ``,
     `Log "Step 1/2 Checking/installing WSL"`,
     `try {`,
@@ -105,6 +110,10 @@ function buildScript({
     `    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 3010) {`,
     `      Fail 'WSL_INSTALL' "wsl exit $LASTEXITCODE"`,
     `    }`,
+    // Reached only when wsl --install actually ran (WSL was absent) →
+    // the WSL feature/kernel was just enabled, so a reboot is genuinely
+    // required to finish setup.
+    `    $rebootNeeded = $true`,
     `  }`,
     `} catch { Fail 'WSL_INSTALL' $_.Exception.Message }`,
     ``,
@@ -149,8 +158,16 @@ function buildScript({
     `  }`,
     `} catch { Fail 'GIT_INSTALL' $_.Exception.Message }`,
     ``,
-    `Log "DONE - Docker Desktop is installed manually from https://docker.com; reboot required to finish WSL kernel setup"`,
-    `Set-Content -Path $resultPath -Value 'OK'`,
+    // Only claim a reboot is needed when we actually installed WSL fresh.
+    // OK_REBOOT vs OK is read back by installWindowsStack() to set the
+    // rebootRequired flag the renderer branches on.
+    `if ($rebootNeeded) {`,
+    `  Log "DONE - WSL was freshly installed; reboot required to finish WSL kernel setup"`,
+    `  Set-Content -Path $resultPath -Value 'OK_REBOOT'`,
+    `} else {`,
+    `  Log "DONE - all prerequisites already present (Docker installed manually from https://docker.com); no reboot needed"`,
+    `  Set-Content -Path $resultPath -Value 'OK'`,
+    `}`,
     `try { Stop-Transcript | Out-Null } catch { }`,
     `exit 0`,
   ].join('\n')
@@ -344,8 +361,10 @@ async function installWindowsStack({
   try { result = fsApi.readFileSync(paths.result, 'utf8').trim() } catch { /* missing */ }
   wrappedLog(`installWindowsStack: result file content = ${result}`)
 
-  if (result === 'OK' && exitCode === 0) {
-    return { ok: true, rebootRequired: true }
+  if ((result === 'OK' || result === 'OK_REBOOT') && exitCode === 0) {
+    // OK_REBOOT → WSL freshly installed, reboot needed. OK → everything
+    // was already present, no reboot (both are successful outcomes).
+    return { ok: true, rebootRequired: result === 'OK_REBOOT' }
   }
 
   // Map known result tags to actionable error stages.
