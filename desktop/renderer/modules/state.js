@@ -20,6 +20,12 @@ export const state = {
   // (remote Hetzner host). Set at the location step, persisted via
   // prefsApi so a relaunch resumes on the right branch.
   location: null,
+  // Entry point picked on the welcome-intro screen: 'start' (new user) or
+  // 'signin' (returning user). 'signin' turns the Supabase step into
+  // required-login mode (skip hidden, "welcome back" copy); the rest of
+  // the flow is identical, so no screen reordering / no risk of a double
+  // Supabase step.
+  onboardingIntent: 'start',
   // Supabase OAuth session for cloud sync + VPS pairing. Mirrored
   // here for the renderer to read synchronously after each authApi
   // call. null = not signed in.
@@ -66,6 +72,8 @@ export const state = {
 // body is fully parsed before this runs).
 export const dom = {
   steps: document.querySelectorAll('.step'),
+  btnIntroStart: document.getElementById('btn-intro-start'),
+  btnIntroSignin: document.getElementById('btn-intro-signin'),
   btnWelcomeBack: document.getElementById('btn-welcome-back'),
   btnWelcomeContinue: document.getElementById('btn-welcome-continue'),
   locationCardLocal: document.getElementById('location-card-local'),
