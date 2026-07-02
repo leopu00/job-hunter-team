@@ -55,6 +55,7 @@ const NAV_SKELETON: NavSkeletonSection[] = [
     items: [
       { href: "/docs/guides/faq", emoji: "❓" },
       { href: "/docs/guides/privacy-and-security", emoji: "🔒" },
+      { href: "/docs/guides/beta", emoji: "🧪" },
     ],
   },
 ];
@@ -390,6 +391,42 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
       title: "Privacidade e segurança",
       description:
         "Onde ficam os teus dados, chaves e CVs — explicado de forma simples.",
+    },
+  },
+  "/docs/guides/beta": {
+    it: {
+      title: "Diventare beta tester",
+      description:
+        "Prova il team sulla tua ricerca vera e aiutaci a migliorarlo.",
+    },
+    en: {
+      title: "Becoming a beta tester",
+      description: "Run the team on your real search and help us improve it.",
+    },
+    es: {
+      title: "Convertirse en beta tester",
+      description:
+        "Prueba el equipo en tu búsqueda real y ayúdanos a mejorarlo.",
+    },
+    fr: {
+      title: "Devenir bêta testeur",
+      description:
+        "Testez l'équipe sur votre vraie recherche et aidez-nous à l'améliorer.",
+    },
+    de: {
+      title: "Beta-Tester werden",
+      description:
+        "Teste das Team an deiner echten Suche und hilf uns, es zu verbessern.",
+    },
+    hu: {
+      title: "Béta tesztelővé válás",
+      description:
+        "Próbáld ki a csapatot a valódi keresésen, és segíts jobbá tenni.",
+    },
+    pt: {
+      title: "Tornar-se beta tester",
+      description:
+        "Testa a equipa na tua procura real e ajuda-nos a melhorá-la.",
     },
   },
   "/docs/guides/cli": {
