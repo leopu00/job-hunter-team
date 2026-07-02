@@ -533,6 +533,9 @@ function createWindow() {
     height: 760,
     minWidth: 880,
     minHeight: 620,
+    // Start hidden and reveal maximized on ready-to-show, so the user never
+    // sees the small centered window flash before it fills the screen.
+    show: false,
     autoHideMenuBar: true,
     title: 'JHT Desktop',
     backgroundColor: '#0d1411',
@@ -548,6 +551,15 @@ function createWindow() {
   })
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'))
+
+  // Open maximized: fill the screen's work area but NOT native macOS
+  // fullscreen (the green-button Space). The user wants a normal window,
+  // anchored to the current desktop, just sized to the whole screen.
+  mainWindow.once('ready-to-show', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.maximize()
+    mainWindow.show()
+  })
 
   // Dev: apri DevTools detached per vedere i log del renderer fianco
   // alla finestra. Solo da sorgente, mai in build packaged.
@@ -636,12 +648,19 @@ function broadcastProviderLog(message) {
 }
 
 function broadcastInstallLog(message) {
+  const text = String(message)
+  // Persist install output on disk too: senza questo l'unica traccia di un
+  // setup fallito è nella UI, che sparisce quando l'utente chiude la finestra
+  // (ci ha reso ciechi a un bug reale di install). Le righe vanno a `debug`.
+  log.child('setup').debug('install.log', { line: text.slice(0, 500) })
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('setup:install-log', String(message))
+    mainWindow.webContents.send('setup:install-log', text)
   }
 }
 
 function broadcastInstallStage(stage, status) {
+  const level = status === 'fail' ? 'error' : 'info'
+  log.child('setup')[level]('install.stage', { stage, status })
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('setup:install-stage', { stage, status })
   }
@@ -1761,10 +1780,19 @@ app.whenReady().then(() => {
         onLog: broadcastInstallLog,
         onStage: broadcastInstallStage,
       })
+      if (result && result.ok) {
+        log.child('setup').info('install.done', { stage: result.stage })
+      } else {
+        log.child('setup').error('install.failed', {
+          stage: result?.stage,
+          error: result?.error,
+        })
+      }
       return result
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       broadcastInstallLog(`Errore: ${message}`)
+      log.child('setup').error('install.exception', { error: message })
       return { ok: false, stage: 'exception', error: message }
     }
   })

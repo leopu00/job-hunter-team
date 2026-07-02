@@ -70,6 +70,7 @@ test('brew install triggers brew installer when missing, then proceeds', async (
       return true
     },
     dockerCheck: async () => true,
+    brewWritable: async () => ({ ok: true }),
     brewInstaller: async () => ({ ok: true, code: 0, stderr: '' }),
   })
   assert.equal(result.ok, true)
@@ -77,6 +78,24 @@ test('brew install triggers brew installer when missing, then proceeds', async (
   // Homebrew should flip busy → ok once the installer runs and brew is found.
   assert.ok(stages.includes('homebrew:busy'))
   assert.ok(stages.includes('homebrew:ok'))
+})
+
+test('stage=brew-not-writable when brew exists but prefix belongs to another user', async () => {
+  const stages = []
+  const run = fakeRunSequence([])
+  const result = await installDocker({
+    platform: 'darwin',
+    run,
+    onStage: (name, status) => stages.push(`${name}:${status}`),
+    brewCheck: async () => true,
+    brewWritable: async () => ({ ok: false, prefix: '/opt/homebrew', dir: '/opt/homebrew/Cellar' }),
+    dockerCheck: async () => true,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.stage, 'brew-not-writable')
+  assert.match(result.error, /altro utente/)
+  assert.ok(stages.includes('homebrew:fail'))
+  assert.equal(run.calls.length, 0, 'brew install must not run when prefix is not writable')
 })
 
 test('stage=brew-install when brew install fails', async () => {
@@ -87,6 +106,7 @@ test('stage=brew-install when brew install fails', async () => {
     platform: 'darwin',
     run,
     brewCheck: async () => true,
+    brewWritable: async () => ({ ok: true }),
     dockerCheck: async () => true,
   })
   assert.equal(result.ok, false)
@@ -111,6 +131,7 @@ test('stage=colima-start when colima start fails on both VZ and QEMU', async () 
     platform: 'darwin',
     run,
     brewCheck: async () => true,
+    brewWritable: async () => ({ ok: true }),
     dockerCheck: async () => true,
     // qemu-img absent → the QEMU fallback must `brew install qemu` first.
     // Injected so the test doesn't depend on the host actually having qemu-img.
@@ -132,6 +153,7 @@ test('stage=daemon-unreachable when docker ps still fails after start', async ()
     platform: 'darwin',
     run,
     brewCheck: async () => true,
+    brewWritable: async () => ({ ok: true }),
     dockerCheck: async () => false,
   })
   assert.equal(result.ok, false)
@@ -152,6 +174,7 @@ test('ok=true when brew install + colima start + docker ps all succeed', async (
     onLog: (line) => logs.push(line),
     run,
     brewCheck: async () => true,
+    brewWritable: async () => ({ ok: true }),
     dockerCheck: async () => true,
   })
   assert.equal(result.ok, true)

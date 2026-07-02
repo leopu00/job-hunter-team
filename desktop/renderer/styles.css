@@ -2704,3 +2704,73 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 #email-status[data-kind='ok'] { color: var(--success); }
 #email-status[data-kind='warn'] { color: #e0b15a; }
 #email-status[data-kind='error'] { color: var(--danger); }
+
+/* ── Welcome intro (first screen) ─────────────────────────────── */
+.intro-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.intro-logo {
+  font-size: 60px;
+  line-height: 1;
+  margin-bottom: 18px;
+  user-select: none;
+}
+.intro-title {
+  margin: 0 0 6px;
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.intro-tagline {
+  margin: 0 0 22px;
+  font-size: 16px;
+  color: var(--text-dim);
+}
+.intro-pitch {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
+  max-width: 520px;
+}
+.intro-actions {
+  margin-top: 30px;
+}
+.intro-signin-link {
+  margin-top: 16px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+.intro-signin-link:hover { color: var(--text); }
+
+.btn--large {
+  padding: 13px 40px;
+  font-size: 16px;
+}
+
+/* OAuth buttons: logo + label side by side, label stays centered */
+.btn--oauth {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.oauth-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.oauth-logo svg { display: block; }
