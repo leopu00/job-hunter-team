@@ -13,7 +13,6 @@ import {
   type TeamActivityRole,
 } from "@/lib/team-activity";
 import betaCRun from "@/data/case-studies/betaC-codex-run.json";
-import betaBCodexRun from "@/data/case-studies/betaB-codex-run.json";
 import betaBKimiRun from "@/data/case-studies/betaB-kimi-run.json";
 import betaDRun from "@/data/case-studies/betaD-kimi-run.json";
 import PROFILES_I18N from "@/data/case-studies/profiles-i18n.json";
@@ -78,13 +77,16 @@ export interface CaseStudyMeta {
   profile: CaseStudyProfile;
   /** fasi del run con modello diverso (opzionale); se assente = run mono-fase */
   phases?: CaseStudyPhase[];
+  /** sessione free-run senza monitor del budget (burst di pochi giorni che ha
+   *  bruciato una settimana di budget): esclusa dalle statistiche di tasso
+   *  giornaliero, dove pochi giorni non sono rappresentativi. */
+  freeRun?: boolean;
   run: CaseStudyRun;
 }
 
-// Profilo condiviso dalle DUE pagine del beta tester 1 (technical writer): stesso
-// candidato, testato in due sessioni distinte — prima Codex (free-run), poi Kimi
-// (monitorato) — tenute su pagine SEPARATE, così match/categorie/fonti/funnel non
-// mescolano modelli e periodi diversi.
+// Profilo del beta tester 1 (technical writer). La sessione free-run Codex è
+// stata rimossa (~3 giorni senza monitor, sporcava le medie): resta la sessione
+// Kimi monitorata.
 const TW_PROFILE: CaseStudyProfile = {
   badge: "B1",
   headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
@@ -112,41 +114,38 @@ const TW_PROFILE: CaseStudyProfile = {
   why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
 };
 
-// Schede in ordine CRONOLOGICO di run. Il beta tester 1 (technical writer) è
-// stato testato in DUE sessioni su pagine separate — prima Codex (mag '26), poi
-// Kimi (giu '26); il run finance è avvenuto IN MEZZO, quindi si inserisce tra le
-// due. (Le etichette "Beta tester N" restano per tester, non per posizione.)
+// Tre beta tester, in ordine di etichetta. La sessione free-run Codex del
+// technical writer è stata TOLTA: ~3 giorni senza monitor del budget, sporcava
+// tutte le medie. Resta la sua sessione Kimi (monitorata) come beta tester 1.
 export const CASE_STUDIES: CaseStudyMeta[] = [
-  // ── Beta tester 1 · technical writer · sessione Codex (free-run) ─────────
+  // ── Beta tester 1 · technical writer (Kimi, run monitorato) ─────────────
   {
-    id: "beta-1-codex",
+    id: "beta-1-kimi",
     label: "Beta tester 1",
-    tagline: "Sessione Codex · Technical writing · traduzione · localizzazione",
+    tagline: "Technical writing · traduzione · localizzazione",
     category: "Technical Writing",
     seniority: "Senior · cross-domain",
     geos: ["Ungheria", "Italia", "Europa"],
-    model: "Codex",
+    model: "Kimi",
     subscription: {
-      provider: "OpenAI Codex",
-      plan: "Pro",
-      price: "~€100/mese",
-      monthlyEur: 100,
+      provider: "Moonshot Kimi",
+      plan: "Kimi Code",
+      price: "~€40/mese",
+      monthlyEur: 40,
     },
     profile: TW_PROFILE,
-    // Fase unica = l'UNICA sessione di questa pagina (Codex free-run, ~3 giorni):
-    // dettaglio ora-per-ora, per mostrare il burst intraday senza monitor.
+    // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
     phases: [
       {
-        key: "codex",
-        label: "Codex",
-        price: "~€100/mese",
-        note: "primo test — agenti liberi, senza monitor, fino a esaurire il budget",
-        from: "2026-05-19",
-        to: "2026-05-21",
-        detail: "hourly",
+        key: "kimi",
+        label: "Kimi",
+        price: "~€40/mese",
+        note: "run monitorato — budget settimanale dosato (pacing)",
+        from: "2026-06-13",
+        to: null,
       },
     ],
-    run: betaBCodexRun as unknown as CaseStudyRun,
+    run: betaBKimiRun as unknown as CaseStudyRun,
   },
   // ── Beta tester 2 · finance, inizio carriera (Codex) ────────────────────
   {
@@ -195,35 +194,6 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       why: "Ecco perché i numeri vengono così: cercando ruoli finance e investment in grandi città europee, il team ha concentrato la ricerca negli hub finanziari (Londra, Zurigo, Ginevra, Lussemburgo, Dublino) e quasi tutte le posizioni ricadono in categorie business & finance — esattamente il profilo del candidato.",
     },
     run: betaCRun as unknown as CaseStudyRun,
-  },
-  // ── Beta tester 1 · technical writer · sessione Kimi (run monitorato) ────
-  {
-    id: "beta-1-kimi",
-    label: "Beta tester 1",
-    tagline: "Sessione Kimi · Technical writing · traduzione · localizzazione",
-    category: "Technical Writing",
-    seniority: "Senior · cross-domain",
-    geos: ["Ungheria", "Italia", "Europa"],
-    model: "Kimi",
-    subscription: {
-      provider: "Moonshot Kimi",
-      plan: "Kimi Code",
-      price: "~€40/mese",
-      monthlyEur: 40,
-    },
-    profile: TW_PROFILE,
-    // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
-    phases: [
-      {
-        key: "kimi",
-        label: "Kimi",
-        price: "~€40/mese",
-        note: "run monitorato — budget settimanale dosato (pacing)",
-        from: "2026-06-13",
-        to: null,
-      },
-    ],
-    run: betaBKimiRun as unknown as CaseStudyRun,
   },
   // ── Beta tester 3 · luxury hospitality (Kimi) ───────────────────────────
   {
