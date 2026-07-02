@@ -100,4 +100,4 @@ che betaD resta ferma fino a domani avendo fatto solo i CV del mattino — ma è
 l'89% di settimanale e 3 giorni al reset, il sistema la mette a riposo per non finire in lockout.
 
 Vedi anche: `2026-06-28-betaD-vps-budget-burn-investigation.md` (indagine a monte),
-`2026-06-29-coordinator-burn-kimi-vs-codex.md`.
+`architecture/kimi-vs-codex-economics.md` (economia provider, living doc).
