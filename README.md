@@ -30,7 +30,7 @@
 
 ---
 
-Point the system at your profile, start the team, and only review applications that clear the quality bar. Each agent specializes in one task: Scout finds positions, Analyst evaluates them, Scorer ranks them, Writer prepares documents, and Critic reviews everything before submission.
+Point the system at your profile, start the team, and only review applications that clear the quality bar. The **worker** agents each specialize in one task — Scout finds positions, Analyst evaluates them, Scorer ranks them, Writer prepares documents, Critic reviews everything — all orchestrated by a **Captain**, with a support core alongside (see [The Team](#the-team) below).
 
 The whole pipeline runs **locally in a container**, on your machine or your VPS — your profile, your data, your provider account. JHT never bills you: you only pay the LLM subscription of the provider you choose. **AI on the side of workers, not against them.**
 
@@ -192,6 +192,7 @@ Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
 PRs and issues welcome. See [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) for the dev setup, PR flow, commit conventions, and agent-specific guides.
 
+- 🙌 **Where you can help** — the [contributor missions](docs/about/ROADMAP.md#-where-you-can-help--contributor-missions) (M1–M8) are the bigger directions we'd love a hand with; each breaks into `good first issue` entry-points
 - 🧪 **Beta tester?** See [`docs/guides/BETA.md`](docs/guides/BETA.md) — we want real job-seekers to break things and tell us how
 - 🔐 **Found a security issue?** See [`SECURITY.md`](SECURITY.md) for responsible disclosure — please don't open a public issue. Internal pre-launch audit + hardening sprint results live in [`docs/security/`](docs/security/)
 - 🤝 **Code of conduct**: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Contributor Covenant 2.1
