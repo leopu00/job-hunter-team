@@ -9,6 +9,28 @@
   </head>
   <body>
     <main class="wizard" id="wizard">
+      <!-- Step -1: welcome intro — the very first screen on a fresh install.
+           Big title + pitch, with two entry points. "Get started" runs the
+           new-user setup; "Sign in" is the returning-user path. -->
+      <section class="step step--centered step--intro" id="step-welcome-intro" data-step="welcome-intro">
+        <div class="intro-hero">
+          <div class="intro-logo" aria-hidden="true">🎯</div>
+          <h1 class="intro-title" data-i18n="intro.title">JobHunter Team</h1>
+          <p class="intro-tagline" data-i18n="intro.tagline">Your AI job-hunting team</p>
+          <p class="intro-pitch" data-i18n="intro.pitch">
+            AI agents that hunt for jobs for you: they compare openings against your profile, prepare tailored CVs and cover letters, and guide you through your choices.
+          </p>
+        </div>
+        <div class="step__actions intro-actions">
+          <button class="btn btn--primary btn--large" id="btn-intro-start" data-i18n="intro.start">
+            Get started
+          </button>
+        </div>
+        <button type="button" class="intro-signin-link" id="btn-intro-signin" data-i18n="intro.signin">
+          Already registered? Sign in
+        </button>
+      </section>
+
       <!-- Step 0: language -->
       <section class="step step--centered" id="step-language" data-step="language">
         <h1 class="step__title" data-i18n="lang.title">Choose your language</h1>
@@ -32,16 +54,15 @@
         </div>
       </section>
 
-      <!-- Step 1: welcome -->
+      <!-- Step 1: computer readiness check (pitch moved to welcome-intro).
+           Minimal technical intro before the setup steps. -->
       <section class="step step--centered" id="step-welcome" data-step="welcome" hidden>
-        <div class="step__emoji" aria-hidden="true">🎯</div>
-        <h1 class="step__title" data-i18n="welcome.title">Job Hunter Team</h1>
+        <div class="step__emoji" aria-hidden="true">🔧</div>
+        <h1 class="step__title" data-i18n="welcome.title">Let's get your computer ready</h1>
         <p class="step__lead" data-i18n="welcome.lead">
-          AI agents that help you land a job: match offers to your profile, tailor CVs and mentor your next move.
+          Over the next steps we'll check what the team needs and set it up for you. It only takes a couple of minutes.
         </p>
-        <p class="step__hint" data-i18n="welcome.hint" data-i18n-platform="true">
-          First we check your computer is ready.
-        </p>
+        <p class="step__hint" data-i18n="welcome.hint" data-i18n-platform="true"></p>
         <div class="step__actions step__actions--between step__actions--wide">
           <button class="btn btn--ghost" id="btn-welcome-back" data-i18n="welcome.back">
             Back
@@ -98,11 +119,17 @@
           Optional sync: sign in to back up your data and check results from your phone — and never lose anything if something happens to this computer. It's entirely optional: you can stay fully local forever, and you can turn sync on later whenever you want.
         </p>
         <div class="supabase-actions">
-          <button type="button" class="btn btn--secondary" id="btn-supabase-google" data-i18n="supabase.google">
-            Continue with Google
+          <button type="button" class="btn btn--secondary btn--oauth" id="btn-supabase-google">
+            <span class="oauth-logo" aria-hidden="true">
+              <svg viewBox="0 0 48 48" width="18" height="18"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+            </span>
+            <span data-i18n="supabase.google">Continue with Google</span>
           </button>
-          <button type="button" class="btn btn--secondary" id="btn-supabase-github" data-i18n="supabase.github">
-            Continue with GitHub
+          <button type="button" class="btn btn--secondary btn--oauth" id="btn-supabase-github">
+            <span class="oauth-logo" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="18" height="18"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            </span>
+            <span data-i18n="supabase.github">Continue with GitHub</span>
           </button>
         </div>
         <div class="signin-progress" id="supabase-signin-progress" hidden>

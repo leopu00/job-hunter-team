@@ -126,15 +126,21 @@ if (dom.btnLocationContinue) {
 
 async function enterSupabaseLogin() {
   showStep(STEP_SUPABASE_LOGIN)
-  // Adapt copy + skip-button visibility to the chosen path.
+  // Adapt copy to the path and to how the user got here. Coming from the
+  // "Sign in" entry point (onboardingIntent==='signin') means they already
+  // have an account → "welcome back" copy, login required.
   if (dom.supabaseHint) {
-    const key = state.location === LOCATION_VPS ? 'supabase.lead.vps' : 'supabase.lead.local'
+    const key =
+      state.onboardingIntent === 'signin'
+        ? 'supabase.lead.signin'
+        : state.location === LOCATION_VPS
+          ? 'supabase.lead.vps'
+          : 'supabase.lead.local'
     dom.supabaseHint.setAttribute('data-i18n', key)
     dom.supabaseHint.textContent = t(key)
   }
-  if (dom.btnSupabaseSkip) {
-    dom.btnSupabaseSkip.hidden = state.location === LOCATION_VPS
-  }
+  // Skip/Continue visibility is derived from sign-in state in
+  // renderSupabaseStep() below (called at the end of this function).
   // Probe current auth state — the user might already be signed in
   // from a previous session (Supabase session stored in OS keyring).
   try {
@@ -161,10 +167,21 @@ function renderSupabaseStep() {
   if (dom.btnSupabaseGoogle) dom.btnSupabaseGoogle.hidden = signedIn
   if (dom.btnSupabaseGithub) dom.btnSupabaseGithub.hidden = signedIn
   if (dom.btnSupabaseSignout) dom.btnSupabaseSignout.hidden = !signedIn
+  const isVps = state.location === LOCATION_VPS
+  // "Continue" only makes sense once you're signed in — otherwise it did
+  // exactly the same thing as "Skip" (both proceeded without an account),
+  // which confused users. So:
+  //   - not signed in, local → show "Skip" only (Continue hidden)
+  //   - signed in           → show "Continue" (Skip hidden)
+  //   - VPS                 → Continue always shown but disabled until signed in
   if (dom.btnSupabaseContinue) {
-    // Local path: continue always enabled (skip is also available).
-    // VPS path: continue only enabled once signed in.
-    dom.btnSupabaseContinue.disabled = state.location === LOCATION_VPS && !signedIn
+    dom.btnSupabaseContinue.disabled = !signedIn
+    dom.btnSupabaseContinue.hidden = !isVps && !signedIn
+  }
+  if (dom.btnSupabaseSkip) {
+    // Skip is hidden on VPS (login required), once signed in, and when the
+    // user chose "Sign in" on the intro (they came here to log in).
+    dom.btnSupabaseSkip.hidden = isVps || signedIn || state.onboardingIntent === 'signin'
   }
 }
 

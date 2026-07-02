@@ -11,7 +11,7 @@ import {
   onLangChange,
 } from './modules/i18n.js'
 import { SUPPORTED_LANGS, LANG_STORAGE_KEY, DEFAULT_LANG } from './modules/translations.js'
-import { STEP_LANGUAGE, STEP_WELCOME } from './modules/constants.js'
+import { STEP_WELCOME_INTRO, STEP_LANGUAGE, STEP_WELCOME } from './modules/constants.js'
 import { showStep } from './modules/state.js'
 import {
   renderDockerCard,
@@ -41,6 +41,22 @@ initLangDropdown(document.getElementById('lang-select'), {
 onLangChange(() => {
   if (state.docker) renderDockerCard(state.docker)
 })
+
+// Welcome-intro entry points. Both go through language selection; the
+// chosen intent only changes how the Supabase step behaves later
+// ('signin' → login required, 'start' → login optional).
+if (dom.btnIntroStart) {
+  dom.btnIntroStart.addEventListener('click', () => {
+    state.onboardingIntent = 'start'
+    showStep(STEP_LANGUAGE)
+  })
+}
+if (dom.btnIntroSignin) {
+  dom.btnIntroSignin.addEventListener('click', () => {
+    state.onboardingIntent = 'signin'
+    showStep(STEP_LANGUAGE)
+  })
+}
 
 document.getElementById('btn-language-continue').addEventListener('click', () => {
   showStep(STEP_WELCOME)
@@ -148,10 +164,11 @@ async function boot() {
     _bootLog.warn('boot.probe-failed', { err: error && (error.message || String(error)) })
     appendLog(`boot probe: ${error.message || error}`)
   }
-  // Setup incompleto (primo avvio): se la lingua non è mai stata scelta parti
-  // dallo step lingua, altrimenti dal welcome.
-  const screen = validLang ? STEP_WELCOME : STEP_LANGUAGE
-  _bootLog.info('boot.decision', { screen: validLang ? 'wizard:welcome' : 'wizard:language', reason: 'setup-incomplete' })
+  // Setup incompleto: primissimo avvio (lingua mai scelta) → schermata di
+  // benvenuto con pitch + Inizia/Accedi. Relaunch a metà setup (lingua già
+  // scelta) → riprende dallo step tecnico, saltando l'intro.
+  const screen = validLang ? STEP_WELCOME : STEP_WELCOME_INTRO
+  _bootLog.info('boot.decision', { screen: validLang ? 'wizard:welcome' : 'wizard:welcome-intro', reason: 'setup-incomplete' })
   showWizard(screen)
 }
 
