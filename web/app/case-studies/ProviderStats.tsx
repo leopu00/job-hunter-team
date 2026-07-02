@@ -59,6 +59,7 @@ const T: Record<
   {
     title: string;
     lead: string;
+    scoreNote: string;
     colMonth: string;
     colDay: string;
     colPrice: string;
@@ -73,6 +74,8 @@ const T: Record<
   it: {
     title: "Dal trovato all'eccellente · per provider",
     lead: "Scegli il provider: i numeri sono aggregati per abbonamento (Kimi e Codex costano diverso, non vanno mischiati). Per ogni livello, in un mese di budget: quante posizioni, quante al giorno e il prezzo medio per singolo risultato.",
+    scoreNote:
+      "Le soglie ≥70 e ≥80 sono il punteggio di match che il team assegna a ogni posizione (scala 0–100): più è alto, più l'offerta è in linea col profilo.",
     colMonth: "Totale / mese",
     colDay: "Al giorno",
     colPrice: "Prezzo medio",
@@ -88,6 +91,8 @@ const T: Record<
   en: {
     title: "From found to excellent · by provider",
     lead: "Pick the provider: figures are aggregated per subscription (Kimi and Codex cost differently, they don't mix). For each level, over a month of budget: how many positions, how many per day, and the average price per single result.",
+    scoreNote:
+      "The ≥70 and ≥80 thresholds are the match score the team gives each position (0–100 scale): the higher it is, the better the job fits the profile.",
     colMonth: "Total / month",
     colDay: "Per day",
     colPrice: "Avg price",
@@ -103,6 +108,8 @@ const T: Record<
   es: {
     title: "De encontrada a excelente · por proveedor",
     lead: "Elige el proveedor: los números se agregan por suscripción (Kimi y Codex cuestan distinto, no se mezclan). Por cada nivel, en un mes de presupuesto: cuántas posiciones, cuántas al día y el precio medio por resultado.",
+    scoreNote:
+      "Los umbrales ≥70 y ≥80 son la puntuación de match que el equipo asigna a cada posición (escala 0–100): cuanto más alta, más se ajusta la oferta al perfil.",
     colMonth: "Total / mes",
     colDay: "Al día",
     colPrice: "Precio medio",
@@ -118,6 +125,8 @@ const T: Record<
   fr: {
     title: "De trouvé à excellent · par fournisseur",
     lead: "Choisis le fournisseur : les chiffres sont agrégés par abonnement (Kimi et Codex n'ont pas le même prix, on ne les mélange pas). Pour chaque niveau, sur un mois de budget : combien de postes, combien par jour et le prix moyen par résultat.",
+    scoreNote:
+      "Les seuils ≥70 et ≥80 correspondent au score de match que l'équipe attribue à chaque poste (échelle 0–100) : plus il est élevé, plus l'offre colle au profil.",
     colMonth: "Total / mois",
     colDay: "Par jour",
     colPrice: "Prix moyen",
@@ -133,6 +142,8 @@ const T: Record<
   de: {
     title: "Von gefunden zu exzellent · nach Provider",
     lead: "Wähle den Provider: die Zahlen sind je Abo aggregiert (Kimi und Codex kosten unterschiedlich, sie werden nicht vermischt). Je Stufe, in einem Monat Budget: wie viele Stellen, wie viele pro Tag und der Durchschnittspreis pro Ergebnis.",
+    scoreNote:
+      "Die Schwellen ≥70 und ≥80 sind der Match-Score, den das Team jeder Stelle gibt (Skala 0–100): je höher, desto besser passt die Stelle zum Profil.",
     colMonth: "Gesamt / Monat",
     colDay: "Pro Tag",
     colPrice: "Ø-Preis",
@@ -148,6 +159,8 @@ const T: Record<
   hu: {
     title: "A találattól a kiválóig · providerenként",
     lead: "Válaszd ki a providert: a számok előfizetésenként összesítve (a Kimi és a Codex ára eltér, nem keverjük). Szintenként, egy hónap budget alatt: hány pozíció, naponta mennyi, és az átlagár eredményenként.",
+    scoreNote:
+      "A ≥70 és ≥80 küszöbök a match-pontszámot jelentik, amelyet a csapat minden pozícióhoz rendel (0–100 skála): minél magasabb, annál jobban illik az állás a profilhoz.",
     colMonth: "Összesen / hó",
     colDay: "Naponta",
     colPrice: "Átlagár",
@@ -163,6 +176,8 @@ const T: Record<
   pt: {
     title: "De encontrada a excelente · por fornecedor",
     lead: "Escolhe o fornecedor: os números são agregados por subscrição (Kimi e Codex custam de forma diferente, não se misturam). Por cada nível, num mês de orçamento: quantas posições, quantas por dia e o preço médio por resultado.",
+    scoreNote:
+      "Os limiares ≥70 e ≥80 são a pontuação de match que a equipa atribui a cada posição (escala 0–100): quanto mais alta, mais a oferta se ajusta ao perfil.",
     colMonth: "Total / mês",
     colDay: "Por dia",
     colPrice: "Preço médio",
@@ -245,21 +260,27 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
         </span>
       </div>
 
+      <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-dim)]">
+        {t.scoreNote}
+      </p>
+
       {/* tabella-imbuto: una riga per tappa, tre colonne + barra proporzionale */}
       <div className="mt-5 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-        <div className="flex items-baseline gap-2 mb-3 text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+        <div className="flex items-baseline gap-3 mb-3 text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
           <span className="w-2.5 shrink-0" />
           <span className="flex-1" />
-          <span className="w-16 text-right">{t.colMonth}</span>
-          <span className="w-14 text-right">{t.colDay}</span>
-          <span className="w-20 text-right">{t.colPrice}</span>
+          <div className="flex items-baseline gap-6">
+            <span className="w-20 text-right leading-tight">{t.colMonth}</span>
+            <span className="w-14 text-right leading-tight">{t.colDay}</span>
+            <span className="w-20 text-right leading-tight">{t.colPrice}</span>
+          </div>
         </div>
         <div className="flex flex-col gap-3">
           {p.rows.map((r) => {
             const color = COLOR[r.key] ?? "#22C55E";
             return (
               <div key={r.key}>
-                <div className="flex items-baseline gap-2 mb-1">
+                <div className="flex items-baseline gap-3 mb-1">
                   <span
                     className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
                     style={{ background: color }}
@@ -267,15 +288,17 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
                   <span className="flex-1 truncate text-[11px] text-[var(--color-muted)]">
                     {label[r.key] ?? r.key}
                   </span>
-                  <span className="w-16 text-right text-[13px] font-bold tabular-nums text-[var(--color-base)]">
-                    {nf(r.count)}
-                  </span>
-                  <span className="w-14 text-right text-[12px] tabular-nums text-[var(--color-muted)]">
-                    {nf(r.perDay)}
-                  </span>
-                  <span className="w-20 text-right text-[12px] tabular-nums text-[var(--color-muted)]">
-                    ≈ {eur(r.price)}
-                  </span>
+                  <div className="flex items-baseline gap-6">
+                    <span className="w-20 text-right text-[13px] font-bold tabular-nums text-[var(--color-base)]">
+                      {nf(r.count)}
+                    </span>
+                    <span className="w-14 text-right text-[12px] tabular-nums text-[var(--color-muted)]">
+                      {nf(r.perDay)}
+                    </span>
+                    <span className="w-20 text-right text-[12px] tabular-nums text-[var(--color-muted)]">
+                      ≈ {eur(r.price)}
+                    </span>
+                  </div>
                 </div>
                 <div
                   className="h-2 rounded-full overflow-hidden"
