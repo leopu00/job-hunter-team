@@ -274,7 +274,7 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
       <h2 className="text-2xl sm:text-[28px] font-bold tracking-tight">
         {t.title}
       </h2>
-      <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-[var(--color-muted)]">
+      <p className="mt-3 text-[15px] leading-relaxed text-[var(--color-muted)]">
         {t.subtitle}
       </p>
 
