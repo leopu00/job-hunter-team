@@ -2,6 +2,13 @@
 // la base it/en/hu; le chiavi assenti ripiegano automaticamente su `en`.
 // Le chiavi array (ta()) non passano dall'overlay: vivono solo nella base.
 export const pt: Record<string, string> = {
+  // Chiavi aggiunte (allineamento i18n)
+  home_intro: "O Job Hunter Team é uma equipa de agentes IA autónomos que procuram emprego por ti, sem parar. Cada agente é um especialista: um localiza as ofertas, outro analisa-as em detalhe e outro atribui a cada uma uma pontuação, consoante o quão perto está do que realmente te importa. A teu pedido, preparam também o CV para te candidatares. E quando as candidaturas enviadas não bastam para encontrar emprego, um agente dedicado acompanha-te: ajuda-te a orientares-te no mercado de trabalho e a aproximares-te do cargo que desejas. A direção dá-la tu e a última palavra é sempre tua; o resto leva-o adiante a equipa, em privado, na tua própria máquina.",
+  theme_system: "sistema",
+  theme_dark: "noite",
+  theme_light: "dia",
+  nav_run: "Como iniciar",
+  home_pricing_alt: "Um cadeado aberto rodeado por algumas moedas, uma verde brilhante: a plataforma é gratuita e open source, só pagas o fornecedor de IA.",
   // Nav
   nav_features: "Funcionalidades",
   nav_how: "Como funciona",
@@ -21,9 +28,9 @@ export const pt: Record<string, string> = {
   hero_badge: "beta pública",
   hero_title_1: "A tua equipa de agentes IA",
   hero_title_2: "para encontrar emprego",
-  hero_desc_short: "Uma equipa de agentes IA para a tua procura de emprego.",
+  hero_desc_short: "Uma equipa de agentes IA autónomos para a tua procura de emprego.",
   hero_desc:
-    "Um sistema multiagente que automatiza cada fase da tua procura: desde a análise das ofertas até à candidatura personalizada. Tu defines a estratégia, os agentes executam.",
+    "Um sistema multiagente autónomo que trata de cada fase da tua procura: desde a análise das ofertas até à candidatura personalizada. Tu defines a estratégia, os agentes executam-na.",
   hero_cta: "Começa aqui",
   hero_cta2: "Descobre como funciona",
   hero_project_cta: "GitHub",
@@ -48,7 +55,7 @@ export const pt: Record<string, string> = {
     "Cada oferta é analisada e avaliada com base no teu perfil, competências e preferências. Foca-te no que importa.",
   feat_4_title: "Painel em Tempo Real",
   feat_4_desc:
-    "Métricas, analytics e estado de cada candidatura. Tudo numa vista: tokens, custos, latência, pipeline completo.",
+    "Métricas, analytics e estado de cada candidatura. Tudo numa vista: progresso, custos e o pipeline completo num relance.",
   feat_5_title: "Tu no Comando",
   feat_5_desc:
     "Os agentes propõem, tu decides. Cada candidatura requer a tua aprovação antes do envio.",
@@ -119,7 +126,7 @@ export const pt: Record<string, string> = {
   // Footer
   footer_jht: "Job Hunter Team",
   footer_brand_desc:
-    "Uma equipa de agentes IA que procura emprego por ti. Open source, local, privado.",
+    "Uma equipa de agentes IA autónomos que procura emprego por ti. Open source, local, privado.",
   footer_product: "Produto",
   footer_stats: "Projeto",
   footer_report: "Relatórios",
@@ -226,7 +233,7 @@ export const pt: Record<string, string> = {
   about_title_1: "Uma equipa de agentes IA",
   about_title_2: "ao teu serviço",
   about_intro:
-    "O Job Hunter Team é um projeto open-source que automatiza a procura de emprego com um sistema multiagente. Cada agente tem um papel preciso e, juntos, formam um pipeline completo: desde a descoberta das ofertas até à candidatura final.",
+    "O Job Hunter Team é um projeto open-source que automatiza a procura de emprego com uma equipa de agentes IA autónomos. Cada agente tem um papel preciso e, juntos, formam um pipeline completo: desde a descoberta das ofertas até à candidatura final.",
   about_story_label: "a história",
   about_story_title: "Como nasceu o projeto",
   about_story_desc:
@@ -259,7 +266,7 @@ export const pt: Record<string, string> = {
     "O revisor. Examina com olhar crítico cada documento produzido pelo Escritor: coerência, erros, keywords em falta, tom inadequado. Se necessário, devolve o trabalho ao Escritor com feedback preciso.",
   about_agent_sentinella_name: "Sentinela",
   about_agent_sentinella_desc:
-    "O guardião. Monitoriza os custos de API, o consumo de tokens, a latência e a saúde do sistema. Avisa-te se algo correr mal e garante que a equipa opera dentro dos limites de orçamento definidos.",
+    "O guardião. Monitoriza os custos de API, o uso, os tempos de resposta e a saúde do sistema. Avisa-te se algo correr mal e garante que a equipa opera dentro dos limites de orçamento definidos.",
   about_agent_assistente_name: "Assistente",
   about_agent_assistente_desc:
     "O apoio. Responde às tuas perguntas, guia-te na configuração, explica as decisões dos outros agentes. É o teu ponto de referência quando precisas de ajuda ou queres perceber o que está a acontecer.",
@@ -391,7 +398,7 @@ export const pt: Record<string, string> = {
   home_team_kicker: "A equipa",
   home_team_title: "Uma equipa, não um único bot",
   home_team_body:
-    "Por trás do Job Hunter Team está uma equipa de agentes de IA especializados: um encontra as ofertas, um verifica-as, um pontua-as, um escreve o seu CV e um critica-o sem piedade. Cada um faz uma coisa, e fá-la bem.",
+    "Um único chatbot tem de fazer tudo sozinho e não se destaca em nada. Uma equipa não: cada agente tem uma tarefa precisa e leva-a a fundo, e o trabalho de cada um passa pelo crivo do seguinte. Assim cada fase é tratada por quem melhor a sabe fazer, e o que chega até ti já foi verificado várias vezes.",
   home_team_cta: "Conheça a equipa →",
   home_dashboard_kicker: "O seu painel",
   home_dashboard_title: "Tudo sob controlo, a partir da web",
@@ -403,7 +410,7 @@ export const pt: Record<string, string> = {
   home_setup_kicker: "Execute-o",
   home_setup_title: "Como quiser, onde quiser",
   home_setup_body:
-    "No seu PC com Docker, num computador dedicado sempre ligado ou numa VPS económica que trabalha para si dia e noite. Tudo é gerido a partir da app de ambiente de trabalho: inicie, pare e fique de olho na equipa com um clique.",
+    "Corre num computador dedicado sempre ligado ou numa VPS económica, e trabalha para ti dia e noite. Geres tudo a partir da app de ambiente de trabalho: inicias, paras e vigias a equipa com um clique. E não ficas preso a esse computador: pela web podes acompanhar os resultados e falar com a equipa também a partir de outro PC ou do telemóvel.",
   home_setup_cta: "Como executá-lo →",
   home_pricing_kicker: "Preços",
   home_pricing_title: "Código aberto. A plataforma é gratuita.",

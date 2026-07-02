@@ -10,8 +10,8 @@ import {
   Code,
   Pre,
   GitHubMore,
-  repoFile,
 } from "../../DocKit";
+import { repoFile } from "../../repo";
 import type { Locale } from "@/i18n/config";
 import { getRequestLocale } from "@/lib/request-locale";
 
@@ -110,10 +110,10 @@ const T: Record<Locale, Dict> = {
     path2Li2: "Signs you into your provider through an embedded terminal.",
     path2Li3A: "Click ",
     path2Li3B: " — the team boots and your browser opens on the dashboard.",
-    desktopLabel: "on/off switch and setup wizard",
-    desktopBodyA: "💡 The desktop app is the ",
+    desktopLabel: "interaction cockpit",
+    desktopBodyA: "💡 The desktop app is your ",
     desktopBodyB:
-      ", not where you read results. After it starts the team you interact via the web dashboard, Telegram or the CLI.",
+      ": it sets up and starts the team, and it's where you chat with the agents, upload files and start or stop them. The public web dashboard is read-only — for viewing positions, scores and the map.",
     path3Title: "📦 Path 3 — One-liner installer",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
@@ -177,10 +177,10 @@ const T: Record<Locale, Dict> = {
     path2Li2: "Ti fa accedere al tuo provider tramite un terminale integrato.",
     path2Li3A: "Clicca ",
     path2Li3B: " — il team si avvia e il browser si apre sulla dashboard.",
-    desktopLabel: "interruttore on/off e procedura di configurazione",
-    desktopBodyA: "💡 L'app desktop è l'",
+    desktopLabel: "cabina di comando",
+    desktopBodyA: "💡 L'app desktop è la tua ",
     desktopBodyB:
-      ", non il luogo dove leggi i risultati. Dopo che ha avviato il team interagisci tramite la dashboard web, Telegram o la CLI.",
+      ": configura e avvia il team, ed è da lì che parli con gli agenti, carichi i file e li avvii o fermi. La dashboard web pubblica è in sola lettura — per consultare posizioni, punteggi e mappa.",
     path3Title: "📦 Percorso 3 — Installer one-liner",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
@@ -244,11 +244,10 @@ const T: Record<Locale, Dict> = {
     path2Li2: "Te conecta a tu proveedor mediante un terminal integrado.",
     path2Li3A: "Haz clic en ",
     path2Li3B: " — el equipo arranca y tu navegador se abre en el panel.",
-    desktopLabel:
-      "interruptor de encendido/apagado y asistente de configuración",
-    desktopBodyA: "💡 La app de escritorio es el ",
+    desktopLabel: "cabina de mando",
+    desktopBodyA: "💡 La app de escritorio es tu ",
     desktopBodyB:
-      ", no donde lees los resultados. Una vez que inicia el equipo, interactúas a través del panel web, Telegram o la CLI.",
+      ": configura y arranca el equipo, y es desde donde hablas con los agentes, subes archivos y los inicias o detienes. El panel web público es de solo lectura — para consultar posiciones, puntuaciones y el mapa.",
     path3Title: "📦 Vía 3 — Instalador en una línea",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
@@ -315,10 +314,10 @@ const T: Record<Locale, Dict> = {
     path2Li3A: "Cliquez sur ",
     path2Li3B:
       " — l'équipe démarre et votre navigateur s'ouvre sur le tableau de bord.",
-    desktopLabel: "interrupteur marche/arrêt et assistant de configuration",
-    desktopBodyA: "💡 L'application de bureau est l'",
+    desktopLabel: "poste de pilotage",
+    desktopBodyA: "💡 L'application de bureau est votre ",
     desktopBodyB:
-      ", pas l'endroit où vous lisez les résultats. Une fois qu'elle a démarré l'équipe, vous interagissez via le tableau de bord web, Telegram ou la CLI.",
+      " : elle configure et lance l'équipe, et c'est de là que vous parlez aux agents, téléversez des fichiers et les démarrez ou arrêtez. Le tableau de bord web public est en lecture seule — pour consulter postes, scores et carte.",
     path3Title: "📦 Voie 3 — Installateur en une ligne",
     path3Mac: "macOS / Linux / WSL2 :",
     path3WinIntro:
@@ -385,10 +384,10 @@ const T: Record<Locale, Dict> = {
       "Meldet dich über ein eingebettetes Terminal bei deinem Anbieter an.",
     path2Li3A: "Klicke auf ",
     path2Li3B: " — das Team startet und dein Browser öffnet das Dashboard.",
-    desktopLabel: "Ein-/Aus-Schalter und Einrichtungsassistent",
-    desktopBodyA: "💡 Die Desktop-App ist der ",
+    desktopLabel: "Steuerstand",
+    desktopBodyA: "💡 Die Desktop-App ist dein ",
     desktopBodyB:
-      ", nicht der Ort, an dem du Ergebnisse liest. Nachdem sie das Team gestartet hat, interagierst du über das Web-Dashboard, Telegram oder die CLI.",
+      ": Sie richtet das Team ein und startet es, und von dort aus sprichst du mit den Agenten, lädst Dateien hoch und startest oder stoppst sie. Das öffentliche Web-Dashboard ist schreibgeschützt — zum Ansehen von Stellen, Scores und Karte.",
     path3Title: "📦 Weg 3 — Einzeiler-Installer",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro: "Windows (PowerShell, Docker Desktop muss bereits laufen):",
@@ -454,10 +453,10 @@ const T: Record<Locale, Dict> = {
     path2Li3A: "Kattints a ",
     path2Li3B:
       " gombra — a csapat elindul, és a böngésződ megnyílik az irányítópulton.",
-    desktopLabel: "be-/kikapcsoló és beállítóvarázsló",
+    desktopLabel: "vezérlőpultod",
     desktopBodyA: "💡 Az asztali alkalmazás a ",
     desktopBodyB:
-      ", nem pedig az a hely, ahol az eredményeket olvasod. Miután elindította a csapatot, a webes irányítópulton, a Telegramon vagy a CLI-n keresztül lépsz vele kapcsolatba.",
+      ": beállítja és elindítja a csapatot, és innen beszélsz az ügynökökkel, töltesz fel fájlokat, és indítod vagy állítod le őket. A nyilvános webes irányítópult csak olvasható — a pozíciók, pontszámok és a térkép megtekintésére.",
     path3Title: "📦 3. út — Egysoros telepítő",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro: "Windows (PowerShell, a Docker Desktopnak már futnia kell):",
@@ -522,10 +521,10 @@ const T: Record<Locale, Dict> = {
       "Inicia a tua sessão no fornecedor através de um terminal incorporado.",
     path2Li3A: "Clica em ",
     path2Li3B: " — a equipa arranca e o teu navegador abre no painel.",
-    desktopLabel: "interruptor de ligar/desligar e assistente de configuração",
-    desktopBodyA: "💡 A aplicação de ambiente de trabalho é o ",
+    desktopLabel: "cabina de comando",
+    desktopBodyA: "💡 A app de ambiente de trabalho é a tua ",
     desktopBodyB:
-      ", não o local onde lês os resultados. Depois de iniciar a equipa, interages através do painel web, do Telegram ou da CLI.",
+      ": configura e arranca a equipa, e é dali que falas com os agentes, carregas ficheiros e os inicias ou paras. O painel web público é apenas de leitura — para consultar posições, pontuações e o mapa.",
     path3Title: "📦 Caminho 3 — Instalador numa só linha",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
