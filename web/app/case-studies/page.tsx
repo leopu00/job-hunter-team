@@ -691,7 +691,11 @@ export default async function CaseStudiesIndexPage() {
         budgetWeeks > 0.1
           ? WEEKS_PER_MONTH / budgetWeeks
           : MONTH_DAYS / Math.max(1, caseRunInfo(cs.run, locale).days);
-      return { mult, eur: cs.subscription.monthlyEur ?? null, c: cs.run.conversion! };
+      return {
+        mult,
+        eur: cs.subscription.monthlyEur ?? null,
+        c: cs.run.conversion!,
+      };
     });
     const mean = (fn: (r: (typeof perRun)[number]) => number) =>
       perRun.reduce((s, r) => s + fn(r), 0) / perRun.length;

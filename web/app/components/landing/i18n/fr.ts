@@ -3,12 +3,14 @@
 // Le chiavi array (ta()) non passano dall'overlay: vivono solo nella base.
 export const fr: Record<string, string> = {
   // Chiavi aggiunte (allineamento i18n)
-  home_intro: "Job Hunter Team est une équipe d'agents IA autonomes qui cherchent un emploi pour vous, sans relâche. Chaque agent est un spécialiste : l'un repère les offres, un autre les analyse en détail et un autre attribue à chacune une note, selon sa proximité avec ce qui compte vraiment pour vous. Sur votre demande, ils préparent aussi le CV pour votre candidature. Et quand les candidatures envoyées ne suffisent pas à trouver un emploi, un agent dédié vous accompagne : il vous aide à vous orienter sur le marché du travail et à vous rapprocher du poste que vous désirez. C'est vous qui donnez la direction et gardez le dernier mot ; le reste, l'équipe s'en charge, en privé, sur votre propre machine.",
+  home_intro:
+    "Job Hunter Team est une équipe d'agents IA autonomes qui cherchent un emploi pour vous, sans relâche. Chaque agent est un spécialiste : l'un repère les offres, un autre les analyse en détail et un autre attribue à chacune une note, selon sa proximité avec ce qui compte vraiment pour vous. Sur votre demande, ils préparent aussi le CV pour votre candidature. Et quand les candidatures envoyées ne suffisent pas à trouver un emploi, un agent dédié vous accompagne : il vous aide à vous orienter sur le marché du travail et à vous rapprocher du poste que vous désirez. C'est vous qui donnez la direction et gardez le dernier mot ; le reste, l'équipe s'en charge, en privé, sur votre propre machine.",
   theme_system: "système",
   theme_dark: "nuit",
   theme_light: "jour",
   nav_run: "Comment le lancer",
-  home_pricing_alt: "Un cadenas ouvert entouré de quelques pièces, une verte lumineuse : la plateforme est gratuite et open source, vous ne payez que le fournisseur d'IA.",
+  home_pricing_alt:
+    "Un cadenas ouvert entouré de quelques pièces, une verte lumineuse : la plateforme est gratuite et open source, vous ne payez que le fournisseur d'IA.",
   // Nav
   nav_features: "Fonctionnalités",
   nav_how: "Comment ça marche",
@@ -28,7 +30,8 @@ export const fr: Record<string, string> = {
   hero_badge: "bêta publique",
   hero_title_1: "Votre équipe d'agents IA",
   hero_title_2: "pour trouver un emploi",
-  hero_desc_short: "Une équipe d'agents IA autonomes pour votre recherche d'emploi.",
+  hero_desc_short:
+    "Une équipe d'agents IA autonomes pour votre recherche d'emploi.",
   hero_desc:
     "Un système multi-agent autonome qui prend en charge chaque étape de votre recherche : du scan des offres à la candidature personnalisée. Vous définissez la stratégie, les agents l'exécutent.",
   hero_cta: "Commencez ici",

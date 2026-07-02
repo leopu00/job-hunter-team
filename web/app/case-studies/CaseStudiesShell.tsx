@@ -151,78 +151,78 @@ export default function CaseStudiesShell({
               {testers.map((t) => {
                 const active = t.id === activeId;
                 return (
-                <Link
-                  key={t.id}
-                  href={`/case-studies/${t.id}`}
-                  // Su una pagina di dettaglio (activeId presente) non riportare in
-                  // cima: ricordiamo la sezione corrente e la riallineiamo sul nuovo
-                  // tester (restoreSection nel dettaglio). Dall'indice invece si entra
-                  // in cima alla pagina scelta.
-                  scroll={!activeId}
-                  onClick={activeId ? rememberCurrentSection : undefined}
-                  aria-current={active ? "page" : undefined}
-                  className={`group flex h-full flex-col rounded-xl border ${
-                    active
-                      ? "border-[var(--color-blue)]"
-                      : "border-[var(--color-border)]"
-                  } bg-[var(--color-card)] px-3.5 py-3 no-underline transition-colors hover:border-[var(--color-blue)]`}
-                  style={
-                    active
-                      ? {
-                          background:
-                            "color-mix(in srgb, var(--color-blue) 10%, var(--color-card))",
-                        }
-                      : undefined
-                  }
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-bold text-[var(--color-white)] truncate">
-                        {t.category}
-                      </span>
-                      <span className="ml-auto text-[var(--color-dim)] group-hover:text-[var(--color-blue)] transition-colors">
-                        →
-                      </span>
-                    </div>
-
-                    <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-                      <span
-                        className="text-[9px] rounded-full px-1.5 py-0.5 border text-[var(--color-base)]"
-                        style={{
-                          borderColor:
-                            "color-mix(in srgb, var(--color-blue) 35%, transparent)",
-                          background:
-                            "color-mix(in srgb, var(--color-blue) 10%, transparent)",
-                        }}
-                      >
-                        {t.seniority}
-                      </span>
-                      {t.geos.map((g) => (
-                        <span
-                          key={g}
-                          className="text-[9px] rounded-full px-1.5 py-0.5 border border-[var(--color-border)] text-[var(--color-muted)]"
-                        >
-                          {g}
+                  <Link
+                    key={t.id}
+                    href={`/case-studies/${t.id}`}
+                    // Su una pagina di dettaglio (activeId presente) non riportare in
+                    // cima: ricordiamo la sezione corrente e la riallineiamo sul nuovo
+                    // tester (restoreSection nel dettaglio). Dall'indice invece si entra
+                    // in cima alla pagina scelta.
+                    scroll={!activeId}
+                    onClick={activeId ? rememberCurrentSection : undefined}
+                    aria-current={active ? "page" : undefined}
+                    className={`group flex h-full flex-col rounded-xl border ${
+                      active
+                        ? "border-[var(--color-blue)]"
+                        : "border-[var(--color-border)]"
+                    } bg-[var(--color-card)] px-3.5 py-3 no-underline transition-colors hover:border-[var(--color-blue)]`}
+                    style={
+                      active
+                        ? {
+                            background:
+                              "color-mix(in srgb, var(--color-blue) 10%, var(--color-card))",
+                          }
+                        : undefined
+                    }
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-bold text-[var(--color-white)] truncate">
+                          {t.category}
                         </span>
-                      ))}
-                      <span
-                        className="text-[9px] font-semibold rounded-full px-1.5 py-0.5"
-                        style={{
-                          background:
-                            "color-mix(in srgb, #00e676 14%, transparent)",
-                          color: "#00e676",
-                        }}
-                      >
-                        {t.model}
-                      </span>
-                    </div>
+                        <span className="ml-auto text-[var(--color-dim)] group-hover:text-[var(--color-blue)] transition-colors">
+                          →
+                        </span>
+                      </div>
 
-                    {/* periodo di lavoro (finestra + giorni), breve */}
-                    <div className="mt-2 text-[9px] tabular-nums text-[var(--color-dim)]">
-                      {t.period}
+                      <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+                        <span
+                          className="text-[9px] rounded-full px-1.5 py-0.5 border text-[var(--color-base)]"
+                          style={{
+                            borderColor:
+                              "color-mix(in srgb, var(--color-blue) 35%, transparent)",
+                            background:
+                              "color-mix(in srgb, var(--color-blue) 10%, transparent)",
+                          }}
+                        >
+                          {t.seniority}
+                        </span>
+                        {t.geos.map((g) => (
+                          <span
+                            key={g}
+                            className="text-[9px] rounded-full px-1.5 py-0.5 border border-[var(--color-border)] text-[var(--color-muted)]"
+                          >
+                            {g}
+                          </span>
+                        ))}
+                        <span
+                          className="text-[9px] font-semibold rounded-full px-1.5 py-0.5"
+                          style={{
+                            background:
+                              "color-mix(in srgb, #00e676 14%, transparent)",
+                            color: "#00e676",
+                          }}
+                        >
+                          {t.model}
+                        </span>
+                      </div>
+
+                      {/* periodo di lavoro (finestra + giorni), breve */}
+                      <div className="mt-2 text-[9px] tabular-nums text-[var(--color-dim)]">
+                        {t.period}
+                      </div>
                     </div>
-                  </div>
-                </Link>
+                  </Link>
                 );
               })}
             </nav>

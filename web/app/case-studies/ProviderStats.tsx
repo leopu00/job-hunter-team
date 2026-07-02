@@ -46,14 +46,20 @@ const COLOR: Record<string, string> = {
 };
 
 // Etichetta + descrizione per ogni tappa.
-const STAGE: Record<
-  Locale,
-  Record<string, { label: string; desc: string }>
-> = {
+const STAGE: Record<Locale, Record<string, { label: string; desc: string }>> = {
   it: {
-    strong80: { label: "Eccellenti ≥80", desc: "punteggio ≥80 · corrispondenza ottima" },
-    strong70: { label: "Match forti ≥70", desc: "punteggio ≥70 · buona corrispondenza" },
-    scored: { label: "Valutate", desc: "analizzate, con un punteggio di match (0–100)" },
+    strong80: {
+      label: "Eccellenti ≥80",
+      desc: "punteggio ≥80 · corrispondenza ottima",
+    },
+    strong70: {
+      label: "Match forti ≥70",
+      desc: "punteggio ≥70 · buona corrispondenza",
+    },
+    scored: {
+      label: "Valutate",
+      desc: "analizzate, con un punteggio di match (0–100)",
+    },
     found: { label: "Trovate", desc: "posizioni scovate dal team" },
   },
   en: {
@@ -63,33 +69,72 @@ const STAGE: Record<
     found: { label: "Found", desc: "jobs the team collected" },
   },
   es: {
-    strong80: { label: "Excelentes ≥80", desc: "puntuación ≥80 · correspondencia óptima" },
-    strong70: { label: "Match fuerte ≥70", desc: "puntuación ≥70 · buena correspondencia" },
-    scored: { label: "Evaluadas", desc: "analizadas, con una puntuación de match (0–100)" },
-    found: { label: "Encontradas", desc: "posiciones encontradas por el equipo" },
+    strong80: {
+      label: "Excelentes ≥80",
+      desc: "puntuación ≥80 · correspondencia óptima",
+    },
+    strong70: {
+      label: "Match fuerte ≥70",
+      desc: "puntuación ≥70 · buena correspondencia",
+    },
+    scored: {
+      label: "Evaluadas",
+      desc: "analizadas, con una puntuación de match (0–100)",
+    },
+    found: {
+      label: "Encontradas",
+      desc: "posiciones encontradas por el equipo",
+    },
   },
   fr: {
-    strong80: { label: "Excellents ≥80", desc: "score ≥80 · correspondance optimale" },
-    strong70: { label: "Match fort ≥70", desc: "score ≥70 · bonne correspondance" },
-    scored: { label: "Évaluées", desc: "analysées, avec un score de match (0–100)" },
+    strong80: {
+      label: "Excellents ≥80",
+      desc: "score ≥80 · correspondance optimale",
+    },
+    strong70: {
+      label: "Match fort ≥70",
+      desc: "score ≥70 · bonne correspondance",
+    },
+    scored: {
+      label: "Évaluées",
+      desc: "analysées, avec un score de match (0–100)",
+    },
     found: { label: "Trouvées", desc: "postes trouvés par l'équipe" },
   },
   de: {
-    strong80: { label: "Exzellent ≥80", desc: "Score ≥80 · exzellente Passung" },
+    strong80: {
+      label: "Exzellent ≥80",
+      desc: "Score ≥80 · exzellente Passung",
+    },
     strong70: { label: "Starkes Match ≥70", desc: "Score ≥70 · gute Passung" },
     scored: { label: "Bewertet", desc: "analysiert, mit Match-Score (0–100)" },
     found: { label: "Gefunden", desc: "vom Team gefundene Stellen" },
   },
   hu: {
-    strong80: { label: "Kiváló ≥80", desc: "pontszám ≥80 · kiváló illeszkedés" },
-    strong70: { label: "Erős találat ≥70", desc: "pontszám ≥70 · jó illeszkedés" },
+    strong80: {
+      label: "Kiváló ≥80",
+      desc: "pontszám ≥80 · kiváló illeszkedés",
+    },
+    strong70: {
+      label: "Erős találat ≥70",
+      desc: "pontszám ≥70 · jó illeszkedés",
+    },
     scored: { label: "Értékelt", desc: "elemzett, match-pontszámmal (0–100)" },
     found: { label: "Találat", desc: "a csapat által talált pozíciók" },
   },
   pt: {
-    strong80: { label: "Excelentes ≥80", desc: "pontuação ≥80 · correspondência ótima" },
-    strong70: { label: "Match forte ≥70", desc: "pontuação ≥70 · boa correspondência" },
-    scored: { label: "Avaliadas", desc: "analisadas, com uma pontuação de match (0–100)" },
+    strong80: {
+      label: "Excelentes ≥80",
+      desc: "pontuação ≥80 · correspondência ótima",
+    },
+    strong70: {
+      label: "Match forte ≥70",
+      desc: "pontuação ≥70 · boa correspondência",
+    },
+    scored: {
+      label: "Avaliadas",
+      desc: "analisadas, com uma pontuação de match (0–100)",
+    },
     found: { label: "Encontradas", desc: "posições encontradas pela equipa" },
   },
 };
@@ -248,7 +293,11 @@ const T: Record<
   },
 };
 
-export default function ProviderStats({ providers }: { providers: ProviderData[] }) {
+export default function ProviderStats({
+  providers,
+}: {
+  providers: ProviderData[];
+}) {
   const locale = useLocale();
   const tag = LOCALE_TAG[locale];
   const t = T[locale];

@@ -3,12 +3,14 @@
 // Le chiavi array (ta()) non passano dall'overlay: vivono solo nella base.
 export const de: Record<string, string> = {
   // Chiavi aggiunte (allineamento i18n)
-  home_intro: "Job Hunter Team ist ein Team autonomer KI-Agenten, die ununterbrochen für dich nach Arbeit suchen. Jeder Agent ist ein Spezialist: Einer spürt die Stellen auf, einer analysiert sie im Detail und einer vergibt jeder eine Bewertung, je nachdem, wie nah sie an dem ist, was dir wirklich wichtig ist. Auf Wunsch erstellen sie auch den Lebenslauf für deine Bewerbung. Und wenn die versendeten Bewerbungen nicht ausreichen, um Arbeit zu finden, steht dir ein eigener Agent zur Seite: Er hilft dir, dich auf dem Arbeitsmarkt zu orientieren und dich der gewünschten Rolle zu nähern. Du gibst die Richtung vor und behältst das letzte Wort; den Rest übernimmt das Team, privat, auf deiner eigenen Maschine.",
+  home_intro:
+    "Job Hunter Team ist ein Team autonomer KI-Agenten, die ununterbrochen für dich nach Arbeit suchen. Jeder Agent ist ein Spezialist: Einer spürt die Stellen auf, einer analysiert sie im Detail und einer vergibt jeder eine Bewertung, je nachdem, wie nah sie an dem ist, was dir wirklich wichtig ist. Auf Wunsch erstellen sie auch den Lebenslauf für deine Bewerbung. Und wenn die versendeten Bewerbungen nicht ausreichen, um Arbeit zu finden, steht dir ein eigener Agent zur Seite: Er hilft dir, dich auf dem Arbeitsmarkt zu orientieren und dich der gewünschten Rolle zu nähern. Du gibst die Richtung vor und behältst das letzte Wort; den Rest übernimmt das Team, privat, auf deiner eigenen Maschine.",
   theme_system: "System",
   theme_dark: "Nacht",
   theme_light: "Tag",
   nav_run: "Wie man es startet",
-  home_pricing_alt: "Ein offenes Vorhängeschloss, umgeben von wenigen Münzen, eine leuchtend grün: Die Plattform ist kostenlos und Open Source, du zahlst nur den KI-Anbieter.",
+  home_pricing_alt:
+    "Ein offenes Vorhängeschloss, umgeben von wenigen Münzen, eine leuchtend grün: Die Plattform ist kostenlos und Open Source, du zahlst nur den KI-Anbieter.",
   // Nav
   nav_features: "Funktionen",
   nav_how: "So funktioniert's",

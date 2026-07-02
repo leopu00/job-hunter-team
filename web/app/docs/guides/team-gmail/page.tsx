@@ -166,13 +166,12 @@ const EN: Strings = {
     <>
       In the desktop app’s onboarding email step, enter the{" "}
       <strong>Gmail address</strong> and the <strong>app password</strong>, tick
-      “this is a dedicated inbox”, and press{" "}
-      <strong>Verify connection</strong> — the app does a quick round-trip
-      (sign in, send a test code, read it back) to confirm it works. You can also
-      add or change it later from the <strong>Home → Email</strong> panel,
-      where you simply enter the address and app password and press{" "}
-      <strong>Save</strong>. Either way, the credentials are saved locally on your
-      computer.
+      “this is a dedicated inbox”, and press <strong>Verify connection</strong>{" "}
+      — the app does a quick round-trip (sign in, send a test code, read it
+      back) to confirm it works. You can also add or change it later from the{" "}
+      <strong>Home → Email</strong> panel, where you simply enter the address
+      and app password and press <strong>Save</strong>. Either way, the
+      credentials are saved locally on your computer.
     </>
   ),
 
@@ -308,14 +307,13 @@ const IT: Strings = {
   s5Body: (
     <>
       Nello step email di onboarding dell’app desktop, inserisci l’
-      <strong>indirizzo Gmail</strong> e l’<strong>app-password</strong>,
-      spunta “è una casella dedicata” e premi{" "}
-      <strong>Verifica connessione</strong>: l’app fa un giro veloce
-      (accesso, invio di un codice di prova, rilettura) per confermare che
-      funzioni. Puoi anche aggiungerla o modificarla più tardi dal pannello{" "}
-      <strong>Home → Email</strong>, dove basta inserire indirizzo e
-      app-password e premere <strong>Salva</strong>. In entrambi i casi le
-      credenziali restano in locale sul tuo computer.
+      <strong>indirizzo Gmail</strong> e l’<strong>app-password</strong>, spunta
+      “è una casella dedicata” e premi <strong>Verifica connessione</strong>:
+      l’app fa un giro veloce (accesso, invio di un codice di prova, rilettura)
+      per confermare che funzioni. Puoi anche aggiungerla o modificarla più
+      tardi dal pannello <strong>Home → Email</strong>, dove basta inserire
+      indirizzo e app-password e premere <strong>Salva</strong>. In entrambi i
+      casi le credenziali restano in locale sul tuo computer.
     </>
   ),
 
@@ -383,8 +381,8 @@ const ES: Strings = {
       <strong>Opcional.</strong> Puedes omitirlo durante la configuración y
       añadirlo más tarde desde la app de escritorio. Sin él, el equipo encuentra
       igualmente empleo en la web — solo que con menos leads y menos relevantes.
-      ¿Con prisa o sin teléfono a mano? Ve a{" "}
-      <em>“¿Sin teléfono? Usa GMX”</em> más abajo.
+      ¿Con prisa o sin teléfono a mano? Ve a <em>“¿Sin teléfono? Usa GMX”</em>{" "}
+      más abajo.
     </>
   ),
 
@@ -456,13 +454,12 @@ const ES: Strings = {
     <>
       En el paso de correo del onboarding de la app de escritorio, introduce la{" "}
       <strong>dirección de Gmail</strong> y la{" "}
-      <strong>contraseña de aplicación</strong>, marca “es un
-      buzón dedicado” y pulsa <strong>Verificar conexión</strong>:
-      la app hace un recorrido rápido (inicia sesión, envía un
-      código de prueba, lo vuelve a leer) para confirmar que funciona.
-      También puedes añadirla o cambiarla más tarde desde el panel{" "}
-      <strong>Home → Email</strong>, donde solo introduces la dirección
-      y la contraseña de aplicación y pulsas <strong>Guardar</strong>.
+      <strong>contraseña de aplicación</strong>, marca “es un buzón dedicado” y
+      pulsa <strong>Verificar conexión</strong>: la app hace un recorrido rápido
+      (inicia sesión, envía un código de prueba, lo vuelve a leer) para
+      confirmar que funciona. También puedes añadirla o cambiarla más tarde
+      desde el panel <strong>Home → Email</strong>, donde solo introduces la
+      dirección y la contraseña de aplicación y pulsas <strong>Guardar</strong>.
       En ambos casos las credenciales se guardan en local en tu ordenador.
     </>
   ),
@@ -514,8 +511,8 @@ const FR: Strings = {
     "Créez une boîte de réception dédiée que l’équipe peut lire — étape par étape.",
   intro: (
     <>
-      L’équipe peut lire une boîte de réception dédiée et transformer les alertes
-      emploi que vous y transférez en opportunités notées. Ce guide vous
+      L’équipe peut lire une boîte de réception dédiée et transformer les
+      alertes emploi que vous y transférez en opportunités notées. Ce guide vous
       accompagne dans la création d’une <strong>Gmail dédiée</strong> pour
       l’équipe et du <strong>mot de passe d’application</strong> nécessaire pour
       la connecter. Pour comprendre l’intérêt et savoir comment transférer
@@ -531,16 +528,18 @@ const FR: Strings = {
       <strong>Facultatif.</strong> Vous pouvez sauter cette étape lors de la
       configuration et l’ajouter plus tard depuis l’application de bureau. Sans
       elle, l’équipe trouve quand même des offres sur le web — simplement avec
-      des pistes moins nombreuses et moins ciblées. Pressé ou sans téléphone sous
-      la main ? Passez à <em>“Pas de téléphone ? Utilisez GMX”</em> plus bas.
+      des pistes moins nombreuses et moins ciblées. Pressé ou sans téléphone
+      sous la main ? Passez à <em>“Pas de téléphone ? Utilisez GMX”</em> plus
+      bas.
     </>
   ),
 
   s1Title: "1. Créer une Gmail dédiée",
   s1Body: (
     <>
-      Créez une <strong>Gmail toute neuve et gratuite, rien que pour l’équipe</strong>{" "}
-      — pas votre boîte personnelle. Une adresse dédiée garde votre recherche
+      Créez une{" "}
+      <strong>Gmail toute neuve et gratuite, rien que pour l’équipe</strong> —
+      pas votre boîte personnelle. Une adresse dédiée garde votre recherche
       d’emploi à part et fait en sorte que l’équipe ne voie que ce que vous lui
       transférez. Choisissez quelque chose comme{" "}
       <code>votrenom.jht@gmail.com</code>.
@@ -579,12 +578,12 @@ const FR: Strings = {
       <strong>Créer</strong>.
     </>,
     <>
-      Google affiche un <strong>code de 16 caractères</strong> (quatre groupes de
-      quatre). Copiez-le.
+      Google affiche un <strong>code de 16 caractères</strong> (quatre groupes
+      de quatre). Copiez-le.
     </>,
     <>
-      Collez ce code dans le champ <strong>Mot de passe d’application</strong> de
-      l’application — pas votre mot de passe habituel de connexion Gmail. Les
+      Collez ce code dans le champ <strong>Mot de passe d’application</strong>{" "}
+      de l’application — pas votre mot de passe habituel de connexion Gmail. Les
       espaces n’ont pas d’importance.
     </>,
   ],
@@ -604,16 +603,15 @@ const FR: Strings = {
   s5Title: "5. La connecter dans l’application",
   s5Body: (
     <>
-      Dans l’étape email de l’onboarding de l’application de
-      bureau, saisissez l’<strong>adresse Gmail</strong> et le{" "}
-      <strong>mot de passe d’application</strong>, cochez « c’est
-      une boîte dédiée » et appuyez sur{" "}
-      <strong>Vérifier la connexion</strong> : l’application effectue un
-      aller-retour rapide (connexion, envoi d’un code de test, relecture)
-      pour confirmer que tout fonctionne. Vous pouvez aussi l’ajouter ou la
-      modifier plus tard depuis le panneau <strong>Home → Email</strong>,
-      où il suffit de saisir l’adresse et le mot de passe
-      d’application et d’appuyer sur <strong>Enregistrer</strong>. Dans
+      Dans l’étape email de l’onboarding de l’application de bureau, saisissez
+      l’<strong>adresse Gmail</strong> et le{" "}
+      <strong>mot de passe d’application</strong>, cochez « c’est une boîte
+      dédiée » et appuyez sur <strong>Vérifier la connexion</strong> :
+      l’application effectue un aller-retour rapide (connexion, envoi d’un code
+      de test, relecture) pour confirmer que tout fonctionne. Vous pouvez aussi
+      l’ajouter ou la modifier plus tard depuis le panneau{" "}
+      <strong>Home → Email</strong>, où il suffit de saisir l’adresse et le mot
+      de passe d’application et d’appuyer sur <strong>Enregistrer</strong>. Dans
       les deux cas, les identifiants restent en local sur votre ordinateur.
     </>
   ),
@@ -634,14 +632,14 @@ const FR: Strings = {
     <>
       Activez IMAP :{" "}
       <strong>
-        Paramètres → POP3 et IMAP → cochez « Activer l’accès via POP3 et IMAP » →
-        Enregistrer
+        Paramètres → POP3 et IMAP → cochez « Activer l’accès via POP3 et IMAP »
+        → Enregistrer
       </strong>{" "}
       (c’est désactivé par défaut).
     </>,
     <>
-      Dans l’application, utilisez votre adresse <code>nom@gmx.com</code> et votre{" "}
-      <strong>mot de passe habituel</strong> (le champ « Mot de passe
+      Dans l’application, utilisez votre adresse <code>nom@gmx.com</code> et
+      votre <strong>mot de passe habituel</strong> (le champ « Mot de passe
       d’application » l’accepte).
     </>,
   ],
@@ -681,21 +679,22 @@ const DE: Strings = {
   ),
   calloutOptional: (
     <>
-      <strong>Optional.</strong> Du kannst das beim Setup überspringen und später
-      aus der Desktop-App hinzufügen. Ohne findet das Team trotzdem Jobs im Web —
-      es bekommt nur weniger und schwächere Leads. In Eile oder kein Handy zur
-      Hand? Springe unten zu <em>“Kein Handy? Nimm stattdessen GMX”</em>.
+      <strong>Optional.</strong> Du kannst das beim Setup überspringen und
+      später aus der Desktop-App hinzufügen. Ohne findet das Team trotzdem Jobs
+      im Web — es bekommt nur weniger und schwächere Leads. In Eile oder kein
+      Handy zur Hand? Springe unten zu{" "}
+      <em>“Kein Handy? Nimm stattdessen GMX”</em>.
     </>
   ),
 
   s1Title: "1. Eine dedizierte Gmail erstellen",
   s1Body: (
     <>
-      Erstelle eine <strong>brandneue, kostenlose Gmail nur für das Team</strong>{" "}
-      — nicht dein persönliches Postfach. Eine dedizierte Adresse hält deine
-      Jobsuche getrennt und sorgt dafür, dass das Team immer nur das sieht, was
-      du ihm weiterleitest. Wähle etwas wie{" "}
-      <code>deinname.jht@gmail.com</code>.
+      Erstelle eine{" "}
+      <strong>brandneue, kostenlose Gmail nur für das Team</strong> — nicht dein
+      persönliches Postfach. Eine dedizierte Adresse hält deine Jobsuche
+      getrennt und sorgt dafür, dass das Team immer nur das sieht, was du ihm
+      weiterleitest. Wähle etwas wie <code>deinname.jht@gmail.com</code>.
     </>
   ),
 
@@ -715,8 +714,8 @@ const DE: Strings = {
         “The setting you are looking for is not available for your account”
       </em>{" "}
       mit einem kleinen kaputten Roboter zeigt, bedeutet das, dass die
-      Bestätigung in zwei Schritten noch nicht aktiv ist — schließe zuerst diesen
-      Schritt ab.
+      Bestätigung in zwei Schritten noch nicht aktiv ist — schließe zuerst
+      diesen Schritt ab.
     </>
   ),
 
@@ -732,8 +731,8 @@ const DE: Strings = {
       <strong>Erstellen</strong>.
     </>,
     <>
-      Google zeigt einen <strong>16-stelligen Code</strong> (vier Vierergruppen).
-      Kopiere ihn.
+      Google zeigt einen <strong>16-stelligen Code</strong> (vier
+      Vierergruppen). Kopiere ihn.
     </>,
     <>
       Füge diesen Code in das Feld <strong>App-Passwort</strong> der App ein —
@@ -761,11 +760,11 @@ const DE: Strings = {
       hake „das ist ein dediziertes Postfach“ an und drücke auf{" "}
       <strong>Verbindung prüfen</strong> — die App macht einen schnellen
       Durchlauf (Anmelden, einen Testcode senden, ihn zurücklesen), um zu
-      bestätigen, dass alles funktioniert. Du kannst es auch später
-      über das Panel <strong>Home → E-Mail</strong> hinzufügen oder
-      ändern, wo du einfach Adresse und App-Passwort eingibst und auf{" "}
-      <strong>Speichern</strong> drückst. In beiden Fällen bleiben die
-      Zugangsdaten lokal auf deinem Computer.
+      bestätigen, dass alles funktioniert. Du kannst es auch später über das
+      Panel <strong>Home → E-Mail</strong> hinzufügen oder ändern, wo du einfach
+      Adresse und App-Passwort eingibst und auf <strong>Speichern</strong>{" "}
+      drückst. In beiden Fällen bleiben die Zugangsdaten lokal auf deinem
+      Computer.
     </>
   ),
 
@@ -784,21 +783,22 @@ const DE: Strings = {
     <>
       Aktiviere IMAP:{" "}
       <strong>
-        Einstellungen → POP3 &amp; IMAP → „Zugriff über POP3 und IMAP
-        erlauben“ anhaken → Speichern
+        Einstellungen → POP3 &amp; IMAP → „Zugriff über POP3 und IMAP erlauben“
+        anhaken → Speichern
       </strong>{" "}
       (standardmäßig ausgeschaltet).
     </>,
     <>
       Nutze in der App deine <code>name@gmx.com</code>-Adresse und dein{" "}
-      <strong>normales Passwort</strong> (das Feld „App-Passwort“ akzeptiert es).
+      <strong>normales Passwort</strong> (das Feld „App-Passwort“ akzeptiert
+      es).
     </>,
   ],
 
   forwardNote: (
     <>
-      Fertig? Richte als Nächstes die automatische Weiterleitung ein, damit deine
-      Job-Alerts in diesem Postfach landen — siehe{" "}
+      Fertig? Richte als Nächstes die automatische Weiterleitung ein, damit
+      deine Job-Alerts in diesem Postfach landen — siehe{" "}
       <Link href="/docs/guides/email-forwarding" className={LINK_CLS}>
         E-Mail-Weiterleitung
       </Link>
@@ -819,9 +819,9 @@ const HU: Strings = {
       A csapat képes olvasni egy dedikált e-mail postafiókot, és az oda
       továbbított állásértesítőket pontozott lehetőségekké alakítani. Ez az
       útmutató végigvezet egy <strong>dedikált Gmail</strong> létrehozásán a
-      csapat számára, valamint az <strong>alkalmazásjelszó</strong>{" "}
-      beállításán, amelyre a csatlakozáshoz szüksége van. Hogy miért hasznos, és
-      hogyan továbbíthatod automatikusan az értesítőidet, lásd:{" "}
+      csapat számára, valamint az <strong>alkalmazásjelszó</strong> beállításán,
+      amelyre a csatlakozáshoz szüksége van. Hogy miért hasznos, és hogyan
+      továbbíthatod automatikusan az értesítőidet, lásd:{" "}
       <Link href="/docs/guides/email-forwarding" className={LINK_CLS}>
         E-mail továbbítás
       </Link>
@@ -832,8 +832,8 @@ const HU: Strings = {
     <>
       <strong>Opcionális.</strong> A beállítás során átugorhatod, és később
       hozzáadhatod az asztali alkalmazásból. Enélkül is talál a csapat állásokat
-      a weben — csak kevesebb és gyengébb jelértékű lehetőséget kap. Sietsz, vagy
-      nincs kéznél telefon? Ugorj a lenti{" "}
+      a weben — csak kevesebb és gyengébb jelértékű lehetőséget kap. Sietsz,
+      vagy nincs kéznél telefon? Ugorj a lenti{" "}
       <em>“Nincs telefon? Használj inkább GMX-et”</em> részhez.
     </>
   ),
@@ -841,11 +841,11 @@ const HU: Strings = {
   s1Title: "1. Dedikált Gmail létrehozása",
   s1Body: (
     <>
-      Hozz létre egy <strong>vadonatúj, ingyenes Gmailt kizárólag a csapatnak</strong>{" "}
-      — ne a személyes postafiókodat. Egy dedikált cím elkülönítve tartja az
+      Hozz létre egy{" "}
+      <strong>vadonatúj, ingyenes Gmailt kizárólag a csapatnak</strong> — ne a
+      személyes postafiókodat. Egy dedikált cím elkülönítve tartja az
       álláskeresésedet, és biztosítja, hogy a csapat mindig csak azt lássa, amit
-      továbbítasz neki. Válassz valami ilyesmit:{" "}
-      <code>nev.jht@gmail.com</code>.
+      továbbítasz neki. Válassz valami ilyesmit: <code>nev.jht@gmail.com</code>.
     </>
   ),
 
@@ -853,9 +853,9 @@ const HU: Strings = {
   s2Body: (
     <>
       A Gmail csak akkor engedélyezi az „alkalmazásjelszót”, ha a kétlépcsős
-      azonosítás be van kapcsolva. Nyisd meg a{" "}
-      <Ext href={TWOSV}>{TWOSV}</Ext> oldalt, és kapcsold be (a Google egyszer
-      kérni fog egy telefonszámot, hogy elküldjön egy ellenőrző kódot).
+      azonosítás be van kapcsolva. Nyisd meg a <Ext href={TWOSV}>{TWOSV}</Ext>{" "}
+      oldalt, és kapcsold be (a Google egyszer kérni fog egy telefonszámot, hogy
+      elküldjön egy ellenőrző kódot).
     </>
   ),
   s2Callout: (
@@ -906,19 +906,15 @@ const HU: Strings = {
   s5Title: "5. Összekapcsolás az alkalmazásban",
   s5Body: (
     <>
-      Az asztali alkalmazás onboarding e-mail lépésénél add
-      meg a <strong>Gmail-címet</strong> és az{" "}
-      <strong>alkalmazásjelszót</strong>, pipáld be, hogy „ez
-      egy dedikált postafiók“, majd nyomd meg a{" "}
-      <strong>Kapcsolat ellenőrzése</strong> gombot — az
-      alkalmazás egy gyors kört tesz (bejelentkezés, tesztkód
-      küldése, visszaolvasása), hogy megerősítse, minden
-      működik. Később a <strong>Home → E-mail</strong>
-      panelből is hozzáadhatod vagy módosíthatod, ahol csak
-      megadod a címet és az alkalmazásjelszót, és
-      megnyomod a <strong>Mentés</strong> gombot. Mindkét esetben a
-      hitelesítő adatok helyben, a számítógépeden
-      maradnak.
+      Az asztali alkalmazás onboarding e-mail lépésénél add meg a{" "}
+      <strong>Gmail-címet</strong> és az <strong>alkalmazásjelszót</strong>,
+      pipáld be, hogy „ez egy dedikált postafiók“, majd nyomd meg a{" "}
+      <strong>Kapcsolat ellenőrzése</strong> gombot — az alkalmazás egy gyors
+      kört tesz (bejelentkezés, tesztkód küldése, visszaolvasása), hogy
+      megerősítse, minden működik. Később a <strong>Home → E-mail</strong>
+      panelből is hozzáadhatod vagy módosíthatod, ahol csak megadod a címet és
+      az alkalmazásjelszót, és megnyomod a <strong>Mentés</strong> gombot.
+      Mindkét esetben a hitelesítő adatok helyben, a számítógépeden maradnak.
     </>
   ),
 
@@ -970,12 +966,12 @@ const PT: Strings = {
     "Cria uma caixa de correio dedicada que a equipa possa ler — passo a passo.",
   intro: (
     <>
-      A equipa pode ler uma caixa de correio dedicada e transformar os alertas de
-      emprego que reencaminhas para lá em oportunidades com pontuação. Este guia
-      acompanha-te na criação de uma <strong>Gmail dedicada</strong> para a equipa
-      e da <strong>palavra-passe de app</strong> de que ela precisa para se
-      ligar. Para perceberes porque ajuda e como reencaminhar os teus alertas em
-      automático, vê{" "}
+      A equipa pode ler uma caixa de correio dedicada e transformar os alertas
+      de emprego que reencaminhas para lá em oportunidades com pontuação. Este
+      guia acompanha-te na criação de uma <strong>Gmail dedicada</strong> para a
+      equipa e da <strong>palavra-passe de app</strong> de que ela precisa para
+      se ligar. Para perceberes porque ajuda e como reencaminhar os teus alertas
+      em automático, vê{" "}
       <Link href="/docs/guides/email-forwarding" className={LINK_CLS}>
         Reencaminhamento de email
       </Link>
@@ -986,8 +982,8 @@ const PT: Strings = {
     <>
       <strong>Opcional.</strong> Podes saltar isto durante a configuração e
       adicioná-lo depois a partir da app de computador. Sem isto, a equipa
-      continua a encontrar empregos na web — apenas recebe menos leads e com menos
-      sinal. Com pressa ou sem telemóvel à mão? Salta para{" "}
+      continua a encontrar empregos na web — apenas recebe menos leads e com
+      menos sinal. Com pressa ou sem telemóvel à mão? Salta para{" "}
       <em>“Sem telemóvel? Usa o GMX”</em> mais abaixo.
     </>
   ),
@@ -995,8 +991,8 @@ const PT: Strings = {
   s1Title: "1. Criar uma Gmail dedicada",
   s1Body: (
     <>
-      Cria uma <strong>Gmail nova e gratuita só para a equipa</strong> — não a tua
-      caixa de correio pessoal. Um endereço dedicado mantém a tua procura de
+      Cria uma <strong>Gmail nova e gratuita só para a equipa</strong> — não a
+      tua caixa de correio pessoal. Um endereço dedicado mantém a tua procura de
       emprego separada e faz com que a equipa veja apenas aquilo que lhe
       reencaminhas. Escolhe algo como <code>oteunome.jht@gmail.com</code>.
     </>
@@ -1017,8 +1013,8 @@ const PT: Strings = {
       <em>
         “The setting you are looking for is not available for your account”
       </em>{" "}
-      com um robôzinho partido, significa que a verificação em 2 passos ainda não
-      está ativa — completa primeiro este passo.
+      com um robôzinho partido, significa que a verificação em 2 passos ainda
+      não está ativa — completa primeiro este passo.
     </>
   ),
 
@@ -1058,25 +1054,23 @@ const PT: Strings = {
   s5Body: (
     <>
       No passo do email do onboarding da app de computador, introduz o{" "}
-      <strong>endereço Gmail</strong> e a{" "}
-      <strong>palavra-passe de app</strong>, assinala “é uma caixa de
-      correio dedicada” e carrega em <strong>Verificar ligação</strong>:
-      a app faz uma volta rápida (iniciar sessão, enviar um código
-      de teste, voltar a lê-lo) para confirmar que está tudo a
-      funcionar. Também podes adicioná-la ou alterá-la mais tarde no
-      painel <strong>Home → Email</strong>, onde basta introduzir o
-      endereço e a palavra-passe de app e carregar em{" "}
-      <strong>Guardar</strong>. Em qualquer dos casos, as credenciais ficam
-      guardadas localmente no teu computador.
+      <strong>endereço Gmail</strong> e a <strong>palavra-passe de app</strong>,
+      assinala “é uma caixa de correio dedicada” e carrega em{" "}
+      <strong>Verificar ligação</strong>: a app faz uma volta rápida (iniciar
+      sessão, enviar um código de teste, voltar a lê-lo) para confirmar que está
+      tudo a funcionar. Também podes adicioná-la ou alterá-la mais tarde no
+      painel <strong>Home → Email</strong>, onde basta introduzir o endereço e a
+      palavra-passe de app e carregar em <strong>Guardar</strong>. Em qualquer
+      dos casos, as credenciais ficam guardadas localmente no teu computador.
     </>
   ),
 
   gmxTitle: "Sem telemóvel? Usa o GMX",
   gmxBody: (
     <>
-      Não queres dar um número de telemóvel ao Google? O <strong>GMX</strong> é um
-      fornecedor gratuito que aceita a palavra-passe normal (sem verificação em 2
-      passos, sem palavra-passe de app):
+      Não queres dar um número de telemóvel ao Google? O <strong>GMX</strong> é
+      um fornecedor gratuito que aceita a palavra-passe normal (sem verificação
+      em 2 passos, sem palavra-passe de app):
     </>
   ),
   gmxSteps: [

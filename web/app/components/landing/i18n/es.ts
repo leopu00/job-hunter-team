@@ -3,12 +3,14 @@
 // Le chiavi array (ta()) non passano dall'overlay: vivono solo nella base.
 export const es: Record<string, string> = {
   // Chiavi aggiunte (allineamento i18n)
-  home_intro: "Job Hunter Team es un equipo de agentes IA autónomos que buscan empleo por ti, sin descanso. Cada agente es un especialista: uno localiza las ofertas, otro las analiza en detalle y otro asigna a cada una una puntuación, según lo cerca que esté de lo que de verdad te importa. Si se lo pides, también preparan el CV para que te presentes. Y cuando las candidaturas enviadas no bastan para encontrar empleo, un agente dedicado te acompaña: te ayuda a orientarte en el mercado laboral y a acercarte al puesto que deseas. La dirección la marcas tú y la última palabra es siempre tuya; el resto lo lleva adelante el equipo, en privado, en tu propia máquina.",
+  home_intro:
+    "Job Hunter Team es un equipo de agentes IA autónomos que buscan empleo por ti, sin descanso. Cada agente es un especialista: uno localiza las ofertas, otro las analiza en detalle y otro asigna a cada una una puntuación, según lo cerca que esté de lo que de verdad te importa. Si se lo pides, también preparan el CV para que te presentes. Y cuando las candidaturas enviadas no bastan para encontrar empleo, un agente dedicado te acompaña: te ayuda a orientarte en el mercado laboral y a acercarte al puesto que deseas. La dirección la marcas tú y la última palabra es siempre tuya; el resto lo lleva adelante el equipo, en privado, en tu propia máquina.",
   theme_system: "sistema",
   theme_dark: "noche",
   theme_light: "día",
   nav_run: "Cómo se inicia",
-  home_pricing_alt: "Un candado abierto rodeado de unas pocas monedas, una verde brillante: la plataforma es gratuita y open source, solo pagas el proveedor de IA.",
+  home_pricing_alt:
+    "Un candado abierto rodeado de unas pocas monedas, una verde brillante: la plataforma es gratuita y open source, solo pagas el proveedor de IA.",
   // Nav
   nav_features: "Funciones",
   nav_how: "Cómo funciona",
@@ -28,7 +30,8 @@ export const es: Record<string, string> = {
   hero_badge: "beta pública",
   hero_title_1: "Tu equipo de agentes IA",
   hero_title_2: "para encontrar empleo",
-  hero_desc_short: "Un equipo de agentes IA autónomos para tu búsqueda de empleo.",
+  hero_desc_short:
+    "Un equipo de agentes IA autónomos para tu búsqueda de empleo.",
   hero_desc:
     "Un sistema multiagente autónomo que se encarga de cada fase de tu búsqueda: desde el escaneo de ofertas hasta la candidatura personalizada. Tú decides la estrategia, los agentes la ejecutan.",
   hero_cta: "Empieza aquí",
