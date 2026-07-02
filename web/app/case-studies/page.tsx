@@ -12,12 +12,10 @@ import { LandingFooter } from "../components/landing/LandingCTA";
 import {
   CASE_STUDIES,
   CONTRIBUTE_LINKS,
-  caseMonthlyProjection,
   caseRunInfo,
   localizeCaseStudy,
 } from "@/lib/case-studies";
-import ScoreDistribution from "@/app/components/ScoreDistribution";
-import ConversionFunnelCard from "./ConversionFunnelCard";
+import ProviderStats from "./ProviderStats";
 import { getRequestLocale } from "@/lib/request-locale";
 import type { Locale } from "@/i18n/config";
 
@@ -39,9 +37,6 @@ const LOCALE_TAG: Record<Locale, string> = {
   pt: "pt-PT",
 };
 
-// Colori dei livelli (coerenti col funnel e con CostPerOutcome).
-const TIER_COLORS = ["#3B82F6", "#0EA5A4", "#22C55E", "#F59E0B"];
-
 const T: Record<
   Locale,
   {
@@ -58,6 +53,7 @@ const T: Record<
     positions: string;
     avgMatch: string;
     strongMatch: string;
+    cardDays: string;
     cumTitle: string;
     cumLead: string;
     cumDays: string;
@@ -82,6 +78,18 @@ const T: Record<
     dailyChartTitle: string;
     dailyUnit: string;
     dailyCaption: string;
+    dashTitle: string;
+    dashLead: string;
+    dashExcellent: string;
+    dashCostExcellent: string;
+    dashPositions: string;
+    dashCaption: string;
+    tierTitle: string;
+    tierLead: string;
+    matchDayCardTitle: string;
+    matchDayCaption: string;
+    costCardTitle: string;
+    costCaption: string;
     moreComingTitle: string;
     moreComingSub: string;
     contributeTitle: string;
@@ -112,6 +120,7 @@ const T: Record<
     positions: "posizioni",
     avgMatch: "match medio",
     strongMatch: "match forti",
+    cardDays: "giorni lavorati",
     cumTitle: "In media, per case study",
     cumLead:
       "Non la somma, ma la MEDIA sui case study monitorati: cosa produce una run tipo. Le run hanno durate diverse, quindi è un valore indicativo — per dati mensili accurati servono run da un mese intero.",
@@ -134,13 +143,30 @@ const T: Record<
       "Più alto è il livello di qualità richiesto, più sale il costo per singolo risultato.",
     dailyTitle: "Match ad alto score al giorno",
     dailyLead:
-      "In media, quante posizioni ad alto score (≥70) ed eccellente (≥80) produce il team ogni giorno di lavoro — e come varia tra i profili.",
+      "In media, quante posizioni ad alto score (≥70) ed eccellente (≥80) produce il team al giorno — distribuendo l'output sul budget di un mese, così le run brevi che hanno bruciato una settimana di budget in pochi giorni non risultano gonfiate.",
     dailyAvgStrong: "≥70 / giorno (media)",
     dailyAvgExcellent: "≥80 / giorno (media)",
     dailyChartTitle: "Media al giorno · per profilo",
     dailyUnit: "giorno",
     dailyCaption:
-      "Media per giorno lavorato; la quota ≥80 è evidenziata in verde vivo.",
+      "Ritmo sostenibile: output mensile stimato ÷ giorni del mese, esclusa la sessione free-run senza monitor (troppo breve per essere rappresentativa); la quota ≥80 è evidenziata in verde vivo.",
+    dashTitle: "La media, per utente",
+    dashLead:
+      "I numeri distillati per un mese di abbonamento: l'output di ogni caso proiettato su un mese in base al budget consumato — così una run breve non abbassa la media, né una intensiva la gonfia. Esclude il free-run.",
+    dashExcellent: "match eccellenti ≥80 / giorno",
+    dashCostExcellent: "costo / match eccellente ≥80",
+    dashPositions: "posizioni / mese",
+    dashCaption:
+      "Proiezione a un mese in base al budget consumato da ogni run (escluso il free-run); conteggi arrotondati, costo per match eccellente.",
+    tierTitle: "Resa e prezzo per livello di qualità",
+    tierLead:
+      "Quanti match al giorno il team produce a ogni livello e quanto costa in media ogni singolo risultato. Media sui tre casi, proiettata su un mese di budget (free-run escluso).",
+    matchDayCardTitle: "📈 Match al giorno · per livello",
+    matchDayCaption:
+      "Match/giorno in media, proiettati su un mese di budget. La riga ≥80 coincide con gli eccellenti/giorno del riepilogo qui sopra.",
+    costCardTitle: "💶 Prezzo medio per risultato · per livello di qualità",
+    costCaption:
+      "Più alto è il livello di qualità richiesto, più sale il costo per singolo risultato. La riga ≥80 coincide con il costo per eccellente del riepilogo qui sopra.",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
     contributeTitle: "Contribuisci con i tuoi dati",
@@ -173,6 +199,7 @@ const T: Record<
     positions: "positions",
     avgMatch: "average match",
     strongMatch: "strong matches",
+    cardDays: "working days",
     cumTitle: "On average, per case study",
     cumLead:
       "Not the sum, but the AVERAGE across the monitored case studies: what a typical run produces. Runs have different lengths, so it's indicative — accurate monthly figures need full-month runs.",
@@ -195,13 +222,30 @@ const T: Record<
       "The higher the quality bar, the higher the cost per single result.",
     dailyTitle: "High-score matches per day",
     dailyLead:
-      "On average, how many high-score (≥70) and excellent (≥80) positions the team produces each working day — and how it varies across profiles.",
+      "On average, how many high-score (≥70) and excellent (≥80) positions the team produces per day — spreading the output over a month of budget, so short runs that burned a week of budget in a few days aren't inflated.",
     dailyAvgStrong: "≥70 / day (avg)",
     dailyAvgExcellent: "≥80 / day (avg)",
     dailyChartTitle: "Average per day · by profile",
     dailyUnit: "day",
     dailyCaption:
-      "Average per working day; the ≥80 share is highlighted in bright green.",
+      "Sustainable pace: estimated monthly output ÷ days in a month, excluding the unmonitored free-run session (too short to be representative); the ≥80 share is highlighted in bright green.",
+    dashTitle: "On average, per user",
+    dashLead:
+      "The numbers distilled for one month of subscription: each case's output projected over a month based on the budget it used — so a short run doesn't drag the average down, nor an intensive one inflate it. Free-run excluded.",
+    dashExcellent: "excellent ≥80 matches / day",
+    dashCostExcellent: "cost / excellent ≥80 match",
+    dashPositions: "positions / month",
+    dashCaption:
+      "Projected to a month from the budget each run used (free-run excluded); counts rounded, cost per excellent match.",
+    tierTitle: "Yield and price per quality level",
+    tierLead:
+      "How many matches per day the team produces at each level, and how much each single result costs on average. Averaged over the three cases, projected over a month of budget (free-run excluded).",
+    matchDayCardTitle: "📈 Matches per day · by level",
+    matchDayCaption:
+      "Matches/day on average, projected over a month of budget. The ≥80 row equals the excellent/day figure in the summary above.",
+    costCardTitle: "💶 Average price per result · by quality level",
+    costCaption:
+      "The higher the quality bar, the higher the cost per single result. The ≥80 row equals the cost per excellent in the summary above.",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
     contributeTitle: "Contribute your data",
@@ -234,6 +278,7 @@ const T: Record<
     positions: "puestos",
     avgMatch: "coincidencia media",
     strongMatch: "coincidencias fuertes",
+    cardDays: "días trabajados",
     cumTitle: "En promedio, por caso de estudio",
     cumLead:
       "No la suma, sino el PROMEDIO de los casos de estudio monitorizados: lo que produce una ejecución típica. Las ejecuciones tienen duraciones distintas, así que es indicativo — para datos mensuales precisos hacen falta ejecuciones de un mes completo.",
@@ -256,13 +301,30 @@ const T: Record<
       "Cuanto mayor es el nivel de calidad exigido, más sube el coste por resultado.",
     dailyTitle: "Match de score alto al día",
     dailyLead:
-      "De media, cuántas posiciones de score alto (≥70) y excelente (≥80) produce el equipo cada día de trabajo — y cómo varía entre perfiles.",
+      "De media, cuántas posiciones de score alto (≥70) y excelente (≥80) produce el equipo al día — repartiendo el output sobre un mes de presupuesto, para que las ejecuciones cortas que gastaron una semana de presupuesto en pocos días no salgan infladas.",
     dailyAvgStrong: "≥70 / día (media)",
     dailyAvgExcellent: "≥80 / día (media)",
     dailyChartTitle: "Media al día · por perfil",
     dailyUnit: "día",
     dailyCaption:
-      "Media por día trabajado; la cuota ≥80 está resaltada en verde vivo.",
+      "Ritmo sostenible: output mensual estimado ÷ días del mes, excluida la sesión free-run sin monitor (demasiado corta para ser representativa); la cuota ≥80 está resaltada en verde vivo.",
+    dashTitle: "En promedio, por usuario",
+    dashLead:
+      "Los números destilados para un mes de suscripción: el output de cada caso proyectado sobre un mes según el presupuesto usado — así una ejecución corta no baja la media, ni una intensiva la infla. Free-run excluido.",
+    dashExcellent: "match excelentes ≥80 / día",
+    dashCostExcellent: "coste / match excelente ≥80",
+    dashPositions: "posiciones / mes",
+    dashCaption:
+      "Proyección a un mes según el presupuesto usado por cada ejecución (free-run excluido); conteos redondeados, coste por match excelente.",
+    tierTitle: "Rendimiento y precio por nivel de calidad",
+    tierLead:
+      "Cuántos match al día produce el equipo en cada nivel y cuánto cuesta de media cada resultado. Media sobre los tres casos, proyectada sobre un mes de presupuesto (sin el free-run).",
+    matchDayCardTitle: "📈 Match al día · por nivel",
+    matchDayCaption:
+      "Match/día de media, proyectados sobre un mes de presupuesto. La fila ≥80 coincide con los excelentes/día del resumen de arriba.",
+    costCardTitle: "💶 Precio medio por resultado · por nivel de calidad",
+    costCaption:
+      "Cuanto más alto es el nivel de calidad exigido, más sube el coste por resultado. La fila ≥80 coincide con el coste por excelente del resumen de arriba.",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
     contributeTitle: "Contribuye con tus datos",
@@ -296,6 +358,7 @@ const T: Record<
     positions: "postes",
     avgMatch: "correspondance moyenne",
     strongMatch: "correspondances fortes",
+    cardDays: "jours travaillés",
     cumTitle: "En moyenne, par étude de cas",
     cumLead:
       "Non pas la somme, mais la MOYENNE sur les études de cas suivies : ce que produit un run type. Les runs ont des durées différentes, c'est donc indicatif — des chiffres mensuels précis nécessitent des runs d'un mois entier.",
@@ -318,13 +381,30 @@ const T: Record<
       "Plus le niveau de qualité exigé est élevé, plus le coût par résultat augmente.",
     dailyTitle: "Matchs à score élevé par jour",
     dailyLead:
-      "En moyenne, combien de postes à score élevé (≥70) et excellent (≥80) l'équipe produit chaque jour de travail — et comment cela varie selon les profils.",
+      "En moyenne, combien de postes à score élevé (≥70) et excellent (≥80) l'équipe produit par jour — en répartissant l'output sur un mois de budget, pour que les runs courts ayant consommé une semaine de budget en quelques jours ne soient pas gonflés.",
     dailyAvgStrong: "≥70 / jour (moy.)",
     dailyAvgExcellent: "≥80 / jour (moy.)",
     dailyChartTitle: "Moyenne par jour · par profil",
     dailyUnit: "jour",
     dailyCaption:
-      "Moyenne par jour travaillé ; la part ≥80 est mise en évidence en vert vif.",
+      "Rythme soutenable : output mensuel estimé ÷ jours du mois, hors session free-run sans monitor (trop courte pour être représentative) ; la part ≥80 est mise en évidence en vert vif.",
+    dashTitle: "En moyenne, par utilisateur",
+    dashLead:
+      "Les chiffres distillés pour un mois d'abonnement : l'output de chaque cas projeté sur un mois selon le budget consommé — ainsi un run court ne fait pas baisser la moyenne, ni un run intensif ne la gonfle. Free-run exclu.",
+    dashExcellent: "matchs excellents ≥80 / jour",
+    dashCostExcellent: "coût / match excellent ≥80",
+    dashPositions: "postes / mois",
+    dashCaption:
+      "Projeté sur un mois selon le budget consommé par chaque run (free-run exclu) ; comptes arrondis, coût par match excellent.",
+    tierTitle: "Rendement et prix par niveau de qualité",
+    tierLead:
+      "Combien de matchs par jour l'équipe produit à chaque niveau, et combien coûte en moyenne chaque résultat. Moyenne sur les trois cas, projetée sur un mois de budget (free-run exclu).",
+    matchDayCardTitle: "📈 Matchs par jour · par niveau",
+    matchDayCaption:
+      "Matchs/jour en moyenne, projetés sur un mois de budget. La ligne ≥80 correspond aux excellents/jour du récapitulatif ci-dessus.",
+    costCardTitle: "💶 Prix moyen par résultat · par niveau de qualité",
+    costCaption:
+      "Plus le niveau de qualité exigé est élevé, plus le coût par résultat augmente. La ligne ≥80 correspond au coût par excellent du récapitulatif ci-dessus.",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
     contributeTitle: "Contribue avec tes données",
@@ -358,6 +438,7 @@ const T: Record<
     positions: "Stellen",
     avgMatch: "durchschnittlicher Match",
     strongMatch: "starke Matches",
+    cardDays: "Arbeitstage",
     cumTitle: "Im Schnitt, pro Fallstudie",
     cumLead:
       "Nicht die Summe, sondern der DURCHSCHNITT über die beobachteten Fallstudien: was ein typischer Lauf produziert. Läufe haben unterschiedliche Längen, daher ist es indikativ — genaue Monatszahlen brauchen Läufe über einen vollen Monat.",
@@ -380,13 +461,30 @@ const T: Record<
       "Je höher die geforderte Qualität, desto höher die Kosten pro einzelnem Ergebnis.",
     dailyTitle: "Hoch bewertete Matches pro Tag",
     dailyLead:
-      "Im Schnitt, wie viele hoch (≥70) und exzellent (≥80) bewertete Positionen das Team pro Arbeitstag produziert — und wie es je Profil variiert.",
+      "Im Schnitt, wie viele hoch (≥70) und exzellent (≥80) bewertete Positionen das Team pro Tag produziert — verteilt über einen Monat Budget, damit kurze Läufe, die eine Budgetwoche in wenigen Tagen verbraucht haben, nicht überhöht wirken.",
     dailyAvgStrong: "≥70 / Tag (Ø)",
     dailyAvgExcellent: "≥80 / Tag (Ø)",
     dailyChartTitle: "Durchschnitt pro Tag · je Profil",
     dailyUnit: "Tag",
     dailyCaption:
-      "Durchschnitt pro Arbeitstag; der ≥80-Anteil ist in kräftigem Grün hervorgehoben.",
+      "Nachhaltiges Tempo: geschätzter Monats-Output ÷ Tage im Monat, ohne die unüberwachte Free-Run-Session (zu kurz, um repräsentativ zu sein); der ≥80-Anteil ist in kräftigem Grün hervorgehoben.",
+    dashTitle: "Im Schnitt, pro Nutzer",
+    dashLead:
+      "Die Zahlen destilliert für einen Abo-Monat: der Output jedes Falls auf einen Monat projiziert anhand des verbrauchten Budgets — so drückt ein kurzer Lauf den Schnitt nicht und ein intensiver bläht ihn nicht auf. Free-Run ausgeschlossen.",
+    dashExcellent: "exzellente ≥80 Matches / Tag",
+    dashCostExcellent: "Kosten / exzellenter ≥80 Match",
+    dashPositions: "Stellen / Monat",
+    dashCaption:
+      "Auf einen Monat projiziert anhand des von jedem Lauf verbrauchten Budgets (Free-Run ausgeschlossen); Zahlen gerundet, Kosten pro exzellentem Match.",
+    tierTitle: "Ertrag und Preis je Qualitätsstufe",
+    tierLead:
+      "Wie viele Matches pro Tag das Team je Stufe produziert und was jedes einzelne Ergebnis im Schnitt kostet. Gemittelt über die drei Fälle, auf einen Monat Budget projiziert (ohne Free-Run).",
+    matchDayCardTitle: "📈 Matches pro Tag · nach Stufe",
+    matchDayCaption:
+      "Matches/Tag im Schnitt, auf einen Monat Budget projiziert. Die Zeile ≥80 entspricht den exzellenten/Tag in der Übersicht oben.",
+    costCardTitle: "💶 Durchschnittspreis pro Ergebnis · nach Qualitätsstufe",
+    costCaption:
+      "Je höher die geforderte Qualität, desto höher die Kosten pro Ergebnis. Die Zeile ≥80 entspricht den Kosten je exzellentem Match in der Übersicht oben.",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
     contributeTitle: "Steuere deine Daten bei",
@@ -420,6 +518,7 @@ const T: Record<
     positions: "pozíció",
     avgMatch: "átlagos egyezés",
     strongMatch: "erős egyezések",
+    cardDays: "munkanap",
     cumTitle: "Átlagosan, esettanulmányonként",
     cumLead:
       "Nem az összeg, hanem az ÁTLAG a megfigyelt esettanulmányokon: mit produkál egy tipikus futás. A futások eltérő hosszúságúak, ezért ez irányadó — pontos havi adatokhoz teljes hónapos futások kellenek.",
@@ -442,13 +541,30 @@ const T: Record<
       "Minél magasabb a megkövetelt minőség, annál nagyobb az egy eredményre jutó költség.",
     dailyTitle: "Magas pontszámú találatok naponta",
     dailyLead:
-      "Átlagosan hány magas (≥70) és kiváló (≥80) pontszámú pozíciót termel a csapat munkanaponta — és hogyan változik profilonként.",
+      "Átlagosan hány magas (≥70) és kiváló (≥80) pontszámú pozíciót termel a csapat naponta — az outputot egy havi budgetre elosztva, hogy a rövid futások (amelyek egy heti budgetet néhány nap alatt égettek el) ne tűnjenek felfújtnak.",
     dailyAvgStrong: "≥70 / nap (átlag)",
     dailyAvgExcellent: "≥80 / nap (átlag)",
     dailyChartTitle: "Napi átlag · profilonként",
     dailyUnit: "nap",
     dailyCaption:
-      "Átlag munkanaponként; a ≥80 hányad élénkzölddel kiemelve.",
+      "Fenntartható tempó: becsült havi output ÷ a hónap napjai, a monitor nélküli free-run munkamenet kizárva (túl rövid ahhoz, hogy reprezentatív legyen); a ≥80 hányad élénkzölddel kiemelve.",
+    dashTitle: "Átlagosan, felhasználónként",
+    dashLead:
+      "A számok egy előfizetési hónapra desztillálva: minden eset outputja egy hónapra vetítve az elhasznált budget alapján — így egy rövid futás nem húzza le az átlagot, egy intenzív pedig nem fújja fel. A free-run kizárva.",
+    dashExcellent: "kiváló ≥80 találat / nap",
+    dashCostExcellent: "költség / kiváló ≥80 találat",
+    dashPositions: "pozíció / hó",
+    dashCaption:
+      "Egy hónapra vetítve az egyes futások elhasznált budgetje alapján (free-run kizárva); a számok kerekítve, költség kiváló találatonként.",
+    tierTitle: "Hozam és ár minőségi szintenként",
+    tierLead:
+      "Hány találatot termel a csapat naponta az egyes szinteken, és mennyibe kerül átlagosan egy-egy eredmény. A három eset átlaga, egy hónap budgetre vetítve (free-run nélkül).",
+    matchDayCardTitle: "📈 Találatok naponta · szintenként",
+    matchDayCaption:
+      "Találat/nap átlagosan, egy hónap budgetre vetítve. A ≥80 sor megegyezik a fenti összegzés kiváló/nap értékével.",
+    costCardTitle: "💶 Átlagár eredményenként · minőségi szintenként",
+    costCaption:
+      "Minél magasabb az elvárt minőség, annál nagyobb az egy eredményre jutó költség. A ≥80 sor megegyezik a fenti összegzés kiváló találat költségével.",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
     contributeTitle: "Járulj hozzá az adataiddal",
@@ -481,6 +597,7 @@ const T: Record<
     positions: "posições",
     avgMatch: "correspondência média",
     strongMatch: "correspondências fortes",
+    cardDays: "dias trabalhados",
     cumTitle: "Em média, por estudo de caso",
     cumLead:
       "Não a soma, mas a MÉDIA dos estudos de caso monitorizados: o que produz uma execução típica. As execuções têm durações diferentes, por isso é indicativo — dados mensais precisos exigem execuções de um mês inteiro.",
@@ -503,13 +620,30 @@ const T: Record<
       "Quanto maior o nível de qualidade exigido, maior o custo por resultado.",
     dailyTitle: "Matches de score alto por dia",
     dailyLead:
-      "Em média, quantas posições de score alto (≥70) e excelente (≥80) a equipa produz por dia de trabalho — e como varia entre perfis.",
+      "Em média, quantas posições de score alto (≥70) e excelente (≥80) a equipa produz por dia — distribuindo o output por um mês de orçamento, para que execuções curtas que gastaram uma semana de orçamento em poucos dias não fiquem infladas.",
     dailyAvgStrong: "≥70 / dia (média)",
     dailyAvgExcellent: "≥80 / dia (média)",
     dailyChartTitle: "Média por dia · por perfil",
     dailyUnit: "dia",
     dailyCaption:
-      "Média por dia trabalhado; a quota ≥80 está destacada em verde vivo.",
+      "Ritmo sustentável: output mensal estimado ÷ dias do mês, excluída a sessão free-run sem monitor (demasiado curta para ser representativa); a quota ≥80 está destacada em verde vivo.",
+    dashTitle: "Em média, por utilizador",
+    dashLead:
+      "Os números destilados para um mês de subscrição: o output de cada caso projetado sobre um mês com base no orçamento usado — assim uma execução curta não baixa a média, nem uma intensiva a infla. Free-run excluído.",
+    dashExcellent: "matches excelentes ≥80 / dia",
+    dashCostExcellent: "custo / match excelente ≥80",
+    dashPositions: "posições / mês",
+    dashCaption:
+      "Projetado para um mês com base no orçamento usado por cada execução (free-run excluído); contagens arredondadas, custo por match excelente.",
+    tierTitle: "Rendimento e preço por nível de qualidade",
+    tierLead:
+      "Quantos matches por dia a equipa produz em cada nível e quanto custa em média cada resultado. Média sobre os três casos, projetada sobre um mês de orçamento (sem o free-run).",
+    matchDayCardTitle: "📈 Matches por dia · por nível",
+    matchDayCaption:
+      "Matches/dia em média, projetados sobre um mês de orçamento. A linha ≥80 coincide com os excelentes/dia do resumo acima.",
+    costCardTitle: "💶 Preço médio por resultado · por nível de qualidade",
+    costCaption:
+      "Quanto mais alto o nível de qualidade exigido, mais sobe o custo por resultado. A linha ≥80 coincide com o custo por excelente do resumo acima.",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
     contributeTitle: "Contribui com os teus dados",
@@ -533,101 +667,55 @@ export default async function CaseStudiesIndexPage() {
   const nf = (n: number): string => n.toLocaleString(LOCALE_TAG[locale]);
   const localized = CASE_STUDIES.map((cs) => localizeCaseStudy(cs, locale));
 
-  // Numeri cumulativi su TUTTE le run monitorate (sezione in cima all'indice).
-  const runs = localized.map((cs) => cs.run);
-  const allScores = runs.flatMap((r) => r.match.scores ?? []);
-  const cum = {
-    cases: localized.length,
-    positions: runs.reduce(
-      (s, r) =>
-        s + (r.conversion?.found ?? r.funnelTotals?.found ?? r.totals.positions),
-      0,
-    ),
-    scored: runs.reduce((s, r) => s + (r.conversion?.scored ?? 0), 0),
-    strong70: runs.reduce(
-      (s, r) => s + (r.conversion?.strong70 ?? r.match.strong70),
-      0,
-    ),
-    strong80: runs.reduce(
-      (s, r) => s + (r.conversion?.strong80 ?? r.match.strong80),
-      0,
-    ),
-    days: localized.reduce((s, cs) => s + caseRunInfo(cs.run, locale).days, 0),
-    avg: allScores.length
-      ? Math.round(allScores.reduce((s, n) => s + n, 0) / allScores.length)
-      : 0,
-  };
-  // MEDIA per case study (una run tipo), non la somma: le run hanno durate
-  // diverse quindi è indicativo — per dati mensili accurati servono run da un
-  // mese intero (vedi beta tester 2 · finance, ~26 giorni).
-  const nStudies = Math.max(1, cum.cases);
-  const per = {
-    positions: Math.round(cum.positions / nStudies),
-    scored: Math.round(cum.scored / nStudies),
-    strong70: Math.round(cum.strong70 / nStudies),
-    strong80: Math.round(cum.strong80 / nStudies),
-    days: Math.round(cum.days / nStudies),
-  };
-
-  // Prezzo MEDIO per risultato: media (sui case study con canone noto) del costo
-  // mensile per posizione / valutata / forte≥70 / eccellente≥80. Finance è
-  // misurato, gli altri stimati (proiezione a un mese, stessa logica del
-  // dettaglio). Mescola canoni €100 (Codex) e €40 (Kimi) → media indicativa.
-  const pricedStudies = localized
-    .map((cs) => ({
-      cs,
-      mult: caseMonthlyProjection(cs.run, caseRunInfo(cs.run, locale).days)
-        .multiplier,
-    }))
-    .filter((s) => s.cs.subscription.monthlyEur != null && s.cs.run.conversion);
-  const avgCostOf = (key: "found" | "scored" | "strong70" | "strong80") => {
-    if (pricedStudies.length === 0) return 0;
-    const total = pricedStudies.reduce((acc, s) => {
-      const monthly = s.cs.run.conversion![key] * s.mult;
-      return acc + (monthly > 0 ? s.cs.subscription.monthlyEur! / monthly : 0);
-    }, 0);
-    return total / pricedStudies.length;
-  };
-  const eurFmt = (n: number) =>
-    new Intl.NumberFormat(LOCALE_TAG[locale], {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n);
-  const priceTiers = [
-    { v: avgCostOf("found"), l: t.pricePosition, c: TIER_COLORS[0] },
-    { v: avgCostOf("scored"), l: t.priceScored, c: TIER_COLORS[1] },
-    { v: avgCostOf("strong70"), l: t.priceStrong, c: TIER_COLORS[2] },
-    { v: avgCostOf("strong80"), l: t.priceExcellent, c: TIER_COLORS[3] },
-  ];
-  const maxPrice = Math.max(...priceTiers.map((x) => x.v), 0.0001);
-
-  // Match ad alto score AL GIORNO: per ogni studio il tasso giornaliero medio di
-  // posizioni ≥70 (forti) e ≥80 (eccellenti); poi la media tra gli studi + il
-  // confronto per profilo. Tassi reali (conteggi giornalieri ÷ giorni), non
-  // proiezioni.
-  const dailyStudies = localized
-    .map((cs) => {
-      const sd = cs.run.scoreDaily ?? [];
-      const days = sd.length;
-      return {
-        label: `${cs.category} · ${cs.model}`,
-        r70: days ? sd.reduce((s, d) => s + d.strong70, 0) / days : 0,
-        r80: days ? sd.reduce((s, d) => s + d.strong80, 0) / days : 0,
-        has: days > 0,
-      };
-    })
-    .filter((s) => s.has);
-  const dailyAvg70 = dailyStudies.length
-    ? dailyStudies.reduce((s, x) => s + x.r70, 0) / dailyStudies.length
-    : 0;
-  const dailyAvg80 = dailyStudies.length
-    ? dailyStudies.reduce((s, x) => s + x.r80, 0) / dailyStudies.length
-    : 0;
-  const dailyMax = Math.max(...dailyStudies.map((x) => x.r70), 0.001);
-  const fmt1 = (n: number) =>
-    n.toLocaleString(LOCALE_TAG[locale], { maximumFractionDigits: 1 });
+  // ── Statistiche PER PROVIDER ────────────────────────────────────────────
+  // Kimi (~€40) e Codex (~€100) NON si mediano insieme: prezzi diversi. Raggruppo
+  // i casi per provider (model) e proietto ogni run su un mese di budget: un mese
+  // ≈ 4,345 budget settimanali, quindi una run che ne ha consumati W producendo X
+  // rende X × 4,345/W al mese ("giorni × 30" grezzo sovrastima le run intensive).
+  // Per ogni tappa del funnel: totale/mese, al giorno (÷30) e prezzo medio per
+  // risultato (canone ÷ output/mese). Free-run escluso. La riga ≥80 dà eccellenti/
+  // giorno e €/eccellente; Trovate dà posizioni/mese.
+  const WEEKS_PER_MONTH = 4.345;
+  const MONTH_DAYS = 30;
+  const PROVIDER_ORDER = ["Kimi", "Codex"];
+  const STAGES = ["strong80", "strong70", "scored", "found"] as const;
+  const eligible = localized.filter((cs) => !cs.freeRun && cs.run.conversion);
+  const providers = PROVIDER_ORDER.map((id) => {
+    const group = eligible.filter((cs) => cs.model === id);
+    if (group.length === 0) return null;
+    const perRun = group.map((cs) => {
+      const budgetWeeks =
+        (cs.run.usage?.daily ?? []).reduce((s, d) => s + (d.pct ?? 0), 0) / 100;
+      // proietta al budget di un mese; fallback ai giorni se manca l'usage.
+      const mult =
+        budgetWeeks > 0.1
+          ? WEEKS_PER_MONTH / budgetWeeks
+          : MONTH_DAYS / Math.max(1, caseRunInfo(cs.run, locale).days);
+      return { mult, eur: cs.subscription.monthlyEur ?? null, c: cs.run.conversion! };
+    });
+    const mean = (fn: (r: (typeof perRun)[number]) => number) =>
+      perRun.reduce((s, r) => s + fn(r), 0) / perRun.length;
+    const meanPrice = (stage: (typeof STAGES)[number]) => {
+      const xs = perRun
+        .map((r) => {
+          const m = r.c[stage] * r.mult;
+          return r.eur != null && m > 0 ? r.eur / m : null;
+        })
+        .filter((v): v is number => v != null);
+      return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+    };
+    return {
+      id,
+      monthlyEur: perRun[0].eur,
+      nCases: group.length,
+      rows: STAGES.map((stage) => ({
+        key: stage as string,
+        count: mean((r) => r.c[stage] * r.mult),
+        perDay: mean((r) => (r.c[stage] * r.mult) / MONTH_DAYS),
+        price: meanPrice(stage),
+      })),
+    };
+  }).filter((p): p is NonNullable<typeof p> => p != null);
 
   return (
     <main className="min-h-screen bg-[var(--color-panel)] text-[var(--color-white)]">
@@ -663,240 +751,8 @@ export default async function CaseStudiesIndexPage() {
           </p>
         </header>
 
-        {/* ── Numeri cumulativi (tutti i case study insieme) ─────── */}
-        <section className="mb-14">
-          <h2 className="text-xl font-bold tracking-tight">{t.cumTitle}</h2>
-          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
-            {t.cumLead}
-          </p>
-
-          {/* KPI headline */}
-          <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { v: nf(cum.cases), l: t.cumCases, c: "var(--color-white)" },
-              { v: nf(per.positions), l: t.cumPositions, c: "var(--color-blue)" },
-              { v: nf(cum.avg), l: t.avgMatch, c: "#00e676" },
-              { v: nf(per.days), l: t.cumDays, c: "var(--color-white)" },
-            ].map((k) => (
-              <div
-                key={k.l}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
-              >
-                <div
-                  className="text-[22px] font-extrabold tabular-nums leading-none"
-                  style={{ color: k.c }}
-                >
-                  {k.v}
-                </div>
-                <div className="mt-1.5 text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
-                  {k.l}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Grafici cumulativi: conversione complessiva + distribuzione match */}
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-            <div className="flex flex-col">
-              <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
-                {t.cumFunnelTitle}
-              </div>
-              <div className="flex-1">
-                <ConversionFunnelCard
-                  found={per.positions}
-                  scored={per.scored}
-                  strong70={per.strong70}
-                  strong80={per.strong80}
-                />
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <ScoreDistribution
-                scores={allScores}
-                title={t.cumScoreTitle}
-                emptyLabel={t.cumScoreEmpty}
-                thresholdReady={70}
-                thresholdLabel="≥ 70"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* ── Prezzo medio per risultato (media tra gli studi) ───── */}
-        <section className="mb-14">
-          <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight">{t.priceTitle}</h2>
-            <span
-              className="text-[9px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
-              style={{
-                background: "color-mix(in srgb, #F59E0B 16%, transparent)",
-                color: "#F59E0B",
-              }}
-            >
-              {t.priceEstimate}
-            </span>
-          </div>
-          <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
-            {t.priceLead}
-          </p>
-
-          {/* Card: prezzo medio per livello */}
-          <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {priceTiers.map((tier) => (
-              <div
-                key={tier.l}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
-              >
-                <div
-                  className="text-[22px] font-extrabold tabular-nums leading-none"
-                  style={{ color: tier.c }}
-                >
-                  ≈ {eurFmt(tier.v)}
-                </div>
-                <div className="mt-1.5 text-[10px] leading-snug text-[var(--color-muted)]">
-                  {tier.l}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Grafico a barre del prezzo medio */}
-          <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-            <div className="text-[12px] font-semibold text-[var(--color-base)] mb-4">
-              {t.priceChartTitle}
-            </div>
-            <div className="flex flex-col gap-3">
-              {priceTiers.map((tier) => (
-                <div key={tier.l}>
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span
-                      className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
-                      style={{ background: tier.c }}
-                    />
-                    <span className="text-[11px] text-[var(--color-muted)] flex-1 truncate">
-                      {tier.l}
-                    </span>
-                    <span className="text-[13px] font-bold tabular-nums text-[var(--color-base)]">
-                      ≈ {eurFmt(tier.v)}
-                    </span>
-                  </div>
-                  <div
-                    className="h-2 rounded-full overflow-hidden"
-                    style={{ background: "var(--color-border)" }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.max(2, (tier.v / maxPrice) * 100)}%`,
-                        background: tier.c,
-                        opacity: 0.85,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)]">
-              {t.priceCaption}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Match ad alto score al giorno (media tra gli studi) ── */}
-        <section className="mb-14">
-          <h2 className="text-xl font-bold tracking-tight">{t.dailyTitle}</h2>
-          <p className="text-[13px] leading-relaxed text-[var(--color-muted)] mt-2">
-            {t.dailyLead}
-          </p>
-
-          {/* KPI: media ≥70/giorno e ≥80/giorno tra gli studi */}
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            {[
-              { v: dailyAvg70, l: t.dailyAvgStrong, c: "#15803d" },
-              { v: dailyAvg80, l: t.dailyAvgExcellent, c: "#22c55e" },
-            ].map((k) => (
-              <div
-                key={k.l}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
-              >
-                <div
-                  className="text-[22px] font-extrabold tabular-nums leading-none"
-                  style={{ color: k.c }}
-                >
-                  {fmt1(k.v)}
-                </div>
-                <div className="mt-1.5 text-[10px] leading-snug text-[var(--color-muted)]">
-                  {k.l}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Confronto per profilo: tasso giornaliero, ≥80 evidenziato */}
-          <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
-              <span className="text-[12px] font-semibold text-[var(--color-base)]">
-                {t.dailyChartTitle}
-              </span>
-              <span className="flex items-center gap-3 text-[10px] text-[var(--color-muted)]">
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm"
-                    style={{ background: "#22c55e" }}
-                  />
-                  ≥80
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm"
-                    style={{ background: "#15803d" }}
-                  />
-                  ≥70
-                </span>
-              </span>
-            </div>
-            <div className="flex flex-col gap-3">
-              {dailyStudies.map((s) => (
-                <div key={s.label}>
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className="text-[11px] text-[var(--color-muted)] flex-1 truncate">
-                      {s.label}
-                    </span>
-                    <span className="text-[13px] font-bold tabular-nums text-[var(--color-base)]">
-                      {fmt1(s.r70)}
-                      <span className="text-[10px] font-normal text-[var(--color-dim)]">
-                        {" "}
-                        / {t.dailyUnit}
-                      </span>
-                    </span>
-                  </div>
-                  <div
-                    className="relative h-2 rounded-full overflow-hidden"
-                    style={{ background: "var(--color-border)" }}
-                  >
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full"
-                      style={{
-                        width: `${Math.max(2, (s.r70 / dailyMax) * 100)}%`,
-                        background: "#15803d",
-                      }}
-                    />
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full"
-                      style={{
-                        width: `${(s.r80 / dailyMax) * 100}%`,
-                        background: "#22c55e",
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)]">
-              {t.dailyCaption}
-            </div>
-          </div>
-        </section>
+        {/* ── Statistiche per provider · una tabella-imbuto ─────── */}
+        <ProviderStats providers={providers} />
 
         {/* ── Card dei case study ───────────────────────────────── */}
         <section className="mb-14">
@@ -942,7 +798,7 @@ export default async function CaseStudiesIndexPage() {
                 <p className="text-[12px] text-[var(--color-muted)] leading-relaxed line-clamp-2 mb-4">
                   {cs.profile.headline} · {cs.profile.summary}
                 </p>
-                <div className="grid grid-cols-3 gap-2 border-t border-[var(--color-border)] pt-3">
+                <div className="grid grid-cols-4 gap-2 border-t border-[var(--color-border)] pt-3">
                   <div>
                     <div
                       className="text-[18px] font-extrabold tabular-nums"
@@ -974,6 +830,17 @@ export default async function CaseStudiesIndexPage() {
                     </div>
                     <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
                       {t.strongMatch}
+                    </div>
+                  </div>
+                  <div>
+                    <div
+                      className="text-[18px] font-extrabold tabular-nums"
+                      style={{ color: "var(--color-white)" }}
+                    >
+                      {nf(caseRunInfo(cs.run, locale).days)}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+                      {t.cardDays}
                     </div>
                   </div>
                 </div>

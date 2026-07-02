@@ -94,17 +94,20 @@ export default function ConversionFunnelCard({
   const t = T[locale];
 
   const base = Math.max(1, found);
+  // Imbuto rovesciato: eccellenti in cima (stadio più stretto) → trovate in fondo
+  // (stadio più ampio). La conversione tra step confronta ogni riga con quella
+  // SOTTO, cioè lo stadio più ampio da cui si "sale".
   const stages = [
-    { label: t.found, n: found, color: COLORS[0] },
-    { label: t.scored, n: scored, color: COLORS[1] },
-    { label: t.strong, n: strong70, color: COLORS[2] },
     { label: t.excellent, n: strong80, color: COLORS[3] },
+    { label: t.strong, n: strong70, color: COLORS[2] },
+    { label: t.scored, n: scored, color: COLORS[1] },
+    { label: t.found, n: found, color: COLORS[0] },
   ];
   const pctFound = (n: number) => Math.round((n / base) * 100);
   const pctStep = (i: number) =>
-    i === 0 || stages[i - 1].n <= 0
+    i === stages.length - 1 || stages[i + 1].n <= 0
       ? null
-      : Math.round((stages[i].n / stages[i - 1].n) * 100);
+      : Math.round((stages[i].n / stages[i + 1].n) * 100);
 
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 h-full">
@@ -123,7 +126,7 @@ export default function ConversionFunnelCard({
                 </span>
                 {step != null && (
                   <span className="text-[10px] tabular-nums text-[var(--color-dim)]">
-                    ↓ {step}%
+                    ↑ {step}%
                   </span>
                 )}
                 <span className="text-[13px] font-bold tabular-nums text-[var(--color-base)] w-12 text-right">
@@ -151,7 +154,7 @@ export default function ConversionFunnelCard({
         })}
       </div>
       <div className="mt-4 pt-2 border-t border-[var(--color-border)] text-[10px] text-[var(--color-dim)] text-right">
-        % {t.ofFound} · ↓ {t.stepNote}
+        % {t.ofFound} · ↑ {t.stepNote}
       </div>
     </div>
   );
