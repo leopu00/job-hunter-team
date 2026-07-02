@@ -1,9 +1,10 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-05-31
+> Last updated: 2026-07-02 · public launch imminent
 >
 > 📋 **For tactical, task-by-task detail → see [`BACKLOG.md`](../../BACKLOG.md)**.
 > This file is the strategic, visual summary — where we're going, not the day-to-day.
+> 🙌 **Want to contribute?** Jump to [Where you can help](#-where-you-can-help--contributor-missions).
 
 ---
 
@@ -55,8 +56,36 @@ Job Hunter Team is an open-source application that runs **locally** in a Docker 
 | Container runtime | **Docker + Docker Compose** | Isolation, reproducibility |
 | Structured data (cloud, opt-in) | **Supabase** | PostgreSQL + Google/GitHub auth |
 | User files (cloud, opt-in) | **Google Drive** | CV, cover letters, generated PDFs |
-| Cloud provisioning | **Multi-provider** | Hetzner first (cheapest, EU GDPR), then AWS + GCP |
+| Cloud provisioning | **Any VPS via SSH** | A VPS is a VPS — the manual SSH + IP flow already runs on any provider. Hetzner is simply the one we test on (cheapest, EU GDPR). A per-cloud one-click abstraction is *not* a target — see Phase 3. |
 | Primary language | **English** | Italian, Hungarian as additional |
+
+---
+
+## 🙌 Where you can help — contributor missions
+
+New here? These are the **missions** we'd love a hand with — bigger directions, each broken into smaller entry-point tasks. Pick one, comment to claim it, open a PR.
+
+```
+  NOW                          NEXT                         LATER
+  (core team, pre-launch)      (great entry points)         (bigger builds)
+  ────────────────────────     ────────────────────────     ────────────────────────
+  • cross-OS setup E2E         • M1 quick-feedback cards     • M2 mobile team control
+  • public site polish         • M4 cheaper tiers +          • M5 fully-local models
+  • case studies                  more providers
+                               • M3 harden security
+```
+
+| # | Mission | Good for | Size |
+|---|---------|----------|------|
+| **M1** | 🃏 Quick-feedback cards on offers (swipe / buttons → the team learns your taste) | Frontend / UX | 🟡 medium |
+| **M2** | 📱 Control & stop the team from your phone | Mobile + API | 🔴 large |
+| **M3** | 🛡️ Harden security (prompt-injection fencing, uniform auth gates, token policy) | Security / Backend | 🔴 large |
+| **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ | Integrations | 🟡 medium |
+| **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ | LLM / infra | 🔴 large |
+
+**Also on the horizon:** 🧙‍♂️ **M6** — make the Mentor a first-class citizen (dedicated web + desktop page, deeper tuning) · 📊 **M7** — fine-grained team observability + user feedback (full timeline of every offer, who-did-what-when) · 💳 **M8** — pay-per-use API mode with a **€-budget** the Sentinel enforces (not just a subscription %).
+
+> Each mission has **good-first sub-tasks** in its issue. Issues go live at launch — look for the `good first issue` and `help wanted` labels, or open a [Discussion](https://github.com/leopu00/job-hunter-team/discussions) and we'll help you scope a first slice.
 
 ---
 
@@ -149,6 +178,8 @@ For full task list → [BACKLOG · Phase 2](../../BACKLOG.md#2️⃣-phase-2--�
 ### ☁️ Phase 3 — Multi-Provider Cloud Provisioning
 
 > _"Click a button, the team runs on a self-hosted VPS."_
+
+> ⚠️ **Rescoped (2026-07-02).** The team already runs on **any** VPS through the manual SSH + IP flow (T1–T4, shipped). A dedicated **per-cloud abstraction layer** (AWS/GCP adapters, one-click `create-server`, billing-aware provisioning) is **no longer a milestone** — it buys little over "paste your VPS IP" and adds provider-specific magic. We'll **document/test** additional providers opportunistically instead. The items below marked ⬜ for AWS/GCP adapters are kept for reference, not as committed work.
 
 ```
 🟡 Status: IN PROGRESS — ~50%
@@ -459,7 +490,7 @@ The current `jobs.db` schema is functional but **lossy**: state transitions, Cri
 ⬜ captain_decisions — orchestration log (spawn +1 analyst, freeze, throttle, etc.)
 ```
 
-**Anti-collision mechanism — descriptive, not unified.** The 5 agent roles do genuinely different work and use different lock strategies (Scout pre-INSERT URL dedup · Analyst/Scorer `last_checked` watermark · Writer `status = writing` flip). Forcing one common pattern adds friction for marginal gain. The new `claimed_by/at` columns sit alongside the existing role-specific mechanisms, primarily to enable the batch-claim shortcut and the UI activity view.
+**Anti-collision mechanism — descriptive, not unified.** The five worker roles (Scout · Analyst · Scorer · Writer · Critic) do genuinely different work and use different lock strategies (Scout pre-INSERT URL dedup · Analyst/Scorer `last_checked` watermark · Writer `status = writing` flip). Forcing one common pattern adds friction for marginal gain. The new `claimed_by/at` columns sit alongside the existing role-specific mechanisms, primarily to enable the batch-claim shortcut and the UI activity view.
 
 → Detailed analysis: [`agents/_manual/db-schema.md`](../../agents/_manual/db-schema.md). Highest-ROI single change is `position_events` — unlocks dashboard timeline + debug + analytics with one new table and zero changes to the existing flow.
 
