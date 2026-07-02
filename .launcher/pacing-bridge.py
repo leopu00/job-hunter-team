@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """
-pacing-bridge.py — tick orario al Capitano sul ritmo di consumo del team.
+pacing-bridge.py — tick di pacing alla SENTINELLA sul ritmo di consumo del team.
+
+── ROLE-MAP dei bridge deterministici (vedi docs/internal/architecture/bridges.md) ──
+  sentinel-bridge.py  → SENSORE usage: fetch provider ~2-10min, scrive
+                        sentinel-data.jsonl, ticka la SENTINELLA ([BRIDGE TICK]).
+  pacing-bridge.py    → QUESTO: report pacing ogni 15min alla SENTINELLA
+                        ([BRIDGE PACING]). Il Capitano NON è pingato (pull on-demand).
+  heartbeat-bridge.py → nudge orario al CAPITANO ([HEARTBEAT]); off-hours tace.
 
 Ogni 15 minuti, allineato all'orologio (:00, :15, :30, :45 UTC), calcola:
 
@@ -34,7 +41,7 @@ Override env:
 Modi:
   python3 pacing-bridge.py            # loop infinito allineato all'orologio
   python3 pacing-bridge.py --once     # un solo tick, stampa, niente send
-  python3 pacing-bridge.py --once --send  # un solo tick + send al CAPITANO
+  python3 pacing-bridge.py --once --send  # un solo tick + send alla SENTINELLA
 """
 import importlib.util
 import json

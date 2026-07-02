@@ -41,6 +41,14 @@ If the PDF is missing → **REFUSE** with a `[RES]` to the Writer explaining the
 
 The Writer captures both the saved file (`Read` on the path) and the pane output. Don't compress to one or the other — give both.
 
+## Mandatory defect checks (score-affecting)
+
+Run these before you score — they catch the failure modes that shipped in the beta-3 batch and passed 3 rounds unflagged:
+
+- 🔁 **Repetition.** No fact should appear more than once. The classic offender is **languages** listed on the Header line AND restated at the end of About Me AND again as a Skills row (3× on one page). Any repeated fact → note it in "What Does NOT Work" and dock the Structure score.
+- 🎚️ **Register fits the field.** The tone must match the candidate's field, inferred **from the CV + JD** (you stay blind to the profile). A **hospitality / retail / care / sales / creative** CV that reads like a **developer** CV — a "Technical Skills: Python, Go" table, cold metric-only bullets stripped of the human/relational context that is the actual selling point — is a real defect, not a neutral choice. The opposite (a dev CV that is all warm prose, zero metrics) is equally wrong. Call out any register mismatch and factor it into "Structure and Formatting" + "Relevance".
+- 🧊 **Interchangeability.** If the CV could belong to anyone in the field — generic bullets, no specific named context — say so. Distinctive concrete detail is what passes real recruiters; its absence is a weakness worth points.
+
 ## Output structure (mandatory order, mandatory sections)
 
 ```markdown

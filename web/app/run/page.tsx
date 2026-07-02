@@ -171,29 +171,23 @@ const PAGE = {
   it: {
     title: "Come si avvia",
     subtitle:
-      "Scegli dove far girare la squadra e gestiscila come preferisci — app desktop, terminale, o entrambi insieme. Non sei legato a un solo strumento.",
+      "Il team lavora per te giorno e notte, perciò ha bisogno di un computer sempre acceso: il tuo, uno dedicato, oppure un server in cloud.",
+    setupNote:
+      "Tutto parte dall'app desktop: è da lì che configuri e comandi il team. La installi su un computer a portata di mano e da lì gestisci tutto, che la squadra giri su quella stessa macchina o su una VPS remota.",
     ctrlTitle: "Come la controlli",
     ctrlIntro:
-      "Non sei legato a un solo strumento: app desktop, terminale, o entrambi insieme — stesso runtime, stesse funzioni.",
+      "Non sei legato a un solo strumento: gestisci la squadra dall'app desktop, dal terminale, o da entrambi insieme, con lo stesso runtime e le stesse funzioni. E se fai il login e sincronizzi i dati sul cloud, la ritrovi anche dal web: apri la dashboard e la consulti dal telefono o da qualsiasi browser, senza dover restare al computer su cui gira.",
     ctrlDesktopLabel: "App desktop",
     ctrlDesktopBody:
       "Il telecomando con interfaccia grafica: installa Docker, avvia e ferma il team, ne mostra lo stato in tempo reale e collega anche una VPS.",
     ctrlTerminalLabel: "Terminale (CLI / TUI)",
     ctrlTerminalBody:
-      "Le stesse cose dalla riga di comando, da alternare all'app desktop quando vuoi.",
-    ctrlAssistant:
-      "E non è un aut-aut: mentre usi la grafica desktop, puoi anche parlare con il tuo assistente AI personale — come Claude Code o OpenClaw — che dal terminale gestisce il team al posto tuo.",
-    reqTitle: "Requisiti minimi",
-    reqRows: [
-      ["Docker", "Obbligatorio — l'unica vera dipendenza"],
-      ["RAM", "4 GB minimo · 8 GB consigliati"],
-      ["CPU", "2 core minimo · 4 consigliati"],
-      ["Disco", "~35 GB liberi"],
-      ["VPS", "4 GB RAM · 2 vCPU (per la modalità cloud)"],
-    ],
-    osTitle: "Sistemi supportati",
-    osBody:
-      "macOS (Intel e Apple Silicon), Windows 10/11 e Linux. Tre strade per installare: l'app desktop con interfaccia grafica (DMG, EXE, AppImage), un singolo comando da terminale, oppure lasciando fare al tuo assistente AI.",
+      "Le stesse funzioni dalla riga di comando. Puoi anche affidarle al tuo assistente AI personale, come Claude Code o OpenClaw.",
+    ctrlBrowserLabel: "Browser",
+    ctrlBrowserBody:
+      "Con il login apri la dashboard da qualsiasi browser, anche dal telefono, e segui la squadra ovunque ti trovi.",
+    ctrlWeb:
+      "Il login resta sempre facoltativo: se preferisci, i tuoi dati restano solo sul tuo computer, senza alcun cloud.",
     ctaDownload: "Scarica l'app →",
     back: "← Torna alla home",
   },
@@ -212,17 +206,6 @@ const PAGE = {
       "The same things from the command line, to switch with the desktop app whenever you like.",
     ctrlAssistant:
       "And it's not either/or: while you use the desktop interface, you can also talk to your personal AI assistant — like Claude Code or OpenClaw — which manages the team for you from the terminal.",
-    reqTitle: "Minimum requirements",
-    reqRows: [
-      ["Docker", "Required — the only real dependency"],
-      ["RAM", "4 GB minimum · 8 GB recommended"],
-      ["CPU", "2 cores minimum · 4 recommended"],
-      ["Disk", "~35 GB free"],
-      ["VPS", "4 GB RAM · 2 vCPU (for cloud mode)"],
-    ],
-    osTitle: "Supported systems",
-    osBody:
-      "macOS (Intel and Apple Silicon), Windows 10/11 and Linux. Three ways to install: the desktop app with a graphical interface (DMG, EXE, AppImage), a single terminal command, or letting your AI assistant do it.",
     ctaDownload: "Download the app →",
     back: "← Back to home",
   },
@@ -241,17 +224,6 @@ const PAGE = {
       "Las mismas cosas desde la línea de comandos, para alternar con la app de escritorio cuando quieras.",
     ctrlAssistant:
       "Y no es uno u otro: mientras usas la interfaz gráfica de escritorio, también puedes hablar con tu asistente de IA personal — como Claude Code u OpenClaw — que desde el terminal gestiona el equipo en tu lugar.",
-    reqTitle: "Requisitos mínimos",
-    reqRows: [
-      ["Docker", "Obligatorio — la única dependencia real"],
-      ["RAM", "4 GB mínimo · 8 GB recomendado"],
-      ["CPU", "2 núcleos mínimo · 4 recomendado"],
-      ["Disco", "~35 GB libres"],
-      ["VPS", "4 GB RAM · 2 vCPU (para el modo nube)"],
-    ],
-    osTitle: "Sistemas compatibles",
-    osBody:
-      "macOS (Intel y Apple Silicon), Windows 10/11 y Linux. Tres formas de instalar: la app de escritorio con interfaz gráfica (DMG, EXE, AppImage), un único comando de terminal, o dejando que lo haga tu asistente de IA.",
     ctaDownload: "Descarga la app →",
     back: "← Volver al inicio",
   },
@@ -270,17 +242,6 @@ const PAGE = {
       "Les mêmes choses depuis la ligne de commande, à alterner avec l'app de bureau quand vous le voulez.",
     ctrlAssistant:
       "Et ce n'est pas l'un ou l'autre : pendant que vous utilisez l'interface graphique de bureau, vous pouvez aussi parler à votre assistant d'IA personnel — comme Claude Code ou OpenClaw — qui, depuis le terminal, gère l'équipe à votre place.",
-    reqTitle: "Configuration minimale",
-    reqRows: [
-      ["Docker", "Obligatoire — la seule vraie dépendance"],
-      ["RAM", "4 Go minimum · 8 Go recommandés"],
-      ["CPU", "2 cœurs minimum · 4 recommandés"],
-      ["Disque", "~35 Go libres"],
-      ["VPS", "4 Go RAM · 2 vCPU (pour le mode cloud)"],
-    ],
-    osTitle: "Systèmes pris en charge",
-    osBody:
-      "macOS (Intel et Apple Silicon), Windows 10/11 et Linux. Trois façons d'installer : l'app de bureau avec interface graphique (DMG, EXE, AppImage), une seule commande dans le terminal, ou en laissant faire votre assistant d'IA.",
     ctaDownload: "Téléchargez l'app →",
     back: "← Retour à l'accueil",
   },
@@ -299,17 +260,6 @@ const PAGE = {
       "Dasselbe über die Kommandozeile, um nach Belieben mit der Desktop-App zu wechseln.",
     ctrlAssistant:
       "Und es ist kein Entweder-oder: Während du die grafische Desktop-Oberfläche nutzt, kannst du auch mit deinem persönlichen KI-Assistenten sprechen — wie Claude Code oder OpenClaw — der vom Terminal aus das Team für dich verwaltet.",
-    reqTitle: "Mindestanforderungen",
-    reqRows: [
-      ["Docker", "Erforderlich — die einzige echte Abhängigkeit"],
-      ["RAM", "4 GB minimum · 8 GB empfohlen"],
-      ["CPU", "2 Kerne minimum · 4 empfohlen"],
-      ["Festplatte", "~35 GB frei"],
-      ["VPS", "4 GB RAM · 2 vCPU (für den Cloud-Modus)"],
-    ],
-    osTitle: "Unterstützte Systeme",
-    osBody:
-      "macOS (Intel und Apple Silicon), Windows 10/11 und Linux. Drei Wege zur Installation: die Desktop-App mit grafischer Oberfläche (DMG, EXE, AppImage), ein einziger Terminalbefehl oder du überlässt es deinem KI-Assistenten.",
     ctaDownload: "App herunterladen →",
     back: "← Zurück zur Startseite",
   },
@@ -328,17 +278,6 @@ const PAGE = {
       "Ugyanazok a dolgok a parancssorból, hogy tetszés szerint válts az asztali appal.",
     ctrlAssistant:
       "És nem vagy-vagy: miközben az asztali grafikus felületet használod, beszélgethetsz is a személyes AI-asszisztenseddel — mint a Claude Code vagy az OpenClaw —, amely a terminálból helyetted kezeli a csapatot.",
-    reqTitle: "Minimális követelmények",
-    reqRows: [
-      ["Docker", "Kötelező — az egyetlen valódi függőség"],
-      ["RAM", "4 GB minimum · 8 GB ajánlott"],
-      ["CPU", "2 mag minimum · 4 ajánlott"],
-      ["Lemez", "~35 GB szabad hely"],
-      ["VPS", "4 GB RAM · 2 vCPU (a felhő módhoz)"],
-    ],
-    osTitle: "Támogatott rendszerek",
-    osBody:
-      "macOS (Intel és Apple Silicon), Windows 10/11 és Linux. Három telepítési mód: a grafikus felületű asztali app (DMG, EXE, AppImage), egyetlen terminálparancs, vagy bízd az AI-asszisztensedre.",
     ctaDownload: "Töltsd le az appot →",
     back: "← Vissza a főoldalra",
   },
@@ -357,17 +296,6 @@ const PAGE = {
       "As mesmas coisas a partir da linha de comandos, para alternar com a app de ambiente de trabalho quando quiseres.",
     ctrlAssistant:
       "E não é um ou outro: enquanto usas a interface gráfica de ambiente de trabalho, também podes falar com o teu assistente de IA pessoal — como o Claude Code ou o OpenClaw — que, a partir do terminal, gere a equipa por ti.",
-    reqTitle: "Requisitos mínimos",
-    reqRows: [
-      ["Docker", "Obrigatório — a única dependência real"],
-      ["RAM", "4 GB mínimo · 8 GB recomendado"],
-      ["CPU", "2 núcleos mínimo · 4 recomendado"],
-      ["Disco", "~35 GB livres"],
-      ["VPS", "4 GB RAM · 2 vCPU (para o modo nuvem)"],
-    ],
-    osTitle: "Sistemas suportados",
-    osBody:
-      "macOS (Intel e Apple Silicon), Windows 10/11 e Linux. Três formas de instalar: a app de ambiente de trabalho com interface gráfica (DMG, EXE, AppImage), um único comando de terminal, ou deixando o teu assistente de IA fazê-lo.",
     ctaDownload: "Transfere a app →",
     back: "← Voltar ao início",
   },
@@ -377,6 +305,14 @@ function SetupContent() {
   const { lang } = useLandingI18n();
   const L = (PAGE[lang as Lang] ? lang : "en") as Lang;
   const p = PAGE[L];
+
+  const ctrlRows: [string, string][] = [
+    [p.ctrlDesktopLabel, p.ctrlDesktopBody],
+    [p.ctrlTerminalLabel, p.ctrlTerminalBody],
+  ];
+  if ("ctrlBrowserLabel" in p && "ctrlBrowserBody" in p) {
+    ctrlRows.push([p.ctrlBrowserLabel, p.ctrlBrowserBody]);
+  }
 
   return (
     <>
@@ -438,6 +374,14 @@ function SetupContent() {
           ))}
         </section>
 
+        {"setupNote" in p && (
+          <div className="-mt-10 mb-16 border-l-2 border-[var(--color-green)] pl-4">
+            <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
+              {p.setupNote}
+            </p>
+          </div>
+        )}
+
         {/* Come la controlli — desktop / terminale / assistente AI, unificato */}
         <section
           className="border border-[var(--color-border)] p-6 md:p-8 mb-16"
@@ -449,70 +393,26 @@ function SetupContent() {
           <p className="text-[13px] md:text-[14px] text-[var(--color-bright)] leading-relaxed mb-6">
             {p.ctrlIntro}
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-5">
-            <div>
-              <div className="text-[13px] font-bold text-[var(--color-white)] mb-1.5">
-                {p.ctrlDesktopLabel}
-              </div>
-              <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
-                {p.ctrlDesktopBody}
-              </p>
-            </div>
-            <div>
-              <div className="text-[13px] font-bold text-[var(--color-white)] mb-1.5">
-                {p.ctrlTerminalLabel}
-              </div>
-              <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
-                {p.ctrlTerminalBody}
-              </p>
-            </div>
-          </div>
-          <p className="text-[12px] md:text-[13px] text-[var(--color-muted)] leading-relaxed border-t border-[var(--color-border)] pt-4">
-            {p.ctrlAssistant}
-          </p>
-        </section>
-
-        {/* Requisiti */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10 mb-16">
-          <div>
-            <h2 className="text-lg md:text-xl font-bold text-[var(--color-white)] tracking-tight mb-5">
-              {p.reqTitle}
-            </h2>
-            <div className="flex flex-col">
-              {p.reqRows.map(([k, v]) => (
-                <div
-                  key={k}
-                  className="flex items-baseline justify-between gap-4 py-2.5 border-b border-[var(--color-border)]"
-                >
-                  <span className="text-[12px] font-semibold tracking-wide text-[var(--color-white)]">
-                    {k}
-                  </span>
-                  <span className="text-[12px] text-[var(--color-muted)] text-right">
-                    {v}
-                  </span>
+          <div className="border-t border-[var(--color-border)]">
+            {ctrlRows.map(([label, body]) => (
+              <div
+                key={label}
+                className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-1.5 sm:gap-6 py-4 border-b border-[var(--color-border)]"
+              >
+                <div className="text-[13px] font-bold text-[var(--color-white)]">
+                  {label}
                 </div>
-              ))}
-            </div>
+                <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
+                  {body}
+                </p>
+              </div>
+            ))}
           </div>
-          <div>
-            <h2 className="text-lg md:text-xl font-bold text-[var(--color-white)] tracking-tight mb-5">
-              {p.osTitle}
-            </h2>
-            <p className="text-[13px] md:text-[14px] text-[var(--color-bright)] leading-relaxed mb-6">
-              {p.osBody}
+          {"ctrlWeb" in p && (
+            <p className="text-[12px] md:text-[13px] text-[var(--color-muted)] leading-relaxed pt-4">
+              {p.ctrlWeb}
             </p>
-            <div className="flex flex-wrap gap-2">
-              {["macOS", "Windows", "Linux"].map((os) => (
-                <span
-                  key={os}
-                  className="text-[11px] font-semibold tracking-wide text-[var(--color-bright)] border border-[var(--color-border)] px-3 py-1.5"
-                  style={{ background: "var(--color-panel)" }}
-                >
-                  {os}
-                </span>
-              ))}
-            </div>
-          </div>
+          )}
         </section>
 
         <div className="flex flex-col items-center gap-4">

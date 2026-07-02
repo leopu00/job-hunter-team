@@ -184,21 +184,21 @@ if [ "$ROLE" = "bridge" ]; then
   # push→pull il Capitano non riceve più il pacing ogni 15min e si incaglia
   # quando la Sentinella tace: questo lo risveglia 1×/ora con un nudge basato sui
   # dati DB (deterministico, NON LLM), così resta attivo senza essere passivo.
-  HEARTBEAT_SCRIPT="/app/.launcher/capitano-bridge.py"
+  HEARTBEAT_SCRIPT="/app/.launcher/heartbeat-bridge.py"
   if [ -f "$HEARTBEAT_SCRIPT" ]; then
-    for _pid in $(grep -l capitano-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+    for _pid in $(grep -l heartbeat-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
       kill -TERM "$_pid" 2>/dev/null || true
     done
     sleep 0.5
-    for _pid in $(grep -l capitano-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
+    for _pid in $(grep -l heartbeat-bridge.py /proc/[0-9]*/cmdline 2>/dev/null | sed 's|/proc/||;s|/cmdline||'); do
       kill -KILL "$_pid" 2>/dev/null || true
     done
     sleep 0.5
     setsid sh -c "
-      JHT_CAPITANO_HEARTBEAT_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
-        python3 -u $HEARTBEAT_SCRIPT >> /tmp/capitano-bridge.log 2>&1
+      JHT_HEARTBEAT_SESSION='${JHT_TARGET_SESSION:-CAPITANO}' \
+        python3 -u $HEARTBEAT_SCRIPT >> /tmp/heartbeat-bridge.log 2>&1
     " >/dev/null 2>&1 < /dev/null &
-    echo "✓ capitano-bridge (heartbeat orario) partito (log /tmp/capitano-bridge.log)"
+    echo "✓ heartbeat-bridge (nudge orario al Capitano) partito (log /tmp/heartbeat-bridge.log)"
   else
     echo "⚠ $HEARTBEAT_SCRIPT non trovato — heartbeat NON partito"
   fi
@@ -497,9 +497,17 @@ case "$PROVIDER" in
     # l'intelligenza per trovare e valutare offerte (a thinking spento il team betaB
     # non trovava nulla). Revisione mirata del "tutti off" del 2026-06-29; il flag
     # commuta in "Instant mode", il ragionamento resta visibile nella risposta.
+    # REVISIONE 2026-07-01: il CAPITANO torna a thinking ON. Prova sul campo (beta-3):
+    # il Capitano Kimi a thinking OFF ha VIOLATO il gate writer-on-demand (C-10) —
+    # ha invertito la regola ("il filtro è score>=50, non write_requested") e ordinato
+    # 30 CV mai richiesti, bruciando il weekly all'88%. Il coordinamento del Capitano
+    # (enforcement dei gate, giudizio pacing) richiede la catena di reasoning: senza,
+    # Kimi delibera male e fa danni gravi. Costa di più del coast-burn ma è NECESSARIO.
+    # La SENTINELLA resta OFF (compito più stretto: monitoraggio/soglie) — si osserva
+    # nei prossimi giorni se regge. Doc: docs/internal/2026-07-01-capitano-kimi-thinking-off-writer-gate.md
     THINKING_FLAG=""
     case "$(printf '%s' "$ROLE" | tr 'A-Z' 'a-z')" in
-      capitano|sentinella) THINKING_FLAG=" --no-thinking" ;;
+      sentinella) THINKING_FLAG=" --no-thinking" ;;
     esac
     CLI_ARGS="--yolo --max-steps-per-turn 100${THINKING_FLAG}"
     if [ "$AUTH_METHOD" = "api_key" ] && [ -n "$API_KEY" ]; then

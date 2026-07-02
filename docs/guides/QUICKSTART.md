@@ -175,7 +175,7 @@ Whichever path you took:
 | 👨‍💻 | **Scorer** | Assigns 0–100 score against your profile |
 | 👨‍🏫 | **Writer** | Generates CVs and cover letters tailored to each position |
 | 👨‍⚖️ | **Critic** | 3-round blind review before submission |
-| 👨‍💼 | **Assistant** | Platform copilot — helps you navigate every interface |
+| 👩‍💼 | **Assistant** | Platform copilot — helps you navigate every interface |
 | 🧙‍♂️ | **Mentor** | Career coach — analyzes goals/gaps/market signals |
 | 🩺 | **Dottore** *(one-shot)* | Agent-health — restarts stuck agents with fresh context |
 | 👷‍♂️ | **Mantenitore** *(one-shot)* | Infra-health — container, deps, disk, mission-critical tools |
