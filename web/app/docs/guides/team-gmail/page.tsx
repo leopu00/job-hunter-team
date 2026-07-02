@@ -164,12 +164,15 @@ const EN: Strings = {
   s5Title: "5. Connect it in the app",
   s5Body: (
     <>
-      In the desktop app’s email step (or later from the Home → Email panel),
-      enter the <strong>Gmail address</strong> and the{" "}
-      <strong>app password</strong>, tick “this is a dedicated inbox”, and press{" "}
-      <strong>Verify connection</strong>. The app does a quick round-trip (sign
-      in, send a test code, read it back) to confirm everything works, then
-      saves the credentials locally on your computer.
+      In the desktop app’s onboarding email step, enter the{" "}
+      <strong>Gmail address</strong> and the <strong>app password</strong>, tick
+      “this is a dedicated inbox”, and press{" "}
+      <strong>Verify connection</strong> — the app does a quick round-trip
+      (sign in, send a test code, read it back) to confirm it works. You can also
+      add or change it later from the <strong>Home → Email</strong> panel,
+      where you simply enter the address and app password and press{" "}
+      <strong>Save</strong>. Either way, the credentials are saved locally on your
+      computer.
     </>
   ),
 
@@ -304,12 +307,15 @@ const IT: Strings = {
   s5Title: "5. Collegala nell’app",
   s5Body: (
     <>
-      Nello step email dell’app desktop (o dopo dal pannello Home → Email),
-      inserisci l’<strong>indirizzo Gmail</strong> e l’
-      <strong>app-password</strong>, spunta “è una casella dedicata” e premi{" "}
-      <strong>Verifica connessione</strong>. L’app fa un giro veloce (accesso,
-      invio di un codice di prova, rilettura) per confermare che tutto funzioni,
-      poi salva le credenziali in locale sul tuo computer.
+      Nello step email di onboarding dell’app desktop, inserisci l’
+      <strong>indirizzo Gmail</strong> e l’<strong>app-password</strong>,
+      spunta “è una casella dedicata” e premi{" "}
+      <strong>Verifica connessione</strong>: l’app fa un giro veloce
+      (accesso, invio di un codice di prova, rilettura) per confermare che
+      funzioni. Puoi anche aggiungerla o modificarla più tardi dal pannello{" "}
+      <strong>Home → Email</strong>, dove basta inserire indirizzo e
+      app-password e premere <strong>Salva</strong>. In entrambi i casi le
+      credenziali restano in locale sul tuo computer.
     </>
   ),
 
@@ -448,13 +454,16 @@ const ES: Strings = {
   s5Title: "5. Conéctalo en la app",
   s5Body: (
     <>
-      En el paso de correo de la app de escritorio (o más tarde desde el panel
-      Home → Email), introduce la <strong>dirección de Gmail</strong> y la{" "}
-      <strong>contraseña de aplicación</strong>, marca “es un buzón dedicado” y
-      pulsa <strong>Verificar conexión</strong>. La app hace un recorrido rápido
-      (inicia sesión, envía un código de prueba, lo vuelve a leer) para confirmar
-      que todo funciona, y luego guarda las credenciales en local en tu
-      ordenador.
+      En el paso de correo del onboarding de la app de escritorio, introduce la{" "}
+      <strong>dirección de Gmail</strong> y la{" "}
+      <strong>contraseña de aplicación</strong>, marca “es un
+      buzón dedicado” y pulsa <strong>Verificar conexión</strong>:
+      la app hace un recorrido rápido (inicia sesión, envía un
+      código de prueba, lo vuelve a leer) para confirmar que funciona.
+      También puedes añadirla o cambiarla más tarde desde el panel{" "}
+      <strong>Home → Email</strong>, donde solo introduces la dirección
+      y la contraseña de aplicación y pulsas <strong>Guardar</strong>.
+      En ambos casos las credenciales se guardan en local en tu ordenador.
     </>
   ),
 
@@ -595,13 +604,17 @@ const FR: Strings = {
   s5Title: "5. La connecter dans l’application",
   s5Body: (
     <>
-      Dans l’étape email de l’application de bureau (ou plus tard depuis le
-      panneau Home → Email), saisissez l’<strong>adresse Gmail</strong> et le{" "}
-      <strong>mot de passe d’application</strong>, cochez « c’est une boîte
-      dédiée » et appuyez sur <strong>Vérifier la connexion</strong>.
-      L’application effectue un aller-retour rapide (connexion, envoi d’un code de
-      test, relecture) pour confirmer que tout fonctionne, puis enregistre les
-      identifiants en local sur votre ordinateur.
+      Dans l’étape email de l’onboarding de l’application de
+      bureau, saisissez l’<strong>adresse Gmail</strong> et le{" "}
+      <strong>mot de passe d’application</strong>, cochez « c’est
+      une boîte dédiée » et appuyez sur{" "}
+      <strong>Vérifier la connexion</strong> : l’application effectue un
+      aller-retour rapide (connexion, envoi d’un code de test, relecture)
+      pour confirmer que tout fonctionne. Vous pouvez aussi l’ajouter ou la
+      modifier plus tard depuis le panneau <strong>Home → Email</strong>,
+      où il suffit de saisir l’adresse et le mot de passe
+      d’application et d’appuyer sur <strong>Enregistrer</strong>. Dans
+      les deux cas, les identifiants restent en local sur votre ordinateur.
     </>
   ),
 
@@ -743,13 +756,16 @@ const DE: Strings = {
   s5Title: "5. In der App verbinden",
   s5Body: (
     <>
-      Gib im E-Mail-Schritt der Desktop-App (oder später im Panel Home → E-Mail)
-      die <strong>Gmail-Adresse</strong> und das{" "}
-      <strong>App-Passwort</strong> ein, hake „das ist ein dediziertes Postfach“
-      an und drücke auf <strong>Verbindung prüfen</strong>. Die App macht einen
-      schnellen Durchlauf (Anmelden, einen Testcode senden, ihn zurücklesen), um
-      zu bestätigen, dass alles funktioniert, und speichert die Zugangsdaten dann
-      lokal auf deinem Computer.
+      Gib im Onboarding-E-Mail-Schritt der Desktop-App die{" "}
+      <strong>Gmail-Adresse</strong> und das <strong>App-Passwort</strong> ein,
+      hake „das ist ein dediziertes Postfach“ an und drücke auf{" "}
+      <strong>Verbindung prüfen</strong> — die App macht einen schnellen
+      Durchlauf (Anmelden, einen Testcode senden, ihn zurücklesen), um zu
+      bestätigen, dass alles funktioniert. Du kannst es auch später
+      über das Panel <strong>Home → E-Mail</strong> hinzufügen oder
+      ändern, wo du einfach Adresse und App-Passwort eingibst und auf{" "}
+      <strong>Speichern</strong> drückst. In beiden Fällen bleiben die
+      Zugangsdaten lokal auf deinem Computer.
     </>
   ),
 
@@ -890,13 +906,19 @@ const HU: Strings = {
   s5Title: "5. Összekapcsolás az alkalmazásban",
   s5Body: (
     <>
-      Az asztali alkalmazás e-mail lépésénél (vagy később a Home → E-mail
-      panelből) add meg a <strong>Gmail-címet</strong> és az{" "}
-      <strong>alkalmazásjelszót</strong>, pipáld be, hogy „ez egy dedikált
-      postafiók”, majd nyomd meg a <strong>Kapcsolat ellenőrzése</strong> gombot.
-      Az alkalmazás egy gyors kört tesz (bejelentkezés, tesztkód küldése,
-      visszaolvasása), hogy megerősítse, minden működik, majd helyben, a
-      számítógépeden menti a hitelesítő adatokat.
+      Az asztali alkalmazás onboarding e-mail lépésénél add
+      meg a <strong>Gmail-címet</strong> és az{" "}
+      <strong>alkalmazásjelszót</strong>, pipáld be, hogy „ez
+      egy dedikált postafiók“, majd nyomd meg a{" "}
+      <strong>Kapcsolat ellenőrzése</strong> gombot — az
+      alkalmazás egy gyors kört tesz (bejelentkezés, tesztkód
+      küldése, visszaolvasása), hogy megerősítse, minden
+      működik. Később a <strong>Home → E-mail</strong>
+      panelből is hozzáadhatod vagy módosíthatod, ahol csak
+      megadod a címet és az alkalmazásjelszót, és
+      megnyomod a <strong>Mentés</strong> gombot. Mindkét esetben a
+      hitelesítő adatok helyben, a számítógépeden
+      maradnak.
     </>
   ),
 
@@ -1035,13 +1057,17 @@ const PT: Strings = {
   s5Title: "5. Ligá-la na app",
   s5Body: (
     <>
-      No passo do email da app de computador (ou depois no painel Home → Email),
-      introduz o <strong>endereço Gmail</strong> e a{" "}
-      <strong>palavra-passe de app</strong>, assinala “é uma caixa de correio
-      dedicada” e carrega em <strong>Verificar ligação</strong>. A app faz uma
-      volta rápida (iniciar sessão, enviar um código de teste, voltar a lê-lo)
-      para confirmar que está tudo a funcionar e depois guarda as credenciais
-      localmente no teu computador.
+      No passo do email do onboarding da app de computador, introduz o{" "}
+      <strong>endereço Gmail</strong> e a{" "}
+      <strong>palavra-passe de app</strong>, assinala “é uma caixa de
+      correio dedicada” e carrega em <strong>Verificar ligação</strong>:
+      a app faz uma volta rápida (iniciar sessão, enviar um código
+      de teste, voltar a lê-lo) para confirmar que está tudo a
+      funcionar. Também podes adicioná-la ou alterá-la mais tarde no
+      painel <strong>Home → Email</strong>, onde basta introduzir o
+      endereço e a palavra-passe de app e carregar em{" "}
+      <strong>Guardar</strong>. Em qualquer dos casos, as credenciais ficam
+      guardadas localmente no teu computador.
     </>
   ),
 
