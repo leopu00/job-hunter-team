@@ -1,8 +1,11 @@
 # Coordinator-burn Kimi vs Codex — analisi consolidata
 
-> **Ultimo aggiornamento: 2026-07-02** — ⚠️ **REVISIONE IMPORTANTE.** La misura pulita
-> su tutto lo storico (tutti i tick pacing parsati) **ribalta la tesi originale**: i
-> coordinatori NON pesano più su Kimi che su Codex. Vedi *Misura pulita*. Le sezioni
+> **Ultimo aggiornamento: 2026-07-02** — ⚠️ **REVISIONE IMPORTANTE (2 correzioni).**
+> (1) La misura pulita su tutto lo storico **ribalta la tesi originale**: i coordinatori
+> NON pesano più su Kimi che su Codex (~20% su entrambi). (2) Anche il "budget di Kimi
+> ~17× più piccolo" è stato **corretto**: misurato con 3 metodi indipendenti il budget di
+> Kimi è **~2× più piccolo di Codex, non 17×** (stesso ordine di grandezza) — il "17×"
+> nasceva da un errore d'asse. Vedi *Misura pulita* e *Dimensione del budget*. Le sezioni
 > "vecchie" restano per traccia ma sono superate dove indicato. Dettaglio forense
 > dell'incidente writer-gate in
 > [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](./2026-07-01-capitano-kimi-thinking-off-writer-gate.md).
@@ -18,9 +21,16 @@
 - Il **"monitoraggio >70%" è reale ma vale per ENTRAMBI**, e solo in **coast**: quando i
   worker sono fermi i coordinatori sono ~95% del (poco) budget bruciato — è fisico, non
   dipende dal modello.
-- **Il vero problema di Kimi è la dimensione del budget**: servono ~20 kT per muovere 1%
-  di settimanale su Kimi contro ~340 kT/1% su Codex → **ogni azione costa ~17× di più in
-  percentuale**. Il costo per-tick in token è simile; è il budget che è ~17× più piccolo.
+- **Il budget di Kimi è più piccolo di quello di Codex, ma solo ~2×** (stesso ordine di
+  grandezza), **NON 17×**. Tre metodi indipendenti concordano: settimanale di Kimi
+  ≈**13M token** contro ≈**31M** di Codex (~2,4×); asse 5h ~1,5-2×; throughput assoluto
+  ~2×. Il "17×" di una stima precedente era un **errore d'asse** (confrontava il weekly di
+  Codex ~330 kT/% con un numero Kimi rotto ~20 al posto del reale ~130). Vedi
+  *Dimensione del budget*.
+- **Cosa tiene davvero Kimi in beta NON è il budget** (che è gestibile a ~2×), ma la
+  **precisione/comportamento**: oscillazione della proiezione ±10-15% (vs ±5% Claude),
+  scout rabbit-hole (36 tool/turno), fragilità del thinking (ha rotto il writer-gate),
+  thrash del pacing. Sono problemi di *tuning*, in lavorazione — non un muro di capacità.
 - La decisione sui flag thinking (Sentinella `--no-thinking`, Capitano `--thinking ON`)
   **resta valida** (per correttezza, non per il burn), ma attacca una quota ~20% =
   **leva secondaria**, non il "70%".
@@ -49,14 +59,41 @@ Codex(betaC) 24,3%  19,2%  20,8%  27,8%    19,2%  (cap 13,6 + sent 5,6)
 Grafico: `docs/internal/assets/2026-07-02-coord-weekly.svg` (se presente) o rigenerabile
 col *Metodo*.
 
-## Il vero problema di Kimi: dimensione del budget (non il monitoraggio)
+## Dimensione del budget (misura pulita v2, 2026-07-02) — ~2×, NON 17×
 
-Dai tick: **ratio ~20 kT/% su Kimi vs ~340 kT/% su Codex**. Cioè lo stesso lavoro (stesso
-numero di token) mangia **~17× più budget settimanale in percentuale** su Kimi. Il
-settimanale di Kimi è piccolo in token: si esaurisce prima **a parità di lavoro**, e questo
-fa *sembrare* che "il monitoraggio lo mangi" — quando in realtà è **tutto il team** a
-costare tanto in %. Questa, non la quota coordinatori, è la leva strutturale per la scelta
-modello/beta.
+La prima versione di questo doc diceva "budget Kimi ~17× più piccolo" (ratio ~20 kT/% Kimi
+vs ~340 kT/% Codex). **È stato un errore d'asse**: il ~340 di Codex è il numero corretto
+**sull'asse settimanale**, ma il ~20 di Kimi era rotto — il reale settimanale di Kimi è
+**~130 kT/%**. Confrontando gli **stessi assi**, il rapporto è **~2,4×**, non 17×.
+
+Il bridge stesso logga `ratio=X kT/%` (`team_kT / Δusage`) in ogni tick. Aggregando in modo
+robusto (`Σ team_kT / Σ Δusage`, no media outlier-sensibile) su tutto lo storico:
+
+```
+Metodo (provider-indipendente)      Kimi (betaB)      Codex (betaC)    rapporto
+────────────────────────────────────────────────────────────────────────────────
+5h    Σ(kT)/Σ(Δusage)               ~44-61 kT/%       ~89-92 kT/%       ~1,5-2×
+      → budget 5h implicito         ~4-6M token       ~9M token
+settimanale (W24-27, stabile)       ~130 kT/%         ~330 kT/%         ~2,4×
+      → budget settimanale          ≈13M token/sett   ≈31M token/sett
+throughput assoluto (recente)       ~15M token/sett   ~31M token/sett   ~2×
+```
+
+- I tre metodi convergono su **~2× (range 1,5-2,5×)**. Codex ha un budget in token circa
+  **doppio** di Kimi, **stesso ordine di grandezza**. Il throughput assoluto totale sullo
+  storico lo conferma: **117M token (Kimi) vs 158M (Codex) = 1,35×**.
+- Perché nasceva il "17×": la media dei `ratio` per-tick è avvelenata dai tick con
+  `Δusage≈1%` (divisione per ~1 → picchi 750+ kT/%), **identici su entrambi i provider**
+  (Kimi max 755, Codex max 776) → non spiegano nessuna asimmetria. L'aggregato `Σ/Σ` li
+  neutralizza. Media/mediana/aggregato per-provider **concordano tutti** (Kimi 48-72, Codex
+  70-89 kT/% sull'asse 5h).
+
+**Implicazione per la decisione beta.** Un budget ~2× più piccolo è un handicap **modesto e
+gestibile** col pacing weekly-aware — **non** il criterio disqualificante. Ciò che tiene
+Kimi in beta è la **precisione** (oscillazione proiezione ±10-15% vs ±5% Claude → occasionali
+sforamenti del 100%) e il **comportamento** (scout rabbit-hole, thinking fragile che ha rotto
+il writer-gate, thrash del pacing). Sono voci di *tuning* in lavorazione, non un muro di
+capacità in token.
 
 ## ~~Il fenomeno (vecchia lettura, SUPERATA)~~
 
@@ -104,8 +141,10 @@ visibile nella risposta (Instant mode) → auditabile. Da confermare sul lungo.
   del Capitano abbassa la sua fetta.
 - Leve residue (per abbassare comunque il ~20%): **tick coordinatori meno frequenti in
   COAST**; **`top-consumer` del pacing capace di nominare i coordinatori** (oggi solo worker).
-- Leva strutturale (la più impattante): il **costo-per-azione in %-budget su Kimi (~17×)** —
-  è questo, non il monitoraggio, il criterio per la decisione beta.
+- Il budget di Kimi (~2× più piccolo di Codex, **non** 17×) è un handicap gestibile: **non**
+  è il criterio disqualificante per la beta. Il criterio vero è la **precisione della
+  proiezione** (±10-15% Kimi vs ±5% Claude) e il **comportamento** (scout rabbit-hole,
+  thinking fragile) — è lì che va il tuning.
 
 ## Le manopole nel codice (`.launcher/start-agent.sh`, ramo `kimi`)
 
@@ -122,6 +161,12 @@ visibile nella risposta (Instant mode) → auditabile. Da confermare sul lungo.
   Regex `([A-Za-z][\w-]*)=[\d.]+%/h \[([\d.]+)kT/\d+m` — nota `\d+m` (il formato vecchio
   usa finestre variabili `11m`, non solo `15m`: la regex fissa su `15m` perdeva metà storico).
   Somma per-agente per settimana → quota = (capitano+sentinella)/totale.
+- **Dimensione budget** (kT per 1% di budget): i tick contengono `ratio=X kT/%
+  (team NkT / Δusage M%)`. Aggregare **`Σ team_kT / Σ Δusage`** su tutti i tick (robusto);
+  NON la media dei `ratio` per-tick (avvelenata da `Δusage≈1%`). Per l'asse settimanale:
+  incrociare `Σ team_kT` (mailbox) con la somma dei delta positivi di `weekly_usage`
+  (`sentinel-data.jsonl`, `source=bridge`). 5h e settimanale devono concordare in ordine
+  di grandezza.
 - `agent-usage-table.json` = serie kT/agente per bucket 5m su finestra 2h (solo recente).
 - `pacing-bridge-state.json` = `last_report.agents[].kt/share` per l'ultimo tick.
 - Caveat: i tick coprono le finestre con breakdown; le finestre `skip` (insufficient_samples,

@@ -11,7 +11,7 @@ Sul team **Kimi** (betaB), la pacing decisa dal coordinatore-LLM **ad ogni tick*
 - **Coordinator self-burn:** il *decidere stesso* è costoso — il Capitano va in turni lunghi (audit pipeline) e diventa la voce dominante del consumo proprio quando dovrebbe frenare.
 - Risultato: budget bruciato dall'oscillazione, non dal lavoro (notte: +22% weekly, 13 trovate / 7 scored).
 
-> ⚠️ **NOTA 2026-07-02 (correzione):** il "coordinator self-burn / il Capitano diventa la voce dominante del consumo" è stato ridimensionato dalla misura pulita full-history: i coordinatori pesano ~20% del budget, **~uguale su Kimi e Codex** (Capitano ~13,6%); il "70%" è coast su ENTRAMBI. Restano validi il thrash/bang-bang e il coast-burn; il vero limite di Kimi è il **budget piccolo** (~17× costo-per-azione in %). Vedi [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](./2026-06-29-coordinator-burn-kimi-vs-codex.md).
+> ⚠️ **NOTA 2026-07-02 (correzione):** il "coordinator self-burn / il Capitano diventa la voce dominante del consumo" è stato ridimensionato dalla misura pulita full-history: i coordinatori pesano ~20% del budget, **~uguale su Kimi e Codex** (Capitano ~13,6%); il "70%" è coast su ENTRAMBI. Restano validi il thrash/bang-bang e il coast-burn. Il budget di Kimi è **~2× più piccolo di Codex, NON 17×** (misura pulita v2 del 02/07, 3 metodi; il "17×" era un errore d'asse): handicap gestibile, non il limite dominante — che è invece la **precisione della proiezione** (±10-15% vs ±5% Claude) e il comportamento. Vedi [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](./2026-06-29-coordinator-burn-kimi-vs-codex.md).
 
 ## 💡 L'idea B1 (in breve)
 
