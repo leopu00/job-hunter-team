@@ -127,6 +127,7 @@ const T: Record<
     funnelChartTitle: string; // titolo grafico funnel giornaliero
     funnelDonutTitle: string; // titolo donut tenute vs escluse
     conversionTitle: string; // titolo card statistiche di conversione
+    breadcrumbAria: string; // aria-label della navigazione breadcrumb
   }
 > = {
   it: {
@@ -164,6 +165,7 @@ const T: Record<
     funnelChartTitle: "Trovate: tenute vs escluse · giorno per giorno",
     funnelDonutTitle: "Tenute vs escluse · totale",
     conversionTitle: "Statistiche di conversione",
+    breadcrumbAria: "Percorso di navigazione",
   },
   en: {
     caseStudies: "Case studies",
@@ -200,6 +202,7 @@ const T: Record<
     funnelChartTitle: "Found: kept vs excluded · day by day",
     funnelDonutTitle: "Kept vs excluded · total",
     conversionTitle: "Conversion statistics",
+    breadcrumbAria: "Breadcrumb",
   },
   es: {
     caseStudies: "Casos de estudio",
@@ -237,6 +240,7 @@ const T: Record<
     funnelChartTitle: "Encontradas: conservadas vs excluidas · día a día",
     funnelDonutTitle: "Conservadas vs excluidas · total",
     conversionTitle: "Estadísticas de conversión",
+    breadcrumbAria: "Ruta de navegación",
   },
   fr: {
     caseStudies: "Études de cas",
@@ -274,6 +278,7 @@ const T: Record<
     funnelChartTitle: "Trouvés : conservés vs exclus · jour par jour",
     funnelDonutTitle: "Conservés vs exclus · total",
     conversionTitle: "Statistiques de conversion",
+    breadcrumbAria: "Fil d'Ariane",
   },
   de: {
     caseStudies: "Fallstudien",
@@ -311,6 +316,7 @@ const T: Record<
     funnelChartTitle: "Gefunden: behalten vs. ausgeschlossen · Tag für Tag",
     funnelDonutTitle: "Behalten vs. ausgeschlossen · gesamt",
     conversionTitle: "Conversion-Statistik",
+    breadcrumbAria: "Brotkrümelnavigation",
   },
   hu: {
     caseStudies: "Esettanulmányok",
@@ -348,6 +354,7 @@ const T: Record<
     funnelChartTitle: "Találatok: megtartott vs. kizárt · naponta",
     funnelDonutTitle: "Megtartott vs. kizárt · összesen",
     conversionTitle: "Konverziós statisztika",
+    breadcrumbAria: "Morzsamenü",
   },
   pt: {
     caseStudies: "Estudos de caso",
@@ -385,6 +392,7 @@ const T: Record<
     funnelChartTitle: "Encontradas: mantidas vs excluídas · dia a dia",
     funnelDonutTitle: "Mantidas vs excluídas · total",
     conversionTitle: "Estatísticas de conversão",
+    breadcrumbAria: "Trilho de navegação",
   },
 };
 
@@ -446,7 +454,7 @@ export default function CaseStudyDetail({
       {/* ── Toolbar: breadcrumb + switcher collassabile ───────── */}
       <div className="flex items-center justify-between gap-3">
         <nav
-          aria-label="Breadcrumb"
+          aria-label={t.breadcrumbAria}
           className="flex items-center gap-2 text-[11px] min-w-0"
         >
           <Link
