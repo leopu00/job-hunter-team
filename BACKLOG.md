@@ -331,6 +331,15 @@ Versione: `package.json` `v0.1.17` (production ferma a `v0.1.12` dopo blocco Tur
 - **Tensione aperta (riserva utente):** "tutto a uno script" perde l'adattività dell'LLM sui casi anomali → direzione promettente = **ibrido** (script ATTUA il pacing, LLM **supervisiona/analizza i risultati** e interviene solo su anomalie, da decisore-continuo a revisore-a-campione).
 - **Stato:** ⚪ **parcheggiata, NON si fa ora.** Se si riprende: shadow-log prima (la base del Passo B esiste già) + disegnare il ruolo-supervisore dell'LLM. Doc: `docs/internal/2026-06-30-B1-deterministic-pacing-idea.md`.
 
+##### 🛑 [PACING-DAILY-HALT-STANDBY-LEAK] Lo standby del daily hard-stop perde ~1–2%/notte — FIX da fare 🔴 (NEW 2026-07-02)
+
+- **Contesto:** prima accensione **live** del daily hard-stop (`[BRIDGE ALERT] ⛔ DAILY-CAP SFORATO`, fix #2 coordinator-burn) su betaB/Kimi la notte 01→02/07. Ha funzionato nella sostanza (burn tagliato da ~1.75%/h a ~0.5%/h, weekly protetto a 74%), ma con **due difetti**.
+- **Bug 1 (minore, quantizzazione):** scatta a `consumed=14%` e non a `13.4%` perché il contatore usage del provider è **granulare a % INTERE** (13 → 14): a 13 è sotto cap, a 14 sopra → ~0.6pp di sforo inevitabile + latenza tick ~5–15 min. Non è un bug di logica, è la risoluzione del dato. Al più: trigger su `consumed >= floor(cap)`.
+- **Bug 2 (🔴 il grosso):** ESC + `daily-halt.flag` **silenziano i bridge** (verificato: 0 messaggi bridge dopo l'alert) **ma non gli agenti**. Ogni worker resta su un **timer di throttle** (900s→3600s); allo scadere la CLI gli dà un turno → si sveglia, pinga il Capitano (`[READY]` "throttle finito, coda vuota"), e il **Capitano risponde** (core non-halted, thinking ON). ~1×/ora → i **+2pp/notte** osservati (daily 14→15 dopo il halt). Nessuno dei tre passi legge il flag → lo standby **non è silenzio vero**.
+- **Fix:** (1) **worker** al risveglio `test -f daily-halt.flag` → se presente NON pinga, rientra in throttle massimo; (2) **Capitano** con flag presente **ignora i `[READY]`** (risvegli da timer), zitto fino a `[RIPRENDI]` alla riapertura; (3) cintura: il bridge **ri-ESC** qualunque sessione che parla mentre il flag è attivo.
+- **Nota:** lo sforo NON era dei worker (7 posizioni poi parcheggiati su mercato secco) ma dell'**overhead coordinatori** (Mentor + Mantenitore + Capitano-thinking-ON) → da incrociare con la valutazione del thinking ON sul Capitano. Doc: `docs/internal/2026-07-02-daily-halt-standby-leak.md`.
+- **Priorità:** 🔴 media — il hard-stop funziona (protegge il weekly), ma perde il residuo; il "silenzio fino al reset" promesso non c'è ancora. Da fare nel prossimo giro coordinator-burn.
+
 ##### 🔐 [JHT-ACCESS-CREDENTIALS-GAPS] Access & credentials — gap doc vs codice (NEW 2026-05-26)
 
 - **Context:** sessione di consolidamento doc 2026-05-26 (`docs/internal/ops/access-and-credentials.md`) ha riallineato la storia "dove vivono le credenziali" e rivelato 6 punti dove la doc promette qualcosa che il codice non implementa ancora.
