@@ -4,32 +4,42 @@
 > provider per la decisione "che tier mandare in beta / general availability". Aggiornato
 > **in place**. Ultimo aggiornamento: **2026-07-02**.
 >
+> ⚠️ **PRELIMINARE.** Le cifre di budget/prezzo qui sono una **prima passata** su un banco di
+> test ristretto (poche istanze, account provider ruotati nel tempo). Vanno **rivalidate**
+> quando ci saranno tester separati, ognuno con un proprio singolo account e senza rotazione.
+> Prendi i **rapporti** (~2-3×, €/token ≈ pari) come ordine di grandezza solido; i **valori
+> assoluti** come indicativi. È materia da approfondire strada facendo.
+>
 > Snapshot forensi datati che l'hanno prodotto (record storici, non aggiornarli):
+> [`2026-07-02-kimi-codex-exact-token-forensics.md`](../2026-07-02-kimi-codex-exact-token-forensics.md)
+> (token **ESATTI** dai log CLI + metering-cache),
 > [`2026-07-02-kimi-clean-measurement.md`](../2026-07-02-kimi-clean-measurement.md) (misura
-> pulita full-history), [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](../2026-06-29-coordinator-burn-kimi-vs-codex.md)
-> (indagine coordinator-burn + evoluzione thinking-flag),
+> token-meter, precedente e meno precisa),
+> [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](../2026-06-29-coordinator-burn-kimi-vs-codex.md)
+> (coordinator-burn + thinking-flag),
 > [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](../2026-07-01-capitano-kimi-thinking-off-writer-gate.md)
-> (incidente writer-gate).
+> (writer-gate).
 
 ## TL;DR
 
 - **Coordinatori (Capitano+Sentinella) ~20% del budget, ~UGUALE su Kimi e Codex.** Non è un
   difetto di Kimi. Il "monitoraggio >70%" è reale ma vale per **entrambi** e solo in *coast*.
-- **Budget di Kimi ~2× più piccolo di Codex (NON 17×)**, stesso ordine di grandezza.
-- **€/token ≈ PARI**: prezzo 2,5× (€40 vs €100) e budget 2,4× si annullano.
+- **Budget di Kimi ~2,7× più piccolo di Codex (NON 17×)** sull'unica base valida (token
+  *non-cached*), misurato dai log CLI **esatti** dei due provider. Stesso ordine di grandezza.
+- **€/token ≈ PARI**: prezzo ~2,6× e budget ~2,7× si annullano (~€0,4/M non-cached su entrambi).
 - **Il vero blocco alla de-beta di Kimi NON è il budget**, ma la **precisione della
   proiezione** (±10-15% vs ±5% Claude) e il **comportamento** (scout rabbit-hole, thinking
   fragile). Sono voci di *tuning*, in lavorazione.
 
 ## 1. Quota coordinatori — ~20%, uguale sui due modelli
 
-Aggregando **tutti** i tick pacing del `bridge-mailbox.jsonl` (554 betaB / 631 betaC,
+Aggregando **tutti** i tick pacing del `bridge-mailbox.jsonl` (554 Kimi / 631 Codex,
 maggio→luglio), quota = `(capitano+sentinella) kT / totale team kT`:
 
 ```
-                storico         W24    W25    W26    W27
-Kimi  (betaB)   20,5%           25,9%  25,0%  33,8%  35,5%   (cap 13,7 + sent 6,8)
-Codex (betaC)  19,2%           24,3%  19,2%  20,8%  27,8%   (cap 13,5 + sent 5,7)
+        storico         W24    W25    W26    W27
+Kimi    20,5%           25,9%  25,0%  33,8%  35,5%   (cap 13,7 + sent 6,8)
+Codex   19,2%           24,3%  19,2%  20,8%  27,8%   (cap 13,5 + sent 5,7)
 ```
 
 - **Capitano ~13,6% su entrambi**, identico. Storico ~uguale (20,5 vs 19,2).
@@ -40,57 +50,73 @@ Codex (betaC)  19,2%           24,3%  19,2%  20,8%  27,8%   (cap 13,5 + sent 5,7
 - La vecchia lettura "Kimi 76% vs Codex 20%" era un **confronto di fasi sbagliato** (coast
   Kimi vs attivo Codex).
 
-## 2. Dimensione del budget — ~2×, NON 17×
+## 2. Dimensione del budget — ~2,7× su token *non-cached* (misura ESATTA)
 
-Il bridge logga in ogni tick `ratio = team_kT / Δusage` (= kT per 1% di budget). Aggregato
-robusto `Σ team_kT / Σ Δusage` su tutta la storia, tre metodi indipendenti:
+> La prima stima (~2×) veniva dal **token-meter del bridge** (euristica sui pane). I log CLI
+> dei due provider registrano i token **esatti per chiamata** → rifatto su quelli. Il "17×"
+> era comunque morto; con dati esatti il numero è ~2,7×.
+
+**Fonti esatte** (log CLI dei provider):
+- **Codex**: rollout JSONL, evento `token_count` → `total_token_usage`/`last_token_usage`
+  (input, cached_input, output, reasoning, total). Metodo-A vs cross-check concordano al ~1%.
+- **Kimi**: `wire.jsonl`, evento `StatusUpdate.payload.token_usage` (`input_other`=fresh,
+  `input_cache_read`, `input_cache_creation`, `output`). Auto-consistente al **100%** (i tre
+  input sommano a `context_tokens`), dedup per `message_id`.
+
+**Il numero che conta è il NON-CACHED (fresh input + output).** Il **94-97%** dei token è
+cache-read (ri-lettura del contesto ad ogni turno): headline-are il "totale con cache"
+gonfierebbe di **~30×**.
+
+**Asimmetria di metering (il punto chiave):**
+```
+        la quota settimanale conta la cache?          base
+Codex   SÌ — token LORDI, cache a peso pieno           (regressione tok↔used_percent, R²≈0,998)
+Kimi    NO — solo NON-CACHED, cache-read gratis        (calibrazione ~190k non-cached / 1%)
+```
+→ confrontare i **lordi** è invalido (misurano due valute diverse); l'unica base comune è il
+**non-cached**.
 
 ```
-Metodo                              Kimi (betaB)      Codex (betaC)    rapporto
-────────────────────────────────────────────────────────────────────────────────
-5h    Σ(kT)/Σ(Δusage)               ~44-61 kT/%       ~89-92 kT/%       ~1,5-2×
-      → budget 5h implicito         ~4-6M token       ~9M token
-settimanale (W24-27, stabile)       ~130 kT/%         ~330 kT/%         ~2,4×
-      → budget settimanale          ≈13M token/sett   ≈31M token/sett
-throughput assoluto (recente)       ~15M token/sett   ~31M token/sett   ~2×
-throughput assoluto (totale)        117M token        158M token        1,35×
+NON-CACHED (fresh input + output)     Codex             Kimi (per singolo account)
+──────────────────────────────────────────────────────────────────────────────────
+budget settimanale                    ~48-57M           ~16-20M
+rapporto Codex / Kimi                 ~2,5-3,2×   (centro ~2,7×)
+throughput / giorno attivo            ~7,8M             ~4,5M      (~1,7×)
 ```
 
-I tre metodi convergono su **~2× (range 1,5-2,5×)**, stesso ordine di grandezza.
-Il "17×" di una stima precedente era un **errore d'asse**: confrontava il weekly di Codex
-(~330 kT/%, corretto) con un numero Kimi rotto (~20 al posto del reale ~130). A parità
-d'asse: 330/130 ≈ 2,5×. La media dei `ratio` per-tick è avvelenata dai tick con `Δusage≈1%`
-(picchi 750+ kT/%), **identici sui due provider** (Kimi max 755, Codex 776) → non spiegano
-asimmetrie; l'aggregato `Σ/Σ` li neutralizza.
+- **Allowance ~2,7×**, ma **throughput/giorno solo ~1,7×**: il team Kimi gira "caldo"
+  (~170% del ritmo sostenibile), Codex ~100%.
+- **Nota metodologica (banco di test)**: le cifre Kimi provengono da un contesto dove
+  l'account veniva **ruotato** nel tempo; misure che attraversano uno switch mescolano
+  **tier di budget diversi** (osservati ~16M e ~20M non-cached/sett). Vanno **segmentate** per
+  account prima di calibrare (vedi §6, rilevamento switch). Da qui il range 16-20M per-account.
 
 ## 3. Prezzo per unità di lavoro — ≈ pari
 
-Prezzi documentati (`docs/about/PROVIDERS.md`): Kimi Pro ~€40, Codex Plus/Pro ~€100.
+Piani testati (prezzi = info pubblica del provider, verificati via web): Codex ~**$100/mese**,
+Kimi ~**$39/mese** (~2,6× di prezzo).
 
+€/M token **non-cached** (l'unica base valida, §2):
 ```
-                        Kimi Pro        Codex Plus/Pro     rapporto
-──────────────────────────────────────────────────────────────────
-prezzo / mese           €40             €100               2,5×
-budget settimanale      ~13M token      ~31M token         2,4×
-budget mensile (~4,3sn) ~56M token      ~135M token        2,4×
-€ / milione di token    ~€0,71          ~€0,74             ~1,05×  (≈ PARI)
+                     base budget sostenibile     base throughput reale
+Codex ($100)         ~€0,41/M                     ~€0,39/M
+Kimi  ($39)          ~€0,41-0,51/M                ~€0,26-0,30/M
 ```
 
-Il rapporto prezzo (2,5×) e il rapporto budget (2,4×) **quasi si annullano** → costo per
-token **praticamente identico**. Kimi non è "più economico perché fa meno": ha la **stessa
-efficienza €/token di Codex** a barriera d'ingresso **2,5× più bassa** → è questo l'argomento
-per il tier mass-market.
+→ **economia unitaria comparabile**: Codex compra ~2,7× il budget per ~2,6× il prezzo. Kimi
+non è "più economico perché fa meno" — **stesso €/token per-abbonamento**, a barriera
+d'ingresso ~2,6× più bassa. Sul throughput reale Kimi è pure un filo più economico (gira più
+caldo). È questo l'argomento per il tier mass-market.
+
+**Trade-off vero del mass-market**: la **capacità assoluta di UN abbonamento Kimi è ~2,7× più
+piccola** di un Codex — non un difetto di efficienza, ma meno lavoro/settimana per singolo
+utente. Per pareggiare un Codex servirebbero ~2-3 abbonamenti Kimi (≈ o oltre il prezzo Codex).
 
 Caveat:
-- **Rapporto robusto, assoluto approssimato**: i ~13M/~31M sono in unità token-meter (stima
-  euristica) con lo **stesso bias su entrambi** → il rapporto €/token regge; €0,71/€0,74 è
-  indicativo.
-- **Sensibilità al prezzo Codex**: con i €100 documentati sono pari; se Codex fosse ChatGPT
-  Plus (~$20) sarebbe ~5× più economico/token, se Pro (~$200) Kimi sarebbe ~2× più economico.
-- **Riconciliazione col quota-provider**: `PROVIDERS.md` dichiara Kimi "~320M/mese" = quota
-  grezza teorica; l'effettivo **usabile** misurato è ~56M/mese (~1/6) per pacing
-  (working-hours + target 88% + no-100%) e per il token-meter. Per il €/token conta
-  l'effettivo, non il pubblicitario.
+- **Sensibilità al prezzo Codex**: tutto regge su ~$100; a ~$200 Codex sarebbe ~2× più
+  caro/token, a ~$20 ~5× più economico.
+- **Range Kimi (16-20M/sett)**: dovuto a tier di account diversi nel banco di test (§2) → il
+  €/token Kimi oscilla ~€0,41-0,51/M a seconda del tier. Da fissare con tester a singolo account.
 
 ## 4. Il vero limite di Kimi (non il budget)
 
@@ -125,16 +151,25 @@ Nota: è una scelta di **correttezza**, non di burn (attacca una quota ~20%, non
   breakdown `nome=…%/h [NkT/Xm …]`. Regex `([A-Za-z][\w-]*)=[\d.]+%/h \[([\d.]+)kT/\d+m` —
   nota `\d+m` (il formato vecchio usa finestre variabili `11m`, non solo `15m`). Somma
   per-agente per settimana → quota = `(capitano+sentinella)/totale`.
-- **Dimensione budget** (kT per 1%): i tick contengono `ratio=X kT/% (team NkT / Δusage M%)`.
-  Aggregare **`Σ team_kT / Σ Δusage`** (robusto), NON la media dei `ratio` per-tick
-  (avvelenata da `Δusage≈1%`). Asse settimanale: incrociare `Σ team_kT` (mailbox) con la
-  somma dei delta positivi di `weekly_usage` (`sentinel-data.jsonl`, `source=bridge`). 5h e
-  settimanale devono concordare in ordine di grandezza.
-- **Attenzione alle scale provider**: `weekly_usage` è 0-100% su **entrambi** ma calcolato
-  diversamente — Codex = `rate_limits.secondary.used_percent`; Kimi = `used`/`limit`
-  scala-100. Le finestre `skip` (insufficient_samples, spesso idle) non sono attribuite → la
-  quota "vera" a team molto idle è un po' più alta, ma il confronto Kimi-vs-Codex resta
-  valido (stesso bias su entrambi).
+- **Dimensione budget — TOKEN ESATTI (preferito)**: leggere i log CLI dei provider, NON il
+  token-meter. Codex → rollout `token_count` (`~/.codex/sessions/.../rollout-*.jsonl`,
+  campo `total_token_usage`/`last_token_usage`). Kimi → `wire.jsonl`
+  (`~/.kimi/sessions/<hash>/<uuid>/wire.jsonl`), righe `{"timestamp":…,"message":{"type":
+  "StatusUpdate","payload":{"token_usage":{input_other,input_cache_read,input_cache_creation,
+  output},"message_id":…}}}`; **dedup per `message_id`**. Base di confronto = **non-cached**
+  (fresh input + output). MAI il totale-con-cache (94-97% è cache-read → gonfia ~30×).
+- **Metering-cache asimmetrico** (verificare SEMPRE prima di confrontare): Codex conta la
+  cache nella quota settimanale (regressione tokens ↔ `secondary.used_percent`, R²≈0,998);
+  Kimi NO (calibrazione ~190k **non-cached** per 1%). Calibrare = `non-cached / %-settimanale
+  consumato` (delta positivi di `weekly_usage` in `sentinel-data.jsonl`).
+- **Rilevare gli switch di account (Kimi)**: su Kimi un reset del weekly **in anticipo**
+  (gap < ~7 giorni dal precedente) **+** cambio dell'orario di reset = **switch di account**,
+  non un reset legittimo (Kimi non resetta mai in anticipo; Codex sì, una volta). Ogni switch
+  parte da account **esaurito** (drop 100%→~1%). **Segmentare i token tra gli switch** prima
+  di calibrare: account diversi possono essere di **tier diversi** (budget non uguali).
+- **Dimensione budget — token-meter (fallback, meno preciso)**: i tick contengono
+  `ratio=X kT/% (team NkT / Δusage M%)`. Aggregare `Σ team_kT / Σ Δusage` (robusto), NON la
+  media per-tick (avvelenata da `Δusage≈1%`). Usare solo se i log CLI non sono accessibili.
 - Nessun intervento sui team (osservazione, DB `mode=ro`).
 
 ## Changelog (evoluzione della verità)
@@ -142,9 +177,15 @@ Nota: è una scelta di **correttezza**, non di burn (attacca una quota ~20%, non
 - **2026-06-15→29**: prima tesi — "su Kimi i coordinatori dominano il budget molto più che su
   Codex" + "un tick di coordinamento costa 7-12× di più" + "budget Kimi ~17× più piccolo".
   **Tutte superate**: erano confronti di fasi diverse (coast vs attivo) e un errore d'asse.
-- **2026-07-02**: misura pulita full-history → coordinatori **~20% uguali** (76%→20%); budget
-  **~2×** (17×→2×); aggiunto il finding **€/token ≈ pari**. Vedi lo snapshot forense
+- **2026-07-02 (token-meter)**: misura pulita full-history → coordinatori **~20% uguali**
+  (76%→20%); budget **~2×** (17×→2×); €/token ≈ pari. Snapshot
   [`2026-07-02-kimi-clean-measurement.md`](../2026-07-02-kimi-clean-measurement.md).
+- **2026-07-02 (token ESATTI)**: rifatto sui **log CLI esatti** (non più il meter) → budget
+  **~2,7×** su base **non-cached**, con l'**asimmetria di metering-cache** (Codex conta la
+  cache, Kimi no) e i **prezzi dei piani validati**; €/token confermato ≈ pari. Scoperto che
+  il banco di test **mescola più account/tier Kimi** (segmentati via reset-anomaly).
+  **PRELIMINARE**, da rivalidare con tester separati. Snapshot
+  [`2026-07-02-kimi-codex-exact-token-forensics.md`](../2026-07-02-kimi-codex-exact-token-forensics.md).
 
 ## Correlati
 
