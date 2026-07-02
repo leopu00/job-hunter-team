@@ -3,10 +3,11 @@
 // Statistiche aggregate PER PROVIDER (Kimi ~€40 vs Codex ~€100: prezzi diversi,
 // non si mediano insieme). Un toggle sceglie il provider; UNA sola tabella-imbuto
 // mostra, per ogni tappa del funnel (Eccellenti ≥80 → Trovate), il totale medio in
-// un mese di budget, quante al giorno e il prezzo medio per risultato. I numeri
-// arrivano già calcolati dal server (media dei casi del provider, proiettata su un
-// mese, free-run escluso); qui solo lo stato del toggle, le etichette localizzate,
-// i colori e la formattazione. La barra è la proporzione sul totale trovate.
+// un mese di budget, quante al giorno e il prezzo medio per risultato. Ogni riga ha
+// una descrizione (così "Valutate/Scored" e le soglie ≥70/≥80 sono chiare senza
+// gergo) e sotto un box "come leggere" con metodo e caveat. I numeri arrivano già
+// calcolati dal server; qui solo stato del toggle, etichette localizzate,
+// formattazione e la barra proporzionale sul totale trovate.
 
 import { useState } from "react";
 import { useLocale } from "@/lib/use-locale";
@@ -44,151 +45,206 @@ const COLOR: Record<string, string> = {
   strong80: "#F59E0B",
 };
 
-const STAGE_LABEL: Record<Locale, Record<string, string>> = {
-  it: { strong80: "Eccellenti ≥80", strong70: "Match forti ≥70", scored: "Valutate", found: "Trovate" },
-  en: { strong80: "Excellent ≥80", strong70: "Strong match ≥70", scored: "Scored", found: "Found" },
-  es: { strong80: "Excelentes ≥80", strong70: "Match fuerte ≥70", scored: "Evaluadas", found: "Encontradas" },
-  fr: { strong80: "Excellents ≥80", strong70: "Match fort ≥70", scored: "Évaluées", found: "Trouvées" },
-  de: { strong80: "Exzellent ≥80", strong70: "Starkes Match ≥70", scored: "Bewertet", found: "Gefunden" },
-  hu: { strong80: "Kiváló ≥80", strong70: "Erős találat ≥70", scored: "Értékelt", found: "Találat" },
-  pt: { strong80: "Excelentes ≥80", strong70: "Match forte ≥70", scored: "Avaliadas", found: "Encontradas" },
+// Etichetta + descrizione per ogni tappa.
+const STAGE: Record<
+  Locale,
+  Record<string, { label: string; desc: string }>
+> = {
+  it: {
+    strong80: { label: "Eccellenti ≥80", desc: "punteggio ≥80 · corrispondenza ottima" },
+    strong70: { label: "Match forti ≥70", desc: "punteggio ≥70 · buona corrispondenza" },
+    scored: { label: "Valutate", desc: "analizzate, con un punteggio di match (0–100)" },
+    found: { label: "Trovate", desc: "posizioni scovate dal team" },
+  },
+  en: {
+    strong80: { label: "Excellent ≥80", desc: "score ≥80 · excellent fit" },
+    strong70: { label: "Strong match ≥70", desc: "score ≥70 · good fit" },
+    scored: { label: "Scored", desc: "analyzed, given a match score (0–100)" },
+    found: { label: "Found", desc: "jobs the team collected" },
+  },
+  es: {
+    strong80: { label: "Excelentes ≥80", desc: "puntuación ≥80 · correspondencia óptima" },
+    strong70: { label: "Match fuerte ≥70", desc: "puntuación ≥70 · buena correspondencia" },
+    scored: { label: "Evaluadas", desc: "analizadas, con una puntuación de match (0–100)" },
+    found: { label: "Encontradas", desc: "posiciones encontradas por el equipo" },
+  },
+  fr: {
+    strong80: { label: "Excellents ≥80", desc: "score ≥80 · correspondance optimale" },
+    strong70: { label: "Match fort ≥70", desc: "score ≥70 · bonne correspondance" },
+    scored: { label: "Évaluées", desc: "analysées, avec un score de match (0–100)" },
+    found: { label: "Trouvées", desc: "postes trouvés par l'équipe" },
+  },
+  de: {
+    strong80: { label: "Exzellent ≥80", desc: "Score ≥80 · exzellente Passung" },
+    strong70: { label: "Starkes Match ≥70", desc: "Score ≥70 · gute Passung" },
+    scored: { label: "Bewertet", desc: "analysiert, mit Match-Score (0–100)" },
+    found: { label: "Gefunden", desc: "vom Team gefundene Stellen" },
+  },
+  hu: {
+    strong80: { label: "Kiváló ≥80", desc: "pontszám ≥80 · kiváló illeszkedés" },
+    strong70: { label: "Erős találat ≥70", desc: "pontszám ≥70 · jó illeszkedés" },
+    scored: { label: "Értékelt", desc: "elemzett, match-pontszámmal (0–100)" },
+    found: { label: "Találat", desc: "a csapat által talált pozíciók" },
+  },
+  pt: {
+    strong80: { label: "Excelentes ≥80", desc: "pontuação ≥80 · correspondência ótima" },
+    strong70: { label: "Match forte ≥70", desc: "pontuação ≥70 · boa correspondência" },
+    scored: { label: "Avaliadas", desc: "analisadas, com uma pontuação de match (0–100)" },
+    found: { label: "Encontradas", desc: "posições encontradas pela equipa" },
+  },
 };
 
 const T: Record<
   Locale,
   {
     title: string;
-    lead: string;
-    scoreNote: string;
-    colMonth: string;
-    colDay: string;
-    colPrice: string;
+    subtitle: string;
     perMonth: string;
     avgOver: string;
     caseOne: string;
     caseMany: string;
-    footer: string;
-    disclaimer: string;
+    colMonth: string;
+    colDay: string;
+    colPrice: string;
+    notesTitle: string;
+    methodLabel: string;
+    methodText: string;
+    relativeLabel: string;
+    relativeText: string;
   }
 > = {
   it: {
-    title: "Dal trovato all'eccellente · per provider",
-    lead: "Scegli il provider: i numeri sono aggregati per abbonamento (Kimi e Codex costano diverso, non vanno mischiati). Per ogni livello, in un mese di budget: quante posizioni, quante al giorno e il prezzo medio per singolo risultato.",
-    scoreNote:
-      "Le soglie ≥70 e ≥80 sono il punteggio di match che il team assegna a ogni posizione (scala 0–100): più è alto, più l'offerta è in linea col profilo.",
-    colMonth: "Totale / mese",
-    colDay: "Al giorno",
-    colPrice: "Prezzo medio",
+    title: "Quanto rende il team, per provider",
+    subtitle:
+      "Per un mese di abbonamento: quante posizioni il team produce a ogni livello di qualità e quanto costa ciascun risultato. Diviso per provider, perché Kimi e Codex costano diverso e non vanno mescolati.",
     perMonth: "/mese",
     avgOver: "media su",
     caseOne: "caso",
     caseMany: "casi",
-    footer:
-      "Media dei casi del provider, proiettata su un mese di budget (free-run escluso). Al giorno = totale del mese ÷ 30; prezzo = canone mensile ÷ output del mese.",
-    disclaimer:
-      "I numeri dipendono molto dal profilo: la difficoltà del mercato di riferimento pesa spesso più del provider. I casi aggregati per ciascun provider hanno profili e mercati diversi — un mercato ricco di offerte produce un output più alto a prescindere dal modello — quindi il confronto non è a parità di condizioni: vanno letti come ordini di grandezza indicativi, non come una classifica dei provider.",
+    colMonth: "Totale / mese",
+    colDay: "Al giorno",
+    colPrice: "Prezzo medio",
+    notesTitle: "Come leggere questi dati",
+    methodLabel: "Come sono calcolati",
+    methodText:
+      "Media dei casi del provider proiettata su un mese di budget (free-run escluso). Al giorno = totale del mese ÷ 30; prezzo = canone mensile ÷ output del mese.",
+    relativeLabel: "Sono dati relativi",
+    relativeText:
+      "Dipendono molto dal profilo: la difficoltà del mercato pesa spesso più del provider — un mercato ricco di offerte rende di più a prescindere dal modello. Vanno letti come ordini di grandezza, non come una classifica dei provider.",
   },
   en: {
-    title: "From found to excellent · by provider",
-    lead: "Pick the provider: figures are aggregated per subscription (Kimi and Codex cost differently, they don't mix). For each level, over a month of budget: how many positions, how many per day, and the average price per single result.",
-    scoreNote:
-      "The ≥70 and ≥80 thresholds are the match score the team gives each position (0–100 scale): the higher it is, the better the job fits the profile.",
-    colMonth: "Total / month",
-    colDay: "Per day",
-    colPrice: "Avg price",
+    title: "What the team delivers, by provider",
+    subtitle:
+      "Per month of subscription: how many positions the team produces at each quality level, and how much each result costs. Split by provider, because Kimi and Codex cost differently and shouldn't be mixed.",
     perMonth: "/mo",
     avgOver: "averaged over",
     caseOne: "case",
     caseMany: "cases",
-    footer:
-      "Average of the provider's cases, projected over a month of budget (free-run excluded). Per day = monthly total ÷ 30; price = monthly plan ÷ monthly output.",
-    disclaimer:
-      "The figures depend heavily on the profile: the difficulty of the target job market often matters more than the provider. The cases aggregated under each provider have different profiles and markets — an opportunity-rich market yields higher output regardless of the model — so the comparison isn't like-for-like: read them as indicative orders of magnitude, not as a ranking of providers.",
+    colMonth: "Total / month",
+    colDay: "Per day",
+    colPrice: "Avg price",
+    notesTitle: "How to read this",
+    methodLabel: "How they're computed",
+    methodText:
+      "Average of the provider's cases projected over a month of budget (free-run excluded). Per day = monthly total ÷ 30; price = monthly plan ÷ monthly output.",
+    relativeLabel: "The figures are relative",
+    relativeText:
+      "They depend heavily on the profile: market difficulty often matters more than the provider — an opportunity-rich market yields more regardless of the model. Read them as orders of magnitude, not a ranking of providers.",
   },
   es: {
-    title: "De encontrada a excelente · por proveedor",
-    lead: "Elige el proveedor: los números se agregan por suscripción (Kimi y Codex cuestan distinto, no se mezclan). Por cada nivel, en un mes de presupuesto: cuántas posiciones, cuántas al día y el precio medio por resultado.",
-    scoreNote:
-      "Los umbrales ≥70 y ≥80 son la puntuación de match que el equipo asigna a cada posición (escala 0–100): cuanto más alta, más se ajusta la oferta al perfil.",
-    colMonth: "Total / mes",
-    colDay: "Al día",
-    colPrice: "Precio medio",
+    title: "Cuánto rinde el equipo, por proveedor",
+    subtitle:
+      "Por un mes de suscripción: cuántas posiciones produce el equipo en cada nivel de calidad y cuánto cuesta cada resultado. Separado por proveedor, porque Kimi y Codex cuestan distinto y no deben mezclarse.",
     perMonth: "/mes",
     avgOver: "media sobre",
     caseOne: "caso",
     caseMany: "casos",
-    footer:
-      "Media de los casos del proveedor, proyectada sobre un mes de presupuesto (sin el free-run). Al día = total del mes ÷ 30; precio = cuota mensual ÷ output del mes.",
-    disclaimer:
-      "Los números dependen mucho del perfil: la dificultad del mercado objetivo suele pesar más que el proveedor. Los casos agregados en cada proveedor tienen perfiles y mercados distintos — un mercado con muchas ofertas da un output más alto sin importar el modelo — así que la comparación no es en igualdad de condiciones: léelos como órdenes de magnitud indicativos, no como una clasificación de proveedores.",
+    colMonth: "Total / mes",
+    colDay: "Al día",
+    colPrice: "Precio medio",
+    notesTitle: "Cómo leer estos datos",
+    methodLabel: "Cómo se calculan",
+    methodText:
+      "Media de los casos del proveedor proyectada sobre un mes de presupuesto (sin el free-run). Al día = total del mes ÷ 30; precio = cuota mensual ÷ output del mes.",
+    relativeLabel: "Son datos relativos",
+    relativeText:
+      "Dependen mucho del perfil: la dificultad del mercado suele pesar más que el proveedor — un mercado con muchas ofertas rinde más sin importar el modelo. Léelos como órdenes de magnitud, no como una clasificación de proveedores.",
   },
   fr: {
-    title: "De trouvé à excellent · par fournisseur",
-    lead: "Choisis le fournisseur : les chiffres sont agrégés par abonnement (Kimi et Codex n'ont pas le même prix, on ne les mélange pas). Pour chaque niveau, sur un mois de budget : combien de postes, combien par jour et le prix moyen par résultat.",
-    scoreNote:
-      "Les seuils ≥70 et ≥80 correspondent au score de match que l'équipe attribue à chaque poste (échelle 0–100) : plus il est élevé, plus l'offre colle au profil.",
-    colMonth: "Total / mois",
-    colDay: "Par jour",
-    colPrice: "Prix moyen",
+    title: "Ce que l'équipe produit, par fournisseur",
+    subtitle:
+      "Par mois d'abonnement : combien de postes l'équipe produit à chaque niveau de qualité et combien coûte chaque résultat. Séparé par fournisseur, car Kimi et Codex n'ont pas le même prix et ne doivent pas être mélangés.",
     perMonth: "/mois",
     avgOver: "moyenne sur",
     caseOne: "cas",
     caseMany: "cas",
-    footer:
-      "Moyenne des cas du fournisseur, projetée sur un mois de budget (free-run exclu). Par jour = total du mois ÷ 30 ; prix = abonnement mensuel ÷ output du mois.",
-    disclaimer:
-      "Les chiffres dépendent fortement du profil : la difficulté du marché ciblé pèse souvent plus que le fournisseur. Les cas agrégés par fournisseur ont des profils et des marchés différents — un marché riche en offres donne un output plus élevé quel que soit le modèle — donc la comparaison n'est pas à conditions égales : à lire comme des ordres de grandeur indicatifs, pas comme un classement des fournisseurs.",
+    colMonth: "Total / mois",
+    colDay: "Par jour",
+    colPrice: "Prix moyen",
+    notesTitle: "Comment lire ces données",
+    methodLabel: "Comment ils sont calculés",
+    methodText:
+      "Moyenne des cas du fournisseur projetée sur un mois de budget (free-run exclu). Par jour = total du mois ÷ 30 ; prix = abonnement mensuel ÷ output du mois.",
+    relativeLabel: "Des chiffres relatifs",
+    relativeText:
+      "Ils dépendent fortement du profil : la difficulté du marché pèse souvent plus que le fournisseur — un marché riche en offres produit plus quel que soit le modèle. À lire comme des ordres de grandeur, pas comme un classement des fournisseurs.",
   },
   de: {
-    title: "Von gefunden zu exzellent · nach Provider",
-    lead: "Wähle den Provider: die Zahlen sind je Abo aggregiert (Kimi und Codex kosten unterschiedlich, sie werden nicht vermischt). Je Stufe, in einem Monat Budget: wie viele Stellen, wie viele pro Tag und der Durchschnittspreis pro Ergebnis.",
-    scoreNote:
-      "Die Schwellen ≥70 und ≥80 sind der Match-Score, den das Team jeder Stelle gibt (Skala 0–100): je höher, desto besser passt die Stelle zum Profil.",
-    colMonth: "Gesamt / Monat",
-    colDay: "Pro Tag",
-    colPrice: "Ø-Preis",
+    title: "Was das Team liefert, nach Provider",
+    subtitle:
+      "Pro Monat Abo: wie viele Stellen das Team je Qualitätsstufe produziert und was jedes Ergebnis kostet. Nach Provider getrennt, denn Kimi und Codex kosten unterschiedlich und dürfen nicht vermischt werden.",
     perMonth: "/Mon.",
     avgOver: "Ø über",
     caseOne: "Fall",
     caseMany: "Fälle",
-    footer:
+    colMonth: "Gesamt / Monat",
+    colDay: "Pro Tag",
+    colPrice: "Ø-Preis",
+    notesTitle: "So liest du diese Daten",
+    methodLabel: "Wie sie berechnet werden",
+    methodText:
       "Durchschnitt der Provider-Fälle, auf einen Monat Budget projiziert (ohne Free-Run). Pro Tag = Monatssumme ÷ 30; Preis = Monatsabo ÷ Monatsoutput.",
-    disclaimer:
-      "Die Zahlen hängen stark vom Profil ab: die Schwierigkeit des Zielmarkts wiegt oft schwerer als der Provider. Die je Provider aggregierten Fälle haben unterschiedliche Profile und Märkte — ein angebotsreicher Markt liefert unabhängig vom Modell höheren Output — daher ist der Vergleich nicht gleichwertig: als grobe Größenordnungen zu lesen, nicht als Rangliste der Provider.",
+    relativeLabel: "Relative Zahlen",
+    relativeText:
+      "Sie hängen stark vom Profil ab: die Marktschwierigkeit wiegt oft schwerer als der Provider — ein angebotsreicher Markt liefert unabhängig vom Modell mehr. Als grobe Größenordnungen zu lesen, nicht als Rangliste der Provider.",
   },
   hu: {
-    title: "A találattól a kiválóig · providerenként",
-    lead: "Válaszd ki a providert: a számok előfizetésenként összesítve (a Kimi és a Codex ára eltér, nem keverjük). Szintenként, egy hónap budget alatt: hány pozíció, naponta mennyi, és az átlagár eredményenként.",
-    scoreNote:
-      "A ≥70 és ≥80 küszöbök a match-pontszámot jelentik, amelyet a csapat minden pozícióhoz rendel (0–100 skála): minél magasabb, annál jobban illik az állás a profilhoz.",
-    colMonth: "Összesen / hó",
-    colDay: "Naponta",
-    colPrice: "Átlagár",
+    title: "Mennyit termel a csapat, providerenként",
+    subtitle:
+      "Egy hónap előfizetésre: hány pozíciót termel a csapat az egyes minőségi szinteken, és mennyibe kerül egy-egy eredmény. Providerenként külön, mert a Kimi és a Codex ára eltér, és nem szabad összekeverni.",
     perMonth: "/hó",
     avgOver: "átlag",
     caseOne: "eset",
     caseMany: "eset",
-    footer:
+    colMonth: "Összesen / hó",
+    colDay: "Naponta",
+    colPrice: "Átlagár",
+    notesTitle: "Hogyan olvasd ezeket",
+    methodLabel: "Hogyan számoljuk",
+    methodText:
       "A provider eseteinek átlaga, egy hónap budgetre vetítve (free-run nélkül). Naponta = havi összeg ÷ 30; ár = havi előfizetés ÷ havi output.",
-    disclaimer:
-      "A számok erősen függnek a profiltól: a célpiac nehézsége gyakran többet nyom a latban, mint a provider. Az egyes providerekhez összesített esetek eltérő profilúak és piacúak — egy ajánlatokban gazdag piac a modelltől függetlenül magasabb outputot ad —, így az összehasonlítás nem azonos feltételek mellett történik: nagyságrendi tájékoztató értékként olvasd, nem a providerek rangsoraként.",
+    relativeLabel: "Relatív adatok",
+    relativeText:
+      "Erősen függnek a profiltól: a piac nehézsége gyakran többet nyom a latban, mint a provider — egy ajánlatokban gazdag piac a modelltől függetlenül többet termel. Nagyságrendként olvasd, nem a providerek rangsoraként.",
   },
   pt: {
-    title: "De encontrada a excelente · por fornecedor",
-    lead: "Escolhe o fornecedor: os números são agregados por subscrição (Kimi e Codex custam de forma diferente, não se misturam). Por cada nível, num mês de orçamento: quantas posições, quantas por dia e o preço médio por resultado.",
-    scoreNote:
-      "Os limiares ≥70 e ≥80 são a pontuação de match que a equipa atribui a cada posição (escala 0–100): quanto mais alta, mais a oferta se ajusta ao perfil.",
-    colMonth: "Total / mês",
-    colDay: "Por dia",
-    colPrice: "Preço médio",
+    title: "Quanto rende a equipa, por fornecedor",
+    subtitle:
+      "Por um mês de subscrição: quantas posições a equipa produz em cada nível de qualidade e quanto custa cada resultado. Separado por fornecedor, porque Kimi e Codex custam de forma diferente e não se devem misturar.",
     perMonth: "/mês",
     avgOver: "média sobre",
     caseOne: "caso",
     caseMany: "casos",
-    footer:
-      "Média dos casos do fornecedor, projetada sobre um mês de orçamento (sem o free-run). Por dia = total do mês ÷ 30; preço = mensalidade ÷ output do mês.",
-    disclaimer:
-      "Os números dependem muito do perfil: a dificuldade do mercado-alvo pesa muitas vezes mais do que o fornecedor. Os casos agregados por fornecedor têm perfis e mercados diferentes — um mercado rico em ofertas dá um output mais alto independentemente do modelo — por isso a comparação não é em igualdade de condições: lê-os como ordens de grandeza indicativas, não como uma classificação de fornecedores.",
+    colMonth: "Total / mês",
+    colDay: "Por dia",
+    colPrice: "Preço médio",
+    notesTitle: "Como ler estes dados",
+    methodLabel: "Como são calculados",
+    methodText:
+      "Média dos casos do fornecedor projetada sobre um mês de orçamento (sem o free-run). Por dia = total do mês ÷ 30; preço = mensalidade ÷ output do mês.",
+    relativeLabel: "São dados relativos",
+    relativeText:
+      "Dependem muito do perfil: a dificuldade do mercado pesa muitas vezes mais do que o fornecedor — um mercado rico em ofertas rende mais independentemente do modelo. Lê-os como ordens de grandeza, não como uma classificação de fornecedores.",
   },
 };
 
@@ -196,12 +252,12 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
   const locale = useLocale();
   const tag = LOCALE_TAG[locale];
   const t = T[locale];
+  const stage = STAGE[locale];
   const [sel, setSel] = useState(providers[0]?.id ?? "");
   const p = providers.find((x) => x.id === sel) ?? providers[0];
 
   if (!p) return null;
 
-  const label = STAGE_LABEL[locale];
   const nf = (n: number) => Math.round(n).toLocaleString(tag);
   const eur = (n: number) =>
     new Intl.NumberFormat(tag, {
@@ -214,14 +270,16 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
   const casesWord = p.nCases === 1 ? t.caseOne : t.caseMany;
 
   return (
-    <section className="mb-14">
-      <h2 className="text-xl font-bold tracking-tight">{t.title}</h2>
-      <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-muted)]">
-        {t.lead}
+    <section className="mb-16">
+      <h2 className="text-2xl sm:text-[28px] font-bold tracking-tight">
+        {t.title}
+      </h2>
+      <p className="mt-3 max-w-3xl text-[15px] leading-relaxed text-[var(--color-muted)]">
+        {t.subtitle}
       </p>
 
       {/* toggle provider */}
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div className="mt-6 flex flex-wrap items-center gap-2.5">
         {providers.map((prov) => {
           const on = prov.id === p.id;
           return (
@@ -230,7 +288,7 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
               type="button"
               aria-pressed={on}
               onClick={() => setSel(prov.id)}
-              className={`rounded-full border px-4 py-1.5 text-[12px] font-semibold transition-colors ${
+              className={`rounded-full border px-5 py-2 text-[14px] font-semibold transition-colors ${
                 on
                   ? "border-[var(--color-blue)] text-[var(--color-white)]"
                   : "border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-white)]"
@@ -255,53 +313,65 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
             </button>
           );
         })}
-        <span className="text-[11px] text-[var(--color-dim)]">
+        <span className="text-[12px] text-[var(--color-dim)]">
           {t.avgOver} {p.nCases} {casesWord}
         </span>
       </div>
 
-      <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-dim)]">
-        {t.scoreNote}
-      </p>
-
-      {/* tabella-imbuto: una riga per tappa, tre colonne + barra proporzionale */}
-      <div className="mt-5 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
-        <div className="flex items-baseline gap-3 mb-3 text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
-          <span className="w-2.5 shrink-0" />
+      {/* tabella-imbuto */}
+      <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-7">
+        {/* intestazioni colonne */}
+        <div className="flex items-end gap-4 pb-3 mb-4 border-b border-[var(--color-border)]">
+          <span className="w-3 shrink-0" />
           <span className="flex-1" />
-          <div className="flex items-baseline gap-6">
-            <span className="w-20 text-right leading-tight">{t.colMonth}</span>
-            <span className="w-14 text-right leading-tight">{t.colDay}</span>
-            <span className="w-20 text-right leading-tight">{t.colPrice}</span>
+          <div className="flex items-end gap-8">
+            <span className="w-24 text-right text-[11px] font-semibold uppercase tracking-wide leading-tight text-[var(--color-dim)]">
+              {t.colMonth}
+            </span>
+            <span className="w-16 text-right text-[11px] font-semibold uppercase tracking-wide leading-tight text-[var(--color-dim)]">
+              {t.colDay}
+            </span>
+            <span className="w-24 text-right text-[11px] font-semibold uppercase tracking-wide leading-tight text-[var(--color-dim)]">
+              {t.colPrice}
+            </span>
           </div>
         </div>
-        <div className="flex flex-col gap-3">
+
+        <div className="flex flex-col gap-5">
           {p.rows.map((r) => {
             const color = COLOR[r.key] ?? "#22C55E";
+            const s = stage[r.key];
             return (
               <div key={r.key}>
-                <div className="flex items-baseline gap-3 mb-1">
+                <div className="flex items-start gap-4 mb-2">
                   <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm shrink-0"
+                    className="mt-1.5 inline-block w-3 h-3 rounded-sm shrink-0"
                     style={{ background: color }}
                   />
-                  <span className="flex-1 truncate text-[11px] text-[var(--color-muted)]">
-                    {label[r.key] ?? r.key}
-                  </span>
-                  <div className="flex items-baseline gap-6">
-                    <span className="w-20 text-right text-[13px] font-bold tabular-nums text-[var(--color-base)]">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[15px] font-semibold text-[var(--color-base)]">
+                      {s?.label ?? r.key}
+                    </div>
+                    {s?.desc && (
+                      <div className="text-[12px] leading-snug text-[var(--color-dim)]">
+                        {s.desc}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-8">
+                    <span className="w-24 text-right text-[19px] font-bold tabular-nums text-[var(--color-base)]">
                       {nf(r.count)}
                     </span>
-                    <span className="w-14 text-right text-[12px] tabular-nums text-[var(--color-muted)]">
+                    <span className="w-16 text-right text-[15px] tabular-nums text-[var(--color-muted)]">
                       {nf(r.perDay)}
                     </span>
-                    <span className="w-20 text-right text-[12px] tabular-nums text-[var(--color-muted)]">
+                    <span className="w-24 text-right text-[15px] tabular-nums text-[var(--color-muted)]">
                       ≈ {eur(r.price)}
                     </span>
                   </div>
                 </div>
                 <div
-                  className="h-2 rounded-full overflow-hidden"
+                  className="h-2.5 rounded-full overflow-hidden"
                   style={{ background: "var(--color-border)" }}
                 >
                   <div
@@ -309,7 +379,7 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
                     style={{
                       width: `${Math.max(2, (r.count / max) * 100)}%`,
                       background: color,
-                      opacity: 0.85,
+                      opacity: 0.9,
                     }}
                   />
                 </div>
@@ -317,10 +387,39 @@ export default function ProviderStats({ providers }: { providers: ProviderData[]
             );
           })}
         </div>
-        <div className="mt-4 pt-2 border-t border-[var(--color-border)] space-y-2 text-[10px] leading-relaxed text-[var(--color-dim)]">
-          <p>{t.footer}</p>
-          <p className="italic">{t.disclaimer}</p>
+      </div>
+
+      {/* come leggere: metodo + relatività, raggruppati */}
+      <div className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_55%,transparent)] p-6">
+        <div className="text-[13px] font-bold uppercase tracking-wide text-[var(--color-base)] mb-3">
+          {t.notesTitle}
         </div>
+        <ul className="space-y-3 text-[13px] leading-relaxed text-[var(--color-muted)]">
+          <li className="flex gap-2.5">
+            <span
+              className="mt-2 h-1.5 w-1.5 rounded-full shrink-0"
+              style={{ background: "var(--color-blue)" }}
+            />
+            <span>
+              <strong className="font-semibold text-[var(--color-base)]">
+                {t.methodLabel}.
+              </strong>{" "}
+              {t.methodText}
+            </span>
+          </li>
+          <li className="flex gap-2.5">
+            <span
+              className="mt-2 h-1.5 w-1.5 rounded-full shrink-0"
+              style={{ background: "#F59E0B" }}
+            />
+            <span>
+              <strong className="font-semibold text-[var(--color-base)]">
+                {t.relativeLabel}.
+              </strong>{" "}
+              {t.relativeText}
+            </span>
+          </li>
+        </ul>
       </div>
     </section>
   );
