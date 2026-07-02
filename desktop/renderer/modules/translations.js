@@ -63,33 +63,40 @@ export const TRANSLATIONS = {
     'lang.title': 'Choose your language',
     'lang.lead': 'Interface language for the launcher.',
     'lang.continue': 'Continue',
-    'welcome.title': 'Job Hunter Team',
+    'intro.title': 'JobHunter Team',
+    'intro.tagline': 'Your personal AI job-hunting team',
+    'intro.pitch':
+      'AI agents that hunt for jobs on your behalf: they compare openings against your profile, prepare tailored CVs and cover letters, and guide you through every choice.',
+    'intro.start': 'Get started',
+    'intro.signin': 'Already registered? Sign in',
+    'welcome.title': 'Let’s get your computer ready',
     'welcome.lead':
-      'AI agents that help you land a job: match offers to your profile, tailor CVs and mentor your next move.',
-    'welcome.hint':
-      'First we check your computer is ready.',
+      'Over the next steps we’ll check what the team needs and set it up for you — it only takes a couple of minutes.',
+    'welcome.hint': '',
     'welcome.hint.win32':
-      'First we check your computer is ready. If you pick "this computer" later, WSL may need a Windows restart.',
+      'If you pick “this computer” later, Windows may need one restart to finish.',
     'welcome.back': 'Back',
     'welcome.continue': 'Continue',
-    'location.title': 'Where will the team live?',
+    'location.title': 'Where should the team run?',
     'location.lead':
-      'JHT runs in a container. Pick where that container lives — you can change it later by reinstalling.',
+      'The team runs on a computer that needs to stay on while it works. Choose which one.',
     'location.local.title': 'This computer',
     'location.local.body':
-      'Free, but fragile: the team stops when this PC sleeps or restarts, which can leave agents in a broken state. Best for developers who want to test JHT.',
-    'location.local.badge': 'Developer mode',
+      'Runs on the computer you’re using right now. The simplest way to start — it works whenever your computer is on. Free.',
+    'location.local.badge': 'Easiest to start',
     'location.vps.title': 'A remote server (VPS)',
     'location.vps.body':
-      'A small remote computer that stays on 24/7 in the cloud, ~€6/mo. The team keeps working while your PC sleeps. Works with any VPS host — we set it up from the app. Recommended for daily use.',
-    'location.vps.badge': 'Recommended for daily use',
+      'A small computer in the cloud, always on (~€6/month). The team keeps working even when your computer is off. We set it up for you from here.',
+    'location.vps.badge': 'Best for daily use',
     'location.back': 'Back',
     'location.continue': 'Continue',
-    'supabase.title': 'Cloud account (optional)',
+    'supabase.title': 'Sync your data (optional)',
     'supabase.lead.local':
-      'Optional sync: sign in to back up your data and check results from your phone — and never lose anything if something happens to this computer. It\'s entirely optional: you can stay fully local forever, and turn sync on later whenever you want.',
+      'Optional: sign in to back up your data and check results from your phone — so you never lose anything if something happens to this computer. You can stay fully local and turn sync on later, anytime.',
     'supabase.lead.vps':
       'Required to pair this app with your VPS. Sign in with Google or GitHub.',
+    'supabase.lead.signin':
+      'Welcome back — sign in to restore your data and settings on this computer.',
     // -- Telegram 3-bot tokens step (T4, only on VPS path) --
     'telegram.title': 'Telegram bots',
     'telegram.tokens.lead':
@@ -133,7 +140,7 @@ export const TRANSLATIONS = {
     'supabase.signOut': 'Sign out',
     'supabase.back': 'Back',
     'supabase.continue': 'Continue',
-    'supabase.skip': 'Stay local',
+    'supabase.skip': 'Skip',
     'supabase.error': 'Sign-in failed: {message}',
     'supabase.signin.waiting': 'Waiting for sign-in to complete in your browser…',
     'supabase.signin.copyLink': 'Copy sign-in link',
@@ -175,7 +182,7 @@ export const TRANSLATIONS = {
     'setup.lead.win32':
       "To run the team in isolation we need <strong>Docker Desktop</strong>, free. Let's check if it's already on your computer.",
     'setup.lead.darwin':
-      'The team runs in an isolated container. <strong>Docker</strong> builds it, on macOS via <strong>Colima</strong>: free and active in the background.',
+      'The team runs in its own isolated space on your Mac, free. We just need to set up the engine that powers it — pick how below.',
     'setup.lead.linux':
       "To run the team in isolation we need <strong>Docker Engine</strong>, free. Let's check if it's already on your computer.",
     'docker.name.win32': 'Docker',
@@ -223,10 +230,10 @@ export const TRANSLATIONS = {
     'docker.action.downloadDockerDesktop': 'Download Docker Desktop',
     'docker.runtime.title': 'How do you want to run the team?',
     'docker.runtime.recommended': 'recommended',
-    'docker.runtime.colima.label': 'Let JHT handle it',
-    'docker.runtime.colima.hint': 'We install Colima — lightweight, starts on its own, nothing to manage.',
-    'docker.runtime.dockerDesktop.label': 'Use my Docker Desktop',
-    'docker.runtime.dockerDesktop.hint': 'You install and start it; it must be running when the team runs.',
+    'docker.runtime.colima.label': 'Automatic setup',
+    'docker.runtime.colima.hint': 'Recommended. We install everything for you — lightweight, starts on its own, nothing to manage.',
+    'docker.runtime.dockerDesktop.label': 'Use my existing Docker',
+    'docker.runtime.dockerDesktop.hint': 'For advanced users who already have Docker Desktop. You start it yourself when you use the team.',
     'docker.action.check': 'Check',
     'docker.install.windowsRunning':
       'Installing WSL2 + Docker Desktop. This can take 5-10 minutes. Windows will ask for admin permission. Do not close the app.',
@@ -579,33 +586,40 @@ export const TRANSLATIONS = {
     'lang.title': 'Scegli la lingua',
     'lang.lead': "Lingua dell'interfaccia del launcher.",
     'lang.continue': 'Continua',
-    'welcome.title': 'Job Hunter Team',
+    'intro.title': 'JobHunter Team',
+    'intro.tagline': 'Il tuo team di agenti AI per cercare lavoro',
+    'intro.pitch':
+      'Agenti AI che cercano lavoro al posto tuo: confrontano le offerte col tuo profilo, preparano CV e lettere di presentazione su misura e ti guidano in ogni scelta.',
+    'intro.start': 'Inizia',
+    'intro.signin': 'Sei già registrato? Accedi',
+    'welcome.title': 'Prepariamo il tuo computer',
     'welcome.lead':
-      'Agenti AI che ti aiutano a trovare lavoro: confrontano le offerte col tuo profilo, preparano CV su misura e ti guidano nelle scelte.',
-    'welcome.hint':
-      'Prima controlliamo che il tuo computer sia pronto.',
+      'Nei prossimi passaggi controlliamo cosa serve al team e lo configuriamo per te — bastano un paio di minuti.',
+    'welcome.hint': '',
     'welcome.hint.win32':
-      'Prima controlliamo che il tuo computer sia pronto. Se più avanti scegli "questo computer", potrebbe servire un riavvio di Windows per WSL.',
+      'Se più avanti scegli "questo computer", potrebbe servire un riavvio di Windows per completare.',
     'welcome.back': 'Indietro',
     'welcome.continue': 'Continua',
-    'location.title': 'Dove gira il team?',
+    'location.title': 'Dove far girare il team?',
     'location.lead':
-      'JHT vive dentro un container. Scegli dove farlo girare — puoi cambiare in qualsiasi momento reinstallando.',
+      'Il team gira su un computer che deve restare acceso mentre lavora. Scegli quale.',
     'location.local.title': 'Questo computer',
     'location.local.body':
-      'Gratis, ma fragile: il team si ferma quando il PC va in sospensione o si spegne, e gli agenti possono restare in uno stato corrotto. Adatto a sviluppatori che vogliono testare JHT.',
-    'location.local.badge': 'Modalità sviluppatore',
+      'Gira sul computer che stai usando ora. Il modo più semplice per iniziare — funziona quando il computer è acceso. Gratis.',
+    'location.local.badge': 'Il più semplice',
     'location.vps.title': 'Un server remoto (VPS)',
     'location.vps.body':
-      'Un piccolo computer remoto sempre acceso 24/7 nel cloud, ~€6/mese. Il team continua a lavorare anche quando il tuo PC è spento. Funziona con qualsiasi provider VPS — lo configuriamo dall\'app. Consigliato per uso quotidiano.',
-    'location.vps.badge': 'Consigliato per uso quotidiano',
+      'Un piccolo computer nel cloud, sempre acceso (~€6/mese). Il team continua a lavorare anche quando il tuo computer è spento. Lo configuriamo noi da qui.',
+    'location.vps.badge': 'Ideale per l\'uso quotidiano',
     'location.back': 'Indietro',
     'location.continue': 'Continua',
-    'supabase.title': 'Account cloud (opzionale)',
+    'supabase.title': 'Sincronizza i tuoi dati (opzionale)',
     'supabase.lead.local':
-      'Sincronizzazione opzionale: accedi per fare il backup dei dati e vedere i risultati dal telefono — e non perdere nulla se succede qualcosa a questo computer. È del tutto facoltativa: puoi restare in locale per sempre, e attivare la sync più tardi quando vuoi.',
+      'Opzionale: accedi per fare il backup dei dati e vedere i risultati dal telefono — così non perdi nulla se succede qualcosa a questo computer. Puoi restare del tutto in locale e attivare la sincronizzazione più tardi, quando vuoi.',
     'supabase.lead.vps':
       'Obbligatorio per accoppiare questa app alla tua VPS. Accedi con Google o GitHub.',
+    'supabase.lead.signin':
+      'Bentornato — accedi per ripristinare i tuoi dati e le impostazioni su questo computer.',
     // -- Step bot Telegram (T4, solo path VPS) --
     'telegram.title': 'Bot Telegram',
     'telegram.tokens.lead':
@@ -649,7 +663,7 @@ export const TRANSLATIONS = {
     'supabase.signOut': 'Esci',
     'supabase.back': 'Indietro',
     'supabase.continue': 'Continua',
-    'supabase.skip': 'Resta in locale',
+    'supabase.skip': 'Salta',
     'supabase.error': 'Accesso fallito: {message}',
     'supabase.signin.waiting': 'Aspetto che completi l\u2019accesso nel browser…',
     'supabase.signin.copyLink': 'Copia link di accesso',
@@ -691,7 +705,7 @@ export const TRANSLATIONS = {
     'setup.lead.win32':
       'Per far girare il team in modo isolato serve <strong>Docker Desktop</strong>, gratuito. Controlliamo se è già sul tuo computer.',
     'setup.lead.darwin':
-      'Il team gira in un contenitore isolato. <strong>Docker</strong> lo crea, su macOS tramite <strong>Colima</strong>: gratuito e attivo in background.',
+      'Il team gira in uno spazio isolato sul tuo Mac, gratis. Dobbiamo solo predisporre il motore che lo fa funzionare — scegli come qui sotto.',
     'setup.lead.linux':
       'Per far girare il team in modo isolato serve <strong>Docker Engine</strong>, gratuito. Controlliamo se è già sul tuo computer.',
     'docker.name.win32': 'Docker',
@@ -739,10 +753,10 @@ export const TRANSLATIONS = {
     'docker.action.downloadDockerDesktop': 'Scarica Docker Desktop',
     'docker.runtime.title': 'Come vuoi far girare il team?',
     'docker.runtime.recommended': 'consigliato',
-    'docker.runtime.colima.label': 'Pensaci tu, JHT',
-    'docker.runtime.colima.hint': 'Installiamo Colima — leggero, parte da solo, non devi gestire niente.',
-    'docker.runtime.dockerDesktop.label': 'Uso il mio Docker',
-    'docker.runtime.dockerDesktop.hint': 'Lo installi e lo avvii tu; deve essere acceso quando lavori col team.',
+    'docker.runtime.colima.label': 'Installazione automatica',
+    'docker.runtime.colima.hint': 'Consigliata. Installiamo tutto noi — leggero, parte da solo, non devi gestire niente.',
+    'docker.runtime.dockerDesktop.label': 'Uso il mio Docker esistente',
+    'docker.runtime.dockerDesktop.hint': 'Per utenti esperti che hanno già Docker Desktop. Lo avvii tu quando usi il team.',
     'docker.action.check': 'Verifica',
     'docker.install.windowsRunning':
       'Installazione di WSL2 + Docker Desktop in corso. Può durare 5-10 minuti. Windows chiederà i permessi di amministratore. Non chiudere l\'app.',
@@ -1095,33 +1109,40 @@ export const TRANSLATIONS = {
     'lang.title': 'Válassz nyelvet',
     'lang.lead': 'A launcher felületének nyelve.',
     'lang.continue': 'Tovább',
-    'welcome.title': 'Job Hunter Team',
+    'intro.title': 'JobHunter Team',
+    'intro.tagline': 'A személyes AI álláskeresőcsapatod',
+    'intro.pitch':
+      'AI-ügynökök, akik helyetted keresnek állást: összehasonlítják az ajánlatokat a profiloddal, személyre szabott önéletrajzokat és motivációs leveleket készítenek, és minden döntésben segítenek eligazodni.',
+    'intro.start': 'Kezdjük el',
+    'intro.signin': 'Már van fiókod? Jelentkezz be',
+    'welcome.title': 'Készítsük fel a gépedet',
     'welcome.lead':
-      'AI-ügynökök segítenek állást találni: az ajánlatokat a profilodhoz illesztik, személyre szabják a CV-ket és támogatnak a döntéseidben.',
-    'welcome.hint':
-      'Először ellenőrizzük, hogy a gép készen áll.',
+      'A következő lépésekben megnézzük, mire van szüksége a csapatnak, és mindent beállítunk helyetted — mindez csak néhány percet vesz igénybe.',
+    'welcome.hint': '',
     'welcome.hint.win32':
-      'Először ellenőrizzük, hogy a gép készen áll. Ha később az "ezen a gépen" lehetőséget választod, a WSL miatt szükség lehet egy Windows újraindításra.',
+      'Ha később az »Ezen a számítógépen« lehetőséget választod, előfordulhat, hogy a Windows egy újraindítást igényel a befejezéshez.',
     'welcome.back': 'Vissza',
     'welcome.continue': 'Tovább',
     'location.title': 'Hol fusson a csapat?',
     'location.lead':
-      'A JHT konténerben fut. Válaszd ki, hol legyen ez a konténer — később újratelepítéssel módosíthatod.',
+      'A csapatnak szüksége van egy számítógépre, amelynek bekapcsolva kell maradnia, amíg dolgozik. Válaszd ki, melyiket.',
     'location.local.title': 'Ezen a gépen',
     'location.local.body':
-      'Ingyenes, de törékeny: a csapat leáll, ha a PC alvó módba kerül vagy újraindul, és az ügynökök hibás állapotban maradhatnak. Fejlesztőknek ajánlott, akik tesztelni szeretnék a JHT-t.',
-    'location.local.badge': 'Fejlesztői mód',
+      'Azon a számítógépen fut, amelyet most használsz. A legegyszerűbb módszer az induláshoz — működik, amikor a géped be van kapcsolva. Ingyenes.',
+    'location.local.badge': 'A legegyszerűbb kezdés',
     'location.vps.title': 'Egy távoli szerver (VPS)',
     'location.vps.body':
-      'Egy kis távoli számítógép, ami a felhőben 24/7 mindig fut, ~€6/hó. A csapat akkor is dolgozik, amikor a PC-d alszik. Bármely VPS-szolgáltatóval működik — az appból állítjuk be. Napi használatra ajánlott.',
-    'location.vps.badge': 'Napi használatra ajánlott',
+      'Egy kis felhőszámítógép, amely mindig be van kapcsolva (~€6/hó). A csapat akkor is dolgozik, amikor a te géped ki van kapcsolva. Innen mi állítjuk be neked.',
+    'location.vps.badge': 'A legjobb napi használatra',
     'location.back': 'Vissza',
     'location.continue': 'Tovább',
-    'supabase.title': 'Felhő-fiók',
+    'supabase.title': 'Szinkronizáld az adataidat (opcionális)',
     'supabase.lead.local':
-      'Opcionális: jelentkezz be, hogy szinkronizáld a vezérlőpultot több eszközön. Később is engedélyezheted a beállításokból.',
+      'Opcionális: jelentkezz be, hogy biztonsági másolatot készíts az adataidról, és telefonodról is ellenőrizhesd az eredményeket — így semmi sem veszik el, ha valami történik ezzel a számítógéppel. Maradhatsz teljesen helyi módban is, és a szinkronizálást bármikor bekapcsolhatod később.',
     'supabase.lead.vps':
       'Kötelező, hogy összepárosítsd ezt az alkalmazást a VPS-eddel. Lépj be Google vagy GitHub fiókkal.',
+    'supabase.lead.signin':
+      'Üdv újra — jelentkezz be, hogy visszaállítsd az adataidat és beállításaidat ezen a számítógépen.',
     // -- Telegram 3-bot tokens lépés (T4, csak VPS úton) --
     'telegram.title': 'Telegram botok',
     'telegram.tokens.lead':
@@ -1165,7 +1186,7 @@ export const TRANSLATIONS = {
     'supabase.signOut': 'Kijelentkezés',
     'supabase.back': 'Vissza',
     'supabase.continue': 'Tovább',
-    'supabase.skip': 'Helyben maradok',
+    'supabase.skip': 'Kihagyom',
     'supabase.error': 'Belépés sikertelen: {message}',
     'supabase.signin.waiting': 'Várom, hogy befejezd a belépést a böngészőben…',
     'supabase.signin.copyLink': 'Belépési link másolása',
@@ -1207,7 +1228,7 @@ export const TRANSLATIONS = {
     'setup.lead.win32':
       'A csapat izolált futtatásához <strong>Docker Desktop</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
     'setup.lead.darwin':
-      'A csapat izolált konténerben fut. A <strong>Docker</strong> hozza létre, macOS-en <strong>Colima</strong> segítségével: ingyenes, a háttérben aktív.',
+      'A csapat a Macen saját, elszigetelt környezetben fut, ingyenesen. Csak be kell állítanunk a motort, amely hajtja — válaszd ki alább, hogyan.',
     'setup.lead.linux':
       'A csapat izolált futtatásához <strong>Docker Engine</strong> szükséges, ingyenes. Ellenőrizzük, hogy már fent van-e a gépeden.',
     'docker.name.win32': 'Docker',
@@ -1255,10 +1276,10 @@ export const TRANSLATIONS = {
     'docker.action.downloadDockerDesktop': 'Docker Desktop letöltése',
     'docker.runtime.title': 'Hogyan szeretnéd futtatni a csapatot?',
     'docker.runtime.recommended': 'ajánlott',
-    'docker.runtime.colima.label': 'Bízd a JHT-re',
-    'docker.runtime.colima.hint': 'Telepítjük a Colimát — könnyű, magától indul, nincs vele teendőd.',
-    'docker.runtime.dockerDesktop.label': 'A saját Docker Desktopom',
-    'docker.runtime.dockerDesktop.hint': 'Te telepíted és indítod; futnia kell, amikor a csapat dolgozik.',
+    'docker.runtime.colima.label': 'Automatikus beállítás',
+    'docker.runtime.colima.hint': 'Ajánlott. Mindent mi telepítünk — könnyűsúlyú, magától indul, nem kell kezelni.',
+    'docker.runtime.dockerDesktop.label': 'A meglévő Docker-em használata',
+    'docker.runtime.dockerDesktop.hint': 'Haladó felhasználóknak, akiknek már van Docker Desktop telepítve. Magad indítod el, amikor a csapatot használod.',
     'docker.action.check': 'Ellenőrzés',
     'docker.install.windowsRunning':
       'WSL2 + Docker Desktop telepítése folyamatban. 5-10 percig tarthat. A Windows rendszergazdai engedélyt fog kérni. Ne zárd be az alkalmazást.',
@@ -1561,33 +1582,40 @@ export const TRANSLATIONS = {
     'lang.title': 'Elige tu idioma',
     'lang.lead': 'Idioma de la interfaz del launcher.',
     'lang.continue': 'Continuar',
-    'welcome.title': 'Job Hunter Team',
+    'intro.title': 'JobHunter Team',
+    'intro.tagline': 'Tu equipo personal de IA para buscar trabajo',
+    'intro.pitch':
+      'Agentes de IA que buscan trabajo por ti: comparan las ofertas con tu perfil, preparan CVs y cartas de presentación personalizados, y te orientan en cada decisión.',
+    'intro.start': 'Empezar',
+    'intro.signin': '¿Ya tienes cuenta? Inicia sesión',
+    'welcome.title': 'Preparemos tu ordenador',
     'welcome.lead':
-      'Agentes de IA que te ayudan a conseguir trabajo: emparejan las ofertas con tu perfil, adaptan los CVs y te orientan en el siguiente paso.',
-    'welcome.hint':
-      'Primero comprobamos que tu ordenador esté listo.',
+      'En los próximos pasos comprobaremos lo que el equipo necesita y lo configuraremos por ti — solo lleva un par de minutos.',
+    'welcome.hint': '',
     'welcome.hint.win32':
-      'Primero comprobamos que tu ordenador esté listo. Si más tarde eliges "este ordenador", WSL puede requerir un reinicio de Windows.',
+      'Si eliges «este ordenador» más adelante, es posible que Windows necesite reiniciarse una vez para terminar.',
     'welcome.back': 'Atrás',
     'welcome.continue': 'Continuar',
-    'location.title': '¿Dónde vivirá el equipo?',
+    'location.title': '¿Dónde debe funcionar el equipo?',
     'location.lead':
-      'JHT se ejecuta en un contenedor. Elige dónde vivirá ese contenedor — puedes cambiarlo más tarde reinstalando.',
+      'El equipo funciona en un ordenador que debe permanecer encendido mientras trabaja. Elige cuál.',
     'location.local.title': 'Este ordenador',
     'location.local.body':
-      'Gratis, pero frágil: el equipo se detiene cuando este PC se suspende o reinicia, y eso puede dejar a los agentes en un estado roto. Ideal para desarrolladores que quieran probar JHT.',
-    'location.local.badge': 'Modo desarrollador',
+      'Funciona en el ordenador que estás usando ahora mismo. La forma más sencilla de empezar — funciona siempre que tu ordenador esté encendido. Gratis.',
+    'location.local.badge': 'Lo más fácil para empezar',
     'location.vps.title': 'Un servidor remoto (VPS)',
     'location.vps.body':
-      'Un pequeño ordenador remoto que está encendido 24/7 en la nube, ~6 €/mes. El equipo sigue trabajando mientras tu PC duerme. Funciona con cualquier proveedor VPS: lo configuramos desde la app. Recomendado para uso diario.',
-    'location.vps.badge': 'Recomendado para uso diario',
+      'Un pequeño ordenador en la nube, siempre encendido (~€6/mes). El equipo sigue trabajando aunque apagues tu ordenador. Lo configuramos por ti desde aquí.',
+    'location.vps.badge': 'Lo mejor para el día a día',
     'location.back': 'Atrás',
     'location.continue': 'Continuar',
-    'supabase.title': 'Cuenta en la nube',
+    'supabase.title': 'Sincroniza tus datos (opcional)',
     'supabase.lead.local':
-      'Opcional: inicia sesión para sincronizar tu panel entre dispositivos. Puedes activarlo más tarde desde los ajustes.',
+      'Opcional: inicia sesión para hacer una copia de seguridad de tus datos y consultar los resultados desde el móvil — así no perderás nada si algo le ocurre a este ordenador. Puedes quedarte en local y activar la sincronización más adelante, cuando quieras.',
     'supabase.lead.vps':
       'Necesario para emparejar esta app con tu VPS. Inicia sesión con Google o GitHub.',
+    'supabase.lead.signin':
+      '¡Bienvenido de nuevo! Inicia sesión para restaurar tus datos y configuración en este ordenador.',
     'telegram.title': 'Bots de Telegram',
     'telegram.tokens.lead':
       'Tres bots de Telegram dedicados — uno por cada agente que habla con el usuario. Para cada bot: copia el nombre y username sugeridos en @BotFather, luego pega aquí el token que te devuelve.',
@@ -1630,7 +1658,7 @@ export const TRANSLATIONS = {
     'supabase.signOut': 'Cerrar sesión',
     'supabase.back': 'Atrás',
     'supabase.continue': 'Continuar',
-    'supabase.skip': 'Seguir en local',
+    'supabase.skip': 'Omitir',
     'supabase.error': 'Inicio de sesión fallido: {message}',
     'supabase.signin.waiting': 'Esperando a que se complete el inicio de sesión en tu navegador…',
     'supabase.signin.copyLink': 'Copiar enlace de inicio de sesión',
@@ -1672,7 +1700,7 @@ export const TRANSLATIONS = {
     'setup.lead.win32':
       'Para ejecutar el equipo de forma aislada necesitamos <strong>Docker Desktop</strong>, gratis. Comprobemos si ya lo tienes instalado.',
     'setup.lead.darwin':
-      'El equipo se ejecuta en un contenedor aislado. <strong>Docker</strong> lo construye, en macOS vía <strong>Colima</strong>: gratis y activo en segundo plano.',
+      'El equipo funciona en su propio espacio aislado en tu Mac, gratis. Solo necesitamos configurar el motor que lo impulsa — elige cómo a continuación.',
     'setup.lead.linux':
       'Para ejecutar el equipo de forma aislada necesitamos <strong>Docker Engine</strong>, gratis. Comprobemos si ya lo tienes instalado.',
     'docker.name.win32': 'Docker',
@@ -1720,10 +1748,10 @@ export const TRANSLATIONS = {
     'docker.action.downloadDockerDesktop': 'Descargar Docker Desktop',
     'docker.runtime.title': '¿Cómo quieres ejecutar el equipo?',
     'docker.runtime.recommended': 'recomendado',
-    'docker.runtime.colima.label': 'Deja que lo gestione JHT',
-    'docker.runtime.colima.hint': 'Instalamos Colima — ligero, se inicia solo, no tienes que gestionar nada.',
-    'docker.runtime.dockerDesktop.label': 'Usar mi Docker Desktop',
-    'docker.runtime.dockerDesktop.hint': 'Tú lo instalas y lo inicias; debe estar activo cuando el equipo trabaja.',
+    'docker.runtime.colima.label': 'Configuración automática',
+    'docker.runtime.colima.hint': 'Recomendado. Lo instalamos todo por ti — ligero, arranca solo, sin nada que gestionar.',
+    'docker.runtime.dockerDesktop.label': 'Usar mi Docker existente',
+    'docker.runtime.dockerDesktop.hint': 'Para usuarios avanzados que ya tienen Docker Desktop. Lo inicias tú mismo cuando uses el equipo.',
     'docker.action.check': 'Comprobar',
     'docker.install.windowsRunning':
       'Instalando WSL2 + Docker Desktop. Esto puede llevar 5-10 minutos. Windows pedirá permiso de administrador. No cierres la app.',
@@ -2027,33 +2055,40 @@ export const TRANSLATIONS = {
     'lang.title': 'Wähle deine Sprache',
     'lang.lead': 'Oberflächensprache des Launchers.',
     'lang.continue': 'Weiter',
-    'welcome.title': 'Job Hunter Team',
+    'intro.title': 'JobHunter Team',
+    'intro.tagline': 'Dein persönliches KI-Team für die Jobsuche',
+    'intro.pitch':
+      'KI-Agenten, die für dich Jobs suchen: Sie vergleichen Stellenangebote mit deinem Profil, erstellen maßgeschneiderte Lebensläufe und Anschreiben und begleiten dich bei jeder Entscheidung.',
+    'intro.start': 'Jetzt starten',
+    'intro.signin': 'Schon registriert? Anmelden',
+    'welcome.title': 'Lass uns deinen Computer vorbereiten',
     'welcome.lead':
-      'KI-Agenten, die dir helfen, einen Job zu finden: passende Angebote zu deinem Profil, maßgeschneiderte Lebensläufe und Mentoring für deinen nächsten Schritt.',
-    'welcome.hint':
-      'Zuerst prüfen wir, ob dein Computer bereit ist.',
+      'In den nächsten Schritten prüfen wir, was das Team braucht, und richten alles für dich ein — das dauert nur ein paar Minuten.',
+    'welcome.hint': '',
     'welcome.hint.win32':
-      'Zuerst prüfen wir, ob dein Computer bereit ist. Falls du später "diesen Computer" wählst, kann WSL einen Windows-Neustart erfordern.',
+      'Wenn du später ‚diesen Computer‘ auswählst, braucht Windows möglicherweise einen Neustart, um die Einrichtung abzuschließen.',
     'welcome.back': 'Zurück',
     'welcome.continue': 'Weiter',
-    'location.title': 'Wo soll das Team leben?',
+    'location.title': 'Wo soll das Team laufen?',
     'location.lead':
-      'JHT läuft in einem Container. Wähle, wo dieser Container leben soll — du kannst es später durch Neuinstallation ändern.',
+      'Das Team läuft auf einem Computer, der während der Arbeit eingeschaltet bleiben muss. Wähle aus, auf welchem.',
     'location.local.title': 'Dieser Computer',
     'location.local.body':
-      'Kostenlos, aber fragil: das Team stoppt, wenn dieser PC schläft oder neu startet, was die Agenten in einem kaputten Zustand hinterlassen kann. Ideal für Entwickler, die JHT testen wollen.',
-    'location.local.badge': 'Entwicklermodus',
+      'Läuft auf dem Computer, den du gerade verwendest. Die einfachste Möglichkeit zu starten — es funktioniert, solange dein Computer eingeschaltet ist. Kostenlos.',
+    'location.local.badge': 'Am einfachsten zu starten',
     'location.vps.title': 'Ein Remote-Server (VPS)',
     'location.vps.body':
-      'Ein kleiner Remote-Computer, der 24/7 in der Cloud läuft, ~6 €/Monat. Das Team arbeitet weiter, während dein PC schläft. Funktioniert mit jedem VPS-Anbieter — wir richten ihn aus der App ein. Empfohlen für den täglichen Gebrauch.',
-    'location.vps.badge': 'Empfohlen für den täglichen Gebrauch',
+      'Ein kleiner Cloud-Computer, immer eingeschaltet (~€6/Monat). Das Team arbeitet weiter, auch wenn dein Computer aus ist. Wir richten ihn von hier für dich ein.',
+    'location.vps.badge': 'Ideal für den täglichen Einsatz',
     'location.back': 'Zurück',
     'location.continue': 'Weiter',
-    'supabase.title': 'Cloud-Konto',
+    'supabase.title': 'Deine Daten synchronisieren (optional)',
     'supabase.lead.local':
-      'Optional: Melde dich an, um dein Dashboard zwischen Geräten zu synchronisieren. Du kannst es später in den Einstellungen aktivieren.',
+      'Optional: Melde dich an, um deine Daten zu sichern und Ergebnisse von deinem Handy aus einzusehen — so verlierst du nichts, falls mit diesem Computer etwas passiert. Du kannst auch rein lokal bleiben und die Synchronisierung jederzeit später aktivieren.',
     'supabase.lead.vps':
       'Erforderlich, um diese App mit deinem VPS zu koppeln. Melde dich mit Google oder GitHub an.',
+    'supabase.lead.signin':
+      'Willkommen zurück — melde dich an, um deine Daten und Einstellungen auf diesem Computer wiederherzustellen.',
     'telegram.title': 'Telegram-Bots',
     'telegram.tokens.lead':
       'Drei dedizierte Telegram-Bots — einer pro nutzerseitigem Agenten. Für jeden Bot: kopiere den vorgeschlagenen Namen + Username in @BotFather, dann füge hier den Token ein, den er zurückgibt.',
@@ -2096,7 +2131,7 @@ export const TRANSLATIONS = {
     'supabase.signOut': 'Abmelden',
     'supabase.back': 'Zurück',
     'supabase.continue': 'Weiter',
-    'supabase.skip': 'Lokal bleiben',
+    'supabase.skip': 'Überspringen',
     'supabase.error': 'Anmeldung fehlgeschlagen: {message}',
     'supabase.signin.waiting': 'Warte auf den Abschluss der Anmeldung in deinem Browser…',
     'supabase.signin.copyLink': 'Anmeldelink kopieren',
@@ -2138,7 +2173,7 @@ export const TRANSLATIONS = {
     'setup.lead.win32':
       'Um das Team isoliert auszuführen, brauchen wir <strong>Docker Desktop</strong>, kostenlos. Prüfen wir, ob du es bereits installiert hast.',
     'setup.lead.darwin':
-      'Das Team läuft in einem isolierten Container. <strong>Docker</strong> baut ihn, auf macOS über <strong>Colima</strong>: kostenlos und im Hintergrund aktiv.',
+      'Das Team läuft in einer eigenen, isolierten Umgebung auf deinem Mac — kostenlos. Wir richten nur noch die Engine ein, die alles antreibt — wähle unten aus, wie.',
     'setup.lead.linux':
       'Um das Team isoliert auszuführen, brauchen wir <strong>Docker Engine</strong>, kostenlos. Prüfen wir, ob du es bereits installiert hast.',
     'docker.name.win32': 'Docker',
@@ -2186,10 +2221,10 @@ export const TRANSLATIONS = {
     'docker.action.downloadDockerDesktop': 'Docker Desktop herunterladen',
     'docker.runtime.title': 'Wie möchtest du das Team ausführen?',
     'docker.runtime.recommended': 'empfohlen',
-    'docker.runtime.colima.label': 'JHT übernimmt das',
-    'docker.runtime.colima.hint': 'Wir installieren Colima — leichtgewichtig, startet von selbst, kein Aufwand.',
-    'docker.runtime.dockerDesktop.label': 'Mein Docker Desktop',
-    'docker.runtime.dockerDesktop.hint': 'Du installierst und startest es; es muss laufen, wenn das Team arbeitet.',
+    'docker.runtime.colima.label': 'Automatische Einrichtung',
+    'docker.runtime.colima.hint': 'Empfohlen. Wir installieren alles für dich — leichtgewichtig, startet von selbst, kein Aufwand.',
+    'docker.runtime.dockerDesktop.label': 'Mein vorhandenes Docker verwenden',
+    'docker.runtime.dockerDesktop.hint': 'Für erfahrene Nutzer, die Docker Desktop bereits haben. Du startest es selbst, wenn du das Team verwendest.',
     'docker.action.check': 'Prüfen',
     'docker.install.windowsRunning':
       'Installiere WSL2 + Docker Desktop. Das kann 5-10 Minuten dauern. Windows fragt nach Administratorrechten. Schließe die App nicht.',
@@ -2492,33 +2527,40 @@ export const TRANSLATIONS = {
     'lang.title': 'Choisis ta langue',
     'lang.lead': "Langue d'interface du launcher.",
     'lang.continue': 'Continuer',
-    'welcome.title': 'Job Hunter Team',
+    'intro.title': 'JobHunter Team',
+    'intro.tagline': "Ton équipe IA personnelle pour la recherche d'emploi",
+    'intro.pitch':
+      "Des agents IA qui cherchent des offres pour toi : ils les comparent à ton profil, préparent des CV et lettres de motivation sur mesure, et te guident à chaque étape.",
+    'intro.start': 'Commencer',
+    'intro.signin': 'Déjà inscrit ? Se connecter',
+    'welcome.title': 'Préparons ton ordinateur',
     'welcome.lead':
-      "Des agents IA qui t'aident à décrocher un emploi : faire correspondre les offres à ton profil, adapter les CV et te conseiller pour ton prochain mouvement.",
-    'welcome.hint':
-      "Vérifions d'abord que ton ordinateur est prêt.",
+      "En quelques étapes, on va vérifier ce dont l'équipe a besoin et tout configurer pour toi — ça ne prend que quelques minutes.",
+    'welcome.hint': '',
     'welcome.hint.win32':
-      "Vérifions d'abord que ton ordinateur est prêt. Si tu choisis « cet ordinateur » plus tard, WSL pourrait nécessiter un redémarrage de Windows.",
+      "Si tu choisis « cet ordinateur » plus tard, Windows pourrait avoir besoin d'un redémarrage pour terminer la configuration.",
     'welcome.back': 'Retour',
     'welcome.continue': 'Continuer',
-    'location.title': "Où l'équipe va-t-elle vivre ?",
+    'location.title': "Où l'équipe doit-elle tourner ?",
     'location.lead':
-      "JHT tourne dans un conteneur. Choisis où ce conteneur va vivre — tu peux le changer plus tard en réinstallant.",
+      "L'équipe tourne sur un ordinateur qui doit rester allumé pendant qu'elle travaille. Choisis lequel.",
     'location.local.title': 'Cet ordinateur',
     'location.local.body':
-      "Gratuit, mais fragile : l'équipe s'arrête quand ce PC dort ou redémarre, ce qui peut laisser les agents dans un état cassé. Idéal pour les développeurs qui veulent tester JHT.",
-    'location.local.badge': 'Mode développeur',
+      "Tourne sur l'ordinateur que tu utilises en ce moment. La façon la plus simple de démarrer — ça fonctionne tant que ton ordinateur est allumé. Gratuit.",
+    'location.local.badge': 'Le plus simple pour démarrer',
     'location.vps.title': 'Un serveur distant (VPS)',
     'location.vps.body':
-      "Un petit ordinateur distant qui reste allumé 24/7 dans le cloud, ~6 €/mois. L'équipe continue de travailler pendant que ton PC dort. Compatible avec n'importe quel hébergeur VPS — nous le configurons depuis l'app. Recommandé pour un usage quotidien.",
-    'location.vps.badge': 'Recommandé pour un usage quotidien',
+      "Un petit ordinateur dans le cloud, toujours allumé (~6 €/mois). L'équipe continue de travailler même quand ton ordinateur est éteint. On le configure pour toi depuis ici.",
+    'location.vps.badge': 'Idéal pour une utilisation quotidienne',
     'location.back': 'Retour',
     'location.continue': 'Continuer',
-    'supabase.title': 'Compte cloud',
+    'supabase.title': 'Synchronise tes données (facultatif)',
     'supabase.lead.local':
-      "Optionnel : connecte-toi pour synchroniser ton tableau de bord entre appareils. Tu peux l'activer plus tard dans les paramètres.",
+      "Facultatif : connecte-toi pour sauvegarder tes données et consulter les résultats depuis ton téléphone — pour ne rien perdre si quelque chose arrive à cet ordinateur. Tu peux rester entièrement en local et activer la synchronisation plus tard, à tout moment.",
     'supabase.lead.vps':
       "Nécessaire pour appairer cette app avec ton VPS. Connecte-toi avec Google ou GitHub.",
+    'supabase.lead.signin':
+      "Bon retour — connecte-toi pour restaurer tes données et paramètres sur cet ordinateur.",
     'telegram.title': 'Bots Telegram',
     'telegram.tokens.lead':
       "Trois bots Telegram dédiés — un par agent côté utilisateur. Pour chaque bot : copie le nom et l'username suggérés dans @BotFather, puis colle ici le token qu'il te renvoie.",
@@ -2561,7 +2603,7 @@ export const TRANSLATIONS = {
     'supabase.signOut': 'Se déconnecter',
     'supabase.back': 'Retour',
     'supabase.continue': 'Continuer',
-    'supabase.skip': 'Rester en local',
+    'supabase.skip': 'Passer',
     'supabase.error': 'Connexion échouée : {message}',
     'supabase.signin.waiting': 'En attente de la connexion dans ton navigateur…',
     'supabase.signin.copyLink': 'Copier le lien de connexion',
@@ -2603,7 +2645,7 @@ export const TRANSLATIONS = {
     'setup.lead.win32':
       "Pour exécuter l'équipe en isolation, il nous faut <strong>Docker Desktop</strong>, gratuit. Vérifions s'il est déjà installé.",
     'setup.lead.darwin':
-      "L'équipe tourne dans un conteneur isolé. <strong>Docker</strong> le construit, sur macOS via <strong>Colima</strong> : gratuit et actif en arrière-plan.",
+      "L'équipe tourne dans son propre espace isolé sur ton Mac, gratuitement. Il suffit de configurer le moteur qui l'alimente — choisis comment ci-dessous.",
     'setup.lead.linux':
       "Pour exécuter l'équipe en isolation, il nous faut <strong>Docker Engine</strong>, gratuit. Vérifions s'il est déjà installé.",
     'docker.name.win32': 'Docker',
@@ -2651,10 +2693,11 @@ export const TRANSLATIONS = {
     'docker.action.downloadDockerDesktop': 'Télécharger Docker Desktop',
     'docker.runtime.title': 'Comment veux-tu faire tourner l’équipe ?',
     'docker.runtime.recommended': 'recommandé',
-    'docker.runtime.colima.label': 'Laisse JHT s’en occuper',
-    'docker.runtime.colima.hint': 'On installe Colima — léger, démarre tout seul, rien à gérer.',
-    'docker.runtime.dockerDesktop.label': 'Utiliser mon Docker Desktop',
-    'docker.runtime.dockerDesktop.hint': 'Tu l’installes et le démarres ; il doit tourner quand l’équipe travaille.',
+    'docker.runtime.colima.label': 'Configuration automatique',
+    'docker.runtime.colima.hint': 'Recommandé. On installe tout pour toi — léger, démarre tout seul, rien à gérer.',
+    'docker.runtime.dockerDesktop.label': 'Utiliser mon Docker existant',
+    'docker.runtime.dockerDesktop.hint':
+      "Pour les utilisateurs avancés qui ont déjà Docker Desktop. Tu le lances toi-même quand tu utilises l'équipe.",
     'docker.action.check': 'Vérifier',
     'docker.install.windowsRunning':
       "Installation de WSL2 + Docker Desktop. Cela peut prendre 5-10 minutes. Windows demandera les droits d'administrateur. Ne ferme pas l'app.",
@@ -2957,33 +3000,40 @@ export const TRANSLATIONS = {
     'lang.title': 'Escolha seu idioma',
     'lang.lead': 'Idioma da interface do launcher.',
     'lang.continue': 'Continuar',
-    'welcome.title': 'Job Hunter Team',
+    'intro.title': 'JobHunter Team',
+    'intro.tagline': 'Sua equipe pessoal de IA para buscar emprego',
+    'intro.pitch':
+      'Agentes de IA que buscam emprego por você: comparam as vagas com seu perfil, preparam CVs e cartas de apresentação personalizados e orientam você em cada decisão.',
+    'intro.start': 'Começar',
+    'intro.signin': 'Já tem conta? Entre',
+    'welcome.title': 'Vamos preparar seu computador',
     'welcome.lead':
-      'Agentes de IA que ajudam você a conseguir um emprego: combinam vagas com seu perfil, adaptam CVs e orientam seu próximo passo.',
-    'welcome.hint':
-      'Primeiro vamos verificar se seu computador está pronto.',
+      'Nos próximos passos vamos verificar o que a equipe precisa e configurar tudo para você — leva só alguns minutos.',
+    'welcome.hint': '',
     'welcome.hint.win32':
-      'Primeiro vamos verificar se seu computador está pronto. Se você escolher "este computador" depois, o WSL pode exigir que o Windows seja reiniciado.',
+      'Se você escolher "este computador" depois, o Windows pode precisar de uma reinicialização para concluir.',
     'welcome.back': 'Voltar',
     'welcome.continue': 'Continuar',
-    'location.title': 'Onde a equipe vai viver?',
+    'location.title': 'Onde a equipe deve rodar?',
     'location.lead':
-      'O JHT roda em um contêiner. Escolha onde esse contêiner vai viver — você pode mudar depois reinstalando.',
+      'A equipe roda em um computador que precisa ficar ligado enquanto trabalha. Escolha qual.',
     'location.local.title': 'Este computador',
     'location.local.body':
-      'Gratuito, mas frágil: a equipe para quando este PC dorme ou reinicia, o que pode deixar os agentes num estado quebrado. Ideal para desenvolvedores que querem testar o JHT.',
-    'location.local.badge': 'Modo desenvolvedor',
+      'Roda no computador que você está usando agora. A forma mais simples de começar — funciona sempre que seu computador estiver ligado. Grátis.',
+    'location.local.badge': 'Mais fácil para começar',
     'location.vps.title': 'Um servidor remoto (VPS)',
     'location.vps.body':
-      'Um pequeno computador remoto que fica ligado 24/7 na nuvem, ~6 €/mês. A equipe continua trabalhando enquanto seu PC dorme. Funciona com qualquer provedor VPS — configuramos pelo app. Recomendado para uso diário.',
-    'location.vps.badge': 'Recomendado para uso diário',
+      'Um pequeno computador na nuvem, sempre ligado (~€6/mês). A equipe continua trabalhando mesmo quando seu computador está desligado. Nós configuramos tudo para você a partir daqui.',
+    'location.vps.badge': 'Melhor para uso diário',
     'location.back': 'Voltar',
     'location.continue': 'Continuar',
-    'supabase.title': 'Conta na nuvem',
+    'supabase.title': 'Sincronize seus dados (opcional)',
     'supabase.lead.local':
-      'Opcional: faça login para sincronizar seu dashboard entre dispositivos. Você pode ativar depois nas configurações.',
+      'Opcional: faça login para fazer backup dos seus dados e ver os resultados pelo celular — assim você nunca perde nada se algo acontecer com este computador. Você pode ficar totalmente local e ativar a sincronização depois, quando quiser.',
     'supabase.lead.vps':
       'Necessário para parear este app com seu VPS. Faça login com Google ou GitHub.',
+    'supabase.lead.signin':
+      'Bem-vindo de volta — faça login para restaurar seus dados e configurações neste computador.',
     'telegram.title': 'Bots do Telegram',
     'telegram.tokens.lead':
       'Três bots dedicados do Telegram — um por agente voltado ao usuário. Para cada bot: copie o nome e o username sugeridos no @BotFather, depois cole aqui o token que ele retornar.',
@@ -3026,7 +3076,7 @@ export const TRANSLATIONS = {
     'supabase.signOut': 'Sair',
     'supabase.back': 'Voltar',
     'supabase.continue': 'Continuar',
-    'supabase.skip': 'Continuar local',
+    'supabase.skip': 'Pular',
     'supabase.error': 'Login falhou: {message}',
     'supabase.signin.waiting': 'Aguardando o login ser concluído no seu navegador…',
     'supabase.signin.copyLink': 'Copiar link de login',
@@ -3068,7 +3118,7 @@ export const TRANSLATIONS = {
     'setup.lead.win32':
       'Para rodar a equipe isolada precisamos do <strong>Docker Desktop</strong>, gratuito. Vamos verificar se já está instalado.',
     'setup.lead.darwin':
-      'A equipe roda em um contêiner isolado. O <strong>Docker</strong> o constrói, no macOS via <strong>Colima</strong>: gratuito e ativo em segundo plano.',
+      'A equipe roda em um espaço isolado no seu Mac, de graça. Só precisamos configurar o motor que faz tudo funcionar — escolha como abaixo.',
     'setup.lead.linux':
       'Para rodar a equipe isolada precisamos do <strong>Docker Engine</strong>, gratuito. Vamos verificar se já está instalado.',
     'docker.name.win32': 'Docker',
@@ -3116,10 +3166,10 @@ export const TRANSLATIONS = {
     'docker.action.downloadDockerDesktop': 'Baixar Docker Desktop',
     'docker.runtime.title': 'Como você quer rodar o time?',
     'docker.runtime.recommended': 'recomendado',
-    'docker.runtime.colima.label': 'Deixe o JHT cuidar',
-    'docker.runtime.colima.hint': 'Instalamos o Colima — leve, inicia sozinho, nada para gerenciar.',
-    'docker.runtime.dockerDesktop.label': 'Usar meu Docker Desktop',
-    'docker.runtime.dockerDesktop.hint': 'Você instala e inicia; precisa estar rodando quando o time trabalha.',
+    'docker.runtime.colima.label': 'Configuração automática',
+    'docker.runtime.colima.hint': 'Recomendado. Instalamos tudo para você — leve, inicia sozinho, nada para gerenciar.',
+    'docker.runtime.dockerDesktop.label': 'Usar meu Docker existente',
+    'docker.runtime.dockerDesktop.hint': 'Para usuários avançados que já têm o Docker Desktop. Você mesmo inicia quando usa a equipe.',
     'docker.action.check': 'Verificar',
     'docker.install.windowsRunning':
       'Instalando WSL2 + Docker Desktop. Isso pode levar 5-10 minutos. O Windows vai pedir permissão de administrador. Não feche o app.',
