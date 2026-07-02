@@ -46,7 +46,8 @@ const T: Record<
     legendStrong: "forti 70–79",
     legendExcellent: "eccellenti ≥80",
     chartTitle: "Match ad alto score prodotti · giorno per giorno",
-    caption: "Ogni barra è un giorno di lavoro; l'altezza è il numero di match ≥70, con la quota ≥80 evidenziata.",
+    caption:
+      "Ogni barra è un giorno di lavoro; l'altezza è il numero di match ≥70, con la quota ≥80 evidenziata.",
   },
   en: {
     title: "📈 High-score matches, day by day",
@@ -56,7 +57,8 @@ const T: Record<
     legendStrong: "strong 70–79",
     legendExcellent: "excellent ≥80",
     chartTitle: "High-score matches produced · day by day",
-    caption: "Each bar is a working day; height is the number of ≥70 matches, with the ≥80 share highlighted.",
+    caption:
+      "Each bar is a working day; height is the number of ≥70 matches, with the ≥80 share highlighted.",
   },
   es: {
     title: "📈 Match de score alto, día a día",
@@ -66,7 +68,8 @@ const T: Record<
     legendStrong: "fuertes 70–79",
     legendExcellent: "excelentes ≥80",
     chartTitle: "Match de score alto producidos · día a día",
-    caption: "Cada barra es un día de trabajo; la altura es el número de match ≥70, con la cuota ≥80 resaltada.",
+    caption:
+      "Cada barra es un día de trabajo; la altura es el número de match ≥70, con la cuota ≥80 resaltada.",
   },
   fr: {
     title: "📈 Matchs à score élevé, jour par jour",
@@ -76,7 +79,8 @@ const T: Record<
     legendStrong: "forts 70–79",
     legendExcellent: "excellents ≥80",
     chartTitle: "Matchs à score élevé produits · jour par jour",
-    caption: "Chaque barre est un jour de travail ; la hauteur est le nombre de matchs ≥70, avec la part ≥80 mise en évidence.",
+    caption:
+      "Chaque barre est un jour de travail ; la hauteur est le nombre de matchs ≥70, avec la part ≥80 mise en évidence.",
   },
   de: {
     title: "📈 Hoch bewertete Matches, Tag für Tag",
@@ -86,7 +90,8 @@ const T: Record<
     legendStrong: "stark 70–79",
     legendExcellent: "exzellent ≥80",
     chartTitle: "Hoch bewertete Matches · Tag für Tag",
-    caption: "Jeder Balken ist ein Arbeitstag; die Höhe ist die Zahl der ≥70-Matches, mit hervorgehobenem ≥80-Anteil.",
+    caption:
+      "Jeder Balken ist ein Arbeitstag; die Höhe ist die Zahl der ≥70-Matches, mit hervorgehobenem ≥80-Anteil.",
   },
   hu: {
     title: "📈 Magas pontszámú találatok, naponta",
@@ -96,7 +101,8 @@ const T: Record<
     legendStrong: "erős 70–79",
     legendExcellent: "kiváló ≥80",
     chartTitle: "Magas pontszámú találatok · naponta",
-    caption: "Minden oszlop egy munkanap; a magasság a ≥70 találatok száma, kiemelve a ≥80 hányad.",
+    caption:
+      "Minden oszlop egy munkanap; a magasság a ≥70 találatok száma, kiemelve a ≥80 hányad.",
   },
   pt: {
     title: "📈 Matches de score alto, dia a dia",
@@ -106,7 +112,8 @@ const T: Record<
     legendStrong: "fortes 70–79",
     legendExcellent: "excelentes ≥80",
     chartTitle: "Matches de score alto produzidos · dia a dia",
-    caption: "Cada barra é um dia de trabalho; a altura é o número de matches ≥70, com a quota ≥80 destacada.",
+    caption:
+      "Cada barra é um dia de trabalho; a altura é o número de matches ≥70, com a quota ≥80 destacada.",
   },
 };
 
@@ -203,8 +210,16 @@ export default function DailyHighScore({
                     e.clientY,
                     `${dayLabel(d.day)} · ${nf(d.strong70)} ≥70`,
                     [
-                      { color: EXCELLENT, label: t.legendExcellent, value: nf(d.strong80) },
-                      { color: STRONG, label: t.legendStrong, value: nf(d.strong70 - d.strong80) },
+                      {
+                        color: EXCELLENT,
+                        label: t.legendExcellent,
+                        value: nf(d.strong80),
+                      },
+                      {
+                        color: STRONG,
+                        label: t.legendStrong,
+                        value: nf(d.strong70 - d.strong80),
+                      },
                     ],
                   )
                 }

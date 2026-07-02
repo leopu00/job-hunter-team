@@ -7,7 +7,10 @@
 import { useRef } from "react";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";
-import { TooltipLayer, type TooltipHandle } from "@/app/components/ChartTooltip";
+import {
+  TooltipLayer,
+  type TooltipHandle,
+} from "@/app/components/ChartTooltip";
 
 const LOCALE_TAG: Record<Locale, string> = {
   it: "it-IT",
@@ -45,8 +48,16 @@ export default function DailyAvgBars({
             className="cursor-default"
             onMouseEnter={(e) =>
               tipRef.current?.show(e.clientX, e.clientY, s.label, [
-                { color: EXCELLENT, label: "≥80", value: `${fmt1(s.r80)} / ${unit}` },
-                { color: STRONG, label: "≥70", value: `${fmt1(s.r70)} / ${unit}` },
+                {
+                  color: EXCELLENT,
+                  label: "≥80",
+                  value: `${fmt1(s.r80)} / ${unit}`,
+                },
+                {
+                  color: STRONG,
+                  label: "≥70",
+                  value: `${fmt1(s.r70)} / ${unit}`,
+                },
               ])
             }
             onMouseMove={(e) => tipRef.current?.move(e.clientX, e.clientY)}
@@ -77,7 +88,10 @@ export default function DailyAvgBars({
               />
               <div
                 className="absolute left-0 top-0 h-full rounded-full"
-                style={{ width: `${(s.r80 / max) * 100}%`, background: EXCELLENT }}
+                style={{
+                  width: `${(s.r80 / max) * 100}%`,
+                  background: EXCELLENT,
+                }}
               />
             </div>
           </div>

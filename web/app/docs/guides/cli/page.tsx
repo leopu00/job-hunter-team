@@ -1,14 +1,6 @@
 import type { Locale } from "@/i18n/config";
 import { getRequestLocale } from "@/lib/request-locale";
-import {
-  DocHeader,
-  Callout,
-  H2,
-  P,
-  Code,
-  Pre,
-  GitHubMore,
-} from "../../DocKit";
+import { DocHeader, Callout, H2, P, Code, Pre, GitHubMore } from "../../DocKit";
 import { repoFile } from "../../repo";
 
 const T: Record<
