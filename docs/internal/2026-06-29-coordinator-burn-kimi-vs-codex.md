@@ -95,6 +95,36 @@ sforamenti del 100%) e il **comportamento** (scout rabbit-hole, thinking fragile
 il writer-gate, thrash del pacing). Sono voci di *tuning* in lavorazione, non un muro di
 capacità in token.
 
+## Prezzo per unità di lavoro (Kimi vs Codex) — ≈ pari
+
+Incrociando la dimensione del budget con i prezzi documentati (`docs/about/PROVIDERS.md`:
+Kimi Pro ~€40, Codex Plus/Pro ~€100):
+
+```
+                        Kimi Pro        Codex Plus/Pro     rapporto
+──────────────────────────────────────────────────────────────────
+prezzo / mese           €40             €100               2,5×
+budget settimanale      ~13M token      ~31M token         2,4×
+budget mensile (~4,3sn) ~56M token      ~135M token        2,4×
+€ / milione di token    ~€0,71          ~€0,74             ~1,05×  (≈ PARI)
+```
+
+Il rapporto prezzo (2,5×) e il rapporto budget (2,4×) **quasi si annullano** → il costo per
+token è **praticamente identico**. Kimi non è "più economico perché fa meno": ha la **stessa
+efficienza €/token di Codex**, a una barriera d'ingresso **2,5× più bassa**. È questo
+l'argomento economico per il tier mass-market — stesso valore/€, prezzo assoluto minore.
+
+Caveat:
+- **Rapporto robusto, assoluto approssimato.** I ~13M/~31M sono in unità token-meter
+  (stima euristica) con lo **stesso bias su entrambi** → il rapporto €/token regge;
+  €0,71/€0,74 è indicativo.
+- **Sensibilità al prezzo Codex.** Con i €100 documentati sono pari; se Codex fosse ChatGPT
+  Plus (~$20) sarebbe ~5× più economico/token, se Pro (~$200) Kimi sarebbe ~2× più economico.
+- **Riconciliazione col quota-provider.** `PROVIDERS.md` dichiara Kimi "~320M/mese": è la
+  quota grezza teorica; l'effettivo **usabile** misurato è ~56M/mese (~1/6) per pacing
+  (working-hours + target 88% + no-100%) e per il token-meter. Per il €/token conta
+  l'effettivo, non il pubblicitario.
+
 ## ~~Il fenomeno (vecchia lettura, SUPERATA)~~
 
 > ⚠️ Superata dalla *Misura pulita*. Si era osservato che "su Kimi i coordinatori dominano
