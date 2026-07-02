@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { LandingI18nProvider } from "../components/landing/LandingI18n";
 import LandingNav from "../components/landing/LandingNav";
+import { LandingFooter } from "../components/landing/LandingCTA";
 import {
   CASE_STUDIES,
   CONTRIBUTE_LINKS,
@@ -110,10 +111,10 @@ const T: Record<
     heroTitleEmph: "davvero",
     heroTitlePost: " un team Job Hunter",
     heroLeadPre:
-      "Job Hunter Team è una squadra di agenti AI autonomi che cerca lavoro per te: trova posizioni, le analizza, le valuta sul tuo profilo e prepara le candidature. Qui mostriamo cosa ha prodotto su ",
-    heroLeadStrong: "profili candidato reali",
+      "Questa pagina raccoglie i risultati reali dei team Job Hunter messi al lavoro su ",
+    heroLeadStrong: "profili candidato veri",
     heroLeadPost:
-      " — dati aggregati e anonimi, nessuna informazione personale.",
+      " — quante posizioni trovano, con che qualità di match e a che costo. Dati aggregati e anonimi, da run reali, senza alcuna informazione personale.",
     heroSub:
       "È una pagina viva: cresce a ogni nuovo team monitorato. Scegli un case study qui sotto per vedere tutti i risultati.",
     positions: "posizioni",
@@ -168,13 +169,13 @@ const T: Record<
       "Più alto è il livello di qualità richiesto, più sale il costo per singolo risultato. La riga ≥80 coincide con il costo per eccellente del riepilogo qui sopra.",
     moreComingTitle: "Altri case study in arrivo",
     moreComingSub: "il tuo potrebbe essere il prossimo",
-    contributeTitle: "📥 Contribuisci con i tuoi dati",
+    contributeTitle: "Contribuisci con i tuoi dati",
     contributeLead:
-      "Più profili reali raccogliamo, più questa pagina diventa utile a chi cerca lavoro. Fai girare Job Hunter sulla tua ricerca e condividi i risultati (aggregati e anonimi): bastano pochi passi.",
-    betaTitle: "🧪 Diventa beta tester",
+      "Più profili reali raccogliamo, più questa pagina diventa utile a chi cerca lavoro. Fai girare Job Hunter Team sulla tua ricerca e condividi i risultati: aggregati e anonimi, possono diventare il prossimo case study.",
+    betaTitle: "Diventa un case study",
     betaBody:
-      "Fai girare il team per qualche settimana sulla tua ricerca e condividi i risultati: ti aiutiamo col setup. Guida e modello dati su GitHub.",
-    selfHostTitle: "🛠️ Self-host & contribuisci",
+      "Fai girare il team sulla tua ricerca e condividi i risultati: ti guidiamo noi, non serve essere tecnici. Pubblichiamo solo dati aggregati e anonimi.",
+    selfHostTitle: "Self-host & contribuisci",
     selfHostBody:
       "Installa Job Hunter in locale o sul tuo VPS, usalo sulla tua ricerca e apri una PR con i tuoi dati. Tutto open source.",
     repository: "Repository:",
@@ -247,13 +248,13 @@ const T: Record<
       "The higher the quality bar, the higher the cost per single result. The ≥80 row equals the cost per excellent in the summary above.",
     moreComingTitle: "More case studies coming",
     moreComingSub: "yours could be next",
-    contributeTitle: "📥 Contribute your data",
+    contributeTitle: "Contribute your data",
     contributeLead:
       "The more real profiles we collect, the more useful this page becomes for job seekers. Run Job Hunter on your search and share the results (aggregated and anonymous): it only takes a few steps.",
-    betaTitle: "🧪 Become a beta tester",
+    betaTitle: "Become a beta tester",
     betaBody:
       "Run the team for a few weeks on your search and share the results: we'll help you with the setup. Guide and data model on GitHub.",
-    selfHostTitle: "🛠️ Self-host & contribute",
+    selfHostTitle: "Self-host & contribute",
     selfHostBody:
       "Install Job Hunter locally or on your VPS, use it on your search and open a PR with your data. Fully open source.",
     repository: "Repository:",
@@ -326,13 +327,13 @@ const T: Record<
       "Cuanto más alto es el nivel de calidad exigido, más sube el coste por resultado. La fila ≥80 coincide con el coste por excelente del resumen de arriba.",
     moreComingTitle: "Más casos de estudio en camino",
     moreComingSub: "el tuyo podría ser el próximo",
-    contributeTitle: "📥 Contribuye con tus datos",
+    contributeTitle: "Contribuye con tus datos",
     contributeLead:
       "Cuantos más perfiles reales recopilemos, más útil será esta página para quien busca trabajo. Ejecuta Job Hunter en tu búsqueda y comparte los resultados (agregados y anónimos): bastan unos pocos pasos.",
-    betaTitle: "🧪 Conviértete en beta tester",
+    betaTitle: "Conviértete en beta tester",
     betaBody:
       "Ejecuta el equipo durante unas semanas en tu búsqueda y comparte los resultados: te ayudamos con la configuración. Guía y modelo de datos en GitHub.",
-    selfHostTitle: "🛠️ Auto-aloja y contribuye",
+    selfHostTitle: "Auto-aloja y contribuye",
     selfHostBody:
       "Instala Job Hunter en local o en tu VPS, úsalo en tu búsqueda y abre una PR con tus datos. Todo open source.",
     repository: "Repositorio:",
@@ -406,13 +407,13 @@ const T: Record<
       "Plus le niveau de qualité exigé est élevé, plus le coût par résultat augmente. La ligne ≥80 correspond au coût par excellent du récapitulatif ci-dessus.",
     moreComingTitle: "D'autres études de cas à venir",
     moreComingSub: "la tienne pourrait être la prochaine",
-    contributeTitle: "📥 Contribue avec tes données",
+    contributeTitle: "Contribue avec tes données",
     contributeLead:
       "Plus nous recueillons de profils réels, plus cette page devient utile pour qui cherche du travail. Lance Job Hunter sur ta recherche et partage les résultats (agrégés et anonymes) : il suffit de quelques étapes.",
-    betaTitle: "🧪 Deviens testeur beta",
+    betaTitle: "Deviens testeur beta",
     betaBody:
       "Lance l'équipe pendant quelques semaines sur ta recherche et partage les résultats : on t'aide pour la configuration. Guide et modèle de données sur GitHub.",
-    selfHostTitle: "🛠️ Auto-héberge & contribue",
+    selfHostTitle: "Auto-héberge & contribue",
     selfHostBody:
       "Installe Job Hunter en local ou sur ton VPS, utilise-le sur ta recherche et ouvre une PR avec tes données. Tout en open source.",
     repository: "Dépôt :",
@@ -486,13 +487,13 @@ const T: Record<
       "Je höher die geforderte Qualität, desto höher die Kosten pro Ergebnis. Die Zeile ≥80 entspricht den Kosten je exzellentem Match in der Übersicht oben.",
     moreComingTitle: "Weitere Fallstudien folgen",
     moreComingSub: "deine könnte die nächste sein",
-    contributeTitle: "📥 Steuere deine Daten bei",
+    contributeTitle: "Steuere deine Daten bei",
     contributeLead:
       "Je mehr echte Profile wir sammeln, desto nützlicher wird diese Seite für Jobsuchende. Lass Job Hunter auf deiner Suche laufen und teile die Ergebnisse (aggregiert und anonym): Es sind nur wenige Schritte.",
-    betaTitle: "🧪 Werde Beta-Tester",
+    betaTitle: "Werde Beta-Tester",
     betaBody:
       "Lass das Team ein paar Wochen auf deiner Suche laufen und teile die Ergebnisse: Wir helfen dir beim Setup. Anleitung und Datenmodell auf GitHub.",
-    selfHostTitle: "🛠️ Selbst hosten & beitragen",
+    selfHostTitle: "Selbst hosten & beitragen",
     selfHostBody:
       "Installiere Job Hunter lokal oder auf deinem VPS, nutze es für deine Suche und öffne einen PR mit deinen Daten. Komplett Open Source.",
     repository: "Repository:",
@@ -566,13 +567,13 @@ const T: Record<
       "Minél magasabb az elvárt minőség, annál nagyobb az egy eredményre jutó költség. A ≥80 sor megegyezik a fenti összegzés kiváló találat költségével.",
     moreComingTitle: "További esettanulmányok érkeznek",
     moreComingSub: "a tiéd lehet a következő",
-    contributeTitle: "📥 Járulj hozzá az adataiddal",
+    contributeTitle: "Járulj hozzá az adataiddal",
     contributeLead:
       "Minél több valódi profilt gyűjtünk, annál hasznosabb lesz ez az oldal az álláskeresőknek. Futtasd a Job Huntert a saját keresésedre, és oszd meg az eredményeket (összesítve és anonim módon): csak néhány lépés.",
-    betaTitle: "🧪 Legyél béta tesztelő",
+    betaTitle: "Legyél béta tesztelő",
     betaBody:
       "Futtasd a csapatot néhány hétig a saját keresésedre, és oszd meg az eredményeket: segítünk a beállításban. Útmutató és adatmodell a GitHubon.",
-    selfHostTitle: "🛠️ Önkiszolgáló üzemeltetés & hozzájárulás",
+    selfHostTitle: "Önkiszolgáló üzemeltetés & hozzájárulás",
     selfHostBody:
       "Telepítsd a Job Huntert helyben vagy a saját VPS-eden, használd a keresésedre, és nyiss egy PR-t az adataiddal. Teljesen nyílt forráskódú.",
     repository: "Repository:",
@@ -645,13 +646,13 @@ const T: Record<
       "Quanto mais alto o nível de qualidade exigido, mais sobe o custo por resultado. A linha ≥80 coincide com o custo por excelente do resumo acima.",
     moreComingTitle: "Mais estudos de caso a caminho",
     moreComingSub: "o teu pode ser o próximo",
-    contributeTitle: "📥 Contribui com os teus dados",
+    contributeTitle: "Contribui com os teus dados",
     contributeLead:
       "Quantos mais perfis reais recolhermos, mais útil esta página se torna para quem procura trabalho. Põe o Job Hunter a correr na tua pesquisa e partilha os resultados (agregados e anónimos): bastam poucos passos.",
-    betaTitle: "🧪 Torna-te beta tester",
+    betaTitle: "Torna-te beta tester",
     betaBody:
       "Põe a equipa a correr durante algumas semanas na tua pesquisa e partilha os resultados: ajudamos-te com a configuração. Guia e modelo de dados no GitHub.",
-    selfHostTitle: "🛠️ Auto-aloja & contribui",
+    selfHostTitle: "Auto-aloja & contribui",
     selfHostBody:
       "Instala o Job Hunter localmente ou no teu VPS, usa-o na tua pesquisa e abre um PR com os teus dados. Tudo open source.",
     repository: "Repositório:",
@@ -845,19 +846,6 @@ export default async function CaseStudiesIndexPage() {
                 </div>
               </div>
             ))}
-
-            {/* placeholder: altri in arrivo */}
-            <div className="rounded-2xl border border-dashed border-[var(--color-border)] p-5 flex items-center justify-center text-center opacity-70">
-              <div>
-                <div className="text-2xl mb-1">➕</div>
-                <div className="text-[12px] text-[var(--color-muted)] font-semibold">
-                  {t.moreComingTitle}
-                </div>
-                <div className="text-[11px] text-[var(--color-dim)] mt-1">
-                  {t.moreComingSub}
-                </div>
-              </div>
-            </div>
           </div>
         </section>
 
@@ -870,59 +858,55 @@ export default async function CaseStudiesIndexPage() {
             {t.contributeLead}
           </p>
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <a
-              href={CONTRIBUTE_LINKS.results}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group rounded-xl border border-[#00e676]/40 bg-[var(--color-bg)] p-5 transition-colors hover:border-[#00e676] no-underline"
-            >
-              <div className="text-[13px] font-bold text-[var(--color-white)]">
-                {t.betaTitle}{" "}
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+              <a
+                href={CONTRIBUTE_LINKS.beta}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="contrib-title group inline-flex items-baseline gap-1 w-fit text-[13px] font-bold text-[var(--color-white)] no-underline transition-colors hover:text-[#00e676]"
+              >
+                <span className="underline decoration-1 underline-offset-[3px]">
+                  {t.betaTitle}
+                </span>
                 <span
                   className="inline-block transition-transform group-hover:translate-x-0.5"
                   style={{ color: "#00e676" }}
                 >
                   →
                 </span>
-              </div>
+              </a>
               <p className="mt-1.5 text-[12px] text-[var(--color-muted)] leading-relaxed">
                 {t.betaBody}
               </p>
-            </a>
-            <a
-              href={CONTRIBUTE_LINKS.contributing}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="group rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 transition-colors hover:border-[var(--color-blue)] no-underline"
-            >
-              <div className="text-[13px] font-bold text-[var(--color-white)]">
-                {t.selfHostTitle}{" "}
-                <span className="inline-block transition-transform group-hover:translate-x-0.5 text-[var(--color-blue)]">
+            </div>
+            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+              <a
+                href={CONTRIBUTE_LINKS.contributing}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="contrib-title group inline-flex items-baseline gap-1 w-fit text-[13px] font-bold text-[var(--color-white)] no-underline transition-colors hover:text-[#00e676]"
+              >
+                <span className="underline decoration-1 underline-offset-[3px]">
+                  {t.selfHostTitle}
+                </span>
+                <span
+                  className="inline-block transition-transform group-hover:translate-x-0.5"
+                  style={{ color: "#00e676" }}
+                >
                   →
                 </span>
-              </div>
+              </a>
               <p className="mt-1.5 text-[12px] text-[var(--color-muted)] leading-relaxed">
                 {t.selfHostBody}
               </p>
-            </a>
-          </div>
-          <div className="mt-5 text-[11px] text-[var(--color-dim)]">
-            {t.repository}{" "}
-            <a
-              href={CONTRIBUTE_LINKS.repo}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[var(--color-muted)] underline hover:text-[var(--color-white)]"
-            >
-              github.com/leopu00/job-hunter-team
-            </a>
+            </div>
           </div>
         </section>
       </div>
 
-      <footer className="border-t border-[var(--color-border)] py-6 text-center text-[11px] text-[var(--color-muted)]">
-        {t.footer}
-      </footer>
+      <LandingI18nProvider>
+        <LandingFooter />
+      </LandingI18nProvider>
     </main>
   );
 }
