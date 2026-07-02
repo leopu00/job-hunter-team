@@ -132,6 +132,9 @@ a.chronicle-card,
 a.chronicle-card:hover,
 a.chronicle-card *,
 a.chronicle-card:hover * { text-decoration: none !important; }
+/* Contribute cards: il titolo-link ha UNA sola sottolineatura (dallo span);
+   l'ancora non deve aggiungerne una seconda sull'hover (regola a:hover globale). */
+a.contrib-title:hover { text-decoration: none !important; }
 
 /* ── Section label ───────────────────────────────────────────────── */
 .section-label {
