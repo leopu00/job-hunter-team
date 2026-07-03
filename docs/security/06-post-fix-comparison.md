@@ -35,7 +35,7 @@
 | `shared/logger/redact.ts` | Pattern-based redaction (Bearer, sk-, hex 32+) | `src/logging/redact-bounded.ts` |
 | `.pre-commit-config.yaml` | detect-secrets + actionlint + zizmor + npm-audit-prod | same + shellcheck + ruff |
 | `.secrets.baseline` | detect-secrets findings snapshot | same (it's large) |
-| `zizmor.yml` | unpinned-uses/excessive-permissions disabled | identical |
+| `.github/zizmor.yml` | unpinned-uses/excessive-permissions disabled | identical |
 | `scripts/pre-commit/npm-audit-prod.mjs` | audit fail on high+ in prod deps | same concept |
 | `cli/src/commands/keyring.js` | `jht keyring set/get/delete` for passphrase provisioning | (innovation, not in OpenClaw) |
 
@@ -199,7 +199,7 @@ export function safeResolveUnder(baseDir: string, candidate: string): string | n
 |------|----------|--------------|
 | `detect-secrets` + baseline | ✅ | ✅ `.secrets.baseline` from initial scan |
 | `actionlint` | ✅ | ✅ |
-| `zizmor` | ✅ regular persona, min-severity medium | ✅ identical (`zizmor.yml` file) |
+| `zizmor` | ✅ regular persona, min-severity medium | ✅ identical (`.github/zizmor.yml` file) |
 | `npm-audit-prod` | ✅ via script | ✅ `scripts/pre-commit/npm-audit-prod.mjs` |
 | `shellcheck` | ✅ | ❌ (not imported — minor gap) |
 | Pin Docker base SHA | ✅ | ✅ `sha256:d415caac...` |
