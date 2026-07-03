@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
     ("gpt4", "openai"),
     ("chatgpt", "openai"),
     ("kimi", "kimi"),
-    ("abab", "kimi"),
+    ("moonshot", "kimi"),
 ])
 def test_normalize_alias(alias, expected):
     from shared.llm.factory import normalize_provider_id

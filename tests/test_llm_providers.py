@@ -107,7 +107,7 @@ def test_kimi_provider_complete():
 
     mock_json = {
         "choices": [{"message": {"content": "Ciao da Kimi!"}, "finish_reason": "stop"}],
-        "model": "abab6.5-chat",
+        "model": "kimi-latest",
         "usage": {"prompt_tokens": 5, "completion_tokens": 3},
     }
 

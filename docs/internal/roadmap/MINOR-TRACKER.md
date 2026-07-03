@@ -14,6 +14,14 @@
 
 ## 🧹 CI / Test / Lint debt
 
+### ⬜ `[MINOR-SHARED-LLM-DEAD]` Rimuovere `shared/llm/` (dead code) — post-lancio
+
+- **Stato:** ⬜ open (decisione release 2026-07-03: fix minimale subito, rimozione dopo il lancio).
+- **Contesto:** `shared/llm/` (base + factory + 3 provider) non ha NESSUN consumatore runtime — zero import da `agents/`, `cli/`, `tui/`, `desktop/`, `scripts/`, Docker; unici consumatori i suoi 4 file di test (`test_llm_*`, `test_factory_config`). Il team usa i TUI provider in tmux. Serie `feat(llm)` mai cablata. Fix minimale applicato pre-lancio: model ID MiniMax residui (`abab*`) → ID Moonshot reali (`kimi-latest`, `moonshot-v1-8k`) + alias factory.
+- **Da fare:** rimuovere `shared/llm/` + i 4 test file, aggiornare le 2 righe doc che citano LLM nello stack shared (`README.md` tabella Backend, `shared/README.md` r7). Dopo la rimozione i test file tracciati scendono a ~251 (claim "250+" del README regge).
+- **Effort:** M.
+- **Origine:** fact-check pre-Reddit 2026-07-03 (sessione master-3), consenso master1+master-2 in coordination/chat.jsonl.
+
 ### ✅ `[MINOR-PRETTIER-FORMAT]` Prettier check su `web/app/` + `shared/` — FIXED 2026-06-02
 
 - **Stato:** chiuso 2026-06-02. 8 file riformattati con `npx prettier --write` (mig 024/027/028 + geocode + i18n). Lint workflow ora verde.

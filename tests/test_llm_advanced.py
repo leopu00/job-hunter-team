@@ -77,7 +77,7 @@ def test_get_default_model_kimi():
     with patch.dict(os.environ, {"MOONSHOT_API_KEY": "test-key"}):
         from shared.llm.providers.kimi_provider import KimiProvider
         p = KimiProvider()
-        assert "abab" in p.get_default_model()
+        assert "kimi" in p.get_default_model()
 
 
 # ── FACTORY — get_provider(None) ────────────────────────────────
@@ -205,7 +205,7 @@ def test_kimi_list_models():
         p = KimiProvider()
         models = p.list_models()
     assert len(models) == 2
-    assert any(m.id == "abab6.5-chat" for m in models)
+    assert any(m.id == "kimi-latest" for m in models)
 
 
 # ── SDK NON INSTALLATO ──────────────────────────────────────────

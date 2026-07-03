@@ -21,7 +21,7 @@ PROVIDER_ALIASES = {
     "gpt4": "openai",
     "chatgpt": "openai",
     "kimi": "kimi",
-    "abab": "kimi",
+    "moonshot": "kimi",
 }
 
 PROVIDER_REGISTRY = {

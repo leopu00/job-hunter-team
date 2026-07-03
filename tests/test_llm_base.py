@@ -53,7 +53,7 @@ def test_normalize_provider_id_aliases():
     assert normalize_provider_id("gpt") == "openai"
     assert normalize_provider_id("chatgpt") == "openai"
     assert normalize_provider_id("kimi") == "kimi"
-    assert normalize_provider_id("abab") == "kimi"
+    assert normalize_provider_id("moonshot") == "kimi"
 
 
 def test_normalize_provider_id_unknown():

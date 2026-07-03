@@ -1,7 +1,7 @@
 """Provider Kimi — wrapper API REST (OpenAI-compatible).
 
-Kimi espone un'API compatibile con il formato OpenAI chat completions.
-Modelli: abab6.5-chat, abab5.5-chat.
+Kimi (Moonshot AI) espone un'API compatibile con il formato OpenAI chat
+completions. Modelli: kimi-latest, moonshot-v1-8k.
 Richiede: pip install requests
 """
 
@@ -16,26 +16,26 @@ MOONSHOT_BASE_URL = "https://api.moonshot.cn/v1"
 
 MODELS = [
     ModelInfo(
-        id="abab6.5-chat",
-        name="Kimi ABAB 6.5",
+        id="kimi-latest",
+        name="Kimi (latest)",
         provider="kimi",
-        context_window=245_760,
+        context_window=131_072,
         max_output_tokens=16_384,
         supports_vision=False,
         supports_tools=True,
     ),
     ModelInfo(
-        id="abab5.5-chat",
-        name="Kimi ABAB 5.5",
+        id="moonshot-v1-8k",
+        name="Moonshot v1 8K",
         provider="kimi",
-        context_window=16_384,
+        context_window=8_192,
         max_output_tokens=4_096,
         supports_vision=False,
         supports_tools=False,
     ),
 ]
 
-DEFAULT_MODEL = "abab6.5-chat"
+DEFAULT_MODEL = "kimi-latest"
 
 
 def _resolve_key() -> str:
