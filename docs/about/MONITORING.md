@@ -30,6 +30,19 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 
 **Why so precise**: Anthropic's usage API exposes accurate per-window numbers in near real time, and Claude's response sizes are predictable enough for the projection model.
 
+### 🔵 Codex Pro €100 — weekly-aware, proven over a month
+
+| Metric | Value |
+|---|---|
+| Window tested | weekly cap (Thu→Thu cycle) + 5h windows, over a full month |
+| Target usage | 92% per window, weekly-aware distribution across work hours |
+| Weekly budget landings | 99% (Jun 18) · **100% reached 10 minutes before the last spendable minute of the cycle** (Jun 24) |
+| Frequency of crossing 100% | 0 over 4 consecutive weeks |
+| Human interventions | 0 *(read-only observation for the whole run)* |
+| Verdict | ✅ Weekly-aware pacing works at month scale. Full run: [RESULTS case study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run). |
+
+**Why it matters**: Codex's real constraint is the weekly cap, not the 5h window. The bridge distributes the weekly budget across the user's working hours and auto-adapts the burn rate to the residual budget — as the cap approaches, the team coasts (throttle, no new spawns) and lands *on* the cap instead of crossing it.
+
 ### 🌙 Kimi €40 — works, optimization in progress
 
 | Metric | Value |
@@ -39,7 +52,7 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 | Projection oscillation | ± **10–15%** |
 | Frequency of crossing 100% | occasional |
 | Captain idle time | low |
-| Verdict | 🎯 Viable. Lowering oscillation is the active work. |
+| Verdict | 🎯 Viable, **in beta**. Lowering oscillation is the active work; two multi-week beta teams are live (Jul 2026) to validate month-scale autonomy. |
 
 **Why less precise**: the usage signal we read from Kimi is more variable, and response sizes have a wider distribution. The current mitigation is the 88% target (tuned per-provider in pacing-bridge).
 
@@ -51,7 +64,7 @@ A single agent working at modest pace burns through this tier well before the wi
 
 ## ⚠️ Known issues
 
-1. **🪟 5h window vs weekly cap** — current calibration optimizes for the 5h reset, but Anthropic's real cap is weekly. Two days of intensive use can exhaust the weekly allowance even when every 5h window stayed under 95%. **Real incident observed** on 2026-05-21 (see `docs/internal/postmortems/2026-05-21-halt-weekly-incident.md`). **Next milestone**: weekly-window calibration.
+1. ~~**🪟 5h window vs weekly cap**~~ — **shipped**. Weekly-aware calibration (`schedule+ratio+weekly`) distributes the weekly cap across working hours, and held for a full month on Codex: 99–100% weekly landings, zero overshoot (see the Codex section above). The original problem: two days of intensive use could exhaust the weekly allowance even when every 5h window stayed under 95% — **real incident observed** on 2026-05-21 (see `docs/internal/postmortems/2026-05-21-halt-weekly-incident.md`).
 
 2. **🛡️ Sentinel itself consumes tokens** — the Sentinel intervenes too often today, and each intervention costs LLM calls. This is *the* reason the €20 base tier is currently unusable. Reducing Sentinel intervention frequency is the highest-leverage optimization left.
 
@@ -63,7 +76,7 @@ A single agent working at modest pace burns through this tier well before the wi
 
 The team can be configured to **only work during specific hours**, like a human employee. Outside those hours: no new spawns, no promotions, no new writing assignments; in-flight work finishes and the team idles. Mentor & Assistente bots keep replying to the user (only pipeline production stops).
 
-**Why it matters:** with weekly-capped providers (Codex Pro, Claude Max), a 24/7 team burns the whole weekly budget in 2-4 days and then sits idle for the rest of the week. Concentrating the same budget on the user's working hours = more output per €, landing during the user's day, not at 3am.
+**Why it matters:** with weekly-capped providers (Codex Pro, Claude Max), an unpaced 24/7 team would burn the whole weekly budget in 2-4 days and then sit idle for the rest of the week. Concentrating the same budget on the user's working hours = more output per €, landing during the user's day, not at 3am.
 
 Configure it three ways — `jht working-hours` (CLI), the desktop setup wizard, or the web dashboard (`/team` → Working hours, with a 7×24 heatmap and a sweet-spot meter). The pacing-bridge reads the schedule live and computes each 5h-window target dynamically from the provider's weekly cap, auto-calibrating on the team's real burn rate over the first few days — no restart, no manual tuning.
 
