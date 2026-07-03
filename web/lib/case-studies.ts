@@ -217,6 +217,12 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       ],
       why: "Ecco perché i numeri vengono così: cercando ruoli finance e investment in grandi città europee, il team ha concentrato la ricerca negli hub finanziari (Londra, Zurigo, Ginevra, Lussemburgo, Dublino) e quasi tutte le posizioni ricadono in categorie business & finance — esattamente il profilo del candidato.",
     },
+    maintainerNote: [
+      "Se il technical writing è stata la sfida, questo profilo è **il caso che più si avvicina a ciò che considero un successo**. Il candidato punta a ruoli finance e investment nelle grandi città europee: un mercato ampio, ben definito e concentrato negli hub finanziari — Londra, Zurigo, Ginevra, Lussemburgo, Dublino — dove le posizioni pertinenti non scarseggiano.",
+      "È il profilo affidato a **Codex**, il modello che ho trovato più stabile nell'esecuzione autonoma prolungata. Un mercato favorevole unito a un modello solido ha permesso al team di lavorare **giorno dopo giorno per circa un mese** — esattamente il traguardo che uso come metro di successo.",
+      "I risultati sono i migliori della serie: **la quota più alta di match forti ed eccellenti**. E c'è un dato che merita attenzione: pur essendo l'abbonamento più costoso (~€100 al mese contro i ~€40 di Kimi), **il costo per singolo match eccellente è il più basso** — perché un mercato ricco di posizioni adatte rende molto di più per ogni euro speso.",
+      "Per questo lo considero il caso di riferimento: quando il mercato è favorevole e il modello è stabile, il team consegna un mese intero di lavoro autonomo con il miglior rapporto qualità/costo dell'intera serie.",
+    ],
     run: betaCRun as unknown as CaseStudyRun,
   },
   // ── Beta tester 3 · luxury hospitality (Kimi) ───────────────────────────
@@ -276,7 +282,13 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       ],
       why: "Ecco perché i numeri vengono così: il profilo punta a luxury hospitality e guest experience, con interesse per il cabin crew premium — perciò il team ha cercato soprattutto hôtellerie 5★, guest relations VIP ed eventi, con un ramo dedicato al cabin crew dei vettori del Golfo (Emirates, Wizz Air). Le famiglie di ruolo dominanti sono Luxury Hospitality Operations, hostess/eventi e cabin crew. Quasi tutto arriva da LinkedIn e da job board specializzate dell'hospitality (hosco, resortwork) e delle compagnie aeree; il mercato del lusso italiano fa da baricentro, mentre il requisito di lavorabilità spiega perché diverse posizioni fuori dall'Italia richiedono la verifica di visto/sponsorship.",
     },
-    // Run mono-fase: solo Kimi (budget settimanale monitorato), ~3 giorni.
+    maintainerNote: [
+      "È il caso più recente della serie: il team ha iniziato a lavorarci da poco più di una settimana. Il profilo si muove in **un mercato di nicchia** — hôtellerie di lusso, guest experience e cabin crew per i vettori premium del Golfo — concentrato in poche piazze: le grandi mete del turismo italiano e gli hub internazionali dell'accoglienza di fascia alta.",
+      "Anche qui il team gira su **Kimi**, con l'abbonamento più economico. **È ancora presto per trarre conclusioni**: una settimana racconta l'avvio, non l'andamento di un mese. I primi segnali, però, sono incoraggianti — in pochi giorni il team ha già prodotto un nucleo di match forti ed eccellenti su un profilo tutt'altro che generalista.",
+      "La domanda aperta è la stessa del technical writing: se un mercato così specifico avrà **profondità sufficiente** per alimentare il team a lungo, e se Kimi reggerà l'esecuzione autonoma **per un mese intero** senza sforare il budget. Su questo profilo abbiamo ancora poche settimane di osservazione.",
+      "Per ora lo considero un caso da seguire: promettente nell'avvio, ma tutto da confermare sul lungo periodo. È il banco di prova più fresco della serie.",
+    ],
+    // Run mono-fase: solo Kimi (budget settimanale monitorato), ~1 settimana.
     run: betaDRun as unknown as CaseStudyRun,
   },
 ];
