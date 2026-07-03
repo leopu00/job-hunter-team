@@ -152,7 +152,12 @@ const T: Record<string, Record<string, string>> = {
 };
 
 type Diagnosis =
-  "alive" | "long_turn" | "stallo" | "cli_dead" | "ambiguous" | string;
+  | "alive"
+  | "long_turn"
+  | "stallo"
+  | "cli_dead"
+  | "ambiguous"
+  | string;
 
 type DoctorEvent = {
   ts: string;

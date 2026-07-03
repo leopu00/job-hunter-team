@@ -188,8 +188,7 @@ const T = {
     s5_body:
       "O JHT é totalmente de código aberto. Pode verificar a qualquer momento o que o código faz examinando o repositório no GitHub.",
     s6_title: "Contacto",
-    s6_body:
-      "Para questões de privacidade, escreva para leo_p00@gmail.com.",
+    s6_body: "Para questões de privacidade, escreva para leo_p00@gmail.com.",
     nav_home: "Início",
     nav_privacy: "Privacidade",
     nav_terms: "Termos",
