@@ -8,7 +8,6 @@ import {
 import LandingNav from "../components/landing/LandingNav";
 import { LandingFooter } from "../components/landing/LandingCTA";
 import ScrollToTop from "../components/landing/ScrollToTop";
-import ImagePlaceholder from "../components/landing/ImagePlaceholder";
 
 type Lang = "it" | "en" | "es" | "fr" | "de" | "pt" | "hu";
 
@@ -16,7 +15,7 @@ type ModeText = { title: string; body: string; req: string };
 
 type Mode = {
   promptId: string;
-  img?: string;
+  img: string;
   badge: Record<Lang, string>;
 } & Record<Lang, ModeText>;
 
@@ -188,7 +187,8 @@ const PAGE = {
       "Con il login apri la dashboard da qualsiasi browser, anche dal telefono, e segui la squadra ovunque ti trovi.",
     ctrlWeb:
       "Il login resta sempre facoltativo: se preferisci, i tuoi dati restano solo sul tuo computer, senza alcun cloud.",
-    ctaDownload: "Scarica l'app →",
+    soon: "In arrivo",
+    ctaDownload: "Installa →",
     back: "← Torna alla home",
   },
   en: {
@@ -211,7 +211,8 @@ const PAGE = {
       "With login, open the dashboard from any browser, even your phone, and follow the team wherever you are.",
     ctrlWeb:
       "Login always stays optional: if you prefer, your data stays only on your computer, with no cloud at all.",
-    ctaDownload: "Download the app →",
+    soon: "Coming soon",
+    ctaDownload: "Install →",
     back: "← Back to home",
   },
   es: {
@@ -234,7 +235,8 @@ const PAGE = {
       "Con el inicio de sesión abres la dashboard desde cualquier navegador, incluso desde el móvil, y sigues al equipo estés donde estés.",
     ctrlWeb:
       "El inicio de sesión siempre es opcional: si lo prefieres, tus datos se quedan solo en tu ordenador, sin ninguna nube.",
-    ctaDownload: "Descarga la app →",
+    soon: "Próximamente",
+    ctaDownload: "Instalar →",
     back: "← Volver al inicio",
   },
   fr: {
@@ -257,7 +259,8 @@ const PAGE = {
       "Avec la connexion, ouvrez la dashboard depuis n'importe quel navigateur, même votre téléphone, et suivez l'équipe où que vous soyez.",
     ctrlWeb:
       "La connexion reste toujours facultative : si vous préférez, vos données restent uniquement sur votre ordinateur, sans aucun cloud.",
-    ctaDownload: "Téléchargez l'app →",
+    soon: "Bientôt disponible",
+    ctaDownload: "Installer →",
     back: "← Retour à l'accueil",
   },
   de: {
@@ -280,7 +283,8 @@ const PAGE = {
       "Mit Anmeldung öffnest du die Dashboard von jedem Browser aus, sogar vom Handy, und verfolgst das Team, wo immer du bist.",
     ctrlWeb:
       "Die Anmeldung bleibt immer optional: Wenn du möchtest, bleiben deine Daten nur auf deinem Computer, ganz ohne Cloud.",
-    ctaDownload: "App herunterladen →",
+    soon: "Demnächst",
+    ctaDownload: "Installieren →",
     back: "← Zurück zur Startseite",
   },
   hu: {
@@ -303,7 +307,8 @@ const PAGE = {
       "Bejelentkezéssel bármelyik böngészőből megnyitod a dashboardot, akár a telefonodról is, és bárhol követheted a csapatot.",
     ctrlWeb:
       "A bejelentkezés mindig opcionális marad: ha úgy szeretnéd, az adataid csak a saját gépeden maradnak, felhő nélkül.",
-    ctaDownload: "Töltsd le az appot →",
+    soon: "Hamarosan",
+    ctaDownload: "Telepítés →",
     back: "← Vissza a főoldalra",
   },
   pt: {
@@ -326,7 +331,8 @@ const PAGE = {
       "Com o início de sessão abres a dashboard a partir de qualquer navegador, até do telemóvel, e acompanhas a equipa onde quer que estejas.",
     ctrlWeb:
       "O início de sessão é sempre opcional: se preferires, os teus dados ficam só no teu computador, sem qualquer nuvem.",
-    ctaDownload: "Transfere a app →",
+    soon: "Em breve",
+    ctaDownload: "Instalar →",
     back: "← Voltar ao início",
   },
 };
@@ -336,12 +342,14 @@ function SetupContent() {
   const L = (PAGE[lang as Lang] ? lang : "en") as Lang;
   const p = PAGE[L];
 
-  const ctrlRows: [string, string][] = [
-    [p.ctrlDesktopLabel, p.ctrlDesktopBody],
-    [p.ctrlTerminalLabel, p.ctrlTerminalBody],
+  // L'app desktop non è ancora scaricabile: la riga resta ma con il tag
+  // "in arrivo" (come il tab Desktop su /download).
+  const ctrlRows: { label: string; body: string; soon?: boolean }[] = [
+    { label: p.ctrlDesktopLabel, body: p.ctrlDesktopBody, soon: true },
+    { label: p.ctrlTerminalLabel, body: p.ctrlTerminalBody },
   ];
   if ("ctrlBrowserLabel" in p && "ctrlBrowserBody" in p) {
-    ctrlRows.push([p.ctrlBrowserLabel, p.ctrlBrowserBody]);
+    ctrlRows.push({ label: p.ctrlBrowserLabel, body: p.ctrlBrowserBody });
   }
 
   return (
@@ -368,24 +376,16 @@ function SetupContent() {
               className="flex flex-col border border-[var(--color-border)] overflow-hidden"
               style={{ background: "var(--color-panel)" }}
             >
-              {m.img ? (
-                <div className="aspect-[4/3] flex items-center justify-center p-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={m.img}
-                    alt={m[L].title}
-                    width={1448}
-                    height={1086}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                </div>
-              ) : (
-                <ImagePlaceholder
-                  label={m[L].title}
-                  promptId={m.promptId}
-                  aspect="4 / 3"
+              <div className="aspect-[4/3] flex items-center justify-center p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={m.img}
+                  alt={m[L].title}
+                  width={1448}
+                  height={1086}
+                  className="max-w-full max-h-full object-contain"
                 />
-              )}
+              </div>
               <div className="p-6 flex flex-col flex-1">
                 <span className="text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] mb-2">
                   {m.badge[L]}
@@ -424,13 +424,18 @@ function SetupContent() {
             {p.ctrlIntro}
           </p>
           <div className="border-t border-[var(--color-border)]">
-            {ctrlRows.map(([label, body]) => (
+            {ctrlRows.map(({ label, body, soon }) => (
               <div
                 key={label}
                 className="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-1.5 sm:gap-6 py-4 border-b border-[var(--color-border)]"
               >
                 <div className="text-[13px] font-bold text-[var(--color-white)]">
                   {label}
+                  {soon && (
+                    <span className="ml-2 sm:ml-0 sm:mt-1.5 sm:block sm:w-fit text-[9px] font-semibold tracking-[0.15em] uppercase text-[var(--color-green)] border border-[var(--color-green)] px-2 py-0.5">
+                      {p.soon}
+                    </span>
+                  )}
                 </div>
                 <p className="text-[12px] md:text-[13px] text-[var(--color-bright)] leading-relaxed">
                   {body}
