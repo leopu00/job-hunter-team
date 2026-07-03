@@ -67,7 +67,7 @@ const T: Record<
 };
 
 // Feed "Attività recente": una riga per azione (istanza + cosa + posizione +
-// quando). Condiviso tra la pagina /team/attivita e la card in dashboard.
+// quando). Condiviso tra la pagina /team e la card in dashboard.
 export default function RecentActivityFeed({
   recent,
   max,

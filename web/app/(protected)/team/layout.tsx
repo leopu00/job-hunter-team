@@ -3,11 +3,11 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Team",
   description:
-    "Manage your AI agent team: start, monitor and coordinate Scout, Analyst, Scorer, Writer and others.",
+    "Your AI agent team's activity: who worked, how much and when — charts, per-agent breakdown and full action log.",
   openGraph: {
     title: "Team | Job Hunter Team",
     description:
-      "Manage your AI agent team: start, monitor and coordinate Scout, Analyst, Scorer, Writer and others.",
+      "Your AI agent team's activity: who worked, how much and when — charts, per-agent breakdown and full action log.",
   },
 };
 

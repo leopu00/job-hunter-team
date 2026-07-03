@@ -3,7 +3,7 @@
 // Tooltip isolato per i grafici: vive in un proprio componente con stato
 // interno e portal su <body>, così l'hover aggiorna SOLO questo layer e MAI i
 // grafici → niente re-render delle celle e niente loop scrollbar (la pagina non
-// "trema"). Condiviso tra /team/attivita e /case-studies.
+// "trema"). Condiviso tra /team e /case-studies.
 
 import { forwardRef, useImperativeHandle, useState } from "react";
 import { createPortal } from "react-dom";

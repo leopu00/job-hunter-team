@@ -308,7 +308,7 @@ export default async function DashboardPage() {
               <RecentActivityFeed
                 recent={recentActivity}
                 max={8}
-                viewAllHref="/team/attivita/log"
+                viewAllHref="/team/log"
                 scroll={false}
               />
             </div>

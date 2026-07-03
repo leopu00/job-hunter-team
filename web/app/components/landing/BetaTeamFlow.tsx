@@ -123,7 +123,7 @@ export default function BetaTeamFlow() {
 
         const captainNameRect = rectOf(captainNameRef.current);
 
-        // Captain → pipeline (skip Critic come in team/v2: il Capitano non
+        // Captain → pipeline (skip Critic come nella team v2 archiviata: il Capitano non
         // gli ordina direttamente, riceve solo feedback indiretto).
         const captainPaths: ArrowPath[] = [];
         const pipelineRects = pipelineRefs.current.map((n) => rectOf(n));

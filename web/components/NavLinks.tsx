@@ -71,7 +71,7 @@ function NavLink({
   badgeLabel?: string
 }) {
   // Active quando il pathname è esattamente la voce o un suo sotto-percorso
-  // (es. /team/v2 mantiene "Team" attivo). Stato attivo = colore bianco
+  // (es. /team/log mantiene "Team" attivo). Stato attivo = colore bianco
   // sovrascrivendo l'accent della voce (dev3 commit 06def336).
   const active = pathname === href || pathname.startsWith(href + '/')
   const color = active ? 'var(--color-white)' : accent ?? 'var(--color-muted)'

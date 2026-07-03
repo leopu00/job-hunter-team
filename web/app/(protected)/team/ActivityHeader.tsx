@@ -9,7 +9,6 @@ const T: Record<
   {
     dashboard: string;
     team: string;
-    activity: string;
     log: string;
     titleActivity: string;
     titleLog: string;
@@ -21,7 +20,6 @@ const T: Record<
   it: {
     dashboard: "Dashboard",
     team: "Team",
-    activity: "Attività",
     log: "Registro",
     titleActivity: "📊 Attività del team",
     titleLog: "📋 Registro attività",
@@ -35,7 +33,6 @@ const T: Record<
   en: {
     dashboard: "Dashboard",
     team: "Team",
-    activity: "Activity",
     log: "Log",
     titleActivity: "📊 Team activity",
     titleLog: "📋 Activity log",
@@ -49,7 +46,6 @@ const T: Record<
   es: {
     dashboard: "Panel",
     team: "Equipo",
-    activity: "Actividad",
     log: "Registro",
     titleActivity: "📊 Actividad del equipo",
     titleLog: "📋 Registro de actividad",
@@ -63,7 +59,6 @@ const T: Record<
   fr: {
     dashboard: "Tableau de bord",
     team: "Équipe",
-    activity: "Activité",
     log: "Journal",
     titleActivity: "📊 Activité de l'équipe",
     titleLog: "📋 Journal d'activité",
@@ -77,7 +72,6 @@ const T: Record<
   de: {
     dashboard: "Dashboard",
     team: "Team",
-    activity: "Aktivität",
     log: "Protokoll",
     titleActivity: "📊 Team-Aktivität",
     titleLog: "📋 Aktivitätsprotokoll",
@@ -91,7 +85,6 @@ const T: Record<
   hu: {
     dashboard: "Irányítópult",
     team: "Csapat",
-    activity: "Tevékenység",
     log: "Napló",
     titleActivity: "📊 Csapat tevékenysége",
     titleLog: "📋 Tevékenységnapló",
@@ -105,7 +98,6 @@ const T: Record<
   pt: {
     dashboard: "Painel",
     team: "Equipe",
-    activity: "Atividade",
     log: "Registo",
     titleActivity: "📊 Atividade da equipa",
     titleLog: "📋 Registo de atividade",
@@ -146,18 +138,11 @@ export function ActivityPageHeader({
           {t.dashboard}
         </Link>
         <Crumb>/</Crumb>
-        <Link
-          href="/team"
-          className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
-        >
-          {t.team}
-        </Link>
-        <Crumb>/</Crumb>
         <span
           className="text-[10px] text-[var(--color-muted)]"
           aria-current="page"
         >
-          {t.activity}
+          {t.team}
         </span>
       </nav>
       <div className="mt-3">
@@ -189,13 +174,6 @@ export function LogPageHeader({ total }: { total: number }) {
           className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
         >
           {t.team}
-        </Link>
-        <Crumb>/</Crumb>
-        <Link
-          href="/team/attivita"
-          className="text-[10px] text-[var(--color-dim)] hover:text-[var(--color-muted)] no-underline transition-colors"
-        >
-          {t.activity}
         </Link>
         <Crumb>/</Crumb>
         <span
