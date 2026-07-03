@@ -40,11 +40,11 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 
 > 📊 **From the original private build** — ~200 offers analyzed · ~20 tailored applications · **5 interview invites within a few weeks**. Full background in [`docs/about/STORY.md`](docs/about/STORY.md).
 
-> 📈 **From the public stack (June 2026)** — a Codex-powered team ran **one month unattended**: **649 positions found · 513 scored**, closing its weekly budget at **99–100% for four straight weeks** with zero human interventions. Data in [`docs/about/RESULTS.md`](docs/about/RESULTS.md), live on [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies).
+> 📈 **From the public stack (June 2026)** — a Codex-powered team ran **one month unattended**: **658 positions found · 520 scored · 307 strong matches (score ≥70)**, closing its weekly budget at **99–100% for four straight weeks** with zero human interventions. Data in [`docs/about/RESULTS.md`](docs/about/RESULTS.md), live on [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies).
 
 ## 🎬 Demo
 
-The best demo is real data: [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies) renders the live dashboards of the beta runs — including the month-long autonomous Codex run (649 positions found, 513 scored, weekly budget self-managed at 99–100%).
+The best demo is real data: [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies) renders the live dashboards of the beta runs — including the month-long autonomous Codex run (658 positions found, 520 scored, weekly budget self-managed at 99–100%).
 
 > **Where the numbers come from** — every dashboard renders an anonymized snapshot of the team's event log, committed to this repo ([`web/data/case-studies/`](web/data/case-studies/)). Same data, same charts, reproducible from the JSON. Methodology and per-run breakdowns in [`docs/about/RESULTS.md`](docs/about/RESULTS.md).
 
@@ -141,7 +141,7 @@ Three subscriptions cover the ~400M tokens/month requirement:
 | | Provider | Plan | Cost/mo | Status |
 |---|---|---|---|---|
 | 🟠 | **Claude** | Max x20 | ~€200 | ✅ Production-ready, best precision |
-| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Proven — 1-month autonomous run (649 positions, weekly budget self-managed at 99–100%) |
+| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Proven — 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
 | 🌙 | **Kimi** | Pro | ~€40 | 🧪 Beta — mass-market tier (75h + 10-day runs; two multi-week teams in observation) |
 
 ---

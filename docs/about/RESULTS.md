@@ -131,11 +131,11 @@ Raw data: SQLite snapshot, Sentinel logs (3052 ticks), Kimi session logs (16,700
 |---|---|
 | 👤 User profile | Early-career finance (credit risk → front office) |
 | 🌍 Target geography | European financial hubs |
-| 📅 Period | 2026-06-03 → ongoing (**28 days** covered at the 2026-07-01 snapshot) |
+| 📅 Period | 2026-06-03 → ongoing (**30 days** covered at the 2026-07-03 snapshot) |
 | 💳 Subscription | 🔵 **Codex Pro ~€100/mo** |
-| 🎯 Job offers found by the pipeline | **649** |
-| ✅ Scored | **513** (avg ~70/100 at the mid-run snapshot, range 27–94) |
-| 💪 Strong matches (score ≥70 / ≥80) | **303 / 166** |
+| 🎯 Job offers found by the pipeline | **658** |
+| ✅ Scored | **520** (avg ~71/100, range 27–94) |
+| 💪 Strong matches (score ≥70 / ≥80) | **307 / 169** |
 | 📄 Applications | on-demand only *(writer-on-demand: the user orders CVs when they want — this run measures the search & scoring engine)* |
 | 💰 Weekly budget utilization | **≈100% every week, zero overshoot** (4.1 weekly budgets consumed in 4 calendar weeks) |
 | 🧠 Human interventions | **0** — observed read-only for the whole month |
