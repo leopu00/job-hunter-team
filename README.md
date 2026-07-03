@@ -10,6 +10,8 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/leopu00/job-hunter-team/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/leopu00/job-hunter-team/ci.yml?branch=master&label=CI" alt="CI" /></a>
+  <a href="https://github.com/leopu00/job-hunter-team/actions/workflows/test.yml"><img src="https://img.shields.io/github/actions/workflow/status/leopu00/job-hunter-team/test.yml?branch=master&label=tests" alt="Tests" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="https://github.com/leopu00/job-hunter-team/stargazers"><img src="https://img.shields.io/github/stars/leopu00/job-hunter-team?style=social" alt="GitHub Stars" /></a>
   <a href="https://github.com/leopu00/job-hunter-team/network/members"><img src="https://img.shields.io/github/forks/leopu00/job-hunter-team?style=social" alt="GitHub Forks" /></a>
@@ -42,7 +44,29 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 
 ## 🎬 Demo
 
-The best demo is real data: [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies) renders the live dashboards of the beta runs — including the month-long autonomous Codex run (649 positions found, 513 scored, weekly budget self-managed at 99–100%). Animated GIFs of the dashboard and onboarding are in the works.
+The best demo is real data: [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies) renders the live dashboards of the beta runs — including the month-long autonomous Codex run (649 positions found, 513 scored, weekly budget self-managed at 99–100%).
+
+> **Where the numbers come from** — every dashboard renders an anonymized snapshot of the team's event log, committed to this repo ([`web/data/case-studies/`](web/data/case-studies/)). Same data, same charts, reproducible from the JSON. Methodology and per-run breakdowns in [`docs/about/RESULTS.md`](docs/about/RESULTS.md).
+
+*The live case-studies dashboard — real, anonymized field data:*
+
+<p align="center">
+  <a href="https://jobhunterteam.ai/case-studies"><img src="assets/screenshots/overview.png" alt="Case studies — what the team delivers, by provider" width="100%" /></a>
+</p>
+
+*Where the team hunts (month-long Codex run, 658 positions across Europe) and how well it matches:*
+
+<p align="center">
+  <a href="https://jobhunterteam.ai/case-studies/beta-2"><img src="assets/screenshots/beta2-map.png" alt="Geographic distribution and match quality of the month-long run" width="100%" /></a>
+</p>
+
+*The team managing its own weekly AI budget, day by day, for a full month — no human in the loop:*
+
+<p align="center">
+  <a href="https://jobhunterteam.ai/case-studies/beta-2"><img src="assets/screenshots/beta2-budget.png" alt="Positions by category and self-managed weekly budget over time" width="100%" /></a>
+</p>
+
+Animated GIFs of the dashboard and onboarding are in the works.
 
 ## The Team
 
@@ -127,6 +151,8 @@ Three subscriptions cover the ~400M tokens/month requirement:
 ```bash
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
+
+> 🔍 **Don't trust `curl | bash`? Good instinct.** The script is versioned in this repo ([`web/public/install.sh`](web/public/install.sh)) — read it before running, or preview every action with `--dry-run`: `curl -fsSL https://jobhunterteam.ai/install.sh -o install.sh && less install.sh && bash install.sh --dry-run`. It writes exactly two things on the host — `~/.jht/runtime/docker-compose.yml` and the `~/.local/bin/jht` wrapper — and everything else (Node, Python, tmux, agents) runs inside the container. Only `~/.jht` and `~/Documents/Job Hunter Team` are mounted; the rest of your filesystem is invisible to it.
 
 **Desktop app** — in development, not part of the beta. Unsupported preview builds land on [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases) for contributors, but the website's download page is intentionally disabled until the app is ready. State, gaps and roadmap in [`desktop/STATUS.md`](desktop/STATUS.md).
 
