@@ -23,9 +23,9 @@ Full origin story in [`STORY.md`](STORY.md).
 
 ---
 
-## 🧪 Case study #2 — Beta tester 1 × Codex ProLite (senior multilingual technical profile)
+## 🧪 Case study #2 — The multilingual senior profile × Codex Pro (35-hour run)
 
-35-hour autonomous run on a Hetzner CPX22 VPS. Tested whether a senior multilingual technical profile, targeting a multi-country European market, can be served by the public stack.
+35-hour autonomous run on a Hetzner CPX22 VPS. Tested whether a senior multilingual technical profile, targeting a multi-country European market, can be served by the public stack. *(Shown as "Beta tester 1" on the live dashboard.)*
 
 > **Profile summary**: senior professional with 10+ years of experience in multilingual technical documentation, translation, and localization, with secondary technical/manufacturing skills. Multi-country European job search across primary and secondary markets, with EU-remote as fallback.
 
@@ -34,7 +34,7 @@ Full origin story in [`STORY.md`](STORY.md).
 | 👤 User profile | Senior multilingual tech documentation/translation, 10+y experience |
 | 🌍 Target geography | Multi-country European search (primary + secondary markets + EU remote) |
 | 📅 Period | 2026-05-19 → 2026-05-21 (**34.84h** active pipeline time) |
-| 💳 Subscription | 🔵 **Codex ProLite ~€100/mo** (1 month paid) |
+| 💳 Subscription | 🔵 **Codex Pro ~€100/mo** (1 month paid) |
 | 🖥️ Host | Hetzner CPX22 VPS (2 vCPU, 4GB, **€9.75/mo** ≈ €0.54 for this run) |
 | 🎯 Job offers analyzed by the pipeline | **206** |
 | ✅ Companies vetted | 179 (120 GO / 59 CAUTIOUS / 0 NO_GO) |
@@ -54,7 +54,7 @@ Full origin story in [`STORY.md`](STORY.md).
 - **Curated source > volume** — the curated scout lane (Ashby/Greenhouse-style) produced 22% high-score positions vs the volume scout lane (LinkedIn-heavy) at 14%.
 
 ### ❌ What didn't
-- **Codex Pro weekly cap is a hard ceiling** — the weekly token budget was consumed in ~2.3 days at a 2.7%/h burn rate. At the time of this run, Codex ProLite was **not sustainable for 7-day full-throughput hunts**. → **Closed since**: the weekly-aware pacing bridge now spreads the cap across the whole cycle — see [case study #4](#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run), where the same provider closes every weekly budget at 99–100% for a month straight.
+- **Codex Pro weekly cap is a hard ceiling** — the weekly token budget was consumed in ~2.3 days at a 2.7%/h burn rate. At the time of this run, Codex Pro was **not sustainable for 7-day full-throughput hunts**. → **Closed since**: the weekly-aware pacing bridge now spreads the cap across the whole cycle — see [case study #4](#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run), where the same provider closes every weekly budget at 99–100% for a month straight.
 - **Company verdict rubric is too lenient** — 0 NO_GO out of 179 companies. Hard requirements (degree, geography lock-in) leaked downstream and were filtered late by the Writer instead of upfront by the Analyst.
 - **Writer attribution is broken** — only 8 out of 119 `written_by` fields populated (93% null). Pipeline still works but we lose per-Writer quality breakdown.
 
@@ -69,7 +69,7 @@ Raw data: SQLite snapshot, Sentinel logs, deliverables (PDF CVs, critic reviews)
 
 ---
 
-## 🧪 Case study #3 — Beta tester 2 × Kimi K2 Pro (junior software developer)
+## 🧪 Case study #3 — The junior developer profile × Kimi K2 Pro (75-hour run)
 
 ~75-hour run on a Hetzner CPX22 VPS validating Kimi K2 as the **mass-market jackpot tier** (€40/mo target). Profile: junior software developer in a saturated capital-city market — a deliberately hard cell.
 
@@ -85,20 +85,20 @@ Raw data: SQLite snapshot, Sentinel logs, deliverables (PDF CVs, critic reviews)
 | 🖥️ Host | Hetzner CPX22 VPS (2 vCPU, 4GB, **€9.75/mo** ≈ €1.17 for this run) |
 | 🎯 Job offers analyzed by the pipeline | **251** |
 | ✅ Companies vetted | 178 (158 GO / 20 CAUTIOUS / 0 NO_GO) |
-| 📄 Applications written (CV + critic PASS) | **56** *(22% pipeline conversion)* |
+| 📄 Applications written (CV + critic PASS) | **55** *(22% pipeline conversion)* |
 | 📤 Applications submitted | 0 *(by-design — user-curated)* |
 | 💬 Interview invites | N/A |
 | 🎉 Offers received | N/A |
-| 💰 LLM tokens consumed | **40.7M "fresh" + 1.57B cache_read = 1.61B total** *(aggregated from 16,700 events in 427 session logs)* |
-| 💵 Pay-per-use equivalent cost | **~€78** (input $5 + output $17 + cache_read $63 at Kimi list prices) — vs **€40 subscription** = sub 14× cheaper at this usage |
-| 📈 Critic pass rate | **51.4%** (55 PASS / 51 REJECT, avg score 5.05/10) |
+| 💰 LLM tokens consumed | **40.7M "fresh" (input + output) + 1.57B cache_read = 1.61B total** *(aggregated from 16,700 usage events in the Kimi session logs)* |
+| 💵 Pay-per-use equivalent cost | **~€78** (input $5 + output $17 + cache_read $63 at Kimi list prices) — vs **€40 subscription**: the subscription paid for itself in under 4 days of burst use |
+| 📈 Critic pass rate | **51.9%** (55 PASS / 51 REJECT, avg score 5.05/10) |
 | ⚡ Bridge velocity | 5.37%/h (2× faster than Codex 2.7%/h) |
 | 🧠 Hours of user time | <1h setup + occasional monitoring (autonomous) |
 
 ### ✅ What worked
 - **Token-based provider sustains long runs** — Kimi has no weekly cap; the team ran 4 calendar days without saturation (vs Codex Pro hitting 96% weekly in 2.3 days at the time — weekly-aware pacing has since closed that gap, see [case study #4](#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)).
 - **High scout volume** — 251 positions discovered in the run, peak of 145 on day 2. Scout-1 (volume lane) found 29 high-score positions on 187 total.
-- **Mass-market price point validated** — €40/mo subscription delivered a working pipeline on a junior profile in a saturated metro. **Cost per ready CV: €0.71** (taking the full month's subscription / 56 CVs from this run alone). At pay-per-use rates the same run would have cost ~€78 (input $5 + output $17 + 1.57B cached input $63) — the subscription paid for itself in <4 days.
+- **Mass-market price point validated** — €40/mo subscription delivered a working pipeline on a junior profile in a saturated metro. **Cost per ready CV: €0.73** (taking the full month's subscription / 55 CVs from this run alone). At pay-per-use rates the same run would have cost ~€78 (input $5 + output $17 + 1.57B cached input $63) — the subscription paid for itself in <4 days.
 - **Aggressive prompt caching pays off** — 1.57B cached input reads vs 33.9M new input tokens means the team re-uses context heavily (job descriptions, agent instructions, candidate profile). Caching represents 97% of input volume but cost only ~74% of input billing.
 - **Bug-fix loop during the run** — 13 bugs + 4 features closed in a 24-hour mid-run sprint (the maintainer is also a developer; this is not the default user experience but proves the pipeline is debuggable from inside).
 
@@ -113,7 +113,7 @@ Raw data: SQLite snapshot, Sentinel logs, deliverables (PDF CVs, critic reviews)
 
 > **Note on token aggregation**: `token-meter.csv` (the rolling telemetry file the bridge consumes) was reset when the container restarted, so the live CSV no longer holds historical data. The numbers above are **back-calculated from the durable Kimi session logs** (`wire.jsonl` files, 175MB across 15 sessions) — every `StatusUpdate` event the Kimi CLI emits carries an exact `token_usage` block. Aggregating 16,700 such events gives a precise picture. We tracked a follow-up to make `token-meter.csv` restart-durable so future runs don't need this fallback.
 
-> **Note on profile difference**: case study #2 (Beta tester 1) and case study #3 (Beta tester 2) used **different candidate profiles** and **different providers**. The provider comparison is *not* clean — to isolate provider quality we would need the same candidate × two providers in parallel. That's a follow-up experiment.
+> **Note on profile difference**: case study #2 (multilingual senior) and case study #3 (junior developer) used **different candidate profiles** and **different providers**. The provider comparison is *not* clean — to isolate provider quality we would need the same candidate × two providers in parallel. That's a follow-up experiment.
 
 > **Note on duration**: 75 calendar hours of run, with the weekly token cap hit on day 4. A €40 monthly subscription represents ~4 weeks of pacing — these results show what happens under *burst usage* (single 4-day intensive period), not steady-state. A spread-out usage pattern across the month could produce different cache hit ratios, different pricing dynamics, and potentially better throughput per euro. Multi-week Kimi runs are now underway (two beta teams live as of early July 2026); a separate **€40 pay-per-use validation experiment** remains open.
 

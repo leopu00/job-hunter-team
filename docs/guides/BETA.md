@@ -40,8 +40,8 @@ Our **pre-launch commitment** is not to fill a coverage matrix — it's to **doc
 | # | Persona | Provider tier | Status |
 |---|---|---|---|
 | 1 | Full-stack dev (maintainer baseline) | 🟠 Claude Max x20 | ✅ documented — see [Case study #1](../about/RESULTS.md#-case-study-1--the-maintainer-legacy-team-early-2026) |
-| 2 | Senior multilingual technical documentation profile (multi-country EU) | 🔵 Codex ProLite €100 | ✅ documented — see [Case study #2](../about/RESULTS.md#-case-study-2--beta-tester-1--codex-prolite-senior-multilingual-technical-profile) |
-| 3 | Junior software developer (capital city, no degree) | 🌙 Kimi K2 Pro €40 | ✅ documented — see [Case study #3](../about/RESULTS.md#-case-study-3--beta-tester-2--kimi-k2-pro-junior-software-developer) |
+| 2 | Senior multilingual technical documentation profile (multi-country EU) | 🔵 Codex Pro €100 | ✅ documented — see [Case study #2](../about/RESULTS.md#-case-study-2--the-multilingual-senior-profile--codex-pro-35-hour-run) |
+| 3 | Junior software developer (capital city, no degree) | 🌙 Kimi K2 Pro €40 | ✅ documented — see [Case study #3](../about/RESULTS.md#-case-study-3--the-junior-developer-profile--kimi-k2-pro-75-hour-run) |
 | 4 | Maintainer baseline (weekly-distributed run) | 🌙 Kimi K2 Pro €40 | 🟡 data collected, **processing pending** |
 | 5 | Maintainer baseline (re-test with better monitoring) | 🟠 Claude Max x20 | 🟡 previous run lacked instrumentation, **to be re-run + documented** |
 | 6 | Early-career finance profile (EU financial hubs) | 🔵 Codex Pro €100 | ✅ documented — see [Case study #4](../about/RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run) — **one-month autonomous run** |
@@ -74,7 +74,7 @@ Before signing up, set expectations:
 - ✅ Claude Max x20 is rock-solid; Codex ~€100 is proven over a full autonomous month ([case study #4](../about/RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run))
 - 🟡 Kimi €40 works but token monitoring still has rough edges (see [`MONITORING.md`](../about/MONITORING.md))
 - 🟠 CLI onboarding wizard still has rough edges — expect to ask for help once or twice
-- 🔴 The desktop app (one-click installers for 4 OS) is **not in the beta** — it works up to a point, but for now it's aimed at contributors only ([`desktop/STATUS.md`](../../desktop/STATUS.md))
+- 🔴 The desktop app (one-click installers for macOS/Windows/Linux) is **not in the beta** — it works up to a point, but for now it's aimed at contributors only ([`desktop/STATUS.md`](../../desktop/STATUS.md))
 
 If "rough edges" doesn't scare you, you're the kind of beta tester we need.
 
