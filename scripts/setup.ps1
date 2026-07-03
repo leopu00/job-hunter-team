@@ -8,10 +8,10 @@
 # setup.ps1 resta per chi lavora nativo Windows senza WSL e vuole un
 # onboarding idempotente delle dipendenze Python/Node dal source.
 #
-# Esegui con: powershell -ExecutionPolicy Bypass -File setup.ps1
+# Esegui con: powershell -ExecutionPolicy Bypass -File scripts/setup.ps1
 
 $ErrorActionPreference = "Stop"
-$RepoDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $Steps = 10
 
 # Warning deprecation
