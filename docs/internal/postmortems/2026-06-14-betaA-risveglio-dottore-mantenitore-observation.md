@@ -38,7 +38,7 @@ Sentinella); **salta i fresh**; **parcheggia i singleton idle**. L'interview (do
 
 ### Intoppi raccolti dall'agenda (il valore dell'archivista)
 
-- **SENTINELLA** — *intoppi:* path relativo `../_team/team-rules.md` mancante al boot → corretto a
+- **SENTINELLA** — *intoppi:* path relativo `../../../agents/_team/team-rules.md` mancante al boot → corretto a
   `/app/agents/_team/team-rules.md`. Nessun bridge failure/FATAL/freeze. *imparato:* tenere primary e
   weekly separati; Phase 1 nessun ordine operativo; SOTTO-PACE senza BURN-MODE = silenzio;
   `burst_transient=true` = non frenare un burst già recuperato (= S-07 interiorizzata).
@@ -80,11 +80,11 @@ Esiste anche `mantenitore-actions.jsonl` (log azioni, gemello di `dottore-action
    idle `skipped_parked`, nuovi `skipped_fresh`) **combacia con la spec** → NON è un gap, è il
    comportamento corretto. Il refresh è SELETTIVO (rinfresca solo i long-running che accumulano context),
    non "tutte le sessioni".
-2. **Path relativo `../_team/team-rules.md` → BACKLOG, discrepanza VERA e fleet-wide (indagata a terra 2026-06-14).**
-   - **Confermato fleet-wide:** il link `[\`agents/_team/team-rules.md\`](../_team/team-rules.md)` con
+2. **Path relativo `../../../agents/_team/team-rules.md` → BACKLOG, discrepanza VERA e fleet-wide (indagata a terra 2026-06-14).**
+   - **Confermato fleet-wide:** il link `[\`agents/_team/team-rules.md\`](../../../agents/_team/team-rules.md)` con
      istruzione *"Read them at boot"* è in TUTTI i prompt agente (analista, sentinella, …) e in TUTTE le
      7 lingue (`.md/.it/.es/.fr/.de/.pt/.hu`). Stesso problema per `../_team/architettura.md` (in `_manual/`).
-   - **Causa-radice:** gli agenti girano in `/jht_home/agents/<role>/`; da lì `../_team/team-rules.md` →
+   - **Causa-radice:** gli agenti girano in `/jht_home/agents/<role>/`; da lì `../../../agents/_team/team-rules.md` →
      `/jht_home/agents/_team/team-rules.md`. La dir `/jht_home/agents/_team/` ESISTE ma contiene **solo
      `scout_workspace.json`** — `team-rules.md` NON è lì. `start-agent.sh` copia nella workdir runtime solo
      *identity* (L645) e *skills* (L673-679), **non** `agents/_team/*.md`. Il file vive solo in

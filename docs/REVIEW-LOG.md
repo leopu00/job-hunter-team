@@ -160,9 +160,9 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 | `docs/internal/2026-05-01-team-session-report.md` | Report sessione team 30 apr/1 mag UTC | — | 2026-05-02 | ✅ |
 | [docs/internal/experiments/2026-05-03-rate-kimi-weights.md](./internal/experiments/2026-05-03-rate-kimi-weights.md) | Calibrazione empirica pesi rate Kimi K2 | — | 2026-05-03 | ✅ |
 | `docs/internal/2026-05-04-vps-deployment-design.md` | Design deploy VPS (3 path: SSH manuale / web pairing / launcher) | — | 2026-05-04 | ✅ |
-| [docs/internal/TODO-bridge-v7.md](./internal/_archive/TODO-bridge-v7.md) | 📌 Punch list bridge V7 + token monitor (entry point) | — | 2026-05-02 | ✅ |
+| `docs/internal/TODO-bridge-v7.md` *(file rimosso)* | 📌 Punch list bridge V7 + token monitor (entry point) | — | 2026-05-02 | ✅ |
 | `docs/internal/2026-05-06-host-container-split.md` | ⚙️ Split host/container — CLI wrapper + dev compose, design e razionale | — | 2026-05-06 | ✅ |
-| [docs/internal/2026-05-06-launch-infra-costs.md](./internal/_archive/2026-05-06-launch-infra-costs.md) | 💰 Stima costi infra per public launch (Vercel/Supabase/domain) | — | 2026-05-06 | ✅ |
+| `docs/internal/2026-05-06-launch-infra-costs.md` *(file rimosso)* | 💰 Stima costi infra per public launch (Vercel/Supabase/domain) | — | 2026-05-06 | ✅ |
 | [docs/internal/experiments/2026-05-06-prompt-decomposition-skill-vs-manual.md](./internal/experiments/2026-05-06-prompt-decomposition-skill-vs-manual.md) | 🧩 Architettura prompt decomposition — quando usare CLAUDE.md / Skill / Manual con token math | — | 2026-05-09 | ✅ |
 | [docs/internal/experiments/2026-05-06-agent-prompts-i18n.md](./internal/experiments/2026-05-06-agent-prompts-i18n.md) | _(da compilare nel JSON)_ | — | 2026-05-06 | ✅ |
 | `docs/internal/2026-05-06-vps-providers-research.md` | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |

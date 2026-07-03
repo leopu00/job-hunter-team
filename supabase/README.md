@@ -10,7 +10,7 @@ JHT supports **two ways** to use cloud sync:
 
 2. 🛠️ **Self-host** — clone the repo, create your **own** Supabase project, apply the migrations below, point JHT at your URL/key. You own the data and the infrastructure cost. → **This README is for you.**
 
-> 🔒 **Operational details** for the official `jobhunterteam.ai` instance (project ref, credentials, OAuth setup, region, secrets) live in [`docs/internal/MAINTAINERS.md`](../docs/internal/ops/MAINTAINERS.md) — those are JHT-internal and don't apply to a self-host setup.
+> 🔒 **Operational details** for the official `jobhunterteam.ai` instance (project ref, credentials, OAuth setup, region, secrets) live in [`docs/internal/ops/MAINTAINERS.md`](../docs/internal/ops/MAINTAINERS.md) — those are JHT-internal and don't apply to a self-host setup.
 
 ## Tables
 
@@ -49,17 +49,15 @@ psql $DATABASE_URL -f supabase/seed.sql
 
 ```
 supabase/
-├── migrations/
-│   ├── 001_schema.sql                  # Initial schema (5 core tables, RLS)
-│   ├── 002_add_interview_round.sql     # Interview round tracking
-│   ├── 003_align_legacy_schema.sql     # Align with the legacy team schema
-│   ├── 004_add_legacy_id.sql           # legacy_id column for cloud-sync mapping
-│   ├── 005_feedback_tickets.sql        # Feedback / bug ticket table
-│   ├── 006_cloud_sync_tokens.sql       # Cloud-sync auth tokens (RLS, SHA-256)
-│   └── 007_positions_legacy_unique.sql # UNIQUE (user_id, legacy_id) for idempotent push
-├── seed.sql                            # Demo data
+├── migrations/     # 001–053 — full, ordered schema history: core schema + RLS (001),
+│                   #   feedback tickets (005), cloud-sync tokens + expiry (006, 036),
+│                   #   companies/highlights sync, position tickets, jd_summary,
+│                   #   function hardening (031/032), RLS/index tuning (053), …
+├── seed.sql        # Demo data
 └── README.md
 ```
+
+> Apply them **in order** — each migration is idempotent-safe to re-run via `supabase migration up`. The filename says what it does; the header comment in each file says why.
 
 ## Differences from SQLite (schema V2)
 

@@ -29,7 +29,7 @@ assets/ · build/     icons & packaging resources
 ```bash
 npm run dev          # launch in dev
 npm test             # unit tests
-npm run dist:mac     # build signed .dmg  (also dist:win / dist:linux)
+npm run dist:mac     # build .dmg — ad-hoc signature, code signing deferred during beta  (also dist:win / dist:linux)
 ```
 
 ## See also

@@ -21,8 +21,8 @@ ha **fermato l'emorragia** (l'analista non dumpa più nel catch-all), ma l'utent
 che le offerte nuove finivano in massa in **`Other`** (es. "M&A Mid-Market Analyst" → `Other`,
 "Credit Risk Analyst" → `Other`). Domanda dell'utente: *perché ruoli ovvi non vengono categorizzati?*
 
-**Vincolo dell'utente (ribadito):** gli analisti hanno un cervello, non devono affidarsi a "script di
-merda che funzionano male"; la decisione su quali categorie esistono e dove va un'offerta deve essere
+**Vincolo dell'utente (ribadito):** gli analisti hanno un cervello, non devono affidarsi a "script
+mediocri che funzionano male"; la decisione su quali categorie esistono e dove va un'offerta deve essere
 **giudizio degli agenti**, e il **Capitano deve arbitrare** (split di categorie troppo grandi, merge di
 duplicati), **bounded** (un giro, decidi, avanti — niente loop). Zero liste hardcoded.
 
