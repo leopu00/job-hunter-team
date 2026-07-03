@@ -77,4 +77,4 @@ felülírható: `JHT_USER_TZ` env var (a helper olvassa).
 ## Lásd még
 
 - `shared/skills/format_time.py` — implementáció.
-- `candidate_profile.yml.example` — `timezone:` mező dokumentáció.
+- `docs/examples/candidate_profile.yml.example` — `timezone:` mező dokumentáció.

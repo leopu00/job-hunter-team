@@ -114,7 +114,7 @@ fi
 step 4 "Configurazione candidate_profile.yml"
 
 PROFILE="$REPO_DIR/candidate_profile.yml"
-PROFILE_EXAMPLE="$REPO_DIR/candidate_profile.yml.example"
+PROFILE_EXAMPLE="$REPO_DIR/docs/examples/candidate_profile.yml.example"
 
 if [ -f "$PROFILE" ]; then
   ok "candidate_profile.yml già presente"
@@ -124,7 +124,7 @@ else
     ok "candidate_profile.yml creato da .example"
     warn "AZIONE RICHIESTA: apri candidate_profile.yml e compila il tuo profilo"
   else
-    warn "candidate_profile.yml.example non trovato, skippato"
+    warn "docs/examples/candidate_profile.yml.example non trovato, skippato"
   fi
 fi
 

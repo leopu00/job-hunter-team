@@ -157,7 +157,7 @@ Whichever path you took:
 
 1. **Set up your candidate profile.** The Assistant agent can do this for you in conversation:
    - Web: visit `/onboarding` and chat with the Assistant — it writes `candidate_profile.yml` for you
-   - Or edit `~/Documents/Job Hunter Team/candidate_profile.yml` by hand (see `candidate_profile.yml.example`)
+   - Or edit `~/Documents/Job Hunter Team/candidate_profile.yml` by hand (see `docs/examples/candidate_profile.yml.example`)
 2. **Configure the team.** Pick the agents you want active, set the polling intervals, set your work hours.
 3. **Click Start.** The Captain dispatches orders to Scout → Analyst → Scorer → Writer → Critic. Sentinel and Bridge keep the team within the subscription window.
 4. **Review the output.** Applications marked "Ready to submit" land in `~/Documents/Job Hunter Team/applications/`. You decide what to send.

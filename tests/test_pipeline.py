@@ -732,7 +732,7 @@ class TestSetupScript:
         Setup della temp dir:
           - setup.sh
           - .env.example
-          - candidate_profile.yml.example
+          - docs/examples/candidate_profile.yml.example
           - requirements.txt
           - shared/skills/ (necessario per db_init.py e db_migrate_v2.py)
           - shared/data/  (creata da setup.sh step 5, ma serve prima per i DB path)
@@ -740,7 +740,7 @@ class TestSetupScript:
         # Copia i file necessari nella temp dir
         shutil.copy2(SETUP_SH, tmp_path / 'setup.sh')
 
-        for fname in ('.env.example', 'candidate_profile.yml.example', 'requirements.txt'):
+        for fname in ('.env.example', 'docs/examples/candidate_profile.yml.example', 'requirements.txt'):
             src = os.path.join(REPO_ROOT, fname)
             if os.path.isfile(src):
                 shutil.copy2(src, tmp_path / fname)
@@ -782,7 +782,7 @@ class TestSetupScript:
         # Ricrea lo stesso ambiente della temp dir
         shutil.copy2(SETUP_SH, tmp_path / 'setup.sh')
 
-        for fname in ('.env.example', 'candidate_profile.yml.example', 'requirements.txt'):
+        for fname in ('.env.example', 'docs/examples/candidate_profile.yml.example', 'requirements.txt'):
             src = os.path.join(REPO_ROOT, fname)
             if os.path.isfile(src):
                 shutil.copy2(src, tmp_path / fname)
@@ -937,7 +937,7 @@ exec(_code, {{'__file__': {repr(tmp_db_init)}, '__name__': '__main__'}})
         """
         BUG-NDV-01: db_init.py non deve crashare se scoring_weights usa chiavi EN
         (growth/company) invece di IT (crescita/azienda).
-        Fix in PR #14: candidate_profile.yml.example standardizzato su chiavi EN.
+        Fix in PR #14: docs/examples/candidate_profile.yml.example standardizzato su chiavi EN.
         Verifica regressione: db_init non tenta di accedere a 'crescita'/'azienda'.
         """
         profile = (
