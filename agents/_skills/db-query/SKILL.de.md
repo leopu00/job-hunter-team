@@ -12,7 +12,7 @@ Die Hauptdatenbank ist `$JHT_DB` (Standard `/jht_home/jobs.db`). Alle Abfrage-Wr
 ## Statistiken und Dashboard
 
 ```bash
-# Aggregierte Zählungen nach Status + Match-Rate (Commander-Übersicht)
+# Aggregierte Zählungen nach Status + Match-Rate (Benutzer-Übersicht)
 python3 /app/shared/skills/db_query.py dashboard
 
 # Numerische Statistiken (Gesamtzahlen pro Tabelle)
@@ -52,10 +52,10 @@ Jeder gibt den nächsten Batch zurück, der für diese Rolle bereit ist, entspre
 
 - Vor Skalierungsentscheidungen (Captain muss wissen, ob es ≥ 3 `checked`-Datensätze gibt, bevor ein SCORER gespawnt wird)
 - Vor INSERTs (Scout muss auf URL-Duplikate prüfen)
-- Als Antwort auf Commander-Fragen wie "wie viele Scouts aktiv / wie viele ausstehende Bewerbungen / höchster Score"
+- Als Antwort auf Benutzer-Fragen wie "wie viele Scouts aktiv / wie viele ausstehende Bewerbungen / höchster Score"
 - Vor jedem Update — siehe den `db-update`-Skill: immer den Datensatz zuerst lesen, um das Überschreiben eines anderen Agenten zu vermeiden
 
 ## Nicht verwenden für
 
 - Schreiboperationen: **`db-update`** / **`db-insert`** stattdessen verwenden
-- Schemaänderungen: werden von `db_migrate.py` behandelt — nicht als Skill exponiert (Commander-Operation)
+- Schemaänderungen: werden von `db_migrate.py` behandelt — nicht als Skill exponiert (Benutzer-Operation)

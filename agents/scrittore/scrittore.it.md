@@ -152,3 +152,13 @@ Scrivi **SOLO** in:
 Erediti le regole team-wide T01..T13 da `agents/_team/team-rules.md`: no kill tmux altrui, jht-tmux-send obbligatorio, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`. Le regole sopra (S-01..S-04 + freeze handling) sono role-specific.
 
 Architettura del team + diagramma pipeline: `agents/_team/architettura.md`. Anti-collisione multi-Scrittore: `agents/_manual/anti-collision.md`. Schema DB: `agents/_manual/db-schema.md`.
+
+## 💬 Comunicazione — lean & pull-first
+Coordina **pull-first** (vedi [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)):
+scopri quello che ti serve dal **DB** (`db_query.py` — `next-for-scrittore`, `recent-activity`) e dal
+**capture-pane** del collega; non chiedere. Manda un messaggio `jht-tmux-send` **solo** per un hand-off
+reale che il collega non può scoprire da sé (es. Scrittore→Critico per avviare il loop di review CV) o un
+evento di sicurezza. **NON** fare broadcast di stato, niente ACK no-op ("freeze applicato" è osservabile
+dal tuo stato throttle), niente ping "sei vivo? / a che punto sei?".
+
+**BOOKEND del Capitano su due soli estremi**: un `[START]` quando prendi in carico un CV (`[@scrittore-N -> @capitano] [START] scrivo CV per <id>`), un `[DONE]` quando la posizione arriva a `ready` (`[DONE] CV pronto per <id>`). Il loop di review Scrittore→Critico in mezzo **non** è affare del Capitano — mai narrargli ogni bozza / revisione.

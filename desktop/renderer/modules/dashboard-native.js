@@ -4,6 +4,8 @@
 // window.dashboardApi.get(path) (IPC main → fetch localhost:PORT+path con
 // local-token — lane dev3). Questo modulo è la lane renderer.
 
+import { t } from './i18n.js'
+
 const _log = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
   ? window.jhtLog.scope('dashboard-native')
   : { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
@@ -35,7 +37,7 @@ function emptyBox(text) {
 function loadingBox() {
   const box = el('div', 'dash__loading')
   box.appendChild(el('span', 'status-icon'))
-  box.appendChild(el('span', null, 'Caricamento…'))
+  box.appendChild(el('span', null, t('dash.loading')))
   box.firstChild.dataset.state = 'busy'
   return box
 }
@@ -53,8 +55,8 @@ async function renderInto(containerId, fetchAndBuild) {
   } catch (e) {
     c.innerHTML = ''
     const msg = e?.code === 'no-channel'
-      ? 'Canale dati non disponibile. Avvia il team o aggiorna l’app.'
-      : 'Il team non è raggiungibile. Avvialo dalla sezione Team e riprova.'
+      ? t('dash.error.noChannel')
+      : t('dash.error.unreachable')
     c.appendChild(emptyBox(msg))
     _log.warn('render.failed', { containerId, err: String(e?.message || e) })
   }
@@ -73,7 +75,7 @@ function fmtDate(iso) {
 }
 
 function locationLabel(p) {
-  const remote = p.remote_type === 'full_remote' ? 'Remote' : p.remote_type === 'hybrid' ? 'Ibrido' : null
+  const remote = p.remote_type === 'full_remote' ? t('dash.location.remote') : p.remote_type === 'hybrid' ? t('dash.location.hybrid') : null
   const place = p.loc_city || p.location || p.loc_country || null
   return [place, remote].filter(Boolean).join(' · ')
 }
@@ -122,7 +124,7 @@ function infoRow(label, value) {
 function renderDetail(data) {
   const d = document.getElementById('dash-detail'); if (!d) return
   const p = data.position || {}; d.innerHTML = ''
-  const back = el('button', 'btn btn--ghost dash-detail__back', '← Indietro'); back.type = 'button'
+  const back = el('button', 'btn btn--ghost dash-detail__back', t('dash.detail.back')); back.type = 'button'
   back.addEventListener('click', () => loadDashboard())
   d.appendChild(back)
   const head = el('div', 'dash-detail__head')
@@ -150,27 +152,27 @@ function renderDetail(data) {
       })
       return b
     }
-    actions.appendChild(mkBtn('📝 Richiedi CV', '✓ CV richiesto', 'write-request', !!p.write_requested))
-    actions.appendChild(mkBtn('🔄 Ricontrolla', '✓ In ricontrollo', 'recheck-request', !!p.recheck_requested))
-    actions.appendChild(mkBtn('📍 Geocodifica', '✓ Geocodifica richiesta', 'geocode-request', !!p.geocode_requested))
+    actions.appendChild(mkBtn(t('dash.actions.requestCv'), t('dash.actions.cvRequested'), 'write-request', !!p.write_requested))
+    actions.appendChild(mkBtn(t('dash.actions.recheck'), t('dash.actions.recheckRequested'), 'recheck-request', !!p.recheck_requested))
+    actions.appendChild(mkBtn(t('dash.actions.geocode'), t('dash.actions.geocodeRequested'), 'geocode-request', !!p.geocode_requested))
     const excluded = p.status === 'excluded' || !!p.user_excluded_reason
-    actions.appendChild(mkBtn('🚫 Escludi', '✓ Esclusa', 'user-exclude', excluded, { reason: 'other', note: 'Esclusa dalla dashboard' }))
+    actions.appendChild(mkBtn(t('dash.actions.exclude'), t('dash.actions.excluded'), 'user-exclude', excluded, { reason: 'other', note: t('dash.actions.excludedNote') }))
     d.appendChild(actions)
 
     // Ticket: richiesta libera al team su questa offerta.
     const tk = el('div', 'dash-ticket')
-    tk.appendChild(el('div', 'dash-detail__label', 'Chiedi al team'))
+    tk.appendChild(el('div', 'dash-detail__label', t('dash.ticket.title')))
     const tkRow = el('div', 'dash-ticket__row')
     const tkIn = el('input', 'dash-ticket__input'); tkIn.type = 'text'
-    tkIn.placeholder = 'Es. "Trovane di simili", "Questa è scaduta"…'
-    const tkBtn = el('button', 'btn btn--ghost', 'Invia richiesta'); tkBtn.type = 'button'
+    tkIn.placeholder = t('dash.ticket.placeholder')
+    const tkBtn = el('button', 'btn btn--ghost', t('dash.ticket.send')); tkBtn.type = 'button'
     const sendTicket = async () => {
       const text = tkIn.value.trim()
       if (!text) return
       tkBtn.disabled = true; const orig = tkBtn.textContent; tkBtn.textContent = '…'
       try {
         await window.dashboardApi.post(`/api/positions/${legacyId}/ticket`, { request_text: text })
-        tkIn.value = ''; tkBtn.textContent = '✓ Inviata'
+        tkIn.value = ''; tkBtn.textContent = t('dash.ticket.sent')
         setTimeout(() => { tkBtn.textContent = orig; tkBtn.disabled = false }, 2000)
       } catch (e) {
         tkBtn.textContent = orig; tkBtn.disabled = false
@@ -185,15 +187,15 @@ function renderDetail(data) {
   }
 
   const rows = el('div', 'dash-detail__rows')
-  if (p.company) rows.appendChild(infoRow('Azienda', p.company))
-  const loc = locationLabel(p); if (loc) rows.appendChild(infoRow('Luogo', loc))
-  if (p.role_family) rows.appendChild(infoRow('Categoria', p.role_family))
-  if (p.status) rows.appendChild(infoRow('Stato', p.status))
+  if (p.company) rows.appendChild(infoRow(t('dash.detail.company'), p.company))
+  const loc = locationLabel(p); if (loc) rows.appendChild(infoRow(t('dash.detail.location'), loc))
+  if (p.role_family) rows.appendChild(infoRow(t('dash.detail.category'), p.role_family))
+  if (p.status) rows.appendChild(infoRow(t('dash.detail.status'), p.status))
   if (p.url) {
     const row = el('div', 'dash-detail__row')
     const link = el('a', 'dash-detail__value', p.url); link.href = '#'
     link.addEventListener('click', (e) => { e.preventDefault(); window.launcherApi?.openExternal?.(p.url) })
-    row.append(el('span', 'dash-detail__label', 'Annuncio'), link); rows.appendChild(row)
+    row.append(el('span', 'dash-detail__label', t('dash.detail.listing')), link); rows.appendChild(row)
   }
   d.appendChild(rows)
   const hls = Array.isArray(data.highlights) ? data.highlights : []
@@ -204,20 +206,20 @@ function renderDetail(data) {
       const c = el('div', `dash-detail__hlcol ${cls}`); c.appendChild(el('div', 'dash-detail__hltitle', title))
       const ul = el('ul', 'dash-detail__hllist'); for (const it of items) ul.appendChild(el('li', null, it.text)); c.appendChild(ul); return c
     }
-    if (pros.length) wrap.appendChild(col('Pro', pros, 'is-pro'))
-    if (cons.length) wrap.appendChild(col('Contro', cons, 'is-con'))
+    if (pros.length) wrap.appendChild(col(t('dash.detail.pros'), pros, 'is-pro'))
+    if (cons.length) wrap.appendChild(col(t('dash.detail.cons'), cons, 'is-con'))
     d.appendChild(wrap)
   }
   // Azienda (se analizzata): verdetto + settore + rating + red flag
   const co = data.company
   if (co && (co.verdict || co.sector || co.glassdoor_rating || co.red_flags)) {
     const box = el('div', 'dash-detail__rows')
-    box.appendChild(el('div', 'dash-detail__label', 'Azienda'))
-    if (co.verdict) box.appendChild(infoRow('Verdetto', co.verdict))
-    if (co.sector) box.appendChild(infoRow('Settore', co.sector))
-    if (co.size) box.appendChild(infoRow('Dimensione', co.size))
+    box.appendChild(el('div', 'dash-detail__label', t('dash.detail.company')))
+    if (co.verdict) box.appendChild(infoRow(t('dash.detail.verdict'), co.verdict))
+    if (co.sector) box.appendChild(infoRow(t('dash.detail.sector'), co.sector))
+    if (co.size) box.appendChild(infoRow(t('dash.detail.size'), co.size))
     if (typeof co.glassdoor_rating === 'number') box.appendChild(infoRow('Glassdoor', `${co.glassdoor_rating}/5`))
-    if (co.red_flags) box.appendChild(infoRow('Red flag', co.red_flags))
+    if (co.red_flags) box.appendChild(infoRow(t('dash.detail.redFlags'), co.red_flags))
     d.appendChild(box)
   }
 
@@ -225,17 +227,17 @@ function renderDetail(data) {
   const ap = data.application
   if (ap && (ap.status || typeof ap.critic_score === 'number' || ap.response)) {
     const box = el('div', 'dash-detail__rows')
-    box.appendChild(el('div', 'dash-detail__label', 'Candidatura'))
-    if (ap.status) box.appendChild(infoRow('Stato', ap.status))
-    if (ap.critic_verdict) box.appendChild(infoRow('Critico', ap.critic_verdict))
-    if (typeof ap.critic_score === 'number') box.appendChild(infoRow('Voto critico', `${ap.critic_score}/10`))
-    if (ap.response) box.appendChild(infoRow('Risposta', ap.response))
+    box.appendChild(el('div', 'dash-detail__label', t('dash.detail.application')))
+    if (ap.status) box.appendChild(infoRow(t('dash.detail.status'), ap.status))
+    if (ap.critic_verdict) box.appendChild(infoRow(t('dash.detail.critic'), ap.critic_verdict))
+    if (typeof ap.critic_score === 'number') box.appendChild(infoRow(t('dash.detail.criticScore'), `${ap.critic_score}/10`))
+    if (ap.response) box.appendChild(infoRow(t('dash.detail.response'), ap.response))
     d.appendChild(box)
   }
 
   if (p.jd_text) {
     const desc = el('div', 'dash-detail__desc')
-    desc.appendChild(el('div', 'dash-detail__label', 'Descrizione'))
+    desc.appendChild(el('div', 'dash-detail__label', t('dash.detail.description')))
     desc.appendChild(el('p', null, p.jd_text)); d.appendChild(desc)
   }
   show('detail')
@@ -285,14 +287,14 @@ function wireFilters() {
 }
 
 export async function loadDashboard() {
-  setOffersEmpty('Caricamento…')
+  setOffersEmpty(t('dash.loading'))
   try {
     // facets = lista COMPLETA leggera di tutte le offerte (id/title/company/
     // role_family/score/loc/status), ideale per lista + filtri client.
     const res = await apiGet('/api/positions/facets')
     _offers = Array.isArray(res) ? res : (Array.isArray(res?.facets) ? res.facets : [])
     if (_offers.length === 0) {
-      setOffersEmpty('Nessuna offerta ancora. Avvia il team: appena trova offerte compaiono qui.')
+      setOffersEmpty(t('dash.offers.empty'))
       return
     }
     wireFilters()
@@ -300,23 +302,25 @@ export async function loadDashboard() {
     _log.info('offers.ok', { count: _offers.length })
   } catch (e) {
     setOffersEmpty(e?.code === 'no-channel'
-      ? 'Canale dati non disponibile. Avvia il team o aggiorna l’app.'
-      : 'Il team non è raggiungibile. Avvialo dalla sezione Team e riprova.')
+      ? t('dash.error.noChannel')
+      : t('dash.error.unreachable'))
   }
 }
 
 // ───────────────────────── Statistiche ─────────────────────────
 
+// Le label sono CHIAVI i18n: tradotte al render con t(), non a import-time,
+// così il cambio lingua si riflette al render successivo.
 const STAT_CARDS = [
-  ['total', 'Totali'], ['new', 'Nuove'], ['checked', 'Verificate'], ['scored', 'Valutate'],
-  ['writing', 'In scrittura'], ['review', 'In revisione'], ['ready', 'Pronte'],
-  ['applied', 'Inviate'], ['response', 'Risposte'], ['excluded', 'Escluse'],
+  ['total', 'dash.stats.total'], ['new', 'dash.stats.new'], ['checked', 'dash.stats.checked'], ['scored', 'dash.stats.scored'],
+  ['writing', 'dash.stats.writing'], ['review', 'dash.stats.review'], ['ready', 'dash.stats.ready'],
+  ['applied', 'dash.stats.applied'], ['response', 'dash.stats.response'], ['excluded', 'dash.stats.excluded'],
 ]
 
 const PIPELINE = [
-  ['new', 'Nuove'], ['checked', 'Verificate'], ['scored', 'Valutate'],
-  ['writing', 'In scrittura'], ['review', 'In revisione'], ['ready', 'Pronte'],
-  ['applied', 'Inviate'], ['response', 'Risposte'],
+  ['new', 'dash.stats.new'], ['checked', 'dash.stats.checked'], ['scored', 'dash.stats.scored'],
+  ['writing', 'dash.stats.writing'], ['review', 'dash.stats.review'], ['ready', 'dash.stats.ready'],
+  ['applied', 'dash.stats.applied'], ['response', 'dash.stats.response'],
 ]
 
 export function loadStats() {
@@ -326,10 +330,10 @@ export function loadStats() {
 
     // Card riepilogo
     const grid = el('div', 'dash-stats__grid')
-    for (const [key, label] of STAT_CARDS) {
+    for (const [key, labelKey] of STAT_CARDS) {
       const card = el('div', 'dash-stat')
       card.appendChild(el('div', 'dash-stat__num', typeof s?.[key] === 'number' ? s[key] : 0))
-      card.appendChild(el('div', 'dash-stat__label', label))
+      card.appendChild(el('div', 'dash-stat__label', t(labelKey)))
       grid.appendChild(card)
     }
     wrap.appendChild(grid)
@@ -338,10 +342,10 @@ export function loadStats() {
     const counts = PIPELINE.map(([k]) => (typeof s?.[k] === 'number' ? s[k] : 0))
     const max = Math.max(1, ...counts)
     const pipe = el('div', 'dash-pipeline')
-    pipe.appendChild(el('div', 'dash-detail__label', 'Pipeline'))
-    PIPELINE.forEach(([key, label], i) => {
+    pipe.appendChild(el('div', 'dash-detail__label', t('dash.stats.pipeline')))
+    PIPELINE.forEach(([key, labelKey], i) => {
       const row = el('div', 'dash-pipeline__row')
-      row.appendChild(el('span', 'dash-pipeline__label', label))
+      row.appendChild(el('span', 'dash-pipeline__label', t(labelKey)))
       const track = el('div', 'dash-pipeline__track')
       const bar = el('div', 'dash-pipeline__bar')
       bar.style.width = `${Math.round((counts[i] / max) * 100)}%`
@@ -364,11 +368,11 @@ export function loadStats() {
         ]
         const counts = bands.map(([, fn]) => arr.filter((p) => typeof p.score === 'number' && fn(p.score)).length)
         const unscored = arr.filter((p) => typeof p.score !== 'number').length
-        const labels = [...bands.map(([l]) => l), 'senza']
+        const labels = [...bands.map(([l]) => l), t('dash.stats.unscored')]
         const vals = [...counts, unscored]
         const max = Math.max(1, ...vals)
         const dist = el('div', 'dash-pipeline')
-        dist.appendChild(el('div', 'dash-detail__label', 'Distribuzione punteggio'))
+        dist.appendChild(el('div', 'dash-detail__label', t('dash.stats.scoreDistribution')))
         labels.forEach((label, i) => {
           const row = el('div', 'dash-pipeline__row')
           row.appendChild(el('span', 'dash-pipeline__label', label))
@@ -397,23 +401,23 @@ export function loadApplications() {
     const counts = res?.counts || {}
     const wrap = el('div', 'dash-apps')
     const countRow = el('div', 'dash-apps__counts')
-    for (const [k, label] of [['draft', 'Bozze'], ['sent', 'Inviate'], ['viewed', 'Viste'], ['interview', 'Colloqui'], ['offer', 'Offerte'], ['rejected', 'Rifiutate']]) {
+    for (const [k, labelKey] of [['draft', 'dash.apps.draft'], ['sent', 'dash.apps.sent'], ['viewed', 'dash.apps.viewed'], ['interview', 'dash.apps.interview'], ['offer', 'dash.apps.offer'], ['rejected', 'dash.apps.rejected']]) {
       const chip = el('div', 'dash-apps__count')
       chip.appendChild(el('span', 'dash-apps__count-num', counts[k] ?? 0))
-      chip.appendChild(el('span', 'dash-apps__count-label', label))
+      chip.appendChild(el('span', 'dash-apps__count-label', t(labelKey)))
       countRow.appendChild(chip)
     }
     wrap.appendChild(countRow)
-    if (apps.length === 0) { wrap.appendChild(el('p', 'home__subtitle', 'Nessuna candidatura ancora.')); return wrap }
+    if (apps.length === 0) { wrap.appendChild(el('p', 'home__subtitle', t('dash.apps.empty'))); return wrap }
     const list = el('div', 'dash__list')
     for (const a of apps) {
       const card = el('div', 'dash-card')
       const main = el('div', 'dash-card__main')
       main.appendChild(el('div', 'dash-card__title', a.position_title || a.position_id || '—'))
       const meta = el('div', 'dash-card__meta')
-      meta.appendChild(el('span', null, `Stato: ${a.status || '—'}`))
-      if (a.applied_at) meta.appendChild(el('span', null, `Inviata: ${fmtDate(a.applied_at)}`))
-      if (a.response) meta.appendChild(el('span', null, 'Risposta ricevuta'))
+      meta.appendChild(el('span', null, t('dash.apps.status', { status: a.status || '—' })))
+      if (a.applied_at) meta.appendChild(el('span', null, t('dash.apps.sentOn', { date: fmtDate(a.applied_at) })))
+      if (a.response) meta.appendChild(el('span', null, t('dash.apps.responseReceived')))
       main.appendChild(meta)
       const side = el('div', 'dash-card__side')
       if (typeof a.critic_score === 'number') side.appendChild(el('div', `dash-score ${scoreClass(a.critic_score * 10)}`, a.critic_score))
@@ -431,10 +435,10 @@ export function loadMap() {
   return renderInto('dash-map', async () => {
     const coords = await apiGet('/api/positions/coords')
     const arr = Array.isArray(coords) ? coords : []
-    if (arr.length === 0) return emptyBox('Nessuna offerta geolocalizzata ancora.')
+    if (arr.length === 0) return emptyBox(t('dash.map.empty'))
     const byPlace = new Map()
     for (const c of arr) {
-      const key = c.is_remote ? 'Remote' : (c.loc_city || c.loc_country || c.location || 'Altro')
+      const key = c.is_remote ? t('dash.location.remote') : (c.loc_city || c.loc_country || c.location || t('dash.map.other'))
       const g = byPlace.get(key) || { count: 0, best: null }
       g.count += 1
       if (typeof c.score === 'number' && (g.best == null || c.score > g.best)) g.best = c.score
@@ -446,7 +450,7 @@ export function loadMap() {
       const card = el('div', 'dash-card')
       const main = el('div', 'dash-card__main')
       main.appendChild(el('div', 'dash-card__title', place))
-      main.appendChild(el('div', 'dash-card__meta', `${g.count} offerte`))
+      main.appendChild(el('div', 'dash-card__meta', t('dash.map.offersCount', { count: g.count })))
       const side = el('div', 'dash-card__side')
       if (g.best != null) side.appendChild(el('div', `dash-score ${scoreClass(g.best)}`, g.best))
       card.append(main, side)
@@ -478,26 +482,26 @@ export function loadProfile() {
     const res = await apiGet('/api/profile')
     const p = res?.profile || null
     if (!p || (!p.name && !p.target_role)) {
-      const box = emptyBox('Profilo non ancora configurato.')
-      box.appendChild(assistantButton('💬 Costruisci il profilo con l’assistente'))
+      const box = emptyBox(t('dash.profile.notConfigured'))
+      box.appendChild(assistantButton(t('dash.profile.buildWithAssistant')))
       return box
     }
     const wrap = el('div', 'dash-profile')
-    wrap.appendChild(assistantButton('💬 Modifica con l’assistente'))
+    wrap.appendChild(assistantButton(t('dash.profile.editWithAssistant')))
     const head = el('div', 'dash-detail__head')
     head.appendChild(el('h2', 'dash-detail__title', p.name || '—'))
     wrap.appendChild(head)
     if (p.target_role) wrap.appendChild(el('p', 'home__subtitle', p.target_role))
 
     const rows = el('div', 'dash-detail__rows')
-    const exp = [p.experience_years ? `${p.experience_years} anni` : null, p.experience_months ? `${p.experience_months} mesi` : null].filter(Boolean).join(' ')
-    if (p.email) rows.appendChild(infoRow('Email', p.email))
-    if (p.location) rows.appendChild(infoRow('Luogo', p.location))
-    if (exp) rows.appendChild(infoRow('Esperienza', exp))
-    rows.appendChild(infoRow('Laurea', p.has_degree ? 'Sì' : 'No'))
-    if (Array.isArray(p.job_titles) && p.job_titles.length) rows.appendChild(infoRow('Ruoli', p.job_titles.join(', ')))
+    const exp = [p.experience_years ? t('dash.profile.years', { n: p.experience_years }) : null, p.experience_months ? t('dash.profile.months', { n: p.experience_months }) : null].filter(Boolean).join(' ')
+    if (p.email) rows.appendChild(infoRow(t('dash.profile.email'), p.email))
+    if (p.location) rows.appendChild(infoRow(t('dash.detail.location'), p.location))
+    if (exp) rows.appendChild(infoRow(t('dash.profile.experience'), exp))
+    rows.appendChild(infoRow(t('dash.profile.degree'), p.has_degree ? t('dash.common.yes') : t('dash.common.no')))
+    if (Array.isArray(p.job_titles) && p.job_titles.length) rows.appendChild(infoRow(t('dash.profile.roles'), p.job_titles.join(', ')))
     if (Array.isArray(p.languages) && p.languages.length) {
-      rows.appendChild(infoRow('Lingue', p.languages.map((l) => l.name || l.language || l).join(', ')))
+      rows.appendChild(infoRow(t('dash.profile.languages'), p.languages.map((l) => l.name || l.language || l).join(', ')))
     }
     wrap.appendChild(rows)
 
@@ -527,7 +531,7 @@ export function loadNotifications() {
   return renderInto('dash-notifs', async () => {
     const res = await apiGet('/api/notifications')
     const items = Array.isArray(res?.notifications) ? res.notifications : (Array.isArray(res) ? res : [])
-    if (items.length === 0) return emptyBox('Nessuna notifica.')
+    if (items.length === 0) return emptyBox(t('dash.notifs.empty'))
     const list = el('div', 'dash__list')
     for (const n of items) {
       const row = el('div', `dash-notif ${n.read ? 'is-read' : ''}`)
@@ -544,9 +548,10 @@ export function loadNotifications() {
 
 // ───────────────────────── Orari di lavoro ─────────────────────────
 
+// Valori = chiavi i18n, tradotte al render con t().
 const WH_LABELS = {
-  enabled: 'Attivo', start: 'Inizio', end: 'Fine', timezone: 'Fuso orario',
-  tz: 'Fuso orario', days: 'Giorni', start_hour: 'Ora inizio', end_hour: 'Ora fine',
+  enabled: 'dash.hours.enabled', start: 'dash.hours.start', end: 'dash.hours.end', timezone: 'dash.hours.timezone',
+  tz: 'dash.hours.timezone', days: 'dash.hours.days', start_hour: 'dash.hours.startHour', end_hour: 'dash.hours.endHour',
 }
 
 export function loadWorkingHours() {
@@ -560,19 +565,19 @@ export function loadWorkingHours() {
       const active = pv.working === true || pv.active === true || pv.is_working === true || pv.in_hours === true
       const badge = el('div', 'dash-hours__status')
       const dot = el('span', 'home__status-dot'); dot.dataset.state = active ? 'running' : 'stopped'
-      badge.append(dot, el('span', null, active ? 'Il team è in orario di lavoro' : 'Fuori orario di lavoro'))
+      badge.append(dot, el('span', null, active ? t('dash.hours.inHours') : t('dash.hours.outOfHours')))
       wrap.appendChild(badge)
     }
     const rows = el('div', 'dash-detail__rows')
     let any = false
     for (const [k, v] of Object.entries(wh)) {
       if (v == null || typeof v === 'object') continue
-      const label = WH_LABELS[k] || k
-      const val = typeof v === 'boolean' ? (v ? 'Sì' : 'No') : String(v)
+      const label = WH_LABELS[k] ? t(WH_LABELS[k]) : k
+      const val = typeof v === 'boolean' ? (v ? t('dash.common.yes') : t('dash.common.no')) : String(v)
       rows.appendChild(infoRow(label, val)); any = true
     }
-    if (Array.isArray(wh.days) && wh.days.length) { rows.appendChild(infoRow('Giorni', wh.days.join(', '))); any = true }
-    if (!any) return emptyBox('Orari di lavoro non configurati. Avvia il team.')
+    if (Array.isArray(wh.days) && wh.days.length) { rows.appendChild(infoRow(t('dash.hours.days'), wh.days.join(', '))); any = true }
+    if (!any) return emptyBox(t('dash.hours.empty'))
     wrap.appendChild(rows)
     return wrap
   })
@@ -580,16 +585,17 @@ export function loadWorkingHours() {
 
 // ───────────────────────── Agenti ─────────────────────────
 
+// Titoli = chiavi i18n, tradotte al render con t().
 const AGENT_GROUPS = [
-  ['Core', ['capitano', 'sentinella', 'assistente', 'mentor', 'dottore']],
-  ['Pipeline', ['scout', 'analista', 'scorer', 'scrittore', 'critico']],
+  ['dash.agents.groupCore', ['capitano', 'sentinella', 'assistente', 'mentor', 'dottore']],
+  ['dash.agents.groupPipeline', ['scout', 'analista', 'scorer', 'scrittore', 'critico']],
 ]
 
 export function loadAgents() {
   return renderInto('dash-agents', async () => {
     const res = await apiGet('/api/agents')
     const agents = Array.isArray(res) ? res : (Array.isArray(res?.agents) ? res.agents : [])
-    if (agents.length === 0) return emptyBox('Nessun agente. Avvia il team dalla sezione Team.')
+    if (agents.length === 0) return emptyBox(t('dash.agents.empty'))
     const idOf = (a) => String(a.id || a.role || a.name || '').toLowerCase()
     const isRunning = (a) => a.running === true || a.status === 'running' || a.active === true
     const renderRow = (a) => {
@@ -599,7 +605,7 @@ export function loadAgents() {
       left.append(dot, el('span', 'dash-agent__name', a.name || a.role || a.id || '—'))
       row.appendChild(left)
       const right = el('div', 'dash-agent__actions')
-      right.appendChild(el('span', 'dash-card__date', isRunning(a) ? 'attivo' : 'fermo'))
+      right.appendChild(el('span', 'dash-card__date', isRunning(a) ? t('dash.agents.active') : t('dash.agents.stopped')))
       // Controlli per-agente: Ferma (se attivo) / Riavvia. Via agentApi →
       // docker exec tmux kill-session / start-agent.sh nel container.
       const role = idOf(a)
@@ -614,19 +620,19 @@ export function loadAgents() {
           })
           return b
         }
-        if (isRunning(a)) right.appendChild(mkBtn('Ferma', (r) => window.agentApi.stop(r)))
-        right.appendChild(mkBtn('Riavvia', (r) => window.agentApi.restart(r)))
+        if (isRunning(a)) right.appendChild(mkBtn(t('dash.agents.stop'), (r) => window.agentApi.stop(r)))
+        right.appendChild(mkBtn(t('dash.agents.restart'), (r) => window.agentApi.restart(r)))
       }
       row.appendChild(right)
       return row
     }
     const wrap = el('div', 'dash-agents')
     const placed = new Set()
-    for (const [title, ids] of AGENT_GROUPS) {
+    for (const [titleKey, ids] of AGENT_GROUPS) {
       const inGroup = agents.filter((a) => ids.some((id) => idOf(a).startsWith(id)))
       if (inGroup.length === 0) continue
       const grp = el('div', 'dash-agentgroup')
-      grp.appendChild(el('div', 'dash-detail__label', title))
+      grp.appendChild(el('div', 'dash-detail__label', t(titleKey)))
       const list = el('div', 'dash__list')
       for (const a of inGroup) { list.appendChild(renderRow(a)); placed.add(idOf(a)) }
       grp.appendChild(list)
@@ -636,7 +642,7 @@ export function loadAgents() {
     const rest = agents.filter((a) => !placed.has(idOf(a)))
     if (rest.length) {
       const grp = el('div', 'dash-agentgroup')
-      grp.appendChild(el('div', 'dash-detail__label', 'Altri'))
+      grp.appendChild(el('div', 'dash-detail__label', t('dash.agents.groupOther')))
       const list = el('div', 'dash__list')
       for (const a of rest) list.appendChild(renderRow(a))
       grp.appendChild(list)
@@ -652,7 +658,7 @@ export function loadActivity() {
   return renderInto('dash-activity', async () => {
     const data = await apiGet('/api/positions/state-history')
     const arr = Array.isArray(data) ? data : (Array.isArray(data?.transitions) ? data.transitions : [])
-    if (arr.length === 0) return emptyBox('Nessuna attività registrata ancora.')
+    if (arr.length === 0) return emptyBox(t('dash.activity.empty'))
     const rows = arr.slice(0, 100)
     const list = el('div', 'dash__list')
     for (const t of rows) {

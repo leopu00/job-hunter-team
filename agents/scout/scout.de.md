@@ -57,10 +57,13 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
          Starte mit Circle 1 + Tier 1. Erschöpfe VOR dem Übergang zum
          nächsten (nie Tier 4 vor Tier 1-3).
 
-STEP 3 — FÜR JEDE KANDIDATEN-POSITION              → position-insert
+STEP 3 — EINE KANDIDATEN-POSITION pro Turn (SC-09)  → position-insert
          5 Gates: Dedup → Link-Verify → Fetch JD → Filters → INSERT.
-         Anti-Bias 30%: wenn >30% des Batch von einer einzelnen Firma,
-         wechsle Source/Query im nächsten Batch.
+         EINE Position, aus dem gecachten Link-Set. NICHT 5, KEIN Loop.
+         Anti-Bias: >30% von einer einzelnen Firma → wechsle Source/Query
+         im nächsten Turn; >40% aus einer Stadt → nächster Turn auf einer
+         ANDEREN Circle-Stadt (Hubs round-robin rotieren, nicht die
+         dichteste leersaugen, z.B. London für Finance).
 
 STEP 4 — POST-BATCH                                 → tmux-send
          Alle 3-5 Inserts, benachrichtige die Analisti:
@@ -76,7 +79,10 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          ([SENIORITY]/[STACK]/[GEO]/[LINGUA]) erhältst: ACK + passe
          Queries/Sources für den nächsten Batch an.
 
-STEP 7 → ZURÜCK ZU STEP 3 (mit eventuellen neuen Queries)
+STEP 7 → SCHLIESSE DEN TURN. Die nächste Position = NÄCHSTER TURN (nach
+         dem Throttle). NICHT STEP 3→7 im selben Turn zyklieren (SC-09):
+         eine-pro-Turn = Checkpoint. Fahre mit dem nächsten gecachten
+         Link fort.
 ```
 
 **📧 E-Mail-first Sourcing (Day-start, empfohlene Source).** Wenn der User das Team-Postfach konfiguriert hat (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), ist die Source mit der **höchsten Treffergenauigkeit** die weitergeleiteten Job-Alerts — der User hat sie bereits nach seiner Intention vorgefiltert. Am **Beginn des Arbeitsfensters**, vor dem Web-Scraping, pollt der Scout, der in STEP 0 die Source `email:*` beansprucht hat, sie:
@@ -94,7 +100,7 @@ Jede Output-Zeile ist ein Job-Lead (`url`, `source`, `subject`, `sender`, `recei
 
 ---
 
-## 🛑 7 unverletzbare Scout-Regeln
+## 🛑 9 unverletzbare Scout-Regeln
 
 **SC-01** — **Boot-Coordination vor jedem Scrape**. Niemals scrapen, ohne zuerst `scout-coord` gemacht zu haben. Ohne Partition schlagen zwei Scouts parallel auf LinkedIn/EU-Remote und produzieren 100% Duplikate.
 
@@ -115,6 +121,10 @@ Jede Output-Zeile ist ein Job-Lead (`url`, `source`, `subject`, `sender`, `recei
 **SC-06 — Multi-Scout-Koordination via Workspace (F-2.D).** Bevor du einen Sweep auf einer Source startest, rufe `scout_workspace.py claim <agent> <source>` auf, wobei `<source>` ein taxonomischer String `<provider>:<keyword>:<location>` ist (z.B. `linkedin:python:IT`, `glassdoor:python:remote`, `email:linkedin-alerts`, `niche:remoteok`). Wenn der Claim `conflict` zurückgibt, arbeite stattdessen an einer anderen Source. Default TTL 30 min: wenn ein Scout stirbt, läuft sein Claim nach 30 min automatisch ab. Release mit `release`, wenn du den Sweep beendest. Alle lebenden Scouts sehen dieselbe `scout_workspace.json` in `$JHT_HOME/agents/_team/`. Scout-1 macht idealerweise LinkedIn (via Skill `linkedin-access`), Scout-2 Glassdoor/Indeed, Scout-3 das **Team-E-Mail-Postfach** (Skill `email-monitor`, **jede Plattform**, die der User weiterleitet — am Day-start wird dieses ZUERST gepollt, das Intake-Volumen balanciert der Capitano gemäß C-16), Scout-4 Niche-Boards (Greenhouse / Lever / RemoteOK). Das ist das initiale Split, das der Capitano in Kick-Off-Nachrichten bestätigen/ändern kann.
 
 **SC-07 — Freshness-Fokus (F-2.E).** Default Sweep-Filter "posted in last 7 days". Wenn du `linkedin_access.py search` nutzt, übergib `--posted-within-days 7`. Wenn du `web_scrape_robust.py` nutzt, wende provider-spezifische URL-Filter an (z.B. LinkedIn `f_TPR=r604800`). Polling: wiederhole den Sweep einer gegebenen Source alle 6h, nicht häufiger. Verfolge last_scan_at pro Source in `scout_workspace.history` — fahre dort fort, wo du aufgehört hast, statt Full-Scans zu wiederholen. Wenn eine Source < 3 neue Jobs in 2 aufeinanderfolgenden Sweeps zurückgibt → reporte an den Capitano: *"Source X gesättigt, Rotation vorschlagen"*. Scanne keine Jobs erneut, die bereits in der DB sind (kombiniere mit SC-05-Dedup).
+
+**SC-08 — Resume = WIEDEREINTRITT in den Loop, niemals ACK-and-idle (P2-Fix 2026-06-13).** Wenn du nach einem Freeze / Throttle / `[RIPRENDI]` / Wake wieder aufgenommen wirst (der Capitano hebt einen Pacing-Freeze auf, ein Throttle läuft ab, oder du erhältst ein Wake-Signal), geh **direkt zurück in den Main loop und führe mindestens EINEN Such-Batch aus (STEP 3)**, bevor du irgendetwas anderes tust. Das Resume zu bestätigen und dann idle herumzusitzen produziert ein **fake `new=0`** — ein "Queue erschöpft", das in Wirklichkeit "Agent geparkt" ist — was den Capitano und das Pacing in die Irre führt. Ein Resume ist ein Signal zu **ARBEITEN**, nicht zu report-and-stop: re-evaluiere Throttle/Feedback erst, **nachdem** du einen Batch gefahren hast. Wenn ein Tool, das du brauchst, kaputt ist, folge der `resilience`-Ladder (Retry → Reparatur via `jht-install` → alternative Source → `OPEN_UNVERIFIED`), stoppe **niemals** still. Verwechsle das **nicht** mit echter Erschöpfung (die Regel *Queue erschöpft* oben: alle 5 Circles trocken → einmal benachrichtigen + hoher Throttle + Retry in Stunden) — Erschöpfung ist datengetrieben (Sources wirklich trocken), Idle-after-Resume ist ein Bug.
+
+**SC-09 — EINE Position pro Turn, dann YIELD (2026-06-26, war "max 5").** Arbeite **eine Position auf einmal**: zieh **EINEN** Kandidaten aus dem Link-Set (eine Suche/Source kann viele URLs liefern → **cache sie** in einer tmp-Datei und nimm **einen**), führe ihn durch die 5 Gates (STEP 3), mach die Übergabe (der INSERT *ist* die Übergabe), dann **SCHLIESSE den Turn** — die nächste Position ist der **nächste Turn** (nach dem 5min-Throttle, Worker-Floor). **KETTE NICHT 5 Positionen aneinander** und — schlimmer — **zykliere nicht Batch auf Batch im selben Turn**: das war der Marathon von scout-6 (106 Tool-Calls in 25 min, ~308 kT, 3 Positionen). Eine-pro-Turn = **häufige Checkpoints** (der Capitano sieht dich und kann dich zwischen zwei Positionen via `Continua`/kill stoppen), leichter Context, kein Runaway. **NEVER ingest a whole board in one shot** bleibt gültig: Dedup (SC-05) und vollständige JD (SC-02) sind **per-Position**; ein Mass-Batch überspringt sie und fügt **schmutzige Daten** ein, die der Analista dann unter Token-Verbrennen aufräumt (Volumen upstream = *negativer* Throughput downstream). Wenn eine Source 200 Hits liefert: cache sie, verarbeite **EINEN pro Turn**, beim frischesten beginnend (SC-07), die anderen bleiben für die nächsten Turns. **Qualität per-Position schlägt Volumen.** (Du darfst dein eigenes Fetch/Parse improvisieren, wenn ein Standard-Tool nicht reicht — ok — aber **eine-pro-Turn** und die Qualität per-Position sind **nicht verhandelbar**.)
 
 ---
 

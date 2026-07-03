@@ -12,7 +12,7 @@ La base de datos principal es `$JHT_DB` (por defecto `/jht_home/jobs.db`). Todos
 ## Estadísticas y dashboard
 
 ```bash
-# Conteos agregados por estado + tasa de coincidencia (vista general del Commander)
+# Conteos agregados por estado + tasa de coincidencia (vista general del usuario)
 python3 /app/shared/skills/db_query.py dashboard
 
 # Estadísticas numéricas (totales por tabla)
@@ -52,10 +52,10 @@ Cada uno retorna el siguiente lote listo para ese rol, siguiendo el flujo de est
 
 - Antes de decisiones de escalamiento (el Captain necesita saber si hay ≥ 3 registros `checked` antes de generar un SCORER)
 - Antes de INSERTs (el Scout debe verificar duplicados de URL)
-- En respuesta a preguntas del Commander como "cuántos scouts activos / cuántas applications pendientes / puntuación más alta"
+- En respuesta a preguntas del usuario como "cuántos scouts activos / cuántas applications pendientes / puntuación más alta"
 - Antes de cualquier actualización — ver la skill `db-update`: siempre leer el registro primero para evitar pisar la escritura de otro
 
 ## No usarlo para
 
 - Escrituras: usar **`db-update`** / **`db-insert`** en su lugar
-- Cambios de esquema: manejados por `db_migrate.py` — no expuesto como skill (operación del Commander)
+- Cambios de esquema: manejados por `db_migrate.py` — no expuesto como skill (operación del usuario)

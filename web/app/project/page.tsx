@@ -156,7 +156,7 @@ const en: Copy = {
 const es: Copy = {
   title: "El proyecto",
   subtitle:
-    "Un equipo de agentes de IA que busca trabajo por ti y te ayuda a orientarte entre las ofertas.",
+    "Un equipo de agentes de IA autónomos que busca trabajo por ti y te ayuda a orientarte entre las ofertas.",
   badge: "open source",
   imageAlt:
     "Ilustración: un cubo de cristal que encierra una oficina en miniatura con el equipo de agentes trabajando, observado desde fuera por dos personas que toman notas.",
@@ -215,7 +215,7 @@ const es: Copy = {
 const fr: Copy = {
   title: "Le projet",
   subtitle:
-    "Une équipe d'agents IA qui cherche du travail pour toi et t'aide à t'orienter parmi les offres.",
+    "Une équipe d'agents IA autonomes qui cherche du travail pour toi et t'aide à t'orienter parmi les offres.",
   badge: "open source",
   imageAlt:
     "Illustration : un cube de verre renfermant un bureau miniature avec l'équipe d'agents au travail, observé de l'extérieur par deux personnes qui prennent des notes.",
@@ -274,7 +274,7 @@ const fr: Copy = {
 const de: Copy = {
   title: "Das Projekt",
   subtitle:
-    "Ein Team aus KI-Agenten, das für dich nach Arbeit sucht und dir hilft, dich zwischen den Angeboten zurechtzufinden.",
+    "Ein Team aus autonomen KI-Agenten, das für dich nach Arbeit sucht und dir hilft, dich zwischen den Angeboten zurechtzufinden.",
   badge: "open source",
   imageAlt:
     "Illustration: ein Glaswürfel, der ein Miniaturbüro mit dem arbeitenden Agententeam umschließt, von außen beobachtet von zwei Personen, die sich Notizen machen.",
@@ -333,7 +333,7 @@ const de: Copy = {
 const pt: Copy = {
   title: "O projeto",
   subtitle:
-    "Uma equipe de agentes de IA que procura trabalho por você e ajuda a se orientar entre as ofertas.",
+    "Uma equipe de agentes de IA autónomos que procura trabalho por você e ajuda a se orientar entre as ofertas.",
   badge: "open source",
   imageAlt:
     "Ilustração: um cubo de vidro que encerra um escritório em miniatura com a equipe de agentes trabalhando, observado de fora por duas pessoas que tomam notas.",
@@ -392,7 +392,7 @@ const pt: Copy = {
 const hu: Copy = {
   title: "A projekt",
   subtitle:
-    "MI-ügynökök csapata, amely munkát keres helyetted, és segít eligazodni az ajánlatok között.",
+    "Autonóm MI-ügynökök csapata, amely munkát keres helyetted, és segít eligazodni az ajánlatok között.",
   badge: "open source",
   imageAlt:
     "Illusztráció: egy üvegkocka, amely egy miniatűr irodát zár magába a dolgozó ügynökcsapattal, kívülről két jegyzetelő ember figyeli.",

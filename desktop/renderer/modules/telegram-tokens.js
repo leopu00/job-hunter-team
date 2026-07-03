@@ -21,6 +21,7 @@
 
 import { state, dom, showStep } from './state.js'
 import { STEP_TELEGRAM_TOKENS } from './constants.js'
+import { t } from './i18n.js'
 
 const log = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
   ? window.jhtLog.scope('telegram-tokens')
@@ -92,7 +93,7 @@ function setDeepLink(els, botUsername) {
   }
   const url = `https://t.me/${botUsername}?start=jht`
   els.deepLink.href = url
-  els.deepLink.textContent = `Open @${botUsername} and press Start`
+  els.deepLink.textContent = t('tgSetup.openBot', { bot: botUsername })
   els.deepLink.hidden = false
 }
 
@@ -118,7 +119,7 @@ function renderRow(roleKey) {
   if (isLocked(roleKey)) {
     if (els.input) els.input.disabled = true
     els.verifyBtn.disabled = true
-    els.verifyBtn.textContent = 'Verify'
+    els.verifyBtn.textContent = t('tgSetup.verify')
     setStatus(els, lockCountdownText(roleKey), 'progress')
     setDeepLink(els, null)
     els.root.setAttribute('data-status', 'locked')
@@ -138,13 +139,13 @@ function renderRow(roleKey) {
   switch (bot.status) {
     case 'idle':
       els.verifyBtn.disabled = !bot.token || !bot.token.trim()
-      els.verifyBtn.textContent = 'Verify'
+      els.verifyBtn.textContent = t('tgSetup.verify')
       setStatus(els, '', null)
       setDeepLink(els, null)
       break
     case 'verifying':
       els.verifyBtn.disabled = true
-      els.verifyBtn.textContent = 'Verifying…'
+      els.verifyBtn.textContent = t('tgSetup.verifying')
       setStatus(els, 'Calling Telegram /getMe…', 'progress')
       setDeepLink(els, null)
       break
@@ -157,13 +158,13 @@ function renderRow(roleKey) {
       break
     case 'chat-captured':
       els.verifyBtn.disabled = false
-      els.verifyBtn.textContent = `Re-verify`
+      els.verifyBtn.textContent = t('tgSetup.reverify')
       setStatus(els, `✓ @${bot.botUsername} · chat_id ${bot.chatId}`, 'ok')
       setDeepLink(els, null)
       break
     case 'failed':
       els.verifyBtn.disabled = !bot.token || !bot.token.trim()
-      els.verifyBtn.textContent = 'Retry'
+      els.verifyBtn.textContent = t('provider.retry')
       setStatus(els, bot.error || 'failed', 'error')
       setDeepLink(els, null)
       break

@@ -804,7 +804,7 @@ async function persistTelegramToVps() {
   if (state.location !== LOCATION_VPS) {
     if (!isTelegramTokensReady()) {
       if (statusEl) {
-        statusEl.textContent = 'Telegram bots not ready — complete the 3-bot setup first.'
+        statusEl.textContent = t('tgSetup.save.notReady')
         statusEl.hidden = false
       }
       return false
@@ -815,7 +815,7 @@ async function persistTelegramToVps() {
         : { ok: false, error: 'no-api' }
       if (!res?.ok) {
         if (statusEl) {
-          statusEl.textContent = `Failed to save Telegram bots: ${res?.error || 'unknown'}`
+          statusEl.textContent = t('tgSetup.save.failed', { error: res?.error || 'unknown' })
           statusEl.hidden = false
         }
         return false
@@ -824,7 +824,7 @@ async function persistTelegramToVps() {
       return true
     } catch (e) {
       if (statusEl) {
-        statusEl.textContent = `Failed to save Telegram bots: ${e?.message || e}`
+        statusEl.textContent = t('tgSetup.save.failed', { error: e?.message || e })
         statusEl.hidden = false
       }
       return false
@@ -832,21 +832,21 @@ async function persistTelegramToVps() {
   }
   if (!isTelegramTokensReady()) {
     if (statusEl) {
-      statusEl.textContent = 'Telegram bots not ready — complete the 3-bot setup first.'
+      statusEl.textContent = t('tgSetup.save.notReady')
       statusEl.hidden = false
     }
     return false
   }
   if (!state.vps.ip) {
     if (statusEl) {
-      statusEl.textContent = 'Missing VPS IP — go back and re-run the install step.'
+      statusEl.textContent = t('tgSetup.save.missingIp')
       statusEl.hidden = false
     }
     return false
   }
   state.telegramSaveBusy = true
   if (statusEl) {
-    statusEl.textContent = 'Saving Telegram bots to the VPS…'
+    statusEl.textContent = t('tgSetup.save.saving')
     statusEl.hidden = false
   }
   let res
@@ -862,7 +862,7 @@ async function persistTelegramToVps() {
   if (!res?.ok) {
     state.telegramSaveError = res?.error || 'unknown error'
     if (statusEl) {
-      statusEl.textContent = `Failed to save Telegram bots: ${state.telegramSaveError}`
+      statusEl.textContent = t('tgSetup.save.failed', { error: state.telegramSaveError })
       statusEl.hidden = false
     }
     log.warn('telegram.save.failed', { error: state.telegramSaveError })
@@ -870,7 +870,7 @@ async function persistTelegramToVps() {
   }
   state.telegramSaveError = null
   if (statusEl) {
-    statusEl.textContent = `Telegram bots saved to ${res.path || '/root/.jht/jht.config.json'}.`
+    statusEl.textContent = t('tgSetup.save.done', { path: res.path || '/root/.jht/jht.config.json' })
     statusEl.hidden = false
   }
   log.info('telegram.save.ok', { path: res.path })

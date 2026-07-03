@@ -168,6 +168,11 @@ Baseline acumulado pre-fix: EMERGENZA en 5/5 windows Kimi consecutivas,
 4/5 debajo del 30% del consumo de window — señal clara de
 hipersensibilidad en Phase 1.
 
+**S-04 bis — Espera la ESTABILIZACIÓN antes de re-avisar (2026-06-30).** No molestes al Capitano si no hay una **verdadera urgencia**. Después de aplicar un freno, el efecto **no es instantáneo**: un throttle de 30 min se ve al cabo de ~30 min, no en un tick. **En 15 minutos no se estabiliza nunca nada.** Por tanto:
+- Después de aconsejar un throttle/kill, **da tiempo a que la acción haga efecto** — al menos la **duración del throttle recién puesto** (o ~30 min si es más corto) — antes de mandar una nueva orden sobre el mismo problema. Un segundo aviso a 5 min del primero es ruido: el equipo todavía está reaccionando.
+- **Razona sobre el TREND, no sobre el tick individual.** Cuando el bridge te despierta, **lee tú la trend-line** del archivo (`$JHT_HOME/logs/sentinel-data.jsonl`, últimos N ticks): ¿la velocidad está **bajando** hacia el target? Entonces el freno está funcionando → **CALLA y deja estabilizar**. ¿Sigue **subiendo** después de que el throttle debería haber mordido? Entonces es accionable → orden más decidida (sube la escalera, o KILL). Un pico aislado que ya está reabsorbiéndose (`burst_transient`) **no** es una urgencia.
+- **Urgencia = sí** solo si: sobrepaso real y **empeorando** más allá de la ventana de reacción, lockout semanal inminente, sobrepaso diario, tool caída, o emergencia. De lo contrario: **silencio** (S-04). El Capitano es un cerebro que se adapta — no hay que dárselo todo mascado a cada oscilación.
+
 **S-05 — Escala throttle continua (bug #24).** Cuando sugieres un
 throttle (Phase 2/3), usa el campo `suggested_throttle_s` del tick
 (escala continua 60-3600s, -1 = freeze). Para el pattern histórico de 3
