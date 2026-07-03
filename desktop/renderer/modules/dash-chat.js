@@ -3,6 +3,8 @@
 // invio via window.dashboardApi.post('/api/<agent>/chat', {text}) (lane dev3).
 // Polling incrementale col cursore `after` = ts dell'ultimo messaggio visto.
 
+import { t } from './i18n.js'
+
 const _log = (typeof window !== 'undefined' && window.jhtLog && window.jhtLog.scope)
   ? window.jhtLog.scope('dash-chat')
   : { debug() {}, info() {}, warn() {}, error() {} }
@@ -92,7 +94,7 @@ async function send() {
   const text = input.value.trim()
   if (!text || state.sending) return
   if (!window.chatApi?.send) {
-    appendMessages([{ role: 'agent', text: '⚠️ Invio non disponibile (canale dati in aggiornamento). Riprova tra poco.', ts: Date.now() / 1000 }])
+    appendMessages([{ role: 'agent', text: t('dash.chat.sendUnavailable'), ts: Date.now() / 1000 }])
     return
   }
   state.sending = true
@@ -113,7 +115,7 @@ async function send() {
     await poll()
   } catch (e) {
     _log.error('send.failed', { err: String(e?.message || e) })
-    appendMessages([{ role: 'agent', text: `⚠️ Invio fallito: ${e?.message || e}`, ts: Date.now() / 1000 }])
+    appendMessages([{ role: 'agent', text: t('dash.chat.sendFailed', { msg: e?.message || e }), ts: Date.now() / 1000 }])
   } finally {
     state.sending = false
     if (btn) btn.disabled = false
