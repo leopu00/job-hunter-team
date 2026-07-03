@@ -3,53 +3,53 @@
 # ║  Job Hunter Team — Installer (Docker-by-default)                         ║
 # ╠══════════════════════════════════════════════════════════════════════════╣
 # ║                                                                          ║
-# ║  Uso:                                                                    ║
+# ║  Usage:                                                                  ║
 # ║    curl -fsSL https://jobhunterteam.ai/install.sh | bash                 ║
 # ║                                                                          ║
-# ║    # Installazione "expert mode" senza container:                        ║
+# ║    # "Expert mode" install without a container:                          ║
 # ║    curl -fsSL https://jobhunterteam.ai/install.sh | bash -s -- --no-docker ║
 # ║                                                                          ║
-# ║  Default (Docker-mode): non installa nulla sull'host se non Docker.      ║
-# ║  Scarica:                                                                ║
+# ║  Default (Docker mode): installs nothing on the host except Docker.      ║
+# ║  Downloads:                                                              ║
 # ║    - $HOME/.jht/runtime/docker-compose.yml                               ║
-# ║    - $HOME/.local/bin/jht         (wrapper bash, ~165 righe)             ║
-# ║  Il CLI Node, Python, tmux, agents girano TUTTI nel container long-      ║
-# ║  running gestito dal compose. Niente Node/Python/tmux sull'host.         ║
-# ║  Niente socket Docker dentro al container.                               ║
+# ║    - $HOME/.local/bin/jht         (bash wrapper, ~165 lines)             ║
+# ║  The Node CLI, Python, tmux and the agents ALL run inside the long-      ║
+# ║  running container managed by compose. No Node/Python/tmux on the host.  ║
+# ║  No Docker socket inside the container.                                  ║
 # ║                                                                          ║
-# ║  Solo due cartelle host vengono esposte al container: ~/.jht e           ║
-# ║  ~/Documents/Job Hunter Team. Il resto del filesystem e' invisibile.     ║
+# ║  Only two host folders are exposed to the container: ~/.jht and          ║
+# ║  ~/Documents/Job Hunter Team. The rest of the filesystem is invisible.   ║
 # ║                                                                          ║
-# ║  Opzioni (env var / flag):                                               ║
-# ║    --no-docker             Salta il container, installa nativo (expert)  ║
-# ║    --runtime <r>           macOS: runtime container — colima (default,   ║
-# ║                            headless) o docker-desktop (il tuo Docker).   ║
-# ║                            Se un Docker e' gia' attivo viene riusato     ║
-# ║                            (detect-first). Ignorato su Linux. ADR-0006.  ║
-# ║    --dry-run               Mostra solo le azioni che verrebbero eseguite ║
-# ║    --branch <name>         Branch sorgente per wrapper+compose           ║
-# ║                            (equivalente a JHT_BRANCH=<name>, default     ║
-# ║                            master). Esempio per testare dev-1:           ║
+# ║  Options (env vars / flags):                                             ║
+# ║    --no-docker             Skip the container, install natively (expert) ║
+# ║    --runtime <r>           macOS: container runtime — colima (default,   ║
+# ║                            headless) or docker-desktop (your Docker).    ║
+# ║                            If a Docker is already running it is reused   ║
+# ║                            (detect-first). Ignored on Linux. ADR-0006.   ║
+# ║    --dry-run               Only show the actions that would be executed  ║
+# ║    --branch <name>         Source branch for wrapper+compose             ║
+# ║                            (same as JHT_BRANCH=<name>, default           ║
+# ║                            master). Example to test dev-1:               ║
 # ║      curl ...install.sh | bash -s -- --branch dev-1                      ║
-# ║    JHT_BRANCH=dev-1        Branch sorgente (env var, alternativa a       ║
+# ║    JHT_BRANCH=dev-1        Source branch (env var, alternative to        ║
 # ║                            --branch). default: master                    ║
-# ║    JHT_INSTALL_DIR         Dove clonare la repo (default: $HOME/.jht/src,║
-# ║                            usato solo da --no-docker)                    ║
-# ║    JHT_RUNTIME_DIR         Dove scaricare docker-compose.yml             ║
+# ║    JHT_INSTALL_DIR         Where to clone the repo (default: $HOME/.jht/src,║
+# ║                            only used by --no-docker)                     ║
+# ║    JHT_RUNTIME_DIR         Where to download docker-compose.yml          ║
 # ║                            (default: $HOME/.jht/runtime)                 ║
-# ║    JHT_BIN_DIR             Dove mettere il wrapper jht (default:         ║
+# ║    JHT_BIN_DIR             Where to put the jht wrapper (default:        ║
 # ║                            $HOME/.local/bin)                             ║
-# ║    JHT_IMAGE               Override immagine container (default:         ║
+# ║    JHT_IMAGE               Container image override (default:            ║
 # ║                            ghcr.io/leopu00/jht:latest)                   ║
-# ║    JHT_RAW_BASE            Override base URL per i download              ║
+# ║    JHT_RAW_BASE            Base URL override for downloads               ║
 # ║                            (default: https://raw.githubusercontent.com/  ║
 # ║                                      leopu00/job-hunter-team/<BRANCH>)   ║
-# ║    JHT_SKIP_ONBOARD=1      Non lanciare il wizard alla fine              ║
+# ║    JHT_SKIP_ONBOARD=1      Do not launch the wizard at the end           ║
 # ║                                                                          ║
-# ║  Riferimento design:                                                     ║
+# ║  Design reference:                                                       ║
 # ║    docs/internal/ops/vps.md                      ║
 # ║                                                                          ║
-# ║  Supporta: macOS (Colima o Docker Desktop), Linux (Debian/Ubuntu/Fedora/  ║
+# ║  Supports: macOS (Colima or Docker Desktop), Linux (Debian/Ubuntu/Fedora/ ║
 # ║  Arch), WSL2.                                                             ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
@@ -60,10 +60,10 @@ REPO_URL="${JHT_REPO_URL:-https://github.com/leopu00/job-hunter-team.git}"
 BRANCH="${JHT_BRANCH:-master}"
 INSTALL_DIR="${JHT_INSTALL_DIR:-$HOME/.jht/src}"
 
-# BIN_DIR scelta automatica:
-# - root su Linux/WSL  → /usr/local/bin (sempre nel PATH default, no profile.d)
-# - non-root o macOS   → $HOME/.local/bin (richiede /etc/profile.d o ~/.bashrc)
-# Override esplicito sempre rispettato via JHT_BIN_DIR.
+# BIN_DIR automatic choice:
+# - root on Linux/WSL  → /usr/local/bin (always in the default PATH, no profile.d)
+# - non-root or macOS  → $HOME/.local/bin (requires /etc/profile.d or ~/.bashrc)
+# An explicit override via JHT_BIN_DIR is always respected.
 if [ -n "${JHT_BIN_DIR:-}" ]; then
   BIN_DIR="$JHT_BIN_DIR"
 elif [ "$(id -u 2>/dev/null || echo 1000)" -eq 0 ] && [ -w /usr/local/bin ]; then
@@ -76,44 +76,44 @@ RUNTIME_DIR="${JHT_RUNTIME_DIR:-$HOME/.jht/runtime}"
 IMAGE="${JHT_IMAGE:-ghcr.io/leopu00/jht:latest}"
 MIN_NODE_MAJOR=22
 
-# ── Argomenti ─────────────────────────────────────────────────────────────
+# ── Arguments ─────────────────────────────────────────────────────────────
 USE_DOCKER=1
 DRY_RUN=0
 PAIRING_TOKEN=""
 # macOS container runtime: '' (= colima default) | 'colima' | 'docker-desktop'.
-# Non interattivo (curl | bash) → la scelta e' un flag, non un prompt; il
-# detect-first riusa comunque un Docker gia' attivo. Ignorato su Linux. (ADR-0006)
+# Non-interactive (curl | bash) → the choice is a flag, not a prompt; the
+# detect-first still reuses an already running Docker. Ignored on Linux. (ADR-0006)
 RUNTIME_CHOICE=""
-# Position-based parser: gestisce sia flag standalone (--no-docker) sia
-# coppie key/value (--branch dev-1). Non usiamo `for arg in "$@"` perche'
-# perde il legame tra --branch e il valore successivo.
+# Position-based parser: handles both standalone flags (--no-docker) and
+# key/value pairs (--branch dev-1). We do not use `for arg in "$@"` because
+# it loses the link between --branch and the following value.
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-docker) USE_DOCKER=0; shift ;;
-    --with-docker) USE_DOCKER=1; shift ;;  # alias retro-compat
+    --with-docker) USE_DOCKER=1; shift ;;  # backwards-compat alias
     --runtime)
-      [ -n "${2:-}" ] || { printf "%s richiede un argomento (colima|docker-desktop)\n" "$1" >&2; exit 2; }
+      [ -n "${2:-}" ] || { printf "%s requires an argument (colima|docker-desktop)\n" "$1" >&2; exit 2; }
       RUNTIME_CHOICE="$2"
       shift 2
       ;;
     --runtime=*) RUNTIME_CHOICE="${1#*=}"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --branch)
-      # Override esplicito della branch, equivalente a JHT_BRANCH=<name>.
-      # Utile per testare branch dev-N senza set dell'env var
-      # (BUG-INSTALL-BRANCH-MASTER-DEFAULT). Vince su JHT_BRANCH se entrambi.
-      [ -n "${2:-}" ] || { printf "%s richiede un argomento\n" "$1" >&2; exit 2; }
+      # Explicit branch override, same as JHT_BRANCH=<name>.
+      # Useful to test dev-N branches without setting the env var
+      # (BUG-INSTALL-BRANCH-MASTER-DEFAULT). Wins over JHT_BRANCH if both set.
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
       BRANCH="$2"
       shift 2
       ;;
     --branch=*) BRANCH="${1#*=}"; shift ;;
     --pairing-token)
-      # Token opaco generato dalla desktop app dalla session Supabase.
-      # Decisione lockata 2026-05-13 #4: l'app passa qui il token, install.sh
-      # lo salva in $HOME/.jht/.pairing-token (perms 0600) e salta il wizard
-      # interattivo (no `jht cloud login` da rifare dentro la VPS). Il
-      # container lo legge al primo run via `jht cloud pair` (gap futuro).
-      [ -n "${2:-}" ] || { printf "%s richiede un argomento\n" "$1" >&2; exit 2; }
+      # Opaque token generated by the desktop app from the Supabase session.
+      # Decision locked 2026-05-13 #4: the app passes the token here, install.sh
+      # saves it to $HOME/.jht/.pairing-token (perms 0600) and skips the
+      # interactive wizard (no `jht cloud login` to redo inside the VPS). The
+      # container reads it on first run via `jht cloud pair` (future gap).
+      [ -n "${2:-}" ] || { printf "%s requires an argument\n" "$1" >&2; exit 2; }
       PAIRING_TOKEN="$2"
       shift 2
       ;;
@@ -123,25 +123,25 @@ while [ $# -gt 0 ]; do
       exit 0
       ;;
     *)
-      printf "Argomento non riconosciuto: %s\n" "$1" >&2
+      printf "Unrecognized argument: %s\n" "$1" >&2
       exit 2
       ;;
   esac
 done
 
-# Normalizza/valida la scelta runtime: 'auto' (e vuoto) = colima di default.
+# Normalize/validate the runtime choice: 'auto' (and empty) = colima by default.
 case "$RUNTIME_CHOICE" in
   ""|auto) RUNTIME_CHOICE="" ;;
   colima|docker-desktop) ;;
-  *) printf "Valore --runtime non valido: %s (usa colima|docker-desktop)\n" "$RUNTIME_CHOICE" >&2; exit 2 ;;
+  *) printf "Invalid --runtime value: %s (use colima|docker-desktop)\n" "$RUNTIME_CHOICE" >&2; exit 2 ;;
 esac
 
-# RAW_BASE va calcolato DOPO arg parsing perche' `--branch` puo' aver
-# sovrascritto $BRANCH. Senza, lo --branch non avrebbe effetto sui download
-# di docker-compose.yml e jht-wrapper.sh in download_runtime_files().
+# RAW_BASE must be computed AFTER arg parsing because `--branch` may have
+# overridden $BRANCH. Without this, --branch would have no effect on the
+# downloads of docker-compose.yml and jht-wrapper.sh in download_runtime_files().
 RAW_BASE="${JHT_RAW_BASE:-https://raw.githubusercontent.com/leopu00/job-hunter-team/$BRANCH}"
 
-# ── Colori ────────────────────────────────────────────────────────────────
+# ── Colors ────────────────────────────────────────────────────────────────
 if [ -t 1 ]; then
   RED='\033[0;31m'
   GREEN='\033[0;32m'
@@ -160,7 +160,7 @@ info()  { printf "  ${BLUE}▸${RESET} %s\n" "$*"; }
 fail()  { printf "  ${RED}✗${RESET} %s\n" "$*" >&2; exit 1; }
 step()  { printf "\n${BOLD}[%s/%s] %s${RESET}\n" "$1" "$2" "$3"; }
 
-# Wrap comandi con side-effect sul sistema. In dry-run stampa invece di eseguire.
+# Wrap commands with system side effects. In dry-run, print instead of executing.
 run() {
   if [ "${DRY_RUN:-0}" = "1" ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: %s\n" "$*"
@@ -176,23 +176,23 @@ header() {
   printf "${BOLD}╚══════════════════════════════════════════╝${RESET}\n"
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
-    printf "  ${DIM}mode:    ${RESET}${BOLD}Docker (isolato)${RESET}\n"
+    printf "  ${DIM}mode:    ${RESET}${BOLD}Docker (isolated)${RESET}\n"
     printf "  ${DIM}image:   %s${RESET}\n" "$IMAGE"
     printf "  ${DIM}branch:  %s${RESET}\n" "$BRANCH"
     printf "  ${DIM}runtime: %s${RESET}\n" "$RUNTIME_DIR"
   else
-    printf "  ${DIM}mode:   ${RESET}${YELLOW}nativo (expert mode, --no-docker)${RESET}\n"
+    printf "  ${DIM}mode:   ${RESET}${YELLOW}native (expert mode, --no-docker)${RESET}\n"
     printf "  ${DIM}repo:   %s${RESET}\n" "$REPO_URL"
     printf "  ${DIM}branch: %s${RESET}\n" "$BRANCH"
     printf "  ${DIM}target: %s${RESET}\n" "$INSTALL_DIR"
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}dry-run:${RESET} ${YELLOW}ON${RESET} (nessuna modifica al sistema)\n"
+    printf "  ${DIM}dry-run:${RESET} ${YELLOW}ON${RESET} (no changes to the system)\n"
   fi
   printf "\n"
 }
 
-# Step counts diversi a seconda del path
+# Different step counts depending on the path
 TOTAL_STEPS_DOCKER=4
 TOTAL_STEPS_NATIVE=7
 
@@ -209,7 +209,7 @@ detect_os() {
         OS="linux"
       fi
       ;;
-    *) fail "Sistema operativo non supportato: $uname_s" ;;
+    *) fail "Unsupported operating system: $uname_s" ;;
   esac
 }
 
@@ -228,7 +228,7 @@ sudo_maybe() {
 
 detect_system() {
   local total="$1"
-  step 1 "$total" "Rilevamento sistema"
+  step 1 "$total" "System detection"
   detect_os
   case "$OS" in
     macos) ok "macOS" ;;
@@ -244,13 +244,13 @@ detect_system() {
 # ── Docker runtime install ────────────────────────────────────────────────
 install_brew_if_missing() {
   if command -v brew &>/dev/null; then return 0; fi
-  info "Homebrew non trovato. Installazione in corso..."
+  info "Homebrew not found. Installing..."
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash\n"
     return 0
   fi
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
-    || fail "Installazione Homebrew fallita"
+    || fail "Homebrew installation failed"
   if [ -x /opt/homebrew/bin/brew ]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
   elif [ -x /usr/local/bin/brew ]; then
@@ -261,122 +261,122 @@ install_brew_if_missing() {
 install_colima_macos() {
   install_brew_if_missing
   if ! command -v colima &>/dev/null; then
-    info "Installo Colima (runtime container Apache 2.0, no Docker Desktop)..."
-    run brew install colima || fail "Installazione Colima fallita"
+    info "Installing Colima (Apache 2.0 container runtime, no Docker Desktop)..."
+    run brew install colima || fail "Colima installation failed"
   else
-    ok "colima gia' installato"
+    ok "colima already installed"
   fi
   if ! command -v docker &>/dev/null; then
-    info "Installo docker CLI..."
-    run brew install docker || fail "Installazione docker CLI fallita"
+    info "Installing docker CLI..."
+    run brew install docker || fail "docker CLI installation failed"
   else
-    ok "docker CLI gia' installato"
+    ok "docker CLI already installed"
   fi
-  # Avvia Colima se non gia' attivo
+  # Start Colima if not already running
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would execute: colima start (se non gia' attivo)\n"
+    printf "  ${DIM}[dry-run]${RESET} would execute: colima start (if not already running)\n"
     return 0
   fi
   if colima status &>/dev/null; then
-    ok "colima gia' in esecuzione"
+    ok "colima already running"
   else
-    info "Avvio Colima (puo' richiedere 30-60s la prima volta)..."
-    colima start || fail "colima start fallito. Riprova manualmente con 'colima start'."
-    ok "colima avviato"
+    info "Starting Colima (may take 30-60s the first time)..."
+    colima start || fail "colima start failed. Retry manually with 'colima start'."
+    ok "colima started"
   fi
 }
 
 install_docker_linux() {
-  # Installa Docker Engine + Docker Compose v2 plugin. Su Ubuntu 24.04
-  # `apt install docker.io` NON include il plugin compose: senza,
-  # `docker compose ...` fallisce con "unknown shorthand flag 'f'" e il
-  # wrapper jht non parte. Tracciato come gotcha durante il primo smoke
-  # VPS Hetzner del 2026-05-06 (vedi docs/internal/ops/vps.md).
+  # Install Docker Engine + the Docker Compose v2 plugin. On Ubuntu 24.04
+  # `apt install docker.io` does NOT include the compose plugin: without it,
+  # `docker compose ...` fails with "unknown shorthand flag 'f'" and the
+  # jht wrapper does not start. Tracked as a gotcha during the first Hetzner
+  # VPS smoke test of 2026-05-06 (see docs/internal/ops/vps.md).
   case "$PKG" in
     apt)
       run sudo_maybe apt-get update -qq
       if ! command -v docker &>/dev/null; then
-        info "Installo docker.io..."
-        run sudo_maybe apt-get install -y docker.io || fail "Installazione docker.io fallita"
+        info "Installing docker.io..."
+        run sudo_maybe apt-get install -y docker.io || fail "docker.io installation failed"
       fi
       if ! docker compose version &>/dev/null; then
-        info "Installo docker-compose-v2 (plugin)..."
-        run sudo_maybe apt-get install -y docker-compose-v2 || fail "Installazione docker-compose-v2 fallita"
+        info "Installing docker-compose-v2 (plugin)..."
+        run sudo_maybe apt-get install -y docker-compose-v2 || fail "docker-compose-v2 installation failed"
       fi
       ;;
     dnf)
       if ! command -v docker &>/dev/null; then
-        info "Installo docker..."
-        run sudo_maybe dnf install -y docker || fail "Installazione docker fallita"
+        info "Installing docker..."
+        run sudo_maybe dnf install -y docker || fail "docker installation failed"
       fi
       if ! docker compose version &>/dev/null; then
-        info "Installo docker-compose-plugin..."
-        run sudo_maybe dnf install -y docker-compose-plugin || warn "Installazione docker-compose-plugin fallita — verifica manualmente"
+        info "Installing docker-compose-plugin..."
+        run sudo_maybe dnf install -y docker-compose-plugin || warn "docker-compose-plugin installation failed — check manually"
       fi
       ;;
     pacman)
       if ! command -v docker &>/dev/null; then
-        info "Installo docker..."
-        run sudo_maybe pacman -Sy --noconfirm docker || fail "Installazione docker fallita"
+        info "Installing docker..."
+        run sudo_maybe pacman -Sy --noconfirm docker || fail "docker installation failed"
       fi
       if ! docker compose version &>/dev/null; then
-        info "Installo docker-compose..."
-        run sudo_maybe pacman -S --noconfirm docker-compose || warn "Installazione docker-compose fallita — verifica manualmente"
+        info "Installing docker-compose..."
+        run sudo_maybe pacman -S --noconfirm docker-compose || warn "docker-compose installation failed — check manually"
       fi
       ;;
     *)
-      command -v docker &>/dev/null || fail "Package manager sconosciuto. Installa docker manualmente o riprova con --no-docker."
-      docker compose version &>/dev/null || warn "docker compose v2 non disponibile — installa il plugin manualmente"
+      command -v docker &>/dev/null || fail "Unknown package manager. Install docker manually or retry with --no-docker."
+      docker compose version &>/dev/null || warn "docker compose v2 not available — install the plugin manually"
       ;;
   esac
-  # Su Linux/WSL2 il daemon di solito non parte da solo
+  # On Linux/WSL2 the daemon usually does not start on its own
   if command -v systemctl &>/dev/null; then
     run sudo_maybe systemctl enable --now docker 2>/dev/null || true
   fi
-  # WSL2: il daemon e' avviato dal service docker
+  # WSL2: the daemon is started by the docker service
   if [ "$OS" = "wsl" ]; then
     run sudo_maybe service docker start 2>/dev/null || true
   fi
-  # Aggiungi utente al gruppo docker per evitare sudo (richiede logout).
-  # Salto per root: root usa docker senza re-login e il warning sarebbe
-  # solo rumore. Comune su VPS dove l'install gira come root.
+  # Add the user to the docker group to avoid sudo (requires logout).
+  # Skipped for root: root uses docker without re-login and the warning
+  # would just be noise. Common on VPS where the install runs as root.
   if [ "$(id -u)" -ne 0 ] && ! groups 2>/dev/null | grep -q '\bdocker\b'; then
     run sudo_maybe usermod -aG docker "$USER" 2>/dev/null || true
-    warn "Sei stato aggiunto al gruppo 'docker'. Esci e rientra (o 'newgrp docker') per usarlo senza sudo."
+    warn "You have been added to the 'docker' group. Log out and back in (or run 'newgrp docker') to use it without sudo."
   fi
-  ok "docker installato"
+  ok "docker installed"
 }
 
 install_docker_desktop_macos() {
-  # Docker Desktop e' l'app dell'utente: NON la installiamo in silenzio (EULA +
-  # password admin + GUI alla prima apertura). Il detect-first e' gia' passato,
-  # quindi qui il daemon e' giu'. (ADR-0006)
+  # Docker Desktop is the user's app: we do NOT install it silently (EULA +
+  # admin password + GUI on first open). The detect-first already ran,
+  # so at this point the daemon is down. (ADR-0006)
   if [ ! -d "/Applications/Docker.app" ]; then
-    fail "Docker Desktop non e' installato. Scaricalo da https://www.docker.com/products/docker-desktop/ e rilancia, oppure usa Colima con --runtime=colima."
+    fail "Docker Desktop is not installed. Download it from https://www.docker.com/products/docker-desktop/ and re-run, or use Colima with --runtime=colima."
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf "  ${DIM}[dry-run]${RESET} would execute: open -a Docker (+ attesa daemon)\n"
+    printf "  ${DIM}[dry-run]${RESET} would execute: open -a Docker (+ wait for daemon)\n"
     return 0
   fi
-  info "Avvio Docker Desktop..."
+  info "Starting Docker Desktop..."
   open -a Docker || true
-  info "Attendo il daemon Docker (fino a 120s)..."
+  info "Waiting for the Docker daemon (up to 120s)..."
   local i=0
   while [ "$i" -lt 60 ]; do
-    if docker info &>/dev/null; then ok "Docker Desktop pronto"; return 0; fi
+    if docker info &>/dev/null; then ok "Docker Desktop ready"; return 0; fi
     sleep 2
     i=$((i + 1))
   done
-  fail "Docker Desktop avviato ma il daemon non risponde dopo 120s. Aprilo a mano e rilancia."
+  fail "Docker Desktop started but the daemon is not responding after 120s. Open it manually and re-run."
 }
 
 install_container_runtime() {
   step 2 "$TOTAL_STEPS_DOCKER" "Container runtime"
-  # Detect-first: se un daemon Docker risponde gia' (Docker Desktop, una Colima
-  # esistente, OrbStack, ...), lo riusiamo — niente seconda installazione/VM
-  # sopra (evita il clash a due VM, ADR-0006).
+  # Detect-first: if a Docker daemon already responds (Docker Desktop, an
+  # existing Colima, OrbStack, ...), we reuse it — no second installation/VM
+  # on top (avoids the two-VM clash, ADR-0006).
   if [ "$DRY_RUN" -ne 1 ] && docker info &>/dev/null; then
-    ok "Docker gia' attivo e raggiungibile — riuso questo runtime (nessuna installazione)"
+    ok "Docker already running and reachable — reusing this runtime (no installation)"
     return 0
   fi
   case "$OS" in
@@ -391,22 +391,22 @@ install_container_runtime() {
 }
 
 verify_docker_works() {
-  step 3 "$TOTAL_STEPS_DOCKER" "Verifica docker"
+  step 3 "$TOTAL_STEPS_DOCKER" "Docker check"
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: docker info\n"
     return 0
   fi
   if ! docker info &>/dev/null; then
     if [ "$OS" = "linux" ] || [ "$OS" = "wsl" ]; then
-      warn "docker info fallisce: probabilmente serve sudo o un re-login per il gruppo docker."
-      info "Provo con sudo per la verifica..."
+      warn "docker info fails: you probably need sudo or a re-login for the docker group."
+      info "Trying with sudo for the check..."
       sudo docker info &>/dev/null \
-        || fail "Il daemon Docker non risponde. Verifica con 'sudo systemctl status docker' (Linux) o 'colima status' (Mac)."
+        || fail "The Docker daemon is not responding. Check with 'sudo systemctl status docker' (Linux) or 'colima status' (Mac)."
     else
-      fail "Il daemon Docker non risponde. Verifica con 'colima status' (Mac) o 'systemctl status docker' (Linux)."
+      fail "The Docker daemon is not responding. Check with 'colima status' (Mac) or 'systemctl status docker' (Linux)."
     fi
   fi
-  ok "docker daemon raggiungibile"
+  ok "docker daemon reachable"
 }
 
 download_runtime_files() {
@@ -434,22 +434,22 @@ download_runtime_files() {
 
   mkdir -p "$RUNTIME_DIR" "$BIN_DIR"
 
-  info "Scarico docker-compose.yml..."
+  info "Downloading docker-compose.yml..."
   if ! curl -fsSL "$compose_url" -o "$compose_dest"; then
-    fail "Download fallito: $compose_url. Controlla connessione e branch ($BRANCH)."
+    fail "Download failed: $compose_url. Check your connection and branch ($BRANCH)."
   fi
   ok "compose: $compose_dest"
 
-  info "Scarico wrapper jht..."
+  info "Downloading jht wrapper..."
   if ! curl -fsSL "$wrapper_url" -o "$wrapper_dest"; then
-    fail "Download fallito: $wrapper_url. Controlla connessione e branch ($BRANCH)."
+    fail "Download failed: $wrapper_url. Check your connection and branch ($BRANCH)."
   fi
   chmod +x "$wrapper_dest"
   ok "wrapper: $wrapper_dest"
 
-  info "Scarico host-setup.sh (preflight VPS/swap)..."
+  info "Downloading host-setup.sh (VPS/swap preflight)..."
   if ! curl -fsSL "$hostsetup_url" -o "$hostsetup_dest"; then
-    warn "Download host-setup.sh fallito ($hostsetup_url) — proseguo senza preflight"
+    warn "host-setup.sh download failed ($hostsetup_url) — continuing without preflight"
   else
     chmod +x "$hostsetup_dest"
     ok "host-setup: $hostsetup_dest"
@@ -457,47 +457,47 @@ download_runtime_files() {
 
   case ":$PATH:" in
     *":$BIN_DIR:"*)
-      ok "$BIN_DIR gia' nel PATH"
+      ok "$BIN_DIR already in PATH"
       PATH_READY=1
       ;;
     *)
-      # Auto-add a una location persistente cosi' i prossimi shell login
-      # vedono `jht` senza intervento manuale (BUG-INSTALL-PATH-NOT-EXPORTED).
-      # Su Ubuntu Bash, ~/.profile contiene gia' il guard
+      # Auto-add to a persistent location so the next login shells see
+      # `jht` without manual intervention (BUG-INSTALL-PATH-NOT-EXPORTED).
+      # On Ubuntu Bash, ~/.profile already contains the guard
       # `if [ -d "$HOME/.local/bin" ]; then PATH="$HOME/.local/bin:$PATH"; fi`,
-      # ma quel guard si valuta SOLO al login successivo a quando la dir e'
-      # creata — installando JHT in una sessione gia' aperta, la dir non
-      # esisteva al login → PATH non popolato → `jht` not found.
-      # Il subshell di `curl | bash` non puo' modificare il PATH del parent,
-      # quindi serve scrivere a un file sourced dal prossimo shell.
+      # but that guard is evaluated ONLY at the login following the creation
+      # of the dir — installing JHT in an already open session, the dir did
+      # not exist at login → PATH not populated → `jht` not found.
+      # The `curl | bash` subshell cannot modify the parent PATH, so we
+      # must write to a file sourced by the next shell.
       local persistent_added=0
       if [ "${EUID:-$(id -u)}" -eq 0 ] && [ -d /etc/profile.d ] && [ -w /etc/profile.d ]; then
-        # System-wide (preferito su VPS root): /etc/profile.d/<file>.sh viene
-        # sourceto da /etc/profile a ogni login interactive shell.
+        # System-wide (preferred on root VPS): /etc/profile.d/<file>.sh is
+        # sourced by /etc/profile at every interactive login shell.
         printf 'export PATH="$PATH:%s"\n' "$BIN_DIR" > /etc/profile.d/jht.sh
         chmod 644 /etc/profile.d/jht.sh
-        ok "PATH aggiunto a /etc/profile.d/jht.sh (system-wide)"
+        ok "PATH added to /etc/profile.d/jht.sh (system-wide)"
         persistent_added=1
       else
-        # User-level fallback: append a ~/.bashrc + ~/.zshrc se esistono e
-        # non gia' presenti. Idempotente: skip se gia' aggiunto.
+        # User-level fallback: append to ~/.bashrc + ~/.zshrc if they exist
+        # and not already present. Idempotent: skip if already added.
         for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
           if [ -f "$rc" ] && ! grep -q "$BIN_DIR" "$rc" 2>/dev/null; then
             printf '\n# Added by JHT install.sh\nexport PATH="$PATH:%s"\n' "$BIN_DIR" >> "$rc"
-            ok "PATH aggiunto a $rc"
+            ok "PATH added to $rc"
             persistent_added=1
           fi
         done
       fi
       if [ "$persistent_added" -eq 0 ]; then
-        warn "Nessun shell rc scritto. Aggiungi manualmente:"
+        warn "No shell rc file was written. Add manually:"
         printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
       fi
-      # Aggiorna anche il PATH di questa subshell cosi' i comandi che
-      # install.sh esegue dopo (es. il wizard) trovano `jht`. Il PATH del
-      # parent shell sara' aggiornato al prossimo login (via /etc/profile.d
-      # o ~/.bashrc). Mostriamo PATH_READY=1 nei "prossimi passi" perche'
-      # l'utente di solito apre una nuova shell o ri-esegue exec bash -l.
+      # Also update this subshell's PATH so the commands install.sh runs
+      # afterwards (e.g. the wizard) can find `jht`. The parent shell PATH
+      # will be updated at the next login (via /etc/profile.d or ~/.bashrc).
+      # We show PATH_READY=1 in the "next steps" because the user usually
+      # opens a new shell or re-runs exec bash -l.
       export PATH="$BIN_DIR:$PATH"
       PATH_READY=1
       ;;
@@ -512,16 +512,16 @@ install_dep() {
   local name="$1"
   shift
   if command -v "$name" &>/dev/null; then
-    ok "$name gia' installato"
+    ok "$name already installed"
     return 0
   fi
-  info "Installo $name..."
-  run "$@" || fail "Installazione $name fallita"
-  ok "$name installato"
+  info "Installing $name..."
+  run "$@" || fail "$name installation failed"
+  ok "$name installed"
 }
 
 install_system_deps() {
-  step 2 "$TOTAL_STEPS_NATIVE" "Dipendenze di sistema (git, curl, tmux)"
+  step 2 "$TOTAL_STEPS_NATIVE" "System dependencies (git, curl, tmux)"
 
   case "$OS" in
     macos)
@@ -549,8 +549,8 @@ install_system_deps() {
           install_dep curl sudo_maybe pacman -S --noconfirm curl
           ;;
         *)
-          command -v git &>/dev/null || fail "git non trovato e package manager sconosciuto. Installa git manualmente."
-          command -v tmux &>/dev/null || fail "tmux non trovato. Installa tmux manualmente."
+          command -v git &>/dev/null || fail "git not found and unknown package manager. Install git manually."
+          command -v tmux &>/dev/null || fail "tmux not found. Install tmux manually."
           ;;
       esac
       ;;
@@ -570,11 +570,11 @@ install_node() {
   step 3 "$TOTAL_STEPS_NATIVE" "Node.js ${MIN_NODE_MAJOR}+"
 
   if check_node_version; then
-    ok "node $(node -v) gia' installato"
+    ok "node $(node -v) already installed"
     return 0
   fi
 
-  info "Installo Node.js ${MIN_NODE_MAJOR}..."
+  info "Installing Node.js ${MIN_NODE_MAJOR}..."
   case "$OS" in
     macos)
       run brew install "node@${MIN_NODE_MAJOR}"
@@ -604,7 +604,7 @@ install_node() {
           run sudo_maybe pacman -S --noconfirm nodejs npm
           ;;
         *)
-          fail "Installazione Node.js automatica non supportata su questo sistema."
+          fail "Automatic Node.js installation is not supported on this system."
           ;;
       esac
       ;;
@@ -613,28 +613,28 @@ install_node() {
   if [ "$DRY_RUN" -eq 1 ]; then
     return 0
   fi
-  check_node_version || fail "Node.js ${MIN_NODE_MAJOR}+ non e' disponibile dopo l'installazione"
-  ok "node $(node -v) installato"
+  check_node_version || fail "Node.js ${MIN_NODE_MAJOR}+ is not available after installation"
+  ok "node $(node -v) installed"
 }
 
 install_claude_cli() {
   step 4 "$TOTAL_STEPS_NATIVE" "Claude CLI"
 
   if command -v claude &>/dev/null; then
-    ok "claude CLI gia' installato"
+    ok "claude CLI already installed"
     return 0
   fi
 
-  info "Installo Claude CLI via npm (globale)..."
+  info "Installing Claude CLI via npm (global)..."
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: npm install -g @anthropic-ai/claude-cli\n"
     return 0
   fi
   if ! npm install -g @anthropic-ai/claude-cli 2>/dev/null; then
-    warn "Installazione automatica fallita. Installa manualmente da https://docs.anthropic.com/claude/docs/claude-code"
+    warn "Automatic installation failed. Install manually from https://docs.anthropic.com/claude/docs/claude-code"
     return 0
   fi
-  ok "claude CLI installato"
+  ok "claude CLI installed"
 }
 
 clone_repo() {
@@ -651,43 +651,43 @@ clone_repo() {
   fi
 
   if [ -d "$INSTALL_DIR/.git" ]; then
-    info "Repo gia' presente in $INSTALL_DIR, aggiorno..."
+    info "Repo already present in $INSTALL_DIR, updating..."
     (cd "$INSTALL_DIR" && git fetch --quiet --depth 1 origin "$BRANCH" && git checkout --quiet "$BRANCH" && git reset --hard --quiet "origin/$BRANCH") \
-      || fail "Impossibile aggiornare la repo"
-    ok "Repo aggiornata a $BRANCH"
+      || fail "Unable to update the repo"
+    ok "Repo updated to $BRANCH"
   else
     mkdir -p "$(dirname "$INSTALL_DIR")"
     git clone --quiet --depth 1 --branch "$BRANCH" "$REPO_URL" "$INSTALL_DIR" \
-      || fail "Clone fallito. Controlla la connessione e i permessi su $INSTALL_DIR"
-    ok "Repo clonata in $INSTALL_DIR"
+      || fail "Clone failed. Check your connection and permissions on $INSTALL_DIR"
+    ok "Repo cloned into $INSTALL_DIR"
   fi
 }
 
 build_jht() {
-  step 6 "$TOTAL_STEPS_NATIVE" "Build TUI, CLI e moduli shared"
+  step 6 "$TOTAL_STEPS_NATIVE" "Build TUI, CLI and shared modules"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf "  ${DIM}[dry-run]${RESET} would execute: (cd %s/tui && npm install && npx tsc)\n" "$INSTALL_DIR"
     printf "  ${DIM}[dry-run]${RESET} would execute: (cd %s/cli && npm install)\n" "$INSTALL_DIR"
-    printf "  ${DIM}[dry-run]${RESET} would execute: npm install in ogni %s/shared/*/package.json con deps\n" "$INSTALL_DIR"
+    printf "  ${DIM}[dry-run]${RESET} would execute: npm install in each %s/shared/*/package.json with deps\n" "$INSTALL_DIR"
     return 0
   fi
 
-  info "Installo dipendenze TUI..."
+  info "Installing TUI dependencies..."
   (cd "$INSTALL_DIR/tui" && npm install --silent --no-audit --no-fund) \
-    || fail "npm install TUI fallito"
+    || fail "TUI npm install failed"
 
-  info "Compilo TUI (TypeScript)..."
+  info "Compiling TUI (TypeScript)..."
   (cd "$INSTALL_DIR/tui" && npx --yes tsc) \
-    || fail "Build TUI fallito"
-  ok "TUI compilata in $INSTALL_DIR/tui/dist"
+    || fail "TUI build failed"
+  ok "TUI compiled in $INSTALL_DIR/tui/dist"
 
-  info "Installo dipendenze CLI..."
+  info "Installing CLI dependencies..."
   (cd "$INSTALL_DIR/cli" && npm install --silent --no-audit --no-fund) \
-    || fail "npm install CLI fallito"
-  ok "CLI pronta"
+    || fail "CLI npm install failed"
+  ok "CLI ready"
 
-  info "Installo dipendenze moduli shared..."
+  info "Installing shared module dependencies..."
   local shared_installed=0
   for pkg in "$INSTALL_DIR"/shared/*/package.json; do
     [ -f "$pkg" ] || continue
@@ -697,15 +697,15 @@ build_jht() {
     has_deps=$(node -p "Object.keys(JSON.parse(require('fs').readFileSync('$pkg','utf8')).dependencies||{}).length > 0")
     if [ "$has_deps" = "true" ]; then
       (cd "$dir" && npm install --silent --no-audit --no-fund) \
-        || fail "npm install $(basename "$dir") fallito"
+        || fail "npm install $(basename "$dir") failed"
       shared_installed=$((shared_installed + 1))
     fi
   done
-  ok "$shared_installed moduli shared pronti"
+  ok "$shared_installed shared modules ready"
 }
 
 link_bin_native() {
-  step 7 "$TOTAL_STEPS_NATIVE" "Installazione comando jht (nativo)"
+  step 7 "$TOTAL_STEPS_NATIVE" "Install jht command (native)"
 
   local target="$INSTALL_DIR/cli/bin/jht.js"
   local link="$BIN_DIR/jht"
@@ -724,7 +724,7 @@ link_bin_native() {
   mkdir -p "$BIN_DIR"
 
   if [ ! -f "$target" ]; then
-    fail "Entry point non trovato: $target"
+    fail "Entry point not found: $target"
   fi
 
   chmod +x "$target"
@@ -733,28 +733,28 @@ link_bin_native() {
     rm -f "$link"
   fi
   ln -s "$target" "$link"
-  ok "Simlink creato: $link -> $target"
+  ok "Symlink created: $link -> $target"
 
   case ":$PATH:" in
     *":$BIN_DIR:"*)
-      ok "$BIN_DIR e' gia' nel PATH"
+      ok "$BIN_DIR is already in PATH"
       PATH_READY=1
       ;;
     *)
-      warn "$BIN_DIR non e' nel PATH."
-      info "Aggiungi questa riga al tuo shell rc (~/.zshrc, ~/.bashrc):"
+      warn "$BIN_DIR is not in PATH."
+      info "Add this line to your shell rc (~/.zshrc, ~/.bashrc):"
       printf "\n      ${BOLD}export PATH=\"\$PATH:%s\"${RESET}\n\n" "$BIN_DIR"
       PATH_READY=0
       ;;
   esac
 }
 
-# ── Finale ────────────────────────────────────────────────────────────────
+# ── Final ─────────────────────────────────────────────────────────────────
 
-# Vero se maybe_onboard() puo' lanciare il wizard subito (TTY disponibile
-# direttamente o riapribile da /dev/tty). Usato da final_message per
-# decidere se stampare "Prossimi passi: jht setup" (sarebbe rumore se il
-# wizard sta per partire da solo nelle prossime righe).
+# True if maybe_onboard() can launch the wizard right away (TTY available
+# directly or re-openable from /dev/tty). Used by final_message to decide
+# whether to print "Next steps: jht setup" (it would be noise if the
+# wizard is about to start on its own a few lines below).
 will_auto_onboard() {
   [ "$DRY_RUN" -eq 1 ] && return 1
   [ "${JHT_SKIP_ONBOARD:-0}" = "1" ] && return 1
@@ -766,38 +766,38 @@ will_auto_onboard() {
 final_message() {
   printf "\n"
   printf "${GREEN}${BOLD}══════════════════════════════════════════${RESET}\n"
-  printf "${GREEN}${BOLD}  Installazione completata!${RESET}\n"
+  printf "${GREEN}${BOLD}  Installation complete!${RESET}\n"
   printf "${GREEN}${BOLD}══════════════════════════════════════════${RESET}\n"
   printf "\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
-    printf "  ${BOLD}Modalita' container attiva.${RESET}\n"
-    printf "  ${DIM}Gli agenti vedono solo:${RESET}\n"
-    printf "  ${DIM}  ~/.jht/                       → /jht_home (config, db, agenti)${RESET}\n"
-    printf "  ${DIM}  ~/Documents/Job Hunter Team/  → /jht_user (CV, allegati, output)${RESET}\n"
+    printf "  ${BOLD}Container mode active.${RESET}\n"
+    printf "  ${DIM}The agents can only see:${RESET}\n"
+    printf "  ${DIM}  ~/.jht/                       → /jht_home (config, db, agents)${RESET}\n"
+    printf "  ${DIM}  ~/Documents/Job Hunter Team/  → /jht_user (CVs, attachments, output)${RESET}\n"
     printf "\n"
   else
-    printf "  ${YELLOW}${BOLD}⚠  Modalita' nativa (--no-docker).${RESET}\n"
-    printf "  ${DIM}Gli agenti AI hanno accesso al tuo filesystem. Usa solo se sai${RESET}\n"
-    printf "  ${DIM}cosa stai facendo o se hai dedicato un PC/VM solo a JHT.${RESET}\n"
+    printf "  ${YELLOW}${BOLD}⚠  Native mode (--no-docker).${RESET}\n"
+    printf "  ${DIM}The AI agents have access to your filesystem. Use this only if${RESET}\n"
+    printf "  ${DIM}you know what you are doing or have a PC/VM dedicated to JHT.${RESET}\n"
     printf "\n"
-    printf "  ${DIM}Layout file:${RESET}\n"
-    printf "  ${DIM}  ~/.jht/                       → config, db, agenti (non toccare)${RESET}\n"
-    printf "  ${DIM}  ~/Documents/Job Hunter Team/  → CV, allegati, output${RESET}\n"
+    printf "  ${DIM}File layout:${RESET}\n"
+    printf "  ${DIM}  ~/.jht/                       → config, db, agents (do not touch)${RESET}\n"
+    printf "  ${DIM}  ~/Documents/Job Hunter Team/  → CVs, attachments, output${RESET}\n"
     printf "\n"
   fi
 
-  # Mostra "Prossimi passi" solo quando il wizard NON parte da solo
-  # (es. CI senza TTY, JHT_SKIP_ONBOARD=1). Quando parte, il wizard
-  # prende il sopravvento subito sotto e queste righe sarebbero noise.
+  # Show "Next steps" only when the wizard does NOT start on its own
+  # (e.g. CI without a TTY, JHT_SKIP_ONBOARD=1). When it starts, the
+  # wizard takes over right below and these lines would be noise.
   if ! will_auto_onboard; then
-    printf "  ${BOLD}Prossimi passi:${RESET}\n"
+    printf "  ${BOLD}Next steps:${RESET}\n"
     printf "\n"
     if [ "${PATH_READY:-0}" -eq 1 ]; then
       if [ "$USE_DOCKER" -eq 1 ]; then
-        printf "      ${BOLD}jht setup${RESET}        ${DIM}# wizard di configurazione (avvia anche il container)${RESET}\n"
+        printf "      ${BOLD}jht setup${RESET}        ${DIM}# configuration wizard (also starts the container)${RESET}\n"
       else
-        printf "      ${BOLD}jht setup${RESET}        ${DIM}# configurazione iniziale${RESET}\n"
-        printf "      ${BOLD}jht dashboard${RESET}    ${DIM}# avvia la dashboard web${RESET}\n"
+        printf "      ${BOLD}jht setup${RESET}        ${DIM}# initial configuration${RESET}\n"
+        printf "      ${BOLD}jht dashboard${RESET}    ${DIM}# starts the web dashboard${RESET}\n"
       fi
     else
       if [ "$USE_DOCKER" -eq 1 ]; then
@@ -810,121 +810,121 @@ final_message() {
     printf "\n"
   fi
 
-  printf "  ${DIM}Per disinstallare (mantiene i tuoi dati in ~/.jht e ~/Documents/Job Hunter Team):${RESET}\n"
+  printf "  ${DIM}To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):${RESET}\n"
   if [ "$USE_DOCKER" -eq 1 ]; then
     printf "  ${DIM}  jht down && rm -rf %s %s/jht && docker rmi %s${RESET}\n" "$RUNTIME_DIR" "$BIN_DIR" "$IMAGE"
   else
     printf "  ${DIM}  rm -rf %s %s/jht${RESET}\n" "$INSTALL_DIR" "$BIN_DIR"
   fi
-  printf "  ${DIM}Per cancellare anche dati (config, db, CV, output):${RESET}\n"
+  printf "  ${DIM}To also delete your data (config, db, CVs, output):${RESET}\n"
   printf "  ${DIM}  rm -rf %s/.jht \"%s/Documents/Job Hunter Team\"${RESET}\n" "$HOME" "$HOME"
   printf "\n"
 }
 
 save_pairing_token() {
-  # Salva il pairing token in $HOME/.jht/.pairing-token con perms 0600.
-  # Il container lo legge al primo run e fa lo scambio refresh_token →
-  # access_token Supabase prima di chiamare /auth/v1/user. Vedi
-  # cli/src/commands/cloud.js handlePair (task futuro).
+  # Save the pairing token to $HOME/.jht/.pairing-token with perms 0600.
+  # The container reads it on first run and exchanges the refresh_token →
+  # Supabase access_token before calling /auth/v1/user. See
+  # cli/src/commands/cloud.js handlePair (future task).
   [ -z "$PAIRING_TOKEN" ] && return 0
   local jht_home="$HOME/.jht"
   local token_file="$jht_home/.pairing-token"
   run mkdir -p "$jht_home"
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "dry-run: salverei pairing token in $token_file"
+    info "dry-run: would save the pairing token to $token_file"
     return 0
   fi
   printf '%s' "$PAIRING_TOKEN" > "$token_file"
-  # 0644: il container gira come UID non-root (jht/1001) e deve poter
-  # leggere il token al primo boot. Su VPS l'unico user host è root,
-  # quindi il rischio "altri user dell'host leggono" è nullo. Inoltre
-  # il file viene cancellato da `jht cloud pair` subito dopo il consumo.
+  # 0644: the container runs as a non-root UID (jht/1001) and must be able
+  # to read the token on first boot. On a VPS the only host user is root,
+  # so the risk of "other host users reading it" is nil. Moreover the
+  # file is deleted by `jht cloud pair` right after consumption.
   chmod 644 "$token_file" 2>/dev/null || true
-  ok "Pairing token salvato in $token_file (mode 0644)"
+  ok "Pairing token saved to $token_file (mode 0644)"
 }
 
 run_host_setup_vps() {
-  # Quando install.sh arriva con --pairing-token, la macchina è una VPS
-  # provisionata dal desktop launcher: nessun utente al terminale, host-setup
-  # va lanciato non-interattivo per scrivere ~/.jht/host.env con
-  # JHT_HOST_TYPE=vps. Senza questo file il container parte in mode=local
-  # (default backwards-compat del compose) e pid1 salta il pair-on-boot.
+  # When install.sh arrives with --pairing-token, the machine is a VPS
+  # provisioned by the desktop launcher: no user at the terminal, host-setup
+  # must be run non-interactively to write ~/.jht/host.env with
+  # JHT_HOST_TYPE=vps. Without this file the container starts in mode=local
+  # (backwards-compat default of the compose) and pid1 skips pair-on-boot.
   [ -z "$PAIRING_TOKEN" ] && return 0
   local hostsetup="$RUNTIME_DIR/host-setup.sh"
   if [ ! -x "$hostsetup" ]; then
-    warn "host-setup.sh non disponibile in $hostsetup — skip preflight VPS"
+    warn "host-setup.sh not available at $hostsetup — skipping VPS preflight"
     return 0
   fi
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "dry-run: eseguirei $hostsetup --host-type=vps"
+    info "dry-run: would run $hostsetup --host-type=vps"
     return 0
   fi
-  info "Eseguo host-setup.sh in modalità VPS (scrive host.env + swap)..."
+  info "Running host-setup.sh in VPS mode (writes host.env + swap)..."
   if "$hostsetup" --host-type=vps </dev/null; then
-    ok "host-setup VPS completato"
+    ok "VPS host-setup completed"
   else
-    warn "host-setup VPS uscito con errore — proseguo (pair manuale potrebbe servire)"
+    warn "VPS host-setup exited with an error — continuing (a manual pair may be needed)"
   fi
-  # Allinea ownership di ~/.jht e ~/Documents/Job Hunter Team al UID del
-  # container `jht` (1001, vedi Dockerfile `useradd jht`). Senza questo,
-  # il container parte come UID 1001 e fallisce su due punti distinti:
-  #   - pid1 → cloud pair → EACCES su /jht_home/cloud.json
+  # Align the ownership of ~/.jht and ~/Documents/Job Hunter Team with the
+  # `jht` container UID (1001, see Dockerfile `useradd jht`). Without this,
+  # the container starts as UID 1001 and fails at two distinct points:
+  #   - pid1 → cloud pair → EACCES on /jht_home/cloud.json
   #   - jht team start → mkdir /jht_user/output → Permission denied
-  # Entrambe le dir sono bind-mountate, quindi serve allineare l'host.
+  # Both dirs are bind-mounted, so the host must be aligned.
   local jht_home="$HOME/.jht"
   local jht_user_dir="$HOME/Documents/Job Hunter Team"
   if command -v chown >/dev/null 2>&1; then
     chown -R 1001:1001 "$jht_home" 2>/dev/null && \
       ok "Ownership $jht_home → 1001:1001 (container UID)" || \
-      warn "chown $jht_home fallito — il pair potrebbe richiedere fix manuale"
+      warn "chown $jht_home failed — pairing may require a manual fix"
     mkdir -p "$jht_user_dir" 2>/dev/null
     chown -R 1001:1001 "$jht_user_dir" 2>/dev/null && \
       ok "Ownership $jht_user_dir → 1001:1001 (container UID)" || \
-      warn "chown $jht_user_dir fallito — il team start potrebbe fallire su mkdir output/"
+      warn "chown $jht_user_dir failed — team start may fail on mkdir output/"
   fi
 }
 
 maybe_onboard() {
   if [ "$DRY_RUN" -eq 1 ]; then
-    info "dry-run: salto il wizard di onboarding."
+    info "dry-run: skipping the onboarding wizard."
     return 0
   fi
   if [ "${JHT_SKIP_ONBOARD:-0}" = "1" ]; then
     return 0
   fi
   if [ -n "$PAIRING_TOKEN" ]; then
-    # Pairing token presente → l'utente sta provisionando la VPS dal
-    # desktop launcher (decisione lockata 2026-05-13 #4). Niente wizard
-    # interattivo: il container far\u00E0 il pair non-interattivo al primo run
-    # tramite il file .pairing-token. L'utente completer\u00E0 il provider
-    # login (Claude/Codex/Kimi) dal terminale embedded del desktop.
-    info "Pairing token presente: skip wizard interattivo."
-    info "Il container completer\u00E0 il pairing al primo avvio."
+    # Pairing token present → the user is provisioning the VPS from the
+    # desktop launcher (decision locked 2026-05-13 #4). No interactive
+    # wizard: the container will do the non-interactive pair on first run
+    # via the .pairing-token file. The user will complete the provider
+    # login (Claude/Codex/Kimi) from the desktop embedded terminal.
+    info "Pairing token present: skipping the interactive wizard."
+    info "The container will complete the pairing on first boot."
     return 0
   fi
 
-  # `curl | bash` connette stdin al pipe, quindi `-t 0` e' falso e
-  # `read` non puo' parlare con l'utente. Riapriamo stdin dal
-  # terminale controllante (/dev/tty) cosi' il wizard puo' leggere
-  # input: pattern di rustup, nvm, oh-my-zsh.
-  # Senza questo escape hatch, dopo `curl | bash` l'installer
-  # stampava "Stdin non e' un terminale interattivo: salto il
-  # wizard" e l'utente doveva ricordarsi di rilanciare `jht setup`.
+  # `curl | bash` connects stdin to the pipe, so `-t 0` is false and
+  # `read` cannot talk to the user. We reopen stdin from the
+  # controlling terminal (/dev/tty) so the wizard can read input:
+  # same pattern as rustup, nvm, oh-my-zsh.
+  # Without this escape hatch, after `curl | bash` the installer
+  # printed "Stdin is not an interactive terminal: skipping the
+  # wizard" and the user had to remember to re-run `jht setup`.
   if [ ! -t 0 ]; then
     if [ -r /dev/tty ]; then
       exec </dev/tty
     else
-      info "Nessun terminale interattivo (no /dev/tty): salto il wizard."
-      info "Esegui manualmente: jht setup"
+      info "No interactive terminal (no /dev/tty): skipping the wizard."
+      info "Run manually: jht setup"
       return 0
     fi
   fi
 
-  # Niente prompt "Vuoi avviare il setup?": al primo run e' sempre la
-  # prossima azione corretta. Chi vuole skippare usa JHT_SKIP_ONBOARD=1.
+  # No "Do you want to start the setup?" prompt: on first run it is always
+  # the correct next action. Whoever wants to skip uses JHT_SKIP_ONBOARD=1.
   export PATH="$BIN_DIR:$PATH"
   printf "\n"
-  jht setup || warn "Il wizard e' uscito con errore. Rilancialo con 'jht setup'."
+  jht setup || warn "The wizard exited with an error. Re-run it with 'jht setup'."
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────
