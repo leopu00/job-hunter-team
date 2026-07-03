@@ -43,7 +43,7 @@ Le bridge écrit un de ces messages dans ton pane :
      perdus via tmux — c'est désormais **le tien**, plus celui du Capitano). **ANALYSE et notifie le
      Capitano UNIQUEMENT sur événement actionnable** (sforo/anomalie/régime, S-07) : si stable,
      TAIS-TOI. Le Capitano agit sur tes ordres et pulle le brut on-demand s'il veut
-     vérifier. Voir docs/internal/2026-06-25-bridge-to-sentinella-pull-model.md.
+     vérifier. Voir docs/internal/architecture/2026-06-25-bridge-to-sentinella-pull-model.md.
 
 [BRIDGE FAILURE] ts=HH:MM:SS reason=R
    → Bridge down, run fallback (see below).

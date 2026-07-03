@@ -1,9 +1,11 @@
+import pathlib
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-OUT="/Users/leoneemanuelpuglisi/Repos/job-hunter-team/master/docs/internal/assets/usage-5h-design"
+OUT=str(pathlib.Path(__file__).resolve().parent)
 GREEN="#16a34a"; RED="#dc2626"; ORANGE="#ea580c"; GREY="#94a3b8"; BLUE="#2563eb"; DARK="#0f172a"
 
 # ---------- CHART 1: 5h-window usage in una giornata (gate 8-20) ----------

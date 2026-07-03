@@ -13,7 +13,7 @@
 // categoria dal title. Era hardcoded e tarata sui profili dev, dava 81%
 // "Other" sui profili non-dev (technical writer/CAD/translator). Migrata
 // a colonna DB + lettura data-driven il 2026-05-23. Roadmap per la pipeline
-// LLM in `docs/internal/2026-05-23-position-classifier-llm-roadmap.md`.
+// LLM in `docs/internal/roadmap/2026-05-23-position-classifier-llm-roadmap.md`.
 
 export const UNCATEGORIZED_LABEL = "Da categorizzare";
 

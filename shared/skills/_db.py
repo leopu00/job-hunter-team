@@ -160,7 +160,7 @@ def ensure_schema(conn: sqlite3.Connection):
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         -- Length guardrails: mirror dei CHECK constraint Postgres (mig 015).
         -- Origin: incident RobertHalf 2026-05-19 (location 4394 char di HTML
-        -- bloccava sync cloud, vedi docs/internal/cloud-sync-architecture.md).
+        -- bloccava sync cloud, vedi docs/internal/architecture/cloud-sync-architecture.md).
         -- SQLite locale deve fallire SUBITO al INSERT, non in differita al push.
         CHECK (LENGTH(title) <= 500),
         CHECK (LENGTH(company) <= 300),
@@ -878,7 +878,7 @@ def _migrate_positions_role_family(conn: sqlite3.Connection) -> None:
 def _migrate_positions_structured_location(conn: sqlite3.Connection) -> None:
     """Aggiunge le 10 colonne location strutturate popolate dall'analista.
 
-    Vedi `docs/internal/2026-05-23-location-playbook.md`. Allinea SQLite a
+    Vedi `docs/internal/experiments/2026-05-23-location-playbook.md`. Allinea SQLite a
     Supabase mig `add_structured_location_columns` del 2026-05-23.
     """
     if not _table_exists(conn, 'positions'):
@@ -1255,7 +1255,7 @@ def _migrate_v6_to_v7_tombstones(conn: sqlite3.Connection) -> None:
     push e il receive Supabase applica UPDATE SET deleted_at = ?.
 
     Vedi BACKLOG [JHT-CLOUDSYNC-01] DELETE tombstone (2026-05-31) +
-    docs/internal/cloud-sync-architecture.md + Supabase mig 025.
+    docs/internal/architecture/cloud-sync-architecture.md + Supabase mig 025.
 
     Idempotente: tabella e trigger sono CREATE ... IF NOT EXISTS sia
     qui sia nel blocco principale di ensure_schema. La funzione di

@@ -44,8 +44,6 @@ shared/data/linkedin-alerts/
 shared/data/incoming/
 
 # Telegram: sessioni e dati personali (il bridge code e' versionato)
-shared/telegram/sessions/
-shared/telegram/*.session
 
 # Screenshot con dati personali
 *.png

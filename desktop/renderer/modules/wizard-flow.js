@@ -403,7 +403,7 @@ function ensureTgCreateState() {
 // the WORST-CASE cap globally so all 3 bot usernames carry the same
 // (truncated) tag — user-recognizable cross-bot.
 //
-// Observed 2026-05-19: tag "leonepuglisi" (12) + role "assistente"
+// Observed 2026-05-19: a 12-char tag + role "assistente"
 // produced 34-char username, rejected by BotFather with
 // "Sorry, this username is invalid".
 const TG_USERNAME_MAX = 32

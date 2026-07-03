@@ -24,7 +24,7 @@ The same Docker image runs in all three modes — only the host machine changes:
 
 The dashboard is served by the container itself:
 - Local / Dedicated → `localhost:3000`
-- Self-hosted VPS → published on the VPS's public IP (or behind a tunnel, see [`JHT-CLOUD-06`](../../../BACKLOG.md))
+- Self-hosted VPS → published on the VPS's public IP (or reached through the desktop SSH tunnel — see [`JHT-VPS-TUNNEL`](../../../BACKLOG.md))
 
 ### ☁️ Optional managed storage (read-only mirror)
 

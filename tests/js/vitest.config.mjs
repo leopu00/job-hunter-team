@@ -8,13 +8,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.join(__dirname, '../../web'),
-      grammy: path.join(__dirname, 'telegram-stubs/grammy.ts'),
-      '@grammyjs/auto-retry': path.join(__dirname, 'telegram-stubs/grammy-auto-retry.ts'),
-      '@grammyjs/runner': path.join(__dirname, 'telegram-stubs/grammy-runner.ts'),
     },
   },
   test: {
-    include: ['config/**/*.test.ts', 'wizard/**/*.test.js', 'telegram/**/*.test.ts', 'deploy/**/*.test.ts', 'assistant/**/*.test.ts', 'context-engine/**/*.test.ts', 'tasks/**/*.test.ts', 'events/**/*.test.ts', 'validators/**/*.test.ts', 'integration/**/*.test.ts', 'sessions/**/*.test.ts', 'queue/**/*.test.ts'],
+    include: ['config/**/*.test.ts', 'wizard/**/*.test.js', 'deploy/**/*.test.ts', 'assistant/**/*.test.ts', 'context-engine/**/*.test.ts', 'tasks/**/*.test.ts', 'events/**/*.test.ts', 'validators/**/*.test.ts', 'integration/**/*.test.ts', 'sessions/**/*.test.ts', 'queue/**/*.test.ts'],
     environment: 'node',
   },
 });

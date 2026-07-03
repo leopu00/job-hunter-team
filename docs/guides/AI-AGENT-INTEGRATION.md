@@ -126,8 +126,8 @@ For **VPS**: the recommended path is the desktop pairing-token (see `docs/intern
 | Provider | Plan | Cost/month | Best for | Status |
 |---|---|---|---|---|
 | 🟠 **Claude** | Max x20 | ~€200 | Production-ready, best precision, lowest token oscillation | ✅ Recommended for serious job hunt |
-| 🔵 **Codex** (OpenAI) | Plus or Pro | ~€100 | Fast iteration, ok precision | 🔬 Supported, benchmarks in progress |
-| 🌙 **Kimi** (Moonshot) | Pro | ~€40 | Mass-market price, "good enough" for most cases | 🎯 Target tier for cost-sensitive users |
+| 🔵 **Codex** (OpenAI) | Plus or Pro | ~€100 | Best €/result balance, weekly-aware pacing | ✅ Proven — 1-month autonomous run |
+| 🌙 **Kimi** (Moonshot) | Pro | ~€40 | Mass-market price, "good enough" for most cases | 🧪 Beta — cheapest tier, under observation |
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account the user uses for personal AI. A shared account drains the same weekly quota twice and the team hits rate limits unexpectedly.
 

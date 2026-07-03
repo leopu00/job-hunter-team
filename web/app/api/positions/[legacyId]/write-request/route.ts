@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 // Writer-on-demand: l'utente "richiede" il CV per una posizione cliccando
 // il pulsante "Scrivi CV" sul dashboard (o `/cv <id>` su Telegram, vedi
-// telegram-bridge). Setta `positions.write_requested = 1` cosi' il Capitano
+// tg-bridge.py). Setta `positions.write_requested = 1` cosi' il Capitano
 // spawna uno Scrittore on-demand.
 //
 // Due modi operativi (decisi dalla presenza di SQLite locale):

@@ -314,7 +314,7 @@ Amikor a Sentinel rate-limit teliteodest jelez, a Captain `[URG] FREEZE`-t kuld 
 
 ### 🛠️ Skills / tools
 
-- **`shared/telegram/`** — TypeScript bot + bridge kimeno ertesitesekhez es bejoeovoe felhasznaloi visszajelzesekhez / statueszfrissitesekhez.
+- **`.launcher/tg-bridge.py`** — Telegram bridge (Python): kimenő értesítések és bejövő felhasználói visszajelzések / státuszfrissítések, felhasználó felé néző szerepenként egy bot.
 - **`positions.applied`** — DB flag, amelyet a felhasznalo valtoztat (soha nem automatikusan a csapat).
 
 ---

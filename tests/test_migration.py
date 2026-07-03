@@ -4,7 +4,7 @@ Test migrazione legacy → Job Hunter Team.
 Verifica:
 - Schema DB SQLite v2 (interview_round presente, PRAGMA user_version = 2)
 - db_migrate_v2.py applica correttamente la migrazione su DB legacy
-- Integrità file di setup (setup.sh, .env.example, candidate_profile.yml.example)
+- Integrità file di setup (setup.sh, .env.example, docs/examples/candidate_profile.yml.example)
 - Supabase: tabelle popolate con dati reali (richiede SUPABASE_SERVICE_KEY)
 
 Eseguire con:
@@ -102,7 +102,7 @@ class TestSchemaV2:
         """Fresh DB deve rifiutare INSERT con title/company/location over-length.
 
         Mirror del CHECK constraint Postgres (mig 015) — origin: incident
-        RobertHalf 2026-05-19 (vedi docs/internal/cloud-sync-architecture.md).
+        RobertHalf 2026-05-19 (vedi docs/internal/architecture/cloud-sync-architecture.md).
         """
         result = run_cli(DB_INIT, [], tmp_db, tmp_path)
         assert result.returncode == 0, f"db_init fallito:\n{result.stderr}"
@@ -289,9 +289,9 @@ class TestSetupIntegrity:
         assert os.path.isfile(path), f".env.example mancante in {REPO_ROOT}"
 
     def test_candidate_profile_example_exists(self):
-        """candidate_profile.yml.example deve esistere — richiesto da setup.sh step 4."""
-        path = os.path.join(REPO_ROOT, 'candidate_profile.yml.example')
-        assert os.path.isfile(path), f"candidate_profile.yml.example mancante"
+        """docs/examples/candidate_profile.yml.example deve esistere — richiesto da setup.sh step 4."""
+        path = os.path.join(REPO_ROOT, 'docs/examples/candidate_profile.yml.example')
+        assert os.path.isfile(path), f"docs/examples/candidate_profile.yml.example mancante"
 
     def test_requirements_txt_exists(self):
         """requirements.txt deve esistere per setup.sh step 2."""

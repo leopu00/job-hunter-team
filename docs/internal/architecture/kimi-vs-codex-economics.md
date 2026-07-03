@@ -11,13 +11,13 @@
 > assoluti** come indicativi. È materia da approfondire strada facendo.
 >
 > Snapshot forensi datati che l'hanno prodotto (record storici, non aggiornarli):
-> [`2026-07-02-kimi-codex-exact-token-forensics.md`](../2026-07-02-kimi-codex-exact-token-forensics.md)
+> [`2026-07-02-kimi-codex-exact-token-forensics.md`](../postmortems/2026-07-02-kimi-codex-token-forensics.md)
 > (token **ESATTI** dai log CLI + metering-cache),
-> [`2026-07-02-kimi-clean-measurement.md`](../2026-07-02-kimi-clean-measurement.md) (misura
+> [`2026-07-02-kimi-clean-measurement.md`](../postmortems/2026-07-02-kimi-codex-token-forensics.md) (misura
 > token-meter, precedente e meno precisa),
-> [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](../2026-06-29-coordinator-burn-kimi-vs-codex.md)
+> [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](../_archive/2026-06-29-coordinator-burn-kimi-vs-codex.md)
 > (coordinator-burn + thinking-flag),
-> [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](../2026-07-01-capitano-kimi-thinking-off-writer-gate.md)
+> [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](../postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md)
 > (writer-gate).
 
 ## TL;DR
@@ -142,7 +142,7 @@ Evoluzione: `12f088d64` (tutti OFF) → `7e7ecbe2b` (solo coordinatori OFF) → 
 in SOPRA-PACE su lavoro fantasma. A thinking spento Kimi collassa su scorciatoie
 plausibili-ma-sbagliate; modelli forti (Codex) reggono lo stesso gate. **Su Kimi il Capitano
 NON può girare a thinking-OFF.** La Sentinella resta OFF (compito più stretto, meno esposta).
-Dettaglio: [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](../2026-07-01-capitano-kimi-thinking-off-writer-gate.md).
+Dettaglio: [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](../postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md).
 Nota: è una scelta di **correttezza**, non di burn (attacca una quota ~20%, non un 70%).
 
 ## 6. Metodo (riproducibile, sola lettura)
@@ -179,13 +179,13 @@ Nota: è una scelta di **correttezza**, non di burn (attacca una quota ~20%, non
   **Tutte superate**: erano confronti di fasi diverse (coast vs attivo) e un errore d'asse.
 - **2026-07-02 (token-meter)**: misura pulita full-history → coordinatori **~20% uguali**
   (76%→20%); budget **~2×** (17×→2×); €/token ≈ pari. Snapshot
-  [`2026-07-02-kimi-clean-measurement.md`](../2026-07-02-kimi-clean-measurement.md).
+  [`2026-07-02-kimi-clean-measurement.md`](../postmortems/2026-07-02-kimi-codex-token-forensics.md).
 - **2026-07-02 (token ESATTI)**: rifatto sui **log CLI esatti** (non più il meter) → budget
   **~2,7×** su base **non-cached**, con l'**asimmetria di metering-cache** (Codex conta la
   cache, Kimi no) e i **prezzi dei piani validati**; €/token confermato ≈ pari. Scoperto che
   il banco di test **mescola più account/tier Kimi** (segmentati via reset-anomaly).
   **PRELIMINARE**, da rivalidare con tester separati. Snapshot
-  [`2026-07-02-kimi-codex-exact-token-forensics.md`](../2026-07-02-kimi-codex-exact-token-forensics.md).
+  [`2026-07-02-kimi-codex-exact-token-forensics.md`](../postmortems/2026-07-02-kimi-codex-token-forensics.md).
 
 ## Correlati
 

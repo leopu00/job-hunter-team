@@ -77,4 +77,4 @@ override per session: `JHT_USER_TZ` env var (read by the helper).
 ## See also
 
 - `shared/skills/format_time.py` — implementation.
-- `candidate_profile.yml.example` — `timezone:` field docs.
+- `docs/examples/candidate_profile.yml.example` — `timezone:` field docs.

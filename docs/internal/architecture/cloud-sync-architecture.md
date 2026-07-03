@@ -7,7 +7,7 @@
 >
 > 🔄 **Shift 2026-06-20** — direzione target rivista in [`2026-06-20-data-sync-and-dashboard-split-design.md`](2026-06-20-data-sync-and-dashboard-split-design.md): **sync dati on-access + pulsante "Sync now", niente polling continuo** (unico poller = la VPS, adattivo); **`position_transitions` da aggiungere al push** (mig 044 esiste, mai cablata → event-log fossile); **corsia richieste async** (ticket+azioni-posizione) mantenuta sul cloud e **pullata** dalla VPS; **bus real-time di controllo** (`team_state`/reconciler, chat poller, `team_commands`) candidato a ritiro. Le sezioni "desired-state bidirezionale" qui sotto descrivono lo stato *attuale*, in parte superato da quel design.
 >
-> 🔀 **Shift 2026-06-15 (interaction planes)** — l'interazione (start/stop, chat, upload, config) è **desktop-first** (locale via browser→`localhost`, VPS via tunnel SSH); il **web è sola lettura** (data plane). La "vision web-first" citata più sotto (es. *"il browser deve mostrare team vivo come localhost"*) è **superata**: il path cloud interattivo (`team_state`/reconciler, chat poller, `team_commands`) è in ritiro. Vedi [`2026-06-15-interaction-planes-redesign-design.md`](../2026-06-15-interaction-planes-redesign-design.md).
+> 🔀 **Shift 2026-06-15 (interaction planes)** — l'interazione (start/stop, chat, upload, config) è **desktop-first** (locale via browser→`localhost`, VPS via tunnel SSH); il **web è sola lettura** (data plane). La "vision web-first" citata più sotto (es. *"il browser deve mostrare team vivo come localhost"*) è **superata**: il path cloud interattivo (`team_state`/reconciler, chat poller, `team_commands`) è in ritiro. Vedi [`2026-06-15-interaction-planes-redesign-design.md`](2026-06-15-interaction-planes-redesign-design.md).
 
 ## 🧭 TL;DR oggi (2026-05-31)
 
@@ -99,7 +99,7 @@ Spawn SCRITTORE on-demand (lazy, RULE C-10 V6, no boot upfront)
 **Telegram `/cv` shortcut**: bypassa cloud completamente.
 ```
 User: /cv 42
-   ↓  telegram-bridge gira NEL container
+   ↓  tg-bridge.py gira NEL container
    ↓
 python3 shared/skills/write_request.py 42 --mode on
    ↓
@@ -119,7 +119,7 @@ UPDATE SQLite locale diretto → Capitano pickup → Scrittore
 - VPS2 sync disabilitato (conservato per analisi), VPS1 riabilitato
 - Supabase Nano → Micro (incluso nel Pro plan, no extra cost): RAM 0.5GB→1GB, CPU dedicato
 
-**Findings post-upgrade (`supabase__get_advisors`)**: 40+ raccomandazioni perf mai applicate. Dettaglio in `2026-05-20-supabase-perf-backlog.md`. Highlight:
+**Findings post-upgrade (`supabase__get_advisors`)**: 40+ raccomandazioni perf mai applicate. Dettaglio in `docs/internal/_archive/2026-05-20-supabase-perf-backlog.md` (P0-P2 applicati, archiviato). Highlight:
 - `auth_rls_initplan` × 24 — `auth.uid()` per row invece di `(select auth.uid())` una volta per query → amplificatore primario del 504-storm
 - `unindexed_foreign_keys` × 9 — penalty su JOIN/cascade
 - `unused_index` × 7 — write overhead inutile
@@ -290,7 +290,7 @@ Discovered 2026-05-25. Pattern: dare all'utente più controllo + segnali per ori
 - [project_team_location_exclusive] (memory) — un solo writer alla volta
 - [project_fallback_via_cloud_sync] (memory) — notifiche via `pending_user_messages`
 - [project_writer_on_demand_arch] (memory) — JHT-WRITER-ON-DEMAND 2026-05-29
-- `docs/internal/roadmap/2026-05-20-supabase-perf-backlog.md` — 40+ findings advisor
+- `docs/internal/_archive/2026-05-20-supabase-perf-backlog.md` — 40+ findings advisor (applicati, archiviato)
 - `docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md` — incident parallelo (push troppo aggressivo + dashboard polling)
 - `BACKLOG.md` — entry `[JHT-CLOUDSYNC-01]`, `[JHT-CLOUD-06]`, `[JHT-LOCAL-NO-API]`, `[JHT-WRITER-ON-DEMAND]`
 

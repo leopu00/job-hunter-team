@@ -7,6 +7,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### 📚 Docs restructure: one-screen ROADMAP + slim BACKLOG index — 2026-07-03
+
+- **`docs/about/ROADMAP.md`** rewritten as a one-screen strategic view: verbal states instead of invented percentages (i18n was listed "~70%" with all 7 locales already shipped; "multi-cloud ~50%" had zero code behind it and is now an explicit scope-note), a theme table, and the contributor missions M1–M8. Unique content preserved, not deleted: the skill-distribution design moved to `docs/internal/architecture/skill-distribution.md`, the DB schema plan to `docs/internal/roadmap/db-schema-optimization.md`.
+- **`BACKLOG.md`** (1487 lines, mostly done-entries masquerading as backlog) reduced to a slim index of open tactical work. The full pre-restructure file is frozen verbatim in `docs/internal/_archive/BACKLOG-2026-07-03-frozen.md` — every closed `[TAG]` referenced from code or docs resolves there.
+- Shipped work the old BACKLOG recorded that this changelog didn't yet: **CLI ↔ container coordination** complete (post 04-22); **~14 KNOWN BUGS closed** (TUI build, clack TTY, doctor tmux, codex provider-alias + trust-prompt, pid1 auto-migrate, claude trust-prompt, install PATH, VPS auth over tunnel, CSP JSON-LD ×2, Turbopack shared-resolve, plus the 13-bug/3-feature team-strategy sprint of 2026-05-17/18); **[OBS-TELEGRAM-SEND-LOG]** central outgoing-message log (2026-05-31); **[JHT-LOCAL-NO-API]** local-PC mode bypassing Supabase entirely (2026-05-31). Full details with commit hashes: the frozen archive.
+- The graphics-polish `docs/internal/MINOR-TRACKER.md` merged into `docs/internal/landing-image-prompts.md`, ending the name collision with the canonical debt tracker `docs/internal/roadmap/MINOR-TRACKER.md`; the 39 dated notes in the `docs/internal/` root moved into `architecture/` / `postmortems/` / `roadmap/` / `_archive/` with a formal note protocol in the README-index.
+
 ### 🐳 macOS container runtime: user choice (Colima or Docker Desktop) — 2026-06-20
 
 Supera l'ADR-0001 (Colima-only su macOS) con [ADR-0006](docs/adr/0006-user-choice-container-runtime-macos.md). Su **macOS** l'utente sceglie il runtime:
@@ -61,7 +68,7 @@ Dettaglio architettura in [`docs/internal/architecture/cloud-sync-architecture.m
 ### 🐛 Team strategy bugs sprint — 2026-05-17 / 2026-05-18 (19 commit, 48h)
 
 Dettaglio in
-[`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](docs/internal/_archive/2026-05-17-team-strategy-bugs.md)
+[`docs/internal/_archive/BACKLOG-2026-07-03-frozen.md`](docs/internal/_archive/BACKLOG-2026-07-03-frozen.md) (§ Team strategy bugs sprint)
 e [`docs/sessions/2026-05-18-fix-effectiveness-review/`](docs/sessions/2026-05-18-fix-effectiveness-review/).
 
 **Effetto cumulativo misurato (pre/post-fix)**:
@@ -191,9 +198,9 @@ The 10-day arc was not a clean V1→V5 progression — it was a real-world explo
   - `docs/about/RESULTS.md` — case studies + community template
   - `docs/guides/BETA.md` — beta tester program + coverage matrix (provider × persona, 10 cells, 1/10 done) + status board
   - `docs/internal/ops/MAINTAINERS.md` — internal operations reference (Supabase, Vercel, OAuth, security)
-  - `agents/maestro/maestro.md` — planned career-coach agent spec
+  - `agents/mentor/mentor.md` — career-coach agent spec (added as `maestro`, since renamed and shipped as **Mentor**)
 - **📐 ADR-0004** added — subscription-only, no API keys (decision rationale)
-- **📚 ROADMAP, INFRA, BETA, MONITORING** updated for consistency (8-agent team, 112 web pages, 📡 Bridge in monitoring stack)
+- **📚 ROADMAP, INFRA, BETA, MONITORING** updated for consistency (team size + page counts as of that update, 📡 Bridge in monitoring stack)
 - **🦞 OpenClaw integration** — emoji standardized across README + AI-AGENT-INTEGRATION.md
 
 ### 🔒 Security

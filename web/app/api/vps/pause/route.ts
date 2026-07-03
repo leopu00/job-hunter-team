@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Bottone "⏸️ Pausa team" del lifecycle dashboard
- * (docs/internal/vps.md § "Lifecycle e shutdown UX").
+ * (docs/internal/ops/vps.md § "Lifecycle e shutdown UX").
  *
  * Cosa fa: `docker stop` del container `jht`. La VPS resta su, la
  * fattura Hetzner continua (~€4.50/mo). Riprendi con un altro click
