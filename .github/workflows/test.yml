@@ -26,7 +26,6 @@ jobs:
           - queue
           - sessions
           - tasks
-          - telegram
           - validators
           - wizard
 

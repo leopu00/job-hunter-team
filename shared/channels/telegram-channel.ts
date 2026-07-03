@@ -2,7 +2,7 @@
  * JHT Channels — Telegram Channel
  *
  * Adattatore per il bridge Telegram. Si connette al bot via
- * telegram-bridge/ per inviare e ricevere messaggi.
+ * .launcher/tg-bridge.py per inviare e ricevere messaggi.
  * Supporta markdown (HTML Telegram) e allegati.
  */
 import type {
@@ -90,7 +90,7 @@ export class TelegramChannel implements Channel {
 
   /**
    * Riceve un messaggio dal webhook/polling del bot Telegram.
-   * Chiamato da telegram-bridge quando arriva un messaggio.
+   * Chiamato dal bridge Telegram (.launcher/tg-bridge.py) quando arriva un messaggio.
    */
   async receiveFromBot(params: {
     text: string;

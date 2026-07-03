@@ -489,6 +489,8 @@ Next.js default to support hydration. Limits but does not eliminate XSS protecti
 
 **File:** `shared/telegram/*` — verified that the bot token is loaded from `process.env.TELEGRAM_BOT_TOKEN` and not logged. Risk remains of accidental echo in stack trace on crash. Add a global logger filter (`pino-redact`).
 
+> **Superseded 2026-07-03:** `shared/telegram/` (and the `telegram-bridge/` TS module) were dead code — never deployed — and have been removed from the repo. The live bridge is `.launcher/tg-bridge.py`.
+
 ---
 
 ### L4 — `.env.example`: no warning about key rotation / scope

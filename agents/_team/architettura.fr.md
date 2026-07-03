@@ -314,7 +314,7 @@ Quand le Sentinel signale une saturation de rate-limit, le Captain envoie `[URG]
 
 ### 🛠️ Skills / tools
 
-- **`shared/telegram/`** — bot TypeScript + bridge pour les notifications sortantes et le feedback / mises a jour de status de l'utilisateur entrants.
+- **`.launcher/tg-bridge.py`** — bridge Telegram (Python) : notifications sortantes et feedback / mises à jour de statut de l'utilisateur entrants, un bot par rôle user-facing.
 - **`positions.applied`** — flag DB change par l'utilisateur (jamais automatiquement par l'equipe).
 
 ---

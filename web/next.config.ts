@@ -61,7 +61,6 @@ const nextConfig: NextConfig = {
       path.join(MONOREPO_ROOT, 'tui/**'),
       path.join(MONOREPO_ROOT, 'agents/**'),
       path.join(MONOREPO_ROOT, 'e2e/**'),
-      path.join(MONOREPO_ROOT, 'telegram-bridge/**'),
       path.join(MONOREPO_ROOT, 'tests/**'),
       path.join(MONOREPO_ROOT, 'docs/**'),
       path.join(MONOREPO_ROOT, 'scripts/**'),

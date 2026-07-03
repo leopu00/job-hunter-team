@@ -314,7 +314,7 @@ Wenn der Sentinel Rate-Limit-Saettigung meldet, sendet der Captain `[URG] FREEZE
 
 ### 🛠️ Skills / tools
 
-- **`shared/telegram/`** — TypeScript-Bot + Bridge fuer ausgehende Benachrichtigungen und eingehende Benutzer-Feedbacks / Status-Updates.
+- **`.launcher/tg-bridge.py`** — Telegram-Bridge (Python): ausgehende Benachrichtigungen und eingehende Benutzer-Feedbacks / Status-Updates, ein Bot pro user-facing Rolle.
 - **`positions.applied`** — DB-Flag, das vom Benutzer geaendert wird (nie automatisch vom Team).
 
 ---
