@@ -1,4 +1,4 @@
-# 🎨 Minor Tracker — rifiniture grafiche
+# 🎨 Graphics polish — rifiniture grafiche
 
 Piccole rifiniture estetiche del sito pubblico, non bloccanti. Da spuntare
 quando fatte. Tracker creato il 2026-06-21.
