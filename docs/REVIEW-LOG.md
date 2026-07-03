@@ -186,7 +186,6 @@ Serve a tenere traccia di cosa hai già letto e cosa è cambiato dopo l'ultima l
 
 | 📄 File | 📝 Descrizione | 👀 Rev | 🔄 Update | ❗ Rivedi |
 |---|---|---|---|---|
-| [docs/sessions/2026-05-04-long-session/README.md](./sessions/2026-05-04-long-session/README.md) | Report sessione 10h+ con 2 finestre Claude back-to-back | — | 2026-05-04 | ✅ |
 | [docs/sessions/README.md](./sessions/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 | [docs/sessions/2026-05-08-codex-10h/README.md](./sessions/2026-05-08-codex-10h/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |
 | [docs/sessions/2026-05-08-codex-12h-pm/README.md](./sessions/2026-05-08-codex-12h-pm/README.md) | _(da compilare nel JSON)_ | — | 2026-05-09 | ✅ |

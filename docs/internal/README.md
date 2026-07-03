@@ -136,7 +136,6 @@ Piani tecnici, backlog, tracker e idee parcheggiate. Aggiornati finché aperti.
 | [`2026-06-20-proj-volatile-pacing-todo.md`](roadmap/2026-06-20-proj-volatile-pacing-todo.md) | `[PACING-PROJ-VOLATILE]`: gate del bridge su `proj` volatile — deferred, non toccare a caldo |
 | [`2026-06-06-idle-enrichment-roadmap.md`](roadmap/2026-06-06-idle-enrichment-roadmap.md) | Roadmap arricchimento durante idle |
 | [`2026-06-05-pacing-migration-plan.md`](roadmap/2026-06-05-pacing-migration-plan.md) | Piano migrazione pacing |
-| [`2026-06-04-pii-sanitization-plan.md`](roadmap/2026-06-04-pii-sanitization-plan.md) | Piano sanitizzazione PII storia repo |
 | [`2026-05-23-position-classifier-llm-roadmap.md`](roadmap/2026-05-23-position-classifier-llm-roadmap.md) | Roadmap classificatore posizioni LLM |
 
 ## ⚙️ ops/

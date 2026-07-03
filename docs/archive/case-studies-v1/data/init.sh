@@ -11,9 +11,6 @@ rm -f "$db" "$db-shm" "$db-wal"
 
 sqlite3 "$db" < "$here/schema.sql"
 sqlite3 "$db" < "$here/seed.sql"
-if [ -f "$here/seed_burn_samples.sql" ]; then
-  sqlite3 "$db" < "$here/seed_burn_samples.sql"
-fi
 if [ -f "$here/seed_token_usage.sql" ]; then
   sqlite3 "$db" < "$here/seed_token_usage.sql"
 fi
