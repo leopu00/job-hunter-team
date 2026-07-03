@@ -548,9 +548,13 @@ if (dom.tgCreateOpenBotfather) {
   })
 }
 
-dom.btnSetupBack.addEventListener('click', () => enterSupabaseLogin())
+// Null-guard the setup/container nav wiring: these run at module import
+// (before boot). A missing id would throw here and abort the whole renderer
+// boot → frozen screen. Guard so a stray HTML change degrades to a dead
+// button, not a dead app.
+if (dom.btnSetupBack) dom.btnSetupBack.addEventListener('click', () => enterSupabaseLogin())
 
-dom.btnSetupContinue.addEventListener('click', () => {
+if (dom.btnSetupContinue) dom.btnSetupContinue.addEventListener('click', () => {
   const dockerOk = state.docker?.check.state === 'ok'
   const depsOk = !state.extraDeps || state.extraDeps.allRequiredOk !== false
   if (!dockerOk || !depsOk) return
@@ -562,7 +566,7 @@ if (dom.btnWinInstallEverything) {
   dom.btnWinInstallEverything.addEventListener('click', onInstallWindowsStack)
 }
 
-dom.btnContainerBack.addEventListener('click', async () => {
+if (dom.btnContainerBack) dom.btnContainerBack.addEventListener('click', async () => {
   if (state.containerBusy) return
   await enterSetup()
 })
@@ -572,12 +576,12 @@ async function enterSetup() {
   await refreshDockerStatus()
 }
 
-dom.btnContainerRetry.addEventListener('click', () => {
+if (dom.btnContainerRetry) dom.btnContainerRetry.addEventListener('click', () => {
   if (state.containerBusy) return
   startContainerPrep()
 })
 
-dom.btnContainerContinue.addEventListener('click', () => {
+if (dom.btnContainerContinue) dom.btnContainerContinue.addEventListener('click', () => {
   if (state.containerReady) {
     // 2026-06-23: gli step "Subscriptions, not API keys" e "How the models
     // compare" sono stati rimossi (solo informativi) → si va dritti alla
@@ -1131,13 +1135,17 @@ function providerLabel(id) {
   return opt ? opt.label : null
 }
 
-window.setupApi.onProviderLog((line) => {
-  dom.providerLog.textContent = line
-  const match = /── Installing (.+) ──/.exec(line)
-  if (match) {
-    dom.providerMessage.textContent = t('provider.installStatus.running', { name: match[1] })
-  }
-})
+// Guard the preload API + DOM ref: a partial preload or missing element must
+// not throw at module import (would abort the whole renderer boot).
+if (window.setupApi?.onProviderLog) {
+  window.setupApi.onProviderLog((line) => {
+    if (dom.providerLog) dom.providerLog.textContent = line
+    const match = /── Installing (.+) ──/.exec(line)
+    if (match && dom.providerMessage) {
+      dom.providerMessage.textContent = t('provider.installStatus.running', { name: match[1] })
+    }
+  })
+}
 
 // ── Step: working hours (local tail) ────────────────────────────────
 // L'utente sceglie quando il team lavora. Salvato in jht.config.json
