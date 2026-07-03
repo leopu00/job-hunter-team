@@ -3,7 +3,7 @@
  *
  * Renamed 2026-05-31: precedente nome `realtime-subscriber.js` era
  * ingannevole — questo file NON usa WebSocket/Supabase Realtime, fa
- * long-poll HTTP. Vedi `docs/internal/cloud-sync-architecture.md` §
+ * long-poll HTTP. Vedi `docs/internal/architecture/cloud-sync-architecture.md` §
  * "Nota architetturale sulla nomenclatura".
  *
  * Long-running process che fa long-poll su
@@ -247,8 +247,8 @@ export async function runTeamCommandsPoller() {
   // cli/src/commands/cloud.js), saltiamo il poll quando il flag e' attivo.
   // Ogni poll = 1 Function Invocation Vercel + Postgres roundtrip; durante
   // HALT-WEEKLY (team operativi killati) non c'e' nulla da fare.
-  // Vedi docs/internal/2026-05-21-halt-weekly-incident.md +
-  // docs/internal/2026-05-22-vercel-quota-exhaustion.md.
+  // Vedi docs/internal/postmortems/2026-05-21-halt-weekly-incident.md +
+  // docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md.
   let haltLogTick = 0;
   let lastActivityAt = Date.now();
   while (!shuttingDown) {

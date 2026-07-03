@@ -136,7 +136,7 @@ TARGET_BAND_CENTER = _resolve_target_band_center()
 # Capitano (2026-06-25, push→pull). Il Capitano non viene pingato ogni 15 min;
 # riceve solo gli ordini filtrati della Sentinella e pulla on-demand (rate-budget
 # / agent-speed-table) per verificare. Vedi
-# docs/internal/2026-06-25-bridge-to-sentinella-pull-model.md.
+# docs/internal/architecture/2026-06-25-bridge-to-sentinella-pull-model.md.
 TARGET_SESSION = os.environ.get("JHT_PACING_TARGET_SESSION", "SENTINELLA")
 TICK_MIN = int(os.environ.get("JHT_PACING_TICK_MIN", "15"))
 # Auto-recovery pipeline (2026-06-28): se il target (Sentinella) è irricettivo
@@ -192,7 +192,7 @@ def _throttle_target_for_sforo(delta_pct_h):
 # liscio invece di saltare. Confronto su N giorni → poi si decide il flip (slim).
 # Completamente isolato: legge il dict già ritornato da compute_tick, scrive un
 # jsonl a parte, mai tocca il verdetto/lo state. Vedi
-# docs/internal/2026-06-28-pace-imperative-and-token-slim.md.
+# docs/internal/architecture/2026-06-28-weekly-pacing-redesign.md.
 SHADOW_RATIO_MIN_DELTA = 2.0   # %-interi minimi per fidarsi del ratio del tick
 SHADOW_EMA_ALPHA = 0.3         # peso del campione nuovo nell'EMA del ratio
 _SHADOW_STATE = "pace-shadow-state.json"
@@ -320,7 +320,7 @@ def _load_target_helpers():
 
     Sostituisce il TARGET_BAND_CENTER fisso 92% con un target che dipende
     da (a) ore ON dell'utente nella finestra 5h corrente, (b) ratio del
-    provider (cap 5h / cap weekly). Vedi docs/internal/2026-05-25-work-hours-design.md.
+    provider (cap 5h / cap weekly). Vedi docs/internal/architecture/2026-05-25-work-hours-design.md.
 
     Failsafe: qualsiasi import error → ritorna (None, None) e il bridge
     continua col target band classico.

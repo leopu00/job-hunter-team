@@ -42,7 +42,7 @@ import { registerPid1Command } from './commands/pid1.js';
 // Per la lista completa di tutti i sotto-comandi (export/import/cron/
 // webhooks/secrets/...) l'utente usa `jht help`. Riduce l'attrito post-
 // install: VPS fresca → 30+ sotto-comandi spaventano e nascondono i 5
-// che servono davvero. Vedi docs/internal/vps.md → "P1 — Help post-install
+// che servono davvero. Vedi docs/internal/ops/vps.md → "P1 — Help post-install
 // troppo lunga".
 const ESSENTIAL_HELP = `Usage: jht [command]
 

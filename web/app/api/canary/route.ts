@@ -1,7 +1,7 @@
 /**
  * Canary endpoint per diagnostica veloce Supabase vs Vercel.
  *
- * P2 da docs/internal/cloud-sync-architecture.md: durante l'incident
+ * P2 da docs/internal/architecture/cloud-sync-architecture.md: durante l'incident
  * RobertHalf 2026-05-19 il middleware Next.js timeout (504 GATEWAY_TIMEOUT)
  * mascherava la causa reale (Supabase Nano connection pool saturo). Senza
  * un endpoint dedicato, oncall non poteva distinguere "Supabase saturo"

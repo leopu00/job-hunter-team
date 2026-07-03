@@ -84,7 +84,7 @@ Append con `>>`, mai overwrite. Sintesi densa (come le note di viaggio del Dotto
 ## See also
 - `shared/skills/process_health.py` — il canary di liveness dei processi salva-vita usato allo step 0 (rete di sicurezza giornaliera; gemello-per-i-processi del tool_health).
 - `shared/skills/tool_health.py` — lo smoke-test riusato allo step 1 (anche gate build-time + tick).
-- `.launcher/agent-watchdog.sh` — il recovery VELOCE (ogni 30s, `maybe_respawn_bridges`) di cui lo step 0 è la rete di sicurezza giornaliera; vedi `docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md`.
+- `.launcher/agent-watchdog.sh` — il recovery VELOCE (ogni 30s, `maybe_respawn_bridges`) di cui lo step 0 è la rete di sicurezza giornaliera; vedi `docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md`.
 - `agents/mantenitore/mantenitore.md` — la persona/lifecycle del Mantenitore (dev3).
 - `agents/_skills/resilience/SKILL.md` — la ladder anti-silenzio degli agenti (dev3); il suo step "classify" riusa `tool_health.py`.
 - `agents/_skills/liveness-check/SKILL.md` — il gemello lato Dottore (salute agenti), per struttura.

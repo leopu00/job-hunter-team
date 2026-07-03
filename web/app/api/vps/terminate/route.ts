@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Bottone "💀 Termina VPS" del lifecycle dashboard
- * (docs/internal/vps.md § "Lifecycle e shutdown UX").
+ * (docs/internal/ops/vps.md § "Lifecycle e shutdown UX").
  *
  * Quando: "ho trovato lavoro, fine job-hunt". Costo dopo: €0.
  * Riprendi: from scratch (rifare wizard).

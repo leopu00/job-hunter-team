@@ -11,7 +11,7 @@ non infinito. Complementare, non alternativo, al watchdog (recovery in secondi).
 Nasce dal crash silenzioso del sentinel-bridge su betaC (2026-06-27): un daemon
 detached morto, nessuno se ne accorgeva perché nessuno faceva il canary dei
 PROCESSI del team (il maintainer-sweep canariava solo i TOOL: browser/LinkedIn).
-Vedi docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md.
+Vedi docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md.
 
 READ-ONLY: scansiona /proc/*/cmdline e riporta alive/dead per ogni processo
 atteso. La RIPARAZIONE (respawn) la guida la skill (start-agent.sh bridge|tg-bridge

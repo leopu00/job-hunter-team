@@ -80,7 +80,7 @@ export default async function ProtectedLayout({
   // Tenta sessione Supabase prima di tutto. Se l'utente è loggato in
   // cloud, prevale sul flusso locale (anche su localhost): mandarlo in
   // /onboarding wizard-PC-locale ha senso solo per chi NON ha account.
-  // Vedi docs/internal/2026-05-19-dashboard-routing-cases.md.
+  // Vedi docs/internal/architecture/2026-05-19-dashboard-routing-cases.md.
   let cloudUser: User | null = null;
   if (isSupabaseConfigured && !demoMode && !localOnly) {
     const supabase = await createClient();

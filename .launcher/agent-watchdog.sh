@@ -49,7 +49,7 @@ SENTINELLA_MAX_CTX_AGE_H="${JHT_SENTINELLA_MAX_CTX_AGE_H:-24}"
 # 2026-06-27. Qui li risorvegliamo a ogni tick. **Anti-flap** (lezione del V4
 # restart-loop, per cui il self-restart del bridge fu RIMOSSO): oltre un cap di
 # respawn in finestra, NON rispawna più e ESCALA al Capitano — niente crash-loop.
-# Vedi docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md.
+# Vedi docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md.
 BRIDGE_STATE_DIR="$JHT_HOME/logs"
 BRIDGE_FLAP_WINDOW_SEC="${JHT_BRIDGE_FLAP_WINDOW_SEC:-600}"   # 10 min
 BRIDGE_FLAP_CAP="${JHT_BRIDGE_FLAP_CAP:-3}"                   # max respawn/finestra

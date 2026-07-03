@@ -5,7 +5,7 @@ episodio attuabile a REGIME invariato, posticipa la re-conferma fino al cap
 SENTINELLA_RECONFIRM_MIN invece di svegliarla a ogni quarto. Un cambio di
 regime (status) la sveglia subito.
 
-Vedi docs/internal/2026-06-28-betaD-vps-budget-burn-investigation.md §9.
+Vedi docs/internal/postmortems/2026-06-28-betaD-vps-budget-burn-investigation.md §9.
 
 Eseguire:
     pytest tests/test_sentinella_notify_gate.py -v

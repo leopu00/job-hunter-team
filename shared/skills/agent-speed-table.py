@@ -89,7 +89,7 @@ PAUSE_OPTIONS_MIN = [10, 15, 20, 30]
 # fuori, qualcosa e' cambiato (Kimi ha cambiato il rate model, bridge
 # sballato, composizione team estrema). NON cambiamo i pesi
 # automaticamente — emettiamo un warning per chi consuma il JSON.
-# Cfr docs/internal/2026-05-03-rate-kimi-weights.md per il razionale.
+# Cfr docs/internal/experiments/2026-05-03-rate-kimi-weights.md per il razionale.
 RATIO_OK_MIN_KT_PER_PCT = 25.0
 RATIO_OK_MAX_KT_PER_PCT = 60.0
 
@@ -244,14 +244,14 @@ def main():
         warnings.append(
             f"ratio_kt_per_pct={ratio:.1f} sotto soglia "
             f"{RATIO_OK_MIN_KT_PER_PCT} kT/%: pesi possibilmente "
-            f"fuori taratura. Vedi docs/internal/2026-05-03-rate-kimi-weights.md"
+            f"fuori taratura. Vedi docs/internal/experiments/2026-05-03-rate-kimi-weights.md"
         )
     elif ratio > RATIO_OK_MAX_KT_PER_PCT:
         warnings.append(
             f"ratio_kt_per_pct={ratio:.1f} sopra soglia "
             f"{RATIO_OK_MAX_KT_PER_PCT} kT/%: pesi possibilmente "
             f"fuori taratura (Kimi ha cambiato modello? cache_read sta "
-            f"contando di nuovo?). Vedi docs/internal/2026-05-03-rate-kimi-weights.md"
+            f"contando di nuovo?). Vedi docs/internal/experiments/2026-05-03-rate-kimi-weights.md"
         )
 
     out = {

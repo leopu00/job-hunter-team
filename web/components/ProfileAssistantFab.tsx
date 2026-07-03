@@ -256,7 +256,7 @@ export default function ProfileAssistantFab() {
   // Poll attivo solo quando il pannello e' aperto E la tab e' visibile.
   // Pre-fix (2026-05-22): interval continuava anche con tab in background,
   // contribuendo al consumo Vercel Function Invocations (vedi
-  // docs/internal/2026-05-22-vercel-quota-exhaustion.md).
+  // docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md).
   useEffect(() => {
     if (!open) return
     let cancelled = false
