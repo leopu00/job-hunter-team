@@ -3,8 +3,10 @@
 Raccolta dei prompt per **tutte le immagini** del sito pubblico (landing + pagine
 dedicate). Ogni placeholder nel codice porta un `promptId` che corrisponde a una
 voce qui sotto. Stile e regole condivise vivono in
-[`chronicles-canon.md`](./chronicles-canon.md) (sezione "Stile visivo" + regola
-**occhiali da sole** Matrix identici per tutti).
+[`archive/chronicles-v1/chronicles-canon.md`](../../archive/chronicles-v1/chronicles-canon.md)
+(sezione "Stile visivo" + regola **occhiali da sole** Matrix identici per tutti;
+il canone è archiviato con la pagina Cronache, ma la parte stile/cast resta il
+riferimento per le immagini del sito).
 
 Convenzione `promptId`: `area.nome` (es. `team.analisti`, `hero.main`).
 
@@ -169,7 +171,7 @@ scenico del ruolo.** Niente testo leggibile.
 | `team.assistente` | The Assistant — elegant suit and tie (the bridge to the outside world); warm, welcoming, talking to someone off-frame. |
 
 > Nota: gli attributi scenici per ruolo sono presi dalla tabella "cast" in
-> `chronicles-canon.md`. Mantenere coerenza con quelle cover.
+> `archive/chronicles-v1/chronicles-canon.md`. Mantenere coerenza con quelle cover.
 >
 > ⚠️ **Rebrand in corso** Capitano→Coordinatore (BACKLOG `[JHT-RENAME-COORDINATOR]`):
 > la pagina è ora `/agents` (non `/team`) e i ruoli **non mostrano più emoji**.

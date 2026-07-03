@@ -1,6 +1,12 @@
 # 📖 Canone narrativo delle Cronache
 
-Regole condivise per scrivere le **Cronache del Team** (pagina web `/chronicles`).
+> ⚠️ **ARCHIVIATO con la pagina** — la route `/chronicles` è stata tolta dal sito
+> pubblico (vedi [`README.md`](./README.md) per il perché e come ripristinarla).
+> Questo canone vive qui accanto alle storie: torna rilevante solo se le Cronache
+> tornano online. Unico consumatore ancora attivo: gli attributi scenici del cast
+> riusati da `docs/internal/landing-image-prompts.md` per le immagini di `/agents`.
+
+Regole condivise per scrivere le **Cronache del Team** (pagina web `/chronicles`, oggi ritirata).
 Le Cronache raccontano **fatti realmente accaduti** dentro il sistema, ma
 **romanzati** e leggibili da chiunque, senza alcuna conoscenza tecnica. Non
 sono case study: niente numeri, niente analisi, niente «morale» o «lezione».
@@ -175,27 +181,28 @@ Stato pubblicate: `zombie-night`, `bipolar-sentinel`, `scout-and-london`,
 ### Episodi candidati (fatti reali documentati, da romanzare)
 
 Dal riordino di `docs/internal` 2026-07-03. La fonte tecnica è indicata; qui solo il gancio.
+Rilevanti solo se le Cronache tornano online (la pagina oggi è ritirata).
 
 - **I 30 curriculum che nessuno ha chiesto** — il Capitano, a cervello spento, si convince da
-  solo che l'utente li abbia ordinati (`postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md`).
+  solo che l'utente li abbia ordinati (`docs/internal/postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md`).
 - **Il team che chiacchiera nel sonno** — a riposo forzato, gli impiegati si svegliano da soli,
   si salutano, e il Capitano risponde educatamente: il silenzio che costa
-  (`postmortems/2026-07-02-daily-halt-standby-leak.md`).
+  (`docs/internal/postmortems/2026-07-02-daily-halt-standby-leak.md`).
 - **Lo Scout che parte per la tangente** — invece di cercare offerte si mette a costruirsi gli
   attrezzi, si perde nei propri errori, e il Capitano deve congedarlo
-  (`postmortems/2026-06-24-betaB-kimi-fresh-weekly-monitor.md`).
+  (`docs/internal/postmortems/2026-06-24-betaB-kimi-fresh-weekly-monitor.md`).
 - **Il pannello spento che nessuno guarda** — il battito del team sparisce dal monitor per ore e
   perfino il medico dell'infrastruttura legge dati fermi senza accorgersene
-  (`postmortems/2026-06-27-betaC-sentinel-bridge-crash.md`).
+  (`docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md`).
 - **L'atterraggio sul filo** — il team dosa il lavoro per tutta la settimana e chiude il budget
   al 100% esatto, dieci minuti prima della campanella
-  (`postmortems/2026-06-24-betaA-weekly-milestones.md`).
+  (`docs/internal/postmortems/2026-06-24-betaA-weekly-milestones.md`).
 - **Tutti nello stesso cassetto** — l'archivista, costretto a scegliere da un menù con una voce
   sola, si arrende e infila ogni mestiere nello stesso faldone
-  (`postmortems/2026-06-16-betaA-taxonomy-collapse-finding.md`).
+  (`docs/internal/postmortems/2026-06-16-betaA-taxonomy-collapse-finding.md`).
 - **Il Capitano che aspetta un messaggero che non arriverà** — privato del suo ping periodico,
   rimanda ogni decisione al prossimo giro e disobbedisce alla Sentinella
-  (`postmortems/2026-06-25-rollout-observation-betaB.md`).
+  (`docs/internal/postmortems/2026-06-25-rollout-observation-betaB.md`).
 
 ---
 

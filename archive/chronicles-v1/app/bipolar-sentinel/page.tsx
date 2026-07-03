@@ -13,7 +13,7 @@ import { getStory } from "../stories";
 const story = getStory("bipolar-sentinel")!;
 
 // TODO(cronache): storia DA RIFINIRE quando c'è tempo — vedi
-// docs/internal/chronicles-canon.md § "Storie da rifinire" (ritmo round,
+// archive/chronicles-v1/chronicles-canon.md § "Storie da rifinire" (ritmo round,
 // dialoghi, equilibrio dei due poli della bipolarità, cover col taglio nuovo).
 
 const CONTENT = {
