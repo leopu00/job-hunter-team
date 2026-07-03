@@ -148,7 +148,7 @@ export default function DailyHighScore({
   const kpi = (v: number, label: string, color: string) => (
     <div
       key={label}
-      className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
+      className="border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
     >
       <div
         className="text-[22px] font-extrabold tabular-nums leading-none"
@@ -172,7 +172,7 @@ export default function DailyHighScore({
         {kpi(avg80, t.avgExcellent, EXCELLENT)}
       </div>
 
-      <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+      <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] p-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
           <span className="text-[12px] font-semibold text-[var(--color-base)]">
             {t.chartTitle}

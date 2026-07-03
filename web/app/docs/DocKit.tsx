@@ -83,7 +83,7 @@ export function Code({ children }: { children: React.ReactNode }) {
 /** A fenced command/code block. */
 export function Pre({ children }: { children: React.ReactNode }) {
   return (
-    <pre className="my-4 overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] p-4 text-[11.5px] leading-relaxed text-[var(--color-bright)] font-mono">
+    <pre className="my-4 overflow-x-auto border border-[var(--color-border)] bg-[var(--color-panel)] p-4 text-[11.5px] leading-relaxed text-[var(--color-bright)] font-mono">
       <code>{children}</code>
     </pre>
   );

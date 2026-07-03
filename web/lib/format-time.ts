@@ -1,6 +1,6 @@
 // Helpers di formattazione tempo per UI. Server-safe (niente window).
-// Logica originale duplicata da web/app/(protected)/team/v2/page.tsx —
-// quando team/v2 verra' rivisitato, convertire l'import.
+// Logica originale duplicata da archive/team-control-v1/page.v2.tsx —
+// se la pagina verra' ripresa dall'archivio, convertire l'import.
 
 export function formatRelative(iso: string): string {
   const t = Date.parse(iso);

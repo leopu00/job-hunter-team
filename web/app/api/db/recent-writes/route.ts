@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 
 // Per ogni agente, restituisce il timestamp UTC dell'ultima scrittura
 // che gli è attribuibile guardando direttamente le tabelle del DB (zero
-// modifiche alle skill). La pagina /team/v2 polla questo endpoint e
-// quando un timestamp avanza anima il pallino dall'agente al nodo DB.
+// modifiche alle skill). La pagina team v2 (oggi in archive/team-control-v1/) pollava questo endpoint e
+// quando un timestamp avanzava animava il pallino dall'agente al nodo DB.
 //
 //   scout      → MAX(positions.found_at)
 //   scorer     → MAX(scores.scored_at)

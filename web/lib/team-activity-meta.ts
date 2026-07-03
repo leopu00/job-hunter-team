@@ -1,5 +1,5 @@
 // Metadati di presentazione degli agenti + formatter condivisi tra la pagina
-// /team/attivita (ActivityCharts) e la card Attività recente in dashboard.
+// /team (ActivityCharts) e la card Attività recente in dashboard.
 // Emoji/colori canonici della GUI (stessi di RecentPositionsTable / positions).
 import type { TeamActivityRole } from "./team-activity";
 

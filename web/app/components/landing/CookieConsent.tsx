@@ -93,7 +93,7 @@ export default function CookieConsent() {
       <div
         role="dialog"
         aria-label={tr("cookie_consent")}
-        className="pointer-events-auto w-full max-w-sm rounded-xl px-5 py-4 flex flex-col gap-3"
+        className="pointer-events-auto w-full max-w-sm px-5 py-4 flex flex-col gap-3"
         style={{
           background: "var(--color-panel)",
           border: "1px solid var(--color-border)",

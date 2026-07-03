@@ -1,41 +1,43 @@
 import type { Metadata } from "next";
 import { getServerLocale } from "@/lib/server-locale";
 
+// /team è la pagina ATTIVITÀ del team (dev2 2026-07-03): i metadata descrivono
+// chi ha lavorato, quanto e quando — non più la gestione/controllo del team.
 const META: Record<string, { title: string; description: string }> = {
   it: {
     title: "Team — Job Hunter",
     description:
-      "Gestisci il team di agenti AI: avvia, monitora e coordina Scout, Analista, Scorer, Scrittore e gli altri",
+      "L'attività del tuo team di agenti AI: chi ha lavorato, quanto e quando — grafici, dettaglio per agente e log completo delle azioni",
   },
   en: {
     title: "Team — Job Hunter",
     description:
-      "Manage your AI agent team: start, monitor and coordinate Scout, Analyst, Scorer, Writer and others",
+      "Your AI agent team's activity: who worked, how much and when — charts, per-agent breakdown and full action log",
   },
   hu: {
     title: "Csapat — Job Hunter",
     description:
-      "AI-ügynökcsapat kezelése: a Felderítő, az Elemző, a Pontozó, az Író és a többiek indítása, figyelése és koordinálása",
+      "AI-ügynökcsapatod tevékenysége: ki dolgozott, mennyit és mikor — grafikonok, ügynökönkénti bontás és teljes műveletnapló",
   },
   es: {
     title: "Equipo — Job Hunter",
     description:
-      "Gestiona tu equipo de agentes de IA: inicia, supervisa y coordina al Explorador, el Analista, el Evaluador, el Redactor y otros",
+      "La actividad de tu equipo de agentes de IA: quién trabajó, cuánto y cuándo — gráficos, desglose por agente y registro completo de acciones",
   },
   de: {
     title: "Team — Job Hunter",
     description:
-      "Verwalte dein KI-Agenten-Team: starte, überwache und koordiniere Späher, Analyst, Bewerter, Verfasser und weitere",
+      "Die Aktivität deines KI-Agenten-Teams: wer wie viel und wann gearbeitet hat — Diagramme, Aufschlüsselung pro Agent und vollständiges Aktionsprotokoll",
   },
   fr: {
     title: "Équipe — Job Hunter",
     description:
-      "Gérez votre équipe d'agents IA : démarrez, surveillez et coordonnez l'Éclaireur, l'Analyste, l'Évaluateur, le Rédacteur et les autres",
+      "L'activité de votre équipe d'agents IA : qui a travaillé, combien et quand — graphiques, détail par agent et journal complet des actions",
   },
   pt: {
     title: "Equipe — Job Hunter",
     description:
-      "Gerencie sua equipe de agentes de IA: inicie, monitore e coordene o Explorador, o Analista, o Avaliador, o Redator e outros",
+      "A atividade da sua equipe de agentes de IA: quem trabalhou, quanto e quando — gráficos, detalhamento por agente e registro completo de ações",
   },
 };
 

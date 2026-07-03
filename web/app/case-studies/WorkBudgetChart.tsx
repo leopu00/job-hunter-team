@@ -291,7 +291,7 @@ export default function WorkBudgetChart({
   return (
     <div ref={wrapRef} className="relative">
       {workingHoursText && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
+        <div className="mb-4 flex items-center gap-2 border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2">
           <span aria-hidden className="text-[13px]">
             🕗
           </span>
@@ -479,7 +479,7 @@ export default function WorkBudgetChart({
       {/* tooltip */}
       {hd && (
         <div
-          className="absolute z-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-[10px] shadow-xl pointer-events-none"
+          className="absolute z-10 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-[10px] shadow-xl pointer-events-none"
           style={{
             left: `${(xc(hover!) / W) * 100}%`,
             top: 0,

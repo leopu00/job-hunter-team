@@ -39,16 +39,9 @@ type Dict = {
   path1AfterA: string;
   path1AfterB: string;
   path2Title: string;
-  path2IntroA: string;
+  path2SoonA: string;
   downloadPage: string;
-  path2IntroB: string;
-  path2Li1: string;
-  path2Li2: string;
-  path2Li3A: string;
-  path2Li3B: string;
-  desktopLabel: string;
-  desktopBodyA: string;
-  desktopBodyB: string;
+  path2SoonB: string;
   path3Title: string;
   path3Mac: string;
   path3WinIntro: string;
@@ -102,18 +95,11 @@ const T: Record<Locale, Dict> = {
     path1AfterA: "It will read the docs, install the CLI, run ",
     path1AfterB:
       ", fix what's missing and start the team. This is a primary design goal, not a hack.",
-    path2Title: "🖥️ Path 2 — Desktop app (no terminal)",
-    path2IntroA: "Download the launcher from ",
-    downloadPage: "the download page",
-    path2IntroB: ". Open it, then the wizard:",
-    path2Li1: "Picks your language and installs the container runtime for you.",
-    path2Li2: "Signs you into your provider through an embedded terminal.",
-    path2Li3A: "Click ",
-    path2Li3B: " — the team boots and your browser opens on the dashboard.",
-    desktopLabel: "interaction cockpit",
-    desktopBodyA: "💡 The desktop app is your ",
-    desktopBodyB:
-      ": it sets up and starts the team, and it's where you chat with the agents, upload files and start or stop them. The public web dashboard is read-only — for viewing positions, scores and the map.",
+    path2Title: "🖥️ Path 2 — Desktop app (coming soon)",
+    path2SoonA:
+      "A graphical launcher for macOS, Windows and Linux is on its way: it will install everything and start the team with one click, no terminal needed. It's not downloadable yet — you can track it on ",
+    downloadPage: "the install page",
+    path2SoonB: ". In the meantime, use Path 1 or Path 3.",
     path3Title: "📦 Path 3 — One-liner installer",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
@@ -168,19 +154,11 @@ const T: Record<Locale, Dict> = {
     path1AfterA: "Leggerà la documentazione, installerà la CLI, eseguirà ",
     path1AfterB:
       ", sistemerà ciò che manca e avvierà il team. Questo è un obiettivo di progettazione primario, non un trucco.",
-    path2Title: "🖥️ Percorso 2 — App desktop (nessun terminale)",
-    path2IntroA: "Scarica il launcher dalla ",
-    downloadPage: "pagina di download",
-    path2IntroB: ". Aprilo, poi la procedura guidata:",
-    path2Li1:
-      "Sceglie la tua lingua e installa il runtime dei container per te.",
-    path2Li2: "Ti fa accedere al tuo provider tramite un terminale integrato.",
-    path2Li3A: "Clicca ",
-    path2Li3B: " — il team si avvia e il browser si apre sulla dashboard.",
-    desktopLabel: "cabina di comando",
-    desktopBodyA: "💡 L'app desktop è la tua ",
-    desktopBodyB:
-      ": configura e avvia il team, ed è da lì che parli con gli agenti, carichi i file e li avvii o fermi. La dashboard web pubblica è in sola lettura — per consultare posizioni, punteggi e mappa.",
+    path2Title: "🖥️ Percorso 2 — App desktop (in arrivo)",
+    path2SoonA:
+      "Un launcher grafico per macOS, Windows e Linux è in arrivo: installerà tutto e avvierà il team con un clic, senza terminale. Non è ancora scaricabile — lo trovi segnalato sulla ",
+    downloadPage: "pagina di installazione",
+    path2SoonB: ". Nel frattempo usa il Percorso 1 o il Percorso 3.",
     path3Title: "📦 Percorso 3 — Installer one-liner",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
@@ -236,18 +214,11 @@ const T: Record<Locale, Dict> = {
     path1AfterA: "Leerá la documentación, instalará la CLI, ejecutará ",
     path1AfterB:
       ", arreglará lo que falte e iniciará el equipo. Este es un objetivo de diseño primordial, no un truco.",
-    path2Title: "🖥️ Vía 2 — App de escritorio (sin terminal)",
-    path2IntroA: "Descarga el lanzador desde ",
-    downloadPage: "la página de descargas",
-    path2IntroB: ". Ábrelo y luego el asistente:",
-    path2Li1: "Elige tu idioma e instala el runtime de contenedores por ti.",
-    path2Li2: "Te conecta a tu proveedor mediante un terminal integrado.",
-    path2Li3A: "Haz clic en ",
-    path2Li3B: " — el equipo arranca y tu navegador se abre en el panel.",
-    desktopLabel: "cabina de mando",
-    desktopBodyA: "💡 La app de escritorio es tu ",
-    desktopBodyB:
-      ": configura y arranca el equipo, y es desde donde hablas con los agentes, subes archivos y los inicias o detienes. El panel web público es de solo lectura — para consultar posiciones, puntuaciones y el mapa.",
+    path2Title: "🖥️ Vía 2 — App de escritorio (próximamente)",
+    path2SoonA:
+      "Un lanzador gráfico para macOS, Windows y Linux está en camino: instalará todo e iniciará el equipo con un clic, sin terminal. Aún no se puede descargar — puedes seguirlo en ",
+    downloadPage: "la página de instalación",
+    path2SoonB: ". Mientras tanto, usa la Vía 1 o la Vía 3.",
     path3Title: "📦 Vía 3 — Instalador en una línea",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
@@ -304,20 +275,11 @@ const T: Record<Locale, Dict> = {
     path1AfterA: "Il lira la documentation, installera la CLI, exécutera ",
     path1AfterB:
       ", corrigera ce qui manque et démarrera l'équipe. C'est un objectif de conception primordial, pas une bidouille.",
-    path2Title: "🖥️ Voie 2 — Application de bureau (sans terminal)",
-    path2IntroA: "Téléchargez le lanceur depuis ",
-    downloadPage: "la page de téléchargement",
-    path2IntroB: ". Ouvrez-le, puis l'assistant :",
-    path2Li1:
-      "Choisit votre langue et installe le runtime de conteneurs pour vous.",
-    path2Li2: "Vous connecte à votre fournisseur via un terminal intégré.",
-    path2Li3A: "Cliquez sur ",
-    path2Li3B:
-      " — l'équipe démarre et votre navigateur s'ouvre sur le tableau de bord.",
-    desktopLabel: "poste de pilotage",
-    desktopBodyA: "💡 L'application de bureau est votre ",
-    desktopBodyB:
-      " : elle configure et lance l'équipe, et c'est de là que vous parlez aux agents, téléversez des fichiers et les démarrez ou arrêtez. Le tableau de bord web public est en lecture seule — pour consulter postes, scores et carte.",
+    path2Title: "🖥️ Voie 2 — Application de bureau (bientôt disponible)",
+    path2SoonA:
+      "Un lanceur graphique pour macOS, Windows et Linux arrive : il installera tout et démarrera l'équipe en un clic, sans terminal. Il n'est pas encore téléchargeable — suivez-le sur ",
+    downloadPage: "la page d'installation",
+    path2SoonB: ". En attendant, utilisez la Voie 1 ou la Voie 3.",
     path3Title: "📦 Voie 3 — Installateur en une ligne",
     path3Mac: "macOS / Linux / WSL2 :",
     path3WinIntro:
@@ -374,20 +336,11 @@ const T: Record<Locale, Dict> = {
     path1AfterA: "Er liest die Dokumentation, installiert die CLI, führt ",
     path1AfterB:
       " aus, behebt, was fehlt, und startet das Team. Das ist ein primäres Designziel, kein Trick.",
-    path2Title: "🖥️ Weg 2 — Desktop-App (kein Terminal)",
-    path2IntroA: "Lade den Launcher von ",
-    downloadPage: "der Download-Seite",
-    path2IntroB: " herunter. Öffne ihn, dann den Assistenten:",
-    path2Li1:
-      "Wählt deine Sprache und installiert die Container-Laufzeitumgebung für dich.",
-    path2Li2:
-      "Meldet dich über ein eingebettetes Terminal bei deinem Anbieter an.",
-    path2Li3A: "Klicke auf ",
-    path2Li3B: " — das Team startet und dein Browser öffnet das Dashboard.",
-    desktopLabel: "Steuerstand",
-    desktopBodyA: "💡 Die Desktop-App ist dein ",
-    desktopBodyB:
-      ": Sie richtet das Team ein und startet es, und von dort aus sprichst du mit den Agenten, lädst Dateien hoch und startest oder stoppst sie. Das öffentliche Web-Dashboard ist schreibgeschützt — zum Ansehen von Stellen, Scores und Karte.",
+    path2Title: "🖥️ Weg 2 — Desktop-App (demnächst)",
+    path2SoonA:
+      "Ein grafischer Launcher für macOS, Windows und Linux ist unterwegs: Er wird alles installieren und das Team mit einem Klick starten, ganz ohne Terminal. Er ist noch nicht herunterladbar — du findest ihn angekündigt auf ",
+    downloadPage: "der Installationsseite",
+    path2SoonB: ". Nutze in der Zwischenzeit Weg 1 oder Weg 3.",
     path3Title: "📦 Weg 3 — Einzeiler-Installer",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro: "Windows (PowerShell, Docker Desktop muss bereits laufen):",
@@ -443,20 +396,11 @@ const T: Record<Locale, Dict> = {
     path1AfterA: "Elolvassa a dokumentációt, telepíti a CLI-t, lefuttatja a ",
     path1AfterB:
       " parancsot, kijavítja, ami hiányzik, és elindítja a csapatot. Ez elsődleges tervezési cél, nem trükk.",
-    path2Title: "🖥️ 2. út — Asztali alkalmazás (terminál nélkül)",
-    path2IntroA: "Töltsd le az indítót a ",
-    downloadPage: "letöltési oldalról",
-    path2IntroB: ". Nyisd meg, majd a varázsló:",
-    path2Li1:
-      "Kiválasztja a nyelvedet, és telepíti helyetted a konténer-futtatókörnyezetet.",
-    path2Li2: "Beléptet a szolgáltatódhoz egy beágyazott terminálon keresztül.",
-    path2Li3A: "Kattints a ",
-    path2Li3B:
-      " gombra — a csapat elindul, és a böngésződ megnyílik az irányítópulton.",
-    desktopLabel: "vezérlőpultod",
-    desktopBodyA: "💡 Az asztali alkalmazás a ",
-    desktopBodyB:
-      ": beállítja és elindítja a csapatot, és innen beszélsz az ügynökökkel, töltesz fel fájlokat, és indítod vagy állítod le őket. A nyilvános webes irányítópult csak olvasható — a pozíciók, pontszámok és a térkép megtekintésére.",
+    path2Title: "🖥️ 2. út — Asztali alkalmazás (hamarosan)",
+    path2SoonA:
+      "Úton van egy grafikus indító macOS-re, Windowsra és Linuxra: mindent telepít majd, és egy kattintással elindítja a csapatot, terminál nélkül. Egyelőre nem tölthető le — a ",
+    downloadPage: "telepítési oldalon",
+    path2SoonB: " követheted. Addig használd az 1. vagy a 3. utat.",
     path3Title: "📦 3. út — Egysoros telepítő",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro: "Windows (PowerShell, a Docker Desktopnak már futnia kell):",
@@ -511,20 +455,11 @@ const T: Record<Locale, Dict> = {
     path1AfterA: "Ele lerá a documentação, instalará a CLI, executará ",
     path1AfterB:
       ", corrigirá o que falta e iniciará a equipa. Este é um objetivo de design primordial, não um truque.",
-    path2Title:
-      "🖥️ Caminho 2 — Aplicação de ambiente de trabalho (sem terminal)",
-    path2IntroA: "Descarrega o launcher a partir da ",
-    downloadPage: "página de transferências",
-    path2IntroB: ". Abre-o e, em seguida, o assistente:",
-    path2Li1: "Escolhe o teu idioma e instala o runtime de contentores por ti.",
-    path2Li2:
-      "Inicia a tua sessão no fornecedor através de um terminal incorporado.",
-    path2Li3A: "Clica em ",
-    path2Li3B: " — a equipa arranca e o teu navegador abre no painel.",
-    desktopLabel: "cabina de comando",
-    desktopBodyA: "💡 A app de ambiente de trabalho é a tua ",
-    desktopBodyB:
-      ": configura e arranca a equipa, e é dali que falas com os agentes, carregas ficheiros e os inicias ou paras. O painel web público é apenas de leitura — para consultar posições, pontuações e o mapa.",
+    path2Title: "🖥️ Via 2 — App de ambiente de trabalho (em breve)",
+    path2SoonA:
+      "Está a caminho um launcher gráfico para macOS, Windows e Linux: vai instalar tudo e arrancar a equipa com um clique, sem terminal. Ainda não pode ser descarregado — podes acompanhá-lo na ",
+    downloadPage: "página de instalação",
+    path2SoonB: ". Entretanto, usa a Via 1 ou a Via 3.",
     path3Title: "📦 Caminho 3 — Instalador numa só linha",
     path3Mac: "macOS / Linux / WSL2:",
     path3WinIntro:
@@ -618,30 +553,15 @@ Walk me through what you need."`}
 
       <H3>{t.path2Title}</H3>
       <P>
-        {t.path2IntroA}
+        {t.path2SoonA}
         <Link
           href="/download"
           className="font-semibold text-[var(--color-green)] no-underline hover:opacity-80"
         >
           {t.downloadPage}
-        </Link>{" "}
-        (macOS <Code>.dmg</Code>, Windows <Code>.exe</Code>, Linux{" "}
-        <Code>.AppImage</Code>/<Code>.deb</Code>){t.path2IntroB}
+        </Link>
+        {t.path2SoonB}
       </P>
-      <UL>
-        <LI>{t.path2Li1}</LI>
-        <LI>{t.path2Li2}</LI>
-        <LI>
-          {t.path2Li3A}
-          <strong>Start</strong>
-          {t.path2Li3B}
-        </LI>
-      </UL>
-      <Callout>
-        {t.desktopBodyA}
-        <strong>{t.desktopLabel}</strong>
-        {t.desktopBodyB}
-      </Callout>
 
       <H3>{t.path3Title}</H3>
       <P>{t.path3Mac}</P>

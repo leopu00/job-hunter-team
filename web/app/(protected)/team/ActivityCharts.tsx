@@ -768,7 +768,7 @@ function WorkDonut({
 
 /* ── Componente principale ──────────────────────────────────────────
    `showRecent`: il feed "Attività recente" linka a rotte protette
-   (/team/attivita/log, /positions/[id]) → su pagine pubbliche (case-studies)
+   (/team/log, /positions/[id]) → su pagine pubbliche (case-studies)
    va passato false. Default true per la vista protetta. */
 export default function ActivityCharts({
   activity,
@@ -915,7 +915,7 @@ export default function ActivityCharts({
     >
       {/* ── 0. Attività recente (chi ha fatto le ultime azioni) ──── */}
       {showRecent && (
-        <RecentActivityFeed recent={recent} viewAllHref="/team/attivita/log" />
+        <RecentActivityFeed recent={recent} viewAllHref="/team/log" />
       )}
       {/* ── 1. Leaderboard nel periodo (per istanza) ─────────────── */}
       {showLeaderboard && (

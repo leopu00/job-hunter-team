@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import TeamOrgChart from "../_components/TeamOrgChart";
+import TeamOrgChart from "./_components/TeamOrgChart";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { useLocale } from "@/lib/use-locale";
 import type { Locale } from "@/i18n/config";

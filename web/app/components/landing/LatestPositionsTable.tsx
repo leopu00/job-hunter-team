@@ -169,7 +169,7 @@ export default function LatestPositionsTable() {
           {t("table_title").replace("{n}", String(TABLE_LIMIT))}
         </h2>
         <div
-          className="rounded-md border border-[var(--color-border)] overflow-hidden"
+          className="border border-[var(--color-border)] overflow-hidden"
           style={{ background: "rgba(255,255,255,0.02)" }}
         >
           <table

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { DOC_HREFS } from "./docs/docs-nav";
+import { CASE_STUDIES } from "@/lib/case-studies";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jobhunterteam.ai";
 
@@ -7,6 +8,15 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jobhunterteam.ai";
 const PUBLIC_PAGES = [
   { path: "/", priority: 1.0, changeFrequency: "weekly" as const },
   { path: "/download", priority: 0.9, changeFrequency: "weekly" as const },
+  { path: "/pricing", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/run", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/case-studies", priority: 0.7, changeFrequency: "weekly" as const },
+  ...CASE_STUDIES.map((cs) => ({
+    path: `/case-studies/${cs.id}`,
+    priority: 0.6,
+    changeFrequency: "monthly" as const,
+  })),
+  { path: "/agents", priority: 0.7, changeFrequency: "monthly" as const },
   { path: "/project", priority: 0.7, changeFrequency: "weekly" as const },
   { path: "/docs", priority: 0.6, changeFrequency: "weekly" as const },
   ...DOC_HREFS.map((path) => ({

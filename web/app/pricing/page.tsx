@@ -39,6 +39,7 @@ const PROVIDERS: Provider[] = [
     plan: "Anthropic · Max",
     price: "~€90",
     url: "https://www.anthropic.com/pricing",
+    beta: true,
     it: "Un po' meno output di Codex, ma il più preciso e il più intelligente: la scelta migliore per valutare le offerte e scrivere i CV con cura.",
     en: "A bit less output than Codex, but the most precise and the most intelligent: the best choice for evaluating jobs and writing CVs with care.",
     es: "Un poco menos de resultado que Codex, pero el más preciso y el más inteligente: la mejor opción para evaluar las ofertas y escribir los CV con cuidado.",
