@@ -67,6 +67,21 @@
            Big title + pitch, with two entry points. "Get started" runs the
            new-user setup; "Sign in" is the returning-user path. -->
       <section class="step step--centered step--intro" id="step-welcome-intro" data-step="welcome-intro">
+        <!-- Language picker lives on the very first screen: switching it
+             re-renders the welcome copy live (title, pitch, buttons). -->
+        <div class="intro-lang lang-select" id="intro-lang-select">
+          <button
+            type="button"
+            class="lang-select__toggle"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-label="Language"
+          >
+            <span class="flag" data-lang-flag></span>
+            <span class="lang-select__label" data-lang-label></span>
+          </button>
+          <ul class="lang-select__menu" role="listbox" hidden></ul>
+        </div>
         <div class="intro-hero">
           <div class="intro-logo" aria-hidden="true">🎯</div>
           <h1 class="intro-title" data-i18n="intro.title">JobHunter Team</h1>
@@ -78,32 +93,6 @@
         <div class="step__actions intro-actions">
           <button class="btn btn--primary btn--large" id="btn-intro-start" data-i18n="intro.start">
             Get started
-          </button>
-        </div>
-        <button type="button" class="intro-signin-link" id="btn-intro-signin" data-i18n="intro.signin">
-          Already registered? Sign in
-        </button>
-      </section>
-
-      <!-- Step 0: language -->
-      <section class="step step--centered" id="step-language" data-step="language">
-        <h1 class="step__title" data-i18n="lang.title">Choose your language</h1>
-        <p class="step__lead" data-i18n="lang.lead">Interface language for the launcher.</p>
-        <div class="lang-select" id="lang-select">
-          <button
-            type="button"
-            class="lang-select__toggle"
-            aria-haspopup="listbox"
-            aria-expanded="false"
-          >
-            <span class="flag" data-lang-flag></span>
-            <span class="lang-select__label" data-lang-label></span>
-          </button>
-          <ul class="lang-select__menu" role="listbox" hidden></ul>
-        </div>
-        <div class="step__actions">
-          <button class="btn btn--primary" id="btn-language-continue" data-i18n="lang.continue">
-            Continue
           </button>
         </div>
       </section>

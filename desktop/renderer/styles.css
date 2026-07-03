@@ -2741,19 +2741,15 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 .intro-actions {
   margin-top: 30px;
 }
-.intro-signin-link {
-  margin-top: 16px;
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  transition: color 0.15s ease;
+/* Language picker pinned to the top-right of the first screen. Switching
+   it re-renders the welcome copy live via applyTranslations(). */
+.intro-lang {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 5;
 }
-.intro-signin-link:hover { color: var(--text); }
+.intro-lang .lang-select__toggle { min-width: 150px; }
 
 .btn--large {
   padding: 13px 40px;

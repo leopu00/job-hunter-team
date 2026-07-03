@@ -11,7 +11,7 @@ import {
   onLangChange,
 } from './modules/i18n.js'
 import { SUPPORTED_LANGS, LANG_STORAGE_KEY, DEFAULT_LANG } from './modules/translations.js'
-import { STEP_WELCOME_INTRO, STEP_LANGUAGE, STEP_WELCOME } from './modules/constants.js'
+import { STEP_WELCOME_INTRO, STEP_WELCOME } from './modules/constants.js'
 import { showStep } from './modules/state.js'
 import {
   renderDockerCard,
@@ -29,7 +29,7 @@ import { showWizard, showHome, isSetupComplete } from './modules/home.js'
 
 // -------- Wiring (boot-time event listeners that depend on multiple modules) --------
 
-initLangDropdown(document.getElementById('lang-select'), {
+initLangDropdown(document.getElementById('intro-lang-select'), {
   onPick: (lang) => {
     setLang(lang)
   },
@@ -42,35 +42,23 @@ onLangChange(() => {
   if (state.docker) renderDockerCard(state.docker)
 })
 
-// Welcome-intro entry points. Both go through language selection; the
-// chosen intent only changes how the Supabase step behaves later
-// ('signin' → login required, 'start' → login optional).
+// Welcome-intro entry point. The language picker lives on this same
+// screen; "Get started" goes straight to the readiness check. The sign-in
+// shortcut was removed — it was confusing and could skip setup steps a
+// returning user still needs, so everyone goes through the full flow.
 if (dom.btnIntroStart) {
   dom.btnIntroStart.addEventListener('click', () => {
     state.onboardingIntent = 'start'
-    showStep(STEP_LANGUAGE)
-  })
-}
-if (dom.btnIntroSignin) {
-  dom.btnIntroSignin.addEventListener('click', () => {
-    state.onboardingIntent = 'signin'
-    showStep(STEP_LANGUAGE)
-  })
-}
-
-// Null-guard every boot-time listener: these run at module-import, before
-// boot(). A single missing id (renamed/removed in HTML) would throw here and
-// abort the whole renderer boot → frozen screen. Guarding degrades gracefully
-// to "that one button does nothing" instead of "nothing works".
-const btnLangContinue = document.getElementById('btn-language-continue')
-if (btnLangContinue) {
-  btnLangContinue.addEventListener('click', () => {
     showStep(STEP_WELCOME)
   })
 }
 
+// Null-guard boot-time listeners: these run at module-import, before boot().
+// A missing id (renamed/removed in HTML) would otherwise throw here and abort
+// the whole renderer boot → frozen screen. Guarding degrades gracefully to
+// "that one button does nothing" instead of "nothing works".
 if (dom.btnWelcomeBack) {
-  dom.btnWelcomeBack.addEventListener('click', () => showStep(STEP_LANGUAGE))
+  dom.btnWelcomeBack.addEventListener('click', () => showStep(STEP_WELCOME_INTRO))
 }
 
 if (dom.btnWelcomeContinue) {
