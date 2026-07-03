@@ -469,7 +469,7 @@ export default function CaseStudyDetail({
           <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-expanded={menuOpen}
-            className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-muted)] hover:border-[var(--color-blue)] hover:text-[var(--color-white)] transition-colors"
+            className="flex items-center gap-2 border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-muted)] hover:border-[var(--color-blue)] hover:text-[var(--color-white)] transition-colors"
           >
             ☰ {t.allCaseStudies}
             <span
@@ -487,7 +487,7 @@ export default function CaseStudyDetail({
                 onClick={() => setMenuOpen(false)}
                 aria-hidden="true"
               />
-              <div className="absolute right-0 mt-2 w-64 z-50 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-1.5 shadow-xl">
+              <div className="absolute right-0 mt-2 w-64 z-50 border border-[var(--color-border)] bg-[var(--color-card)] p-1.5 shadow-xl">
                 {all.map((c) => {
                   const active = c.id === current.id;
                   return (
@@ -499,7 +499,7 @@ export default function CaseStudyDetail({
                         rememberCurrentSection();
                         setMenuOpen(false);
                       }}
-                      className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 no-underline transition-colors hover:bg-[var(--color-bg)]"
+                      className="flex items-center gap-2.5 px-2.5 py-2 no-underline transition-colors hover:bg-[var(--color-bg)]"
                       style={{
                         background: active
                           ? "color-mix(in srgb, var(--color-blue) 12%, transparent)"
@@ -507,7 +507,7 @@ export default function CaseStudyDetail({
                       }}
                     >
                       <span
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-[11px] font-bold shrink-0"
+                        className="inline-flex items-center justify-center w-7 h-7 text-[11px] font-bold shrink-0"
                         style={{
                           background: active
                             ? "var(--color-blue)"
@@ -532,7 +532,7 @@ export default function CaseStudyDetail({
                   <Link
                     href="/case-studies"
                     onClick={() => setMenuOpen(false)}
-                    className="block rounded-lg px-2.5 py-2 text-[11px] text-[var(--color-dim)] hover:text-[var(--color-muted)] hover:bg-[var(--color-bg)] no-underline transition-colors"
+                    className="block px-2.5 py-2 text-[11px] text-[var(--color-dim)] hover:text-[var(--color-muted)] hover:bg-[var(--color-bg)] no-underline transition-colors"
                   >
                     ← {t.backToOverview}
                   </Link>
@@ -545,7 +545,7 @@ export default function CaseStudyDetail({
 
       {/* ── Profilo ───────────────────────────────────────────── */}
       <header id="cs-profile" data-cs-anchor="profile">
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-8">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-6 sm:p-8">
           {/* Riga alta: testo a sinistra (piena larghezza) + abbonamento a destra */}
           <div className="flex flex-col lg:flex-row lg:items-stretch gap-6">
             <div className="flex-1 min-w-0">
@@ -562,7 +562,7 @@ export default function CaseStudyDetail({
 
             {/* Abbonamento AI usato — l'unica spesa reale */}
             <div
-              className="lg:w-64 shrink-0 rounded-xl px-4 py-4 flex flex-col justify-center"
+              className="lg:w-64 shrink-0 px-4 py-4 flex flex-col justify-center"
               style={{
                 border:
                   "1px solid color-mix(in srgb, #00e676 40%, transparent)",
@@ -669,7 +669,7 @@ export default function CaseStudyDetail({
                         {ph.label}
                       </span>
                       <span
-                        className="text-[10px] font-semibold rounded-md px-2 py-0.5"
+                        className="text-[10px] font-semibold px-2 py-0.5"
                         style={{
                           background:
                             "color-mix(in srgb, var(--color-blue) 14%, transparent)",
@@ -682,7 +682,7 @@ export default function CaseStudyDetail({
                         {ph.note}
                       </span>
                     </div>
-                    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+                    <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-6">
                       {ph.detail === "hourly" && run.hourly ? (
                         // Fase corta (es. free-run): dettaglio ora per ora.
                         <IntradayBudgetChart
@@ -705,7 +705,7 @@ export default function CaseStudyDetail({
               })}
             </div>
           ) : (
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-6">
               <WorkBudgetChart
                 usage={run.usage}
                 roleDaily={activity.roleDaily}
@@ -742,7 +742,7 @@ export default function CaseStudyDetail({
             <p className="text-[11px] text-[var(--color-dim)] mb-4">
               {t.sourcesScoreCaption}
             </p>
-            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-6">
               <SourcesScoreChart
                 daily={run.sourcesDaily}
                 scoreDaily={run.sourcesScoreDaily}
@@ -788,7 +788,7 @@ export default function CaseStudyDetail({
               <div className="text-[12px] font-semibold text-[var(--color-base)] mb-3">
                 {t.funnelChartTitle}
               </div>
-              <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 flex-1 flex flex-col">
+              <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-6 flex-1 flex flex-col">
                 <PositionsFunnelChart daily={run.funnelDaily} />
               </div>
             </div>

@@ -91,7 +91,7 @@ export default function ExcludedDonut({
   const pct = (nn: number) => Math.round((nn / total) * 100);
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-6">
       <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-6 items-center">
         <div
           className="relative shrink-0 mx-auto"

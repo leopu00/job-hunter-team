@@ -110,7 +110,7 @@ export default function ConversionFunnelCard({
       : Math.round((stages[i].n / stages[i + 1].n) * 100);
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 h-full">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-6 h-full">
       <div className="flex flex-col gap-3">
         {stages.map((s, i) => {
           const step = pctStep(i);

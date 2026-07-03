@@ -236,7 +236,7 @@ export default function CostPerOutcome({
         {tiers.map((tier) => (
           <div
             key={tier.label}
-            className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
+            className="border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-4"
           >
             <div
               className="text-[22px] font-extrabold tabular-nums leading-none"
@@ -258,7 +258,7 @@ export default function CostPerOutcome({
       </div>
 
       {/* Grafico: costo per risultato (barre, larghezza ∝ costo) */}
-      <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+      <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] p-6">
         <div className="text-[12px] font-semibold text-[var(--color-base)] mb-4">
           {t.chartTitle}
         </div>

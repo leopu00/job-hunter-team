@@ -459,7 +459,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
 
         {/* Callout sintetici */}
         <div className="grid grid-cols-3 gap-3 mb-4">
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
+          <div className="border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
             <div className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none">
               {Math.round(match.avg)}
               <span className="text-[var(--color-dim)] text-base font-bold">
@@ -470,7 +470,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
               {t.matchMedio(nf(match.scored, tag))}
             </div>
           </div>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
+          <div className="border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
             <div
               className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none"
               style={{ color: GREEN }}
@@ -487,7 +487,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
               {t.matchForti}
             </div>
           </div>
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
+          <div className="border border-[var(--color-border)] bg-[var(--color-card)] px-4 py-3">
             <div
               className="text-2xl sm:text-3xl font-extrabold tabular-nums leading-none"
               style={{ color: GREEN }}
@@ -533,7 +533,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
             )}
           </p>
 
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-center">
+          <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-5 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6 items-center">
             {/* Mappa a bolle */}
             <div className="overflow-hidden">
               <svg
@@ -706,7 +706,7 @@ export default function CaseStudyOverview({ run }: { run: CaseStudyRun }) {
           {t.rolesIntro(categories.length)}
         </p>
 
-        <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-8 items-center">
+        <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-6 grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-8 items-center">
           {/* Donut */}
           <div
             className="relative shrink-0 mx-auto"

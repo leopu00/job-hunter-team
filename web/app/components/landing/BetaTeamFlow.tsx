@@ -860,7 +860,6 @@ function SpeechBubble({
         background: "var(--color-card)",
         color: "var(--color-bright)",
         border: "1px solid var(--color-border)",
-        borderRadius: 6,
         padding: "4px 10px",
         fontSize: 11,
         lineHeight: 1.3,

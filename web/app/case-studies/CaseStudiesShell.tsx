@@ -137,7 +137,7 @@ export default function CaseStudiesShell({
                 onClick={() => setCollapsed(true)}
                 title={t.collapse}
                 aria-label={t.collapseAria}
-                className="h-7 w-7 inline-flex items-center justify-center text-[13px] rounded-md border cursor-pointer transition-colors text-[var(--color-dim)] hover:text-[var(--color-white)]"
+                className="h-7 w-7 inline-flex items-center justify-center text-[13px] border cursor-pointer transition-colors text-[var(--color-dim)] hover:text-[var(--color-white)]"
                 style={{
                   borderColor: "var(--color-border)",
                   background: "var(--color-card)",
@@ -161,7 +161,7 @@ export default function CaseStudiesShell({
                     scroll={!activeId}
                     onClick={activeId ? rememberCurrentSection : undefined}
                     aria-current={active ? "page" : undefined}
-                    className={`group flex h-full flex-col rounded-xl border ${
+                    className={`group flex h-full flex-col border ${
                       active
                         ? "border-[var(--color-blue)]"
                         : "border-[var(--color-border)]"
@@ -242,7 +242,7 @@ export default function CaseStudiesShell({
               onClick={() => setCollapsed(false)}
               title={t.show}
               aria-label={t.showAria}
-              className="mb-6 h-8 px-3 hidden lg:inline-flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] uppercase rounded-lg border cursor-pointer transition-colors"
+              className="mb-6 h-8 px-3 hidden lg:inline-flex items-center gap-2 text-[10px] font-semibold tracking-[0.14em] uppercase border cursor-pointer transition-colors"
               style={{
                 borderColor: "var(--color-border)",
                 color: "var(--color-base)",

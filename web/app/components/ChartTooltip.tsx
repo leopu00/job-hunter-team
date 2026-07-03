@@ -53,7 +53,7 @@ export const TooltipLayer = forwardRef<TooltipHandle>(
 
     return createPortal(
       <div
-        className="fixed z-[9999] pointer-events-none rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 shadow-lg"
+        className="fixed z-[9999] pointer-events-none border border-[var(--color-border)] bg-[var(--color-card)] px-2.5 py-1.5 shadow-lg"
         style={{ ...pos, maxWidth: 240 }}
       >
         <div className="text-[10px] font-semibold text-[var(--color-white)] mb-0.5 whitespace-nowrap">

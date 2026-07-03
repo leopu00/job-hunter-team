@@ -2882,7 +2882,7 @@ export default async function EmailForwardingGuidePage() {
 
       {/* Three steps */}
       <h2 className={TITLE_CLS}>{t.stepsTitle}</h2>
-      <pre className="my-3 p-4 rounded-md bg-[var(--color-border)] overflow-x-auto">
+      <pre className="my-3 p-4 bg-[var(--color-border)] overflow-x-auto">
         <code className="text-[11px] font-mono text-[var(--color-muted)] leading-relaxed whitespace-pre">
           {t.stepsCode}
         </code>

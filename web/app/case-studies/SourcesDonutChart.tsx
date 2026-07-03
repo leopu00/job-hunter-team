@@ -118,7 +118,7 @@ export default function SourcesDonutChart({
   const active = hover ? arcs.find((a) => a.name === hover) : null;
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] p-6">
       <div className="text-[12px] font-semibold text-[var(--color-base)] mb-4">
         {t.title}
       </div>

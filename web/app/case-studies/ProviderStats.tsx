@@ -368,7 +368,7 @@ export default function ProviderStats({
       </div>
 
       {/* tabella-imbuto */}
-      <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] rounded-2xl p-6 sm:p-7">
+      <div className="mt-6 bg-[var(--color-card)] border border-[var(--color-border)] p-6 sm:p-7">
         {/* intestazioni colonne */}
         <div className="flex items-end gap-4 pb-3 mb-4 border-b border-[var(--color-border)]">
           <span className="w-3 shrink-0" />
@@ -439,7 +439,7 @@ export default function ProviderStats({
       </div>
 
       {/* come leggere: metodo + relatività, raggruppati */}
-      <div className="mt-4 rounded-2xl border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_55%,transparent)] p-6">
+      <div className="mt-4 border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-card)_55%,transparent)] p-6">
         <div className="text-[13px] font-bold uppercase tracking-wide text-[var(--color-base)] mb-3">
           {t.notesTitle}
         </div>

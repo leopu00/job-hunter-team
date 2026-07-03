@@ -362,7 +362,7 @@ export default function SourcesScoreChart({
       {/* tooltip */}
       {hd && hd.total > 0 && (
         <div
-          className="absolute z-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-[10px] shadow-xl pointer-events-none"
+          className="absolute z-10 border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2 text-[10px] shadow-xl pointer-events-none"
           style={{
             left: `${(xc(hover!) / W) * 100}%`,
             top: 0,

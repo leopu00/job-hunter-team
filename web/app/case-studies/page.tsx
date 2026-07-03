@@ -764,11 +764,11 @@ export default async function CaseStudiesIndexPage() {
             {localized.map((cs) => (
               <div
                 key={cs.id}
-                className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-5"
+                className="border border-[var(--color-border)] bg-[var(--color-card)] p-5"
               >
                 <div className="flex items-center gap-3 mb-4">
                   <span
-                    className="inline-flex items-center justify-center w-11 h-11 rounded-xl text-[14px] font-extrabold shrink-0"
+                    className="inline-flex items-center justify-center w-11 h-11 text-[14px] font-extrabold shrink-0"
                     style={{
                       background:
                         "color-mix(in srgb, var(--color-blue) 18%, transparent)",
@@ -854,7 +854,7 @@ export default async function CaseStudiesIndexPage() {
         </section>
 
         {/* ── Contribuisci ──────────────────────────────────────── */}
-        <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 sm:p-8">
+        <section className="border border-[var(--color-border)] bg-[var(--color-card)] p-6 sm:p-8">
           <h2 className="text-xl font-bold tracking-tight">
             {t.contributeTitle}
           </h2>
@@ -862,7 +862,7 @@ export default async function CaseStudiesIndexPage() {
             {t.contributeLead}
           </p>
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+            <div className="border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
               <a
                 href={CONTRIBUTE_LINKS.beta}
                 target="_blank"
@@ -883,7 +883,7 @@ export default async function CaseStudiesIndexPage() {
                 {t.betaBody}
               </p>
             </div>
-            <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
+            <div className="border border-[var(--color-border)] bg-[var(--color-bg)] p-5">
               <a
                 href={CONTRIBUTE_LINKS.contributing}
                 target="_blank"
