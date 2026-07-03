@@ -4,9 +4,9 @@ JHT is in active beta. We're looking for a small group of real job-seekers who a
 
 ## Why your test matters
 
-Every claim about JHT today (Claude ±5% precision, Kimi ±10–15%, ~200 offers / 5 interviews in 2 weeks) is **anecdotal** — it comes from a single profile (the maintainer's, full-stack developer) running on a single provider tier (Claude Max x20).
+JHT's claims are backed by four documented case studies — including a **one-month fully autonomous run on Codex** (649 positions found, 513 scored, weekly budget self-managed at 99–100% with zero human interventions — [case study #4](../about/RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). But that's still a handful of profiles across three provider tiers.
 
-Public users will ask: *"does it work for my role? on my provider? at my cost?"* We don't have those answers yet. **You testing JHT on your real job hunt is how we find out.**
+Public users will ask: *"does it work for my role? on my provider? at my cost?"* Every new profile × provider combination adds a real answer. **You testing JHT on your real job hunt is how we find out.**
 
 ## Who we're looking for
 
@@ -14,7 +14,7 @@ Public users will ask: *"does it work for my role? on my provider? at my cost?"*
 - 💳 You can afford **at least one supported subscription** — see [`PROVIDERS.md`](../about/PROVIDERS.md). The Kimi €40 tier is our target for beta testers.
 - 💬 You're willing to **report back honestly** — what worked, what didn't, what was confusing
 
-**No technical background required.** JHT runs from a desktop app — installation is one click, and the team's Assistant walks you through anything you don't understand. If you can install a regular app and follow on-screen instructions, you can run JHT.
+**Comfort with a terminal required (for now).** During beta the supported setup is the CLI one-liner (or letting your own AI assistant drive the setup — see [`AI-AGENT-INTEGRATION.md`](AI-AGENT-INTEGRATION.md)). The one-click desktop app exists but is **not part of the beta yet** ([`desktop/STATUS.md`](../../desktop/STATUS.md)); once it's ready, the program opens to non-technical testers too.
 
 ## What you get
 
@@ -70,12 +70,11 @@ We will reply within a few days.
 Before signing up, set expectations:
 
 - ✅ The agent team runs end-to-end (pipeline + Assistant)
-- ✅ Web dashboard, CLI, Telegram, Desktop launcher all work
-- ✅ Claude Max x20 is rock-solid
-- 🟠 macOS installer is not notarized yet — Gatekeeper shows an "unverified developer" warning at first launch; right-click the app → Open (or run `xattr -dr com.apple.quarantine <app>`) to bypass it. Notarization is planned post-launch.
+- ✅ Web dashboard, CLI and Telegram all work
+- ✅ Claude Max x20 is rock-solid; Codex ~€100 is proven over a full autonomous month ([case study #4](../about/RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run))
 - 🟡 Kimi €40 works but token monitoring still has rough edges (see [`MONITORING.md`](../about/MONITORING.md))
-- 🟠 Onboarding wizard still has rough edges — expect to ask for help once or twice
-- 🔴 Windows / Linux installers are **not signed yet** — your OS will show a "publisher unknown" warning at first launch
+- 🟠 CLI onboarding wizard still has rough edges — expect to ask for help once or twice
+- 🔴 The desktop app (one-click installers for 4 OS) is **not in the beta** — it works up to a point, but for now it's aimed at contributors only ([`desktop/STATUS.md`](../../desktop/STATUS.md))
 
 If "rough edges" doesn't scare you, you're the kind of beta tester we need.
 
