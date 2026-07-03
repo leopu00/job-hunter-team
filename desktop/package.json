@@ -4,8 +4,12 @@
   "private": true,
   "description": "Desktop launcher for Job Hunter Team",
   "author": {
-    "name": "Mario Rossi",
-    "email": "owner@example.com"
+    "name": "Leone Emanuel Puglisi",
+    "email": "leopu00@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leopu00/job-hunter-team.git"
   },
   "homepage": "https://jobhunterteam.ai",
   "license": "MIT",
@@ -134,7 +138,7 @@
     "linux": {
       "artifactName": "job-hunter-team-${version}-linux.${ext}",
       "icon": "assets/icon.png",
-      "maintainer": "Mario Rossi <owner@example.com>",
+      "maintainer": "Leone Emanuel Puglisi <leopu00@gmail.com>",
       "target": [
         "AppImage",
         "deb"
