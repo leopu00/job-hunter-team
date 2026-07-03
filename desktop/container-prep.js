@@ -1,9 +1,16 @@
 // Prepare the JHT container image on the user's machine.
 //
-// Strategy: prefer `docker compose pull` (the ghcr.io/leopu00/jht:latest
-// image) — fastest path, a ready-made image. If pull fails (offline,
-// registry outage, missing image) fall back to `docker compose build`,
-// which compiles from the Dockerfile shipped inside the payload.
+// Strategy: always keep the user on the current ghcr.io/leopu00/jht:latest.
+// `docker compose pull` refreshes to the newest registry image and is cheap
+// when already current — it checks the manifest digest and downloads only
+// changed layers (an up-to-date image pulls nothing). If pull fails (offline,
+// registry outage, missing image) fall back to the existing local image when
+// there is one, otherwise `docker compose build` from the shipped Dockerfile.
+//
+// The one image we must NOT clobber is a locally-BUILT one (the dev flow,
+// iterating on the Dockerfile with `docker compose build`). Those never came
+// from a registry, so they carry no RepoDigests — that's how we tell them
+// apart from a pulled release and skip the refresh only for them.
 //
 // Both commands stream stdout and stderr through `onLog` so the UI
 // can show live progress during the few minutes this can take.
@@ -90,21 +97,29 @@ async function ensureContainerImage({
     return { ok: false, stage: 'init', error: 'payloadDir required' }
   }
 
-  // If a local image already exists, skip the pull. Pulling from
-  // ghcr.io every launch would clobber any locally-built image (the
-  // dev flow when you're iterating on the Dockerfile or the files it
-  // bakes in), forcing a painful rebuild every time the registry
-  // ships a different SHA. For the first run on a clean machine the
-  // image isn't there yet, so we still fall through to pull + build.
   const local = inspect()
-  if (local.present) {
-    onLog(`Using existing local image ${local.image} — skipping pull`)
-    return { ok: true, stage: 'local-existing', source: 'local' }
+
+  // A locally-BUILT image has no RepoDigests — it was compiled here, never
+  // pulled from a registry. Leave it alone: this is the dev flow where a pull
+  // would clobber your work and force a painful rebuild on every registry SHA.
+  // Everything else (a registry-pulled image, or none) goes through the pull
+  // so end users always land on the current :latest.
+  if (isLocallyBuiltImage(local)) {
+    onLog(`Using locally-built image ${local.image} — skipping pull`)
+    return { ok: true, stage: 'local-build', source: 'local' }
   }
 
+  // Refresh to the current registry :latest. Cheap when already up to date.
   const pull = await pullImage({ cwd: payloadDir, service, onLog, run })
   if (pull.ok) {
     return { ok: true, stage: 'pulled', source: 'registry' }
+  }
+
+  // Pull failed (offline / registry down). If a usable image is already on
+  // disk, run with it rather than blocking startup on a network hiccup.
+  if (local.present) {
+    onLog('pull failed — using existing local image')
+    return { ok: true, stage: 'local-existing', source: 'local' }
   }
 
   onLog('pull failed, falling back to local build…')
@@ -118,6 +133,19 @@ async function ensureContainerImage({
     stage: 'build',
     error: build.error || `docker compose build exited with code ${build.code}`,
   }
+}
+
+// True only for an image that was built locally (present, but with no
+// registry digest). A pulled image always carries a RepoDigest; a missing
+// image has none but isn't `present`. Anything ambiguous errs toward pulling,
+// which is the safe default for end users (they get the latest release).
+function isLocallyBuiltImage(local) {
+  return Boolean(
+    local &&
+    local.present &&
+    Array.isArray(local.digests) &&
+    local.digests.length === 0,
+  )
 }
 
 function inspectImage(imageName = 'ghcr.io/leopu00/jht:latest') {
