@@ -34,7 +34,9 @@
 
 Point the system at your profile, start the team, and only review applications that clear the quality bar. The **worker** agents each specialize in one task — Scout finds positions, Analyst evaluates them, Scorer ranks them, Writer prepares documents, Critic reviews everything — all orchestrated by a **Captain**, with a support core alongside (see [The Team](#the-team) below).
 
-The whole pipeline runs **locally in a container**, on your machine or your VPS — your profile, your data, your provider account. JHT never bills you: you only pay the LLM subscription of the provider you choose. **AI on the side of workers, not against them.**
+The whole pipeline runs **locally in a container**, on your machine or your VPS — your profile, your data, your provider account. **AI on the side of workers, not against them.**
+
+> 💳 **What it costs, upfront:** JHT itself is free and never bills you — but it needs a **dedicated LLM subscription (~€40–200/mo)** to run: the team burns ~400M tokens/month, which is why it runs on flat-rate subscriptions instead of pay-per-use API keys (the same usage would cost $1,000–2,500/mo on the API). Full breakdown in [Install](#install) and [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md).
 
 I originally built JHT for my own job hunt. It worked. So I rebuilt it as open source, so anyone could use it.
 
@@ -46,7 +48,7 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 
 The best demo is real data: [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies) renders the live dashboards of the beta runs — including the month-long autonomous Codex run (658 positions found, 520 scored, weekly budget self-managed at 99–100%).
 
-> **Where the numbers come from** — every dashboard renders an anonymized snapshot of the team's event log, committed to this repo ([`web/data/case-studies/`](web/data/case-studies/)). Same data, same charts, reproducible from the JSON. Methodology and per-run breakdowns in [`docs/about/RESULTS.md`](docs/about/RESULTS.md).
+> **Where the numbers come from** — every dashboard renders an anonymized snapshot of the team's event log, committed to this repo ([`web/data/case-studies/`](web/data/case-studies/)). Same data, same charts, reproducible from the JSON. Methodology and per-run breakdowns in [`docs/about/RESULTS.md`](docs/about/RESULTS.md). To be clear: these are **self-reported numbers from runs I operated** — the honest way to verify them is to run your own team and watch the same dashboards render your own data.
 
 *The live case-studies dashboard — real, anonymized field data:*
 
@@ -220,7 +222,7 @@ Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 PRs and issues welcome. See [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) for the dev setup, PR flow, commit conventions, and agent-specific guides.
 
 - 🙌 **Where you can help** — the [contributor missions](docs/about/ROADMAP.md#-where-you-can-help--contributor-missions) (M1–M5, with M6–M8 on the horizon) are the bigger directions we'd love a hand with; each breaks into `good first issue` entry-points. The **desktop app** is the highest-impact area right now — the ranked list is in [`desktop/STATUS.md`](desktop/STATUS.md)
-- 🌿 **How development flows** — the core team works on several parallel `devN` branches (four active at the moment), each merged into `master` when its slice is done; external contributions come in as `feat/`/`fix/` branches → PR
+- 🌿 **How development flows** — JHT is built by a solo maintainer orchestrating AI agents on several parallel `devN` branches (the same multi-agent approach the product itself uses), each merged into `master` when its slice is done; external contributions come in as `feat/`/`fix/` branches → PR
 - 🧪 **Beta tester?** See [`docs/guides/BETA.md`](docs/guides/BETA.md) — we want real job-seekers to break things and tell us how
 - 🔐 **Found a security issue?** See [`SECURITY.md`](SECURITY.md) for responsible disclosure — please don't open a public issue. Internal pre-launch audit + hardening sprint results live in [`docs/security/`](docs/security/)
 - 🤝 **Code of conduct**: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Contributor Covenant 2.1

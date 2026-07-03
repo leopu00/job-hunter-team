@@ -17,11 +17,13 @@ This page tells you which subscription to pick.
 | Provider | Plan | Cost / month | ~Tokens / month | JHT verdict | Status |
 |---|---|---|---|---|---|
 | 🟠 **Claude** | Max x20 | ~€200 | ~400M | ✅ **Best in class** — usage projection oscillates within ±5% of target. Captain + Sentinel land the 92% per-window target with surgical precision. | Tested, production-ready |
-| 🔵 **Codex / OpenAI** | Plus / Pro | ~€100 | varies | ✅ **Proven over a full month** — 28-day autonomous run: 649 positions found, 513 scored, weekly budget closed at 99–100% every week with zero overshoot ([Case Study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Pacing tuned at 92% target. | Tested, production-ready |
+| 🔵 **Codex / OpenAI** | Plus / Pro | ~€100 | varies | ✅ **Proven over a full month** — 30-day autonomous run: 658 positions found, 520 scored, weekly budget closed at 99–100% every week with zero overshoot ([Case Study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Pacing tuned at 92% target. | Tested, production-ready |
 | 🌙 **Kimi** | Pro | ~€40 | ~320M | 🧪 **Mass-market tier (beta)** — usage projection oscillates ±10–15% (mitigated by 88% target). 75h run: 251 pos, 55 ready (Case Study #3). 10-day beta: 557 pos, 264 scored *(case study in preparation)*. Two multi-week teams live (Jul 2026) to validate month-scale autonomy. | Beta — under observation |
 | 🟠 **Claude** | Pro | ~€20 | ~50M | ❌ Insufficient — burns out before a single agent finishes a meaningful work session. | Tested, not viable |
 
 > **Note**: token counts are approximate and depend on the provider's current allowance. Always check the provider's pricing page before subscribing.
+
+> ⚖️ **Terms of service** — JHT drives each provider through its **official CLI** (Claude Code, Codex CLI, Kimi CLI): the same tools your subscription licenses, running on your machine under your account. No scraping, no reverse-engineered endpoints. That said, providers' terms evolve and automation policies differ between plans — **review your provider's current ToS** before running a team around the clock, and prefer a subscription dedicated to JHT (also required for budget reasons, see below).
 
 ## 🎯 How JHT keeps you within the window
 

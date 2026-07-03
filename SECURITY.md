@@ -71,6 +71,8 @@ To set expectations honestly:
 
 The repository has been through a pre-launch hardening sprint: 31 of 34 hardening tasks closed (from 27 findings), security score moved from 30% to 74% versus the OpenClaw baseline. Tooling in place: `gitleaks`, `detect-secrets`, `actionlint`, `zizmor`, `npm audit --production`, `pip-audit`, Dependabot (npm + Docker).
 
+**Git history sanitization** — before the first public release (2026-07-03) the entire git history was rewritten with `git filter-repo` to purge all personal data from the beta runs: real names, e-mail addresses, VPS IPs, application dossiers and employer names were removed or pseudonymized across every commit, branch and tag. If you spot a `chore(pii)` commit in the log, that's the tip-level removal — the historical blobs behind it were purged in the same sweep.
+
 Full audit trail and remaining gaps: [`docs/security/`](docs/security/).
 
 ## Versioning

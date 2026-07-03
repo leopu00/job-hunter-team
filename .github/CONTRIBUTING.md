@@ -45,7 +45,7 @@ Full contributor setup (Node 20+, tmux, agent CLIs, TUI/CLI build from source) i
 - **Do not push directly to `master`**
 - Open a Pull Request and wait for review
 
-> ℹ️ You'll see merge commits from `devN` branches (`dev1`, `dev2`, …) in the history: that's how the core team works — several parallel `devN` worktrees at a time, each merged into `master` when its slice is done. External contributions follow the `feat/`/`fix/` + PR flow above.
+> ℹ️ You'll see merge commits from `devN` branches (`dev1`, `dev2`, …) in the history: that's how JHT is built — a solo maintainer orchestrating AI agents on several parallel `devN` worktrees at a time, each merged into `master` when its slice is done. External contributions follow the `feat/`/`fix/` + PR flow above.
 
 ## What your PR should show
 
