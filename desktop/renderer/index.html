@@ -6,6 +6,60 @@
     <title>JHT Desktop</title>
     <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
     <link rel="stylesheet" href="./styles.css" />
+    <!-- Renderer safety net. Loads BEFORE the ESM modules so it also catches a
+         module that throws at import time (which would otherwise abort the whole
+         boot and leave a frozen screen with zero feedback). On any uncaught
+         error / rejection: log it and show a dismissible banner instead of a
+         silent hang. The banner is created lazily so it works even if <body>
+         isn't parsed yet. -->
+    <script>
+      (function () {
+        function showErrorBanner(msg) {
+          try {
+            var id = 'fatal-error-banner'
+            var el = document.getElementById(id)
+            if (!el) {
+              el = document.createElement('div')
+              el.id = id
+              el.setAttribute('role', 'alert')
+              el.style.cssText =
+                'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+                'background:#5c1f1f;color:#fff;font:13px/1.5 -apple-system,system-ui,sans-serif;' +
+                'padding:10px 44px 10px 16px;box-shadow:0 2px 8px rgba(0,0,0,.4);'
+              var close = document.createElement('button')
+              close.textContent = '✕'
+              close.setAttribute('aria-label', 'Chiudi')
+              close.style.cssText =
+                'position:absolute;top:6px;right:10px;background:none;border:none;' +
+                'color:#fff;font-size:16px;cursor:pointer;line-height:1;'
+              close.onclick = function () { el.remove() }
+              el.appendChild(close)
+              var text = document.createElement('span')
+              text.id = id + '-text'
+              el.appendChild(text)
+              ;(document.body || document.documentElement).appendChild(el)
+            }
+            var t = document.getElementById(id + '-text')
+            if (t) {
+              t.textContent =
+                'Si è verificato un errore imprevisto. Il setup potrebbe non essere ' +
+                'completo: riavvia l\'app se qualcosa non risponde. Dettaglio: ' + msg
+            }
+          } catch (e) { /* niente da fare se anche il DOM è rotto */ }
+        }
+        function report(kind, detail) {
+          try { window.jhtLog && window.jhtLog.scope && window.jhtLog.scope('renderer').error('fatal.' + kind, { detail: String(detail) }) } catch (e) {}
+          showErrorBanner(String(detail))
+        }
+        window.addEventListener('error', function (ev) {
+          report('error', (ev && ev.error && (ev.error.stack || ev.error.message)) || (ev && ev.message) || 'errore sconosciuto')
+        })
+        window.addEventListener('unhandledrejection', function (ev) {
+          var r = ev && ev.reason
+          report('unhandledrejection', (r && (r.stack || r.message)) || r || 'promise rifiutata')
+        })
+      })()
+    </script>
   </head>
   <body>
     <main class="wizard" id="wizard">

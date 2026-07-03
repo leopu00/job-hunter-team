@@ -58,15 +58,26 @@ if (dom.btnIntroSignin) {
   })
 }
 
-document.getElementById('btn-language-continue').addEventListener('click', () => {
-  showStep(STEP_WELCOME)
-})
+// Null-guard every boot-time listener: these run at module-import, before
+// boot(). A single missing id (renamed/removed in HTML) would throw here and
+// abort the whole renderer boot → frozen screen. Guarding degrades gracefully
+// to "that one button does nothing" instead of "nothing works".
+const btnLangContinue = document.getElementById('btn-language-continue')
+if (btnLangContinue) {
+  btnLangContinue.addEventListener('click', () => {
+    showStep(STEP_WELCOME)
+  })
+}
 
-dom.btnWelcomeBack.addEventListener('click', () => showStep(STEP_LANGUAGE))
+if (dom.btnWelcomeBack) {
+  dom.btnWelcomeBack.addEventListener('click', () => showStep(STEP_LANGUAGE))
+}
 
-dom.btnWelcomeContinue.addEventListener('click', async () => {
-  await smartAdvanceFromWelcome()
-})
+if (dom.btnWelcomeContinue) {
+  dom.btnWelcomeContinue.addEventListener('click', async () => {
+    await smartAdvanceFromWelcome()
+  })
+}
 
 // Dev-mode shortcut: visibile solo quando Electron gira da sorgente.
 // Probe async all'avvio; se disponibile, mostra il pulsante accanto al
@@ -129,7 +140,13 @@ if (dom.btnStartTeam) {
   _bootLog.error('btnStartTeam.missing-at-wire-time')
 }
 
-window.launcherApi.onPayloadLog(appendLog)
+// preload wires launcherApi via contextBridge; guard in case an old/partial
+// preload didn't expose it, so the boot doesn't die on a missing API.
+if (window.launcherApi?.onPayloadLog) {
+  window.launcherApi.onPayloadLog(appendLog)
+} else {
+  _bootLog.warn('launcherApi.onPayloadLog.missing')
+}
 
 // -------- Boot --------
 
