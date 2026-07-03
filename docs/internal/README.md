@@ -95,10 +95,10 @@ Piani tecnici, backlog, tracker. Aggiornati finché aperti.
 
 | File | Topic |
 |---|---|
-| [`2026-06-14-piano-dse3-parteB.md`](roadmap/2026-06-14-piano-dse3-parteB.md) | Piano dse3 Parte B (pacing + request-tables + recheck) |
+| [`2026-06-14-piano-dse3-parteB.md`](_archive/2026-06-14-piano-dse3-parteB.md) | Piano dse3 Parte B (bozza mai implementata — archiviata) |
 | [`2026-06-06-idle-enrichment-roadmap.md`](roadmap/2026-06-06-idle-enrichment-roadmap.md) | Roadmap arricchimento durante idle |
 | [`2026-05-23-position-classifier-llm-roadmap.md`](roadmap/2026-05-23-position-classifier-llm-roadmap.md) | Roadmap classificatore posizioni LLM |
-| [`2026-05-20-supabase-perf-backlog.md`](roadmap/2026-05-20-supabase-perf-backlog.md) | Backlog performance Supabase |
+| [`2026-05-20-supabase-perf-backlog.md`](_archive/2026-05-20-supabase-perf-backlog.md) | Backlog performance Supabase (P0-P2 applicati — archiviato) |
 | [`2026-06-05-pacing-migration-plan.md`](roadmap/2026-06-05-pacing-migration-plan.md) | Piano migrazione pacing |
 | [`2026-06-04-pii-sanitization-plan.md`](roadmap/2026-06-04-pii-sanitization-plan.md) | Piano sanitizzazione PII storia repo |
 | [`MINOR-TRACKER.md`](roadmap/MINOR-TRACKER.md) | Tracker mini-fix (Prettier, debt, Windows dev) |
