@@ -9,17 +9,17 @@ This page tells you which subscription to pick.
 | Profile | Pick |
 |---|---|
 | 💼 You can spend €200/month for the best result | 🟠 **Claude Max x20** |
-| 🎯 You want JHT to actually work without breaking the bank | 🌙 **Kimi €40** *(validated)* |
-| 🧪 Mid-tier with strong reasoning | 🔵 **Codex Plus / Pro €100** *(tested)* |
+| 🎯 Best €/result balance, proven over a full month | 🔵 **Codex Plus / Pro €100** *(proven — 1-month autonomous run)* |
+| 🧪 The cheapest tier that can work | 🌙 **Kimi €40** *(beta — under observation)* |
 
 ## 💳 Supported subscriptions
 
 | Provider | Plan | Cost / month | ~Tokens / month | JHT verdict | Status |
 |---|---|---|---|---|---|
 | 🟠 **Claude** | Max x20 | ~€200 | ~400M | ✅ **Best in class** — usage projection oscillates within ±5% of target. Captain + Sentinel hit ~95% of the 5h window with surgical precision. | Tested, production-ready |
-| 🌙 **Kimi** | Pro | ~€40 | ~320M | ✅ **Mass-market tier validated** — usage projection oscillates ±10–15% (mitigated by 88% target). 75h run: 251 pos, 56 ready (Case Study #3). 10-day beta: 557 pos, 264 scored. JHT is affordable for everyone at this tier. | Tested, per-provider pacing tuned |
+| 🔵 **Codex / OpenAI** | Plus / Pro | ~€100 | varies | ✅ **Proven over a full month** — 28-day autonomous run: 649 positions found, 513 scored, weekly budget closed at 99–100% every week with zero overshoot ([Case Study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Pacing tuned at 92% target. | Tested, production-ready |
+| 🌙 **Kimi** | Pro | ~€40 | ~320M | 🧪 **Mass-market tier (beta)** — usage projection oscillates ±10–15% (mitigated by 88% target). 75h run: 251 pos, 56 ready (Case Study #3). 10-day beta: 557 pos, 264 scored. Two multi-week teams live (Jul 2026) to validate month-scale autonomy. | Beta — under observation |
 | 🟠 **Claude** | Pro | ~€20 | ~50M | ❌ Insufficient — burns out before a single agent finishes a meaningful work session. | Tested, not viable |
-| 🔵 **Codex / OpenAI** | Plus / Pro | ~€100 | varies | ✅ **Tested** — 206 positions in a 35h beta run on VPS. Pacing tuned at 92% target. | Tested, production-ready |
 
 > **Note**: token counts are approximate and depend on the provider's current allowance. Always check the provider's pricing page before subscribing.
 

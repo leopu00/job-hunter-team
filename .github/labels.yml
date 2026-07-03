@@ -3,7 +3,7 @@
 # Source of truth — sync to the GitHub repo with:
 #   gh label create <name> --color <hex> --description "<desc>"
 # or in bulk via a label-sync action (not yet wired; see
-# docs/internal/triage.md).
+# docs/internal/ops/triage.md).
 #
 # Conventions:
 #   - Surface labels (cli, web, desktop, …) tell us WHERE the bug lives.

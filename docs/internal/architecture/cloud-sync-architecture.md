@@ -119,7 +119,7 @@ UPDATE SQLite locale diretto → Capitano pickup → Scrittore
 - VPS2 sync disabilitato (conservato per analisi), VPS1 riabilitato
 - Supabase Nano → Micro (incluso nel Pro plan, no extra cost): RAM 0.5GB→1GB, CPU dedicato
 
-**Findings post-upgrade (`supabase__get_advisors`)**: 40+ raccomandazioni perf mai applicate. Dettaglio in `2026-05-20-supabase-perf-backlog.md`. Highlight:
+**Findings post-upgrade (`supabase__get_advisors`)**: 40+ raccomandazioni perf mai applicate. Dettaglio in `docs/internal/_archive/2026-05-20-supabase-perf-backlog.md` (P0-P2 applicati, archiviato). Highlight:
 - `auth_rls_initplan` × 24 — `auth.uid()` per row invece di `(select auth.uid())` una volta per query → amplificatore primario del 504-storm
 - `unindexed_foreign_keys` × 9 — penalty su JOIN/cascade
 - `unused_index` × 7 — write overhead inutile
@@ -290,7 +290,7 @@ Discovered 2026-05-25. Pattern: dare all'utente più controllo + segnali per ori
 - [project_team_location_exclusive] (memory) — un solo writer alla volta
 - [project_fallback_via_cloud_sync] (memory) — notifiche via `pending_user_messages`
 - [project_writer_on_demand_arch] (memory) — JHT-WRITER-ON-DEMAND 2026-05-29
-- `docs/internal/roadmap/2026-05-20-supabase-perf-backlog.md` — 40+ findings advisor
+- `docs/internal/_archive/2026-05-20-supabase-perf-backlog.md` — 40+ findings advisor (applicati, archiviato)
 - `docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md` — incident parallelo (push troppo aggressivo + dashboard polling)
 - `BACKLOG.md` — entry `[JHT-CLOUDSYNC-01]`, `[JHT-CLOUD-06]`, `[JHT-LOCAL-NO-API]`, `[JHT-WRITER-ON-DEMAND]`
 

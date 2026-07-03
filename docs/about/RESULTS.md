@@ -54,7 +54,7 @@ Full origin story in [`STORY.md`](STORY.md).
 - **Curated source > volume** — the curated scout lane (Ashby/Greenhouse-style) produced 22% high-score positions vs the volume scout lane (LinkedIn-heavy) at 14%.
 
 ### ❌ What didn't
-- **Codex Pro weekly cap is a hard ceiling** — the weekly token budget was consumed in ~2.3 days at a 2.7%/h burn rate. Codex ProLite is **not sustainable for 7-day full-throughput hunts**. Users on this plan need to pace via the bridge or schedule the run.
+- **Codex Pro weekly cap is a hard ceiling** — the weekly token budget was consumed in ~2.3 days at a 2.7%/h burn rate. At the time of this run, Codex ProLite was **not sustainable for 7-day full-throughput hunts**. → **Closed since**: the weekly-aware pacing bridge now spreads the cap across the whole cycle — see [case study #4](#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run), where the same provider closes every weekly budget at 99–100% for a month straight.
 - **Company verdict rubric is too lenient** — 0 NO_GO out of 179 companies. Hard requirements (degree, geography lock-in) leaked downstream and were filtered late by the Writer instead of upfront by the Analyst.
 - **Writer attribution is broken** — only 8 out of 119 `written_by` fields populated (93% null). Pipeline still works but we lose per-Writer quality breakdown.
 
@@ -63,7 +63,7 @@ Full origin story in [`STORY.md`](STORY.md).
 
 > **Note on "0 submitted"**: JHT does not auto-submit applications. The user reviews the ready stack (105 CVs in this run) and clicks send when they want. This is the same intentional behavior as case study #1.
 
-> **Note on duration**: this is a ~35-hour snapshot, not a full month of work. A monthly subscription represents ~4 weeks of pacing — these results should be read as *what the pipeline produces under near-burst conditions* rather than steady-state. Multi-week beta tests are the next milestone.
+> **Note on duration**: this is a ~35-hour snapshot, not a full month of work. A monthly subscription represents ~4 weeks of pacing — these results should be read as *what the pipeline produces under near-burst conditions* rather than steady-state. That "multi-week test" milestone has since landed: see [case study #4](#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run), the same stack running unattended for a full month on Codex.
 
 Raw data: SQLite snapshot, Sentinel logs, deliverables (PDF CVs, critic reviews) extracted and verified.
 
@@ -96,7 +96,7 @@ Raw data: SQLite snapshot, Sentinel logs, deliverables (PDF CVs, critic reviews)
 | 🧠 Hours of user time | <1h setup + occasional monitoring (autonomous) |
 
 ### ✅ What worked
-- **Token-based provider sustains long runs** — Kimi has no weekly cap; the team ran 4 calendar days without saturation (vs Codex Pro hitting 96% weekly in 2.3 days).
+- **Token-based provider sustains long runs** — Kimi has no weekly cap; the team ran 4 calendar days without saturation (vs Codex Pro hitting 96% weekly in 2.3 days at the time — weekly-aware pacing has since closed that gap, see [case study #4](#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)).
 - **High scout volume** — 251 positions discovered in the run, peak of 145 on day 2. Scout-1 (volume lane) found 29 high-score positions on 187 total.
 - **Mass-market price point validated** — €40/mo subscription delivered a working pipeline on a junior profile in a saturated metro. **Cost per ready CV: €0.71** (taking the full month's subscription / 56 CVs from this run alone). At pay-per-use rates the same run would have cost ~€78 (input $5 + output $17 + 1.57B cached input $63) — the subscription paid for itself in <4 days.
 - **Aggressive prompt caching pays off** — 1.57B cached input reads vs 33.9M new input tokens means the team re-uses context heavily (job descriptions, agent instructions, candidate profile). Caching represents 97% of input volume but cost only ~74% of input billing.
@@ -115,9 +115,41 @@ Raw data: SQLite snapshot, Sentinel logs, deliverables (PDF CVs, critic reviews)
 
 > **Note on profile difference**: case study #2 (Beta tester 1) and case study #3 (Beta tester 2) used **different candidate profiles** and **different providers**. The provider comparison is *not* clean — to isolate provider quality we would need the same candidate × two providers in parallel. That's a follow-up experiment.
 
-> **Note on duration**: 75 calendar hours of run, with the weekly token cap hit on day 4. A €40 monthly subscription represents ~4 weeks of pacing — these results show what happens under *burst usage* (single 4-day intensive period), not steady-state. A spread-out usage pattern across the month could produce different cache hit ratios, different pricing dynamics, and potentially better throughput per euro. Multi-week beta tests and a separate **€40 pay-per-use validation experiment** are the next milestones.
+> **Note on duration**: 75 calendar hours of run, with the weekly token cap hit on day 4. A €40 monthly subscription represents ~4 weeks of pacing — these results show what happens under *burst usage* (single 4-day intensive period), not steady-state. A spread-out usage pattern across the month could produce different cache hit ratios, different pricing dynamics, and potentially better throughput per euro. Multi-week Kimi runs are now underway (two beta teams live as of early July 2026); a separate **€40 pay-per-use validation experiment** remains open.
 
 Raw data: SQLite snapshot, Sentinel logs (3052 ticks), Kimi session logs (16,700 token events), deliverables (PDF CVs, critic reviews) extracted and verified.
+
+---
+
+## 🧪 Case study #4 — The finance profile × Codex Pro (one-month autonomous run)
+
+**The flagship run so far**: ~4 weeks of continuous, unattended operation on a Hetzner VPS — the run that proves a JHT team can manage its own weekly budget for a full subscription month. The data is live on the public dashboard: [`jobhunterteam.ai/case-studies`](https://jobhunterteam.ai/case-studies) (shown there as *Beta tester 2*).
+
+> **Profile summary**: early-career finance professional (credit risk / due diligence at an international investment bank), aiming at front-office roles — investment management, restructuring, transaction advisory — across major European financial hubs.
+
+| Metric | Value |
+|---|---|
+| 👤 User profile | Early-career finance (credit risk → front office) |
+| 🌍 Target geography | European financial hubs |
+| 📅 Period | 2026-06-03 → ongoing (**28 days** covered at the 2026-07-01 snapshot) |
+| 💳 Subscription | 🔵 **Codex Pro ~€100/mo** |
+| 🎯 Job offers found by the pipeline | **649** |
+| ✅ Scored | **513** (avg ~70/100 at the mid-run snapshot, range 27–94) |
+| 💪 Strong matches (score ≥70 / ≥80) | **303 / 166** |
+| 📄 Applications | on-demand only *(writer-on-demand: the user orders CVs when they want — this run measures the search & scoring engine)* |
+| 💰 Weekly budget utilization | **≈100% every week, zero overshoot** (4.1 weekly budgets consumed in 4 calendar weeks) |
+| 🧠 Human interventions | **0** — observed read-only for the whole month |
+
+### ✅ What worked
+- **Weekly-aware pacing closed the gap case study #2 exposed.** In May, Codex burned its weekly cap in ~2.3 days and sat idle. This run had the weekly-aware bridge: the team spreads the same budget across the user's working hours, all week, every week — four cycles in a row.
+- **Budget landings you could set a watch by** — on 2026-06-18 the team closed its weekly cap at **99%**; on 2026-06-24 it hit **100% at 19:50 Rome time, 10 minutes before the last spendable minute of the whole Thu→Thu cycle** (work hours end 20:00, weekly reset Thursday 06:00 UTC). It got there by auto-adapting its burn rate to the residual budget and coasting (throttle, no new spawns) as the cap approached. No overshoot, no rate-limit freeze.
+- **A month of unattended stability** — no halt flags, no crash-loops; the Captain kept scaling the worker pool up and down (Scouts/Analysts/Scorers), and the role taxonomy self-organized into 8 finance families with zero hardcoded categories.
+
+### ❌ What didn't
+- **Scout saturation over time** — fresh positions per week declined as the team exhausted the easy sources (~172 → ~139 → ~41/week), so cost-per-new-position rises in later weeks. Late-cycle weeks are work-limited, not budget-limited; smarter source rotation is open work.
+- **No conversion numbers from this run** — with writer-on-demand, CV production depends on the user asking. Search & scoring autonomy is proven; interview-conversion economics need a run where the user actively applies.
+
+Raw data: anonymized snapshots versioned in-repo (`web/data/case-studies/`), rendered live at [`jobhunterteam.ai/case-studies`](https://jobhunterteam.ai/case-studies).
 
 ---
 

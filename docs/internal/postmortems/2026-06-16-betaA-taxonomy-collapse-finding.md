@@ -9,7 +9,7 @@
 > grappoli + Capitano arbitro C-17, auto-pass RIMOSSO), deployata, e betaA è stato resettato. Dettagli
 > nel doc del 20/06.
 
-**Data:** 2026-06-16 · **VPS:** betaA (`203.0.113.10`, provider codex/gpt-5.5, user_id `9996e20c`) ·
+**Data:** 2026-06-16 · **VPS:** betaA (`203.0.113.10`, provider codex/gpt-5.5, user_id `<redacted>`) ·
 **Lane fix:** dev1 (prompt analista) + dev2 (`role_registry.py` / bootstrap). · **Modalità:** SOLA
 LETTURA (nessun intervento sul team — [[feedback_no_intervention_in_simulations]]). ·
 **Correlati:** `agents/_team/role-taxonomy.md` (MODELLO), `2026-06-15-taxonomy-upstream-fix-e-domain-gaps.md`
@@ -168,7 +168,7 @@ contenente il lone catch-all) **non scatta da solo**. Due livelli:
 2. **Riparazione completa (redistribuisce le 192):** dopo il deploy, **una-tantum** resettare il
    registro POLLUTO di betaA (tabella META, non dati posizioni):
    ```sql
-   DELETE FROM role_family_registry WHERE user_id = '9996e20c-0223-433b-9d37-a04ccb77b299';
+   DELETE FROM role_family_registry WHERE user_id = '<betaA-user-id>';
    ```
    → registro vuoto → al prossimo pass di promozione il **guard sopprime** il re-seed del catch-all →
    cold-start → `next-for-categorize` ri-accoda TUTTE le 302 (le 192 ex-`Business & Operations`

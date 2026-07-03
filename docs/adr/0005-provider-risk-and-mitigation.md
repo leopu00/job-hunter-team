@@ -33,6 +33,8 @@ JHT acknowledges provider risk **explicitly** and ships a layered mitigation, no
 - ✅ **Honesty is a feature** — contributors, beta testers, and reviewers see provider risk documented openly. This builds trust and frames future incidents as known-risk-materialized, not surprises.
 - ⚠️ **Adds permanent engineering surface** — three providers must stay supported in parallel; dropping one without a replacement re-creates the single-point-of-failure.
 - ⚠️ **Quality variance** — Kimi oscillates ±10-15% vs Claude's ±5% (mitigated by 88% target). Validated over 75h + 10-day beta runs (557 positions, 264 scored). Codex benchmarked at ~€100 tier (206 positions in 35h). Parity is functional, not identical.
+
+  > **Update 2026-07-03**: Codex has since been proven at month scale — a 28-day autonomous run, 649 positions, weekly budget closed at 99–100% each week with zero overshoot ([RESULTS case study #4](../about/RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Kimi remains in beta observation (two multi-week teams live).
 - ⚠️ **No insurance against simultaneous tightening** — if all three providers move against agentic use in the same quarter, only the local-LLM fallback remains, and it is not production-ready today.
 
 ## Alternatives considered
