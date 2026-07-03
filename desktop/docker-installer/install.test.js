@@ -27,10 +27,104 @@ test('returns unsupported-platform on win32', async () => {
   assert.equal(result.error, 'unsupported-platform')
 })
 
-test('returns unsupported-platform on linux', async () => {
-  const result = await installDocker({ platform: 'linux' })
+test('linux: installs Docker Engine via get.docker.com and reports ok', async () => {
+  const stages = []
+  const run = fakeRunSequence([{ ok: true, code: 0, stderr: '' }]) // pkexec sh -c <root script>
+  const result = await installDocker({
+    platform: 'linux',
+    run,
+    onStage: (name, status) => stages.push(`${name}:${status}`),
+    download: async () => '/tmp/jht-get-docker.sh',
+    pkexecCheck: async () => true,
+    daemonCheck: async () => true,
+    dockerCheck: async () => false, // current session not in docker group yet
+    username: 'tester',
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.stage, 'ok')
+  assert.equal(result.needsRelogin, true, 'group membership needs a re-login to take effect')
+  // Everything privileged runs under a SINGLE pkexec elevation.
+  assert.equal(run.calls.length, 1)
+  assert.equal(run.calls[0].cmd, 'pkexec')
+  const rootScript = run.calls[0].args.join(' ')
+  assert.ok(/usermod -aG docker "tester"/.test(rootScript), 'adds the user to the docker group')
+  assert.ok(/systemctl enable --now docker/.test(rootScript), 'enables + starts the daemon')
+  assert.ok(stages.includes('downloading-script:ok'))
+  assert.ok(stages.includes('starting-daemon:ok'))
+})
+
+test('linux: needsRelogin=false when docker is already reachable in-session', async () => {
+  const run = fakeRunSequence([{ ok: true, code: 0, stderr: '' }])
+  const result = await installDocker({
+    platform: 'linux',
+    run,
+    download: async () => '/tmp/x.sh',
+    pkexecCheck: async () => true,
+    daemonCheck: async () => true,
+    dockerCheck: async () => true,
+    username: 'tester',
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.needsRelogin, false)
+})
+
+test('linux: pkexec dialog dismissed → stage auth-canceled', async () => {
+  const run = fakeRunSequence([{ ok: false, code: 126, stderr: '' }])
+  const result = await installDocker({
+    platform: 'linux',
+    run,
+    download: async () => '/tmp/x.sh',
+    pkexecCheck: async () => true,
+    daemonCheck: async () => true,
+    dockerCheck: async () => false,
+    username: 'tester',
+  })
   assert.equal(result.ok, false)
-  assert.equal(result.error, 'unsupported-platform')
+  assert.equal(result.stage, 'auth-canceled')
+})
+
+test('linux: no pkexec available → stage no-pkexec, nothing runs', async () => {
+  const run = fakeRunSequence([])
+  const result = await installDocker({
+    platform: 'linux',
+    run,
+    download: async () => '/tmp/x.sh',
+    pkexecCheck: async () => false,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.stage, 'no-pkexec')
+  assert.equal(run.calls.length, 0)
+})
+
+test('linux: script download failure → stage downloading-script', async () => {
+  const run = fakeRunSequence([])
+  const result = await installDocker({
+    platform: 'linux',
+    run,
+    download: async () => {
+      throw new Error('Download script Docker fallito: HTTP 500')
+    },
+    pkexecCheck: async () => true,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.stage, 'downloading-script')
+  assert.match(result.error, /HTTP 500/)
+  assert.equal(run.calls.length, 0)
+})
+
+test('linux: daemon not active after install → stage daemon-inactive', async () => {
+  const run = fakeRunSequence([{ ok: true, code: 0, stderr: '' }])
+  const result = await installDocker({
+    platform: 'linux',
+    run,
+    download: async () => '/tmp/x.sh',
+    pkexecCheck: async () => true,
+    daemonCheck: async () => false,
+    dockerCheck: async () => false,
+    username: 'tester',
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.stage, 'daemon-inactive')
 })
 
 test('stage=brew-install-homebrew when brew is missing and installer fails', async () => {

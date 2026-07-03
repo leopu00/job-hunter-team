@@ -611,30 +611,220 @@ async function installColimaOnDarwin({
   return { ok: true, stage: 'ok' }
 }
 
-async function installDocker({
-  platform = process.platform,
+// ───────────────────────────────────────────────────────────────────────────
+// Linux: install Docker Engine (CE) via Docker's official convenience script
+// (https://get.docker.com). No Docker Desktop, no VM — on Linux the daemon
+// runs natively as a systemd service, which is the lightest option. Colima is
+// deliberately NOT used here: Colima exists to give macOS/Windows a Linux VM;
+// on Linux we're already on Linux. Mirrors the darwin pipeline (streamed logs,
+// staged progress) so the wizard drives the whole install without the user
+// leaving the app.
+//
+// Stages reported back:
+//   downloading-script     → fetching get.docker.com (unprivileged).
+//   installing             → running the script as root (installs docker-ce).
+//   configuring-user-group → usermod -aG docker <user>.
+//   starting-daemon        → systemctl enable --now docker + verify it's up.
+//   ok                     → installed + daemon active. `needsRelogin` is true
+//                            when the current session can't reach the socket
+//                            yet: docker-group membership only applies to NEW
+//                            login sessions, so checkDocker() reports
+//                            needs-reboot until the user logs out/in or reboots.
+const GET_DOCKER_SCRIPT_URL = 'https://get.docker.com'
+// Sentinel the root script echoes so we can advance the wizard's stage from
+// inside a single pkexec elevation (one password prompt for everything).
+const STAGE_MARKER = '@@JHTSTAGE:'
+
+// Fetch the official install script to a temp file, following redirects.
+// Unprivileged on purpose: only the fetch happens here; the script itself runs
+// as root via pkexec below.
+function downloadDockerScript(
+  url,
+  destPath,
+  { onLog = () => {}, redirectsLeft = 5 } = {},
+) {
+  return new Promise((resolve, reject) => {
+    onLog(`Scarico lo script ufficiale Docker da ${url}…`)
+    let req
+    try {
+      req = https.get(url, (res) => {
+        const status = res.statusCode || 0
+        if (status >= 300 && status < 400 && res.headers.location) {
+          res.resume()
+          if (redirectsLeft <= 0) {
+            reject(new Error('Troppi redirect scaricando lo script Docker'))
+            return
+          }
+          const next = new URL(res.headers.location, url).toString()
+          resolve(
+            downloadDockerScript(next, destPath, {
+              onLog,
+              redirectsLeft: redirectsLeft - 1,
+            }),
+          )
+          return
+        }
+        if (status !== 200) {
+          res.resume()
+          reject(new Error(`Download script Docker fallito: HTTP ${status}`))
+          return
+        }
+        const file = fs.createWriteStream(destPath, { mode: 0o600 })
+        res.pipe(file)
+        file.on('finish', () => file.close(() => resolve(destPath)))
+        file.on('error', (error) => reject(error))
+      })
+    } catch (error) {
+      reject(error)
+      return
+    }
+    req.on('error', (error) => reject(error))
+    req.setTimeout(30000, () => {
+      req.destroy(new Error('Timeout scaricando lo script Docker'))
+    })
+  })
+}
+
+async function isPkexecPresent({ env } = {}) {
+  try {
+    await execFileAsync('sh', ['-c', 'command -v pkexec'], {
+      env: env || process.env,
+      timeout: 3000,
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// The freshly added docker-group membership doesn't apply to the current
+// session, so `docker ps` as the user would fail even with the daemon up.
+// Check the systemd unit instead — readable without root and the real signal
+// that Engine is running.
+async function isDockerDaemonActive({ env } = {}) {
+  try {
+    const { stdout } = await execFileAsync('systemctl', ['is-active', 'docker'], {
+      env: env || process.env,
+      timeout: 4000,
+    })
+    return stdout.trim() === 'active'
+  } catch {
+    return false
+  }
+}
+
+async function installDockerEngineOnLinux({
   onLog = () => {},
   onStage = () => {},
   run = runStreamed,
-  brewCheck = isBrewPresent,
-  brewWritable = isBrewWritable,
+  download = downloadDockerScript,
+  pkexecCheck = isPkexecPresent,
+  daemonCheck = isDockerDaemonActive,
   dockerCheck = isDockerResponsive,
-  brewInstaller = installHomebrew,
-  qemuImgCheck = isQemuImgPresent,
+  username = os.userInfo().username,
+  env = process.env,
 } = {}) {
+  // 1) Fetch the official convenience script (unprivileged).
+  onStage('downloading-script', 'busy')
+  const scriptPath = path.join(os.tmpdir(), 'jht-get-docker.sh')
+  try {
+    await download(GET_DOCKER_SCRIPT_URL, scriptPath, { onLog })
+  } catch (error) {
+    onStage('downloading-script', 'fail')
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, stage: 'downloading-script', error: message }
+  }
+  onStage('downloading-script', 'ok')
+
+  // 2) We need a GRAPHICAL privilege prompt. pkexec (PolicyKit) gives one;
+  //    sudo would need a TTY the GUI session doesn't have.
+  if (!(await pkexecCheck({ env }))) {
+    return {
+      ok: false,
+      stage: 'no-pkexec',
+      error:
+        'pkexec (PolicyKit) non disponibile: impossibile chiedere i privilegi di ' +
+        'amministratore in modalità grafica. Installa "policykit-1" oppure segui ' +
+        'la guida ufficiale di Docker.',
+    }
+  }
+
+  // 3) Whole privileged sequence in ONE elevation (single password prompt):
+  //    install Engine → add user to docker group → enable+start the daemon.
+  //    The root script echoes STAGE markers so we advance the wizard without
+  //    splitting this into several pkexec calls (= several prompts).
+  onStage('installing', 'busy')
+  const rootScript = [
+    'set -e',
+    `sh "${scriptPath}"`,
+    `echo "${STAGE_MARKER}configuring-user-group"`,
+    'groupadd -f docker',
+    `usermod -aG docker "${username}"`,
+    `echo "${STAGE_MARKER}starting-daemon"`,
+    'systemctl enable --now docker',
+  ].join('\n')
+
+  const result = await run('pkexec', ['/bin/sh', '-c', rootScript], {
+    env,
+    onLog: (line) => {
+      if (typeof line === 'string' && line.startsWith(STAGE_MARKER)) {
+        const stage = line.slice(STAGE_MARKER.length).trim()
+        onStage(stage, 'busy')
+        if (stage === 'configuring-user-group') {
+          onLog(`Aggiungo l'utente ${username} al gruppo docker…`)
+        } else if (stage === 'starting-daemon') {
+          onLog('Abilito e avvio il daemon Docker…')
+        }
+        return
+      }
+      onLog(line)
+    },
+  })
+
+  if (!result.ok) {
+    // pkexec exit codes: 126 = auth dialog dismissed, 127 = not authorized.
+    const canceled = result.code === 126 || result.code === 127
+    onStage('installing', 'fail')
+    return {
+      ok: false,
+      stage: canceled ? 'auth-canceled' : 'install',
+      error: canceled
+        ? 'Autenticazione annullata: servono i privilegi di amministratore per installare Docker Engine.'
+        : result.stderr || `Installazione Docker terminata con codice ${result.code}`,
+    }
+  }
+
+  // 4) Confirm the daemon is up (systemd unit, not `docker ps` — see above).
+  onStage('starting-daemon', 'busy')
+  if (!(await daemonCheck({ env }))) {
+    onStage('starting-daemon', 'fail')
+    return {
+      ok: false,
+      stage: 'daemon-inactive',
+      error:
+        'Docker installato ma il daemon non risulta attivo (systemctl is-active docker ≠ active).',
+    }
+  }
+  onStage('starting-daemon', 'ok')
+
+  // If the current process can already reach docker (app relaunched, or the
+  // user was already a docker-group member) we're fully done; otherwise flag
+  // that a re-login is needed for the group membership to take effect.
+  const responsiveNow = await Promise.resolve(dockerCheck({ env })).catch(() => false)
+  return { ok: true, stage: 'ok', needsRelogin: !responsiveNow }
+}
+
+async function installDocker(opts = {}) {
+  const platform = opts.platform || process.platform
+  if (platform === 'linux') {
+    return installDockerEngineOnLinux(opts)
+  }
   if (platform !== 'darwin') {
     return { ok: false, error: 'unsupported-platform' }
   }
-  return installColimaOnDarwin({
-    onLog,
-    onStage,
-    run,
-    brewCheck,
-    brewWritable,
-    dockerCheck,
-    brewInstaller,
-    qemuImgCheck,
-  })
+  // installColimaOnDarwin applies its own defaults for any dep not injected,
+  // so forwarding opts verbatim preserves the previous behaviour.
+  return installColimaOnDarwin(opts)
 }
 
 module.exports = {
@@ -650,5 +840,10 @@ module.exports = {
     installHomebrew,
     brewEnv,
     brewPath,
+    // Linux (Docker Engine via get.docker.com)
+    installDockerEngineOnLinux,
+    downloadDockerScript,
+    isPkexecPresent,
+    isDockerDaemonActive,
   },
 }
