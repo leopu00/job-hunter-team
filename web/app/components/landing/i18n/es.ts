@@ -15,7 +15,7 @@ export const es: Record<string, string> = {
   nav_features: "Funciones",
   nav_how: "Cómo funciona",
   nav_github: "GitHub",
-  nav_download: "Descargar",
+  nav_download: "Instalar",
   nav_project: "Proyecto",
   nav_demo: "Demo",
   nav_guide: "Guía",
@@ -122,7 +122,7 @@ export const es: Record<string, string> = {
   cta_title_2: "tu búsqueda de empleo?",
   cta_desc:
     "Un equipo de agentes IA rastrea todo el mercado y encuentra las ofertas que encajan contigo — verificadas y ordenadas según cuánto coinciden con tu perfil.",
-  cta_button: "Descarga la app",
+  cta_button: "Empezar",
   cta_team: "Conoce al equipo",
   cta_note: "No se requiere tarjeta de crédito · Beta pública",
 
@@ -146,7 +146,7 @@ export const es: Record<string, string> = {
 
   // Download page
   dl_desc:
-    "El panel web de JHT puede iniciarse desde el launcher de escritorio o desde la terminal mediante una configuración avanzada con CLI y TUI. El runtime se ejecuta en tu ordenador y tus datos permanecen bajo tu control.",
+    "El panel de JHT se inicia desde la terminal, mediante la configuración con CLI y TUI. El runtime se ejecuta en tu ordenador y tus datos permanecen bajo tu control.",
   dl_back: "← Atrás",
   dl_title_1: "Configura tu equipo",
   dl_title_2: "en tu PC",

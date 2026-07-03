@@ -15,7 +15,7 @@ export const pt: Record<string, string> = {
   nav_features: "Funcionalidades",
   nav_how: "Como funciona",
   nav_github: "GitHub",
-  nav_download: "Descarregar",
+  nav_download: "Instalar",
   nav_project: "Projeto",
   nav_demo: "Demo",
   nav_guide: "Guia",
@@ -122,7 +122,7 @@ export const pt: Record<string, string> = {
   cta_title_2: "a tua procura de emprego?",
   cta_desc:
     "Uma equipa de agentes IA percorre todo o mercado e encontra as vagas certas para ti — verificadas e ordenadas pelo quanto combinam com o teu perfil.",
-  cta_button: "Descarrega a app",
+  cta_button: "Começar",
   cta_team: "Conhece a equipa",
   cta_note: "Não é necessário cartão de crédito · Beta pública",
 
@@ -146,7 +146,7 @@ export const pt: Record<string, string> = {
 
   // Download page
   dl_desc:
-    "O painel web do JHT pode ser iniciado a partir do launcher desktop ou do terminal através de uma configuração avançada com CLI e TUI. O runtime corre no teu computador e os teus dados permanecem sob o teu controlo.",
+    "O painel do JHT é iniciado a partir do terminal, através da configuração com CLI e TUI. O runtime corre no teu computador e os teus dados permanecem sob o teu controlo.",
   dl_back: "← Voltar",
   dl_title_1: "Configura a tua equipa",
   dl_title_2: "no teu PC",
