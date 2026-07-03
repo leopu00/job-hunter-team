@@ -2,7 +2,7 @@
 
 Sets `positions.geocode_requested = 1|0` atomically and emits a JSON
 result line on stdout. Used by:
-  - telegram-bridge handler `/geo <id>` (single source of truth for the
+  - tg-bridge handler `/geo <id>` (single source of truth for the
     validate+UPDATE pair)
   - web/api/positions/[id]/geocode-request (TS-side already inline, but
     can fall back to this for parity)

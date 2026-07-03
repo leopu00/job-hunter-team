@@ -182,7 +182,6 @@ Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 | 🌐 [`web/`](web/) | Dashboard (Next.js · React · Tailwind) | [README](web/README.md) |
 | 🖥️ [`desktop/`](desktop/) | Desktop app (Electron) | [README](desktop/README.md) |
 | ⌨️ [`tui/`](tui/) | Terminal UI | [README](tui/README.md) |
-| 💬 [`telegram-bridge/`](telegram-bridge/) | Bidirectional Telegram bridge (grammy) | [README](telegram-bridge/README.md) |
 | 🧩 [`shared/`](shared/) | Shared core lib (config · LLM · monitoring · auth) | [README](shared/README.md) |
 | 🤖 [`agents/`](agents/) | Agent prompts & skills (×7 languages) | [team rules](agents/_team/team-rules.md) |
 | 🐚 [`scripts/`](scripts/) | Setup, install, dev & release tooling | [README](scripts/README.md) |

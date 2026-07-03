@@ -313,7 +313,7 @@ When the Sentinel flags rate-limit saturation, the Captain sends `[URG] FREEZE` 
 
 ### 🛠️ Skills / tools
 
-- **`shared/telegram/`** — TypeScript bot + bridge for outbound notifications and inbound user feedback / status updates.
+- **`.launcher/tg-bridge.py`** — Telegram bridge (Python): outbound notifications and inbound user feedback / status updates, one bot per user-facing role.
 - **`positions.applied`** — DB flag flipped by the user (never automatically by the team).
 
 ---

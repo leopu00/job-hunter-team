@@ -1857,7 +1857,7 @@ async function handleSyncRendezvous(options = {}) {
  * usato dal killswitch del daemon per notificare l'utente quando il token
  * è revocato. Il push delta-only normalmente propaga questa tabella in
  * cloud, ma se siamo qui è proprio perché il push fallisce → il bridge
- * Telegram locale è la via di consegna primaria (vedi telegram-bridge).
+ * Telegram locale è la via di consegna primaria (vedi .launcher/tg-bridge.py).
  *
  * Schema riferimento: shared/skills/_db.py + supabase mig 010.
  */

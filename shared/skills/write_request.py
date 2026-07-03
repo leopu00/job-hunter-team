@@ -2,7 +2,7 @@
 
 Sets `positions.write_requested = 1|0` atomically and emits a JSON
 result line on stdout. Used by:
-  - telegram-bridge handler `/cv <id>` (single source of truth for the
+  - tg-bridge handler `/cv <id>` (single source of truth for the
     validation+UPDATE pair)
   - web/api/positions/[id]/write-request (TS-side already inline, but
     can fall back to this for parity)

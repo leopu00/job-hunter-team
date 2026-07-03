@@ -99,7 +99,7 @@ Spawn SCRITTORE on-demand (lazy, RULE C-10 V6, no boot upfront)
 **Telegram `/cv` shortcut**: bypassa cloud completamente.
 ```
 User: /cv 42
-   ↓  telegram-bridge gira NEL container
+   ↓  tg-bridge.py gira NEL container
    ↓
 python3 shared/skills/write_request.py 42 --mode on
    ↓
