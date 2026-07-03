@@ -7,6 +7,16 @@ import { useIsCloud } from '@/app/hooks/useIsCloud'
 import { useLocale } from '@/lib/use-locale'
 import type { Locale } from '@/i18n/config'
 
+const LOCALE_TAG: Record<Locale, string> = {
+  it: 'it-IT',
+  en: 'en-US',
+  es: 'es-ES',
+  fr: 'fr-FR',
+  de: 'de-DE',
+  hu: 'hu-HU',
+  pt: 'pt-PT',
+}
+
 const T: Record<Locale, {
   chat: string
   terminal: string
@@ -207,7 +217,8 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const devMode = useDevMode()
-  const t = T[useLocale()]
+  const locale = useLocale()
+  const t = T[locale]
 
   // Se il dev mode si spegne mentre si è sul tab terminale, torna su chat.
   useEffect(() => {
@@ -481,7 +492,7 @@ export default function AgentInteraction({ sessionPrefix, color, label }: Props)
                   }}>
                   <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
                   <div className="text-[9px] mt-1 opacity-50 text-right">
-                    {new Date(msg.ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                    {new Date(msg.ts * 1000).toLocaleTimeString(LOCALE_TAG[locale] ?? 'en-US', { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
               </div>
