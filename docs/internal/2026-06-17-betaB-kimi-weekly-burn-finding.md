@@ -1,6 +1,6 @@
 # 🔥 betaB/Kimi — weekly esaurito in 2 giorni: backfill storm post-deploy (finding)
 
-**Data:** 2026-06-17 · **VPS:** betaB (`203.0.113.20`, provider kimi, user_id `22a8e78c`) ·
+**Data:** 2026-06-17 · **VPS:** betaB (`203.0.113.20`, provider kimi, user_id `<redacted>`) ·
 **Lane fix:** pacing/dev1 (bridge weekly-aware + `analista.md` RULE-12/14). · **Modalità:** SOLA
 LETTURA (nessun intervento — [[feedback_no_intervention_in_simulations]]). · **Correlati:**
 `project_usage_redesign_validated_betaB`, `2026-06-07-capitano-runaway-scaling-postmortem.md`,

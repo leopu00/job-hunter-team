@@ -1,7 +1,7 @@
 # 👁️ betaB/Kimi — monitor weekly su account fresco (live observation)
 
 **Avvio:** 2026-06-24 ~19:45 CEST · **VPS:** betaB (`203.0.113.20`, provider kimi,
-user_id `22a8e78c`) · **Modalità:** SOLA LETTURA (nessun intervento sulle decisioni del
+user_id `<redacted>`) · **Modalità:** SOLA LETTURA (nessun intervento sulle decisioni del
 team — [[feedback_no_intervention_in_simulations]]).
 
 ## 🎯 Obiettivo

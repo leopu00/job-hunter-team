@@ -7,7 +7,7 @@
 >
 > **Conclusione: niente da implementare.** Voce BACKLOG `[PACING-DOTTORE-OFFHOURS-GATE]` chiusa come misdiagnosi. Il testo sotto resta solo come storico (premessa errata).
 
-**Data:** 2026-06-29 · **VPS:** betaB (`203.0.113.20`, Kimi, user `22a8e78c`) · **Tipo:** osservazione read-only, NON intervenuto. **Severità:** ~~minore~~ → **nulla (finding errato)**.
+**Data:** 2026-06-29 · **VPS:** betaB (`203.0.113.20`, Kimi, user `<redacted>`) · **Tipo:** osservazione read-only, NON intervenuto. **Severità:** ~~minore~~ → **nulla (finding errato)**.
 
 ---
 
