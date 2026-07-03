@@ -2,7 +2,7 @@
 
 Get the team running in **about 10 minutes**, depending on the path you pick.
 
-> 🧪 JHT is in beta. The installer and the desktop app are still maturing — if anything goes wrong, see [`docs/BETA.md`](BETA.md).
+> 🧪 JHT is in beta — **CLI-first**. The desktop app is in development and not yet publicly released ([`desktop/STATUS.md`](../../desktop/STATUS.md)). If anything goes wrong, see [`BETA.md`](BETA.md).
 
 ---
 
@@ -29,9 +29,9 @@ Pick the path that fits how you work:
 | | Path | Best for | Time |
 |---|---|---|---|
 | 🦞 | [AI agent drives JHT](#-path-1-let-your-ai-agent-do-it) | You already use Claude Code / OpenClaw / Codex / Cursor | < 5 min |
-| 🖥️ | [Desktop app](#%EF%B8%8F-path-2-desktop-app-non-tech) | Non-technical users, GUI-only | ~10 min |
 | 📦 | [One-liner installer](#-path-3-one-liner-installer-cli-users) | Comfortable with the terminal | ~10 min |
 | 🛠️ | [From source](#%EF%B8%8F-path-4-from-source-contributors) | Contributors, hackers | ~15 min |
+| 🖥️ | [Desktop app](#%EF%B8%8F-path-2-desktop-app-in-development) | 🚧 In development — contributors build from source | ~15 min |
 
 ---
 
@@ -45,23 +45,22 @@ If you already use a personal AI assistant (Claude Code, OpenClaw, Codex, Cursor
 
 ---
 
-## 🖥️ Path 2 — Desktop app (non-tech)
+## 🖥️ Path 2 — Desktop app (in development)
 
-The app handles everything through a graphical interface — no terminal required.
+> 🚧 The desktop app is **not part of the beta yet**: the website's download page is intentionally disabled and no public binaries are promoted. It works up to a point — the honest state, known gaps and contributor roadmap live in [`desktop/STATUS.md`](../../desktop/STATUS.md).
 
-1. Download from [`/download`](https://jobhunterteam.ai/download) or GitHub Releases:
-   - macOS: `.dmg`
-   - Windows: `.exe`
-   - Linux: `.AppImage` or `.deb`
-2. Open the app and walk through the setup wizard:
-   - Pick your language (en/it/hu)
-   - **"Install everything"** button installs Docker (macOS: Colima by default or your own Docker Desktop — you choose in the setup card / Docker Desktop on Windows / docker.io on Linux) + Git in a single guided flow
-   - Pick your provider (🟠 Claude / 🔵 Codex / 🌙 Kimi) and sign in via embedded terminal
-3. Click **Start** — the team boots in the background and your default browser opens on the dashboard.
+If you want to try it anyway (or help close the gaps), build it from source:
 
-> 💡 The desktop app is your **interaction cockpit**: it sets up and starts the team, and it's where you chat with the agents, upload files, and start/stop — for a local team via a browser window to `localhost`, for a VPS team over an SSH tunnel. The **web dashboard is read-only** (positions, scores, map); **Telegram** is the optional async channel for when you're away.
+```bash
+git clone https://github.com/leopu00/job-hunter-team.git
+cd job-hunter-team/desktop
+npm install
+npm run dev          # run the app from source
+```
 
-> ⚠️ On first launch macOS/Windows may warn about an "unverified app" — JHT is open source and you can build from source if you don't trust the binary. Code signing is intentionally deferred during beta (see BACKLOG `[JHT-DESKTOP-05]`). To bypass: right-click → Open on macOS, "Run anyway" on Windows.
+The app walks you through the same setup the CLI wizard covers — language, prerequisite install (Docker + Git), provider login (🟠 Claude / 🔵 Codex / 🌙 Kimi) in an embedded terminal, profile upload — then **Start** boots the team in the background.
+
+> 💡 The desktop app is designed to become the **interaction cockpit** for non-technical users: chat with the agents, upload files, start/stop — for a local team via a browser window to `localhost`, for a VPS team over an SSH tunnel. The **web dashboard is read-only** (positions, scores, map); **Telegram** is the optional async channel for when you're away.
 
 ---
 

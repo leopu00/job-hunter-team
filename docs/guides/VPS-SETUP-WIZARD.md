@@ -5,6 +5,11 @@ User-facing guide to install Job Hunter Team on a Hetzner VPS using
 on **2026-05-16** in "fresh wipe" mode with 0 manual patches needed
 post-wizard.
 
+> 🚧 **The desktop app is not publicly released yet** — the website's download page is
+> intentionally disabled and this path currently requires building the app from source
+> ([`desktop/STATUS.md`](../../desktop/STATUS.md)). The supported beta path for a VPS is
+> the manual CLI one → [`VPS-SETUP.md`](VPS-SETUP.md).
+
 > ℹ️ **Path 2** = "Desktop on your Mac/PC + team running on a remote Hetzner VPS".
 > Just want manual CLI via SSH? → [`VPS-SETUP.md`](VPS-SETUP.md) (tech path).
 > Want everything local on your PC, no cloud? → [`QUICKSTART.md`](QUICKSTART.md).
@@ -28,7 +33,7 @@ You need these ready in advance (5 minutes of prep):
 | **3 Telegram bot tokens** | [@BotFather](https://t.me/BotFather) → `/newbot` × 3 (Assistant, Captain, Mentor) | ~3 min |
 | **Hetzner Cloud account** | [console.hetzner.com](https://console.hetzner.com) — credit card required | ~5 min |
 | **AI provider account** | Kimi (Moonshot, free) or a Claude/Codex subscription | depends |
-| **JHT Desktop app installed** | DMG from [jobhunterteam.ai/download](https://jobhunterteam.ai/download) | ~1 min |
+| **JHT Desktop app installed** | build from source — see [`desktop/STATUS.md`](../../desktop/STATUS.md) (public download disabled during beta) | ~15 min |
 
 > 💡 **Telegram tip**: at each `/newbot` BotFather asks for a name (visible in
 > chat, e.g. "My JHT Assistant") and a username (must end in `_bot`,
