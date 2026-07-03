@@ -211,6 +211,17 @@ export const dom = {
 }
 
 export function showStep(name) {
+  // Guard against navigating to a step that doesn't exist in the DOM (typo,
+  // renamed data-step, refactor). Without this the loop below would hide
+  // EVERY section → a blank white screen with no way out. Log and bail so
+  // the current screen stays put instead.
+  const target = [...dom.steps].find((s) => s.dataset.step === name)
+  if (!target) {
+    try {
+      window.jhtLog?.scope?.('renderer')?.error?.('showStep.unknown', { name, current: state.step })
+    } catch { /* logger assente */ }
+    return
+  }
   state.step = name
   for (const section of dom.steps) {
     section.hidden = section.dataset.step !== name
