@@ -56,7 +56,7 @@ const translations = {
   nav_features: { it: "Features", en: "Features", hu: "Funkciók" },
   nav_how: { it: "Come funziona", en: "How it works", hu: "Hogyan működik" },
   nav_github: { it: "GitHub", en: "GitHub", hu: "GitHub" },
-  nav_download: { it: "Download", en: "Download", hu: "Letöltés" },
+  nav_download: { it: "Installa", en: "Install", hu: "Telepítés" },
   nav_run: { it: "Come si avvia", en: "How to run it", hu: "Hogyan indítható" },
   nav_team: { it: "Team", en: "Team", hu: "Csapat" },
   nav_pricing: { it: "Prezzi", en: "Pricing", hu: "Árak" },
@@ -346,9 +346,9 @@ const translations = {
     hu: "Egy AI ügynök csapat átfésüli az egész piacot, és megtalálja a hozzád illő állásokat — ellenőrizve és a profilodhoz való illeszkedés szerint rangsorolva.",
   },
   cta_button: {
-    it: "Scarica l'app",
-    en: "Download the app",
-    hu: "Töltsd le az appot",
+    it: "Inizia",
+    en: "Get started",
+    hu: "Kezdés",
   },
   cta_team: {
     it: "Vedi il team",
@@ -411,9 +411,9 @@ const translations = {
 
   // Download page
   dl_desc: {
-    it: "La dashboard web di JHT puo essere avviata dal launcher desktop oppure da terminale tramite setup avanzato con CLI e TUI. Il runtime gira sul tuo computer e i dati restano sotto il tuo controllo.",
-    en: "JHT web dashboard can be started from the desktop launcher or from the terminal through advanced CLI and TUI setup. The runtime runs on your machine and your data stays under your control.",
-    hu: "A JHT webes irányítópult elindítható az asztali launcherről vagy a terminálból fejlett CLI és TUI beállítással. A futtatókörnyezet a gépeden fut, és az adataid a te ellenőrzésed alatt maradnak.",
+    it: "La dashboard di JHT si avvia da terminale, con setup CLI e TUI. Il runtime gira sul tuo computer e i dati restano sotto il tuo controllo.",
+    en: "The JHT dashboard is started from the terminal, via the CLI and TUI setup. The runtime runs on your machine and your data stays under your control.",
+    hu: "A JHT irányítópultja a terminálból indul, CLI és TUI beállítással. A futtatókörnyezet a gépeden fut, és az adataid a te ellenőrzésed alatt maradnak.",
   },
   dl_back: { it: "← Indietro", en: "← Back", hu: "← Vissza" },
   dl_title_1: {

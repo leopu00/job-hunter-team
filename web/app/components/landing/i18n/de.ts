@@ -15,7 +15,7 @@ export const de: Record<string, string> = {
   nav_features: "Funktionen",
   nav_how: "So funktioniert's",
   nav_github: "GitHub",
-  nav_download: "Download",
+  nav_download: "Installieren",
   nav_project: "Projekt",
   nav_demo: "Demo",
   nav_guide: "Anleitung",
@@ -121,7 +121,7 @@ export const de: Record<string, string> = {
   cta_title_2: "Jobsuche zu revolutionieren?",
   cta_desc:
     "Ein Team von KI-Agenten durchsucht den gesamten Markt und findet die Stellen, die zu dir passen — geprüft und nach Übereinstimmung mit deinem Profil sortiert.",
-  cta_button: "App herunterladen",
+  cta_button: "Loslegen",
   cta_team: "Lerne das Team kennen",
   cta_note: "Keine Kreditkarte erforderlich · Öffentliche Beta",
 
@@ -145,7 +145,7 @@ export const de: Record<string, string> = {
 
   // Download page
   dl_desc:
-    "Das JHT-Web-Dashboard kann über den Desktop-Launcher oder über das Terminal mit einem erweiterten Setup aus CLI und TUI gestartet werden. Die Runtime läuft auf deinem Computer und deine Daten bleiben unter deiner Kontrolle.",
+    "Das JHT-Dashboard wird über das Terminal gestartet, mit dem CLI- und TUI-Setup. Die Runtime läuft auf deinem Computer und deine Daten bleiben unter deiner Kontrolle.",
   dl_back: "← Zurück",
   dl_title_1: "Richte dein Team ein",
   dl_title_2: "auf deinem PC",
