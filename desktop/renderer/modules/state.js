@@ -73,7 +73,6 @@ export const state = {
 export const dom = {
   steps: document.querySelectorAll('.step'),
   btnIntroStart: document.getElementById('btn-intro-start'),
-  btnIntroSignin: document.getElementById('btn-intro-signin'),
   btnWelcomeBack: document.getElementById('btn-welcome-back'),
   btnWelcomeContinue: document.getElementById('btn-welcome-continue'),
   locationCardLocal: document.getElementById('location-card-local'),

@@ -42,19 +42,13 @@ onLangChange(() => {
   if (state.docker) renderDockerCard(state.docker)
 })
 
-// Welcome-intro entry points. The language picker lives on this same
-// screen, so both buttons go straight to the readiness check; the chosen
-// intent only changes how the Supabase step behaves later ('signin' →
-// login required, 'start' → login optional).
+// Welcome-intro entry point. The language picker lives on this same
+// screen; "Get started" goes straight to the readiness check. The sign-in
+// shortcut was removed — it was confusing and could skip setup steps a
+// returning user still needs, so everyone goes through the full flow.
 if (dom.btnIntroStart) {
   dom.btnIntroStart.addEventListener('click', () => {
     state.onboardingIntent = 'start'
-    showStep(STEP_WELCOME)
-  })
-}
-if (dom.btnIntroSignin) {
-  dom.btnIntroSignin.addEventListener('click', () => {
-    state.onboardingIntent = 'signin'
     showStep(STEP_WELCOME)
   })
 }
