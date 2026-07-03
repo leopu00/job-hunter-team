@@ -59,7 +59,8 @@ const T: Record<
   en: {
     title: "CLI — the jht command",
     tagline: "The essential commands to drive the team from a terminal",
-    intro1: "Everything the web — and the upcoming desktop app — does, you can do with",
+    intro1:
+      "Everything the web — and the upcoming desktop app — does, you can do with",
     intro2:
       ". It's the single surface humans, power users and AI assistants share — self-sufficient for day-to-day operation. Here are the commands you'll actually use.",
     callout1: "💡 Every command supports",
@@ -111,7 +112,8 @@ const T: Record<
   it: {
     title: "CLI — il comando jht",
     tagline: "I comandi essenziali per guidare il team da terminale",
-    intro1: "Tutto ciò che fa il web — e che farà l'app desktop in arrivo — lo puoi fare con",
+    intro1:
+      "Tutto ciò che fa il web — e che farà l'app desktop in arrivo — lo puoi fare con",
     intro2:
       ". È l'unica superficie condivisa da esseri umani, utenti esperti e assistenti AI — autosufficiente per l'uso quotidiano. Ecco i comandi che userai davvero.",
     callout1: "💡 Ogni comando supporta",
@@ -277,7 +279,8 @@ const T: Record<
     title: "CLI — der Befehl jht",
     tagline:
       "Die wesentlichen Befehle, um das Team vom Terminal aus zu steuern",
-    intro1: "Alles, was das Web tut — und was die kommende Desktop-App tun wird — kannst du mit",
+    intro1:
+      "Alles, was das Web tut — und was die kommende Desktop-App tun wird — kannst du mit",
     intro2:
       " erledigen. Es ist die einzige Oberfläche, die Menschen, Power-User und KI-Assistenten teilen — autark für den täglichen Betrieb. Hier sind die Befehle, die du tatsächlich nutzen wirst.",
     callout1: "💡 Jeder Befehl unterstützt",
@@ -330,7 +333,8 @@ const T: Record<
     title: "CLI — a jht parancs",
     tagline:
       "A csapat terminálból való irányításához szükséges alapvető parancsok",
-    intro1: "Mindent, amit a web csinál — és amit a hamarosan érkező asztali alkalmazás tud majd — megtehetsz a",
+    intro1:
+      "Mindent, amit a web csinál — és amit a hamarosan érkező asztali alkalmazás tud majd — megtehetsz a",
     intro2:
       " segítségével. Ez az egyetlen felület, amelyet emberek, haladó felhasználók és MI-asszisztensek megosztanak — önellátó a napi használathoz. Íme a parancsok, amelyeket valóban használni fogsz.",
     callout1: "💡 Minden parancs támogatja a",
@@ -383,7 +387,8 @@ const T: Record<
     title: "CLI — o comando jht",
     tagline:
       "Os comandos essenciais para conduzir a equipe a partir de um terminal",
-    intro1: "Tudo o que a web faz — e o que a futura app de desktop fará — você pode fazer com",
+    intro1:
+      "Tudo o que a web faz — e o que a futura app de desktop fará — você pode fazer com",
     intro2:
       ". É a única superfície partilhada por humanos, utilizadores avançados e assistentes de IA — autossuficiente para o uso diário. Aqui estão os comandos que você realmente vai usar.",
     callout1: "💡 Todos os comandos suportam",

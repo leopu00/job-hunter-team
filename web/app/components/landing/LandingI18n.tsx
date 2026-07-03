@@ -218,7 +218,6 @@ const translations = {
 
   // Get Started
 
-
   // CTA
   cta_title_1: {
     it: "Pronto a rivoluzionare",
@@ -342,7 +341,6 @@ const translations = {
     en: "Read the guide",
     hu: "Olvasd el az útmutatót",
   },
-
 
   // FAQ page
   faq_title: {

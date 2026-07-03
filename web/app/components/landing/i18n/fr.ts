@@ -76,7 +76,6 @@ export const fr: Record<string, string> = {
 
   // Get Started
 
-
   // CTA
   cta_title_1: "Prêt à révolutionner",
   cta_title_2: "votre recherche d'emploi ?",
@@ -117,7 +116,6 @@ export const fr: Record<string, string> = {
   dl_desktop_soon_badge: "Bientôt disponible",
   dl_help_text: "Vous ne savez pas où l'installer ?",
   dl_help_link: "Lire le guide",
-
 
   // FAQ page
   faq_title: "Questions fréquentes",
