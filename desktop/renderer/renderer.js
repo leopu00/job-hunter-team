@@ -11,7 +11,7 @@ import {
   onLangChange,
 } from './modules/i18n.js'
 import { SUPPORTED_LANGS, LANG_STORAGE_KEY, DEFAULT_LANG } from './modules/translations.js'
-import { STEP_WELCOME_INTRO, STEP_LANGUAGE, STEP_WELCOME } from './modules/constants.js'
+import { STEP_WELCOME_INTRO, STEP_WELCOME } from './modules/constants.js'
 import { showStep } from './modules/state.js'
 import {
   renderDockerCard,
@@ -29,7 +29,7 @@ import { showWizard, showHome, isSetupComplete } from './modules/home.js'
 
 // -------- Wiring (boot-time event listeners that depend on multiple modules) --------
 
-initLangDropdown(document.getElementById('lang-select'), {
+initLangDropdown(document.getElementById('intro-lang-select'), {
   onPick: (lang) => {
     setLang(lang)
   },
@@ -42,27 +42,24 @@ onLangChange(() => {
   if (state.docker) renderDockerCard(state.docker)
 })
 
-// Welcome-intro entry points. Both go through language selection; the
-// chosen intent only changes how the Supabase step behaves later
-// ('signin' → login required, 'start' → login optional).
+// Welcome-intro entry points. The language picker lives on this same
+// screen, so both buttons go straight to the readiness check; the chosen
+// intent only changes how the Supabase step behaves later ('signin' →
+// login required, 'start' → login optional).
 if (dom.btnIntroStart) {
   dom.btnIntroStart.addEventListener('click', () => {
     state.onboardingIntent = 'start'
-    showStep(STEP_LANGUAGE)
+    showStep(STEP_WELCOME)
   })
 }
 if (dom.btnIntroSignin) {
   dom.btnIntroSignin.addEventListener('click', () => {
     state.onboardingIntent = 'signin'
-    showStep(STEP_LANGUAGE)
+    showStep(STEP_WELCOME)
   })
 }
 
-document.getElementById('btn-language-continue').addEventListener('click', () => {
-  showStep(STEP_WELCOME)
-})
-
-dom.btnWelcomeBack.addEventListener('click', () => showStep(STEP_LANGUAGE))
+dom.btnWelcomeBack.addEventListener('click', () => showStep(STEP_WELCOME_INTRO))
 
 dom.btnWelcomeContinue.addEventListener('click', async () => {
   await smartAdvanceFromWelcome()
