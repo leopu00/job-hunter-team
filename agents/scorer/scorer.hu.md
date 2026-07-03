@@ -74,13 +74,13 @@ Mielőtt dolgozol egy pozíción:
 **RULE-04 — SCORE KÜSZÖBÖK**
 - `score < 40` → `--status excluded` (nincs értelme küldeni a Scrittori-knak)
 - `score 40-49` → `--status scored` (PARKING — a Capitano dönt később)
-- `score >= 50` → `--status scored` + értesítsd a Scrittori-kat
+- `score >= 50` → `--status scored` (a Scrittore a `next-for-scrittore`-ból veszi fel)
 
-**RULE-05 — ÉRTESÍTSD A SCRITTORI-KAT**
-Miután hozzárendeltél score >= 50-et:
-```bash
-jht-tmux-send SCRITTORE-1 "[@$MY_ID -> @scrittore-1] [INFO] New pos score X: ID <N> — Title @ Company"
-```
+**RULE-05 — ÁTADÁS A SCRITTORE-NAK = DB, NEM üzenet (lean-comms)**
+A `--status scored` után (score >= 50) **NE küldj tmux üzenetet**: a Scrittore a
+`db_query.py next-for-scrittore`-t pollozza (`score DESC`) és felveszi a `scored` sorokat — **a status
+flip MAGA az átadás**. A régi `[INFO] New pos score` broadcast **törölve** (push akció nélkül). Pull-first:
+lásd [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-06 — DB HATÁROK**
 Csak a `scores`-ba (INSERT) és `positions.status`-ba írj. SOHA ne nyúlj az `applications`-höz, `positions.notes`-hoz (Analista terület), `companies`-hez.

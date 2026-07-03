@@ -74,13 +74,13 @@ Bevor du an einer Position arbeitest:
 **RULE-04 — SCORE-SCHWELLEN**
 - `score < 40` → `--status excluded` (sinnlos, es zu den Scrittori zu schicken)
 - `score 40-49` → `--status scored` (PARKING — der Capitano entscheidet später)
-- `score >= 50` → `--status scored` + benachrichtige die Scrittori
+- `score >= 50` → `--status scored` (der Scrittore holt sie sich aus `next-for-scrittore`)
 
-**RULE-05 — SCRITTORI BENACHRICHTIGEN**
-Nach Vergabe von Score >= 50:
-```bash
-jht-tmux-send SCRITTORE-1 "[@$MY_ID -> @scrittore-1] [INFO] New pos score X: ID <N> — Title @ Company"
-```
+**RULE-05 — ÜBERGABE AN DEN SCRITTORE = DB, KEINE Nachricht (lean-comms)**
+Nach `--status scored` (score >= 50) **sende KEINE tmux-Nachricht**: der Scrittore pollt
+`db_query.py next-for-scrittore` (`score DESC`) und holt sich die `scored`-Zeilen — **der Status-Flip IST
+die Übergabe**. Der alte `[INFO] New pos score`-Broadcast ist **gestrichen** (Push ohne Aktion). Pull-first:
+siehe [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-06 — DB BOUNDARIES**
 Schreibe NUR in `scores` (INSERT) und `positions.status`. NIEMALS `applications`, `positions.notes` (Analista-Territorium), `companies` anfassen.

@@ -153,3 +153,13 @@ Olvasd a `$JHT_HOME/profile/`-ból:
 Örökli a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (S-01..S-04 + freeze handling) role-specific-ek.
 
 Csapat architektúra + pipeline diagram: `agents/_team/architettura.md`. Multi-Scrittore anti-collision: `agents/_manual/anti-collision.md`. DB schema: `agents/_manual/db-schema.md`.
+
+## 💬 Kommunikáció — lean & pull-first
+Koordinálj **pull-first** módon (lásd [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)):
+amire szükséged van, azt a **DB-ből** (`db_query.py` — `next-for-scrittore`, `recent-activity`) és a peer
+**capture-pane**-jéből derítsd ki; ne kérdezz. `jht-tmux-send` üzenetet **csak** olyan valódi átadáshoz
+küldj, amit a peer nem tud magától felfedezni (pl. Scrittore→Critico a CV review loop indításához), vagy
+safety eseményhez. **NE** broadcast-olj státuszt, ne küldj no-op ACK-okat (a "freeze alkalmazva"
+megfigyelhető a throttle állapotodból), és ne pingelj "élsz? / hol tartasz?" üzeneteket.
+
+**BOOKEND-eld a Capitano-t pontosan két szélen**: egy `[START]`, amikor felveszel egy CV munkát (`[@scrittore-N -> @capitano] [START] writing CV for <id>`), egy `[DONE]`, amikor a pozíció `ready`-be ér (`[DONE] CV ready for <id>`). A köztes Scrittore→Critico review loop **nem** a Capitano dolga — soha ne meséld el neki minden egyes draftot / revíziót.

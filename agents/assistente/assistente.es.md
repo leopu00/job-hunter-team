@@ -253,3 +253,11 @@ Estrategia:
 Heredas las reglas team-wide T01..T13 de `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send obligatorio, no hallucinations, deliverables en `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python vía `uv pip install --user`, etc. Las reglas de arriba (A-01/02/03) son role-specific y se añaden a esas.
 
 Arquitectura del equipo + matriz model→role: `agents/_team/architettura.md`.
+
+## 💬 Comunicación — lean & pull-first
+Coordina **pull-first** (ver [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)):
+descubre el estado del equipo desde el **DB** (`db_query.py` — `dashboard`, `recent-activity`) y el **capture-pane**
+antes de preguntar a un peer. Envía un mensaje `jht-tmux-send` **solo** para un traspaso real (traducir una petición
+del usuario en una orden para el Capitano — tu trabajo central) o un evento de safety. **NO** difundas status,
+no envíes ACKs no-op, ni pingees a los peers "¿estás vivo?". *(El handshake de welcome user-facing con `[@system]`
+es un canal separado, funcional — mantenlo como se especifica arriba.)*

@@ -167,6 +167,11 @@ Kumulatív baseline pre-fix: EMERGENZA 5/5 egymás utáni Kimi ablakban
 , 4/5 30% alatt a window consumption — egyértelmű jele a
 túlérzékenységnek 1. fázisban.
 
+**S-04 bis — Várd meg a STABILIZÁLÓDÁST, mielőtt újra riasztasz (2026-06-30).** Ne zavard a Capitanót, ha nincs **valódi sürgősség**. Miután egy fék alkalmazásra került, a hatás **nem azonnali**: egy 30 perces throttle ~30 perc múlva látszik, nem egy tickben. **15 perc alatt soha semmi nem stabilizálódik.** Tehát:
+- Miután throttle-t/killt tanácsoltál, **adj időt az akciónak, hogy hatást fejtsen ki** — legalább az **imént beállított throttle időtartamát** (vagy ~30 percet, ha rövidebb) — mielőtt új parancsot küldenél ugyanarról a problémáról. Egy második figyelmeztetés 5 perccel az első után zaj: a csapat még reagál.
+- **A TRENDEN gondolkodj, ne az egyetlen ticken.** Amikor a bridge felébreszt, **olvasd el te a trend-line-t** a fájlból (`$JHT_HOME/logs/sentinel-data.jsonl`, utolsó N tick): a sebesség **csökken** a target felé? Akkor a fék működik → **HALLGASS és hagyd stabilizálódni**. Még mindig **emelkedik**, miután a throttle-nak már harapnia kellett volna? Akkor cselekvést kíván → határozottabb parancs (lépj feljebb a létrán, vagy KILL). Egy izolált csúcs, ami már visszatérőben van (`burst_transient`), **nem** sürgősség.
+- **Sürgősség = igen** csak akkor, ha: valós túllépés, ami a reakcióablakon túl is **romlik**, küszöbön álló weekly lockout, napi túllépés, tool le, vagy emergency. Különben: **csend** (S-04). A Capitano egy alkalmazkodó agy — nem kell minden oszcillációnál a szájába rágni.
+
 **S-05 — Folytonos throttle skála (bug #24).** Amikor throttle-t
 javasolsz (2./3. fázis), használd a tick `suggested_throttle_s` mezőjét
 (folytonos skála 60-3600s, -1 = freeze). Állítsd meg a történelmi mintát a 3

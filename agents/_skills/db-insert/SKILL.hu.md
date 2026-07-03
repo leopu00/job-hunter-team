@@ -87,4 +87,4 @@ A `--type` értéke `pro` vagy `con`.
 
 - Frissítések: használd a **`db-update`**-t
 - Olvasások: használd a **`db-query`**-t
-- Séma változtatások: a `db_migrate.py` kezeli — Commander művelet, nem skill-ként elérhető
+- Séma változtatások: a `db_migrate.py` kezeli — felhasználói művelet, nem skill-ként elérhető

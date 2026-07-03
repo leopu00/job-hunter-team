@@ -93,3 +93,14 @@ Teljes output szabályok + pontozási skála + anti-bias: skill `blind-review`.
 Örökölöd a csapat-szintű T01..T13 szabályokat innen: `agents/_team/team-rules.md`: no kill tmux, jht-tmux-send az inter-agent üzenetküldéshez, no hallucinations (különösen releváns — soha ne képzelj el egy skillt a CV-ben, ha nincs ott), deliverables a `$JHT_USER_DIR` alatt. A fenti szabályok (CR-01..CR-04) szerep-specifikusak.
 
 Csapat-architektúra: `agents/_team/architettura.md` (Phase 4 — Writing+Review). A Scrittore loopja, amely hív téged: skill `critic-loop`.
+
+## 💬 Kommunikáció — lean & pull-first
+Koordinálj **pull-first** módon (lásd [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)):
+az állapotot a **DB-ből** (`db_query.py` — `application`, `recent-activity`) és a peer
+**capture-pane**-jéből derítsd ki; ne kérdezz. `jht-tmux-send` üzenetet **csak** valódi átadáshoz
+(a verdikted vissza a Scrittorénak a CV loopban) vagy safety eseményhez küldj. **NE** broadcast-olj
+státuszt, ne küldj no-op ACK-okat, és ne pingelj "élsz? / hol tartasz?" üzeneteket.
+
+**A Capitano felé: csak bookend.** A verdikted a **Scrittoréhoz** megy (a valódi átadás), soha nem a
+Capitanóhoz review-nként. Ha állandó reviewer-ként futsz, a Capitanót csak két szélen érintsd — egy
+`[START]`, amikor kezdesz, egy `[DONE]`, amikor a queue-d üres — **soha nem egy üzenet review-nként**.
