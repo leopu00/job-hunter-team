@@ -9,51 +9,51 @@ const META: Record<
   { title: string; description: string; jsonLdDescription: string }
 > = {
   it: {
-    title: "Download",
+    title: "Installa",
     description:
-      "Scarica Job Hunter Team per macOS, Linux o Windows. Avvia il team di agenti AI sul tuo computer in pochi minuti.",
+      "Installa Job Hunter Team da terminale (CLI). Il tuo team di agenti AI gira sul tuo computer — open source, locale, privato.",
     jsonLdDescription:
       "Un team di agenti AI che automatizza la ricerca di lavoro. Open source, locale, privato.",
   },
   en: {
-    title: "Download",
+    title: "Install",
     description:
-      "Download Job Hunter Team for macOS, Linux or Windows. Launch your AI agent team on your computer in minutes.",
+      "Install Job Hunter Team from the terminal (CLI). Your AI agent team runs on your own computer — open source, local, private.",
     jsonLdDescription:
       "A team of AI agents that automates the job search. Open source, local, private.",
   },
   es: {
-    title: "Descargar",
+    title: "Instalar",
     description:
-      "Descarga Job Hunter Team para macOS, Linux o Windows. Pon en marcha tu equipo de agentes de IA en tu ordenador en pocos minutos.",
+      "Instala Job Hunter Team desde la terminal (CLI). Tu equipo de agentes de IA se ejecuta en tu propio ordenador — open source, local, privado.",
     jsonLdDescription:
       "Un equipo de agentes de IA que automatiza la búsqueda de empleo. Open source, local, privado.",
   },
   fr: {
-    title: "Télécharger",
+    title: "Installer",
     description:
-      "Téléchargez Job Hunter Team pour macOS, Linux ou Windows. Lancez votre équipe d'agents IA sur votre ordinateur en quelques minutes.",
+      "Installez Job Hunter Team depuis le terminal (CLI). Votre équipe d'agents IA s'exécute sur votre propre ordinateur — open source, locale, privée.",
     jsonLdDescription:
       "Une équipe d'agents IA qui automatise la recherche d'emploi. Open source, locale, privée.",
   },
   de: {
-    title: "Herunterladen",
+    title: "Installieren",
     description:
-      "Lade Job Hunter Team für macOS, Linux oder Windows herunter. Starte dein KI-Agententeam in wenigen Minuten auf deinem Computer.",
+      "Installiere Job Hunter Team über das Terminal (CLI). Dein KI-Agententeam läuft auf deinem eigenen Computer — open source, lokal, privat.",
     jsonLdDescription:
       "Ein Team von KI-Agenten, das die Jobsuche automatisiert. Open source, lokal, privat.",
   },
   hu: {
-    title: "Letöltés",
+    title: "Telepítés",
     description:
-      "Töltsd le a Job Hunter Teamet macOS, Linux vagy Windows rendszerre. Indítsd el az MI-ügynökökből álló csapatodat a számítógépeden pár perc alatt.",
+      "Telepítsd a Job Hunter Teamet a terminálból (CLI). Az MI-ügynökökből álló csapatod a saját számítógépeden fut — open source, helyi, privát.",
     jsonLdDescription:
       "MI-ügynökökből álló csapat, amely automatizálja az álláskeresést. Open source, helyi, privát.",
   },
   pt: {
-    title: "Descarregar",
+    title: "Instalar",
     description:
-      "Descarregue o Job Hunter Team para macOS, Linux ou Windows. Coloque a sua equipa de agentes de IA a funcionar no seu computador em poucos minutos.",
+      "Instala o Job Hunter Team a partir do terminal (CLI). A tua equipa de agentes de IA corre no teu próprio computador — open source, local, privada.",
     jsonLdDescription:
       "Uma equipa de agentes de IA que automatiza a procura de emprego. Open source, local, privada.",
   },
@@ -81,15 +81,17 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://jobhunterteam.ai";
 async function DownloadJsonLd() {
   const [nonce, locale] = await Promise.all([getNonce(), getRequestLocale()]);
   const m = META[locale] ?? META.en;
+  // 2026-07-03: niente `downloadUrl`/`softwareVersion` — l'app desktop non è più
+  // scaricabile dal web (si installa via CLI). Non dichiariamo un installer
+  // diretto nei dati strutturati. `installUrl` punta alla pagina d'installazione.
   const data = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "Job Hunter Team",
     applicationCategory: "BusinessApplication",
-    operatingSystem: "macOS, Linux, Windows",
+    operatingSystem: "macOS, Linux, Windows (WSL)",
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-    downloadUrl: `${SITE_URL}/download`,
-    softwareVersion: "0.1.0",
+    installUrl: `${SITE_URL}/download`,
     description: m.jsonLdDescription,
     license: "https://opensource.org/licenses/MIT",
     isAccessibleForFree: true,

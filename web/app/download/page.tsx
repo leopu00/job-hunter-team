@@ -1,14 +1,10 @@
-import { redirect } from "next/navigation";
+import DownloadClient from "./DownloadClient";
 
-// The desktop app is NOT publicly promoted yet: it works end-to-end but still
-// has gaps we haven't finished testing (see desktop/STATUS.md). Until it's
-// ready, we don't hand out installers from the web — the supported path is the
-// CLI. So /download bounces to the CLI guide instead of serving .exe/.dmg/
-// .AppImage builds.
-//
-// The full installer-picker UI still lives in git history (and DownloadClient
-// stays on disk, dormant): to re-open desktop downloads, restore the previous
-// version of this file — no other change needed.
+// 2026-07-03: l'app desktop non è più scaricabile dal web (non ancora promossa —
+// vedi docs/internal/2026-07-03-desktop-app-status-and-vision.md). La pagina non
+// deve più interrogare le GitHub Releases né fare UA-detection per servire gli
+// installer: mostra solo i percorsi CLI (terminale) e prompt-assistente, quindi
+// è una pagina statica senza dati di release.
 export default function DownloadPage() {
-  redirect("/docs/guides/cli");
+  return <DownloadClient />;
 }
