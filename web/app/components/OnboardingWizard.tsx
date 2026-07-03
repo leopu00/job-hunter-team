@@ -10,8 +10,8 @@ type Lang = "it" | "en" | "es" | "de" | "fr" | "pt" | "hu";
 
 const SUPPORTED_LANGS: Lang[] = ["it", "en", "es", "de", "fr", "pt", "hu"];
 
-// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Copre it/en/es/de/fr/pt;
-// qualsiasi locale non supportata (es. hu) ricade su en.
+// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Copre tutte e 7 le
+// lingue (it/en/es/de/fr/pt/hu); qualsiasi locale sconosciuta ricade su en.
 function getLang(): Lang {
   const l = readLocaleCookie();
   return (SUPPORTED_LANGS as string[]).includes(l) ? (l as Lang) : "en";

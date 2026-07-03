@@ -759,6 +759,7 @@ export default async function ProfilePage() {
                                 profile.salary_target.italy_min
                               }
                               color="var(--color-green)"
+                              dateLocale={dateLocale}
                             />
                           )}
                           {profile.salary_target.remote_eu_min != null && (
@@ -771,6 +772,7 @@ export default async function ProfilePage() {
                                 profile.salary_target.remote_eu_min
                               }
                               color="var(--color-blue)"
+                              dateLocale={dateLocale}
                             />
                           )}
                         </div>
@@ -1002,12 +1004,14 @@ function SalaryRange({
   min,
   max,
   color,
+  dateLocale,
 }: {
   label: string;
   ariaLabel: string;
   min: number;
   max: number;
   color: string;
+  dateLocale: string;
 }) {
   return (
     <div>
@@ -1016,7 +1020,7 @@ function SalaryRange({
           {label}
         </span>
         <span className="text-[11px] font-bold tabular-nums" style={{ color }}>
-          €{min.toLocaleString("it-IT")} – €{max.toLocaleString("it-IT")}
+          €{min.toLocaleString(dateLocale)} – €{max.toLocaleString(dateLocale)}
         </span>
       </div>
       <div

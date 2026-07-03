@@ -291,8 +291,8 @@ const T: Record<string, Record<Lang, string>> = {
   },
 };
 
-// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Copre it/en/es/de/fr/pt;
-// qualsiasi locale non supportata (es. hu) ricade su en.
+// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Copre tutte e 7 le
+// lingue (it/en/es/de/fr/pt/hu); qualsiasi locale sconosciuta ricade su en.
 function useLang(): Lang {
   const [lang, setLang] = useState<Lang>("it");
   useEffect(() => {
