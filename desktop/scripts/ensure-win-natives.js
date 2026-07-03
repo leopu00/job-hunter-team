@@ -68,10 +68,14 @@ function vendor(target) {
       encoding: 'utf8',
       shell: isWin,
     })
-    const tarball = out.trim().split('\n').filter(Boolean).pop()
+    const tarball = out.trim().split('\n').filter(Boolean).pop().trim()
+    // Extract with RELATIVE paths only (cwd=tmp): absolute Windows paths like
+    // C:\... make GNU tar (Git bash) treat the drive letter as a remote host.
+    // npm tarballs always unpack into ./package — copy that over dest with Node.
+    execFileSync('tar', ['-xzf', tarball], { cwd: tmp })
     fs.rmSync(dest, { recursive: true, force: true })
-    fs.mkdirSync(dest, { recursive: true })
-    execFileSync('tar', ['-xzf', path.join(tmp, tarball), '-C', dest, '--strip-components=1'])
+    fs.mkdirSync(path.dirname(dest), { recursive: true })
+    fs.cpSync(path.join(tmp, 'package'), dest, { recursive: true })
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
   }
