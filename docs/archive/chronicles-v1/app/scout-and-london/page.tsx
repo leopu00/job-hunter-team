@@ -14,7 +14,7 @@ const story = getStory("scout-and-london")!;
 
 // TODO(cronache): storia DA RIFINIRE quando c'è tempo — migliorare la
 // narrazione; per la cover valutare una scena a Londra di notte (Big Ben, lui
-// che fruga nei vicoli). Vedi docs/internal/chronicles-canon.md § "Storie da rifinire".
+// che fruga nei vicoli). Vedi archive/chronicles-v1/chronicles-canon.md § "Storie da rifinire".
 
 const CONTENT = {
   it: {

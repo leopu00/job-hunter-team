@@ -19,9 +19,12 @@ Organizzate per **categoria** in sotto-cartelle. Come scrivere una nuova nota: v
 | [`ops/`](ops/) | Infra, VPS, release, triage, credenziali |
 | [`_archive/`](_archive/) | Note superate, conservate per git-blame |
 
-File di root: [`chronicles-canon.md`](chronicles-canon.md) (canone narrativo delle Cronache /chronicles) e
-[`landing-image-prompts.md`](landing-image-prompts.md) (prompt immagini del sito + rifiniture aperte).
+File di root: [`landing-image-prompts.md`](landing-image-prompts.md) (prompt immagini del sito + rifiniture aperte).
 Il log review è in [`../REVIEW-LOG.md`](../REVIEW-LOG.md).
+
+> Il canone narrativo delle Cronache è **archiviato con la pagina** (tolta dal sito
+> pubblico): vive in [`archive/chronicles-v1/`](../../archive/chronicles-v1/) accanto
+> alle storie. La sua tabella cast/stile resta il riferimento per `landing-image-prompts.md`.
 
 ---
 

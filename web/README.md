@@ -16,7 +16,6 @@ app/
                  profile, settings, team/*, secrets, cron, onboarding
   api/           route handlers (cloud-sync, profile, i18n, …)
   case-studies/  public case studies
-  chronicles/    public narrative pages
   page.tsx       landing
 components/       shared UI components
 lib/             queries, i18n, parsers, types

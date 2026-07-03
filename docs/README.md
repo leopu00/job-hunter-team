@@ -25,7 +25,7 @@ Review pre-launch, threat model, checklist, comparazioni.
 `01`→`06` + `README`
 
 ## 🚀 [`launch/`](launch/) — materiali di lancio
-`demo-storyboard` · `show-hn-draft`
+`demo-storyboard` (le bozze di post pubblici — Show HN ecc. — stanno fuori dalla repo, in `prima-release/`)
 
 ## 📊 [`sessions/`](sessions/) — log run reali
 Una cartella per run agenti (Codex/Kimi/long-session) con README + dump dati.
