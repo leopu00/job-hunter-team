@@ -42,7 +42,7 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 
 ## 🎬 Demo
 
-> 🚧 **Coming soon** — animated GIFs of the dashboard, team pipeline, and onboarding flow.
+The best demo is real data: [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies) renders the live dashboards of the beta runs — including the month-long autonomous Codex run (649 positions found, 513 scored, weekly budget self-managed at 99–100%). Animated GIFs of the dashboard and onboarding are in the works.
 
 ## The Team
 
@@ -106,7 +106,7 @@ See [`docs/internal/ops/INFRA.md`](docs/internal/ops/INFRA.md) for the full infr
 
 ## Install
 
-> 🧪 **Beta — installer maturing.** The team and the agents work end-to-end. The desktop installer and the onboarding wizard are still rounding off rough edges — if you hit a snag, see [`docs/guides/BETA.md`](docs/guides/BETA.md) and join the beta program.
+> 🧪 **Beta — CLI-first.** The team and the agents work end-to-end; the supported entry points today are the CLI one-liner below and the [AI-agent path](#-ai-agents-can-drive-jht). The desktop app is **not part of the beta yet** — it works up to a point and is under active development ([`desktop/STATUS.md`](desktop/STATUS.md)). If you hit a snag, see [`docs/guides/BETA.md`](docs/guides/BETA.md) and join the beta program.
 
 **Before you start** — JHT runs ~**400M tokens/month** (many agents working in parallel, around the clock). To make this affordable, JHT runs on **LLM subscriptions, not pay-per-use API keys** — the same usage on the API would cost $1,000–$2,500/mo. See [`docs/about/PROVIDERS.md`](docs/about/PROVIDERS.md) and [ADR-0004](docs/adr/0004-subscription-only-no-api-keys.md) for the full reasoning.
 
@@ -128,7 +128,7 @@ Three subscriptions cover the ~400M tokens/month requirement:
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
-**Desktop app** — `.dmg` / `.exe` / `.AppImage` / `.deb` from [`/download`](https://jobhunterteam.ai/download) or GitHub Releases.
+**Desktop app** — in development, not yet publicly released (the website's download page is intentionally disabled until it's ready). Contributors can build it from source — state, gaps and roadmap in [`desktop/STATUS.md`](desktop/STATUS.md).
 
 Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/QUICKSTART.md`](docs/guides/QUICKSTART.md).
 
@@ -137,7 +137,7 @@ Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/QU
 | | Interface | Launch | Stack |
 |---|---|---|---|
 | 🌐 | **Web Dashboard** | `cd web && npm run dev:host` | Next.js · React · Tailwind · Supabase |
-| 🖥️ | **Desktop App** | open `JHT Desktop` | Electron · electron-builder *(interaction cockpit — start/stop, chat, file upload; the web dashboard is view-only)* |
+| 🖥️ | **Desktop App** *(in development)* | build from source — [`desktop/STATUS.md`](desktop/STATUS.md) | Electron · electron-builder *(interaction cockpit — start/stop, chat, file upload; not yet publicly released)* |
 | ⌨️ | **CLI** | `jht team start` | Node.js · Commander *(full reference: [`docs/guides/CLI-REFERENCE.md`](docs/guides/CLI-REFERENCE.md). Also designed to be driven by AI agents — see [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md))* |
 | 💬 | **Telegram** | bidirectional bot bridge | grammy |
 
@@ -168,9 +168,9 @@ See [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md)
 
 ## Status
 
-- ✅ **Done** — agent team (always-on core: Captain · Sentinel · Assistant · Mentor + dynamic worker pool: Scout · Analyst · Scorer · Writer · Critic + one-shot: Dottore · Mantenitore), monitored by 📡 Bridge; CLI + TUI + web dashboard (54 pages + 143 API routes wired to real Supabase data); desktop installers (`.dmg` / `.exe` / `.AppImage` / `.deb`); i18n in 7 languages (en/it/hu/es/de/fr/pt — UI and agent prompts); 150+ test files; tested end-to-end on Claude Max x20, Kimi €40 (75h + 10-day beta), and Codex ~€100 (**1-month autonomous run**)
-- 🔨 **In progress** — Desktop installer onboarding polish · Kimi tier hardening (two multi-week beta teams in observation)
-- ⏭️ **Next** — Code signing + auto-update for desktop · contributor missions M1–M8 (see the roadmap)
+- ✅ **Done** — agent team (always-on core: Captain · Sentinel · Assistant · Mentor + dynamic worker pool: Scout · Analyst · Scorer · Writer · Critic + one-shot: Dottore · Mantenitore), monitored by 📡 Bridge; CLI + TUI + web dashboard (54 pages + 143 API routes wired to real Supabase data); i18n in 7 languages (en/it/hu/es/de/fr/pt — UI and agent prompts); 150+ test files; tested end-to-end on Claude Max x20, Kimi €40 (75h + 10-day beta), and Codex ~€100 (**1-month autonomous run**)
+- 🔨 **In progress** — Desktop app toward public beta (installers build for 4 OS and onboarding runs end-to-end, but dashboard parity, agent lifecycle controls and cross-platform QA are open — [`desktop/STATUS.md`](desktop/STATUS.md)) · Kimi tier hardening (two multi-week beta teams in observation)
+- ⏭️ **Next** — Demo GIFs + launch assets · desktop auto-update + tray/notifications · contributor missions M1–M5 (see the roadmap)
 
 Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
@@ -193,7 +193,8 @@ Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 
 PRs and issues welcome. See [`CONTRIBUTING.md`](.github/CONTRIBUTING.md) for the dev setup, PR flow, commit conventions, and agent-specific guides.
 
-- 🙌 **Where you can help** — the [contributor missions](docs/about/ROADMAP.md#-where-you-can-help--contributor-missions) (M1–M8) are the bigger directions we'd love a hand with; each breaks into `good first issue` entry-points
+- 🙌 **Where you can help** — the [contributor missions](docs/about/ROADMAP.md#-where-you-can-help--contributor-missions) (M1–M5, with M6–M8 on the horizon) are the bigger directions we'd love a hand with; each breaks into `good first issue` entry-points. The **desktop app** is the highest-impact area right now — the ranked list is in [`desktop/STATUS.md`](desktop/STATUS.md)
+- 🌿 **How development flows** — the core team works on several parallel `devN` branches (four active at the moment), each merged into `master` when its slice is done; external contributions come in as `feat/`/`fix/` branches → PR
 - 🧪 **Beta tester?** See [`docs/guides/BETA.md`](docs/guides/BETA.md) — we want real job-seekers to break things and tell us how
 - 🔐 **Found a security issue?** See [`SECURITY.md`](SECURITY.md) for responsible disclosure — please don't open a public issue. Internal pre-launch audit + hardening sprint results live in [`docs/security/`](docs/security/)
 - 🤝 **Code of conduct**: [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — Contributor Covenant 2.1
