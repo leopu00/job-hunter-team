@@ -8,11 +8,11 @@ Thanks for considering a contribution. Bug reports, feature ideas, documentation
 - **Report bugs and ideas** — use the [Bug Report](ISSUE_TEMPLATE/bug_report.md) and [Feature Request](ISSUE_TEMPLATE/feature_request.md) templates
 - **Improve docs** — PRs against `docs/`, the README, or the ADRs are always appreciated
 - **Fix a bug / ship a feature** — follow the PR flow below
-- **Share feedback from the app** — the in-app `/feedback` page is wired to a ticketing backend (see [`docs/guides/feedback-ticketing.md`](../docs/guides/feedback-ticketing.md))
+- **Share feedback from the app** — the in-app `/feedback` page is wired to a ticketing backend (see [`docs/guides/FEEDBACK-TICKETING.md`](../docs/guides/FEEDBACK-TICKETING.md))
 
 ## Triage and response time
 
-While JHT is in beta we aim to apply a triage label (surface + severity) to every new issue within **48 hours**. We don't commit to a fix SLA in beta, but `severity:blocker` issues get a maintainer acknowledgement within **24 hours** even if the fix takes longer. The full workflow — labels, kanban columns, close reasons — lives in [`docs/internal/triage.md`](../docs/internal/ops/triage.md). The canonical label set is [`/.github/labels.yml`](labels.yml).
+While JHT is in beta we aim to apply a triage label (surface + severity) to every new issue within **48 hours**. We don't commit to a fix SLA in beta, but `severity:blocker` issues get a maintainer acknowledgement within **24 hours** even if the fix takes longer. The full workflow — labels, kanban columns, close reasons — lives in [`docs/internal/ops/triage.md`](../docs/internal/ops/triage.md). The canonical label set is [`/.github/labels.yml`](labels.yml).
 
 ## Setup
 
@@ -37,7 +37,7 @@ pre-commit install
 jht setup
 ```
 
-Full contributor setup (Node 20+, tmux, agent CLIs, TUI/CLI build from source) is in [`docs/guides/quickstart.md`](../docs/guides/quickstart.md#source-setup-for-contributors).
+Full contributor setup (Node 20+, tmux, agent CLIs, TUI/CLI build from source) is in [`docs/guides/QUICKSTART.md`](../docs/guides/QUICKSTART.md#️-path-4--from-source-contributors) (Path 4 — From source).
 
 ## Branches
 
@@ -122,7 +122,7 @@ the root `package.json` and `desktop/package.json` before tagging —
 electron-builder names artifacts after the desktop version, so forgetting
 it ships assets labeled with the previous release number. The full
 checklist (including the version-consistency gate and the Windows x64 /
-ARM64 split) lives in [`docs/internal/release.md`](../docs/internal/ops/release.md).
+ARM64 split) lives in [`docs/internal/ops/release.md`](../docs/internal/ops/release.md).
 
 ## Code of conduct
 

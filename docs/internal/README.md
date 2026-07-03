@@ -42,6 +42,7 @@ Design/architettura che riflette lo stato corrente. Aggiornati in place (living)
 | [`file-bridge-on-demand.md`](architecture/file-bridge-on-demand.md) | Pull-on-demand file via Supabase Storage |
 | [`context-watchdog-spec.md`](architecture/context-watchdog-spec.md) | Restart periodico agenti via Dottore (anti context saturation) |
 | [`onboarding-flow.md`](architecture/onboarding-flow.md) | Sequenza canonica onboarding: location → sync → Telegram → provider |
+| [`skill-distribution.md`](architecture/skill-distribution.md) | Isolamento skill per-agente: distribuzione launcher-driven (no walk-up), layout pool + punch list |
 | [`bot-telegram.md`](architecture/bot-telegram.md) | Design bot Telegram (3 bot obbligatori), ingest documenti, working hours |
 | [`bridges.md`](architecture/bridges.md) | Role-map dei 3 bridge (.launcher): sentinel / pacing / heartbeat |
 | [`2026-06-15-lean-comms-redesign.md`](architecture/2026-06-15-lean-comms-redesign.md) | Comunicazione interna team push→pull: notify solo a hand-off/safety, coordinamento via DB + capture-pane |
@@ -129,15 +130,14 @@ Piani tecnici, backlog, tracker e idee parcheggiate. Aggiornati finché aperti.
 | File | Topic |
 |---|---|
 | [`MINOR-TRACKER.md`](roadmap/MINOR-TRACKER.md) | Tracker mini-fix e debt non-blocker (CI/lint, cross-platform, TODO inline, note) |
+| [`db-schema-optimization.md`](roadmap/db-schema-optimization.md) | Evoluzione schema jobs.db (position_events, critic rounds, captain_decisions) — alimenta la missione M7 |
 | [`2026-06-30-B1-deterministic-pacing-idea.md`](roadmap/2026-06-30-B1-deterministic-pacing-idea.md) | Idea B1: pacing deterministico ATTUA + LLM SUPERVISIONA (parcheggiata; partire da shadow-log) |
 | [`2026-06-25-pacing-future-ideas.md`](roadmap/2026-06-25-pacing-future-ideas.md) | Even-spread giornaliero (cap→target) + riserva budget per richieste utente (aperte) |
 | [`2026-06-20-proj-volatile-pacing-todo.md`](roadmap/2026-06-20-proj-volatile-pacing-todo.md) | `[PACING-PROJ-VOLATILE]`: gate del bridge su `proj` volatile — deferred, non toccare a caldo |
-| [`2026-06-14-piano-dse3-parteB.md`](roadmap/2026-06-14-piano-dse3-parteB.md) | Piano dse3 Parte B (pacing + request-tables + recheck) |
 | [`2026-06-06-idle-enrichment-roadmap.md`](roadmap/2026-06-06-idle-enrichment-roadmap.md) | Roadmap arricchimento durante idle |
 | [`2026-06-05-pacing-migration-plan.md`](roadmap/2026-06-05-pacing-migration-plan.md) | Piano migrazione pacing |
 | [`2026-06-04-pii-sanitization-plan.md`](roadmap/2026-06-04-pii-sanitization-plan.md) | Piano sanitizzazione PII storia repo |
 | [`2026-05-23-position-classifier-llm-roadmap.md`](roadmap/2026-05-23-position-classifier-llm-roadmap.md) | Roadmap classificatore posizioni LLM |
-| [`2026-05-20-supabase-perf-backlog.md`](roadmap/2026-05-20-supabase-perf-backlog.md) | Backlog performance Supabase |
 
 ## ⚙️ ops/
 
@@ -158,6 +158,9 @@ Note storiche superate o consolidate altrove. Conservate per git-blame e ricerca
 
 | File | Motivo archive |
 |---|---|
+| [`_archive/BACKLOG-2026-07-03-frozen.md`](_archive/BACKLOG-2026-07-03-frozen.md) | Snapshot integrale del BACKLOG pre-ristrutturazione (1487 righe): ogni [TAG] chiuso si risolve qui |
+| [`_archive/2026-06-14-piano-dse3-parteB.md`](_archive/2026-06-14-piano-dse3-parteB.md) | Piano dse3 Parte B — bozza mai implementata, superata |
+| [`_archive/2026-05-20-supabase-perf-backlog.md`](_archive/2026-05-20-supabase-perf-backlog.md) | Backlog perf Supabase — P0-P2 applicati 2026-05-31, resta solo monitoring pool (nel BACKLOG index) |
 | [`_archive/2026-06-29-coordinator-burn-kimi-vs-codex.md`](_archive/2026-06-29-coordinator-burn-kimi-vs-codex.md) | Snapshot congelato dell'indagine coordinator-burn; conclusioni quantitative superate dal living doc `architecture/kimi-vs-codex-economics.md` |
 | [`_archive/2026-06-29-dottore-offhours-burn-finding.md`](_archive/2026-06-29-dottore-offhours-burn-finding.md) | Finding errato (il gate off-hours del Dottore esisteva già); tenuto come lezione metodologica |
 | [`_archive/2026-06-15-sync-web-release-gate-finding.md`](_archive/2026-06-15-sync-web-release-gate-finding.md) | Gate release master→production superato dagli eventi (release effettuate fino a v0.1.22) |

@@ -1,7 +1,7 @@
 # 🔴 betaC — sentinel-bridge morto dalle 08:00, nessun auto-recovery
 
 **Data:** 2026-06-27 ~16:00 UTC
-**VPS:** betaC (`203.0.113.10`, `ubuntu-2gb-hil-1-betaC`, user `9996e20c…`, provider Codex/gpt-5.5)
+**VPS:** betaC (`203.0.113.10`, `ubuntu-2gb-hil-1-betaC`, user `<redacted>…`, provider Codex/gpt-5.5)
 **Severità:** 🟠 Media — non blocca il team (degrada in coast prudente), ma **lascia la Sentinella + il pacing ciechi sull'usage finché il container non riparte**.
 **Natura:** osservazione READ-ONLY. Nessun intervento a caldo (regola "team in osservazione = sola lettura"). Finding per il CODICE.
 

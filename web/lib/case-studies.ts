@@ -114,39 +114,11 @@ const TW_PROFILE: CaseStudyProfile = {
   why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
 };
 
-// Tre beta tester, in ordine di etichetta. La sessione free-run Codex del
-// technical writer è stata TOLTA: ~3 giorni senza monitor del budget, sporcava
-// tutte le medie. Resta la sua sessione Kimi (monitorata) come beta tester 1.
+// Tre beta tester. Apre il run Codex (beta-2): il più lungo (~1 mese
+// continuativo), l'unico MEASURED nel calcolo dei costi. La sessione free-run
+// Codex del technical writer è stata TOLTA: ~3 giorni senza monitor del
+// budget, sporcava tutte le medie. Resta la sua sessione Kimi (monitorata).
 export const CASE_STUDIES: CaseStudyMeta[] = [
-  // ── Beta tester 1 · technical writer (Kimi, run monitorato) ─────────────
-  {
-    id: "beta-1-kimi",
-    label: "Beta tester 1",
-    tagline: "Technical writing · traduzione · localizzazione",
-    category: "Technical Writing",
-    seniority: "Senior · cross-domain",
-    geos: ["Ungheria", "Italia", "Europa"],
-    model: "Kimi",
-    subscription: {
-      provider: "Moonshot Kimi",
-      plan: "Kimi Code",
-      price: "~€40/mese",
-      monthlyEur: 40,
-    },
-    profile: TW_PROFILE,
-    // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
-    phases: [
-      {
-        key: "kimi",
-        label: "Kimi",
-        price: "~€40/mese",
-        note: "run monitorato — budget settimanale dosato (pacing)",
-        from: "2026-06-13",
-        to: null,
-      },
-    ],
-    run: betaBKimiRun as unknown as CaseStudyRun,
-  },
   // ── Beta tester 2 · finance, inizio carriera (Codex) ────────────────────
   {
     id: "beta-2",
@@ -194,6 +166,35 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       why: "Ecco perché i numeri vengono così: cercando ruoli finance e investment in grandi città europee, il team ha concentrato la ricerca negli hub finanziari (Londra, Zurigo, Ginevra, Lussemburgo, Dublino) e quasi tutte le posizioni ricadono in categorie business & finance — esattamente il profilo del candidato.",
     },
     run: betaCRun as unknown as CaseStudyRun,
+  },
+  // ── Beta tester 1 · technical writer (Kimi, run monitorato) ─────────────
+  {
+    id: "beta-1-kimi",
+    label: "Beta tester 1",
+    tagline: "Technical writing · traduzione · localizzazione",
+    category: "Technical Writing",
+    seniority: "Senior · cross-domain",
+    geos: ["Ungheria", "Italia", "Europa"],
+    model: "Kimi",
+    subscription: {
+      provider: "Moonshot Kimi",
+      plan: "Kimi Code",
+      price: "~€40/mese",
+      monthlyEur: 40,
+    },
+    profile: TW_PROFILE,
+    // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
+    phases: [
+      {
+        key: "kimi",
+        label: "Kimi",
+        price: "~€40/mese",
+        note: "run monitorato — budget settimanale dosato (pacing)",
+        from: "2026-06-13",
+        to: null,
+      },
+    ],
+    run: betaBKimiRun as unknown as CaseStudyRun,
   },
   // ── Beta tester 3 · luxury hospitality (Kimi) ───────────────────────────
   {

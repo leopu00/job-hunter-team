@@ -38,6 +38,8 @@ I originally built JHT for my own job hunt. It worked. So I rebuilt it as open s
 
 > 📊 **From the original private build** — ~200 offers analyzed · ~20 tailored applications · **5 interview invites in 2 weeks**. Full background in [`docs/about/STORY.md`](docs/about/STORY.md).
 
+> 📈 **From the public stack (June 2026)** — a Codex-powered team ran **one month unattended**: **649 positions found · 513 scored**, closing its weekly budget at **99–100% for four straight weeks** with zero human interventions. Data in [`docs/about/RESULTS.md`](docs/about/RESULTS.md), live on [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies).
+
 ## 🎬 Demo
 
 > 🚧 **Coming soon** — animated GIFs of the dashboard, team pipeline, and onboarding flow.
@@ -115,8 +117,8 @@ Three subscriptions cover the ~400M tokens/month requirement:
 | | Provider | Plan | Cost/mo | Status |
 |---|---|---|---|---|
 | 🟠 | **Claude** | Max x20 | ~€200 | ✅ Production-ready, best precision |
-| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Tested — 206 positions in a 35h beta run |
-| 🌙 | **Kimi** | Pro | ~€40 | ✅ Tested — mass-market tier (75h + 10-day runs) |
+| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Proven — 1-month autonomous run (649 positions, weekly budget self-managed at 99–100%) |
+| 🌙 | **Kimi** | Pro | ~€40 | 🧪 Beta — mass-market tier (75h + 10-day runs; two multi-week teams in observation) |
 
 ---
 
@@ -166,9 +168,9 @@ See [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md)
 
 ## Status
 
-- ✅ **Done** — agent team (always-on core: Captain · Sentinel · Assistant · Mentor + dynamic worker pool: Scout · Analyst · Scorer · Writer · Critic + one-shot: Dottore · Mantenitore), monitored by 📡 Bridge; CLI (37 commands) + TUI + web dashboard (44 pages + 135 API routes wired to real Supabase data); desktop installers (`.dmg` / `.exe` / `.AppImage` / `.deb`); i18n base (it/en); 150+ test files; tested end-to-end on Claude Max x20, Kimi €40 (75h + 10-day beta), and Codex ~€100
-- 🔨 **In progress** — Desktop installer onboarding polish · Sentinel token-consumption optimization
-- ⏭️ **Next** — Code signing + auto-update for desktop · Full i18n coverage (ES/DE/FR/PT)
+- ✅ **Done** — agent team (always-on core: Captain · Sentinel · Assistant · Mentor + dynamic worker pool: Scout · Analyst · Scorer · Writer · Critic + one-shot: Dottore · Mantenitore), monitored by 📡 Bridge; CLI + TUI + web dashboard (54 pages + 143 API routes wired to real Supabase data); desktop installers (`.dmg` / `.exe` / `.AppImage` / `.deb`); i18n in 7 languages (en/it/hu/es/de/fr/pt — UI and agent prompts); 150+ test files; tested end-to-end on Claude Max x20, Kimi €40 (75h + 10-day beta), and Codex ~€100 (**1-month autonomous run**)
+- 🔨 **In progress** — Desktop installer onboarding polish · Kimi tier hardening (two multi-week beta teams in observation)
+- ⏭️ **Next** — Code signing + auto-update for desktop · contributor missions M1–M8 (see the roadmap)
 
 Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
 

@@ -177,9 +177,7 @@ The realtime subscriber on the VPS isn't receiving events. Verify:
 
 ### ❌ The Captain replies but says "LLM not set"
 
-Known kimi-cli bug (see
-[strategic bugs](../internal/_archive/2026-05-17-team-strategy-bugs.md) #1).
-Already fixed with the `KIMI_SHARE_DIR` export in `start-agent.sh`. If you see this
+Known kimi-cli bug, already fixed with the `KIMI_SHARE_DIR` export in `start-agent.sh`. If you see this
 error, the GHCR image is stale: rebuild it with `docker compose pull && docker
 compose up -d` via SSH.
 
@@ -329,8 +327,6 @@ There's no one-shot command yet. Manual procedure:
 
 - [`docs/sessions/2026-05-17-vps-path2-e2e/`](../sessions/2026-05-17-vps-path2-e2e/README.md)
   — session report of the end-to-end test with 27 fixes tracked
-- [`docs/internal/_archive/2026-05-17-team-strategy-bugs.md`](../internal/_archive/2026-05-17-team-strategy-bugs.md)
-  — known strategic bugs (Whisper/Vision, Sentinel throttle, hierarchy)
 - [`docs/sessions/2026-05-17-budget-windows/`](../sessions/2026-05-17-budget-windows/README.md)
   — how the team manages the Kimi budget windows (with matplotlib charts)
 - [`VPS-SETUP.md`](VPS-SETUP.md) — tech version (manual CLI via SSH)
@@ -344,8 +340,6 @@ There's no one-shot command yet. Manual procedure:
 | Telegram photos/screenshots not interpreted | Captain says "I have no OCR" | Describe in words or link to `/positions` |
 | Sentinel freezes team at 30% if proj > 100% (rare) | Pipeline stalled 30-60 min | Write "restart" to the Captain |
 | Chat history not synced to web | Agent replies visible only on Telegram | Open Telegram directly |
-
-See [strategic bugs](../internal/_archive/2026-05-17-team-strategy-bugs.md) for details and fix priorities.
 
 ## 📸 Screenshot TODO
 

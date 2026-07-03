@@ -677,7 +677,7 @@ export default async function CaseStudiesIndexPage() {
   // giorno e €/eccellente; Trovate dà posizioni/mese.
   const WEEKS_PER_MONTH = 4.345;
   const MONTH_DAYS = 30;
-  const PROVIDER_ORDER = ["Kimi", "Codex"];
+  const PROVIDER_ORDER = ["Codex", "Kimi"];
   const STAGES = ["strong80", "strong70", "scored", "found"] as const;
   const eligible = localized.filter((cs) => !cs.freeRun && cs.run.conversion);
   const providers = PROVIDER_ORDER.map((id) => {
