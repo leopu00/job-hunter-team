@@ -57,4 +57,4 @@ Both are uploaded to the same GitHub Release. The `/download` page detects ARM64
 
 - 📋 [`CHANGELOG.md`](../../../CHANGELOG.md) — release-by-release history
 - 🔒 [`docs/MAINTAINERS.md`](./MAINTAINERS.md) — macOS signing playbook (when we re-enable it), Vercel env vars, OAuth setup, contact
-- 🚢 [BACKLOG · Phase 6 Pre-Launch](../../../BACKLOG.md#6️⃣-phase-6--🚢-pre-launch-public-oss-new) — what blocks the public 1.0 launch
+- 🚢 [BACKLOG · Docs & launch assets](../../../BACKLOG.md#-docs--launch-assets-maintainer) — what blocks the public 1.0 launch
