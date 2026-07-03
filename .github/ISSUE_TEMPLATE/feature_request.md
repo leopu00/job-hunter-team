@@ -35,5 +35,5 @@ gap, not the proposed solution.
 
 <!--
 Triage SLA: a label within ~48h. We may close as `wontfix` if the
-feature conflicts with a tracked ADR — see docs/internal/triage.md.
+feature conflicts with a tracked ADR — see docs/internal/ops/triage.md.
 -->

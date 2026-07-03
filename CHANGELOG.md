@@ -191,9 +191,9 @@ The 10-day arc was not a clean V1→V5 progression — it was a real-world explo
   - `docs/about/RESULTS.md` — case studies + community template
   - `docs/guides/BETA.md` — beta tester program + coverage matrix (provider × persona, 10 cells, 1/10 done) + status board
   - `docs/internal/ops/MAINTAINERS.md` — internal operations reference (Supabase, Vercel, OAuth, security)
-  - `agents/maestro/maestro.md` — planned career-coach agent spec
+  - `agents/mentor/mentor.md` — career-coach agent spec (added as `maestro`, since renamed and shipped as **Mentor**)
 - **📐 ADR-0004** added — subscription-only, no API keys (decision rationale)
-- **📚 ROADMAP, INFRA, BETA, MONITORING** updated for consistency (8-agent team, 112 web pages, 📡 Bridge in monitoring stack)
+- **📚 ROADMAP, INFRA, BETA, MONITORING** updated for consistency (team size + page counts as of that update, 📡 Bridge in monitoring stack)
 - **🦞 OpenClaw integration** — emoji standardized across README + AI-AGENT-INTEGRATION.md
 
 ### 🔒 Security

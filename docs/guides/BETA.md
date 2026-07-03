@@ -39,7 +39,7 @@ Our **pre-launch commitment** is not to fill a coverage matrix — it's to **doc
 
 | # | Persona | Provider tier | Status |
 |---|---|---|---|
-| 1 | Full-stack dev (maintainer baseline) | 🟠 Claude Max x20 | ✅ documented — see [Case study #1](../about/RESULTS.md#case-study-1--the-maintainer-legacy-team-early-2026) |
+| 1 | Full-stack dev (maintainer baseline) | 🟠 Claude Max x20 | ✅ documented — see [Case study #1](../about/RESULTS.md#-case-study-1--the-maintainer-legacy-team-early-2026) |
 | 2 | Senior multilingual technical documentation profile (multi-country EU) | 🔵 Codex ProLite €100 | ✅ documented — see [Case study #2](../about/RESULTS.md#-case-study-2--beta-tester-1--codex-prolite-senior-multilingual-technical-profile) |
 | 3 | Junior software developer (capital city, no degree) | 🌙 Kimi K2 Pro €40 | ✅ documented — see [Case study #3](../about/RESULTS.md#-case-study-3--beta-tester-2--kimi-k2-pro-junior-software-developer) |
 | 4 | Maintainer baseline (weekly-distributed run) | 🌙 Kimi K2 Pro €40 | 🟡 data collected, **processing pending** |
