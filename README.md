@@ -36,7 +36,7 @@ The whole pipeline runs **locally in a container**, on your machine or your VPS 
 
 I originally built JHT for my own job hunt. It worked. So I rebuilt it as open source, so anyone could use it.
 
-> 📊 **From the original private build** — ~200 offers analyzed · ~20 tailored applications · **5 interview invites in 2 weeks**. Full background in [`docs/about/STORY.md`](docs/about/STORY.md).
+> 📊 **From the original private build** — ~200 offers analyzed · ~20 tailored applications · **5 interview invites within a few weeks**. Full background in [`docs/about/STORY.md`](docs/about/STORY.md).
 
 > 📈 **From the public stack (June 2026)** — a Codex-powered team ran **one month unattended**: **649 positions found · 513 scored**, closing its weekly budget at **99–100% for four straight weeks** with zero human interventions. Data in [`docs/about/RESULTS.md`](docs/about/RESULTS.md), live on [jobhunterteam.ai/case-studies](https://jobhunterteam.ai/case-studies).
 
@@ -128,7 +128,7 @@ Three subscriptions cover the ~400M tokens/month requirement:
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
-**Desktop app** — in development, not yet publicly released (the website's download page is intentionally disabled until it's ready). Contributors can build it from source — state, gaps and roadmap in [`desktop/STATUS.md`](desktop/STATUS.md).
+**Desktop app** — in development, not part of the beta. Unsupported preview builds land on [GitHub Releases](https://github.com/leopu00/job-hunter-team/releases) for contributors, but the website's download page is intentionally disabled until the app is ready. State, gaps and roadmap in [`desktop/STATUS.md`](desktop/STATUS.md).
 
 Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/QUICKSTART.md`](docs/guides/QUICKSTART.md).
 
@@ -139,7 +139,7 @@ Expert mode, contributor setup, and the full walkthrough are in [`docs/guides/QU
 | 🌐 | **Web Dashboard** | `cd web && npm run dev:host` | Next.js · React · Tailwind · Supabase |
 | 🖥️ | **Desktop App** *(in development)* | build from source — [`desktop/STATUS.md`](desktop/STATUS.md) | Electron · electron-builder *(interaction cockpit — start/stop, chat, file upload; not yet publicly released)* |
 | ⌨️ | **CLI** | `jht team start` | Node.js · Commander *(full reference: [`docs/guides/CLI-REFERENCE.md`](docs/guides/CLI-REFERENCE.md). Also designed to be driven by AI agents — see [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md))* |
-| 💬 | **Telegram** | bidirectional bot bridge | grammy |
+| 💬 | **Telegram** | 3 bots — Assistant · Captain · Mentor | Python bot bridge *(field-validated — the recommended channel for teams on a VPS or dedicated PC)* |
 
 ## 🤖 AI agents can drive JHT
 
@@ -168,8 +168,8 @@ See [`docs/guides/AI-AGENT-INTEGRATION.md`](docs/guides/AI-AGENT-INTEGRATION.md)
 
 ## Status
 
-- ✅ **Done** — agent team (always-on core: Captain · Sentinel · Assistant · Mentor + dynamic worker pool: Scout · Analyst · Scorer · Writer · Critic + one-shot: Dottore · Mantenitore), monitored by 📡 Bridge; CLI + TUI + web dashboard (54 pages + 143 API routes wired to real Supabase data); i18n in 7 languages (en/it/hu/es/de/fr/pt — UI and agent prompts); 150+ test files; tested end-to-end on Claude Max x20, Kimi €40 (75h + 10-day beta), and Codex ~€100 (**1-month autonomous run**)
-- 🔨 **In progress** — Desktop app toward public beta (installers build for 4 OS and onboarding runs end-to-end, but dashboard parity, agent lifecycle controls and cross-platform QA are open — [`desktop/STATUS.md`](desktop/STATUS.md)) · Kimi tier hardening (two multi-week beta teams in observation)
+- ✅ **Done** — agent team (always-on core: Captain · Sentinel · Assistant · Mentor + dynamic worker pool: Scout · Analyst · Scorer · Writer · Critic + one-shot: Dottore · Mantenitore), monitored by 📡 Bridge; CLI + TUI + web dashboard (54 pages + 142 API routes wired to real Supabase data); full UI i18n in 7 languages (en/it/hu/es/de/fr/pt — agent-prompt translations still catching up in places); 250+ test files; tested end-to-end on Claude Max x20, Kimi €40 (75h + 10-day beta), and Codex ~€100 (**1-month autonomous run**)
+- 🔨 **In progress** — Desktop app toward public beta (installers build for macOS/Windows/Linux and onboarding runs end-to-end, but dashboard parity, agent lifecycle controls and cross-platform QA are open — [`desktop/STATUS.md`](desktop/STATUS.md)) · Kimi tier hardening (two multi-week beta teams in observation)
 - ⏭️ **Next** — Demo GIFs + launch assets · desktop auto-update + tray/notifications · contributor missions M1–M5 (see the roadmap)
 
 Full roadmap: [`docs/about/ROADMAP.md`](docs/about/ROADMAP.md).
