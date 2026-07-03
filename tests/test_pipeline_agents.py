@@ -251,11 +251,21 @@ class TestScorerFlow:
             f"next-for-scrittore mostra posizioni con score<50.\nOutput: {r.stdout}"
 
     def test_scorer_next_for_scrittore_includes_high_scores(self, fresh_db):
-        """next-for-scrittore deve includere posizioni con score>=50."""
+        """next-for-scrittore deve includere posizioni con score>=50
+        e CV richiesto dall'utente (writer-on-demand, V6)."""
         db_path, tmp = fresh_db
         pos_id = self._setup_checked(db_path, tmp, 'Good Role', 'GoodCo')
         insert_score(db_path, tmp, pos_id, total=70)
         update_position(db_path, tmp, pos_id, status='scored')
+
+        # Writer-on-demand: il CV si scrive solo su richiesta utente
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "UPDATE positions SET write_requested = 1, "
+            "write_requested_at = datetime('now') WHERE id = ?", (pos_id,)
+        )
+        conn.commit()
+        conn.close()
 
         r = run_cli(DB_QUERY, ['next-for-scrittore'], db_path, tmp)
         assert r.returncode == 0

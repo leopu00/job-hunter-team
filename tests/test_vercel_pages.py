@@ -66,7 +66,7 @@ class TestProtectedPages:
     PROTECTED_ROUTES = [
         "/dashboard",
         "/positions",
-        "/applications",
+        "/profile",
     ]
 
     def test_dashboard_requires_auth(self):
@@ -84,12 +84,12 @@ class TestProtectedPages:
         )
         assert status != 500, "/positions restituisce 500"
 
-    def test_applications_requires_auth(self):
-        status = http_status("/applications")
+    def test_profile_requires_auth(self):
+        status = http_status("/profile")
         assert status in (200, 401, 302, 307), (
-            f"/applications: status inatteso {status}"
+            f"/profile: status inatteso {status}"
         )
-        assert status != 500, "/applications restituisce 500"
+        assert status != 500, "/profile restituisce 500"
 
     def test_no_protected_page_returns_500(self):
         """Nessuna pagina protetta deve crashare con 500."""

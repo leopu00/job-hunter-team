@@ -76,7 +76,7 @@ def tmp_db(tmp_path):
 # ---------------------------------------------------------------------------
 
 class TestSchemaV2:
-    """Lo schema corrente deve avere interview_round e user_version=5."""
+    """Lo schema corrente deve avere interview_round e user_version=7."""
 
     def test_db_init_creates_current_user_version(self, tmp_db, tmp_path):
         """db_init.py deve lasciare PRAGMA user_version alla versione corrente."""
@@ -86,7 +86,7 @@ class TestSchemaV2:
         conn = sqlite3.connect(tmp_db)
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         conn.close()
-        assert version == 5, f"PRAGMA user_version atteso 5, trovato {version}"
+        assert version == 7, f"PRAGMA user_version atteso 7, trovato {version}"
 
     def test_applications_has_interview_round(self, tmp_db, tmp_path):
         """La tabella applications deve avere interview_round (schema v2 in _db.py)."""

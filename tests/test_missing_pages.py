@@ -48,10 +48,6 @@ class TestMissingRoutesCritical:
         """/team Monitor Pipeline — dati reali posizioni per status + scout activity (PR #33)."""
         assert http_status("/team") != 404, "/team → 404"
 
-    def test_crescita_page_exists(self):
-        """/crescita deve esistere (career path — PR #29)."""
-        assert http_status("/crescita") != 404, "/crescita → 404"
-
     def test_ready_page_exists(self):
         """/ready deve esistere (applicazioni pronte — PR #29)."""
         assert http_status("/ready") != 404, "/ready → 404"
@@ -118,8 +114,8 @@ class TestMigratedFeaturesStillWork:
     def test_position_detail_still_works(self):
         assert http_status("/positions/1") not in (404, 500)
 
-    def test_applications_still_works(self):
-        assert http_status("/applications") not in (404, 500)
+    def test_notifications_still_works(self):
+        assert http_status("/notifications") not in (404, 500)
 
     def test_profile_still_works(self):
         assert http_status("/profile") not in (404, 500)

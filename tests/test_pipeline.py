@@ -24,7 +24,7 @@ DB_INSERT = os.path.join(SKILLS_DIR, 'db_insert.py')
 DB_UPDATE = os.path.join(SKILLS_DIR, 'db_update.py')
 DB_QUERY = os.path.join(SKILLS_DIR, 'db_query.py')
 DB_MIGRATE_V2 = os.path.join(SKILLS_DIR, 'db_migrate_v2.py')
-SETUP_SH = os.path.join(REPO_ROOT, 'setup.sh')
+SETUP_SH = os.path.join(REPO_ROOT, 'scripts', 'setup.sh')
 
 
 # ---------------------------------------------------------------------------
@@ -592,8 +592,8 @@ class TestDbInitUserVersion:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         conn.close()
 
-        assert version == 5, (
-            f"PRAGMA user_version dovrebbe essere 5 (schema corrente), trovato: {version}"
+        assert version == 7, (
+            f"PRAGMA user_version dovrebbe essere 7 (schema corrente), trovato: {version}"
         )
 
 
@@ -655,6 +655,8 @@ class TestDbQueryNextForExtended:
         """
         next-for-scrittore deve mostrare solo posizioni con p.status='scored'.
         Una posizione con status='checked' ma score >= 50 NON deve apparire.
+        Writer-on-demand (V6): entrambe hanno write_requested=1, il filtro
+        discriminante qui è lo status.
         """
         run_cli(DB_INIT, [], tmp_db, tmp_path)
 
@@ -675,6 +677,16 @@ class TestDbQueryNextForExtended:
             'score', '--position-id', str(checked_id),
             '--total', '75', '--scored-by', 'qa-test',
         ], tmp_db, tmp_path)
+
+        # Writer-on-demand: senza write_requested=1 nessuna posizione appare
+        conn = sqlite3.connect(tmp_db)
+        conn.execute(
+            "UPDATE positions SET write_requested = 1, "
+            "write_requested_at = datetime('now') "
+            "WHERE id IN (?, ?)", (scored_id, checked_id)
+        )
+        conn.commit()
+        conn.close()
 
         result = run_cli(DB_QUERY, ['next-for-scrittore'], tmp_db, tmp_path)
 
@@ -738,11 +750,13 @@ class TestSetupScript:
           - shared/data/  (creata da setup.sh step 5, ma serve prima per i DB path)
         """
         # Copia i file necessari nella temp dir
-        shutil.copy2(SETUP_SH, tmp_path / 'setup.sh')
+        (tmp_path / 'scripts').mkdir(exist_ok=True)
+        shutil.copy2(SETUP_SH, tmp_path / 'scripts' / 'setup.sh')
 
         for fname in ('.env.example', 'docs/examples/candidate_profile.yml.example', 'requirements.txt'):
             src = os.path.join(REPO_ROOT, fname)
             if os.path.isfile(src):
+                (tmp_path / fname).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, tmp_path / fname)
 
         # Copia shared/skills/ (db_init.py, _db.py, ecc.)
@@ -754,7 +768,7 @@ class TestSetupScript:
         (tmp_path / 'shared' / 'data').mkdir(parents=True, exist_ok=True)
 
         result = subprocess.run(
-            ['bash', str(tmp_path / 'setup.sh')],
+            ['bash', str(tmp_path / 'scripts' / 'setup.sh')],
             cwd=str(tmp_path),
             capture_output=True,
             text=True,
@@ -780,11 +794,13 @@ class TestSetupScript:
         Dipende da test_setup_sh_creates_venv: il venv deve esistere.
         """
         # Ricrea lo stesso ambiente della temp dir
-        shutil.copy2(SETUP_SH, tmp_path / 'setup.sh')
+        (tmp_path / 'scripts').mkdir(exist_ok=True)
+        shutil.copy2(SETUP_SH, tmp_path / 'scripts' / 'setup.sh')
 
         for fname in ('.env.example', 'docs/examples/candidate_profile.yml.example', 'requirements.txt'):
             src = os.path.join(REPO_ROOT, fname)
             if os.path.isfile(src):
+                (tmp_path / fname).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, tmp_path / fname)
 
         shutil.copytree(
@@ -794,7 +810,7 @@ class TestSetupScript:
         (tmp_path / 'shared' / 'data').mkdir(parents=True, exist_ok=True)
 
         subprocess.run(
-            ['bash', str(tmp_path / 'setup.sh')],
+            ['bash', str(tmp_path / 'scripts' / 'setup.sh')],
             cwd=str(tmp_path),
             capture_output=True,
             text=True,
