@@ -1,6 +1,5 @@
 // Overlay traduzioni Deutsch (de). Sovrascrive le chiavi presenti sopra la
 // base it/en/hu; le chiavi assenti ripiegano automaticamente su `en`.
-// Le chiavi array (ta()) non passano dall'overlay: vivono solo nella base.
 export const de: Record<string, string> = {
   // Chiavi aggiunte (allineamento i18n)
   home_intro:
@@ -17,8 +16,6 @@ export const de: Record<string, string> = {
   nav_github: "GitHub",
   nav_download: "Installieren",
   nav_project: "Projekt",
-  nav_demo: "Demo",
-  nav_guide: "Anleitung",
   nav_faq: "FAQ",
   nav_pricing: "Preise",
   nav_about: "Über uns",
@@ -76,45 +73,7 @@ export const de: Record<string, string> = {
     "Prüfe die fertigen Bewerbungen im Dashboard. Freigeben, bearbeiten oder verwerfen. Immer du in der Kontrolle.",
 
   // Get Started
-  gs_label: "jetzt loslegen",
-  gs_title: "Erste Schritte",
-  gs_0_title: "Herunterladen",
-  gs_0_desc:
-    "Lade das Paket für dein Betriebssystem herunter. Eine einzige Datei, keine komplizierte Installation.",
-  gs_1_title: "Profil einrichten",
-  gs_1_desc:
-    "Gib deine Rolle, deine Fähigkeiten und das Suchgebiet an. Das Team kalibriert sich in wenigen Sekunden auf dich.",
-  gs_2_title: "Lass das Team arbeiten",
-  gs_2_desc:
-    "Die Agenten suchen, analysieren und bereiten Bewerbungen vor, während du anderes erledigst. Prüfe und gib im Dashboard frei.",
 
-  // Demo page
-  demo_badge: "geführte Tour",
-  demo_title: "So funktioniert JHT",
-  demo_subtitle:
-    "Eine Schritt-für-Schritt-Tour durch das System: von der Installation bis zu den Ergebnissen.",
-  demo_s0_title: "Herunterladen und starten",
-  demo_s0_desc:
-    "Lade den Desktop-Installer für dein Betriebssystem herunter, schließe den ersten Start ab und lass den Launcher das lokale Dashboard im Browser öffnen.",
-  demo_s1_title: "Profil konfigurieren",
-  demo_s1_desc:
-    "Gib Name, Fähigkeiten, Suchgebiet und Jobtyp ein. Die Agenten kalibrieren sich auf dein Profil, um die richtigen Stellen zu finden.",
-  demo_s2_title: "Team starten",
-  demo_s2_desc:
-    'Klicke auf der Team-Seite auf „Alle starten". Jeder Agent aktiviert sich in seiner Session: Der Scout sucht, der Analyst bewertet, der Scorer rangiert.',
-  demo_s3_title: "Pipeline in Aktion",
-  demo_s3_desc:
-    "Die Pipeline arbeitet autonom. Der Scout findet Stellen, der Analyst prüft sie, der Scorer berechnet den Match, der Schreiber bereitet die Dokumente vor.",
-  demo_s4_title: "Ergebnis-Dashboard",
-  demo_s4_desc:
-    "Im Dashboard siehst du die fertigen Bewerbungen, den Match-Score und den Status jeder Stelle. Freigeben, bearbeiten oder verwerfen mit einem Klick.",
-  demo_s5_title: "Finale Bewerbung",
-  demo_s5_desc:
-    "Der Kritiker prüft jedes Dokument. Wenn alles bereit ist, gibst du den Versand frei. Du behältst die Kontrolle, die Agenten führen aus.",
-  demo_cta: "Jetzt ausprobieren",
-  demo_prev: "Zurück",
-  demo_next: "Weiter",
-  demo_all_steps: "Alle Schritte",
 
   // CTA
   cta_title_1: "Bereit, deine",
@@ -133,7 +92,6 @@ export const de: Record<string, string> = {
   footer_stats: "Projekt",
   footer_report: "Berichte",
   footer_resources: "Ressourcen",
-  footer_guide: "Anleitung",
   footer_docs: "Dokumentation",
   footer_about: "Über uns",
   footer_contacts: "Kontakt",
@@ -149,16 +107,7 @@ export const de: Record<string, string> = {
   dl_back: "← Zurück",
   dl_title_1: "Richte dein Team ein",
   dl_title_2: "auf deinem PC",
-  dl_toggle_hide: "− Weitere Optionen ausblenden",
-  dl_toggle_show: "+ Weitere Optionen (andere OS / Architekturen)",
   dl_copy_cmd: "Befehl kopieren",
-  dl_norelease_title: "Derzeit kein Desktop-Release veröffentlicht",
-  dl_norelease_desc:
-    "Sobald das nächste Release veröffentlicht wird, bietet diese Seite den direkten Download an. In der Zwischenzeit kannst du die Terminal-Installation unten nutzen oder die Liste auf GitHub einsehen.",
-  dl_open_releases: "GitHub Releases öffnen",
-  dl_detected_label: "Erkannt",
-  dl_download_for: "Herunterladen für",
-  dl_detected: "erkannt",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
   dl_desktop_soon_desc:
@@ -166,59 +115,7 @@ export const de: Record<string, string> = {
   dl_desktop_soon_badge: "Demnächst",
   dl_help_text: "Du weißt nicht, wo du es installieren sollst?",
   dl_help_link: "Lies die Anleitung",
-  dl_instructions: "Anweisungen",
-  dl_close: "Schließen",
-  dl_download: "Herunterladen",
-  dl_view_release: "Release ansehen",
-  dl_asset_pending:
-    "Der Installer ist im neuesten Release noch nicht vorhanden: Es wird die Release-Seite statt eines direkten Downloads geöffnet.",
-  dl_how_title: "So funktioniert's",
-  dl_step1_title: "Herunterladen",
-  dl_step1_desc: "Wähle das Paket für dein Betriebssystem",
-  dl_step2_title: "Starten",
-  dl_step2_desc:
-    "Öffne den Desktop-Launcher und lass Bootstrap und Runtime-Start automatisch laufen",
-  dl_step3_title: "Nutzen",
-  dl_step3_desc:
-    "Der Browser öffnet sich auf localhost mit dem Web-Dashboard des Teams",
-  dl_setup_title: "Installationshinweis",
-  dl_setup_desc:
-    "Die Desktop-Pakete für macOS, Windows und Linux enthalten den Launcher und das bereits fertige Web-Payload. CLI und TUI bieten hingegen einen erweiterten Zugriff auf dieselbe lokale Runtime. Unter Linux können Standard-Systembibliotheken für AppImage erforderlich sein.",
-  dl_terminal_title: "Terminal",
-  dl_terminal_desc:
-    "Wenn du lieber über die Kommandozeile startest, kannst du das Repository klonen und das lokale Web-Dashboard starten oder CLI und TUI für eine erweiterte Kontrolle der Runtime nutzen.",
-  dl_terminal_source_tab: "Aus dem Quellcode",
-  dl_terminal_cli_tab: "One-liner",
-  dl_terminal_source_title: "Aus dem Quellcode bauen",
-  dl_terminal_source_desc:
-    "Klone das Repo, baue TUI und CLI. Empfohlen für alle, die beitragen möchten.",
-  dl_terminal_source_note:
-    "Nach dem Build kannst du den Assistenten mit node cli/bin/jht.js starten. Die Daten landen in ~/.jht und ~/Documents/Job Hunter Team.",
-  dl_terminal_cli_title: "One-liner-Installer",
-  dl_terminal_cli_desc:
-    "Installiere alles mit einem einzigen Befehl: Systemabhängigkeiten, Node, Claude CLI, Repo und Assistent.",
-  dl_terminal_cli_note:
-    "Unterstützt unter macOS, Linux (apt/dnf/pacman) und WSL. Erstellt ~/.jht (Konfig, DB, Agenten) und ~/Documents/Job Hunter Team (Lebenslauf, Output).",
-  dl_setup_link: "Node.js verfügbar unter",
-  dl_home: "Startseite",
-  dl_all_releases: "Alle Releases",
-  dl_demo_question: "Möchtest du vor dem Download sehen, wie es funktioniert?",
-  dl_demo_cta: "Sieh dir die interaktive Demo an",
-  dl_mac_guide_title: "macOS-Installationsanleitung",
-  dl_mac_prereq_title: "Voraussetzungen",
-  dl_mac_node_title: "Schritt 1 — Paket öffnen",
-  dl_mac_node_desc:
-    "Der Desktop-Launcher benötigt keine separate Node.js-Installation. Zum Starten:",
-  dl_mac_node_alt:
-    'Wenn Gatekeeper die App blockiert, gehe zu Systemeinstellungen > Datenschutz & Sicherheit und wähle „Trotzdem öffnen".',
-  dl_mac_install_title: "Schritt 2 — Herunterladen und starten",
-  dl_mac_expect_title: "Was passiert",
 
-  // Guide page
-  guide_title: "Benutzerhandbuch",
-  guide_subtitle:
-    "So installierst, konfigurierst und nutzt du Job Hunter Team mit dem Desktop-Launcher, dem lokalen Dashboard und erweiterten Tools.",
-  guide_docs_link: "Technische Dokumentation",
 
   // FAQ page
   faq_title: "Häufig gestellte Fragen",
@@ -226,7 +123,6 @@ export const de: Record<string, string> = {
   faq_no_answer: "Du findest die Antwort nicht?",
   faq_no_answer_desc:
     "Sieh dir die vollständige Anleitung oder die technische Dokumentation an.",
-  faq_guide_btn: "Benutzerhandbuch",
   faq_docs_btn: "Dokumentation",
 
   // About page
