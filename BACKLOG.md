@@ -26,7 +26,7 @@
 - ⬜ **[JHT-REALTIME-SCALE]** — event-driven sync is live and degrades gracefully; scale refinements for many users (reconnect-rate monitor, Realtime connection ceiling, thundering herd, unified auth, tunable parachute).
 - ⬜ **[JHT-CLOUDSYNC-01]** — remaining P0 flow-correctness items; living doc: `docs/internal/architecture/cloud-sync-architecture.md` § Pending.
 - ⬜ **[JHT-ONBOARDING-04]** — periodic agent-results push.
-- 🟠 **[JHT-CASE-STUDIES-WEB]** — publish run #4 (Kimi weekly-distributed, data collected, processing pending) and re-run #5 (Claude Max with proper instrumentation); optional charts (team efficiency, Kimi burn sparkline, per-day timeline).
+- 🟠 **[JHT-CASE-STUDIES-WEB]** — publish the Kimi weekly-distributed run (data collected, processing pending) and the Claude Max re-run (with proper instrumentation); optional charts (team efficiency, Kimi burn sparkline, per-day timeline).
 - ⬜ **[JHT-WEB-02-CHECKSUM]** — SHA256 checksums on the download page.
 - ⬜ **[JHT-SETUP-LOCAL-FIRST]** — re-elevate Local PC to a first-class path; align execution-mode copy.
 
