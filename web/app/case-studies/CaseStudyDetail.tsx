@@ -96,6 +96,20 @@ function dowLabels(locale: Locale): Record<string, string> {
   return out;
 }
 
+// Rende il grassetto **così** dentro un paragrafo (nota del manutentore): split
+// sul marcatore, i segmenti a indice dispari sono le parti da evidenziare.
+function renderBold(text: string) {
+  return text.split(/\*\*(.+?)\*\*/g).map((seg, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className="font-semibold text-[var(--color-white)]">
+        {seg}
+      </strong>
+    ) : (
+      <span key={i}>{seg}</span>
+    ),
+  );
+}
+
 const T: Record<
   Locale,
   {
@@ -170,7 +184,7 @@ const T: Record<
     conversionTitle: "Statistiche di conversione",
     breadcrumbAria: "Percorso di navigazione",
     maintainerNoteLabel: "Nota del manutentore",
-    maintainerNoteSign: "— Il manutentore del team",
+    maintainerNoteSign: "— Il manutentore",
   },
   en: {
     caseStudies: "Case studies",
@@ -209,7 +223,7 @@ const T: Record<
     conversionTitle: "Conversion statistics",
     breadcrumbAria: "Breadcrumb",
     maintainerNoteLabel: "Maintainer's note",
-    maintainerNoteSign: "— The team maintainer",
+    maintainerNoteSign: "— The maintainer",
   },
   es: {
     caseStudies: "Casos de estudio",
@@ -249,7 +263,7 @@ const T: Record<
     conversionTitle: "Estadísticas de conversión",
     breadcrumbAria: "Ruta de navegación",
     maintainerNoteLabel: "Nota del mantenedor",
-    maintainerNoteSign: "— El mantenedor del equipo",
+    maintainerNoteSign: "— El mantenedor",
   },
   fr: {
     caseStudies: "Études de cas",
@@ -289,7 +303,7 @@ const T: Record<
     conversionTitle: "Statistiques de conversion",
     breadcrumbAria: "Fil d'Ariane",
     maintainerNoteLabel: "Note du mainteneur",
-    maintainerNoteSign: "— Le mainteneur de l'équipe",
+    maintainerNoteSign: "— Le mainteneur",
   },
   de: {
     caseStudies: "Fallstudien",
@@ -329,7 +343,7 @@ const T: Record<
     conversionTitle: "Conversion-Statistik",
     breadcrumbAria: "Brotkrümelnavigation",
     maintainerNoteLabel: "Notiz des Betreuers",
-    maintainerNoteSign: "— Der Team-Betreuer",
+    maintainerNoteSign: "— Der Betreuer",
   },
   hu: {
     caseStudies: "Esettanulmányok",
@@ -369,7 +383,7 @@ const T: Record<
     conversionTitle: "Konverziós statisztika",
     breadcrumbAria: "Morzsamenü",
     maintainerNoteLabel: "A karbantartó megjegyzése",
-    maintainerNoteSign: "— A csapat karbantartója",
+    maintainerNoteSign: "— A karbantartó",
   },
   pt: {
     caseStudies: "Estudos de caso",
@@ -409,7 +423,7 @@ const T: Record<
     conversionTitle: "Estatísticas de conversão",
     breadcrumbAria: "Trilho de navegação",
     maintainerNoteLabel: "Nota do mantenedor",
-    maintainerNoteSign: "— O mantenedor da equipa",
+    maintainerNoteSign: "— O mantenedor",
   },
 };
 
@@ -890,7 +904,7 @@ export default function CaseStudyDetail({
                   key={i}
                   className="text-[13px] leading-relaxed text-[var(--color-muted)]"
                 >
-                  {para}
+                  {renderBold(para)}
                 </p>
               ))}
             </div>
