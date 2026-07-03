@@ -1,6 +1,6 @@
 # 🎯 Milestone — betaA (Codex): cap settimanale al 100% a 10 minuti dalla chiusura
 
-**Data:** 2026-06-24 · **VPS:** betaA / `203.0.113.10` (Codex) · **user_id:** `9996e20c` (finance)
+**Data:** 2026-06-24 · **VPS:** betaA / `203.0.113.10` (Codex) · **user_id:** `<redacted>` (finance)
 **Modalità:** sola osservazione read-only (nessun intervento — regola ferrea).
 **Segue / supera:** [`2026-06-18-betaA-weekly-99pct-milestone.md`](2026-06-18-betaA-weekly-99pct-milestone.md)
 

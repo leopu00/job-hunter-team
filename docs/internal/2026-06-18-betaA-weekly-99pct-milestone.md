@@ -1,6 +1,6 @@
 # 🏆 Milestone — betaA (Codex): cap settimanale chiuso al 99% (auto-adattamento al budget)
 
-**Data:** 2026-06-18 · **VPS:** betaA / `203.0.113.10` (Codex) · **user_id:** `9996e20c` (finance)
+**Data:** 2026-06-18 · **VPS:** betaA / `203.0.113.10` (Codex) · **user_id:** `<redacted>` (finance)
 **Modalità:** sola osservazione read-only (nessun intervento — regola ferrea).
 
 ## 🎯 Il risultato
