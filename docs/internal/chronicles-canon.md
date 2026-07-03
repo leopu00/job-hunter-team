@@ -172,6 +172,31 @@ Stato pubblicate: `zombie-night`, `bipolar-sentinel`, `scout-and-london`,
 - **`zombie-night`** — da ripassare nello stesso registro narrativo (mostrare,
   non spiegare; dialoghi) una volta allineato il tono con le storie nuove.
 
+### Episodi candidati (fatti reali documentati, da romanzare)
+
+Dal riordino di `docs/internal` 2026-07-03. La fonte tecnica è indicata; qui solo il gancio.
+
+- **I 30 curriculum che nessuno ha chiesto** — il Capitano, a cervello spento, si convince da
+  solo che l'utente li abbia ordinati (`postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md`).
+- **Il team che chiacchiera nel sonno** — a riposo forzato, gli impiegati si svegliano da soli,
+  si salutano, e il Capitano risponde educatamente: il silenzio che costa
+  (`postmortems/2026-07-02-daily-halt-standby-leak.md`).
+- **Lo Scout che parte per la tangente** — invece di cercare offerte si mette a costruirsi gli
+  attrezzi, si perde nei propri errori, e il Capitano deve congedarlo
+  (`postmortems/2026-06-24-betaB-kimi-fresh-weekly-monitor.md`).
+- **Il pannello spento che nessuno guarda** — il battito del team sparisce dal monitor per ore e
+  perfino il medico dell'infrastruttura legge dati fermi senza accorgersene
+  (`postmortems/2026-06-27-betaC-sentinel-bridge-crash.md`).
+- **L'atterraggio sul filo** — il team dosa il lavoro per tutta la settimana e chiude il budget
+  al 100% esatto, dieci minuti prima della campanella
+  (`postmortems/2026-06-24-betaA-weekly-milestones.md`).
+- **Tutti nello stesso cassetto** — l'archivista, costretto a scegliere da un menù con una voce
+  sola, si arrende e infila ogni mestiere nello stesso faldone
+  (`postmortems/2026-06-16-betaA-taxonomy-collapse-finding.md`).
+- **Il Capitano che aspetta un messaggero che non arriverà** — privato del suo ping periodico,
+  rimanda ogni decisione al prossimo giro e disobbedisce alla Sentinella
+  (`postmortems/2026-06-25-rollout-observation-betaB.md`).
+
 ---
 
 ## ✍️ Regole di stile
