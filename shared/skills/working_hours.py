@@ -2,7 +2,7 @@
 """
 working_hours.py — helper "siamo dentro o fuori la finestra di lavoro?".
 
-Decisione 2026-05-13 (docs/internal/bot-telegram.md § 9): l'utente puo'
+Decisione 2026-05-13 (docs/internal/architecture/bot-telegram.md § 9): l'utente puo'
 configurare working hours del team. Fuori finestra il pacing-bridge non
 emette tick al Capitano e jht-notify-user non fa push Telegram (la riga
 resta in pending_user_messages e l'utente la trova in dashboard al

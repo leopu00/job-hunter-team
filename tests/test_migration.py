@@ -102,7 +102,7 @@ class TestSchemaV2:
         """Fresh DB deve rifiutare INSERT con title/company/location over-length.
 
         Mirror del CHECK constraint Postgres (mig 015) — origin: incident
-        RobertHalf 2026-05-19 (vedi docs/internal/cloud-sync-architecture.md).
+        RobertHalf 2026-05-19 (vedi docs/internal/architecture/cloud-sync-architecture.md).
         """
         result = run_cli(DB_INIT, [], tmp_db, tmp_path)
         assert result.returncode == 0, f"db_init fallito:\n{result.stderr}"

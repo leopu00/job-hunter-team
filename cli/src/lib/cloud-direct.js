@@ -10,7 +10,7 @@
 // finché non si abilita su una VPS). Credenziali da cloud.json (supabase_url +
 // supabase_refresh_token, dal pairing/login Google) + anon key pubblica da env
 // JHT_SUPABASE_ANON_KEY o cloud.json.supabase_anon_key. La RLS limita ai dati
-// dell'utente. Vedi docs/internal/2026-06-24-vps-daemon-supabase-direct-design.md.
+// dell'utente. Vedi docs/internal/architecture/daemon-sync-redesign.md.
 
 import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
 import { join } from 'node:path';

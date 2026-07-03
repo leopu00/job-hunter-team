@@ -3,7 +3,7 @@
 -- ╠══════════════════════════════════════════════════════════════════════════╣
 -- ║                                                                          ║
 -- ║ Tappa 3 del piano event-driven sync                                      ║
--- ║ (docs/internal/2026-06-25-daemon-event-driven-realtime-design.md):       ║
+-- ║ (docs/internal/architecture/daemon-sync-redesign.md):       ║
 -- ║ sposta position_tickets da poll 60s a Supabase Realtime.                 ║
 -- ║                                                                          ║
 -- ║ (a) aggiunge position_tickets alla publication supabase_realtime, così   ║

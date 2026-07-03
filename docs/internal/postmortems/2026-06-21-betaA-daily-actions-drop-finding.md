@@ -20,7 +20,7 @@ Sono cambiate due cose:
    questo profilo si sta saturando → meno lavoro nuovo + costo/azione più alto.
 
 Non è un calo di budget e non è un team rotto: il pacing fa esattamente quello
-per cui è progettato (vedi [milestone weekly 99%](2026-06-18-betaA-weekly-99pct-milestone.md)).
+per cui è progettato (vedi [milestone weekly 99%](2026-06-24-betaA-weekly-milestones.md)).
 
 ---
 
@@ -136,7 +136,7 @@ day        usg_5h_av  weekly_av  weekly_mx  status prevalente
    vince. Per lo più corretto (preserva il weekly), ma a inizio settimana — quando
    il mercato è più fresco — un **front-load leggermente maggiore** catturerebbe
    più posizioni nuove prima della saturazione. Tuning, non bug. Collegato a
-   [proj volatile nel pacing](2026-06-20-proj-volatile-pacing-todo.md).
+   [proj volatile nel pacing](../roadmap/2026-06-20-proj-volatile-pacing-todo.md).
 2. **Saturazione scout come segnale di prima classe.** Quando
    `duplicati+skip » nuove`, ha senso che il team **riallochi il budget**
    (recheck/approfondimento, o allargare lingua/geo del profilo) invece di

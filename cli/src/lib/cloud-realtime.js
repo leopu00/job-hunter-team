@@ -1,8 +1,8 @@
 // cloud-realtime.js
 //
 // Client Supabase Realtime per il daemon VPS — [JHT-REALTIME-SYNC] tappa 1 del piano
-// event-driven (vedi docs/internal/2026-06-25-daemon-event-driven-realtime-design.md
-// e docs/internal/2026-06-26-sync-status-report.md).
+// event-driven (vedi docs/internal/architecture/daemon-sync-redesign.md
+// e docs/internal/architecture/daemon-sync-redesign.md).
 //
 // PERCHÉ: oggi il daemon polla `team_state` ogni ~5s (sync-check) + corsie 60s → ~900
 // query/h/utente. Con Realtime il daemon si ISCRIVE alle tabelle che cambiano di rado

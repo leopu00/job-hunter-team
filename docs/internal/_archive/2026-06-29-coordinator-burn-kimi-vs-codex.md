@@ -5,8 +5,8 @@
 > **quantitative** sono state **superate** dalla misura pulita del 02/07: i coordinatori pesano
 > ~20% **uguale** su Kimi e Codex, il budget di Kimi è ~2× (non 17×) più piccolo, il €/token è
 > ≈ pari. **La verità corrente e consolidata è nel living doc**
-> [`architecture/kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md); la
-> misura che l'ha prodotta è in [`2026-07-02-kimi-clean-measurement.md`](./2026-07-02-kimi-clean-measurement.md).
+> [`architecture/kimi-vs-codex-economics.md`](../architecture/kimi-vs-codex-economics.md); la
+> misura che l'ha prodotta è in [`2026-07-02-kimi-clean-measurement.md`](../postmortems/2026-07-02-kimi-codex-token-forensics.md).
 > Resta qui, congelato, ciò che è genuinamente d'epoca: l'ipotesi iniziale e le prove sui
 > flag thinking.
 
@@ -38,7 +38,7 @@ stesso gate regge (betaC/Codex rifiuta correttamente). ➡️ **Su Kimi il Capit
 girare a thinking-OFF.** Dettaglio (timeline, DB, regole violate) nell'annex forense.
 
 *(Nota: quei ~30 CV non richiesti sono lo stesso over-burn che ha fatto scattare il daily
-hard-stop su beta-3 — vedi [`2026-07-01-betaD-daily-hardstop-validated.md`](./2026-07-01-betaD-daily-hardstop-validated.md).)*
+hard-stop su beta-3 — vedi [`2026-07-01-betaD-daily-hardstop-validated.md`](../postmortems/2026-07-01-betaD-daily-hardstop-validated.md).)*
 NB: questa scelta è di **correttezza**, non di burn.
 
 ## La Sentinella resta no-thinking
@@ -51,14 +51,14 @@ visibile nella risposta (Instant mode) → auditabile. Da confermare sul lungo.
 
 Le sezioni quantitative — quota coordinatori (~20% uguale), dimensione del budget (~2×),
 prezzo per token (≈ pari), le manopole nel codice e il metodo riproducibile — sono state
-**consolidate nel living doc** [`architecture/kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md).
+**consolidate nel living doc** [`architecture/kimi-vs-codex-economics.md`](../architecture/kimi-vs-codex-economics.md).
 Erano state scritte in questo file il 02/07 e sono state spostate lì per non far accumulare
 a uno snapshot datato una settimana di correzioni successive.
 
 ## Correlati
 
-- Living doc corrente: [`architecture/kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md).
-- Snapshot misura pulita: [`2026-07-02-kimi-clean-measurement.md`](./2026-07-02-kimi-clean-measurement.md).
-- Annex writer-gate: [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](./2026-07-01-capitano-kimi-thinking-off-writer-gate.md).
+- Living doc corrente: [`architecture/kimi-vs-codex-economics.md`](../architecture/kimi-vs-codex-economics.md).
+- Snapshot misura pulita: [`2026-07-02-kimi-clean-measurement.md`](../postmortems/2026-07-02-kimi-codex-token-forensics.md).
+- Annex writer-gate: [`2026-07-01-capitano-kimi-thinking-off-writer-gate.md`](../postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md).
 - Famiglia: `2026-06-15-coordinator-burn-consumo-finding.md`, `2026-06-17-betaB-kimi-weekly-burn-finding.md`,
   `2026-07-01-cv-quality-findings-beta3.md`, `2026-07-01-betaD-daily-hardstop-validated.md`.

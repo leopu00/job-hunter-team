@@ -17,7 +17,7 @@ export const maxDuration = 300;
 
 /**
  * Bottone "📸 Snapshot + Elimina VPS" del lifecycle dashboard
- * (docs/internal/vps.md § "Lifecycle e shutdown UX").
+ * (docs/internal/ops/vps.md § "Lifecycle e shutdown UX").
  *
  * Flow:
  *  1. Crea snapshot del server via Hetzner API.
