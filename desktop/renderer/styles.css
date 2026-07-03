@@ -2755,6 +2755,16 @@ a.dash-detail__value { color: var(--color-green, #00e87a); cursor: pointer; }
 }
 .intro-signin-link:hover { color: var(--text); }
 
+/* Language picker pinned to the top-right of the first screen. Switching
+   it re-renders the welcome copy live via applyTranslations(). */
+.intro-lang {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 5;
+}
+.intro-lang .lang-select__toggle { min-width: 150px; }
+
 .btn--large {
   padding: 13px 40px;
   font-size: 16px;
