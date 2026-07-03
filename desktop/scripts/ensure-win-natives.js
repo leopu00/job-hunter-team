@@ -60,9 +60,13 @@ function vendor(target) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'jht-native-'))
   try {
     // npm pack prints the tarball filename on stdout (last non-empty line).
-    const out = execFileSync('npm', ['pack', target.spec, '--silent'], {
+    // On Windows npm is npm.cmd and recent Node refuses to spawn .cmd files
+    // without a shell — hence the shell flag (args are simple, no quoting risk).
+    const isWin = process.platform === 'win32'
+    const out = execFileSync(isWin ? 'npm.cmd' : 'npm', ['pack', target.spec, '--silent'], {
       cwd: tmp,
       encoding: 'utf8',
+      shell: isWin,
     })
     const tarball = out.trim().split('\n').filter(Boolean).pop()
     fs.rmSync(dest, { recursive: true, force: true })
