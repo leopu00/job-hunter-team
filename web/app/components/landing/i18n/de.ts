@@ -161,12 +161,9 @@ export const de: Record<string, string> = {
   dl_detected: "erkannt",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
-  dl_mode_prompt_title: "Prompt",
-  dl_prompt_intro:
-    "Kopiere diesen Prompt und gib ihn deinem KI-Assistenten: Er installiert und startet das Team für dich.",
-  dl_copy_prompt: "Prompt kopieren",
-  dl_prompt_note:
-    "Der KI-Assistent braucht Zugriff auf deinen Computer — Terminal und Dateien (z. B. Claude Code, Cursor, Codex CLI).",
+  dl_desktop_soon_desc:
+    "Die Desktop-App kommt für alle drei Betriebssysteme: Wir feilen noch daran, sie ist noch nicht herunterladbar. In der Zwischenzeit installiert die CLI alles.",
+  dl_desktop_soon_badge: "Demnächst",
   dl_help_text: "Du weißt nicht, wo du es installieren sollst?",
   dl_help_link: "Lies die Anleitung",
   dl_instructions: "Anweisungen",

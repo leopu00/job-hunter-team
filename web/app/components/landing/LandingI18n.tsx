@@ -465,21 +465,15 @@ const translations = {
   dl_detected: { it: "rilevato", en: "detected", hu: "észlelt" },
   dl_mode_desktop_title: { it: "Desktop", en: "Desktop", hu: "Asztali" },
   dl_mode_terminal_title: { it: "CLI", en: "CLI", hu: "CLI" },
-  dl_mode_prompt_title: { it: "Prompt", en: "Prompt", hu: "Prompt" },
-  dl_prompt_intro: {
-    it: "Copia questo prompt e dallo al tuo assistente AI: penserà lui a installare e avviare il team.",
-    en: "Copy this prompt and hand it to your AI assistant: it will install and start the team for you.",
-    hu: "Másold ki ezt a promptot és add át az AI asszisztensednek: ő telepíti és elindítja helyetted a csapatot.",
+  dl_desktop_soon_desc: {
+    it: "L'app desktop è in arrivo per tutti e tre i sistemi operativi: la stiamo rifinendo e non è ancora scaricabile. Nel frattempo installi tutto dalla CLI.",
+    en: "The desktop app is coming to all three operating systems: we're polishing it and it's not downloadable yet. In the meantime, the CLI installs everything.",
+    hu: "Az asztali app hamarosan érkezik mindhárom operációs rendszerre: még csiszoljuk, ezért egyelőre nem tölthető le. Addig a CLI-vel mindent telepíthetsz.",
   },
-  dl_copy_prompt: {
-    it: "Copia prompt",
-    en: "Copy prompt",
-    hu: "Prompt másolása",
-  },
-  dl_prompt_note: {
-    it: "L'assistente AI deve avere accesso al tuo computer — terminale e file (es. Claude Code, Cursor, Codex CLI).",
-    en: "The AI assistant needs access to your computer — terminal and files (e.g. Claude Code, Cursor, Codex CLI).",
-    hu: "Az AI asszisztensnek hozzá kell férnie a számítógépedhez — terminál és fájlok (pl. Claude Code, Cursor, Codex CLI).",
+  dl_desktop_soon_badge: {
+    it: "In arrivo",
+    en: "Coming soon",
+    hu: "Hamarosan",
   },
   dl_help_text: {
     it: "Non sai dove installarlo?",

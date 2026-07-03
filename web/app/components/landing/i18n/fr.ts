@@ -162,12 +162,9 @@ export const fr: Record<string, string> = {
   dl_detected: "détecté",
   dl_mode_desktop_title: "Bureau",
   dl_mode_terminal_title: "CLI",
-  dl_mode_prompt_title: "Prompt",
-  dl_prompt_intro:
-    "Copiez ce prompt et confiez-le à votre assistant IA : il installera et démarrera l'équipe pour vous.",
-  dl_copy_prompt: "Copier le prompt",
-  dl_prompt_note:
-    "L'assistant IA doit avoir accès à votre ordinateur — terminal et fichiers (p. ex. Claude Code, Cursor, Codex CLI).",
+  dl_desktop_soon_desc:
+    "L'app de bureau arrive sur les trois systèmes d'exploitation : nous la peaufinons et elle n'est pas encore téléchargeable. En attendant, la CLI installe tout.",
+  dl_desktop_soon_badge: "Bientôt disponible",
   dl_help_text: "Vous ne savez pas où l'installer ?",
   dl_help_link: "Lire le guide",
   dl_instructions: "Instructions",

@@ -162,12 +162,9 @@ export const pt: Record<string, string> = {
   dl_detected: "detetado",
   dl_mode_desktop_title: "Desktop",
   dl_mode_terminal_title: "CLI",
-  dl_mode_prompt_title: "Prompt",
-  dl_prompt_intro:
-    "Copia este prompt e entrega-o ao teu assistente de IA: ele instala e inicia a equipa por ti.",
-  dl_copy_prompt: "Copiar prompt",
-  dl_prompt_note:
-    "O assistente de IA precisa de acesso ao teu computador — terminal e ficheiros (p. ex. Claude Code, Cursor, Codex CLI).",
+  dl_desktop_soon_desc:
+    "A app de ambiente de trabalho está a chegar aos três sistemas operativos: estamos a aperfeiçoá-la e ainda não pode ser descarregada. Entretanto, a CLI instala tudo.",
+  dl_desktop_soon_badge: "Em breve",
   dl_help_text: "Não sabes onde instalá-lo?",
   dl_help_link: "Lê o guia",
   dl_instructions: "Instruções",
