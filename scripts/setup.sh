@@ -19,7 +19,7 @@ if [ -t 1 ]; then
   printf "   \033[1mcurl -fsSL https://jobhunterteam.ai/install.sh | bash\033[0m\n\n"
 fi
 
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 STEPS=10
 
 # ── Colori ────────────────────────────────────────────────────────────────────
