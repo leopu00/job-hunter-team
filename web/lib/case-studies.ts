@@ -81,6 +81,10 @@ export interface CaseStudyMeta {
    *  bruciato una settimana di budget): esclusa dalle statistiche di tasso
    *  giornaliero, dove pochi giorni non sono rappresentativi. */
   freeRun?: boolean;
+  /** nota editoriale in prima persona di chi opera e affina il team su questo
+   *  profilo (voce del manutentore): contesto, sfide e criterio di successo.
+   *  Un paragrafo per elemento. Opzionale: la card in fondo appare solo se c'è. */
+  maintainerNote?: string[];
   run: CaseStudyRun;
 }
 
@@ -93,11 +97,26 @@ const TW_PROFILE: CaseStudyProfile = {
   summary:
     "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
   facts: [
-    { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
+    {
+      label: "Ruoli target",
+      value: "Technical writer · traduttore tecnico · localizzazione/LQA",
+    },
     { label: "Esperienza", value: "Cross-domain · industria + lingue" },
-    { label: "Background", value: "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato" },
-    { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
-    { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
+    {
+      label: "Background",
+      value:
+        "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato",
+    },
+    {
+      label: "Lingue",
+      value:
+        "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)",
+    },
+    {
+      label: "Mobilità",
+      value:
+        "Cittadino UE · full remote preferito · Ungheria → Italia → Europa",
+    },
   ],
   locationNote:
     "Priorità al full remote; geograficamente prima l'Ungheria, poi l'Italia, poi il resto d'Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
@@ -165,6 +184,12 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       ],
       why: "Ecco perché i numeri vengono così: cercando ruoli finance e investment in grandi città europee, il team ha concentrato la ricerca negli hub finanziari (Londra, Zurigo, Ginevra, Lussemburgo, Dublino) e quasi tutte le posizioni ricadono in categorie business & finance — esattamente il profilo del candidato.",
     },
+    maintainerNote: [
+      "Se il technical writing è stata la sfida, questo profilo è **il caso che più si avvicina a ciò che considero un successo**. Il candidato punta a ruoli finance e investment nelle grandi città europee: un mercato ampio, ben definito e concentrato negli hub finanziari — Londra, Zurigo, Ginevra, Lussemburgo, Dublino — dove le posizioni pertinenti non scarseggiano.",
+      "È il profilo affidato a **Codex**, il modello che ho trovato più stabile nell'esecuzione autonoma prolungata. Un mercato favorevole unito a un modello solido ha permesso al team di lavorare **giorno dopo giorno per circa un mese** — esattamente il traguardo che uso come metro di successo.",
+      "I risultati sono i migliori della serie: **la quota più alta di match forti ed eccellenti**. E c'è un dato che merita attenzione: pur essendo l'abbonamento più costoso (~€100 al mese contro i ~€40 di Kimi), **il costo per singolo match eccellente è il più basso** — perché un mercato ricco di posizioni adatte rende molto di più per ogni euro speso.",
+      "Per questo lo considero il caso di riferimento: quando il mercato è favorevole e il modello è stabile, il team consegna un mese intero di lavoro autonomo con il miglior rapporto qualità/costo dell'intera serie.",
+    ],
     run: betaCRun as unknown as CaseStudyRun,
   },
   // ── Beta tester 1 · technical writer (Kimi, run monitorato) ─────────────
@@ -183,6 +208,11 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       monthlyEur: 40,
     },
     profile: TW_PROFILE,
+    maintainerNote: [
+      "Questo profilo è stato **la sfida più impegnativa della serie**. Le competenze sono molto eterogenee — technical writing, traduzione tecnica e localizzazione, innestate su un solido background industriale — e il target geografico è volutamente ampio: ne deriva **un mercato frammentato**, con annunci difficili da ricondurre a categorie stabili e da valutare con un metro uniforme. È inoltre il profilo su cui ho messo alla prova **Kimi K2**, il modello più difficile da mantenere in esecuzione autonoma per periodi prolungati.",
+      "Nelle prime settimane Kimi **esauriva l'intero budget settimanale in un paio di giorni**. Per evitare che il team restasse fermo in attesa del reset ho distribuito il carico su più abbonamenti e, soprattutto, ho affinato progressivamente il pacing e il monitoraggio della spesa. Oggi **il budget viene dosato con rigore** e il tetto giornaliero non viene più superato; nel frattempo, però, il bacino di annunci realmente pertinenti per questo profilo ha iniziato a ridursi.",
+      "Per considerarlo un successo pieno manca un ultimo traguardo: che, **con un solo abbonamento, il team lavori in autonomia giorno dopo giorno per almeno un mese consecutivo**, senza interruzioni. Raggiunto quel punto, diventerà il caso di riferimento della serie.",
+    ],
     // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
     phases: [
       {
@@ -219,18 +249,24 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       facts: [
         {
           label: "Ruoli target",
-          value: "Luxury hospitality · guest experience · VIP relations · cabin crew",
+          value:
+            "Luxury hospitality · guest experience · VIP relations · cabin crew",
         },
         { label: "Esperienza", value: "Inizio-media carriera" },
-        { label: "Settore", value: "Hôtellerie 5★ · ristorazione di lusso · eventi" },
+        {
+          label: "Settore",
+          value: "Hôtellerie 5★ · ristorazione di lusso · eventi",
+        },
         { label: "Formazione", value: "Ambito turistico-alberghiero" },
         {
           label: "Lingue",
-          value: "Profilo multilingue (quattro lingue, incl. italiano e inglese)",
+          value:
+            "Profilo multilingue (quattro lingue, incl. italiano e inglese)",
         },
         {
           label: "Mobilità",
-          value: "Lavora in Italia · per alcune mete estere serve verifica di visto/sponsorship",
+          value:
+            "Lavora in Italia · per alcune mete estere serve verifica di visto/sponsorship",
         },
       ],
       locationNote:
@@ -247,7 +283,13 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       ],
       why: "Ecco perché i numeri vengono così: il profilo punta a luxury hospitality e guest experience, con interesse per il cabin crew premium — perciò il team ha cercato soprattutto hôtellerie 5★, guest relations VIP ed eventi, con un ramo dedicato al cabin crew dei vettori del Golfo (Emirates, Wizz Air). Le famiglie di ruolo dominanti sono Luxury Hospitality Operations, hostess/eventi e cabin crew. Quasi tutto arriva da LinkedIn e da job board specializzate dell'hospitality (hosco, resortwork) e delle compagnie aeree; il mercato del lusso italiano fa da baricentro, mentre il requisito di lavorabilità spiega perché diverse posizioni fuori dall'Italia richiedono la verifica di visto/sponsorship.",
     },
-    // Run mono-fase: solo Kimi (budget settimanale monitorato), ~3 giorni.
+    maintainerNote: [
+      "È il caso più recente della serie: il team ha iniziato a lavorarci da poco più di una settimana. Il profilo si muove in **un mercato di nicchia** — hôtellerie di lusso, guest experience e cabin crew per i vettori premium del Golfo — concentrato in poche piazze: le grandi mete del turismo italiano e gli hub internazionali dell'accoglienza di fascia alta.",
+      "Anche qui il team gira su **Kimi**, con l'abbonamento più economico. **È ancora presto per trarre conclusioni**: una settimana racconta l'avvio, non l'andamento di un mese. I primi segnali, però, sono incoraggianti — in pochi giorni il team ha già prodotto un nucleo di match forti ed eccellenti su un profilo tutt'altro che generalista.",
+      "La domanda aperta è la stessa del technical writing: se un mercato così specifico avrà **profondità sufficiente** per alimentare il team a lungo, e se Kimi reggerà l'esecuzione autonoma **per un mese intero** senza sforare il budget. Su questo profilo abbiamo ancora poche settimane di osservazione.",
+      "Per ora lo considero un caso da seguire: promettente nell'avvio, ma tutto da confermare sul lungo periodo. È il banco di prova più fresco della serie.",
+    ],
+    // Run mono-fase: solo Kimi (budget settimanale monitorato), ~1 settimana.
     run: betaDRun as unknown as CaseStudyRun,
   },
 ];
@@ -275,6 +317,8 @@ interface CaseI18nContent {
   locationNote: string;
   why: string;
   phaseNotes?: { price: string; note: string }[];
+  /** nota del manutentore tradotta (opzionale finché non localizzata: fallback IT) */
+  maintainerNote?: string[];
 }
 
 const CASE_I18N = PROFILES_I18N as Partial<
@@ -295,6 +339,8 @@ export function localizeCaseStudy(
     category: tr.category,
     seniority: tr.seniority,
     geos: tr.geos,
+    // finché la nota non è tradotta nella lingua scelta, resta l'italiano (sorgente)
+    maintainerNote: tr.maintainerNote ?? meta.maintainerNote,
     subscription: { ...meta.subscription, price: tr.subscriptionPrice },
     phases: meta.phases?.map((p, i) => ({
       ...p,

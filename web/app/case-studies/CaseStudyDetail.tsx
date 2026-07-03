@@ -40,6 +40,7 @@ export interface PreparedCase {
   };
   profile: CaseStudyProfile;
   phases?: CaseStudyPhase[];
+  maintainerNote?: string[];
   run: CaseStudyRun; // events alleggeriti
   activity: TeamActivity;
 }
@@ -95,6 +96,20 @@ function dowLabels(locale: Locale): Record<string, string> {
   return out;
 }
 
+// Rende il grassetto **così** dentro un paragrafo (nota del manutentore): split
+// sul marcatore, i segmenti a indice dispari sono le parti da evidenziare.
+function renderBold(text: string) {
+  return text.split(/\*\*(.+?)\*\*/g).map((seg, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className="font-semibold text-[var(--color-white)]">
+        {seg}
+      </strong>
+    ) : (
+      <span key={i}>{seg}</span>
+    ),
+  );
+}
+
 const T: Record<
   Locale,
   {
@@ -128,6 +143,8 @@ const T: Record<
     funnelDonutTitle: string; // titolo donut tenute vs escluse
     conversionTitle: string; // titolo card statistiche di conversione
     breadcrumbAria: string; // aria-label della navigazione breadcrumb
+    maintainerNoteLabel: string; // kicker della card "Nota del manutentore"
+    maintainerNoteSign: string; // firma in coda alla nota
   }
 > = {
   it: {
@@ -166,6 +183,8 @@ const T: Record<
     funnelDonutTitle: "Tenute vs escluse · totale",
     conversionTitle: "Statistiche di conversione",
     breadcrumbAria: "Percorso di navigazione",
+    maintainerNoteLabel: "Nota del manutentore",
+    maintainerNoteSign: "— Il manutentore",
   },
   en: {
     caseStudies: "Case studies",
@@ -203,6 +222,8 @@ const T: Record<
     funnelDonutTitle: "Kept vs excluded · total",
     conversionTitle: "Conversion statistics",
     breadcrumbAria: "Breadcrumb",
+    maintainerNoteLabel: "Maintainer's note",
+    maintainerNoteSign: "— The maintainer",
   },
   es: {
     caseStudies: "Casos de estudio",
@@ -241,6 +262,8 @@ const T: Record<
     funnelDonutTitle: "Conservadas vs excluidas · total",
     conversionTitle: "Estadísticas de conversión",
     breadcrumbAria: "Ruta de navegación",
+    maintainerNoteLabel: "Nota del mantenedor",
+    maintainerNoteSign: "— El mantenedor",
   },
   fr: {
     caseStudies: "Études de cas",
@@ -279,6 +302,8 @@ const T: Record<
     funnelDonutTitle: "Conservés vs exclus · total",
     conversionTitle: "Statistiques de conversion",
     breadcrumbAria: "Fil d'Ariane",
+    maintainerNoteLabel: "Note du mainteneur",
+    maintainerNoteSign: "— Le mainteneur",
   },
   de: {
     caseStudies: "Fallstudien",
@@ -317,6 +342,8 @@ const T: Record<
     funnelDonutTitle: "Behalten vs. ausgeschlossen · gesamt",
     conversionTitle: "Conversion-Statistik",
     breadcrumbAria: "Brotkrümelnavigation",
+    maintainerNoteLabel: "Notiz des Betreuers",
+    maintainerNoteSign: "— Der Betreuer",
   },
   hu: {
     caseStudies: "Esettanulmányok",
@@ -355,6 +382,8 @@ const T: Record<
     funnelDonutTitle: "Megtartott vs. kizárt · összesen",
     conversionTitle: "Konverziós statisztika",
     breadcrumbAria: "Morzsamenü",
+    maintainerNoteLabel: "A karbantartó megjegyzése",
+    maintainerNoteSign: "— A karbantartó",
   },
   pt: {
     caseStudies: "Estudos de caso",
@@ -393,6 +422,8 @@ const T: Record<
     funnelDonutTitle: "Mantidas vs excluídas · total",
     conversionTitle: "Estatísticas de conversão",
     breadcrumbAria: "Trilho de navegação",
+    maintainerNoteLabel: "Nota do mantenedor",
+    maintainerNoteSign: "— O mantenedor",
   },
 };
 
@@ -853,6 +884,37 @@ export default function CaseStudyDetail({
             multiplier={costMultiplier}
             estimated={costEstimated}
           />
+        </section>
+      )}
+
+      {/* ── Nota del manutentore (voce umana in prima persona, per-tester) ── */}
+      {current.maintainerNote && current.maintainerNote.length > 0 && (
+        <section className="pt-10 border-t border-[var(--color-border)]">
+          <div className="section-label mb-4">✍️ {t.maintainerNoteLabel}</div>
+          <div
+            className="rounded-2xl border border-[var(--color-border)] p-6 sm:p-7"
+            style={{
+              borderLeft: "3px solid #00e676",
+              background: "color-mix(in srgb, #00e676 5%, var(--color-card))",
+            }}
+          >
+            <div className="flex flex-col gap-3">
+              {current.maintainerNote.map((para, i) => (
+                <p
+                  key={i}
+                  className="text-[13px] leading-relaxed text-[var(--color-muted)]"
+                >
+                  {renderBold(para)}
+                </p>
+              ))}
+            </div>
+            <div
+              className="mt-5 text-[12px] font-semibold"
+              style={{ color: "#00e676" }}
+            >
+              {t.maintainerNoteSign}
+            </div>
+          </div>
         </section>
       )}
     </div>
