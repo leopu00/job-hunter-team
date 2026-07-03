@@ -1,6 +1,6 @@
 # 💬 Feedback Ticketing
 
-Operational runbook for the [`/feedback`](/feedback) page and the [`/api/feedback`](/api/feedback) API.
+Operational runbook for the `/feedback` page and the `/api/feedback` API.
 
 > 🧪 This is the channel beta testers use to report issues — see [`docs/BETA.md`](./BETA.md).
 

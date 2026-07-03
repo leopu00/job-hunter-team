@@ -25,4 +25,4 @@ npm run test:report  # open the HTML report
 
 ## See also
 
-- Historical QA/E2E reports: [`docs/internal/qa-reports/`](../docs/internal/qa-reports/)
+- Web dashboard (the system under test): [`web/`](../web/)

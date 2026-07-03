@@ -8,7 +8,7 @@ for **Path 3 (One-liner installer)** in the [Quickstart](QUICKSTART.md):
 curl -fsSL https://jobhunterteam.ai/install.sh | bash
 ```
 
-For the GUI / desktop launcher path, see the `/download` page.
+The GUI / desktop app path is in development and not part of the beta — see [`desktop/STATUS.md`](../../desktop/STATUS.md).
 For onboarding inside an already-cloned repo, see [legacy `setup.sh` / `setup.ps1`](#-legacy-onboarding-setupsh--setupps1).
 
 ---

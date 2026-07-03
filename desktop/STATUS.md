@@ -37,7 +37,7 @@ desktop app is where we want contributors to help.
 
 The full first-run flow is real and has been driven end-to-end on Windows:
 
-1. **Install** — signed-in NSIS/dmg/AppImage installer, one click.
+1. **Install** — NSIS/dmg/AppImage installer, one click (unsigned during beta).
 2. **Welcome + language** — first screen carries the language picker; switching
    it re-translates the whole screen live. 7 languages.
 3. **Readiness check** — detects and installs WSL2, Git and Docker Desktop

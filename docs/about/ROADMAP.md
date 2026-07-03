@@ -12,7 +12,7 @@
 
 > 🧭 Product vision & design philosophy → [`VISION.md`](VISION.md) — agents-as-characters, the Mentor, the anti-goals. This section covers *deployment & stack* only.
 
-Job Hunter Team runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). Non-technical users download the Electron app; technical users clone the repo and use the CLI. Either way, the agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service. **AI on the side of workers, not against them.**
+Job Hunter Team runs **locally** in a Docker container, with multiple interfaces (web/desktop/CLI/TUI/Telegram). The target: non-technical users download the Electron app; technical users clone the repo and use the CLI. *(During beta the supported entry point is the CLI — the desktop app is still in development, see [`desktop/STATUS.md`](../../desktop/STATUS.md).)* Either way, the agent team works on the user's own machine, on their own data, with their own LLM subscription — not a managed cloud service. **AI on the side of workers, not against them.**
 
 ```
                               👤 User
@@ -56,12 +56,12 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 
 | Theme | State | What's open |
 |---|---|---|
-| 🔨 **Web platform** (read-only cloud dashboard) | **Shipped, hardening** | Live on [jobhunterteam.ai](https://jobhunterteam.ai) — 54 pages, 143 API routes on real data, E2E-tested. Open: pacing reset-edge guard, publish the remaining test-campaign cells ([`BETA.md`](../guides/BETA.md)). |
-| 🖥️ **Desktop launcher** (Electron, all-in-one) | **Shipped, polishing** | Installers (4 OS), wizard, OAuth, encrypted cloud sync live. Open: auto-update, tray icon + native notifications, recovery passphrase, friendly error cards, embedded help/FAQ. Code signing deferred by choice (open source + community review as the trust signal). |
+| 🔨 **Web platform** (read-only cloud dashboard) | **Shipped, hardening** | Live on [jobhunterteam.ai](https://jobhunterteam.ai) — 54 pages, 142 API routes on real data, E2E-tested. Open: pacing reset-edge guard, publish the remaining test-campaign cells ([`BETA.md`](../guides/BETA.md)). |
+| 🖥️ **Desktop app** (Electron, all-in-one) | **Works end-to-end, not yet public** | Installers (macOS/Windows/Linux), wizard, OAuth, encrypted cloud sync work — but the app is **not part of the beta**: `/download` is intentionally disabled, the CLI is the supported entry point, and the builds on GitHub Releases are unsupported previews. Open: dashboard parity with web, agent lifecycle UI, observability, auto-update + tray/notifications, cross-platform QA — full state in [`desktop/STATUS.md`](../../desktop/STATUS.md). Code signing deferred by choice (open source + community review as the trust signal). |
 | ☁️ **VPS provisioning** (bring-up via SSH) | **Shipped** | Desktop wizard brings a team up on any VPS (SSH key + IP, provider install, login PTY, Telegram step). Multi-cloud adapters deliberately not pursued — see the scope note below. |
 | 📡 **Budget monitoring** (Bridge + Sentinel) | **Proven at month scale on Codex** | Weekly-aware pacing closed 4 straight weekly cycles at 99–100% with zero overshoot ([case study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Open: Kimi projection precision (±10–15% → tier stays **beta**, two multi-week teams in observation), €20 entry tiers not viable yet (→ mission M4). |
 | 🌍 **Internationalization** (7 languages) | **Essentially done** | EN base + it/hu/es/de/fr/pt across agent prompts, UI, landing, docs pages. Open: `LOCALES` drift (`shared/i18n/types.ts` omits `hu`; API default `'it'` vs `DEFAULT_LOCALE='en'`), `mantenitore` agent overlays, translator-facing guide, native-speaker review. |
-| 💬 **Telegram** (async channel) | **Shipped, optional** | 3 bots (Assistant/Captain/Mentor) via wizard, skippable since 2026-06-15. Horizon: per-agent 1:1 chat, directed messages (`@scout find python jobs in EU`), "team forum" view (→ mission M7). |
+| 💬 **Async channels** (Telegram · email) | **Telegram shipped & validated** | 3 Telegram bots (Assistant/Captain/Mentor) via wizard, skippable since 2026-06-15 — **field-validated, and the recommended channel for teams on a VPS or dedicated PC**. Email: job-alert sourcing shipped ([`EMAIL-FORWARDING.md`](../guides/EMAIL-FORWARDING.md)); two-way agent email is implemented but still untested. Horizon: per-agent 1:1 chat, directed messages (`@scout find python jobs in EU`), "team forum" view (→ mission M7), **WhatsApp** as an additional channel on the same three-door model. |
 | 🌐 **Public website & launch assets** | **In progress** | Landing + case studies + docs live in 7 languages. Open (maintainer): demo GIFs for the README (blocker), launcher screenshots, visual FAQ, video tutorials, SHA256 checksums on the download page, press kit. |
 | 🚢 **OSS hygiene** | **In progress** | LICENSE, CoC, SECURITY, issue templates, 25-label taxonomy, triage SLA in place. Open: `gh label sync` live + public project board, FAQ, VPS comparison doc, awesome-lists submissions. |
 
@@ -75,8 +75,8 @@ The maintainer's own sequencing (contributor missions below run in parallel and 
 
 | Horizon | Focus |
 |---|---|
-| **Now** *(weeks)* | Demo GIFs + launch assets for the README and download page · the two open pacing guards (reset-edge false-freeze, daily-halt standby leak) · publish the remaining case studies (Kimi weekly-distributed run #4, Claude re-run #5) · observe the two multi-week Kimi beta teams. |
-| **Next** *(1–2 months)* | Desktop auto-update + tray/notifications + recovery passphrase · **Kimi €40 out of beta** if the month-scale observation holds (that unlocks the honest "affordable for everyone" claim) · translator guide + native-speaker review pass · public project board fed by triaged issues. |
+| **Now** *(weeks)* | Demo GIFs + launch assets for the README and download page · the two open pacing guards (reset-edge false-freeze, daily-halt standby leak) · publish the remaining case studies (the Kimi weekly-distributed run, the Claude Max re-run with proper instrumentation) · observe the two multi-week Kimi beta teams. |
+| **Next** *(1–2 months)* | **Desktop app toward public beta** — the gateway for non-technical users: dashboard parity, agent lifecycle UI, observability, auto-update + tray/notifications, recovery passphrase, macOS/Linux QA (ranked list in [`desktop/STATUS.md`](../../desktop/STATUS.md)) · **Kimi €40 out of beta** if the month-scale observation holds (that unlocks the honest "affordable for everyone" claim) · translator guide + native-speaker review pass · public project board fed by triaged issues. |
 | **Later** *(a quarter and beyond)* | The large missions as they attract contributors — mobile control (M2), local models (M5), pay-per-use €-budget (M8) · Mentor as a first-class surface (M6) · fine-grained team observability with a who-did-what-when timeline (M7, enabled by the [DB schema evolution](../internal/roadmap/db-schema-optimization.md)). |
 
 ---
@@ -102,6 +102,8 @@ New here? These are the **missions** we'd love a hand with — bigger directions
 | **M3** | 🛡️ Harden security — prompt-injection fencing on ingested job descriptions, uniform auth gates across routes, sync-token lifecycle policy. | Security / Backend | 🔴 large |
 | **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — the blocker is projection precision and coordinator overhead, not raw budget; every new provider also stress-tests the pacing abstraction. | Integrations | 🟡 medium |
 | **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — start by swapping a single role (the Scorer is the most self-contained) and measure quality against the case-study baselines. | LLM / infra | 🔴 large |
+
+> 🖥️ **Desktop app** — the highest-impact contribution area right now, and the key to opening JHT to a non-technical audience: dashboard parity with web, agent lifecycle UI, observability panel, the three-door chat model, macOS/Linux QA. The ranked list with architecture orientation lives in [`desktop/STATUS.md`](../../desktop/STATUS.md).
 
 **On the horizon** — bigger directions we've scoped but not opened yet:
 

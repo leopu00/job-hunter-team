@@ -14,5 +14,12 @@
     "@supabase/supabase-js": "^2.108.2",
     "commander": "^13.1.0",
     "picocolors": "^1.1.1"
-  }
+  },
+  "license": "MIT",
+  "author": "Leone Emanuel Puglisi <leopu00@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leopu00/job-hunter-team.git"
+  },
+  "description": "jht CLI — control surface for the Job Hunter Team agent stack"
 }

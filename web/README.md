@@ -12,15 +12,15 @@ in the desktop app (`requireLocalWrite` → 403 from cloud).
 
 ```
 app/
-  (protected)/   authenticated app: dashboard, positions, analisi, map,
+  (protected)/   authenticated app: dashboard, positions, map,
                  profile, settings, team/*, secrets, cron, onboarding
   api/           route handlers (cloud-sync, profile, i18n, …)
   case-studies/  public case studies
   page.tsx       landing
 components/       shared UI components
 lib/             queries, i18n, parsers, types
-i18n/ · messages/  localization (note: inline dict is the live path — see
-                   docs/internal/web-i18n notes)
+i18n/ · messages/  localization (note: the inline dict in lib/ is the live
+                   path; messages/ + next-intl is legacy, unused)
 middleware.ts    auth/routing middleware
 ```
 

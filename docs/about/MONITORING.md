@@ -22,7 +22,7 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 | Metric | Value |
 |---|---|
 | Window tested | 5 hours |
-| Target usage | 95% of window |
+| Target usage | 92% of window *(per-provider tuning in pacing-bridge)* |
 | Projection oscillation | ± **5%** |
 | Frequency of crossing 100% | 0 |
 | Captain idle time | minimal — the team stays productive end-to-end |
@@ -48,7 +48,7 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 | Metric | Value |
 |---|---|
 | Window tested | 5 hours |
-| Target usage | 85% of window *(15% safety buffer)* |
+| Target usage | 88% of window *(12% safety buffer)* |
 | Projection oscillation | ± **10–15%** |
 | Frequency of crossing 100% | occasional |
 | Captain idle time | low |
@@ -56,25 +56,23 @@ This separation (clock-only Bridge + event-driven Sentinel) is the result of mul
 
 **Why less precise**: the usage signal we read from Kimi is more variable, and response sizes have a wider distribution. The current mitigation is the 88% target (tuned per-provider in pacing-bridge).
 
-**Validated**: 75h run (Case Study #3, 251 positions) + 10-day beta run (557 positions) both completed within budget. Pacing-bridge per-provider tuning (Kimi 88%, Codex/Claude 92%) landed 2026-05-31. The mass-market threshold is functional — remaining work is oscillation reduction, not viability.
+**Validated**: 75h run (Case Study #3, 251 positions) + 10-day beta run (557 positions — *case study in preparation*) both completed within budget. Pacing-bridge per-provider tuning (Kimi 88%, Codex/Claude 92%) landed 2026-05-31. The mass-market threshold is functional — remaining work is oscillation reduction, not viability.
 
 ### 🟣 Claude Pro €20 — not viable
 
-A single agent working at modest pace burns through this tier well before the window resets. Not enough headroom for the full team running in parallel. Re-test deferred until Sentinel token consumption drops.
+A single agent working at modest pace burns through this tier well before the window resets. Not enough headroom for the full team running in parallel. Re-test deferred until projection precision and coordinator overhead improve.
 
 ## ⚠️ Known issues
 
 1. ~~**🪟 5h window vs weekly cap**~~ — **shipped**. Weekly-aware calibration (`schedule+ratio+weekly`) distributes the weekly cap across working hours, and held for a full month on Codex: 99–100% weekly landings, zero overshoot (see the Codex section above). The original problem: two days of intensive use could exhaust the weekly allowance even when every 5h window stayed under 95% — **real incident observed** on 2026-05-21 (see `docs/internal/postmortems/2026-05-21-halt-weekly-incident.md`).
 
-2. **🛡️ Sentinel itself consumes tokens** — the Sentinel intervenes too often today, and each intervention costs LLM calls. This is *the* reason the €20 base tier is currently unusable. Reducing Sentinel intervention frequency is the highest-leverage optimization left.
-
-   > ⚠️ **Note (2026-07-02, correction):** "*the* reason / highest-leverage" is superseded. A clean full-history measurement shows the coordinators at ~20% of the budget (Captain ~13.6%, **equal on Kimi and Codex**); the "70%" is a coast/idle artifact present on *both* models, not Kimi-specific. Reducing the Sentinel is a ~20% (secondary) lever. Budget size is **not** the structural blocker either: 3 independent methods put Kimi's weekly budget at only **~2× smaller than Codex (~13M vs ~31M tokens/week), not 17×** — same order of magnitude. The real limit is **projection precision** (Kimi ±10-15% vs ±5% on Claude) and behavior (scout rabbit-holes, thinking-mode fragility) — tuning, not a token wall. See [`docs/internal/architecture/kimi-vs-codex-economics.md`](../internal/architecture/kimi-vs-codex-economics.md).
+2. **🛡️ Coordinator overhead** — the coordinators (Sentinel + Captain) cost ~20% of the budget, roughly equal on Kimi and Codex (full-history measurement, 2026-07-02) — a real but **secondary** lever. What actually keeps the cheap tiers in beta is **projection precision** (Kimi ±10–15% vs ±5% on Claude) and model behavior (scout rabbit-holes, thinking-mode fragility) — tuning work, not a token wall: Kimi's weekly budget is only ~2× smaller than Codex (~13M vs ~31M tokens/week). See [`docs/internal/architecture/kimi-vs-codex-economics.md`](../internal/architecture/kimi-vs-codex-economics.md).
 
 3. ~~**⏰ No work-hours scheduling yet**~~ — **shipped 2026-05-26**. Users now define when the team works (CLI / desktop wizard / web UI). The Bridge distributes the weekly budget only across active hours and computes the per-window target dynamically. See **🗓️ Work hours** below.
 
 ## 🗓️ Work hours — team as employee
 
-The team can be configured to **only work during specific hours**, like a human employee. Outside those hours: no new spawns, no promotions, no new writing assignments; in-flight work finishes and the team idles. Mentor & Assistente bots keep replying to the user (only pipeline production stops).
+The team can be configured to **only work during specific hours**, like a human employee. Outside those hours: no new spawns, no promotions, no new writing assignments; in-flight work finishes and the team idles. Mentor & Assistant bots keep replying to the user (only pipeline production stops).
 
 **Why it matters:** with weekly-capped providers (Codex Pro, Claude Max), an unpaced 24/7 team would burn the whole weekly budget in 2-4 days and then sit idle for the rest of the week. Concentrating the same budget on the user's working hours = more output per €, landing during the user's day, not at 3am.
 

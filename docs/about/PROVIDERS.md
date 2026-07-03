@@ -16,9 +16,9 @@ This page tells you which subscription to pick.
 
 | Provider | Plan | Cost / month | ~Tokens / month | JHT verdict | Status |
 |---|---|---|---|---|---|
-| 🟠 **Claude** | Max x20 | ~€200 | ~400M | ✅ **Best in class** — usage projection oscillates within ±5% of target. Captain + Sentinel hit ~95% of the 5h window with surgical precision. | Tested, production-ready |
+| 🟠 **Claude** | Max x20 | ~€200 | ~400M | ✅ **Best in class** — usage projection oscillates within ±5% of target. Captain + Sentinel land the 92% per-window target with surgical precision. | Tested, production-ready |
 | 🔵 **Codex / OpenAI** | Plus / Pro | ~€100 | varies | ✅ **Proven over a full month** — 28-day autonomous run: 649 positions found, 513 scored, weekly budget closed at 99–100% every week with zero overshoot ([Case Study #4](RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). Pacing tuned at 92% target. | Tested, production-ready |
-| 🌙 **Kimi** | Pro | ~€40 | ~320M | 🧪 **Mass-market tier (beta)** — usage projection oscillates ±10–15% (mitigated by 88% target). 75h run: 251 pos, 56 ready (Case Study #3). 10-day beta: 557 pos, 264 scored. Two multi-week teams live (Jul 2026) to validate month-scale autonomy. | Beta — under observation |
+| 🌙 **Kimi** | Pro | ~€40 | ~320M | 🧪 **Mass-market tier (beta)** — usage projection oscillates ±10–15% (mitigated by 88% target). 75h run: 251 pos, 55 ready (Case Study #3). 10-day beta: 557 pos, 264 scored *(case study in preparation)*. Two multi-week teams live (Jul 2026) to validate month-scale autonomy. | Beta — under observation |
 | 🟠 **Claude** | Pro | ~€20 | ~50M | ❌ Insufficient — burns out before a single agent finishes a meaningful work session. | Tested, not viable |
 
 > **Note**: token counts are approximate and depend on the provider's current allowance. Always check the provider's pricing page before subscribing.
@@ -30,7 +30,7 @@ Two components prevent runaway spending:
 1. **🛡️ Sentinel** — monitors token usage in real time and intervenes if the team is going too fast.
 2. **🌉 Bridge** — fetches usage samples on a fixed clock and projects when the team will hit 100% of the window.
 
-The two together aim for **~95% of the window** at every reset, without crossing 100% (which would trigger a rate-limit and freeze the team).
+The two together aim to land each window *on* its per-provider target — **92% for Claude/Codex, 88% for Kimi** — without ever crossing 100% (which would trigger a rate-limit and freeze the team).
 
 For the actual numbers we measured during testing, see [`MONITORING.md`](MONITORING.md).
 
@@ -38,9 +38,7 @@ For the actual numbers we measured during testing, see [`MONITORING.md`](MONITOR
 
 - ✅ ~~Weekly window calibration~~ — **Done**. Weekly-aware pacing (`schedule+ratio+weekly`) distributes budget across working hours, not just 5h windows.
 - ✅ ~~User-defined work hours~~ — **Done**. Config + gate in pacing-bridge, UI in CLI + web + wizard.
-- ⚡ **Lower Sentinel token consumption** — the Sentinel itself eats too many tokens today; reducing this is the key to making the €20 base tier viable
-
-  > ⚠️ **Note (2026-07-02, correction):** A full-history measurement resized the coordinators (Sentinel+Captain) to ~20% of the budget — roughly *equal* on Kimi and Codex — a **secondary** lever, not "the key". Budget size is **not** the blocker either: measured with 3 independent methods, Kimi's weekly budget is only **~2× smaller than Codex (~13M vs ~31M tokens/week), not 17×** — same order of magnitude. What actually keeps cheap tiers in beta is **projection precision** (Kimi oscillates ±10-15% vs ±5% on Claude) and behavior (scout rabbit-holes, thinking-mode fragility), i.e. tuning work — not a token wall. See [`docs/internal/architecture/kimi-vs-codex-economics.md`](../internal/architecture/kimi-vs-codex-economics.md).
+- ⚡ **Make the cheap tiers viable** — what keeps the €20–40 tiers in beta is **projection precision** (Kimi oscillates ±10–15% vs ±5% on Claude) and model behavior (scout rabbit-holes, thinking-mode fragility) — tuning work, not a token wall. Measured across the full history: Kimi's weekly budget is only ~2× smaller than Codex (~13M vs ~31M tokens/week), and the coordinators (Sentinel + Captain) cost ~20% of the budget on *both* providers — a real but secondary lever. Full analysis: [`docs/internal/architecture/kimi-vs-codex-economics.md`](../internal/architecture/kimi-vs-codex-economics.md).
 
 ## 💸 What about pay-per-use?
 

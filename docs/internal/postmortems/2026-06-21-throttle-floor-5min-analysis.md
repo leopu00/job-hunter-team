@@ -10,7 +10,7 @@
 
 L'utente nota che il Capitano frena gli agenti con throttle da **120s (2min)**, e in generale
 sotto i 5min: *"fai riposare un agente che consuma tantissimo per 2 minuti invece di 1 — non
-cambia praticamente un cazzo. Nell'arco di un'ora togli ~20% del consumo, ma in proiezione su
+cambia praticamente nulla. Nell'arco di un'ora togli ~20% del consumo, ma in proiezione su
 mezz'ora diventa 10% e non si nota."* Proposta: **tagliare i throttle troppo bassi, floor a 5min**,
 ladder `5, 10, 15, 20, 25, 30, 40, 50, 60 min`. Richiesta esplicita: **analizzare prima lo storico**
 (*"forse mi sbaglio, vediamo come vanno"*) su betaB (Kimi) **e** betaA (Codex).

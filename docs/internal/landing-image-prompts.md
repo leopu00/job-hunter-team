@@ -3,7 +3,7 @@
 Raccolta dei prompt per **tutte le immagini** del sito pubblico (landing + pagine
 dedicate). Ogni placeholder nel codice porta un `promptId` che corrisponde a una
 voce qui sotto. Stile e regole condivise vivono in
-[`archive/chronicles-v1/chronicles-canon.md`](../../archive/chronicles-v1/chronicles-canon.md)
+[`archive/chronicles-v1/chronicles-canon.md`](../archive/chronicles-v1/chronicles-canon.md)
 (sezione "Stile visivo" + regola **occhiali da sole** Matrix identici per tutti;
 il canone è archiviato con la pagina Cronache, ma la parte stile/cast resta il
 riferimento per le immagini del sito).

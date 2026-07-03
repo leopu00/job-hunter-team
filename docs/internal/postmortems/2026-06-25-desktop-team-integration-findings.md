@@ -142,7 +142,7 @@ ha il **contesto del canale**.
 2. **Ingegnarsi invece di delegare all'utente.** Per mandare una mail **non serve MCP**:
    scrivere uno **script Python** (`smtplib`) che usa le **credenziali email del team**
    già configurate (`~/.jht/credentials/email_monitor.json` — Gmail app-password vale
-   sia IMAP che SMTP) e inviarla. "Non ci vuole un cazzo." Stesso principio per altri
+   sia IMAP che SMTP) e inviarla. "È banale da fare." Stesso principio per altri
    bisogni: prima prova a risolvere da solo con codice.
 3. **Essere più furbi con slash-command / strumenti che servono a loro stessi:**
    - Uno slash command lo possono **auto-iniettare nella propria sessione** (es. via
