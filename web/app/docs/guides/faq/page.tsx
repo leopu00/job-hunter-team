@@ -36,9 +36,7 @@ type FaqCopy = {
   githubMore: string;
 };
 
-// EN + IT autorati; le altre lingue arrivano dai traduttori (fallback su EN
-// finché non presenti) — stesso pattern delle altre guide.
-const T: Partial<Record<Locale, FaqCopy>> = {
+const T: Record<Locale, FaqCopy> = {
   en: {
     title: "FAQ",
     tagline: "Quick answers before you start",
@@ -213,11 +211,40 @@ const T: Partial<Record<Locale, FaqCopy>> = {
     stillRest: " Kérdezd a közösséget itt: ",
     githubMore: "a dokumentáció a GitHubon",
   },
+  pt: {
+    title: "Perguntas frequentes",
+    tagline: "Respostas rápidas antes de começares",
+    intro:
+      "As perguntas mais comuns antes de descarregar o Job Hunter Team — custos, os teus dados, os fornecedores e o que a equipa faz (e não faz).",
+    q1: "Quanto custa o Job Hunter Team?",
+    a1: "A plataforma em si é gratuita e open source (MIT). Pagas apenas o fornecedor de IA que escolheres — Kimi (~€40/mês), Claude (~€90/mês) ou Codex (~€100/mês). A equipa nunca te cobra nada.",
+    q2: "Porquê uma subscrição e não uma chave de API paga por utilização?",
+    a2: "A equipa trabalha 24 horas por dia. Com uma API paga por token, uma única semana de procura custaria centenas ou milhares de euros. Uma subscrição é uma mensalidade fixa e previsível — sem contador a correr, sem fatura surpresa.",
+    q3: "Preciso de saber programar?",
+    a3: "Não. Descarregas a app de ambiente de trabalho (Windows, macOS, Linux) e um assistente trata do resto. Se fores técnico, podes conduzi-la a partir da linha de comandos, mas não é obrigatório.",
+    q4: "Para onde vão os meus dados?",
+    a4: "Tudo corre na tua própria máquina (ou no teu próprio VPS, sob a tua própria conta): posições, CV e o teu perfil ficam em local. A sincronização na cloud é opcional — existe apenas para conseguires chegar aos teus dados a partir de outro dispositivo.",
+    q5: "A equipa candidata-se às ofertas por mim?",
+    a5: "Não. Prepara CV e cartas de apresentação à medida e deixa-os «prontos a enviar», mas és sempre tu que os envias. Nunca nada é enviado em teu nome.",
+    q6: "Que fornecedor devo escolher?",
+    a6: "O Kimi é o mais barato e um ótimo ponto de partida; o Claude é o mais preciso, ideal para pontuar e escrever; o Codex é o mais completo. Podes alternar entre eles quando quiseres, sem refazer o perfil. Consulta a página de Preços para mais detalhes.",
+    q7: "Que tipo de ofertas procura?",
+    a7: "Portais de emprego, páginas de carreiras, LinkedIn, canais de recrutadores. Cada posição recebe uma pontuação de 0–100 consoante o quão perto está do teu perfil, das tuas competências e dos objetivos que defines.",
+    q8: "Onde é que a equipa tem de correr?",
+    a8: "Num computador que fique sempre ligado: o teu, um dedicado, ou um pequeno servidor na nuvem (um VPS, ~€6–10/mês). Tem de se manter ligado para continuar a trabalhar enquanto fazes outras coisas.",
+    q9: "Preciso de um cartão de crédito para experimentar?",
+    a9: "Para nós não — a plataforma é gratuita. Só precisas da subscrição do fornecedor de IA que escolheres.",
+    q10: "Está pronto? É estável?",
+    a10: "Está em beta: a equipa funciona de ponta a ponta, mas a instalação ainda tem algumas arestas. Se quiseres ajudar a dar-lhe forma, vê «Tornar-se beta tester».",
+    stillStrong: "Ainda tens alguma pergunta?",
+    stillRest: " Pergunta à comunidade nas ",
+    githubMore: "os docs no GitHub",
+  },
 };
 
 export default async function FaqPage() {
   const locale = await getRequestLocale();
-  const t = (T[locale] ?? T.en) as FaqCopy;
+  const t = T[locale];
 
   const qa: [string, string][] = [
     [t.q1, t.a1],

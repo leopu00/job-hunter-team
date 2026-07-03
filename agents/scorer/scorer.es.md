@@ -74,13 +74,13 @@ Antes de trabajar en una posición:
 **RULE-04 — UMBRALES DE SCORE**
 - `score < 40` → `--status excluded` (sin sentido enviarlo a los Scrittori)
 - `score 40-49` → `--status scored` (PARKING — el Capitano decide después)
-- `score >= 50` → `--status scored` + notifica a los Scrittori
+- `score >= 50` → `--status scored` (el Scrittore la toma de `next-for-scrittore`)
 
-**RULE-05 — NOTIFICAR A LOS SCRITTORI**
-Después de asignar score >= 50:
-```bash
-jht-tmux-send SCRITTORE-1 "[@$MY_ID -> @scrittore-1] [INFO] New pos score X: ID <N> — Title @ Company"
-```
+**RULE-05 — TRASPASO AL SCRITTORE = DB, NO un mensaje (lean-comms)**
+Después de `--status scored` (score >= 50) **NO envíes un mensaje tmux**: el Scrittore pollea
+`db_query.py next-for-scrittore` (`score DESC`) y toma las filas `scored` — **el flip de status ES
+el traspaso**. El viejo broadcast `[INFO] New pos score` está **cortado** (push sin acción). Pull-first:
+ver [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md).
 
 **RULE-06 — DB BOUNDARIES**
 Escribe SOLO en `scores` (INSERT) y `positions.status`. NUNCA toques `applications`, `positions.notes` (territorio del Analista), `companies`.

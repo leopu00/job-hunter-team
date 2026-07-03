@@ -191,9 +191,10 @@ const T: Record<
     heroTitleEmph: "really",
     heroTitlePost: " does",
     heroLeadPre:
-      "Job Hunter Team is a team of autonomous AI agents that looks for work on your behalf: it finds positions, analyzes them, scores them against your profile and prepares the applications. Here we show what it produced on ",
+      "This page collects the real results of Job Hunter teams put to work on ",
     heroLeadStrong: "real candidate profiles",
-    heroLeadPost: " — aggregated, anonymous data, no personal information.",
+    heroLeadPost:
+      " — how many positions they find, at what match quality and at what cost. Aggregated, anonymous data from real runs, no personal information.",
     heroSub:
       "It's a living page: it grows with every new team we monitor. Pick a case study below to see all the results.",
     positions: "positions",
@@ -270,9 +271,10 @@ const T: Record<
     heroTitleEmph: "realmente",
     heroTitlePost: " hace un equipo Job Hunter",
     heroLeadPre:
-      "Job Hunter es un equipo de agentes de IA que busca trabajo por ti: encuentra puestos, los analiza, los evalúa según tu perfil y prepara las candidaturas. Aquí mostramos lo que produjo sobre ",
+      "Esta página recoge los resultados reales de los equipos Job Hunter puestos a trabajar sobre ",
     heroLeadStrong: "perfiles de candidato reales",
-    heroLeadPost: " — datos agregados y anónimos, sin información personal.",
+    heroLeadPost:
+      " — cuántos puestos encuentran, con qué grado de coincidencia y a qué coste. Datos agregados y anónimos, de ejecuciones reales, sin ninguna información personal.",
     heroSub:
       "Es una página viva: crece con cada nuevo equipo monitorizado. Elige un caso de estudio abajo para ver todos los resultados.",
     positions: "puestos",
@@ -349,10 +351,10 @@ const T: Record<
     heroTitleEmph: "vraiment",
     heroTitlePost: "",
     heroLeadPre:
-      "Job Hunter est une équipe d'agents IA qui cherche du travail à ta place : elle trouve des postes, les analyse, les évalue selon ton profil et prépare les candidatures. Nous montrons ici ce qu'elle a produit sur ",
+      "Cette page rassemble les résultats réels des équipes Job Hunter à l'œuvre sur ",
     heroLeadStrong: "de vrais profils de candidat",
     heroLeadPost:
-      " — données agrégées et anonymes, aucune information personnelle.",
+      " — combien de postes elles trouvent, avec quelle qualité de match et à quel coût. Données agrégées et anonymes, issues de runs réels, sans aucune information personnelle.",
     heroSub:
       "C'est une page vivante : elle grandit à chaque nouvelle équipe suivie. Choisis une étude de cas ci-dessous pour voir tous les résultats.",
     positions: "postes",
@@ -429,10 +431,10 @@ const T: Record<
     heroTitleEmph: "wirklich",
     heroTitlePost: " leistet",
     heroLeadPre:
-      "Job Hunter ist ein Team von KI-Agenten, das für dich Arbeit sucht: Es findet Stellen, analysiert sie, bewertet sie anhand deines Profils und bereitet die Bewerbungen vor. Hier zeigen wir, was es auf ",
+      "Diese Seite sammelt die realen Ergebnisse der Job Hunter-Teams, die auf ",
     heroLeadStrong: "echten Kandidatenprofilen",
     heroLeadPost:
-      " produziert hat — aggregierte, anonyme Daten, keine persönlichen Informationen.",
+      " zum Einsatz kamen — wie viele Stellen sie finden, mit welcher Match-Qualität und zu welchen Kosten. Aggregierte, anonyme Daten aus echten Runs, ohne jede persönliche Information.",
     heroSub:
       "Es ist eine lebendige Seite: Sie wächst mit jedem neu beobachteten Team. Wähle unten eine Fallstudie, um alle Ergebnisse zu sehen.",
     positions: "Stellen",
@@ -508,11 +510,10 @@ const T: Record<
     heroTitlePre: "Mit csinál ",
     heroTitleEmph: "valójában",
     heroTitlePost: " egy Job Hunter csapat",
-    heroLeadPre:
-      "A Job Hunter AI-ügynökök csapata, amely helyetted keres munkát: pozíciókat talál, elemzi azokat, a profilodhoz méri őket, és előkészíti a jelentkezéseket. Itt megmutatjuk, mit produkált ",
+    heroLeadPre: "Ez az oldal a ",
     heroLeadStrong: "valódi jelölti profilokon",
     heroLeadPost:
-      " — összesített, anonim adatok, semmilyen személyes információ.",
+      " munkára fogott Job Hunter csapatok valós eredményeit gyűjti össze — hány pozíciót találnak, milyen match-minőséggel és mennyiért. Összesített, anonim adatok valós futásokból, semmilyen személyes információ.",
     heroSub:
       "Ez egy élő oldal: minden új megfigyelt csapattal bővül. Válassz egy esettanulmányt alább az összes eredmény megtekintéséhez.",
     positions: "pozíció",
@@ -589,9 +590,10 @@ const T: Record<
     heroTitleEmph: "realmente",
     heroTitlePost: " faz",
     heroLeadPre:
-      "O Job Hunter é uma equipa de agentes de IA que procura trabalho por ti: encontra posições, analisa-as, avalia-as face ao teu perfil e prepara as candidaturas. Aqui mostramos o que produziu sobre ",
+      "Esta página reúne os resultados reais das equipas Job Hunter postas a trabalhar sobre ",
     heroLeadStrong: "perfis de candidato reais",
-    heroLeadPost: " — dados agregados e anónimos, sem informação pessoal.",
+    heroLeadPost:
+      " — quantas posições encontram, com que qualidade de correspondência e a que custo. Dados agregados e anónimos, de execuções reais, sem qualquer informação pessoal.",
     heroSub:
       "É uma página viva: cresce a cada nova equipa monitorizada. Escolhe um estudo de caso abaixo para ver todos os resultados.",
     positions: "posições",

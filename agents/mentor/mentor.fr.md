@@ -160,3 +160,10 @@ Si `jht-telegram-send` échoue, **ne** touche **pas** au flag (le watchdog rées
 Tu hérites des règles team-wide T01..T13 de `agents/_team/team-rules.md` : no kill tmux, jht-tmux-send pour messagerie inter-agent, no hallucinations, deliverables sous `$JHT_USER_DIR`, install Python via `uv pip install --user`. Les règles ci-dessus (M-01..M-04 + voix) sont role-specific.
 
 Architecture équipe + matrice de tier : `agents/_team/architettura.md`. Spec planifiée du Mentor : ce fichier.
+
+## 💬 Communication — lean & pull-first
+Coordonne **pull-first** (voir [`agents/_manual/communication-rules.md`](../_manual/communication-rules.md)) :
+lis l'état de l'équipe depuis la **DB** (`db_query.py` — `recent-activity`, `dashboard`) et le **capture-pane**
+plutôt que d'interroger les peers. Envoie un message `jht-tmux-send` **uniquement** pour un vrai hand-off ou un événement de sécurité.
+**NE fais PAS** de broadcast de status, n'envoie pas d'ACK no-op, et ne ping pas "tu es vivant ?". *(Le handshake de welcome
+user-facing avec `[@system]` est un canal séparé, fonctionnel — garde-le tel que spécifié ci-dessus.)*

@@ -10,6 +10,17 @@
 import { useEffect, useState } from "react";
 import { useIsCloud } from "@/app/hooks/useIsCloud";
 import { useLocale } from "@/lib/use-locale";
+import type { Locale } from "@/i18n/config";
+
+const LOCALE_TAG: Record<Locale, string> = {
+  it: "it-IT",
+  en: "en-US",
+  es: "es-ES",
+  fr: "fr-FR",
+  de: "de-DE",
+  hu: "hu-HU",
+  pt: "pt-PT",
+};
 
 const T: Record<string, Record<string, string>> = {
   title: {
@@ -141,12 +152,7 @@ const T: Record<string, Record<string, string>> = {
 };
 
 type Diagnosis =
-  | "alive"
-  | "long_turn"
-  | "stallo"
-  | "cli_dead"
-  | "ambiguous"
-  | string;
+  "alive" | "long_turn" | "stallo" | "cli_dead" | "ambiguous" | string;
 
 type DoctorEvent = {
   ts: string;
@@ -216,10 +222,10 @@ function timeAgo(iso: string | null, tr: (k: string) => string): string {
   return tr("hoursAgo").replace("{n}", (diff / 3600).toFixed(1));
 }
 
-function fmtTime(iso: string | null): string {
+function fmtTime(iso: string | null, locale: Locale): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return d.toLocaleTimeString("it-IT", {
+  return d.toLocaleTimeString(LOCALE_TAG[locale] ?? "en-US", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -365,7 +371,7 @@ export default function DoctorPanel() {
                 className="py-1.5 flex items-center gap-3 flex-wrap"
               >
                 <span className="text-[10px] text-[var(--color-dim)] w-16">
-                  {fmtTime(r.started_at)}
+                  {fmtTime(r.started_at, locale)}
                 </span>
                 <code className="text-[10px]">{r.round_id.slice(0, 18)}</code>
                 <span>📨 {r.pings}</span>
@@ -402,7 +408,7 @@ export default function DoctorPanel() {
             {recentEvents.map((e, i) => (
               <li key={i} className="flex gap-2">
                 <span className="text-[var(--color-dim)] w-20 shrink-0">
-                  {fmtTime(e.ts)}
+                  {fmtTime(e.ts, locale)}
                 </span>
                 <span className="w-5 text-center" aria-hidden>
                   {EVENT_ICON[e.event] || "•"}

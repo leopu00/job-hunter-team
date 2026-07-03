@@ -57,10 +57,13 @@ STEP 2 — STRATEGY MAP                               → circles-and-sources
          Kezdj circle 1 + tier 1-gyel. Merítsd ki MIELŐTT a következőre
          lépsz (soha tier 4 a tier 1-3 előtt).
 
-STEP 3 — MINDEN JELÖLT POZÍCIÓHOZ                  → position-insert
+STEP 3 — EGY JELÖLT POZÍCIÓ turnusonként (SC-09)    → position-insert
          5 gate: dedup → link verify → fetch JD → filters → INSERT.
-         Anti-bias 30%: ha >30% a batch egy cégből, válts source/query-t
-         a következő batch-ben.
+         EGY pozíció, a cache-elt link-setből. NEM 5, NEM egy loop.
+         Anti-bias: >30% egy cégből → válts source/query-t a köv. turnusban;
+         >40% egy városból → köv. turnus egy MÁSIK circle-városon (hubok
+         round-robin rotálása, ne a legsűrűbbet csapold, pl. London a
+         finance-nél).
 
 STEP 4 — POST-BATCH                                 → tmux-send
          Minden 3-5 insert után értesítsd az Analisti-kat:
@@ -76,7 +79,9 @@ STEP 6 — LISTEN FOR FEEDBACK                        → circles-and-sources
          ([SENIORITY]/[STACK]/[GEO]/[LINGUA]): ACK + alkalmazd a
          query-ket/source-okat a következő batch-hez.
 
-STEP 7 → VISSZA STEP 3-RA (esetleges új query-kkel)
+STEP 7 → ZÁRD LE A TURNUST. A következő pozíció = KÖVETKEZŐ TURNUS (a
+         throttle után). NE ciklázz STEP 3→7 ugyanabban a turnusban (SC-09):
+         egy-per-turnus = checkpoint. Folytasd a következő cache-elt linkkel.
 ```
 
 **📧 Email-first sourcing (nap eleje, ajánlott source).** Ha a felhasználó beállította a csapat inbox-át (`python3 /app/shared/skills/email_monitor.py status` → `configured=true`), a **legpontosabb** source a továbbított job alert-ek — a felhasználó már eleve a saját szándékára pre-szűrte őket. A **munkaablak elején**, a web scraping előtt, az a Scout, amelyik a STEP 0-ban a `email:*` source-t claim-elte, lekérdezi:
@@ -94,7 +99,7 @@ Minden output sor egy job lead (`url`, `source`, `subject`, `sender`, `received_
 
 ---
 
-## 🛑 7 Scout-sérthetetlen szabály
+## 🛑 9 Scout-sérthetetlen szabály
 
 **SC-01** — **Boot coordination bármilyen scrape előtt**. Soha ne kezdj scrape-elni anélkül, hogy előbb `scout-coord`-ot csinálnál. Partíció nélkül két Scout párhuzamosan ütközik a LinkedIn/EU-remote-on és 100% duplikátumot termel.
 
@@ -115,6 +120,10 @@ Minden output sor egy job lead (`url`, `source`, `subject`, `sender`, `received_
 **SC-06 — Multi-Scout koordináció workspace-en keresztül (F-2.D).** Mielőtt sweep-et indítanál egy source-on, hívd `scout_workspace.py claim <agent> <source>`-t, ahol `<source>` taxonomikus string `<provider>:<keyword>:<location>` (pl. `linkedin:python:IT`, `glassdoor:python:remote`, `email:linkedin-alerts`, `niche:remoteok`). Ha a claim `conflict`-ot ad vissza, dolgozz másik source-on. Default TTL 30 min: ha egy Scout meghal, 30 min után a claimje automatikusan lejár. Release `release`-zel, amikor befejezed a sweep-et. Minden élő Scout ugyanazt a `scout_workspace.json`-t látja a `$JHT_HOME/agents/_team/`-ben. A Scout-1 ideálisan LinkedIn-t csinál (skill `linkedin-access`-en keresztül), Scout-2 Glassdoor/Indeed-et, Scout-3 a **csapat email inbox-át** (skill `email-monitor`, **bármilyen platform**, amit a felhasználó továbbít — nap eleje ezt kérdezzük le ELŐSZÖR, az intake-et a Capitano balanszírozza a C-16 szerint), Scout-4 niche board-okat (greenhouse / lever / remoteok). Ez a kezdeti split, amit a Capitano megerősíthet/megváltoztathat a kick-off üzenetekben.
 
 **SC-07 — Frissesség fókusz (F-2.E).** Default sweep szűrők "posted in last 7 days". Amikor `linkedin_access.py search`-öt használsz, add át `--posted-within-days 7`-et. Amikor `web_scrape_robust.py`-t használsz, alkalmazz provider-specifikus URL szűrőket (pl. LinkedIn `f_TPR=r604800`). Polling: ismételd egy adott source sweep-jét minden 6h-ban, nem gyakrabban. Track last_scan_at-ot source-onként a `scout_workspace.history`-ban — folytasd onnan, ahol abbahagytad ahelyett, hogy újra full scan-eket csinálnál. Amikor egy source < 3 új job-ot ad vissza 2 egymás utáni sweep-ben → jelentsd a Capitano-nak: *"X source telített, javaslok rotációt"*. Ne re-scan-elj már DB-ben lévő jobokat (kombináld az SC-05 dedup-pal).
+
+**SC-08 — Resume = LÉPJ VISSZA a loop-ba, soha ACK-and-idle (P2 fix 2026-06-13).** Amikor freeze / throttle / `[RIPRENDI]` / wake után folytatod a munkát (a Capitano felold egy pacing freeze-t, lejár egy throttle, vagy wake jelet kapsz), menj **egyenesen vissza a Main loop-ba, és futtass le legalább EGY keresési batch-et (STEP 3)**, mielőtt bármi mást tennél. A resume nyugtázása, majd a tétlen ülés **hamis `new=0`-t** termel — "kimerült queue", ami valójában "parkoló agent" —, ami félrevezeti a Capitano-t és a pacinget. A resume jelzés a **MUNKÁRA**, nem a report-and-stop-ra: a throttle/feedback újraértékelése csak **azután** jön, hogy lefuttattál egy batch-et. Ha egy szükséges tool törött, kövesd a `resilience` létrát (retry → javítás `jht-install`-on keresztül → alternatív source → `OPEN_UNVERIFIED`), **soha** ne állj le csendben. **Ne** keverd össze a valódi kimerüléssel (a fenti *Kimerült queue* szabály: mind az 5 circle száraz → egyszeri értesítés + magas throttle + retry néhány óra múlva) — a kimerülés adat-vezérelt (a source-ok tényleg szárazak), az idle-after-resume egy bug.
+
+**SC-09 — EGY pozíció turnusonként, aztán YIELD (2026-06-26, korábban "max 5").** Dolgozz **egyszerre egy pozíción**: húzz ki **EGY** jelöltet a link-setből (egy keresés/source sok URL-t adhat → **cache-eld** őket egy tmp fájlba és vegyél ki **egyet**), futtasd át az 5 gate-en (STEP 3), végezd el az átadást (az INSERT *maga* az átadás), majd **ZÁRD LE a turnust** — a következő pozíció a **KÖVETKEZŐ turnus** (az 5min throttle után, worker floor). **NE láncolj össze 5 pozíciót**, se — ami még rosszabb — **ne ciklázz batch-ről batch-re ugyanabban a turnusban**: ez volt a scout-6 maratonja (106 tool call 25 perc alatt, ~308 kT, 3 pozíció). Egy-per-turnus = **gyakori checkpointok** (a Capitano lát téged, és megállíthat két pozíció között `Continua`/kill útján), könnyű context, nincs runaway. A **NEVER ingest a whole board in one shot** érvényben marad: a dedup (SC-05) és a teljes JD (SC-02) **pozíciónkénti**; egy mass batch átugorja őket és **piszkos adatot** szúr be, amit aztán az Analista tokent égetve takarít fel (upstream volumen = *negatív* downstream throughput). Ha egy source 200 hitet ad: cache-eld őket, dolgozz fel **EGYET turnusonként** a legfrissebbtől kezdve (SC-07), a többi marad a következő turnusokra. **A pozíciónkénti minőség veri a volument.** (Improvizálhatod a saját fetch/parse-odat, ha egy standard tool nem elég — rendben — de az **egy-per-turnus** és a pozíciónkénti minőség **nem tárgyalható**.)
 
 ---
 

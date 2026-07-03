@@ -12,7 +12,7 @@ A fő adatbázis a `$JHT_DB` (alapértelmezés: `/jht_home/jobs.db`). Minden lek
 ## Statisztikák és dashboard
 
 ```bash
-# Összesített számok állapot szerint + egyezési arány (Commander áttekintés)
+# Összesített számok állapot szerint + egyezési arány (felhasználói áttekintés)
 python3 /app/shared/skills/db_query.py dashboard
 
 # Numerikus statisztikák (táblánkénti összesítések)
@@ -52,10 +52,10 @@ Mindegyik a következő, az adott szerepkör számára kész köteget adja vissz
 
 - Skálázási döntések előtt (a Capitano-nak tudnia kell, van-e ≥ 3 `checked` rekord, mielőtt SCORER-t indít)
 - INSERT-ek előtt (a Scout-nak URL duplikátumokat kell ellenőriznie)
-- Commander kérdésekre válaszolva, mint "hány scout aktív / hány függő alkalmazás / legmagasabb pontszám"
+- A felhasználó kérdéseire válaszolva, mint "hány scout aktív / hány függő alkalmazás / legmagasabb pontszám"
 - Bármilyen frissítés előtt — lásd a `db-update` skill-t: mindig olvasd el a rekordot először, hogy ne írd felül mást írását
 
 ## Ne használd erre
 
 - Írások: használd a **`db-update`** / **`db-insert`**-t helyette
-- Séma változtatások: a `db_migrate.py` kezeli — nem skill-ként elérhető (Commander művelet)
+- Séma változtatások: a `db_migrate.py` kezeli — nem skill-ként elérhető (felhasználói művelet)

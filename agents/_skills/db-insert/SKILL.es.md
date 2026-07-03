@@ -87,4 +87,4 @@ python3 /app/shared/skills/db_insert.py highlight \
 
 - Actualizaciones: usar **`db-update`**
 - Lecturas: usar **`db-query`**
-- Cambios de esquema: manejados por `db_migrate.py` — operación del Commander, no expuesta como skill
+- Cambios de esquema: manejados por `db_migrate.py` — operación del usuario, no expuesta como skill

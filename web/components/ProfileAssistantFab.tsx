@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocale } from '@/lib/use-locale'
+import type { Locale } from '@/i18n/config'
 import {
   OPEN_ASSISTANT_EVENT,
   type OpenAssistantDetail,
@@ -10,6 +11,16 @@ import {
 
 type ChatMsg = { role: 'user' | 'assistant'; text: string; ts: number }
 type AgentStatus = 'unknown' | 'active' | 'inactive' | 'starting'
+
+const LOCALE_TAG: Record<Locale, string> = {
+  it: 'it-IT',
+  en: 'en-US',
+  es: 'es-ES',
+  fr: 'fr-FR',
+  de: 'de-DE',
+  hu: 'hu-HU',
+  pt: 'pt-PT',
+}
 
 const T: Record<string, Record<string, string>> = {
   quick_analyze: {
@@ -559,6 +570,7 @@ export default function ProfileAssistantFab() {
 }
 
 function Bubble({ msg }: { msg: ChatMsg }) {
+  const locale = useLocale()
   const isUser = msg.role === 'user'
   return (
     <div className={`flex mb-2.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -582,7 +594,7 @@ function Bubble({ msg }: { msg: ChatMsg }) {
       >
         <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</div>
         <div className="text-[9px] mt-1 opacity-40 text-right">
-          {new Date(msg.ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+          {new Date(msg.ts * 1000).toLocaleTimeString(LOCALE_TAG[locale] ?? 'en-US', { hour: '2-digit', minute: '2-digit' })}
         </div>
       </div>
     </div>

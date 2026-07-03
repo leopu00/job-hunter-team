@@ -40,19 +40,29 @@ function scoreBg(s?: number) {
   return "var(--color-red)";
 }
 
-function formatFoundAt(ts: string | null | undefined) {
+const LOCALE_TAG: Record<string, string> = {
+  it: "it-IT",
+  en: "en-US",
+  hu: "hu-HU",
+  es: "es-ES",
+  de: "de-DE",
+  fr: "fr-FR",
+  pt: "pt-PT",
+};
+
+function formatFoundAt(ts: string | null | undefined, locale: string) {
   if (!ts) return "—";
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return "—";
   const today = new Date();
   const sameDay = d.toDateString() === today.toDateString();
   if (sameDay) {
-    return d.toLocaleTimeString("it-IT", {
+    return d.toLocaleTimeString(LOCALE_TAG[locale] ?? "en-US", {
       hour: "2-digit",
       minute: "2-digit",
     });
   }
-  return d.toLocaleString("it-IT", {
+  return d.toLocaleString(LOCALE_TAG[locale] ?? "en-US", {
     day: "2-digit",
     month: "2-digit",
     hour: "2-digit",
@@ -790,7 +800,7 @@ export default async function PositionsPage({ searchParams }: PageProps) {
                     </td>
                     {/* Aggiornato (ultima azione, fallback rilevazione) */}
                     <td className="px-4 py-3 text-[10px] text-[var(--color-muted)] whitespace-nowrap font-mono tabular-nums">
-                      {formatFoundAt(p.last_action_at || p.found_at)}
+                      {formatFoundAt(p.last_action_at || p.found_at, locale)}
                     </td>
                     {/* Titolo — una riga, troncato con … se troppo lungo */}
                     <td className="px-4 py-3 font-medium">

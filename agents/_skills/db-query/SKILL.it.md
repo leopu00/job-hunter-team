@@ -12,7 +12,7 @@ Il database principale è `$JHT_DB` (default `/jht_home/jobs.db`). Tutti i wrapp
 ## Statistiche e dashboard
 
 ```bash
-# Conteggi aggregati per status + match rate (panoramica Comandante)
+# Conteggi aggregati per status + match rate (panoramica utente)
 python3 /app/shared/skills/db_query.py dashboard
 
 # Statistiche numeriche (totali per tabella)
@@ -52,10 +52,10 @@ Ciascuno restituisce il prossimo batch pronto per quel ruolo, seguendo il flusso
 
 - Prima di decisioni di scaling (il Capitano deve sapere se ci sono ≥ 3 record `checked` prima di spawnare uno SCORER)
 - Prima degli INSERT (lo Scout deve controllare i duplicati URL)
-- In risposta a domande del Comandante come "quanti scout attivi / quante application pendenti / punteggio più alto"
+- In risposta a domande dell'utente come "quanti scout attivi / quante application pendenti / punteggio più alto"
 - Prima di qualsiasi update — vedi la skill `db-update`: leggi sempre il record prima per evitare di sovrascrivere la scrittura di qualcun altro
 
 ## Non usarla per
 
 - Scritture: usa **`db-update`** / **`db-insert`** invece
-- Modifiche schema: gestite da `db_migrate.py` — non esposta come skill (operazione del Comandante)
+- Modifiche schema: gestite da `db_migrate.py` — non esposta come skill (operazione dell'utente)

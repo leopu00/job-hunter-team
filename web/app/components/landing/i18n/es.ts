@@ -9,6 +9,7 @@ export const es: Record<string, string> = {
   theme_dark: "noche",
   theme_light: "día",
   nav_run: "Cómo se inicia",
+  nav_team: "Equipo",
   home_pricing_alt:
     "Un candado abierto rodeado de unas pocas monedas, una verde brillante: la plataforma es gratuita y open source, solo pagas el proveedor de IA.",
   // Nav

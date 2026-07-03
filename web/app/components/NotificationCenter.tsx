@@ -77,8 +77,8 @@ const I18N: Record<Lang, Record<string, string>> = {
   },
 };
 
-// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Copre it/en/es/de/fr/pt;
-// qualsiasi locale non supportata (es. hu) ricade su en.
+// Fonte unica: cookie NEXT_LOCALE (vedi lib/use-locale). Copre tutte e 7 le
+// lingue (it/en/es/de/fr/pt/hu); qualsiasi locale sconosciuta ricade su en.
 function detectLang(): Lang {
   const l = readLocaleCookie();
   return l in I18N ? (l as Lang) : "en";
