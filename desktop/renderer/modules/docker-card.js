@@ -314,12 +314,15 @@ export function renderDockerCard(status) {
     return
   }
 
-  // linux fallback: the "open download page" flow.
+  // Linux: silent auto-install of Docker Engine via the official
+  // get.docker.com script (see installDockerEngineOnLinux in install.js).
+  // Drives the same onInstallDocker pipeline + live log as macOS instead of
+  // just opening the download page in a browser.
   if (check.state === 'missing') {
     const install = document.createElement('button')
     install.className = 'btn btn--primary'
     install.textContent = t('docker.action.install')
-    install.addEventListener('click', onOpenDownloadPage)
+    install.addEventListener('click', onInstallDocker)
     dom.dockerActions.appendChild(install)
     return
   }
