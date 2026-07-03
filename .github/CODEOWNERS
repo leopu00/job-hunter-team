@@ -1,0 +1,9 @@
+# Default owner: ogni PR richiede la review del maintainer.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+*                       @leopu00
+
+# Superfici sensibili: pipeline CI/CD, release e deploy del sito.
+/.github/workflows/     @leopu00
+/scripts/               @leopu00
+/supabase/migrations/   @leopu00
+/web/app/api/           @leopu00
