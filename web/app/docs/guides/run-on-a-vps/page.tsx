@@ -92,7 +92,7 @@ const T: Record<
     step4Li2Post: ", so the team survives reboots automatically.",
     calloutDesktopLabel: "Prefer no terminal?",
     calloutDesktopPre:
-      "The desktop app can connect to and control a team running on a VPS — start, stop and monitor it as if it were local. See",
+      "The desktop app (coming soon) will connect to and control a team running on a VPS — start, stop and monitor it as if it were local. See",
     calloutDesktopLink: "how to run it",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "One team per user.",
@@ -138,7 +138,7 @@ const T: Record<
     step4Li2Post: ", così il team sopravvive automaticamente ai riavvii.",
     calloutDesktopLabel: "Preferisci niente terminale?",
     calloutDesktopPre:
-      "L'app desktop può connettersi e controllare un team in esecuzione su un VPS — avvialo, fermalo e monitoralo come se fosse locale. Vedi",
+      "L'app desktop (in arrivo) si connetterà e controllerà un team in esecuzione su un VPS — avvialo, fermalo e monitoralo come se fosse locale. Vedi",
     calloutDesktopLink: "come eseguirlo",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Un team per utente.",
@@ -186,7 +186,7 @@ const T: Record<
       ", así que el equipo sobrevive a los reinicios automáticamente.",
     calloutDesktopLabel: "¿Prefieres sin terminal?",
     calloutDesktopPre:
-      "La app de escritorio puede conectarse y controlar un equipo en ejecución en un VPS — iníciarlo, detenerlo y monitorizarlo como si fuera local. Mira",
+      "La app de escritorio (próximamente) se conectará y controlará un equipo en ejecución en un VPS — iniciarlo, detenerlo y monitorizarlo como si fuera local. Mira",
     calloutDesktopLink: "cómo ejecutarlo",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Un equipo por usuario.",
@@ -234,7 +234,7 @@ const T: Record<
     step4Li2Post: ", donc l'équipe survit automatiquement aux redémarrages.",
     calloutDesktopLabel: "Vous préférez sans terminal ?",
     calloutDesktopPre:
-      "L'application de bureau peut se connecter à une équipe tournant sur un VPS et la contrôler — la démarrer, l'arrêter et la surveiller comme si elle était locale. Voir",
+      "L'application de bureau (bientôt disponible) pourra se connecter à une équipe tournant sur un VPS et la contrôler — la démarrer, l'arrêter et la surveiller comme si elle était locale. Voir",
     calloutDesktopLink: "comment l'exécuter",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Une équipe par utilisateur.",
@@ -282,7 +282,7 @@ const T: Record<
     step4Li2Post: ", sodass das Team Neustarts automatisch übersteht.",
     calloutDesktopLabel: "Lieber ohne Terminal?",
     calloutDesktopPre:
-      "Die Desktop-App kann sich mit einem Team verbinden, das auf einem VPS läuft, und es steuern — starten, stoppen und überwachen, als wäre es lokal. Siehe",
+      "Die Desktop-App (demnächst) wird sich mit einem Team verbinden können, das auf einem VPS läuft, und es steuern — starten, stoppen und überwachen, als wäre es lokal. Siehe",
     calloutDesktopLink: "wie man es ausführt",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Ein Team pro Benutzer.",
@@ -329,7 +329,7 @@ const T: Record<
     step4Li2Post: ", így a csapat automatikusan túléli az újraindításokat.",
     calloutDesktopLabel: "Inkább terminál nélkül?",
     calloutDesktopPre:
-      "Az asztali alkalmazás csatlakozhat egy VPS-en futó csapathoz és vezérelheti azt — indíthatod, leállíthatod és figyelheted, mintha helyi lenne. Lásd:",
+      "Az asztali alkalmazás (hamarosan) csatlakozni tud majd egy VPS-en futó csapathoz és vezérelni azt — indíthatod, leállíthatod és figyelheted, mintha helyi lenne. Lásd:",
     calloutDesktopLink: "hogyan futtasd",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Egy csapat felhasználónként.",
@@ -377,7 +377,7 @@ const T: Record<
       ", por isso a equipa sobrevive automaticamente aos reinícios.",
     calloutDesktopLabel: "Preferes sem terminal?",
     calloutDesktopPre:
-      "A aplicação de desktop pode ligar-se e controlar uma equipa a correr num VPS — iniciá-la, pará-la e monitorizá-la como se fosse local. Vê",
+      "A aplicação de desktop (em breve) poderá ligar-se e controlar uma equipa a correr num VPS — iniciá-la, pará-la e monitorizá-la como se fosse local. Vê",
     calloutDesktopLink: "como a executar",
     calloutDesktopPost: ".",
     calloutOneTeamLabel: "Uma equipa por utilizador.",

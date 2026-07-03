@@ -19,6 +19,18 @@ function Callout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// L'app desktop non è ancora scaricabile (in arrivo per macOS/Windows/Linux):
+// i passaggi della guida che la citano si applicano al suo arrivo.
+const DESKTOP_SOON: Record<string, string> = {
+  it: "Nota: l'app desktop citata in questa guida non è ancora scaricabile — è in arrivo per macOS, Windows e Linux.",
+  en: "Note: the desktop app mentioned in this guide isn't downloadable yet — it's coming to macOS, Windows and Linux.",
+  es: "Nota: la app de escritorio mencionada en esta guía aún no se puede descargar — llegará a macOS, Windows y Linux.",
+  fr: "Remarque : l'application de bureau mentionnée dans ce guide n'est pas encore téléchargeable — elle arrive sur macOS, Windows et Linux.",
+  de: "Hinweis: Die in dieser Anleitung erwähnte Desktop-App ist noch nicht herunterladbar — sie kommt für macOS, Windows und Linux.",
+  hu: "Megjegyzés: az útmutatóban említett asztali app még nem tölthető le — hamarosan érkezik macOS-re, Windowsra és Linuxra.",
+  pt: "Nota: a app de ambiente de trabalho mencionada neste guia ainda não pode ser descarregada — está a chegar a macOS, Windows e Linux.",
+};
+
 type Strings = {
   bcHome: string;
   bcDocs: string;
@@ -2862,6 +2874,8 @@ export default async function EmailForwardingGuidePage() {
           {t.intro}
         </p>
       </div>
+
+      <Callout>{DESKTOP_SOON[locale] ?? DESKTOP_SOON.en}</Callout>
 
       <Callout>{t.calloutOptional}</Callout>
 

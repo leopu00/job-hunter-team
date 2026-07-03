@@ -103,37 +103,37 @@ const DOCS_I18N: Record<string, Record<DocLocale, DocText>> = {
     it: {
       title: "Per iniziare",
       description:
-        "Tre modi per installare, la prima esecuzione e il team in 10 minuti.",
+        "Come installare, la prima esecuzione e il team in 10 minuti.",
     },
     en: {
       title: "Getting Started",
       description:
-        "Three ways to install, your first run, and the team in 10 minutes.",
+        "How to install, your first run, and the team in 10 minutes.",
     },
     es: {
       title: "Primeros pasos",
       description:
-        "Tres formas de instalar, tu primera ejecución y el equipo en 10 minutos.",
+        "Cómo instalar, tu primera ejecución y el equipo en 10 minutos.",
     },
     fr: {
       title: "Pour commencer",
       description:
-        "Trois façons d'installer, votre première exécution et l'équipe en 10 minutes.",
+        "Comment installer, votre première exécution et l'équipe en 10 minutes.",
     },
     de: {
       title: "Erste Schritte",
       description:
-        "Drei Installationswege, dein erster Lauf und das Team in 10 Minuten.",
+        "Wie du installierst, dein erster Lauf und das Team in 10 Minuten.",
     },
     hu: {
       title: "Első lépések",
       description:
-        "Három telepítési mód, az első futtatás és a csapat 10 perc alatt.",
+        "Hogyan telepíts, az első futtatás és a csapat 10 perc alatt.",
     },
     pt: {
       title: "Primeiros passos",
       description:
-        "Três formas de instalar, a tua primeira execução e a equipa em 10 minutos.",
+        "Como instalar, a tua primeira execução e a equipa em 10 minutos.",
     },
   },
   "/docs/guides/connect-ai-provider": {

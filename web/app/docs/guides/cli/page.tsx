@@ -59,7 +59,7 @@ const T: Record<
   en: {
     title: "CLI — the jht command",
     tagline: "The essential commands to drive the team from a terminal",
-    intro1: "Everything the desktop app and the web do, you can do with",
+    intro1: "Everything the web — and the upcoming desktop app — does, you can do with",
     intro2:
       ". It's the single surface humans, power users and AI assistants share — self-sufficient for day-to-day operation. Here are the commands you'll actually use.",
     callout1: "💡 Every command supports",
@@ -111,7 +111,7 @@ const T: Record<
   it: {
     title: "CLI — il comando jht",
     tagline: "I comandi essenziali per guidare il team da terminale",
-    intro1: "Tutto ciò che fanno l'app desktop e il web, lo puoi fare con",
+    intro1: "Tutto ciò che fa il web — e che farà l'app desktop in arrivo — lo puoi fare con",
     intro2:
       ". È l'unica superficie condivisa da esseri umani, utenti esperti e assistenti AI — autosufficiente per l'uso quotidiano. Ecco i comandi che userai davvero.",
     callout1: "💡 Ogni comando supporta",
@@ -165,7 +165,7 @@ const T: Record<
     tagline:
       "Los comandos esenciales para dirigir el equipo desde una terminal",
     intro1:
-      "Todo lo que hacen la app de escritorio y la web, lo puedes hacer con",
+      "Todo lo que hace la web — y lo que hará la futura app de escritorio — lo puedes hacer con",
     intro2:
       ". Es la única superficie que comparten humanos, usuarios avanzados y asistentes de IA — autosuficiente para el uso diario. Estos son los comandos que realmente usarás.",
     callout1: "💡 Cada comando admite",
@@ -222,7 +222,7 @@ const T: Record<
     tagline:
       "Les commandes essentielles pour piloter l'équipe depuis un terminal",
     intro1:
-      "Tout ce que font l'application de bureau et le web, vous pouvez le faire avec",
+      "Tout ce que fait le web — et ce que fera la future application de bureau — vous pouvez le faire avec",
     intro2:
       ". C'est la seule surface partagée par les humains, les utilisateurs avancés et les assistants IA — autosuffisante pour l'usage quotidien. Voici les commandes que vous utiliserez vraiment.",
     callout1: "💡 Chaque commande prend en charge",
@@ -277,7 +277,7 @@ const T: Record<
     title: "CLI — der Befehl jht",
     tagline:
       "Die wesentlichen Befehle, um das Team vom Terminal aus zu steuern",
-    intro1: "Alles, was die Desktop-App und das Web tun, kannst du mit",
+    intro1: "Alles, was das Web tut — und was die kommende Desktop-App tun wird — kannst du mit",
     intro2:
       " erledigen. Es ist die einzige Oberfläche, die Menschen, Power-User und KI-Assistenten teilen — autark für den täglichen Betrieb. Hier sind die Befehle, die du tatsächlich nutzen wirst.",
     callout1: "💡 Jeder Befehl unterstützt",
@@ -330,7 +330,7 @@ const T: Record<
     title: "CLI — a jht parancs",
     tagline:
       "A csapat terminálból való irányításához szükséges alapvető parancsok",
-    intro1: "Mindent, amit az asztali alkalmazás és a web csinál, megtehetsz a",
+    intro1: "Mindent, amit a web csinál — és amit a hamarosan érkező asztali alkalmazás tud majd — megtehetsz a",
     intro2:
       " segítségével. Ez az egyetlen felület, amelyet emberek, haladó felhasználók és MI-asszisztensek megosztanak — önellátó a napi használathoz. Íme a parancsok, amelyeket valóban használni fogsz.",
     callout1: "💡 Minden parancs támogatja a",
@@ -383,7 +383,7 @@ const T: Record<
     title: "CLI — o comando jht",
     tagline:
       "Os comandos essenciais para conduzir a equipe a partir de um terminal",
-    intro1: "Tudo o que a app de desktop e a web fazem, você pode fazer com",
+    intro1: "Tudo o que a web faz — e o que a futura app de desktop fará — você pode fazer com",
     intro2:
       ". É a única superfície partilhada por humanos, utilizadores avançados e assistentes de IA — autossuficiente para o uso diário. Aqui estão os comandos que você realmente vai usar.",
     callout1: "💡 Todos os comandos suportam",

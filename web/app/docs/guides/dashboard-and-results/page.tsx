@@ -103,7 +103,7 @@ jht stats                 # found / scored / applied counts`,
     readOnlyStrong: "read-only",
     readOnlyRest1: "🌐 On the public site the dashboard is ",
     readOnlyRest2:
-      " for safety. Anything that changes your team or your data happens from the desktop app or the CLI, on your machine.",
+      " for safety. Anything that changes your team or your data happens from the CLI (and soon the desktop app), on your machine.",
     outputH2: "📄 The output you act on",
     outputRest1:
       "Each CV you request comes back as a ready-to-send package (CV + cover letter) in your ",
@@ -162,7 +162,7 @@ jht stats                 # conteggi trovate / valutate / candidate`,
     readOnlyStrong: "in sola lettura",
     readOnlyRest1: "🌐 Sul sito pubblico la dashboard è ",
     readOnlyRest2:
-      " per sicurezza. Tutto ciò che modifica il tuo team o i tuoi dati avviene dall'app desktop o dalla CLI, sulla tua macchina.",
+      " per sicurezza. Tutto ciò che modifica il tuo team o i tuoi dati avviene dalla CLI (e presto dall'app desktop), sulla tua macchina.",
     outputH2: "📄 Il risultato su cui agisci",
     outputRest1:
       "Ogni CV che richiedi torna come pacchetto pronto all'invio (CV + lettera di presentazione) nella tua cartella documenti ",
@@ -221,7 +221,7 @@ jht stats                 # recuentos de encontradas / puntuadas / aplicadas`,
     readOnlyStrong: "de solo lectura",
     readOnlyRest1: "🌐 En el sitio público el panel es ",
     readOnlyRest2:
-      " por seguridad. Todo lo que cambia tu equipo o tus datos ocurre desde la app de escritorio o la CLI, en tu máquina.",
+      " por seguridad. Todo lo que cambia tu equipo o tus datos ocurre desde la CLI (y pronto desde la app de escritorio), en tu máquina.",
     outputH2: "📄 El resultado sobre el que actúas",
     outputRest1:
       "Cada CV que pides vuelve como paquete listo para enviar (CV + carta de presentación) en tu carpeta de documentos ",
@@ -341,7 +341,7 @@ jht stats                 # Zähler gefunden / bewertet / beworben`,
     readOnlyRest1:
       "🌐 Auf der öffentlichen Seite ist das Dashboard zur Sicherheit ",
     readOnlyRest2:
-      ". Alles, was dein Team oder deine Daten ändert, geschieht über die Desktop-App oder die CLI, auf deinem Rechner.",
+      ". Alles, was dein Team oder deine Daten ändert, geschieht über die CLI (und bald die Desktop-App), auf deinem Rechner.",
     outputH2: "📄 Das Ergebnis, auf das du reagierst",
     outputRest1:
       "Jeder CV, den du anforderst, kommt als versandfertiges Paket (Lebenslauf + Anschreiben) in deinem Dokumentenordner ",
@@ -399,7 +399,7 @@ jht stats                 # talált / pontozott / jelentkezett darabszámok`,
     readOnlyStrong: "csak olvasható",
     readOnlyRest1: "🌐 A nyilvános oldalon az irányítópult biztonsági okból ",
     readOnlyRest2:
-      ". Minden, ami a csapatodat vagy az adataidat módosítja, az asztali alkalmazásból vagy a CLI-ből történik, a saját gépeden.",
+      ". Minden, ami a csapatodat vagy az adataidat módosítja, a CLI-ből történik (és hamarosan az asztali alkalmazásból), a saját gépeden.",
     outputH2: "📄 Az eredmény, amire reagálsz",
     outputRest1:
       "Minden kért CV küldésre kész csomagként (önéletrajz + kísérőlevél) érkezik vissza a ",
