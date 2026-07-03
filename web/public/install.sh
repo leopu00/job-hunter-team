@@ -47,7 +47,7 @@
 # ║    JHT_SKIP_ONBOARD=1      Non lanciare il wizard alla fine              ║
 # ║                                                                          ║
 # ║  Riferimento design:                                                     ║
-# ║    docs/internal/vps.md                      ║
+# ║    docs/internal/ops/vps.md                      ║
 # ║                                                                          ║
 # ║  Supporta: macOS (Colima o Docker Desktop), Linux (Debian/Ubuntu/Fedora/  ║
 # ║  Arch), WSL2.                                                             ║
@@ -291,7 +291,7 @@ install_docker_linux() {
   # `apt install docker.io` NON include il plugin compose: senza,
   # `docker compose ...` fallisce con "unknown shorthand flag 'f'" e il
   # wrapper jht non parte. Tracciato come gotcha durante il primo smoke
-  # VPS Hetzner del 2026-05-06 (vedi docs/internal/vps.md).
+  # VPS Hetzner del 2026-05-06 (vedi docs/internal/ops/vps.md).
   case "$PKG" in
     apt)
       run sudo_maybe apt-get update -qq

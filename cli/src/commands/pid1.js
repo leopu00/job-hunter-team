@@ -382,7 +382,7 @@ async function runUnstuckPositions() {
   // Reset positions stuck in 'writing'/'checked' da HALT/kill mid-run del
   // boot precedente. Idempotente: zero stuck = no-op. Skip se jobs.db
   // ancora non esiste (nessun team mai avviato, niente da pulire).
-  // Origin: docs/internal/2026-05-21-vps1-run-postmortem.md anomalia #4.
+  // Origin: docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md anomalia #4.
   const JOBS_DB_PATH = `${JHT_HOME}/jobs.db`;
   try {
     await access(JOBS_DB_PATH);
@@ -718,7 +718,7 @@ async function dispatch() {
 
   // team_state reconciler: polla /api/team-state e converge desired→observed
   // via `jht team start|stop|restart`. Parallelo a realtime subscriber durante
-  // il cutover (Step 5 in docs/internal/cloud-sync-architecture.md).
+  // il cutover (Step 5 in docs/internal/architecture/cloud-sync-architecture.md).
   const startTeamState = () => {
     if (teamStateChild && !teamStateChild.killed) return;
     pid1Log('starting team_state reconciler');

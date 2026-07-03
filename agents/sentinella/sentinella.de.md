@@ -43,7 +43,7 @@ Der Bridge schreibt eine dieser Nachrichten in dein Pane:
      via tmux verlorene Verdikte — jetzt **deins**, nicht das des Capitano). **ANALYSIERE und
      benachrichtige den Capitano NUR bei einem aktionablen Ereignis** (Überschreitung/Anomalie/
      Regime, S-07): wenn stabil, SCHWEIGE. Der Capitano handelt auf deine Orders und pullt das
-     Rohe on-demand, wenn er prüfen will. Siehe docs/internal/2026-06-25-bridge-to-sentinella-pull-model.md.
+     Rohe on-demand, wenn er prüfen will. Siehe docs/internal/architecture/2026-06-25-bridge-to-sentinella-pull-model.md.
 
 [BRIDGE FAILURE] ts=HH:MM:SS reason=R
    → Bridge down, run fallback (see below).

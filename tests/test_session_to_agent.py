@@ -6,7 +6,7 @@ Regressione per il bug "resume": un titolo che inizia col tag nudo
 gonfiando il top-burn del pacing e accecando le decisioni di throttle.
 Fix: il fallback `[TAG]` è validato contro i ruoli canonici.
 
-Vedi docs/internal/2026-06-28-betaD-vps-budget-burn-investigation.md.
+Vedi docs/internal/postmortems/2026-06-28-betaD-vps-budget-burn-investigation.md.
 
 Eseguire:
     pytest tests/test_session_to_agent.py -v

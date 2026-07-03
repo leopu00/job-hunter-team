@@ -1,6 +1,6 @@
 """Test shared/skills/unstuck_positions.py.
 
-Address anomalia #4 da docs/internal/2026-05-21-vps1-run-postmortem.md:
+Address anomalia #4 da docs/internal/postmortems/2026-05-21-vps1-run-postmortem.md:
 positions stuck in 'writing'/'checked' al boot dopo HALT/kill mid-run.
 
 Eseguire:

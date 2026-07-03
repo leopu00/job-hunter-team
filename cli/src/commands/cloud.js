@@ -16,12 +16,12 @@ const PROFILE_SUMMARIES_DIR = join(PROFILE_DIR, 'summaries');
 const WEEKLY_HALT_FLAG = join(JHT_HOME, '.weekly-halt.flag');
 // Cursor delta-sync: per ogni tabella memorizziamo l'ultimo updated_at
 // pushato. Al tick successivo selezioniamo solo righe con updated_at >
-// cursor. Crollo bandwidth ~95% (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md).
+// cursor. Crollo bandwidth ~95% (vedi docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md).
 const CLOUD_CURSOR_FILE = join(JHT_HOME, '.cloud-sync-cursor.json');
 // Cursor pull desired-state: ultimo updated_at letto da Supabase per
 // recuperare flag user-driven (write_requested) scritti via web mentre
 // il container era offline. Separato dal push cursor: due direzioni di
-// flusso indipendenti (vedi docs/internal/cloud-sync-architecture.md).
+// flusso indipendenti (vedi docs/internal/architecture/cloud-sync-architecture.md).
 const CLOUD_PULL_CURSOR_FILE = join(JHT_HOME, '.cloud-pull-cursor.json');
 // Cursor sync ticket (round-trip cloud↔VPS, [JHT-DATA-SYNC] fase 2):
 // { pull_since } = ultimo created_at importato dal cloud (ticket 'open' utente);
@@ -1015,7 +1015,7 @@ async function handlePush(options) {
   if (!res.ok) {
     // 409 not_active_device → un altro device ha fatto claim del team.
     // Questo push viene rifiutato deliberatamente (single-team enforcement,
-    // vedi mig 019/023 + docs/internal/vps.md:392). Il daemon entra in
+    // vedi mig 019/023 + docs/internal/ops/vps.md:392). Il daemon entra in
     // consecutive-fails countdown (vedi handleDaemon: 3 warn / 5 shutdown),
     // così non resta in loop infinito a sbattere la testa.
     if (res.status === 409 && body.error === 'not_active_device') {
@@ -1923,10 +1923,10 @@ async function handleDaemon(options) {
   process.on('SIGINT', () => shutdown('SIGINT'));
 
   // HALT-WEEKLY guard: se il flag esiste, l'utente ha ordinato stop team
-  // (vedi docs/internal/2026-05-21-halt-weekly-incident.md). Saltiamo il
+  // (vedi docs/internal/postmortems/2026-05-21-halt-weekly-incident.md). Saltiamo il
   // push: dati locali non cambiano, e ogni tick costa ~1 MB upload + 1
   // function invocation + ~500ms-2s CPU Postgres lato Vercel/Supabase
-  // (vedi docs/internal/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
+  // (vedi docs/internal/postmortems/2026-05-22-vercel-quota-exhaustion.md). Logghiamo
   // ogni 10 tick per evitare spam ma confermare che il daemon e' vivo.
   let haltSkipCount = 0;
   // [PUSH ON-DEMAND 2026-06-25] Niente push automatico per-tick: la dashboard cloud
@@ -2299,7 +2299,7 @@ export function registerCloudCommand(program) {
   // `team-state-listen` — desired-state reconciler che polla /api/team-state
   // e converge `should_run`/`restart_token` → `jht team start|stop|restart`.
   // Parallelo a `realtime-listen` durante il cutover (vedi Step 5 in
-  // docs/internal/cloud-sync-architecture.md). Idempotente con team_commands:
+  // docs/internal/architecture/cloud-sync-architecture.md). Idempotente con team_commands:
   // i due subscriber chiamano gli stessi `jht team <action>`.
   cloud
     .command('team-state-listen')

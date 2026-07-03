@@ -32,7 +32,7 @@
 #   4 → TUI occupata (turno in corso) oltre il budget d'attesa → agente VIVO:
 #       messaggio NON consegnato in sincrono, il chiamante deve RIPROVARE piu'
 #       tardi, MAI spawnare un rimpiazzo. "Busy != morto" (vedi
-#       docs/internal/2026-06-11-overspawn-rootcause.md).
+#       docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
 
 set -euo pipefail
 
@@ -129,7 +129,7 @@ signature=$(printf '%s' "$message" | head -c 30)
 # digitato → la signature non comparirebbe mai e concluderemmo a torto che la
 # TUI e' irricettiva (morta). Un pane occupato e' un agente VIVO: aspettiamo
 # che torni idle prima di typeare, MAI typeare dentro un turno in corso.
-# Causa radice dell'overspawn 07/06 (docs/internal/2026-06-11-overspawn-rootcause.md).
+# Causa radice dell'overspawn 07/06 (docs/internal/postmortems/2026-06-11-overspawn-rootcause.md).
 _pane_busy() {
   case "$(printf '%s' "$1" | tr 'A-Z' 'a-z')" in
     *"esc to interrupt"*|*"to interrupt"*) return 0 ;;
