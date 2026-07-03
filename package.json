@@ -1,7 +1,12 @@
 {
   "name": "job-hunter-team",
   "version": "0.1.24",
-  "description": "> Un framework multi-agente AI open-source che automatizza la tua ricerca lavoro — dalla scoperta di posizioni alla scrittura di CV e cover letter su misura.",
+  "description": "An open-source multi-agent AI framework that automates your job search — from position discovery to tailored CVs and cover letters.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leopu00/job-hunter-team.git"
+  },
+  "homepage": "https://jobhunterteam.ai",
   "main": "index.js",
   "directories": {
     "doc": "docs",
@@ -21,7 +26,7 @@
     "desktop:dist:linux": "npm --prefix desktop run dist:linux"
   },
   "keywords": [],
-  "author": "Leone P.",
+  "author": "Leone Emanuel Puglisi <leopu00@gmail.com>",
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {

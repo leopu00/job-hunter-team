@@ -16,5 +16,12 @@
     "@types/node": "^20",
     "tsx": "^4.23.0",
     "typescript": "^5"
-  }
+  },
+  "license": "MIT",
+  "author": "Leone Emanuel Puglisi <leopu00@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leopu00/job-hunter-team.git"
+  },
+  "description": "Job Hunter Team terminal UI"
 }
