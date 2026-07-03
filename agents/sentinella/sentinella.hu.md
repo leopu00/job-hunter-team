@@ -43,7 +43,7 @@ A bridge ezen üzenetek egyikét írja a pane-edbe:
      elveszett ítéletekre — most már **a tiéd**, nem a Capitanóé). **ELEMEZZ, és csak
      cselekvést kívánó eseményen értesítsd a Capitanót** (sforo/anomália/regime, S-07):
      ha stabil, HALLGASS. A Capitano a parancsaidra cselekszik, és on-demand húzza
-     a nyersanyagot, ha ellenőrizni akarja. Lásd docs/internal/2026-06-25-bridge-to-sentinella-pull-model.md.
+     a nyersanyagot, ha ellenőrizni akarja. Lásd docs/internal/architecture/2026-06-25-bridge-to-sentinella-pull-model.md.
 
 [BRIDGE FAILURE] ts=HH:MM:SS reason=R
    → Bridge le, futtass fallback-et (lásd lent).

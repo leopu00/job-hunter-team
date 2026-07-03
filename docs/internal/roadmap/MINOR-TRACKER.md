@@ -69,7 +69,7 @@
 
 ### ⬜ `[MINOR-TAXONOMY-I18N]` Allineare le 6 traduzioni di analista/capitano al redesign brain-driven
 
-- **Origine:** redesign tassonomia 2026-06-20 (`docs/internal/2026-06-20-taxonomy-brain-driven-redesign.md`).
+- **Origine:** redesign tassonomia 2026-06-20 (`docs/internal/architecture/2026-06-20-taxonomy-brain-driven-redesign.md`).
 - **Cosa serve:** lo step 8 (categorizzazione brain-driven: `other-pile` → `promote`) di `agents/analista/analista.<lang>.md` e la regola **C-17** (arbitro tassonomia) di `agents/capitano/capitano.<lang>.md` esistono solo nel **base EN**. Le 6 varianti `.it/.de/.es/.fr/.hu/.pt` sono stale (descrivono ancora il vecchio modello a string-pass).
 - **Impatto:** NESSUNO su betaA+betaB (entrambi `locale=en` → caricano il base EN). Riguarda solo eventuali utenti in altre lingue.
 - **Effort:** M (2 file × 6 lingue, traduzione fedele).

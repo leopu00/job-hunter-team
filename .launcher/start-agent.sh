@@ -489,7 +489,7 @@ case "$PROVIDER" in
     # --no-thinking (#5, 2026-06-30): K2.7-Code ha il "thinking" (catena di reasoning
     # fatturata come output) ON di default; è la causa del coordinator-burn — i
     # coordinatori Kimi costavano ~7-12x un tick di Codex (vedi
-    # docs/internal/2026-06-29-coordinator-burn-kimi-vs-codex.md). Lo spegniamo SOLO
+    # docs/internal/_archive/2026-06-29-coordinator-burn-kimi-vs-codex.md). Lo spegniamo SOLO
     # per i COORDINATORI (Capitano + Sentinella): il loro lavoro non è user-facing,
     # lì il thinking è idle-burn puro (il Capitano congelato bruciava ~35 kT/h solo
     # per ri-deliberare "resto in coast"). I WORKER (Scout/Analista/Scorer/Scrittore/
@@ -504,7 +504,7 @@ case "$PROVIDER" in
     # (enforcement dei gate, giudizio pacing) richiede la catena di reasoning: senza,
     # Kimi delibera male e fa danni gravi. Costa di più del coast-burn ma è NECESSARIO.
     # La SENTINELLA resta OFF (compito più stretto: monitoraggio/soglie) — si osserva
-    # nei prossimi giorni se regge. Doc: docs/internal/2026-07-01-capitano-kimi-thinking-off-writer-gate.md
+    # nei prossimi giorni se regge. Doc: docs/internal/postmortems/2026-07-01-capitano-kimi-thinking-off-writer-gate.md
     THINKING_FLAG=""
     case "$(printf '%s' "$ROLE" | tr 'A-Z' 'a-z')" in
       sentinella) THINKING_FLAG=" --no-thinking" ;;
@@ -646,7 +646,7 @@ IDENTITY_DEST="$AGENT_DIR/$IDENTITY_FILE"
 #   4. default 'en' (DEFAULT_LOCALE in shared/i18n/types.ts)
 # Il fallback al baseline (`<role>.md`, sempre EN dal 2026-05-18) è
 # silenzioso perché 'en' è il master language.
-# Vedi docs/internal/2026-05-06-agent-prompts-i18n.md.
+# Vedi docs/internal/experiments/2026-05-06-agent-prompts-i18n.md.
 USER_LOCALE=""
 if [ -n "${JHT_LANG:-}" ]; then
   USER_LOCALE="$JHT_LANG"

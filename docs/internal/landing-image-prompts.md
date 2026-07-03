@@ -378,3 +378,28 @@ un cervello umano biologico: c'è un **cervello AI = rete neurale / LLM**.
 > [STYLE] A stylized view of the desktop app window: a big green START button, a
 > team-status panel, simple toggles — clean and friendly, abstract UI with NO
 > readable text. 4:3.
+
+---
+
+## 🧹 Rifiniture aperte (ex `MINOR-TRACKER.md` root, creato 2026-06-21)
+
+Piccole rifiniture estetiche del sito pubblico, non bloccanti. Da spuntare quando fatte.
+
+### Pulizia immagini (punti bianchi residui)
+
+Artefatti bianchi (residui di rimozione sfondo) da ripulire:
+
+- [ ] `web/public/landing-team.png` — immagine del team nella **home** (sezione "Il team").
+- [ ] `web/public/the-box.png` — immagine principale della pagina **Project** (`/project`).
+
+### Diversità di genere figure agenti (`/agents`)
+
+Al momento quasi tutti gli agenti illustrati sono uomini. In futuro rigenerare **almeno un paio di
+figure come donne** per equilibrare il roster: basta cambiare il genere nei prompt qui sopra
+lasciando il resto (ruolo, prop, occhiali, stile). Non urgente.
+
+### Fatto
+
+- Home: rimosso il placeholder immagine nella sezione Prezzi.
+- Home: aggiunte sezioni text-only **Project** (→ `/project`) e **Studies** (→ `/case-studies`) sotto Prezzi.
+- Pagina team (`/agents`): rimossi i placeholder immagine per gli agenti senza immagine.

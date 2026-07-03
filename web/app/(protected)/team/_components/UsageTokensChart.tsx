@@ -1550,7 +1550,7 @@ function fmtDuration(ms: number): string {
 // cache_read non contribuisce al rate budget come la doc lascia intendere.
 // Stessa scelta in shared/skills/token-by-agent-series.py — i due punti
 // devono restare allineati altrimenti UI e tabella throttle divergono.
-// Razionale completo: docs/internal/2026-05-03-rate-kimi-weights.md
+// Razionale completo: docs/internal/experiments/2026-05-03-rate-kimi-weights.md
 const FALLBACK_W: Weights = {
   input: 1.0,
   output: 1.0,

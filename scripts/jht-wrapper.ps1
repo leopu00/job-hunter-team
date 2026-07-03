@@ -25,7 +25,7 @@
 # ║    - NO host-setup.sh invocation: swap config e' Linux-only, lang/tz     ║
 # ║      picker resta gestito dal wizard Node dentro al container.           ║
 # ║                                                                          ║
-# ║  Riferimento design: docs/internal/vps.md                                ║
+# ║  Riferimento design: docs/internal/ops/vps.md                                ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 $ErrorActionPreference = 'Stop'

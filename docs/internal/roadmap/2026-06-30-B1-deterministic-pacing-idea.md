@@ -11,7 +11,7 @@ Sul team **Kimi** (betaB), la pacing decisa dal coordinatore-LLM **ad ogni tick*
 - **Coordinator self-burn:** il *decidere stesso* è costoso — il Capitano va in turni lunghi (audit pipeline) e diventa la voce dominante del consumo proprio quando dovrebbe frenare.
 - Risultato: budget bruciato dall'oscillazione, non dal lavoro (notte: +22% weekly, 13 trovate / 7 scored).
 
-> ⚠️ **NOTA 2026-07-02 (correzione):** il "coordinator self-burn / il Capitano voce dominante del consumo" è stato ridimensionato: coordinatori **~20% e ~uguali** su Kimi/Codex; il "70%" è coast su ENTRAMBI. Restano validi il thrash/bang-bang e il coast-burn. Il budget di Kimi è **~2× (non 17×)** più piccolo, handicap gestibile — il limite dominante è **precisione + comportamento**, non il budget. Living doc: [`architecture/kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md).
+> ⚠️ **NOTA 2026-07-02 (correzione):** il "coordinator self-burn / il Capitano voce dominante del consumo" è stato ridimensionato: coordinatori **~20% e ~uguali** su Kimi/Codex; il "70%" è coast su ENTRAMBI. Restano validi il thrash/bang-bang e il coast-burn. Il budget di Kimi è **~2× (non 17×)** più piccolo, handicap gestibile — il limite dominante è **precisione + comportamento**, non il budget. Living doc: [`architecture/kimi-vs-codex-economics.md`](../architecture/kimi-vs-codex-economics.md).
 
 ## 💡 L'idea B1 (in breve)
 
@@ -49,4 +49,4 @@ Così si abbatte il consumo (il problema) **senza** buttare via l'intelligenza (
 ## 📌 Decisione attuale
 - **NON si implementa ora.** Parcheggiata come possibile-futuro.
 - Se si riprende: partire dallo **shadow-log** + disegnare bene il **ruolo supervisore** dell'LLM (non un puro script).
-- Collegata a: `2026-06-28-pace-imperative-and-token-slim.md` (Passo B shadow, la base tecnica già esiste), analisi thrash notte betaB.
+- Collegata a: [`../architecture/2026-06-28-weekly-pacing-redesign.md`](../architecture/2026-06-28-weekly-pacing-redesign.md) (Parte 1, pace imperative: Passo B shadow, la base tecnica già esiste), analisi thrash notte betaB.

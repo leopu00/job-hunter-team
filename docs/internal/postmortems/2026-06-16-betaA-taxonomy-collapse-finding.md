@@ -1,6 +1,6 @@
 # 🕳️ Tassonomia emergente — collasso a 1 categoria su betaA (finding)
 
-> ⚠️ **AGGIORNAMENTO 2026-06-20 — leggere PRIMA `2026-06-20-taxonomy-brain-driven-redesign.md`.**
+> ⚠️ **AGGIORNAMENTO 2026-06-20 — leggere PRIMA [`../architecture/2026-06-20-taxonomy-brain-driven-redesign.md`](../architecture/2026-06-20-taxonomy-brain-driven-redesign.md).**
 > Il fix judge-first qui descritto (Mosse 1+2) ha fermato il collasso ma le offerte finivano poi in
 > massa in `Other` perché il **pass di promozione a stringhe non promuoveva mai** (rootcause vera).
 > Una perlustrazione del 20/06 ha **SMENTITO il §5 di questo doc**: betaB NON aveva "legacy pulito" —

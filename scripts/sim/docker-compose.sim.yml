@@ -4,7 +4,7 @@
 # l'ambiente di dev (dev1 usa `jht`, dev2 usa il next dev host su 3005).
 #
 # Storia: creato 2026-05-23 per testare il playbook location dell'analista
-# (docs/internal/2026-05-23-location-playbook.md) su 206 posizioni vergini.
+# (docs/internal/experiments/2026-05-23-location-playbook.md) su 206 posizioni vergini.
 #
 # Differenze vs docker-compose.yml di produzione:
 # - container_name: jht-sim-d2 (non collide con `jht`)

@@ -472,7 +472,7 @@ def jht_tmux_send(session, text):
     # bridge. Senza questa guardia, TimeoutExpired propagava fuori dal while-loop di
     # main() (l'unico handler esterno è KeyboardInterrupt) → bridge morto in silenzio,
     # zero auto-recovery (setsid detached, fuori dal respawn di pid1). Vedi postmortem
-    # docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md. Degrada a "tick saltato".
+    # docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md. Degrada a "tick saltato".
     try:
         return subprocess.run(["jht-tmux-send", session, text], capture_output=True, timeout=15).returncode == 0
     except (subprocess.TimeoutExpired, OSError) as e:
@@ -2030,7 +2030,7 @@ if __name__ == "__main__":
     # (a) la guardia in jht_tmux_send degrada il caso noto a "tick saltato";
     # (b) l'agent-watchdog (maybe_respawn_bridges) respawna il processo se muore
     # del tutto (OOM/kill); (c) il Mantenitore fa il canary completo 1×/dì.
-    # Vedi docs/internal/2026-06-27-betaC-sentinel-bridge-crash.md.
+    # Vedi docs/internal/postmortems/2026-06-27-betaC-sentinel-bridge-crash.md.
     import time as _time
     import traceback as _tb
     while True:

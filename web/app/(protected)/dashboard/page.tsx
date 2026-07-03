@@ -61,7 +61,7 @@ export default async function DashboardPage() {
   const locale = getServerLocale();
   const t = getDashboardT(locale);
 
-  // Routing precedence (vedi docs/internal/2026-05-19-dashboard-routing-cases.md):
+  // Routing precedence (vedi docs/internal/architecture/2026-05-19-dashboard-routing-cases.md):
   //   1. demo mode  → demo data (più sotto)
   //   2. Supabase + utente loggato → 3-way cloud routing su user_onboarding_state,
   //      ANCHE su localhost: se l'utente ha già fatto sign-in con un account
@@ -221,7 +221,7 @@ export default async function DashboardPage() {
           {/* ── VPS lifecycle: 3 bottoni (pausa/snapshot/termina) ────
           Solo in VPS mode (JHT_HOST_TYPE=vps): in Local PC mode i
           bottoni non hanno senso — niente "snapshot Hetzner" della
-          tua MacBook. Vedi docs/internal/vps.md § "Lifecycle". */}
+          tua MacBook. Vedi docs/internal/ops/vps.md § "Lifecycle". */}
           <VpsLifecycleCard visible={process.env.JHT_HOST_TYPE === "vps"} />
 
           {/* ── Onboarding popup (empty state) ────────────────────── */}

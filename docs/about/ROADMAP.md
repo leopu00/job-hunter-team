@@ -1,6 +1,6 @@
 # 🗺️ ROADMAP — Job Hunter Team
 
-> Last updated: 2026-07-03 · 🚀 launch day
+> Last updated: 2026-07-03
 >
 > This is the **strategic, forward-looking** view — the themes in motion and where help is welcome. It is **not** a status ledger: shipped work lives in [`CHANGELOG.md`](../../CHANGELOG.md), tactical tasks in [GitHub Issues](https://github.com/leopu00/job-hunter-team/issues) (plus the slim [`BACKLOG.md`](../../BACKLOG.md) index), technical debt in [`docs/internal/roadmap/MINOR-TRACKER.md`](../internal/roadmap/MINOR-TRACKER.md). No percentages here — verbal states only.
 >
@@ -29,7 +29,14 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
          🖥️ Local PC      🏠 Dedicated PC    ☁️ Self-hosted VPS
 ```
 
-**Two interaction planes** (decision 2026-06-15): the **data plane** is one-way and read-only everywhere — container → Supabase → the public web dashboard (positions, scores, map, case studies; usable from a phone or a work PC). The **interaction plane** — chat, files, start/stop, config — always lives co-located with the team in the **desktop app** (browser to `localhost` for a local team, the same stack over an SSH tunnel for a VPS team). Telegram is the optional async channel. Full rationale: [`docs/internal/2026-06-15-interaction-planes-redesign-design.md`](../internal/2026-06-15-interaction-planes-redesign-design.md).
+**Two interaction planes** (decision 2026-06-15): the **data plane** is one-way and read-only everywhere — container → Supabase → the public web dashboard (positions, scores, map, case studies; usable from a phone or a work PC). The **interaction plane** — chat, files, start/stop, config — always lives co-located with the team in the **desktop app** (browser to `localhost` for a local team, the same stack over an SSH tunnel for a VPS team). Telegram is the optional async channel. Full rationale: [`docs/internal/architecture/2026-06-15-interaction-planes-redesign-design.md`](../internal/architecture/2026-06-15-interaction-planes-redesign-design.md).
+
+**Guiding principles** — the constraints every roadmap item respects:
+
+- **Local-first, privacy-first.** Credentials, CVs and the SQLite source-of-truth never leave the user's machine; the cloud mirror is opt-in and read-only. Web read-only is a *security* stance, not a UX shortcut.
+- **Subscriptions, not API keys.** A parallel agent team burns pay-per-use credits in hours; subscription tokens cost ~5× less ([ADR-0004](../adr/0004-subscription-only-no-api-keys.md)). Pay-per-use returns only as a Sentinel-enforced €-budget (mission M8).
+- **Quality over volume.** No auto-apply spam: the Critic gate rewrites until submissions pass a rubric, and the human clicks send.
+- **Honest status.** Verbal states, measured numbers, and published case studies — nothing on this page should fail a fact-check against the code.
 
 **Stack decisions:**
 
@@ -62,15 +69,27 @@ Job Hunter Team runs **locally** in a Docker container, with multiple interfaces
 
 ---
 
+## 🧭 Horizons — what the core team is driving
+
+The maintainer's own sequencing (contributor missions below run in parallel and are not gated on this):
+
+| Horizon | Focus |
+|---|---|
+| **Now** *(weeks)* | Demo GIFs + launch assets for the README and download page · the two open pacing guards (reset-edge false-freeze, daily-halt standby leak) · publish the remaining case studies (Kimi weekly-distributed run #4, Claude re-run #5) · observe the two multi-week Kimi beta teams. |
+| **Next** *(1–2 months)* | Desktop auto-update + tray/notifications + recovery passphrase · **Kimi €40 out of beta** if the month-scale observation holds (that unlocks the honest "affordable for everyone" claim) · translator guide + native-speaker review pass · public project board fed by triaged issues. |
+| **Later** *(a quarter and beyond)* | The large missions as they attract contributors — mobile control (M2), local models (M5), pay-per-use €-budget (M8) · Mentor as a first-class surface (M6) · fine-grained team observability with a who-did-what-when timeline (M7, enabled by the [DB schema evolution](../internal/roadmap/db-schema-optimization.md)). |
+
+---
+
 ## 🙌 Where you can help — contributor missions
 
 New here? These are the **missions** we'd love a hand with — bigger directions, each broken into smaller entry-point tasks. Pick one, comment to claim it, open a PR.
 
 ```
   NOW                          NEXT                         LATER
-  (core team, pre-launch)      (great entry points)         (bigger builds)
+  (core team)                  (great entry points)         (bigger builds)
   ────────────────────────     ────────────────────────     ────────────────────────
-  • cross-OS setup E2E         • M1 quick-feedback cards     • M2 mobile team control
+  • launch assets              • M1 quick-feedback cards     • M2 mobile team control
   • public site polish         • M4 cheaper tiers +          • M5 fully-local models
   • case studies                  more providers
                                • M3 harden security
@@ -78,15 +97,21 @@ New here? These are the **missions** we'd love a hand with — bigger directions
 
 | # | Mission | Good for | Size |
 |---|---------|----------|------|
-| **M1** | 🃏 Quick-feedback cards on offers (swipe / buttons → the team learns your taste) | Frontend / UX | 🟡 medium |
-| **M2** | 📱 Control & stop the team from your phone | Mobile + API | 🔴 large |
-| **M3** | 🛡️ Harden security (prompt-injection fencing, uniform auth gates, token policy) | Security / Backend | 🔴 large |
-| **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ | Integrations | 🟡 medium |
-| **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ | LLM / infra | 🔴 large |
+| **M1** | 🃏 Quick-feedback cards on offers (swipe / buttons → the team learns your taste). The backend action already exists (`user-exclude` + the async request lane); the card UX is the work. | Frontend / UX | 🟡 medium |
+| **M2** | 📱 Control & stop the team from your phone — today the phone gets the read-only dashboard and Telegram; full control needs a mobile-friendly surface over the interaction plane. | Mobile + API | 🔴 large |
+| **M3** | 🛡️ Harden security — prompt-injection fencing on ingested job descriptions, uniform auth gates across routes, sync-token lifecycle policy. | Security / Backend | 🔴 large |
+| **M4** | 💸 Run on entry tiers (~€20/mo) + add more providers ⭐ — the blocker is projection precision and coordinator overhead, not raw budget; every new provider also stress-tests the pacing abstraction. | Integrations | 🟡 medium |
+| **M5** | 🏠 Run the whole team on local models (zero cloud) ⭐ — start by swapping a single role (the Scorer is the most self-contained) and measure quality against the case-study baselines. | LLM / infra | 🔴 large |
 
-**Also on the horizon:** 🧙‍♂️ **M6** — make the Mentor a first-class citizen (dedicated web + desktop page, deeper tuning) · 📊 **M7** — fine-grained team observability + user feedback (full timeline of every offer, who-did-what-when) · 💳 **M8** — pay-per-use API mode with a **€-budget** the Sentinel enforces (not just a subscription %).
+**On the horizon** — bigger directions we've scoped but not opened yet:
 
-> Each mission has **good-first sub-tasks** in its issue. Issues go live at launch — look for the `good first issue` and `help wanted` labels, or open a [Discussion](https://github.com/leopu00/job-hunter-team/discussions) and we'll help you scope a first slice.
+| # | Direction | Why it matters |
+|---|---|---|
+| **M6** | 🧙‍♂️ Mentor as a first-class citizen — dedicated web + desktop page, deeper tuning | The career-coach agent is live but buried in chat; it deserves its own surface. |
+| **M7** | 📊 Fine-grained observability + user feedback — full who-did-what-when timeline per offer | Builds on the [schema evolution plan](../internal/roadmap/db-schema-optimization.md) (`position_events` is the enabler). |
+| **M8** | 💳 Pay-per-use API mode with a **€-budget** the Sentinel enforces | Turns the budget guardian from "subscription %" into real money limits — and makes JHT usable without any subscription. |
+
+> Each mission gets a tracking issue with **good-first sub-tasks** — look for the `good first issue` and `help wanted` labels, or open a [Discussion](https://github.com/leopu00/job-hunter-team/discussions) and we'll help you scope a first slice.
 
 ---
 
