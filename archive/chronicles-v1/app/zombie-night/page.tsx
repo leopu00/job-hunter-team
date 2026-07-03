@@ -14,7 +14,7 @@ const story = getStory("zombie-night")!;
 
 // TODO(cronache): storia DA RIFINIRE quando c'è tempo — riallineare il registro
 // narrativo a quello delle storie nuove (mostrare non spiegare, dialoghi).
-// Vedi docs/internal/chronicles-canon.md § "Storie da rifinire".
+// Vedi archive/chronicles-v1/chronicles-canon.md § "Storie da rifinire".
 
 const CONTENT = {
   it: {
