@@ -81,6 +81,10 @@ export interface CaseStudyMeta {
    *  bruciato una settimana di budget): esclusa dalle statistiche di tasso
    *  giornaliero, dove pochi giorni non sono rappresentativi. */
   freeRun?: boolean;
+  /** nota editoriale in prima persona di chi opera e affina il team su questo
+   *  profilo (voce del manutentore): contesto, sfide e criterio di successo.
+   *  Un paragrafo per elemento. Opzionale: la card in fondo appare solo se c'è. */
+  maintainerNote?: string[];
   run: CaseStudyRun;
 }
 
@@ -93,11 +97,26 @@ const TW_PROFILE: CaseStudyProfile = {
   summary:
     "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
   facts: [
-    { label: "Ruoli target", value: "Technical writer · traduttore tecnico · localizzazione/LQA" },
+    {
+      label: "Ruoli target",
+      value: "Technical writer · traduttore tecnico · localizzazione/LQA",
+    },
     { label: "Esperienza", value: "Cross-domain · industria + lingue" },
-    { label: "Background", value: "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato" },
-    { label: "Lingue", value: "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)" },
-    { label: "Mobilità", value: "Cittadino UE · full remote preferito · Ungheria → Italia → Europa" },
+    {
+      label: "Background",
+      value:
+        "Manifattura · CAD/CAM/CNC · allestimenti · traduzione/interpretariato",
+    },
+    {
+      label: "Lingue",
+      value:
+        "Ungherese e Italiano (madrelingua) · Inglese (C1-C2) · Tedesco (base)",
+    },
+    {
+      label: "Mobilità",
+      value:
+        "Cittadino UE · full remote preferito · Ungheria → Italia → Europa",
+    },
   ],
   locationNote:
     "Priorità al full remote; geograficamente prima l'Ungheria, poi l'Italia, poi il resto d'Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
@@ -134,6 +153,11 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       monthlyEur: 40,
     },
     profile: TW_PROFILE,
+    maintainerNote: [
+      "È stato il profilo più difficile da far rendere. Le competenze sono molto diversificate — technical writing, traduzione tecnica, localizzazione, su un solido passato industriale — e il target geografico è ampio: ne esce un mercato eterogeneo, con offerte difficili da ricondurre a categorie stabili e da valutare con un metro coerente. È anche il profilo su cui abbiamo messo alla prova Kimi K2, il modello più ostico da tenere in esecuzione autonoma per periodi lunghi.",
+      "Nelle prime settimane Kimi esauriva l'intero budget settimanale in un paio di giorni; per non lasciare il team fermo ad aspettare il reset ho lavorato su più abbonamenti e, soprattutto, ho affinato passo dopo passo il pacing e il monitoraggio della spesa. Oggi il budget viene dosato con rigore e il tetto giornaliero non viene più sforato — nel frattempo, però, il bacino di offerte davvero adatte a questo profilo ha iniziato a diradarsi.",
+      "Per considerarlo un caso pienamente riuscito manca un ultimo traguardo: che con un solo abbonamento il team lavori in autonomia, giorno dopo giorno, per almeno un mese di fila senza interruzioni. Quando ci arriveremo, questo diventerà il caso esemplare della serie.",
+    ],
     // Run monitorato (Kimi), settimane intere: vista budget giornaliera.
     phases: [
       {
@@ -218,18 +242,24 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
       facts: [
         {
           label: "Ruoli target",
-          value: "Luxury hospitality · guest experience · VIP relations · cabin crew",
+          value:
+            "Luxury hospitality · guest experience · VIP relations · cabin crew",
         },
         { label: "Esperienza", value: "Inizio-media carriera" },
-        { label: "Settore", value: "Hôtellerie 5★ · ristorazione di lusso · eventi" },
+        {
+          label: "Settore",
+          value: "Hôtellerie 5★ · ristorazione di lusso · eventi",
+        },
         { label: "Formazione", value: "Ambito turistico-alberghiero" },
         {
           label: "Lingue",
-          value: "Profilo multilingue (quattro lingue, incl. italiano e inglese)",
+          value:
+            "Profilo multilingue (quattro lingue, incl. italiano e inglese)",
         },
         {
           label: "Mobilità",
-          value: "Lavora in Italia · per alcune mete estere serve verifica di visto/sponsorship",
+          value:
+            "Lavora in Italia · per alcune mete estere serve verifica di visto/sponsorship",
         },
       ],
       locationNote:
@@ -274,6 +304,8 @@ interface CaseI18nContent {
   locationNote: string;
   why: string;
   phaseNotes?: { price: string; note: string }[];
+  /** nota del manutentore tradotta (opzionale finché non localizzata: fallback IT) */
+  maintainerNote?: string[];
 }
 
 const CASE_I18N = PROFILES_I18N as Partial<
@@ -294,6 +326,8 @@ export function localizeCaseStudy(
     category: tr.category,
     seniority: tr.seniority,
     geos: tr.geos,
+    // finché la nota non è tradotta nella lingua scelta, resta l'italiano (sorgente)
+    maintainerNote: tr.maintainerNote ?? meta.maintainerNote,
     subscription: { ...meta.subscription, price: tr.subscriptionPrice },
     phases: meta.phases?.map((p, i) => ({
       ...p,
