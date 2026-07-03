@@ -95,7 +95,7 @@ const TW_PROFILE: CaseStudyProfile = {
   badge: "B1",
   headline: "Technical writer & traduttore tecnico — ponte industria e lingue",
   summary:
-    "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; priorità Ungheria, poi Italia, poi resto d'Europa.",
+    "Candidato che punta a ruoli di technical writing, traduzione tecnica e localizzazione/LQA-UAT (ungherese/italiano/inglese). Porta un'esperienza cross-domain che unisce mestieri industriali e manifatturieri — manifattura, CAD/CAM/CNC, allestimenti fieristici — con traduzione e interpretariato multilingue: il suo punto di forza è proprio il ponte tra competenza hands-on di settore e competenza linguistica. Preferisce il full remote; ricerca multi-paese in Europa.",
   facts: [
     {
       label: "Ruoli target",
@@ -115,11 +115,11 @@ const TW_PROFILE: CaseStudyProfile = {
     {
       label: "Mobilità",
       value:
-        "Cittadino UE · full remote preferito · Ungheria → Italia → Europa",
+        "Cittadino UE · full remote preferito · ricerca multi-paese in Europa",
     },
   ],
   locationNote:
-    "Priorità al full remote; geograficamente prima l'Ungheria, poi l'Italia, poi il resto d'Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
+    "Priorità al full remote; ricerca multi-paese in Europa, con apertura agli hub tech europei. Tra le città ricorrenti nella ricerca:",
   targetCities: [
     "Budapest",
     "Milano",
@@ -130,7 +130,7 @@ const TW_PROFILE: CaseStudyProfile = {
     "Varsavia",
     "Lisbona",
   ],
-  why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; Ungheria e Italia in cima rispecchiano la priorità geografica e le lingue native.",
+  why: "Ecco perché i numeri vengono così: il candidato punta a technical writing, traduzione tecnica e localizzazione, ma con un forte background industriale — perciò il team ha cercato soprattutto documentazione tecnica industriale e software, e le famiglie di ruolo dominanti sono technical writing hardware/manifatturiero, software/API docs e localizzazione (con qualche affaccio su CAD/CAM/CNC, riflesso del suo passato di settore). Quasi tutto arriva da LinkedIn e da job board specializzate; la distribuzione geografica rispecchia le lingue native e le priorità del candidato.",
 };
 
 // Tre beta tester. Apre il run Codex (beta-2): il più lungo (~1 mese
@@ -199,7 +199,7 @@ export const CASE_STUDIES: CaseStudyMeta[] = [
     tagline: "Technical writing · traduzione · localizzazione",
     category: "Technical Writing",
     seniority: "Senior · cross-domain",
-    geos: ["Ungheria", "Italia", "Europa"],
+    geos: ["Europa"],
     model: "Kimi",
     subscription: {
       provider: "Moonshot Kimi",
