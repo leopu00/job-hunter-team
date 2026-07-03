@@ -126,7 +126,7 @@ ARM64 split) lives in [`docs/internal/ops/release.md`](../docs/internal/ops/rele
 
 ## Code of conduct
 
-This project follows the [Contributor Covenant 2.1](../CODE_OF_CONDUCT.md). By participating you agree to uphold it. Report unacceptable behavior to `info@jobhunterteam.ai`.
+This project follows the [Contributor Covenant 2.1](../CODE_OF_CONDUCT.md). By participating you agree to uphold it. Report unacceptable behavior to `leo_p00@gmail.com`.
 
 ## License
 

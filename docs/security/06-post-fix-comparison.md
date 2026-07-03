@@ -222,7 +222,7 @@ JHT has **`docs/security/04-threat-model.md`** with:
 - Explicit single-user assumption
 - Enumerated in-scope / out-of-scope
 - Container ≠ security boundary documented
-- Reporting policy (`info@jobhunterteam.ai`)
+- Reporting policy (`leo_p00@gmail.com`)
 - Crypto / data handling section
 - Update / patch policy
 

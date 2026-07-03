@@ -18,6 +18,11 @@ buttata: si può ripescare e ri-pubblicare quando ha senso.
   quattro storie pubblicate (`zombie-night`, `bipolar-sentinel`,
   `scout-and-london`, `week-nobody-saw`) con i rispettivi `layout.tsx`/`page.tsx`.
 - `public-images/` — le cover delle storie (`<slug>.png`).
+- `chronicles-canon.md` — il canone narrativo (cornice, cast, glossario
+  tecnico→narrativo, stile copertine, backlog storie + episodi candidati).
+  Spostato qui da `docs/internal/` il 2026-07-03: vive e muore con la pagina.
+  Nota: la tabella "cast" (attributi scenici per ruolo) è ancora consultata da
+  `docs/internal/landing-image-prompts.md` per le immagini di `/agents`.
 
 ## Come riprenderla
 
