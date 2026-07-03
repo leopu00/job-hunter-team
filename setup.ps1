@@ -149,7 +149,7 @@ if (Test-Path $envFile) {
 Step 4 "Configurazione candidate_profile.yml"
 
 $profile = Join-Path $RepoDir "candidate_profile.yml"
-$profileExample = Join-Path $RepoDir "candidate_profile.yml.example"
+$profileExample = Join-Path $RepoDir "docs/examples/candidate_profile.yml.example"
 
 if (Test-Path $profile) {
     Ok "candidate_profile.yml gia' presente"
@@ -158,7 +158,7 @@ if (Test-Path $profile) {
     Ok "candidate_profile.yml creato da .example"
     Warn "AZIONE RICHIESTA: apri candidate_profile.yml e compila il tuo profilo"
 } else {
-    Warn "candidate_profile.yml.example non trovato, skippato"
+    Warn "docs/examples/candidate_profile.yml.example non trovato, skippato"
 }
 
 # ── 5. Web App — web/.env.local ──────────────────────────────────────────────

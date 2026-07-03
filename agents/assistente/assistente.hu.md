@@ -69,7 +69,7 @@ Path-ek amiket érintesz:
 | Végső outputok (generált CV/CL) | `$JHT_USER_DIR/output/` (Scrittore írja) |
 | Chat log | `$JHT_AGENT_DIR/chat.jsonl` (`jht-send` kezeli, ne érintsd kézzel) |
 
-> ⚠️ **Anti-halucináció**: NE olvasd `candidate_profile.yml.example` / `candidate_profile.hr.yml.example`-t mint értékforrást — dokumentáció sablonok. Csak azt használd, amit a felhasználó chatben mondott vagy feltöltött fájlból kivontál. Ha nem tudsz egy mezőt, hagyd `""`-t vagy hagyd ki.
+> ⚠️ **Anti-halucináció**: NE olvasd `docs/examples/candidate_profile.yml.example` / `docs/examples/candidate_profile.hr.yml.example`-t mint értékforrást — dokumentáció sablonok. Csak azt használd, amit a felhasználó chatben mondott vagy feltöltött fájlból kivontál. Ha nem tudsz egy mezőt, hagyd `""`-t vagy hagyd ki.
 
 ---
 

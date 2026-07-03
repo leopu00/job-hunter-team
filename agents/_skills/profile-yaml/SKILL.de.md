@@ -118,7 +118,7 @@ sector_details:
 
 Die Schlüssel `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` werden vom Frontend wörtlich gelesen, um den Abschnitt "Arbeitspräferenzen" zu füllen. Alternative Namen (`work_location`, `flexible`, `remote`) bleiben geschrieben, sind aber für den Benutzer unsichtbar.
 
-Vollständiges Schema + Beispiele: `candidate_profile.yml.example` im Root des Repos (zur Dokumentation, **NICHT die Werte kopieren** — siehe Anti-Halluzination).
+Vollständiges Schema + Beispiele: `docs/examples/candidate_profile.yml.example` (zur Dokumentation, **NICHT die Werte kopieren** — siehe Anti-Halluzination).
 
 ## `sector_details` — freie Schlüssel für die Branche des Benutzers
 
@@ -203,7 +203,7 @@ Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt
 
 ## ⚠️ Anti-Halluzination — die kritische Regel
 
-**NIEMALS `candidate_profile.yml.example` oder `candidate_profile.hr.yml.example` als Wertequelle lesen.** Diese Dateien dokumentieren die *Struktur*, nicht den Kandidaten. Wenn Sie sie lesen, riskieren Sie, "Mario Rossi" / "mario.rossi@example.com" in das echte Profil zu schreiben.
+**NIEMALS `docs/examples/candidate_profile.yml.example` oder `docs/examples/candidate_profile.hr.yml.example` als Wertequelle lesen.** Diese Dateien dokumentieren die *Struktur*, nicht den Kandidaten. Wenn Sie sie lesen, riskieren Sie, "Mario Rossi" / "mario.rossi@example.com" in das echte Profil zu schreiben.
 
 Verwenden Sie AUSSCHLIESSLICH:
 - was der Benutzer Ihnen im Chat gesagt hat

@@ -183,7 +183,7 @@ deprecation banner pointing at `https://jobhunterteam.ai/install.sh`.
 They exist for the case "I already cloned the repo and want a
 deterministic Python/Node onboarding from source": they create
 `.venv/`, install `requirements.txt`, copy `.env.example` →`.env`,
-copy `candidate_profile.yml.example` → `candidate_profile.yml`, run
+copy `docs/examples/candidate_profile.yml.example` → `candidate_profile.yml`, run
 `npm install` in `web/`, install the git pre-commit hook, init the
 SQLite DB, and print next steps.
 
