@@ -15,7 +15,7 @@ You need an active subscription to **one** of:
 | | Provider | Plan | Cost/mo | Status |
 |---|---|---|---|---|
 | 🟠 | **Claude** | Max x20 | ~€200 | ✅ Production-ready, best precision |
-| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Proven — 1-month autonomous run (649 positions, weekly budget self-managed at 99–100%) |
+| 🔵 | **Codex** | Plus / Pro | ~€100 | ✅ Proven — 1-month autonomous run (658 positions, weekly budget self-managed at 99–100%) |
 | 🌙 | **Kimi** | Pro | ~€40 | 🧪 Beta — mass-market tier (75h + 10-day runs; multi-week observation ongoing) |
 
 > ⚠️ **The subscription must be dedicated to JHT** — not the same account you use for personal/work AI tasks. A shared account drains the same weekly quota twice and the team will hit rate limits unexpectedly.

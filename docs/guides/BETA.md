@@ -4,7 +4,7 @@ JHT is in active beta. We're looking for a small group of real job-seekers who a
 
 ## Why your test matters
 
-JHT's claims are backed by four documented case studies — including a **one-month fully autonomous run on Codex** (649 positions found, 513 scored, weekly budget self-managed at 99–100% with zero human interventions — [case study #4](../about/RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). But that's still a handful of profiles across three provider tiers.
+JHT's claims are backed by four documented case studies — including a **one-month fully autonomous run on Codex** (658 positions found, 520 scored, weekly budget self-managed at 99–100% with zero human interventions — [case study #4](../about/RESULTS.md#-case-study-4--the-finance-profile--codex-pro-one-month-autonomous-run)). But that's still a handful of profiles across three provider tiers.
 
 Public users will ask: *"does it work for my role? on my provider? at my cost?"* Every new profile × provider combination adds a real answer. **You testing JHT on your real job hunt is how we find out.**
 
