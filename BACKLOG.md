@@ -80,7 +80,7 @@
 
 - 🟡 **[JHT-LAUNCH-03]** — demo GIFs for the README (**blocker**: replaces the "coming soon" placeholder).
 - 🟡 **[JHT-LAUNCH-08]** — `gh label sync` live + public project board.
-- 🟡 **[JHT-LAUNCH-09]** — Show HN post ([`docs/launch/show-hn-draft.md`](docs/launch/show-hn-draft.md)), not published yet.
+- 🟡 **[JHT-LAUNCH-09]** — Show HN post, not published yet (draft kept in the private `prima-release/` launch folder, outside this repo).
 - ⬜ **[JHT-LAUNCH-05]** monitoring freeze window · **[JHT-LAUNCH-06]** awesome-lists submissions · **[JHT-LAUNCH-07]** beta recruitment · **[JHT-LAUNCH-10]** press kit.
 - ⬜ **[JHT-TEST-CAMPAIGN]** — publish the remaining documented runs (see the matrix in [`docs/guides/BETA.md`](docs/guides/BETA.md)).
 - ⬜ **[JHT-VPS-COMPARISON-DOC]** — honest decision tree: local PC vs dedicated PC vs VPS.
