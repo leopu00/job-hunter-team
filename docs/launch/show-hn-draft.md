@@ -2,7 +2,8 @@
 
 Working draft for the public launch post on Hacker News. Tone is dev-to-dev:
 no marketing language, no "revolutionary AI", no sales speak. Lead with what
-it does and the numbers from the legacy run, then the why.
+it does, the origin story, and the **month-long autonomous run** (RESULTS
+case study #4) as the proof, then the why.
 
 Linked from [`BACKLOG.md`](../../BACKLOG.md) item **[JHT-LAUNCH-09]**. Owner:
 maintainer. Reviewer: the team (post in #launch when ready). Not published yet.
@@ -48,6 +49,15 @@ one line. The second one performs better on engagement but reads more
 > containerized, runnable as a single CLI command. That's what's on
 > GitHub now.
 >
+> The public stack has since been proven at month scale. A beta tester's
+> team on Codex Pro (~€100/mo) ran **28 days unattended** on a €10 VPS:
+> **649 positions found, 513 scored**, and the team closed its weekly
+> token budget at **99–100% for four straight weeks** — zero human
+> interventions, zero overshoots. The pacing layer auto-adapts the burn
+> rate to the residual budget and coasts as the cap approaches; one
+> weekly landing hit 100% ten minutes before the last spendable minute
+> of the cycle. Live data: <https://jobhunterteam.ai/case-studies>.
+>
 > **What's in the box**
 >
 > - A team of specialized agents — an always-on core (Captain
@@ -59,8 +69,9 @@ one line. The second one performs better on engagement but reads more
 > - A monitoring layer (Bridge + Sentinel) that calibrates token usage
 >   to stay inside the subscription window — overshoot is what kills
 >   "AI-agent" projects in practice.
-> - Pluggable providers: Claude Max ($200/mo), Kimi K2 (~€40/mo), Codex.
->   Subscription-only, no per-token surprises.
+> - Pluggable providers: Claude Max (~€200/mo, most precise), Codex
+>   Plus/Pro (~€100/mo, proven over the month-long run), Kimi K2
+>   (~€40/mo, beta). Subscription-only, no per-token surprises.
 > - Web dashboard + Telegram bot + CLI + desktop launcher.
 > - Everything runs in a single Docker container. State lives in a
 >   bind-mount, so your machine stays clean.
@@ -74,10 +85,10 @@ one line. The second one performs better on engagement but reads more
 > - It's not a hosted service. You run the container, you bring your
 >   own Claude / Kimi / Codex subscription. Nothing leaves your box
 >   except the actual job application traffic.
-> - It's not finished. The Mentor agent (career-coach role) is
->   half-built, the desktop installer for non-CLI users is in beta,
->   and I'm still chasing real €40/month coverage with Kimi as the
->   primary provider.
+> - It's not finished. The desktop installer for non-CLI users is in
+>   beta, and the €40/month Kimi tier is still under observation — two
+>   multi-week beta teams are running right now to prove it can
+>   self-manage a full month the way the Codex tier already does.
 >
 > **Why open**
 >
@@ -117,8 +128,11 @@ answer fast. Pre-write these so we don't fumble live.
 ### "What stops it from burning my Claude quota in 4 hours?"
 > The Sentinel reads usage live from the provider's `/usage` endpoint
 > and adjusts a global throttle (T0 → T2 → freeze) for the whole team.
-> Empirically it lands within 5-15% of the subscription window. Source:
-> `agents/sentinella/` + `agents/_skills/throttle/`.
+> Empirically it lands within 5-15% of the subscription window — and on
+> the month-long Codex run it closed the weekly cap at 99–100% for four
+> consecutive weeks without ever crossing it (one landing hit 100% ten
+> minutes before the shift-end deadline). Source: `agents/sentinella/`
+> + `agents/_skills/throttle/`, data in RESULTS case study #4.
 
 ### "How is this different from autoApplyBot / autoApply / Simplify / ..."
 > Most of those are browser-extension form-fillers. JHT is the layer
@@ -128,9 +142,12 @@ answer fast. Pre-write these so we don't fumble live.
 > your LinkedIn account is too expensive a failure mode.
 
 ### "Can it really run on €40/month?"
-> Yes. Kimi K2 at €40/mo has been validated in two real beta runs: a
-> 75-hour campaign (251 positions, 56 ready) and a 10-day run (557
-> positions, 264 scored). Full numbers in the Case Studies page.
+> Honest answer: not proven yet at month scale. What's proven is the
+> €100 Codex tier (28 days autonomous, case study #4). Kimi at €40 has
+> two real runs behind it — a 75-hour campaign (251 positions, 56 ready,
+> case study #3) and a 10-day run being written up — and two multi-week
+> beta teams are running right now. If the month-scale test holds, €40
+> becomes the recommended entry tier; until then it's labeled beta.
 
 ## Timing
 
