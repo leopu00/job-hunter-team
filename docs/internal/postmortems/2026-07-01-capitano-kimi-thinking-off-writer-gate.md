@@ -1,9 +1,9 @@
 # 🚨 Il Capitano Kimi a thinking-OFF viola il gate writer-on-demand (beta-3, 2026-07-01)
 
 > 📎 **Verità consolidata (economia + decisione thinking-flag)** nel living doc
-> [`architecture/kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md)
+> [`architecture/kimi-vs-codex-economics.md`](../architecture/kimi-vs-codex-economics.md)
 > (§5 = questa decisione). Contesto storico dell'indagine coordinator-burn in
-> [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](./2026-06-29-coordinator-burn-kimi-vs-codex.md).
+> [`2026-06-29-coordinator-burn-kimi-vs-codex.md`](../_archive/2026-06-29-coordinator-burn-kimi-vs-codex.md).
 > Questo file resta come **record forense dettagliato** dell'incidente.
 
 **TL;DR** — Con il `--no-thinking` applicato al Capitano Kimi (fix coordinator-burn #5 del 2026-06-30), il Capitano di **beta-3** (profilo betaD, provider **Kimi K2.7-Code**) ha **invertito la regola C-10** e ordinato allo Scrittore di scrivere **30 CV+CL che nessun utente aveva richiesto**, bruciando **~11 punti di quota settimanale** in 2 ore e spingendo il team in `SOPRA-PACE-WEEKLY` (88%). È la prova sul campo che **il Capitano Kimi NON può girare a thinking OFF**: senza catena di reasoning delibera male sui gate e fa danni gravi. **Decisione: Capitano → thinking ON; Sentinella → resta OFF** (osservazione nei prossimi giorni).

@@ -7,7 +7,7 @@
 
 ---
 
-> ⚠️ **NOTA 2026-07-02 (correzione):** il punto 3 del TL;DR ("i coordinatori 42% = il vero motore del consumo") è un **artefatto di coast** (finestra già in throttling/idle). Verità corrente (misura pulita full-history): coordinatori **~20% e ~uguali** su Kimi/Codex, budget Kimi **~2× (non 17×)**, €/token ≈ pari; il limite vero è **precisione + comportamento**, non il budget. Living doc: [`architecture/kimi-vs-codex-economics.md`](architecture/kimi-vs-codex-economics.md). *(I fix che ne derivarono restano validi come riduzione-costo generica.)*
+> ⚠️ **NOTA 2026-07-02 (correzione):** il punto 3 del TL;DR ("i coordinatori 42% = il vero motore del consumo") è un **artefatto di coast** (finestra già in throttling/idle). Verità corrente (misura pulita full-history): coordinatori **~20% e ~uguali** su Kimi/Codex, budget Kimi **~2× (non 17×)**, €/token ≈ pari; il limite vero è **precisione + comportamento**, non il budget. Living doc: [`architecture/kimi-vs-codex-economics.md`](../architecture/kimi-vs-codex-economics.md). *(I fix che ne derivarono restano validi come riduzione-costo generica.)*
 
 ## 🎯 TL;DR
 
