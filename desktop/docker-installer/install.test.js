@@ -200,3 +200,29 @@ test('brewPath puts /opt/homebrew/bin first so Apple Silicon brew is found', () 
     process.env.PATH = original
   }
 })
+
+test('runStreamed kills a silent child after the idle timeout', async () => {
+  // A process that produces no output and never exits is exactly the hang
+  // we must not wait forever on. With a tiny idle timeout it should be
+  // killed and reported as timedOut instead of pending forever.
+  const start = Date.now()
+  const result = await _internal.runStreamed('sleep', ['30'], {
+    idleTimeoutMs: 250,
+  })
+  assert.equal(result.ok, false)
+  assert.equal(result.timedOut, true)
+  assert.match(result.stderr, /timed out/)
+  assert.ok(Date.now() - start < 10000, 'resolved promptly after idle timeout, not after sleep 30')
+})
+
+test('runStreamed does NOT time out a child that keeps emitting output', async () => {
+  // Emits a line every ~40ms for ~200ms then exits 0. The idle timer resets
+  // on each line, so a 250ms idle window must NOT trip: healthy-but-slow
+  // installs keep running.
+  const script = 'for i in 1 2 3 4 5; do echo line$i; sleep 0.04; done'
+  const result = await _internal.runStreamed('bash', ['-c', script], {
+    idleTimeoutMs: 250,
+  })
+  assert.equal(result.ok, true)
+  assert.equal(result.timedOut, undefined)
+})

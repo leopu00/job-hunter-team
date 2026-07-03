@@ -39,7 +39,14 @@ function brewEnv() {
   return { ...process.env, PATH: brewPath() }
 }
 
-function runStreamed(cmd, args, { onLog = () => {}, env } = {}) {
+// A `brew install` that streams bottle-download progress can legitimately
+// run for many minutes, so a hard total-timeout would kill healthy installs.
+// Instead we use an IDLE timeout: the clock resets on every line of output,
+// and only fires if the child goes completely silent (hung on a stalled TCP
+// socket, DNS, or a lock it will never get). Default 6 min of dead air.
+const DEFAULT_IDLE_TIMEOUT_MS = 6 * 60 * 1000
+
+function runStreamed(cmd, args, { onLog = () => {}, env, idleTimeoutMs = DEFAULT_IDLE_TIMEOUT_MS } = {}) {
   return new Promise((resolve) => {
     onLog(`$ ${cmd} ${args.join(' ')}`)
     let child
@@ -52,11 +59,34 @@ function runStreamed(cmd, args, { onLog = () => {}, env } = {}) {
     }
 
     let stderrTail = ''
+    let settled = false
+    let timedOut = false
+    let idleTimer = null
+
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      if (idleTimer) clearTimeout(idleTimer)
+      resolve(result)
+    }
+
+    const bumpIdle = () => {
+      if (!idleTimeoutMs || idleTimeoutMs <= 0) return
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        timedOut = true
+        onLog(`⏱️ Nessun output per ${Math.round(idleTimeoutMs / 60000)} min — interrompo "${cmd}" (probabile blocco).`)
+        try { child.kill('SIGTERM') } catch (_) { /* già morto */ }
+        // Se SIGTERM non basta entro 5s, forza.
+        setTimeout(() => { try { child.kill('SIGKILL') } catch (_) {} }, 5000)
+      }, idleTimeoutMs)
+    }
 
     const forward = (stream, isErr) => {
       stream.setEncoding('utf8')
       let buffer = ''
       stream.on('data', (chunk) => {
+        bumpIdle()
         if (isErr) stderrTail += chunk
         buffer += chunk
         const lines = buffer.split(/\r?\n/)
@@ -72,13 +102,23 @@ function runStreamed(cmd, args, { onLog = () => {}, env } = {}) {
 
     forward(child.stdout, false)
     forward(child.stderr, true)
+    bumpIdle()
 
     child.on('error', (error) => {
       const message = error instanceof Error ? error.message : String(error)
-      resolve({ ok: false, code: -1, stderr: message })
+      finish({ ok: false, code: -1, stderr: message })
     })
     child.on('close', (code) => {
-      resolve({
+      if (timedOut) {
+        finish({
+          ok: false,
+          code: -1,
+          stderr: `timed out (no output for ${Math.round(idleTimeoutMs / 60000)} min)\n${stderrTail.trim().slice(-900)}`,
+          timedOut: true,
+        })
+        return
+      }
+      finish({
         ok: code === 0,
         code: typeof code === 'number' ? code : -1,
         stderr: stderrTail.trim().slice(-1000),
@@ -273,25 +313,44 @@ function fetchJson(url) {
 
 function downloadFile(url, destPath, onLog) {
   return new Promise((resolve, reject) => {
+    let settled = false
+    // A half-written .pkg/.dmg is worse than none: the installer could run on
+    // a truncated package. On any failure/timeout we unlink the partial file
+    // so a retry starts clean and nothing downstream sees corrupt bytes.
+    const fail = (err) => {
+      if (settled) return
+      settled = true
+      fs.unlink(destPath, () => reject(err))
+    }
+    const done = () => {
+      if (settled) return
+      settled = true
+      resolve()
+    }
     const doGet = (currentUrl) => {
-      https
-        .get(currentUrl, { headers: { 'User-Agent': 'jht-desktop' } }, (res) => {
-          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-            res.resume()
-            doGet(res.headers.location)
-            return
-          }
-          if (res.statusCode !== 200) {
-            res.resume()
-            reject(new Error(`Download HTTP ${res.statusCode}`))
-            return
-          }
-          const file = fs.createWriteStream(destPath)
-          res.pipe(file)
-          file.on('finish', () => file.close(() => resolve()))
-          file.on('error', reject)
-        })
-        .on('error', reject)
+      const req = https.get(currentUrl, { headers: { 'User-Agent': 'jht-desktop' } }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume()
+          doGet(res.headers.location)
+          return
+        }
+        if (res.statusCode !== 200) {
+          res.resume()
+          fail(new Error(`Download HTTP ${res.statusCode}`))
+          return
+        }
+        const file = fs.createWriteStream(destPath)
+        res.pipe(file)
+        file.on('finish', () => file.close(() => done()))
+        file.on('error', fail)
+        res.on('error', fail)
+      })
+      req.on('error', fail)
+      // Stalled transfer (handshake ok, bytes frozen): bail after 60s of
+      // no socket activity so we don't hang the whole Docker install.
+      req.setTimeout(60000, () => {
+        req.destroy(new Error('Download timed out (stalled transfer)'))
+      })
     }
     doGet(url)
   })
