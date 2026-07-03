@@ -20,6 +20,31 @@ if (process.platform === 'darwin') {
   process.env.PATH = parts.join(':')
 }
 
+// Last-resort safety net. Without these, an unhandled throw/rejection in the
+// main process crashes the whole app silently mid-onboarding — the user is
+// left staring at a frozen window with no idea why. Log it (so we can debug
+// from the file) and, once, surface a dialog instead of vanishing. We do NOT
+// force-quit: for a setup wizard, staying open so the user can read the error
+// and retry beats a hard exit.
+let fatalDialogShown = false
+function reportFatal(kind, err) {
+  const message = err && (err.stack || err.message) ? (err.stack || err.message) : String(err)
+  try { log.child('main').error(`fatal.${kind}`, { message }) } catch (_) {}
+  try {
+    if (!fatalDialogShown && dialog && typeof dialog.showErrorBox === 'function') {
+      fatalDialogShown = true
+      dialog.showErrorBox(
+        'JHT Desktop — errore imprevisto',
+        `Si è verificato un errore imprevisto (${kind}).\n\n` +
+          `${(err && err.message) || message}\n\n` +
+          'Il dettaglio completo è nel file di log. Puoi riprovare o riavviare l\'app.',
+      )
+    }
+  } catch (_) { /* dialog non disponibile (pre-ready): il log basta */ }
+}
+process.on('uncaughtException', (err) => reportFatal('uncaughtException', err))
+process.on('unhandledRejection', (reason) => reportFatal('unhandledRejection', reason))
+
 // Dev convenience: when running unpackaged (npm run dev) with a sibling
 // web/ checkout, auto-enable the live bind mount so edits to /web show
 // up in the container instantly via Next HMR. Temporary — remove once
@@ -559,6 +584,33 @@ function createWindow() {
     if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.maximize()
     mainWindow.show()
+  })
+
+  // If the renderer process dies (OOM, crash, GPU fault) the window goes
+  // white with no feedback. Log it and tell the user how to recover instead
+  // of leaving a blank screen. Not an auto-reload: a reload would wipe the
+  // in-memory wizard state, so we let the user decide to restart.
+  const mainLog = log.child('main')
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    mainLog.error('renderer.gone', { reason: details && details.reason, exitCode: details && details.exitCode })
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    try {
+      dialog.showMessageBox(mainWindow, {
+        type: 'error',
+        title: 'JHT Desktop',
+        message: 'La finestra si è chiusa in modo imprevisto.',
+        detail: 'Riavvia l\'app per riprendere il setup. Il progresso salvato (lingua, provider) non va perso.',
+        buttons: ['Riavvia', 'Chiudi'],
+        defaultId: 0,
+      }).then(({ response }) => {
+        if (response === 0) { app.relaunch(); app.exit(0) }
+      }).catch(() => {})
+    } catch (_) { /* dialog non disponibile */ }
+  })
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    // -3 = ERR_ABORTED, normale su navigazioni annullate: ignora.
+    if (errorCode === -3) return
+    mainLog.error('renderer.did-fail-load', { errorCode, errorDescription, validatedURL })
   })
 
   // Dev: apri DevTools detached per vedere i log del renderer fianco
